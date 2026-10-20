@@ -2,9 +2,21 @@ import type { AgentConfig } from "@/lib/agent";
 import type {
   IntakeFieldDefinition,
   VoiceV3AgentConfig,
-  VoiceWizardBookingStrategy,
-} from "@/lib/server/voice-v3/types/agent-config";
+} from "@/lib/server/voice-v3/config/agent-config";
+import type { VoiceWizardBookingStrategy } from "@/lib/server/voice-v3/config/booking-strategies";
+import {
+  DEFAULT_V3_BOOKING_STRATEGY,
+  defaultNestedFromFlat,
+  mergeNestedConfig,
+} from "@/lib/server/voice-v3/config/default-nested-config";
+import { compileVoiceV3TransferPolicyFromEditor } from "@/lib/server/receptionist/compile-transfer-from-editor";
+import { operatingPolicyFromEditor, resolveBusinessScheduleForRuntime } from "@/lib/server/receptionist/operating-maturity-from-editor";
+import { qualificationConfigFromEditor } from "@/lib/server/receptionist/qualification-from-editor";
+import { voiceV3ServicesFromEditor } from "@/lib/server/receptionist/service-config-from-editor";
+import { transferTriggerPhrasesFromEditor } from "@/lib/server/receptionist/transfer-triggers-from-editor";
+import { urgencyRulesFromEditor } from "@/lib/server/receptionist/urgency-from-editor";
 import { mapEditorVoiceToLiveVoiceId } from "@/lib/server/receptionist/voice-map";
+import { businessHoursWindowFromWeeklySchedule } from "@/lib/server/voice-v3/config/business-hours-from-wizard";
 import { livePromptControlsFromAgentConfig } from "@/lib/server/voice-v3/prompts/live-prompt-controls";
 
 export type KnowledgeCompileSlice = {
@@ -46,7 +58,7 @@ function bookingStrategy(editor: AgentConfig): VoiceWizardBookingStrategy {
     return "REQUEST_ONLY";
   }
   if (editor.appointments.provider === "microsoft") return "MICROSOFT_365";
-  if (editor.appointments.provider === "google") return "GOOGLE";
+  if (editor.appointments.provider === "google") return "GOOGLE_CALENDAR";
   if (editor.appointments.provider === "calendly") return "CALENDLY";
   return "REQUEST_ONLY";
 }
@@ -63,6 +75,10 @@ function primaryService(editor: AgentConfig) {
   };
 }
 
+/**
+ * Single runtime source of truth: new-app receptionist `AgentConfig` (UI editor + knowledge profile).
+ * Not the legacy appointment-receptionist wizard snapshot.
+ */
 export function editorToVoiceV3AgentConfig(input: {
   editor: AgentConfig;
   workspaceId: string;
@@ -88,47 +104,37 @@ export function editorToVoiceV3AgentConfig(input: {
     editor.appointments.strategy === "live" &&
     editor.appointments.provider !== "none";
 
-  const services = editor.appointments.types
-    .filter((t) => t.enabled)
-    .map((t) => ({
-      id: t.id,
-      name: t.name,
-      durationMinutes: t.duration,
-      description: t.location || undefined,
-      enabled: true,
-      requiredIntakeKeys: t.requiredFields,
-    }));
-
-  const service = primaryService(editor);
+  const v3Services = voiceV3ServicesFromEditor(editor);
+  const service = v3Services[0] ?? primaryService(editor);
   const strategy = bookingStrategy(editor);
-
-  const transferEnabled = cap.transfer && editor.transfers.some((t) => t.enabled);
-  const transfer = transferEnabled
-    ? {
-        enabled: true,
-        routes: editor.transfers
-          .filter((t) => t.enabled)
-          .map((t) => ({
-            id: t.id,
-            label: t.name,
-            description: t.reason || "Transfer when appropriate",
-          })),
-        destinations: editor.transfers
-          .filter((t) => t.enabled)
-          .map((t) => ({ id: t.id, label: t.name })),
-      }
-    : undefined;
+  const schedule = resolveBusinessScheduleForRuntime(editor);
+  const businessHours = businessHoursWindowFromWeeklySchedule(schedule, {
+    timezone: schedule.timezone || timezone,
+    weekdays: [1, 2, 3, 4, 5],
+    startLocal: "09:00",
+    endLocal: "17:00",
+  });
+  const transferPolicy = compileVoiceV3TransferPolicyFromEditor(editor);
+  const operatingPolicy = operatingPolicyFromEditor(editor);
+  const transferTriggers = transferTriggerPhrasesFromEditor(editor);
+  const adv = editor.transferAdvanced;
 
   const spamSolicitor = editor.protection.find((r) => r.kind === "solicitor" && r.enabled);
   const spamLikely = editor.protection.find((r) => r.kind === "spam_likely" && r.enabled);
 
-  const base: VoiceV3AgentConfig = {
+  const nested = defaultNestedFromFlat({
+    businessName,
+    timezone,
+    service,
+    agentName: editor.identity.name,
+  });
+
+  const shell: VoiceV3AgentConfig = {
     workspaceId: input.workspaceId,
     agentId: input.agentId,
     businessName,
     timezone,
     intakeFields: editor.intake.map(mapIntakeField),
-    transfer,
     transferDestinations: editor.transfers.map((t) => ({
       id: t.id,
       label: t.name,
@@ -137,15 +143,20 @@ export function editorToVoiceV3AgentConfig(input: {
       description: t.reason,
     })),
     service,
-    services: services.length ? services : [service],
-    businessHours: { timezone },
+    services: v3Services.length ? v3Services : [service],
+    businessHours: { ...businessHours, timezone: schedule.timezone || timezone },
+    ...nested,
+    source: "new_app_published",
+  };
+
+  const merged = mergeNestedConfig(shell, {
     identity: { agentName: editor.identity.name },
     capabilities: {
       answerQuestions: cap.answer,
       collectIntake: editor.intake.length > 0,
       checkAvailability: bookLive,
       bookAppointments: bookLive,
-      findAppointments: cap.reschedule || cap.cancel,
+      findAppointments: (cap.reschedule || cap.cancel) && bookLive,
       rescheduleAppointments: cap.reschedule && bookLive,
       cancelAppointments: cap.cancel && bookLive,
       transferCalls: cap.transfer,
@@ -208,7 +219,7 @@ export function editorToVoiceV3AgentConfig(input: {
     scheduling: {
       bookingStrategy: strategy,
       primaryServiceId: service.id,
-      services: services.length ? services : [service],
+      services: v3Services.length ? v3Services : [service],
       bookingBehavior: {
         askPreferredDayFirst: editor.appointments.preferredDayFirst,
         offerEarliestThree: editor.appointments.offerCount === 3,
@@ -232,23 +243,79 @@ export function editorToVoiceV3AgentConfig(input: {
         knowledgeItemSummaries: knowledge.knowledgeItemSummaries,
       },
       retrieval: {
-        enabled: cap.answer && (knowledge.openaiVectorStoreIds.length > 0 || knowledge.faqFacts.length > 0),
+        enabled:
+          cap.answer &&
+          (knowledge.openaiVectorStoreIds.length > 0 || knowledge.faqFacts.length > 0),
         knowledgeBaseIds: knowledge.knowledgeBaseIds,
         documentSourceIds: knowledge.documentSourceIds,
         openaiVectorStoreIds: knowledge.openaiVectorStoreIds,
         revision: knowledge.revision,
       },
     },
+    telephony: {
+      phoneNumberId: editor.connection.id?.trim() || null,
+      phoneNumberE164: null,
+      callRecording:
+        editor.audio.recording === "inbound"
+          ? "inbound_only"
+          : editor.audio.recording === "all"
+            ? "all"
+            : "off",
+      connectionGreetingMode: editor.audio.connectionGreeting,
+      connectionGreetingText: editor.audio.connectionGreetingText,
+      liveVoiceId: mapEditorVoiceToLiveVoiceId(editor.identity.voice, editor.identity.customVoiceId),
+      speaksFirst: "ai",
+    },
     callHandling: {
-      transferTriggers: [],
-      transferRingSeconds: 30,
-      transferFallback: "message",
+      transferTriggers,
+      transferRingSeconds: adv.ringSeconds,
+      transferFallback: adv.globalFallback,
       warmTransfer: editor.transferStyle === "warm",
+      detectVoicemailOnTransfer: adv.detectVoicemailOnTransfer,
+      voiceV2HumanTransferEnabled: adv.humanTransferEnabled,
+      allowCallerRequestedTransfer: true,
+      transferRouting: adv.routing === "waterfall" ? "waterfall" : "single",
+      defaultTransferPlanId: "default_transfer_route",
+      transferPlanSteps: adv.planSteps,
+      urgencyEnabled: editor.urgency.enabled,
+      urgencyRules: urgencyRulesFromEditor(editor),
       callbackRequestsEnabled: editor.messages.callbacks,
       callbackUseAniByDefault: editor.messages.requiredFields.ani,
       callbackAskPreferredTime: editor.messages.requiredFields.time,
       callbackConfirmNumber: editor.messages.requiredFields.confirm,
     },
+    qualification: qualificationConfigFromEditor(editor),
+    recovery: {
+      aiCallRecoveryEnabled: editor.recovery.enabled,
+      consentMode: editor.recovery.consentMode ?? null,
+      sendingPhoneNumberId: null,
+      continueOverSms: editor.recovery.carryover,
+      delaySeconds: editor.recovery.delaySec ?? null,
+      sendWhenCallbackCreated: false,
+    },
+    integrations: {
+      crmEnabled: editor.crmWrite,
+      longTermMemory: editor.memory,
+      calendarProvider: editor.appointments.provider,
+      calendarConnected: editor.appointments.provider !== "none",
+      calendarEmail: null,
+    },
+    bookingStrategyDetail: {
+      ...DEFAULT_V3_BOOKING_STRATEGY,
+      strategy,
+      executionStatus:
+        strategy === "SEND_LINK" || strategy === "MICROSOFT_365" || strategy === "GOOGLE_CALENDAR"
+          ? "ACTIVE_EXECUTION"
+          : "CONFIGURED_NOT_IMPLEMENTED",
+      bookingLinkUrl: editor.appointments.bookingLink?.trim() || null,
+      bookingLinkLabel: editor.appointments.linkSender?.trim() || null,
+    },
+  });
+
+  const base: VoiceV3AgentConfig = {
+    ...merged,
+    transfer: transferPolicy,
+    operatingPolicy,
     spamProtection: {
       spamLikelyPolicy: spamLikely
         ? spamLikely.action === "end"
@@ -265,7 +332,6 @@ export function editorToVoiceV3AgentConfig(input: {
     },
   };
 
-  // live-prompt-controls helper expects full config on conversation
   void livePromptControlsFromAgentConfig(base);
   return base;
 }

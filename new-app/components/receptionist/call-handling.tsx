@@ -40,14 +40,15 @@ import { NumberPicker, useResolvedConnection, type ConnectionRef } from '@/compo
 import { Callout, FlowDiagram } from '@/components/numbers/number-ui'
 import type { AgentConfig, SpamRule, TransferDestination } from '@/lib/agent'
 import { formatPhone, formatWhen } from '@/lib/format'
-import { DemoNote, JumpChips, NotAvailable, Pills, Section, ToggleRow } from './ai-ui'
+import { DemoNote, JumpChips, Pills, Section, ToggleRow } from './ai-ui'
+import { OperationsEditor } from './operations-editor'
 
 const MODES: { value: AgentConfig['coverage']['mode']; label: string; description: string; disabled?: boolean }[] = [
   { value: 'every_call', label: 'Every call', description: 'Ava answers immediately, day and night.' },
   { value: 'after_hours', label: 'After hours', description: 'Staff answer during business hours; Ava after.' },
   { value: 'overflow', label: 'No answer / overflow', description: 'Ring staff first, then Ava picks up.' },
   { value: 'busy', label: 'Line busy', description: 'Ava answers when every staff line is busy.' },
-  { value: 'custom', label: 'Custom schedule', description: 'Per-day windows. Coming to your plan soon.', disabled: true },
+  { value: 'custom', label: 'Custom schedule', description: 'Per-day windows when Ava answers (see Operations below).' },
 ]
 
 const FALLBACK_LABEL: Record<TransferDestination['fallback'], string> = { backup: 'Try backup destination', callback: 'Schedule a callback', message: 'Take a message', end: 'End politely' }
@@ -130,7 +131,7 @@ export function CallHandlingEditor() {
         )}
       </section>
 
-      <JumpChips items={[{ id: 'coverage', label: 'Coverage' }, { id: 'transfers', label: 'Transfers' }, { id: 'messages', label: 'Messages & alerts' }, { id: 'recovery', label: 'Recovery SMS' }, { id: 'protection', label: 'Protection' }, { id: 'advanced', label: 'Advanced' }]} />
+      <JumpChips items={[{ id: 'coverage', label: 'Coverage' }, { id: 'transfers', label: 'Transfers' }, { id: 'operations', label: 'Hours & on-call' }, { id: 'messages', label: 'Messages & alerts' }, { id: 'recovery', label: 'Recovery SMS' }, { id: 'protection', label: 'Protection' }, { id: 'advanced', label: 'Advanced' }]} />
 
       <Section id="coverage" icon={Route} title="Coverage & routing" description="When Ava answers, and who rings first.">
         <OptionGroup label="Answer mode" value={mode} onChange={(v) => update('coverage', (c) => ({ ...c, mode: v }))} options={MODES} columns={2} />
@@ -180,17 +181,13 @@ export function CallHandlingEditor() {
           {draft.triggers.custom && <Input aria-label="Custom trigger" placeholder="e.g. caller mentions a lawsuit" value={draft.customTrigger} onChange={(e) => update('customTrigger', e.target.value)} />}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Pills label="Transfer style" value={draft.transferStyle} onChange={(v) => update('transferStyle', v)} options={[{ value: 'cold', label: 'Cold — connect directly' }, { value: 'warm', label: 'Warm — brief staff', disabled: true }]} />
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">Voicemail detection on destination</span>
-            <NotAvailable />
-          </div>
-        </div>
-        <div className="flex items-center justify-between rounded-lg bg-muted/40 p-3">
-          <span className="flex flex-col"><span className="text-sm font-medium">Waterfall routing</span><span className="text-xs text-muted-foreground">Ordered steps with timeouts — in Advanced.</span></span>
-          <a href="#advanced" className="text-xs font-medium text-primary hover:underline">Open</a>
+          <Pills label="Transfer style" value={draft.transferStyle} onChange={(v) => update('transferStyle', v)} options={[{ value: 'cold', label: 'Cold — connect directly' }, { value: 'warm', label: 'Warm — brief staff' }]} />
         </div>
       </Section>
+
+      <div id="operations" className="flex flex-col gap-4 scroll-mt-20">
+        <OperationsEditor draft={draft} update={update} />
+      </div>
 
       <Section id="messages" icon={BellRing} title="Messages, callbacks & notifications" description="What Ava collects and who hears about it.">
         <div className="divide-y">
@@ -266,12 +263,8 @@ export function CallHandlingEditor() {
           {draft.audio.connectionGreeting === 'upload' && <Input type="file" accept="audio/mpeg,audio/wav" aria-label="Upload connection audio" />}
           <FlowDiagram steps={['Call connects', draft.audio.connectionGreeting === 'none' ? 'No connection audio' : 'Connection greeting', 'Ava: opening line']} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <AdvRow title="Waterfall transfers" text="Ordered destinations with per-step timeout." badge={<NotAvailable label="Runtime pending" />} />
-          <AdvRow title="On-call rotation" text="Weekly schedule for urgent transfers." badge={<NotAvailable label="Runtime pending" />} />
-          <AdvRow title="Callback SLA" text={`Follow-ups flagged after ${draft.messages.slaHours} hours.`} />
-          <AdvRow title="Ingress diagnostics" text="SIP trunk healthy · worker region us-central · 182 ms avg pickup" />
-        </div>
+        <AdvRow title="Callback SLA" text={`Follow-ups flagged after ${draft.messages.slaHours} hours (also in operating maturity).`} />
+        <AdvRow title="Ingress diagnostics" text="SIP trunk healthy · worker region us-central · 182 ms avg pickup" />
       </Section>
 
       <DemoNote />

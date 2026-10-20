@@ -1,8 +1,10 @@
-import type { AgentConfig, Capability } from "@/lib/agent";
+import type { AgentConfig } from "@/lib/agent";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import {
   RECEPTIONIST_PUBLISHED_SCHEMA_VERSION,
 } from "@/lib/server/receptionist/constants";
+import { buildReceptionistConfigProvenance } from "@/lib/server/receptionist/editor-config-digest";
+import { enabledVoiceToolNamesFromEditor } from "@/lib/server/receptionist/editor-screen-mapping";
 import { mapEditorVoiceToLiveVoiceId } from "@/lib/server/receptionist/voice-map";
 import { buildVoiceV3Prompts } from "@/lib/server/voice-v3/build-voice-v3-prompts";
 import {
@@ -10,28 +12,10 @@ import {
   type KnowledgeCompileSlice,
 } from "@/lib/server/voice-v3/editor-to-voice-v3-config";
 import type { ReceptionistBusinessFacts } from "@/lib/server/receptionist/business-facts";
+import { buildVoiceV3PromptFingerprint } from "@/lib/server/voice-v3/prompt-fingerprint";
 
 /** Matches monolith `VOICE_V3_ASTRA_MODEL_DEFAULT` (GPT-Live delegation backend). */
 const ASTRA_MODEL = process.env.VOICE_V3_ASTRA_MODEL?.trim() || "gpt-6-luna";
-
-function enabledTools(config: AgentConfig): string[] {
-  const names: string[] = ["update_intake", "end_call"];
-  const cap = config.capabilities;
-  const on = (c: Capability) => cap[c] === true;
-  if (on("book") || on("reschedule")) {
-    names.push("set_scheduling_preference", "find_availability");
-  }
-  if (on("book")) names.push("book_appointment", "send_booking_link");
-  if (on("reschedule")) names.push("find_appointment", "reschedule_appointment");
-  if (on("cancel")) names.push("find_appointment", "cancel_appointment");
-  if (on("transfer")) names.push("transfer_call");
-  if (on("message")) names.push("request_callback");
-  if (on("answer")) names.push("business_answer");
-  if (config.protection.some((r) => r.enabled && r.kind === "solicitor")) {
-    names.push("report_unwanted_solicitor");
-  }
-  return [...new Set(names)];
-}
 
 function buildVoiceV3Snapshot(
   config: AgentConfig,
@@ -74,7 +58,7 @@ export function compilePublishedBundle(input: {
   businessFacts: ReceptionistBusinessFacts;
   knowledge: KnowledgeCompileSlice;
 }): ReceptionistPublishedBundle {
-  const toolNames = enabledTools(input.editor);
+  const toolNames = enabledVoiceToolNamesFromEditor(input.editor);
   const liveVoiceId = mapEditorVoiceToLiveVoiceId(
     input.editor.identity.voice,
     input.editor.identity.customVoiceId,
@@ -98,10 +82,19 @@ export function compilePublishedBundle(input: {
     toolNames,
   });
 
+  const provenance = buildReceptionistConfigProvenance(input.editor);
+  const promptFingerprint = buildVoiceV3PromptFingerprint({
+    amyInstructions: prompts.liveInstructions,
+    astraInstructions: prompts.astraInstructions,
+    toolNames,
+    toolSchemaCount: toolNames.length,
+  });
+
   return {
     schemaVersion: RECEPTIONIST_PUBLISHED_SCHEMA_VERSION,
     publishedAt: new Date().toISOString(),
     editor: input.editor,
+    configProvenance: provenance,
     runtime: {
       amyInstructions: prompts.liveInstructions,
       astraInstructions: prompts.astraInstructions,
@@ -110,6 +103,7 @@ export function compilePublishedBundle(input: {
       toolNames,
       maxToolSteps: 5,
       openaiFileSearchVectorStoreIds: input.knowledge.openaiVectorStoreIds,
+      promptFingerprint,
       voiceV3: buildVoiceV3Snapshot(input.editor, input.workspaceId, voiceV3Config),
     },
   };

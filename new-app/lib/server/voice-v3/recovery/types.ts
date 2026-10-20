@@ -1,0 +1,43 @@
+export type VoiceV3RecoveryCode =
+  | "REQUIRED_FIELD_MISSING"
+  | "SCHEDULING_DATE_MISSING"
+  | "SCHEDULING_TIME_MISSING"
+  | "SCHEDULING_AMBIGUOUS"
+  | "INTENT_AMBIGUOUS"
+  | "SLOT_SELECTION_AMBIGUOUS"
+  | "SLOT_SELECTION_REQUIRED"
+  | "SLOT_NOT_AVAILABLE"
+  | "NO_AVAILABILITY"
+  | "APPOINTMENT_NOT_IDENTIFIED"
+  | "APPOINTMENT_NOT_FOUND"
+  | "MULTIPLE_APPOINTMENTS_FOUND"
+  | "CANCELLATION_CONFIRMATION_REQUIRED"
+  | "CALLER_VERIFICATION_REQUIRED"
+  | "SEMANTIC_EXTRACTION_FAILED"
+  | "SEMANTIC_TRANSPORT_FAILED"
+  | "MICROSOFT_TEMPORARY_FAILURE"
+  | "MICROSOFT_THROTTLED"
+  | "MICROSOFT_AUTH_FAILED"
+  | "OPENAI_DELEGATION_FAILURE"
+  | "PROVIDER_TIMEOUT"
+  | "BOOKING_OUTCOME_UNKNOWN"
+  | "RESCHEDULE_OUTCOME_UNKNOWN"
+  | "CANCELLATION_OUTCOME_UNKNOWN"
+  | "ASYNC_ACTION_TIMED_OUT";
+
+export type VoiceV3RecoveryStatus = "ACTIVE" | "RESOLVED" | "SUPERSEDED";
+
+export interface VoiceV3RecoveryDirective {
+  id: string;
+  callId: string;
+  code: VoiceV3RecoveryCode;
+  status: VoiceV3RecoveryStatus;
+  userRecoverable: boolean;
+  missingFieldKey?: string;
+  relatedAction?: string;
+  safeAgentMessage: string;
+  createdAt: string;
+  resolvedAt?: string;
+  schedulingGeneration?: number;
+  offerSetId?: string;
+}
