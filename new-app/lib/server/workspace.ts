@@ -4,7 +4,10 @@ import { getPrisma } from "@/lib/server/db";
  * Until product auth ships: pin workspace via env or bootstrap the first workspace row.
  */
 export async function resolveWorkspaceId(): Promise<string> {
-  const pinned = process.env.DEV_WORKSPACE_ID?.trim() || process.env.TRANSOVO_WORKSPACE_ID?.trim();
+  const pinned =
+    process.env.DEV_WORKSPACE_ID?.trim() ||
+    process.env.TRANSOVO_WORKSPACE_ID?.trim() ||
+    process.env.WORKSPACE_ID?.trim();
   if (pinned) return pinned;
 
   const prisma = getPrisma();

@@ -66,14 +66,30 @@ function googleRedirectUri(path = GOOGLE_OAUTH_CALLBACK_PATH) {
   return `${appUrl()}${path}`;
 }
 
+function googleCalendarOAuthClientId(): string | undefined {
+  return (
+    process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim() ||
+    process.env.GOOGLE_OAUTH_CLIENT_ID?.trim()
+  );
+}
+
+function googleCalendarOAuthClientSecret(): string | undefined {
+  return (
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim() ||
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim()
+  );
+}
+
 export function getGoogleOAuthStartUrl(
   connectionId: string,
   workspaceId: string,
   returnTo?: string,
   callbackPath = GOOGLE_OAUTH_CALLBACK_PATH,
 ) {
-  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
-  if (!clientId) throw new Error("GOOGLE_CALENDAR_CLIENT_ID not configured");
+  const clientId = googleCalendarOAuthClientId();
+  if (!clientId) {
+    throw new Error("GOOGLE_CALENDAR_CLIENT_ID or GOOGLE_OAUTH_CLIENT_ID not configured");
+  }
   const redirect = googleRedirectUri(callbackPath);
   const params = new URLSearchParams({
     client_id: clientId,
@@ -114,9 +130,11 @@ export async function completeGoogleOAuth(
   const parsed = parseOAuthState(state);
   if (!parsed) throw new Error("Invalid OAuth state");
 
-  const clientId = process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) throw new Error("Google OAuth not configured");
+  const clientId = googleCalendarOAuthClientId();
+  const clientSecret = googleCalendarOAuthClientSecret();
+  if (!clientId || !clientSecret) {
+    throw new Error("Google OAuth not configured (calendar or GOOGLE_OAUTH_* client credentials)");
+  }
 
   const redirect = googleRedirectUri(callbackPath);
   const res = await fetch("https://oauth2.googleapis.com/token", {
