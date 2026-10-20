@@ -15,6 +15,11 @@ import {
   normalizeE164,
   resolveReceptionistByCalledNumber,
 } from "@/lib/server/receptionist/routing-resolve";
+import { voiceV3AgentConfigFromBundle } from "@/lib/server/voice-v3/bundle-voice-config";
+import { enrichVoiceV3AgentConfigForRuntime } from "@/lib/server/voice-v3/enrich-runtime-config";
+import { createVoiceV3CallRuntime } from "@/lib/server/voice-v3/state/call-runtime";
+import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
+import type { FunctionTool } from "openai/resources/live/live";
 
 const BROWSER_TEST_PREFIX =
   process.env.LIVEKIT_BROWSER_TEST_ROOM_PREFIX?.trim() || "transovo-browser-test-";
@@ -77,10 +82,24 @@ async function loadPublishedBundle(
   if (!version?.config) throw new Error("Published version config missing");
   const config = version.config as Record<string, unknown>;
   const nested = config.newAppReceptionist as ReceptionistPublishedBundle | undefined;
-  const amyLen = nested?.runtime?.amyInstructions?.length ?? 0;
-  if (nested?.runtime?.toolNames?.length && amyLen > 2000) return nested;
+  if (!nested?.editor) {
+    throw new Error(
+      "Published receptionist is missing newAppReceptionist editor — republish from the new app (four-screen setup). Legacy wizard config is not used for PSTN.",
+    );
+  }
 
-  const editor = loadLiveEditorFromPublished(version.config, nested?.editor || ({} as never));
+  const editor = loadLiveEditorFromPublished(version.config, nested.editor);
+  const amyLen = nested.runtime?.amyInstructions?.length ?? 0;
+  const hasProvenance = nested.configProvenance?.configSource === "new_app_receptionist";
+  if (
+    nested.runtime?.toolNames?.length &&
+    amyLen > 2000 &&
+    hasProvenance &&
+    nested.runtime.promptFingerprint
+  ) {
+    return nested;
+  }
+
   return compileReceptionistRuntimeBundle({
     workspaceId,
     agentId,
@@ -173,6 +192,28 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
   const rt = bundle.runtime;
 
   const callerE164 = payload.callerE164?.trim();
+
+  let voiceV3Config = voiceV3AgentConfigFromBundle(bundle, {
+    workspaceId,
+    agentId,
+  });
+  voiceV3Config = await enrichVoiceV3AgentConfigForRuntime({
+    config: voiceV3Config,
+    workspaceId,
+    editor: bundle.editor,
+  });
+
+  createVoiceV3CallRuntime({
+    liveSessionId,
+    callId,
+    inboundCallerE164: callerE164,
+    config: voiceV3Config,
+  });
+
+  const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(voiceV3Config);
+  const allowed = new Set(rt.toolNames);
+  const toolSchemas: FunctionTool[] = catalogTools.filter((t) => allowed.has(String(t.name)));
+
   putLiveSession({
     liveSessionId,
     callId,
@@ -185,6 +226,26 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     publishedVersionId,
     scheduling: {},
   });
+
+  const promptFingerprint = rt.promptFingerprint;
+  const configProvenance = bundle.configProvenance;
+  if (promptFingerprint) {
+    console.info(
+      JSON.stringify({
+        event: "VOICE_V3_PROMPT_FINGERPRINT",
+        liveSessionId,
+        workspaceId,
+        agentId,
+        configSource: configProvenance?.configSource ?? "unknown",
+        legacyWizardUsed: configProvenance?.legacyWizardUsed ?? true,
+        editorDigest: configProvenance?.editorDigest?.slice(0, 16),
+        amyChars: promptFingerprint.amyChars,
+        astraChars: promptFingerprint.astraChars,
+        amySha256: promptFingerprint.amySha256.slice(0, 16),
+        toolNames: promptFingerprint.toolNames,
+      }),
+    );
+  }
 
   await prisma.voiceCall
     .create({
@@ -217,12 +278,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     astraInstructions: rt.astraInstructions,
     astraModel: rt.astraModel,
     liveVoiceId: rt.liveVoiceId,
-    toolSchemas: rt.toolNames.map((name) => ({
-      type: "function",
-      name,
-      description: name,
-      parameters: { type: "object", properties: {} },
-    })),
+    toolSchemas,
     toolNames: rt.toolNames,
     intakeFields: bundle.editor.intake.map((f) => ({
       key: f.id,
@@ -234,5 +290,9 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     reasoningEffort: "low",
     textVerbosity: "low",
     openaiFileSearchVectorStoreIds: rt.openaiFileSearchVectorStoreIds,
+    promptFingerprint: rt.promptFingerprint,
+    configProvenance: bundle.configProvenance,
+    voiceV3ConfigSource: voiceV3Config.source,
+    bookingStrategy: voiceV3Config.scheduling?.bookingStrategy,
   };
 }

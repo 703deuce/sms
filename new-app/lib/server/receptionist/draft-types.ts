@@ -1,4 +1,6 @@
 import type { AgentConfig } from "@/lib/agent";
+import type { ReceptionistConfigProvenance } from "@/lib/server/receptionist/editor-config-digest";
+import type { VoiceV3PromptFingerprint } from "@/lib/server/voice-v3/prompt-fingerprint";
 
 export type ReceptionistDraftEnvelope = {
   schemaVersion: number;
@@ -11,6 +13,7 @@ export type ReceptionistPublishedBundle = {
   schemaVersion: number;
   publishedAt: string;
   editor: AgentConfig;
+  configProvenance?: ReceptionistConfigProvenance;
   runtime: {
     amyInstructions: string;
     astraInstructions: string;
@@ -19,6 +22,7 @@ export type ReceptionistPublishedBundle = {
     toolNames: string[];
     maxToolSteps: number;
     openaiFileSearchVectorStoreIds: string[];
+    promptFingerprint?: VoiceV3PromptFingerprint;
     voiceV3: Record<string, unknown>;
   };
 };

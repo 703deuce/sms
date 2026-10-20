@@ -75,11 +75,11 @@ export function loadLiveEditorFromPublished(
 ): AgentConfig {
   if (!publishedConfig || typeof publishedConfig !== "object") return fallback;
   const row = publishedConfig as {
-    editor?: AgentConfig;
     newAppReceptionist?: { editor?: AgentConfig };
   };
-  if (row.newAppReceptionist?.editor) return row.newAppReceptionist.editor;
-  if (row.editor && typeof row.editor === "object") return row.editor;
+  if (row.newAppReceptionist?.editor) {
+    return normalizeReceptionistEditor(row.newAppReceptionist.editor);
+  }
   return fallback;
 }
 
