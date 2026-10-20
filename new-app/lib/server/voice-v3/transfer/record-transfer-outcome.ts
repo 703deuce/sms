@@ -12,6 +12,7 @@ function asRecord(v: unknown): Record<string, unknown> {
 function outcomeLabel(outcome: string): string {
   const o = outcome.toUpperCase();
   if (o === "CONNECTED") return "connected";
+  if (o === "SIP_REFER_ACCEPTED") return "refer accepted (answer not confirmed)";
   if (o === "NO_ANSWER" || o === "TIMEOUT") return "no answer";
   if (o === "DECLINED") return "declined";
   if (o === "VOICEMAIL") return "voicemail";
@@ -24,7 +25,7 @@ export async function recordVoiceV3TransferOutcomeForNewApp(input: {
   agentId?: string | null;
   transferRequestId: string;
   routeId: string;
-  status: "transfer_connected" | "transfer_exhausted";
+  status: "transfer_connected" | "transfer_refer_accepted" | "transfer_exhausted";
   reason?: string | null;
   attempts: Array<{
     destination_id: string;
@@ -59,9 +60,17 @@ export async function recordVoiceV3TransferOutcomeForNewApp(input: {
   };
   meta.voiceV3 = voiceV3;
 
-  const transferred = input.status === "transfer_connected";
+  const humanAnswered = input.status === "transfer_connected";
+  const referAccepted = input.status === "transfer_refer_accepted";
+  const transferred = humanAnswered;
   const outcome =
-    input.status === "transfer_exhausted" ? "transfer_exhausted" : transferred ? "transferred" : null;
+    input.status === "transfer_exhausted"
+      ? "transfer_exhausted"
+      : humanAnswered
+        ? "transferred"
+        : referAccepted
+          ? "transfer_refer_accepted"
+          : null;
   await prisma.voiceCall.update({
     where: { id: call.id },
     data: {
@@ -78,9 +87,9 @@ export async function recordVoiceV3TransferOutcomeForNewApp(input: {
         callId: call.id,
         transferType: "voice_v3_livekit",
         destination: input.connectedDestinationId || input.routeId,
-        status: transferred ? "completed" : "failed",
+        status: humanAnswered ? "completed" : referAccepted ? "refer_accepted" : "failed",
         summary: input.reason,
-        answered: transferred,
+        answered: humanAnswered,
         completedAt: new Date(),
         metadata: {
           transferRequestId: input.transferRequestId,

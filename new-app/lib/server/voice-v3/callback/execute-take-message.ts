@@ -117,11 +117,11 @@ export async function executeTakeMessage(
   if (!persistResult.duplicate && persistResult.callbackRequestId) {
     void (async () => {
       try {
-        const { projectVoiceV3CallbackOntoCall } = await import("./project-call-outcome");
+        const { projectVoiceV3MessageOntoCall } = await import("./project-call-outcome");
         const { notifyVoiceV3CallbackRequested } = await import(
           "../notifications/notify-callback-requested"
         );
-        await projectVoiceV3CallbackOntoCall({
+        await projectVoiceV3MessageOntoCall({
           callId: ctx.callId,
           callbackRequestId: persistResult.callbackRequestId!,
           reason,

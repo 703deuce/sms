@@ -18,6 +18,7 @@ import {
 import { voiceV3AgentConfigFromBundle } from "@/lib/server/voice-v3/bundle-voice-config";
 import { enrichVoiceV3AgentConfigForRuntime } from "@/lib/server/voice-v3/enrich-runtime-config";
 import { createVoiceV3CallRuntime } from "@/lib/server/voice-v3/state/call-runtime";
+import { ensureVoiceCallRowOnSessionResolve } from "@/lib/server/voice-v3/post-call/ensure-voice-call-row";
 import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
 import type { FunctionTool } from "openai/resources/live/live";
 
@@ -247,26 +248,21 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     );
   }
 
-  await prisma.voiceCall
-    .create({
-      data: {
-        id: callId,
-        workspaceId,
-        agentId,
-        direction: "INBOUND",
-        status: "IN_PROGRESS",
-        fromE164: payload.callerE164?.trim() || (isBrowserTest ? "browser-tester" : "unknown"),
-        toE164: dialed || "browser-test",
-        phoneNumberId: phoneNumberId || undefined,
-        metadata: {
-          liveSessionId,
-          roomName,
-          configSource,
-          publishedVersionId,
-        },
-      },
-    })
-    .catch(() => undefined);
+  await ensureVoiceCallRowOnSessionResolve({
+    callId,
+    workspaceId,
+    agentId,
+    fromE164: payload.callerE164?.trim() || (isBrowserTest ? "browser-tester" : "unknown"),
+    toE164: dialed || "browser-test",
+    phoneNumberId,
+    metadata: {
+      liveSessionId,
+      roomName,
+      configSource,
+      publishedVersionId,
+      voiceTransport: "voice_v3_livekit",
+    },
+  });
 
   return {
     liveSessionId,

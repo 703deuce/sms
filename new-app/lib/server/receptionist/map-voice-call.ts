@@ -5,8 +5,8 @@ function mapOutcome(outcome: string | null, transferred: boolean, appointmentBoo
   const o = (outcome || "").toLowerCase();
   if (appointmentBooked || o.includes("book")) return "booked";
   if (transferred || o.includes("transfer")) return "transferred";
+  if (o.includes("message_left") || o.includes("message")) return "message";
   if (o.includes("callback")) return "callback";
-  if (o.includes("message")) return "message";
   if (o.includes("fail")) return "failed";
   return "unresolved";
 }
@@ -64,6 +64,14 @@ export function mapVoiceCallToUiCall(
       summary:
         extras?.summary ||
         (typeof meta.callSummary === "string" ? meta.callSummary : undefined) ||
+        (() => {
+          const v3 = meta.voiceV3;
+          if (v3 && typeof v3 === "object" && "messageText" in v3) {
+            const t = (v3 as { messageText?: unknown }).messageText;
+            if (typeof t === "string" && t.trim()) return t.trim();
+          }
+          return undefined;
+        })() ||
         call.errorMessage ||
         "AI handled call",
       followUp: followUpMeta,

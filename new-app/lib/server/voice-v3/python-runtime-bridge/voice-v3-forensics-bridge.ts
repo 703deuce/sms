@@ -104,6 +104,30 @@ export async function flushVoiceV3ForensicsForPython(input: {
     });
   }
 
+  const finalizeResult = await import("@/lib/server/voice-v3/post-call/run-flush-finalize").then(
+    (m) =>
+      m.runVoiceV3FlushFinalize({
+        liveSessionId: input.liveSessionId,
+        callId: input.callId,
+        workspaceId: input.workspaceId,
+        errorMessage: input.errorMessage,
+      }),
+  );
+  if (!finalizeResult.ok) {
+    console.error("VOICE_V3_FLUSH_FINALIZE_FAILED", {
+      callId: input.callId,
+      workspaceId: input.workspaceId,
+      code: finalizeResult.code,
+      message: finalizeResult.message,
+    });
+  } else {
+    console.info("VOICE_V3_FLUSH_FINALIZE_OK", {
+      callId: input.callId,
+      workspaceId: input.workspaceId,
+      duplicate: finalizeResult.duplicate === true,
+    });
+  }
+
   finalizeVoiceV3CallForensics(input.liveSessionId, {
     reason: input.errorMessage ? "error" : "python_flush",
     errorMessage: input.errorMessage,

@@ -88,7 +88,8 @@ async def _direct_transfer(
     )
     req.ringing_timeout.FromTimedelta(timedelta(seconds=ringing_timeout_seconds))
     await job_ctx.api.sip.transfer_sip_participant(req)
-    return "CONNECTED"
+    # SIP REFER accepted by provider — not proof the destination party answered.
+    return "SIP_REFER_ACCEPTED"
 
 
 async def _warm_transfer(
@@ -241,10 +242,11 @@ async def execute_authorized_transfer_plan(
             },
         )
 
-        if outcome == "CONNECTED":
+        if outcome in ("CONNECTED", "SIP_REFER_ACCEPTED"):
+            is_refer_only = outcome == "SIP_REFER_ACCEPTED"
             total_ms = int((time.monotonic() - started) * 1000)
             log_event(
-                "VOICE_V3_TRANSFER_CONNECTED",
+                "VOICE_V3_TRANSFER_CONNECTED" if not is_refer_only else "VOICE_V3_TRANSFER_REFER_ACCEPTED",
                 extra={
                     "transfer_request_id": transfer_request_id,
                     "route_id": route_id,
@@ -268,23 +270,28 @@ async def execute_authorized_transfer_plan(
                     "warm_consult_duration_ms": duration_ms if mode == "WARM" else None,
                 },
             )
+            backend_status = (
+                "transfer_refer_accepted" if is_refer_only else "transfer_connected"
+            )
+            surface_status = backend_status
             sanitized = _strip_execution_payload(result)
             if isinstance(sanitized.get("data"), dict):
                 sanitized["data"] = {
                     **sanitized["data"],
-                    "status": "transfer_connected",
+                    "status": surface_status,
                     "attempts": attempts,
+                    "human_answered": not is_refer_only,
                 }
-                sanitized["status"] = "transfer_connected"
+                sanitized["status"] = surface_status
             asyncio.create_task(
                 _report_transfer_outcome_to_backend(
                     client,
                     transfer_request_id=transfer_request_id,
                     route_id=route_id,
-                    status="transfer_connected",
+                    status=backend_status,
                     reason=transfer_reason,
                     attempts=attempts,
-                    connected_destination_id=dest_id,
+                    connected_destination_id=dest_id if not is_refer_only else None,
                 ),
             )
             return sanitized
