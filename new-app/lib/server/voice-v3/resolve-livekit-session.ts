@@ -82,10 +82,24 @@ async function loadPublishedBundle(
   if (!version?.config) throw new Error("Published version config missing");
   const config = version.config as Record<string, unknown>;
   const nested = config.newAppReceptionist as ReceptionistPublishedBundle | undefined;
-  const amyLen = nested?.runtime?.amyInstructions?.length ?? 0;
-  if (nested?.runtime?.toolNames?.length && amyLen > 2000) return nested;
+  if (!nested?.editor) {
+    throw new Error(
+      "Published receptionist is missing newAppReceptionist editor — republish from the new app (four-screen setup). Legacy wizard config is not used for PSTN.",
+    );
+  }
 
-  const editor = loadLiveEditorFromPublished(version.config, nested?.editor || ({} as never));
+  const editor = loadLiveEditorFromPublished(version.config, nested.editor);
+  const amyLen = nested.runtime?.amyInstructions?.length ?? 0;
+  const hasProvenance = nested.configProvenance?.configSource === "new_app_receptionist";
+  if (
+    nested.runtime?.toolNames?.length &&
+    amyLen > 2000 &&
+    hasProvenance &&
+    nested.runtime.promptFingerprint
+  ) {
+    return nested;
+  }
+
   return compileReceptionistRuntimeBundle({
     workspaceId,
     agentId,
@@ -213,6 +227,26 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     scheduling: {},
   });
 
+  const promptFingerprint = rt.promptFingerprint;
+  const configProvenance = bundle.configProvenance;
+  if (promptFingerprint) {
+    console.info(
+      JSON.stringify({
+        event: "VOICE_V3_PROMPT_FINGERPRINT",
+        liveSessionId,
+        workspaceId,
+        agentId,
+        configSource: configProvenance?.configSource ?? "unknown",
+        legacyWizardUsed: configProvenance?.legacyWizardUsed ?? true,
+        editorDigest: configProvenance?.editorDigest?.slice(0, 16),
+        amyChars: promptFingerprint.amyChars,
+        astraChars: promptFingerprint.astraChars,
+        amySha256: promptFingerprint.amySha256.slice(0, 16),
+        toolNames: promptFingerprint.toolNames,
+      }),
+    );
+  }
+
   await prisma.voiceCall
     .create({
       data: {
@@ -256,5 +290,9 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     reasoningEffort: "low",
     textVerbosity: "low",
     openaiFileSearchVectorStoreIds: rt.openaiFileSearchVectorStoreIds,
+    promptFingerprint: rt.promptFingerprint,
+    configProvenance: bundle.configProvenance,
+    voiceV3ConfigSource: voiceV3Config.source,
+    bookingStrategy: voiceV3Config.scheduling?.bookingStrategy,
   };
 }

@@ -25,13 +25,15 @@ function bookingStrategy(editor: AgentConfig): string {
   if (editor.appointments.strategy === "link") return "SEND_LINK";
   if (editor.appointments.strategy === "request") return "REQUEST_ONLY";
   if (editor.appointments.provider === "calendly") return "CALENDLY";
-  if (editor.appointments.provider === "google") return "MICROSOFT_365";
+  if (editor.appointments.provider === "google") return "GOOGLE_CALENDAR";
   if (editor.appointments.provider === "microsoft") return "MICROSOFT_365";
   return editor.appointments.strategy === "live" ? "MICROSOFT_365" : "NONE";
 }
 
 /**
- * Maps flat new-app AgentConfig into VoiceAgentConfig + wizard snapshot for Voice V3 runtime.
+ * Persists new-app publish payload on VoiceAgentVersion.config.
+ * Runtime (GPT-Live / Astra) reads **only** `newAppReceptionist` — not `advanced.appointmentReceptionistWizard`.
+ * The nested wizard object is legacy metadata for older tooling; it must not drive PSTN behavior.
  */
 export function buildVoiceAgentRuntimeConfigFromEditor(
   editor: AgentConfig,
@@ -100,6 +102,7 @@ export function buildVoiceAgentRuntimeConfigFromEditor(
       schemaVersion: bundle.schemaVersion,
       publishedAt: bundle.publishedAt,
       editor,
+      configProvenance: bundle.configProvenance,
       runtime: bundle.runtime,
     },
   };
