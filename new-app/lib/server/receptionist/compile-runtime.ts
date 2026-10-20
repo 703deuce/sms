@@ -102,7 +102,7 @@ export function compilePublishedBundle(input: {
       astraModel: ASTRA_MODEL,
       toolNames,
       maxToolSteps: 5,
-      openaiFileSearchVectorStoreIds: input.knowledge.openaiVectorStoreIds,
+      openaiFileSearchVectorStoreIds: input.knowledge.openaiVectorStoreIds.slice(0, 2),
       promptFingerprint,
       voiceV3: buildVoiceV3Snapshot(input.editor, input.workspaceId, voiceV3Config),
     },

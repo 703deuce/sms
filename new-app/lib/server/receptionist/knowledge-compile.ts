@@ -6,24 +6,17 @@ import type { KnowledgeCompileSlice } from "@/lib/server/voice-v3/editor-to-voic
 import { listOpenAiVectorStoreIdsForKnowledgeBases } from "@/lib/server/voice-v3/knowledge/gpt-live-file-search-rag";
 import { processPendingKnowledgeSourcesForWorkspace } from "@/lib/server/receptionist/knowledge-processor";
 
+/** Only explicitly linked knowledge bases — never all active workspace KBs (legacy agents). */
 async function activeKnowledgeBaseIds(workspaceId: string, agentId: string): Promise<string[]> {
   const prisma = getPrisma();
-  const ids = new Set<string>();
-
-  const bases = await prisma.voiceKnowledgeBase.findMany({
-    where: { workspaceId, status: "active" },
-    select: { id: true },
-  });
-  for (const kb of bases) ids.add(kb.id);
-
   const links = await prisma.voiceAgentKnowledgeBase.findMany({
     where: { workspaceId, agentId },
     select: { knowledgeBaseId: true },
   });
+  const ids = new Set<string>();
   for (const row of links) {
     if (row.knowledgeBaseId) ids.add(row.knowledgeBaseId);
   }
-
   return [...ids];
 }
 
@@ -37,6 +30,17 @@ export async function buildKnowledgeCompileSlice(input: {
 }): Promise<KnowledgeCompileSlice> {
   const prisma = getPrisma();
   const knowledgeBaseIds = await activeKnowledgeBaseIds(input.workspaceId, input.agentId);
+
+  if (!knowledgeBaseIds.length) {
+    return {
+      knowledgeBaseIds: [],
+      openaiVectorStoreIds: [],
+      documentSourceIds: [],
+      faqFacts: [],
+      knowledgeItemSummaries: [],
+      revision: revisionFingerprint([]),
+    };
+  }
 
   const faqSources = await prisma.voiceKnowledgeSource.findMany({
     where: {
