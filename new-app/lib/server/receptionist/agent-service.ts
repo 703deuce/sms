@@ -1,6 +1,14 @@
 import type { AgentConfig } from "@/lib/agent";
 import { getPrisma } from "@/lib/server/db";
 import { compilePublishedBundle } from "@/lib/server/receptionist/compile-runtime";
+import {
+  resolveReceptionistBusinessFacts,
+  resolveReceptionistBusinessTimezone,
+} from "@/lib/server/receptionist/business-facts";
+import {
+  buildKnowledgeCompileSlice,
+  prepareKnowledgeForPublish,
+} from "@/lib/server/receptionist/knowledge-compile";
 import { validateReceptionistPublish } from "@/lib/server/voice-v3/publish-gate";
 import {
   ensureWorkspaceReceptionistAgent,
@@ -29,6 +37,44 @@ export type ReceptionistStateDto = {
 
 function businessNameFromWorkspace(name: string | null | undefined): string {
   return name?.trim() || "your business";
+}
+
+export async function compileReceptionistRuntimeBundle(input: {
+  workspaceId: string;
+  agentId: string;
+  editor: AgentConfig;
+  syncKnowledge?: boolean;
+}): Promise<ReceptionistPublishedBundle> {
+  const prisma = getPrisma();
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: input.workspaceId },
+    select: { name: true },
+  });
+  const businessName = businessNameFromWorkspace(workspace?.name);
+  const timezone = await resolveReceptionistBusinessTimezone(input.workspaceId);
+  const businessFacts = await resolveReceptionistBusinessFacts(
+    input.workspaceId,
+    input.editor,
+  );
+  const knowledge = input.syncKnowledge
+    ? await prepareKnowledgeForPublish({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+      })
+    : await buildKnowledgeCompileSlice({
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+      });
+
+  return compilePublishedBundle({
+    editor: input.editor,
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    businessName,
+    timezone,
+    businessFacts,
+    knowledge,
+  });
 }
 
 export async function getReceptionistState(workspaceId: string): Promise<ReceptionistStateDto> {
@@ -112,10 +158,22 @@ export async function publishReceptionist(workspaceId: string): Promise<{
     select: { name: true },
   });
 
+  const businessName = businessNameFromWorkspace(workspace?.name);
+  const timezone = await resolveReceptionistBusinessTimezone(workspaceId);
+  const businessFacts = await resolveReceptionistBusinessFacts(workspaceId, draftEnvelope.editor);
+  const knowledge = await prepareKnowledgeForPublish({
+    workspaceId,
+    agentId: agent.id,
+  });
+
   const bundle = compilePublishedBundle({
     editor: draftEnvelope.editor,
     workspaceId,
-    businessName: businessNameFromWorkspace(workspace?.name),
+    agentId: agent.id,
+    businessName,
+    timezone,
+    businessFacts,
+    knowledge,
   });
 
   const lastVersion = await prisma.voiceAgentVersion.findFirst({

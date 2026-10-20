@@ -13,6 +13,7 @@ import { SegmentedFilter } from '@/components/app/filters'
 import { StatusBadge } from '@/components/app/status'
 import {
   addReceptionistWebsiteSource,
+  uploadReceptionistKnowledgeFile,
   fetchReceptionistKnowledgeFaqs,
   fetchReceptionistKnowledgeGaps,
   fetchReceptionistKnowledgeSources,
@@ -37,6 +38,7 @@ export function KnowledgeManager() {
   const [answering, setAnswering] = useState<string | null>(null)
   const [answer, setAnswer] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -70,6 +72,22 @@ export function KnowledgeManager() {
       await reload()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to publish answer')
+    }
+  }
+
+  const onFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    try {
+      await uploadReceptionistKnowledgeFile(file)
+      toast.success('Document uploaded', { description: 'Indexing for Ava may take a minute.' })
+      await reload()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -168,11 +186,26 @@ export function KnowledgeManager() {
       {tab === 'sources' && (
         <div className="flex flex-col gap-4">
           <Panel title="Add a source">
-            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={addWebsite}>
-              <Label htmlFor="src-url" className="sr-only">Website URL</Label>
-              <Input id="src-url" type="url" required placeholder="https://yourwebsite.com/page" className="flex-1" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} />
-              <Button type="submit">Add website</Button>
-            </form>
+            <div className="flex flex-col gap-4">
+              <form className="flex flex-col gap-2 sm:flex-row" onSubmit={addWebsite}>
+                <Label htmlFor="src-url" className="sr-only">Website URL</Label>
+                <Input id="src-url" type="url" required placeholder="https://yourwebsite.com/page" className="flex-1" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} />
+                <Button type="submit">Add website</Button>
+              </form>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Label htmlFor="src-file" className="text-sm text-muted-foreground">
+                  Upload PDF, DOCX, TXT, CSV, MD, JSON, or HTML (max 25MB)
+                </Label>
+                <Input
+                  id="src-file"
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,.csv,.md,.json,.html,.htm"
+                  disabled={uploading}
+                  className="max-w-md"
+                  onChange={(e) => void onFileUpload(e)}
+                />
+              </div>
+            </div>
           </Panel>
           <Panel title="Sources" bodyClassName="p-0">
             <ul className="divide-y">

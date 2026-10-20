@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/server/db";
-import { compilePublishedBundle } from "@/lib/server/receptionist/compile-runtime";
+import { compileReceptionistRuntimeBundle } from "@/lib/server/receptionist/agent-service";
 import { loadLiveEditorFromPublished } from "@/lib/server/receptionist/agent-store";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import { putLiveSession } from "@/lib/server/receptionist/runtime/session-store";
@@ -80,14 +80,11 @@ async function loadPublishedBundle(
   if (nested?.runtime?.toolNames?.length) return nested;
 
   const editor = loadLiveEditorFromPublished(version.config, nested?.editor || ({} as never));
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { name: true },
-  });
-  return compilePublishedBundle({
-    editor,
+  return compileReceptionistRuntimeBundle({
     workspaceId,
-    businessName: workspace?.name || "your business",
+    agentId,
+    editor,
+    syncKnowledge: false,
   });
 }
 
@@ -126,14 +123,11 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     configSource = meta.useDraft ? "draft_test" : "published";
     if (configSource === "draft_test") {
       const draft = loadLiveEditorFromPublished(agent.draftConfig, {} as never);
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { name: true },
-      });
-      bundle = compilePublishedBundle({
-        editor: draft,
+      bundle = await compileReceptionistRuntimeBundle({
         workspaceId,
-        businessName: workspace?.name || "your business",
+        agentId,
+        editor: draft,
+        syncKnowledge: false,
       });
     } else {
       if (!agent.publishedVersionId) throw new Error("Publish the agent before live browser test");

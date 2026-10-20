@@ -64,8 +64,9 @@ export async function upsertFaq(
     });
   }
 
+  let row;
   if (input.id) {
-    return prisma.voiceKnowledgeSource.update({
+    row = await prisma.voiceKnowledgeSource.update({
       where: { id: input.id },
       data: {
         name: input.question,
@@ -74,19 +75,29 @@ export async function upsertFaq(
         status: "ready",
       },
     });
+  } else {
+    row = await prisma.voiceKnowledgeSource.create({
+      data: {
+        workspaceId,
+        knowledgeBaseId: kb.id,
+        sourceType: "faq",
+        name: input.question,
+        contentText: input.answer,
+        fileMeta: { question: input.question },
+        status: "ready",
+      },
+    });
   }
 
-  return prisma.voiceKnowledgeSource.create({
-    data: {
-      workspaceId,
-      knowledgeBaseId: kb.id,
-      sourceType: "faq",
-      name: input.question,
-      contentText: input.answer,
-      fileMeta: { question: input.question },
-      status: "ready",
-    },
-  });
+  try {
+    const { processReceptionistKnowledgeSource } = await import(
+      "@/lib/server/receptionist/knowledge-processor"
+    );
+    await processReceptionistKnowledgeSource(row.id);
+  } catch {
+    // FAQ saved; indexing can complete on next publish
+  }
+  return row;
 }
 
 export async function deleteFaq(workspaceId: string, id: string) {

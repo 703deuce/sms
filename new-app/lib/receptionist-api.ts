@@ -158,6 +158,17 @@ export async function resolveReceptionistGap(gapId: string, answer: string) {
   );
 }
 
+export async function uploadReceptionistKnowledgeFile(file: File) {
+  const form = new FormData();
+  form.set("file", file);
+  return parse<{ id: string; name: string; status: string }>(
+    await fetch("/api/receptionist/knowledge/upload", {
+      method: "POST",
+      body: form,
+    }),
+  );
+}
+
 export async function addReceptionistWebsiteSource(url: string) {
   return parse(
     await fetch("/api/receptionist/knowledge/sources", {

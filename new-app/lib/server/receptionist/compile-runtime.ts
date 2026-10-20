@@ -4,6 +4,12 @@ import {
   RECEPTIONIST_PUBLISHED_SCHEMA_VERSION,
 } from "@/lib/server/receptionist/constants";
 import { mapEditorVoiceToLiveVoiceId } from "@/lib/server/receptionist/voice-map";
+import { buildVoiceV3Prompts } from "@/lib/server/voice-v3/build-voice-v3-prompts";
+import {
+  editorToVoiceV3AgentConfig,
+  type KnowledgeCompileSlice,
+} from "@/lib/server/voice-v3/editor-to-voice-v3-config";
+import type { ReceptionistBusinessFacts } from "@/lib/server/receptionist/business-facts";
 
 const ASTRA_MODEL = process.env.VOICE_V3_ASTRA_MODEL?.trim() || "gpt-5.2";
 
@@ -26,38 +32,11 @@ function enabledTools(config: AgentConfig): string[] {
   return [...new Set(names)];
 }
 
-function buildAmyInstructions(config: AgentConfig, businessName: string): string {
-  const greeting = config.identity.greeting
-    .replace(/\{business_name\}/g, businessName)
-    .replace(/\{agent_name\}/g, config.identity.name)
-    .replace(/\{time_of_day\}/g, "today");
-  return [
-    `You are ${config.identity.name}, ${config.identity.role} for ${businessName}.`,
-    `Open with: ${greeting}`,
-    "Speak naturally, one question at a time. Yield when the caller interrupts.",
-    "Acknowledge tool work briefly; do not repeat filler phrases.",
-    config.instructions?.trim() || "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-function buildAstraInstructions(config: AgentConfig, toolNames: string[]): string {
-  return [
-    "You are the backend reasoning layer for a live voice receptionist.",
-    `Enabled tools: ${toolNames.join(", ")}.`,
-    "Never invent calendar availability or booking confirmations — use tools.",
-    "Persist intake with update_intake when the caller supplies configured fields.",
-    "For scheduling: set_scheduling_preference before find_availability; book only after caller selects a slot.",
-    config.qualification.rules.length
-      ? `Qualification: ${config.qualification.match} of rules; fallback ${config.qualification.fallback}.`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function buildVoiceV3Snapshot(config: AgentConfig, workspaceId: string): Record<string, unknown> {
+function buildVoiceV3Snapshot(
+  config: AgentConfig,
+  workspaceId: string,
+  voiceV3Config: ReturnType<typeof editorToVoiceV3AgentConfig>,
+): Record<string, unknown> {
   return {
     workspaceId,
     identity: {
@@ -81,33 +60,56 @@ function buildVoiceV3Snapshot(config: AgentConfig, workspaceId: string): Record<
     telephony: {
       liveVoiceId: mapEditorVoiceToLiveVoiceId(config.identity.voice, config.identity.customVoiceId),
     },
+    voiceV3AgentConfig: voiceV3Config,
   };
 }
 
 export function compilePublishedBundle(input: {
   editor: AgentConfig;
   workspaceId: string;
+  agentId: string;
   businessName: string;
-  openaiFileSearchVectorStoreIds?: string[];
+  timezone: string;
+  businessFacts: ReceptionistBusinessFacts;
+  knowledge: KnowledgeCompileSlice;
 }): ReceptionistPublishedBundle {
   const toolNames = enabledTools(input.editor);
   const liveVoiceId = mapEditorVoiceToLiveVoiceId(
     input.editor.identity.voice,
     input.editor.identity.customVoiceId,
   );
+
+  const voiceV3Config = editorToVoiceV3AgentConfig({
+    editor: input.editor,
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    businessName: input.businessName,
+    timezone: input.timezone,
+    businessFacts: input.businessFacts,
+    knowledge: input.knowledge,
+  });
+
+  const prompts = buildVoiceV3Prompts({
+    agentName: input.editor.identity.name,
+    businessName: input.businessName,
+    timezone: input.timezone,
+    agentConfig: voiceV3Config,
+    toolNames,
+  });
+
   return {
     schemaVersion: RECEPTIONIST_PUBLISHED_SCHEMA_VERSION,
     publishedAt: new Date().toISOString(),
     editor: input.editor,
     runtime: {
-      amyInstructions: buildAmyInstructions(input.editor, input.businessName),
-      astraInstructions: buildAstraInstructions(input.editor, toolNames),
+      amyInstructions: prompts.liveInstructions,
+      astraInstructions: prompts.astraInstructions,
       liveVoiceId,
       astraModel: ASTRA_MODEL,
       toolNames,
       maxToolSteps: 5,
-      openaiFileSearchVectorStoreIds: input.openaiFileSearchVectorStoreIds ?? [],
-      voiceV3: buildVoiceV3Snapshot(input.editor, input.workspaceId),
+      openaiFileSearchVectorStoreIds: input.knowledge.openaiVectorStoreIds,
+      voiceV3: buildVoiceV3Snapshot(input.editor, input.workspaceId, voiceV3Config),
     },
   };
 }
