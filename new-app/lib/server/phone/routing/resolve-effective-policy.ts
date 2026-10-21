@@ -1,4 +1,5 @@
-import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
+import { usesPhoneCallControlRuntime } from "@/lib/server/telephony/integrated-phone-ingress";
+import { getPrisma } from "@/lib/server/db";
 import { getAnsweringPolicyForNumber } from "./store";
 import {
   inboundCallContext,
@@ -13,7 +14,8 @@ export type EffectiveAnswering =
   | { kind: "forward"; destinationE164: string; press1: boolean; screeningText?: string | null }
   | { kind: "forward_group"; strategy: string; destinations: Array<{ e164: string; press1: boolean; timeout: number }> }
   | { kind: "auto_attendant"; menuId: string }
-  | { kind: "greeting_then_forward"; greeting: string; destinationE164: string };
+  | { kind: "greeting_then_forward"; greeting: string; destinationE164: string }
+  | { kind: "conversational_ivr"; agentId: string | null };
 
 type ScheduleJson = {
   afterHoursMode?: string;
@@ -32,8 +34,7 @@ export async function resolveEffectiveAnswering(input: {
   phoneNumberId: string | null;
   settingsJson: unknown;
 }): Promise<EffectiveAnswering> {
-  const telephony = readTelephonyProvision(input.settingsJson);
-  if (telephony.routingMode !== "telnyx_call_control" || telephony.state !== "active") {
+  if (!usesPhoneCallControlRuntime(input.settingsJson)) {
     return { kind: "browser" };
   }
 
@@ -87,6 +88,18 @@ export async function resolveEffectiveAnswering(input: {
         };
       }
     }
+  }
+
+  if (policy.answeringMode === "conversational_ivr") {
+    const link = await getPrisma().voiceAgentPhoneNumber.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        phoneNumberId: input.phoneNumberId,
+        inboundEnabled: true,
+      },
+      select: { agentId: true },
+    });
+    return { kind: "conversational_ivr", agentId: link?.agentId ?? null };
   }
 
   if (policy.answeringMode === "auto_attendant" && policy.autoAttendantMenuId) {

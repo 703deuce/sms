@@ -4,6 +4,7 @@ import { jsonError } from "@/lib/server/api-error";
 import { mapPhoneRowToOwned } from "@/lib/server/numbers/map-owned";
 import { orderPhoneNumber } from "@/lib/server/telnyx/numbers";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
+import { provisionIntegratedPhoneNumber } from "@/lib/server/telephony/provision-integrated-phone";
 
 export async function POST(request: Request) {
   try {
@@ -45,7 +46,18 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ data: mapPhoneRowToOwned(row) });
+    const provision =
+      row.status === "Active" && row.providerNumberId
+        ? await provisionIntegratedPhoneNumber({
+            workspaceId,
+            phoneNumberId: row.id,
+          })
+        : { ok: true, actions: ["provision_deferred_until_active"] as string[] };
+
+    return NextResponse.json({
+      data: mapPhoneRowToOwned(row),
+      provision: provision.ok ? { actions: provision.actions } : { error: provision.error },
+    });
   } catch (err) {
     return jsonError(err, 500);
   }

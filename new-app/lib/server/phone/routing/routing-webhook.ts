@@ -170,6 +170,31 @@ export async function processCallForwardingWebhookEvent(input: {
         return { handled: true };
       }
 
+      if (clientState.simultaneous && sessionId && !winner) {
+        const activeOutbound = await getPrisma().phoneCallLeg.count({
+          where: {
+            sessionId,
+            direction: "outbound",
+            status: { in: ["dialing", "ringing", "answered"] },
+          },
+        });
+        if (activeOutbound === 0 && clientState.parentCallControlId) {
+          const ctx = await getCallContextFromSession(sessionId);
+          if (ctx) {
+            const fb = await resolveNoAnswerFallback(ctx.workspaceId, ctx.phoneNumberId);
+            await executeFallback({
+              workspaceId: ctx.workspaceId,
+              humanCallId: ctx.humanCallId,
+              inboundControlId: String(clientState.parentCallControlId),
+              phoneNumberId: ctx.phoneNumberId,
+              action: fb,
+              routingSessionId: sessionId,
+            });
+          }
+          return { handled: true };
+        }
+      }
+
       if (queue.length && clientState.parentCallControlId) {
         const next = queue[0];
         const ctx = sessionId ? await getCallContextFromSession(sessionId) : null;

@@ -16,7 +16,8 @@ type VoiceRuntimeAction =
   | "finalize_voice_v3_call"
   | "append_voice_v3_forensic_events"
   | "flush_voice_v3_forensics"
-  | "record_voice_v3_transfer_outcome";
+  | "record_voice_v3_transfer_outcome"
+  | "execute_phone_foundation_transfer";
 
 export async function GET() {
   return NextResponse.json({
@@ -100,6 +101,28 @@ export async function POST(request: Request) {
           "@/lib/server/voice-v3/transfer/record-transfer-outcome"
         );
         return NextResponse.json(await recordVoiceV3TransferOutcomeForNewApp(payload as never));
+      }
+      case "execute_phone_foundation_transfer": {
+        const { executePhoneFoundationTransferHandoff } = await import(
+          "@/lib/server/phone/orchestration/phone-foundation-transfer"
+        );
+        const workspaceId = String(payload.workspaceId || "");
+        const humanCallId = String(payload.humanCallId || "");
+        const inboundCallControlId = String(payload.inboundCallControlId || "");
+        const result = await executePhoneFoundationTransferHandoff({
+          workspaceId,
+          humanCallId,
+          inboundCallControlId,
+          forwardingGroupId: payload.forwardingGroupId
+            ? String(payload.forwardingGroupId)
+            : null,
+          destinationId: payload.destinationId ? String(payload.destinationId) : null,
+          destinationE164: payload.destinationE164
+            ? String(payload.destinationE164)
+            : null,
+          press1: payload.press1 === true,
+        });
+        return NextResponse.json({ ok: true, ...result });
       }
       default:
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });

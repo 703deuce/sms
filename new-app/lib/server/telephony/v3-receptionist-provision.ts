@@ -33,15 +33,61 @@ export type PreparedLiveKitDestination = {
   error?: string;
 };
 
+function buildPreparedLiveKitDestinationOk(input: {
+  connectionId: string;
+  fqdnId: string;
+  trunkId: string;
+  dispatchRuleId: string;
+  priorTelnyxConnectionId: string | null;
+  providerNumberId: string;
+  actions: string[];
+}): PreparedLiveKitDestination {
+  return {
+    ok: true,
+    connectionId: input.connectionId,
+    fqdnId: input.fqdnId,
+    trunkId: input.trunkId,
+    dispatchRuleId: input.dispatchRuleId,
+    priorTelnyxConnectionId: input.priorTelnyxConnectionId,
+    providerNumberId: input.providerNumberId,
+    actions: input.actions,
+  };
+}
+
 /**
- * Steps 3–4 (prepare): LiveKit trunk + per-DID dispatch + FQDN connection record — no Telnyx number reroute yet.
+ * LiveKit trunk + dispatch for Phone Call Control handoff — does not change Telnyx DID ingress.
  */
+export async function prepareLiveKitHandoffResources(input: {
+  workspaceId: string;
+  phoneNumberId: string;
+  agentId: string;
+  publishedVersionId?: string | null;
+}): Promise<PreparedLiveKitDestination> {
+  return prepareVoiceV3LiveKitDestinationCore(input, { persistExclusiveIngress: false });
+}
+
 export async function prepareVoiceV3LiveKitDestination(input: {
   workspaceId: string;
   phoneNumberId: string;
   agentId: string;
   publishedVersionId?: string | null;
 }): Promise<PreparedLiveKitDestination> {
+  return prepareVoiceV3LiveKitDestinationCore(input, { persistExclusiveIngress: true });
+}
+
+/**
+ * Steps 3–4 (prepare): LiveKit trunk + per-DID dispatch + FQDN connection record — no Telnyx number reroute yet.
+ */
+async function prepareVoiceV3LiveKitDestinationCore(
+  input: {
+    workspaceId: string;
+    phoneNumberId: string;
+    agentId: string;
+    publishedVersionId?: string | null;
+  },
+  options?: { persistExclusiveIngress?: boolean },
+): Promise<PreparedLiveKitDestination> {
+  const persistExclusiveIngress = options?.persistExclusiveIngress !== false;
   const prisma = getPrisma();
   const phone = await prisma.phoneNumber.findFirst({
     where: { id: input.phoneNumberId, workspaceId: input.workspaceId },
@@ -98,18 +144,21 @@ export async function prepareVoiceV3LiveKitDestination(input: {
     });
     actions.push(...pruned.actions);
 
-    await writeTelephonyProvision(phone.id, {
-      routingMode: "livekit_sip",
-      state: "provisioning",
-      telnyxFqdnConnectionId: connectionId,
-      telnyxFqdnId: fqdnId,
-      livekitInboundTrunkId: trunkId,
-      livekitDidDispatchRuleId: dispatch.ruleId,
-      lastError: null,
-    });
+    if (persistExclusiveIngress) {
+      await writeTelephonyProvision(phone.id, {
+        routingMode: "livekit_sip",
+        state: "provisioning",
+        telnyxFqdnConnectionId: connectionId,
+        telnyxFqdnId: fqdnId,
+        livekitInboundTrunkId: trunkId,
+        livekitDidDispatchRuleId: dispatch.ruleId,
+        lastError: null,
+      });
+    } else {
+      actions.push("skipped_exclusive_ingress_telephony_write");
+    }
 
-    return {
-      ok: true,
+    return buildPreparedLiveKitDestinationOk({
       connectionId,
       fqdnId,
       trunkId,
@@ -117,7 +166,7 @@ export async function prepareVoiceV3LiveKitDestination(input: {
       priorTelnyxConnectionId: live.connectionId,
       providerNumberId: live.providerNumberId,
       actions,
-    };
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {

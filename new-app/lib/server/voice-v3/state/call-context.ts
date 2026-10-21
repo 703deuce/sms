@@ -150,6 +150,13 @@ export interface VoiceV3CallContext {
   runtime: {
     version: number;
   };
+  /** Present when Conversational IVR runs behind Phone Call Control (not exclusive LiveKit ingress). */
+  phoneFoundation?: {
+    humanCallId: string;
+    inboundCallControlId: string;
+    workspaceId: string;
+    phoneNumberId: string;
+  };
 }
 
 export function createInitialVoiceV3CallContext(input: {
@@ -158,6 +165,7 @@ export function createInitialVoiceV3CallContext(input: {
   timezone: string;
   clock: VoiceV3CallClock;
   inboundCallerE164?: string | null;
+  phoneFoundation?: VoiceV3CallContext["phoneFoundation"];
   now?: Date;
 }): VoiceV3CallContext {
   const now = (input.now ?? new Date()).toISOString();
@@ -168,6 +176,7 @@ export function createInitialVoiceV3CallContext(input: {
     updatedAt: now,
     business: { timezone: input.timezone },
     telephony: { inboundCallerE164: input.inboundCallerE164?.trim() || null },
+    phoneFoundation: input.phoneFoundation,
     clock: input.clock,
     dialog: { activeGoal: "UNKNOWN" },
     conversation: {

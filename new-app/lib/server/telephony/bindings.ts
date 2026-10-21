@@ -2,6 +2,7 @@ import "server-only";
 
 import type { NumberProduct } from "@/lib/numbers";
 import { getPrisma } from "@/lib/server/db";
+import { isPhoneFoundationIngress } from "@/lib/server/telephony/integrated-phone-ingress";
 import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
 
 export type NumberProductBinding = {
@@ -22,15 +23,24 @@ export async function detectNumberProductBindings(input: {
 
   const bindings: NumberProductBinding[] = [];
   const telephony = readTelephonyProvision(phone.settingsJson);
+  const foundation = isPhoneFoundationIngress(phone.settingsJson);
 
-  if (telephony.routingMode === "livekit_sip" && telephony.state === "active") {
+  if (!foundation && telephony.routingMode === "livekit_sip" && telephony.state === "active") {
     bindings.push({ product: "receptionist", detail: "AI Receptionist (Voice V3 LiveKit ingress)" });
   }
-  if (telephony.routingMode === "mctb_texml" && telephony.state === "active") {
+  if (!foundation && telephony.routingMode === "mctb_texml" && telephony.state === "active") {
     bindings.push({ product: "mctb", detail: "Missed Call Text Back (TeXML ingress)" });
   }
-  if (telephony.routingMode === "telnyx_call_control" && telephony.state === "active") {
-    bindings.push({ product: "phone", detail: "Phone call handling (Telnyx Call Control)" });
+  if (
+    foundation ||
+    (telephony.routingMode === "telnyx_call_control" && telephony.state === "active")
+  ) {
+    bindings.push({
+      product: "phone",
+      detail: foundation
+        ? "Phone (single Call Control ingress)"
+        : "Phone call handling (Telnyx Call Control)",
+    });
   }
 
   const agentLinks = await prisma.voiceAgentPhoneNumber.findMany({
@@ -41,9 +51,17 @@ export async function detectNumberProductBindings(input: {
     if (!bindings.some((b) => b.product === "receptionist")) {
       bindings.push({
         product: "receptionist",
-        detail: `AI Receptionist · ${link.agent?.name || "Agent"}`,
+        detail: foundation
+          ? `Conversational IVR · ${link.agent?.name || "Agent"}`
+          : `AI Receptionist · ${link.agent?.name || "Agent"}`,
       });
     }
+  }
+
+  const settings = phone.settingsJson as Record<string, unknown> | null;
+  const mctbInbound = settings?.mctbInbound as Record<string, unknown> | undefined;
+  if (foundation && mctbInbound?.enabled && !bindings.some((b) => b.product === "mctb")) {
+    bindings.push({ product: "mctb", detail: "Missed Call Text Back (Phone-owned)" });
   }
 
   const routing = await prisma.workspaceCallRouting.findUnique({

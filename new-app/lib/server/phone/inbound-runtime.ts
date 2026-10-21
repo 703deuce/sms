@@ -81,6 +81,7 @@ export async function processInboundCallInitiated(input: {
     effective.kind === "forward_group" ||
     effective.kind === "greeting_then_forward" ||
     effective.kind === "auto_attendant" ||
+    effective.kind === "conversational_ivr" ||
     effective.kind === "voicemail";
 
   const browserRing =
@@ -173,6 +174,23 @@ export async function processInboundCallInitiated(input: {
           forwardingEffective: effective.kind,
         },
       },
+    });
+    return call;
+  }
+
+  if (input.telnyxCallControlId && effective.kind === "conversational_ivr" && pn?.id) {
+    const { startConversationalIvrOnCallControlSession } = await import(
+      "@/lib/server/phone/orchestration/livekit-handoff"
+    );
+    await startConversationalIvrOnCallControlSession({
+      workspaceId: input.workspaceId,
+      humanCallId: call.id,
+      phoneNumberId: pn.id,
+      inboundControlId: input.telnyxCallControlId,
+      businessLineE164: input.toE164,
+      callerE164: from,
+      agentId: effective.agentId,
+      reason: "primary",
     });
     return call;
   }

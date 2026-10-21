@@ -79,6 +79,35 @@ export async function executeFallback(input: {
     }
     return;
   }
+  if (input.action.type === "conversational_ivr") {
+    const { startConversationalIvrOnCallControlSession } = await import(
+      "@/lib/server/phone/orchestration/livekit-handoff"
+    );
+    const call = await getPrisma().humanCall.findUnique({ where: { id: input.humanCallId } });
+    if (!call) return;
+    await startConversationalIvrOnCallControlSession({
+      workspaceId: input.workspaceId,
+      humanCallId: input.humanCallId,
+      phoneNumberId: input.phoneNumberId || call.phoneNumberId || "",
+      inboundControlId: input.inboundControlId,
+      businessLineE164: call.to,
+      callerE164: call.from,
+      reason: "no_answer_fallback",
+    });
+    return;
+  }
+  if (input.action.type === "forward_group" && input.action.forwardingGroupId) {
+    const { executePhoneFoundationTransferHandoff } = await import(
+      "@/lib/server/phone/orchestration/phone-foundation-transfer"
+    );
+    await executePhoneFoundationTransferHandoff({
+      workspaceId: input.workspaceId,
+      humanCallId: input.humanCallId,
+      inboundCallControlId: input.inboundControlId,
+      forwardingGroupId: input.action.forwardingGroupId,
+    });
+    return;
+  }
   if (input.action.type === "replay_menu" && input.action.menuId) {
     const { startAutoAttendantFlow } = await import("./menu-executor");
     const ctx = input.routingSessionId

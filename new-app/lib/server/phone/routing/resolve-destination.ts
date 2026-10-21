@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/server/db";
+import { isPhoneFoundationIngress } from "@/lib/server/telephony/integrated-phone-ingress";
 import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
 import type { ForwardingDestinationRef, ResolvedForwardingDialTarget } from "./destination-types";
 import {
@@ -39,6 +40,7 @@ export async function assertWorkspacePhoneForwardable(
     select: { id: true, e164: true, settingsJson: true },
   });
   if (!phone) throw new Error("Transovo number not found in this workspace");
+  if (isPhoneFoundationIngress(phone.settingsJson)) return phone;
   const telephony = readTelephonyProvision(phone.settingsJson);
   const mode = telephony.routingMode || "telnyx_call_control";
   if (UNSUPPORTED_ROUTING_MODES.has(mode)) {

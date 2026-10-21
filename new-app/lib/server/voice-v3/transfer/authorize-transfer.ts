@@ -165,14 +165,30 @@ export function authorizeVoiceV3Transfer(input: {
   }
 
   const authorizedTargets: VoiceV3AuthorizedTransferPlan["targets"] = [];
+  const phoneFoundation = callContext.phoneFoundation;
   for (const t of targets) {
     const dest = destMap.get(t.destinationId);
-    if (!dest?.enabled || !dest.phoneE164) continue;
+    if (!dest?.enabled) continue;
+    if (dest.forwardingGroupId) {
+      authorizedTargets.push({
+        destination_id: dest.id,
+        mode: t.mode,
+        dial_target: `phone_foundation:forwarding_group:${dest.forwardingGroupId}`,
+        ringing_timeout_seconds: t.ringingTimeoutSeconds,
+        executor: "phone_call_control",
+        forwarding_group_id: dest.forwardingGroupId,
+        inbound_call_control_id: phoneFoundation?.inboundCallControlId ?? null,
+        human_call_id: phoneFoundation?.humanCallId ?? null,
+      });
+      continue;
+    }
+    if (!dest.phoneE164) continue;
     authorizedTargets.push({
       destination_id: dest.id,
       mode: t.mode,
       dial_target: dest.phoneE164,
       ringing_timeout_seconds: t.ringingTimeoutSeconds,
+      executor: "livekit_sip",
     });
   }
 

@@ -12,6 +12,10 @@ import {
   prepareVoiceV3LiveKitDestination,
 } from "@/lib/server/telephony/v3-receptionist-provision";
 import { syncReceptionistDraftConnectionOnNumberSwitch } from "@/lib/server/receptionist/sync-draft-connection";
+import {
+  shouldUseIntegratedCapabilitySwitch,
+  switchIntegratedPhoneCapabilities,
+} from "@/lib/server/telephony/integrated-capabilities";
 
 /** Carrier ingress change vs logical product binding (Phone + Ava can share one DID). */
 export type IngressStrategy = "exclusive" | "shared_voice";
@@ -147,6 +151,18 @@ export async function switchNumberToProduct(
       actions,
       error: "Phone number not found",
     };
+  }
+
+  if (shouldUseIntegratedCapabilitySwitch(phone.settingsJson)) {
+    return switchIntegratedPhoneCapabilities({
+      workspaceId: input.workspaceId,
+      phoneNumberId: input.phoneNumberId,
+      targetProduct: input.targetProduct,
+      agentId: input.agentId,
+      e164: phone.e164,
+      previousBindings: conflicts,
+      ingressStrategy,
+    });
   }
 
   const live = await readLiveTelnyxConnectionId({

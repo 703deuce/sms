@@ -18,6 +18,7 @@ import {
 import { voiceV3AgentConfigFromBundle } from "@/lib/server/voice-v3/bundle-voice-config";
 import { enrichVoiceV3AgentConfigForRuntime } from "@/lib/server/voice-v3/enrich-runtime-config";
 import { createVoiceV3CallRuntime } from "@/lib/server/voice-v3/state/call-runtime";
+import type { VoiceV3CallContext } from "@/lib/server/voice-v3/state/call-context";
 import { ensureVoiceCallRowOnSessionResolve } from "@/lib/server/voice-v3/post-call/ensure-voice-call-row";
 import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
 import type { FunctionTool } from "openai/resources/live/live";
@@ -40,9 +41,16 @@ function assertInboundSipBootstrapTrust(payload: LiveKitBootstrapPayload, roomNa
     );
   }
 
+  if (payload.bootstrapPath === "phone_call_control") {
+    if (!payload.humanCallId?.trim()) {
+      throw new Error("humanCallId is required for phone_call_control bootstrap");
+    }
+    return;
+  }
+
   if (payload.bootstrapPath !== "livekit_sip") {
     throw new Error(
-      "Inbound SIP resolve requires bootstrapPath livekit_sip from authenticated transovo-voice-v3 worker",
+      "Inbound SIP resolve requires bootstrapPath livekit_sip or phone_call_control from authenticated transovo-voice-v3 worker",
     );
   }
 
@@ -194,6 +202,32 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
 
   const callerE164 = payload.callerE164?.trim();
 
+  let phoneFoundation: VoiceV3CallContext["phoneFoundation"];
+  if (payload.bootstrapPath === "phone_call_control" && payload.humanCallId?.trim()) {
+    const humanCallId = payload.humanCallId.trim();
+    const hc = await prisma.humanCall.findFirst({
+      where: { id: humanCallId, workspaceId },
+      select: { id: true, phoneNumberId: true, metadata: true },
+    });
+    const meta = (hc?.metadata as Record<string, unknown>) || {};
+    const orch = (meta.orchestration as Record<string, unknown>) || {};
+    const inboundCallControlId =
+      payload.inboundCallControlId?.trim() ||
+      String(meta.callerCallControlId || "") ||
+      "";
+    if (hc?.phoneNumberId && inboundCallControlId) {
+      phoneFoundation = {
+        humanCallId,
+        inboundCallControlId,
+        workspaceId,
+        phoneNumberId: hc.phoneNumberId,
+      };
+    }
+    if (orch.stage === "ai_active") {
+      // still on same logical Phone call — do not treat staff ring timeout as missed yet
+    }
+  }
+
   let voiceV3Config = voiceV3AgentConfigFromBundle(bundle, {
     workspaceId,
     agentId,
@@ -208,6 +242,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     liveSessionId,
     callId,
     inboundCallerE164: callerE164,
+    phoneFoundation,
     config: voiceV3Config,
   });
 
@@ -261,6 +296,8 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
       configSource,
       publishedVersionId,
       voiceTransport: "voice_v3_livekit",
+      phoneFoundationHumanCallId: phoneFoundation?.humanCallId ?? null,
+      inboundCallControlId: phoneFoundation?.inboundCallControlId ?? null,
     },
   });
 

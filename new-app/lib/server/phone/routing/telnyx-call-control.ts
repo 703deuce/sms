@@ -105,6 +105,37 @@ export async function dialPstnLeg(input: {
   });
 }
 
+export async function dialSipLeg(input: {
+  connectionId: string;
+  sipUri: string;
+  fromE164: string;
+  linkToControlId: string;
+  timeoutSec: number;
+  clientState: Record<string, unknown>;
+  bridgeOnAnswer?: boolean;
+  sipHeaders?: Array<{ name: string; value: string }>;
+}) {
+  const body: Record<string, unknown> = {
+    connection_id: input.connectionId,
+    to: input.sipUri,
+    from: input.fromE164,
+    client_state: encodeTelnyxClientState(input.clientState),
+    timeout_secs: input.timeoutSec,
+    link_to: input.linkToControlId,
+    bridge_intent: true,
+    bridge_on_answer: input.bridgeOnAnswer ?? true,
+    prevent_double_bridge: true,
+    command_id: newCommandId("dial_sip"),
+  };
+  if (input.sipHeaders?.length) {
+    body.sip_headers = input.sipHeaders.map((h) => ({ name: h.name, value: h.value }));
+  }
+  return telnyxRequest<{ data?: { call_control_id?: string } }>("/calls", {
+    method: "POST",
+    body,
+  });
+}
+
 export function requireCallControlConnectionId() {
   const id = getPhoneCallControlConnectionId();
   if (!id) throw new Error("TELNYX_CALL_CONTROL_APP_ID is not configured");

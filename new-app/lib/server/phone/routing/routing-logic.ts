@@ -33,10 +33,18 @@ export function shouldTrySequentialOnHangup(input: {
 }
 
 export type FallbackActionParsed = {
-  type: "voicemail" | "forward_phone" | "announcement" | "hangup" | "replay_menu";
+  type:
+    | "voicemail"
+    | "forward_phone"
+    | "forward_group"
+    | "conversational_ivr"
+    | "announcement"
+    | "hangup"
+    | "replay_menu";
   destinationE164?: string;
   destinationId?: string;
   destinationWorkspacePhoneId?: string;
+  forwardingGroupId?: string;
   announcementText?: string;
   menuId?: string;
 };
@@ -48,6 +56,10 @@ export function parseFallbackJson(raw: unknown): FallbackActionParsed | null {
   if (type === "voicemail") return { type: "voicemail" };
   if (type === "hangup") return { type: "hangup" };
   if (type === "replay_menu" && o.menuId) return { type: "replay_menu", menuId: String(o.menuId) };
+  if (type === "conversational_ivr") return { type: "conversational_ivr" };
+  if (type === "forward_group" && o.forwardingGroupId) {
+    return { type: "forward_group", forwardingGroupId: String(o.forwardingGroupId) };
+  }
   if (type === "forward_phone") {
     if (o.destinationId) {
       return { type: "forward_phone", destinationId: String(o.destinationId) };

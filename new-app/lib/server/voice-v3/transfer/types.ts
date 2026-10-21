@@ -25,6 +25,8 @@ export interface VoiceV3TransferDestinationCompiled {
   /** Semantic hint for route selection — never a phone number. */
   description?: string;
   phoneE164: string;
+  /** Phone Call Control executor — full ring group via Phone routing (not LiveKit SIP REFER). */
+  forwardingGroupId?: string;
   defaultMode: VoiceV3TransferMode;
   ringingTimeoutSeconds: number;
   enabled: boolean;
@@ -61,11 +63,17 @@ export interface VoiceV3TransferPolicyCompiled {
 }
 
 /** Runtime execution plan — trusted worker payload only. */
+export type VoiceV3TransferExecutor = "livekit_sip" | "phone_call_control";
+
 export interface VoiceV3AuthorizedTransferTarget {
   destination_id: string;
   mode: VoiceV3TransferMode;
   dial_target: string;
   ringing_timeout_seconds: number;
+  executor?: VoiceV3TransferExecutor;
+  forwarding_group_id?: string | null;
+  inbound_call_control_id?: string | null;
+  human_call_id?: string | null;
 }
 
 export interface VoiceV3AuthorizedTransferPlan {
