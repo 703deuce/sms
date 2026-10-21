@@ -1,22 +1,34 @@
 /**
  * Inspect LiveKit SIP trunks + dispatch rules; optionally prune obsolete per-DID rules.
  *
- *   cd new-app && npx tsx scripts/livekit-v3-canonical-routing-audit.mjs
- *   LIVEKIT_V3_ROUTING_RESET_ACK=1 npx tsx scripts/livekit-v3-canonical-routing-audit.mjs --apply
+ *   cd new-app && NODE_OPTIONS='--import ../../scripts/preload-server-only.mjs' npx tsx scripts/livekit-v3-canonical-routing-audit.mjs
+ *   LIVEKIT_V3_ROUTING_RESET_ACK=1 ... --apply
  */
-import {
+const livekitUrl = process.env.LIVEKIT_URL?.trim() || "";
+if (!livekitUrl || !process.env.LIVEKIT_API_KEY?.trim() || !process.env.LIVEKIT_API_SECRET?.trim()) {
+  console.log(
+    JSON.stringify({
+      ok: true,
+      skipped: true,
+      reason: "LIVEKIT_URL/API_KEY/API_SECRET not set in this environment",
+    }),
+  );
+  process.exit(0);
+}
+
+const apply = process.argv.includes("--apply");
+
+const {
   ensureCanonicalV3SharedDispatchRule,
   isObsoletePerDidDispatchRuleName,
   pruneObsoleteDispatchRules,
-} from "../lib/server/receptionist/livekit/canonical-dispatch.ts";
-import { getLiveKitSipClient, VOICE_V3_LIVEKIT_AGENT_NAME } from "../lib/server/receptionist/livekit/client.ts";
-import {
-  TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME,
-  TRANSOVO_LIVEKIT_TRUNK_NAME,
-} from "../lib/server/telephony/config.ts";
-
-const apply = process.argv.includes("--apply");
-const livekitUrl = process.env.LIVEKIT_URL?.trim() || "";
+} = await import("../lib/server/receptionist/livekit/canonical-dispatch.ts");
+const { getLiveKitSipClient, VOICE_V3_LIVEKIT_AGENT_NAME } = await import(
+  "../lib/server/receptionist/livekit/client.ts",
+);
+const { TRANSOVO_LIVEKIT_DISPATCH_RULE_NAME, TRANSOVO_LIVEKIT_TRUNK_NAME } = await import(
+  "../lib/server/telephony/config.ts",
+);
 
 const client = getLiveKitSipClient();
 const trunks = await client.listSipInboundTrunk();
@@ -66,8 +78,7 @@ for (const r of canonicalCandidates) {
   });
 }
 
-const keeper =
-  trunks.find((t) => t.name === TRANSOVO_LIVEKIT_TRUNK_NAME) || trunks[0];
+const keeper = trunks.find((t) => t.name === TRANSOVO_LIVEKIT_TRUNK_NAME) || trunks[0];
 const trunkId = keeper?.sipTrunkId;
 if (!trunkId) {
   console.error("No inbound trunk found — cannot ensure canonical dispatch.");
