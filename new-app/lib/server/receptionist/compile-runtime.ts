@@ -141,7 +141,17 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
       );
       const legacy = config.transfers.some((t) => t.enabled && t.number?.trim());
       if (!routes.length && !legacy) {
-        errors.push("Add at least one enabled call route with a Phone destination.");
+        errors.push("Add at least one enabled transfer destination with a phone number.");
+      }
+      for (const r of routes) {
+        if (!r.name?.trim()) {
+          errors.push("Each transfer destination needs a name.");
+          break;
+        }
+        if (!r.intentDescription?.trim()) {
+          errors.push("Each transfer destination needs “When to transfer” guidance.");
+          break;
+        }
       }
     } else if (!config.transfers.some((t) => t.enabled && t.number?.trim())) {
       errors.push("Enable at least one transfer destination.");

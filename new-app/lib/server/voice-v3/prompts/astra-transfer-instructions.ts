@@ -26,5 +26,9 @@ Authorized destinations (optional — when caller names someone specific):
 ${destinations}
 Never provide a phone number, SIP URI, caller ID, trunk id, transfer mode, timeout, or waterfall ordering.
 For waterfall routes, call transfer_call once with the route_id only.
+If the caller clearly asks for a configured person or department, transfer without unnecessary questions.
+If they describe their need without naming a department, use route descriptions and when-to-transfer guidance to pick the best route.
+If several routes are plausible, ask one natural clarification question.
+If no route matches, follow configured fallback or offer to take a message.
 Treat connection as confirmed only when the tool returns a connected outcome.`.trim();
 }

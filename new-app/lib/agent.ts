@@ -176,7 +176,9 @@ export type RuntimeProfile = "conversational_ivr" | "full_receptionist";
 export type ConversationalRoute = {
   id: string;
   name: string;
-  /** Natural-language guidance for when to use this route (not keyword matching). */
+  /** Who this person or department is and what they handle. */
+  description: string;
+  /** Plain-language guidance for when the AI should select this route (not keyword matching). */
   intentDescription: string;
   examples: string[];
   /** Phone forwarding destination id, ring group id, or legacy transfer destination id. */

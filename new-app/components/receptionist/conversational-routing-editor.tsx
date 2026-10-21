@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { Loader2, Pencil, Plus, Route, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,386 +12,381 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { SimpleSelect } from '@/components/app/filters'
 import { Panel } from '@/components/app/page-primitives'
 import { useAgent } from '@/components/providers/agent-provider'
-import type { AgentConfig, ConversationalRoute } from '@/lib/agent'
-import { fetchCallForwarding, type ForwardingConfigDto, type ForwardingDestinationDto } from '@/lib/phone-forwarding-api'
+import type { ConversationalRoute } from '@/lib/agent'
 import { formatPhone } from '@/lib/format'
-import { Section } from './ai-ui'
+import {
+  CONVERSATIONAL_ROUTE_EXAMPLE,
+  tryNormalizePhoneInput,
+} from '@/lib/receptionist/conversational-route-helpers'
+import {
+  createForwardingDestination,
+  patchForwardingDestination,
+} from '@/lib/phone-forwarding-api'
 
 function newRouteId() {
   return `cr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
 }
 
-type DestinationPick = {
-  kind: 'forwarding_destination'
-  id: string
-  label: string
-  phoneE164: string
-}
-
-/** Individual Phone forwarding destinations only — ring groups require LiveKit↔Phone bridge (not v1). */
-function buildDestinationOptions(config: ForwardingConfigDto | null): DestinationPick[] {
-  if (!config) return []
-  const out: DestinationPick[] = []
-  for (const d of config.destinations.filter((x) => x.enabled)) {
-    out.push({
-      kind: 'forwarding_destination',
-      id: d.id,
-      label: d.name,
-      phoneE164: d.phoneE164,
-    })
+function emptyRoute(): ConversationalRoute {
+  return {
+    id: newRouteId(),
+    name: '',
+    description: '',
+    intentDescription: '',
+    examples: [],
+    destinationRef: '',
+    destinationKind: 'forwarding_destination',
+    enabled: true,
+    confirmBeforeTransfer: false,
   }
-  return out
 }
 
-function destinationLabel(route: ConversationalRoute, options: DestinationPick[]): string {
-  const hit = options.find((o) => o.id === route.destinationRef && o.kind === route.destinationKind)
-  if (hit) return hit.label
-  return route.destinationLabel || route.destinationRef || '—'
+async function syncPhoneDestination(route: ConversationalRoute): Promise<ConversationalRoute> {
+  const phone = route.destinationPhoneE164?.trim()
+  if (!phone) throw new Error('Phone number is required.')
+
+  const body = {
+    name: route.name.trim() || 'Transfer destination',
+    destinationKind: 'external_phone',
+    phoneE164: phone,
+    enabled: true,
+  }
+
+  if (
+    route.destinationRef &&
+    route.destinationKind === 'forwarding_destination'
+  ) {
+    await patchForwardingDestination(route.destinationRef, body)
+    return {
+      ...route,
+      destinationLabel: route.name.trim(),
+      destinationPhoneE164: phone,
+    }
+  }
+
+  const created = await createForwardingDestination(body)
+  return {
+    ...route,
+    destinationRef: created.id,
+    destinationKind: 'forwarding_destination',
+    destinationLabel: created.name,
+    destinationPhoneE164: created.phoneE164,
+  }
 }
 
 export function ConversationalRoutingEditor() {
   const { draft, update } = useAgent()
-  const [loading, setLoading] = useState(true)
-  const [config, setConfig] = useState<ForwardingConfigDto | null>(null)
-  const [editRoute, setEditRoute] = useState<ConversationalRoute | null>(null)
-
-  const destinationOptions = useMemo(() => buildDestinationOptions(config), [config])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await fetchCallForwarding()
-      setConfig(data)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  const routing = draft.conversationalRouting
   const routes = draft.conversationalRoutes ?? []
+  const routing = draft.conversationalRouting
+  const [editRoute, setEditRoute] = useState<ConversationalRoute | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const setRoutes = (next: ConversationalRoute[]) => {
     update('conversationalRoutes', next)
-  }
-
-  const openNew = () => {
-    setEditRoute({
-      id: newRouteId(),
-      name: '',
-      intentDescription: '',
-      examples: [],
-      destinationRef: '',
-      destinationKind: 'forwarding_destination',
-      enabled: true,
-      confirmBeforeTransfer: false,
-    })
-  }
-
-  const saveRoute = (route: ConversationalRoute) => {
-    const idx = routes.findIndex((r) => r.id === route.id)
-    const next = idx >= 0 ? routes.map((r) => (r.id === route.id ? route : r)) : [...routes, route]
-    setRoutes(next)
-    setEditRoute(null)
+    if (next.length > 0 && !draft.capabilities.transfer) {
+      update('capabilities', (c) => ({ ...c, transfer: true }))
+    }
   }
 
   const removeRoute = (id: string) => {
     setRoutes(routes.filter((r) => r.id !== id))
   }
 
-  const defaultOptions = destinationOptions.map((o) => ({
-    value: `${o.kind}:${o.id}`,
-    label: o.label,
-  }))
-
-  const pickDefault = (value: string) => {
-    const [kind, id] = value.split(':')
-    update('conversationalRouting', (r) => ({ ...r, defaultDestinationRef: id }))
+  const persistRoute = async (route: ConversationalRoute) => {
+    setSaving(true)
+    try {
+      const synced = await syncPhoneDestination(route)
+      const idx = routes.findIndex((r) => r.id === synced.id)
+      const next =
+        idx >= 0 ? routes.map((r) => (r.id === synced.id ? synced : r)) : [...routes, synced]
+      setRoutes(next)
+      setEditRoute(null)
+      toast.success('Transfer destination saved to draft')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save phone destination')
+    } finally {
+      setSaving(false)
+    }
   }
-
-  const defaultValue = routing.defaultDestinationRef
-    ? destinationOptions.find((o) => o.id === routing.defaultDestinationRef)
-    : null
 
   return (
     <div className="flex flex-col gap-6">
-      <Section
-        id="default-handling"
-        icon={Route}
-        title="Default handling"
-        description="Individual Phone forwarding destinations only. Ring groups are not supported as IVR transfer targets until multi-leg routing is certified."
-      >
-        {loading ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-            Loading Phone destinations…
-          </p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="default-dest">Default destination</Label>
-              <SimpleSelect
-                id="default-dest"
-                value={
-                  defaultValue ? `${defaultValue.kind}:${defaultValue.id}` : ''
-                }
-                onChange={pickDefault}
-                options={[{ value: '', label: 'Select destination…' }, ...defaultOptions]}
-              />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label>When no route matches</Label>
-                <SimpleSelect
-                  value={routing.whenNoRuleMatches}
-                  onChange={(v) =>
-                    update('conversationalRouting', (r) => ({ ...r, whenNoRuleMatches: v }))
-                  }
-                  options={[
-                    { value: 'message', label: 'Take a message' },
-                    { value: 'default', label: 'Use default destination' },
-                    { value: 'end', label: 'End call politely' },
-                  ]}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>When transfer fails</Label>
-                <SimpleSelect
-                  value={routing.whenTransferFails}
-                  onChange={(v) =>
-                    update('conversationalRouting', (r) => ({ ...r, whenTransferFails: v }))
-                  }
-                  options={[
-                    { value: 'message', label: 'Take a message' },
-                    { value: 'default', label: 'Return to conversational menu' },
-                    { value: 'end', label: 'End call politely' },
-                  ]}
-                />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Business hours and forwarding rules live in{' '}
-              <Link href="/app/phone/call-handling" className="font-medium text-primary hover:underline">
-                Phone → Call Handling
-              </Link>
-              .
-            </p>
-          </div>
-        )}
-      </Section>
-
       <Panel
-        title="Conversation routing rules"
-        description="Describe when each route should be used in plain language. The agent interprets intent — not exact keywords."
+        title="Transfer destinations"
+        description="Configure who your conversational menu can connect callers to. Each destination is one place: name, number, who they are, and when the AI should transfer."
         actions={
-          <Button size="sm" onClick={openNew} disabled={loading}>
+          <Button size="sm" onClick={() => setEditRoute(emptyRoute())}>
             <Plus data-icon="inline-start" />
-            Add route
+            Add transfer destination
           </Button>
         }
         bodyClassName="p-0"
       >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
-                <th scope="col" className="px-4 py-3 font-medium">Route</th>
-                <th scope="col" className="px-4 py-3 font-medium">Caller intent</th>
-                <th scope="col" className="px-4 py-3 font-medium">Destination</th>
-                <th scope="col" className="px-4 py-3 font-medium">On</th>
-                <th scope="col" className="px-4 py-3 font-medium">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {routes.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                    No routes yet. Add a route when callers should reach different departments or numbers.
-                  </td>
-                </tr>
-              )}
-              {routes.map((route) => (
-                <tr key={route.id} className="border-b last:border-0">
-                  <td className="px-4 py-3 font-medium">{route.name || 'Untitled'}</td>
-                  <td className="max-w-xs px-4 py-3 text-muted-foreground">
-                    <span className="line-clamp-2">{route.intentDescription || '—'}</span>
-                  </td>
-                  <td className="px-4 py-3">{destinationLabel(route, destinationOptions)}</td>
-                  <td className="px-4 py-3">
-                    <Switch
-                      checked={route.enabled}
-                      onCheckedChange={(on) =>
-                        setRoutes(routes.map((r) => (r.id === route.id ? { ...r, enabled: on } : r)))
-                      }
-                      aria-label={`Enable route ${route.name}`}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon-sm" onClick={() => setEditRoute(route)} aria-label="Edit route">
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => removeRoute(route.id)}
-                        aria-label="Remove route"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {routes.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            <p>No transfer destinations yet.</p>
+            <p className="mt-2">
+              Add Sales, Billing, Service, or individual staff numbers. The AI uses your descriptions to choose the
+              right route — callers do not need exact keywords.
+            </p>
+            <Button className="mt-4" variant="outline" size="sm" onClick={() => setEditRoute(emptyRoute())}>
+              <Plus data-icon="inline-start" />
+              Add transfer destination
+            </Button>
+          </div>
+        ) : (
+          <ul className="divide-y">
+            {routes.map((route) => (
+              <li key={route.id} className="flex flex-col gap-3 px-4 py-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold">{route.name || 'Untitled'}</h3>
+                    {!route.enabled && (
+                      <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">Disabled</span>
+                    )}
+                  </div>
+                  {route.description?.trim() ? (
+                    <p className="text-sm text-muted-foreground">{route.description}</p>
+                  ) : null}
+                  {route.destinationPhoneE164 ? (
+                    <p className="text-sm font-medium tabular-nums">{formatPhone(route.destinationPhoneE164)}</p>
+                  ) : (
+                    <p className="text-sm text-destructive">Phone number missing — edit to fix.</p>
+                  )}
+                  <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">When to transfer</p>
+                    <p className="mt-1 text-sm">{route.intentDescription || '—'}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Switch
+                    checked={route.enabled}
+                    onCheckedChange={(on) =>
+                      setRoutes(routes.map((r) => (r.id === route.id ? { ...r, enabled: on } : r)))
+                    }
+                    aria-label={`Enable ${route.name || 'destination'}`}
+                  />
+                  <Button variant="ghost" size="icon-sm" onClick={() => setEditRoute(route)} aria-label="Edit">
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => removeRoute(route.id)}
+                    aria-label="Delete"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel
+        title="Fallback behavior"
+        description="What happens when no destination matches or a transfer does not connect. Publish from the bar above to apply routing changes to live calls."
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="when-no-match">When no destination matches</Label>
+            <SimpleSelect
+              id="when-no-match"
+              value={routing.whenNoRuleMatches}
+              onChange={(v) => update('conversationalRouting', (r) => ({ ...r, whenNoRuleMatches: v }))}
+              options={[
+                { value: 'message', label: 'Take a message' },
+                { value: 'default', label: 'Try default destination (if configured)' },
+                { value: 'end', label: 'End call politely' },
+              ]}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="when-transfer-fails">When transfer fails</Label>
+            <SimpleSelect
+              id="when-transfer-fails"
+              value={routing.whenTransferFails}
+              onChange={(v) => update('conversationalRouting', (r) => ({ ...r, whenTransferFails: v }))}
+              options={[
+                { value: 'message', label: 'Take a message' },
+                { value: 'default', label: 'Return to conversational menu' },
+                { value: 'end', label: 'End call politely' },
+              ]}
+            />
+          </div>
         </div>
       </Panel>
 
-      <RouteDrawer
+      <DestinationDrawer
         open={Boolean(editRoute)}
         route={editRoute}
-        destinations={destinationOptions}
-        onClose={() => setEditRoute(null)}
-        onSave={saveRoute}
+        saving={saving}
+        onClose={() => !saving && setEditRoute(null)}
+        onSave={(route) => void persistRoute(route)}
       />
     </div>
   )
 }
 
-function RouteDrawer({
+function DestinationDrawer({
   open,
   route,
-  destinations,
+  saving,
   onClose,
   onSave,
 }: {
   open: boolean
   route: ConversationalRoute | null
-  destinations: DestinationPick[]
+  saving: boolean
   onClose: () => void
   onSave: (r: ConversationalRoute) => void
 }) {
   const [local, setLocal] = useState<ConversationalRoute | null>(route)
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phoneError, setPhoneError] = useState<string | null>(null)
 
   useEffect(() => {
     setLocal(route)
+    setPhoneInput(route?.destinationPhoneE164 ? formatPhone(route.destinationPhoneE164) : '')
+    setPhoneError(null)
   }, [route])
 
   if (!local) return null
 
-  const destKey = local.destinationRef
-    ? `${local.destinationKind}:${local.destinationRef}`
-    : ''
-
-  const applyDestination = (value: string) => {
-    const [kind, id] = value.split(':') as [ConversationalRoute['destinationKind'], string]
-    const pick = destinations.find((d) => d.kind === kind && d.id === id)
+  const applyExample = () => {
     setLocal({
       ...local,
-      destinationKind: kind,
-      destinationRef: id,
-      destinationPhoneE164: pick?.phoneE164,
-      destinationLabel: pick?.label,
+      name: CONVERSATIONAL_ROUTE_EXAMPLE.name,
+      description: CONVERSATIONAL_ROUTE_EXAMPLE.description,
+      intentDescription: CONVERSATIONAL_ROUTE_EXAMPLE.intentDescription,
+      destinationPhoneE164: CONVERSATIONAL_ROUTE_EXAMPLE.destinationPhoneE164,
     })
+    setPhoneInput(formatPhone(CONVERSATIONAL_ROUTE_EXAMPLE.destinationPhoneE164))
+    setPhoneError(null)
+    toast.message('Example filled — illustrative only until you save')
   }
 
-  const examplesText = (local.examples ?? []).join('\n')
+  const commitPhone = (): string | null => {
+    const normalized = tryNormalizePhoneInput(phoneInput)
+    if (!normalized.ok) {
+      setPhoneError(normalized.message)
+      return null
+    }
+    setPhoneError(null)
+    setLocal({ ...local, destinationPhoneE164: normalized.e164 })
+    return normalized.e164
+  }
+
+  const canSave =
+    local.name.trim().length > 0 &&
+    local.description.trim().length > 0 &&
+    local.intentDescription.trim().length > 0 &&
+    (local.destinationPhoneE164?.trim() || tryNormalizePhoneInput(phoneInput).ok)
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-[540px] overflow-y-auto">
+    <Sheet open={open} onOpenChange={(v) => !v && !saving && onClose()}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-[540px]">
         <SheetHeader>
-          <SheetTitle>{local.name ? 'Edit route' : 'Add route'}</SheetTitle>
+          <SheetTitle>{routesHasName(local) ? 'Edit transfer destination' : 'Add transfer destination'}</SheetTitle>
           <SheetDescription>
-            Semantic guidance for the agent. Callers do not need to use exact words.
+            Use everyday language. The AI interprets caller intent — exact keywords are not required.
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 py-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="route-name">Route name</Label>
+            <Label htmlFor="dest-name">Destination name</Label>
             <Input
-              id="route-name"
+              id="dest-name"
               value={local.name}
               onChange={(e) => setLocal({ ...local, name: e.target.value })}
-              placeholder="Service Department"
+              placeholder="Sales Department"
+              autoComplete="off"
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="route-intent">When to use this route</Label>
+            <Label htmlFor="dest-phone">Transfer phone number</Label>
+            <Input
+              id="dest-phone"
+              type="tel"
+              inputMode="tel"
+              value={phoneInput}
+              onChange={(e) => {
+                setPhoneInput(e.target.value)
+                setPhoneError(null)
+              }}
+              onBlur={() => {
+                const e164 = commitPhone()
+                if (e164) setPhoneInput(formatPhone(e164))
+              }}
+              placeholder="(571) 555-0134"
+              aria-invalid={phoneError ? true : undefined}
+              aria-describedby={phoneError ? 'dest-phone-error' : undefined}
+            />
+            {phoneError ? (
+              <p id="dest-phone-error" className="text-sm text-destructive" role="alert">
+                {phoneError}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Cell or landline that should ring when this route is selected.</p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="dest-description">Description</Label>
             <Textarea
-              id="route-intent"
+              id="dest-description"
+              rows={3}
+              value={local.description}
+              onChange={(e) => setLocal({ ...local, description: e.target.value })}
+              placeholder="Who this person or department is and what they handle."
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="dest-when">When should the AI transfer here?</Label>
+            <Textarea
+              id="dest-when"
               rows={4}
               value={local.intentDescription}
               onChange={(e) => setLocal({ ...local, intentDescription: e.target.value })}
-              placeholder="Callers who need an existing job checked, want repairs, or need a technician."
+              placeholder="When someone wants a quote, asks about pricing, or asks to speak with Sales."
             />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="route-examples">Example phrases (optional)</Label>
-            <Textarea
-              id="route-examples"
-              rows={4}
-              value={examplesText}
-              onChange={(e) =>
-                setLocal({
-                  ...local,
-                  examples: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
-                })
-              }
-              placeholder={'I need someone to fix my water heater.\nMy technician has not arrived.'}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="route-dest">Destination</Label>
-            <SimpleSelect
-              id="route-dest"
-              value={destKey}
-              onChange={applyDestination}
-              options={[
-                { value: '', label: 'Select Phone destination…' },
-                ...destinations.map((d) => ({
-                  value: `${d.kind}:${d.id}`,
-                  label: `${d.label} · ${formatPhone(d.phoneE164)}`,
-                })),
-              ]}
-            />
-          </div>
+          <Button type="button" variant="outline" size="sm" className="self-start" onClick={applyExample}>
+            Copy example configuration
+          </Button>
+          <p className="text-xs text-muted-foreground">Example only — does not save until you click Save destination.</p>
           <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
             <div>
-              <p className="text-sm font-medium">Confirm before transferring</p>
-              <p className="text-xs text-muted-foreground">Ask the caller briefly before connecting.</p>
+              <p className="text-sm font-medium">Destination enabled</p>
+              <p className="text-xs text-muted-foreground">Disabled destinations are ignored on live calls after publish.</p>
             </div>
             <Switch
-              checked={local.confirmBeforeTransfer}
-              onCheckedChange={(on) => setLocal({ ...local, confirmBeforeTransfer: on })}
+              checked={local.enabled}
+              onCheckedChange={(on) => setLocal({ ...local, enabled: on })}
+              aria-label="Destination enabled"
             />
-          </div>
-          <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium">Route enabled</p>
-            </div>
-            <Switch checked={local.enabled} onCheckedChange={(on) => setLocal({ ...local, enabled: on })} />
           </div>
         </div>
         <SheetFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
           <Button
+            disabled={!canSave || saving}
             onClick={() => {
-              if (!local.name.trim() || !local.destinationPhoneE164?.trim()) return
-              onSave(local)
+              const e164 = commitPhone()
+              if (!e164) return
+              onSave({ ...local, destinationPhoneE164: e164 })
             }}
-            disabled={!local.name.trim() || !local.destinationPhoneE164?.trim()}
           >
-            Save route
+            {saving ? 'Saving…' : 'Save destination'}
           </Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
   )
+}
+
+function routesHasName(route: ConversationalRoute): boolean {
+  return Boolean(route.name?.trim())
 }

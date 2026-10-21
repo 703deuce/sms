@@ -3,6 +3,7 @@ import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
 import { normalizeE164 } from "@/lib/server/phone/normalize";
 import { getStoredLiveKitOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 import { mapWizardTransferFallback } from "@/lib/server/voice-v3/transfer/map-fallback";
+import { buildConversationalRouteAiDescription } from "@/lib/receptionist/conversational-route-helpers";
 import { transferTriggerPhrasesFromEditor } from "@/lib/server/receptionist/transfer-triggers-from-editor";
 import type { VoiceV3TransferFallback } from "@/lib/server/voice-v3/transfer/types";
 import type {
@@ -137,20 +138,23 @@ function compileConversationalIvrTransferPolicy(
       continue;
     }
 
-    const resolvedDestId = addDestination(destId, label, phone, route.intentDescription);
+    const resolvedDestId = addDestination(
+      destId,
+      label,
+      phone,
+      route.description?.trim() || route.intentDescription?.trim(),
+    );
     if (!resolvedDestId) continue;
 
-    const examples = (route.examples ?? []).filter(Boolean);
-    const description = [route.intentDescription?.trim(), examples.length ? `Examples: ${examples.join("; ")}` : ""]
-      .filter(Boolean)
-      .join(" ");
+    const description = buildConversationalRouteAiDescription({
+      ...route,
+      description: route.description ?? "",
+    });
 
     routes.push({
       id: route.id,
       label: route.name?.trim() || "Route",
-      description:
-        description ||
-        "Use when the caller's intent matches this route based on natural conversation — not exact keywords.",
+      description,
       targets: [
         {
           destinationId: resolvedDestId,

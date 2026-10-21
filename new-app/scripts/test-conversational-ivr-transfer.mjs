@@ -34,6 +34,7 @@ const editor = {
     {
       id: "route_sales",
       name: "Sales",
+      description: "New customers, pricing, and quotes.",
       intentDescription: "Caller wants sales, pricing, or to buy.",
       examples: ["I want a quote", "Talk to sales"],
       destinationRef: "fd_1",
@@ -46,6 +47,7 @@ const editor = {
     {
       id: "route_bad_group",
       name: "Ring group (unsupported)",
+      description: "",
       intentDescription: "Should be skipped at compile",
       examples: [],
       destinationRef: "rg_1",

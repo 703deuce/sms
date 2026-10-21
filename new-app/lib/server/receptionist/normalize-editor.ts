@@ -33,7 +33,10 @@ export function normalizeReceptionistEditor(editor: AgentConfig): AgentConfig {
       voice: normalizeGptLiveVoiceId(editor.identity.voice || "marin"),
     },
     runtimeProfile: editor.runtimeProfile ?? "conversational_ivr",
-    conversationalRoutes: editor.conversationalRoutes ?? [],
+    conversationalRoutes: (editor.conversationalRoutes ?? []).map((route) => ({
+      ...route,
+      description: route.description?.trim() ?? route.intentDescription?.trim() ?? "",
+    })),
     conversationalRouting:
       editor.conversationalRouting ?? DEFAULT_AGENT.conversationalRouting,
     messageTaking: editor.messageTaking ?? DEFAULT_AGENT.messageTaking,
