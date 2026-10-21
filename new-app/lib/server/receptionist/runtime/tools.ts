@@ -7,6 +7,7 @@ export async function executeVoiceV3ToolForNewApp(payload: {
   toolName: string;
   arguments: Record<string, unknown>;
   functionCallId: string;
+  delegationId?: string | null;
 }): Promise<Record<string, unknown>> {
   const session = getLiveSession(payload.liveSessionId);
   if (!session) {
@@ -18,6 +19,7 @@ export async function executeVoiceV3ToolForNewApp(payload: {
     toolName: payload.toolName,
     args: payload.arguments,
     functionCallId: payload.functionCallId,
+    delegationId: payload.delegationId ?? null,
   });
   return result as Record<string, unknown>;
 }
