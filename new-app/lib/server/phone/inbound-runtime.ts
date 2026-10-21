@@ -291,6 +291,8 @@ export async function processDueInboundRingTimeouts(workspaceId: string) {
           metadata: { ...meta, ringTimeoutAt: null },
         },
       });
+      const { schedulePhoneOwnedMctbIfMissed } = await import("@/lib/server/mctb/pipeline");
+      schedulePhoneOwnedMctbIfMissed({ workspaceId, humanCallId: call.id });
       continue;
     }
 
@@ -327,6 +329,8 @@ export async function processDueInboundRingTimeouts(workspaceId: string) {
             metadata: { ...meta, ringTimeoutAt: null },
           },
         });
+        const { schedulePhoneOwnedMctbIfMissed } = await import("@/lib/server/mctb/pipeline");
+        schedulePhoneOwnedMctbIfMissed({ workspaceId, humanCallId: call.id });
       }
     } else {
       await telnyxCallAction(call.telnyxCallControlId, "hangup");
@@ -339,6 +343,8 @@ export async function processDueInboundRingTimeouts(workspaceId: string) {
           metadata: { ...meta, ringTimeoutAt: null },
         },
       });
+      const { schedulePhoneOwnedMctbIfMissed } = await import("@/lib/server/mctb/pipeline");
+      schedulePhoneOwnedMctbIfMissed({ workspaceId, humanCallId: call.id });
     }
   }
 }

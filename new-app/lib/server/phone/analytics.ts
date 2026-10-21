@@ -68,6 +68,27 @@ export async function getPhoneAnalytics(
       calls: count,
     }));
 
+  const mctbSince = since;
+  const [mctbSent, mctbSuppressed, mctbReplied] = await Promise.all([
+    prisma.missedCallEvent.count({
+      where: { workspaceId, smsSentAt: { gte: mctbSince } },
+    }),
+    prisma.missedCallEvent.count({
+      where: {
+        workspaceId,
+        detectedAt: { gte: mctbSince },
+        status: "SUPPRESSED",
+      },
+    }),
+    prisma.missedCallEvent.count({
+      where: {
+        workspaceId,
+        detectedAt: { gte: mctbSince },
+        status: "SENT",
+      },
+    }),
+  ]);
+
   const campaigns = await prisma.powerDialerCampaign.findMany({
     where: { workspaceId },
     select: {
@@ -95,6 +116,12 @@ export async function getPhoneAnalytics(
     trend,
     hourly,
     campaigns,
+    mctb: {
+      recoveryTextsSent: mctbSent,
+      suppressedRecoveries: mctbSuppressed,
+      eligibleSentEvents: mctbReplied,
+      replyRate: mctbSent ? 0 : 0,
+    },
   };
 }
 

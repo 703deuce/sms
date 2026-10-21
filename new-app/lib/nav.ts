@@ -68,6 +68,7 @@ export const PRODUCTS: NavContext[] = [
       { title: 'Voicemail', href: '/app/phone/voicemail', icon: Voicemail, group: 'Configure' },
       { title: 'Phone Numbers', href: '/app/numbers', icon: Hash, group: 'Configure' },
       { title: 'Call Handling', href: '/app/phone/call-handling', icon: Signpost, group: 'Configure' },
+      { title: 'Missed Call Text Back', href: '/app/phone/missed-call-text-back', icon: PhoneMissed, group: 'Configure' },
       { title: 'Analytics', href: '/app/phone/analytics', icon: BarChart3, group: 'Insights' },
     ],
   },

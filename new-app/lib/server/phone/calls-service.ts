@@ -604,6 +604,16 @@ export async function processHumanCallWebhookEvent(input: {
     data: patch,
   });
 
+  const becameMissedInbound =
+    input.eventType === "call.hangup" &&
+    call.direction === "inbound" &&
+    !wasAnswered &&
+    (patch.status === "missed" || updated.status === "missed");
+  if (becameMissedInbound && updated.phoneNumberId) {
+    const { schedulePhoneOwnedMctbIfMissed } = await import("@/lib/server/mctb/pipeline");
+    schedulePhoneOwnedMctbIfMissed({ workspaceId: call.workspaceId, humanCallId: call.id });
+  }
+
   await prisma.humanCallEvent.create({
     data: {
       workspaceId: call.workspaceId,
