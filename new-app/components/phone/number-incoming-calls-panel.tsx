@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { Panel } from '@/components/app/page-primitives'
 import {
   fetchCallForwarding,
@@ -28,6 +29,10 @@ const MODES = [
   { value: 'forward', label: 'Forward to phone or ring group' },
   { value: 'auto_attendant', label: 'Keypad auto attendant' },
   { value: 'conversational_ivr', label: 'Conversational IVR first' },
+  {
+    value: 'staff_then_ivr',
+    label: 'Ring team first, then Conversational IVR',
+  },
   { value: 'greeting_then_forward', label: 'Greeting then forward' },
   { value: 'voicemail', label: 'Voicemail' },
 ]
@@ -49,6 +54,9 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
   const [mctbEnabled, setMctbEnabled] = useState(false)
   const [mctbSaving, setMctbSaving] = useState(false)
   const [menus, setMenus] = useState<Array<{ id: string; name: string }>>([])
+  const [scheduleJson, setScheduleJson] = useState<Record<string, unknown>>({})
+  const [staffGroupId, setStaffGroupId] = useState('')
+  const [staffRingSec, setStaffRingSec] = useState('20')
   const [loading, setLoading] = useState(true)
 
   const reloadForwarding = useCallback(() => {
@@ -75,6 +83,14 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
         if (p?.forwardingGroupId) setForwardingGroupId(p.forwardingGroupId)
         if (p?.autoAttendantMenuId) setMenuId(p.autoAttendantMenuId)
         if (typeof p?.paused === 'boolean') setPaused(p.paused)
+        const sched = (p?.scheduleJson || {}) as Record<string, unknown>
+        setScheduleJson(sched)
+        const integrated = (sched.integratedRouting || sched) as Record<string, unknown>
+        const staff = integrated.staffThenIvr as
+          | { forwardingGroupId?: string; ringTimeoutSec?: number }
+          | undefined
+        if (staff?.forwardingGroupId) setStaffGroupId(staff.forwardingGroupId)
+        if (staff?.ringTimeoutSec) setStaffRingSec(String(staff.ringTimeoutSec))
         setIngressFoundation(isPhoneFoundation(number?.settingsJson))
         const line = mctbRes.data?.numbers?.find((n: { id: string }) => n.id === phoneNumberId)
         if (line?.mctb) setMctbEnabled(Boolean(line.mctb.enabled))
@@ -85,13 +101,31 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
   }, [phoneNumberId, reloadForwarding])
 
   const save = () => {
+    const integratedRouting = {
+      answeringMode: mode,
+      staffThenIvr:
+        mode === 'staff_then_ivr'
+          ? {
+              forwardingGroupId: staffGroupId,
+              ringTimeoutSec: Math.max(5, Number(staffRingSec) || 20),
+            }
+          : undefined,
+    }
+    const nextSchedule = { ...scheduleJson, integratedRouting }
+
     void saveAnsweringPolicy(phoneNumberId, {
       answeringMode: mode,
       primaryDestinationId:
         mode === 'forward' && !forwardingGroupId ? primaryDestinationId || null : null,
-      forwardingGroupId: mode === 'forward' && forwardingGroupId ? forwardingGroupId : null,
+      forwardingGroupId:
+        mode === 'forward' && forwardingGroupId
+          ? forwardingGroupId
+          : mode === 'staff_then_ivr'
+            ? staffGroupId || null
+            : null,
       autoAttendantMenuId: mode === 'auto_attendant' ? menuId || null : null,
       paused,
+      scheduleJson: nextSchedule,
     })
       .then(() => {
         toast.success('Incoming call behavior saved')
@@ -229,6 +263,46 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
               </Link>
               . Staff-first and ring-timeout fallback are configured below.
             </p>
+          )}
+          {mode === 'staff_then_ivr' && (
+            <>
+              <div>
+                <Label>Ring group</Label>
+                <Select value={staffGroupId || '_none'} onValueChange={(v) => setStaffGroupId(v === '_none' ? '' : v)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Choose ring group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none" disabled>Choose ring group</SelectItem>
+                    {groups.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.name} · {g.strategy}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="staff-ring-sec">Ring time before IVR (seconds)</Label>
+                <Input
+                  id="staff-ring-sec"
+                  type="number"
+                  min={5}
+                  max={120}
+                  className="mt-1 max-w-[8rem]"
+                  value={staffRingSec}
+                  onChange={(e) => setStaffRingSec(e.target.value)}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                If nobody answers, the call hands off to Conversational IVR on this number. Publish an
+                agent under{' '}
+                <Link href="/app/receptionist" className="text-primary underline">
+                  AI Receptionist
+                </Link>
+                .
+              </p>
+            </>
           )}
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" onClick={save}>Save incoming behavior</Button>

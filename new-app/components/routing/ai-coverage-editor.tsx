@@ -9,12 +9,21 @@ import { StatusBadge } from '@/components/app/status'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { TRANSFERS, type RoutePolicy } from '@/lib/data'
 import { formatPhone } from '@/lib/format'
+import {
+  isPhoneAiCoverageRuntimeMode,
+  phoneAiCoverageModeDescription,
+} from '@/lib/phone/ai-coverage-support'
 
 export function AiCoverageEditor() {
   const { routePolicy, updateRoutePolicy } = useWorkspace()
   const [transfers, setTransfers] = useState(TRANSFERS)
 
   const setCoverage = (v: RoutePolicy['aiCoverage']) => {
+    if (!isPhoneAiCoverageRuntimeMode(v)) {
+      toast.message('Preference saved', {
+        description: phoneAiCoverageModeDescription(v),
+      })
+    }
     const patch: Partial<RoutePolicy> = { aiCoverage: v }
     if (v === 'off') {
       if (routePolicy.noAnswer === 'ai') patch.noAnswer = 'voicemail'
@@ -26,12 +35,17 @@ export function AiCoverageEditor() {
     if (v === 'overflow' || v === 'after_hours_overflow') patch.noAnswer = 'ai'
     if (v !== 'full_time' && routePolicy.duringHours === 'ai') patch.duringHours = 'ring_group'
     updateRoutePolicy(patch, 'AI Receptionist')
-    toast.success('AI coverage updated', { description: 'Phone call handling was updated to match.' })
+    if (isPhoneAiCoverageRuntimeMode(v)) {
+      toast.success('AI coverage updated', { description: 'Phone call handling was updated to match.' })
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <Panel title="When should Ava answer?" description="Applies to the Main line. Phone routing updates automatically.">
+      <Panel
+        title="When should Ava answer?"
+        description="Per-number Call Forwarding uses Telnyx Call Control. Other modes are preferences until the line uses Conversational IVR answering."
+      >
         <OptionGroup
           label="Coverage"
           value={routePolicy.aiCoverage}

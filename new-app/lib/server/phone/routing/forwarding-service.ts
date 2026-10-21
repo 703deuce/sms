@@ -10,6 +10,7 @@ import {
   speakOnCall,
 } from "./telnyx-call-control";
 import { recordForwardedCallAttempt } from "./usage-accounting";
+import { patchRoutingSessionState } from "./session-state";
 
 export async function startForwardingFlow(input: {
   workspaceId: string;
@@ -70,9 +71,54 @@ export async function startForwardingFlow(input: {
     return session;
   }
 
+  if (input.effective.kind === "staff_then_ivr") {
+    await patchRoutingSessionState(session.id, {
+      staffThenIvrOverflow: true,
+      ringTimeoutSec: input.effective.ringTimeoutSec,
+    });
+    const list = input.effective.destinations;
+    if (input.effective.strategy === "simultaneous") {
+      await patchRoutingSessionState(session.id, {
+        pendingSimultaneousLegs: list.length,
+      });
+      for (const dest of list) {
+        await dialDestination({
+          sessionId: session.id,
+          workspaceId: input.workspaceId,
+          humanCallId: input.humanCallId,
+          inboundControlId: input.inboundControlId,
+          businessLineE164: input.businessLineE164,
+          callerE164: input.callerE164,
+          destinationE164: dest.e164,
+          press1: dest.press1,
+          simultaneous: true,
+        });
+      }
+    } else {
+      const first = list[0];
+      if (first) {
+        await dialDestination({
+          sessionId: session.id,
+          workspaceId: input.workspaceId,
+          humanCallId: input.humanCallId,
+          inboundControlId: input.inboundControlId,
+          businessLineE164: input.businessLineE164,
+          callerE164: input.callerE164,
+          destinationE164: first.e164,
+          press1: first.press1,
+          sequentialQueue: list.slice(1),
+        });
+      }
+    }
+    return session;
+  }
+
   if (input.effective.kind === "forward_group") {
     const list = input.effective.destinations;
     if (input.effective.strategy === "simultaneous") {
+      await patchRoutingSessionState(session.id, {
+        pendingSimultaneousLegs: list.length,
+      });
       for (const dest of list) {
         await dialDestination({
           sessionId: session.id,

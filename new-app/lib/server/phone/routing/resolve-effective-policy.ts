@@ -1,6 +1,7 @@
 import { usesPhoneCallControlRuntime } from "@/lib/server/telephony/integrated-phone-ingress";
 import { phoneCallForwardingRuntimeAllowed } from "@/lib/server/telephony/forwarding-runtime-gate";
 import { getPrisma } from "@/lib/server/db";
+import { readIntegratedRouting } from "@/lib/server/phone/routing/integrated-routing-policy";
 import { getAnsweringPolicyForNumber } from "./store";
 import {
   inboundCallContext,
@@ -16,7 +17,13 @@ export type EffectiveAnswering =
   | { kind: "forward_group"; strategy: string; destinations: Array<{ e164: string; press1: boolean; timeout: number }> }
   | { kind: "auto_attendant"; menuId: string }
   | { kind: "greeting_then_forward"; greeting: string; destinationE164: string }
-  | { kind: "conversational_ivr"; agentId: string | null };
+  | { kind: "conversational_ivr"; agentId: string | null }
+  | {
+      kind: "staff_then_ivr";
+      strategy: string;
+      destinations: Array<{ e164: string; press1: boolean; timeout: number }>;
+      ringTimeoutSec: number;
+    };
 
 type ScheduleJson = {
   afterHoursMode?: string;
@@ -47,6 +54,7 @@ export async function resolveEffectiveAnswering(input: {
   const policy = await getAnsweringPolicyForNumber(input.workspaceId, input.phoneNumberId);
   if (!policy || policy.paused) return { kind: "browser" };
 
+  const integrated = readIntegratedRouting(policy.scheduleJson);
   const callCtx = await inboundCallContext(input.workspaceId, input.phoneNumberId);
 
   const { getBusinessHours } = await import("@/lib/server/phone/routing");
@@ -81,6 +89,17 @@ export async function resolveEffectiveAnswering(input: {
     if (schedule?.afterHoursMode === "auto_attendant" && schedule.afterHoursMenuId) {
       return { kind: "auto_attendant", menuId: schedule.afterHoursMenuId };
     }
+    if (schedule?.afterHoursMode === "conversational_ivr" || integrated.afterHoursMode === "conversational_ivr") {
+      const link = await getPrisma().voiceAgentPhoneNumber.findFirst({
+        where: {
+          workspaceId: input.workspaceId,
+          phoneNumberId: input.phoneNumberId,
+          inboundEnabled: true,
+        },
+        select: { agentId: true },
+      });
+      return { kind: "conversational_ivr", agentId: link?.agentId ?? null };
+    }
     if (schedule?.afterHoursMode === "forward") {
       const afterHours = await resolveScheduleForward(input.workspaceId, schedule, callCtx);
       if (afterHours) {
@@ -94,7 +113,7 @@ export async function resolveEffectiveAnswering(input: {
     }
   }
 
-  if (policy.answeringMode === "conversational_ivr") {
+  if (integrated.answeringMode === "conversational_ivr" || policy.answeringMode === "conversational_ivr") {
     const link = await getPrisma().voiceAgentPhoneNumber.findFirst({
       where: {
         workspaceId: input.workspaceId,
@@ -104,6 +123,53 @@ export async function resolveEffectiveAnswering(input: {
       select: { agentId: true },
     });
     return { kind: "conversational_ivr", agentId: link?.agentId ?? null };
+  }
+
+  const staffGroupId =
+    integrated.staffThenIvr?.forwardingGroupId || policy.forwardingGroupId || null;
+  if (
+    (policy.answeringMode === "staff_then_ivr" ||
+      integrated.answeringMode === "staff_then_ivr") &&
+    staffGroupId
+  ) {
+    const prisma = getPrisma();
+    const group =
+      policy.forwardingGroup?.id === staffGroupId
+        ? policy.forwardingGroup
+        : await prisma.forwardingGroup.findFirst({
+            where: {
+              id: staffGroupId,
+              workspaceId: input.workspaceId,
+              enabled: true,
+            },
+            include: {
+              members: { include: { destination: true }, orderBy: { priority: "asc" } },
+            },
+          });
+    if (group?.members?.length) {
+      const destinations: Array<{ e164: string; press1: boolean; timeout: number }> = [];
+      for (const m of group.members) {
+        if (!m.enabled || !m.destination.enabled) continue;
+        try {
+          const resolved = await resolveForwardingDestinationRow(m.destination, callCtx);
+          destinations.push({
+            e164: resolved.dialE164,
+            press1: resolved.press1,
+            timeout: resolved.ringTimeoutSec,
+          });
+        } catch {
+          // skip invalid member
+        }
+      }
+      if (destinations.length) {
+        return {
+          kind: "staff_then_ivr",
+          strategy: group.strategy,
+          destinations,
+          ringTimeoutSec: Math.max(5, integrated.staffThenIvr.ringTimeoutSec ?? 20),
+        };
+      }
+    }
   }
 
   if (policy.answeringMode === "auto_attendant" && policy.autoAttendantMenuId) {

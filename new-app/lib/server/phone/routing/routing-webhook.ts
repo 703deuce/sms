@@ -10,7 +10,11 @@ import {
   recordLegEnded,
   bridgedMinutesFromPayload,
 } from "./usage-accounting";
-import { claimSimultaneousWinner, getCallContextFromSession } from "./session-state";
+import {
+  claimSimultaneousWinner,
+  getCallContextFromSession,
+  patchRoutingSessionState,
+} from "./session-state";
 import { executeFallback, resolveNoAnswerFallback } from "./fallback-executor";
 
 function hangupCause(payload: Record<string, unknown>) {
@@ -180,29 +184,36 @@ export async function processCallForwardingWebhookEvent(input: {
       const state = sessionId
         ? await getPrisma().phoneCallRoutingSession.findUnique({ where: { id: sessionId } })
         : null;
-      const winner = (state?.stateJson as { bridgeWinnerControlId?: string })?.bridgeWinnerControlId;
+      const sessionJson = (state?.stateJson || {}) as {
+        bridgeWinnerControlId?: string;
+        pendingSimultaneousLegs?: number;
+        staffThenIvrOverflow?: boolean;
+        allowIvrFallbackAfterGroup?: boolean;
+      };
+      const winner = sessionJson.bridgeWinnerControlId;
       if (clientState.simultaneous && winner && winner !== eventControlId) {
         return { handled: true };
       }
 
-      if (clientState.simultaneous && sessionId && !winner) {
-        const activeOutbound = await getPrisma().phoneCallLeg.count({
-          where: {
-            sessionId,
-            direction: "outbound",
-            status: { in: ["dialing", "ringing", "answered"] },
-          },
-        });
-        if (activeOutbound === 0 && clientState.parentCallControlId) {
+      if (clientState.simultaneous && sessionId && state && !winner) {
+        const remaining = Math.max(0, (sessionJson.pendingSimultaneousLegs ?? 1) - 1);
+        await patchRoutingSessionState(sessionId, { pendingSimultaneousLegs: remaining });
+        if (remaining > 0) {
+          return { handled: true };
+        }
+        if (clientState.parentCallControlId) {
           const ctx = await getCallContextFromSession(sessionId);
           if (ctx) {
-            const fb = await resolveNoAnswerFallback(ctx.workspaceId, ctx.phoneNumberId);
+            let action = await resolveNoAnswerFallback(ctx.workspaceId, ctx.phoneNumberId);
+            if (sessionJson.staffThenIvrOverflow || sessionJson.allowIvrFallbackAfterGroup) {
+              action = { type: "conversational_ivr" };
+            }
             await executeFallback({
               workspaceId: ctx.workspaceId,
               humanCallId: ctx.humanCallId,
               inboundControlId: String(clientState.parentCallControlId),
               phoneNumberId: ctx.phoneNumberId,
-              action: fb,
+              action,
               routingSessionId: sessionId,
             });
           }
