@@ -52,4 +52,8 @@ const { normalizeMctbConsentMode, MCTB_CONSENT_MODE_VERIFIED } = await import(
 );
 assert.equal(normalizeMctbConsentMode("press_1"), MCTB_CONSENT_MODE_VERIFIED);
 
+assert.match(read("lib/server/mctb/press1-consent.ts"), /resolvePress1GatherPlayback/);
+assert.match(read("lib/server/mctb/consent-prompt-store.ts"), /resolvePress1GatherPlayback/);
+assert.match(read("lib/server/mctb/press1-consent.ts"), /gatherUsingAudio/);
+
 console.log("test-phone-mctb-e2e-wiring: PASS");
