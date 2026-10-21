@@ -16,6 +16,6 @@ const record = (
   rows.push({ testId, feature, executed, expected, actual, status, evidence });
 };
 
-runPhase4Scenarios(record);
+await runPhase4Scenarios(record);
 mkdirSync(path.dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify(rows, null, 2));

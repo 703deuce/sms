@@ -63,18 +63,19 @@ const SCRIPT_PRELOAD = new Set([
   "simulate-receptionist-publish-pipeline.mjs",
 ]);
 
-const SCRIPT_NEEDS_DB = new Set(["simulate-receptionist-publish-pipeline.mjs"]);
-
 function runScript(scriptName, testIdPrefix) {
-  if (SCRIPT_NEEDS_DB.has(scriptName) && !process.env.DATABASE_URL?.trim()) {
+  if (
+    scriptName === "simulate-receptionist-publish-pipeline.mjs" &&
+    !process.env.DATABASE_URL?.trim()
+  ) {
     record(
       testIdPrefix,
       "Script suite",
       `npx tsx scripts/${scriptName}`,
-      "DATABASE_URL or skip exit 0",
-      "DATABASE_URL missing — runner BLOCKED",
+      "server DB audit",
+      "use test:phone:audit:server-db",
       "BLOCKED",
-      "Hydrate DATABASE_URL (e.g. Coolify) to execute DB-backed script in CI/agent.",
+      "npm run test:phone:audit:server-db — loads DATABASE_URL from production container via SSH.",
     );
     return true;
   }

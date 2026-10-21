@@ -46,7 +46,7 @@ function runScenario(
   }
 }
 
-export function runPhase4Scenarios(record: AuditRecord) {
+export async function runPhase4Scenarios(record: AuditRecord) {
   runScenario(record, "S-01", "Forwarding loop rejected (direct E.164)", () => {
     assert.throws(() => rejectDirectE164Loop("+15551234567", "+15551234567"));
   });
@@ -91,28 +91,32 @@ export function runPhase4Scenarios(record: AuditRecord) {
   });
 
   const db = Boolean(process.env.DATABASE_URL?.trim());
-  const dbScenarios: Array<[string, string]> = [
-    ["S-07", "Inbound → browser ring → answer → history (DB integration)"],
-    ["S-08", "Inbound → forwarding → answer"],
-    ["S-09", "Inbound → forwarding → voicemail"],
-    ["S-10", "Inbound → ring group → third answers"],
-    ["S-11", "Inbound → auto attendant → DTMF → forward"],
-    ["S-12", "After hours → conversational IVR → callback"],
-    ["S-13", "Power dialer session resume"],
-    ["S-14", "Concurrent workspaces isolation"],
-    ["S-15", "Indirect forwarding loop guard (graph walk)"],
-  ];
-  for (const [id, label] of dbScenarios) {
-    record(
-      id,
-      "Cross-feature",
-      label,
-      db ? "prisma-backed simulation" : "DATABASE_URL",
-      db ? "NOT_RUN_YET" : "missing",
-      db ? "NOT_IMPLEMENTED" : "BLOCKED",
-      db
-        ? "DB available but full handler simulation not yet wired in this runner — add prisma fixture suite."
-        : "Coolify SSH unavailable in this agent VM; cannot hydrate DATABASE_URL.",
-    );
+  if (!db) {
+    const dbScenarios: Array<[string, string]> = [
+      ["S-07", "Inbound → browser ring → answer → history (DB integration)"],
+      ["S-08", "Inbound → forwarding → answer"],
+      ["S-09", "Inbound → forwarding → voicemail"],
+      ["S-10", "Inbound → ring group → third answers"],
+      ["S-11", "Inbound → auto attendant → DTMF → forward"],
+      ["S-12", "After hours → conversational IVR → callback"],
+      ["S-13", "Power dialer session resume"],
+      ["S-14", "Concurrent workspaces isolation"],
+      ["S-15", "Indirect forwarding loop guard (graph walk)"],
+    ];
+    for (const [id, label] of dbScenarios) {
+      record(
+        id,
+        "Cross-feature",
+        label,
+        "DATABASE_URL",
+        "missing",
+        "BLOCKED",
+        "Run npm run test:phone:audit:server-db (hydrates DATABASE_URL from production web container).",
+      );
+    }
+    return;
   }
+
+  const { runPhase4DbScenarios } = await import("./phase-4-db-scenarios.ts");
+  await runPhase4DbScenarios(record);
 }
