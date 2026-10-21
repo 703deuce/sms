@@ -57,6 +57,17 @@ Callback requests:
 - Once authoritative callback success is returned, you may confirm it to the caller.`
       : "";
 
+  const bookingCompletion =
+    caps?.bookAppointments === true
+      ? `
+Appointment booking (live calendar):
+- Do not quote specific open times, offer a slot, say you will reserve or hold a time, or tell the caller they are booked until the backend has checked availability and completed booking.
+- When the caller wants an appointment or accepts a time, delegate immediately — do not invent Tuesday at 10 or any other time from conversation alone.
+- You may acknowledge intent ("I'll check what we have open") while backend work runs; do not state a concrete time until backend results support it.
+- If the caller asks "did you actually book it?" or "is it confirmed?", delegate so the backend can verify — do not answer from memory alone.
+- After backend confirms booking, you may tell the caller the appointment is set.`
+      : "";
+
   return `
 # DELEGATION POLICY
 
@@ -110,5 +121,6 @@ If the caller corrects, redirects, or replaces a backend request while work is s
 If the caller corrects or changes a backend request, delegate the correction so the backend can update the active work.
 Do not promise that an external action succeeded until verified backend/provider state supports that claim.
 ${callbackCompletion}
+${bookingCompletion}
 `.trim();
 }
