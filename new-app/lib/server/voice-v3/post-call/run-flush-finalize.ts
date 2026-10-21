@@ -78,5 +78,21 @@ export async function runVoiceV3FlushFinalize(input: {
     });
   }
 
+  if (result.ok && result.duplicate !== true && transcript.trim()) {
+    const { runVoiceV3PostCallAfterFinalize } = await import(
+      "@/lib/server/voice-v3/post-call/run-post-call-after-finalize"
+    );
+    void runVoiceV3PostCallAfterFinalize({
+      callId: input.callId,
+      workspaceId: input.workspaceId,
+      summaryText: transcript.slice(0, 500),
+    }).catch((err) => {
+      console.error("VOICE_V3_POST_CALL_AFTER_FINALIZE_FAILED", {
+        callId: input.callId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
+
   return { ok: true, duplicate: result.duplicate === true };
 }

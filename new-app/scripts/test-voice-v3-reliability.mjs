@@ -35,6 +35,12 @@ const forensicsBridge = read(
 assert.ok(forensicsBridge.includes("runVoiceV3FlushFinalize"), "flush calls runVoiceV3FlushFinalize");
 assert.ok(forensicsBridge.includes("VOICE_V3_FLUSH_FINALIZE_OK"), "finalize success logged");
 
+const flushFinalize = read("lib/server/voice-v3/post-call/run-flush-finalize.ts");
+assert.ok(
+  flushFinalize.includes("runVoiceV3PostCallAfterFinalize"),
+  "flush finalize runs golden post-call side effects",
+);
+
 // 3 — take_message independent path
 const takeTool = read("lib/server/voice-v3/tools/take-message-tool.ts");
 assert.ok(takeTool.includes("executeTakeMessage"), "take_message uses executeTakeMessage");
