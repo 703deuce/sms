@@ -21,7 +21,22 @@ import { createVoiceV3CallRuntime } from "@/lib/server/voice-v3/state/call-runti
 import type { VoiceV3CallContext } from "@/lib/server/voice-v3/state/call-context";
 import { ensureVoiceCallRowOnSessionResolve } from "@/lib/server/voice-v3/post-call/ensure-voice-call-row";
 import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
+import {
+  buildLiveKitIntakeFieldMetadata,
+  buildLiveKitIntakeFunctionTools,
+} from "@/lib/server/voice-v3/tools/livekit-intake-tool-schemas";
 import type { FunctionTool } from "openai/resources/live/live";
+
+/** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
+const VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES = new Set(["end_call"]);
+
+function toolSchemaName(tool: FunctionTool): string {
+  return String(tool.name ?? "");
+}
+
+function filterToolsForLiveKitSession(tools: FunctionTool[]): FunctionTool[] {
+  return tools.filter((t) => !VOICE_V3_LIVEKIT_NATIVE_TOOL_NAMES.has(toolSchemaName(t)));
+}
 
 const BROWSER_TEST_PREFIX =
   process.env.LIVEKIT_BROWSER_TEST_ROOM_PREFIX?.trim() || "transovo-browser-test-";
@@ -248,7 +263,16 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
 
   const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(voiceV3Config);
   const allowed = new Set(rt.toolNames);
-  const toolSchemas: FunctionTool[] = catalogTools.filter((t) => allowed.has(String(t.name)));
+  const intakeTools = buildLiveKitIntakeFunctionTools(voiceV3Config);
+  const mergedByName = new Map<string, FunctionTool>();
+  for (const t of filterToolsForLiveKitSession(catalogTools)) {
+    if (!allowed.has(toolSchemaName(t))) continue;
+    mergedByName.set(toolSchemaName(t), t);
+  }
+  for (const t of intakeTools) {
+    mergedByName.set(toolSchemaName(t), t);
+  }
+  const toolSchemas = [...mergedByName.values()];
 
   putLiveSession({
     liveSessionId,
@@ -312,12 +336,8 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     astraModel: rt.astraModel,
     liveVoiceId: rt.liveVoiceId,
     toolSchemas,
-    toolNames: rt.toolNames,
-    intakeFields: bundle.editor.intake.map((f) => ({
-      key: f.id,
-      label: f.label,
-      required: f.required,
-    })),
+    toolNames: toolSchemas.map((t) => toolSchemaName(t)),
+    intakeFields: buildLiveKitIntakeFieldMetadata(voiceV3Config),
     parallelToolCalls: false,
     maxToolSteps: rt.maxToolSteps,
     reasoningEffort: "low",

@@ -6,7 +6,7 @@
 
 **Monolith today:** Prompts were **restored to golden wording** on branch/PR **`cursor/voice-v3-golden-era-sept-f350`** → **`baffdbf2d`** / **#682** (five files). Current `master` monolith Amy/Astra **prompt modules** are effectively **golden-era text** (only tiny diffs vs `a4a63466c`).
 
-**new-app receptionist:** Uses a **ported copy** of the prompt modules under `new-app/lib/server/voice-v3/prompts/`, but **does not** yet port the full **tool catalog, scheduling semantics, or delegation hydration** that made M365 booking work on the monolith.
+**new-app receptionist:** Uses a **ported copy** of the prompt modules under `new-app/lib/server/voice-v3/prompts/`, plus a **ported tool catalog** (`astra-tool-contracts.ts`, `voice-tool-catalog.ts`, scheduling tools, delegation hydration). Remaining gaps are mostly **product-mode gating** (Conversational IVR), **Amy delegation compliance** (GPT-Live can speak before delegating), and **LiveKit bootstrap parity** (intake tool merge — see §3.6).
 
 ---
 
@@ -72,21 +72,21 @@ Golden-era reliable M365 booking depended on **prompts + tool contracts + execut
 
 ### 3.1 Luna tool descriptions (`astra-tool-contracts.ts`)
 
-| | Monolith golden / master | new-app |
-|---|--------------------------|---------|
-| File | `src/lib/voice-v3/tools/astra-tool-contracts.ts` | **Missing** |
-| LiveKit session | `buildVoiceV3AstraFunctionToolsFromCatalog` — full OpenAI `FunctionTool` descriptions + JSON schemas | `resolve-livekit-session.ts` builds **stubs**: `description: toolName`, **empty `parameters`** |
+| | Monolith golden / master | new-app (current `master`) |
+|---|--------------------------|---------------------------|
+| File | `src/lib/voice-v3/tools/astra-tool-contracts.ts` | **Present** — `new-app/lib/server/voice-v3/tools/astra-tool-contracts.ts` (identical) |
+| LiveKit session | `buildVoiceV3AstraFunctionToolsFromCatalog` | **Same** in `resolve-livekit-session.ts` (filtered by published `toolNames`) |
 
-**Impact:** Luna sees **none** of the golden-era “when to call / when not to call / never invent ids” contract text that PR #682 restored. Prompts say “follow tool descriptions”; tools have **no** real descriptions on new-app.
+**Impact:** Luna **does** receive full contract descriptions on new-app when tools are enabled for the published profile. Stale audits claiming stub tools are incorrect.
 
 ### 3.2 `set_scheduling_preference` (scheduling semantics)
 
-| | Monolith | new-app `execute-tool.ts` |
-|---|----------|---------------------------|
-| Args | `SchedulingMeaning` (date_relation, weekday, time_kind, …) via Zod | **Only** `service_id` + `timezone` stored |
-| Behavior | `mergeSchedulingMeaningIntoContext`, `schedulingMeaningHasSignal`, FIND uses **normalized preference** | `find_availability` uses **fixed window**: now → +14 days, busy/free slot grid — **ignores** “Tuesday afternoon”, “next available”, etc. |
+| | Monolith | new-app |
+|---|----------|---------|
+| Args | `SchedulingMeaning` via Zod | **Ported** — `set-scheduling-preference-tool.ts` + `scheduling-meaning-schema.ts` |
+| Behavior | `mergeSchedulingMeaningIntoContext`, FIND uses normalized preference | **Ported** — `find-availability-tool.ts` gates on stored preference |
 
-**Impact:** Golden behavior (“next available” without re-asking the day; FIND after SET) **cannot** match on new-app even with identical Astra **prompt** text.
+**Impact:** SET→FIND semantics **match** golden monolith for Full Receptionist + live calendar. Residual risk is **executor/provider** differences (M365 adapter paths), not missing SET schema.
 
 ### 3.3 Tool execution stack
 
@@ -98,7 +98,7 @@ Golden-era reliable M365 booking depended on **prompts + tool contracts + execut
 | Operation requirements / booking preconditions | `operation-requirements`, intake merge, book gates | **Not ported** |
 | Idempotency / tool traces | `voiceToolExecution`, forensics | Partial Prisma logging in `execute-tool.ts` |
 
-**Impact:** M365 **can** create events if caller picks a slot from the simplified list, but **not** the same FIND/SET/BOOK semantics as Sept stress tests.
+**Impact:** Residual differences are **operation-requirements / book gates** and provider adapters — not missing SET/FIND tool wiring on Full Receptionist.
 
 ### 3.4 Delegation hydration (Amy sees facts after tools)
 
@@ -108,10 +108,26 @@ Golden manifest (`docs/VOICE-V3-GOLDEN-ERA-PARITY-MANIFEST.md`):
 
 | | Monolith | new-app |
 |---|----------|---------|
-| `resolveDelegatedRuntimeContext` | Full hydration path | **`intake_snapshot` only** (`delegation.ts`) |
-| After `update_intake` | Live recovery push to GPT-Live | **No** equivalent push |
+| `resolveDelegatedRuntimeContext` | Full hydration via `pushDelegatedRuntimeContextToLive` | **Ported** — `live-context.ts` + `push-delegated-runtime-context.ts` |
+| After tool execute | `liveContextEvents` on tool result | **Ported** — `execute-tool.ts` + Python `apply_live_context_from_tool_result` |
 
-**Impact:** Booking ↔ callback ↔ booking switches and “don’t re-ask name” stress behavior from golden era **not** replicated.
+**Impact:** Hydration **largely matches** golden era. Conversational IVR skips `buildIntakeObjectiveContext` in the thinking push (by design).
+
+### 3.6 LiveKit session bootstrap (intake tools + metadata)
+
+| | Monolith `voice-v3-livekit.ts` | new-app `resolve-livekit-session.ts` |
+|---|-------------------------------|--------------------------------------|
+| Catalog tools | `buildVoiceV3AstraFunctionToolsFromCatalog` + allowlist | Same |
+| Per-field intake tools | `buildLiveKitIntakeFunctionTools` merged into `toolSchemas` | **Was missing** — restored to match monolith merge |
+| `intakeFields` for Python | `buildLiveKitIntakeFieldMetadata` (`liveKitToolName`, collection strategy) | **Was simplified editor rows** — restored |
+
+**Impact:** Golden-era multi-field intake (`set_intake_*`, `collect_intake_field`) and Python routing depend on this merge. Missing merge does **not** remove `book_appointment` from the catalog, but it **does** weaken intake/tool routing parity.
+
+### 3.7 Conversational IVR (new — not in Sept golden PSTN cert)
+
+`voice-tool-catalog.ts` on new-app strips all tools except `end_call`, `search_business_knowledge`, `transfer_call`, `take_message` when `runtimeProfile !== full_receptionist`. Golden-era monolith had **no** this gate.
+
+**Impact:** A number published as **Conversational IVR** will never expose booking tools to Luna — Amy may still improvise booking language (GPT-Live has no tools). Verify **live published mode** on failing lines.
 
 ### 3.5 Other monolith paths (not in new-app)
 
@@ -133,21 +149,23 @@ Examples still on monolith only (non-exhaustive):
 | Amy **instruction document** (compiled `amyInstructions`) | **~Yes** |
 | Astra **instruction document** (`astraInstructions`) | **~Yes** |
 | Default backend model **Luna** on publish | **Yes** (after `0a51da44c`; republish required) |
-| **Tool descriptions** Luna sees | **No** — stubs |
-| **set_scheduling_preference** + FIND semantics | **No** — stub / date window |
-| **M365 book executor** (Graph create) | **Partial** — create exists, pipeline differs |
-| **Delegation / live context recovery** | **No** |
-| **Forensics / parity scripts** | Monolith: `verify-voice-v3-golden-era-parity.ts` — not run against new-app |
+| **Tool descriptions** Luna sees | **Yes** (catalog + contracts) when Full Receptionist + capabilities on |
+| **set_scheduling_preference** + FIND semantics | **Yes** (ported tools) |
+| **M365 book executor** (Graph create) | **Partial** — real Graph path exists; certify per workspace |
+| **Delegation / live context recovery** | **Mostly yes** (push + post-tool events) |
+| **LiveKit intake tool merge** | **Fixed** — match monolith merge in `resolve-livekit-session.ts` |
+| **Amy delegates before claiming “booked”** | **Behavioral** — same architecture as golden; enforce via `live-delegation-policy.ts` + PSTN forensics |
+| **Forensics / parity scripts** | `verify-voice-v3-golden-era-parity.ts` — monolith tests; new-app bootstrap should be covered by publish/simulate scripts |
 
 ---
 
 ## 5. Recommended parity work (order)
 
-1. **Port `astra-tool-contracts.ts` + `buildVoiceV3AstraFunctionToolsFromCatalog`** (or equivalent) into new-app; return real `toolSchemas` from `resolveNativeVoiceV3LiveKitSession` (mirror `voice-v3-livekit.ts`).
-2. **Port `set_scheduling_preference` tool** + `scheduling-meaning-schema` + `merge-scheduling-meaning` + wire `find_availability` to **stored preference** (monolith behavior).
-3. **Port delegation hydration** (`pushDelegatedRuntimeContextToLive` pattern) on tool success and `resolveDelegatedRuntimeContext`.
-4. **Bridge or reuse** monolith `book-appointment-tool` / `find-availability-tool` executors for M365 instead of simplified `scheduling/service.ts` slot grid — **or** call monolith internal API for tools until parity certified.
-5. Run `scripts/verify-voice-v3-golden-era-parity.ts` against new-app bootstrap + PSTN smoke (book → callback → book).
+1. **Confirm published `runtimeProfile`** is `full_receptionist` on lines that must book (not Conversational IVR).
+2. **PSTN forensics** on booking calls: require `set_scheduling_preference` → `find_availability` → `book_appointment` before any “you’re booked” TTS; investigate **zero delegation** vs **delegation with wrong tool choice**.
+3. **Amy policy** — keep `live-delegation-policy.ts` aligned with golden “delegate before authoritative claims”; consider hard gates if model skips delegation again.
+4. **M365 live cert** per workspace (`scripts/cert-voice-v3-microsoft-appointment-live.ts`) — provider truth separate from tool surface parity.
+5. Extend golden parity gate to run new-app `resolve-livekit-session` intake merge assertions (monolith gate currently fails MODULE_NOT_FOUND in cloud CI without full graph).
 
 ---
 
@@ -161,8 +179,8 @@ Examples still on monolith only (non-exhaustive):
 | `docs/VOICE-V3-GOLDEN-ERA-PARITY-MANIFEST.md` | Runtime invariants |
 | `docs/TRANSOVO-NEW-APP-VOICE-V3-PROMPT-CANON.md` | Prompt export index |
 | `src/lib/voice/python-runtime-bridge/voice-v3-livekit.ts` | Monolith session bootstrap (tools + prompts) |
-| `new-app/lib/server/voice-v3/resolve-livekit-session.ts` | new-app bootstrap (prompts OK, tools stub) |
+| `new-app/lib/server/voice-v3/resolve-livekit-session.ts` | new-app bootstrap (catalog tools + intake merge) |
 
 ---
 
-*Generated for parity review — prompts match golden era; booking agent behavior on new-app does not yet.*
+*Updated Oct 2026 — prompts and Luna tool contracts match golden era; Sept “tools never fired” regressions on new-app are usually **Amy not delegating** or **wrong published mode**, not missing `astra-tool-contracts`.*
