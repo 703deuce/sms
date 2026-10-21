@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Panel } from '@/components/app/page-primitives'
 import { SimpleSelect } from '@/components/app/filters'
 import { SettingRow } from '@/components/app/option-group'
+import { cn } from '@/lib/utils'
 import { StatusBadge } from '@/components/app/status'
 import { formatPhone } from '@/lib/format'
 import type { MctbConsentMode } from '@/lib/mctb/consent-mode'
@@ -218,16 +219,54 @@ export function PhoneMctbSettings() {
         )}
       </Panel>
 
-      <Panel title="Text-back template" description="Platform-approved messages — select one; the body cannot be edited.">
-        <SimpleSelect
-          label="Template"
-          value={data.template.selectedId}
-          onValueChange={(v) => void save({ templateId: v })}
-          options={data.template.templates.map((t) => ({ value: t.id, label: t.name }))}
-        />
+      <Panel
+        title="Recovery text template"
+        description="Pick one of five platform-approved first messages. Transovo sends this after consent — wording is fixed; you choose the strategy."
+      >
+        <ul
+          className="divide-y rounded-xl border bg-card"
+          role="radiogroup"
+          aria-label="Recovery message template"
+        >
+          {data.template.templates.map((t) => {
+            const selected = data.template.selectedId === t.id
+            return (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={saving}
+                  className={cn(
+                    'flex w-full gap-3 px-4 py-3 text-left transition-colors',
+                    selected ? 'bg-primary/5' : 'hover:bg-muted/40',
+                    saving && 'opacity-60',
+                  )}
+                  onClick={() => {
+                    if (selected) return
+                    void save({ templateId: t.id })
+                  }}
+                >
+                  <span
+                    className={cn(
+                      'mt-1 size-4 shrink-0 rounded-full border-2',
+                      selected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                    )}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-sm font-medium">{t.name}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{t.purpose}</span>
+                    <span className="mt-2 block text-xs leading-relaxed text-foreground/85">{t.preview}</span>
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
         {selectedTemplate && (
-          <div className="mt-3 space-y-2">
-            <p className="text-xs text-muted-foreground">{selectedTemplate.purpose}</p>
+          <div className="mt-4 space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Selected preview</p>
             <div className="max-w-md rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm text-primary-foreground">
               {selectedTemplate.preview}
             </div>
