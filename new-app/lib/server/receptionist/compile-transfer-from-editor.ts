@@ -111,7 +111,39 @@ function compileConversationalIvrTransferPolicy(
   for (const route of editor.conversationalRoutes ?? []) {
     if (!route.enabled) continue;
     if (route.destinationKind === "ring_group") {
-      // LiveKit TransferSIPParticipant supports one E.164 target — ring groups stay on Phone Call Control.
+      const groupId = route.destinationRef?.trim();
+      if (!groupId) continue;
+      const label = route.destinationLabel?.trim() || route.name?.trim() || "Ring group";
+      const destId = `rg_${groupId}`;
+      if (!destinations.find((d) => d.id === destId)) {
+        destinations.push({
+          id: destId,
+          label,
+          description: route.description?.trim() || route.intentDescription?.trim(),
+          forwardingGroupId: groupId,
+          executor: "phone_ring_group",
+          defaultMode: mode,
+          ringingTimeoutSeconds: defaultTimeout,
+          enabled: true,
+        });
+      }
+      const description = buildConversationalRouteAiDescription({
+        ...route,
+        description: route.description ?? "",
+      });
+      routes.push({
+        id: route.id,
+        label: route.name?.trim() || "Route",
+        description,
+        targets: [
+          {
+            destinationId: destId,
+            mode,
+            ringingTimeoutSeconds: defaultTimeout,
+          },
+        ],
+        fallback,
+      });
       continue;
     }
     let phone = route.destinationPhoneE164?.trim() ?? "";

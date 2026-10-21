@@ -16,7 +16,8 @@ type VoiceRuntimeAction =
   | "finalize_voice_v3_call"
   | "append_voice_v3_forensic_events"
   | "flush_voice_v3_forensics"
-  | "record_voice_v3_transfer_outcome";
+  | "record_voice_v3_transfer_outcome"
+  | "execute_phone_ivr_ring_group_transfer";
 
 export async function GET() {
   return NextResponse.json({
@@ -100,6 +101,19 @@ export async function POST(request: Request) {
           "@/lib/server/voice-v3/transfer/record-transfer-outcome"
         );
         return NextResponse.json(await recordVoiceV3TransferOutcomeForNewApp(payload as never));
+      }
+      case "execute_phone_ivr_ring_group_transfer": {
+        const { executePhoneIvrRingGroupTransferFromLiveSession } = await import(
+          "@/lib/server/phone/ivr-integration/ai-group-transfer"
+        );
+        const result = await executePhoneIvrRingGroupTransferFromLiveSession({
+          liveSessionId: String(payload.liveSessionId || ""),
+          transferRequestId: String(payload.transferRequestId || ""),
+          routeId: String(payload.routeId || ""),
+          forwardingGroupId: String(payload.forwardingGroupId || ""),
+          workspaceId: String(payload.workspaceId || ""),
+        });
+        return NextResponse.json(result);
       }
       default:
         return NextResponse.json({ ok: false, error: `Unknown action: ${action}` }, { status: 400 });

@@ -45,10 +45,10 @@ const editor = {
       confirmBeforeTransfer: false,
     },
     {
-      id: "route_bad_group",
-      name: "Ring group (unsupported)",
-      description: "",
-      intentDescription: "Should be skipped at compile",
+      id: "route_sales_group",
+      name: "Sales group",
+      description: "Sales ring group",
+      intentDescription: "Quotes",
       examples: [],
       destinationRef: "rg_1",
       destinationKind: "ring_group",
@@ -59,15 +59,12 @@ const editor = {
 };
 
 const policy = compileVoiceV3TransferPolicyFromEditor(editor);
-assert.equal(policy.enabled, true, "policy should enable when routes have E.164");
-assert.equal(policy.routes.length, 1, "ring_group route must not compile to LiveKit transfer");
-assert.equal(policy.routes[0]?.id, "route_sales");
+assert.equal(policy.enabled, true, "policy should enable when routes have targets");
+assert.equal(policy.routes.length, 2, "individual + ring group routes compile");
+assert.ok(policy.destinations.some((d) => d.executor === "phone_ring_group"));
 
 const publishBlocked = validateEditorForPublish(editor);
-assert.equal(publishBlocked.ok, false);
-assert.ok(
-  publishBlocked.errors.some((e) => e.includes("Ring groups are not supported")),
-);
+assert.equal(publishBlocked.ok, true, JSON.stringify(publishBlocked.errors));
 
 const editorClean = {
   ...editor,

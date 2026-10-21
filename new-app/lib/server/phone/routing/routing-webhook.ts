@@ -10,7 +10,11 @@ import {
   recordLegEnded,
   bridgedMinutesFromPayload,
 } from "./usage-accounting";
-import { claimSimultaneousWinner, getCallContextFromSession } from "./session-state";
+import {
+  claimSimultaneousWinner,
+  getCallContextFromSession,
+  patchRoutingSessionState,
+} from "./session-state";
 import { executeFallback, resolveNoAnswerFallback } from "./fallback-executor";
 
 function hangupCause(payload: Record<string, unknown>) {
@@ -65,6 +69,17 @@ export async function processCallForwardingWebhookEvent(input: {
       });
       return { handled: true };
     }
+  }
+
+  if (input.eventType === "call.answered" && kind === "cf_ivr_handoff") {
+    const sessionId = String(clientState.routingSessionId || "");
+    if (sessionId && eventControlId) {
+      await patchRoutingSessionState(sessionId, {
+        livekitSipLegControlId: eventControlId,
+        inboundCallControlId: String(clientState.parentCallControlId || ""),
+      });
+    }
+    return { handled: true };
   }
 
   if (input.eventType === "call.answered" && kind === "cf_outbound") {
@@ -165,8 +180,53 @@ export async function processCallForwardingWebhookEvent(input: {
       const state = sessionId
         ? await getPrisma().phoneCallRoutingSession.findUnique({ where: { id: sessionId } })
         : null;
-      const winner = (state?.stateJson as { bridgeWinnerControlId?: string })?.bridgeWinnerControlId;
+      const sessionJson = (state?.stateJson || {}) as {
+        bridgeWinnerControlId?: string;
+        pendingSimultaneousLegs?: number;
+        staffThenIvrOverflow?: boolean;
+        allowIvrFallbackAfterGroup?: boolean;
+      };
+      const winner = sessionJson.bridgeWinnerControlId;
       if (clientState.simultaneous && winner && winner !== eventControlId) {
+        return { handled: true };
+      }
+      if (clientState.simultaneous && sessionId && state && !winner) {
+        const remaining = Math.max(0, (sessionJson.pendingSimultaneousLegs ?? 1) - 1);
+        await patchRoutingSessionState(sessionId, { pendingSimultaneousLegs: remaining });
+        if (remaining > 0) {
+          return { handled: true };
+        }
+        const ctx = await getCallContextFromSession(sessionId);
+        if (ctx && clientState.parentCallControlId) {
+          let action = await resolveNoAnswerFallback(ctx.workspaceId, ctx.phoneNumberId);
+          if (sessionJson.staffThenIvrOverflow || sessionJson.allowIvrFallbackAfterGroup) {
+            const stateFull = (state?.stateJson || {}) as {
+              forwardingGroupId?: string;
+              integratedHandoff?: { exhaustedGroupIds?: string[] };
+            };
+            const groupId = stateFull.forwardingGroupId;
+            const prior = stateFull.integratedHandoff?.exhaustedGroupIds || [];
+            const exhausted = groupId ? [...new Set([...prior, groupId])] : prior;
+            if (groupId && sessionId) {
+              await patchRoutingSessionState(sessionId, {
+                integratedHandoff: {
+                  ...(stateFull.integratedHandoff || {}),
+                  exhaustedGroupIds: exhausted,
+                  stage: "FALLBACK_ACTIVE",
+                },
+              });
+            }
+            action = { type: "conversational_ivr" };
+          }
+          await executeFallback({
+            workspaceId: ctx.workspaceId,
+            humanCallId: ctx.humanCallId,
+            inboundControlId: String(clientState.parentCallControlId),
+            phoneNumberId: ctx.phoneNumberId,
+            action,
+            routingSessionId: sessionId,
+          });
+        }
         return { handled: true };
       }
 

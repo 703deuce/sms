@@ -160,6 +160,7 @@ async def execute_authorized_transfer_plan(
     if not isinstance(targets, list) or not targets:
         return _strip_execution_payload(result)
 
+    executor = str(plan.get("executor") or "livekit_refer").lower()
     transfer_request_id = str(plan.get("transfer_request_id") or "")
     route_id = str(plan.get("route_id") or "")
     fallback = plan.get("fallback")
@@ -172,6 +173,72 @@ async def execute_authorized_transfer_plan(
             transfer_reason = raw_reason.strip()
     trunk_id = plan.get("outbound_sip_trunk_id")
     caller_id = plan.get("outbound_caller_id_e164")
+
+    if executor == "phone_ring_group" and client is not None:
+        first = targets[0] if targets else {}
+        group_id = str(first.get("forwarding_group_id") or "") if isinstance(first, dict) else ""
+        dest_id = str(first.get("destination_id") or "") if isinstance(first, dict) else ""
+        if not group_id:
+            sanitized = _strip_execution_payload(result)
+            if isinstance(sanitized.get("data"), dict):
+                sanitized["data"] = {
+                    **sanitized["data"],
+                    "status": "transfer_configuration_error",
+                }
+                sanitized["status"] = "transfer_configuration_error"
+            return sanitized
+        payload = {
+            "liveSessionId": client._ctx.live_session_id,
+            "transferRequestId": transfer_request_id,
+            "routeId": route_id,
+            "forwardingGroupId": group_id,
+            "workspaceId": client._ctx.workspace_id,
+        }
+        try:
+            backend_result = await client._backend.call(
+                "execute_phone_ivr_ring_group_transfer",
+                payload,
+            )
+        except Exception:
+            logger.exception("phone_ring_group_handoff_failed")
+            backend_result = {"ok": False, "error": "HANDOFF_FAILED"}
+        ok = bool(backend_result.get("ok"))
+        status = (
+            "phone_group_routing_started"
+            if ok
+            else str(backend_result.get("code") or backend_result.get("error") or "HANDOFF_FAILED")
+        )
+        attempts = [
+            {
+                "destination_id": dest_id,
+                "mode": "DIRECT",
+                "outcome": "CONNECTED" if ok else "CONFIGURATION_ERROR",
+                "duration_ms": 0,
+                "attempt_index": 0,
+            },
+        ]
+        sanitized = _strip_execution_payload(result)
+        if isinstance(sanitized.get("data"), dict):
+            sanitized["data"] = {
+                **sanitized["data"],
+                "status": status,
+                "attempts": attempts,
+                "human_answered": False,
+                "phone_executor": True,
+            }
+            sanitized["status"] = status
+        asyncio.create_task(
+            _report_transfer_outcome_to_backend(
+                client,
+                transfer_request_id=transfer_request_id,
+                route_id=route_id,
+                status="transfer_phone_routing_started" if ok else "transfer_exhausted",
+                reason=transfer_reason,
+                attempts=attempts,
+                connected_destination_id=None,
+            ),
+        )
+        return sanitized
 
     attempts: list[dict[str, Any]] = []
     started = time.monotonic()

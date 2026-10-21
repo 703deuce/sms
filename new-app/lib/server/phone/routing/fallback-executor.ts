@@ -79,6 +79,25 @@ export async function executeFallback(input: {
     }
     return;
   }
+  if (input.action.type === "conversational_ivr" && input.routingSessionId) {
+    const ctx = await getCallContextFromSession(input.routingSessionId);
+    if (ctx?.inboundControlId) {
+      const { startConversationalIvrHandoffFromCallControl } = await import(
+        "@/lib/server/phone/ivr-integration/livekit-handoff"
+      );
+      await startConversationalIvrHandoffFromCallControl({
+        workspaceId: input.workspaceId,
+        humanCallId: input.humanCallId,
+        phoneNumberId: input.phoneNumberId,
+        inboundControlId: input.inboundControlId,
+        businessLineE164: ctx.businessLineE164,
+        callerE164: ctx.callerE164,
+        routingSessionId: input.routingSessionId,
+        reason: "no_answer_fallback",
+      });
+    }
+    return;
+  }
   if (input.action.type === "replay_menu" && input.action.menuId) {
     const { startAutoAttendantFlow } = await import("./menu-executor");
     const ctx = input.routingSessionId
@@ -108,7 +127,16 @@ export async function resolveNoAnswerFallback(
   const parsed = parseFallbackJson(
     (policy?.scheduleJson as { noAnswerFallback?: unknown } | null)?.noAnswerFallback,
   );
-  if (!parsed) return { type: "voicemail" };
+  if (!parsed) {
+    const { readIntegratedRouting, integratedNoAnswerIsConversationalIvr } = await import(
+      "@/lib/server/phone/ivr-integration/integrated-policy"
+    );
+    const integrated = readIntegratedRouting(policy?.scheduleJson);
+    if (integratedNoAnswerIsConversationalIvr(integrated)) {
+      return { type: "conversational_ivr" };
+    }
+    return { type: "voicemail" };
+  }
   if (parsed.type === "forward_phone" && !parsed.destinationE164) {
     const { resolveForwardingDestinationById, resolveForwardingDestinationRef, inboundCallContext } =
       await import("./resolve-destination");
