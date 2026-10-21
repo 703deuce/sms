@@ -4,6 +4,11 @@ import { getPrisma } from "@/lib/server/db";
 import { createId } from "@/lib/supabase/id";
 import { renderMctbFirstTextTemplateBody } from "@/lib/mctb/first-text-templates/render";
 import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
+import type { MctbOutboundSmsRoute } from "@/lib/mctb/messaging/outbound-sms-route";
+import {
+  gateMctbPlatformOutboundSend,
+  touchMctbPlatformAssignmentAfterOutbound,
+} from "@/lib/mctb/messaging/platform-outbound-gate";
 import { loadMctbRecoveryConfig } from "@/lib/server/mctb/config";
 import { normalizeE164 } from "@/lib/server/phone/normalize";
 import { ensureMctbConversationForRecovery } from "@/lib/server/mctb/ensure-conversation";
@@ -48,6 +53,43 @@ export async function executeMctbRecoverySend(input: {
   }
 
   const to = normalizeE164(event.callerE164);
+  const route: MctbOutboundSmsRoute = {
+    senderMode: "PLATFORM",
+    fromE164: platform.e164,
+    phoneNumberId: platform.phoneNumberId,
+  };
+
+  const { conversationId: preConversationId, contactId: preContactId } =
+    await ensureMctbConversationForRecovery({
+      workspaceId: input.workspaceId,
+      missedCallEventId: event.id,
+      callerE164: to,
+      businessE164: event.businessE164,
+      phoneNumberId: platform.phoneNumberId,
+      contactId: event.contactId,
+    });
+
+  const gate = await gateMctbPlatformOutboundSend({
+    workspaceId: input.workspaceId,
+    route,
+    consumerE164: to,
+    conversationId: preConversationId,
+    missedCallEventId: event.id,
+  });
+  if (!gate.ok) {
+    await prisma.missedCallEvent.update({
+      where: { id: event.id },
+      data: {
+        status: "SUPPRESSED",
+        suppressionReason: "PLATFORM_SENDER_PAIR_COLLISION",
+        metadata: {
+          ...(typeof event.metadata === "object" && event.metadata ? event.metadata : {}),
+          collisionOwnerWorkspaceId: gate.ownerWorkspaceId,
+        },
+      },
+    });
+    return { ok: false, reason: "platform_sender_collision" };
+  }
   const apiKey = process.env.TELNYX_API_KEY?.trim();
   if (!apiKey) {
     await prisma.missedCallEvent.update({
@@ -101,14 +143,8 @@ export async function executeMctbRecoverySend(input: {
     },
   }).catch(() => undefined);
 
-  const { conversationId, contactId } = await ensureMctbConversationForRecovery({
-    workspaceId: input.workspaceId,
-    missedCallEventId: event.id,
-    callerE164: to,
-    businessE164: event.businessE164,
-    phoneNumberId: event.phoneNumberId,
-    contactId: event.contactId,
-  });
+  const conversationId = preConversationId;
+  const contactId = preContactId;
 
   await prisma.conversationMessage.create({
     data: {
@@ -137,10 +173,20 @@ export async function executeMctbRecoverySend(input: {
         ...(typeof event.metadata === "object" && event.metadata ? event.metadata : {}),
         templateId: config.firstTextTemplate.templateId,
         platformSenderE164: platform.e164,
+        outboundSmsFromE164: platform.e164,
+        outboundSmsPhoneNumberId: platform.phoneNumberId,
         renderedBody: body,
         conversationId,
       },
     },
+  });
+
+  await touchMctbPlatformAssignmentAfterOutbound({
+    workspaceId: input.workspaceId,
+    route,
+    consumerE164: to,
+    conversationId,
+    claim: gate.claim,
   });
 
   return { ok: true, messageId, conversationId };

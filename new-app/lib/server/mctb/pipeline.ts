@@ -155,6 +155,13 @@ export async function processPhoneOwnedMctbMissedCall(input: {
     data: { scheduledSmsAt: runAt, status: "SCHEDULED" },
   });
 
+  const { enqueueMctbRecoverySendJob } = await import("@/lib/server/jobs/mctb-jobs");
+  await enqueueMctbRecoverySendJob({
+    workspaceId: input.workspaceId,
+    missedCallEventId: event.id,
+    runAfter: runAt,
+  });
+
   if (delayMs <= 0) {
     await executeMctbRecoverySend({
       workspaceId: input.workspaceId,

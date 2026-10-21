@@ -67,3 +67,10 @@ export async function resolveCanonicalMctbPlatformSender(): Promise<CanonicalMct
     provider: String(row.provider || "").toLowerCase() || "twilio",
   };
 }
+
+export async function isActiveMctbPlatformSenderE164(toRaw: string): Promise<boolean> {
+  const dest = await import("@/lib/messaging/platform-inbound-destination").then((m) =>
+    m.resolvePlatformInboundDestination(toRaw),
+  );
+  return Boolean(dest);
+}

@@ -314,42 +314,36 @@ export async function processDueInboundRingTimeouts(workspaceId: string) {
       continue;
     }
 
-    const noAnswer = routing.noAnswer;
-    if (noAnswer === "voicemail") {
+    const { resolveNoAnswerFallback } = await import("@/lib/server/phone/routing/fallback-executor");
+    const noAnswerFallback = await resolveNoAnswerFallback(workspaceId, call.phoneNumberId);
+    if (noAnswerFallback.type === "voicemail") {
+      const { tryOfferMctbPress1BeforeVoicemail } = await import("@/lib/server/mctb/press1-consent");
+      const offer = await tryOfferMctbPress1BeforeVoicemail({
+        workspaceId,
+        humanCallId: call.id,
+        inboundControlId: call.telnyxCallControlId,
+        phoneNumberId: call.phoneNumberId,
+      });
+      if (offer.offered) continue;
       await leaveVoicemailOnCall({
         workspaceId,
         humanCallId: call.id,
         telnyxCallControlId: call.telnyxCallControlId,
         phoneNumberId: call.phoneNumberId,
       });
-    } else if (noAnswer === "external") {
-      const target = resolveExternalForwardTarget(routing);
-      if (target) {
-        await telnyxCallAction(call.telnyxCallControlId, "answer");
-        await telnyxCallAction(call.telnyxCallControlId, "transfer", { to: target });
-        await prisma.humanCall.update({
-          where: { id: call.id },
-          data: {
-            status: "transferred",
-            disposition: `forward:${target}`,
-            endedAt: new Date(),
-            metadata: { ...meta, ringTimeoutAt: null },
-          },
-        });
-      } else {
-        await telnyxCallAction(call.telnyxCallControlId, "hangup");
-        await prisma.humanCall.update({
-          where: { id: call.id },
-          data: {
-            status: "missed",
-            disposition: "missed:no_external_target",
-            endedAt: new Date(),
-            metadata: { ...meta, ringTimeoutAt: null },
-          },
-        });
-        const { schedulePhoneOwnedMctbIfMissed } = await import("@/lib/server/mctb/pipeline");
-        schedulePhoneOwnedMctbIfMissed({ workspaceId, humanCallId: call.id });
-      }
+    } else if (noAnswerFallback.type === "forward_phone" && noAnswerFallback.destinationE164) {
+      const target = noAnswerFallback.destinationE164;
+      await telnyxCallAction(call.telnyxCallControlId, "answer");
+      await telnyxCallAction(call.telnyxCallControlId, "transfer", { to: target });
+      await prisma.humanCall.update({
+        where: { id: call.id },
+        data: {
+          status: "transferred",
+          disposition: `forward:${target}`,
+          endedAt: new Date(),
+          metadata: { ...meta, ringTimeoutAt: null },
+        },
+      });
     } else {
       await telnyxCallAction(call.telnyxCallControlId, "hangup");
       await prisma.humanCall.update({
