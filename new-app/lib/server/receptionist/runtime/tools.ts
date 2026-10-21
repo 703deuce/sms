@@ -1,5 +1,5 @@
 import { getLiveSession } from "@/lib/server/receptionist/runtime/session-store";
-import { executeNativeVoiceV3Tool } from "@/lib/server/voice-v3/execute-tool";
+import { executeVoiceV3LiveKitToolForConnector } from "@/lib/server/voice-v3-runtime-connector";
 import { toolErr } from "@/lib/server/voice-v3/tool-result";
 
 export async function executeVoiceV3ToolForNewApp(payload: {
@@ -14,7 +14,7 @@ export async function executeVoiceV3ToolForNewApp(payload: {
     return toolErr("RUNTIME_NOT_FOUND", "Session not found — worker must resolve session first.");
   }
 
-  const result = await executeNativeVoiceV3Tool({
+  const result = await executeVoiceV3LiveKitToolForConnector({
     session,
     toolName: payload.toolName,
     args: payload.arguments,

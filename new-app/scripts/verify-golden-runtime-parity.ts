@@ -22,32 +22,10 @@ function sha256File(abs: string): string {
   return createHash("sha256").update(readFileSync(abs)).digest("hex");
 }
 
+import { MUST_MATCH_RELATIVE_PATHS } from "../../packages/transovo-voice-v3-runtime/must-match-manifest.mjs";
+
 /** Byte-identical to golden monolith at HEAD (scheduling/booking core). */
-const MUST_MATCH: string[] = [
-  "calendar/book-dispatch.ts",
-  "calendar/find-dispatch.ts",
-  "calendar/cancel-dispatch.ts",
-  "tools/execute-voice-tool.ts",
-  "tools/handle-delegated-voice-tools.ts",
-  "tools/concurrency-policy.ts",
-  "tools/registry.ts",
-  "tools/book-appointment-tool.ts",
-  "tools/find-availability-tool.ts",
-  "tools/set-scheduling-preference-tool.ts",
-  "tools/cancel-appointment-tool.ts",
-  "tools/reschedule-appointment-tool.ts",
-  "tools/transfer-call-tool.ts",
-  "tools/request-callback-tool.ts",
-  "tools/send-booking-link-tool.ts",
-  "tools/update-intake-tool.ts",
-  "tools/astra-tool-contracts.ts",
-  "delegation/conversation-freshness.ts",
-  "delegation/live-response-coordinator.ts",
-  "operations/run-authoritative-operation.ts",
-  "operations/registry.ts",
-  "agent/after-state-change.ts",
-  "recovery/push-recovery-to-live.ts",
-];
+const MUST_MATCH: string[] = [...MUST_MATCH_RELATIVE_PATHS];
 
 /** Documented intentional deltas (do not fail gate). */
 const ALLOWED_DIFF: Record<string, string> = {
@@ -95,6 +73,7 @@ function runNewAppTests(): void {
   const nodeOpts = "--import ../scripts/preload-server-only.mjs";
   const tests = [
     "scripts/test-receptionist-config-source.ts",
+    "scripts/test-voice-v3-runtime-execution-authority.ts",
     "scripts/test-voice-v3-runtime-parity-smoke.ts",
     "scripts/test-voice-v3-post-call-parity.ts",
   ];

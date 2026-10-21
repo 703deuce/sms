@@ -26,7 +26,8 @@ export async function GET() {
     route: "/api/internal/voice-runtime",
     accepts: "POST",
     apiVersion: 1,
-    runtime: "native_voice_v3",
+    runtime: "voice_v3_authority_synced",
+    executionAuthority: "src/lib/voice-v3",
   });
 }
 

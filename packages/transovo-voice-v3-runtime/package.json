@@ -1,0 +1,12 @@
+{
+  "name": "@transovo/voice-v3-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Voice V3 execution authority — canonical implementation lives in src/lib/voice-v3",
+  "type": "module",
+  "exports": {
+    "./authority": "./authority.ts",
+    "./must-match-manifest": "./must-match-manifest.mjs",
+    "./sync-to-new-app": "./sync-to-new-app.mjs"
+  }
+}
