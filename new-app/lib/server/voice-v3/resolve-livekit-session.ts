@@ -21,9 +21,11 @@ import { createVoiceV3CallRuntime } from "@/lib/server/voice-v3/state/call-runti
 import type { VoiceV3CallContext } from "@/lib/server/voice-v3/state/call-context";
 import { ensureVoiceCallRowOnSessionResolve } from "@/lib/server/voice-v3/post-call/ensure-voice-call-row";
 import {
+  coalesceRuntimeProfileForVoiceConfig,
   isConversationalIvrRuntime,
   withRuntimeProfileFromEditor,
 } from "@/lib/receptionist/runtime-profile";
+import { enabledVoiceToolNamesFromEditor } from "@/lib/server/receptionist/editor-screen-mapping";
 import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
 import {
   appendVoiceV3ForensicEvent,
@@ -271,7 +273,25 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
   });
 
   const catalogTools = buildVoiceV3AstraFunctionToolsFromCatalog(voiceV3Config);
-  const allowed = new Set(rt.toolNames);
+  const editorForTools = {
+    ...bundle.editor,
+    runtimeProfile: coalesceRuntimeProfileForVoiceConfig(bundle.editor, voiceV3Config),
+  };
+  const enabledFromEditor = enabledVoiceToolNamesFromEditor(editorForTools);
+  const publishedSet = new Set(rt.toolNames);
+  const editorSet = new Set(enabledFromEditor);
+  const stalePublishedTools =
+    publishedSet.size !== editorSet.size ||
+    [...editorSet].some((n) => !publishedSet.has(n));
+  if (stalePublishedTools) {
+    console.warn("VOICE_V3_PUBLISHED_TOOL_NAMES_STALE", {
+      liveSessionId,
+      agentId,
+      published_tool_names: rt.toolNames,
+      editor_enabled_tool_names: enabledFromEditor,
+    });
+  }
+  const allowed = editorSet;
   const intakeTools = buildLiveKitIntakeFunctionTools(voiceV3Config);
   const mergedByName = new Map<string, FunctionTool>();
   for (const t of filterToolsForLiveKitSession(catalogTools)) {
@@ -290,19 +310,43 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     workspaceId,
     agentId,
   });
+  const bookCapability = bundle.editor.capabilities?.book === true;
+  const bookLive =
+    bookCapability &&
+    bundle.editor.appointments?.strategy === "live" &&
+    bundle.editor.appointments?.provider !== "none";
+  const bookingToolsPresent = schemaToolNames.filter((n) =>
+    ["set_scheduling_preference", "find_availability", "book_appointment"].includes(n),
+  );
   appendVoiceV3ForensicEvent(liveSessionId, "VOICE_V3_SESSION_TOOL_SURFACE", {
     runtime_profile: voiceV3Config.runtimeProfile ?? null,
+    editor_runtime_profile: editorForTools.runtimeProfile ?? null,
     conversational_ivr: isConversationalIvrRuntime(voiceV3Config),
+    book_capability: bookCapability,
+    appointment_strategy: bundle.editor.appointments?.strategy ?? null,
+    appointment_provider: bundle.editor.appointments?.provider ?? null,
+    live_booking_configured: bookLive,
     published_tool_names: rt.toolNames,
+    editor_enabled_tool_names: enabledFromEditor,
+    published_tool_names_stale: stalePublishedTools,
     schema_tool_names: schemaToolNames,
     schema_tool_count: schemaToolNames.length,
-    booking_tools_present: schemaToolNames.filter((n) =>
-      ["set_scheduling_preference", "find_availability", "book_appointment"].includes(n),
-    ),
+    booking_tools_present: bookingToolsPresent,
+    booking_tools_missing_when_live_book_expected:
+      bookLive && !bookingToolsPresent.includes("find_availability"),
     astra_model: rt.astraModel,
     config_source: configSource,
     published_version_id: publishedVersionId,
   });
+  if (bookLive && !bookingToolsPresent.includes("find_availability")) {
+    console.error("VOICE_V3_LIVE_BOOKING_TOOLS_MISSING_ON_SESSION", {
+      liveSessionId,
+      agentId,
+      workspaceId,
+      schema_tool_names: schemaToolNames,
+      editor_enabled_tool_names: enabledFromEditor,
+    });
+  }
 
   putLiveSession({
     liveSessionId,
