@@ -1,18 +1,27 @@
-import { Page, PageHeader } from '@/components/app/page-primitives'
-import { MessageTakingEditor } from '@/components/receptionist/message-taking-editor'
-import { DraftBar } from '@/components/receptionist/ai-ui'
+'use client'
 
-export const metadata = { title: 'Message Taking · Conversational IVR' }
+import { Page, PageHeader } from '@/components/app/page-primitives'
+import { DraftBar } from '@/components/receptionist/ai-ui'
+import { CallerIntakePageContent } from '@/components/receptionist/caller-intake-page-content'
+import { useAgent } from '@/components/providers/agent-provider'
+import { isConversationalIvrEditor } from '@/lib/receptionist/runtime-profile'
 
 export default function MessageTakingPage() {
+  const { draft } = useAgent()
+  const ivr = isConversationalIvrEditor(draft)
+
   return (
     <Page>
       <DraftBar />
       <PageHeader
-        title="Message Taking"
-        description="Choose what your conversational menu should ask when callers want to leave a message."
+        title={ivr ? 'Message Taking' : 'Caller Intake'}
+        description={
+          ivr
+            ? 'Choose what your conversational menu should ask when callers want to leave a message.'
+            : 'Messages, callback requests, intake fields, and qualification for Full Receptionist.'
+        }
       />
-      <MessageTakingEditor />
+      <CallerIntakePageContent />
     </Page>
   )
 }

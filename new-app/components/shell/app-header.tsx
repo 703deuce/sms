@@ -25,7 +25,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useAgent } from '@/components/providers/agent-provider'
 import { PRODUCTS, resolveContext } from '@/lib/nav'
+import { resolveRuntimeProfile } from '@/lib/receptionist/runtime-profile'
 import { BUSINESS, THREADS } from '@/lib/data'
 import { cn } from '@/lib/utils'
 import { GlobalSearch } from './global-search'
@@ -44,7 +46,8 @@ const UTILITIES = [
 export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
-  const context = resolveContext(pathname)
+  const { draft } = useAgent()
+  const context = resolveContext(pathname, resolveRuntimeProfile(draft))
   const unread = THREADS.filter((t) => t.unread).length
 
   return (

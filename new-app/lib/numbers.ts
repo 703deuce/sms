@@ -9,14 +9,14 @@ export type NumberProduct = 'phone' | 'receptionist' | 'mctb' | 'sms'
 
 export const PRODUCT_LABEL: Record<NumberProduct, string> = {
   phone: 'Phone',
-  receptionist: 'Conversational IVR',
+  receptionist: 'AI Receptionist',
   mctb: 'MCTB',
   sms: 'SMS',
 }
 
 export const PRODUCT_RETURN: Record<NumberProduct, { label: string; href: string }> = {
   phone: { label: 'Phone call handling', href: '/app/phone/call-handling' },
-  receptionist: { label: 'Conversational IVR', href: '/app/receptionist' },
+  receptionist: { label: 'AI Receptionist', href: '/app/receptionist' },
   mctb: { label: 'MCTB recovery settings', href: '/app/mctb/recovery' },
   sms: { label: 'SMS settings', href: '/app/settings' },
 }

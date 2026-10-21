@@ -3,7 +3,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { useAgent } from '@/components/providers/agent-provider'
 import { groupItems, isItemActive, resolveContext } from '@/lib/nav'
+import { resolveRuntimeProfile } from '@/lib/receptionist/runtime-profile'
 import { cn } from '@/lib/utils'
 
 type SidebarNavProps = {
@@ -14,7 +16,9 @@ type SidebarNavProps = {
 
 export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNavProps) {
   const pathname = usePathname()
-  const context = resolveContext(pathname)
+  const { draft } = useAgent()
+  const receptionistProfile = resolveRuntimeProfile(draft)
+  const context = resolveContext(pathname, receptionistProfile)
   const groups = groupItems(context.items)
   const ContextIcon = context.icon
 

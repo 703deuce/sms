@@ -100,9 +100,14 @@ export async function validateReceptionistPublish(
         errors.push("Configure at least one semantic route with a Phone destination.");
       }
     } else {
-      const enabled = editor.transfers.filter((t) => t.enabled && t.number?.trim());
-      if (!enabled.length) {
-        errors.push("Enable at least one transfer destination with a phone number.");
+      const routes = (editor.conversationalRoutes ?? []).filter(
+        (r) => r.enabled && r.destinationPhoneE164?.trim(),
+      );
+      const legacy = editor.transfers.filter((t) => t.enabled && t.number?.trim());
+      if (!routes.length && !legacy.length) {
+        errors.push(
+          "Configure at least one semantic call route with a destination, or a legacy transfer destination.",
+        );
       }
     }
   }

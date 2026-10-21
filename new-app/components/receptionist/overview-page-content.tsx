@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { AlertTriangle, BookOpen, MessageSquare, Route } from 'lucide-react'
+import { AlertTriangle, BookOpen, CalendarCheck, MessageSquare, PhoneForwarded, Route } from 'lucide-react'
 import { OverviewStatus } from '@/components/receptionist/overview-status'
+import { OperatingModeSelector } from '@/components/receptionist/operating-mode-selector'
 import { Page, PageHeader, Panel, Stat } from '@/components/app/page-primitives'
 import { RoutingSummary } from '@/components/app/routing-summary'
 import { AI_OUTCOME, StatusBadge } from '@/components/app/status'
@@ -11,16 +12,30 @@ import { RecentCalls } from '@/components/calls/recent-calls'
 import type { Call } from '@/lib/data'
 import { formatDuration, formatWhen } from '@/lib/format'
 import { fetchReceptionistOverview } from '@/lib/receptionist-api'
-import { CONVERSATIONAL_IVR_PRODUCT_DESCRIPTION } from '@/lib/receptionist/runtime-profile'
+import {
+  AI_RECEPTIONIST_PRODUCT_TITLE,
+  CONVERSATIONAL_IVR_MODE_DESCRIPTION,
+  FULL_RECEPTIONIST_MODE_DESCRIPTION,
+  isConversationalIvrEditor,
+} from '@/lib/receptionist/runtime-profile'
 import { useAgent } from '@/components/providers/agent-provider'
 
 export function ReceptionistOverviewContent() {
   const { draft } = useAgent()
+  const ivr = isConversationalIvrEditor(draft)
+  const schedulingEnabled =
+    !ivr &&
+    (draft.capabilities.book ||
+      draft.capabilities.reschedule ||
+      draft.capabilities.cancel ||
+      draft.appointments.strategy !== 'none')
+
   const [loading, setLoading] = useState(true)
   const [metrics, setMetrics] = useState({
     handled: 0,
     booked: 0,
     transferred: 0,
+    callbacks: 0,
     needsAttention: 0,
     avgSec: 0,
     openGaps: 0,
@@ -47,18 +62,40 @@ export function ReceptionistOverviewContent() {
   const attention = recentCalls.filter((c) => c.ai?.followUp === 'open').slice(0, 4)
   const routeCount = (draft.conversationalRoutes ?? []).filter((r) => r.enabled).length
   const messageOn = draft.messageTaking?.enabled ?? draft.messages.takeMessage
+  const intakeLabel = ivr ? 'Message taking' : 'Caller intake'
 
   return (
     <Page>
       <PageHeader
-        title="Conversational IVR"
-        description={CONVERSATIONAL_IVR_PRODUCT_DESCRIPTION}
+        title={AI_RECEPTIONIST_PRODUCT_TITLE}
+        description={ivr ? CONVERSATIONAL_IVR_MODE_DESCRIPTION : FULL_RECEPTIONIST_MODE_DESCRIPTION}
       />
+      <Panel title="Operating mode" description="Applies to published calls after you review and publish.">
+        <OperatingModeSelector compact />
+      </Panel>
       <OverviewStatus />
 
-      <section aria-label="Call outcomes" className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <section
+        aria-label="Call outcomes"
+        className={`grid grid-cols-2 gap-3 ${ivr ? 'md:grid-cols-4' : schedulingEnabled ? 'md:grid-cols-4 lg:grid-cols-7' : 'md:grid-cols-5'}`}
+      >
         <Stat label="Calls handled" value={loading ? '—' : metrics.handled} href="/app/receptionist/calls" />
         <Stat label="Transferred" value={loading ? '—' : metrics.transferred} href="/app/receptionist/calls?filter=transferred" />
+        {!ivr && (
+          <Stat
+            label="Callback requests"
+            value={loading ? '—' : metrics.callbacks}
+            href="/app/receptionist/calls?filter=open"
+          />
+        )}
+        {schedulingEnabled && (
+          <Stat
+            label="Appointments booked"
+            value={loading ? '—' : metrics.booked}
+            tone="success"
+            href="/app/receptionist/calls?filter=booked"
+          />
+        )}
         <Stat
           label="Needs attention"
           value={loading ? '—' : metrics.needsAttention}
@@ -78,11 +115,15 @@ export function ReceptionistOverviewContent() {
         </div>
       )}
 
-      <Panel title="How your calls are handled" description="Incoming call → Conversational IVR → route, answer, or message.">
+      <Panel
+        title="How your calls are handled"
+        description={
+          ivr
+            ? 'Phone decides when the AI answers → route, answer, or message.'
+            : 'Phone decides when the AI answers → knowledge, intake, appointments, transfer, or message.'
+        }
+      >
         <RoutingSummary title="Phone answering policy" manageHref="/app/phone/call-handling" manageLabel="Phone routing" />
-        <p className="mt-3 text-xs text-muted-foreground">
-          Incoming call → Conversational IVR → Route / Answer / Message
-        </p>
       </Panel>
 
       <Panel title="Setup readiness">
@@ -96,15 +137,25 @@ export function ReceptionistOverviewContent() {
           </li>
           <li className="flex items-center gap-3 py-3">
             <Route className="size-4 text-muted-foreground" aria-hidden />
-            <Link href="/app/receptionist/call-routing" className="flex-1 font-medium hover:underline">Routing destinations</Link>
+            <Link href="/app/receptionist/call-routing" className="flex-1 font-medium hover:underline">Call routing</Link>
             <StatusBadge tone={routeCount ? 'success' : 'warning'}>{routeCount ? `${routeCount} routes` : 'Add routes'}</StatusBadge>
           </li>
           <li className="flex items-center gap-3 py-3">
             <MessageSquare className="size-4 text-muted-foreground" aria-hidden />
-            <Link href="/app/receptionist/message-taking" className="flex-1 font-medium hover:underline">Message taking</Link>
+            <Link href="/app/receptionist/message-taking" className="flex-1 font-medium hover:underline">{intakeLabel}</Link>
             <StatusBadge tone={messageOn ? 'success' : 'neutral'}>{messageOn ? 'Enabled' : 'Off'}</StatusBadge>
           </li>
+          {!ivr && draft.capabilities.book && draft.appointments.strategy === 'live' && (
+            <li className="flex items-center gap-3 py-3">
+              <CalendarCheck className="size-4 text-muted-foreground" aria-hidden />
+              <Link href="/app/receptionist/appointments" className="flex-1 font-medium hover:underline">Calendar & booking</Link>
+              <StatusBadge tone={readiness.calendarConnected ? 'success' : 'warning'}>
+                {readiness.calendarConnected ? 'Connected' : 'Connect calendar'}
+              </StatusBadge>
+            </li>
+          )}
           <li className="flex items-center gap-3 py-3">
+            <PhoneForwarded className="size-4 text-muted-foreground" aria-hidden />
             <span className="flex-1 font-medium">Phone assignment</span>
             <Link href="/app/receptionist/call-routing" className="text-xs font-medium text-primary hover:underline">Manage</Link>
           </li>

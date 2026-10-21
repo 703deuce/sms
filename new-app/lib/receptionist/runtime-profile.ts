@@ -6,9 +6,21 @@ export type RuntimeProfile = "conversational_ivr" | "full_receptionist";
 export const RUNTIME_PROFILE_CONVERSATIONAL_IVR: RuntimeProfile = "conversational_ivr";
 export const RUNTIME_PROFILE_FULL_RECEPTIONIST: RuntimeProfile = "full_receptionist";
 
-export const CONVERSATIONAL_IVR_PRODUCT_TITLE = "Conversational IVR";
-export const CONVERSATIONAL_IVR_PRODUCT_DESCRIPTION =
-  "Let callers explain what they need. Your conversational phone menu can answer common questions, connect them to the right person, or take a message.";
+export const AI_RECEPTIONIST_PRODUCT_TITLE = "AI Receptionist";
+
+export const CONVERSATIONAL_IVR_MODE_LABEL = "Conversational IVR";
+export const FULL_RECEPTIONIST_MODE_LABEL = "Full Receptionist";
+
+/** @deprecated Use AI_RECEPTIONIST_PRODUCT_TITLE — product name is AI Receptionist; mode is separate. */
+export const CONVERSATIONAL_IVR_PRODUCT_TITLE = AI_RECEPTIONIST_PRODUCT_TITLE;
+
+export const CONVERSATIONAL_IVR_MODE_DESCRIPTION =
+  "Answer questions, understand callers, route calls, and take messages.";
+
+export const FULL_RECEPTIONIST_MODE_DESCRIPTION =
+  "Collect information, qualify callers, manage appointments, and handle more complex requests.";
+
+export const CONVERSATIONAL_IVR_PRODUCT_DESCRIPTION = CONVERSATIONAL_IVR_MODE_DESCRIPTION;
 
 export const CONVERSATIONAL_IVR_ACTIVE_TOOLS = [
   "end_call",

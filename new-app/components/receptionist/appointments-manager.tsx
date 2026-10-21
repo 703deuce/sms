@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CalendarClock, CalendarDays, Clock, Link2, ListChecks, MapPin, Pencil, Plus, Settings2, Trash2, Video } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -19,12 +19,33 @@ import { DemoNote, JumpChips, Pills, Section, ToggleRow } from './ai-ui'
 
 type Appt = AgentConfig['appointments']
 
-const PROVIDERS: { value: Appt['provider']; label: string; detail: string; tone: 'success' | 'danger' | 'muted' }[] = [
-  { value: 'google', label: 'Google Calendar', detail: 'frontdesk@harborpine.com · 3 calendars', tone: 'success' },
-  { value: 'microsoft', label: 'Microsoft 365', detail: 'Not connected', tone: 'muted' },
-  { value: 'calendly', label: 'Calendly', detail: 'Disconnected — reconnect in Integrations', tone: 'danger' },
-  { value: 'none', label: 'No calendar', detail: 'Ava takes requests your team confirms', tone: 'muted' },
-]
+type CalendarRow = { provider: string; status: string; name?: string }
+
+function providerCards(calendars: CalendarRow[]): { value: Appt['provider']; label: string; detail: string; tone: 'success' | 'danger' | 'muted' }[] {
+  const row = (p: string) => calendars.find((c) => c.provider === p)
+  const detail = (p: string, fallback: string) => {
+    const r = row(p)
+    if (!r) return fallback
+    if (r.status === 'connected' || r.status === 'active' || r.status === 'ok') {
+      return r.name ? `Connected · ${r.name}` : 'Connected — select calendar in Integrations'
+    }
+    if (r.status === 'needs_reauth' || r.status === 'error') return 'Needs reconnect in Integrations'
+    return fallback
+  }
+  const tone = (p: string): 'success' | 'danger' | 'muted' => {
+    const r = row(p)
+    if (!r) return 'muted'
+    if (r.status === 'connected' || r.status === 'active' || r.status === 'ok') return 'success'
+    if (r.status === 'needs_reauth' || r.status === 'error') return 'danger'
+    return 'muted'
+  }
+  return [
+    { value: 'google', label: 'Google Calendar', detail: detail('google', 'Not connected'), tone: tone('google') },
+    { value: 'microsoft', label: 'Microsoft 365', detail: detail('microsoft', 'Connect for live Outlook booking'), tone: tone('microsoft') },
+    { value: 'calendly', label: 'Calendly', detail: detail('calendly', 'Connect in Integrations for link booking'), tone: tone('calendly') },
+    { value: 'none', label: 'No calendar', detail: 'Use appointment requests or booking links only', tone: 'muted' },
+  ]
+}
 
 const MODALITY = { in_person: { label: 'In person', icon: MapPin }, phone: { label: 'Phone', icon: Clock }, video: { label: 'Video', icon: Video } } as const
 
@@ -33,7 +54,18 @@ export function AppointmentsManager() {
   const a = draft.appointments
   const set = (patch: Partial<Appt>) => update('appointments', (x) => ({ ...x, ...patch }))
   const [editing, setEditing] = useState<AppointmentType | null>(null)
+  const [calendars, setCalendars] = useState<CalendarRow[]>([])
   const bookingOff = !draft.capabilities.book
+
+  useEffect(() => {
+    void fetch('/api/integrations/status')
+      .then((r) => r.json())
+      .then((j) => setCalendars((j.data?.calendars as CalendarRow[]) ?? []))
+      .catch(() => setCalendars([]))
+  }, [])
+
+  const PROVIDERS = providerCards(calendars)
+  const returnTo = encodeURIComponent('/app/receptionist/appointments')
 
   return (
     <div className="flex flex-col gap-4">
@@ -79,7 +111,16 @@ export function AppointmentsManager() {
               </button>
             ))}
           </div>
-          <Link href="/app/integrations" className="self-start text-xs font-medium text-primary hover:underline">Manage calendar connections in Integrations</Link>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/app/integrations" className="text-xs font-medium text-primary hover:underline">
+              Manage calendar connections in Integrations
+            </Link>
+            {a.provider === 'microsoft' && providerCards(calendars).find((p) => p.value === 'microsoft')?.tone !== 'success' && (
+              <Link href={`/app/integrations?connect=microsoft&returnTo=${returnTo}`} className="text-xs font-medium text-primary hover:underline">
+                Connect Microsoft 365
+              </Link>
+            )}
+          </div>
         </div>
         {a.strategy === 'link' && (
           <div className="grid gap-4 sm:grid-cols-2">

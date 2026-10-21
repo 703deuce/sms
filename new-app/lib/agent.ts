@@ -488,7 +488,7 @@ export function diffSections(a: AgentConfig, b: AgentConfig) {
     protection: 'Call protection',
     audio: 'Recording & connection audio',
     knowledgeProfile: 'Business knowledge & agent job',
-    runtimeProfile: 'Runtime profile',
+    runtimeProfile: 'Operating mode',
     conversationalRoutes: 'Call routing rules',
     conversationalRouting: 'Default routing',
     messageTaking: 'Message taking',

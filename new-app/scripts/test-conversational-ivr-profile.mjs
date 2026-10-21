@@ -39,10 +39,11 @@ assert.ok(voiceRuntime.includes('flush_voice_v3_forensics'), 'forensics flush wi
 assert.ok(voiceRuntime.includes('record_voice_v3_transfer_outcome'), 'transfer outcome wired')
 
 const nav = read('../lib/nav.ts')
-assert.ok(nav.includes('Conversational IVR'), 'nav product renamed')
+assert.ok(nav.includes('AI_RECEPTIONIST_PRODUCT_TITLE'), 'product is AI Receptionist')
+assert.ok(nav.includes('receptionistNavItems'), 'mode-aware nav builder')
 assert.ok(nav.includes('/app/receptionist/call-routing'), 'call routing nav entry')
 assert.ok(nav.includes('/app/receptionist/message-taking'), 'message taking nav entry')
-assert.ok(!nav.includes("href: '/app/receptionist/appointments'"), 'appointments hidden from nav')
+assert.ok(nav.includes("href: '/app/receptionist/appointments'"), 'appointments in full mode nav map')
 
 const compileRuntime = read('../lib/server/receptionist/compile-runtime.ts')
 assert.ok(compileRuntime.includes('isConversationalIvrEditor'), 'publish validation aware of profile')

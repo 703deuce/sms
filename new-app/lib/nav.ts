@@ -19,7 +19,10 @@ import {
   Route,
   Settings,
   Settings2,
+  SlidersHorizontal,
   Signpost,
+  CalendarClock,
+  ClipboardList,
   Hash,
   Clock3,
   ListTree,
@@ -27,7 +30,12 @@ import {
   Voicemail,
   type LucideIcon,
 } from 'lucide-react'
-import { CONVERSATIONAL_IVR_PRODUCT_TITLE } from '@/lib/receptionist/runtime-profile'
+import {
+  AI_RECEPTIONIST_PRODUCT_TITLE,
+  type RuntimeProfile,
+  RUNTIME_PROFILE_FULL_RECEPTIONIST,
+} from '@/lib/receptionist/runtime-profile'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 
 export type ProductKey = 'phone' | 'receptionist' | 'mctb'
 export type ContextKey = ProductKey | 'workspace'
@@ -50,6 +58,56 @@ export type NavContext = {
   items: NavItem[]
 }
 
+export function receptionistNavItems(profile: RuntimeProfile): NavItem[] {
+  const intake: NavItem = {
+    title:
+      profile === RUNTIME_PROFILE_FULL_RECEPTIONIST ? 'Caller Intake' : 'Message Taking',
+    href: '/app/receptionist/message-taking',
+    icon: profile === RUNTIME_PROFILE_FULL_RECEPTIONIST ? ClipboardList : MessageSquare,
+    group: 'Configure',
+  }
+  const base: NavItem[] = [
+    { title: 'Overview', href: '/app/receptionist', icon: LayoutDashboard, exact: true, group: 'Workspace' },
+    { title: 'Business Knowledge', href: '/app/receptionist/knowledge', icon: BookOpen, group: 'Configure' },
+    { title: 'Call Routing', href: '/app/receptionist/call-routing', icon: Route, group: 'Configure' },
+    intake,
+    { title: 'Calls', href: '/app/receptionist/calls', icon: PhoneCall, group: 'Activity' },
+  ]
+  if (profile === RUNTIME_PROFILE_FULL_RECEPTIONIST) {
+    return [
+      base[0],
+      base[1],
+      base[2],
+      base[3],
+      {
+        title: 'Appointments',
+        href: '/app/receptionist/appointments',
+        icon: CalendarClock,
+        group: 'Configure',
+      },
+      {
+        title: 'Agent Settings',
+        href: '/app/receptionist/agent',
+        icon: SlidersHorizontal,
+        group: 'Configure',
+      },
+      base[4],
+    ]
+  }
+  return base
+}
+
+export function receptionistProductContext(profile: RuntimeProfile): NavContext {
+  return {
+    key: 'receptionist',
+    title: AI_RECEPTIONIST_PRODUCT_TITLE,
+    shortTitle: 'AI Receptionist',
+    href: '/app/receptionist',
+    icon: Bot,
+    items: receptionistNavItems(profile),
+  }
+}
+
 export const PRODUCTS: NavContext[] = [
   {
     key: 'phone',
@@ -68,38 +126,31 @@ export const PRODUCTS: NavContext[] = [
       { title: 'Voicemail', href: '/app/phone/voicemail', icon: Voicemail, group: 'Configure' },
       { title: 'Phone Numbers', href: '/app/numbers', icon: Hash, group: 'Configure' },
       { title: 'Call Handling', href: '/app/phone/call-handling', icon: Signpost, group: 'Configure' },
-      { title: 'Missed Call Text Back', href: '/app/phone/missed-call-text-back', icon: PhoneMissed, group: 'Configure' },
+      ...(MCTB_UI_ENABLED
+        ? [{ title: 'Missed Call Text Back', href: '/app/phone/missed-call-text-back', icon: PhoneMissed, group: 'Configure' as const }]
+        : []),
       { title: 'Analytics', href: '/app/phone/analytics', icon: BarChart3, group: 'Insights' },
     ],
   },
-  {
-    key: 'receptionist',
-    title: CONVERSATIONAL_IVR_PRODUCT_TITLE,
-    shortTitle: 'Conversational IVR',
-    href: '/app/receptionist',
-    icon: Bot,
-    items: [
-      { title: 'Overview', href: '/app/receptionist', icon: LayoutDashboard, exact: true, group: 'Workspace' },
-      { title: 'Business Knowledge', href: '/app/receptionist/knowledge', icon: BookOpen, group: 'Configure' },
-      { title: 'Call Routing', href: '/app/receptionist/call-routing', icon: Route, group: 'Configure' },
-      { title: 'Message Taking', href: '/app/receptionist/message-taking', icon: MessageSquare, group: 'Configure' },
-      { title: 'Calls', href: '/app/receptionist/calls', icon: PhoneCall, group: 'Activity' },
-    ],
-  },
-  {
-    key: 'mctb',
-    title: 'Missed Call Text Back',
-    shortTitle: 'Missed Call Text Back',
-    href: '/app/mctb',
-    icon: MessageSquareReply,
-    items: [
-      { title: 'Overview', href: '/app/mctb', icon: LayoutDashboard, exact: true, group: 'Workspace' },
-      { title: 'Missed Calls', href: '/app/mctb/calls', icon: PhoneMissed, group: 'Activity' },
-      { title: 'Conversations', href: '/app/mctb/conversations', icon: MessagesSquare, group: 'Activity' },
-      { title: 'Recovery Settings', href: '/app/mctb/recovery', icon: Settings2, group: 'Configure' },
-      { title: 'Analytics', href: '/app/mctb/analytics', icon: BarChart3, group: 'Insights' },
-    ],
-  },
+  receptionistProductContext('conversational_ivr'),
+  ...(MCTB_UI_ENABLED
+    ? [
+        {
+          key: 'mctb' as const,
+          title: 'Missed Call Text Back',
+          shortTitle: 'Missed Call Text Back',
+          href: '/app/mctb',
+          icon: MessageSquareReply,
+          items: [
+            { title: 'Overview', href: '/app/mctb', icon: LayoutDashboard, exact: true, group: 'Workspace' },
+            { title: 'Missed Calls', href: '/app/mctb/calls', icon: PhoneMissed, group: 'Activity' },
+            { title: 'Conversations', href: '/app/mctb/conversations', icon: MessagesSquare, group: 'Activity' },
+            { title: 'Recovery Settings', href: '/app/mctb/recovery', icon: Settings2, group: 'Configure' },
+            { title: 'Analytics', href: '/app/mctb/analytics', icon: BarChart3, group: 'Insights' },
+          ],
+        },
+      ]
+    : []),
 ]
 
 export const WORKSPACE: NavContext = {
@@ -121,7 +172,13 @@ export const WORKSPACE: NavContext = {
 
 export const ALL_CONTEXTS: NavContext[] = [...PRODUCTS, WORKSPACE]
 
-export function resolveContext(pathname: string): NavContext {
+export function resolveContext(
+  pathname: string,
+  receptionistProfile?: RuntimeProfile,
+): NavContext {
+  if (pathname === '/app/receptionist' || pathname.startsWith('/app/receptionist/')) {
+    return receptionistProductContext(receptionistProfile ?? 'conversational_ivr')
+  }
   const product = PRODUCTS.find(
     (p) => pathname === p.href || pathname.startsWith(`${p.href}/`),
   )

@@ -10,7 +10,7 @@ export async function getReceptionistOverview(workspaceId: string) {
   since.setDate(since.getDate() - 7);
 
   const agentId = state.agentId;
-  const [handled, booked, transferred, gaps, sources, recent] = await Promise.all([
+  const [handled, booked, transferred, callbacks, gaps, sources, recent] = await Promise.all([
     prisma.voiceCall.count({
       where: { workspaceId, agentId, startedAt: { gte: since } },
     }),
@@ -19,6 +19,13 @@ export async function getReceptionistOverview(workspaceId: string) {
     }),
     prisma.voiceCall.count({
       where: { workspaceId, agentId, transferred: true, startedAt: { gte: since } },
+    }),
+    prisma.callbackRequest.count({
+      where: {
+        workspaceId,
+        createdAt: { gte: since },
+        sourceRoute: { in: ["voice_v3_take_message", "voice_v3_request_callback"] },
+      },
     }),
     listKnowledgeGaps(workspaceId),
     listKnowledgeSources(workspaceId),
@@ -51,6 +58,7 @@ export async function getReceptionistOverview(workspaceId: string) {
       handled,
       booked,
       transferred,
+      callbacks,
       needsAttention,
       avgSec,
       openGaps,
