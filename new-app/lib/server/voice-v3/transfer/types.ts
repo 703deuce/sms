@@ -1,5 +1,7 @@
 export type VoiceV3TransferMode = "DIRECT" | "WARM";
 
+export type VoiceV3TransferExecutor = "livekit_refer" | "phone_ring_group";
+
 export type VoiceV3TransferFallback =
   | "RETURN_TO_AGENT"
   | "REQUEST_CALLBACK"
@@ -24,7 +26,9 @@ export interface VoiceV3TransferDestinationCompiled {
   label: string;
   /** Semantic hint for route selection — never a phone number. */
   description?: string;
-  phoneE164: string;
+  phoneE164?: string;
+  forwardingGroupId?: string;
+  executor?: VoiceV3TransferExecutor;
   defaultMode: VoiceV3TransferMode;
   ringingTimeoutSeconds: number;
   enabled: boolean;
@@ -64,7 +68,8 @@ export interface VoiceV3TransferPolicyCompiled {
 export interface VoiceV3AuthorizedTransferTarget {
   destination_id: string;
   mode: VoiceV3TransferMode;
-  dial_target: string;
+  dial_target?: string;
+  forwarding_group_id?: string;
   ringing_timeout_seconds: number;
 }
 
@@ -72,6 +77,7 @@ export interface VoiceV3AuthorizedTransferPlan {
   transfer_request_id: string;
   route_id: string;
   fallback: VoiceV3TransferFallback;
+  executor?: VoiceV3TransferExecutor;
   targets: VoiceV3AuthorizedTransferTarget[];
   handoff_instructions: string;
   outbound_sip_trunk_id: string | null;

@@ -248,6 +248,19 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     );
   }
 
+  let phoneRoutingSessionId: string | null = null;
+  if (!isBrowserTest && phoneNumberId) {
+    const { linkLiveSessionToPhoneRouting } = await import(
+      "@/lib/server/phone/ivr-integration/resolve-handoff"
+    );
+    phoneRoutingSessionId = await linkLiveSessionToPhoneRouting({
+      liveSessionId,
+      workspaceId,
+      phoneNumberId,
+      callerE164: payload.callerE164,
+    });
+  }
+
   await ensureVoiceCallRowOnSessionResolve({
     callId,
     workspaceId,
@@ -261,6 +274,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
       configSource,
       publishedVersionId,
       voiceTransport: "voice_v3_livekit",
+      phoneRoutingSessionId,
     },
   });
 

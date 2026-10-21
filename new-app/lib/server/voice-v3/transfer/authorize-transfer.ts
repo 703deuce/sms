@@ -165,9 +165,21 @@ export function authorizeVoiceV3Transfer(input: {
   }
 
   const authorizedTargets: VoiceV3AuthorizedTransferPlan["targets"] = [];
+  let executor: VoiceV3AuthorizedTransferPlan["executor"] = "livekit_refer";
   for (const t of targets) {
     const dest = destMap.get(t.destinationId);
-    if (!dest?.enabled || !dest.phoneE164) continue;
+    if (!dest?.enabled) continue;
+    if (dest.executor === "phone_ring_group" && dest.forwardingGroupId) {
+      executor = "phone_ring_group";
+      authorizedTargets.push({
+        destination_id: dest.id,
+        mode: t.mode,
+        forwarding_group_id: dest.forwardingGroupId,
+        ringing_timeout_seconds: t.ringingTimeoutSeconds,
+      });
+      continue;
+    }
+    if (!dest.phoneE164) continue;
     authorizedTargets.push({
       destination_id: dest.id,
       mode: t.mode,
@@ -197,6 +209,7 @@ export function authorizeVoiceV3Transfer(input: {
     transfer_request_id: transferRequestId,
     route_id: route.id,
     fallback: route.fallback,
+    executor,
     targets: authorizedTargets,
     handoff_instructions: handoff,
     outbound_sip_trunk_id: policy.telephony.outboundSipTrunkId,

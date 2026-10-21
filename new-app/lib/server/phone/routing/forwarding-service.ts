@@ -9,6 +9,7 @@ import {
   requireCallControlConnectionId,
   speakOnCall,
 } from "./telnyx-call-control";
+import { patchRoutingSessionState } from "./session-state";
 import { recordForwardedCallAttempt } from "./usage-accounting";
 
 export async function startForwardingFlow(input: {
@@ -70,9 +71,54 @@ export async function startForwardingFlow(input: {
     return session;
   }
 
+  if (input.effective.kind === "staff_then_ivr") {
+    await patchRoutingSessionState(session.id, {
+      staffThenIvrOverflow: true,
+      ringTimeoutSec: input.effective.ringTimeoutSec,
+    });
+    const list = input.effective.destinations;
+    if (input.effective.strategy === "simultaneous") {
+      await patchRoutingSessionState(session.id, {
+        pendingSimultaneousLegs: list.length,
+      });
+      for (const dest of list) {
+        await dialDestination({
+          sessionId: session.id,
+          workspaceId: input.workspaceId,
+          humanCallId: input.humanCallId,
+          inboundControlId: input.inboundControlId,
+          businessLineE164: input.businessLineE164,
+          callerE164: input.callerE164,
+          destinationE164: dest.e164,
+          press1: dest.press1,
+          simultaneous: true,
+        });
+      }
+    } else {
+      const first = list[0];
+      if (first) {
+        await dialDestination({
+          sessionId: session.id,
+          workspaceId: input.workspaceId,
+          humanCallId: input.humanCallId,
+          inboundControlId: input.inboundControlId,
+          businessLineE164: input.businessLineE164,
+          callerE164: input.callerE164,
+          destinationE164: first.e164,
+          press1: first.press1,
+          sequentialQueue: list.slice(1),
+        });
+      }
+    }
+    return session;
+  }
+
   if (input.effective.kind === "forward_group") {
     const list = input.effective.destinations;
     if (input.effective.strategy === "simultaneous") {
+      await patchRoutingSessionState(session.id, {
+        pendingSimultaneousLegs: list.length,
+      });
       for (const dest of list) {
         await dialDestination({
           sessionId: session.id,
@@ -106,6 +152,99 @@ export async function startForwardingFlow(input: {
   }
 
   return session;
+}
+
+/** Dial forwarding destinations on an existing routing session (AI → Phone group handoff). */
+export async function runEffectiveForwardingOnSession(input: {
+  sessionId: string;
+  workspaceId: string;
+  humanCallId: string;
+  phoneNumberId: string | null;
+  inboundControlId: string;
+  businessLineE164: string;
+  callerE164: string;
+  effective: EffectiveAnswering;
+}) {
+  if (
+    input.effective.kind !== "forward_group" &&
+    input.effective.kind !== "staff_then_ivr" &&
+    input.effective.kind !== "forward"
+  ) {
+    throw new Error(`Unsupported effective kind for session forwarding: ${input.effective.kind}`);
+  }
+
+  await patchRoutingSessionState(input.sessionId, {
+    stage: "forwarding",
+    effective: input.effective,
+  });
+
+  if (input.effective.kind === "forward") {
+    await dialDestination({
+      sessionId: input.sessionId,
+      workspaceId: input.workspaceId,
+      humanCallId: input.humanCallId,
+      inboundControlId: input.inboundControlId,
+      businessLineE164: input.businessLineE164,
+      callerE164: input.callerE164,
+      destinationE164: input.effective.destinationE164,
+      press1: input.effective.press1,
+      screeningText: input.effective.screeningText,
+    });
+    return;
+  }
+
+  const list =
+    input.effective.kind === "staff_then_ivr"
+      ? input.effective.destinations
+      : input.effective.destinations;
+  const strategy =
+    input.effective.kind === "staff_then_ivr"
+      ? input.effective.strategy
+      : input.effective.strategy;
+
+  if (input.effective.kind === "staff_then_ivr") {
+    await patchRoutingSessionState(input.sessionId, {
+      staffThenIvrOverflow: true,
+      ringTimeoutSec: input.effective.ringTimeoutSec,
+    });
+  }
+
+  if (strategy === "simultaneous") {
+    await patchRoutingSessionState(input.sessionId, {
+      pendingSimultaneousLegs: list.length,
+      allowIvrFallbackAfterGroup: true,
+    });
+    for (const dest of list) {
+      await dialDestination({
+        sessionId: input.sessionId,
+        workspaceId: input.workspaceId,
+        humanCallId: input.humanCallId,
+        inboundControlId: input.inboundControlId,
+        businessLineE164: input.businessLineE164,
+        callerE164: input.callerE164,
+        destinationE164: dest.e164,
+        press1: dest.press1,
+        simultaneous: true,
+      });
+    }
+    return;
+  }
+
+  const first = list[0];
+  if (first) {
+    await patchRoutingSessionState(input.sessionId, { allowIvrFallbackAfterGroup: true });
+    await dialDestination({
+      sessionId: input.sessionId,
+      workspaceId: input.workspaceId,
+      humanCallId: input.humanCallId,
+      inboundControlId: input.inboundControlId,
+      businessLineE164: input.businessLineE164,
+      callerE164: input.callerE164,
+      destinationE164: first.e164,
+      press1: first.press1,
+      sequentialQueue: list.slice(1),
+    });
+  }
 }
 
 export async function dialDestination(input: {

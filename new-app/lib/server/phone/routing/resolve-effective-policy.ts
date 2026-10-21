@@ -1,3 +1,4 @@
+import { readIntegratedRouting } from "@/lib/server/phone/ivr-integration/integrated-policy";
 import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
 import { getAnsweringPolicyForNumber } from "./store";
 import {
@@ -13,7 +14,14 @@ export type EffectiveAnswering =
   | { kind: "forward"; destinationE164: string; press1: boolean; screeningText?: string | null }
   | { kind: "forward_group"; strategy: string; destinations: Array<{ e164: string; press1: boolean; timeout: number }> }
   | { kind: "auto_attendant"; menuId: string }
-  | { kind: "greeting_then_forward"; greeting: string; destinationE164: string };
+  | { kind: "greeting_then_forward"; greeting: string; destinationE164: string }
+  | { kind: "conversational_ivr" }
+  | {
+      kind: "staff_then_ivr";
+      strategy: string;
+      destinations: Array<{ e164: string; press1: boolean; timeout: number }>;
+      ringTimeoutSec: number;
+    };
 
 type ScheduleJson = {
   afterHoursMode?: string;
@@ -42,6 +50,7 @@ export async function resolveEffectiveAnswering(input: {
   const policy = await getAnsweringPolicyForNumber(input.workspaceId, input.phoneNumberId);
   if (!policy || policy.paused) return { kind: "browser" };
 
+  const integrated = readIntegratedRouting(policy.scheduleJson);
   const callCtx = await inboundCallContext(input.workspaceId, input.phoneNumberId);
 
   const { getBusinessHours } = await import("@/lib/server/phone/routing");
@@ -76,6 +85,9 @@ export async function resolveEffectiveAnswering(input: {
     if (schedule?.afterHoursMode === "auto_attendant" && schedule.afterHoursMenuId) {
       return { kind: "auto_attendant", menuId: schedule.afterHoursMenuId };
     }
+    if (schedule?.afterHoursMode === "conversational_ivr" || integrated.afterHoursMode === "conversational_ivr") {
+      return { kind: "conversational_ivr" };
+    }
     if (schedule?.afterHoursMode === "forward") {
       const afterHours = await resolveScheduleForward(input.workspaceId, schedule, callCtx);
       if (afterHours) {
@@ -84,6 +96,54 @@ export async function resolveEffectiveAnswering(input: {
           destinationE164: afterHours.dialE164,
           press1: afterHours.press1,
           screeningText: afterHours.screeningText,
+        };
+      }
+    }
+  }
+
+  if (integrated.answeringMode === "conversational_ivr" || policy.answeringMode === "conversational_ivr") {
+    return { kind: "conversational_ivr" };
+  }
+
+  if (
+    integrated.answeringMode === "staff_then_ivr" &&
+    integrated.staffThenIvr?.forwardingGroupId
+  ) {
+    const { getPrisma } = await import("@/lib/server/db");
+    const group =
+      policy.forwardingGroup?.id === integrated.staffThenIvr.forwardingGroupId
+        ? policy.forwardingGroup
+        : await getPrisma().forwardingGroup.findFirst({
+            where: {
+              id: integrated.staffThenIvr.forwardingGroupId,
+              workspaceId: input.workspaceId,
+              enabled: true,
+            },
+            include: {
+              members: { include: { destination: true }, orderBy: { priority: "asc" } },
+            },
+          });
+    if (group?.members?.length) {
+      const destinations: Array<{ e164: string; press1: boolean; timeout: number }> = [];
+      for (const m of group.members) {
+        if (!m.enabled || !m.destination.enabled) continue;
+        try {
+          const resolved = await resolveForwardingDestinationRow(m.destination, callCtx);
+          destinations.push({
+            e164: resolved.dialE164,
+            press1: resolved.press1,
+            timeout: resolved.ringTimeoutSec,
+          });
+        } catch {
+          // skip
+        }
+      }
+      if (destinations.length) {
+        return {
+          kind: "staff_then_ivr",
+          strategy: group.strategy,
+          destinations,
+          ringTimeoutSec: Math.max(5, integrated.staffThenIvr.ringTimeoutSec ?? 20),
         };
       }
     }

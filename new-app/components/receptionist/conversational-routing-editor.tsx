@@ -80,6 +80,18 @@ export function ConversationalRoutingEditor() {
   const routing = draft.conversationalRouting
   const [editRoute, setEditRoute] = useState<ConversationalRoute | null>(null)
   const [saving, setSaving] = useState(false)
+  const [ringGroups, setRingGroups] = useState<Array<{ id: string; name: string; strategy?: string }>>([])
+
+  useEffect(() => {
+    void fetch('/api/phone/forwarding')
+      .then((r) => r.json())
+      .then((res) => {
+        setRingGroups(
+          (res.data?.groups || []).map((g: { id: string; name: string; strategy?: string }) => g),
+        )
+      })
+      .catch(() => undefined)
+  }, [])
 
   const setRoutes = (next: ConversationalRoute[]) => {
     update('conversationalRoutes', next)
@@ -95,6 +107,20 @@ export function ConversationalRoutingEditor() {
   const persistRoute = async (route: ConversationalRoute) => {
     setSaving(true)
     try {
+      if (route.destinationKind === 'ring_group') {
+        if (!route.destinationRef?.trim()) throw new Error('Select a Phone ring group.')
+        const idx = routes.findIndex((r) => r.id === route.id)
+        const synced = {
+          ...route,
+          destinationLabel: ringGroups.find((g) => g.id === route.destinationRef)?.name || route.name,
+        }
+        const next =
+          idx >= 0 ? routes.map((r) => (r.id === synced.id ? synced : r)) : [...routes, synced]
+        setRoutes(next)
+        setEditRoute(null)
+        toast.success('Ring group route saved to draft')
+        return
+      }
       const synced = await syncPhoneDestination(route)
       const idx = routes.findIndex((r) => r.id === synced.id)
       const next =
@@ -148,7 +174,11 @@ export function ConversationalRoutingEditor() {
                   {route.description?.trim() ? (
                     <p className="text-sm text-muted-foreground">{route.description}</p>
                   ) : null}
-                  {route.destinationPhoneE164 ? (
+                  {route.destinationKind === 'ring_group' ? (
+                    <p className="text-sm font-medium">
+                      Ring group: {route.destinationLabel || route.destinationRef || '—'}
+                    </p>
+                  ) : route.destinationPhoneE164 ? (
                     <p className="text-sm font-medium tabular-nums">{formatPhone(route.destinationPhoneE164)}</p>
                   ) : (
                     <p className="text-sm text-destructive">Phone number missing — edit to fix.</p>
@@ -192,7 +222,7 @@ export function ConversationalRoutingEditor() {
           <div className="flex flex-col gap-2">
             <Label htmlFor="when-no-match">When no destination matches</Label>
             <SimpleSelect
-              id="when-no-match"
+              label="When no destination matches"
               value={routing.whenNoRuleMatches}
               onChange={(v) => update('conversationalRouting', (r) => ({ ...r, whenNoRuleMatches: v }))}
               options={[
@@ -205,7 +235,7 @@ export function ConversationalRoutingEditor() {
           <div className="flex flex-col gap-2">
             <Label htmlFor="when-transfer-fails">When transfer fails</Label>
             <SimpleSelect
-              id="when-transfer-fails"
+              label="When transfer fails"
               value={routing.whenTransferFails}
               onChange={(v) => update('conversationalRouting', (r) => ({ ...r, whenTransferFails: v }))}
               options={[
@@ -221,6 +251,7 @@ export function ConversationalRoutingEditor() {
       <DestinationDrawer
         open={Boolean(editRoute)}
         route={editRoute}
+        ringGroups={ringGroups}
         saving={saving}
         onClose={() => !saving && setEditRoute(null)}
         onSave={(route) => void persistRoute(route)}
@@ -232,12 +263,14 @@ export function ConversationalRoutingEditor() {
 function DestinationDrawer({
   open,
   route,
+  ringGroups,
   saving,
   onClose,
   onSave,
 }: {
   open: boolean
   route: ConversationalRoute | null
+  ringGroups: Array<{ id: string; name: string; strategy?: string }>
   saving: boolean
   onClose: () => void
   onSave: (r: ConversationalRoute) => void
@@ -262,7 +295,7 @@ function DestinationDrawer({
       intentDescription: CONVERSATIONAL_ROUTE_EXAMPLE.intentDescription,
       destinationPhoneE164: CONVERSATIONAL_ROUTE_EXAMPLE.destinationPhoneE164,
     })
-    setPhoneInput(formatPhone(CONVERSATIONAL_ROUTE_EXAMPLE.destinationPhoneE164))
+    setPhoneInput(formatPhone(CONVERSATIONAL_ROUTE_EXAMPLE.destinationPhoneE164 || ''))
     setPhoneError(null)
     toast.message('Example filled — illustrative only until you save')
   }
@@ -278,11 +311,14 @@ function DestinationDrawer({
     return normalized.e164
   }
 
+  const isGroup = local.destinationKind === 'ring_group'
   const canSave =
     local.name.trim().length > 0 &&
     local.description.trim().length > 0 &&
     local.intentDescription.trim().length > 0 &&
-    (local.destinationPhoneE164?.trim() || tryNormalizePhoneInput(phoneInput).ok)
+    (isGroup
+      ? Boolean(local.destinationRef?.trim())
+      : Boolean(local.destinationPhoneE164?.trim() || tryNormalizePhoneInput(phoneInput).ok))
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && !saving && onClose()}>
@@ -305,32 +341,74 @@ function DestinationDrawer({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="dest-phone">Transfer phone number</Label>
-            <Input
-              id="dest-phone"
-              type="tel"
-              inputMode="tel"
-              value={phoneInput}
-              onChange={(e) => {
-                setPhoneInput(e.target.value)
-                setPhoneError(null)
-              }}
-              onBlur={() => {
-                const e164 = commitPhone()
-                if (e164) setPhoneInput(formatPhone(e164))
-              }}
-              placeholder="(571) 555-0134"
-              aria-invalid={phoneError ? true : undefined}
-              aria-describedby={phoneError ? 'dest-phone-error' : undefined}
+            <Label htmlFor="dest-target-kind">Transfer target</Label>
+            <SimpleSelect
+              label="Transfer target type"
+              value={isGroup ? 'ring_group' : 'phone'}
+              onChange={(v) =>
+                setLocal({
+                  ...local,
+                  destinationKind: v === 'ring_group' ? 'ring_group' : 'forwarding_destination',
+                  destinationRef: v === 'ring_group' ? local.destinationRef : local.destinationRef,
+                })
+              }
+              options={[
+                { value: 'phone', label: 'Individual phone number' },
+                { value: 'ring_group', label: 'Saved Phone ring group' },
+              ]}
             />
-            {phoneError ? (
-              <p id="dest-phone-error" className="text-sm text-destructive" role="alert">
-                {phoneError}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">Cell or landline that should ring when this route is selected.</p>
-            )}
           </div>
+          {isGroup ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="dest-group">Ring group</Label>
+              <SimpleSelect
+                label="Ring group"
+                value={local.destinationRef || ''}
+                onChange={(v) =>
+                  setLocal({
+                    ...local,
+                    destinationRef: v,
+                    destinationLabel: ringGroups.find((g) => g.id === v)?.name ?? local.destinationLabel,
+                  })
+                }
+                options={ringGroups.map((g) => ({
+                  value: g.id,
+                  label: `${g.name}${g.strategy ? ` (${g.strategy})` : ''}`,
+                }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Phone executes the full group strategy (simultaneous or sequential). The AI selects this route once.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="dest-phone">Transfer phone number</Label>
+              <Input
+                id="dest-phone"
+                type="tel"
+                inputMode="tel"
+                value={phoneInput}
+                onChange={(e) => {
+                  setPhoneInput(e.target.value)
+                  setPhoneError(null)
+                }}
+                onBlur={() => {
+                  const e164 = commitPhone()
+                  if (e164) setPhoneInput(formatPhone(e164))
+                }}
+                placeholder="(571) 555-0134"
+                aria-invalid={phoneError ? true : undefined}
+                aria-describedby={phoneError ? 'dest-phone-error' : undefined}
+              />
+              {phoneError ? (
+                <p id="dest-phone-error" className="text-sm text-destructive" role="alert">
+                  {phoneError}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Cell or landline that should ring when this route is selected.</p>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="dest-description">Description</Label>
             <Textarea
@@ -374,6 +452,10 @@ function DestinationDrawer({
           <Button
             disabled={!canSave || saving}
             onClick={() => {
+              if (isGroup) {
+                onSave(local)
+                return
+              }
               const e164 = commitPhone()
               if (!e164) return
               onSave({ ...local, destinationPhoneE164: e164 })

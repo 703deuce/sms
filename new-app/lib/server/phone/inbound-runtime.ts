@@ -79,9 +79,11 @@ export async function processInboundCallInitiated(input: {
   const usesCallForwardingRuntime =
     effective.kind === "forward" ||
     effective.kind === "forward_group" ||
+    effective.kind === "staff_then_ivr" ||
     effective.kind === "greeting_then_forward" ||
     effective.kind === "auto_attendant" ||
-    effective.kind === "voicemail";
+    effective.kind === "voicemail" ||
+    effective.kind === "conversational_ivr";
 
   const browserRing =
     effective.kind === "browser" && route.mode === "ring_browser";
@@ -147,10 +149,49 @@ export async function processInboundCallInitiated(input: {
     return call;
   }
 
+  if (input.telnyxCallControlId && effective.kind === "conversational_ivr") {
+    const { startConversationalIvrHandoffFromCallControl } = await import(
+      "@/lib/server/phone/ivr-integration/livekit-handoff"
+    );
+    const session = await prisma.phoneCallRoutingSession.create({
+      data: {
+        workspaceId: input.workspaceId,
+        phoneNumberId: pn?.id ?? null,
+        humanCallId: call.id,
+        inboundCallControlId: input.telnyxCallControlId,
+        stage: "conversational_ivr",
+        stateJson: { effectiveKind: "conversational_ivr" },
+      },
+    });
+    await startConversationalIvrHandoffFromCallControl({
+      workspaceId: input.workspaceId,
+      humanCallId: call.id,
+      phoneNumberId: pn?.id ?? null,
+      inboundControlId: input.telnyxCallControlId,
+      businessLineE164: input.toE164,
+      callerE164: from,
+      routingSessionId: session.id,
+      reason: "ivr_first",
+    });
+    await prisma.humanCall.update({
+      where: { id: call.id },
+      data: {
+        status: "ringing",
+        metadata: {
+          ...(call.metadata as object),
+          inboundRoute: "conversational_ivr",
+          routingSessionId: session.id,
+        },
+      },
+    });
+    return call;
+  }
+
   if (
     input.telnyxCallControlId &&
     (effective.kind === "forward" ||
       effective.kind === "forward_group" ||
+      effective.kind === "staff_then_ivr" ||
       effective.kind === "greeting_then_forward")
   ) {
     const { startForwardingFlow } = await import("@/lib/server/phone/routing/forwarding-service");
