@@ -14,6 +14,7 @@ from livekit.agents.voice.events import RunContext
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
+from transovo_voice.voice_v3.transfer_targets import normalize_transfer_to
 
 logger = logging.getLogger("transovo-voice.voice_v3.transfer")
 
@@ -47,15 +48,6 @@ async def _report_transfer_outcome_to_backend(
         logger.exception("voice_v3_transfer_outcome_report_failed")
 
 
-def _normalize_transfer_to(destination: str) -> str:
-    dest = destination.strip()
-    if dest.startswith("tel:") or dest.startswith("sip:"):
-        return dest
-    if dest.startswith("+") or (dest and dest[0].isdigit()):
-        return f"tel:{dest}"
-    return dest
-
-
 def _strip_execution_payload(result: dict[str, Any]) -> dict[str, Any]:
     out = dict(result)
     data = out.get("data")
@@ -71,7 +63,7 @@ async def _direct_transfer(
     dial_target: str,
     ringing_timeout_seconds: float,
 ) -> str:
-    transfer_to = _normalize_transfer_to(dial_target)
+    transfer_to = normalize_transfer_to(dial_target)
     job_ctx = telephony.job_ctx
     log_event(
         "voice_v3_transfer_direct_starting",
@@ -87,7 +79,15 @@ async def _direct_transfer(
         play_dialtone=False,
     )
     req.ringing_timeout.FromTimedelta(timedelta(seconds=ringing_timeout_seconds))
-    await job_ctx.api.sip.transfer_sip_participant(req)
+    try:
+        await job_ctx.api.sip.transfer_sip_participant(req)
+    except asyncio.TimeoutError:
+        raise
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "timeout" in msg or "deadline" in msg or "no answer" in msg:
+            raise asyncio.TimeoutError(str(exc)) from exc
+        raise
     # SIP REFER accepted by provider — not proof the destination party answered.
     return "SIP_REFER_ACCEPTED"
 

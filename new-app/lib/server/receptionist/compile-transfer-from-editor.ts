@@ -109,6 +109,10 @@ function compileConversationalIvrTransferPolicy(
 
   for (const route of editor.conversationalRoutes ?? []) {
     if (!route.enabled) continue;
+    if (route.destinationKind === "ring_group") {
+      // LiveKit TransferSIPParticipant supports one E.164 target — ring groups stay on Phone Call Control.
+      continue;
+    }
     let phone = route.destinationPhoneE164?.trim() ?? "";
     let destId = `route_dest_${route.id}`;
     const label = route.destinationLabel?.trim() || route.name?.trim() || "Route destination";
