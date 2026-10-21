@@ -114,7 +114,7 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
               description="Consent, delivery and reply for this missed call"
               actions={
                 call.mctb.threadId ? (
-                  <Link href={`/app/mctb/conversations?thread=${call.mctb.threadId}`} className="text-xs font-medium text-primary hover:underline">
+                  <Link href={`/app/inbox?thread=${call.mctb.threadId}`} className="text-xs font-medium text-primary hover:underline">
                     Open conversation
                   </Link>
                 ) : undefined

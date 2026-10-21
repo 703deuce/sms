@@ -155,7 +155,7 @@ export default async function PhoneOverview() {
           <div className="flex flex-col gap-2">
             {[
               { icon: Bot, title: 'AI Receptionist', body: 'Answering after-hours and overflow on Main line', href: '/app/receptionist/call-handling' },
-              { icon: MessageSquareReply, title: 'Missed Call Text Back', body: 'Texts consenting callers when calls go unanswered', href: '/app/mctb/recovery' },
+              { icon: MessageSquareReply, title: 'Missed Call Text Back', body: 'Texts consenting callers when calls go unanswered', href: '/app/phone/missed-call-text-back' },
             ].map((p) => (
               <Link key={p.title} href={p.href} className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/60">
                 <span className="flex size-8 items-center justify-center rounded-md bg-accent text-accent-foreground">

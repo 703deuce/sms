@@ -17,7 +17,7 @@ export const PRODUCT_LABEL: Record<NumberProduct, string> = {
 export const PRODUCT_RETURN: Record<NumberProduct, { label: string; href: string }> = {
   phone: { label: 'Phone call handling', href: '/app/phone/call-handling' },
   receptionist: { label: 'Conversational IVR', href: '/app/receptionist' },
-  mctb: { label: 'MCTB recovery settings', href: '/app/mctb/recovery' },
+  mctb: { label: 'MCTB recovery settings', href: '/app/phone/missed-call-text-back' },
   sms: { label: 'SMS settings', href: '/app/settings' },
 }
 

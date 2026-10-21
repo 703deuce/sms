@@ -348,7 +348,7 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
           />
         </div>
         <Button type="button" variant="link" className="mt-2 h-auto p-0" asChild>
-          <Link href="/app/mctb/recovery">Recovery message, consent, and cooldowns</Link>
+          <Link href="/app/phone/missed-call-text-back">Recovery message, consent, and cooldowns</Link>
         </Button>
       </Panel>
     </div>

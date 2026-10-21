@@ -10,7 +10,7 @@ import { SearchInput, SimpleSelect } from '@/components/app/filters'
 const START = [
   { title: 'Phone System', icon: Phone, href: '/app/numbers', body: 'Add or port a number, set business hours, and place a test call.' },
   { title: 'AI Receptionist', icon: Bot, href: '/app/receptionist/agent', body: 'Choose a voice, add your FAQs, then decide when the AI answers.' },
-  { title: 'Missed Call Text Back', icon: MessageSquareReply, href: '/app/mctb/recovery', body: 'Turn on press-1 consent and write your first text-back message.' },
+  { title: 'Missed Call Text Back', icon: MessageSquareReply, href: '/app/phone/missed-call-text-back', body: 'Turn on press-1 consent and choose one of five recovery message templates.' },
 ]
 
 const FAQ = [

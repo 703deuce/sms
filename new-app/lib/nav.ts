@@ -10,15 +10,12 @@ import {
   LifeBuoy,
   ListChecks,
   MessageSquare,
-  MessageSquareReply,
-  MessagesSquare,
   Phone,
   PhoneCall,
   PhoneMissed,
   Plug,
   Route,
   Settings,
-  Settings2,
   Signpost,
   Hash,
   Clock3,
@@ -29,7 +26,7 @@ import {
 } from 'lucide-react'
 import { CONVERSATIONAL_IVR_PRODUCT_TITLE } from '@/lib/receptionist/runtime-profile'
 
-export type ProductKey = 'phone' | 'receptionist' | 'mctb'
+export type ProductKey = 'phone' | 'receptionist'
 export type ContextKey = ProductKey | 'workspace'
 
 export type NavItem = {
@@ -84,20 +81,6 @@ export const PRODUCTS: NavContext[] = [
       { title: 'Call Routing', href: '/app/receptionist/call-routing', icon: Route, group: 'Configure' },
       { title: 'Message Taking', href: '/app/receptionist/message-taking', icon: MessageSquare, group: 'Configure' },
       { title: 'Calls', href: '/app/receptionist/calls', icon: PhoneCall, group: 'Activity' },
-    ],
-  },
-  {
-    key: 'mctb',
-    title: 'Missed Call Text Back',
-    shortTitle: 'Missed Call Text Back',
-    href: '/app/mctb',
-    icon: MessageSquareReply,
-    items: [
-      { title: 'Overview', href: '/app/mctb', icon: LayoutDashboard, exact: true, group: 'Workspace' },
-      { title: 'Missed Calls', href: '/app/mctb/calls', icon: PhoneMissed, group: 'Activity' },
-      { title: 'Conversations', href: '/app/mctb/conversations', icon: MessagesSquare, group: 'Activity' },
-      { title: 'Recovery Settings', href: '/app/mctb/recovery', icon: Settings2, group: 'Configure' },
-      { title: 'Analytics', href: '/app/mctb/analytics', icon: BarChart3, group: 'Insights' },
     ],
   },
 ]

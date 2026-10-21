@@ -19,6 +19,16 @@ const nextConfig = {
   turbopack: {
     root: appDir,
   },
+  async redirects() {
+    return [
+      { source: "/app/mctb", destination: "/app/phone/missed-call-text-back", permanent: false },
+      { source: "/app/mctb/recovery", destination: "/app/phone/missed-call-text-back", permanent: false },
+      { source: "/app/mctb/calls/:path*", destination: "/app/phone/calls/:path*", permanent: false },
+      { source: "/app/mctb/calls", destination: "/app/phone/calls", permanent: false },
+      { source: "/app/mctb/conversations", destination: "/app/inbox", permanent: false },
+      { source: "/app/mctb/analytics", destination: "/app/phone/analytics", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Bot, CheckCircle2, Circle, MessageSquareReply, Phone } from 'lucide-react'
+import { ArrowRight, Bot, CheckCircle2, Circle, Phone } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Page, PageHeader, Panel, Stat } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
@@ -31,7 +31,12 @@ export default function HomePage() {
       icon: Phone,
       href: '/app/phone',
       state: `${NUMBERS.length} numbers`,
-      lines: [`${p.inbound} inbound`, `${p.missed} missed`, `${p.callbacksOpen} callbacks open`],
+      lines: [
+        `${p.inbound} inbound`,
+        `${p.missed} missed`,
+        `${p.callbacksOpen} callbacks open`,
+        `MCTB: ${m.sent} texts · ${m.replied} replied`,
+      ],
     },
     {
       name: 'AI Receptionist',
@@ -39,13 +44,6 @@ export default function HomePage() {
       href: '/app/receptionist',
       state: 'Live after hours',
       lines: [`${a.handled} handled`, `${a.booked} booked`, `${a.needsAttention} need follow-up`],
-    },
-    {
-      name: 'Missed Call Text Back',
-      icon: MessageSquareReply,
-      href: '/app/mctb',
-      state: 'Recovery on',
-      lines: [`${m.sent} texts sent`, `${m.replied} replied`, `${m.needsCallback} need callback`],
     },
   ]
 
@@ -64,7 +62,7 @@ export default function HomePage() {
         <Stat label="Integration issues" value={brokenIntegrations} tone={brokenIntegrations ? 'danger' : 'default'} href="/app/integrations" />
       </section>
 
-      <section aria-label="Products" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <section aria-label="Products" className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {products.map((prod) => (
           <article key={prod.name} className="flex flex-col gap-4 rounded-xl surface p-5">
             <div className="flex items-start justify-between gap-3">
