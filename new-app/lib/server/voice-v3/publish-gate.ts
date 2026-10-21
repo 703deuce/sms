@@ -8,6 +8,7 @@ import { resolveSchedulingBackend } from "@/lib/server/voice-v3/scheduling/conne
 import { schedulingCapsForBackend } from "@/lib/server/voice-v3/scheduling/provider-capabilities";
 import { findWorkspaceReceptionistAgent } from "@/lib/server/receptionist/agent-store";
 import { buildKnowledgeCompileSlice } from "@/lib/server/receptionist/knowledge-compile";
+import { receptionistHasPublishableAnswerKnowledge } from "@/lib/server/receptionist/answer-knowledge-publish";
 
 const MAX_OPENAI_VECTOR_STORES_PER_PUBLISH = 2;
 
@@ -69,11 +70,14 @@ export async function validateReceptionistPublish(
         workspaceId,
         agentId: agent.id,
       });
-      const hasFaq = slice.faqFacts.length > 0;
-      const hasVector = slice.openaiVectorStoreIds.length > 0;
-      if (!hasFaq && !hasVector) {
+      const hasKnowledge = await receptionistHasPublishableAnswerKnowledge(
+        workspaceId,
+        editor,
+        slice,
+      );
+      if (!hasKnowledge) {
         errors.push(
-          "Knowledge: link a knowledge base and add FAQs (or indexed documents) before publishing answer capability.",
+          "Knowledge: add business facts on the Knowledge page (Business knowledge) or link sources/FAQs before publishing answer capability.",
         );
       }
       if (slice.openaiVectorStoreIds.length > MAX_OPENAI_VECTOR_STORES_PER_PUBLISH) {
