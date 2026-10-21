@@ -146,7 +146,7 @@ export function NumbersInventory() {
           <div className="flex flex-col gap-3 px-4 pb-6">
             {[
               { icon: ShoppingBag, t: 'Buy a new number', d: 'Instant. We own it, so voice, SMS and caller ID all work everywhere. Best for new lines or campaigns.', href: '/app/numbers/new' },
-              { icon: Link2, t: 'Connect a number you keep', d: 'Keep your carrier. You set up call forwarding; AI Receptionist and MCTB answer forwarded calls. Outbound and SMS stay with your carrier.', href: '/app/numbers/connect' },
+              { icon: Link2, t: 'Connect a number you keep', d: 'Keep your carrier. You set up call forwarding; Conversational IVR can answer forwarded calls. Outbound and SMS stay with your carrier.', href: '/app/numbers/connect' },
               { icon: ArrowRightLeft, t: 'Port your number', d: 'Move ownership to Transovo. Takes days to weeks and needs carrier account details. Best when you want everything in one place.', href: '/app/numbers/port' },
             ].map((o) => (
               <Link key={o.t} href={o.href} className="flex gap-3 rounded-xl p-4 surface-raised transition-shadow hover:shadow-md">

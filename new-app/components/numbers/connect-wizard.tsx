@@ -30,6 +30,7 @@ import { CARRIERS, CARRIER_INSTRUCTIONS, FORWARDING_LABEL, PRODUCT_RETURN, type 
 import { formatPhone } from '@/lib/format'
 import { Callout, ChoiceCard, Field, StepIntro, WizardShell } from './number-ui'
 import { cn } from '@/lib/utils'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 
 const STEPS = ['Number', 'Products', 'Forwarding', 'Carrier setup', 'Test']
 const FORWARD_DEST = '+13125550199'
@@ -48,12 +49,14 @@ export function ConnectWizard() {
   const params = useSearchParams()
   const productParam = params.get('product') as 'receptionist' | 'mctb' | null
   const { owned, connections, addConnection } = useNumbers()
+  const initialProduct =
+    productParam === 'mctb' && !MCTB_UI_ENABLED ? 'receptionist' : productParam ?? 'receptionist'
 
   const [step, setStep] = useState(0)
   const [raw, setRaw] = useState('')
   const [label, setLabel] = useState('')
   const [carrier, setCarrier] = useState<string>(CARRIERS[0])
-  const [products, setProducts] = useState<('receptionist' | 'mctb')[]>(productParam ? [productParam] : ['receptionist'])
+  const [products, setProducts] = useState<('receptionist' | 'mctb')[]>([initialProduct === 'mctb' ? 'mctb' : 'receptionist'])
   const [types, setTypes] = useState<ForwardingType[]>(['no_answer', 'busy'])
   const [confirmed, setConfirmed] = useState(false)
   const [test, setTest] = useState<TestState>('idle')
@@ -155,7 +158,7 @@ export function ConnectWizard() {
             )}
           </Panel>
           <Callout icon={Info} title="What connecting can and can't do">
-            Forwarded calls can be answered by AI Receptionist and recovered by MCTB. Outbound calls, caller ID and SMS from this number stay with your carrier — port it if you want those in Transovo.
+            Forwarded calls can be answered by AI Receptionist on Transovo. Outbound calls, caller ID and SMS from this number stay with your carrier — port it if you want those in Transovo.
           </Callout>
         </section>
       )}
@@ -165,9 +168,11 @@ export function ConnectWizard() {
           <StepIntro title="What should happen to forwarded calls?" text="Pick one or both. Each product's own settings decide the details." />
           <div className="grid gap-3 sm:grid-cols-2">
             <ChoiceCard selected={products.includes('receptionist')} onSelect={() => setProducts(toggle(products, 'receptionist'))} icon={Bot} title="AI Receptionist answers" description="Ava picks up, answers questions, books and takes messages." />
-            <ChoiceCard selected={products.includes('mctb')} onSelect={() => setProducts(toggle(products, 'mctb'))} icon={MessageSquareReply} title="Missed-call text back" description="If nobody answers, we text the caller from your Transovo SMS number." />
+            {MCTB_UI_ENABLED && (
+              <ChoiceCard selected={products.includes('mctb')} onSelect={() => setProducts(toggle(products, 'mctb'))} icon={MessageSquareReply} title="Missed-call text back" description="If nobody answers, we text the caller from your Transovo SMS number." />
+            )}
           </div>
-          {products.includes('mctb') && (
+          {MCTB_UI_ENABLED && products.includes('mctb') && (
             <Callout tone="warning" icon={AlertTriangle}>
               Texts can&apos;t come from a number you keep with another carrier. MCTB will send from a Transovo number with SMS — you can choose which in MCTB settings.
             </Callout>

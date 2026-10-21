@@ -5,7 +5,7 @@ import { Page, PageHeader, Panel, Stat } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
 import { RecentCalls } from '@/components/calls/recent-calls'
 import { BUSINESS, CALLS, INTEGRATIONS, NUMBERS } from '@/lib/data'
-import { aiMetrics, inboxMetrics, mctbMetrics, phoneMetrics } from '@/lib/metrics'
+import { aiMetrics, inboxMetrics, phoneMetrics } from '@/lib/metrics'
 
 export const metadata = { title: 'Home' }
 
@@ -20,7 +20,6 @@ const ONBOARDING = [
 export default function HomePage() {
   const p = phoneMetrics()
   const a = aiMetrics()
-  const m = mctbMetrics()
   const inbox = inboxMetrics()
   const attentionCalls = CALLS.filter((c) => c.callbackNeeded && !c.handled)
   const brokenIntegrations = INTEGRATIONS.filter((i) => i.status === 'error').length
@@ -35,7 +34,6 @@ export default function HomePage() {
         `${p.inbound} inbound`,
         `${p.missed} missed`,
         `${p.callbacksOpen} callbacks open`,
-        `MCTB: ${m.sent} texts · ${m.replied} replied`,
       ],
     },
     {
@@ -52,7 +50,7 @@ export default function HomePage() {
       <PageHeader
         eyebrow={BUSINESS.workspace}
         title="Good afternoon, Maya"
-        description="Everything that needs you across phone, AI and text-back — each call counted once."
+        description="Everything that needs you across phone and AI — each call counted once."
       />
 
       <section aria-label="Needs attention" className="grid grid-cols-2 gap-3 md:grid-cols-4">

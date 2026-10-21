@@ -5,10 +5,14 @@ import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 import { saveMctbConsentPrompt } from "@/lib/server/mctb/consent-prompt-store";
+import { MCTB_UI_ENABLED } from "@/lib/products/mctb-ui";
 import { synthesizeElevenLabsMp3 } from "@/lib/server/voice/elevenlabs-tts";
 import { toPublicAssetUrl } from "@/lib/server/public-url";
 
 export async function POST(request: Request) {
+  if (!MCTB_UI_ENABLED) {
+    return NextResponse.json({ ok: false, error: "not_available" }, { status: 404 });
+  }
   const denied = assertDevApiAccess(request);
   if (denied) return denied;
   try {

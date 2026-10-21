@@ -6,11 +6,15 @@ import { jsonError } from "@/lib/server/api-error";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 import { saveMctbConsentPrompt } from "@/lib/server/mctb/consent-prompt-store";
 import { toPublicAssetUrl } from "@/lib/server/public-url";
+import { MCTB_UI_ENABLED } from "@/lib/products/mctb-ui";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg"]);
 
 export async function POST(request: Request) {
+  if (!MCTB_UI_ENABLED) {
+    return NextResponse.json({ ok: false, error: "not_available" }, { status: 404 });
+  }
   const denied = assertDevApiAccess(request);
   if (denied) return denied;
   try {

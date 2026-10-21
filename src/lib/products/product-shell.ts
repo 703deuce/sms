@@ -18,7 +18,10 @@ import {
   isUnifiedAppointmentsExperience,
   unifiedAppointmentsProductLabel,
 } from "@/lib/products/unified-appointments";
-import { isVoiceProductCustomerVisible } from "@/lib/products/launch-product-availability";
+import {
+  isLaunchProductCustomerVisible,
+  isVoiceProductCustomerVisible,
+} from "@/lib/products/launch-product-availability";
 
 export type ProductShell =
   | "appointments"
@@ -260,13 +263,13 @@ export function visibleProductShells(input: ProductShellEntitlementInput): Produ
 
   if (isAppointmentsV1Primary()) {
     const shells: ProductShell[] = ["appointments"];
-    if (input.hasMctb) shells.push("mctb");
+    if (input.hasMctb && isLaunchProductCustomerVisible("mctb")) shells.push("mctb");
     return shells;
   }
 
   if (isMctbV1Primary()) {
     const shells: ProductShell[] = [];
-    if (input.hasMctb) shells.push("mctb");
+    if (input.hasMctb && isLaunchProductCustomerVisible("mctb")) shells.push("mctb");
     if (input.hasAiAfterHours && isVoiceProductCustomerVisible()) shells.push("ai_after_hours");
     return shells;
   }
@@ -274,7 +277,7 @@ export function visibleProductShells(input: ProductShellEntitlementInput): Produ
   const shells: ProductShell[] = [];
   if (input.hasMassSms && !isSmsStandaloneHidden()) shells.push("mass_sms");
   if (input.hasAppointmentReminders) shells.push("appointment_reminders");
-  if (input.hasMctb) shells.push("mctb");
+  if (input.hasMctb && isLaunchProductCustomerVisible("mctb")) shells.push("mctb");
   if (input.hasAiAfterHours && isVoiceProductCustomerVisible()) shells.push("ai_after_hours");
   return shells;
 }

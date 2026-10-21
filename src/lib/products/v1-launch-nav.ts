@@ -12,7 +12,7 @@ export const MASS_MESSAGING_IN_V1_NAV = false;
 export const APPOINTMENTS_IN_V1_NAV = false;
 
 /** Missed Call Text Back surfaces. */
-export const MISSED_CALL_TEXT_BACK_IN_V1_NAV = true;
+export const MISSED_CALL_TEXT_BACK_IN_V1_NAV = false;
 
 /** Shared launch surfaces always visible when entitled. */
 export const CONVERSATIONS_IN_V1_NAV = true;

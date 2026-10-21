@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-auth";
+import { MCTB_UI_ENABLED } from "@/lib/products/mctb-ui";
 import { getPhoneMctbSettings, patchPhoneMctbSettings } from "@/lib/server/mctb/api-model";
 
+function mctbUiDisabledResponse() {
+  return NextResponse.json({ ok: false, error: "not_available" }, { status: 404 });
+}
+
 export async function GET() {
+  if (!MCTB_UI_ENABLED) return mctbUiDisabledResponse();
   try {
     const { workspaceId } = await requireSession();
     const data = await getPhoneMctbSettings(workspaceId);
@@ -14,6 +20,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+  if (!MCTB_UI_ENABLED) return mctbUiDisabledResponse();
   try {
     const { workspaceId, session } = await requireSession();
     const body = (await req.json()) as Record<string, unknown>;

@@ -18,7 +18,8 @@ function read(rel) {
 // Nav: MCTB is not a top-level product anymore.
 const nav = read("lib/nav.ts");
 assert.doesNotMatch(nav, /key: 'mctb'/);
-assert.match(nav, /missed-call-text-back/);
+assert.match(nav, /MCTB_UI_ENABLED/);
+assert.match(read("lib/products/mctb-ui.ts"), /MCTB_UI_ENABLED/);
 
 // Legacy /app/mctb URLs redirect into Phone.
 const nextCfg = readFileSync(path.join(appRoot, "next.config.mjs"), "utf8");

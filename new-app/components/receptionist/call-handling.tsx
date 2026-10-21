@@ -35,6 +35,7 @@ import { IconTile } from '@/components/app/page-primitives'
 import { OptionGroup } from '@/components/app/option-group'
 import { SimpleSelect } from '@/components/app/filters'
 import { StatusBadge } from '@/components/app/status'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 import { useAgent } from '@/components/providers/agent-provider'
 import { NumberPicker, useResolvedConnection, type ConnectionRef } from '@/components/numbers/number-picker'
 import { Callout, FlowDiagram } from '@/components/numbers/number-ui'
@@ -149,7 +150,7 @@ export function CallHandlingEditor() {
           <span className="flex items-center gap-2"><Clock className="size-4 text-muted-foreground" aria-hidden />Business hours Mon–Fri 8a–6p, Sat 9a–2p · Central time</span>
           <Link href="/app/settings?tab=business" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">Edit shared hours & holidays<ChevronRight className="size-3" /></Link>
         </div>
-        {mctbShares && (
+        {MCTB_UI_ENABLED && mctbShares && (
           <Callout tone="warning" icon={TriangleAlert} title="Missed Call Text Back shares this number">
             Calls Ava answers are never treated as missed, so MCTB won&apos;t text those callers. MCTB only fires if neither staff nor Ava picks up.
           </Callout>

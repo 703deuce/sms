@@ -25,6 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { CONVERSATIONAL_IVR_PRODUCT_TITLE } from '@/lib/receptionist/runtime-profile'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 
 export type ProductKey = 'phone' | 'receptionist'
 export type ContextKey = ProductKey | 'workspace'
@@ -65,7 +66,9 @@ export const PRODUCTS: NavContext[] = [
       { title: 'Voicemail', href: '/app/phone/voicemail', icon: Voicemail, group: 'Configure' },
       { title: 'Phone Numbers', href: '/app/numbers', icon: Hash, group: 'Configure' },
       { title: 'Call Handling', href: '/app/phone/call-handling', icon: Signpost, group: 'Configure' },
-      { title: 'Missed Call Text Back', href: '/app/phone/missed-call-text-back', icon: PhoneMissed, group: 'Configure' },
+      ...(MCTB_UI_ENABLED
+        ? [{ title: 'Missed Call Text Back', href: '/app/phone/missed-call-text-back', icon: PhoneMissed, group: 'Configure' as const }]
+        : []),
       { title: 'Analytics', href: '/app/phone/analytics', icon: BarChart3, group: 'Insights' },
     ],
   },

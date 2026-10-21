@@ -2,16 +2,15 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Bot, ExternalLink, LifeBuoy, MessageSquareReply, Phone } from 'lucide-react'
+import { ArrowRight, Bot, ExternalLink, LifeBuoy, Phone } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Panel } from '@/components/app/page-primitives'
 import { SearchInput, SimpleSelect } from '@/components/app/filters'
 
-const START = [
+const START_BASE = [
   { title: 'Phone System', icon: Phone, href: '/app/numbers', body: 'Add or port a number, set business hours, and place a test call.' },
   { title: 'AI Receptionist', icon: Bot, href: '/app/receptionist/agent', body: 'Choose a voice, add your FAQs, then decide when the AI answers.' },
-  { title: 'Missed Call Text Back', icon: MessageSquareReply, href: '/app/phone/missed-call-text-back', body: 'Turn on press-1 consent and choose one of five recovery message templates.' },
-]
+] as const
 
 const FAQ = [
   { q: 'Why does my test call go straight to voicemail?', a: 'Check that forwarding is active on your carrier and that the line is inside business hours. Open Phone → Numbers and run "Verify forwarding".' },
@@ -39,8 +38,8 @@ export function HelpCenter() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section aria-label="Get started" className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {START.map((s) => (
+      <section aria-label="Get started" className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {START_BASE.map((s) => (
           <Link key={s.title} href={s.href} className="group flex flex-col gap-3 rounded-xl surface p-5 hover:border-primary/50">
             <s.icon className="size-5 text-primary" />
             <div className="flex flex-col gap-1">
