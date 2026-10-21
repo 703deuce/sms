@@ -98,7 +98,20 @@ export function DraftBar({ testHref = '/app/receptionist/test' }: { testHref?: s
             <FlaskConical data-icon="inline-start" />
             Test
           </Button>
-          <Button size="sm" disabled={!hasChanges || status === 'publishing'} render={<Link href="/app/receptionist/activate" />}>
+          <Button
+            size="sm"
+            disabled={status === 'publishing'}
+            render={
+              <Link
+                href="/app/receptionist/activate"
+                aria-label={
+                  hasChanges || unsaved
+                    ? 'Review and publish draft changes'
+                    : 'Open review and publish (no draft changes yet)'
+                }
+              />
+            }
+          >
             <Rocket data-icon="inline-start" />
             Publish
           </Button>
