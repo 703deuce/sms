@@ -57,6 +57,64 @@ def _strip_execution_payload(result: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+async def _phone_foundation_handoff(
+    client: TransovoV3ToolClient | None,
+    *,
+    target: dict[str, Any],
+    transfer_request_id: str,
+    route_id: str,
+) -> str:
+    if client is None:
+        raise ToolError("Phone foundation transfer requires an active backend session.")
+
+    workspace_id = str(client._ctx.workspace_id)
+    human_call_id = str(target.get("human_call_id") or "").strip()
+    inbound_cc = str(target.get("inbound_call_control_id") or "").strip()
+    group_id = target.get("forwarding_group_id")
+    dest_id = target.get("destination_id")
+
+    if not human_call_id or not inbound_cc:
+        log_event(
+            "voice_v3_transfer_phone_foundation_missing_context",
+            extra={"transfer_request_id": transfer_request_id, "route_id": route_id},
+        )
+        return "CONFIGURATION_ERROR"
+
+    payload: dict[str, Any] = {
+        "workspaceId": workspace_id,
+        "humanCallId": human_call_id,
+        "inboundCallControlId": inbound_cc,
+    }
+    if group_id:
+        payload["forwardingGroupId"] = str(group_id)
+    elif dest_id:
+        payload["destinationId"] = str(dest_id)
+    else:
+        dial = str(target.get("dial_target") or "")
+        if dial.startswith("phone_foundation:forwarding_group:"):
+            payload["forwardingGroupId"] = dial.split(":")[-1]
+        elif dial and not dial.startswith("phone_foundation:"):
+            payload["destinationE164"] = dial
+
+    log_event(
+        "voice_v3_transfer_phone_foundation_starting",
+        extra={
+            "transfer_request_id": transfer_request_id,
+            "route_id": route_id,
+            "has_group": bool(payload.get("forwardingGroupId")),
+        },
+    )
+    try:
+        result = await client._backend.call("execute_phone_foundation_transfer", payload)
+    except Exception:
+        logger.exception("voice_v3_transfer_phone_foundation_failed")
+        return "PROVIDER_ERROR"
+
+    if isinstance(result, dict) and result.get("ok"):
+        return "PHONE_HANDOFF_STARTED"
+    return "PROVIDER_ERROR"
+
+
 async def _direct_transfer(
     telephony: LiveKitTelephonyBridge,
     *,
@@ -181,9 +239,10 @@ async def execute_authorized_transfer_plan(
             continue
         dest_id = str(target.get("destination_id") or "")
         mode = str(target.get("mode") or "DIRECT").upper()
+        executor = str(target.get("executor") or "livekit_sip").lower()
         dial_target = str(target.get("dial_target") or "")
         timeout = float(target.get("ringing_timeout_seconds") or 30)
-        if not dial_target:
+        if not dial_target and executor != "phone_call_control":
             continue
 
         log_event(
@@ -199,7 +258,14 @@ async def execute_authorized_transfer_plan(
         attempt_started = time.monotonic()
         outcome = "PROVIDER_ERROR"
         try:
-            if mode == "WARM":
+            if executor == "phone_call_control":
+                outcome = await _phone_foundation_handoff(
+                    client,
+                    target=target,
+                    transfer_request_id=transfer_request_id,
+                    route_id=route_id,
+                )
+            elif mode == "WARM":
                 outcome = await _warm_transfer(
                     telephony,
                     context,
@@ -242,8 +308,8 @@ async def execute_authorized_transfer_plan(
             },
         )
 
-        if outcome in ("CONNECTED", "SIP_REFER_ACCEPTED"):
-            is_refer_only = outcome == "SIP_REFER_ACCEPTED"
+        if outcome in ("CONNECTED", "SIP_REFER_ACCEPTED", "PHONE_HANDOFF_STARTED"):
+            is_refer_only = outcome in ("SIP_REFER_ACCEPTED", "PHONE_HANDOFF_STARTED")
             total_ms = int((time.monotonic() - started) * 1000)
             log_event(
                 "VOICE_V3_TRANSFER_CONNECTED" if not is_refer_only else "VOICE_V3_TRANSFER_REFER_ACCEPTED",
@@ -270,10 +336,14 @@ async def execute_authorized_transfer_plan(
                     "warm_consult_duration_ms": duration_ms if mode == "WARM" else None,
                 },
             )
-            backend_status = (
-                "transfer_refer_accepted" if is_refer_only else "transfer_connected"
-            )
-            surface_status = backend_status
+            if outcome == "PHONE_HANDOFF_STARTED":
+                backend_status = "transfer_phone_handoff_started"
+                surface_status = backend_status
+            else:
+                backend_status = (
+                    "transfer_refer_accepted" if is_refer_only else "transfer_connected"
+                )
+                surface_status = backend_status
             sanitized = _strip_execution_payload(result)
             if isinstance(sanitized.get("data"), dict):
                 sanitized["data"] = {

@@ -56,4 +56,24 @@ const jobPreview = renderMctbFirstTextPreviewExample("on_a_job", "Acme Co");
 assert.notEqual(simplePreview, jobPreview);
 assert.match(simplePreview, /Acme Co/);
 
+const press1Src = readFileSync(
+  path.join(root, "../lib/server/mctb/press1-consent.ts"),
+  "utf8",
+);
+assert.match(press1Src, /cf_mctb_consent/);
+assert.match(press1Src, /tryOfferMctbPress1BeforeVoicemail/);
+
+const transferPy = readFileSync(
+  path.join(root, "../../voice-runtime-python/transovo_voice/voice_v3/transfer_executor.py"),
+  "utf8",
+);
+assert.match(transferPy, /phone_call_control/);
+assert.match(transferPy, /execute_phone_foundation_transfer/);
+
+const convSrc = readFileSync(
+  path.join(root, "../lib/server/mctb/ensure-conversation.ts"),
+  "utf8",
+);
+assert.match(convSrc, /productSource: "MCTB"/);
+
 console.log("test-phone-mctb-integration: PASS");

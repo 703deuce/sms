@@ -18,6 +18,15 @@ export async function executeFallback(input: {
   routingSessionId?: string;
 }) {
   if (input.action.type === "voicemail") {
+    const { tryOfferMctbPress1BeforeVoicemail } = await import("@/lib/server/mctb/press1-consent");
+    const offer = await tryOfferMctbPress1BeforeVoicemail({
+      workspaceId: input.workspaceId,
+      humanCallId: input.humanCallId,
+      inboundControlId: input.inboundControlId,
+      phoneNumberId: input.phoneNumberId,
+      routingSessionId: input.routingSessionId,
+    });
+    if (offer.offered) return;
     await leaveVoicemailOnCall({
       workspaceId: input.workspaceId,
       humanCallId: input.humanCallId,

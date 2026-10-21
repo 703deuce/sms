@@ -6,6 +6,7 @@ import { renderMctbFirstTextTemplateBody } from "@/lib/mctb/first-text-templates
 import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
 import { loadMctbRecoveryConfig } from "@/lib/server/mctb/config";
 import { normalizeE164 } from "@/lib/server/phone/normalize";
+import { ensureMctbConversationForRecovery } from "@/lib/server/mctb/ensure-conversation";
 
 async function resolveBusinessName(workspaceId: string): Promise<string> {
   const prisma = getPrisma();
@@ -100,20 +101,47 @@ export async function executeMctbRecoverySend(input: {
     },
   }).catch(() => undefined);
 
+  const { conversationId, contactId } = await ensureMctbConversationForRecovery({
+    workspaceId: input.workspaceId,
+    missedCallEventId: event.id,
+    callerE164: to,
+    businessE164: event.businessE164,
+    phoneNumberId: event.phoneNumberId,
+    contactId: event.contactId,
+  });
+
+  await prisma.conversationMessage.create({
+    data: {
+      id: createId(),
+      conversationId,
+      direction: "outbound",
+      body,
+      providerMessageId: providerId,
+      fromE164: platform.e164,
+    },
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { updatedAt: new Date(), contactId },
+  });
+
   await prisma.missedCallEvent.update({
     where: { id: event.id },
     data: {
       status: "SENT",
       smsSentAt: new Date(),
       smsMessageId: messageId,
+      contactId: event.contactId ?? contactId,
       metadata: {
         ...(typeof event.metadata === "object" && event.metadata ? event.metadata : {}),
         templateId: config.firstTextTemplate.templateId,
         platformSenderE164: platform.e164,
         renderedBody: body,
+        conversationId,
       },
     },
   });
 
-  return { ok: true, messageId };
+  return { ok: true, messageId, conversationId };
 }

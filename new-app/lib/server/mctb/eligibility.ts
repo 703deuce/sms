@@ -11,6 +11,7 @@ import { loadMctbRecoveryConfig } from "@/lib/server/mctb/config";
 import { readPhoneMctbInbound } from "@/lib/server/mctb/phone-line-config";
 import { isExistingConsentMode, MCTB_CONSENT_MODE_VERIFIED } from "@/lib/mctb/consent-mode";
 import { loadMctbConsentMode, validateExistingConsentAttestation } from "@/lib/server/mctb/attestation";
+import { readMctbPress1FromCallMetadata } from "@/lib/server/mctb/press1-consent";
 
 export type MctbSuppressionReason =
   | "INVALID_PHONE"
@@ -39,6 +40,7 @@ export async function evaluatePhoneMctbEligibility(input: {
   callerE164: string;
   call: ClassifyInboundCallInput;
   idempotencyKey: string;
+  humanCallId?: string;
 }): Promise<{ eligible: boolean; reason: MctbSuppressionReason | null; classification: string }> {
   const line = readPhoneMctbInbound(input.phoneSettingsJson);
   const config = await loadMctbRecoveryConfig(input.workspaceId);
@@ -65,7 +67,19 @@ export async function evaluatePhoneMctbEligibility(input: {
       return { eligible: false, reason: "NOT_EXISTING_CONSENT", classification };
     }
   } else if (consentMode === MCTB_CONSENT_MODE_VERIFIED) {
-    return { eligible: false, reason: "PRESS_1_REQUIRED", classification };
+    if (input.humanCallId) {
+      const humanCall = await getPrisma().humanCall.findFirst({
+        where: { id: input.humanCallId, workspaceId: input.workspaceId },
+        select: { metadata: true },
+      });
+      if (readMctbPress1FromCallMetadata(humanCall?.metadata) === "pressed") {
+        // Caller pressed 1 on the owned Call Control leg — allow recovery SMS.
+      } else {
+        return { eligible: false, reason: "PRESS_1_REQUIRED", classification };
+      }
+    } else {
+      return { eligible: false, reason: "PRESS_1_REQUIRED", classification };
+    }
   }
 
   if (classification === "answered" || classification === "outbound") {

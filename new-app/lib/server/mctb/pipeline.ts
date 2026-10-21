@@ -51,6 +51,16 @@ export async function processPhoneOwnedMctbMissedCall(input: {
     return { ok: false, reason: "answered" };
   }
 
+  const callMeta = (call.metadata as Record<string, unknown>) || {};
+  const orch = (callMeta.orchestration as Record<string, unknown>) || {};
+  const orchStage = String(orch.stage || "");
+  if (orchStage === "ai_active" || orchStage === "phone_forwarding_after_ai") {
+    return { ok: false, reason: "call_still_in_orchestration" };
+  }
+  if (call.status === "ringing" && orchStage) {
+    return { ok: false, reason: "call_still_ringing_orchestrated" };
+  }
+
   const phoneRow = call.phoneNumberId
     ? await prisma.phoneNumber.findFirst({
         where: { id: call.phoneNumberId, workspaceId: input.workspaceId },
@@ -75,6 +85,7 @@ export async function processPhoneOwnedMctbMissedCall(input: {
     callerE164,
     call: classifier,
     idempotencyKey,
+    humanCallId: call.id,
   });
 
   const traceId = `mctb_${createId()}`;
@@ -144,19 +155,13 @@ export async function processPhoneOwnedMctbMissedCall(input: {
     data: { scheduledSmsAt: runAt, status: "SCHEDULED" },
   });
 
-  const runSend = async () => {
+  if (delayMs <= 0) {
     await executeMctbRecoverySend({
       workspaceId: input.workspaceId,
       missedCallEventId: event.id,
     });
-  };
-
-  void (async () => {
-    if (delayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-    await runSend();
-  })();
+  }
+  // Delayed sends: SCHEDULED row + processDueMctbRecoverySends on later Telnyx/webhook ticks (no setTimeout).
 
   return {
     ok: true,

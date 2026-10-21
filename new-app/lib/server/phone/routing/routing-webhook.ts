@@ -65,6 +65,21 @@ export async function processCallForwardingWebhookEvent(input: {
       });
       return { handled: true };
     }
+    if (kind === "cf_mctb_consent" && clientState.humanCallId) {
+      const { handleMctbPress1GatherEnded } = await import("@/lib/server/mctb/press1-consent");
+      await handleMctbPress1GatherEnded({
+        workspaceId: String(clientState.workspaceId),
+        humanCallId: String(clientState.humanCallId),
+        inboundControlId: eventControlId,
+        phoneNumberId: clientState.phoneNumberId ? String(clientState.phoneNumberId) : null,
+        digit: digits,
+        routingSessionId: clientState.routingSessionId
+          ? String(clientState.routingSessionId)
+          : undefined,
+        after: typeof clientState.after === "string" ? clientState.after : undefined,
+      });
+      return { handled: true };
+    }
   }
 
   if (input.eventType === "call.answered" && kind === "cf_outbound") {
@@ -244,6 +259,14 @@ export async function processCallForwardingWebhookEvent(input: {
     eventType: input.eventType,
     kind,
   });
+
+  if (clientState.workspaceId) {
+    void import("@/lib/server/mctb/recovery-scheduler").then(({ processDueMctbRecoverySends }) =>
+      processDueMctbRecoverySends({ workspaceId: String(clientState.workspaceId) }).catch(
+        () => undefined,
+      ),
+    );
+  }
 
   return { handled: true };
 }

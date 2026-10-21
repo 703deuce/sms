@@ -12,6 +12,7 @@ try:
     from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
     from transovo_voice.voice_v3.transfer_executor import (
         _direct_transfer,
+        _phone_foundation_handoff,
         execute_authorized_transfer_plan,
     )
 
@@ -117,6 +118,65 @@ class TestExecuteAuthorizedPlan(unittest.IsolatedAsyncioTestCase):
         telephony = MagicMock()
         out = await execute_authorized_transfer_plan({"ok": False, "error": "bad"}, telephony, None, None)
         self.assertFalse(out.get("ok"))
+
+    async def test_phone_call_control_invokes_backend(self) -> None:
+        job_ctx = MagicMock()
+        telephony = LiveKitTelephonyBridge(
+            job_ctx=job_ctx,
+            sip_participant_identity="sip-caller-abc",
+        )
+        backend = MagicMock()
+        backend._ctx.workspace_id = "ws_1"
+        backend._ctx.call_id = "call_1"
+        backend._ctx.agent_id = "agent_1"
+        backend._backend = MagicMock()
+        backend._backend.call = AsyncMock(return_value={"ok": True})
+
+        result = {
+            "ok": True,
+            "data": {
+                "status": "transfer_authorized",
+                "execution": {
+                    "transfer_request_id": "tr_pf",
+                    "route_id": "route_group",
+                    "fallback": "TAKE_MESSAGE",
+                    "targets": [
+                        {
+                            "destination_id": "dest_ring",
+                            "mode": "DIRECT",
+                            "executor": "phone_call_control",
+                            "forwarding_group_id": "grp_1",
+                            "human_call_id": "hc_1",
+                            "inbound_call_control_id": "cc_in_1",
+                            "ringing_timeout_seconds": 30,
+                        },
+                    ],
+                    "handoff_instructions": "test",
+                },
+            },
+        }
+
+        out = await execute_authorized_transfer_plan(result, telephony, None, backend)
+        backend._backend.call.assert_awaited_once()
+        args = backend._backend.call.await_args
+        self.assertEqual(args.args[0], "execute_phone_foundation_transfer")
+        payload = args.args[1]
+        self.assertEqual(payload["humanCallId"], "hc_1")
+        self.assertEqual(payload["forwardingGroupId"], "grp_1")
+        data = out.get("data") or {}
+        self.assertEqual(data.get("status"), "transfer_phone_handoff_started")
+
+    async def test_phone_foundation_missing_context(self) -> None:
+        backend = MagicMock()
+        backend._ctx.workspace_id = "ws_1"
+        backend._backend = MagicMock()
+        outcome = await _phone_foundation_handoff(
+            backend,
+            target={"destination_id": "d1"},
+            transfer_request_id="tr_x",
+            route_id="r_x",
+        )
+        self.assertEqual(outcome, "CONFIGURATION_ERROR")
 
 
 if __name__ == "__main__":

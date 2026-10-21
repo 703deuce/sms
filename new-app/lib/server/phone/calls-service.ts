@@ -585,10 +585,17 @@ export async function processHumanCallWebhookEvent(input: {
   if (input.eventType === "call.hangup") {
     if (hangupCause.includes("busy")) patch.status = "busy";
     if (!wasAnswered && call.direction === "inbound" && call.status !== "voicemail") {
-      patch.status = "missed";
-      patch.disposition = call.disposition || `missed:${hangupCause || "no_answer"}`;
-      patch.callbackNeeded = true;
-      patch.endedAt = new Date();
+      const meta = (call.metadata as Record<string, unknown>) || {};
+      const orch = (meta.orchestration as Record<string, unknown>) || {};
+      const orchStage = String(orch.stage || "");
+      const stillOrchestrated =
+        orchStage === "ai_active" || orchStage === "phone_forwarding_after_ai";
+      if (!stillOrchestrated) {
+        patch.status = "missed";
+        patch.disposition = call.disposition || `missed:${hangupCause || "no_answer"}`;
+        patch.callbackNeeded = true;
+        patch.endedAt = new Date();
+      }
     }
     if (call.direction === "outbound" && patch.status === "completed") {
       patch.endedAt = patch.endedAt || new Date();
@@ -613,6 +620,10 @@ export async function processHumanCallWebhookEvent(input: {
     const { schedulePhoneOwnedMctbIfMissed } = await import("@/lib/server/mctb/pipeline");
     schedulePhoneOwnedMctbIfMissed({ workspaceId: call.workspaceId, humanCallId: call.id });
   }
+
+  void import("@/lib/server/mctb/recovery-scheduler").then(({ processDueMctbRecoverySends }) =>
+    processDueMctbRecoverySends({ workspaceId: call.workspaceId }).catch(() => undefined),
+  );
 
   await prisma.humanCallEvent.create({
     data: {
