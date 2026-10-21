@@ -110,39 +110,8 @@ function compileConversationalIvrTransferPolicy(
 
   for (const route of editor.conversationalRoutes ?? []) {
     if (!route.enabled) continue;
-    if (route.destinationKind === "ring_group" && route.destinationRef?.trim()) {
-      const groupId = route.destinationRef.trim();
-      const destId = `ring_group_${groupId}`;
-      if (!destinations.some((d) => d.id === destId)) {
-        destinations.push({
-          id: destId,
-          label: route.destinationLabel?.trim() || route.name?.trim() || "Ring group",
-          description: route.description?.trim() || route.intentDescription?.trim(),
-          phoneE164: "",
-          forwardingGroupId: groupId,
-          defaultMode: mode,
-          ringingTimeoutSeconds: defaultTimeout,
-          enabled: true,
-        });
-      }
-      routes.push({
-        id: route.id,
-        label: route.name?.trim() || "Ring group",
-        description: buildConversationalRouteAiDescription({
-          ...route,
-          description: route.description ?? "",
-        }),
-        targets: [
-          {
-            destinationId: destId,
-            mode,
-            ringingTimeoutSeconds: defaultTimeout,
-          },
-        ],
-        fallback,
-      });
-      continue;
-    }
+    // Ring groups are configured in Phone forwarding — not LiveKit PSTN transfer targets.
+    if (route.destinationKind === "ring_group") continue;
     let phone = route.destinationPhoneE164?.trim() ?? "";
     let destId = `route_dest_${route.id}`;
     const label = route.destinationLabel?.trim() || route.name?.trim() || "Route destination";
