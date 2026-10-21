@@ -415,7 +415,7 @@ API-only scripts (`test-drip-campaigns-api.mjs`, etc.) do **not** replace flow r
 
 **Full workflow:** `docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md`
 
-- SSH: runtime secret `COOLIFY_SSH_KEY`, alias `ssh coolify-server` (`root@128.140.102.51`). Never print the key.
+- SSH: Cursor Cloud secret **`TRANSOVO_SSH_PRIVATE_KEY`** (aliases: `TRANSOVO_SSH_KEY`, `COOLIFY_SSH_KEY` on GitHub). Run `bash scripts/cloud-agent/ensure-coolify-ssh.sh` or rely on `bootstrap-on-start.sh`; alias `ssh coolify-server` → default **`cursor-agent@128.140.102.51`**. Never print the key.
 - **Push to `master` starts deployment; it does not finish the task.** Follow commit → Coolify build → new container → production verification. Fix failures from deployment/runtime logs and redeploy until healthy.
 - **First task in a session:** run the discovery section in that doc (read-only SSH) and confirm the production map (repo → Coolify app → container → URL → `commitSha`).
 

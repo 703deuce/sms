@@ -13,7 +13,7 @@ Production **web containers are Next.js standalone** (no `tsx` / `scripts/`). Ru
 cd new-app && npm run test:phone:audit:server-db
 ```
 
-Requires **`COOLIFY_SSH_KEY`** (Cursor secret) or **`COOLIFY_SSH_KEY_PATH`**, or set **`DATABASE_URL`** directly.
+Requires **`TRANSOVO_SSH_PRIVATE_KEY`** (Cursor Cloud secret; aliases `TRANSOVO_SSH_KEY`, `COOLIFY_SSH_KEY`) or on-disk `~/.ssh/cursor_hetzner_ed25519`, via `scripts/cloud-agent/ensure-coolify-ssh.sh`. Or set **`DATABASE_URL`** directly.
 
 The runner SSHs to the Coolify host, runs `docker exec … printenv DATABASE_URL` on the web app container (`ds8s3hjin60qs6g7s0iqkixs`), then executes:
 
