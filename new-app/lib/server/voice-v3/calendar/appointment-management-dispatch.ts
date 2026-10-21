@@ -12,6 +12,7 @@ import { dispatchCancellationIfRequired } from "./cancel-dispatch";
 import { buildLiveManagementCandidatesAppend } from "./live-management-context";
 import type { VoiceV3LiveRuntimeHooks } from "../live-runtime-hooks";
 import { pushLiveThinkingEvent } from "../live-runtime-hooks";
+import { resolveCustomerIdentityFromIntake } from "../intake-objective/resolve-stored-intake";
 
 export function applyVerifiedExisting(
   ctx: VoiceV3CallContext,
@@ -68,14 +69,15 @@ export async function dispatchAppointmentManagementIfRequired(
       }
     } else if (!ctx.appointmentManagement.lookupCompleted) {
       console.log("EXISTING_APPOINTMENT_LOOKUP_STARTED", { call_id: ctx.callId });
-      const phone = ctx.intake.values.phone?.value;
-      const email = ctx.intake.values.email?.value;
+      const identity = resolveCustomerIdentityFromIntake(runtime.config, ctx.intake.values);
+      const phone = identity.phone ?? undefined;
+      const email = identity.email ?? undefined;
       const result = await findExistingAppointment(
         {
           callId: ctx.callId,
           phone,
           email,
-          customerName: ctx.intake.values.name?.value,
+          customerName: identity.name ?? undefined,
           dateHint: ctx.scheduling.normalized,
           timezone: ctx.business.timezone,
           microsoftLookup: true,

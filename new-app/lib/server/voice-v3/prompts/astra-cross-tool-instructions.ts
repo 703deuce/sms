@@ -33,6 +33,8 @@ Tool discipline (production):
 4. Cancel path: find_appointment → explicit caller confirmation → cancel_appointment with confirmed=true.
 ${callbackSection}5. Never invent offer_set_id, slot_id, or provider_event_id. Only use values returned by tools in this call.
 6. A function call is a request, not proof of success. Read tool results before telling Amy anything is done.
+6b. Never tell the caller an appointment is booked, reserved, confirmed, or "all set" unless book_appointment returned status confirmed on this call (or find_appointment returned booked_this_call). Offering a time or saying you will reserve is not booking — run set_scheduling_preference → find_availability → book_appointment first.
+6c. When the caller asks whether the appointment was actually booked, call find_appointment (or rely on book_appointment result). If not booked, say so plainly and complete the booking tools — do not only call update_intake.
 7. If a tool returns not_ready, missing fields, stale offer set, or clarification required, choose the corrective tool or let Amy ask — do not repeat the same failed mutation blindly.
 8. Do not call calendar mutation tools (book_appointment, reschedule_appointment, cancel_appointment) for small talk or vague curiosity.
 9. update_intake is for configured caller/intake fields only — never for calendar dates, times, or availability searches.

@@ -119,6 +119,96 @@ async function sectionModeAndPublish() {
   );
 }
 
+async function sectionBookingRequestIdentity() {
+  const { buildCreateBookingRequest } = await import(
+    "@/lib/server/voice-v3/calendar/build-create-booking-request"
+  );
+  const { defaultReceptionistEditorConfig } = await import(
+    "@/lib/server/receptionist/defaults"
+  );
+  const { editorToVoiceV3AgentConfig } = await import(
+    "@/lib/server/voice-v3/editor-to-voice-v3-config"
+  );
+
+  const editor = {
+    ...defaultReceptionistEditorConfig(),
+    runtimeProfile: "full_receptionist" as const,
+    capabilities: { ...defaultReceptionistEditorConfig().capabilities, book: true },
+  };
+  editor.appointments = { ...editor.appointments, strategy: "live", provider: "microsoft" };
+
+  const config = editorToVoiceV3AgentConfig({
+    editor,
+    workspaceId: "ws_verify",
+    agentId: "ag_verify",
+    businessName: "Verify Co",
+    timezone: "America/Chicago",
+    knowledge: {
+      knowledgeBaseIds: [],
+      openaiVectorStoreIds: [],
+      documentSourceIds: [],
+      faqFacts: [],
+      knowledgeItemSummaries: [],
+      revision: null,
+    },
+  });
+  config.calendar = {
+    connectionId: "conn_test",
+    calendarIds: ["cal_test"],
+    provider: "microsoft",
+  };
+
+  const ctx = {
+    callId: "call_identity",
+    selection: {
+      selected: {
+        offerSetId: "offer_1",
+        slotId: "slot_1",
+        schedulingGeneration: 1,
+        startUtc: "2026-10-28T15:00:00.000Z",
+        endUtc: "2026-10-28T15:30:00.000Z",
+        localStart: "Tue Oct 28 10:00 AM",
+        localEnd: "Tue Oct 28 10:30 AM",
+        timezone: "America/Chicago",
+      },
+      lastResolutionStatus: "RESOLVED",
+    },
+    availability: {
+      activeOfferSet: {
+        offerSetId: "offer_1",
+        slots: [
+          {
+            slotId: "slot_1",
+            startUtc: "2026-10-28T15:00:00.000Z",
+            endUtc: "2026-10-28T15:30:00.000Z",
+            localStart: "Tue Oct 28 10:00 AM",
+            localEnd: "Tue Oct 28 10:30 AM",
+          },
+        ],
+      },
+      status: "ready",
+    },
+    scheduling: { generation: 1 },
+    intake: {
+      values: {
+        i1: { value: "Anthony Johnson", source: "caller", confidence: 1, updatedAt: "", revision: 0, verificationStatus: "collected" },
+        i2: { value: "+15714776175", source: "caller", confidence: 1, updatedAt: "", revision: 0, verificationStatus: "collected" },
+      },
+    },
+    business: { timezone: "America/Chicago" },
+  } as import("@/lib/server/voice-v3/state/call-context").VoiceV3CallContext;
+
+  const req = buildCreateBookingRequest(ctx, config, "attempt_1");
+  assert.ok(req, "buildCreateBookingRequest accepts i1/i2 intake keys");
+  assert.equal(req?.customer.name, "Anthony Johnson");
+  assert.equal(req?.customer.phone, "+15714776175");
+  record(
+    "Booking customer identity (i1/i2 intake keys)",
+    "PASS",
+    "buildCreateBookingRequest resolves name/phone from configured intake field ids",
+  );
+}
+
 async function sectionIntakeQualification() {
   const { mergeIntakeUpdate } = await import(
     "@/lib/server/voice-v3/intake-objective/merge-intake-update"
@@ -420,6 +510,11 @@ async function main() {
     await sectionModeAndPublish();
   } catch (e) {
     fail("Mode switching → published tool allowlist", e);
+  }
+  try {
+    await sectionBookingRequestIdentity();
+  } catch (e) {
+    fail("Booking customer identity (i1/i2 intake keys)", e);
   }
   try {
     await sectionIntakeQualification();

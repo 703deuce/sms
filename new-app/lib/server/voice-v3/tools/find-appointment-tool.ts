@@ -17,6 +17,7 @@ import { schedulingMeaningZodObject } from "../time/scheduling-meaning-schema";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { FIND_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+import { resolveCustomerIdentityFromIntake } from "../intake-objective/resolve-stored-intake";
 
 const findApptIdentitySchema = z.object({
   name: z
@@ -101,12 +102,16 @@ function schedulingMeaningFromFindArgs(args: FindAppointmentArgs): SchedulingMea
   };
 }
 
-function mergeFindArgs(ctx: VoiceV3CallContext, args: FindAppointmentArgs) {
-  const snap = ctx;
+function mergeFindArgs(
+  ctx: VoiceV3CallContext,
+  args: FindAppointmentArgs,
+  config: VoiceV3AgentConfig,
+) {
+  const identity = resolveCustomerIdentityFromIntake(config, ctx.intake.values);
   return {
-    name: args.name?.trim() || snap.intake.values.name?.value?.trim() || undefined,
-    phone: args.phone?.trim() || snap.intake.values.phone?.value?.trim() || undefined,
-    email: args.email?.trim() || snap.intake.values.email?.value?.trim() || undefined,
+    name: args.name?.trim() || identity.name || undefined,
+    phone: args.phone?.trim() || identity.phone || undefined,
+    email: args.email?.trim() || identity.email || undefined,
     service: args.service?.trim() || undefined,
     location: args.location?.trim() || undefined,
   };
@@ -123,13 +128,41 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
   validate: (raw) => findApptArgsSchema.parse(raw),
   execute: async (ctx, args) => {
     const snap = ctx.runtime.getSnapshot();
-    const merged = mergeFindArgs(snap, args);
+    const config = ctx.runtime.config;
+
+    if (snap.booking.phase === "BOOKING_CONFIRMED" && snap.booking.confirmed) {
+      const confirmed = snap.booking.confirmed;
+      return toolOk("booked_this_call", {
+        local_start: confirmed.localStart,
+        provider_event_id: confirmed.providerEventId,
+        message: "Appointment was booked successfully on this call.",
+      });
+    }
+
+    const merged = mergeFindArgs(snap, args, config);
     const lookupState = snap.appointmentManagement.lookupState;
     const appointmentWhen = buildAppointmentWhenFromSchedulingMeaning(
       schedulingMeaningFromFindArgs(args),
       snap.clock,
     );
     const ani = trustedAni(snap);
+
+    const hasLookupConstraint =
+      Boolean(merged.name || merged.phone || merged.email || merged.service || merged.location || ani) ||
+      Boolean(args.explicit_date?.trim() || args.date_expression?.trim() || appointmentWhen?.normalized);
+
+    if (
+      !args.confirm_selection &&
+      !args.appointment_selection_id &&
+      !hasLookupConstraint &&
+      snap.booking.phase !== "BOOKING_CONFIRMED"
+    ) {
+      return toolOk("not_booked_this_call", {
+        booking_phase: snap.booking.phase,
+        message:
+          "No successful book_appointment on this call yet. Do not tell the caller they are booked — use set_scheduling_preference, find_availability, then book_appointment.",
+      });
+    }
 
     if (args.confirm_selection) {
       const selected = resolveVerifiedAppointmentBySelectionId(
