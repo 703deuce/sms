@@ -11,7 +11,9 @@ import {
   FULL_RECEPTIONIST_MODE_LABEL,
   RUNTIME_PROFILE_CONVERSATIONAL_IVR,
   RUNTIME_PROFILE_FULL_RECEPTIONIST,
+  receptionistModeStatusCopy,
   resolveRuntimeProfile,
+  runtimeProfileLabel,
 } from '@/lib/receptionist/runtime-profile'
 
 type Props = {
@@ -20,10 +22,15 @@ type Props = {
 }
 
 export function OperatingModeSelector({ showLiveHint = true, compact = false }: Props) {
-  const { draft, live, update, unsaved } = useAgent()
+  const { draft, live, update, unsaved, changes } = useAgent()
   const draftProfile = resolveRuntimeProfile(draft)
   const liveProfile = resolveRuntimeProfile(live)
   const modeChanged = draftProfile !== liveProfile
+  const modeCopy = receptionistModeStatusCopy({
+    draftProfile,
+    liveProfile,
+    hasUnpublishedDraft: changes.length > 0 || unsaved,
+  })
 
   const setProfile = (profile: RuntimeProfile) => {
     update('runtimeProfile', profile)
@@ -32,21 +39,21 @@ export function OperatingModeSelector({ showLiveHint = true, compact = false }: 
   return (
     <div className="flex flex-col gap-3">
       {showLiveHint && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">{modeCopy.editingLine}</span>
+            {modeChanged && <StatusBadge tone="warning">Publish to change live mode</StatusBadge>}
+          </div>
           <span>
-            Published mode:{' '}
-            <StatusBadge tone="neutral">
-              {liveProfile === RUNTIME_PROFILE_FULL_RECEPTIONIST
-                ? FULL_RECEPTIONIST_MODE_LABEL
-                : CONVERSATIONAL_IVR_MODE_LABEL}
-            </StatusBadge>
+            {modeCopy.liveLine}
+            {modeChanged ? (
+              <>
+                {' '}
+                — you are editing{' '}
+                <span className="font-medium text-foreground">{runtimeProfileLabel(draftProfile)}</span>
+              </>
+            ) : null}
           </span>
-          {modeChanged && unsaved && (
-            <StatusBadge tone="warning">Draft mode — publish to apply on live calls</StatusBadge>
-          )}
-          {modeChanged && !unsaved && (
-            <StatusBadge tone="info">Draft matches selection — save or publish when ready</StatusBadge>
-          )}
         </div>
       )}
       <OptionGroup

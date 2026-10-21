@@ -76,6 +76,10 @@ export async function microsoftGetBusy(input: {
   rangeStart: Date;
   rangeEnd: Date;
 }): Promise<{ start: string; end: string }[]> {
+  const verify = await import("./microsoft-scheduling-verify-mock");
+  if (verify.isMicrosoftSchedulingVerifyMock()) {
+    return verify.verifyMockGetBusy();
+  }
   const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
   const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(
     input.calendarId,
@@ -104,6 +108,10 @@ export async function microsoftCreateEvent(input: {
   endIso: string;
   attendeeEmail?: string;
 }): Promise<{ id: string }> {
+  const verify = await import("./microsoft-scheduling-verify-mock");
+  if (verify.isMicrosoftSchedulingVerifyMock()) {
+    return verify.verifyMockCreateEvent({ startIso: input.startIso });
+  }
   const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
   const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(
     input.calendarId,
@@ -144,6 +152,16 @@ export async function microsoftListEvents(input: {
   rangeStart: Date;
   rangeEnd: Date;
 }): Promise<MicrosoftCalendarEvent[]> {
+  const verify = await import("./microsoft-scheduling-verify-mock");
+  if (verify.isMicrosoftSchedulingVerifyMock()) {
+    const rows = await verify.verifyMockListEvents();
+    return rows.map((r) => ({
+      id: r.id,
+      subject: r.subject,
+      startIso: r.start,
+      endIso: r.end,
+    }));
+  }
   const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
   const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(
     input.calendarId,
@@ -188,6 +206,11 @@ export async function microsoftPatchEventTimes(input: {
   startIso: string;
   endIso: string;
 }): Promise<void> {
+  const verify = await import("./microsoft-scheduling-verify-mock");
+  if (verify.isMicrosoftSchedulingVerifyMock()) {
+    await verify.verifyMockPatchEventTimes();
+    return;
+  }
   const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
   const url = `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(input.eventId)}`;
   const res = await fetch(url, {
@@ -209,6 +232,11 @@ export async function microsoftDeleteEvent(input: {
   connectionId: string;
   eventId: string;
 }): Promise<void> {
+  const verify = await import("./microsoft-scheduling-verify-mock");
+  if (verify.isMicrosoftSchedulingVerifyMock()) {
+    await verify.verifyMockDeleteEvent();
+    return;
+  }
   const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
   const url = `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(input.eventId)}`;
   const res = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });

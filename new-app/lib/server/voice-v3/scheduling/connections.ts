@@ -15,6 +15,14 @@ export async function resolveSchedulingBackend(
   workspaceId: string,
   editor: AgentConfig,
 ): Promise<SchedulingBackend> {
+  const {
+    isMicrosoftSchedulingVerifyMock,
+    verifyMockSchedulingBackend,
+  } = await import("./microsoft-scheduling-verify-mock");
+  if (isMicrosoftSchedulingVerifyMock()) {
+    return verifyMockSchedulingBackend();
+  }
+
   const provider = editor.appointments.provider;
   const prisma = getPrisma();
 

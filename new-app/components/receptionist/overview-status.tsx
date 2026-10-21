@@ -9,10 +9,16 @@ import { useAgent } from '@/components/providers/agent-provider'
 import { useResolvedConnection } from '@/components/numbers/number-picker'
 import { formatPhone, formatWhen } from '@/lib/format'
 import { AgentStatusBadge } from './ai-ui'
+import { receptionistModeStatusCopy, resolveRuntimeProfile } from '@/lib/receptionist/runtime-profile'
 
 /** Live agent card for the Overview: status, connected number, and draft state. */
 export function OverviewStatus() {
-  const { live, changes, status, lastPublished } = useAgent()
+  const { live, draft, changes, status, lastPublished, unsaved } = useAgent()
+  const modeCopy = receptionistModeStatusCopy({
+    draftProfile: resolveRuntimeProfile(draft),
+    liveProfile: resolveRuntimeProfile(live),
+    hasUnpublishedDraft: changes.length > 0 || unsaved,
+  })
   const conn = useResolvedConnection(live.connection)
 
   return (
@@ -28,6 +34,10 @@ export function OverviewStatus() {
             {conn ? <span className="tabular-nums">{formatPhone(conn.number)}</span> : 'No number'}
             {conn && ` · ${conn.label}`} · published {formatWhen(lastPublished)}
           </span>
+          <span className="text-xs text-muted-foreground">{modeCopy.liveLine}</span>
+          {resolveRuntimeProfile(draft) !== resolveRuntimeProfile(live) && (
+            <StatusBadge tone="warning" className="self-start">{modeCopy.editingLine}</StatusBadge>
+          )}
           {changes.length > 0 && (
             <span className="flex items-center gap-1 text-xs font-medium text-primary">
               <CircleDot className="size-3" aria-hidden />

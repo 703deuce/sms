@@ -5,7 +5,10 @@ import { usePathname } from 'next/navigation'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useAgent } from '@/components/providers/agent-provider'
 import { groupItems, isItemActive, resolveContext } from '@/lib/nav'
-import { resolveRuntimeProfile } from '@/lib/receptionist/runtime-profile'
+import {
+  receptionistModeStatusCopy,
+  resolveRuntimeProfile,
+} from '@/lib/receptionist/runtime-profile'
 import { cn } from '@/lib/utils'
 
 type SidebarNavProps = {
@@ -16,9 +19,17 @@ type SidebarNavProps = {
 
 export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNavProps) {
   const pathname = usePathname()
-  const { draft } = useAgent()
+  const { draft, live, changes, unsaved } = useAgent()
   const receptionistProfile = resolveRuntimeProfile(draft)
   const context = resolveContext(pathname, receptionistProfile)
+  const receptionistMode =
+    context.key === 'receptionist'
+      ? receptionistModeStatusCopy({
+          draftProfile: receptionistProfile,
+          liveProfile: resolveRuntimeProfile(live),
+          hasUnpublishedDraft: changes.length > 0 || unsaved,
+        })
+      : null
   const groups = groupItems(context.items)
   const ContextIcon = context.icon
 
@@ -36,8 +47,17 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-sidebar-accent-foreground">{context.title}</p>
             <p className="text-xs text-sidebar-muted">
-              {context.key === 'workspace' ? 'Shared across products' : 'Subscribed · Active'}
+              {context.key === 'workspace'
+                ? 'Shared across products'
+                : receptionistMode
+                  ? receptionistMode.liveLine
+                  : 'Subscribed · Active'}
             </p>
+            {receptionistMode && receptionistProfile !== resolveRuntimeProfile(live) && (
+              <p className="truncate text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                {receptionistMode.editingLine}
+              </p>
+            )}
           </div>
         )}
       </div>

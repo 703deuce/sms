@@ -43,6 +43,40 @@ export function isConversationalIvrRuntime(config: VoiceV3AgentConfig): boolean 
   return config.runtimeProfile !== "full_receptionist";
 }
 
+export function runtimeProfileLabel(profile: RuntimeProfile): string {
+  return profile === RUNTIME_PROFILE_FULL_RECEPTIONIST
+    ? FULL_RECEPTIONIST_MODE_LABEL
+    : CONVERSATIONAL_IVR_MODE_LABEL;
+}
+
+/** Customer-facing copy when draft editing mode differs from live published mode. */
+export function receptionistModeStatusCopy(input: {
+  draftProfile: RuntimeProfile;
+  liveProfile: RuntimeProfile;
+  hasUnpublishedDraft: boolean;
+}): { editingLine: string; liveLine: string } {
+  const draftLabel = runtimeProfileLabel(input.draftProfile);
+  const liveLabel = runtimeProfileLabel(input.liveProfile);
+  const modeDiffers = input.draftProfile !== input.liveProfile;
+
+  if (modeDiffers) {
+    return {
+      editingLine: `${draftLabel} — Unpublished changes`,
+      liveLine: `Live calls: ${liveLabel}`,
+    };
+  }
+  if (input.hasUnpublishedDraft) {
+    return {
+      editingLine: draftLabel,
+      liveLine: `Live calls: ${liveLabel} · unpublished settings`,
+    };
+  }
+  return {
+    editingLine: draftLabel,
+    liveLine: `Live calls: ${liveLabel}`,
+  };
+}
+
 export function conversationalIvrToolAllowlist(editor: AgentConfig): string[] {
   const names: string[] = ["end_call", "search_business_knowledge"];
   if (editor.capabilities.transfer) names.push("transfer_call");
