@@ -13,6 +13,8 @@ import {
 } from "@/lib/server/mctb/attestation";
 import { loadMctbRecoveryConfig, updateMctbRecoveryConfig } from "@/lib/server/mctb/config";
 import { mergePhoneMctbInbound, readPhoneMctbInbound } from "@/lib/server/mctb/phone-line-config";
+import { loadMctbConsentPrompt, saveMctbConsentPrompt } from "@/lib/server/mctb/consent-prompt-store";
+import type { MctbConsentPromptSource } from "@/lib/mctb/consent-prompt/types";
 
 export async function getPhoneMctbSettings(workspaceId: string) {
   const prisma = getPrisma();
@@ -31,6 +33,7 @@ export async function getPhoneMctbSettings(workspaceId: string) {
   ]);
 
   const attestation = readExistingConsentAttestation(ws?.customFieldsConfig);
+  const consentPrompt = await loadMctbConsentPrompt(workspaceId);
   const templates = MCTB_FIRST_TEXT_TEMPLATE_ORDER.map((id) => {
     const def = getMctbFirstTextTemplate(id);
     return {
@@ -90,6 +93,7 @@ export async function getPhoneMctbSettings(workspaceId: string) {
       mode: consentMode,
       defaultMode: MCTB_CONSENT_MODE_EXISTING,
       attestation,
+      press1Prompt: consentPrompt,
     },
     template: {
       selectedId: config.firstTextTemplate.templateId,
@@ -177,6 +181,19 @@ export async function patchPhoneMctbSettings(
           mctb: { ...mctb, consentMode: normalizeMctbConsentMode(consent.mode) },
         },
       },
+    });
+  }
+
+  if (body.consentPrompt && typeof body.consentPrompt === "object") {
+    const p = body.consentPrompt as Record<string, unknown>;
+    const source = p.source;
+    await saveMctbConsentPrompt(workspaceId, {
+      ...(typeof source === "string"
+        ? { source: source as MctbConsentPromptSource }
+        : {}),
+      ...(typeof p.scriptText === "string" ? { scriptText: p.scriptText } : {}),
+      ...(typeof p.voiceId === "string" ? { voiceId: p.voiceId } : {}),
+      ...(p.audioUrl === null ? { audioUrl: null } : {}),
     });
   }
 

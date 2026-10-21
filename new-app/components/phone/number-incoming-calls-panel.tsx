@@ -23,6 +23,7 @@ import {
 import { AfterHoursForwardPanel } from '@/components/phone/after-hours-forward-panel'
 import { NoAnswerFallbackPanel } from '@/components/phone/no-answer-fallback-panel'
 import { formatPhone } from '@/lib/format'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 
 const MODES = [
   { value: 'browser', label: 'Browser phone' },
@@ -67,15 +68,21 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
 
   useEffect(() => {
     setLoading(true)
-    void Promise.all([
+    const loads: Promise<unknown>[] = [
       fetch(`/api/phone/numbers/${encodeURIComponent(phoneNumberId)}/answering-policy`).then((r) =>
         r.json(),
       ),
       reloadForwarding(),
       fetch('/api/phone/auto-attendant').then((r) => r.json()),
-      fetch('/api/phone/mctb').then((r) => r.json()),
-    ])
-      .then(([policyRes, , menuRes, mctbRes]) => {
+    ]
+    if (MCTB_UI_ENABLED) {
+      loads.push(fetch('/api/phone/mctb').then((r) => r.json()))
+    }
+    void Promise.all(loads)
+      .then((results) => {
+        const policyRes = results[0] as { data?: { policy?: unknown; number?: unknown } }
+        const menuRes = results[2] as { data?: unknown }
+        const mctbRes = MCTB_UI_ENABLED ? (results[3] as { data?: { numbers?: Array<{ id: string; mctb?: { enabled?: boolean } }> } }) : null
         const p = policyRes.data?.policy
         const number = policyRes.data?.number
         if (p?.answeringMode) setMode(p.answeringMode)
@@ -92,9 +99,11 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
         if (staff?.forwardingGroupId) setStaffGroupId(staff.forwardingGroupId)
         if (staff?.ringTimeoutSec) setStaffRingSec(String(staff.ringTimeoutSec))
         setIngressFoundation(isPhoneFoundation(number?.settingsJson))
-        const line = mctbRes.data?.numbers?.find((n: { id: string }) => n.id === phoneNumberId)
-        if (line?.mctb) setMctbEnabled(Boolean(line.mctb.enabled))
-        setMenus((menuRes.data || []).map((m: { id: string; name: string }) => m))
+        if (MCTB_UI_ENABLED && mctbRes) {
+          const line = mctbRes.data?.numbers?.find((n) => n.id === phoneNumberId)
+          if (line?.mctb) setMctbEnabled(Boolean(line.mctb.enabled))
+        }
+        setMenus(((menuRes.data || []) as Array<{ id: string; name: string }>).map((m) => m))
       })
       .catch(() => toast.error('Could not load incoming call settings'))
       .finally(() => setLoading(false))
@@ -163,7 +172,7 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
         title="Incoming calls"
         description={
           ingressFoundation
-            ? 'This number uses one Telnyx Call Control ingress. Change answering mode, IVR, and MCTB without repointing the carrier.'
+            ? 'This number uses one Telnyx Call Control ingress. Change answering mode and IVR without repointing the carrier.'
             : 'How this number answers on Telnyx Call Control.'
         }
       >
@@ -326,31 +335,33 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
         onSaved={() => void reloadForwarding()}
       />
 
-      <Panel
-        title="Missed Call Text Back"
-        description="Optional recovery texts after a qualifying missed call. Independent of how the call is answered."
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium">
-              Enable for{' '}
-              {formatPhone(config?.numbers.find((n) => n.id === phoneNumberId)?.e164 || 'this line')}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Uses the platform sender. Does not change Telnyx connection settings.
-            </p>
+      {MCTB_UI_ENABLED && (
+        <Panel
+          title="Missed Call Text Back"
+          description="Optional recovery texts after a qualifying missed call. Independent of how the call is answered."
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">
+                Enable for{' '}
+                {formatPhone(config?.numbers.find((n) => n.id === phoneNumberId)?.e164 || 'this line')}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Uses the platform sender. Does not change Telnyx connection settings.
+              </p>
+            </div>
+            <Switch
+              checked={mctbEnabled}
+              disabled={mctbSaving}
+              onCheckedChange={(v) => saveMctb(v)}
+              aria-label="Enable Missed Call Text Back for this number"
+            />
           </div>
-          <Switch
-            checked={mctbEnabled}
-            disabled={mctbSaving}
-            onCheckedChange={(v) => saveMctb(v)}
-            aria-label="Enable Missed Call Text Back for this number"
-          />
-        </div>
-        <Button type="button" variant="link" className="mt-2 h-auto p-0" asChild>
-          <Link href="/app/mctb/recovery">Recovery message, consent, and cooldowns</Link>
-        </Button>
-      </Panel>
+          <Button type="button" variant="link" className="mt-2 h-auto p-0" asChild>
+            <Link href="/app/phone/missed-call-text-back">Recovery message, consent, and cooldowns</Link>
+          </Button>
+        </Panel>
+      )}
     </div>
   )
 }

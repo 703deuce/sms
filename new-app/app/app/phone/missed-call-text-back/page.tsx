@@ -1,7 +1,12 @@
+import { redirect } from 'next/navigation'
 import { Page, PageHeader } from '@/components/app/page-primitives'
 import { PhoneMctbSettings } from '@/components/phone/phone-mctb-settings'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 
 export default function PhoneMissedCallTextBackPage() {
+  if (!MCTB_UI_ENABLED) {
+    redirect('/app/phone')
+  }
   return (
     <Page className="max-w-3xl">
       <PageHeader

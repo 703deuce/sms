@@ -10,7 +10,10 @@ import type { ProductKey, UserProductAccess } from "@/lib/products/types";
 import { productHomePath } from "@/lib/products/types";
 import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 import { isAppointmentsV1Primary, isSmsStandaloneHidden } from "@/lib/workspace/platform-launch";
-import { voiceCustomerHiddenRedirect } from "@/lib/products/launch-product-availability";
+import {
+  mctbCustomerHiddenRedirect,
+  voiceCustomerHiddenRedirect,
+} from "@/lib/products/launch-product-availability";
 
 /** Edge-safe product route guards (no DB / server-only imports). */
 
@@ -24,6 +27,9 @@ export function productAccessDeniedRedirect(
   access: ProductAccessFlags,
   options?: { authenticated?: boolean },
 ): string | null {
+  const mctbHidden = mctbCustomerHiddenRedirect(pathname);
+  if (mctbHidden) return mctbHidden;
+
   const voiceHidden = voiceCustomerHiddenRedirect(pathname);
   if (voiceHidden) return voiceHidden;
 

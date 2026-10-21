@@ -7,7 +7,9 @@
  * @see docs/VOICE-V3-PRODUCT-VISIBILITY.md
  */
 
-import { mctbShellHome } from "@/lib/products/product-shell";
+import { BUSINESS_MESSAGING_OVERVIEW_HREF } from "@/lib/products/business-messaging-nav";
+import { isExplicitMctbShellPath, mctbShellHome } from "@/lib/products/product-shell";
+import { isMctbAppPath } from "@/lib/products/voice-routes";
 import { isVoiceCustomerUiPath } from "@/lib/products/mctb-bundled-receptionist-paths";
 import { isDevAuthBypassEnabled } from "@/lib/auth/dev-auth-bypass";
 import { isBusinessMessagingUnifiedNav, isMctbV1Primary } from "@/lib/workspace/platform-launch";
@@ -24,7 +26,7 @@ export type LaunchProductAvailabilityRow = {
 
 /** Default launch posture — override with env for internal QA only. */
 export const LAUNCH_PRODUCT_AVAILABILITY: Record<LaunchProductKey, LaunchProductAvailabilityRow> = {
-  mctb: { enabled: true, customerVisible: true },
+  mctb: { enabled: true, customerVisible: false },
   voice: { enabled: true, customerVisible: true },
   appointments: { enabled: true, customerVisible: false },
   mass_sms: { enabled: true, customerVisible: false },
@@ -47,7 +49,15 @@ export function isVoiceProductCustomerVisible(): boolean {
   return row.enabled && row.customerVisible;
 }
 
+export function isMctbProductCustomerVisible(): boolean {
+  if (envTruthy("TRANSOVO_MCTB_CUSTOMER_VISIBLE")) return true;
+  if (process.env.TRANSOVO_MCTB_CUSTOMER_VISIBLE?.trim() === "0") return false;
+  const row = LAUNCH_PRODUCT_AVAILABILITY.mctb;
+  return row.enabled && row.customerVisible;
+}
+
 export function isLaunchProductCustomerVisible(product: LaunchProductKey): boolean {
+  if (product === "mctb") return isMctbProductCustomerVisible();
   if (product === "voice") return isVoiceProductCustomerVisible();
   if (isBusinessMessagingUnifiedNav() && product === "mass_sms") {
     if (envTruthy("TRANSOVO_MASS_SMS_CUSTOMER_VISIBLE")) return true;
@@ -74,6 +84,14 @@ export function mctbLaunchCustomerHome(): string {
  * Redirect authenticated customers away from hidden Voice AI Receptionist UI routes.
  * Does not apply to API/webhooks/runtime endpoints.
  */
+/** Redirect authenticated customers away from hidden MCTB UI routes. Runtime/webhooks unchanged. */
+export function mctbCustomerHiddenRedirect(pathname: string): string | null {
+  if (isMctbProductCustomerVisible()) return null;
+  if (!isExplicitMctbShellPath(pathname) && !isMctbAppPath(pathname)) return null;
+  if (isBusinessMessagingUnifiedNav()) return BUSINESS_MESSAGING_OVERVIEW_HREF;
+  return "/dashboard";
+}
+
 export function voiceCustomerHiddenRedirect(pathname: string): string | null {
   if (isVoiceProductCustomerVisible()) return null;
   if (isMctbV1Primary() && isMctbBundledVoiceAgentWizardPath(pathname)) {

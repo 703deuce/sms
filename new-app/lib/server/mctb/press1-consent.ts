@@ -1,15 +1,16 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/server/db";
-import { gatherUsingSpeak } from "@/lib/server/phone/routing/telnyx-call-control";
+import {
+  gatherUsingAudio,
+  gatherUsingSpeak,
+} from "@/lib/server/phone/routing/telnyx-call-control";
+import { resolvePress1GatherPlayback } from "@/lib/server/mctb/consent-prompt-store";
 import { readPhoneMctbInbound } from "@/lib/server/mctb/phone-line-config";
 import { loadMctbConsentMode } from "@/lib/server/mctb/attestation";
 import { MCTB_CONSENT_MODE_VERIFIED } from "@/lib/mctb/consent-mode";
 import { leaveVoicemailOnCall } from "@/lib/server/phone/voicemail-runtime";
 import { schedulePhoneOwnedMctbIfMissed } from "@/lib/server/mctb/pipeline";
-
-const DEFAULT_DISCLOSURE =
-  "Sorry we missed your call. To receive a text message from us, press 1. To continue without a text, press 2 or hang up.";
 
 export type MctbPress1State = "pressed" | "declined" | "no_input" | "not_offered";
 
@@ -58,20 +59,31 @@ export async function tryOfferMctbPress1BeforeVoicemail(input: {
   });
   if (!ok) return { offered: false };
 
-  await gatherUsingSpeak({
-    callControlId: input.inboundControlId,
-    text: DEFAULT_DISCLOSURE,
-    validDigits: "12",
-    clientState: {
-      kind: "cf_mctb_consent",
-      stage: "awaiting_digit",
-      workspaceId: input.workspaceId,
-      humanCallId: input.humanCallId,
-      phoneNumberId: input.phoneNumberId ?? call.phoneNumberId,
-      routingSessionId: input.routingSessionId || "",
-      after: "voicemail",
-    },
-  });
+  const playback = await resolvePress1GatherPlayback(input.workspaceId);
+  const clientState = {
+    kind: "cf_mctb_consent",
+    stage: "awaiting_digit",
+    workspaceId: input.workspaceId,
+    humanCallId: input.humanCallId,
+    phoneNumberId: input.phoneNumberId ?? call.phoneNumberId,
+    routingSessionId: input.routingSessionId || "",
+    after: "voicemail",
+  };
+  if (playback.mode === "audio") {
+    await gatherUsingAudio({
+      callControlId: input.inboundControlId,
+      audioUrl: playback.audioUrl,
+      validDigits: "12",
+      clientState,
+    });
+  } else {
+    await gatherUsingSpeak({
+      callControlId: input.inboundControlId,
+      text: playback.text,
+      validDigits: "12",
+      clientState,
+    });
+  }
 
   await prisma.humanCall.update({
     where: { id: call.id },

@@ -16,6 +16,7 @@ import { searchNumbers } from '@/lib/numbers-api'
 import { formatPhone } from '@/lib/format'
 import { Callout, CapabilityChips, ChoiceCard, Field, StepIntro, WizardShell } from './number-ui'
 import { cn } from '@/lib/utils'
+import { MCTB_UI_ENABLED, numberProductsForUi } from '@/lib/products/mctb-ui'
 
 const STEPS = ['Type', 'Find', 'Review', 'Assign', 'Done']
 const DEFAULT_TARGET: Record<NumberProduct, string> = {
@@ -298,7 +299,7 @@ export function BuyWizard() {
             <StepIntro title={`${formatPhone(picked.number)} is yours`} text="Link it to a product now, or leave it unassigned and do it later." />
           </div>
           <div role="radiogroup" aria-label="Assign to product" className="grid gap-3 sm:grid-cols-2">
-            {(['phone', 'receptionist', 'mctb', 'none'] as const).map((p) => {
+            {([...numberProductsForUi(['phone', 'receptionist', 'mctb']), 'none'] as const).map((p) => {
               const blocked = p === 'mctb' && !picked.capabilities.sms
               return (
                 <ChoiceCard

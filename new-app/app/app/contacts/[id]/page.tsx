@@ -6,6 +6,7 @@ import { EmptyState, KeyValue, Page, PageHeader, Panel } from '@/components/app/
 import { AI_OUTCOME, CALL_OUTCOME, MCTB_STATE, StatusBadge } from '@/components/app/status'
 import { CONTACTS, THREADS, callsForContact, getContact } from '@/lib/data'
 import { formatDuration, formatFull, formatPhone, formatWhen } from '@/lib/format'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 
 export function generateStaticParams() {
   return CONTACTS.map((c) => ({ id: c.id }))
@@ -40,7 +41,9 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
           <span className="text-muted-foreground">· {formatDuration(c.durationSec)}</span>
           <StatusBadge tone={CALL_OUTCOME[c.outcome].tone}>{CALL_OUTCOME[c.outcome].label}</StatusBadge>
           {c.ai && <StatusBadge tone={AI_OUTCOME[c.ai.outcome].tone}>AI · {AI_OUTCOME[c.ai.outcome].label}</StatusBadge>}
-          {c.mctb && <StatusBadge tone={MCTB_STATE[c.mctb.state].tone}>Text back · {MCTB_STATE[c.mctb.state].label}</StatusBadge>}
+          {MCTB_UI_ENABLED && c.mctb && (
+            <StatusBadge tone={MCTB_STATE[c.mctb.state].tone}>Text back · {MCTB_STATE[c.mctb.state].label}</StatusBadge>
+          )}
           {c.disposition && <StatusBadge tone="muted">{c.disposition}</StatusBadge>}
         </div>
       ),

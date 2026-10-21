@@ -5,6 +5,7 @@ import { AI_OUTCOME, CALL_OUTCOME, MCTB_STATE, StatusBadge } from '@/components/
 import { type Call } from '@/lib/data'
 import { formatDuration, formatFull, formatPhone, formatWhen, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 import { CallActions, CallNotes } from './call-actions'
 import { CallRecordingPlayer } from './call-recording-player'
 
@@ -23,7 +24,7 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
   ]
   if (call.voicemail) timeline.push({ icon: Voicemail, title: 'Voicemail left', detail: `${formatDuration(call.voicemail.durationSec)} · transcribed` })
   if (call.ai) timeline.push({ icon: Bot, title: `AI Receptionist: ${AI_OUTCOME[call.ai.outcome].label}`, detail: call.ai.intent, tone: 'text-primary' })
-  if (call.mctb)
+  if (MCTB_UI_ENABLED && call.mctb)
     timeline.push({
       icon: MessageSquareReply,
       title: `Missed Call Text Back: ${MCTB_STATE[call.mctb.state].label}`,
@@ -39,7 +40,9 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
           <>
             <StatusBadge tone={outcome.tone}>{outcome.label}</StatusBadge>
             {call.ai && <StatusBadge tone={AI_OUTCOME[call.ai.outcome].tone}>{AI_OUTCOME[call.ai.outcome].label}</StatusBadge>}
-            {call.mctb && <StatusBadge tone={MCTB_STATE[call.mctb.state].tone}>{MCTB_STATE[call.mctb.state].label}</StatusBadge>}
+            {MCTB_UI_ENABLED && call.mctb && (
+              <StatusBadge tone={MCTB_STATE[call.mctb.state].tone}>{MCTB_STATE[call.mctb.state].label}</StatusBadge>
+            )}
           </>
         }
         title={call.caller}
@@ -108,13 +111,13 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
             </Panel>
           )}
 
-          {call.mctb && (
+          {MCTB_UI_ENABLED && call.mctb && (
             <Panel
               title="Missed Call Text Back"
               description="Consent, delivery and reply for this missed call"
               actions={
                 call.mctb.threadId ? (
-                  <Link href={`/app/mctb/conversations?thread=${call.mctb.threadId}`} className="text-xs font-medium text-primary hover:underline">
+                  <Link href={`/app/inbox?thread=${call.mctb.threadId}`} className="text-xs font-medium text-primary hover:underline">
                     Open conversation
                   </Link>
                 ) : undefined
@@ -143,7 +146,7 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
             </Panel>
           )}
 
-          {!call.ai && !call.voicemail && !call.mctb && (
+          {!call.ai && !call.voicemail && !(MCTB_UI_ENABLED && call.mctb) && (
             <Panel title="Recording">
               {call.recording ? (
                 <CallRecordingPlayer callId={call.id} durationSec={call.durationSec} />

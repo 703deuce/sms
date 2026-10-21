@@ -6,6 +6,7 @@ import { Panel } from '@/components/app/page-primitives'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { formatWhen } from '@/lib/format'
 import type { RoutePolicy } from '@/lib/data'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 
 export const DESTINATION_LABEL: Record<RoutePolicy['duringHours'], string> = {
   ring_group: 'Front desk ring group',
@@ -37,7 +38,13 @@ export function useRouteSteps() {
       { when: 'During hours', then: `${DESTINATION_LABEL[p.duringHours]}${p.duringHours === 'ring_group' ? ` · ${p.ringStrategy}, ${p.ringTimeout}s` : ''}` },
       { when: 'No answer / busy', then: FALLBACK_LABEL[p.noAnswer] },
       { when: 'After hours', then: FALLBACK_LABEL[p.afterHours] },
-      { when: 'Still missed', then: p.mctbEnabled ? 'Missed Call Text Back (press-1 consent)' : 'No text back' },
+      {
+        when: 'Still missed',
+        then:
+          MCTB_UI_ENABLED && p.mctbEnabled
+            ? 'Missed Call Text Back (press-1 consent)'
+            : 'No automated text back',
+      },
     ],
   }
 }
