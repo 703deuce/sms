@@ -4,7 +4,9 @@ import { jsonError } from "@/lib/server/api-error";
 import { getPhoneSettings, upsertPhoneSettings } from "@/lib/server/phone/settings";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = assertDevApiAccess(request);
+  if (denied) return denied;
   try {
     const workspaceId = await resolveWorkspaceId();
     const data = await getPhoneSettings(workspaceId);
