@@ -20,7 +20,15 @@ import { enrichVoiceV3AgentConfigForRuntime } from "@/lib/server/voice-v3/enrich
 import { createVoiceV3CallRuntime } from "@/lib/server/voice-v3/state/call-runtime";
 import type { VoiceV3CallContext } from "@/lib/server/voice-v3/state/call-context";
 import { ensureVoiceCallRowOnSessionResolve } from "@/lib/server/voice-v3/post-call/ensure-voice-call-row";
+import {
+  isConversationalIvrRuntime,
+  withRuntimeProfileFromEditor,
+} from "@/lib/receptionist/runtime-profile";
 import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
+import {
+  appendVoiceV3ForensicEvent,
+  initVoiceV3CallForensics,
+} from "@/lib/server/voice-v3/telemetry/call-forensics";
 import {
   buildLiveKitIntakeFieldMetadata,
   buildLiveKitIntakeFunctionTools,
@@ -252,6 +260,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     workspaceId,
     editor: bundle.editor,
   });
+  voiceV3Config = withRuntimeProfileFromEditor(bundle.editor, voiceV3Config);
 
   createVoiceV3CallRuntime({
     liveSessionId,
@@ -273,6 +282,27 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     mergedByName.set(toolSchemaName(t), t);
   }
   const toolSchemas = [...mergedByName.values()];
+  const schemaToolNames = toolSchemas.map((t) => toolSchemaName(t));
+
+  initVoiceV3CallForensics({
+    callId,
+    liveSessionId,
+    workspaceId,
+    agentId,
+  });
+  appendVoiceV3ForensicEvent(liveSessionId, "VOICE_V3_SESSION_TOOL_SURFACE", {
+    runtime_profile: voiceV3Config.runtimeProfile ?? null,
+    conversational_ivr: isConversationalIvrRuntime(voiceV3Config),
+    published_tool_names: rt.toolNames,
+    schema_tool_names: schemaToolNames,
+    schema_tool_count: schemaToolNames.length,
+    booking_tools_present: schemaToolNames.filter((n) =>
+      ["set_scheduling_preference", "find_availability", "book_appointment"].includes(n),
+    ),
+    astra_model: rt.astraModel,
+    config_source: configSource,
+    published_version_id: publishedVersionId,
+  });
 
   putLiveSession({
     liveSessionId,

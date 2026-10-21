@@ -6,8 +6,15 @@ import assert from "node:assert/strict";
 import { defaultReceptionistEditorConfig } from "@/lib/server/receptionist/defaults";
 import { enabledVoiceToolNamesFromEditor } from "@/lib/server/receptionist/editor-screen-mapping";
 import { compilePublishedBundle } from "@/lib/server/receptionist/compile-runtime";
+import {
+  coalesceRuntimeProfileForVoiceConfig,
+  isConversationalIvrRuntime,
+  withRuntimeProfileFromEditor,
+} from "@/lib/receptionist/runtime-profile";
+import { voiceV3AgentConfigFromBundle } from "@/lib/server/voice-v3/bundle-voice-config";
 import { editorToVoiceV3AgentConfig } from "@/lib/server/voice-v3/editor-to-voice-v3-config";
 import { isVoiceV3ToolAuthorizedBase } from "@/lib/server/voice-v3/tools/authorize-tool-for-config";
+import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
 
 function emptyKnowledge() {
   return {
@@ -125,5 +132,56 @@ const wired = editorToVoiceV3AgentConfig({
 assert.ok(wired.callHandling.transferTriggers.length > 0);
 assert.ok(wired.operatingPolicy?.businessSchedule?.weekly?.monday);
 assert.ok(wired.transfer?.enabled !== undefined);
+
+// Full Receptionist publish must not lose booking tools when snapshot omits runtimeProfile.
+const fullLive = asFullReceptionist({
+  ...base,
+  capabilities: { ...base.capabilities, book: true },
+});
+fullLive.appointments = {
+  ...fullLive.appointments,
+  strategy: "live",
+  provider: "microsoft",
+};
+const fullBundle = compilePublishedBundle({
+  editor: fullLive,
+  workspaceId: "ws_test",
+  agentId: "ag_test",
+  businessName: "Test Co",
+  timezone: "America/Chicago",
+  businessFacts: {},
+  knowledge: emptyKnowledge(),
+});
+const snap = fullBundle.runtime.voiceV3 as { voiceV3AgentConfig?: Record<string, unknown> };
+if (snap?.voiceV3AgentConfig) {
+  delete snap.voiceV3AgentConfig.runtimeProfile;
+}
+const fromBundle = voiceV3AgentConfigFromBundle(fullBundle, {
+  workspaceId: "ws_test",
+  agentId: "ag_test",
+});
+assert.equal(
+  coalesceRuntimeProfileForVoiceConfig(fullLive, fromBundle),
+  "full_receptionist",
+  "editor full_receptionist wins when snapshot omits runtimeProfile",
+);
+assert.equal(isConversationalIvrRuntime(fromBundle), false);
+const catalogNames = buildVoiceV3AstraFunctionToolsFromCatalog(fromBundle).map((t) =>
+  String(t.name),
+);
+assert.ok(
+  catalogNames.includes("book_appointment"),
+  "catalog must expose book_appointment for full receptionist live book",
+);
+assert.ok(
+  catalogNames.includes("find_availability"),
+  "catalog must expose find_availability",
+);
+
+const strippedProfile = { ...fromBundle, runtimeProfile: undefined };
+const ivrOnly = withRuntimeProfileFromEditor(base, strippedProfile);
+assert.equal(isConversationalIvrRuntime(ivrOnly), true);
+const ivrCatalog = buildVoiceV3AstraFunctionToolsFromCatalog(ivrOnly).map((t) => String(t.name));
+assert.ok(!ivrCatalog.includes("book_appointment"), "IVR catalog must not include book_appointment");
 
 console.log("test-receptionist-config-source: ALL PASS");

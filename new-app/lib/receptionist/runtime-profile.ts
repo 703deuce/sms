@@ -39,8 +39,32 @@ export function isConversationalIvrEditor(editor: AgentConfig): boolean {
   return resolveRuntimeProfile(editor) === RUNTIME_PROFILE_CONVERSATIONAL_IVR;
 }
 
+/**
+ * Published `voiceV3AgentConfig` snapshots may omit `runtimeProfile` (pre two-mode).
+ * Always align runtime config with the editor's operating mode before tool catalog gating.
+ */
+export function coalesceRuntimeProfileForVoiceConfig(
+  editor: AgentConfig,
+  config: VoiceV3AgentConfig,
+): RuntimeProfile {
+  if (config.runtimeProfile === "full_receptionist" || config.runtimeProfile === "conversational_ivr") {
+    return config.runtimeProfile;
+  }
+  return resolveRuntimeProfile(editor);
+}
+
+export function withRuntimeProfileFromEditor(
+  editor: AgentConfig,
+  config: VoiceV3AgentConfig,
+): VoiceV3AgentConfig {
+  const runtimeProfile = coalesceRuntimeProfileForVoiceConfig(editor, config);
+  if (config.runtimeProfile === runtimeProfile) return config;
+  return { ...config, runtimeProfile };
+}
+
+/** IVR four-tool allowlist applies only when explicitly in conversational mode. */
 export function isConversationalIvrRuntime(config: VoiceV3AgentConfig): boolean {
-  return config.runtimeProfile !== "full_receptionist";
+  return config.runtimeProfile === "conversational_ivr";
 }
 
 export function runtimeProfileLabel(profile: RuntimeProfile): string {
