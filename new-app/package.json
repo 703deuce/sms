@@ -16,7 +16,8 @@
     "test:receptionist": "node scripts/test-receptionist-complete.mjs && node scripts/test-telephony-voice-catalog.mjs && node scripts/test-telephony-switch-sequence.mjs && node scripts/test-ai-receptionist-two-modes.mjs && node scripts/test-conversational-ivr-profile.mjs",
     "test:receptionist:runtime-verify": "NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/test-ai-receptionist-runtime-verification.ts",
     "test:voice-v3": "npx tsx scripts/test-receptionist-config-source.ts && node scripts/test-voice-v3-tools.mjs && node scripts/test-voice-v3-appointment-match.mjs",
-    "test:voice-v3:golden-parity": "NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/verify-golden-runtime-parity.ts",
+    "sync:voice-v3-authority": "node ../packages/transovo-voice-v3-runtime/sync-to-new-app.mjs",
+    "test:voice-v3:golden-parity": "pnpm run sync:voice-v3-authority && NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/verify-golden-runtime-parity.ts",
     "postinstall": "test -f prisma/schema.prisma && prisma generate || true"
   },
   "dependencies": {

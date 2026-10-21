@@ -287,6 +287,7 @@ export type VoiceV3LiveKitExecuteToolPayload = {
   toolName: string;
   arguments: Record<string, unknown>;
   functionCallId: string;
+  delegationId?: string | null;
 };
 
 export async function executeVoiceV3ToolForLiveKit(
@@ -315,7 +316,7 @@ export async function executeVoiceV3ToolForLiveKit(
     {
       callId: runtime.getSnapshot().callId,
       liveSessionId,
-      delegationId: null,
+      delegationId: payload.delegationId?.trim() || null,
       functionCallId: payload.functionCallId,
       runtime,
       tenantId: runtime.config.workspaceId ?? "unknown",

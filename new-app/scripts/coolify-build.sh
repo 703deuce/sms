@@ -22,6 +22,11 @@ fi
 echo "[new-app/coolify-build] prisma generate"
 $PNPM exec prisma generate
 
+if [[ -f ../packages/transovo-voice-v3-runtime/sync-to-new-app.mjs ]]; then
+  echo "[new-app/coolify-build] sync Voice V3 authority (src/lib/voice-v3 → new-app mirror)"
+  node ../packages/transovo-voice-v3-runtime/sync-to-new-app.mjs
+fi
+
 if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
 fi

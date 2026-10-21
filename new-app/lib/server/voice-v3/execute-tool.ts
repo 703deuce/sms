@@ -19,12 +19,17 @@ function mapEngineResult(result: {
   data?: Record<string, unknown>;
   details?: Record<string, unknown>;
   retryable?: boolean;
+  liveContextEvents?: unknown;
 }): ToolResult {
   if (result.ok) {
+    const liveContextEvents = (result as { liveContextEvents?: unknown }).liveContextEvents;
     return {
       ok: true,
       status: result.status,
       ...(result.data ?? {}),
+      ...(Array.isArray(liveContextEvents) && liveContextEvents.length > 0
+        ? { liveContextEvents }
+        : {}),
     };
   }
   return {
@@ -42,6 +47,7 @@ export async function executeNativeVoiceV3Tool(input: {
   toolName: string;
   args: Record<string, unknown>;
   functionCallId: string;
+  delegationId?: string | null;
 }): Promise<ToolResult> {
   const runtime = getVoiceV3CallRuntime(input.session.liveSessionId);
   if (!runtime) {
@@ -74,7 +80,7 @@ export async function executeNativeVoiceV3Tool(input: {
       {
         callId: runtime.getSnapshot().callId,
         liveSessionId: input.session.liveSessionId,
-        delegationId: null,
+        delegationId: input.delegationId?.trim() || null,
         functionCallId: input.functionCallId,
         runtime,
         tenantId: input.session.workspaceId,

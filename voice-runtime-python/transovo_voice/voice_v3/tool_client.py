@@ -34,11 +34,13 @@ class TransovoV3ToolClient:
         *,
         job_metadata: dict[str, Any] | None = None,
         room_metadata: dict[str, Any] | None = None,
+        delegation_context: Any | None = None,
     ) -> None:
         self._backend = backend
         self._ctx = call_context
         self._job_metadata = job_metadata or {}
         self._room_metadata = room_metadata or {}
+        self._delegation_context = delegation_context
 
     async def resolve_session_config(self) -> dict[str, Any]:
         payload = {
@@ -75,12 +77,19 @@ class TransovoV3ToolClient:
         function_call_id: str | None = None,
     ) -> dict[str, Any]:
         fc_id = function_call_id or f"lk_fc_{uuid.uuid4().hex[:12]}"
+        delegation_id: str | None = None
+        if self._delegation_context is not None:
+            resolver = getattr(self._delegation_context, "delegation_id_for_function_call", None)
+            if callable(resolver):
+                delegation_id = resolver(fc_id)
         payload = {
             "liveSessionId": self._ctx.live_session_id,
             "toolName": tool_name,
             "arguments": arguments,
             "functionCallId": fc_id,
         }
+        if delegation_id:
+            payload["delegationId"] = delegation_id
         result = await self._backend.call("execute_voice_v3_livekit_tool", payload)
         if isinstance(result, dict):
             return result

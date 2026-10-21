@@ -35,6 +35,7 @@ from transovo_voice.voice_v3.gpt_live_delegation_telemetry import attach_gpt_liv
 from transovo_voice.voice_v3.delegation_runtime_hydration import (
     attach_voice_v3_delegation_runtime_hydration,
 )
+from transovo_voice.voice_v3.delegation_execution_context import DelegationExecutionContext
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient, VoiceV3CallContext
 from transovo_voice.voice_v3.end_call_tool import build_voice_v3_end_call_toolset
 from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_tools
@@ -196,11 +197,13 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             workspace_id=str(config.get("workspaceId") or ""),
             agent_id=str(config.get("agentId") or ""),
         )
+        delegation_execution = DelegationExecutionContext()
         client = TransovoV3ToolClient(
             backend,
             call_ctx,
             job_metadata=job_meta,
             room_metadata=room_meta,
+            delegation_context=delegation_execution,
         )
         forensics.ctx = call_ctx
 
@@ -340,7 +343,11 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         if forensics:
             forensics.append("AGENTSESSION_START_COMPLETED")
             try:
-                attach_gpt_live_delegation_telemetry(forensics, agent.duplex_session)
+                attach_gpt_live_delegation_telemetry(
+                    forensics,
+                    agent.duplex_session,
+                    delegation_context=delegation_execution,
+                )
                 attach_voice_v3_delegation_runtime_hydration(
                     duplex_session=agent.duplex_session,
                     tool_client=client,

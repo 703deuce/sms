@@ -261,12 +261,21 @@ def record_delegation_provider_event(forensics: VoiceV3CallForensics, raw: dict[
         logger.exception("gpt_live_delegation_telemetry_record_failed")
 
 
-def attach_gpt_live_delegation_telemetry(forensics: VoiceV3CallForensics, duplex_session: Any) -> None:
+def attach_gpt_live_delegation_telemetry(
+    forensics: VoiceV3CallForensics,
+    duplex_session: Any,
+    *,
+    delegation_context: Any | None = None,
+) -> None:
     """Passive listeners on GPTLiveSession; fail-open."""
 
     def _on_server(raw: dict[str, Any]) -> None:
         if not isinstance(raw, dict):
             return
+        if delegation_context is not None:
+            note = getattr(delegation_context, "note_openai_server_event", None)
+            if callable(note):
+                note(raw)
         record_delegation_provider_event(forensics, raw, direction="server")
 
     def _on_client(raw: dict[str, Any]) -> None:
