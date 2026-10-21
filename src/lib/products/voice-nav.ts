@@ -23,6 +23,7 @@ import {
 import { isActiveEntitlement } from "@/lib/products/types";
 import { buildSmartRoutingNavChildren } from "@/lib/smart-routing/nav-children";
 import { isMctbFocusedCustomerNav } from "@/lib/products/mctb-focused-nav";
+import { isLaunchProductCustomerVisible } from "@/lib/products/launch-product-availability";
 import { getSmsPlatformPageTitle } from "@/lib/products/sms-platform-nav";
 
 export type VoiceNavOptions = {
@@ -118,7 +119,8 @@ function buildMctbNav(options: VoiceNavOptions): NavItem[] {
 export function buildMctbShellNav(options: VoiceNavOptions = {}): NavItem[] {
   const features = options.productFeatures;
   const hasMctb = featureActive(features, "mctb", false);
-  const showMctbSection = hasMctb || options.showTryIt;
+  const showMctbSection =
+    isLaunchProductCustomerVisible("mctb") && (hasMctb || options.showTryIt);
   const mctbFocused = isMctbFocusedCustomerNav();
 
   const items: NavItem[] = [
@@ -227,7 +229,8 @@ export function buildMassSmsMobileNav() {
 export function buildVoiceMobileNav(options: VoiceNavOptions = {}) {
   const features = options.productFeatures;
   const hasMctb = featureActive(features, "mctb", false);
-  const showMctbSection = hasMctb || options.showTryIt;
+  const showMctbSection =
+    isLaunchProductCustomerVisible("mctb") && (hasMctb || options.showTryIt);
 
   const items = [{ label: "Missed", href: "/voice/missed-calls" }];
 

@@ -13,6 +13,7 @@ import {
   isPhoneAiCoverageRuntimeMode,
   phoneAiCoverageModeDescription,
 } from '@/lib/phone/ai-coverage-support'
+import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
 
 export function AiCoverageEditor() {
   const { routePolicy, updateRoutePolicy } = useWorkspace()
@@ -87,10 +88,12 @@ export function AiCoverageEditor() {
             <span>Take a message and create a callback task</span>
             <StatusBadge tone="success">On</StatusBadge>
           </div>
-          <div className="flex items-center justify-between gap-4">
-            <span>Then offer Missed Call Text Back</span>
-            <StatusBadge tone={routePolicy.mctbEnabled ? 'success' : 'muted'}>{routePolicy.mctbEnabled ? 'On' : 'Off'}</StatusBadge>
-          </div>
+          {MCTB_UI_ENABLED && (
+            <div className="flex items-center justify-between gap-4">
+              <span>Then offer Missed Call Text Back</span>
+              <StatusBadge tone={routePolicy.mctbEnabled ? 'success' : 'muted'}>{routePolicy.mctbEnabled ? 'On' : 'Off'}</StatusBadge>
+            </div>
+          )}
         </div>
       </Panel>
     </div>

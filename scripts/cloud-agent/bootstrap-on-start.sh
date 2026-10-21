@@ -4,7 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "${COOLIFY_SSH_HOST:-coolify-server}" true 2>/dev/null; then
+# Writes ~/.ssh/config Host coolify-server from TRANSOVO_SSH_PRIVATE_KEY (or aliases) or ~/.ssh/cursor_hetzner_ed25519
+# shellcheck source=scripts/cloud-agent/ensure-coolify-ssh.sh
+source "$ROOT/scripts/cloud-agent/ensure-coolify-ssh.sh"
+
+if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "${COOLIFY_SSH_HOST_ALIAS:-coolify-server}" true 2>/dev/null; then
   echo "bootstrap-on-start: coolify-server SSH unavailable — cannot reach self-hosted Redis" >&2
   exit 1
 fi

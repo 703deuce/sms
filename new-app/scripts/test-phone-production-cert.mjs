@@ -76,9 +76,21 @@ async function main() {
 
   let callId = process.env.PHONE_TEST_CALL_ID?.trim();
   if (!callId) {
-    const list = await get("/api/phone/calls?limit=20");
-    const row = (list.json.data || []).find((c) => c.recording);
-    callId = row?.id;
+    const list = await get("/api/phone/calls?limit=50");
+    const candidates = (list.json.data || []).filter((c) => c.recording);
+    for (const row of candidates) {
+      const probe = await get(`/api/phone/calls/${encodeURIComponent(row.id)}/recording`);
+      if (probe.ok && probe.json.data?.url) {
+        callId = row.id;
+        break;
+      }
+    }
+    if (!callId && candidates.length) {
+      fail(
+        `recording JSON unavailable for ${candidates.length} call(s) with recording flag — set PHONE_TEST_CALL_ID to a call with a live Telnyx artifact`,
+      );
+      return;
+    }
   }
   if (!callId) {
     fail("no call with recording in list — set PHONE_TEST_CALL_ID");

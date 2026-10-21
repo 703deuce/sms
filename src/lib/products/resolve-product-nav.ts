@@ -14,6 +14,7 @@ import {
 } from "@/lib/products/product-shell";
 import type { WorkspaceFeatureSnapshot } from "@/lib/products/feature-entitlements";
 import { resolveMctbLaunchProductShell } from "@/lib/mctb/universal-shell";
+import { isLaunchProductCustomerVisible } from "@/lib/products/launch-product-availability";
 import { isAppointmentsV1Primary, isMctbV1Primary, isSmsOnlyAppNav } from "@/lib/workspace/platform-launch";
 import { isUnifiedAppointmentsExperience } from "@/lib/products/unified-appointments";
 import {
@@ -62,7 +63,7 @@ function resolveEffectiveProductShell(
     return "appointment_reminders";
   }
   if (multiProduct) return productShell;
-  if (isMctbV1Primary() && hasMctb) return "mctb";
+  if (isMctbV1Primary() && hasMctb && isLaunchProductCustomerVisible("mctb")) return "mctb";
   return null;
 }
 
@@ -85,7 +86,7 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
     input.hasMctb,
   );
 
-  if (effectiveShell === "mctb") {
+  if (effectiveShell === "mctb" && isLaunchProductCustomerVisible("mctb")) {
     return buildMctbV1Nav({
       inboxBadge: input.inboxBadge,
       hasVoice: input.hasVoice,
@@ -114,7 +115,7 @@ export function resolveProductSidebarNav(input: ResolveProductNavInput): NavItem
     });
   }
 
-  if (isMctbV1Primary() && input.hasMctb) {
+  if (isMctbV1Primary() && input.hasMctb && isLaunchProductCustomerVisible("mctb")) {
     return buildMctbV1Nav({
       inboxBadge: input.inboxBadge,
       hasVoice: input.hasVoice,
@@ -163,7 +164,7 @@ export function resolveProductMobileNav(input: ResolveProductNavInput): NavItem[
     input.hasMctb,
   );
 
-  if (effectiveShell === "mctb") {
+  if (effectiveShell === "mctb" && isLaunchProductCustomerVisible("mctb")) {
     return buildMctbV1MobileNav({
       inboxBadge: input.inboxBadge,
       hasVoice: input.hasVoice,

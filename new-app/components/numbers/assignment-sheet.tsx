@@ -10,6 +10,7 @@ import { compatibility, inboundFlow, PRODUCT_LABEL, type Assignment, type Number
 import { formatPhone } from '@/lib/format'
 import { SimpleSelect } from '@/components/app/filters'
 import { Callout, FlowDiagram } from './number-ui'
+import { numberProductsForUi } from '@/lib/products/mctb-ui'
 
 const TARGETS: Record<NumberProduct, string[]> = {
   phone: ['Front desk ring group', 'Priya Natarajan', 'Daniel Brooks', 'Main IVR'],
@@ -68,7 +69,10 @@ export function AssignmentSheet({ number, open, onOpenChange }: { number: OwnedN
                     label="Product"
                     value={a.product}
                     onChange={(p) => setRows(list.map((r) => (r.id === a.id ? { ...r, product: p, target: TARGETS[p][0] } : r)))}
-                    options={(Object.keys(PRODUCT_LABEL) as NumberProduct[]).map((p) => ({ value: p, label: PRODUCT_LABEL[p] }))}
+                    options={numberProductsForUi(Object.keys(PRODUCT_LABEL) as NumberProduct[]).map((p) => ({
+                      value: p,
+                      label: PRODUCT_LABEL[p],
+                    }))}
                     className="w-40"
                   />
                   <div className="ml-auto flex items-center">

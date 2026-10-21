@@ -1,5 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 
+if (!process.env.DATABASE_URL?.trim()) {
+  console.log("test-routing-resolve-e164: SKIP (DATABASE_URL unset)");
+  process.exit(0);
+}
+
 const e164 = process.argv.find((a) => a.startsWith("+")) || "+15717491685";
 const prisma = new PrismaClient();
 

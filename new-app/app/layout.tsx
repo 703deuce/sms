@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     template: '%s · Transovo',
   },
   description:
-    'Transovo business communications: Phone with standard and power dialer, AI Receptionist, and Missed Call Text Back on one shared workspace.',
+    'Transovo business communications: Phone with standard and power dialer, Conversational IVR, and shared inbox on one workspace.',
   generator: 'v0.app',
 }
 

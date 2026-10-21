@@ -4,10 +4,11 @@
 
 ## SSH access (Cloud Agent VM)
 
-- Runtime secret: `COOLIFY_SSH_KEY` (private key; never print, cat, or log).
-- Host alias: `coolify-server` → `root@128.140.102.51`
-- Setup: write key to `~/.ssh/cursor_coolify` (mode `600`), config in `~/.ssh/config` (mode `600`).
-- If OpenSSH reports `error in libcrypto`, the secret may be a **single-line** PEM; reflow into standard PEM line breaks before testing again (do not expose key material in logs).
+- **Cursor Cloud Agent secret (preferred name):** `TRANSOVO_SSH_PRIVATE_KEY` — PEM private key; never print, cat, or log.
+- **Also accepted** (same PEM): `TRANSOVO_SSH_KEY`, `TRANSOVO_COOLIFY_SSH_KEY`, `COOLIFY_SSH_KEY` (GitHub Actions still uses this name).
+- **Bootstrap:** `scripts/cloud-agent/ensure-coolify-ssh.sh` (sourced from `bootstrap-on-start.sh`) writes `~/.ssh/config` and picks the first available key: on-disk `~/.ssh/cursor_hetzner_ed25519`, else env secret → `~/.ssh/cursor_coolify` (mode `600`).
+- Host alias: `coolify-server` → **`cursor-agent@128.140.102.51`** by default (`TRANSOVO_SSH_USER` / `COOLIFY_SSH_USER` override; use `root` only when required).
+- If OpenSSH reports `error in libcrypto`, the secret may be a **single-line** PEM; `ensure-coolify-ssh.sh` reflows line breaks automatically (do not expose key material in logs).
 
 ## Production map (discovered — refresh on first task if stale)
 

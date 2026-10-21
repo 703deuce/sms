@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env npx tsx
 import assert from 'node:assert/strict'
 import { validateMenuDigit, validateDestinationE164 } from '../lib/server/phone/routing/validation.ts'
 import {

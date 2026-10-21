@@ -22,6 +22,7 @@ import {
   isVisualizerInBusinessMessagingSidebar,
 } from "@/lib/workspace/platform-launch";
 import { VISUALIZER_ROUTES } from "@/lib/visualizer/routes";
+import { isLaunchProductCustomerVisible } from "@/lib/products/launch-product-availability";
 
 export type BusinessMessagingNavEntitlements = {
   inboxBadge?: number;
@@ -206,16 +207,18 @@ export function buildBusinessMessagingNav(input: BusinessMessagingNavEntitlement
     },
   ];
 
-  const serviceItems: NavItem[] = [
-    {
+  const serviceItems: NavItem[] = [];
+
+  if (isLaunchProductCustomerVisible("mctb")) {
+    serviceItems.push({
       label: "Missed Call Text Back",
       href: MCTB_ROUTES.home,
       icon: PhoneMissed,
       sectionLabel: "Services",
       badge: input.hasMctb ? undefined : "Activate",
       children: [...MCTB_SIDEBAR_CHILDREN],
-    },
-  ];
+    });
+  }
 
   if (isAppointmentRemindersInBusinessMessagingSidebar()) {
     serviceItems.push({
