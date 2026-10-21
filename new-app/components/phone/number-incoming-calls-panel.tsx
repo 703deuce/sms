@@ -85,20 +85,15 @@ export function NumberIncomingCallsPanel({ phoneNumberId }: { phoneNumberId: str
   }, [phoneNumberId, reloadForwarding])
 
   const save = () => {
-    void fetch(`/api/phone/numbers/${encodeURIComponent(phoneNumberId)}/answering-policy`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        answeringMode: mode,
-        primaryDestinationId:
-          mode === 'forward' && !forwardingGroupId ? primaryDestinationId || null : null,
-        forwardingGroupId: mode === 'forward' && forwardingGroupId ? forwardingGroupId : null,
-        autoAttendantMenuId: mode === 'auto_attendant' ? menuId || null : null,
-        paused,
-      }),
+    void saveAnsweringPolicy(phoneNumberId, {
+      answeringMode: mode,
+      primaryDestinationId:
+        mode === 'forward' && !forwardingGroupId ? primaryDestinationId || null : null,
+      forwardingGroupId: mode === 'forward' && forwardingGroupId ? forwardingGroupId : null,
+      autoAttendantMenuId: mode === 'auto_attendant' ? menuId || null : null,
+      paused,
     })
-      .then((r) => {
-        if (!r.ok) throw new Error('Save failed')
+      .then(() => {
         toast.success('Incoming call behavior saved')
         void reloadForwarding()
       })

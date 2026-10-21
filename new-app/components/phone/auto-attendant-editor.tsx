@@ -153,6 +153,10 @@ export function AutoAttendantEditor({ menuId }: { menuId: string }) {
             setGreetingMode('audio')
             setAudioUrl(url)
           }}
+          onElevenLabsGenerated={(url) => {
+            setGreetingMode('audio')
+            setAudioUrl(url)
+          }}
         />
 
         <Panel title="Keypad options" description="Choose what happens when callers press a number.">

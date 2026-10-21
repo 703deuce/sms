@@ -5,6 +5,7 @@ import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 import { saveAutoAttendantMenu } from "@/lib/server/phone/routing/store";
+import { toPublicAssetUrl } from "@/lib/server/public-url";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg"]);
@@ -30,7 +31,8 @@ export async function POST(request: Request, { params }: Params) {
     const safeName = `${id}-${Date.now()}.${file.name.split(".").pop() || "mp3"}`;
     const diskPath = path.join(dir, safeName);
     await writeFile(diskPath, Buffer.from(await file.arrayBuffer()));
-    const publicUrl = `/cf-greeting/${workspaceId}/${safeName}`;
+    const relativeUrl = `/cf-greeting/${workspaceId}/${safeName}`;
+    const publicUrl = toPublicAssetUrl(relativeUrl);
     const menu = await saveAutoAttendantMenu(workspaceId, id, {
       greetingMode: "audio",
       greetingAudioUrl: publicUrl,

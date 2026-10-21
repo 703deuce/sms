@@ -76,4 +76,13 @@ const convSrc = readFileSync(
 );
 assert.match(convSrc, /productSource: "MCTB"/);
 
+const publicUrlSrc = readFileSync(path.join(root, "../lib/server/public-url.ts"), "utf8");
+assert.match(publicUrlSrc, /toPublicAssetUrl/);
+
+const elRoute = readFileSync(
+  path.join(root, "../app/api/phone/auto-attendant/[id]/greeting-elevenlabs/route.ts"),
+  "utf8",
+);
+assert.match(elRoute, /synthesizeElevenLabsMp3/);
+
 console.log("test-phone-mctb-integration: PASS");

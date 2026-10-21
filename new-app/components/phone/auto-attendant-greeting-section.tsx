@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Mic, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Panel } from '@/components/app/page-primitives'
+import { SimpleSelect } from '@/components/app/filters'
 
 type Props = {
   menuId: string
@@ -16,6 +17,7 @@ type Props = {
   audioUrl: string | null
   onGreetingChange: (text: string) => void
   onAudioUploaded: (url: string) => void
+  onElevenLabsGenerated?: (url: string) => void
 }
 
 export function AutoAttendantGreetingSection({
@@ -25,9 +27,52 @@ export function AutoAttendantGreetingSection({
   audioUrl,
   onGreetingChange,
   onAudioUploaded,
+  onElevenLabsGenerated,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [recording, setRecording] = useState(false)
+  const [elVoices, setElVoices] = useState<Array<{ id: string; label: string; description: string }>>([])
+  const [elVoiceId, setElVoiceId] = useState('')
+  const [elLoading, setElLoading] = useState(false)
+
+  useEffect(() => {
+    void fetch('/api/phone/elevenlabs/voices')
+      .then((r) => r.json())
+      .then((j) => {
+        const voices = j.data?.voices || []
+        setElVoices(voices)
+        if (voices[0]?.id) setElVoiceId(voices[0].id)
+      })
+      .catch(() => undefined)
+  }, [])
+
+  const generateElevenLabs = async () => {
+    if (!elVoiceId || !greeting.trim()) {
+      toast.error('Enter greeting text and choose a voice')
+      return
+    }
+    setElLoading(true)
+    try {
+      const res = await fetch(
+        `/api/phone/auto-attendant/${encodeURIComponent(menuId)}/greeting-elevenlabs`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: greeting, voiceId: elVoiceId }),
+        },
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Generation failed')
+      const url = json.data?.url as string
+      onAudioUploaded(url)
+      onElevenLabsGenerated?.(url)
+      toast.success('AI greeting audio saved')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'ElevenLabs failed')
+    } finally {
+      setElLoading(false)
+    }
+  }
   const mediaRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
@@ -74,6 +119,7 @@ export function AutoAttendantGreetingSection({
       <Tabs defaultValue={greetingMode === 'audio' ? 'upload' : 'tts'}>
         <TabsList>
           <TabsTrigger value="tts">Type greeting</TabsTrigger>
+          <TabsTrigger value="elevenlabs">ElevenLabs AI</TabsTrigger>
           <TabsTrigger value="upload">Upload audio</TabsTrigger>
           <TabsTrigger value="record">Record</TabsTrigger>
         </TabsList>
@@ -87,6 +133,28 @@ export function AutoAttendantGreetingSection({
             className="min-h-[120px]"
           />
           <p className="mt-1 text-xs text-muted-foreground">{greeting.length} characters</p>
+        </TabsContent>
+        <TabsContent value="elevenlabs" className="mt-4 flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Generate a hosted MP3 from your script (sales, billing, or general voices). Saved audio is used on live calls.
+          </p>
+          <SimpleSelect
+            label="AI voice"
+            value={elVoiceId}
+            onValueChange={setElVoiceId}
+            options={elVoices.map((v) => ({
+              value: v.id,
+              label: `${v.label} — ${v.description}`,
+            }))}
+          />
+          <Button type="button" disabled={elLoading} onClick={() => void generateElevenLabs()}>
+            {elLoading ? 'Generating…' : 'Generate and save greeting'}
+          </Button>
+          {audioUrl && (
+            <audio controls src={audioUrl} className="w-full">
+              <track kind="captions" />
+            </audio>
+          )}
         </TabsContent>
         <TabsContent value="upload" className="mt-4 flex flex-col gap-2">
           <input

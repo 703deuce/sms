@@ -7,6 +7,7 @@ import {
   telnyxCallControlPath,
 } from "@/lib/server/phone/telnyx-call-actions";
 import { telnyxRequest } from "@/lib/server/telnyx/client";
+import { toPublicAssetUrl } from "@/lib/server/public-url";
 
 export async function startVoicemailRecordingOnCall(input: {
   telnyxCallControlId: string;
@@ -82,7 +83,8 @@ export async function leaveVoicemailOnCall(input: {
   );
 
   const sayText = (box.greetingText || routing.greetingText || "Please leave a message after the tone.").trim();
-  const playUrl = box.greetingUrl || routing.greetingUrl || null;
+  const playUrlRaw = box.greetingUrl || routing.greetingUrl || null;
+  const playUrl = playUrlRaw ? toPublicAssetUrl(playUrlRaw) : null;
 
   const greetingState = encodeTelnyxClientState({
     kind: "voicemail_greeting",

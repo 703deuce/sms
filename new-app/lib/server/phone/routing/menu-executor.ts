@@ -5,6 +5,7 @@ import { startForwardingFlow, dialDestination } from "./forwarding-service";
 import { leaveVoicemailOnCall } from "@/lib/server/phone/voicemail-runtime";
 import { canOpenNestedMenu, maxMenuDepth, patchRoutingSessionState } from "./session-state";
 import { executeFallback, parseFallbackJson } from "./fallback-executor";
+import { toPublicAssetUrl } from "@/lib/server/public-url";
 
 async function playMenuGather(input: {
   inboundControlId: string;
@@ -19,7 +20,7 @@ async function playMenuGather(input: {
   if (input.menu.greetingMode === "audio" && input.menu.greetingAudioUrl) {
     await gatherUsingAudio({
       callControlId: input.inboundControlId,
-      audioUrl: input.menu.greetingAudioUrl,
+      audioUrl: toPublicAssetUrl(input.menu.greetingAudioUrl),
       validDigits,
       timeoutMs: input.menu.inputTimeoutMs,
       clientState: input.clientState,
