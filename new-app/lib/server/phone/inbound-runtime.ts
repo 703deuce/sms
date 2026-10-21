@@ -64,6 +64,31 @@ export async function processInboundCallInitiated(input: {
   const pn = await resolvePhoneNumberRow(input.workspaceId, input.toE164);
   const routing = await getCallRouting(input.workspaceId);
 
+  if (pn?.id) {
+    const { getAnsweringPolicyForNumber } = await import("@/lib/server/phone/routing/store");
+    const inboundPolicy = await getAnsweringPolicyForNumber(input.workspaceId, pn.id);
+    const wantsForwarding =
+      inboundPolicy &&
+      !inboundPolicy.paused &&
+      (inboundPolicy.answeringMode === "forward" ||
+        inboundPolicy.answeringMode === "greeting_then_forward" ||
+        inboundPolicy.answeringMode === "auto_attendant");
+    if (wantsForwarding) {
+      const { ensurePhoneCallControlForForwarding } = await import(
+        "@/lib/server/telephony/ensure-phone-call-control"
+      );
+      await ensurePhoneCallControlForForwarding({
+        workspaceId: input.workspaceId,
+        phoneNumberId: pn.id,
+        settingsJson: pn.settingsJson,
+      }).catch((err) => {
+        phoneServerLog("inbound-runtime", "call_control_provision_failed", {
+          error: err instanceof Error ? err.message : "unknown",
+        });
+      });
+    }
+  }
+
   const { resolveEffectiveAnswering } = await import(
     "@/lib/server/phone/routing/resolve-effective-policy"
   );
@@ -154,15 +179,23 @@ export async function processInboundCallInitiated(input: {
       effective.kind === "greeting_then_forward")
   ) {
     const { startForwardingFlow } = await import("@/lib/server/phone/routing/forwarding-service");
-    await startForwardingFlow({
-      workspaceId: input.workspaceId,
-      humanCallId: call.id,
-      phoneNumberId: pn?.id ?? null,
-      inboundControlId: input.telnyxCallControlId,
-      businessLineE164: input.toE164,
-      callerE164: from,
-      effective,
-    });
+    try {
+      await startForwardingFlow({
+        workspaceId: input.workspaceId,
+        humanCallId: call.id,
+        phoneNumberId: pn?.id ?? null,
+        inboundControlId: input.telnyxCallControlId,
+        businessLineE164: input.toE164,
+        callerE164: from,
+        effective,
+      });
+    } catch (err) {
+      phoneServerLog("inbound-runtime", "forwarding_start_failed", {
+        error: err instanceof Error ? err.message : "unknown",
+        effective: effective.kind,
+      });
+      throw err;
+    }
     await prisma.humanCall.update({
       where: { id: call.id },
       data: {

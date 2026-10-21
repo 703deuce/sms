@@ -1,4 +1,4 @@
-import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
+import { phoneCallForwardingRuntimeAllowed } from "@/lib/server/telephony/forwarding-runtime-gate";
 import { getAnsweringPolicyForNumber } from "./store";
 import {
   inboundCallContext,
@@ -32,12 +32,11 @@ export async function resolveEffectiveAnswering(input: {
   phoneNumberId: string | null;
   settingsJson: unknown;
 }): Promise<EffectiveAnswering> {
-  const telephony = readTelephonyProvision(input.settingsJson);
-  if (telephony.routingMode !== "telnyx_call_control" || telephony.state !== "active") {
+  if (!input.phoneNumberId) return { kind: "browser" };
+
+  if (!phoneCallForwardingRuntimeAllowed(input.settingsJson)) {
     return { kind: "browser" };
   }
-
-  if (!input.phoneNumberId) return { kind: "browser" };
 
   const policy = await getAnsweringPolicyForNumber(input.workspaceId, input.phoneNumberId);
   if (!policy || policy.paused) return { kind: "browser" };

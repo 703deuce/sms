@@ -138,7 +138,11 @@ export function CallForwardingWorkspace() {
     }
     const op = editingDestinationId
       ? patchForwardingDestination(editingDestinationId, body)
-      : createForwardingDestination({ ...body, press1Required: true })
+      : createForwardingDestination({
+          ...body,
+          press1Required: false,
+          screeningEnabled: false,
+        })
     void op
       .then(async (row) => {
         toast.success(editingDestinationId ? 'Destination updated' : 'Destination added')

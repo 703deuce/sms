@@ -232,6 +232,31 @@ export async function upsertAnsweringPolicy(
   },
 ) {
   const prisma = getPrisma();
+  const needsCallControl =
+    data.answeringMode === "forward" ||
+    data.answeringMode === "greeting_then_forward" ||
+    data.answeringMode === "auto_attendant" ||
+    Boolean(data.forwardingGroupId);
+  if (needsCallControl) {
+    const phone = await prisma.phoneNumber.findFirst({
+      where: { id: phoneNumberId, workspaceId },
+      select: { settingsJson: true },
+    });
+    if (phone) {
+      const { ensurePhoneCallControlForForwarding } = await import(
+        "@/lib/server/telephony/ensure-phone-call-control"
+      );
+      const provisioned = await ensurePhoneCallControlForForwarding({
+        workspaceId,
+        phoneNumberId,
+        settingsJson: phone.settingsJson,
+      });
+      if (!provisioned.ok) {
+        throw new Error(provisioned.error || "Phone call control is not ready for forwarding");
+      }
+    }
+  }
+
   const existing = await prisma.phoneNumberAnsweringPolicy.findUnique({ where: { phoneNumberId } });
   const version = (existing?.version ?? 0) + 1;
   return prisma.phoneNumberAnsweringPolicy.upsert({

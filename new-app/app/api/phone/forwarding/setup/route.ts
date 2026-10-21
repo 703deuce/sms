@@ -61,8 +61,8 @@ export async function POST(request: Request) {
           typeof row.workspacePhoneNumberId === "string"
             ? row.workspacePhoneNumberId
             : undefined,
-        press1Required: row.press1Required !== false,
-        screeningEnabled: Boolean(row.screeningEnabled ?? row.press1Required !== false),
+        press1Required: row.press1Required === true,
+        screeningEnabled: Boolean(row.screeningEnabled),
         hostedE164: typeof body.businessE164 === "string" ? body.businessE164 : undefined,
         hostedPhoneNumberId: phoneNumberId,
       });
