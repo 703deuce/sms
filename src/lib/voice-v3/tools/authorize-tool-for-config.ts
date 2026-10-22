@@ -1,6 +1,9 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { isDirectCalendarBookingConfig } from "../calendar/direct-booking-strategy";
+import { gateCapabilitiesForOperatingState } from "../operating-maturity/behavior-gating";
+import { resolveVoiceV2OperatingState } from "../operating-maturity/operating-state";
 import { isVoiceV3ToolAuthorizedEffective } from "../policy/effective-tool-authorization";
+import type { VoiceToolErr } from "./types";
 import { voiceToolError } from "./types";
 
 export type VoiceV3AuthorizedToolName =
@@ -82,10 +85,91 @@ export function isVoiceV3ToolAuthorized(
   return isVoiceV3ToolAuthorizedEffective(config, toolName);
 }
 
+function explainVoiceV3ToolDenial(
+  config: VoiceV3AgentConfig,
+  toolName: VoiceV3AuthorizedToolName,
+): VoiceToolErr | null {
+  if (isVoiceV3ToolAuthorized(config, toolName)) return null;
+
+  if (
+    isVoiceV3ToolAuthorizedBase(config, toolName) &&
+    !isVoiceV3ToolAuthorizedEffective(config, toolName)
+  ) {
+    const policy = config.operatingPolicy;
+    if (
+      policy?.businessSchedule &&
+      policy.afterHoursBehavior &&
+      (toolName === "book_appointment" || toolName === "find_availability")
+    ) {
+      const operating = resolveVoiceV2OperatingState({
+        schedule: policy.businessSchedule,
+      });
+      const gates = gateCapabilitiesForOperatingState({
+        ctx: {
+          capabilities: {
+            transferToolAvailable: isVoiceV3ToolAuthorizedBase(config, "transfer_call"),
+            callbackToolAvailable: isVoiceV3ToolAuthorizedBase(config, "request_callback"),
+            bookingEnabled: isVoiceV3ToolAuthorizedBase(config, "book_appointment"),
+            voiceV2PstnLiveBooking: isVoiceV3ToolAuthorizedBase(config, "book_appointment"),
+          },
+        },
+        operating,
+        behavior: policy.afterHoursBehavior,
+      });
+      if (!gates.liveBookingAllowed) {
+        return voiceToolError(
+          "LIVE_BOOKING_BLOCKED_BY_OPERATING_STATE",
+          "Live calendar booking is not allowed for the current operating state. Do not search or book on the calendar. Offer take_message or request_callback, or explain when live booking is available.",
+          {
+            tool: toolName,
+            operating_state: operating.state,
+            suggested_tools: ["take_message", "request_callback"],
+          },
+          "not_ready",
+        );
+      }
+    }
+    return voiceToolError(
+      "BOOKING_POLICY_BLOCKED",
+      `${toolName} is blocked by a runtime policy gate even though booking is configured. Use an alternate tool or explain the limitation to the caller.`,
+      { tool: toolName },
+      "not_ready",
+    );
+  }
+
+  if (
+    (toolName === "book_appointment" || toolName === "find_availability") &&
+    config.capabilities?.bookAppointments &&
+    !isDirectCalendarStrategy(config)
+  ) {
+    const strategy = config.scheduling?.bookingStrategy ?? "NONE";
+    if (strategy === "SEND_LINK") {
+      return voiceToolError(
+        "BOOKING_STRATEGY_MISMATCH",
+        `${toolName} is not available when the published strategy is Send booking link. Use send_booking_link instead.`,
+        { tool: toolName, suggested_tools: ["send_booking_link"] },
+        "not_allowed",
+      );
+    }
+    if (strategy === "REQUEST_ONLY") {
+      return voiceToolError(
+        "BOOKING_STRATEGY_MISMATCH",
+        `${toolName} is not available for request-only booking. Use submit_appointment_request instead.`,
+        { tool: toolName, suggested_tools: ["submit_appointment_request"] },
+        "not_allowed",
+      );
+    }
+  }
+
+  return null;
+}
+
 export function authorizeVoiceV3ToolOrError(
   config: VoiceV3AgentConfig,
   toolName: VoiceV3AuthorizedToolName,
 ) {
+  const explained = explainVoiceV3ToolDenial(config, toolName);
+  if (explained) return explained;
   if (isVoiceV3ToolAuthorized(config, toolName)) return null;
   if (toolName === "send_booking_link" && isDirectCalendarStrategy(config)) {
     return voiceToolError(

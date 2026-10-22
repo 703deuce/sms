@@ -5,6 +5,7 @@ import type { VoiceWizardBookingStrategy } from "@/lib/solutions/appointment-rec
 export const DIRECT_CALENDAR_BOOKING_STRATEGIES: VoiceWizardBookingStrategy[] = [
   "MICROSOFT_365",
   "GOOGLE_CALENDAR",
+  "CALENDLY",
 ];
 
 export function isDirectCalendarBookingStrategy(
@@ -23,6 +24,7 @@ export function calendarProviderForBookingStrategy(
 ): "microsoft" | "google" | null {
   if (strategy === "MICROSOFT_365") return "microsoft";
   if (strategy === "GOOGLE_CALENDAR") return "google";
+  if (strategy === "CALENDLY") return "calendly";
   return null;
 }
 
