@@ -1,7 +1,29 @@
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import { withRuntimeProfileFromEditor } from "@/lib/receptionist/runtime-profile";
 import type { VoiceV3AgentConfig } from "@/lib/server/voice-v3/config/agent-config";
+import { compileVoiceV3TransferPolicyFromEditor } from "@/lib/server/receptionist/compile-transfer-from-editor";
 import { editorToVoiceV3AgentConfig } from "@/lib/server/voice-v3/editor-to-voice-v3-config";
+
+/** Published snapshots can lag Call Routing edits — always recompile transfer from editor at session load. */
+function refreshTransferFromEditor(
+  editor: ReceptionistPublishedBundle["editor"],
+  config: VoiceV3AgentConfig,
+): VoiceV3AgentConfig {
+  const transferPolicy = compileVoiceV3TransferPolicyFromEditor(editor);
+  const transferDestinations = transferPolicy.destinations.map((d) => ({
+    id: d.id,
+    label: d.label,
+    phoneE164: d.phoneE164,
+    enabled: d.enabled !== false,
+    description: d.description,
+  }));
+  return {
+    ...config,
+    transfer: transferPolicy,
+    transferDestinations:
+      transferDestinations.length > 0 ? transferDestinations : config.transferDestinations,
+  };
+}
 
 export function voiceV3AgentConfigFromBundle(
   bundle: ReceptionistPublishedBundle,
@@ -12,11 +34,11 @@ export function voiceV3AgentConfigFromBundle(
     workspaceId?: string;
   };
   if (snap?.voiceV3AgentConfig) {
-    const merged = {
+    const merged = refreshTransferFromEditor(bundle.editor, {
       ...snap.voiceV3AgentConfig,
       workspaceId: ids?.workspaceId ?? snap.voiceV3AgentConfig.workspaceId,
       agentId: ids?.agentId ?? snap.voiceV3AgentConfig.agentId,
-    };
+    });
     return withRuntimeProfileFromEditor(bundle.editor, merged);
   }
   const workspaceId =

@@ -14,7 +14,7 @@ export function buildAmyTransferInstructions(config: VoiceV3AgentConfig): string
 
   return `
 # TRANSFER BEHAVIOR
-When the caller asks to speak with a person or department (billing, sales, support, a human, etc.), choose the best matching authorized route and invoke transfer_call with that route_id.
+When the caller asks to speak with a person or department (billing, paying a bill, sales, support, a human, etc.), delegate immediately so the backend can run transfer_call with the best matching route_id (do not only talk about transferring).
 Authorized routes (use route_id exactly):
 ${routes}
 Do not invent phone numbers or destinations. Do not pass ring-group ids — only route_id (and optional destination_id when the caller names a configured person).

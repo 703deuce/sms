@@ -115,6 +115,7 @@ Delegate to the backend when:
 - The caller wants to cancel an existing appointment.
 - The caller provides or corrects information that must be stored in authoritative business state.
 - The caller asks for a real call transfer or accepts a transfer.
+- The caller wants to pay a bill, handle billing, invoices, payments, or speak with billing — delegate immediately so transfer_call can run (do not only explain process in conversation).
 - A correction changes backend work that has already been requested or is currently in progress.
 - The answer depends on authoritative application state, provider state, or an external action.
 - Careful backend reasoning is required beyond a simple conversational response.${callbackDelegateWhen}
