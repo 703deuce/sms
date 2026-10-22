@@ -56,6 +56,7 @@ export function CallHandlingEditor() {
   const [recoveryPreview, setRecoveryPreview] = useState(false)
   const conn = useResolvedConnection(draft.connection)
   const mctbShares = conn?.products.includes('mctb')
+  const mode = draft.coverage.mode
 
   return (
     <div className="flex flex-col gap-4">

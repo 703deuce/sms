@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -19,8 +19,7 @@ type Props = {
   showRoutePreview?: boolean
 }
 
-/** Inbound line for AI Receptionist — shown on Call Routing (nav) and legacy Call Handling route. */
-export function ReceptionistPhoneLinePanel({
+function ReceptionistPhoneLinePanelInner({
   returnPath = '/app/receptionist/call-routing',
   showRoutePreview = true,
 }: Props) {
@@ -144,5 +143,25 @@ export function ReceptionistPhoneLinePanel({
         }}
       />
     </>
+  )
+}
+
+function PhoneLinePanelFallback() {
+  return (
+    <section id="phone-line" className="scroll-mt-24 overflow-hidden rounded-xl surface p-5">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+        Loading phone line…
+      </div>
+    </section>
+  )
+}
+
+/** Inbound line for AI Receptionist — shown on Call Routing (nav) and legacy Call Handling route. */
+export function ReceptionistPhoneLinePanel(props: Props) {
+  return (
+    <Suspense fallback={<PhoneLinePanelFallback />}>
+      <ReceptionistPhoneLinePanelInner {...props} />
+    </Suspense>
   )
 }
