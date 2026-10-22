@@ -1,6 +1,10 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/server/db";
+import {
+  microsoftCalendarViewUrl,
+  microsoftCreateEventUrl,
+} from "./microsoft-graph-calendar-urls";
 
 type CalendarConfig = Record<string, unknown>;
 
@@ -81,15 +85,30 @@ export async function microsoftGetBusy(input: {
     return verify.verifyMockGetBusy();
   }
   const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
-  const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(
-    input.calendarId,
-  )}/calendarView?startDateTime=${encodeURIComponent(
+  const row = await getPrisma().voiceCalendarConnection.findFirst({
+    where: { id: input.connectionId, workspaceId: input.workspaceId },
+    select: { config: true },
+  });
+  const connCfg = (row?.config || {}) as CalendarConfig;
+  const viewBase = microsoftCalendarViewUrl({
+    calendarId: input.calendarId,
+    mailboxUserPrincipalName:
+      typeof connCfg.graphMailboxUserPrincipalName === "string"
+        ? connCfg.graphMailboxUserPrincipalName
+        : null,
+  });
+  const url = `${viewBase}?startDateTime=${encodeURIComponent(
     input.rangeStart.toISOString(),
   )}&endDateTime=${encodeURIComponent(input.rangeEnd.toISOString())}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.timezone="UTC"' },
   });
-  if (!res.ok) throw new Error(`Microsoft calendarView failed: ${res.status}`);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(
+      `Microsoft calendarView failed: ${res.status} ${detail.slice(0, 180)}`,
+    );
+  }
   const body = (await res.json()) as { value?: { start?: { dateTime?: string }; end?: { dateTime?: string } }[] };
   return (body.value || [])
     .map((ev) => ({
@@ -113,9 +132,18 @@ export async function microsoftCreateEvent(input: {
     return verify.verifyMockCreateEvent({ startIso: input.startIso });
   }
   const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
-  const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(
-    input.calendarId,
-  )}/events`;
+  const row = await getPrisma().voiceCalendarConnection.findFirst({
+    where: { id: input.connectionId, workspaceId: input.workspaceId },
+    select: { config: true },
+  });
+  const connCfg = (row?.config || {}) as CalendarConfig;
+  const url = microsoftCreateEventUrl({
+    calendarId: input.calendarId,
+    mailboxUserPrincipalName:
+      typeof connCfg.graphMailboxUserPrincipalName === "string"
+        ? connCfg.graphMailboxUserPrincipalName
+        : null,
+  });
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -163,9 +191,19 @@ export async function microsoftListEvents(input: {
     }));
   }
   const token = await getMicrosoftAccessToken(input.workspaceId, input.connectionId);
-  const url = `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(
-    input.calendarId,
-  )}/calendarView?startDateTime=${encodeURIComponent(
+  const row = await getPrisma().voiceCalendarConnection.findFirst({
+    where: { id: input.connectionId, workspaceId: input.workspaceId },
+    select: { config: true },
+  });
+  const connCfg = (row?.config || {}) as CalendarConfig;
+  const viewBase = microsoftCalendarViewUrl({
+    calendarId: input.calendarId,
+    mailboxUserPrincipalName:
+      typeof connCfg.graphMailboxUserPrincipalName === "string"
+        ? connCfg.graphMailboxUserPrincipalName
+        : null,
+  });
+  const url = `${viewBase}?startDateTime=${encodeURIComponent(
     input.rangeStart.toISOString(),
   )}&endDateTime=${encodeURIComponent(input.rangeEnd.toISOString())}&$top=50`;
   const res = await fetch(url, {
