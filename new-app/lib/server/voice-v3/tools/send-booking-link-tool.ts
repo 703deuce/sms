@@ -6,13 +6,24 @@ import type { VoiceToolDefinition } from "./types";
 import { authorizeSendBookingLinkOrError } from "./authorize-tool-for-config";
 import { SEND_BOOKING_LINK_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import { executeSendBookingLink } from "../booking-link/execute-send-booking-link";
+import { isSendBookingLinkToolConsentRequired } from "../booking-link/send-link-consent-policy";
 
-const sendBookingLinkArgsSchema = z.object({
-  confirmed: z
-    .boolean()
-    .describe(
-      "True only after the caller explicitly agrees to receive the booking link by SMS following the required disclosure.",
-    ),
+function sendBookingLinkArgsSchemaForConfig(config: VoiceV3AgentConfig) {
+  const consentGate = isSendBookingLinkToolConsentRequired(config);
+  return z.object({
+    confirmed: consentGate
+      ? z
+          .boolean()
+          .describe(
+            "True only after the caller explicitly agrees to receive the booking link by SMS following the required disclosure.",
+          )
+      : z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe(
+            "True when sending the link (platform sender — no separate SMS consent gate).",
+          ),
   destination_phone: z
     .string()
     .nullable()
@@ -20,15 +31,23 @@ const sendBookingLinkArgsSchema = z.object({
     .describe(
       "Only when the caller explicitly requested the link at a different phone number. Omit to use the trusted inbound caller number.",
     ),
-});
+  });
+}
 
-export type SendBookingLinkArgs = z.infer<typeof sendBookingLinkArgsSchema>;
+export type SendBookingLinkArgs = {
+  confirmed: boolean;
+  destination_phone?: string | null;
+};
 
-export function buildSendBookingLinkOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
+export function buildSendBookingLinkOpenAiTool(config: VoiceV3AgentConfig): FunctionTool {
+  const consentGate = isSendBookingLinkToolConsentRequired(config);
+  const description = consentGate
+    ? SEND_BOOKING_LINK_TOOL_DESCRIPTION
+    : `Send the business booking link by SMS from the Transovo platform number when the caller wants to schedule or asks for the link by text. Call with confirmed=true once the caller agrees to receive the text on this call — there is no separate SMS consent tool step. Do not invent URLs. Do not claim sent until the tool returns sent or already_sent. Omit destination_phone to use inbound caller ID.`;
   const zodTool = zodResponsesFunction({
     name: "send_booking_link",
-    parameters: sendBookingLinkArgsSchema,
-    description: SEND_BOOKING_LINK_TOOL_DESCRIPTION,
+    parameters: sendBookingLinkArgsSchemaForConfig(config),
+    description,
   });
   return {
     type: "function",
@@ -43,11 +62,28 @@ export const sendBookingLinkTool: VoiceToolDefinition<SendBookingLinkArgs> = {
   name: "send_booking_link",
   description: "send_booking_link",
   parameters: {},
-  validate: (raw) => sendBookingLinkArgsSchema.parse(raw),
+  validate: (raw) => {
+    const parsed = z
+      .object({
+        confirmed: z.boolean().optional(),
+        destination_phone: z.string().nullable().optional(),
+      })
+      .parse(raw);
+    return {
+      confirmed: parsed.confirmed ?? false,
+      destination_phone: parsed.destination_phone,
+    };
+  },
   execute: async (ctx, args) => {
     const config = ctx.runtime.config;
     const denied = authorizeSendBookingLinkOrError(config);
     if (denied) return denied;
+
+    const consentGate = isSendBookingLinkToolConsentRequired(config);
+    const normalizedArgs: SendBookingLinkArgs = {
+      ...args,
+      confirmed: consentGate ? Boolean(args.confirmed) : args.confirmed !== false,
+    };
 
     const snap = ctx.runtime.getSnapshot();
     const workspaceId = config.workspaceId?.trim() || ctx.tenantId;
@@ -56,7 +92,7 @@ export const sendBookingLinkTool: VoiceToolDefinition<SendBookingLinkArgs> = {
       agentId: config.agentId ?? null,
       config,
       context: snap,
-      args,
+      args: normalizedArgs,
     });
     ctx.runtime.replaceContext(nextContext);
     return result;

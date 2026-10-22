@@ -319,7 +319,7 @@ export function editorToVoiceV3AgentConfig(input: {
           : "CONFIGURED_NOT_IMPLEMENTED",
       bookingLinkUrl: editor.appointments.bookingLink?.trim() || null,
       bookingLinkLabel: editor.appointments.linkSender?.trim() || null,
-      sendLinkConsentRequired: isBookingLinkOnlyLaunch() ? false : undefined,
+      sendLinkConsentRequired: false,
     },
   });
 

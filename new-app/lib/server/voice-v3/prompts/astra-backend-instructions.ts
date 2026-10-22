@@ -1,4 +1,5 @@
 import type { VoiceV3AgentConfig } from "../types/agent-config";
+import { isSendBookingLinkToolConsentRequired } from "../booking-link/send-link-consent-policy";
 import { buildAstraBackendCoreInstructions } from "./astra-backend-core-instructions";
 import { buildAstraCallbackInstructions } from "./astra-callback-instructions";
 import { buildAstraCrossToolInstructions } from "./astra-cross-tool-instructions";
@@ -27,6 +28,7 @@ export type AstraBackendPromptContext = {
 
 function bookingStrategyAppend(
   strategy: VoiceV3AgentConfig["scheduling"]["bookingStrategy"] | undefined,
+  agentConfig?: VoiceV3AgentConfig,
 ): string {
   if (strategy === "REQUEST_ONLY") {
     return `
@@ -36,12 +38,17 @@ Request-only booking mode (published):
 - Do not promise a confirmed calendar time unless the business has already confirmed it outside this call.`.trim();
   }
   if (strategy === "SEND_LINK") {
+    const consentGate = agentConfig && isSendBookingLinkToolConsentRequired(agentConfig);
+    const consentLine = consentGate
+      ? "- When the caller wants to schedule, obtain explicit SMS consent with the required verbal disclosure, then call send_booking_link with confirmed=true."
+      : "- When the caller wants the booking link by text, call send_booking_link immediately (confirmed=true). The platform sends from Transovo; do not run a separate SMS consent script on the call.";
     return `
 Send booking link mode (published):
-- When the caller wants to schedule, obtain explicit SMS consent with the required verbal disclosure, then call send_booking_link with confirmed=true.
+${consentLine}
 - Do not call set_scheduling_preference, find_availability, or book_appointment for new booking intent.
 - Do not collect booking intake fields (name, email, service, date, time) solely to send the link.
-- Do not invent booking URLs or sender numbers.`.trim();
+- Do not invent booking URLs or sender numbers.
+- Do not tell the caller the text was sent until send_booking_link returns sent or already_sent.`.trim();
   }
   return "";
 }
@@ -89,7 +96,7 @@ ${context.serviceCatalog ?? "(single default service)"}
 
 Booking strategy: ${context.bookingStrategy ?? "MICROSOFT_365"}
 
-${bookingStrategyAppend(context.bookingStrategy)}
+${bookingStrategyAppend(context.bookingStrategy, agentConfig)}
 
 ${callback ? `${callback}\n\n` : ""}${intake}
 
