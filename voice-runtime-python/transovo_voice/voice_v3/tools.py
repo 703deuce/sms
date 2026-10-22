@@ -19,7 +19,11 @@ from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.transfer_executor import execute_authorized_transfer_plan
-from transovo_voice.voice_v3.tool_idle_filler import execute_with_idle_filler
+from transovo_voice.voice_v3.tool_idle_filler import (
+    TRANSFER_FILLER_DELAY_SEC,
+    TRANSFER_FILLER_INSTRUCTIONS,
+    execute_with_idle_filler,
+)
 from transovo_voice.voice_v3.live_context_hydration import apply_live_context_from_tool_result
 
 _LEGACY_COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
@@ -163,11 +167,19 @@ def build_livekit_tools(
                 )
 
             try:
+                _filler_delay = (
+                    TRANSFER_FILLER_DELAY_SEC if _tool_name == "transfer_call" else None
+                )
+                _filler_instructions = (
+                    TRANSFER_FILLER_INSTRUCTIONS if _tool_name == "transfer_call" else None
+                )
                 result = await execute_with_idle_filler(
                     context,
                     tool_name=_tool_name,
                     function_call_id=fc_id_str,
                     execute=_run_tool,
+                    filler_delay_sec=_filler_delay,
+                    filler_instructions=_filler_instructions,
                 )
             except asyncio.CancelledError:
                 log_event(

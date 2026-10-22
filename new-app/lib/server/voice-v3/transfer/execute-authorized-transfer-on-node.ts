@@ -8,6 +8,13 @@ import type { VoiceV3AuthorizedTransferPlan } from "./types";
 import type { VoiceToolResult } from "../tools/types";
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
 
+/** Let GPT-Live speak a connecting line before blind SIP REFER drops the caller leg (~2s idle filler). */
+const TRANSFER_PRE_REFER_DELAY_MS = 2_800;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function normalizeTransferTo(destination: string): string {
   const dest = destination.trim();
   if (dest.startsWith("tel:") || dest.startsWith("sip:")) return dest;
@@ -94,6 +101,14 @@ export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
         } else if (!dialTarget) {
           outcome = "CONFIGURATION_ERROR";
         } else {
+          logVoiceV3TransferEvent("VOICE_V3_TRANSFER_PRE_REFER_SPEECH_BUFFER", {
+            call_id: snap.callId,
+            live_session_id: snap.liveSessionId,
+            transfer_request_id: plan.transfer_request_id,
+            route_id: plan.route_id,
+            delay_ms: TRANSFER_PRE_REFER_DELAY_MS,
+          });
+          await sleepMs(TRANSFER_PRE_REFER_DELAY_MS);
           const client = getLiveKitSipClient();
           const transferTo = normalizeTransferTo(dialTarget);
           await client.transferSipParticipant(
