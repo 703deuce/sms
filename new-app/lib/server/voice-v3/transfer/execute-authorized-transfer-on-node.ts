@@ -246,7 +246,11 @@ export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
 }
 
 function planRequiresWorkerWarmTransfer(plan: VoiceV3AuthorizedTransferPlan): boolean {
-  return plan.targets.some((t) => (t.mode || "DIRECT").toUpperCase() === "WARM");
+  return plan.targets.some((t) => {
+    const executor = (t.executor || "livekit_sip").toLowerCase();
+    if (executor === "phone_call_control") return false;
+    return (t.mode || "DIRECT").toUpperCase() === "WARM";
+  });
 }
 
 /**

@@ -32,6 +32,7 @@ import {
   initVoiceV3CallForensics,
 } from "@/lib/server/voice-v3/telemetry/call-forensics";
 import { buildLiveKitIntakeFieldMetadata } from "@/lib/server/voice-v3/tools/livekit-intake-tool-schemas";
+import { resolvePhoneFoundationForVoiceV3Session } from "@/lib/server/voice-v3/resolve-phone-foundation";
 import type { FunctionTool } from "openai/resources/live/live";
 
 /** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
@@ -247,6 +248,24 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     }
     if (orch.stage === "ai_active") {
       // still on same logical Phone call — do not treat staff ring timeout as missed yet
+    }
+  } else if (!isBrowserTest) {
+    phoneFoundation = await resolvePhoneFoundationForVoiceV3Session({
+      workspaceId,
+      callerE164: payload.callerE164?.trim() || callerE164,
+      businessLineE164: dialed,
+      humanCallIdHint: payload.humanCallId?.trim() || null,
+      inboundCallControlIdHint: payload.inboundCallControlId?.trim() || null,
+    });
+    if (phoneFoundation) {
+      console.info(
+        JSON.stringify({
+          event: "VOICE_V3_PHONE_FOUNDATION_CORRELATED",
+          liveSessionId,
+          humanCallId: phoneFoundation.humanCallId,
+          inboundCallControlPrefix: phoneFoundation.inboundCallControlId.slice(0, 8),
+        }),
+      );
     }
   }
 

@@ -183,19 +183,33 @@ export function authorizeVoiceV3Transfer(input: {
       continue;
     }
     if (!dest.phoneE164) continue;
-    const runtimeMode = runtimeModeForLiveKitPstnTarget(t.mode);
-    if (runtimeMode !== t.mode) {
-      logVoiceV3TransferEvent("VOICE_V3_TRANSFER_MODE_UPGRADED_TO_WARM", {
+    const mode = (t.mode || dest.defaultMode || "DIRECT").toUpperCase();
+    const canUsePhoneCallControl =
+      Boolean(phoneFoundation?.humanCallId) && Boolean(phoneFoundation?.inboundCallControlId);
+
+    if (canUsePhoneCallControl) {
+      authorizedTargets.push({
+        destination_id: dest.id,
+        mode,
+        dial_target: dest.phoneE164,
+        ringing_timeout_seconds: t.ringingTimeoutSeconds,
+        executor: "phone_call_control",
+        inbound_call_control_id: phoneFoundation!.inboundCallControlId,
+        human_call_id: phoneFoundation!.humanCallId,
+      });
+      logVoiceV3TransferEvent("VOICE_V3_TRANSFER_ROUTED_PHONE_CALL_CONTROL", {
         call_id: callContext.callId,
         live_session_id: callContext.liveSessionId,
         route_id: route.id,
         destination_id: dest.id,
-        compiled_mode: t.mode,
+        mode,
       });
+      continue;
     }
+
     authorizedTargets.push({
       destination_id: dest.id,
-      mode: runtimeMode,
+      mode,
       dial_target: dest.phoneE164,
       ringing_timeout_seconds: t.ringingTimeoutSeconds,
       executor: "livekit_sip",

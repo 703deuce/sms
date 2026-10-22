@@ -9,9 +9,15 @@ from typing import Any
 from livekit import api
 from livekit.agents.beta.workflows import WarmTransferTask
 from livekit.agents.llm.tool_context import ToolError
+from livekit.agents.utils.participant import wait_for_participant_attribute
 from livekit.agents.voice.events import RunContext
 
 from transovo_voice.telemetry import log_event
+from transovo_voice.session.sip_status import (
+    SIP_CALL_STATUS_ACTIVE,
+    SIP_CALL_STATUS_ATTR,
+    read_sip_call_status,
+)
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
 from transovo_voice.voice_v3.transfer_targets import normalize_transfer_to
@@ -123,6 +129,35 @@ async def _direct_transfer(
 ) -> str:
     transfer_to = normalize_transfer_to(dial_target)
     job_ctx = telephony.job_ctx
+    remote_participants = getattr(job_ctx.room, "remote_participants", None)
+    participant = None
+    if isinstance(remote_participants, dict):
+        participant = remote_participants.get(telephony.sip_participant_identity)
+    if participant is not None:
+        status = read_sip_call_status(participant)
+        if status != SIP_CALL_STATUS_ACTIVE:
+            try:
+                await asyncio.wait_for(
+                    wait_for_participant_attribute(
+                        job_ctx.room,
+                        identity=telephony.sip_participant_identity,
+                        attribute=SIP_CALL_STATUS_ATTR,
+                        value=SIP_CALL_STATUS_ACTIVE,
+                    ),
+                    timeout=min(8.0, max(2.0, ringing_timeout_seconds / 2)),
+                )
+            except asyncio.TimeoutError:
+                log_event(
+                    "voice_v3_transfer_direct_sip_not_active",
+                    extra={
+                        "participant": telephony.sip_participant_identity,
+                        "sip_call_status": status,
+                    },
+                )
+                return "PROVIDER_ERROR"
+            except RuntimeError:
+                # Participant left before active — do not REFER a non-established leg.
+                return "PROVIDER_ERROR"
     log_event(
         "voice_v3_transfer_direct_starting",
         extra={

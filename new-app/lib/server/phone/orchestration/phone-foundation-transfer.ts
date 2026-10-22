@@ -4,6 +4,7 @@ import { getPrisma } from "@/lib/server/db";
 import { phoneServerLog } from "@/lib/server/phone/phone-log";
 import type { EffectiveAnswering } from "@/lib/server/phone/routing/resolve-effective-policy";
 import { startForwardingFlow } from "@/lib/server/phone/routing/forwarding-service";
+import { hangupCall } from "@/lib/server/phone/routing/telnyx-call-control";
 import { recordAiParticipationEnd } from "@/lib/server/phone/orchestration/usage-correlation";
 
 export async function executePhoneFoundationTransferHandoff(input: {
@@ -22,6 +23,18 @@ export async function executePhoneFoundationTransferHandoff(input: {
   if (!call?.phoneNumberId) throw new Error("Call or business line missing");
 
   await recordAiParticipationEnd(input.workspaceId, input.humanCallId);
+
+  const callMeta = (call.metadata as Record<string, unknown>) || {};
+  const orch = (callMeta.orchestration as Record<string, unknown>) || {};
+  const aiLegControlId =
+    typeof orch.aiLegControlId === "string" ? orch.aiLegControlId.trim() : "";
+  if (aiLegControlId) {
+    phoneServerLog("phone-orchestration", "ai_leg_hangup_before_forward", {
+      humanCallId: input.humanCallId,
+      controlPrefix: aiLegControlId.slice(0, 8),
+    });
+    await hangupCall(aiLegControlId).catch(() => undefined);
+  }
 
   let effective: EffectiveAnswering;
 

@@ -176,6 +176,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             provisional_ctx,
             job_metadata=job_meta,
             room_metadata=room_meta,
+            participant_attributes=attrs,
         )
         forensics.append("AGENTSESSION_START_REQUESTED")
         config = await client.resolve_session_config()
@@ -203,6 +204,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             call_ctx,
             job_metadata=job_meta,
             room_metadata=room_meta,
+            participant_attributes=attrs,
             delegation_context=delegation_execution,
         )
         forensics.ctx = call_ctx
