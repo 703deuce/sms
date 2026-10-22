@@ -12,6 +12,7 @@ import { RecentCalls } from '@/components/calls/recent-calls'
 import type { Call } from '@/lib/data'
 import { formatDuration, formatWhen } from '@/lib/format'
 import { fetchReceptionistOverview } from '@/lib/receptionist-api'
+import { isBookingLinkOnlyLaunch } from '@/lib/receptionist/booking-launch-mode'
 import {
   AI_RECEPTIONIST_PRODUCT_TITLE,
   CONVERSATIONAL_IVR_MODE_DESCRIPTION,
@@ -22,7 +23,8 @@ import { useAgent } from '@/components/providers/agent-provider'
 
 export function ReceptionistOverviewContent() {
   const { draft } = useAgent()
-  const ivr = isConversationalIvrEditor(draft)
+  const linkOnlyAgent = isBookingLinkOnlyLaunch() && draft.capabilities.book
+  const ivr = !linkOnlyAgent && isConversationalIvrEditor(draft)
   const schedulingEnabled =
     !ivr &&
     (draft.capabilities.book ||
@@ -70,9 +72,11 @@ export function ReceptionistOverviewContent() {
         title={AI_RECEPTIONIST_PRODUCT_TITLE}
         description={ivr ? CONVERSATIONAL_IVR_MODE_DESCRIPTION : FULL_RECEPTIONIST_MODE_DESCRIPTION}
       />
-      <Panel title="Operating mode" description="Applies to published calls after you review and publish.">
-        <OperatingModeSelector compact />
-      </Panel>
+      {!linkOnlyAgent ? (
+        <Panel title="Operating mode" description="Applies to published calls after you review and publish.">
+          <OperatingModeSelector compact />
+        </Panel>
+      ) : null}
       <OverviewStatus />
 
       <section

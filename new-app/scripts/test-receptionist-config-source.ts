@@ -6,9 +6,9 @@ import assert from "node:assert/strict";
 import { defaultReceptionistEditorConfig } from "@/lib/server/receptionist/defaults";
 import { enabledVoiceToolNamesFromEditor } from "@/lib/server/receptionist/editor-screen-mapping";
 import { compilePublishedBundle } from "@/lib/server/receptionist/compile-runtime";
+import { normalizeReceptionistEditor } from "@/lib/server/receptionist/normalize-editor";
 import {
   coalesceRuntimeProfileForVoiceConfig,
-  conversationalIvrToolAllowlist,
   isConversationalIvrRuntime,
   withRuntimeProfileFromEditor,
 } from "@/lib/receptionist/runtime-profile";
@@ -172,17 +172,19 @@ assert.equal(
   "editor full_receptionist wins when snapshot omits runtimeProfile",
 );
 assert.equal(isConversationalIvrRuntime(fromBundle), false);
-const catalogNames = buildVoiceV3AstraFunctionToolsFromCatalog(fromBundle).map((t) =>
-  String(t.name),
-);
-assert.ok(
-  catalogNames.includes("book_appointment"),
-  "catalog must expose book_appointment for full receptionist live book",
-);
-assert.ok(
-  catalogNames.includes("find_availability"),
-  "catalog must expose find_availability",
-);
+if (!isBookingLinkOnlyLaunch()) {
+  const catalogNames = buildVoiceV3AstraFunctionToolsFromCatalog(fromBundle).map((t) =>
+    String(t.name),
+  );
+  assert.ok(
+    catalogNames.includes("book_appointment"),
+    "catalog must expose book_appointment for full receptionist live book",
+  );
+  assert.ok(
+    catalogNames.includes("find_availability"),
+    "catalog must expose find_availability",
+  );
+}
 
 const strippedProfile = { ...fromBundle, runtimeProfile: undefined };
 const ivrOnly = withRuntimeProfileFromEditor(base, strippedProfile);
@@ -190,15 +192,17 @@ assert.equal(isConversationalIvrRuntime(ivrOnly), true);
 const ivrCatalog = buildVoiceV3AstraFunctionToolsFromCatalog(ivrOnly).map((t) => String(t.name));
 assert.ok(!ivrCatalog.includes("book_appointment"), "IVR catalog must not include book_appointment");
 
-const ivrLinkBook = {
+const ivrLinkBook = normalizeReceptionistEditor({
   ...base,
   capabilities: { ...base.capabilities, book: true },
-};
-ivrLinkBook.appointments = {
-  ...ivrLinkBook.appointments,
-  strategy: "link",
-  bookingLink: "https://example.com/book",
-};
+  runtimeProfile: "conversational_ivr",
+  appointments: {
+    ...base.appointments,
+    strategy: "link",
+    bookingLink: "https://example.com/book",
+  },
+});
+assert.equal(ivrLinkBook.runtimeProfile, "full_receptionist");
 const ivrLinkV3 = editorToVoiceV3AgentConfig({
   editor: ivrLinkBook,
   workspaceId: "ws_test",
@@ -207,18 +211,18 @@ const ivrLinkV3 = editorToVoiceV3AgentConfig({
   timezone: "America/Chicago",
   knowledge: emptyKnowledge(),
 });
-assert.equal(isConversationalIvrRuntime(ivrLinkV3), true);
+assert.equal(isConversationalIvrRuntime(ivrLinkV3), false);
 assert.equal(isVoiceV3ToolAuthorizedBase(ivrLinkV3, "send_booking_link"), true);
 const ivrLinkCatalog = buildVoiceV3AstraFunctionToolsFromCatalog(ivrLinkV3).map((t) =>
   String(t.name),
 );
 assert.ok(
   ivrLinkCatalog.includes("send_booking_link"),
-  "conversational IVR + SEND_LINK must expose send_booking_link in Astra catalog",
+  "link booking must expose send_booking_link in Astra catalog",
 );
 assert.ok(
-  conversationalIvrToolAllowlist(ivrLinkBook).includes("send_booking_link"),
-  "editor allowlist and Astra catalog stay aligned for send_booking_link",
+  ivrLinkCatalog.includes("update_intake"),
+  "full receptionist link booking keeps intake tools",
 );
 
 console.log("test-receptionist-config-source: ALL PASS");

@@ -44,10 +44,23 @@ export function isConversationalIvrEditor(editor: AgentConfig): boolean {
  * Published `voiceV3AgentConfig` snapshots may omit `runtimeProfile` (pre two-mode).
  * Always align runtime config with the editor's operating mode before tool catalog gating.
  */
+function shouldUseFullReceptionistForLinkBooking(
+  editor: AgentConfig,
+  config: VoiceV3AgentConfig,
+): boolean {
+  if (!editor.capabilities.book) return false;
+  if (config.scheduling?.bookingStrategy === "SEND_LINK") return true;
+  if (isBookingLinkOnlyLaunch()) return true;
+  return editor.appointments.strategy === "link";
+}
+
 export function coalesceRuntimeProfileForVoiceConfig(
   editor: AgentConfig,
   config: VoiceV3AgentConfig,
 ): RuntimeProfile {
+  if (shouldUseFullReceptionistForLinkBooking(editor, config)) {
+    return RUNTIME_PROFILE_FULL_RECEPTIONIST;
+  }
   if (config.runtimeProfile === "full_receptionist" || config.runtimeProfile === "conversational_ivr") {
     return config.runtimeProfile;
   }

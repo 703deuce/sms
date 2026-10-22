@@ -12,6 +12,7 @@ import { SimpleSelect } from '@/components/app/filters'
 import { StatusBadge } from '@/components/app/status'
 import { useAgent } from '@/components/providers/agent-provider'
 import { CAPABILITY_META, GREETING_VARIABLES, renderGreeting, VOICES, type Capability } from '@/lib/agent'
+import { isBookingLinkOnlyLaunch } from '@/lib/receptionist/booking-launch-mode'
 import { isConversationalIvrEditor } from '@/lib/receptionist/runtime-profile'
 import { Callout } from '@/components/numbers/number-ui'
 import { cn } from '@/lib/utils'
@@ -22,7 +23,9 @@ import { DemoNote, JumpChips, NotAvailable, Pills, Section, ToggleRow } from './
 
 export function AgentEditor() {
   const { draft, update } = useAgent()
-  const ivrOnly = isConversationalIvrEditor(draft)
+  const linkOnlyAgent =
+    isBookingLinkOnlyLaunch() && draft.capabilities.book
+  const ivrOnly = !linkOnlyAgent && isConversationalIvrEditor(draft)
   const [previewing, setPreviewing] = useState<string | null>(null)
   const id = draft.identity
 
@@ -94,9 +97,16 @@ export function AgentEditor() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Section id="mode" icon={Sparkles} title="Operating mode" description="Choose lightweight conversational IVR or full receptionist capabilities.">
-        <OperatingModeSelector />
-      </Section>
+      {!linkOnlyAgent ? (
+        <Section
+          id="mode"
+          icon={Sparkles}
+          title="Operating mode"
+          description="Choose lightweight conversational IVR or full receptionist capabilities."
+        >
+          <OperatingModeSelector />
+        </Section>
+      ) : null}
       <JumpChips items={chips} />
 
       <Section id="identity" icon={UserRound} title="Identity & voice" description="Who answers, and how she sounds.">

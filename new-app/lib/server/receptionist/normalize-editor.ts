@@ -63,7 +63,9 @@ export function normalizeReceptionistEditor(editor: AgentConfig): AgentConfig {
       ...aligned.identity,
       voice: normalizeGptLiveVoiceId(aligned.identity.voice || "marin"),
     },
-    runtimeProfile: aligned.runtimeProfile ?? "conversational_ivr",
+    runtimeProfile:
+      aligned.runtimeProfile ??
+      (isBookingLinkOnlyLaunch() ? "full_receptionist" : "conversational_ivr"),
     conversationalRoutes: (aligned.conversationalRoutes ?? []).map((route) => ({
       ...route,
       description: route.description?.trim() ?? route.intentDescription?.trim() ?? "",
