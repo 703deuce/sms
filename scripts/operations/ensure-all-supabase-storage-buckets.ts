@@ -39,7 +39,7 @@ const BUCKETS: BucketSpec[] = [
   {
     name: process.env.SUPABASE_UI_REFERENCES_BUCKET?.trim() || "ui-references",
     public: false,
-    fileSizeLimit: 200 * 1024 * 1024,
+    fileSizeLimit: 100 * 1024 * 1024,
   },
   {
     name: process.env.SUPABASE_VISUALIZER_BUCKET?.trim() || "visualizer-media",

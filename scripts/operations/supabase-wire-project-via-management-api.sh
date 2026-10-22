@@ -51,23 +51,32 @@ if [[ -z "$PASS_FOR_URL" ]]; then
   exit 2
 fi
 
-DATABASE_URL="$(python3 <<PY
+export POOLER_JSON REF PASS_FOR_URL
+DATABASE_URL="$(python3 <<'PY'
 import json, os, urllib.parse
-pooler = json.loads(os.environ["POOLER_JSON"])
-user = pooler.get("db_user") or f"postgres.{os.environ['REF']}"
+raw = json.loads(os.environ["POOLER_JSON"])
+rows = raw if isinstance(raw, list) else [raw]
+# Prefer session pooler :5432 for Prisma migrate; else first row from API.
+pooler = next((r for r in rows if r.get("pool_mode") == "session"), None)
+if pooler is None:
+    pooler = next((r for r in rows if r.get("db_port") == 5432), rows[0])
+ref = os.environ["REF"]
+user = pooler.get("db_user") or f"postgres.{ref}"
 host = pooler["db_host"]
 port = pooler.get("db_port") or 5432
 db = pooler.get("db_name") or "postgres"
 pw = urllib.parse.quote(os.environ["PASS_FOR_URL"], safe="")
-print(f"postgresql://{user}:{pw}@{host}:{port}/{db}?sslmode=require")
+q = "sslmode=require"
+if pooler.get("pool_mode") == "transaction" or port == 6543:
+    q += "&pgbouncer=true"
+print(f"postgresql://{user}:{pw}@{host}:{port}/{db}?{q}")
 PY
 )"
-
-export POOLER_JSON REF PASS_FOR_URL
 export DATABASE_URL
 
 echo "[supabase-wire] fetching API keys (reveal)..."
 KEYS_JSON="$(api GET "/v1/projects/${REF}/api-keys?reveal=true")"
+export KEYS_JSON
 
 python3 <<'PY'
 import json, os
