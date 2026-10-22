@@ -8,7 +8,7 @@ export default function AgentPage() {
   return (
     <Page>
       <DraftBar />
-      <PageHeader title="Agent settings" description="Identity, voice, greeting, capabilities and intake. Edits stay in your draft until you publish." />
+      <PageHeader title="Agent settings" description="Phone line, identity, voice, greeting, capabilities and intake. Edits stay in your draft until you publish." />
       <AgentEditor />
     </Page>
   )

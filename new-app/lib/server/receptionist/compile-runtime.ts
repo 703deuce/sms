@@ -116,7 +116,7 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
   if (!config.identity.name?.trim()) errors.push("Agent name is required.");
   if (!config.identity.greeting?.trim()) errors.push("Greeting is required.");
   if (!config.connection.id?.trim()) {
-    errors.push("Assign a phone number on Call Routing (Connect number at the top of the page).");
+    errors.push("Assign a phone number on Agent settings (Connect number at the top of the page).");
   }
   const conversational = isConversationalIvrEditor(config);
   if (

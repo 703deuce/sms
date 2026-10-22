@@ -73,6 +73,13 @@ export function receptionistNavItems(profile: RuntimeProfile): NavItem[] {
     intake,
     { title: 'Calls', href: '/app/receptionist/calls', icon: PhoneCall, group: 'Activity' },
   ]
+  const agentSettings: NavItem = {
+    title: 'Agent Settings',
+    href: '/app/receptionist/agent',
+    icon: SlidersHorizontal,
+    group: 'Configure',
+  }
+
   if (profile === RUNTIME_PROFILE_FULL_RECEPTIONIST) {
     return [
       base[0],
@@ -85,16 +92,11 @@ export function receptionistNavItems(profile: RuntimeProfile): NavItem[] {
         icon: CalendarClock,
         group: 'Configure',
       },
-      {
-        title: 'Agent Settings',
-        href: '/app/receptionist/agent',
-        icon: SlidersHorizontal,
-        group: 'Configure',
-      },
+      agentSettings,
       base[4],
     ]
   }
-  return base
+  return [base[0], agentSettings, base[1], base[2], base[3], base[4]]
 }
 
 export function receptionistProductContext(profile: RuntimeProfile): NavContext {

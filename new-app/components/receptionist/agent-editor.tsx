@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { IntakeFieldsEditor, QualificationRulesEditor } from '@/components/receptionist/intake-qualification-editor'
 import { CallProtectionEditor } from '@/components/receptionist/call-protection-editor'
 import { OperatingModeSelector } from '@/components/receptionist/operating-mode-selector'
+import { ReceptionistPhoneLinePanel } from '@/components/receptionist/receptionist-phone-line'
 import { DemoNote, JumpChips, NotAvailable, Pills, Section, ToggleRow } from './ai-ui'
 
 export function AgentEditor() {
@@ -78,6 +79,7 @@ export function AgentEditor() {
 
   const chips = ivrOnly
     ? [
+        { id: 'phone-line', label: 'Phone line' },
         { id: 'mode', label: 'Operating mode' },
         { id: 'identity', label: 'Identity & voice' },
         { id: 'greeting', label: 'Greeting' },
@@ -85,6 +87,7 @@ export function AgentEditor() {
         { id: 'instructions', label: 'Instructions' },
       ]
     : [
+        { id: 'phone-line', label: 'Phone line' },
         { id: 'mode', label: 'Operating mode' },
         { id: 'identity', label: 'Identity & voice' },
         { id: 'greeting', label: 'Greeting' },
@@ -97,6 +100,7 @@ export function AgentEditor() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ReceptionistPhoneLinePanel returnPath="/app/receptionist/agent" showRoutePreview={false} />
       {!linkOnlyAgent ? (
         <Section
           id="mode"
