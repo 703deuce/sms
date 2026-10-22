@@ -1,3 +1,4 @@
+import { isSendLinkStrategy } from "../booking-link/resolve-config";
 import type { VoiceV3AgentConfig } from "../types/agent-config";
 import { buildLiveDelegationPolicySection } from "./live-delegation-policy";
 import {
@@ -16,9 +17,14 @@ export type LiveFrontendPromptContext = {
 
 function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
   const c = config.capabilities;
+  const sendLink = isSendLinkStrategy(config);
   const lines: string[] = ["You can help callers with:"];
   if (c.answerQuestions) lines.push("- Answering common business questions from configured facts below.");
-  if (c.bookAppointments) lines.push("- Booking new appointments when calendar booking is enabled.");
+  if (sendLink) {
+    lines.push("- Texting the business scheduling link by SMS when they want to book (no live calendar on this line).");
+  } else if (c.bookAppointments) {
+    lines.push("- Booking new appointments when calendar booking is enabled.");
+  }
   if (c.rescheduleAppointments) lines.push("- Rescheduling existing appointments.");
   if (c.cancelAppointments) lines.push("- Cancelling appointments when allowed.");
   if (c.transferCalls) lines.push("- Transferring to a human when appropriate.");
@@ -95,8 +101,13 @@ function buildAmyPersonaSection(config: VoiceV3AgentConfig): string {
       "- Never invent prices that are not in BUSINESS FACTS or confirmed by the backend.",
     );
   }
-  if (b.neverInventAvailability) {
+  if (b.neverInventAvailability && !isSendLinkStrategy(config)) {
     lines.push("- Never invent appointment availability — delegate for real times.");
+  }
+  if (isSendLinkStrategy(config)) {
+    lines.push(
+      "- Do not say you are checking the calendar or holding a slot — offer to text the booking link instead.",
+    );
   }
   if (conv.guardrails.length > 0) {
     lines.push("Additional guardrails:");

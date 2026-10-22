@@ -8,6 +8,15 @@ from livekit.agents.voice.events import RunContext
 logger = logging.getLogger("transovo-voice.voice_v3.live_context_hydration")
 
 _LIVE_CONTEXT_RESULT_KEY = "liveContextEvents"
+# GPT-Live API: "Context append text must not exceed 500 tokens" per append call.
+_LIVE_CONTEXT_APPEND_MAX_CHARS = 1800
+
+
+def _cap_append_text(content: str) -> str:
+    text = content.strip()
+    if len(text) <= _LIVE_CONTEXT_APPEND_MAX_CHARS:
+        return text
+    return text[: _LIVE_CONTEXT_APPEND_MAX_CHARS - 40] + "\n…(truncated for GPT-Live context limit)"
 
 
 def strip_live_context_events(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -63,11 +72,12 @@ def apply_live_context_events(
         delegation_id = ev.get("delegation_id")
         deleg = str(delegation_id) if delegation_id else None
         try:
+            capped = _cap_append_text(content)
             if etype == "session.thinking.append":
-                gpt_live.append_thinking(content, delegation_id=deleg)
+                gpt_live.append_thinking(capped, delegation_id=deleg)
                 applied += 1
             elif etype == "session.commentary.append":
-                gpt_live.append_commentary(content, delegation_id=deleg)
+                gpt_live.append_commentary(capped, delegation_id=deleg)
                 applied += 1
         except Exception:
             logger.exception("voice_v3_live_context_apply_failed type=%s", etype)

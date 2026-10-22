@@ -53,6 +53,9 @@ function configuredRequiredForOperation(
   if (MUTATION_INTAKE_OPERATIONS.includes(operation)) {
     return defaultRequiredIntakeKeys(config);
   }
+  if (operation === "send_booking_link") {
+    return defaultRequiredIntakeKeys(config);
+  }
   return [];
 }
 

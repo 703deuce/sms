@@ -5,6 +5,7 @@ import {
 import { buildIntakeObjectiveContext } from "../intake-objective";
 import { isConversationalIvrRuntime } from "@/lib/receptionist/runtime-profile";
 import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
+import { capLiveContextAppendText } from "../live/live-context-append-limits";
 import { LiveContextPublisher } from "../live/live-context-publisher";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
 import {
@@ -45,8 +46,11 @@ export function pushDelegatedRuntimeContextToLive(input: {
   }
   const thinking = thinkingParts.join("\n\n");
 
-  publisher.appendThinking(thinking, delegationId);
-  publisher.appendCommentary(buildSharedCallerFactsLiveSummary(config, ctx), delegationId);
+  publisher.appendThinking(capLiveContextAppendText(thinking), delegationId);
+  publisher.appendCommentary(
+    capLiveContextAppendText(buildSharedCallerFactsLiveSummary(config, ctx)),
+    delegationId,
+  );
 
   logVoiceV3Pipeline("delegation", "runtime_context_pushed", {
     live_session_id: input.liveSessionId,

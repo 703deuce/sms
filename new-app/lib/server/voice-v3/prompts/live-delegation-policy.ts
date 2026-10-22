@@ -1,3 +1,4 @@
+import { isSendLinkStrategy } from "../booking-link/resolve-config";
 import type { VoiceV3AgentConfig } from "../types/agent-config";
 
 /**
@@ -13,11 +14,15 @@ export function buildLiveDelegationPolicySection(
   if (!caps || caps.collectIntake) {
     backendCaps.push("- Save or correct caller information required by the business.");
   }
-  if (!caps || caps.checkAvailability) {
+  const sendLinkOnly = config ? isSendLinkStrategy(config) : false;
+  if (!sendLinkOnly && (!caps || caps.checkAvailability)) {
     backendCaps.push("- Check real appointment availability.");
   }
-  if (!caps || caps.bookAppointments) {
+  if (!sendLinkOnly && (!caps || caps.bookAppointments)) {
     backendCaps.push("- Create new appointments.");
+  }
+  if (sendLinkOnly) {
+    backendCaps.push("- Text the published booking link by SMS (send_booking_link) — no live calendar lookup.");
   }
   if (!caps || caps.findAppointments) {
     backendCaps.push("- Find existing appointments.");
@@ -57,8 +62,16 @@ Callback requests:
 - Once authoritative callback success is returned, you may confirm it to the caller.`
       : "";
 
+  const sendLinkCompletion = sendLinkOnly
+    ? `
+Send booking link (no live calendar on this line):
+- Do not say you are checking the calendar, looking for open slots, or reserving a time — this business books via a text link.
+- Offer to text the scheduling link; delegate send_booking_link when the caller agrees.
+- collect_caller_intake with volunteered_values for any configured required fields still missing before or with the link send.`
+    : "";
+
   const bookingCompletion =
-    caps?.bookAppointments === true
+    !sendLinkOnly && caps?.bookAppointments === true
       ? `
 Appointment booking (live calendar):
 - Do not quote specific open times, offer a slot, say you will reserve or hold a time, or tell the caller they are booked until the backend has checked availability and completed booking.
@@ -121,6 +134,7 @@ If the caller corrects, redirects, or replaces a backend request while work is s
 If the caller corrects or changes a backend request, delegate the correction so the backend can update the active work.
 Do not promise that an external action succeeded until verified backend/provider state supports that claim.
 ${callbackCompletion}
+${sendLinkCompletion}
 ${bookingCompletion}
 `.trim();
 }
