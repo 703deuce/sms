@@ -13,12 +13,36 @@ const LOOKUP_WINDOW_MS = 3 * 60 * 60 * 1000;
  * Voice V3 session resolve often only sees `livekit_sip`; correlate the active HumanCall
  * so transfers use Telnyx Dial + Bridge on the PSTN caller leg (not LiveKit SIP REFER).
  */
+function foundationFromHumanRow(
+  workspaceId: string,
+  row: {
+    id: string;
+    phoneNumberId: string | null;
+    telnyxCallControlId: string | null;
+    telnyxCallLegId: string | null;
+    metadata: unknown;
+  },
+  inboundOverride?: string | null,
+): VoiceV3CallContext["phoneFoundation"] | undefined {
+  if (!row.phoneNumberId) return undefined;
+  const inboundCallControlId =
+    inboundOverride?.trim() || resolveTransferControlId(row);
+  if (!inboundCallControlId) return undefined;
+  return {
+    humanCallId: row.id,
+    inboundCallControlId,
+    workspaceId,
+    phoneNumberId: row.phoneNumberId,
+  };
+}
+
 export async function resolvePhoneFoundationForVoiceV3Session(input: {
   workspaceId: string;
   callerE164?: string | null;
   businessLineE164?: string | null;
   humanCallIdHint?: string | null;
   inboundCallControlIdHint?: string | null;
+  liveSessionId?: string | null;
 }): Promise<VoiceV3CallContext["phoneFoundation"] | undefined> {
   const workspaceId = input.workspaceId.trim();
   if (!workspaceId) return undefined;
@@ -41,53 +65,149 @@ export async function resolvePhoneFoundationForVoiceV3Session(input: {
     }
   }
 
-  const caller = input.callerE164?.trim();
-  const businessLine = input.businessLineE164?.trim();
-  if (!caller || !businessLine) return undefined;
+  const prisma = getPrisma();
+  const since = new Date(Date.now() - LOOKUP_WINDOW_MS);
 
-  let normalizedCaller: string;
-  let normalizedLine: string;
-  try {
-    normalizedCaller = normalizeE164(caller);
-    normalizedLine = normalizeE164(businessLine);
-  } catch {
-    return undefined;
+  const liveSessionId = input.liveSessionId?.trim();
+  if (liveSessionId) {
+    const voiceRow = await prisma.voiceCall.findFirst({
+      where: {
+        workspaceId,
+        OR: [
+          { id: liveSessionId },
+          { metadata: { path: ["liveSessionId"], equals: liveSessionId } },
+        ],
+      },
+      select: { metadata: true },
+    });
+    const vMeta = (voiceRow?.metadata as Record<string, unknown>) || {};
+    const hintedHuman = typeof vMeta.phoneFoundationHumanCallId === "string"
+      ? vMeta.phoneFoundationHumanCallId
+      : null;
+    const hintedInbound = typeof vMeta.inboundCallControlId === "string"
+      ? vMeta.inboundCallControlId
+      : null;
+    if (hintedHuman && hintedInbound) {
+      const hc = await prisma.humanCall.findFirst({
+        where: { id: hintedHuman, workspaceId },
+        select: {
+          id: true,
+          phoneNumberId: true,
+          telnyxCallControlId: true,
+          telnyxCallLegId: true,
+          metadata: true,
+        },
+      });
+      const fromHints = hc ? foundationFromHumanRow(workspaceId, hc, hintedInbound) : undefined;
+      if (fromHints) return fromHints;
+    }
   }
 
-  const since = new Date(Date.now() - LOOKUP_WINDOW_MS);
-  const candidates = await getPrisma().humanCall.findMany({
-    where: {
-      workspaceId,
-      from: normalizedCaller,
-      to: normalizedLine,
-      endedAt: null,
-      startedAt: { gte: since },
-      metadata: {
-        path: ["orchestration", "stage"],
-        equals: ACTIVE_AI_ORCHESTRATION_STAGE,
-      },
-    },
-    orderBy: { startedAt: "desc" },
-    take: 3,
-    select: {
-      id: true,
-      phoneNumberId: true,
-      telnyxCallControlId: true,
-      telnyxCallLegId: true,
-      metadata: true,
-    },
-  });
+  let normalizedCaller: string | null = null;
+  let normalizedLine: string | null = null;
+  const caller = input.callerE164?.trim();
+  const businessLine = input.businessLineE164?.trim();
+  try {
+    if (caller) normalizedCaller = normalizeE164(caller);
+    if (businessLine) normalizedLine = normalizeE164(businessLine);
+  } catch {
+    normalizedCaller = null;
+    normalizedLine = null;
+  }
 
-  for (const row of candidates) {
-    if (!row.phoneNumberId) continue;
-    const inboundCallControlId = resolveTransferControlId(row);
-    if (!inboundCallControlId) continue;
-    return {
-      humanCallId: row.id,
-      inboundCallControlId,
-      workspaceId,
-      phoneNumberId: row.phoneNumberId,
-    };
+  if (normalizedCaller) {
+    const routingSessions = await prisma.phoneCallRoutingSession.findMany({
+      where: {
+        workspaceId,
+        stage: "conversational_ivr",
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+      select: {
+        humanCallId: true,
+        inboundCallControlId: true,
+      },
+    });
+    for (const rs of routingSessions) {
+      if (!rs.humanCallId || !rs.inboundCallControlId) continue;
+      const hc = await prisma.humanCall.findFirst({
+        where: {
+          id: rs.humanCallId,
+          workspaceId,
+          from: normalizedCaller,
+          endedAt: null,
+        },
+        select: {
+          id: true,
+          phoneNumberId: true,
+          telnyxCallControlId: true,
+          telnyxCallLegId: true,
+          metadata: true,
+        },
+      });
+      const fromRouting = hc
+        ? foundationFromHumanRow(workspaceId, hc, rs.inboundCallControlId)
+        : undefined;
+      if (fromRouting) return fromRouting;
+    }
+  }
+
+  if (normalizedCaller && normalizedLine) {
+    const candidates = await prisma.humanCall.findMany({
+      where: {
+        workspaceId,
+        from: normalizedCaller,
+        to: normalizedLine,
+        endedAt: null,
+        startedAt: { gte: since },
+        metadata: {
+          path: ["orchestration", "stage"],
+          equals: ACTIVE_AI_ORCHESTRATION_STAGE,
+        },
+      },
+      orderBy: { startedAt: "desc" },
+      take: 3,
+      select: {
+        id: true,
+        phoneNumberId: true,
+        telnyxCallControlId: true,
+        telnyxCallLegId: true,
+        metadata: true,
+      },
+    });
+    for (const row of candidates) {
+      const found = foundationFromHumanRow(workspaceId, row);
+      if (found) return found;
+    }
+  }
+
+  if (normalizedCaller) {
+    const callerOnly = await prisma.humanCall.findMany({
+      where: {
+        workspaceId,
+        from: normalizedCaller,
+        endedAt: null,
+        startedAt: { gte: since },
+        metadata: {
+          path: ["orchestration", "stage"],
+          equals: ACTIVE_AI_ORCHESTRATION_STAGE,
+        },
+      },
+      orderBy: { startedAt: "desc" },
+      take: 3,
+      select: {
+        id: true,
+        phoneNumberId: true,
+        telnyxCallControlId: true,
+        telnyxCallLegId: true,
+        metadata: true,
+      },
+    });
+    for (const row of callerOnly) {
+      const found = foundationFromHumanRow(workspaceId, row);
+      if (found) return found;
+    }
   }
 
   return undefined;

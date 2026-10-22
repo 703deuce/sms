@@ -4,34 +4,35 @@
  */
 import assert from "node:assert/strict";
 
-function planRequiresWorkerWarmTransfer(plan) {
-  return plan.targets.some((t) => {
-    const executor = (t.executor || "livekit_sip").toLowerCase();
-    if (executor === "phone_call_control") return false;
-    return (t.mode || "DIRECT").toUpperCase() === "WARM";
-  });
+function planRequiresNodePhoneHandoff(plan) {
+  return (
+    plan.targets.length > 0 &&
+    plan.targets.every(
+      (t) => (t.executor || "livekit_sip").toLowerCase() === "phone_call_control",
+    )
+  );
 }
 
 const warm = {
   route_id: "cr_billing",
-  targets: [{ mode: "WARM", dial_target: "+17038166017" }],
+  targets: [{ mode: "WARM", executor: "livekit_sip", dial_target: "+17038166017" }],
 };
 const cold = {
   route_id: "cr_billing",
-  targets: [{ mode: "DIRECT", dial_target: "+17038166017" }],
+  targets: [{ mode: "DIRECT", executor: "livekit_sip", dial_target: "+17038166017" }],
 };
-
-assert.equal(planRequiresWorkerWarmTransfer(warm), true);
-assert.equal(planRequiresWorkerWarmTransfer(cold), false);
-const phoneWarm = {
+const phoneCc = {
   route_id: "cr_billing",
   targets: [
     {
-      mode: "WARM",
+      mode: "DIRECT",
       executor: "phone_call_control",
       dial_target: "+17038166017",
     },
   ],
 };
-assert.equal(planRequiresWorkerWarmTransfer(phoneWarm), false);
+
+assert.equal(planRequiresNodePhoneHandoff(warm), false);
+assert.equal(planRequiresNodePhoneHandoff(cold), false);
+assert.equal(planRequiresNodePhoneHandoff(phoneCc), true);
 console.log("test-warm-transfer-delegation-gate: PASS");

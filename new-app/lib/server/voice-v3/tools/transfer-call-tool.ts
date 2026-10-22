@@ -11,6 +11,7 @@ import {
   type TransferCallArgs,
 } from "../transfer/authorize-transfer";
 import { logVoiceV3TransferEvent } from "../transfer/telemetry";
+import { ensurePhoneFoundationForTransfer } from "../transfer/ensure-phone-foundation";
 
 function catalogForSchema(config: VoiceV3AgentConfig) {
   const policy = config.transfer;
@@ -135,10 +136,25 @@ export const transferCallTool: VoiceToolDefinition<TransferCallArgs> = {
       reason: strict.data.reason,
     });
 
+    const workspaceId = config.workspaceId?.trim();
+    if (!workspaceId) {
+      return voiceToolError(
+        "CONFIGURATION_ERROR",
+        "Workspace is not available for transfer.",
+        {},
+        "not_ready",
+      );
+    }
+
+    const callContext = await ensurePhoneFoundationForTransfer({
+      runtime: ctx.runtime,
+      workspaceId,
+    });
+
     const authorized = authorizeVoiceV3Transfer({
       config,
       policy,
-      callContext: ctx.runtime.getSnapshot(),
+      callContext,
       args: strict.data,
     });
     if (!authorized.ok) return authorized;

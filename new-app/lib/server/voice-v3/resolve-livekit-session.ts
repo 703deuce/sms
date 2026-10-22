@@ -256,6 +256,7 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
       businessLineE164: dialed,
       humanCallIdHint: payload.humanCallId?.trim() || null,
       inboundCallControlIdHint: payload.inboundCallControlId?.trim() || null,
+      liveSessionId: liveSessionIdForRoom(roomName),
     });
     if (phoneFoundation) {
       console.info(

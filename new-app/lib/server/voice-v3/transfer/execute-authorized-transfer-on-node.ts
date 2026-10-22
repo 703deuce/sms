@@ -245,17 +245,18 @@ export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
   };
 }
 
-function planRequiresWorkerWarmTransfer(plan: VoiceV3AuthorizedTransferPlan): boolean {
-  return plan.targets.some((t) => {
-    const executor = (t.executor || "livekit_sip").toLowerCase();
-    if (executor === "phone_call_control") return false;
-    return (t.mode || "DIRECT").toUpperCase() === "WARM";
-  });
+function planRequiresNodePhoneHandoff(plan: VoiceV3AuthorizedTransferPlan): boolean {
+  return (
+    plan.targets.length > 0 &&
+    plan.targets.every(
+      (t) => (t.executor || "livekit_sip").toLowerCase() === "phone_call_control",
+    )
+  );
 }
 
 /**
- * Cold DIRECT REFER runs on Node (delegated HTTP tool path). Warm transfer needs
- * LiveKit `WarmTransferTask` + RunContext on the voice worker — do not REFER here.
+ * Node may only run Telnyx Phone foundation handoff. LiveKit SIP (cold REFER or
+ * WarmTransferTask) must execute on the voice worker — Node REFER drops callers without bridging.
  */
 export async function maybeExecuteDelegatedTransferCallResult(input: {
   toolName: string;
@@ -265,15 +266,19 @@ export async function maybeExecuteDelegatedTransferCallResult(input: {
   if (input.toolName !== "transfer_call") return input.result;
   if (!input.result.ok || input.result.status !== "transfer_authorized") return input.result;
   const execution = input.result.data?.execution;
-  if (execution && planRequiresWorkerWarmTransfer(execution)) {
+  if (!execution) return input.result;
+
+  if (!planRequiresNodePhoneHandoff(execution)) {
     logVoiceV3TransferEvent("VOICE_V3_TRANSFER_DEFERRED_TO_WORKER", {
       call_id: input.runtime.getSnapshot().callId,
       live_session_id: input.runtime.getSnapshot().liveSessionId,
       route_id: execution.route_id,
       modes: execution.targets.map((t) => t.mode),
+      executors: execution.targets.map((t) => t.executor || "livekit_sip"),
     });
     return input.result;
   }
+
   return executeAuthorizedTransferOnNodeAfterAuthorize({
     runtime: input.runtime,
     authorized: input.result as VoiceToolResult<{

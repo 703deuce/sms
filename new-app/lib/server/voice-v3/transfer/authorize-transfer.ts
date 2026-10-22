@@ -183,9 +183,20 @@ export function authorizeVoiceV3Transfer(input: {
       continue;
     }
     if (!dest.phoneE164) continue;
-    const mode = (t.mode || dest.defaultMode || "DIRECT").toUpperCase();
+    let mode = (t.mode || dest.defaultMode || "DIRECT").toUpperCase();
     const canUsePhoneCallControl =
       Boolean(phoneFoundation?.humanCallId) && Boolean(phoneFoundation?.inboundCallControlId);
+
+    if (!canUsePhoneCallControl && mode === "DIRECT" && dest.phoneE164) {
+      logVoiceV3TransferEvent("VOICE_V3_TRANSFER_DIRECT_UPGRADED_TO_WARM", {
+        call_id: callContext.callId,
+        live_session_id: callContext.liveSessionId,
+        route_id: route.id,
+        destination_id: dest.id,
+        reason: "no_phone_call_control_context",
+      });
+      mode = "WARM";
+    }
 
     if (canUsePhoneCallControl) {
       authorizedTargets.push({
@@ -251,6 +262,8 @@ export function authorizeVoiceV3Transfer(input: {
     destination_id: destId,
     target_count: authorizedTargets.length,
     modes: authorizedTargets.map((t) => t.mode),
+    executors: authorizedTargets.map((t) => t.executor || "livekit_sip"),
+    phone_foundation: Boolean(phoneFoundation?.humanCallId),
     waterfall: policy.routing === "waterfall",
   });
   logVoiceV3TransferBillingUsage({
