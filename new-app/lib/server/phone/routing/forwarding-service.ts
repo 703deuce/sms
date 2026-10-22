@@ -20,6 +20,15 @@ export async function startForwardingFlow(input: {
   businessLineE164: string;
   callerE164: string;
   effective: EffectiveAnswering;
+  voiceV3Transfer?: {
+    operationId: string;
+    transferRequestId: string;
+    routeId: string;
+    voiceCallId: string;
+    liveSessionId: string;
+    mode: "DIRECT" | "WARM";
+    releaseAiLegOnBridge: boolean;
+  };
 }) {
   const prisma = getPrisma();
   const session = await prisma.phoneCallRoutingSession.create({
@@ -57,17 +66,18 @@ export async function startForwardingFlow(input: {
   }
 
   if (input.effective.kind === "forward") {
-    await dialDestination({
-      sessionId: session.id,
-      workspaceId: input.workspaceId,
-      humanCallId: input.humanCallId,
-      inboundControlId: input.inboundControlId,
-      businessLineE164: input.businessLineE164,
-      callerE164: input.callerE164,
-      destinationE164: input.effective.destinationE164,
-      press1: input.effective.press1,
-      screeningText: input.effective.screeningText,
-    });
+        await dialDestination({
+          sessionId: session.id,
+          workspaceId: input.workspaceId,
+          humanCallId: input.humanCallId,
+          inboundControlId: input.inboundControlId,
+          businessLineE164: input.businessLineE164,
+          callerE164: input.callerE164,
+          destinationE164: input.effective.destinationE164,
+          press1: input.effective.press1,
+          screeningText: input.effective.screeningText,
+          voiceV3Transfer: input.voiceV3Transfer,
+        });
     return session;
   }
 
@@ -166,15 +176,24 @@ export async function dialDestination(input: {
   screeningText?: string | null;
   simultaneous?: boolean;
   sequentialQueue?: Array<{ e164: string; press1: boolean; timeout: number }>;
+  voiceV3Transfer?: {
+    operationId: string;
+    transferRequestId: string;
+    routeId: string;
+    voiceCallId: string;
+    liveSessionId: string;
+    mode: "DIRECT" | "WARM";
+    releaseAiLegOnBridge: boolean;
+  };
 }) {
   const connectionId = requireCallControlConnectionId();
   const from =
     input.callerE164 && input.callerE164.length > 3 ? input.callerE164 : input.businessLineE164;
-  const clientState = {
+  const clientState: Record<string, unknown> = {
     workspaceId: input.workspaceId,
     humanCallId: input.humanCallId,
     routingSessionId: input.sessionId,
-    kind: "cf_outbound",
+    kind: input.voiceV3Transfer ? "v3_cf_transfer" : "cf_outbound",
     parentCallControlId: input.inboundControlId,
     destinationE164: input.destinationE164,
     press1Required: Boolean(input.press1),
@@ -184,6 +203,11 @@ export async function dialDestination(input: {
     sequentialQueue: input.sequentialQueue || [],
     simultaneous: Boolean(input.simultaneous),
   };
+  if (input.voiceV3Transfer) {
+    clientState.voiceV3Transfer = input.voiceV3Transfer;
+    clientState.voiceV3TransferOperationId = input.voiceV3Transfer.operationId;
+    clientState.releaseAiLegOnBridge = input.voiceV3Transfer.releaseAiLegOnBridge;
+  }
 
   const dialed = await dialPstnLeg({
     connectionId,

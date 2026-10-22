@@ -241,6 +241,10 @@ async def execute_authorized_transfer_plan(
     if not result.get("ok"):
         return result
 
+    status = str(result.get("status") or "")
+    if status == "transfer_dialing":
+        return result
+
     data = result.get("data")
     if not isinstance(data, dict):
         # new-app connector may flatten toolOk fields at the top level
@@ -278,6 +282,26 @@ async def execute_authorized_transfer_plan(
         executor = str(target.get("executor") or "livekit_sip").lower()
         dial_target = str(target.get("dial_target") or "")
         timeout = float(target.get("ringing_timeout_seconds") or 30)
+        if executor == "livekit_sip":
+            log_event(
+                "VOICE_V3_TRANSFER_LIVEKIT_EXECUTOR_DISABLED",
+                extra={
+                    "transfer_request_id": transfer_request_id,
+                    "destination_id": dest_id,
+                    "mode": mode,
+                },
+            )
+            outcome = "CONFIGURATION_ERROR"
+            attempts.append(
+                {
+                    "destination_id": dest_id,
+                    "mode": mode,
+                    "outcome": outcome,
+                    "duration_ms": 0,
+                    "attempt_index": index,
+                },
+            )
+            continue
         if not dial_target and executor != "phone_call_control":
             continue
 

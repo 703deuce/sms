@@ -27,7 +27,9 @@ export async function processCallForwardingWebhookEvent(input: {
 }): Promise<{ handled: boolean; result?: unknown }> {
   const clientState = decodeTelnyxClientState(input.eventPayload.client_state);
   const kind = String(clientState.kind || "");
-  if (!kind.startsWith("cf_")) return { handled: false };
+  const isCallForwarding =
+    kind.startsWith("cf_") || kind === "v3_cf_transfer";
+  if (!isCallForwarding) return { handled: false };
 
   const eventControlId = input.eventPayload.call_control_id
     ? String(input.eventPayload.call_control_id)
@@ -59,7 +61,7 @@ export async function processCallForwardingWebhookEvent(input: {
       return { handled: true, result };
     }
     if (
-      (kind === "cf_outbound" || kind === "cf_screening") &&
+      (kind === "cf_outbound" || kind === "v3_cf_transfer" || kind === "cf_screening") &&
       (clientState.press1Required || kind === "cf_screening")
     ) {
       await handleScreeningGather({
@@ -86,7 +88,10 @@ export async function processCallForwardingWebhookEvent(input: {
     }
   }
 
-  if (input.eventType === "call.answered" && kind === "cf_outbound") {
+  if (
+    input.eventType === "call.answered" &&
+    (kind === "cf_outbound" || kind === "v3_cf_transfer")
+  ) {
     if (clientState.press1Required) {
       const screening =
         typeof clientState.screeningText === "string" && clientState.screeningText.trim()
@@ -166,6 +171,16 @@ export async function processCallForwardingWebhookEvent(input: {
         data: { status: "bridged" },
       });
     }
+    if (kind === "v3_cf_transfer" && clientState.humanCallId) {
+      const { handleVoiceV3TelnyxTransferBridged } = await import(
+        "@/lib/server/voice-v3/transfer/telnyx-transfer-coordinator"
+      );
+      await handleVoiceV3TelnyxTransferBridged({
+        humanCallId: String(clientState.humanCallId),
+        outboundCallControlId: eventControlId,
+        clientState,
+      });
+    }
     return { handled: true };
   }
 
@@ -174,7 +189,7 @@ export async function processCallForwardingWebhookEvent(input: {
       await recordLegEnded(eventControlId, input.eventPayload);
     }
 
-    if (kind === "cf_outbound") {
+    if (kind === "cf_outbound" || kind === "v3_cf_transfer") {
       const queue = (clientState.sequentialQueue || []) as Array<{
         e164: string;
         press1: boolean;
@@ -242,6 +257,18 @@ export async function processCallForwardingWebhookEvent(input: {
       const normal = cause === "normal_clearing" || cause === "user_busy" || cause === "";
       if (!normal && clientState.workspaceId && !clientState.simultaneous) {
         await recordMissedForward(String(clientState.workspaceId));
+      }
+
+      if (kind === "v3_cf_transfer" && clientState.humanCallId) {
+        const { handleVoiceV3TelnyxTransferDestinationFailed } = await import(
+          "@/lib/server/voice-v3/transfer/telnyx-transfer-coordinator"
+        );
+        await handleVoiceV3TelnyxTransferDestinationFailed({
+          humanCallId: String(clientState.humanCallId),
+          reason: hangupCause(input.eventPayload) || "destination_hangup",
+          clientState,
+        });
+        return { handled: true };
       }
 
       if (

@@ -183,19 +183,12 @@ export function authorizeVoiceV3Transfer(input: {
       continue;
     }
     if (!dest.phoneE164) continue;
-    let mode = (t.mode || dest.defaultMode || "DIRECT").toUpperCase();
+    const mode = (t.mode || dest.defaultMode || "DIRECT").toUpperCase();
     const canUsePhoneCallControl =
       Boolean(phoneFoundation?.humanCallId) && Boolean(phoneFoundation?.inboundCallControlId);
 
-    if (!canUsePhoneCallControl && mode === "DIRECT" && dest.phoneE164) {
-      logVoiceV3TransferEvent("VOICE_V3_TRANSFER_DIRECT_UPGRADED_TO_WARM", {
-        call_id: callContext.callId,
-        live_session_id: callContext.liveSessionId,
-        route_id: route.id,
-        destination_id: dest.id,
-        reason: "no_phone_call_control_context",
-      });
-      mode = "WARM";
+    if (!canUsePhoneCallControl) {
+      continue;
     }
 
     if (canUsePhoneCallControl) {
@@ -218,19 +211,14 @@ export function authorizeVoiceV3Transfer(input: {
       continue;
     }
 
-    authorizedTargets.push({
-      destination_id: dest.id,
-      mode,
-      dial_target: dest.phoneE164,
-      ringing_timeout_seconds: t.ringingTimeoutSeconds,
-      executor: "livekit_sip",
-    });
   }
 
   if (!authorizedTargets.length) {
     return voiceToolError(
-      "TRANSFER_NOT_CONFIGURED",
-      "No authorized transfer targets are available.",
+      "TRANSFER_NOT_READY",
+      phoneFoundation?.humanCallId
+        ? "Transfer destination is not available."
+        : "Transfer requires an active phone call on Telnyx. The caller leg could not be correlated.",
       { route_id: route.id },
       "not_ready",
     );

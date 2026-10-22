@@ -1,7 +1,8 @@
 import "server-only";
 
 import { getLiveKitSipClient } from "@/lib/server/receptionist/livekit/client";
-import { executePhoneFoundationTransferHandoff } from "@/lib/server/phone/orchestration/phone-foundation-transfer";
+import { ensurePhoneFoundationForTransfer } from "./ensure-phone-foundation";
+import { startVoiceV3TelnyxTransfer } from "./telnyx-transfer-coordinator";
 import { logVoiceV3TransferEvent } from "./telemetry";
 import { recordVoiceV3TransferOutcomeForNewApp } from "./record-transfer-outcome";
 import type { VoiceV3AuthorizedTransferPlan } from "./types";
@@ -43,9 +44,13 @@ export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
   if (!data?.execution) return input.authorized;
 
   const plan = data.execution;
-  const snap = input.runtime.getSnapshot();
+  let snap = input.runtime.getSnapshot();
   const workspaceId = input.runtime.config.workspaceId?.trim();
   const agentId = input.runtime.config.agentId?.trim() ?? null;
+
+  if (workspaceId) {
+    snap = await ensurePhoneFoundationForTransfer({ runtime: input.runtime, workspaceId });
+  }
 
   const attempts: AttemptRow[] = [];
   const started = Date.now();
@@ -81,16 +86,21 @@ export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
         if (!humanCallId || !inboundCc) {
           outcome = "CONFIGURATION_ERROR";
         } else {
-          const handoff = await executePhoneFoundationTransferHandoff({
-            workspaceId,
-            humanCallId,
-            inboundCallControlId: inboundCc,
-            forwardingGroupId: target.forwarding_group_id,
-            destinationE164: dialTarget && !dialTarget.startsWith("phone_foundation:")
-              ? dialTarget
-              : null,
-          });
-          outcome = handoff?.ok ? "PHONE_HANDOFF_STARTED" : "PROVIDER_ERROR";
+          try {
+            await startVoiceV3TelnyxTransfer({
+              workspaceId,
+              humanCallId,
+              inboundCallControlId: inboundCc,
+              voiceCallId: snap.callId,
+              liveSessionId: snap.liveSessionId,
+              plan,
+              targetIndex: index,
+            });
+            outcome = "TELNYX_DIALING";
+          } catch (err) {
+            console.error("VOICE_V3_TELNYX_TRANSFER_START_FAILED", err);
+            outcome = "PROVIDER_ERROR";
+          }
         }
       } else if (mode === "WARM") {
         outcome = "CONFIGURATION_ERROR";
@@ -154,6 +164,20 @@ export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
       duration_ms: durationMs,
       attempt_index: index,
     });
+
+    if (outcome === "TELNYX_DIALING") {
+      const surface = {
+        ...(data.surface ?? {}),
+        status: "transfer_dialing",
+        attempts,
+        human_answered: false,
+      };
+      return {
+        ok: true,
+        status: "transfer_dialing",
+        data: { surface, attempts },
+      };
+    }
 
     if (outcome === "SIP_REFER_ACCEPTED" || outcome === "PHONE_HANDOFF_STARTED" || outcome === "CONNECTED") {
       const isReferOnly = outcome === "SIP_REFER_ACCEPTED" || outcome === "PHONE_HANDOFF_STARTED";
@@ -269,14 +293,22 @@ export async function maybeExecuteDelegatedTransferCallResult(input: {
   if (!execution) return input.result;
 
   if (!planRequiresNodePhoneHandoff(execution)) {
-    logVoiceV3TransferEvent("VOICE_V3_TRANSFER_DEFERRED_TO_WORKER", {
+    logVoiceV3TransferEvent("VOICE_V3_TRANSFER_TELNYX_REQUIRED", {
       call_id: input.runtime.getSnapshot().callId,
       live_session_id: input.runtime.getSnapshot().liveSessionId,
       route_id: execution.route_id,
       modes: execution.targets.map((t) => t.mode),
       executors: execution.targets.map((t) => t.executor || "livekit_sip"),
     });
-    return input.result;
+    return {
+      ok: false,
+      status: "transfer_not_ready",
+      code: "TRANSFER_NOT_READY",
+      message:
+        "This call must transfer through Telnyx Call Control. The original caller leg was not available.",
+      details: { route_id: execution.route_id },
+      retryable: true,
+    };
   }
 
   return executeAuthorizedTransferOnNodeAfterAuthorize({

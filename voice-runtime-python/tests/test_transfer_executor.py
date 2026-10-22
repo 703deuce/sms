@@ -71,7 +71,7 @@ class TestDirectTransfer(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(_LIVEKIT_AVAILABLE, "livekit not installed in this environment")
 class TestExecuteAuthorizedPlan(unittest.IsolatedAsyncioTestCase):
-    async def test_strips_execution_and_reports_refer(self) -> None:
+    async def test_livekit_executor_disabled_returns_exhausted(self) -> None:
         job_ctx = MagicMock()
         job_ctx.room.name = "room_test"
         job_ctx.api.sip.transfer_sip_participant = AsyncMock()
@@ -111,8 +111,8 @@ class TestExecuteAuthorizedPlan(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(out.get("ok"))
         data = out.get("data") or {}
         self.assertNotIn("execution", data)
-        self.assertEqual(data.get("status"), "transfer_refer_accepted")
-        self.assertFalse(data.get("human_answered", True))
+        self.assertEqual(data.get("status"), "transfer_exhausted")
+        job_ctx.api.sip.transfer_sip_participant.assert_not_called()
 
     async def test_wrong_route_skips_executor(self) -> None:
         telephony = MagicMock()
