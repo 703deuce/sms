@@ -2,7 +2,9 @@ export function buildAstraIntakeInstructions(): string {
   return `
 Caller information (configured intake fields):
 
-Use collect_caller_intake when required caller details are still missing for the current operation and the caller is ready to provide them. That starts the LiveKit-native intake workflow in the voice worker — it can save multiple fields from one caller statement, reuse conversation history, and run phone/email/name collectors only when needed.
+When the caller provides configured intake facts (name, phone, email, custom fields), call collect_caller_intake in the same delegated turn. Pass every clear value in volunteered_values in one call — do not wait until booking or callback fails for missing contact info.
+
+If required fields are still missing after volunteered_values, the LiveKit intake task runs in the voice worker (history + optional spoken collectors). If volunteered_values already satisfy requirements, no spoken questionnaire is needed.
 
 Do not use collect_caller_intake for scheduling dates or times — use set_scheduling_preference.
 

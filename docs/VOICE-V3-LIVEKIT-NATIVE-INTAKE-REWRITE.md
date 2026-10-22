@@ -58,11 +58,56 @@ Handled inside **`IntakeTask`** via `record_intake_values` + conversational inst
 
 Task-local **`record_intake_values(values: dict[str, str])`** sends one Node **`update_intake`** batch per invocation (multiple keys in one call).
 
-## Tests run
+## Verification (completion pass)
+
+### 1. Real LiveKit tool lifecycle
+
+`collect_caller_intake` is registered via `livekit.agents.function_tool` in `build_livekit_tools()` — the handler receives `RunContext` and is **not** executed as a Node HTTP round-trip.
+
+`await IntakeTask(...)` runs inside:
+
+`function_tool body → execute_with_idle_filler → execute_collect_caller_intake → run_intake_task → context.foreground() → await task`
+
+This matches LiveKit’s documented pattern (`RunContext.foreground()` wrapping `await AgentTask()`).
+
+**Test:** `test_collect_caller_intake_registered_as_livekit_function_tool` asserts `tool.info.name == collect_caller_intake`.
+
+### 2. Conversation context
+
+`resolve_intake_chat_context()` uses `context.session.history.copy(exclude_instructions=True, exclude_handoff=True)`.
+
+Optional `caller_turn_hint` on the tool appends a user message when delegated context leads session history.
+
+**Tests:** `test_resolve_intake_chat_context_uses_session_history`, `test_append_caller_hint_adds_user_message`.
+
+### 3. Volunteered information without redundant dialogue
+
+`collect_caller_intake` accepts **`volunteered_values`** (batch). Python persists via internal `update_intake` first; if objective is complete, **IntakeTask is not started** (`persisted_volunteered_only: true`).
+
+Luna prompt/cross-tool instructions require calling `collect_caller_intake` with `volunteered_values` in the same turn as scheduling/booking intent.
+
+**Test:** `test_volunteered_values_fast_path_skips_agent_task` (3 fields, `run_intake_task` not called).
+
+### 4. Nested prebuilt collector
+
+**Test:** `test_nested_get_phone_task_returns_e164_shaped_value` (mocked `GetPhoneNumberTask` await from `run_prebuilt_collector_for_field`).
+
+### Tests run (pinned env)
 
 ```bash
-cd voice-runtime-python && pytest tests/test_voice_v3_intake_task.py -q
+cd voice-runtime-python && python3 -m pytest \
+  tests/test_voice_v3_intake_task.py \
+  tests/test_voice_v3_intake_integration.py \
+  tests/test_voice_v3_intake_prebuilt_nested.py -v
 ```
+
+**Result:** 11 passed (see CI / local run after merge).
+
+### Not verified in CI (requires worker + PSTN)
+
+- Full `AgentSession` + GPT-Live delegation smoke
+- Live nested `GetEmailTask` audio confirmation
+- End-to-end book after intake on production
 
 ## PSTN / full dialogue
 

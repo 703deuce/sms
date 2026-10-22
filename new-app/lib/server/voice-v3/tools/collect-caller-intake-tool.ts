@@ -17,15 +17,17 @@ const OPERATIONS = [
 export type CollectCallerIntakeArgs = {
   operation?: (typeof OPERATIONS)[number] | null;
   reason?: string | null;
+  volunteered_values?: { key: string; value: string }[] | null;
+  caller_turn_hint?: string | null;
 };
 
-export const COLLECT_CALLER_INTAKE_TOOL_DESCRIPTION = `Start or continue LiveKit-native caller intake for configured business fields (name, phone, email, address, custom wizard fields, etc.).
+export const COLLECT_CALLER_INTAKE_TOOL_DESCRIPTION = `Persist and/or collect configured caller intake fields (name, phone, email, address, custom wizard fields).
 
-Use when required caller information is still missing for the current operation (booking, callback, message, etc.) and the caller is ready to provide it.
+When the caller clearly provides one or more configured intake facts in the current turn (even while also asking to book, get a link, or leave a message), call this tool in the same delegated work. Pass every clear field in volunteered_values in one call — do not wait until booking fails for missing contact info.
 
-This runs a short LiveKit AgentTask in the Python voice worker — it can capture multiple fields from one caller statement, reuse conversation history, and run specialized phone/email collectors only when needed.
+If required fields are still missing after volunteered_values, the LiveKit intake task continues in the voice worker (conversation history + optional spoken collectors). If volunteered_values already satisfy requirements, no spoken questionnaire is started.
 
-Do not use for scheduling dates/times (use set_scheduling_preference). Do not use when all required intake is already saved — proceed with booking, callback, or the caller's request instead.`;
+Do not use for scheduling dates/times (use set_scheduling_preference). Do not use when all required intake is already saved — proceed with the caller's request.`;
 
 export function buildCollectCallerIntakeOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
   const zodTool = zodResponsesFunction({
@@ -41,6 +43,25 @@ export function buildCollectCallerIntakeOpenAiTool(_config: VoiceV3AgentConfig):
         .nullable()
         .optional()
         .describe("Optional short reason for telemetry (not shown to caller)."),
+      volunteered_values: z
+        .array(
+          z.object({
+            key: z.string().describe("Configured intake field key."),
+            value: z.string().describe("Clear value the caller provided."),
+          }),
+        )
+        .nullable()
+        .optional()
+        .describe(
+          "All configured intake fields the caller clearly provided this turn — saved immediately in one batch before any spoken intake.",
+        ),
+      caller_turn_hint: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Optional verbatim or near-verbatim summary of the caller's latest turn (helps intake task see the utterance if session history lags).",
+        ),
     }),
     description: COLLECT_CALLER_INTAKE_TOOL_DESCRIPTION,
   });

@@ -8,6 +8,7 @@ from livekit.agents.llm import ChatContext
 from livekit.agents.llm.tool_context import ToolError, function_tool
 from livekit.agents.voice.agent import AgentTask
 
+from transovo_voice.voice_v3.intake_chat_context import append_caller_hint, resolve_intake_chat_context
 from transovo_voice.voice_v3.intake_collection import resolve_intake_collection_kind
 from transovo_voice.voice_v3.intake_persist import PersistUpdateFn
 from transovo_voice.voice_v3.intake_prebuilt import run_prebuilt_collector_for_field
@@ -236,13 +237,12 @@ async def run_intake_task(
     required_keys: list[str],
     persist_update: PersistUpdateFn,
     function_call_id: str | None,
+    caller_turn_hint: str | None = None,
 ) -> IntakeTaskResult:
-    chat_ctx = None
-    session = getattr(context, "session", None)
-    if session is not None:
-        history = getattr(session, "history", None)
-        if history is not None and hasattr(history, "copy"):
-            chat_ctx = history.copy(exclude_instructions=True)
+    chat_ctx = append_caller_hint(
+        resolve_intake_chat_context(context),
+        caller_turn_hint,
+    )
 
     task = IntakeTask(
         fields=fields,
