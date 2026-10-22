@@ -1,5 +1,8 @@
 import type { AgentConfig } from "@/lib/agent";
-import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
+import {
+  editorHasConversationalTransferRoutes,
+  isConversationalIvrEditor,
+} from "@/lib/receptionist/runtime-profile";
 import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import {
@@ -119,6 +122,7 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
     errors.push("Assign a phone number on Agent settings (Connect number at the top of the page).");
   }
   const conversational = isConversationalIvrEditor(config);
+  const callRouting = editorHasConversationalTransferRoutes(config);
   if (
     config.capabilities.book &&
     (config.appointments.strategy === "link" || isBookingLinkOnlyLaunch())
@@ -136,13 +140,13 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
     }
   }
   if (config.capabilities.transfer) {
-    if (conversational) {
+    if (callRouting || conversational) {
       const ringGroupRoutes = (config.conversationalRoutes ?? []).filter(
         (r) => r.enabled && r.destinationKind === "ring_group",
       );
       if (ringGroupRoutes.length) {
         errors.push(
-          "Ring groups are not supported as Conversational IVR transfer targets yet. Use an individual Phone forwarding destination.",
+          "Ring groups are not supported as transfer targets yet. Use an individual phone forwarding destination.",
         );
       }
       const routes = (config.conversationalRoutes ?? []).filter(

@@ -265,6 +265,8 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     liveSessionId,
     callId,
     inboundCallerE164: callerE164,
+    liveKitRoomName: roomName,
+    liveKitSipParticipantIdentity: payload.sipParticipantIdentity?.trim() || null,
     phoneFoundation,
     config: voiceV3Config,
   });

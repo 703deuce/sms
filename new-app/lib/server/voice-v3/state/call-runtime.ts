@@ -103,6 +103,8 @@ export function createVoiceV3CallRuntime(input: {
   liveSessionId: string;
   callId?: string | null;
   inboundCallerE164?: string | null;
+  liveKitRoomName?: string | null;
+  liveKitSipParticipantIdentity?: string | null;
   phoneFoundation?: VoiceV3CallContext["phoneFoundation"];
   config?: VoiceV3AgentConfig;
   now?: Date;
@@ -117,6 +119,8 @@ export function createVoiceV3CallRuntime(input: {
     timezone: config.timezone,
     clock,
     inboundCallerE164: input.inboundCallerE164,
+    liveKitRoomName: input.liveKitRoomName,
+    liveKitSipParticipantIdentity: input.liveKitSipParticipantIdentity,
     phoneFoundation: input.phoneFoundation,
     now,
   });

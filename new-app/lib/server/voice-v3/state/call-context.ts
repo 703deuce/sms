@@ -68,6 +68,11 @@ export interface VoiceV3CallContext {
   /** Trusted telephony metadata — not LLM-supplied. */
   telephony: {
     inboundCallerE164: string | null;
+    /** Inbound PSTN leg on LiveKit — required for delegated transfer_call SIP REFER from Node. */
+    liveKit?: {
+      roomName: string;
+      sipParticipantIdentity: string;
+    };
   };
   clock: VoiceV3CallClock;
   dialog: {
@@ -165,17 +170,26 @@ export function createInitialVoiceV3CallContext(input: {
   timezone: string;
   clock: VoiceV3CallClock;
   inboundCallerE164?: string | null;
+  liveKitRoomName?: string | null;
+  liveKitSipParticipantIdentity?: string | null;
   phoneFoundation?: VoiceV3CallContext["phoneFoundation"];
   now?: Date;
 }): VoiceV3CallContext {
   const now = (input.now ?? new Date()).toISOString();
+  const room = input.liveKitRoomName?.trim();
+  const sipIdentity = input.liveKitSipParticipantIdentity?.trim();
   return {
     callId: input.callId,
     liveSessionId: input.liveSessionId,
     createdAt: now,
     updatedAt: now,
     business: { timezone: input.timezone },
-    telephony: { inboundCallerE164: input.inboundCallerE164?.trim() || null },
+    telephony: {
+      inboundCallerE164: input.inboundCallerE164?.trim() || null,
+      ...(room && sipIdentity
+        ? { liveKit: { roomName: room, sipParticipantIdentity: sipIdentity } }
+        : {}),
+    },
     phoneFoundation: input.phoneFoundation,
     clock: input.clock,
     dialog: { activeGoal: "UNKNOWN" },

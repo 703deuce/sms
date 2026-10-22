@@ -33,7 +33,7 @@ import { useResolvedConnection } from '@/components/numbers/number-picker'
 import { Callout, FlowDiagram } from '@/components/numbers/number-ui'
 import { ReceptionistPhoneLinePanel } from '@/components/receptionist/receptionist-phone-line'
 import type { AgentConfig, SpamRule, TransferDestination } from '@/lib/agent'
-import { formatPhone, formatWhen } from '@/lib/format'
+import { formatPhone } from '@/lib/format'
 import { DemoNote, JumpChips, Pills, Section, ToggleRow } from './ai-ui'
 import { OperationsEditor } from './operations-editor'
 

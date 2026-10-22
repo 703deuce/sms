@@ -345,7 +345,7 @@ export const DEFAULT_AGENT: AgentConfig = {
     transfer: true,
     smsConfirm: false,
   },
-  runtimeProfile: "conversational_ivr",
+  runtimeProfile: "full_receptionist",
   conversationalRoutes: [],
   conversationalRouting: {
     defaultDestinationRef: "",
@@ -419,8 +419,8 @@ export const DEFAULT_AGENT: AgentConfig = {
     ],
   },
   transfers: [
-    { id: 'tr1', name: 'On-call dentist', number: '+13125550177', enabled: true, reason: 'Urgent pain, swelling, trauma', fallback: 'callback' },
-    { id: 'tr2', name: 'Billing desk', number: '+13125550150', enabled: true, reason: 'Insurance & payment questions', fallback: 'message' },
+    { id: 'tr1', name: 'On-call dentist', number: '+13125550177', enabled: false, reason: 'Urgent pain, swelling, trauma', fallback: 'callback' },
+    { id: 'tr2', name: 'Billing desk', number: '+13125550150', enabled: false, reason: 'Insurance & payment questions', fallback: 'message' },
     { id: 'tr3', name: 'Maya Okafor (owner)', number: '+13125550101', enabled: false, reason: 'Caller asks for the owner by name', fallback: 'message' },
   ],
   triggers: { asks_person: true, emergency: true, unsupported: true, booking_staff: false, custom: false },

@@ -30,14 +30,14 @@ export const CONVERSATIONAL_IVR_ACTIVE_TOOLS = [
   "take_message",
 ] as const;
 
-export function resolveRuntimeProfile(editor: AgentConfig): RuntimeProfile {
-  return editor.runtimeProfile === "full_receptionist"
-    ? RUNTIME_PROFILE_FULL_RECEPTIONIST
-    : RUNTIME_PROFILE_CONVERSATIONAL_IVR;
+/** Launch product: always Full AI Receptionist (Conversational IVR mode retired). */
+export function resolveRuntimeProfile(_editor: AgentConfig): RuntimeProfile {
+  return RUNTIME_PROFILE_FULL_RECEPTIONIST;
 }
 
-export function isConversationalIvrEditor(editor: AgentConfig): boolean {
-  return resolveRuntimeProfile(editor) === RUNTIME_PROFILE_CONVERSATIONAL_IVR;
+/** @deprecated Conversational IVR is retired — Call Routing uses `conversationalRoutes` under full receptionist. */
+export function isConversationalIvrEditor(_editor: AgentConfig): boolean {
+  return false;
 }
 
 /** True when Call Routing has at least one enabled destination with a dialable E.164. */
@@ -62,16 +62,10 @@ function shouldUseFullReceptionistForLinkBooking(
 }
 
 export function coalesceRuntimeProfileForVoiceConfig(
-  editor: AgentConfig,
-  config: VoiceV3AgentConfig,
+  _editor: AgentConfig,
+  _config: VoiceV3AgentConfig,
 ): RuntimeProfile {
-  if (shouldUseFullReceptionistForLinkBooking(editor, config)) {
-    return RUNTIME_PROFILE_FULL_RECEPTIONIST;
-  }
-  if (config.runtimeProfile === "full_receptionist" || config.runtimeProfile === "conversational_ivr") {
-    return config.runtimeProfile;
-  }
-  return resolveRuntimeProfile(editor);
+  return RUNTIME_PROFILE_FULL_RECEPTIONIST;
 }
 
 export function withRuntimeProfileFromEditor(

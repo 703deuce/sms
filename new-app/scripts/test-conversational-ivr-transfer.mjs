@@ -10,6 +10,7 @@ import { editorToVoiceV3AgentConfig } from "../lib/server/voice-v3/editor-to-voi
 import { authorizeVoiceV3Transfer } from "../lib/server/voice-v3/transfer/authorize-transfer.ts";
 import { buildAmyTransferInstructions } from "../lib/server/voice-v3/prompts/amy-transfer-instructions.ts";
 import { isVoiceV3ToolAuthorizedBase } from "../lib/server/voice-v3/tools/authorize-tool-for-config.ts";
+import { resolveRuntimeProfile } from "../lib/receptionist/runtime-profile.ts";
 
 function emptyKnowledge() {
   return {
@@ -159,5 +160,7 @@ assert.ok(
   fullPolicy.destinations.some((d) => d.phoneE164 === "+17038166017"),
   "billing E.164 must be in compiled destinations",
 );
+
+assert.equal(resolveRuntimeProfile(editorClean), "full_receptionist");
 
 console.log("test-conversational-ivr-transfer: PASS");
