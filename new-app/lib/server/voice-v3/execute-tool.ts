@@ -10,6 +10,7 @@ import {
   createVoiceV3LiveKitLiveContextCollector,
 } from "@/lib/server/voice-v3/livekit/live-context";
 import { getCurrentConversationRevision } from "@/lib/server/voice-v3/conversation/conversation-revision";
+import { maybeExecuteDelegatedTransferCallResult } from "@/lib/server/voice-v3/transfer/execute-authorized-transfer-on-node";
 
 function mapEngineResult(result: {
   ok: boolean;
@@ -23,10 +24,14 @@ function mapEngineResult(result: {
 }): ToolResult {
   if (result.ok) {
     const liveContextEvents = (result as { liveContextEvents?: unknown }).liveContextEvents;
+    const payload = result.data ?? {};
     return {
       ok: true,
       status: result.status,
-      ...(result.data ?? {}),
+      ...payload,
+      ...(typeof payload === "object" && payload !== null && Object.keys(payload).length > 0
+        ? { data: payload }
+        : {}),
       ...(Array.isArray(liveContextEvents) && liveContextEvents.length > 0
         ? { liveContextEvents }
         : {}),
@@ -76,7 +81,7 @@ export async function executeNativeVoiceV3Tool(input: {
   const currentRevision = getCurrentConversationRevision(input.session.liveSessionId);
 
   try {
-    const engineResult = await executeVoiceTool(
+    let engineResult = await executeVoiceTool(
       {
         callId: runtime.getSnapshot().callId,
         liveSessionId: input.session.liveSessionId,
@@ -92,6 +97,14 @@ export async function executeNativeVoiceV3Tool(input: {
       input.toolName,
       input.args,
     );
+
+    if (input.toolName === "transfer_call") {
+      engineResult = await maybeExecuteDelegatedTransferCallResult({
+        toolName: input.toolName,
+        runtime,
+        result: engineResult,
+      });
+    }
 
     const withLive = attachLiveContextEventsToToolResult(
       engineResult as Record<string, unknown>,

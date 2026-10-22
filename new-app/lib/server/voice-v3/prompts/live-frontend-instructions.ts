@@ -135,6 +135,10 @@ export function buildLiveFrontendInstructions(
     ? buildLivePromptControlsInstructionBlock(livePromptControlsFromAgentConfig(config))
     : "";
   const transferBehavior = config ? buildAmyTransferInstructions(config) : "";
+  const transferSpeechGuard =
+    config?.capabilities?.transferCalls && config.transfer?.enabled
+      ? "\n# TRANSFER SPEECH (critical)\nNever tell the caller you are transferring, connecting them, or putting them through unless transfer_call has already succeeded in this turn. If they need a human or billing, delegate and run transfer_call first; only then may you say you are connecting them."
+      : "";
   const endCallBehavior = buildAmyEndCallInstructions();
 
   const greetingHint =
@@ -158,6 +162,7 @@ ${businessFacts ? `${businessFacts}\n` : ""}
 ${persona ? `${persona}\n` : ""}
 ${liveTuning ? `${liveTuning}\n` : ""}
 ${transferBehavior ? `${transferBehavior}\n` : ""}
+${transferSpeechGuard ? `${transferSpeechGuard}\n` : ""}
 ${endCallBehavior ? `${endCallBehavior}\n` : ""}
 
 ${delegationPolicy}

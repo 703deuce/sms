@@ -208,7 +208,8 @@ async def execute_authorized_transfer_plan(
 
     data = result.get("data")
     if not isinstance(data, dict):
-        return result
+        # new-app connector may flatten toolOk fields at the top level
+        data = result if isinstance(result, dict) else {}
 
     plan = data.get("execution")
     if not isinstance(plan, dict):
