@@ -5,6 +5,7 @@
 export type VoiceToolKind = "state_update" | "read" | "mutation" | "lifecycle";
 
 export const VOICE_TOOL_KIND_BY_NAME: Record<string, VoiceToolKind> = {
+  collect_caller_intake: "state_update",
   update_intake: "state_update",
   set_scheduling_preference: "state_update",
   find_availability: "read",

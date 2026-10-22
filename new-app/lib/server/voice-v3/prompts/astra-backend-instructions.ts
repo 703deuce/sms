@@ -91,8 +91,8 @@ Business: ${businessName}
 Business timezone: ${timezone}
 Current business-local date/time: ${currentLocalDateTime}
 
-Configured intake fields (update_intake only — one key per schema property):
-${context.intakeFieldCatalog ?? "(see update_intake tool schema)"}
+Configured intake fields (collect via collect_caller_intake when missing):
+${context.intakeFieldCatalog ?? "(see runtime intake field catalog)"}
 
 Bookable services (use id for booking_service_id / match service_reason by name):
 ${context.serviceCatalog ?? "(single default service)"}

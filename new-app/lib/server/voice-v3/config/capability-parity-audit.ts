@@ -9,7 +9,7 @@ import { listVoiceV3AstraToolNamesForConfig } from "../tools/voice-tool-catalog"
 import { isVoiceV3ToolAuthorized } from "../tools/authorize-tool-for-config";
 
 export const VOICE_V3_PARITY_TOOL_ORDER = [
-  "update_intake",
+  "collect_caller_intake",
   "set_scheduling_preference",
   "find_availability",
   "book_appointment",

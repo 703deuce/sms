@@ -35,6 +35,16 @@ _STANDARD_FIELD_TO_COLLECTION: dict[str, IntakeCollectionKind] = {
 
 def resolve_intake_collection_kind(field: dict[str, Any]) -> IntakeCollectionKind:
     """Resolve how to actively collect one wizard field when passive capture did not supply it."""
+    explicit = str(field.get("collectionKind") or "").strip()
+    if explicit in (
+        "livekit_get_name",
+        "livekit_get_email",
+        "livekit_get_phone",
+        "livekit_get_address",
+        "livekit_get_dob",
+        "livekit_function_tool",
+    ):
+        return explicit  # type: ignore[return-value]
     key = str(field.get("key") or "").strip().lower()
     field_type = str(field.get("type") or "").strip().lower()
     if key in _STANDARD_FIELD_TO_COLLECTION:

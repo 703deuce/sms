@@ -8,6 +8,7 @@ import {
   mergeIntakeUpdate,
   normalizeUpdateIntakeArguments,
 } from "../intake-objective";
+import { hasLiveKitActiveCollector } from "../intake-objective/resolve-intake-collection-kind";
 import { logIntakeTelemetry } from "../intake-objective/telemetry";
 import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
 import { LiveContextPublisher } from "../live/live-context-publisher";
@@ -170,7 +171,9 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
       rejected_fields: merged.rejectedFields.map((r) => {
         const field = config.intakeFields.find((f) => f.key === r.field);
         const suggestCollect =
-          r.code === "INVALID_FORMAT" && field?.type === "phone"
+          field &&
+          (r.code === "INVALID_FORMAT" || r.code === "EMPTY_VALUE") &&
+          hasLiveKitActiveCollector(field)
             ? { use_collect_intake_field: true, field_key: r.field }
             : undefined;
         return {

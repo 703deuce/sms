@@ -30,6 +30,14 @@ export interface IntakeFieldDefinition {
   verificationRequired?: boolean;
   /** When set, update_intake schema uses enum constraint (drive-through pattern). */
   enumValues?: string[];
+  /** LiveKit prebuilt collector routing — mirrors Python intake_collection.py */
+  collectionKind?:
+    | "livekit_get_name"
+    | "livekit_get_email"
+    | "livekit_get_phone"
+    | "livekit_get_address"
+    | "livekit_get_dob"
+    | "livekit_function_tool";
 }
 
 export interface VoiceV3TransferDestination {

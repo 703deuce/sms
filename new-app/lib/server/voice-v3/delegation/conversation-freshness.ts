@@ -11,7 +11,7 @@ export type VoiceToolFreshnessClass =
 export type DelegationSemanticFreshness = "FRESH" | "STALE";
 
 const TOOL_CLASS: Record<string, VoiceToolFreshnessClass> = {
-  update_intake: "SHARED_FACT",
+  collect_caller_intake: "SHARED_FACT",
   set_scheduling_preference: "SEMANTIC_STEERING",
   find_availability: "READ",
   find_appointment: "READ",

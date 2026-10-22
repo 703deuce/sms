@@ -1,13 +1,27 @@
 import { callerFieldIdToIntakeKey } from "@/lib/voice-receptionist-wizard/intake/compile-schema";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import { wizardCollectFieldIdToCallerRowId } from "@/lib/solutions/appointment-receptionist/wizard-collect-field-id";
+import { resolveIntakeCollectionKind } from "../intake-objective/resolve-intake-collection-kind";
 import type { IntakeFieldDefinition, IntakeFieldType } from "./agent-config";
 
 type WizardCollectField = AppointmentReceptionistWizardState["collectFields"][number];
 
 function mapCollectFieldType(id: string, intakeKey: string): IntakeFieldType {
-  if (intakeKey === "email" || id === "email") return "email";
-  if (intakeKey === "phone" || id === "phone" || intakeKey === "callback_number") return "phone";
+  const key = intakeKey.toLowerCase();
+  const rowId = id.toLowerCase();
+  if (key === "email" || rowId === "email") return "email";
+  if (key === "phone" || rowId === "phone" || key === "callback_number") return "phone";
+  if (key === "name" || key === "full_name" || rowId === "name") return "text";
+  if (key.includes("address") || rowId.includes("address")) return "text";
+  if (
+    key === "dob" ||
+    key === "date_of_birth" ||
+    rowId.includes("date_of_birth") ||
+    rowId === "dob"
+  ) {
+    return "date";
+  }
+  if (rowId.includes("number") && !rowId.includes("phone")) return "number";
   return "text";
 }
 
@@ -32,7 +46,7 @@ export function compileWizardCollectFieldsToV3Intake(
     const label = f.label?.trim() || key;
     const description = `Caller ${label}.`;
 
-    out.push({
+    const draft: IntakeFieldDefinition = {
       key,
       label,
       type,
@@ -41,7 +55,9 @@ export function compileWizardCollectFieldsToV3Intake(
       collectionStrategy:
         type === "email" ? "voice_email" : type === "phone" ? "voice_phone" : "standard",
       verificationRequired: false,
-    });
+    };
+    draft.collectionKind = resolveIntakeCollectionKind(draft);
+    out.push(draft);
   }
 
   return out;

@@ -31,10 +31,7 @@ import {
   appendVoiceV3ForensicEvent,
   initVoiceV3CallForensics,
 } from "@/lib/server/voice-v3/telemetry/call-forensics";
-import {
-  buildLiveKitIntakeFieldMetadata,
-  buildLiveKitIntakeFunctionTools,
-} from "@/lib/server/voice-v3/tools/livekit-intake-tool-schemas";
+import { buildLiveKitIntakeFieldMetadata } from "@/lib/server/voice-v3/tools/livekit-intake-tool-schemas";
 import type { FunctionTool } from "openai/resources/live/live";
 
 /** Tools executed natively in the LiveKit Python worker (not Astra FunctionTools). */
@@ -292,14 +289,14 @@ export async function resolveNativeVoiceV3LiveKitSession(payload: LiveKitBootstr
     });
   }
   const allowed = editorSet;
-  const intakeTools = buildLiveKitIntakeFunctionTools(voiceV3Config);
   const mergedByName = new Map<string, FunctionTool>();
   for (const t of filterToolsForLiveKitSession(catalogTools)) {
-    if (!allowed.has(toolSchemaName(t))) continue;
-    mergedByName.set(toolSchemaName(t), t);
-  }
-  for (const t of intakeTools) {
-    mergedByName.set(toolSchemaName(t), t);
+    const name = toolSchemaName(t);
+    if (!allowed.has(name)) continue;
+    if (name === "update_intake" || name === "collect_intake_field" || name.startsWith("set_intake_")) {
+      continue;
+    }
+    mergedByName.set(name, t);
   }
   const toolSchemas = [...mergedByName.values()];
   const schemaToolNames = toolSchemas.map((t) => toolSchemaName(t));
