@@ -84,6 +84,79 @@ async def _execute_transovo_tool(
     return result
 
 
+def _field_meta_by_key(intake_fields: list[dict[str, Any]], field_key: str) -> dict[str, Any] | None:
+    for row in intake_fields:
+        if str(row.get("key") or "") == field_key:
+            return row
+    return None
+
+
+_PLACEHOLDER_PHONE_VALUES = frozenset({"null", "none", "n/a", "na", "undefined", ""})
+
+
+def _phone_value_usable(value: Any) -> bool:
+    if value is None:
+        return False
+    text = str(value).strip()
+    if not text or text.lower() in _PLACEHOLDER_PHONE_VALUES:
+        return False
+    if len(text) <= 2 and not any(ch.isdigit() for ch in text):
+        return False
+    digits = "".join(ch for ch in text if ch.isdigit())
+    return len(digits) >= 10
+
+
+def _is_phone_intake_field(meta: dict[str, Any] | None) -> bool:
+    if meta is None:
+        return False
+    return str(meta.get("type") or "").strip().lower() in ("phone", "tel")
+
+
+async def _persist_active_phone_collection(
+    *,
+    field_key: str,
+    context: RunContext,
+    client: TransovoV3ToolClient,
+    intake_fields: list[dict[str, Any]],
+    reason: str,
+) -> dict[str, Any]:
+    logger.info("voice_v3_phone_collect_fallback field=%s reason=%s", field_key, reason)
+    collected = await run_active_intake_collection(
+        context,
+        field_key=field_key,
+        intake_fields=intake_fields,
+    )
+    result = await client.execute(tool_name="update_intake", arguments=collected)
+    if isinstance(result, dict):
+        return apply_live_context_from_tool_result(result, context=context)
+    return result
+
+
+async def _augment_update_intake_with_phone_collection(
+    args: dict[str, Any],
+    *,
+    context: RunContext,
+    client: TransovoV3ToolClient,
+    intake_fields: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """When the model bulk-saves intake with a bad phone string, run LiveKit GetPhoneNumberTask."""
+    out = dict(args)
+    for key, value in list(args.items()):
+        field_key = str(key).strip()
+        meta = _field_meta_by_key(intake_fields, field_key)
+        if not _is_phone_intake_field(meta):
+            continue
+        if _phone_value_usable(value):
+            continue
+        collected = await run_active_intake_collection(
+            context,
+            field_key=field_key,
+            intake_fields=intake_fields,
+        )
+        out.update(collected)
+    return out
+
+
 def _intake_field_key_from_set_tool(tool_name: str, intake_fields: list[dict[str, Any]]) -> str | None:
     if not tool_name.startswith(_SET_INTAKE_PREFIX):
         return None
@@ -124,6 +197,15 @@ async def _dispatch_intake_tool(
     field_key = _intake_field_key_from_set_tool(tool_name, intake_fields)
     if field_key:
         value = args.get("value")
+        meta = _field_meta_by_key(intake_fields, field_key)
+        if _is_phone_intake_field(meta) and not _phone_value_usable(value):
+            return await _persist_active_phone_collection(
+                field_key=field_key,
+                context=context,
+                client=client,
+                intake_fields=intake_fields,
+                reason="invalid_set_intake_value",
+            )
         payload: dict[str, Any] = {field_key: value}
         result = await client.execute(tool_name="update_intake", arguments=payload)
         if isinstance(result, dict):
@@ -189,6 +271,13 @@ def build_livekit_tools(
                     return await _dispatch_intake_tool(
                         tool_name=_tool_name,
                         args=args,
+                        context=context,
+                        client=_client,
+                        intake_fields=intake_meta,
+                    )
+                if _tool_name == "update_intake" and intake_meta:
+                    args = await _augment_update_intake_with_phone_collection(
+                        args,
                         context=context,
                         client=_client,
                         intake_fields=intake_meta,

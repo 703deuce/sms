@@ -167,10 +167,18 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
 
     return toolOk("INTAKE_UPDATED", {
       updated_fields: merged.updatedFields,
-      rejected_fields: merged.rejectedFields.map((r) => ({
-        field: r.field,
-        code: r.code,
-      })),
+      rejected_fields: merged.rejectedFields.map((r) => {
+        const field = config.intakeFields.find((f) => f.key === r.field);
+        const suggestCollect =
+          r.code === "INVALID_FORMAT" && field?.type === "phone"
+            ? { use_collect_intake_field: true, field_key: r.field }
+            : undefined;
+        return {
+          field: r.field,
+          code: r.code,
+          ...(suggestCollect ? { recovery: suggestCollect } : {}),
+        };
+      }),
       missing_required_fields: objective.missingRequiredFields,
       objective: {
         status: objective.status,

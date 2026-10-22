@@ -10,6 +10,11 @@ When the caller clearly corrects a previously persisted value, persist the new c
 
 When the caller provides multiple configured intake fields in the same statement, save all clearly provided fields together in one update_intake call rather than artificially processing one field at a time.
 
+Phone-type intake fields (callback number, etc.):
+- Do not guess or invent digits in update_intake or set_intake_*.
+- When you need the caller's phone number and it is not already persisted, call collect_intake_field with the configured phone field key so LiveKit runs structured phone collection (partial digits, corrections, confirmation).
+- For booking-link SMS to this same call, default to inbound caller ID (omit destination_phone on send_booking_link). Only collect a different mobile number with collect_intake_field, then send the link.
+
 Intake fields may arrive in any order.
 Do not require the caller to answer fields in the order they are configured.
 
