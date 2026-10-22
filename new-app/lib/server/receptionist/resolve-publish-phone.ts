@@ -3,6 +3,7 @@ import "server-only";
 import type { AgentConfig } from "@/lib/agent";
 import { getPrisma } from "@/lib/server/db";
 import { readTelephonyProvision } from "@/lib/server/telephony/telephony-record";
+import { alignEditorConnectionFromWorkspace } from "@/lib/server/receptionist/align-workspace-phone-connection";
 import { resolveWorkspaceOwnedPhoneNumberId } from "@/lib/server/receptionist/validate-phone-connection";
 
 /**
@@ -30,12 +31,13 @@ export async function alignEditorConnectionForPublish(
   workspaceId: string,
   editor: AgentConfig,
 ): Promise<AgentConfig> {
+  let aligned = await alignEditorConnectionFromWorkspace(workspaceId, editor);
   const ingressPhoneId = await newestActiveLiveKitPhoneId(workspaceId);
-  if (!ingressPhoneId) return editor;
+  if (!ingressPhoneId) return aligned;
 
   const currentId =
-    editor.connection.kind === "owned" ? editor.connection.id?.trim() : "";
-  if (currentId === ingressPhoneId) return editor;
+    aligned.connection.kind === "owned" ? aligned.connection.id?.trim() : "";
+  if (currentId === ingressPhoneId) return aligned;
 
   try {
     await resolveWorkspaceOwnedPhoneNumberId(workspaceId, {
@@ -43,11 +45,11 @@ export async function alignEditorConnectionForPublish(
       id: ingressPhoneId,
     });
   } catch {
-    return editor;
+    return aligned;
   }
 
   return {
-    ...editor,
+    ...aligned,
     connection: { kind: "owned", id: ingressPhoneId },
   };
 }

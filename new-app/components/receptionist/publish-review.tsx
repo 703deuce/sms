@@ -71,7 +71,7 @@ export function PublishReview() {
   )
   const legacyTransfers = draft.transfers.filter((t) => t.enabled && t.number?.trim())
   const checks: Check[] = [
-    { label: 'Phone number', state: !conn ? 'fail' : conn.verified ? 'pass' : 'warn', detail: conn ? `${formatPhone(conn.number)} · ${conn.statusLabel}` : 'No number connected', href: '/app/receptionist/call-routing' },
+    { label: 'Phone number', state: !conn ? 'fail' : conn.verified ? 'pass' : 'warn', detail: conn ? `${formatPhone(conn.number)} · ${conn.statusLabel}` : 'No number connected', href: '/app/receptionist/call-handling' },
     { label: 'Voice', state: draft.identity.customVoiceId && !/^voice_\w{6,}$/.test(draft.identity.customVoiceId) ? 'fail' : 'pass', detail: draft.identity.customVoiceId ? `Custom ${draft.identity.customVoiceId}` : 'Library voice', href: '/app/receptionist/agent#identity' },
     { label: 'Greeting', state: draft.identity.greeting.trim().length > 10 ? 'pass' : 'fail', detail: draft.identity.greeting.trim() ? 'Opening line set' : 'Opening line is empty', href: '/app/receptionist/agent#greeting' },
     { label: 'Knowledge', state: caps.answer ? 'warn' : 'pass', detail: caps.answer ? 'Add Business knowledge and/or FAQs on the Knowledge page before publish' : 'Answering questions is off', href: '/app/receptionist/knowledge' },
