@@ -16,6 +16,10 @@ import type {
   VoiceV3TransferMode,
 } from "@/lib/server/voice-v3/transfer/types";
 
+function editorPrefersWarmTransfer(editor: AgentConfig): boolean {
+  return editor.transferStyle !== "cold";
+}
+
 function wizardMode(stepMode: "BASIC" | "WARM" | undefined, defaultWarm: boolean): VoiceV3TransferMode {
   if (stepMode === "WARM") return "WARM";
   if (stepMode === "BASIC") return "DIRECT";
@@ -83,7 +87,7 @@ function compileConversationalIvrTransferPolicy(
 ): VoiceV3TransferPolicyCompiled {
   const adv = editor.transferAdvanced;
   const defaultTimeout = Math.max(5, adv.ringSeconds ?? 30);
-  const defaultWarm = editor.transferStyle === "warm";
+  const defaultWarm = editorPrefersWarmTransfer(editor);
   const mode: VoiceV3TransferMode = defaultWarm ? "WARM" : "DIRECT";
   const fallback = conversationalFallback(editor);
 
@@ -246,7 +250,7 @@ export function compileVoiceV3TransferPolicyFromEditor(editor: AgentConfig): Voi
   const enabled =
     editor.capabilities.transfer === true && adv.humanTransferEnabled !== false;
   const defaultTimeout = Math.max(5, adv.ringSeconds ?? 30);
-  const defaultWarm = editor.transferStyle === "warm";
+  const defaultWarm = editorPrefersWarmTransfer(editor);
   const destinations = destinationsFromEditor(editor, defaultTimeout, defaultWarm);
   const destById = new Map(destinations.map((d) => [d.id, d]));
   const fallback = mapWizardTransferFallback(mapGlobalFallback(adv.globalFallback));

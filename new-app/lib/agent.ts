@@ -425,7 +425,7 @@ export const DEFAULT_AGENT: AgentConfig = {
   ],
   triggers: { asks_person: true, emergency: true, unsupported: true, booking_staff: false, custom: false },
   customTrigger: '',
-  transferStyle: 'cold',
+  transferStyle: 'warm',
   messages: {
     takeMessage: true,
     callbacks: true,

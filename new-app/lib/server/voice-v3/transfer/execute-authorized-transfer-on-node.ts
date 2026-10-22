@@ -245,6 +245,14 @@ export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
   };
 }
 
+function planRequiresWorkerWarmTransfer(plan: VoiceV3AuthorizedTransferPlan): boolean {
+  return plan.targets.some((t) => (t.mode || "DIRECT").toUpperCase() === "WARM");
+}
+
+/**
+ * Cold DIRECT REFER runs on Node (delegated HTTP tool path). Warm transfer needs
+ * LiveKit `WarmTransferTask` + RunContext on the voice worker — do not REFER here.
+ */
 export async function maybeExecuteDelegatedTransferCallResult(input: {
   toolName: string;
   runtime: VoiceV3CallRuntime;
@@ -252,6 +260,16 @@ export async function maybeExecuteDelegatedTransferCallResult(input: {
 }): Promise<VoiceToolResult> {
   if (input.toolName !== "transfer_call") return input.result;
   if (!input.result.ok || input.result.status !== "transfer_authorized") return input.result;
+  const execution = input.result.data?.execution;
+  if (execution && planRequiresWorkerWarmTransfer(execution)) {
+    logVoiceV3TransferEvent("VOICE_V3_TRANSFER_DEFERRED_TO_WORKER", {
+      call_id: input.runtime.getSnapshot().callId,
+      live_session_id: input.runtime.getSnapshot().liveSessionId,
+      route_id: execution.route_id,
+      modes: execution.targets.map((t) => t.mode),
+    });
+    return input.result;
+  }
   return executeAuthorizedTransferOnNodeAfterAuthorize({
     runtime: input.runtime,
     authorized: input.result as VoiceToolResult<{
