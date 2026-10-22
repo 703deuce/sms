@@ -13,6 +13,30 @@ Use this when you **delete the paused Supabase project** and create a **new** fr
 
 ---
 
+## Account-level access (for Cloud Agent / automation)
+
+The agent **does not** have your Supabase dashboard login. It can SSH to **Coolify** and call **HTTPS APIs** only.
+
+To manage **all projects** (reset DB password, reveal API keys, pooler host, wire Coolify) from the server, add one secret to Coolify (or pass once for a run):
+
+| Variable | Where to get it |
+|----------|-----------------|
+| `SUPABASE_ACCESS_TOKEN` | [Supabase Dashboard → Account → Access Tokens](https://supabase.com/dashboard/account/tokens) — create a **scoped** token with **Projects**, **Database config (read/write)**, and **API keys (read)** for org/projects you use, or a classic PAT for the same account |
+
+Then on the host (or Cloud Agent with token in env):
+
+```bash
+export SUPABASE_ACCESS_TOKEN='sbp_...'
+export SUPABASE_PROJECT_REF='ztccppxodhgdyejkuuax'
+export SUPABASE_DB_PASSWORD='your-chosen-db-password'
+bash scripts/operations/supabase-wire-project-via-management-api.sh
+# feed output into coolify-update-supabase-env.sh + redeploy
+```
+
+**Publishable key + guessed DB password are not enough** — they cannot reset Postgres or reveal the **secret** key. That requires the account PAT or manual copy from the dashboard.
+
+---
+
 ## 1. What production used (last known)
 
 | Item | Value |
