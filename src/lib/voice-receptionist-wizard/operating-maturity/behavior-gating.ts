@@ -49,7 +49,8 @@ export function gateCapabilitiesForOperatingState(input: {
     transferToolAvailable: anyTransfer,
     officeTransferAllowed: officeTransfer,
     onCallEscalationAllowed: onCall,
-    liveBookingAllowed: closed ? when.allowLiveBooking && baseBooking : baseBooking,
+    // Live FIND/BOOK follows agent capabilities only — not business-hours / after-hours policy.
+    liveBookingAllowed: baseBooking,
     callbackToolAvailable: closed ? when.allowCallbackRequest && baseCallback : baseCallback,
     messageTakingAllowed: closed ? when.allowMessageTaking : true,
   };

@@ -8,6 +8,8 @@ import { normalizeReceptionistEditor } from "@/lib/server/receptionist/normalize
 import { operatingPolicyFromEditor } from "@/lib/server/receptionist/operating-maturity-from-editor";
 import { editorToVoiceV3AgentConfig } from "@/lib/server/voice-v3/editor-to-voice-v3-config";
 import { isVoiceV3ToolAuthorized } from "@/lib/server/voice-v3/tools/authorize-tool-for-config";
+import { isVoiceV3ToolAuthorizedEffective } from "@/lib/server/voice-v3/policy/effective-tool-authorization";
+import { gateCapabilitiesForOperatingState } from "@/lib/server/voice-v3/operating-maturity/behavior-gating";
 import { DEFAULT_AFTER_HOURS_BEHAVIOR } from "@/lib/receptionist/operating-defaults";
 
 const base = defaultReceptionistEditorConfig();
@@ -64,6 +66,43 @@ const v3 = editorToVoiceV3AgentConfig({
 assert.ok(
   isVoiceV3ToolAuthorized(v3, "find_availability"),
   "find_availability authorized when booking on and policy aligned",
+);
+
+const v3StalePolicy = {
+  ...v3,
+  operatingPolicy: v3.operatingPolicy
+    ? {
+        ...v3.operatingPolicy,
+        afterHoursBehavior: {
+          ...v3.operatingPolicy.afterHoursBehavior,
+          whenClosed: {
+            ...v3.operatingPolicy.afterHoursBehavior.whenClosed,
+            allowLiveBooking: false,
+          },
+        },
+      }
+    : undefined,
+};
+assert.ok(
+  isVoiceV3ToolAuthorizedEffective(v3StalePolicy, "find_availability"),
+  "after-hours allowLiveBooking false does not block booking when capability is on",
+);
+
+const closedGates = gateCapabilitiesForOperatingState({
+  ctx: { capabilities: { bookingEnabled: true, voiceV2PstnLiveBooking: true } },
+  operating: { state: "CLOSED_AFTER_HOURS", label: "After hours", reason: "test" },
+  behavior: {
+    useOperatingStateDuringCalls: true,
+    whenClosed: {
+      ...DEFAULT_AFTER_HOURS_BEHAVIOR.whenClosed,
+      allowLiveBooking: false,
+    },
+  },
+});
+assert.equal(
+  closedGates.liveBookingAllowed,
+  true,
+  "closed + allowLiveBooking false still allows live booking when capability on",
 );
 
 const noBook = { ...liveBook, capabilities: { ...liveBook.capabilities, book: false } };

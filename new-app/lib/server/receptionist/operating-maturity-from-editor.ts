@@ -2,7 +2,7 @@ import type { AgentConfig, OperatingMaturityConfig } from "@/lib/agent";
 import {
   alignAfterHoursBehaviorForLiveBooking,
   isEditorLiveBookingEnabled,
-} from "@/lib/server/receptionist/live-booking-editor";
+} from "@/lib/receptionist/live-booking-editor";
 
 /** Schedule used for operating-state resolution (custom coverage overrides when active). */
 export function resolveBusinessScheduleForRuntime(editor: AgentConfig): OperatingMaturityConfig["businessSchedule"] {

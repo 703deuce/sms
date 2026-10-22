@@ -9,6 +9,7 @@ import { SimpleSelect } from '@/components/app/filters'
 import { OptionGroup } from '@/components/app/option-group'
 import { StatusBadge } from '@/components/app/status'
 import { Callout } from '@/components/numbers/number-ui'
+import { isEditorLiveBookingEnabled } from '@/lib/receptionist/live-booking-editor'
 import { Pills, Section, ToggleRow } from './ai-ui'
 
 const DAYS: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -209,7 +210,7 @@ export function OperationsEditor({ draft, update }: Props) {
         id="after-hours"
         icon={Moon}
         title="After-hours behavior"
-        description="Which tools stay available when the business is closed."
+        description="Transfer, callback, and message-taking when the business is closed. Live calendar booking follows the Book capability, not these toggles."
       >
         <ToggleRow
           title="Use operating state during calls"
@@ -223,7 +224,22 @@ export function OperationsEditor({ draft, update }: Props) {
           }
         />
         <div className="flex flex-col divide-y rounded-lg ring-1 ring-foreground/8 px-3">
-          <ToggleRow title="Allow live booking when closed" checked={whenClosed.allowLiveBooking} onChange={(v) => update('operating', (o) => ({ ...o, afterHoursBehavior: { ...o.afterHoursBehavior, whenClosed: { ...whenClosed, allowLiveBooking: v } } }))} />
+          {!isEditorLiveBookingEnabled(draft) ? (
+            <ToggleRow
+              title="Allow live booking when closed"
+              description="Only applies when Book is off or link/request-only. Live calendar booking ignores this."
+              checked={whenClosed.allowLiveBooking}
+              onChange={(v) =>
+                update('operating', (o) => ({
+                  ...o,
+                  afterHoursBehavior: {
+                    ...o.afterHoursBehavior,
+                    whenClosed: { ...whenClosed, allowLiveBooking: v },
+                  },
+                }))
+              }
+            />
+          ) : null}
           <ToggleRow title="Allow callbacks when closed" checked={whenClosed.allowCallbackRequest} onChange={(v) => update('operating', (o) => ({ ...o, afterHoursBehavior: { ...o.afterHoursBehavior, whenClosed: { ...whenClosed, allowCallbackRequest: v } } }))} />
           <ToggleRow title="Allow messages when closed" checked={whenClosed.allowMessageTaking} onChange={(v) => update('operating', (o) => ({ ...o, afterHoursBehavior: { ...o.afterHoursBehavior, whenClosed: { ...whenClosed, allowMessageTaking: v } } }))} />
           <ToggleRow title="Allow on-call escalation" checked={whenClosed.allowOnCallEscalation} onChange={(v) => update('operating', (o) => ({ ...o, afterHoursBehavior: { ...o.afterHoursBehavior, whenClosed: { ...whenClosed, allowOnCallEscalation: v } } }))} />

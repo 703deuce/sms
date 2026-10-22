@@ -9,10 +9,7 @@ export function isEditorLiveBookingEnabled(editor: AgentConfig): boolean {
   );
 }
 
-/**
- * When booking is enabled in the agent editor, after-hours policy must allow live booking
- * at runtime — otherwise capabilities, tools, and prompts say "book" while authorize denies FIND/BOOK.
- */
+/** Keeps stored editor policy consistent; runtime no longer gates FIND/BOOK on after-hours when book is on. */
 export function alignAfterHoursBehaviorForLiveBooking(
   behavior: AfterHoursBehaviorConfig,
   bookLive: boolean,

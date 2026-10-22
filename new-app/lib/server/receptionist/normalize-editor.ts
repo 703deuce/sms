@@ -13,7 +13,7 @@ import {
   alignAfterHoursBehaviorForLiveBooking,
   alignRuntimeProfileForLiveBooking,
   isEditorLiveBookingEnabled,
-} from "@/lib/server/receptionist/live-booking-editor";
+} from "@/lib/receptionist/live-booking-editor";
 
 export function normalizeReceptionistEditor(editor: AgentConfig): AgentConfig {
   let aligned = alignRuntimeProfileForLiveBooking(editor);
