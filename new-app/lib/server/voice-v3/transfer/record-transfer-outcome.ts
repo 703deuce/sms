@@ -42,11 +42,22 @@ export async function recordVoiceV3TransferOutcomeForNewApp(input: {
       id: true,
       metadata: true,
       fromE164: true,
-      contact: { select: { firstName: true, lastName: true } },
+      contactId: true,
     },
   });
   if (!call) {
     return { ok: true };
+  }
+
+  let callerName: string | null = null;
+  if (call.contactId) {
+    const contact = await prisma.contact.findFirst({
+      where: { id: call.contactId, workspaceId: input.workspaceId },
+      select: { firstName: true, lastName: true },
+    });
+    if (contact) {
+      callerName = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || null;
+    }
   }
 
   const meta = asRecord(call.metadata);
@@ -113,9 +124,6 @@ export async function recordVoiceV3TransferOutcomeForNewApp(input: {
         label: destMap.get(a.destination_id) || "On-call",
         outcome: outcomeLabel(a.outcome),
       }));
-      const callerName = call.contact
-        ? [call.contact.firstName, call.contact.lastName].filter(Boolean).join(" ")
-        : null;
       await notifyVoiceV3TransferOutcome({
         config: loaded.config,
         workspaceId: input.workspaceId,
