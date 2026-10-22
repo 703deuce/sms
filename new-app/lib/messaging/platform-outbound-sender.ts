@@ -1,9 +1,15 @@
+import "server-only";
+
+import { resolveCanonicalMctbPlatformSender } from "@/lib/mctb/messaging/platform-sender-config";
+
 export async function resolveSharedPlatformOutboundSender(): Promise<{
   fromE164: string;
   phoneNumberId: string;
 } | null> {
-  const from = process.env.VOICE_OUTBOUND_SMS_FROM_E164?.trim();
-  const id = process.env.VOICE_OUTBOUND_SMS_PHONE_NUMBER_ID?.trim();
-  if (!from || !id) return null;
-  return { fromE164: from, phoneNumberId: id };
+  const sender = await resolveCanonicalMctbPlatformSender();
+  if (!sender?.e164 || !sender.phoneNumberId) return null;
+  return {
+    fromE164: sender.e164,
+    phoneNumberId: sender.phoneNumberId,
+  };
 }

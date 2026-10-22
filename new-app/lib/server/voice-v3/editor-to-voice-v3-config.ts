@@ -319,6 +319,7 @@ export function editorToVoiceV3AgentConfig(input: {
           : "CONFIGURED_NOT_IMPLEMENTED",
       bookingLinkUrl: editor.appointments.bookingLink?.trim() || null,
       bookingLinkLabel: editor.appointments.linkSender?.trim() || null,
+      sendLinkConsentRequired: isBookingLinkOnlyLaunch() ? false : undefined,
     },
   });
 
@@ -416,7 +417,7 @@ export function editorToVoiceV3AgentConfig(input: {
     const mt = editor.messageTaking;
     const linkGuards: string[] = [
       "You are a conversational phone menu. Do not claim an appointment is booked on the call, check live calendar availability, or promise specific confirmed times.",
-      "When the caller wants to schedule, offer to text them the business booking link: obtain SMS consent if required, then use send_booking_link with confirmed=true.",
+      "When the caller wants to schedule, call send_booking_link with confirmed=true as soon as they agree to receive the link by text (same turn when possible). Do not describe sending without calling the tool.",
       "You may still transfer or take a message if they prefer not to receive a text.",
     ];
     if (mt?.additionalInstructions?.trim()) {
