@@ -183,9 +183,19 @@ export function authorizeVoiceV3Transfer(input: {
       continue;
     }
     if (!dest.phoneE164) continue;
+    const runtimeMode = runtimeModeForLiveKitPstnTarget(t.mode);
+    if (runtimeMode !== t.mode) {
+      logVoiceV3TransferEvent("VOICE_V3_TRANSFER_MODE_UPGRADED_TO_WARM", {
+        call_id: callContext.callId,
+        live_session_id: callContext.liveSessionId,
+        route_id: route.id,
+        destination_id: dest.id,
+        compiled_mode: t.mode,
+      });
+    }
     authorizedTargets.push({
       destination_id: dest.id,
-      mode: t.mode,
+      mode: runtimeMode,
       dial_target: dest.phoneE164,
       ringing_timeout_seconds: t.ringingTimeoutSeconds,
       executor: "livekit_sip",
