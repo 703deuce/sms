@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AgentConfig } from "@/lib/agent";
 import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
+import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
 import { validateEditorForPublish } from "@/lib/server/receptionist/compile-runtime";
 import { resolveWorkspaceOwnedPhoneNumberId } from "@/lib/server/receptionist/validate-phone-connection";
 import { resolveSchedulingBackend } from "@/lib/server/voice-v3/scheduling/connections";
@@ -57,7 +58,10 @@ export async function validateReceptionistPublish(
     }
   }
 
-  if (!isConversationalIvrEditor(editor) && editor.capabilities.book && editor.appointments.strategy === "link") {
+  if (
+    editor.capabilities.book &&
+    (editor.appointments.strategy === "link" || isBookingLinkOnlyLaunch())
+  ) {
     if (!editor.appointments.bookingLink?.trim()) {
       errors.push("Booking link URL is required when using link booking strategy.");
     }

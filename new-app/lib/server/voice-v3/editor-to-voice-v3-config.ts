@@ -22,6 +22,7 @@ import {
   isConversationalIvrEditor,
   resolveRuntimeProfile,
 } from "@/lib/receptionist/runtime-profile";
+import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
 
 export type KnowledgeCompileSlice = {
   knowledgeBaseIds: string[];
@@ -56,6 +57,7 @@ function mapIntakeField(f: AgentConfig["intake"][number]): IntakeFieldDefinition
 
 function bookingStrategy(editor: AgentConfig): VoiceWizardBookingStrategy {
   if (!editor.capabilities.book) return "NONE";
+  if (isBookingLinkOnlyLaunch()) return "SEND_LINK";
   if (editor.appointments.strategy === "link") return "SEND_LINK";
   if (editor.appointments.strategy === "request") return "REQUEST_ONLY";
   if (editor.appointments.strategy === "none" || editor.appointments.provider === "none") {
@@ -259,6 +261,10 @@ export function editorToVoiceV3AgentConfig(input: {
     telephony: {
       phoneNumberId: editor.connection.id?.trim() || null,
       phoneNumberE164: null,
+      outboundSmsMode:
+        strategy === "SEND_LINK" || isBookingLinkOnlyLaunch() ? "platform" : undefined,
+      outboundSmsPhoneNumberId: null,
+      outboundSmsE164: null,
       callRecording:
         editor.audio.recording === "inbound"
           ? "inbound_only"
@@ -337,7 +343,10 @@ export function editorToVoiceV3AgentConfig(input: {
     },
   };
 
-  if (isConversationalIvrEditor(editor) && !bookLive) {
+  const bookLink =
+    cap.book && (editor.appointments.strategy === "link" || isBookingLinkOnlyLaunch());
+
+  if (isConversationalIvrEditor(editor) && !bookLive && !bookLink) {
     const mt = editor.messageTaking;
     const extraGuards: string[] = [
       "You are a conversational phone menu — not a full receptionist. Never claim an appointment was booked, check calendar availability, promise confirmed times, reschedule or cancel appointments, or send booking links.",
@@ -399,6 +408,44 @@ export function editorToVoiceV3AgentConfig(input: {
             editor.capabilities.answer &&
             (knowledge.openaiVectorStoreIds.length > 0 || knowledge.faqFacts.length > 0),
         },
+      },
+    };
+  }
+
+  if (isConversationalIvrEditor(editor) && bookLink && !bookLive) {
+    const mt = editor.messageTaking;
+    const linkGuards: string[] = [
+      "You are a conversational phone menu. Do not claim an appointment is booked on the call, check live calendar availability, or promise specific confirmed times.",
+      "When the caller wants to schedule, offer to text them the business booking link: obtain SMS consent if required, then use send_booking_link with confirmed=true.",
+      "You may still transfer or take a message if they prefer not to receive a text.",
+    ];
+    if (mt?.additionalInstructions?.trim()) {
+      linkGuards.push(mt.additionalInstructions.trim());
+    }
+    base = {
+      ...base,
+      capabilities: {
+        ...base.capabilities,
+        checkAvailability: false,
+        bookAppointments: false,
+        findAppointments: false,
+        rescheduleAppointments: false,
+        cancelAppointments: false,
+        sendSms: true,
+      },
+      scheduling: {
+        ...base.scheduling,
+        bookingStrategy: "SEND_LINK",
+      },
+      bookingStrategyDetail: {
+        ...base.bookingStrategyDetail,
+        strategy: "SEND_LINK",
+        executionStatus: "ACTIVE_EXECUTION",
+        bookingLinkUrl: editor.appointments.bookingLink?.trim() || base.bookingStrategyDetail.bookingLinkUrl,
+      },
+      conversation: {
+        ...base.conversation,
+        guardrails: [...(base.conversation.guardrails ?? []), ...linkGuards],
       },
     };
   }

@@ -359,7 +359,13 @@ export function assertSendLinkPublishable(
   if (!url) {
     return { ok: false, reason: "Booking URL missing" };
   }
-  if (!config.telephony?.outboundSmsE164 && !config.telephony?.outboundSmsPhoneNumberId) {
+  const platformFrom = process.env.VOICE_OUTBOUND_SMS_FROM_E164?.trim();
+  const platformId = process.env.VOICE_OUTBOUND_SMS_PHONE_NUMBER_ID?.trim();
+  const hasPlatformSender = Boolean(platformFrom && platformId);
+  const hasTelephonySender = Boolean(
+    config.telephony?.outboundSmsE164?.trim() || config.telephony?.outboundSmsPhoneNumberId?.trim(),
+  );
+  if (!hasTelephonySender && !hasPlatformSender) {
     return { ok: false, reason: "SMS sender not configured" };
   }
   return { ok: true };

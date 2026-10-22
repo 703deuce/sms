@@ -14,9 +14,25 @@ import {
   alignRuntimeProfileForLiveBooking,
   isEditorLiveBookingEnabled,
 } from "@/lib/receptionist/live-booking-editor";
+import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
+
+function coerceEditorForBookingLinkOnlyLaunch(editor: AgentConfig): AgentConfig {
+  if (!isBookingLinkOnlyLaunch()) return editor;
+  if (!editor.capabilities.book) return editor;
+  const ap = editor.appointments;
+  if (ap.strategy === "link" && ap.provider === "none") return editor;
+  return {
+    ...editor,
+    appointments: {
+      ...ap,
+      strategy: "link",
+      provider: "none",
+    },
+  };
+}
 
 export function normalizeReceptionistEditor(editor: AgentConfig): AgentConfig {
-  let aligned = alignRuntimeProfileForLiveBooking(editor);
+  let aligned = alignRuntimeProfileForLiveBooking(coerceEditorForBookingLinkOnlyLaunch(editor));
   const kp = aligned.knowledgeProfile ?? DEFAULT_KNOWLEDGE_PROFILE;
   const operating = aligned.operating ?? DEFAULT_OPERATING_MATURITY;
   const bookLive = isEditorLiveBookingEnabled(aligned);

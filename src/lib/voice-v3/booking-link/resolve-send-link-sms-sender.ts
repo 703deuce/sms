@@ -2,6 +2,7 @@ import "server-only";
 
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import { resolveSharedPlatformOutboundSender } from "@/lib/messaging/platform-outbound-sender";
+import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
 import { isPlatformOutboundSmsMode } from "@/lib/voice/sms/voice-outbound-sms-constants";
 import { resolveVoiceOutboundSmsFrom } from "@/lib/voice/sms/voice-outbound-sms-from";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
@@ -22,13 +23,18 @@ export async function resolveSendLinkSmsSender(input: {
   const tel = input.config.telephony;
   const mode = tel?.outboundSmsMode;
 
-  if (isPlatformOutboundSmsMode(mode)) {
+  const platformSender = async (): Promise<ResolvedSendLinkSmsSender | null> => {
     const platform = await resolveSharedPlatformOutboundSender();
     if (!platform?.fromE164 || !platform.phoneNumberId) return null;
     return {
       fromE164: platform.fromE164,
       phoneNumberId: platform.phoneNumberId,
     };
+  };
+
+  if (isBookingLinkOnlyLaunch() || isPlatformOutboundSmsMode(mode)) {
+    const platform = await platformSender();
+    if (platform) return platform;
   }
 
   const explicit = normalizePhoneE164(tel?.outboundSmsE164);
@@ -59,5 +65,5 @@ export async function resolveSendLinkSmsSender(input: {
     return { fromE164, phoneNumberId: configuredId };
   }
 
-  return null;
+  return await platformSender();
 }

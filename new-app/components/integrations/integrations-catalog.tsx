@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { StatusBadge, type Tone } from '@/components/app/status'
 import { INTEGRATION_CATALOG, type IntegrationCatalogItem } from '@/lib/integrations/catalog'
+import { isBookingLinkOnlyLaunch } from '@/lib/receptionist/booking-launch-mode'
 import { formatWhen } from '@/lib/format'
 
 type Status = 'connected' | 'available' | 'error' | 'loading'
@@ -27,7 +28,10 @@ const STATUS: Record<Status, { label: string; tone: Tone }> = {
   loading: { label: 'Loading…', tone: 'muted' },
 }
 
-const CATEGORIES = ['Calendar', 'CRM', 'Payments'] as const
+const ALL_CATEGORIES = ['Calendar', 'CRM', 'Payments'] as const
+const CATEGORIES = isBookingLinkOnlyLaunch()
+  ? ALL_CATEGORIES.filter((c) => c !== 'Calendar')
+  : [...ALL_CATEGORIES]
 
 type CalendarRow = {
   id: string

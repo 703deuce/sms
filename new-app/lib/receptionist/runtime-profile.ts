@@ -1,4 +1,5 @@
 import type { AgentConfig } from "@/lib/agent";
+import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
 import type { VoiceV3AgentConfig } from "@/lib/server/voice-v3/config/agent-config";
 
 export type RuntimeProfile = "conversational_ivr" | "full_receptionist";
@@ -107,5 +108,9 @@ export function conversationalIvrToolAllowlist(editor: AgentConfig): string[] {
   const messageOn =
     editor.messageTaking?.enabled ?? editor.messages.takeMessage ?? editor.capabilities.message;
   if (messageOn) names.push("take_message");
+  const bookLink =
+    editor.capabilities.book &&
+    (isBookingLinkOnlyLaunch() || editor.appointments.strategy === "link");
+  if (bookLink) names.push("send_booking_link");
   return [...new Set(names)];
 }

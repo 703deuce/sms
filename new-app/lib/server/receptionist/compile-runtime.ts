@@ -1,5 +1,6 @@
 import type { AgentConfig } from "@/lib/agent";
 import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
+import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
 import type { ReceptionistPublishedBundle } from "@/lib/server/receptionist/draft-types";
 import {
   RECEPTIONIST_PUBLISHED_SCHEMA_VERSION,
@@ -118,6 +119,14 @@ export function validateEditorForPublish(config: AgentConfig): { ok: true } | { 
     errors.push("Assign a phone number on Overview or Call Routing.");
   }
   const conversational = isConversationalIvrEditor(config);
+  if (
+    config.capabilities.book &&
+    (config.appointments.strategy === "link" || isBookingLinkOnlyLaunch())
+  ) {
+    if (!config.appointments.bookingLink?.trim()) {
+      errors.push("Booking link URL is required when using link booking strategy.");
+    }
+  }
   if (!conversational && config.capabilities.book && config.appointments.strategy === "live") {
     if (config.appointments.provider === "none") {
       errors.push("Connect a calendar or change booking strategy.");

@@ -15,7 +15,10 @@ import { StatusBadge } from '@/components/app/status'
 import { Callout } from '@/components/numbers/number-ui'
 import { useAgent } from '@/components/providers/agent-provider'
 import type { AgentConfig, AppointmentType } from '@/lib/agent'
+import { isBookingLinkOnlyLaunch } from '@/lib/receptionist/booking-launch-mode'
 import { DemoNote, JumpChips, Pills, Section, ToggleRow } from './ai-ui'
+
+const LINK_ONLY_LAUNCH = isBookingLinkOnlyLaunch()
 
 type Appt = AgentConfig['appointments']
 
@@ -58,11 +61,19 @@ export function AppointmentsManager() {
   const bookingOff = !draft.capabilities.book
 
   useEffect(() => {
+    if (LINK_ONLY_LAUNCH) return
     void fetch('/api/integrations/status')
       .then((r) => r.json())
       .then((j) => setCalendars((j.data?.calendars as CalendarRow[]) ?? []))
       .catch(() => setCalendars([]))
   }, [])
+
+  useEffect(() => {
+    if (!LINK_ONLY_LAUNCH || bookingOff) return
+    if (a.strategy !== 'link' || a.provider !== 'none') {
+      set({ strategy: 'link', provider: 'none' })
+    }
+  }, [bookingOff, a.strategy, a.provider, set])
 
   const PROVIDERS = providerCards(calendars)
   const returnTo = encodeURIComponent('/app/receptionist/appointments')
@@ -76,59 +87,89 @@ export function AppointmentsManager() {
         </Callout>
       )}
 
-      <JumpChips items={[{ id: 'strategy', label: 'Booking strategy' }, { id: 'types', label: 'Appointment types' }, { id: 'flow', label: 'Booking flow' }, { id: 'changes', label: 'Reschedule & cancel' }]} />
+      <JumpChips
+        items={
+          LINK_ONLY_LAUNCH
+            ? [{ id: 'strategy', label: 'Booking link' }, { id: 'types', label: 'Appointment types' }]
+            : [
+                { id: 'strategy', label: 'Booking strategy' },
+                { id: 'types', label: 'Appointment types' },
+                { id: 'flow', label: 'Booking flow' },
+                { id: 'changes', label: 'Reschedule & cancel' },
+              ]
+        }
+      />
 
-      <Section id="strategy" icon={CalendarClock} title="Booking strategy" description="How Ava turns a caller into an appointment.">
-        <OptionGroup
-          label="Strategy"
-          value={a.strategy}
-          onChange={(v) => set({ strategy: v })}
-          columns={2}
-          options={[
-            { value: 'live', label: 'Book live', description: 'Checks real availability and books on the call.', disabled: a.provider === 'none' },
-            { value: 'request', label: 'Take a request', description: 'Collects preferences; your team confirms.' },
-            { value: 'link', label: 'Text a booking link', description: 'Sends your scheduling link by SMS.' },
-            { value: 'none', label: 'Don’t book', description: 'Offer a callback instead.' },
-          ]}
-        />
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Calendar</span>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {PROVIDERS.map((p) => (
-              <button
-                key={p.value}
-                type="button"
-                aria-pressed={a.provider === p.value}
-                onClick={() => set({ provider: p.value, strategy: p.value === 'none' && a.strategy === 'live' ? 'request' : a.strategy })}
-                className="flex items-center gap-3 rounded-lg surface p-3 text-left transition-all aria-pressed:ring-2 aria-pressed:ring-primary"
-              >
-                <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm font-medium">{p.label}</span>
-                  <span className="truncate text-xs text-muted-foreground">{p.detail}</span>
-                </span>
-                {p.tone !== 'muted' && <StatusBadge tone={p.tone}>{p.tone === 'success' ? 'Connected' : 'Error'}</StatusBadge>}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link href="/app/integrations" className="text-xs font-medium text-primary hover:underline">
-              Manage calendar connections in Integrations
-            </Link>
-            {a.provider === 'microsoft' && providerCards(calendars).find((p) => p.value === 'microsoft')?.tone !== 'success' && (
-              <Link href={`/app/integrations?connect=microsoft&returnTo=${returnTo}`} className="text-xs font-medium text-primary hover:underline">
-                Connect Microsoft 365
+      <Section
+        id="strategy"
+        icon={CalendarClock}
+        title={LINK_ONLY_LAUNCH ? 'Booking link' : 'Booking strategy'}
+        description={
+          LINK_ONLY_LAUNCH
+            ? 'Ava texts your scheduling link from the Transovo platform number when callers want to book.'
+            : 'How Ava turns a caller into an appointment.'
+        }
+      >
+        {LINK_ONLY_LAUNCH ? (
+          <Callout tone="info" icon={Link2}>
+            Live calendar booking and calendar connections are temporarily hidden. Only link-by-SMS is available right now.
+          </Callout>
+        ) : (
+          <OptionGroup
+            label="Strategy"
+            value={a.strategy}
+            onChange={(v) => set({ strategy: v })}
+            columns={2}
+            options={[
+              { value: 'live', label: 'Book live', description: 'Checks real availability and books on the call.', disabled: a.provider === 'none' },
+              { value: 'request', label: 'Take a request', description: 'Collects preferences; your team confirms.' },
+              { value: 'link', label: 'Text a booking link', description: 'Sends your scheduling link by SMS.' },
+              { value: 'none', label: 'Don’t book', description: 'Offer a callback instead.' },
+            ]}
+          />
+        )}
+        {!LINK_ONLY_LAUNCH && (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">Calendar</span>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {PROVIDERS.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  aria-pressed={a.provider === p.value}
+                  onClick={() => set({ provider: p.value, strategy: p.value === 'none' && a.strategy === 'live' ? 'request' : a.strategy })}
+                  className="flex items-center gap-3 rounded-lg surface p-3 text-left transition-all aria-pressed:ring-2 aria-pressed:ring-primary"
+                >
+                  <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-sm font-medium">{p.label}</span>
+                    <span className="truncate text-xs text-muted-foreground">{p.detail}</span>
+                  </span>
+                  {p.tone !== 'muted' && <StatusBadge tone={p.tone}>{p.tone === 'success' ? 'Connected' : 'Error'}</StatusBadge>}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/app/integrations" className="text-xs font-medium text-primary hover:underline">
+                Manage calendar connections in Integrations
               </Link>
-            )}
-          </div>
-        </div>
-        {a.strategy === 'link' && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2"><Label htmlFor="bl">Booking link</Label><Input id="bl" type="url" value={a.bookingLink} onChange={(e) => set({ bookingLink: e.target.value })} /></div>
-            <div className="flex flex-col gap-2"><Label htmlFor="bs">Sent from</Label><Input id="bs" value={a.linkSender} readOnly /></div>
+              {a.provider === 'microsoft' && providerCards(calendars).find((p) => p.value === 'microsoft')?.tone !== 'success' && (
+                <Link href={`/app/integrations?connect=microsoft&returnTo=${returnTo}`} className="text-xs font-medium text-primary hover:underline">
+                  Connect Microsoft 365
+                </Link>
+              )}
+            </div>
           </div>
         )}
-        {a.provider === 'calendly' && <Callout tone="warning" icon={Link2}>Calendly is disconnected. Live booking will fail and fall back to taking a request until you reconnect.</Callout>}
+        {(LINK_ONLY_LAUNCH || a.strategy === 'link') && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2"><Label htmlFor="bl">Booking link</Label><Input id="bl" type="url" value={a.bookingLink} onChange={(e) => set({ bookingLink: e.target.value })} /></div>
+            <div className="flex flex-col gap-2"><Label htmlFor="bs">Sent from</Label><Input id="bs" value={a.linkSender} readOnly placeholder="Transovo platform number" /></div>
+          </div>
+        )}
+        {!LINK_ONLY_LAUNCH && a.provider === 'calendly' && (
+          <Callout tone="warning" icon={Link2}>Calendly is disconnected. Live booking will fail and fall back to taking a request until you reconnect.</Callout>
+        )}
       </Section>
 
       <Section id="types" icon={ListChecks} title="Appointment types" description="Ava only offers enabled types.">
@@ -165,6 +206,7 @@ export function AppointmentsManager() {
         </Button>
       </Section>
 
+      {!LINK_ONLY_LAUNCH && (
       <Section id="flow" icon={Settings2} title="Booking flow" description="The questions Ava asks and how she offers times.">
         <div className="divide-y">
           <ToggleRow title="Ask which appointment type" checked={a.askType} onChange={(v) => set({ askType: v })} />
@@ -175,7 +217,9 @@ export function AppointmentsManager() {
         </div>
         <Pills label="Times offered at once" value={String(a.offerCount) as '2' | '3' | '4'} onChange={(v) => set({ offerCount: Number(v) })} options={[{ value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]} />
       </Section>
+      )}
 
+      {!LINK_ONLY_LAUNCH && (
       <Section id="changes" icon={CalendarDays} title="Reschedule & cancel" defaultOpen={false} description="What callers can change on their own.">
         <div className="divide-y">
           <ToggleRow title="Allow rescheduling" checked={a.allowReschedule && draft.capabilities.reschedule} disabled={!draft.capabilities.reschedule} onChange={(v) => set({ allowReschedule: v })} />
@@ -183,6 +227,7 @@ export function AppointmentsManager() {
         </div>
         <div className="flex flex-col gap-2"><Label htmlFor="cp">Cancellation policy Ava reads</Label><Textarea id="cp" rows={2} value={a.cancelPolicy} onChange={(e) => set({ cancelPolicy: e.target.value })} /></div>
       </Section>
+      )}
 
       <DemoNote />
       <TypeSheet value={editing} onClose={() => setEditing(null)} />
@@ -216,15 +261,19 @@ function TypeSheet({ value, onClose }: { value: AppointmentType | null; onClose:
               </div>
             </div>
             <div className="flex flex-col gap-2"><Label htmlFor="t-loc">Location</Label><Input id="t-loc" value={f.location} onChange={(e) => setForm({ ...f, location: e.target.value })} /></div>
+            {!LINK_ONLY_LAUNCH && (
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-2"><Label htmlFor="t-cal">Calendar</Label><Input id="t-cal" value={f.calendar} onChange={(e) => setForm({ ...f, calendar: e.target.value })} /></div>
               <div className="flex flex-col gap-2"><Label htmlFor="t-hrs">Bookable hours</Label><Input id="t-hrs" value={f.hours} onChange={(e) => setForm({ ...f, hours: e.target.value })} /></div>
             </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-2"><Label htmlFor="t-notice">Min notice (hrs)</Label><Input id="t-notice" type="number" min={0} value={f.noticeHours} onChange={(e) => setForm({ ...f, noticeHours: Number(e.target.value) })} /></div>
               <div className="flex flex-col gap-2"><Label htmlFor="t-adv">Book up to (days)</Label><Input id="t-adv" type="number" min={1} value={f.advanceDays} onChange={(e) => setForm({ ...f, advanceDays: Number(e.target.value) })} /></div>
             </div>
+            {!LINK_ONLY_LAUNCH && (
             <Pills label="Ava can" value={f.booking} onChange={(v) => setForm({ ...f, booking: v })} options={[{ value: 'book', label: 'Book directly' }, { value: 'request', label: 'Take a request' }]} />
+            )}
           </div>
         )}
         <SheetFooter className="flex-row justify-between border-t p-4">
