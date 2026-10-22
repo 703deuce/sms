@@ -11,6 +11,7 @@ import { compileVoiceBookingLinkSpokenDisclosure } from "./spoken-disclosure";
 import { isSendLinkStrategy, resolveSendLinkConfig } from "./resolve-config";
 import type { VoiceV3BookingLinkCallState } from "./types";
 import { recordVoiceBookingLinkVerbalConsent } from "./record-verbal-consent";
+import { resolveStoredIntakeStringFromConfig } from "../intake-objective/resolve-stored-intake";
 
 export type SendBookingLinkToolArgs = {
   confirmed: boolean;
@@ -54,20 +55,46 @@ function buildAttemptId(input: {
   return `${input.callId}:${input.destinationE164}:${input.configVersion}:${input.bookingUrl}`;
 }
 
+/** LiveKit session ids embed PSTN ANI: `lk_transovo-call-_+15714776175_<suffix>`. */
+function inferAniFromLiveSessionId(liveSessionId: string | null | undefined): string | null {
+  const id = liveSessionId?.trim();
+  if (!id) return null;
+  const match = id.match(/_(\+\d{10,15})_/);
+  return match?.[1] ?? null;
+}
+
 function resolveDestinationE164(
   ctx: VoiceV3CallContext,
   args: SendBookingLinkToolArgs,
+  config: VoiceV3AgentConfig,
 ): { e164: string; source: "INBOUND_ANI" | "CALLER_PROVIDED" } | null {
   const alt = args.destination_phone?.trim();
   if (alt) {
     const normalized = normalizePhoneE164(alt);
-    if (!normalized) return null;
-    return { e164: normalized, source: "CALLER_PROVIDED" };
+    if (normalized) {
+      return { e164: normalized, source: "CALLER_PROVIDED" };
+    }
   }
-  const ani = ctx.telephony.inboundCallerE164?.trim();
-  if (!ani) return null;
-  const normalized = normalizePhoneE164(ani) || ani;
-  return { e164: normalized, source: "INBOUND_ANI" };
+  const ani =
+    ctx.telephony.inboundCallerE164?.trim() ||
+    inferAniFromLiveSessionId(ctx.liveSessionId) ||
+    inferAniFromLiveSessionId(ctx.callId);
+  if (ani) {
+    const normalized = normalizePhoneE164(ani) || ani;
+    return { e164: normalized, source: "INBOUND_ANI" };
+  }
+  const intakePhone = resolveStoredIntakeStringFromConfig(
+    ctx.intake.values,
+    "phone",
+    config.intakeFields,
+  );
+  if (intakePhone) {
+    const normalized = normalizePhoneE164(intakePhone);
+    if (normalized) {
+      return { e164: normalized, source: "CALLER_PROVIDED" };
+    }
+  }
+  return null;
 }
 
 function withBookingLink(
@@ -124,7 +151,7 @@ export async function executeSendBookingLink(input: {
     };
   }
 
-  const dest = resolveDestinationE164(ctx, args);
+  const dest = resolveDestinationE164(ctx, args, config);
   if (!dest) {
     return {
       result: voiceToolError(
