@@ -9,16 +9,31 @@ import {
   DEFAULT_TRANSFER_ADVANCED,
 } from "@/lib/receptionist/operating-defaults";
 import { normalizeGptLiveVoiceId } from "@/lib/voice/gpt-live-built-in-voices";
+import {
+  alignAfterHoursBehaviorForLiveBooking,
+  alignRuntimeProfileForLiveBooking,
+  isEditorLiveBookingEnabled,
+} from "@/lib/receptionist/live-booking-editor";
 
 export function normalizeReceptionistEditor(editor: AgentConfig): AgentConfig {
-  const kp = editor.knowledgeProfile ?? DEFAULT_KNOWLEDGE_PROFILE;
+  let aligned = alignRuntimeProfileForLiveBooking(editor);
+  const kp = aligned.knowledgeProfile ?? DEFAULT_KNOWLEDGE_PROFILE;
+  const operating = aligned.operating ?? DEFAULT_OPERATING_MATURITY;
+  const bookLive = isEditorLiveBookingEnabled(aligned);
+  const afterHoursBehavior = alignAfterHoursBehaviorForLiveBooking(
+    operating.afterHoursBehavior,
+    bookLive,
+  );
   return {
-    ...editor,
+    ...aligned,
     coverage: {
-      ...editor.coverage,
-      customSchedule: editor.coverage?.customSchedule ?? DEFAULT_CUSTOM_COVERAGE,
+      ...aligned.coverage,
+      customSchedule: aligned.coverage?.customSchedule ?? DEFAULT_CUSTOM_COVERAGE,
     },
-    operating: editor.operating ?? DEFAULT_OPERATING_MATURITY,
+    operating: {
+      ...operating,
+      afterHoursBehavior,
+    },
     transferAdvanced: editor.transferAdvanced ?? DEFAULT_TRANSFER_ADVANCED,
     urgency: editor.urgency ?? { enabled: false, rules: [] },
     knowledgeProfile: {
@@ -29,16 +44,16 @@ export function normalizeReceptionistEditor(editor: AgentConfig): AgentConfig {
       paymentMethods: kp.paymentMethods ?? "",
     },
     identity: {
-      ...editor.identity,
-      voice: normalizeGptLiveVoiceId(editor.identity.voice || "marin"),
+      ...aligned.identity,
+      voice: normalizeGptLiveVoiceId(aligned.identity.voice || "marin"),
     },
-    runtimeProfile: editor.runtimeProfile ?? "conversational_ivr",
-    conversationalRoutes: (editor.conversationalRoutes ?? []).map((route) => ({
+    runtimeProfile: aligned.runtimeProfile ?? "conversational_ivr",
+    conversationalRoutes: (aligned.conversationalRoutes ?? []).map((route) => ({
       ...route,
       description: route.description?.trim() ?? route.intentDescription?.trim() ?? "",
     })),
     conversationalRouting:
-      editor.conversationalRouting ?? DEFAULT_AGENT.conversationalRouting,
-    messageTaking: editor.messageTaking ?? DEFAULT_AGENT.messageTaking,
+      aligned.conversationalRouting ?? DEFAULT_AGENT.conversationalRouting,
+    messageTaking: aligned.messageTaking ?? DEFAULT_AGENT.messageTaking,
   };
 }

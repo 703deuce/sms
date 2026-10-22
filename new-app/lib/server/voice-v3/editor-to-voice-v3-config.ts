@@ -337,7 +337,7 @@ export function editorToVoiceV3AgentConfig(input: {
     },
   };
 
-  if (isConversationalIvrEditor(editor)) {
+  if (isConversationalIvrEditor(editor) && !bookLive) {
     const mt = editor.messageTaking;
     const extraGuards: string[] = [
       "You are a conversational phone menu — not a full receptionist. Never claim an appointment was booked, check calendar availability, promise confirmed times, reschedule or cancel appointments, or send booking links.",

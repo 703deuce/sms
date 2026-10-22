@@ -1,4 +1,8 @@
 import type { AgentConfig, OperatingMaturityConfig } from "@/lib/agent";
+import {
+  alignAfterHoursBehaviorForLiveBooking,
+  isEditorLiveBookingEnabled,
+} from "@/lib/receptionist/live-booking-editor";
 
 /** Schedule used for operating-state resolution (custom coverage overrides when active). */
 export function resolveBusinessScheduleForRuntime(editor: AgentConfig): OperatingMaturityConfig["businessSchedule"] {
@@ -29,14 +33,19 @@ function enrichOnCallSchedule(editor: AgentConfig): OperatingMaturityConfig["onC
 
 export function operatingPolicyFromEditor(editor: AgentConfig): OperatingMaturityConfig {
   const schedule = resolveBusinessScheduleForRuntime(editor);
+  const bookLive = isEditorLiveBookingEnabled(editor);
   const onCall = {
     ...enrichOnCallSchedule(editor),
     timezone: editor.operating.onCallSchedule.timezone || schedule.timezone,
   };
+  const afterHoursBehavior = alignAfterHoursBehaviorForLiveBooking(
+    editor.operating.afterHoursBehavior,
+    bookLive,
+  );
   return {
     revision: editor.operating.revision || "v1",
     businessSchedule: schedule,
-    afterHoursBehavior: editor.operating.afterHoursBehavior,
+    afterHoursBehavior,
     onCallSchedule: onCall,
     callbackSla: {
       ...editor.operating.callbackSla,

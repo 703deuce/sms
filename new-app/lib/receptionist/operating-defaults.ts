@@ -29,7 +29,7 @@ export const DEFAULT_BUSINESS_SCHEDULE: BusinessScheduleConfig = {
 export const DEFAULT_AFTER_HOURS_BEHAVIOR: AfterHoursBehaviorConfig = {
   useOperatingStateDuringCalls: true,
   whenClosed: {
-    allowLiveBooking: false,
+    allowLiveBooking: true,
     allowCallbackRequest: true,
     allowMessageTaking: true,
     allowOnCallEscalation: true,
