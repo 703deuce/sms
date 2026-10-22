@@ -15,7 +15,7 @@ export async function resolveWorkspaceOwnedPhoneNumberId(
   if (!id) return null;
   if (isDemoFixturePhoneId(id)) {
     throw new Error(
-      "Call Handling uses a demo placeholder number. Choose a real number from your workspace inventory.",
+      "The receptionist draft uses a demo placeholder number. On Call Routing, use Connect number and pick a line from your workspace.",
     );
   }
   const prisma = getPrisma();
@@ -24,7 +24,7 @@ export async function resolveWorkspaceOwnedPhoneNumberId(
     select: { id: true },
   });
   if (!phone) {
-    throw new Error("Selected phone number was not found in this workspace. Re-select it in Call Handling.");
+    throw new Error("Selected phone number was not found in this workspace. Re-select it on Call Routing (Connect number).");
   }
   return phone.id;
 }

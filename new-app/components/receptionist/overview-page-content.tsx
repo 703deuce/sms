@@ -161,7 +161,7 @@ export function ReceptionistOverviewContent() {
           <li className="flex items-center gap-3 py-3">
             <PhoneForwarded className="size-4 text-muted-foreground" aria-hidden />
             <span className="flex-1 font-medium">Phone assignment</span>
-            <Link href="/app/receptionist/call-routing" className="text-xs font-medium text-primary hover:underline">Manage</Link>
+            <Link href="/app/receptionist/call-routing#phone-line" className="text-xs font-medium text-primary hover:underline">Manage</Link>
           </li>
         </ul>
       </Panel>

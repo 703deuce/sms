@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { SimpleSelect } from '@/components/app/filters'
 import { Panel } from '@/components/app/page-primitives'
+import { ReceptionistPhoneLinePanel } from '@/components/receptionist/receptionist-phone-line'
 import { useAgent } from '@/components/providers/agent-provider'
 import type { ConversationalRoute } from '@/lib/agent'
 import { formatPhone } from '@/lib/format'
@@ -111,6 +112,7 @@ export function ConversationalRoutingEditor() {
 
   return (
     <div className="flex flex-col gap-6">
+      <ReceptionistPhoneLinePanel showRoutePreview={false} />
       <Panel
         title="Transfer destinations"
         description="Configure who your conversational menu can connect callers to. Each destination is one place: name, number, who they are, and when the AI should transfer."

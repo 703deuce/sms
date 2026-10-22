@@ -11,7 +11,7 @@ export default function ConversationalCallRoutingPage() {
       <DraftBar />
       <PageHeader
         title="Call Routing"
-        description="Configure who your conversational menu can connect callers to — name, number, description, and when the AI should transfer."
+        description="Connect the line callers dial to reach your agent, then configure transfer destinations — name, number, description, and when the AI should transfer."
       />
       <Suspense>
         <ConversationalRoutingEditor />
