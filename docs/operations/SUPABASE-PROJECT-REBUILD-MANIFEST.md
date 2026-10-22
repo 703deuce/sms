@@ -111,8 +111,10 @@ Update **values** on web app `ds8s3hjin60qs6g7s0iqkixs` (and any worker using DB
 |----------|---------|
 | `DATABASE_URL` | Session pooler URI from Supabase → Settings → Database |
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://<NEW_REF>.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Project API → anon |
-| `SUPABASE_SERVICE_ROLE_KEY` | Project API → service_role (server only) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Project API → **anon** or **publishable** key (paste either into this slot — do not add a new Coolify key unless you also set publishable for other tools) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Project API → **service_role** / **secret** key (server only) |
+
+Copy **`DATABASE_URL`** from Supabase → **Connect** → **Session pooler** (do not hand-assemble the URI; password special characters must match the dashboard string exactly).
 
 Optional bucket overrides (only if you rename buckets): see table in section 3.
 
@@ -153,13 +155,11 @@ Transovo app auth is primarily in **your** `User` / workspace tables in Postgres
 
 5. **Update Coolify** env (section 4) — same keys, new Supabase values.
 
-6. **Apply schema + buckets**: `provision-fresh-supabase-project.sh` on the host (reads `DATABASE_URL` + Supabase keys) **or** redeploy and let migrate deploy run.
+6. **Apply schema + buckets**: on the host with the same `DATABASE_URL` / Supabase env as Coolify, run `provision-fresh-supabase-project.sh`; then **redeploy** web + workers (deploy runs migrations too).
 
-7. **Redeploy** web + workers.
+7. **Optional:** `pg_restore` logical dump into the new `DATABASE_URL` if you need production data.
 
-8. **Optional:** `pg_restore` logical dump into new DB if you need production data.
-
-9. **Smoke:** login, Agent Settings (`voiceAgent`), MCTB setup, one test call.
+8. **Smoke:** login, Agent Settings (`voiceAgent`), MCTB setup, one test call.
 
 ---
 
