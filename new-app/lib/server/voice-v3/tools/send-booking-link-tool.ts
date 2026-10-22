@@ -7,6 +7,7 @@ import { authorizeSendBookingLinkOrError } from "./authorize-tool-for-config";
 import { SEND_BOOKING_LINK_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import { executeSendBookingLink } from "../booking-link/execute-send-booking-link";
 import { isSendBookingLinkToolConsentRequired } from "../booking-link/send-link-consent-policy";
+import { coerceOptionalToolPhoneArg } from "../intake-objective/coerce-llm-literal";
 
 function sendBookingLinkArgsSchemaForConfig(config: VoiceV3AgentConfig) {
   const consentGate = isSendBookingLinkToolConsentRequired(config);
@@ -43,7 +44,7 @@ export function buildSendBookingLinkOpenAiTool(config: VoiceV3AgentConfig): Func
   const consentGate = isSendBookingLinkToolConsentRequired(config);
   const description = consentGate
     ? SEND_BOOKING_LINK_TOOL_DESCRIPTION
-    : `Send the business booking link by SMS from the Transovo platform number when the caller wants to schedule or asks for the link by text. Call with confirmed=true once the caller agrees to receive the text on this call — there is no separate SMS consent tool step. Do not invent URLs. Do not claim sent until the tool returns sent or already_sent. Omit destination_phone to use inbound caller ID.`;
+    : `Send the business booking link by SMS from the Transovo platform number when the caller wants to schedule or asks for the link by text. Default: ask if you should text the number they are calling from; if yes, call with confirmed=true only and omit destination_phone (inbound caller ID is used automatically). Only pass destination_phone when they want a different mobile number — use digits they spoke (any format); never pass placeholders. Do not invent URLs. Do not claim sent until the tool returns sent or already_sent.`;
   const zodTool = zodResponsesFunction({
     name: "send_booking_link",
     parameters: sendBookingLinkArgsSchemaForConfig(config),
@@ -69,9 +70,10 @@ export const sendBookingLinkTool: VoiceToolDefinition<SendBookingLinkArgs> = {
         destination_phone: z.string().nullable().optional(),
       })
       .parse(raw);
+    const destination_phone = coerceOptionalToolPhoneArg(parsed.destination_phone);
     return {
       confirmed: parsed.confirmed ?? false,
-      destination_phone: parsed.destination_phone,
+      destination_phone: destination_phone ?? null,
     };
   },
   execute: async (ctx, args) => {

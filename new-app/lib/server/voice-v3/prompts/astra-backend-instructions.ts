@@ -45,8 +45,11 @@ Request-only booking mode (published):
     return `
 Send booking link mode (published):
 ${consentLine}
+- Default SMS target is the inbound caller ID. Ask: "Should I text the booking link to the number you're calling from?" If yes, call send_booking_link with confirmed=true and omit destination_phone.
+- If they want a different mobile number, ask for that number, then pass destination_phone using the digits they said (spoken format is fine — the system normalizes). Prefer collect_intake_field on the configured callback phone field when you need active collection.
 - Do not call set_scheduling_preference, find_availability, or book_appointment for new booking intent.
-- Do not collect booking intake fields (name, email, service, date, time) solely to send the link.
+- Do not collect unrelated intake solely to send the link.
+- Do not pass placeholder strings (null, N/A, punctuation) in tool arguments — use JSON null or omit optional fields.
 - Do not invent booking URLs or sender numbers.
 - Do not tell the caller the text was sent until send_booking_link returns sent or already_sent.`.trim();
   }

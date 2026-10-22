@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
+import { isLlmPlaceholderString } from "./coerce-llm-literal";
 
 const SEMANTIC_HINTS: Record<string, string> = {
   name: "Caller's full name as clearly provided or corrected.",
@@ -43,7 +44,14 @@ export function normalizeUpdateIntakeArguments(
   const row =
     raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
   for (const f of config.intakeFields) {
-    if (!(f.key in row)) row[f.key] = null;
+    if (!(f.key in row)) {
+      row[f.key] = null;
+      continue;
+    }
+    const v = row[f.key];
+    if (typeof v === "string" && isLlmPlaceholderString(v)) {
+      row[f.key] = null;
+    }
   }
   return row;
 }
