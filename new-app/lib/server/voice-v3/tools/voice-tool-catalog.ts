@@ -171,6 +171,12 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
       "transfer_call",
       "take_message",
     ]);
+    if (isSendBookingLinkAuthorized(config)) {
+      allow.add("send_booking_link");
+    }
+    if (isRequestCallbackAuthorized(config)) {
+      allow.add("request_callback");
+    }
     return allow.has(entry.name);
   }
   const caps = config.capabilities;

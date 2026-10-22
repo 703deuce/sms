@@ -8,6 +8,7 @@ import { enabledVoiceToolNamesFromEditor } from "@/lib/server/receptionist/edito
 import { compilePublishedBundle } from "@/lib/server/receptionist/compile-runtime";
 import {
   coalesceRuntimeProfileForVoiceConfig,
+  conversationalIvrToolAllowlist,
   isConversationalIvrRuntime,
   withRuntimeProfileFromEditor,
 } from "@/lib/receptionist/runtime-profile";
@@ -15,6 +16,7 @@ import { voiceV3AgentConfigFromBundle } from "@/lib/server/voice-v3/bundle-voice
 import { editorToVoiceV3AgentConfig } from "@/lib/server/voice-v3/editor-to-voice-v3-config";
 import { isVoiceV3ToolAuthorizedBase } from "@/lib/server/voice-v3/tools/authorize-tool-for-config";
 import { buildVoiceV3AstraFunctionToolsFromCatalog } from "@/lib/server/voice-v3/tools/voice-tool-catalog";
+import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
 
 function emptyKnowledge() {
   return {
@@ -116,10 +118,14 @@ const requestV3 = editorToVoiceV3AgentConfig({
   timezone: "America/Chicago",
   knowledge: emptyKnowledge(),
 });
-assert.equal(requestV3.scheduling.bookingStrategy, "REQUEST_ONLY");
-assert.ok(
-  enabledVoiceToolNamesFromEditor(requestEditor).includes("submit_appointment_request"),
-);
+if (isBookingLinkOnlyLaunch()) {
+  assert.equal(requestV3.scheduling.bookingStrategy, "SEND_LINK");
+} else {
+  assert.equal(requestV3.scheduling.bookingStrategy, "REQUEST_ONLY");
+  assert.ok(
+    enabledVoiceToolNamesFromEditor(requestEditor).includes("submit_appointment_request"),
+  );
+}
 
 const wired = editorToVoiceV3AgentConfig({
   editor: base,
@@ -183,5 +189,36 @@ const ivrOnly = withRuntimeProfileFromEditor(base, strippedProfile);
 assert.equal(isConversationalIvrRuntime(ivrOnly), true);
 const ivrCatalog = buildVoiceV3AstraFunctionToolsFromCatalog(ivrOnly).map((t) => String(t.name));
 assert.ok(!ivrCatalog.includes("book_appointment"), "IVR catalog must not include book_appointment");
+
+const ivrLinkBook = {
+  ...base,
+  capabilities: { ...base.capabilities, book: true },
+};
+ivrLinkBook.appointments = {
+  ...ivrLinkBook.appointments,
+  strategy: "link",
+  bookingLink: "https://example.com/book",
+};
+const ivrLinkV3 = editorToVoiceV3AgentConfig({
+  editor: ivrLinkBook,
+  workspaceId: "ws_test",
+  agentId: "ag_test",
+  businessName: "Test Co",
+  timezone: "America/Chicago",
+  knowledge: emptyKnowledge(),
+});
+assert.equal(isConversationalIvrRuntime(ivrLinkV3), true);
+assert.equal(isVoiceV3ToolAuthorizedBase(ivrLinkV3, "send_booking_link"), true);
+const ivrLinkCatalog = buildVoiceV3AstraFunctionToolsFromCatalog(ivrLinkV3).map((t) =>
+  String(t.name),
+);
+assert.ok(
+  ivrLinkCatalog.includes("send_booking_link"),
+  "conversational IVR + SEND_LINK must expose send_booking_link in Astra catalog",
+);
+assert.ok(
+  conversationalIvrToolAllowlist(ivrLinkBook).includes("send_booking_link"),
+  "editor allowlist and Astra catalog stay aligned for send_booking_link",
+);
 
 console.log("test-receptionist-config-source: ALL PASS");
