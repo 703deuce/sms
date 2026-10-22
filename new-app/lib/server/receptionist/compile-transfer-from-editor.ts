@@ -1,5 +1,8 @@
 import type { AgentConfig } from "@/lib/agent";
-import { isConversationalIvrEditor } from "@/lib/receptionist/runtime-profile";
+import {
+  editorHasConversationalTransferRoutes,
+  isConversationalIvrEditor,
+} from "@/lib/receptionist/runtime-profile";
 import { normalizeE164 } from "@/lib/server/phone/normalize";
 import { getStoredLiveKitOutboundTrunkId } from "@/lib/telephony/provisioning/livekit/outbound-trunk";
 import { mapWizardTransferFallback } from "@/lib/server/voice-v3/transfer/map-fallback";
@@ -234,7 +237,9 @@ function compileConversationalIvrTransferPolicy(
 }
 
 export function compileVoiceV3TransferPolicyFromEditor(editor: AgentConfig): VoiceV3TransferPolicyCompiled {
-  if (isConversationalIvrEditor(editor)) {
+  // Call Routing (conversationalRoutes) must win over legacy `transfers[]` even when
+  // link/live booking forces runtimeProfile full_receptionist.
+  if (isConversationalIvrEditor(editor) || editorHasConversationalTransferRoutes(editor)) {
     return compileConversationalIvrTransferPolicy(editor);
   }
   const adv = editor.transferAdvanced;

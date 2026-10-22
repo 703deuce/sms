@@ -40,6 +40,13 @@ export function isConversationalIvrEditor(editor: AgentConfig): boolean {
   return resolveRuntimeProfile(editor) === RUNTIME_PROFILE_CONVERSATIONAL_IVR;
 }
 
+/** True when Call Routing has at least one enabled destination with a dialable E.164. */
+export function editorHasConversationalTransferRoutes(editor: AgentConfig): boolean {
+  return (editor.conversationalRoutes ?? []).some(
+    (route) => route.enabled !== false && Boolean(route.destinationPhoneE164?.trim()),
+  );
+}
+
 /**
  * Published `voiceV3AgentConfig` snapshots may omit `runtimeProfile` (pre two-mode).
  * Always align runtime config with the editor's operating mode before tool catalog gating.

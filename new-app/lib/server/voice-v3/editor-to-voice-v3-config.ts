@@ -121,6 +121,13 @@ export function editorToVoiceV3AgentConfig(input: {
     endLocal: "17:00",
   });
   const transferPolicy = compileVoiceV3TransferPolicyFromEditor(editor);
+  const transferDestinationsFromPolicy = transferPolicy.destinations.map((d) => ({
+    id: d.id,
+    label: d.label,
+    phoneE164: d.phoneE164,
+    enabled: d.enabled !== false,
+    description: d.description,
+  }));
   const operatingPolicy = operatingPolicyFromEditor(editor);
   const transferTriggers = transferTriggerPhrasesFromEditor(editor);
   const adv = editor.transferAdvanced;
@@ -141,13 +148,16 @@ export function editorToVoiceV3AgentConfig(input: {
     businessName,
     timezone,
     intakeFields: editor.intake.map(mapIntakeField),
-    transferDestinations: editor.transfers.map((t) => ({
-      id: t.id,
-      label: t.name,
-      phoneE164: t.number,
-      enabled: t.enabled,
-      description: t.reason,
-    })),
+    transferDestinations:
+      transferDestinationsFromPolicy.length > 0
+        ? transferDestinationsFromPolicy
+        : editor.transfers.map((t) => ({
+            id: t.id,
+            label: t.name,
+            phoneE164: t.number,
+            enabled: t.enabled,
+            description: t.reason,
+          })),
     service,
     services: v3Services.length ? v3Services : [service],
     businessHours: { ...businessHours, timezone: schedule.timezone || timezone },

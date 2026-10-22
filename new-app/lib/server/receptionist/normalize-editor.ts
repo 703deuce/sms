@@ -15,6 +15,19 @@ import {
   isEditorLiveBookingEnabled,
 } from "@/lib/receptionist/live-booking-editor";
 import { isBookingLinkOnlyLaunch } from "@/lib/receptionist/booking-launch-mode";
+import { editorHasConversationalTransferRoutes } from "@/lib/receptionist/runtime-profile";
+
+const DEMO_LEGACY_TRANSFER_IDS = new Set(["tr1", "tr2", "tr3"]);
+
+function disableDemoLegacyTransfersWhenCallRouting(editor: AgentConfig): AgentConfig {
+  if (!editorHasConversationalTransferRoutes(editor)) return editor;
+  return {
+    ...editor,
+    transfers: editor.transfers.map((t) =>
+      DEMO_LEGACY_TRANSFER_IDS.has(t.id) ? { ...t, enabled: false } : t,
+    ),
+  };
+}
 
 function coerceEditorForBookingLinkOnlyLaunch(editor: AgentConfig): AgentConfig {
   if (!isBookingLinkOnlyLaunch()) return editor;
@@ -32,7 +45,9 @@ function coerceEditorForBookingLinkOnlyLaunch(editor: AgentConfig): AgentConfig 
 }
 
 export function normalizeReceptionistEditor(editor: AgentConfig): AgentConfig {
-  let aligned = alignRuntimeProfileForLiveBooking(coerceEditorForBookingLinkOnlyLaunch(editor));
+  let aligned = disableDemoLegacyTransfersWhenCallRouting(
+    alignRuntimeProfileForLiveBooking(coerceEditorForBookingLinkOnlyLaunch(editor)),
+  );
   const kp = aligned.knowledgeProfile ?? DEFAULT_KNOWLEDGE_PROFILE;
   const operating = aligned.operating ?? DEFAULT_OPERATING_MATURITY;
   const bookLive = isEditorLiveBookingEnabled(aligned);

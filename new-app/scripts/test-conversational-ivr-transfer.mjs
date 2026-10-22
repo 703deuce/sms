@@ -60,8 +60,11 @@ const editor = {
 
 const policy = compileVoiceV3TransferPolicyFromEditor(editor);
 assert.equal(policy.enabled, true, "policy should enable when routes have E.164");
-assert.equal(policy.routes.length, 1, "ring_group route must not compile to LiveKit transfer");
-assert.equal(policy.routes[0]?.id, "route_sales");
+assert.ok(policy.routes.some((r) => r.id === "route_sales"));
+const salesDest = policy.destinations.find((d) => d.phoneE164 === "+15551234001");
+assert.ok(salesDest, "sales route must compile to a dialable E.164 destination");
+const ringDest = policy.destinations.find((d) => d.id === "ring_group_rg_1");
+assert.ok(ringDest?.forwardingGroupId === "rg_1", "ring_group compiles to phone foundation, not raw E.164");
 
 const publishBlocked = validateEditorForPublish(editor);
 assert.equal(publishBlocked.ok, false);
@@ -112,5 +115,49 @@ const wrongRoute = authorizeVoiceV3Transfer({
   args: { route_id: "route_does_not_exist", reason: "test" },
 });
 assert.equal(wrongRoute.ok, false);
+
+// Link booking forces full_receptionist — Call Routing must still compile, not demo tr2.
+const fullWithLink = {
+  ...defaultReceptionistEditorConfig(),
+  connection: { kind: "owned", id: "phone_test_1" },
+  runtimeProfile: "full_receptionist",
+  capabilities: {
+    ...defaultReceptionistEditorConfig().capabilities,
+    transfer: true,
+    book: true,
+    answer: true,
+  },
+  appointments: {
+    ...defaultReceptionistEditorConfig().appointments,
+    strategy: "link",
+    provider: "none",
+    bookingLink: "https://example.com/book",
+  },
+  conversationalRoutes: [
+    {
+      id: "route_billing",
+      name: "Billing",
+      description: "Billing department",
+      intentDescription: "Caller wants to pay a bill or invoice.",
+      examples: [],
+      destinationRef: "fd_billing",
+      destinationKind: "forwarding_destination",
+      destinationPhoneE164: "+17038166017",
+      destinationLabel: "Billing",
+      enabled: true,
+      confirmBeforeTransfer: false,
+    },
+  ],
+};
+
+const fullPolicy = compileVoiceV3TransferPolicyFromEditor(fullWithLink);
+assert.ok(
+  !fullPolicy.destinations.some((d) => d.id === "tr2"),
+  "full_receptionist + link booking must not expose demo tr2 when Call Routing is configured",
+);
+assert.ok(
+  fullPolicy.destinations.some((d) => d.phoneE164 === "+17038166017"),
+  "billing E.164 must be in compiled destinations",
+);
 
 console.log("test-conversational-ivr-transfer: PASS");
