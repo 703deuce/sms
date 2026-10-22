@@ -7,7 +7,7 @@ Use this when you **delete the paused Supabase project** and create a **new** fr
 | Step | Script |
 |------|--------|
 | Snapshot before delete (no secrets in output) | `scripts/operations/capture-supabase-rebuild-inventory.sh` |
-| Empty DB schema | `scripts/operations/provision-greenfield-database.sh` with `GREENFIELD_DATABASE_URL` |
+| Empty DB schema | `scripts/operations/provision-fresh-supabase-project.sh` (uses Coolify’s `DATABASE_URL` + Supabase keys) |
 | Storage buckets | `scripts/operations/ensure-all-supabase-storage-buckets.ts` |
 | Optional data restore | `scripts/operations/backup-production-postgres.sh` + `postgres-restore-drill.sh` pattern |
 
@@ -45,15 +45,24 @@ After delete, **DNS and pooler user for that ref stop working**. You must create
 
 ### Apply schema to a new empty project
 
-On a machine with the repo and network access to the new database:
+**Same variable names as production** — update **values** in Coolify (or export the same names when running a one-shot on the server). Do not add new env keys.
+
+1. In Coolify, set `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to the **new** project (from Supabase dashboard).
+
+2. One-shot schema + buckets (from repo root, env loaded from Coolify web container or your shell):
 
 ```bash
-export GREENFIELD_DATABASE_URL='postgresql://postgres.<NEW_REF>:<PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require'
+# Same names the app already uses:
+export DATABASE_URL='postgresql://postgres.<NEW_REF>:<PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require'
+export NEXT_PUBLIC_SUPABASE_URL='https://<NEW_REF>.supabase.co'
+export SUPABASE_SERVICE_ROLE_KEY='...'
 cd /path/to/sms
-GREENFIELD_ALLOW_LEGACY_HOST=1 bash scripts/operations/provision-greenfield-database.sh
+bash scripts/operations/provision-fresh-supabase-project.sh
 ```
 
-Or point Coolify `DATABASE_URL` at the new project and **redeploy** the web container (deploy runs `scripts/deploy-db-migrations.sh`). For a **totally empty** DB, prefer `provision-greenfield-database.sh` once, then normal deploys.
+3. **Redeploy** the web container (deploy also runs `scripts/deploy-db-migrations.sh` when `DATABASE_URL` is set).
+
+For an empty database, run step 2 once before or right after the first deploy so `db push` / migration baseline is applied cleanly.
 
 ### Optional: restore **data** from Coolify backup
 
@@ -94,9 +103,9 @@ NODE_OPTIONS='--import ./scripts/preload-server-only.mjs' \
 
 ---
 
-## 4. Coolify environment variables (update after new project)
+## 4. Coolify environment variables (values only — names unchanged)
 
-Set on web app `ds8s3hjin60qs6g7s0iqkixs` (and any worker using DB/Storage):
+Update **values** on web app `ds8s3hjin60qs6g7s0iqkixs` (and any worker using DB/Storage). Keep the exact same keys the app already reads:
 
 | Variable | Purpose |
 |----------|---------|
@@ -142,11 +151,11 @@ Transovo app auth is primarily in **your** `User` / workspace tables in Postgres
 
 4. **Create** new Supabase project (same region preferred: `us-east-2`).
 
-5. **Apply schema**: `provision-greenfield-database.sh` with new `GREENFIELD_DATABASE_URL`.
+5. **Update Coolify** env (section 4) — same keys, new Supabase values.
 
-6. **Create buckets**: `ensure-all-supabase-storage-buckets.ts`.
+6. **Apply schema + buckets**: `provision-fresh-supabase-project.sh` on the host (reads `DATABASE_URL` + Supabase keys) **or** redeploy and let migrate deploy run.
 
-7. **Update Coolify** env (section 4) → redeploy.
+7. **Redeploy** web + workers.
 
 8. **Optional:** `pg_restore` logical dump into new DB if you need production data.
 
