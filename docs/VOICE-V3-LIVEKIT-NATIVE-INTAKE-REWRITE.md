@@ -105,9 +105,11 @@ cd voice-runtime-python && python3 -m pytest \
 
 ### Not verified in CI (requires worker + PSTN)
 
-- Full `AgentSession` + GPT-Live delegation smoke
-- Live nested `GetEmailTask` audio confirmation
+- Full `AgentSession` + GPT-Live delegation completing `await IntakeTask` on a live call
+- Live nested `GetEmailTask` / `GetPhoneNumberTask` audio confirmation
 - End-to-end book after intake on production
+
+**Controlled PSTN script:** `docs/VOICE-V3-LIVEKIT-INTAKE-PSTN-VERIFICATION.md`
 
 ## PSTN / full dialogue
 

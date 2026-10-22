@@ -60,7 +60,7 @@ export function buildCollectCallerIntakeOpenAiTool(_config: VoiceV3AgentConfig):
         .nullable()
         .optional()
         .describe(
-          "Optional verbatim or near-verbatim summary of the caller's latest turn (helps intake task see the utterance if session history lags).",
+          "ONLY if Amy session history may lag: paste the caller's latest spoken words verbatim (ASR text). Do not paraphrase, infer, or add facts not clearly spoken. Omit when unsure — use volunteered_values for structured facts instead.",
         ),
     }),
     description: COLLECT_CALLER_INTAKE_TOOL_DESCRIPTION,

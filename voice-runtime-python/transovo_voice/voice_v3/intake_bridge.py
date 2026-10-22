@@ -116,7 +116,17 @@ async def execute_collect_caller_intake(
 
     persist = build_persist_update_fn(client, context=context)
     caller_turn_hint = str(arguments.get("caller_turn_hint") or "").strip() or None
+    field_keys = {
+        str(row.get("key") or "").strip()
+        for row in (fields if isinstance(fields, list) else intake_fields)
+        if isinstance(row, dict) and row.get("key")
+    }
     volunteered = _normalize_volunteered_values(arguments.get("volunteered_values"))
+    if field_keys and volunteered:
+        unknown = sorted(set(volunteered.keys()) - field_keys)
+        if unknown:
+            logger.warning("voice_v3_collect_caller_intake_unknown_volunteered_keys keys=%s", unknown)
+            volunteered = {k: v for k, v in volunteered.items() if k in field_keys}
 
     if volunteered:
         logger.info(
