@@ -630,7 +630,7 @@ export function VoicemailDropsLibraryPanel({ optIn }: { optIn: boolean }) {
   return (
     <Panel title="Voicemail drops" description="Record in-browser or upload audio. Files are saved to your workspace and played on live calls when you use voicemail drop.">
       {!optIn && (
-        <p className="mb-3 text-sm text-warning-foreground">Uploads disabled until compliance opt-in is enabled on the Voicemail drops settings tab.</p>
+        <p className="mb-3 text-sm text-warning-foreground">Uploads disabled until compliance opt-in is enabled on the Voicemail Drops tab.</p>
       )}
       <div className="mb-4 grid max-w-xl gap-2">
         <Input placeholder="Drop name" value={name} onChange={(e) => setName(e.target.value)} disabled={!optIn} aria-label="Voicemail drop name" />

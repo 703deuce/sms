@@ -5,6 +5,9 @@ export async function listWorkspaceContacts(
   workspaceId: string,
   opts: { q?: string; page?: number; pageSize?: number },
 ) {
+  const { ensureShellContactsCatalog } = await import("@/lib/server/contacts-shell-catalog");
+  await ensureShellContactsCatalog(workspaceId);
+
   const prisma = getPrisma();
   const term = opts.q?.trim() || "";
   const digits = term.replace(/\D/g, "");
@@ -70,6 +73,9 @@ export async function listWorkspaceContacts(
 }
 
 export async function searchContacts(workspaceId: string, q: string, limit = 10) {
+  const { ensureShellContactsCatalog } = await import("@/lib/server/contacts-shell-catalog");
+  await ensureShellContactsCatalog(workspaceId);
+
   const prisma = getPrisma();
   const term = q.trim();
   const digits = term.replace(/\D/g, "");

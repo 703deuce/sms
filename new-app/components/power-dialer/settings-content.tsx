@@ -22,6 +22,7 @@ export function PowerDialerSettingsContent() {
   const { owned } = useNumbers()
   const [settings, setSettings] = useState<PowerDialerWorkspaceSettings | null>(null)
   const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState('general')
 
   useEffect(() => {
     void fetchPowerDialerSettings().then(setSettings).catch(() => toast.error('Could not load settings'))
@@ -61,7 +62,7 @@ export function PowerDialerSettingsContent() {
           </Button>
         }
       />
-      <Tabs defaultValue="general">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v ?? 'general')}>
         <div className="-mx-1 overflow-x-auto pb-1">
           <TabsList className="inline-flex h-auto w-max flex-nowrap">
             <TabsTrigger value="general">General</TabsTrigger>
@@ -187,23 +188,27 @@ export function PowerDialerSettingsContent() {
           <ScriptsLibraryPanel />
         </TabsContent>
         <TabsContent value="vm-drops" className="mt-6">
-          <Panel title="Compliance opt-in" className="mb-6">
-            <p className="mb-3 text-sm text-muted-foreground">
-              Prerecorded voicemail drops may be restricted in your jurisdiction. Enable only after your administrator confirms compliance.
-            </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.prerecordedVmOptIn ?? false}
-                onChange={(e) => setSettings({ ...settings, prerecordedVmOptIn: e.target.checked })}
-              />
-              Allow voicemail drop uploads and dialer playback
-            </label>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Greeting-end detection depends on carrier AMD signals and may not be available on every call.
-            </p>
-          </Panel>
-          <VoicemailDropsLibraryPanel optIn={Boolean(settings.prerecordedVmOptIn)} />
+          {activeTab === 'vm-drops' && (
+            <>
+              <Panel title="Compliance opt-in" className="mb-6">
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Prerecorded voicemail drops may be restricted in your jurisdiction. Enable only after your administrator confirms compliance.
+                </p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={settings.prerecordedVmOptIn ?? false}
+                    onChange={(e) => setSettings({ ...settings, prerecordedVmOptIn: e.target.checked })}
+                  />
+                  Allow voicemail drop uploads and dialer playback
+                </label>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Greeting-end detection depends on carrier AMD signals and may not be available on every call.
+                </p>
+              </Panel>
+              <VoicemailDropsLibraryPanel optIn={Boolean(settings.prerecordedVmOptIn)} />
+            </>
+          )}
         </TabsContent>
         <TabsContent value="caller-id" className="mt-6">
           <Panel
@@ -238,6 +243,7 @@ export function PowerDialerSettingsContent() {
           </Panel>
         </TabsContent>
         <TabsContent value="screening" className="mt-6">
+          {activeTab === 'screening' && (
           <Panel
             title="Call screening"
             description="When enabled, Transovo can flag automated call screeners so reps know when a person may not be on the line yet. Results depend on the callee’s carrier and device."
@@ -294,6 +300,7 @@ export function PowerDialerSettingsContent() {
               </label>
             </div>
           </Panel>
+          )}
         </TabsContent>
         <TabsContent value="compliance" className="mt-6">
           <PowerDialerComplianceSettingsPanel />
