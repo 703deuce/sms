@@ -68,6 +68,7 @@ export type AttemptSummary = {
   attemptNumber: number;
   createdAt: Date;
   endedAt: Date | null;
+  callbackAt?: Date | null;
 };
 
 export type EligibilityResult = {

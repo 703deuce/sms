@@ -23,20 +23,30 @@ export async function searchContacts(workspaceId: string, q: string, limit = 10)
 export async function listContactLists(workspaceId: string) {
   const prisma = getPrisma();
   const lists = await prisma.contactList.findMany({
-    where: { workspaceId },
-    include: { members: { select: { contactId: true } } },
-    orderBy: { name: "asc" },
+    where: { workspaceId, archivedAt: null },
+    include: {
+      members: { select: { contactId: true, contact: { select: { status: true } } } },
+      powerDialerCampaigns: { select: { id: true, name: true } },
+    },
+    orderBy: { updatedAt: "desc" },
   });
-  return lists.map((l) => ({
-    id: l.id,
-    name: l.name,
-    description: l.description,
-    total: l.members.length,
-    eligible: l.members.length,
-    ineligible: 0,
-    source: "contacts",
-    updated: new Date().toISOString(),
-  }));
+  return lists.map((l) => {
+    const total = l.members.length;
+    const ineligible = l.members.filter(
+      (m) => m.contact.status === "BLOCKED" || m.contact.status === "UNSUBSCRIBED",
+    ).length;
+    return {
+      id: l.id,
+      name: l.name,
+      description: l.description,
+      total,
+      eligible: total - ineligible,
+      ineligible,
+      source: l.source || "manual",
+      updated: l.updatedAt.toISOString(),
+      campaignUsage: l.powerDialerCampaigns.map((c) => ({ id: c.id, name: c.name })),
+    };
+  });
 }
 
 export async function createContactList(workspaceId: string, name: string, description?: string) {

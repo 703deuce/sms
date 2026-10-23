@@ -365,6 +365,67 @@ export async function getPowerDialerOverview(workspaceId: string) {
       message: "No active campaigns — activate a campaign to dial.",
     });
   }
+  const activeNumbers = await prisma.phoneNumber.count({
+    where: { workspaceId, status: { in: ["active", "Active"] } },
+  });
+  if (activeNumbers === 0) {
+    attentionRequired.push({
+      code: "no_outbound_number",
+      message: "No active outbound number — assign a caller ID before dialing.",
+    });
+  }
+
+  if (activeCampaigns.length > 0) {
+    const { isCallingWindowOpen } = await import("@/lib/server/phone/power-dialer/timezone-window");
+    const { resolveCampaignRules } = await import("@/lib/server/phone/power-dialer/campaign-config");
+    const anyWindowOpen = activeCampaigns.some((c) => {
+      const rules = resolveCampaignRules(c);
+      return isCallingWindowOpen(
+        new Date(),
+        rules.timezone,
+        rules.allowedDays,
+        rules.callingHoursStart,
+        rules.callingHoursEnd,
+      ).open;
+    });
+    if (!anyWindowOpen) {
+      attentionRequired.push({
+        code: "calling_window_closed",
+        message: "Calling window is closed for active campaigns (schedule/timezone).",
+      });
+    }
+  }
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const crmFailures = await prisma.crmSyncRun.count({
+    where: {
+      workspaceId,
+      status: { in: ["failed", "partial"] },
+      createdAt: { gte: weekAgo },
+    },
+  });
+  if (crmFailures > 0) {
+    attentionRequired.push({
+      code: "crm_sync_errors",
+      message: `${crmFailures} CRM sync issue(s) in the last 7 days — review Integrations.`,
+    });
+  }
+
+  const limitsRow = await prisma.workspaceLimits.findUnique({
+    where: { workspaceId },
+    select: { limits: true },
+  });
+  const limitsRoot = (limitsRow?.limits || {}) as Record<string, unknown>;
+  const pdLimits = limitsRoot.powerDialer as Record<string, unknown> | undefined;
+  const usedMin = typeof pdLimits?.minutesUsed === "number" ? pdLimits.minutesUsed : null;
+  const capMin = typeof pdLimits?.minutesIncluded === "number" ? pdLimits.minutesIncluded : null;
+  if (usedMin != null && capMin != null && usedMin >= capMin) {
+    attentionRequired.push({
+      code: "usage_limit_reached",
+      message: "Included dialing minutes are exhausted — upgrade or wait for the next cycle.",
+    });
+  }
+
   if (activeSession) {
     try {
       const runtime = await getSessionRuntime(workspaceId, activeSession.id);
