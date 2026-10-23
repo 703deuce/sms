@@ -459,6 +459,11 @@ model Workspace {
   powerDialerCadences                    PowerDialerCadence[]
   powerDialerCadenceEnrollments          PowerDialerCadenceEnrollment[]
   powerDialerScheduledReports            PowerDialerScheduledReport[]
+  powerDialerApiKeys                     PowerDialerApiKey[]
+  powerDialerWebhookEndpoints            PowerDialerWebhookEndpoint[]
+  powerDialerWebhookDeliveries           PowerDialerWebhookDelivery[]
+  powerDialerImpersonationSessions       PowerDialerImpersonationSession[]
+  powerDialerApiAuditLogs                PowerDialerApiAuditLog[]
   crmCompanies                           CrmCompany[]
   crmDealStages                          CrmDealStage[]
   crmDeals                               CrmDeal[]
@@ -5109,6 +5114,97 @@ model PowerDialerScheduledReport {
 
   @@index([workspaceId, enabled])
   @@map("power_dialer_scheduled_reports")
+}
+
+model PowerDialerApiKey {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  name               String
+  prefix             String
+  hashedKey          String
+  scopes             String[]
+  rateLimitPerMinute Int       @default(120)
+  revokedAt          DateTime?
+  createdByUserId    String?
+  lastUsedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, revokedAt])
+  @@index([prefix])
+  @@map("power_dialer_api_keys")
+}
+
+model PowerDialerWebhookEndpoint {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  name              String
+  url               String
+  events            String[]
+  active            Boolean   @default(true)
+  signingSecretHash String
+  signingSecretPrefix String
+  signingSecretEnc  String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries        PowerDialerWebhookDelivery[]
+
+  @@index([workspaceId, active])
+  @@map("power_dialer_webhook_endpoints")
+}
+
+model PowerDialerWebhookDelivery {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  endpointId      String
+  eventId         String    @unique
+  eventType       String
+  status          String    @default("pending")
+  attempt         Int       @default(0)
+  httpStatus      Int?
+  errorMessage    String?
+  responseExcerpt String?
+  nextRetryAt     DateTime?
+  attemptedAt     DateTime?
+  payloadJson     Json
+  createdAt       DateTime  @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  endpoint        PowerDialerWebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([endpointId, status])
+  @@map("power_dialer_webhook_deliveries")
+}
+
+model PowerDialerImpersonationSession {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  actorUserId   String
+  targetUserId  String
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  endReason     String?
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, actorUserId, endedAt])
+  @@map("power_dialer_impersonation_sessions")
+}
+
+model PowerDialerApiAuditLog {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  apiKeyId        String?
+  actorUserId     String?
+  impersonatedUserId String?
+  action          String
+  resource        String?
+  detailJson      Json?
+  createdAt       DateTime  @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("power_dialer_api_audit_logs")
 }
 
 model PowerDialerComplianceAuditLog {
