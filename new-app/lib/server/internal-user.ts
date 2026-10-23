@@ -5,9 +5,12 @@ const SYSTEM_EMAIL = "phone-system@transovo.internal";
 /** Single business operator for greenfield Phone (no customer auth). */
 export async function resolveInternalUserId(): Promise<string> {
   const pinned = process.env.DEV_USER_ID?.trim() || process.env.TRANSOVO_INTERNAL_USER_ID?.trim();
-  if (pinned) return pinned;
-
   const prisma = getPrisma();
+  if (pinned) {
+    const row = await prisma.user.findUnique({ where: { id: pinned }, select: { id: true } });
+    if (row) return row.id;
+  }
+
   const existing = await prisma.user.findUnique({
     where: { email: SYSTEM_EMAIL },
     select: { id: true },

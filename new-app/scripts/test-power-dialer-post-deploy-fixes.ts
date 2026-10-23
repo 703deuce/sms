@@ -38,6 +38,14 @@ async function main() {
     await prisma.workspace.delete({ where: { id: ws.id } });
   }
 
+  const bogus = "clbogus000000000000000000";
+  const prevUser = process.env.DEV_USER_ID;
+  process.env.DEV_USER_ID = bogus;
+  const userIdAfterBogusPin = await resolveInternalUserId();
+  assert.notEqual(userIdAfterBogusPin, bogus);
+  if (prevUser === undefined) delete process.env.DEV_USER_ID;
+  else process.env.DEV_USER_ID = prevUser;
+
   console.log("test-power-dialer-post-deploy-fixes: PASS");
 }
 

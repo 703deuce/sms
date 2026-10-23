@@ -10,8 +10,12 @@ export async function resolveWorkspaceId(): Promise<string> {
     process.env.TRANSOVO_WORKSPACE_ID?.trim() ||
     process.env.WORKSPACE_ID?.trim();
   if (pinned) {
-    await ensureInternalOperatorMembership(pinned);
-    return pinned;
+    const prisma = getPrisma();
+    const row = await prisma.workspace.findUnique({ where: { id: pinned }, select: { id: true } });
+    if (row) {
+      await ensureInternalOperatorMembership(row.id);
+      return row.id;
+    }
   }
 
   const prisma = getPrisma();
