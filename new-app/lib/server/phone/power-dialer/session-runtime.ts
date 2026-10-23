@@ -321,9 +321,13 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
     const eligibleIds = dialMembers
       .filter((m) => eligibilityByContact.get(m.contactId)?.eligible)
       .map((m) => m.contactId);
+    const campaignFresh = await prisma.powerDialerCampaign.findFirst({
+      where: { id: session.campaignId, workspaceId },
+      select: { configJson: true },
+    });
     const cfg =
-      session.campaign.configJson && typeof session.campaign.configJson === "object"
-        ? (session.campaign.configJson as { teamQueuePointer?: number })
+      campaignFresh?.configJson && typeof campaignFresh.configJson === "object"
+        ? (campaignFresh.configJson as { teamQueuePointer?: number })
         : {};
     const rotated = pickRoundRobinContactIds(
       eligibleIds,
@@ -535,9 +539,29 @@ export async function createAttemptForSession(
   });
   await assertOutboundDialAllowed(workspaceId, dial.e164);
 
-  const wsSettings = await (await import("@/lib/server/phone/power-dialer")).getPowerDialerSettings(
+  const extDial = parseExtendedConfig(session.campaign.configJson);
+  const pdSettings = await (await import("@/lib/server/phone/power-dialer")).getPowerDialerSettings(
     workspaceId,
   );
+  const { checkDialCompliance, auditComplianceDecision } = await import("./compliance-gates");
+  const compliance = await checkDialCompliance({
+    workspaceId,
+    contactId: input.contactId,
+    phoneE164: dial.e164,
+    requireExplicitConsent: Boolean(extDial.requireExplicitConsent),
+    externalDncConnected: Boolean(pdSettings.externalDncScreeningConnected),
+    campaignListId: session.campaign.listId,
+  });
+  if (!compliance.ok) {
+    await auditComplianceDecision({
+      workspaceId,
+      action: "dial_blocked",
+      detail: { contactId: input.contactId, reason: compliance.reason, phone: dial.e164 },
+    });
+    throw new Error(compliance.userMessage);
+  }
+
+  const wsSettings = pdSettings;
   if (wsSettings.skipDuplicateNumbers) {
     const dup = await prisma.powerDialerAttempt.findFirst({
       where: {
@@ -586,6 +610,9 @@ export async function createAttemptForSession(
         nextCallAt: null,
       },
     });
+
+    const { advanceTeamQueuePointer } = await import("./caller-id-pool");
+    await advanceTeamQueuePointer(workspaceId, session.campaignId);
 
     return attempt;
   } catch (e) {

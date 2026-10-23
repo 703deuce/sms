@@ -237,17 +237,26 @@ export async function createWebRtcOutboundCall(input: {
       include: { session: true },
     });
     if (preAttempt?.session?.campaignId) {
-      const { resolvePowerDialerOutboundCallerId } = await import(
-        "@/lib/server/phone/power-dialer/caller-id-resolution"
+      const campaign = await prisma.powerDialerCampaign.findFirst({
+        where: { id: preAttempt.session.campaignId },
+        select: { timezone: true },
+      });
+      const { pickCampaignCallerId, advanceCallerIdRotationPointer } = await import(
+        "@/lib/server/phone/power-dialer/caller-id-pool"
       );
-      const resolved = await resolvePowerDialerOutboundCallerId({
+      const resolved = await pickCampaignCallerId({
         workspaceId: input.workspaceId,
         campaignId: preAttempt.session.campaignId,
         repUserId: preAttempt.session.repUserId,
         contactPhone: to,
+        timezone: campaign?.timezone || "America/Chicago",
       });
+      if (resolved.blockReason) {
+        throw new Error(resolved.blockReason);
+      }
       fromInput = resolved.e164;
       resolvedPhoneNumberId = resolved.phoneNumberId;
+      void advanceCallerIdRotationPointer(input.workspaceId, preAttempt.session.campaignId);
     }
   }
 

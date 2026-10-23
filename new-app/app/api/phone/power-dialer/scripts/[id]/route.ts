@@ -23,6 +23,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       name?: string;
       body?: string;
       isDefault?: boolean;
+      assignmentJson?: unknown;
       action?: "archive" | "clone";
     };
     const prisma = getPrisma();
@@ -61,6 +62,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         ...(body.name !== undefined ? { name: body.name.trim() || existing.name } : {}),
         ...(body.body !== undefined ? { body: body.body } : {}),
         ...(body.isDefault !== undefined ? { isDefault: body.isDefault } : {}),
+        ...(body.assignmentJson !== undefined
+          ? { assignmentJson: body.assignmentJson as import("@prisma/client").Prisma.InputJsonValue }
+          : {}),
       },
     });
     return NextResponse.json({ data });

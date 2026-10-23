@@ -11,6 +11,12 @@ export async function GET() {
   try {
     const workspaceId = await resolveWorkspaceId();
     const prisma = getPrisma();
+    const lists = await prisma.contactList.findMany({
+      where: { workspaceId, archivedAt: null },
+      select: { id: true, name: true, dialConsentJson: true },
+      orderBy: { updatedAt: "desc" },
+      take: 100,
+    });
     const [settings, dnc, audit] = await Promise.all([
       getPowerDialerSettings(workspaceId),
       listInternalDnc(workspaceId),
@@ -20,12 +26,30 @@ export async function GET() {
         take: 50,
       }),
     ]);
+    const campaigns = await prisma.powerDialerCampaign.findMany({
+      where: { workspaceId },
+      select: { id: true, name: true },
+    });
+    const abandonedByCampaign: Record<string, unknown> = {};
+    const { getCampaignAbandonedMetrics } = await import(
+      "@/lib/server/phone/power-dialer/abandoned-metrics"
+    );
+    for (const c of campaigns.slice(0, 20)) {
+      abandonedByCampaign[c.id] = {
+        campaignName: c.name,
+        ...(await getCampaignAbandonedMetrics(workspaceId, c.id)),
+      };
+    }
     return NextResponse.json({
       data: {
         settings,
         internalDnc: dnc,
         audit,
+        lists,
+        abandonedByCampaign,
         externalDncConnected: Boolean(settings.externalDncScreeningConnected),
+        legalNotice:
+          "Outbound calling and prerecorded messages may be restricted by federal, state, and carrier rules. Have qualified counsel review scripts, recordings, and abandonment policies before commercial use.",
       },
     });
   } catch (err) {
@@ -82,6 +106,46 @@ export async function PATCH(request: Request) {
       const { removeInternalDnc } = await import("@/lib/server/phone/power-dialer/internal-dnc");
       await removeInternalDnc({ workspaceId, phone: body.phone, actorUserId: userId });
       return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "set_list_consent" && typeof body.listId === "string") {
+      const basis = body.basis;
+      const notes = typeof body.notes === "string" ? body.notes : "";
+      if (
+        basis !== "existing_permission" &&
+        basis !== "lead_form" &&
+        basis !== "purchased_list" &&
+        basis !== "other"
+      ) {
+        throw new Error("Invalid consent basis");
+      }
+      await prisma.contactList.updateMany({
+        where: { id: body.listId, workspaceId },
+        data: {
+          dialConsentJson: {
+            basis,
+            notes,
+            attestedAt: new Date().toISOString(),
+            attestedByUserId: userId,
+          },
+        },
+      });
+      await prisma.powerDialerComplianceAuditLog.create({
+        data: {
+          workspaceId,
+          action: "list_consent_basis_recorded",
+          actorUserId: userId,
+          detailJson: { listId: body.listId, basis },
+        },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "toggle_external_dnc") {
+      const next = await updatePowerDialerSettings(workspaceId, {
+        externalDncScreeningConnected: Boolean(body.connected),
+      });
+      return NextResponse.json({ data: next });
     }
 
     throw new Error("Unknown action");

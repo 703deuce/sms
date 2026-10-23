@@ -71,51 +71,31 @@ export async function sendDispositionEmail(input: {
   const body = input.body;
   if (!body.trim()) return { ok: false, message: "Email body is empty" };
 
-  const provider = process.env.TRANSOVO_OUTBOUND_EMAIL_WEBHOOK_URL?.trim();
-  if (!provider) {
-    const cf =
-      contact && typeof (await prisma.contact.findFirst({
-        where: { id: input.contactId },
-        select: { customFields: true },
-      }))?.customFields === "object"
-        ? ((await prisma.contact.findFirst({
-            where: { id: input.contactId },
-            select: { customFields: true },
-          }))!.customFields as Record<string, unknown>)
-        : {};
-    await prisma.contact.update({
-      where: { id: input.contactId },
-      data: {
-        customFields: {
-          ...cf,
-          pendingPowerDialerEmail: { subject, body, at: new Date().toISOString() },
-        },
-      },
-    });
-    return {
-      ok: false,
-      message: "Email provider not configured for this workspace (set TRANSOVO_OUTBOUND_EMAIL_WEBHOOK_URL)",
-    };
-  }
-
   try {
-    const res = await fetch(provider, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId: input.workspaceId,
-        contactId: input.contactId,
-        to: contact.email,
-        subject,
-        bodyText: body,
-        source: "power_dialer_disposition",
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return { ok: false, message: `Email delivery failed: ${text.slice(0, 120)}` };
+    const { sendTransactionalEmail, resolveTransactionalEmailSenderConfig } = await import(
+      "@/lib/email/brevo"
+    );
+    const cfg = resolveTransactionalEmailSenderConfig();
+    if (!cfg.productionReady) {
+      const missing = !cfg.apiKeyConfigured
+        ? "BREVO_API_KEY"
+        : "BREVO_FROM_EMAIL or TRANSOVO_TRANSACTIONAL_FROM_EMAIL";
+      return {
+        ok: false,
+        message: `Email not configured — set ${missing} on the server`,
+      };
     }
-    return { ok: true, message: "Email sent" };
+    const result = await sendTransactionalEmail({
+      to: contact.email,
+      subject,
+      textContent: body,
+      htmlContent: `<p>${body.replace(/\n/g, "<br/>")}</p>`,
+      workspaceId: input.workspaceId,
+    });
+    if (result.status !== "sent") {
+      return { ok: false, message: result.error || "Email send failed" };
+    }
+    return { ok: true, message: "Email sent via Brevo" };
   } catch (err) {
     return {
       ok: false,

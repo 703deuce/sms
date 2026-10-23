@@ -36,6 +36,11 @@ export async function POST(request: Request) {
             create: src.dispositions.map((d) => ({
               label: d.label,
               category: d.category,
+              outcomeClass: d.outcomeClass,
+              colorHex: d.colorHex,
+              hotkey: d.hotkey,
+              answerContext: d.answerContext,
+              actionsJson: d.actionsJson,
               sortOrder: d.sortOrder,
               requireNotes: d.requireNotes,
               markConnected: d.markConnected,

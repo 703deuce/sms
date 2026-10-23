@@ -1,24 +1,34 @@
 import { getPrisma } from "@/lib/server/db";
 import { isHumanConversation } from "./disposition-effects";
+import { startOfDayInTimezone } from "./timezone-window";
 
 export type NumberHealthRow = {
   phoneNumberId: string;
   e164: string;
   nickname: string | null;
   attempts: number;
+  dialsToday: number;
   minutes: number;
   answerRate: number | null;
   humanConversationRate: number | null;
   screeningRate: number | null;
   failedCalls: number;
   registrationStatus: string;
+  /** M47 — not carrier spam score unless Telnyx reputation is entitled + connected */
+  telnyxReputationStatus: string;
+  stirShakenAttestation: string;
+  healthState: string;
 };
 
 export async function listPowerDialerNumberHealth(workspaceId: string): Promise<NumberHealthRow[]> {
   const prisma = getPrisma();
+  const pdSettings = await import("@/lib/server/phone/power-dialer").then((m) =>
+    m.getPowerDialerSettings(workspaceId),
+  );
+  const dayStart = startOfDayInTimezone(new Date(), pdSettings.defaultTimezone || "America/Chicago");
   const numbers = await prisma.phoneNumber.findMany({
     where: { workspaceId },
-    select: { id: true, e164: true, friendlyName: true },
+    select: { id: true, e164: true, friendlyName: true, a2pStatus: true, capabilitiesJson: true },
   });
 
   const calls = await prisma.humanCall.findMany({
@@ -45,18 +55,36 @@ export async function listPowerDialerNumberHealth(workspaceId: string): Promise<
 
   const byNumber = new Map<string, NumberHealthRow>();
   for (const n of numbers) {
+    const caps = (n.capabilitiesJson || {}) as { stirShaken?: string };
     byNumber.set(n.id, {
       phoneNumberId: n.id,
       e164: n.e164,
       nickname: n.friendlyName,
       attempts: 0,
+      dialsToday: 0,
       minutes: 0,
       answerRate: null,
       humanConversationRate: null,
       screeningRate: null,
       failedCalls: 0,
-      registrationStatus: "Unknown",
+      registrationStatus: n.a2pStatus || "Unknown",
+      telnyxReputationStatus: pdSettings.premiumReputationEntitlement
+        ? "Not provisioned — connect Telnyx Number Reputation in premium settings"
+        : "Not entitled — enable premium reputation for official scores",
+      stirShakenAttestation: caps.stirShaken || "Unknown",
+      healthState: "healthy",
     });
+  }
+
+  const todayAttempts = await prisma.powerDialerAttempt.findMany({
+    where: { workspaceId, createdAt: { gte: dayStart }, humanCall: { phoneNumberId: { not: null } } },
+    select: { humanCall: { select: { phoneNumberId: true } } },
+  });
+  for (const t of todayAttempts) {
+    const id = t.humanCall?.phoneNumberId;
+    if (!id) continue;
+    const row = byNumber.get(id);
+    if (row) row.dialsToday += 1;
   }
 
   let answered = 0;
@@ -94,8 +122,10 @@ export async function listPowerDialerNumberHealth(workspaceId: string): Promise<
         return att?.answerClassification === "screener";
       }).length;
       row.screeningRate = Math.round((scr / row.attempts) * 1000) / 10;
+      if (row.failedCalls / row.attempts > 0.35) row.healthState = "elevated_failures";
+      else if (row.answerRate != null && row.answerRate < 5) row.healthState = "low_answer_rate";
     }
   }
 
-  return [...byNumber.values()].filter((r) => r.attempts > 0 || numbers.some((n) => n.id === r.phoneNumberId));
+  return [...byNumber.values()];
 }

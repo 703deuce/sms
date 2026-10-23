@@ -59,6 +59,15 @@ export async function upsertCallbackFromDisposition(input: {
   const existing = await prisma.powerDialerCallback.findFirst({
     where: { attemptId: input.attemptId },
   });
+  const routing = await import("./callback-routing-runtime").then((m) =>
+    m.resolveCallbackAssignment({
+      workspaceId: input.workspaceId,
+      campaignId: input.campaignId,
+      contactId: input.contactId,
+      preferredRepUserId: input.assignedUserId,
+    }),
+  );
+
   if (existing) {
     return prisma.powerDialerCallback.update({
       where: { id: existing.id },
@@ -68,11 +77,11 @@ export async function upsertCallbackFromDisposition(input: {
         notes: input.notes,
         disposition: input.disposition,
         status: "scheduled",
-        assignedUserId: input.assignedUserId,
-        visibility: input.visibility,
+        assignedUserId: input.assignedUserId ?? routing.assignedUserId,
+        visibility: input.visibility ?? routing.visibility,
         priority: input.priority,
         source: input.source,
-        routingPool: input.routingPool,
+        routingPool: input.routingPool ?? routing.routingPool,
       },
     });
   }
@@ -86,12 +95,12 @@ export async function upsertCallbackFromDisposition(input: {
       timezone: input.timezone,
       notes: input.notes,
       disposition: input.disposition,
-      assignedUserId: input.assignedUserId,
+      assignedUserId: input.assignedUserId ?? routing.assignedUserId,
       status: "scheduled",
-      visibility: input.visibility || "personal",
+      visibility: input.visibility ?? routing.visibility,
       priority: input.priority ?? 0,
       source: input.source,
-      routingPool: input.routingPool,
+      routingPool: input.routingPool ?? routing.routingPool,
     },
   });
 }

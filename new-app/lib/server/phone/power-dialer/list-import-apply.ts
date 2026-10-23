@@ -34,6 +34,15 @@ export async function applyCsvImportToList(
       continue;
     }
 
+    const { isOnInternalDnc } = await import("./internal-dnc");
+    if (await isOnInternalDnc(workspaceId, primary.e164)) {
+      rejected.push({
+        lineNumber: row.lineNumber,
+        reasons: ["Number on workspace do-not-call list"],
+      });
+      continue;
+    }
+
     const parts = (row.name || "").trim().split(/\s+/);
     const firstName = parts[0] || null;
     const lastName = parts.length > 1 ? parts.slice(1).join(" ") : null;

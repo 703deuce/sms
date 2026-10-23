@@ -16,7 +16,11 @@ const actionSchema = z.object({
     "change_owner",
     "cadence_next",
     "cadence_enroll",
+    "voicemail_drop",
+    "crm_note",
   ]),
+  voicemailDropId: z.string().optional(),
+  noteBody: z.string().optional(),
   tagId: z.string().optional(),
   tagName: z.string().optional(),
   listId: z.string().optional(),
@@ -146,6 +150,94 @@ export async function runDispositionActions(
           data: { assignedUserId: action.ownerUserId },
         });
         results.push({ type: action.type, ok: true, message: "Owner updated" });
+        continue;
+      }
+
+      if (action.type === "voicemail_drop" && input.attemptId) {
+        const { getPowerDialerSettings } = await import("@/lib/server/phone/power-dialer");
+        const pd = await getPowerDialerSettings(input.workspaceId);
+        if (!pd.prerecordedVmOptIn) {
+          results.push({
+            type: action.type,
+            ok: false,
+            message: "Prerecorded voicemail drops require admin compliance opt-in",
+          });
+          continue;
+        }
+        const attempt = await prisma.powerDialerAttempt.findFirst({
+          where: { id: input.attemptId, workspaceId: input.workspaceId },
+          select: { id: true, humanCallId: true },
+        });
+        if (!attempt?.humanCallId) {
+          results.push({
+            type: action.type,
+            ok: false,
+            message: "No live call to leave voicemail on",
+          });
+          continue;
+        }
+        const ext = await prisma.powerDialerCampaign.findFirst({
+          where: { id: input.campaignId },
+          select: { configJson: true },
+        });
+        const { parseExtendedConfig } = await import("./campaign-extended-config");
+        const dropId =
+          action.voicemailDropId ||
+          parseExtendedConfig(ext?.configJson).voicemailDropId ||
+          undefined;
+        if (!dropId) {
+          results.push({ type: action.type, ok: false, message: "No voicemail drop configured" });
+          continue;
+        }
+        const call = await prisma.humanCall.findFirst({
+          where: { id: attempt.humanCallId, workspaceId: input.workspaceId },
+        });
+        const controlId = call?.telnyxCallControlId;
+        const drop = await prisma.powerDialerVoicemailDrop.findFirst({
+          where: { id: dropId, workspaceId: input.workspaceId },
+        });
+        if (!controlId || !drop?.storageUrl) {
+          results.push({
+            type: action.type,
+            ok: false,
+            message: "Call not connected or voicemail audio missing",
+          });
+          continue;
+        }
+        const { startVoicemailDropPlayback } = await import("./voicemail-drop-playback");
+        await startVoicemailDropPlayback({
+          telnyxCallControlId: controlId,
+          audioUrl: drop.storageUrl,
+        });
+        results.push({ type: action.type, ok: true, message: "Voicemail drop started" });
+        continue;
+      }
+
+      if (action.type === "crm_note") {
+        const body =
+          action.noteBody || input.notes || `Power dialer note: ${input.disposition?.label || ""}`;
+        await prisma.contactActivityEvent.create({
+          data: {
+            workspaceId: input.workspaceId,
+            contactId: input.contactId,
+            kind: "note",
+            title: "Power dialer",
+            body,
+          },
+        });
+        results.push({ type: action.type, ok: true, message: "CRM note logged" });
+        continue;
+      }
+
+      if (action.type === "create_deal") {
+        const { createDeal } = await import("@/lib/server/crm/native/deals");
+        const title = action.taskTitle || `Deal — ${input.disposition?.label || "Power dialer"}`;
+        await createDeal(input.workspaceId, {
+          title,
+          contactId: input.contactId,
+          ownerUserId: action.ownerUserId || input.assignedUserId || undefined,
+        });
+        results.push({ type: action.type, ok: true, message: "Deal created" });
         continue;
       }
 

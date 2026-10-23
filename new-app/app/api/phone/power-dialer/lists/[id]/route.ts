@@ -29,7 +29,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   try {
     const { id } = await ctx.params;
     const workspaceId = await resolveWorkspaceId();
-    const body = (await request.json()) as { action?: string };
+    const body = (await request.json()) as { action?: string; filters?: unknown; basis?: string; notes?: string };
     const { archiveContactList } = await import("@/lib/server/phone/power-dialer/list-detail");
     if (body.action === "archive") {
       await archiveContactList(workspaceId, id);
@@ -40,6 +40,32 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       await prisma.contactList.updateMany({
         where: { id, workspaceId },
         data: { filtersJson: body.filters ?? [] },
+      });
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === "save_dial_consent") {
+      const prisma = (await import("@/lib/server/db")).getPrisma();
+      const { resolveInternalUserId } = await import("@/lib/server/internal-user");
+      const userId = await resolveInternalUserId();
+      const basis = body.basis;
+      if (
+        basis !== "existing_permission" &&
+        basis !== "lead_form" &&
+        basis !== "purchased_list" &&
+        basis !== "other"
+      ) {
+        throw new Error("Invalid consent basis");
+      }
+      await prisma.contactList.updateMany({
+        where: { id, workspaceId },
+        data: {
+          dialConsentJson: {
+            basis,
+            notes: typeof body.notes === "string" ? body.notes : "",
+            attestedAt: new Date().toISOString(),
+            attestedByUserId: userId,
+          },
+        },
       });
       return NextResponse.json({ ok: true });
     }

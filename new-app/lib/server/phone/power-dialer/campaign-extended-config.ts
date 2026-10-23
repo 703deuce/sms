@@ -19,6 +19,9 @@ export const campaignExtendedConfigSchema = z.object({
   callbackRoutingMode: z
     .enum(["same_rep", "best_eligible", "group", "external", "ai_receptionist"])
     .optional(),
+  callerIdRotationMode: z.enum(["sticky", "rotate", "local_presence"]).optional(),
+  numberPoolDailyCap: z.number().int().min(1).max(10_000).optional(),
+  requireExplicitConsent: z.boolean().optional(),
   callbackAction: z.string().optional(),
   leadRemovalDispositions: z.array(z.string()).optional(),
   dncDispositions: z.array(z.string()).optional(),
@@ -47,6 +50,9 @@ export function parseExtendedConfig(raw: unknown): CampaignExtendedConfig {
     liveAnswerDispositionSetId: o.liveAnswerDispositionSetId,
     noAnswerDispositionSetId: o.noAnswerDispositionSetId,
     callbackRoutingMode: o.callbackRoutingMode,
+    callerIdRotationMode: o.callerIdRotationMode,
+    numberPoolDailyCap: o.numberPoolDailyCap,
+    requireExplicitConsent: o.requireExplicitConsent,
     callbackAction: o.callbackAction,
     leadRemovalDispositions: o.leadRemovalDispositions,
     dncDispositions: o.dncDispositions,
