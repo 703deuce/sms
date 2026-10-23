@@ -6,12 +6,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Panel } from '@/components/app/page-primitives'
 
+type AuditRow = { id: string; action: string; createdAt: string; detailJson?: unknown }
+type ListRow = { id: string; name: string; dialConsentJson?: { basis?: string; attestedAt?: string } | null }
+
 export function PowerDialerComplianceSettingsPanel() {
   const [dnc, setDnc] = useState<{ phone: string; reason: string | null }[]>([])
   const [ackAt, setAckAt] = useState<string | null>(null)
   const [phone, setPhone] = useState('')
   const [search, setSearch] = useState('')
   const [csvText, setCsvText] = useState('')
+  const [audit, setAudit] = useState<AuditRow[]>([])
+  const [lists, setLists] = useState<ListRow[]>([])
+  const [legalNotice, setLegalNotice] = useState('')
+  const [externalDnc, setExternalDnc] = useState(false)
+  const [abandoned, setAbandoned] = useState<Record<string, { campaignName: string; abandonedRatePct: number | null }>>({})
 
   const load = useCallback(() => {
     void fetch('/api/phone/power-dialer/compliance')
@@ -19,6 +27,11 @@ export function PowerDialerComplianceSettingsPanel() {
       .then((j) => {
         setDnc(j.data?.internalDnc || [])
         setAckAt(j.data?.settings?.complianceAcknowledgedAt || null)
+        setAudit(j.data?.audit || [])
+        setLists(j.data?.lists || [])
+        setLegalNotice(j.data?.legalNotice || '')
+        setExternalDnc(Boolean(j.data?.externalDncConnected))
+        setAbandoned(j.data?.abandonedByCampaign || {})
       })
   }, [])
 
@@ -55,8 +68,25 @@ export function PowerDialerComplianceSettingsPanel() {
     toast.success('Added to internal DNC')
   }
 
+  const saveListConsent = async (listId: string, basis: string, notes: string) => {
+    const res = await fetch('/api/phone/power-dialer/compliance', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_list_consent', listId, basis, notes }),
+    })
+    if (!res.ok) {
+      toast.error('Could not save list consent basis')
+      return
+    }
+    toast.success('List consent basis recorded')
+    load()
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      <Panel title="Legal & usage (P24)" description="Not legal advice — counsel review required before commercial enablement.">
+        <p className="text-sm text-muted-foreground">{legalNotice || 'Loading…'}</p>
+      </Panel>
       <Panel title="Admin acknowledgement" description="Required before the first power-dialer session can start.">
         <p className="mb-3 text-sm text-muted-foreground">
           {ackAt
@@ -132,10 +162,83 @@ export function PowerDialerComplianceSettingsPanel() {
           ))}
         </ul>
       </Panel>
-      <Panel title="External DNC screening">
-        <p className="text-sm text-muted-foreground">
-          No external registry integration is connected. Transovo does not display third-party DNC scores without a supported provider.
+      <Panel title="List permission exceptions (M55)">
+        <p className="mb-3 text-sm text-muted-foreground">
+          Records evidentiary basis for a calling list. Does not override opt-outs, internal DNC, or statutory restrictions.
         </p>
+        <ul className="space-y-3 text-sm">
+          {lists.length === 0 && <li className="text-muted-foreground">No lists in workspace.</li>}
+          {lists.map((list) => (
+            <li key={list.id} className="rounded border p-3">
+              <p className="font-medium">{list.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {list.dialConsentJson?.attestedAt
+                  ? `Recorded: ${list.dialConsentJson.basis} · ${new Date(list.dialConsentJson.attestedAt).toLocaleString()}`
+                  : 'No attestation on file'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(['existing_permission', 'lead_form', 'purchased_list', 'other'] as const).map((basis) => (
+                  <Button
+                    key={basis}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void saveListConsent(list.id, basis, `Attested via compliance settings`)}
+                  >
+                    Attest: {basis.replace(/_/g, ' ')}
+                  </Button>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+      <Panel title="External DNC screening (M54)">
+        <p className="mb-2 text-sm text-muted-foreground">
+          Requires your workspace&apos;s own FTC National DNC subscription or qualified provider. Transovo does not share seller SAN data across customers.
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={externalDnc}
+            onChange={(e) => {
+              void fetch('/api/phone/power-dialer/compliance', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'toggle_external_dnc', connected: e.target.checked }),
+              }).then(() => load())
+            }}
+          />
+          External DNC screening connected for this workspace
+        </label>
+      </Panel>
+      <Panel title="Abandoned-call metrics (M59)">
+        {Object.keys(abandoned).length === 0 ? (
+          <p className="text-sm text-muted-foreground">No campaigns yet.</p>
+        ) : (
+          <ul className="text-sm">
+            {Object.entries(abandoned).map(([id, row]) => (
+              <li key={id} className="border-b py-2">
+                {row.campaignName}: {row.abandonedRatePct != null ? `${row.abandonedRatePct}% abandoned (30d)` : '—'}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+      <Panel title="Compliance audit log">
+        {audit.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No compliance decisions logged yet.</p>
+        ) : (
+          <ul className="max-h-64 overflow-auto text-xs">
+            {audit.map((a) => (
+              <li key={a.id} className="border-b py-2">
+                <span className="font-mono text-muted-foreground">{new Date(a.createdAt).toLocaleString()}</span>
+                {' · '}
+                <span className="font-medium">{a.action}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </Panel>
     </div>
   )

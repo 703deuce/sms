@@ -65,6 +65,15 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
   const [blockedAreaCodes, setBlockedAreaCodes] = useState('')
   const [scheduleBreaks, setScheduleBreaks] = useState('')
   const [teamQueueMode, setTeamQueueMode] = useState('shared')
+  const [callbackRoutingMode, setCallbackRoutingMode] = useState('same_rep')
+  const [callbackRoutingE164, setCallbackRoutingE164] = useState('')
+  const [callerIdRotationMode, setCallerIdRotationMode] = useState('sticky')
+  const [numberPoolDailyCap, setNumberPoolDailyCap] = useState(200)
+  const [callerIdPoolNumberIds, setCallerIdPoolNumberIds] = useState<string[]>([])
+  const [liveAnswerDispositionSetId, setLiveAnswerDispositionSetId] = useState('')
+  const [noAnswerDispositionSetId, setNoAnswerDispositionSetId] = useState('')
+  const [requireExplicitConsent, setRequireExplicitConsent] = useState(false)
+  const [recordingEnabled, setRecordingEnabled] = useState(true)
 
   useEffect(() => {
     if (!open) return
@@ -116,6 +125,15 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         setAllowedAreaCodes(Array.isArray(cj.allowedAreaCodes) ? (cj.allowedAreaCodes as string[]).join(',') : '')
         setBlockedAreaCodes(Array.isArray(cj.blockedAreaCodes) ? (cj.blockedAreaCodes as string[]).join(',') : '')
         setTeamQueueMode(String(cj.teamQueueMode || 'shared'))
+        setCallbackRoutingMode(String(cj.callbackRoutingMode || 'same_rep'))
+        setCallbackRoutingE164(String(cj.callbackRoutingE164 || ''))
+        setCallerIdRotationMode(String(cj.callerIdRotationMode || 'sticky'))
+        setNumberPoolDailyCap(typeof cj.numberPoolDailyCap === 'number' ? cj.numberPoolDailyCap : 200)
+        setCallerIdPoolNumberIds(Array.isArray(cj.callerIdPoolNumberIds) ? (cj.callerIdPoolNumberIds as string[]) : [])
+        setLiveAnswerDispositionSetId(String(cj.liveAnswerDispositionSetId || ''))
+        setNoAnswerDispositionSetId(String(cj.noAnswerDispositionSetId || ''))
+        setRequireExplicitConsent(Boolean(cj.requireExplicitConsent))
+        setRecordingEnabled(cj.recordingEnabled !== false)
         if (Array.isArray(cj.scheduleBreaks)) {
           setScheduleBreaks(
             (cj.scheduleBreaks as { startHm: string; endHm: string }[])
@@ -177,6 +195,16 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         allowedAreaCodes: allowedAreaCodes ? allowedAreaCodes.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
         blockedAreaCodes: blockedAreaCodes ? blockedAreaCodes.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
         scheduleBreaks: parseBreaks().length ? parseBreaks() : undefined,
+        callbackRoutingMode,
+        callbackRoutingE164: callbackRoutingE164 || undefined,
+        callerIdRotationMode,
+        numberPoolDailyCap,
+        callerIdPoolNumberIds: callerIdPoolNumberIds.length ? callerIdPoolNumberIds : undefined,
+        liveAnswerDispositionSetId: liveAnswerDispositionSetId || null,
+        noAnswerDispositionSetId: noAnswerDispositionSetId || null,
+        dispositionSetId: dispositionSetId || null,
+        requireExplicitConsent,
+        recordingEnabled,
       }
       if (campaignId) {
         await savePowerCampaignDetail(campaignId, {
@@ -374,14 +402,49 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
           <TabsContent value="caller" className="flex flex-col gap-3">
             <div>
               <SimpleSelect
-                label="Outbound caller ID"
+                label="Default outbound caller ID"
                 value={callerId}
                 onChange={setCallerId}
                 options={owned.filter((n) => n.status === 'active').map((n) => ({ value: n.number, label: n.nickname || n.number }))}
               />
               {fieldErrors.callerId && <p className="mt-1 text-xs text-destructive">{fieldErrors.callerId}</p>}
             </div>
-            <p className="text-xs text-muted-foreground">Numbers come from the global Numbers inventory. Number pools are not configured in this workspace.</p>
+            <SimpleSelect
+              label="Caller ID rotation"
+              value={callerIdRotationMode}
+              onChange={setCallerIdRotationMode}
+              options={[
+                { value: 'sticky', label: 'Sticky (default number)' },
+                { value: 'rotate', label: 'Rotate owned pool' },
+                { value: 'local_presence', label: 'Local presence (match area code when possible)' },
+              ]}
+            />
+            <label className="text-sm">Per-number daily dial cap (pool)
+              <Input type="number" min={1} max={10000} value={numberPoolDailyCap} onChange={(e) => setNumberPoolDailyCap(Number(e.target.value))} />
+            </label>
+            <fieldset className="text-sm">
+              <legend className="mb-1 font-medium">Number pool (owned lines)</legend>
+              <p className="mb-2 text-xs text-muted-foreground">Assign only numbers you own. Rotation is for legitimate outreach — not rapid label evasion.</p>
+              <ul className="max-h-40 space-y-1 overflow-auto rounded border p-2">
+                {owned.filter((n) => n.status === 'active').map((n) => (
+                  <li key={n.id}>
+                    <label className="flex items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={callerIdPoolNumberIds.includes(n.id)}
+                        onChange={(e) => {
+                          setCallerIdPoolNumberIds((prev) =>
+                            e.target.checked ? [...prev, n.id] : prev.filter((id) => id !== n.id),
+                          )
+                        }}
+                      />
+                      {n.nickname || n.number}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+            <Link href="/app/numbers" className="text-xs text-primary hover:underline">Purchase or assign numbers</Link>
           </TabsContent>
           <TabsContent value="handling" className="flex flex-col gap-3">
             <SimpleSelect label="Script" value={scriptId} onChange={setScriptId} options={[{ value: '', label: 'None' }, ...scripts.map((s) => ({ value: s.id, label: s.name }))]} />
@@ -390,11 +453,46 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
           </TabsContent>
           <TabsContent value="outcomes" className="flex flex-col gap-3">
             <SimpleSelect
-              label="Disposition set"
+              label="Disposition set (fallback)"
               value={dispositionSetId}
               onChange={setDispositionSetId}
               options={[{ value: '', label: 'Workspace default' }, ...dispositionSets.map((s) => ({ value: s.id, label: s.name }))]}
             />
+            <SimpleSelect
+              label="Live-answer disposition set"
+              value={liveAnswerDispositionSetId}
+              onChange={setLiveAnswerDispositionSetId}
+              options={[{ value: '', label: 'Same as fallback' }, ...dispositionSets.map((s) => ({ value: s.id, label: s.name }))]}
+            />
+            <SimpleSelect
+              label="No-answer disposition set"
+              value={noAnswerDispositionSetId}
+              onChange={setNoAnswerDispositionSetId}
+              options={[{ value: '', label: 'Same as fallback' }, ...dispositionSets.map((s) => ({ value: s.id, label: s.name }))]}
+            />
+            <SimpleSelect
+              label="Callback routing (P20)"
+              value={callbackRoutingMode}
+              onChange={setCallbackRoutingMode}
+              options={[
+                { value: 'same_rep', label: 'Same rep who dialed' },
+                { value: 'best_eligible', label: 'Best eligible rep in campaign' },
+                { value: 'group', label: 'Campaign member group' },
+                { value: 'external', label: 'External number' },
+                { value: 'ai_receptionist', label: 'AI receptionist queue' },
+              ]}
+            />
+            {callbackRoutingMode === 'external' && (
+              <Input value={callbackRoutingE164} onChange={(e) => setCallbackRoutingE164(e.target.value)} placeholder="External E.164 for callbacks" aria-label="External callback number" />
+            )}
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={requireExplicitConsent} onChange={(e) => setRequireExplicitConsent(e.target.checked)} />
+              Require recorded contact consent before dial (M56)
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={recordingEnabled} onChange={(e) => setRecordingEnabled(e.target.checked)} />
+              Enable call recording for this campaign (P23)
+            </label>
           </TabsContent>
           <TabsContent value="members" className="flex flex-col gap-3">
             <p className="text-xs text-muted-foreground">Only assigned reps (or owners/admins) can start dialing sessions on this campaign.</p>

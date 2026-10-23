@@ -4,9 +4,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/app/page-primitives'
+import { useNumbers } from '@/components/providers/numbers-provider'
 
 export function PowerDialerTeamSettingsPanel() {
+  const { owned } = useNumbers()
   const [reps, setReps] = useState<{ userId: string; name: string; role: string }[]>([])
+  const [repNumberAssignments, setRepNumberAssignments] = useState<Record<string, string[]>>({})
   const [assignments, setAssignments] = useState<
     { campaignId: string; campaignName: string; ownerUserId: string | null; memberUserIds: string[] }[]
   >([])
@@ -19,6 +22,7 @@ export function PowerDialerTeamSettingsPanel() {
         setReps(j.data?.reps || [])
         setAssignments(j.data?.campaignAssignments || [])
         setVisibility(j.data?.settings?.teamActivityVisibility || 'all_reps')
+        setRepNumberAssignments(j.data?.settings?.repNumberAssignments || {})
       })
   }, [])
 
@@ -26,11 +30,15 @@ export function PowerDialerTeamSettingsPanel() {
     load()
   }, [load])
 
-  const saveVisibility = async () => {
+  const saveTeamSettings = async () => {
     const res = await fetch('/api/phone/power-dialer/team', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update_team_settings', teamActivityVisibility: visibility }),
+      body: JSON.stringify({
+        action: 'update_team_settings',
+        teamActivityVisibility: visibility,
+        repNumberAssignments,
+      }),
     })
     if (!res.ok) {
       toast.error('Could not save team settings')
@@ -67,7 +75,43 @@ export function PowerDialerTeamSettingsPanel() {
             <option value="assigned_only">Only their assigned campaigns</option>
           </select>
         </label>
-        <Button type="button" size="sm" className="mt-3" onClick={() => void saveVisibility()}>Save</Button>
+        <Button type="button" size="sm" className="mt-3" onClick={() => void saveTeamSettings()}>Save visibility</Button>
+      </Panel>
+      <Panel title="Rep caller ID assignments (P21 / P28)">
+        <p className="mb-3 text-sm text-muted-foreground">
+          Restrict which owned numbers each rep may use at dial origination. Manage inventory under Numbers.
+        </p>
+        <ul className="space-y-4 text-sm">
+          {reps.map((r) => (
+            <li key={r.userId} className="rounded border p-3">
+              <p className="font-medium">{r.name}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {owned.filter((n) => n.status === 'active').map((n) => {
+                  const checked = (repNumberAssignments[r.userId] || []).includes(n.id)
+                  return (
+                    <label key={n.id} className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          setRepNumberAssignments((prev) => {
+                            const cur = prev[r.userId] || []
+                            const next = e.target.checked
+                              ? [...new Set([...cur, n.id])]
+                              : cur.filter((id) => id !== n.id)
+                            return { ...prev, [r.userId]: next }
+                          })
+                        }}
+                      />
+                      {n.nickname || n.number}
+                    </label>
+                  )
+                })}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <Button type="button" size="sm" className="mt-3" onClick={() => void saveTeamSettings()}>Save rep number assignments</Button>
       </Panel>
       <Panel title="Campaign access">
         <ul className="divide-y text-sm">

@@ -33,6 +33,11 @@ type DispositionRow = {
   id: string
   label: string
   category: string
+  outcomeClass?: string | null
+  colorHex?: string | null
+  hotkey?: string | null
+  answerContext?: string
+  actionsJson?: unknown
   sortOrder: number
   requireNotes: boolean
   markConnected: boolean
@@ -51,7 +56,13 @@ type DispositionSet = {
   dispositions: DispositionRow[]
 }
 
-type ScriptRow = { id: string; name: string; body: string; isDefault: boolean }
+type ScriptRow = {
+  id: string
+  name: string
+  body: string
+  isDefault: boolean
+  assignmentJson?: { teamUserIds?: string[]; campaignIds?: string[] } | null
+}
 
 type VmDrop = { id: string; name: string; storageUrl: string; mimeType: string | null }
 
@@ -236,6 +247,47 @@ function DispositionSetEditor({
                     <Input value={row.category} onChange={(e) => setDraft({ ...row, category: e.target.value })} aria-label="Category" />
                   </label>
                   <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Outcome class</span>
+                    <Input value={row.outcomeClass || ''} onChange={(e) => setDraft({ ...row, outcomeClass: e.target.value })} aria-label="Outcome class" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Color (hex)</span>
+                    <Input value={row.colorHex || ''} onChange={(e) => setDraft({ ...row, colorHex: e.target.value })} placeholder="#22c55e" aria-label="Color hex" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Hotkey</span>
+                    <Input value={row.hotkey || ''} onChange={(e) => setDraft({ ...row, hotkey: e.target.value })} placeholder="1-9" aria-label="Hotkey" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Answer context</span>
+                    <select
+                      className="rounded-md border bg-background px-2 py-1"
+                      value={row.answerContext || 'any'}
+                      onChange={(e) => setDraft({ ...row, answerContext: e.target.value })}
+                      aria-label="Answer context"
+                    >
+                      <option value="any">Any</option>
+                      <option value="live">Live answer</option>
+                      <option value="no_answer">No answer</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Follow-up actions (JSON array)</span>
+                    <Textarea
+                      className="min-h-[100px] font-mono text-[11px]"
+                      value={JSON.stringify(row.actionsJson || [], null, 2)}
+                      onChange={(e) => {
+                        try {
+                          setDraft({ ...row, actionsJson: JSON.parse(e.target.value) as unknown })
+                        } catch {
+                          /* user still typing */
+                        }
+                      }}
+                      aria-label="Disposition actions JSON"
+                    />
+                    <span className="text-muted-foreground">Types: tag, send_sms, send_email, voicemail_drop, crm_note, create_task, create_deal, cadence_enroll, …</span>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
                     <span className="font-medium">Sort order</span>
                     <Input
                       type="number"
@@ -269,7 +321,12 @@ function DispositionSetEditor({
                     type="button"
                     size="sm"
                     className="self-start"
-                    onClick={() => void patchDispo(d.id, draft).catch((e) => toast.error(e.message))}
+                    onClick={() =>
+                      void patchDispo(d.id, {
+                        ...draft,
+                        actionsJson: draft.actionsJson,
+                      }).catch((e) => toast.error(e.message))
+                    }
                   >
                     Save outcome
                   </Button>
@@ -397,7 +454,10 @@ export function ScriptsLibraryPanel() {
     }
   }
 
-  const saveEdit = async (id: string, patch: { name: string; body: string }) => {
+  const saveEdit = async (
+    id: string,
+    patch: { name: string; body: string; assignmentJson?: ScriptRow['assignmentJson'] },
+  ) => {
     const res = await fetch(`/api/phone/power-dialer/scripts/${id}`, {
       method: 'PATCH',
       headers: jsonHeaders,
@@ -539,16 +599,52 @@ function ScriptEditForm({
 }: {
   script: ScriptRow
   onCancel: () => void
-  onSave: (patch: { name: string; body: string }) => void
+  onSave: (patch: { name: string; body: string; assignmentJson?: ScriptRow['assignmentJson'] }) => void
 }) {
   const [name, setName] = useState(script.name)
   const [body, setBody] = useState(script.body)
+  const [teamUserIds, setTeamUserIds] = useState<string[]>(script.assignmentJson?.teamUserIds || [])
+  const [members, setMembers] = useState<{ userId: string; name: string }[]>([])
+  useEffect(() => {
+    void fetch('/api/phone/power-dialer/workspace-members')
+      .then((r) => r.json())
+      .then((j) => setMembers(j.data || []))
+      .catch(() => undefined)
+  }, [])
   return (
     <div className="flex flex-col gap-2">
       <Input value={name} onChange={(e) => setName(e.target.value)} aria-label="Script name" />
       <Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} aria-label="Script body" />
+      <fieldset className="text-xs">
+        <legend className="mb-1 font-medium">Team assignment (M39)</legend>
+        <p className="mb-2 text-muted-foreground">Reps not listed can still use campaign-assigned scripts.</p>
+        <ul className="max-h-32 overflow-auto rounded border p-2">
+          {members.map((m) => (
+            <li key={m.userId}>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={teamUserIds.includes(m.userId)}
+                  onChange={(e) =>
+                    setTeamUserIds((prev) =>
+                      e.target.checked ? [...prev, m.userId] : prev.filter((id) => id !== m.userId),
+                    )
+                  }
+                />
+                {m.name}
+              </label>
+            </li>
+          ))}
+        </ul>
+      </fieldset>
       <div className="flex gap-2">
-        <Button type="button" size="sm" onClick={() => onSave({ name, body })}>Save</Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onSave({ name, body, assignmentJson: { teamUserIds } })}
+        >
+          Save
+        </Button>
         <Button type="button" size="sm" variant="outline" onClick={onCancel}>Cancel</Button>
       </div>
     </div>

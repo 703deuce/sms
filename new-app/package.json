@@ -24,6 +24,7 @@
     "test:power-dialer-b1-carryovers": "npx tsx scripts/test-power-dialer-b1-carryovers.ts",
     "test:power-dialer-batch3": "npx tsx scripts/test-power-dialer-batch3.ts",
     "test:power-dialer-batch4-b3": "npx tsx scripts/test-power-dialer-batch4-b3.ts",
+    "test:power-dialer-batch5-b4": "npx tsx scripts/test-power-dialer-batch5-b4.ts",
     "test:mini-crm-native": "npx tsx scripts/test-mini-crm-native.ts",
     "test:crm-native-b2": "NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/test-crm-native-b2.ts",
     "test:power-dialer-metrics-consistency": "npx tsx scripts/test-power-dialer-metrics-consistency.ts",

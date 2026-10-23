@@ -11,12 +11,16 @@ export type NumberHealthRow = {
   e164: string
   nickname: string | null
   attempts: number
+  dialsToday: number
   minutes: number
   answerRate: number | null
   humanConversationRate: number | null
   screeningRate: number | null
   failedCalls: number
   registrationStatus: string
+  telnyxReputationStatus: string
+  stirShakenAttestation: string
+  healthState: string
 }
 
 export function PowerDialerNumberHealthContent() {
@@ -56,6 +60,8 @@ export function PowerDialerNumberHealthContent() {
             <tr className="border-b text-left text-xs text-muted-foreground">
               <th scope="col" className="px-4 py-2.5 font-medium">Number</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Attempts</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Today</th>
+              <th scope="col" className="px-4 py-2.5 font-medium">Health</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Minutes</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Answer rate</th>
               <th scope="col" className="px-4 py-2.5 font-medium">Human conv.</th>
@@ -68,7 +74,7 @@ export function PowerDialerNumberHealthContent() {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-5 py-8 text-center text-muted-foreground">
+                <td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">
                   No power-dialer outbound usage on assigned numbers yet.
                 </td>
               </tr>
@@ -80,6 +86,10 @@ export function PowerDialerNumberHealthContent() {
                   <span className="block font-mono text-xs text-muted-foreground">{formatPhone(n.e164)}</span>
                 </td>
                 <td className="px-4 py-3">{n.attempts}</td>
+                <td className="px-4 py-3">{n.dialsToday ?? 0}</td>
+                <td className="px-4 py-3">
+                  <StatusBadge tone={n.healthState === 'healthy' ? 'success' : 'warning'}>{n.healthState || '—'}</StatusBadge>
+                </td>
                 <td className="px-4 py-3">{n.minutes.toFixed(1)}</td>
                 <td className="px-4 py-3">{n.answerRate != null ? `${n.answerRate}%` : '—'}</td>
                 <td className="px-4 py-3">{n.humanConversationRate != null ? `${n.humanConversationRate}%` : '—'}</td>
