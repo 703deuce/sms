@@ -63,26 +63,87 @@ async function main() {
   }
   assert.equal(blocked, true, "M19 should block GB when in blockedCountries");
 
-  const { ensureDefaultDealStages } = await import("../lib/server/crm/native/deals");
+  const { ensureDefaultDealStages, createDeal, moveDealStage, upsertDealStages } = await import(
+    "../lib/server/crm/native/deals",
+  );
   const stages = await ensureDefaultDealStages(workspaceId);
   const stage2 = stages[1]?.id;
   assert.ok(stage2);
-  const deal = await prisma.crmDeal.create({
-    data: { workspaceId, title: "B2 deal test", stageId: stages[0]!.id },
-  });
-  const moved = await prisma.crmDeal.update({
-    where: { id: deal.id },
-    data: { stageId: stage2 },
-  });
+  const deal = await createDeal(workspaceId, { title: "B2 deal test", stageId: stages[0]!.id });
+  const moved = await moveDealStage(workspaceId, deal.id, stage2);
   assert.equal(moved.stageId, stage2);
 
-  const task = await prisma.crmTask.create({
-    data: { workspaceId, title: "Call back", contactId: contact.id, status: "open" },
-  });
-  await prisma.crmTask.update({ where: { id: task.id }, data: { status: "done" } });
-  const done = await prisma.crmTask.findUnique({ where: { id: task.id } });
-  assert.equal(done?.status, "done");
+  {
+    const tempName = `B2 temp stage ${Date.now()}`;
+    const withTemp = await upsertDealStages(workspaceId, [
+      ...stages.map((s, i) => ({
+        id: s.id,
+        name: s.name,
+        sortOrder: i,
+        isClosedWon: s.isClosedWon,
+        isClosedLost: s.isClosedLost,
+      })),
+      { name: tempName, sortOrder: stages.length },
+    ]);
+    const tempStage = withTemp.find((s) => s.name === tempName);
+    assert.ok(tempStage?.id);
+    const onTemp = await createDeal(workspaceId, { title: "B2 stage-delete deal", stageId: tempStage!.id });
+    const kept = withTemp
+      .filter((s) => s.id !== tempStage!.id)
+      .map((s, i) => ({
+        id: s.id,
+        name: s.name,
+        sortOrder: i,
+        isClosedWon: s.isClosedWon,
+        isClosedLost: s.isClosedLost,
+      }));
+    await upsertDealStages(workspaceId, kept);
+    const afterDelete = await prisma.crmDeal.findUnique({ where: { id: onTemp.id } });
+    assert.ok(afterDelete);
+    assert.notEqual(afterDelete!.stageId, tempStage!.id, "deals must move off deleted stage");
+    assert.ok(kept.some((k) => k.id === afterDelete!.stageId), "deal lands on a remaining stage");
+    await prisma.crmDeal.delete({ where: { id: onTemp.id } }).catch(() => undefined);
+  }
 
+  const { createTask, patchTask, createAppointment, patchAppointment } = await import(
+    "../lib/server/crm/native/tasks-appointments",
+  );
+  const task = await createTask(workspaceId, {
+    title: "Call back",
+    contactId: contact.id,
+    assigneeUserId: "b2-owner-user",
+  });
+  await patchTask(workspaceId, task.id, { status: "done" });
+  let done = await prisma.crmTask.findUnique({ where: { id: task.id } });
+  assert.equal(done?.status, "done");
+  await patchTask(workspaceId, task.id, { status: "open", assigneeUserId: "b2-owner-2" });
+  done = await prisma.crmTask.findUnique({ where: { id: task.id } });
+  assert.equal(done?.status, "open");
+  assert.equal(done?.assigneeUserId, "b2-owner-2");
+
+  const starts = new Date(Date.now() + 86400000);
+  starts.setMinutes(0, 0, 0);
+  const ends = new Date(starts.getTime() + 3600000);
+  const appt = await createAppointment(workspaceId, {
+    title: "B2 appt",
+    startsAt: starts.toISOString(),
+    endsAt: ends.toISOString(),
+    timezone: "America/Chicago",
+    contactId: contact.id,
+  });
+  const rescheduled = new Date(starts.getTime() + 7200000);
+  await patchAppointment(workspaceId, appt.id, {
+    startsAt: rescheduled.toISOString(),
+    endsAt: new Date(rescheduled.getTime() + 3600000).toISOString(),
+  });
+  const apptAfter = await prisma.crmAppointment.findUnique({ where: { id: appt.id } });
+  assert.equal(apptAfter?.startsAt?.toISOString(), rescheduled.toISOString());
+  await patchAppointment(workspaceId, appt.id, { status: "cancelled" });
+  const cancelled = await prisma.crmAppointment.findUnique({ where: { id: appt.id } });
+  assert.equal(cancelled?.status, "cancelled");
+
+  await prisma.crmAppointment.delete({ where: { id: appt.id } }).catch(() => undefined);
+  await prisma.crmTask.delete({ where: { id: task.id } }).catch(() => undefined);
   await prisma.contact.delete({ where: { id: contact.id } }).catch(() => undefined);
   await prisma.crmDeal.delete({ where: { id: deal.id } }).catch(() => undefined);
 

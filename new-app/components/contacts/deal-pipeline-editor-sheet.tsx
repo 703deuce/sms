@@ -94,7 +94,7 @@ export function DealPipelineEditorSheet({ open, onOpenChange, onSaved }: Props) 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full max-w-md overflow-y-auto sm:max-w-lg">
+      <SheetContent className="w-full max-w-md overflow-y-auto sm:max-w-lg" data-testid="deals-pipeline-editor-sheet">
         <SheetHeader>
           <SheetTitle>Manage pipeline</SheetTitle>
         </SheetHeader>

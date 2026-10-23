@@ -361,8 +361,13 @@ Requires `Authorization: Bearer <api-key>` — smoke expects **401** without key
 | Call History Sessions tab | **Closed** | `call-history-content.tsx` → `/call-history/sessions`; browser: `call-history-sessions.png` |
 | Callbacks five tabs | **Closed** | browser: `callbacks-tabs.png` |
 | Dialer session presets (zero presets path) | **Closed** | `session-presets-sheet.tsx`; browser: `presets-sheet.png` |
-| Calendar month/week/day/list | **Closed** | `crm-calendar-workspace.tsx`; browser: `calendar-views.png` |
-| Tasks create | **Closed** | `crm-tasks-workspace.tsx`; browser: `task-create.png` |
+| Calendar month/week/day/list + create/reschedule/cancel | **Closed** | `crm-calendar-workspace.tsx` + `/api/crm/native/appointments`; API: `test-crm-native-b2.ts` |
+| Deals add/edit/move stage | **Closed** | `crm-section-workspaces.tsx`, `deal-editor-sheet.tsx`, `PATCH /api/crm/native/deals/:id`; API: `test-crm-native-b2.ts` |
+| Pipeline stage reorder/delete (deals reassigned) | **Closed** | `upsertDealStages` in `lib/server/crm/native/deals.ts`; API: `test-crm-native-b2.ts` |
+| Tasks complete/reopen/owner/link/delete | **Closed** | `crm-tasks-workspace.tsx` + `/api/crm/native/tasks`; API: `test-crm-native-b2.ts` |
+| Contacts add/folder/merge wizard | **Closed** | `contacts-workspace.tsx`, `contact-merge-wizard.tsx`, native contacts/folders/merge APIs |
+| Company detail (contacts/deals/activity) | **Closed** | `CompanyDetailWorkspace` + `GET /api/crm/native/companies/:id` |
+| Settings dial-mode toggle → campaign editor locks | **Closed** | `advanced-dial-modes-panel.tsx` + `campaign-editor-sheet.tsx` (`advanced-dial-modes-updated`) |
 | AI callbacks visibility | **Closed** | Callbacks **AI callbacks** tab |
 | Zapier discoverability | **Closed** | browser: `integrations-zapier.png` |
 | Live board supervisor area | **Closed** | browser: `analytics-live-board.png` |
