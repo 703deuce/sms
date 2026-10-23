@@ -39,7 +39,13 @@ const CAMPAIGN_STATUS: Record<string, { label: string; tone: Tone }> = {
   completed: { label: 'Completed', tone: 'neutral' },
 }
 
-export function PowerDialer({ initialTab = 'session' }: { initialTab?: string }) {
+export function PowerDialer({
+  initialTab = 'session',
+  initialCampaignId,
+}: {
+  initialTab?: string
+  initialCampaignId?: string
+}) {
   return (
     <Tabs defaultValue={initialTab} className="gap-6">
       <TabsList>
@@ -47,7 +53,7 @@ export function PowerDialer({ initialTab = 'session' }: { initialTab?: string })
         <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
         <TabsTrigger value="lists">Lists</TabsTrigger>
       </TabsList>
-      <TabsContent value="session"><PowerDialerSessionWorkspace /></TabsContent>
+      <TabsContent value="session"><PowerDialerSessionWorkspace initialCampaignId={initialCampaignId} /></TabsContent>
       <TabsContent value="campaigns"><Campaigns /></TabsContent>
       <TabsContent value="lists"><Lists /></TabsContent>
     </Tabs>

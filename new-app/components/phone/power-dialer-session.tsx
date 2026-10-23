@@ -15,10 +15,12 @@ import { useNumbers } from '@/components/providers/numbers-provider'
 import {
   fetchPowerCampaigns,
   fetchPowerSession,
+  fetchPowerSessionSummary,
   patchPowerCampaign,
   powerSessionAction,
   savePowerAttemptOutcome,
   startPowerSession,
+  type PowerSessionSummaryDto,
   type PowerCampaignDto,
   type PowerSessionStateDto,
 } from '@/lib/phone-api'
@@ -32,7 +34,7 @@ function contactLabel(c: { firstName: string | null; lastName: string | null; ph
   return name || formatPhone(c.phone)
 }
 
-export function PowerDialerSessionWorkspace() {
+export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCampaignId?: string } = {}) {
   const { startCall, endCall, activeCall, webrtcStatus } = useWorkspace()
   const { owned } = useNumbers()
   const [campaigns, setCampaigns] = useState<PowerCampaignDto[]>([])
@@ -45,6 +47,7 @@ export function PowerDialerSessionWorkspace() {
   const [callbackAt, setCallbackAt] = useState('')
   const [loading, setLoading] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [sessionSummary, setSessionSummary] = useState<PowerSessionSummaryDto | null>(null)
   const autoDialLock = useRef(false)
 
   const sessionStatus = runtime?.session?.status ?? null
@@ -69,10 +72,12 @@ export function PowerDialerSessionWorkspace() {
     void fetchPowerCampaigns()
       .then((rows) => {
         setCampaigns(rows)
-        if (!campaignId && rows[0]) setCampaignId(rows[0].id)
+        if (initialCampaignId && rows.some((r) => r.id === initialCampaignId)) {
+          setCampaignId(initialCampaignId)
+        } else if (!campaignId && rows[0]) setCampaignId(rows[0].id)
       })
       .catch(() => toast.error('Could not load campaigns'))
-  }, [campaignId])
+  }, [campaignId, initialCampaignId])
 
   useEffect(() => {
     if (!sessionId) return
@@ -202,9 +207,12 @@ export function PowerDialerSessionWorkspace() {
 
   const endSession = async () => {
     if (!sessionId) return
+    const endedId = sessionId
     try {
       if (onCall) endCall()
-      await powerSessionAction(sessionId, 'end')
+      await powerSessionAction(endedId, 'end')
+      const summary = await fetchPowerSessionSummary(endedId)
+      setSessionSummary(summary)
       setSummaryOpen(true)
       setSessionId(null)
       setRuntime(null)
@@ -303,6 +311,26 @@ export function PowerDialerSessionWorkspace() {
                     <span className="text-xl font-semibold">{contactLabel(lead.contact)}</span>
                     <span className="font-mono text-sm text-muted-foreground">{formatPhone(lead.contact.phone)}</span>
                     {lead.contact.company && <span className="text-xs text-muted-foreground">{lead.contact.company}</span>}
+                    {lead.contact.customFields && typeof lead.contact.customFields === 'object' && (
+                      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                        {Object.entries(lead.contact.customFields as Record<string, unknown>).slice(0, 6).map(([k, v]) => (
+                          <li key={k}><span className="font-medium text-foreground">{k}:</span> {String(v)}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {runtime?.attempts && lead.contact.id && (
+                      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground" aria-label="Previous attempts this session">
+                        {runtime.attempts
+                          .filter((a) => a.contactPhone === lead.contact.phone)
+                          .slice(0, 4)
+                          .map((a) => (
+                            <li key={a.id}>
+                              Prior: {a.disposition || a.status} · {formatWhen(a.createdAt)}
+                              {a.notes ? ` — ${a.notes}` : ''}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
                     <span className="text-xs text-muted-foreground">
                       Attempt {lead.attemptNumber} of {campaignMeta?.maxAttempts ?? 3}
                     </span>
@@ -413,11 +441,29 @@ export function PowerDialerSessionWorkspace() {
         </ul>
       </Panel>
 
-      {summaryOpen && (
+      {summaryOpen && sessionSummary && (
         <Panel title="Session summary" className="lg:col-span-3">
-          <p className="text-sm text-muted-foreground">
-            {log.length} attempt(s) logged this session. Review full metrics under Analytics and Call History.
-          </p>
+          <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+            <div><dt className="text-muted-foreground">Attempts</dt><dd className="font-medium tabular-nums">{sessionSummary.totalAttempts}</dd></div>
+            <div><dt className="text-muted-foreground">Unique contacts</dt><dd className="font-medium tabular-nums">{sessionSummary.uniqueContacts}</dd></div>
+            <div><dt className="text-muted-foreground">Human conversations</dt><dd className="font-medium tabular-nums">{sessionSummary.humanConversations}</dd></div>
+            <div><dt className="text-muted-foreground">Talk time</dt><dd className="font-medium tabular-nums">{formatDuration(sessionSummary.talkSec)}</dd></div>
+            <div><dt className="text-muted-foreground">Session duration</dt><dd className="font-medium tabular-nums">{formatDuration(sessionSummary.sessionDurationSec)}</dd></div>
+            <div><dt className="text-muted-foreground">Follow-ups</dt><dd className="font-medium tabular-nums">{sessionSummary.followUps}</dd></div>
+            <div><dt className="text-muted-foreground">Remaining eligible</dt><dd className="font-medium tabular-nums">{sessionSummary.remainingEligible}</dd></div>
+            <div><dt className="text-muted-foreground">Errors</dt><dd className="font-medium tabular-nums">{sessionSummary.errors}</dd></div>
+          </dl>
+          {Object.keys(sessionSummary.classifications).length > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Answer classifications:{' '}
+              {Object.entries(sessionSummary.classifications).map(([k, v]) => `${k} (${v})`).join(', ')}
+            </p>
+          )}
+          {Object.keys(sessionSummary.dispositions).length > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Dispositions: {Object.entries(sessionSummary.dispositions).map(([k, v]) => `${k} (${v})`).join(', ')}
+            </p>
+          )}
           <Button className="mt-3" variant="outline" onClick={() => setSummaryOpen(false)}>Close</Button>
         </Panel>
       )}

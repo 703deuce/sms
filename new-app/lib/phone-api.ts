@@ -242,6 +242,7 @@ export type PowerListDto = {
   ineligible: number;
   source: string;
   updated: string;
+  campaignUsage?: { id: string; name: string }[];
 };
 
 export type PowerDialerOverviewDto = {
@@ -386,7 +387,15 @@ export async function startPowerSession(campaignId: string) {
 
 export type PowerSessionStateDto = {
   next: {
-    contact: { id: string; firstName: string | null; lastName: string | null; phone: string; company: string | null };
+    contact: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      phone: string;
+      company: string | null;
+      customFields?: Record<string, unknown> | null;
+      timezone?: string | null;
+    };
     attemptNumber: number;
     campaign: { id: string; callerIdE164: string; name: string; configJson: unknown };
     sessionId: string;
@@ -506,4 +515,213 @@ export async function registerInboundReject(humanCallId: string) {
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || res.statusText);
   return json.data;
+}
+
+export type PowerCampaignTableRow = {
+  id: string;
+  name: string;
+  status: string;
+  listName: string;
+  totalContacts: number;
+  eligible: number;
+  deferred: number;
+  completed: number;
+  suppressed: number;
+  failed: number;
+  rollupTruncated: boolean;
+  attempts: number;
+  humanConversations: number;
+  lastActivity: string;
+};
+
+export async function fetchPowerCampaignTable(params?: { q?: string; status?: string }) {
+  const q = new URLSearchParams();
+  if (params?.q) q.set("q", params.q);
+  if (params?.status) q.set("status", params.status);
+  return parse<PowerCampaignTableRow[]>(
+    await fetch(`/api/phone/power-dialer/campaigns/table?${q}`),
+  );
+}
+
+export async function fetchPowerCampaignDetail(id: string) {
+  return parse<{
+    id: string;
+    name: string;
+    description: string | null;
+    listId: string;
+    callerIdE164: string;
+    timezone: string;
+    status: string;
+    rules: Record<string, unknown>;
+    extended: Record<string, unknown>;
+  }>(await fetch(`/api/phone/power-dialer/campaigns/${id}`));
+}
+
+export async function savePowerCampaignDetail(id: string, body: Record<string, unknown>) {
+  return parse(await fetch(`/api/phone/power-dialer/campaigns/${id}`, {
+    method: "PATCH",
+    headers: mutatingHeaders(),
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function clonePowerCampaign(id: string, name?: string) {
+  return parse(
+    await fetch(`/api/phone/power-dialer/campaigns/${id}/clone`, {
+      method: "POST",
+      headers: mutatingHeaders(),
+      body: JSON.stringify({ name }),
+    }),
+  );
+}
+
+export async function patchPowerCampaignAction(
+  id: string,
+  action: "archive" | "pause" | "resume",
+) {
+  return patchPowerCampaign(id, { action });
+}
+
+export type CampaignContactRow = {
+  contactId: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string;
+  bucket: string;
+  reasonLabel: string;
+  attemptCount: number;
+  latestDisposition: string | null;
+  latestStatus: string | null;
+  nextCallbackAt: string | null;
+  retryEligibleAt: string | null;
+};
+
+export async function fetchCampaignContacts(
+  campaignId: string,
+  params: { page?: number; bucket?: string },
+) {
+  const q = new URLSearchParams();
+  if (params.page) q.set("page", String(params.page));
+  if (params.bucket) q.set("bucket", params.bucket);
+  return parse<{ rows: CampaignContactRow[] }>(
+    await fetch(`/api/phone/power-dialer/campaigns/${campaignId}/contacts?${q}`),
+  );
+}
+
+export type PowerSessionSummaryDto = {
+  totalAttempts: number;
+  uniqueContacts: number;
+  humanConversations: number;
+  classifications: Record<string, number>;
+  talkSec: number;
+  sessionDurationSec: number;
+  followUps: number;
+  dispositions: Record<string, number>;
+  remainingEligible: number;
+  errors: number;
+};
+
+export async function fetchPowerSessionSummary(sessionId: string) {
+  return parse<PowerSessionSummaryDto>(
+    await fetch(`/api/phone/power-dialer/sessions/${sessionId}/summary`),
+  );
+}
+
+export async function importListCsv(
+  listId: string,
+  body: {
+    csvText: string;
+    mapping: Record<string, unknown>;
+    duplicateBehavior?: string;
+    dryRun?: boolean;
+  },
+) {
+  return parse(
+    await fetch(`/api/phone/power-dialer/lists/${listId}/import-csv`, {
+      method: "POST",
+      headers: mutatingHeaders(),
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+export type PowerListDetailDto = {
+  id: string;
+  name: string;
+  description: string | null;
+  source: string;
+  updatedAt: string;
+  total: number;
+  filteredTotal: number;
+  page: number;
+  pageSize: number;
+  campaigns: { id: string; name: string; status: string }[];
+  contacts: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    phone: string;
+    company: string | null;
+    status: string;
+  }[];
+};
+
+export async function fetchPowerListDetail(
+  listId: string,
+  params?: { page?: number; q?: string },
+) {
+  const q = new URLSearchParams();
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.q) q.set("q", params.q);
+  return parse<PowerListDetailDto>(
+    await fetch(`/api/phone/power-dialer/lists/${listId}?${q}`),
+  );
+}
+
+export async function archivePowerList(listId: string) {
+  const res = await fetch(`/api/phone/power-dialer/lists/${listId}`, {
+    method: "PATCH",
+    headers: mutatingHeaders(),
+    body: JSON.stringify({ action: "archive" }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json;
+}
+
+export type CampaignHistorySession = {
+  id: string;
+  status: string;
+  startedAt: string;
+  endedAt: string | null;
+  attemptCount: number;
+  attempts: {
+    id: string;
+    disposition: string | null;
+    status: string;
+    createdAt: string;
+    contactName: string;
+    contactPhone: string;
+  }[];
+};
+
+export async function fetchCampaignHistory(campaignId: string) {
+  return parse<CampaignHistorySession[]>(
+    await fetch(`/api/phone/power-dialer/campaigns/${campaignId}/history`),
+  );
+}
+
+export type CampaignAnalyticsDto = {
+  totalAttempts: number;
+  uniqueContacts: number;
+  humanConversations: number;
+  talkSec: number;
+  dispositions: Record<string, number>;
+  answerRate: number;
+};
+
+export async function fetchCampaignAnalytics(campaignId: string) {
+  return parse<CampaignAnalyticsDto>(
+    await fetch(`/api/phone/power-dialer/campaigns/${campaignId}/analytics`),
+  );
 }

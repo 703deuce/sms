@@ -1,15 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Page, PageHeader, Panel, Stat } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
+import { useWorkspace } from '@/components/providers/workspace-provider'
 import { fetchPowerDialerOverview, type PowerDialerOverviewDto } from '@/lib/phone-api'
 import { formatDuration, formatPhone, formatWhen } from '@/lib/format'
 
 export function PowerDialerOverviewContent() {
+  const { webrtcStatus } = useWorkspace()
   const [data, setData] = useState<PowerDialerOverviewDto | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,6 +22,17 @@ export function PowerDialerOverviewContent() {
   }, [])
 
   const kpis = data?.kpis
+
+  const attention = useMemo(() => {
+    const items = [...(data?.attentionRequired ?? [])]
+    if (webrtcStatus !== 'ready') {
+      items.push({
+        code: 'mic_unavailable',
+        message: 'Browser calling is not ready — check microphone permissions before dialing.',
+      })
+    }
+    return items
+  }, [data?.attentionRequired, webrtcStatus])
 
   return (
     <Page>
@@ -41,11 +54,11 @@ export function PowerDialerOverviewContent() {
         }
       />
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-      {(data?.attentionRequired?.length ?? 0) > 0 && (
+      {attention.length > 0 && (
         <section aria-label="Attention required" className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
           <p className="font-medium">Attention required</p>
           <ul className="list-disc pl-5 text-muted-foreground">
-            {data?.attentionRequired?.map((a) => (
+            {attention.map((a) => (
               <li key={a.code}>{a.message}</li>
             ))}
           </ul>

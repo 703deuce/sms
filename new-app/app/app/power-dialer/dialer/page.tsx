@@ -3,14 +3,19 @@ import { PowerDialer } from '@/components/phone/power-dialer'
 
 export const metadata = { title: 'Dialer · Power Dialer' }
 
-export default function PowerDialerDialerPage() {
+export default async function PowerDialerDialerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ campaign?: string; session?: string }>
+}) {
+  const sp = await searchParams
   return (
     <Page>
       <PageHeader
         title="Dialer"
         description="Run a sequential power-dialing session — select a campaign, dial, disposition, and move to the next contact."
       />
-      <PowerDialer initialTab="session" />
+      <PowerDialer initialTab="session" initialCampaignId={sp.campaign} />
     </Page>
   )
 }
