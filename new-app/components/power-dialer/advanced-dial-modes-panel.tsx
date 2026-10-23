@@ -61,6 +61,7 @@ export function AdvancedDialModesPanel() {
       if (!r.ok || j.error) throw new Error(j.error || 'Update failed')
       toast.success('Advanced dial settings updated')
       reload()
+      window.dispatchEvent(new Event('advanced-dial-modes-updated'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Update failed')
     } finally {
@@ -89,7 +90,10 @@ export function AdvancedDialModesPanel() {
               <p className="font-medium">{m.label}</p>
               {m.userMessage && <p className="mt-1 text-xs text-muted-foreground">{m.userMessage}</p>}
             </div>
-            <StatusBadge tone={m.enabled ? 'success' : 'warning'}>{m.enabled ? 'Available' : 'Locked'}</StatusBadge>
+            <div className="text-right">
+              <StatusBadge tone={m.enabled ? 'success' : 'warning'}>{m.enabled ? 'Available' : 'Locked'}</StatusBadge>
+              {!m.enabled && m.blockReason && <p className="mt-1 max-w-[200px] text-xs text-muted-foreground">{m.blockReason}</p>}
+            </div>
           </li>
         ))}
       </ul>

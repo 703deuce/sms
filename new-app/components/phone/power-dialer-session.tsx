@@ -36,6 +36,7 @@ import { formatPhone, formatDuration, formatWhen } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { DialerContactInlineEdit } from '@/components/phone/dialer-contact-inline-edit'
 import { DialerAppointmentDialog } from '@/components/phone/dialer-appointment-dialog'
+import { SessionPresetsSheet } from '@/components/phone/session-presets-sheet'
 
 const DISPOSITIONS = ['Booked', 'Interested', 'Callback', 'No answer', 'Voicemail', 'Not interested', 'Wrong number', 'Do not call'] as const
 
@@ -92,6 +93,8 @@ export function PowerDialerSessionWorkspace({
   const [ratingsRequired, setRatingsRequired] = useState(false)
   const [sessionPresets, setSessionPresets] = useState<{ id: string; name: string; config: Record<string, unknown> }[]>([])
   const [presetName, setPresetName] = useState('')
+  const [presetsOpen, setPresetsOpen] = useState(false)
+  const [selectedPresetId, setSelectedPresetId] = useState('')
   const autoDialLock = useRef(false)
   const [setupDetail, setSetupDetail] = useState<Awaited<ReturnType<typeof fetchPowerCampaignDetail>> | null>(null)
   const [setupLoading, setSetupLoading] = useState(false)
@@ -460,8 +463,9 @@ export function PowerDialerSessionWorkspace({
               />
               <SimpleSelect
                 label="Session preset"
-                value=""
+                value={selectedPresetId}
                 onChange={(id) => {
+                  setSelectedPresetId(id)
                   const p = sessionPresets.find((x) => x.id === id)
                   if (!p?.config) return
                   if (typeof p.config.campaignId === 'string') setCampaignId(p.config.campaignId)
@@ -475,10 +479,11 @@ export function PowerDialerSessionWorkspace({
                 }}
                 options={
                   sessionPresets.length
-                    ? sessionPresets.map((p) => ({ value: p.id, label: p.name }))
+                    ? [{ value: '', label: 'Select preset…' }, ...sessionPresets.map((p) => ({ value: p.id, label: p.name }))]
                     : [{ value: '', label: 'No presets yet — save one below' }]
                 }
               />
+              <Button type="button" variant="outline" size="sm" onClick={() => setPresetsOpen(true)}>Manage presets</Button>
               <div className="flex flex-wrap items-end gap-2">
                 <label className="flex flex-1 flex-col gap-1 text-sm">
                   <span className="font-medium">Save preset</span>
@@ -599,7 +604,7 @@ export function PowerDialerSessionWorkspace({
             title={campaignMeta?.name ?? 'Power dialer session'}
             description={
               campaignMeta
-                ? `${formatPhone(campaignMeta.callerId)} · ${campaignMeta.listName ?? 'List'} · ${eligibleTotal} eligible · ${powerMode ? 'Power' : 'Preview'} mode`
+                ? `${formatPhone(campaignMeta.callerId)} · ${campaignMeta.listName ?? 'List'} · ${eligibleTotal} eligible · ${rules?.dialingMode || (powerMode ? 'power' : previewMode ? 'preview' : 'dial')} mode`
                 : undefined
             }
             actions={
@@ -1047,6 +1052,24 @@ export function PowerDialerSessionWorkspace({
           ))}
         </ul>
       </Panel>
+
+      <SessionPresetsSheet
+        open={presetsOpen}
+        onOpenChange={setPresetsOpen}
+        presets={sessionPresets}
+        onPresetsChange={setSessionPresets}
+        onLoad={(p) => {
+          setSelectedPresetId(p.id)
+          if (typeof p.config.campaignId === 'string') setCampaignId(p.config.campaignId)
+          if (p.config.dialingMode === 'preview' || p.config.dialingMode === 'power') {
+            setSetupDialingMode(p.config.dialingMode)
+          }
+          if (Array.isArray(p.config.phoneFieldPriority)) {
+            setSetupPhoneFields(p.config.phoneFieldPriority.join(', '))
+          }
+          toast.success(`Loaded preset “${p.name}”`)
+        }}
+      />
 
       {summaryOpen && sessionSummary && (
         <Panel title="Session summary" className="lg:col-span-3">

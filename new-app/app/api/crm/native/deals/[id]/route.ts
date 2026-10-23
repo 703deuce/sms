@@ -18,11 +18,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       companyId?: string | null;
     };
     const { stageId, ...patch } = body;
-    if (stageId) {
-      const data = await moveDealStage(workspaceId, id, stageId);
-      return NextResponse.json({ data });
-    }
-    const data = await patchDeal(workspaceId, id, patch);
+    let data = null as Awaited<ReturnType<typeof patchDeal>> | null;
+    if (stageId) data = await moveDealStage(workspaceId, id, stageId);
+    if (Object.keys(patch).length > 0) data = await patchDeal(workspaceId, id, patch);
+    if (!data) throw new Error("No changes");
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 400);

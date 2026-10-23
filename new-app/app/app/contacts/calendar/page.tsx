@@ -1,4 +1,4 @@
-import { CalendarWorkspace } from '@/components/contacts/crm-section-workspaces'
+import { CalendarWorkspace } from '@/components/contacts/crm-calendar-workspace'
 
 export const metadata = { title: 'Calendar' }
 

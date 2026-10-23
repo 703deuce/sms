@@ -1,4 +1,4 @@
-import { TasksWorkspace } from '@/components/contacts/crm-section-workspaces'
+import { TasksWorkspace } from '@/components/contacts/crm-tasks-workspace'
 
 export const metadata = { title: 'Tasks' }
 

@@ -176,12 +176,23 @@ export function LiveBoardPanel() {
               <span className="font-mono text-xs text-muted-foreground">
                 {s.repUserId?.slice(0, 8) || 'unassigned'} · {s.currentAttempt?.status || 'idle'}
               </span>
+              <div className="flex flex-wrap gap-1">
+                <Button type="button" size="sm" variant="outline" disabled title="Listen-in requires Telnyx supervisor monitor (M67) — not provisioned for this workspace.">
+                  Listen
+                </Button>
+                <Button type="button" size="sm" variant="outline" disabled title="Whisper requires supervisor media leg (M67) — contact your Transovo admin.">
+                  Whisper
+                </Button>
+                <Button type="button" size="sm" variant="outline" disabled title="Barge requires supervisor media leg (M67) — not available in this release.">
+                  Barge
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
       )}
       <p className="mt-3 text-xs text-muted-foreground">
-        Supervisor listen / whisper / barge (M67): requires Telnyx supervisor monitor leg on the power-dialer WebRTC path — not provisioned in this release.
+        Supervisor listen / whisper / barge (M67): requires Telnyx supervisor monitor leg on the power-dialer WebRTC path — not provisioned in this release. Buttons above stay visible but disabled until operations enables M67.
       </p>
     </Panel>
   )

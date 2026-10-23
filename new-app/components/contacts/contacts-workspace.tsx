@@ -27,6 +27,9 @@ type Row = {
   company: string | null
   status: string
   createdAt: string
+  ownerUserId: string | null
+  lastActivityAt: string | null
+  nextFollowUpAt: string | null
 }
 
 function statusTone(status: string): { label: string; tone: Tone } {
@@ -48,6 +51,11 @@ export function ContactsWorkspace() {
   const [viewsSheetOpen, setViewsSheetOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [newContactOpen, setNewContactOpen] = useState(false)
+  const [newPhone, setNewPhone] = useState('')
+  const [newFirst, setNewFirst] = useState('')
+  const [newLast, setNewLast] = useState('')
+  const [newEmail, setNewEmail] = useState('')
 
   const reload = useCallback(() => {
     setLoading(true)
@@ -61,7 +69,7 @@ export function ContactsWorkspace() {
         }
         if (j.data?.contacts) {
           setRows(
-            j.data.contacts.map((c: { id: string; name: string; phone: string; email: string | null; company: string | null; status: string; createdAt: string }) => ({
+            j.data.contacts.map((c: Row) => ({
               id: c.id,
               name: c.name,
               phone: c.phone,
@@ -69,6 +77,9 @@ export function ContactsWorkspace() {
               company: c.company,
               status: c.status,
               createdAt: c.createdAt,
+              ownerUserId: c.ownerUserId ?? null,
+              lastActivityAt: c.lastActivityAt ?? null,
+              nextFollowUpAt: c.nextFollowUpAt ?? null,
             })),
           )
           setTotal(j.data.total)
@@ -99,6 +110,12 @@ export function ContactsWorkspace() {
   useEffect(() => {
     reloadViews()
   }, [reloadViews])
+
+  useEffect(() => {
+    if (viewId || folderId) return
+    const defaultView = views.find((v) => v.pinned)
+    if (defaultView) setViewId(defaultView.id)
+  }, [views, viewId, folderId])
 
   useEffect(() => {
     const t = window.setTimeout(reload, query ? 250 : 0)
@@ -137,7 +154,14 @@ export function ContactsWorkspace() {
         description={subtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <ContactsActions total={total} onMerge={() => setMergeOpen(true)} />
+            <ContactsActions total={total} onMerge={() => setMergeOpen(true)} onNewContact={() => setNewContactOpen(true)} />
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" size="sm">More</Button>} />
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setMergeOpen(true)}>Merge duplicates</DropdownMenuItem>
+                <DropdownMenuItem render={<a href="/app/power-dialer/calling-lists" />}>Import via calling lists</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {selectedIds.size > 0 && folderId && (
               <Button
                 type="button"
@@ -269,10 +293,13 @@ export function ContactsWorkspace() {
                   />
                 </TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Phone</TableHead>
+                <TableHead>Primary phone</TableHead>
                 <TableHead className="hidden lg:table-cell">Company</TableHead>
-                <TableHead className="hidden md:table-cell">Added</TableHead>
+                <TableHead className="hidden lg:table-cell">Email</TableHead>
+                <TableHead className="hidden md:table-cell">Owner</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="hidden xl:table-cell">Last activity</TableHead>
+                <TableHead className="hidden xl:table-cell">Next follow-up</TableHead>
                 <TableHead className="pr-5 text-right"><span className="sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>
@@ -301,8 +328,11 @@ export function ContactsWorkspace() {
                     </TableCell>
                     <TableCell className="font-mono text-xs">{formatPhone(c.phone)}</TableCell>
                     <TableCell className="hidden text-muted-foreground lg:table-cell">{c.company || '—'}</TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">{formatWhen(c.createdAt)}</TableCell>
+                    <TableCell className="hidden text-muted-foreground lg:table-cell">{c.email || '—'}</TableCell>
+                    <TableCell className="hidden font-mono text-xs text-muted-foreground md:table-cell">{c.ownerUserId?.slice(0, 8) || '—'}</TableCell>
                     <TableCell><StatusBadge tone={st.tone}>{st.label}</StatusBadge></TableCell>
+                    <TableCell className="hidden text-muted-foreground xl:table-cell">{c.lastActivityAt ? formatWhen(c.lastActivityAt) : '—'}</TableCell>
+                    <TableCell className="hidden text-muted-foreground xl:table-cell">{c.nextFollowUpAt ? formatWhen(c.nextFollowUpAt) : '—'}</TableCell>
                     <TableCell className="pr-5 text-right">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -341,6 +371,43 @@ export function ContactsWorkspace() {
         activeViewId={viewId}
         onSelectView={setViewId}
       />
+      {newContactOpen && (
+        <Panel title="Add contact" className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md border shadow-lg md:relative md:inset-auto md:shadow-none">
+          <div className="grid gap-2">
+            <Input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Phone (E.164)" aria-label="Phone" />
+            <Input value={newFirst} onChange={(e) => setNewFirst(e.target.value)} placeholder="First name" aria-label="First name" />
+            <Input value={newLast} onChange={(e) => setNewLast(e.target.value)} placeholder="Last name" aria-label="Last name" />
+            <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Email" aria-label="Email" />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={() => {
+                  void fetch('/api/crm/native/contacts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: newPhone, firstName: newFirst, lastName: newLast, email: newEmail }),
+                  })
+                    .then(async (r) => {
+                      const j = await r.json()
+                      if (!r.ok || j.error) throw new Error(j.error || 'Create failed')
+                      toast.success('Contact created')
+                      setNewContactOpen(false)
+                      setNewPhone('')
+                      setNewFirst('')
+                      setNewLast('')
+                      setNewEmail('')
+                      reload()
+                    })
+                    .catch((e) => toast.error(e instanceof Error ? e.message : 'Create failed'))
+                }}
+              >
+                Save contact
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setNewContactOpen(false)}>Cancel</Button>
+            </div>
+          </div>
+        </Panel>
+      )}
     </Page>
   )
 }

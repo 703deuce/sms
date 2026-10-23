@@ -154,6 +154,27 @@ export function ContactsSavedViewsSheet({
                 <div className="flex flex-wrap gap-1">
                   <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(v.id)}>Edit</Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => void duplicate(v)}>Duplicate</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      void fetch(`/api/crm/native/views/${v.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ setAsDefault: true, name: v.name, filtersJson: v.filtersJson || {} }),
+                      })
+                        .then((r) => r.json())
+                        .then((j) => {
+                          if (j.error) throw new Error(j.error)
+                          toast.success('Default view updated')
+                          onViewsChange()
+                        })
+                        .catch((e) => toast.error(e instanceof Error ? e.message : 'Failed'))
+                    }}
+                  >
+                    Set default
+                  </Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => void remove(v.id)}>Delete</Button>
                 </div>
               </li>

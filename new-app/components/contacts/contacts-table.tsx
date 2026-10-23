@@ -149,7 +149,15 @@ export function ContactsTable() {
   )
 }
 
-export function ContactsActions({ total = 0, onMerge }: { total?: number; onMerge?: () => void }) {
+export function ContactsActions({
+  total = 0,
+  onMerge,
+  onNewContact,
+}: {
+  total?: number
+  onMerge?: () => void
+  onNewContact?: () => void
+}) {
   return (
     <>
       {onMerge && (
@@ -157,17 +165,17 @@ export function ContactsActions({ total = 0, onMerge }: { total?: number; onMerg
           Merge duplicates
         </Button>
       )}
-      <Button variant="outline" onClick={() => toast('Import contacts', { description: 'Use Power Dialer → Calling lists → Import CSV to add dialer contacts.' })}>
+      <Button variant="outline" render={<a href="/app/power-dialer/calling-lists" />}>
         <Upload />
         Import
       </Button>
-      <Button variant="outline" onClick={() => toast.success('Export started', { description: `${total} contacts · CSV` })}>
+      <Button variant="outline" render={<a href="/api/crm/native/contacts/export" />}>
         <Download />
         Export
       </Button>
-      <Button onClick={() => toast('New contact', { description: 'Contact form coming from backend schema.' })}>
+      <Button type="button" onClick={() => (onNewContact ? onNewContact() : toast.error('Use Add contact from the contacts page header.'))}>
         <Plus />
-        New contact
+        Add contact
       </Button>
     </>
   )

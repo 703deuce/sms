@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EmptyState, Page, PageHeader, Panel } from '@/components/app/page-primitives'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Building2, CheckSquare } from 'lucide-react'
+import { Building2 } from 'lucide-react'
 import { formatWhen } from '@/lib/format'
 import { DealPipelineEditorSheet } from '@/components/contacts/deal-pipeline-editor-sheet'
+import { DealEditorSheet } from '@/components/contacts/deal-editor-sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 async function crmGet<T>(path: string): Promise<T> {
@@ -124,6 +125,7 @@ export function CompanyDetailWorkspace({ companyId }: { companyId: string }) {
     website: string | null
     contacts: { id: string; firstName: string | null; lastName: string | null; phone: string }[]
     deals: { id: string; title: string; stage: { name: string } }[]
+    activity: { id: string; kind: string; title: string; body: string | null; createdAt: string; contactId: string }[]
   } | null>(null)
   useEffect(() => {
     void crmGet<NonNullable<typeof data>>(`/api/crm/native/companies/${companyId}`)
@@ -153,6 +155,22 @@ export function CompanyDetailWorkspace({ companyId }: { companyId: string }) {
             ))}
           </ul>
         </Panel>
+        <Panel title="Activity" className="lg:col-span-2">
+          {!data.activity?.length ? (
+            <p className="text-sm text-muted-foreground">No activity on linked contacts yet.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {data.activity.map((ev) => (
+                <li key={ev.id} className="rounded border px-3 py-2">
+                  <p className="font-medium">{ev.title}</p>
+                  <p className="text-xs text-muted-foreground">{formatWhen(ev.createdAt)} · {ev.kind}</p>
+                  {ev.body && <p className="mt-1 text-muted-foreground">{ev.body}</p>}
+                  <Link href={`/app/contacts/${ev.contactId}`} className="mt-1 inline-block text-xs text-primary">View contact</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
       </div>
     </Page>
   )
@@ -177,12 +195,16 @@ export function DealsWorkspace() {
   const [dealTitle, setDealTitle] = useState('')
   const [search, setSearch] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [editDeal, setEditDeal] = useState<DealRow | null>(null)
+  const [dealEditorOpen, setDealEditorOpen] = useState(false)
+  const [newDealStageId, setNewDealStageId] = useState('')
   const load = useCallback(() => {
     setLoadError(null)
     void crmGet<{ stages: typeof stages; deals: DealRow[] }>('/api/crm/native/deals')
       .then((d) => {
         setStages(d.stages)
         setDeals(d.deals)
+        if (!newDealStageId && d.stages[0]) setNewDealStageId(d.stages[0].id)
         setLoadError(null)
       })
       .catch((e) => {
@@ -217,7 +239,7 @@ export function DealsWorkspace() {
       .catch((e) => toast.error(e.message))
   }
   const addDeal = () => {
-    const stageId = stages[0]?.id
+    const stageId = newDealStageId || stages[0]?.id
     if (!stageId || !dealTitle.trim()) {
       toast.error('Enter a deal name')
       return
@@ -237,6 +259,9 @@ export function DealsWorkspace() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search deals" aria-label="Search deals" className="max-w-[180px]" />
+            <select className="rounded border px-2 py-1 text-sm" aria-label="Pipeline" value="default" disabled>
+              <option value="default">Default pipeline</option>
+            </select>
             <Button type="button" variant="outline" size="sm" onClick={() => setPipelineOpen(true)}>Manage pipeline</Button>
             <Button type="button" variant={view === 'kanban' ? 'default' : 'outline'} size="sm" onClick={() => setView('kanban')}>Kanban</Button>
             <Button type="button" variant={view === 'table' ? 'default' : 'outline'} size="sm" onClick={() => setView('table')}>Table</Button>
@@ -246,6 +271,11 @@ export function DealsWorkspace() {
       <Panel title="Add deal" className="mb-4">
         <div className="flex flex-wrap gap-2">
           <Input value={dealTitle} onChange={(e) => setDealTitle(e.target.value)} placeholder="Deal name" aria-label="Deal name" />
+          <select className="rounded border px-2 py-2 text-sm" value={newDealStageId} onChange={(e) => setNewDealStageId(e.target.value)} aria-label="Initial stage">
+            {stages.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
           <Button type="button" onClick={addDeal}>Add deal</Button>
         </div>
       </Panel>
@@ -260,7 +290,14 @@ export function DealsWorkspace() {
               <ul className="space-y-2">
                 {(byStage.get(s.id) || []).map((d) => (
                   <li key={d.id} className="rounded border p-2 text-sm">
-                    <p className="font-medium">{d.title}</p>
+                    <button type="button" className="font-medium text-left hover:text-primary" onClick={() => { setEditDeal(d); setDealEditorOpen(true) }}>
+                      {d.title}
+                    </button>
+                    {d.amountCents != null && (
+                      <p className="text-xs text-muted-foreground">${(d.amountCents / 100).toLocaleString()}</p>
+                    )}
+                    {d.ownerUserId && <p className="text-xs font-mono text-muted-foreground">Owner {d.ownerUserId.slice(0, 8)}</p>}
+                    {d.closeTargetAt && <p className="text-xs text-muted-foreground">Close {formatWhen(d.closeTargetAt)}</p>}
                     {d.contact && (
                       <Link href={`/app/contacts/${d.contact.id}`} className="text-xs text-primary">
                         View contact
@@ -289,6 +326,8 @@ export function DealsWorkspace() {
               <TableRow>
                 <TableHead scope="col">Deal</TableHead>
                 <TableHead scope="col">Stage</TableHead>
+                <TableHead scope="col">Value</TableHead>
+                <TableHead scope="col">Owner</TableHead>
                 <TableHead scope="col">Close target</TableHead>
                 <TableHead scope="col">Next step</TableHead>
               </TableRow>
@@ -296,8 +335,12 @@ export function DealsWorkspace() {
             <TableBody>
               {filteredDeals.map((d) => (
                 <TableRow key={d.id}>
-                  <TableCell>{d.title}</TableCell>
+                  <TableCell>
+                    <button type="button" className="font-medium hover:text-primary" onClick={() => { setEditDeal(d); setDealEditorOpen(true) }}>{d.title}</button>
+                  </TableCell>
                   <TableCell>{stages.find((s) => s.id === d.stageId)?.name}</TableCell>
+                  <TableCell>{d.amountCents != null ? `$${(d.amountCents / 100).toLocaleString()}` : '—'}</TableCell>
+                  <TableCell className="font-mono text-xs">{d.ownerUserId?.slice(0, 8) || '—'}</TableCell>
                   <TableCell>{d.closeTargetAt ? formatWhen(d.closeTargetAt) : '—'}</TableCell>
                   <TableCell>{d.nextStep || '—'}</TableCell>
                 </TableRow>
@@ -307,127 +350,19 @@ export function DealsWorkspace() {
         </Panel>
       )}
       <DealPipelineEditorSheet open={pipelineOpen} onOpenChange={setPipelineOpen} onSaved={load} />
+      <DealEditorSheet
+        open={dealEditorOpen}
+        onOpenChange={setDealEditorOpen}
+        deal={editDeal ? { ...editDeal, contactId: editDeal.contact?.id ?? null } : null}
+        stages={stages}
+        onSaved={load}
+      />
     </Page>
   )
 }
 
-export function TasksWorkspace() {
-  const [bucket, setBucket] = useState<'due' | 'overdue' | 'upcoming' | 'done'>('due')
-  const [tasks, setTasks] = useState<{ id: string; title: string; dueAt: string | null; status: string; contact: { id: string } | null }[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const load = useCallback(() => {
-    setLoadError(null)
-    void crmGet<typeof tasks>(`/api/crm/native/tasks?bucket=${bucket}`)
-      .then((data) => {
-        setTasks(data)
-        setLoadError(null)
-      })
-      .catch((e) => {
-        const msg = e instanceof Error ? e.message : 'Load failed'
-        setLoadError(msg)
-        setTasks([])
-        toast.error(msg)
-      })
-  }, [bucket])
-  useEffect(() => {
-    load()
-  }, [load])
-  return (
-    <Page>
-      <PageHeader title="Tasks & follow-ups" description="Due, overdue, upcoming, and completed tasks." />
-      <CrmLoadError message={loadError} />
-      <div className="mb-4 flex flex-wrap gap-2">
-        {(['due', 'overdue', 'upcoming', 'done'] as const).map((b) => (
-          <Button key={b} type="button" size="sm" variant={bucket === b ? 'default' : 'outline'} onClick={() => setBucket(b)}>
-            {b.charAt(0).toUpperCase() + b.slice(1)}
-          </Button>
-        ))}
-      </div>
-      <Panel title="Tasks">
-        {loadError ? (
-          <p className="text-sm text-muted-foreground">Fix the error above and refresh the page.</p>
-        ) : !tasks.length ? (
-          <EmptyState icon={CheckSquare} title="No tasks" description="Add a task from a contact or the dialer." />
-        ) : (
-          <ul className="space-y-2 text-sm">
-            {tasks.map((t) => (
-              <li key={t.id} className="flex items-center justify-between rounded border px-3 py-2">
-                <span>{t.title}{t.dueAt ? ` · ${formatWhen(t.dueAt)}` : ''}</span>
-                {t.contact && <Link href={`/app/contacts/${t.contact.id}`} className="text-primary">Contact</Link>}
-                {t.status !== 'done' && (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => void crmSend(`/api/crm/native/tasks/${t.id}`, 'PATCH', { status: 'done' }).then(load)}>
-                    Done
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
-    </Page>
-  )
-}
-
-export function CalendarWorkspace() {
-  const [rows, setRows] = useState<{ id: string; title: string; startsAt: string; contact: { id: string } | null }[]>([])
-  const [title, setTitle] = useState('')
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const load = useCallback(() => {
-    setLoadError(null)
-    void crmGet<typeof rows>('/api/crm/native/appointments')
-      .then((data) => {
-        setRows(data)
-        setLoadError(null)
-      })
-      .catch((e) => {
-        const msg = e instanceof Error ? e.message : 'Load failed'
-        setLoadError(msg)
-        setRows([])
-        toast.error(msg)
-      })
-  }, [])
-  useEffect(() => {
-    load()
-  }, [load])
-  const add = () => {
-    const start = new Date()
-    start.setHours(start.getHours() + 1, 0, 0, 0)
-    const end = new Date(start.getTime() + 3600000)
-    void crmSend('/api/crm/native/appointments', 'POST', {
-      title: title || 'Meeting',
-      startsAt: start.toISOString(),
-      endsAt: end.toISOString(),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    })
-      .then(() => {
-        setTitle('')
-        load()
-      })
-      .catch((e) => toast.error(e.message))
-  }
-  return (
-    <Page>
-      <PageHeader title="Calendar" description="Week-style list of CRM appointments." />
-      <CrmLoadError message={loadError} />
-      <Panel title="Schedule">
-        <div className="flex gap-2">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Appointment title" aria-label="Title" />
-          <Button type="button" onClick={add}>Create</Button>
-        </div>
-      </Panel>
-      <Panel title="Upcoming">
-        <ul className="space-y-2 text-sm">
-          {rows.map((a) => (
-            <li key={a.id} className="flex justify-between rounded border px-3 py-2">
-              <span>{a.title} · {formatWhen(a.startsAt)}</span>
-              {a.contact && <Link href={`/app/contacts/${a.contact.id}`} className="text-primary">Contact</Link>}
-            </li>
-          ))}
-        </ul>
-      </Panel>
-    </Page>
-  )
-}
+export { TasksWorkspace } from '@/components/contacts/crm-tasks-workspace'
+export { CalendarWorkspace } from '@/components/contacts/crm-calendar-workspace'
 
 export function CrmSettingsWorkspace() {
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
@@ -476,7 +411,45 @@ export function CrmSettingsWorkspace() {
         <TabsContent value="general" className="mt-4">
           {settings && (
             <Panel title="General">
-              <p className="text-sm text-muted-foreground">Country defaults and team scopes are stored with your workspace CRM profile.</p>
+              <div className="grid max-w-lg gap-3">
+                <label className="text-sm">
+                  Default country code
+                  <Input
+                    className="mt-1"
+                    value={String(settings.defaultCountryCode || 'US')}
+                    onChange={(e) => setSettings({ ...settings, defaultCountryCode: e.target.value })}
+                  />
+                </label>
+                <label className="text-sm">
+                  Allowed countries (comma-separated ISO codes, empty = all)
+                  <Input
+                    className="mt-1"
+                    value={Array.isArray(settings.allowedCountries) ? (settings.allowedCountries as string[]).join(',') : ''}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        allowedCountries: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                      })
+                    }
+                  />
+                </label>
+                <label className="text-sm">
+                  Blocked countries (comma-separated)
+                  <Input
+                    className="mt-1"
+                    value={Array.isArray(settings.blockedCountries) ? (settings.blockedCountries as string[]).join(',') : ''}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        blockedCountries: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                      })
+                    }
+                  />
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Team contact visibility: {(settings.teamScopes as { contactsRead?: string })?.contactsRead || 'workspace default'}.
+                </p>
+              </div>
               <Button type="button" className="mt-3" onClick={saveSettings}>Save general settings</Button>
             </Panel>
           )}

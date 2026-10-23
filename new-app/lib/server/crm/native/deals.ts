@@ -131,6 +131,22 @@ export async function upsertDealStages(
   await assertCrmWrite(workspaceId);
   if (!stages.length) throw new Error("At least one stage required");
   const prisma = getPrisma();
+  const existing = await prisma.crmDealStage.findMany({ where: { workspaceId } });
+  const keptIds = new Set(stages.map((s) => s.id).filter(Boolean) as string[]);
+  const removed = existing.filter((e) => !keptIds.has(e.id));
+  if (removed.length) {
+    const fallbackId =
+      stages.find((s) => s.id && keptIds.has(s.id))?.id ||
+      (await ensureDefaultDealStages(workspaceId))[0]?.id;
+    if (!fallbackId) throw new Error("No target stage for moved deals");
+    for (const stage of removed) {
+      await prisma.crmDeal.updateMany({
+        where: { workspaceId, stageId: stage.id },
+        data: { stageId: fallbackId },
+      });
+      await prisma.crmDealStage.delete({ where: { id: stage.id } });
+    }
+  }
   const out = [];
   for (const s of stages) {
     if (s.id) {

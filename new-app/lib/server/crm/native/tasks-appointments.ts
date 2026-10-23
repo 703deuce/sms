@@ -33,6 +33,7 @@ export async function listTasks(workspaceId: string, bucket?: TaskBucket, assign
     take: 200,
     include: {
       contact: { select: { id: true, firstName: true, lastName: true, phone: true } },
+      deal: { select: { id: true, title: true } },
     },
   });
 }
@@ -42,6 +43,7 @@ export async function createTask(
   input: {
     title: string;
     contactId?: string;
+    dealId?: string;
     notes?: string;
     dueAt?: string;
     assigneeUserId?: string;
@@ -56,6 +58,7 @@ export async function createTask(
       workspaceId,
       title: input.title.trim(),
       contactId: input.contactId || null,
+      dealId: input.dealId || null,
       notes: input.notes?.trim() || null,
       dueAt: input.dueAt ? new Date(input.dueAt) : null,
       assigneeUserId: input.assigneeUserId || null,
@@ -90,6 +93,8 @@ export async function patchTask(
     status: string;
     assigneeUserId: string | null;
     reminderAt: string | null;
+    contactId: string | null;
+    dealId: string | null;
   }>,
 ) {
   await assertCrmWrite(workspaceId);
@@ -107,13 +112,24 @@ export async function patchTask(
       ...(input.reminderAt !== undefined
         ? { reminderAt: input.reminderAt ? new Date(input.reminderAt) : null }
         : {}),
+      ...(input.contactId !== undefined ? { contactId: input.contactId } : {}),
+      ...(input.dealId !== undefined ? { dealId: input.dealId } : {}),
     },
   });
 }
 
+export async function deleteTask(workspaceId: string, taskId: string) {
+  await assertCrmWrite(workspaceId);
+  const prisma = getPrisma();
+  const row = await prisma.crmTask.findFirst({ where: { id: taskId, workspaceId } });
+  if (!row) throw new Error("Task not found");
+  await prisma.crmTask.delete({ where: { id: taskId } });
+  return { ok: true };
+}
+
 export async function listAppointments(
   workspaceId: string,
-  opts: { from?: string; to?: string; contactId?: string },
+  opts: { from?: string; to?: string; contactId?: string; includeCancelled?: boolean },
 ) {
   await assertCrmRead(workspaceId);
   const prisma = getPrisma();
@@ -124,6 +140,7 @@ export async function listAppointments(
       workspaceId,
       startsAt: { gte: from, lte: to },
       ...(opts.contactId ? { contactId: opts.contactId } : {}),
+      ...(!opts.includeCancelled ? { status: { not: "cancelled" } } : {}),
     },
     orderBy: { startsAt: "asc" },
     take: 200,
@@ -145,6 +162,7 @@ export async function createAppointment(
     dealId?: string;
     assigneeUserId?: string;
     notes?: string;
+    status?: string;
   },
 ) {
   await assertCrmWrite(workspaceId);
@@ -160,6 +178,7 @@ export async function createAppointment(
       dealId: input.dealId || null,
       assigneeUserId: input.assigneeUserId || null,
       notes: input.notes?.trim() || null,
+      status: input.status === "cancelled" ? "cancelled" : "scheduled",
     },
     include: { contact: true, deal: true },
   });
@@ -190,6 +209,7 @@ export async function patchAppointment(
     dealId: string | null;
     assigneeUserId: string | null;
     notes: string | null;
+    status: string;
   }>,
 ) {
   await assertCrmWrite(workspaceId);
@@ -207,6 +227,19 @@ export async function patchAppointment(
       ...(input.dealId !== undefined ? { dealId: input.dealId } : {}),
       ...(input.assigneeUserId !== undefined ? { assigneeUserId: input.assigneeUserId } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
     },
   });
+}
+
+export async function deleteAppointment(workspaceId: string, id: string) {
+  await assertCrmWrite(workspaceId);
+  const prisma = getPrisma();
+  const row = await prisma.crmAppointment.findFirst({ where: { id, workspaceId } });
+  if (!row) throw new Error("Appointment not found");
+  await prisma.crmAppointment.update({
+    where: { id },
+    data: { status: "cancelled" },
+  });
+  return { ok: true };
 }

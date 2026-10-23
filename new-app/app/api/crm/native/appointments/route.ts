@@ -11,6 +11,7 @@ export async function GET(request: Request) {
       from: url.searchParams.get("from") || undefined,
       to: url.searchParams.get("to") || undefined,
       contactId: url.searchParams.get("contactId") || undefined,
+      includeCancelled: url.searchParams.get("includeCancelled") === "1",
     });
     return NextResponse.json({ data });
   } catch (err) {

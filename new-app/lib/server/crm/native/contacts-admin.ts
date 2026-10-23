@@ -80,6 +80,29 @@ export async function listNativeContacts(
   ]);
 
   const visible = rows.filter((c) => contactVisibleToUser(c, userId, isAdmin));
+  const ids = visible.map((c) => c.id);
+  const prismaActivity = getPrisma();
+  const [activityAgg, taskAgg] = ids.length
+    ? await Promise.all([
+        prismaActivity.contactActivityEvent.groupBy({
+          by: ["contactId"],
+          where: { contactId: { in: ids } },
+          _max: { createdAt: true },
+        }),
+        prismaActivity.crmTask.groupBy({
+          by: ["contactId"],
+          where: {
+            contactId: { in: ids },
+            status: { not: "done" },
+            dueAt: { not: null },
+          },
+          _min: { dueAt: true },
+        }),
+      ])
+    : [[], []];
+  const lastActivity = new Map(activityAgg.map((a) => [a.contactId, a._max.createdAt]));
+  const nextFollowUp = new Map(taskAgg.map((t) => [t.contactId, t._min.dueAt]));
+
   return {
     total,
     page,
@@ -97,8 +120,35 @@ export async function listNativeContacts(
       folder: c.folder,
       tags: c.tagMembers.map((t) => t.tag),
       createdAt: c.createdAt.toISOString(),
+      lastActivityAt: lastActivity.get(c.id)?.toISOString() ?? null,
+      nextFollowUpAt: nextFollowUp.get(c.id)?.toISOString() ?? null,
     })),
   };
+}
+
+export async function createManualContact(
+  workspaceId: string,
+  input: { phone: string; firstName?: string; lastName?: string; email?: string; company?: string },
+) {
+  await assertCrmWrite(workspaceId);
+  const prisma = getPrisma();
+  const phone = normalizeE164(input.phone);
+  const existing = await prisma.contact.findUnique({
+    where: { workspaceId_phone: { workspaceId, phone } },
+  });
+  if (existing) throw new Error("A contact with this phone already exists");
+  const row = await prisma.contact.create({
+    data: {
+      workspaceId,
+      phone,
+      firstName: input.firstName?.trim() || null,
+      lastName: input.lastName?.trim() || null,
+      email: input.email?.trim() || null,
+      company: input.company?.trim() || null,
+      leadSource: "manual",
+    },
+  });
+  return row;
 }
 
 export async function patchNativeContact(
@@ -469,6 +519,22 @@ export async function deleteSavedView(workspaceId: string, viewId: string) {
   });
   if (deleted.count === 0) throw new Error("View not found");
   return { ok: true };
+}
+
+/** Pin one view as workspace default (unpins other views for this user). */
+export async function setDefaultSavedView(workspaceId: string, viewId: string) {
+  const { userId } = await assertCrmWrite(workspaceId);
+  const prisma = getPrisma();
+  const view = await prisma.contactSavedView.findFirst({ where: { id: viewId, workspaceId } });
+  if (!view) throw new Error("View not found");
+  await prisma.contactSavedView.updateMany({
+    where: { workspaceId, ownerUserId: userId },
+    data: { pinned: false },
+  });
+  return prisma.contactSavedView.update({
+    where: { id: viewId },
+    data: { pinned: true },
+  });
 }
 
 export async function reassignContactOwner(

@@ -27,7 +27,23 @@ export async function getCompany(workspaceId: string, id: string) {
     },
   });
   if (!row) throw new Error("Company not found");
-  return row;
+  const contactIds = row.contacts.map((c) => c.id);
+  const activity = contactIds.length
+    ? await prisma.contactActivityEvent.findMany({
+        where: { workspaceId, contactId: { in: contactIds } },
+        orderBy: { createdAt: "desc" },
+        take: 40,
+        select: {
+          id: true,
+          kind: true,
+          title: true,
+          body: true,
+          createdAt: true,
+          contactId: true,
+        },
+      })
+    : [];
+  return { ...row, activity };
 }
 
 export async function createCompany(

@@ -90,24 +90,30 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
     void fetch('/api/phone/power-dialer/dispositions').then((r) => r.json()).then((j) => setDispositionSets((j.data || []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })))).catch(() => undefined)
     void fetch('/api/phone/power-dialer/scripts').then((r) => r.json()).then((j) => setScripts(j.data || [])).catch(() => undefined)
     void fetch('/api/phone/power-dialer/voicemail-drops').then((r) => r.json()).then((j) => setVmDrops(j.data || [])).catch(() => undefined)
-    void fetch('/api/phone/power-dialer/dial-modes')
-      .then((r) => r.json())
-      .then((j) => {
-        const modes = (j.data?.modes || []) as { id: string; label: string; selectable: boolean; userMessage?: string }[]
-        if (modes.length) {
-          setDialModeOptions(
-            modes.map((m) => ({
-              value: m.id,
-              label: m.label,
-              disabled: !m.selectable,
-              hint: m.selectable ? undefined : m.userMessage,
-            })),
-          )
-        }
-      })
-      .catch(() => undefined)
+    const loadDialModes = () => {
+      void fetch('/api/phone/power-dialer/dial-modes')
+        .then((r) => r.json())
+        .then((j) => {
+          const modes = (j.data?.modes || []) as { id: string; label: string; selectable: boolean; userMessage?: string }[]
+          if (modes.length) {
+            setDialModeOptions(
+              modes.map((m) => ({
+                value: m.id,
+                label: m.label,
+                disabled: !m.selectable,
+                hint: m.selectable ? undefined : m.userMessage,
+              })),
+            )
+          }
+        })
+        .catch(() => undefined)
+    }
+    loadDialModes()
+    const onModes = () => loadDialModes()
+    window.addEventListener('advanced-dial-modes-updated', onModes)
     const active = owned.find((n) => n.status === 'active')
     if (active && !callerId) setCallerId(active.number)
+    return () => window.removeEventListener('advanced-dial-modes-updated', onModes)
   }, [open, owned, callerId])
 
   useEffect(() => {

@@ -31,6 +31,9 @@ export function ZapierIntegrationPanel() {
       <p className="mt-4 text-xs text-muted-foreground">
         Auth: Bearer token with your workspace API key. 401 responses mean the key is missing or revoked — rotate keys in Settings.
       </p>
+      <Link href="/app/power-dialer/integrations/zapier" className="mt-3 inline-block text-sm font-medium text-primary hover:underline">
+        Open Zapier setup guide →
+      </Link>
     </Panel>
   )
 }

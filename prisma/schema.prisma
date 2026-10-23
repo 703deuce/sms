@@ -4931,6 +4931,7 @@ model CrmDeal {
   company     CrmCompany?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
   stage       CrmDealStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
   appointments CrmAppointment[]
+  tasks       CrmTask[]
 
   @@index([workspaceId, stageId])
   @@index([contactId])
@@ -4941,6 +4942,7 @@ model CrmTask {
   id          String    @id @default(cuid())
   workspaceId String
   contactId   String?
+  dealId      String?
   title       String
   notes       String?
   dueAt       DateTime?
@@ -4952,9 +4954,12 @@ model CrmTask {
   updatedAt   DateTime  @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  deal        CrmDeal?  @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, dueAt])
   @@index([assigneeUserId, status])
+  @@index([contactId])
+  @@index([dealId])
   @@map("crm_tasks")
 }
 
@@ -4967,6 +4972,7 @@ model CrmAppointment {
   startsAt    DateTime
   endsAt      DateTime
   timezone    String
+  status      String    @default("scheduled")
   assigneeUserId String?
   notes       String?
   createdAt   DateTime  @default(now())
