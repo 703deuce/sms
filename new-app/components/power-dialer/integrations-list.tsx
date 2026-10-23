@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { Panel } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
 import { formatCrmOperations } from '@/lib/phone/integration-op-labels'
+import { ZapierIntegrationPanel } from '@/components/power-dialer/zapier-integration-panel'
 
 export function PowerDialerIntegrationsList() {
   const [providers, setProviders] = useState<
@@ -24,6 +25,8 @@ export function PowerDialerIntegrationsList() {
   }, [])
 
   return (
+    <div className="flex flex-col gap-6">
+    <ZapierIntegrationPanel />
     <Panel title="CRM connections" description="Configure sync per provider on the detail page.">
       <ul className="divide-y text-sm">
         {providers.map((p) => (
@@ -44,5 +47,6 @@ export function PowerDialerIntegrationsList() {
         Global OAuth: <Link href="/app/integrations" className="text-primary hover:underline">Integrations</Link>
       </p>
     </Panel>
+    </div>
   )
 }

@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId();
     const tab = new URL(request.url).searchParams.get("tab") || "all";
-    const allowed = ["due_today", "upcoming", "overdue", "completed", "all"] as const;
+    const allowed = ["due_today", "upcoming", "overdue", "completed", "all", "ai_callbacks"] as const;
     const normalized = allowed.includes(tab as (typeof allowed)[number])
       ? (tab as (typeof allowed)[number])
       : "all";

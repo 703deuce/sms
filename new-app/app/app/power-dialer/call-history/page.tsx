@@ -1,5 +1,5 @@
 import { Page, PageHeader } from '@/components/app/page-primitives'
-import { CallsTable } from '@/components/calls/calls-table'
+import { PowerDialerCallHistoryContent } from '@/components/power-dialer/call-history-content'
 
 export const metadata = { title: 'Call History · Power Dialer' }
 
@@ -15,7 +15,7 @@ export default async function PowerDialerCallHistoryPage({
         title="Call history"
         description="Outbound power-dialer calls with disposition, duration, and recordings when available."
       />
-      <CallsTable variant="power_dialer" basePath="/app/power-dialer/call-history" initialFilter={filter} />
+      <PowerDialerCallHistoryContent initialFilter={filter} />
     </Page>
   )
 }

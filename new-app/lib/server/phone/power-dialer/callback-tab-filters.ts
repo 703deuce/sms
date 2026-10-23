@@ -1,4 +1,10 @@
-export type CallbackTab = "due_today" | "upcoming" | "overdue" | "completed" | "all";
+export type CallbackTab =
+  | "due_today"
+  | "upcoming"
+  | "overdue"
+  | "completed"
+  | "all"
+  | "ai_callbacks";
 
 export function dayBoundsUtc(now: Date): { startOfDay: Date; endOfDay: Date } {
   const startOfDay = new Date(now);
@@ -28,6 +34,11 @@ export function buildCallbackTabWhere(
   } else if (tab === "overdue") {
     where.status = "scheduled";
     where.scheduledAt = { lt: startOfDay };
+  } else if (tab === "ai_callbacks") {
+    where.OR = [
+      { source: { contains: "ai", mode: "insensitive" } },
+      { disposition: { equals: "AI callback", mode: "insensitive" } },
+    ];
   }
 
   return where;

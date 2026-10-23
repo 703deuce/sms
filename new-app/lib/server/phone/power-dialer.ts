@@ -271,7 +271,7 @@ export async function updatePowerDialerSettings(
 
 export async function listPowerDialerCallbacks(
   workspaceId: string,
-  tab: "due_today" | "upcoming" | "overdue" | "completed" | "all" = "all",
+  tab: "due_today" | "upcoming" | "overdue" | "completed" | "all" | "ai_callbacks" = "all",
 ) {
   const { listPowerDialerCallbacksV2 } = await import(
     "@/lib/server/phone/power-dialer/callbacks-service"

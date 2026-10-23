@@ -14,14 +14,15 @@ import {
   type PowerDialerCallbackDto,
 } from '@/lib/phone-api'
 import { formatPhone, formatWhen } from '@/lib/format'
+import Link from 'next/link'
 import { CalendarClock } from 'lucide-react'
 
 const TABS = [
+  { value: 'all', label: 'All callbacks' },
   { value: 'due_today', label: 'Due today' },
   { value: 'upcoming', label: 'Upcoming' },
-  { value: 'overdue', label: 'Overdue' },
   { value: 'completed', label: 'Completed' },
-  { value: 'all', label: 'All' },
+  { value: 'ai_callbacks', label: 'AI callbacks' },
 ] as const
 
 export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { initialTab?: string }) {
@@ -110,6 +111,11 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
         title="Callbacks"
         description="Scheduled follow-ups from power-dialer dispositions. Times use each campaign’s timezone setting."
       />
+      {tab === 'ai_callbacks' && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          Rows created when the AI receptionist bridge schedules a callback or enrolls a lead — not proof a voice call completed. Use View contact or Start call only when eligibility passes.
+        </p>
+      )}
       <Panel bodyClassName="p-0">
         <div className="border-b p-4">
           <SegmentedFilter label="Callback queue" value={tab} onChange={changeTab} options={TABS.map((t) => ({ value: t.value, label: t.label }))} />
@@ -142,7 +148,7 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
                 return (
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="px-4 py-3">
-                      <span className="font-medium">{r.contactName}</span>
+                      <Link href={`/app/contacts/${r.contactId}`} className="font-medium hover:text-primary">{r.contactName}</Link>
                       <span className="block font-mono text-xs text-muted-foreground">{formatPhone(r.contactPhone)}</span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{r.campaignName}</td>
