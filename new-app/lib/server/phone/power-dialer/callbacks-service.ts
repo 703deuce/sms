@@ -85,7 +85,7 @@ export async function upsertCallbackFromDisposition(input: {
       },
     });
   }
-  return prisma.powerDialerCallback.create({
+  const row = await prisma.powerDialerCallback.create({
     data: {
       workspaceId: input.workspaceId,
       campaignId: input.campaignId,
@@ -103,6 +103,15 @@ export async function upsertCallbackFromDisposition(input: {
       routingPool: input.routingPool ?? routing.routingPool,
     },
   });
+  const { pdWebhookCallbackCreated } = await import("./webhooks/lifecycle");
+  pdWebhookCallbackCreated({
+    workspaceId: input.workspaceId,
+    callbackId: row.id,
+    contactId: input.contactId,
+    assignedUserId: row.assignedUserId,
+    dueAt: row.scheduledAt.toISOString(),
+  });
+  return row;
 }
 
 export async function countCallbacksDue(workspaceId: string) {

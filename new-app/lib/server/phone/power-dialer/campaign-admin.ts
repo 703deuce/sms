@@ -184,13 +184,16 @@ export async function markCampaignCompletedIfExhausted(
     campaign.configJson && typeof campaign.configJson === "object"
       ? { ...(campaign.configJson as object), completionReason: reason }
       : { completionReason: reason };
-  return prisma.powerDialerCampaign.update({
+  const updated = await prisma.powerDialerCampaign.update({
     where: { id: campaignId },
     data: {
       status: "completed",
       configJson: cfg as import("@prisma/client").Prisma.InputJsonValue,
     },
   });
+  const { pdWebhookCampaignCompleted } = await import("./webhooks/lifecycle");
+  pdWebhookCampaignCompleted({ workspaceId, campaignId });
+  return updated;
 }
 
 export async function cloneCampaign(workspaceId: string, id: string, name?: string) {

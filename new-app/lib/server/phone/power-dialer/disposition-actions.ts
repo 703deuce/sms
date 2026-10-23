@@ -18,7 +18,10 @@ const actionSchema = z.object({
     "cadence_enroll",
     "voicemail_drop",
     "crm_note",
+    "customer_webhook",
   ]),
+  webhookUrl: z.string().url().optional(),
+  webhookEvent: z.string().optional(),
   voicemailDropId: z.string().optional(),
   noteBody: z.string().optional(),
   tagId: z.string().optional(),
@@ -295,6 +298,24 @@ export async function runDispositionActions(
           ok: r.ok,
           message: r.message,
         });
+        continue;
+      }
+
+      if (action.type === "customer_webhook") {
+        const { emitPowerDialerWebhookEvent } = await import("./webhooks/delivery");
+        await emitPowerDialerWebhookEvent({
+          workspaceId: input.workspaceId,
+          eventType: "disposition.saved",
+          eventId: `disp-${input.attemptId}-${action.webhookEvent || "custom"}`,
+          data: {
+            attemptId: input.attemptId,
+            contactId: input.contactId,
+            disposition: input.disposition?.label,
+            notes: input.notes,
+            webhookUrl: action.webhookUrl,
+          },
+        });
+        results.push({ type: action.type, ok: true, message: "Webhook event queued" });
         continue;
       }
 

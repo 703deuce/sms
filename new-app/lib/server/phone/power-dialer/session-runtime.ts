@@ -614,6 +614,15 @@ export async function createAttemptForSession(
     const { advanceTeamQueuePointer } = await import("./caller-id-pool");
     await advanceTeamQueuePointer(workspaceId, session.campaignId);
 
+    const { pdWebhookCallStarted } = await import("./webhooks/lifecycle");
+    pdWebhookCallStarted({
+      workspaceId,
+      attemptId: attempt.id,
+      sessionId,
+      contactId: input.contactId,
+      phoneE164: dial.e164,
+    });
+
     return attempt;
   } catch (e) {
     if (input.idempotencyKey) {
@@ -689,6 +698,23 @@ export async function onPowerDialerCallEnded(
       billableSeconds: input.billableSeconds ?? attempt.billableSeconds,
       acwDeadlineAt,
     },
+  });
+
+  const { pdWebhookCallAnswered, pdWebhookCallEnded } = await import("./webhooks/lifecycle");
+  if (input.wasAnswered) {
+    pdWebhookCallAnswered({
+      workspaceId,
+      attemptId,
+      sessionId: attempt.sessionId,
+      contactId: attempt.contactId,
+    });
+  }
+  pdWebhookCallEnded({
+    workspaceId,
+    attemptId,
+    sessionId: attempt.sessionId,
+    contactId: attempt.contactId,
+    wasAnswered: input.wasAnswered,
   });
 
   await prisma.powerDialerSession.update({
@@ -875,7 +901,7 @@ export async function startSessionWithRep(
   });
   if (active) return active;
 
-  return prisma.powerDialerSession.create({
+  const created = await prisma.powerDialerSession.create({
     data: {
       workspaceId,
       campaignId,
@@ -887,6 +913,14 @@ export async function startSessionWithRep(
         : undefined,
     },
   });
+  const { pdWebhookSessionStarted } = await import("./webhooks/lifecycle");
+  pdWebhookSessionStarted({
+    workspaceId,
+    sessionId: created.id,
+    campaignId,
+    repUserId,
+  });
+  return created;
 }
 
 export async function endSessionHard(workspaceId: string, sessionId: string) {
@@ -919,6 +953,12 @@ export async function endSessionHard(workspaceId: string, sessionId: string) {
     const { markCampaignCompletedIfExhausted } = await import("./campaign-admin");
     await markCampaignCompletedIfExhausted(workspaceId, session.campaignId, "session_ended");
   }
+  const { pdWebhookSessionEnded } = await import("./webhooks/lifecycle");
+  pdWebhookSessionEnded({
+    workspaceId,
+    sessionId,
+    campaignId: session?.campaignId,
+  });
   return updated;
 }
 

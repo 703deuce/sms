@@ -54,6 +54,12 @@ export async function addInternalDnc(input: {
       detailJson: { phone, reason: input.reason },
     },
   });
+  const { pdWebhookDncAdded } = await import("./webhooks/lifecycle");
+  pdWebhookDncAdded({
+    workspaceId: input.workspaceId,
+    phone,
+    source: input.source || "manual",
+  });
   return row;
 }
 

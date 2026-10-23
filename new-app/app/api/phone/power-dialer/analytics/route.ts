@@ -4,18 +4,31 @@ import { getPowerDialerAnalytics } from "@/lib/server/phone/power-dialer/analyti
 import { getCampaignConversionSummary } from "@/lib/server/phone/power-dialer/analytics-conversion";
 import { getPowerDialerUsageSnapshot } from "@/lib/server/phone/power-dialer/usage-limits";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
-import { resolveInternalUserId } from "@/lib/server/internal-user";
 import {
   analyticsRepFilter,
   requirePowerDialerScope,
 } from "@/lib/server/phone/power-dialer/power-dialer-permissions";
+import { logImpersonatedPowerDialerAction } from "@/lib/server/phone/power-dialer/impersonation";
+import { resolvePowerDialerUserIds } from "@/lib/server/phone/power-dialer/session-user";
 
 export async function GET(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId();
-    const userId = await resolveInternalUserId();
-    const { role } = await requirePowerDialerScope(workspaceId, userId, "analytics_read");
-    const repFilter = analyticsRepFilter(role, userId);
+    const { actorUserId, effectiveUserId, impersonationSessionId } =
+      await resolvePowerDialerUserIds(workspaceId);
+    const { role } = await requirePowerDialerScope(workspaceId, actorUserId, "analytics_read");
+    let repFilter = analyticsRepFilter(role, actorUserId);
+    if (impersonationSessionId) {
+      repFilter = effectiveUserId;
+      await logImpersonatedPowerDialerAction({
+        workspaceId,
+        actorUserId,
+        impersonationSessionId,
+        impersonatedUserId: effectiveUserId,
+        action: "impersonation_analytics_read",
+        detail: { range: new URL(request.url).searchParams.get("range") },
+      });
+    }
     const url = new URL(request.url);
     const range = url.searchParams.get("range");
     const r = range === "30d" || range === "90d" ? range : "7d";

@@ -139,6 +139,20 @@ export async function applyDispositionEffects(
       triggerCrm: true,
     });
   }
+
+  const { emitPowerDialerWebhookEvent } = await import("./webhooks/delivery");
+  await emitPowerDialerWebhookEvent({
+    workspaceId: input.workspaceId,
+    eventType: "disposition.saved",
+    eventId: `disposition-${input.attemptId}`,
+    data: {
+      attemptId: input.attemptId,
+      contactId: input.contactId,
+      campaignId: input.campaignId,
+      disposition: d,
+      notes: input.notes,
+    },
+  });
 }
 
 export function isHumanConversation(disposition: string | null, classification: string | null): boolean {
