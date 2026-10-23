@@ -1,12 +1,33 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Panel } from '@/components/app/page-primitives'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 const jsonHeaders = { 'Content-Type': 'application/json' }
+
+const SAMPLE_MERGE = {
+  first_name: 'Ada',
+  rep_name: 'Alex',
+  company: 'Acme Co',
+}
+
+function renderScriptPreview(body: string) {
+  return body
+    .replace(/\{\{\s*first_name\s*\}\}/gi, SAMPLE_MERGE.first_name)
+    .replace(/\{\{\s*rep_name\s*\}\}/gi, SAMPLE_MERGE.rep_name)
+    .replace(/\{\{\s*company\s*\}\}/gi, SAMPLE_MERGE.company)
+}
 
 type DispositionRow = {
   id: string
@@ -45,6 +66,9 @@ function DispositionSetEditor({
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<DispositionRow | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const labelInputRef = useRef<HTMLInputElement | null>(null)
 
   const patchDispo = async (dispoId: string, patch: Partial<DispositionRow>) => {
     const res = await fetch(`/api/phone/power-dialer/dispositions/${set.id}/items/${dispoId}`, {
@@ -95,7 +119,14 @@ function DispositionSetEditor({
       body: JSON.stringify({ label: 'New outcome' }),
     })
     if (!res.ok) throw new Error('Could not add disposition')
+    const j = (await res.json()) as { data?: { id: string } }
     onRefresh()
+    if (j.data?.id) {
+      setExpandedId(j.data.id)
+      setDraft(null)
+      toast.success('Outcome added — edit the label below')
+      window.setTimeout(() => labelInputRef.current?.focus(), 50)
+    }
   }
 
   const setDefault = async () => {
@@ -109,13 +140,19 @@ function DispositionSetEditor({
   }
 
   const deleteSet = async () => {
-    const res = await fetch(`/api/phone/power-dialer/dispositions/${set.id}`, { method: 'DELETE' })
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}))
-      throw new Error((j as { error?: string }).error || 'Delete failed')
+    setDeleteBusy(true)
+    try {
+      const res = await fetch(`/api/phone/power-dialer/dispositions/${set.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error((j as { error?: string }).error || 'Delete failed')
+      }
+      onRefresh()
+      toast.success('Set deleted')
+      setDeleteOpen(false)
+    } finally {
+      setDeleteBusy(false)
     }
-    onRefresh()
-    toast.success('Set deleted')
   }
 
   const sorted = [...set.dispositions].sort((a, b) => a.sortOrder - b.sortOrder)
@@ -132,7 +169,7 @@ function DispositionSetEditor({
             </Button>
           )}
           {!set.isDefault && (
-            <Button type="button" size="sm" variant="ghost" onClick={() => void deleteSet().catch((e) => toast.error(e.message))}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setDeleteOpen(true)}>
               Delete set
             </Button>
           )}
@@ -172,8 +209,28 @@ function DispositionSetEditor({
               </div>
               {open && draft && (
                 <div className="mt-3 grid gap-2 border-t pt-3">
-                  <Input value={row.label} onChange={(e) => setDraft({ ...row, label: e.target.value })} aria-label="Outcome label" />
-                  <Input value={row.category} onChange={(e) => setDraft({ ...row, category: e.target.value })} aria-label="Category" />
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Label</span>
+                    <Input
+                      ref={expandedId === d.id ? labelInputRef : undefined}
+                      value={row.label}
+                      onChange={(e) => setDraft({ ...row, label: e.target.value })}
+                      aria-label="Outcome label"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Category</span>
+                    <Input value={row.category} onChange={(e) => setDraft({ ...row, category: e.target.value })} aria-label="Category" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Sort order</span>
+                    <Input
+                      type="number"
+                      value={row.sortOrder}
+                      onChange={(e) => setDraft({ ...row, sortOrder: Number(e.target.value) })}
+                      aria-label="Sort order"
+                    />
+                  </label>
                   {(
                     [
                       ['requireNotes', 'Require notes'],
@@ -209,6 +266,27 @@ function DispositionSetEditor({
           )
         })}
       </ol>
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete disposition set?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Outcomes in &quot;{set.name}&quot; are removed. If this set is assigned to a campaign, deletion is blocked — reassign the campaign first.
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteBusy}
+              onClick={() => void deleteSet().catch((e) => toast.error(e.message))}
+            >
+              Delete set
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </li>
   )
 }
@@ -276,6 +354,9 @@ export function ScriptsLibraryPanel() {
   const [scripts, setScripts] = useState<ScriptRow[]>([])
   const [name, setName] = useState('')
   const [body, setBody] = useState('Hi {{first_name}}, this is {{rep_name}} from {{company}}.')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ id: string; action: 'archive' | 'delete' } | null>(null)
 
   const load = useCallback(() => {
     void fetch('/api/phone/power-dialer/scripts')
@@ -288,7 +369,7 @@ export function ScriptsLibraryPanel() {
     load()
   }, [load])
 
-  const save = async () => {
+  const saveNew = async () => {
     try {
       await fetch('/api/phone/power-dialer/scripts', {
         method: 'POST',
@@ -303,29 +384,160 @@ export function ScriptsLibraryPanel() {
     }
   }
 
-  const preview = body.replace(/\{\{\s*first_name\s*\}\}/g, 'Ada').replace(/\{\{\s*rep_name\s*\}\}/g, 'Alex').replace(/\{\{\s*company\s*\}\}/g, 'Acme Co')
+  const saveEdit = async (id: string, patch: { name: string; body: string }) => {
+    const res = await fetch(`/api/phone/power-dialer/scripts/${id}`, {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify(patch),
+    })
+    if (!res.ok) throw new Error('Save failed')
+    setEditingId(null)
+    load()
+    toast.success('Script updated')
+  }
+
+  const runAction = async () => {
+    if (!confirm) return
+    const { id, action } = confirm
+    if (action === 'delete') {
+      const res = await fetch(`/api/phone/power-dialer/scripts/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      toast.success('Script deleted')
+    } else {
+      const res = await fetch(`/api/phone/power-dialer/scripts/${id}`, {
+        method: 'PATCH',
+        headers: jsonHeaders,
+        body: JSON.stringify({ action: 'archive' }),
+      })
+      if (!res.ok) throw new Error('Archive failed')
+      toast.success('Script archived')
+    }
+    setConfirm(null)
+    load()
+  }
+
+  const cloneScript = async (id: string) => {
+    const res = await fetch(`/api/phone/power-dialer/scripts/${id}`, {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({ action: 'clone' }),
+    })
+    if (!res.ok) throw new Error('Clone failed')
+    load()
+    toast.success('Script cloned')
+  }
+
+  const setDefault = async (id: string) => {
+    const res = await fetch(`/api/phone/power-dialer/scripts/${id}`, {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({ isDefault: true }),
+    })
+    if (!res.ok) throw new Error('Could not set default')
+    load()
+    toast.success('Default script updated')
+  }
+
+  const previewScript = scripts.find((s) => s.id === previewId)
 
   return (
     <div className="flex flex-col gap-6">
-      <Panel title="Script library" description="Use merge fields: {{first_name}}, {{company}}, {{rep_name}}, and custom field keys.">
+      <Panel title="Script library" description="Use merge fields: {{first_name}}, {{company}}, {{rep_name}}, and custom field keys. Assign scripts per campaign under Campaign settings.">
         <div className="grid max-w-2xl gap-3">
           <Input placeholder="Script name" value={name} onChange={(e) => setName(e.target.value)} aria-label="Script name" />
           <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} aria-label="Script body" />
-          <Button className="self-start" onClick={() => void save()}>Add script</Button>
+          <Button className="self-start" onClick={() => void saveNew()}>Add script</Button>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">Preview: {preview}</p>
+        <p className="mt-4 text-xs text-muted-foreground">Preview: {renderScriptPreview(body)}</p>
       </Panel>
       <Panel title="Saved scripts">
-        <ul className="space-y-2 text-sm">
+        <ul className="space-y-3 text-sm">
           {scripts.map((s) => (
-            <li key={s.id} className="border-b py-2">
-              <span className="font-medium">{s.name}</span>
-              {s.isDefault && <span className="ml-2 text-xs text-muted-foreground">default</span>}
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{s.body}</p>
+            <li key={s.id} className="rounded-lg border p-3">
+              {editingId === s.id ? (
+                <ScriptEditForm
+                  script={s}
+                  onCancel={() => setEditingId(null)}
+                  onSave={(patch) => void saveEdit(s.id, patch).catch((e) => toast.error(e.message))}
+                />
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">{s.name}</span>
+                    {s.isDefault && <span className="text-xs text-muted-foreground">Default</span>}
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{s.body}</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <Button type="button" size="sm" variant="outline" onClick={() => setEditingId(s.id)}>Edit</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setPreviewId(s.id)}>Preview</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => void cloneScript(s.id).catch((e) => toast.error(e.message))}>Clone</Button>
+                    {!s.isDefault && (
+                      <Button type="button" size="sm" variant="outline" onClick={() => void setDefault(s.id).catch((e) => toast.error(e.message))}>
+                        Set default
+                      </Button>
+                    )}
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setConfirm({ id: s.id, action: 'archive' })}>Archive</Button>
+                    <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => setConfirm({ id: s.id, action: 'delete' })}>Delete</Button>
+                  </div>
+                </>
+              )}
             </li>
           ))}
         </ul>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Assign a script on each <Link href="/app/power-dialer/campaigns" className="text-primary hover:underline">campaign</Link> under Call handling.
+        </p>
       </Panel>
+      <Dialog open={!!previewScript} onOpenChange={(o) => !o && setPreviewId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{previewScript?.name} — preview</DialogTitle>
+          </DialogHeader>
+          <p className="whitespace-pre-wrap text-sm">{previewScript ? renderScriptPreview(previewScript.body) : ''}</p>
+          <p className="text-xs text-muted-foreground">Sample merge data: Ada, Alex, Acme Co.</p>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirm?.action === 'delete' ? 'Delete script?' : 'Archive script?'}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {confirm?.action === 'delete'
+              ? 'This permanently removes the script. Campaigns referencing it should be updated first.'
+              : 'Archived scripts are hidden from the library but historical sessions keep their text.'}
+          </p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConfirm(null)}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={() => void runAction().catch((e) => toast.error(e.message))}>
+              {confirm?.action === 'delete' ? 'Delete' : 'Archive'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function ScriptEditForm({
+  script,
+  onCancel,
+  onSave,
+}: {
+  script: ScriptRow
+  onCancel: () => void
+  onSave: (patch: { name: string; body: string }) => void
+}) {
+  const [name, setName] = useState(script.name)
+  const [body, setBody] = useState(script.body)
+  return (
+    <div className="flex flex-col gap-2">
+      <Input value={name} onChange={(e) => setName(e.target.value)} aria-label="Script name" />
+      <Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} aria-label="Script body" />
+      <div className="flex gap-2">
+        <Button type="button" size="sm" onClick={() => onSave({ name, body })}>Save</Button>
+        <Button type="button" size="sm" variant="outline" onClick={onCancel}>Cancel</Button>
+      </div>
     </div>
   )
 }
@@ -350,7 +562,7 @@ export function VoicemailDropsLibraryPanel({ optIn }: { optIn: boolean }) {
 
   const uploadBlob = async (blob: Blob, filename: string) => {
     if (!optIn) {
-      toast.error('Enable admin opt-in under VM compliance first')
+      toast.error('Enable voicemail drop opt-in under Settings → Voicemail drops first')
       return
     }
     const form = new FormData()
@@ -405,7 +617,7 @@ export function VoicemailDropsLibraryPanel({ optIn }: { optIn: boolean }) {
   return (
     <Panel title="Voicemail drops" description="Record in-browser or upload audio. Files are stored in workspace storage; dialer playback uses Telnyx call control (not mock) in production.">
       {!optIn && (
-        <p className="mb-3 text-sm text-warning-foreground">Uploads disabled until compliance opt-in is enabled on the VM compliance tab.</p>
+        <p className="mb-3 text-sm text-warning-foreground">Uploads disabled until compliance opt-in is enabled on the Voicemail drops settings tab.</p>
       )}
       <div className="mb-4 grid max-w-xl gap-2">
         <Input placeholder="Drop name" value={name} onChange={(e) => setName(e.target.value)} disabled={!optIn} aria-label="Voicemail drop name" />

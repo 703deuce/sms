@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -52,6 +53,7 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
   const [scripts, setScripts] = useState<{ id: string; name: string }[]>([])
   const [vmDrops, setVmDrops] = useState<{ id: string; name: string }[]>([])
   const [saving, setSaving] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!open) return
@@ -93,8 +95,13 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
   }, [open, campaignId])
 
   const save = async () => {
-    if (!name.trim() || !listId || !callerId) {
-      toast.error('Name, list, and caller ID are required')
+    const errors: Record<string, string> = {}
+    if (!name.trim()) errors.name = 'Campaign name is required'
+    if (!listId) errors.listId = 'Choose a calling list or create one first'
+    if (!callerId) errors.callerId = 'Outbound caller ID is required'
+    setFieldErrors(errors)
+    if (Object.keys(errors).length) {
+      toast.error('Fix the highlighted fields')
       return
     }
     setSaving(true)
@@ -151,7 +158,8 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
           <SheetTitle>{campaignId ? 'Edit campaign' : 'New campaign'}</SheetTitle>
         </SheetHeader>
         <Tabs defaultValue="general" className="mt-4 gap-4">
-          <TabsList className="flex flex-wrap h-auto">
+          <div className="-mx-1 overflow-x-auto pb-1">
+            <TabsList className="inline-flex h-auto w-max flex-nowrap">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="contacts">Contacts</TabsTrigger>
             <TabsTrigger value="dialing">Dialing rules</TabsTrigger>
@@ -161,13 +169,28 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
             <TabsTrigger value="outcomes">Outcomes</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
           </TabsList>
+          </div>
           <TabsContent value="general" className="flex flex-col gap-3">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name" aria-label="Campaign name" />
+            <div>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name" aria-label="Campaign name" />
+              {fieldErrors.name && <p className="mt-1 text-xs text-destructive">{fieldErrors.name}</p>}
+            </div>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={2} />
             <SimpleSelect label="Timezone" value={timezone} onChange={setTimezone} options={[{ value: 'America/Chicago', label: 'Central' }, { value: 'America/New_York', label: 'Eastern' }, { value: 'America/Los_Angeles', label: 'Pacific' }]} />
           </TabsContent>
           <TabsContent value="contacts" className="flex flex-col gap-3">
-            <SimpleSelect label="Calling list" value={listId} onChange={setListId} options={lists.map((l) => ({ value: l.id, label: l.name }))} />
+            {lists.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No calling lists yet.{' '}
+                <Link href="/app/power-dialer/lists" className="text-primary hover:underline">Create or import a list</Link>
+                {' '}before saving this campaign.
+              </p>
+            ) : (
+              <div>
+                <SimpleSelect label="Calling list" value={listId} onChange={setListId} options={lists.map((l) => ({ value: l.id, label: l.name }))} />
+                {fieldErrors.listId && <p className="mt-1 text-xs text-destructive">{fieldErrors.listId}</p>}
+              </div>
+            )}
             <Input value={leadSource} onChange={(e) => setLeadSource(e.target.value)} placeholder="Lead source label" />
             <SimpleSelect
               label="Duplicate behavior (imports)"
@@ -212,12 +235,15 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
             <p className="text-xs text-muted-foreground">Contact local timezone is used when set on the contact; otherwise campaign timezone applies.</p>
           </TabsContent>
           <TabsContent value="caller" className="flex flex-col gap-3">
-            <SimpleSelect
-              label="Outbound caller ID"
-              value={callerId}
-              onChange={setCallerId}
-              options={owned.filter((n) => n.status === 'active').map((n) => ({ value: n.number, label: n.nickname || n.number }))}
-            />
+            <div>
+              <SimpleSelect
+                label="Outbound caller ID"
+                value={callerId}
+                onChange={setCallerId}
+                options={owned.filter((n) => n.status === 'active').map((n) => ({ value: n.number, label: n.nickname || n.number }))}
+              />
+              {fieldErrors.callerId && <p className="mt-1 text-xs text-destructive">{fieldErrors.callerId}</p>}
+            </div>
             <p className="text-xs text-muted-foreground">Numbers come from the global Numbers inventory. Number pools are not configured in this workspace.</p>
           </TabsContent>
           <TabsContent value="handling" className="flex flex-col gap-3">

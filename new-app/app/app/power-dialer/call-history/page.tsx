@@ -13,7 +13,7 @@ export default async function PowerDialerCallHistoryPage({
     <Page>
       <PageHeader
         title="Call history"
-        description="Outbound power-dialer calls recorded on HumanCall rows, including recordings when available."
+        description="Outbound power-dialer calls with disposition, duration, and recordings when available."
       />
       <CallsTable variant="power_dialer" basePath="/app/power-dialer/call-history" initialFilter={filter} />
     </Page>

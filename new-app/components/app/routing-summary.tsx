@@ -34,7 +34,12 @@ export function useRouteSteps() {
   return {
     policy: p,
     steps: [
-      { when: 'During hours', then: `${DESTINATION_LABEL[p.duringHours]}${p.duringHours === 'ring_group' ? ` · ${p.ringStrategy}, ${p.ringTimeout}s` : ''}` },
+      {
+        when: 'During hours',
+        then: p.duringHours
+          ? `${DESTINATION_LABEL[p.duringHours]}${p.duringHours === 'ring_group' ? ` · ${p.ringStrategy}, ${p.ringTimeout}s` : ''}`
+          : 'Not configured',
+      },
       { when: 'No answer / busy', then: FALLBACK_LABEL[p.noAnswer] },
       { when: 'After hours', then: FALLBACK_LABEL[p.afterHours] },
       { when: 'Still missed', then: p.mctbEnabled ? 'Missed Call Text Back (press-1 consent)' : 'No text back' },

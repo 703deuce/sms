@@ -88,22 +88,27 @@ export function SimpleSelect<T extends string>({
   options,
   label,
   className,
+  disabled,
 }: {
   value: T
   onChange: (v: T) => void
   options: { value: T; label: string }[]
   label: string
   className?: string
+  disabled?: boolean
 }) {
   return (
-    <Select
-      value={value}
-      onValueChange={(v) => v && onChange(v as T)}
-      items={options}
-    >
-      <SelectTrigger aria-label={label} className={cn('min-w-36 bg-card', className)}>
-        <SelectValue />
-      </SelectTrigger>
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      <span className="text-sm font-medium">{label}</span>
+      <Select
+        value={value}
+        onValueChange={(v) => v && onChange(v as T)}
+        items={options}
+        disabled={disabled}
+      >
+        <SelectTrigger aria-label={label} className="min-w-36 bg-card">
+          <SelectValue />
+        </SelectTrigger>
       <SelectContent>
         {options.map((o) => (
           <SelectItem key={o.value} value={o.value}>
@@ -112,5 +117,6 @@ export function SimpleSelect<T extends string>({
         ))}
       </SelectContent>
     </Select>
+    </div>
   )
 }

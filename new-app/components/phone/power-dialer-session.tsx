@@ -15,10 +15,12 @@ import { useNumbers } from '@/components/providers/numbers-provider'
 import {
   fetchContactCampaignHistory,
   fetchDialerPrep,
+  fetchPowerCampaignDetail,
   fetchPowerCampaigns,
   fetchPowerSession,
   fetchPowerSessionSummary,
   patchPowerCampaign,
+  savePowerCampaignDetail,
   powerSessionAction,
   savePowerAttemptOutcome,
   startPowerSession,
@@ -62,6 +64,16 @@ export function PowerDialerSessionWorkspace({
   const [dispositionOptions, setDispositionOptions] = useState<string[]>([...DISPOSITIONS])
   const [voicemailDropReady, setVoicemailDropReady] = useState(false)
   const autoDialLock = useRef(false)
+  const [setupDetail, setSetupDetail] = useState<Awaited<ReturnType<typeof fetchPowerCampaignDetail>> | null>(null)
+  const [setupLoading, setSetupLoading] = useState(false)
+  const [setupCallerId, setSetupCallerId] = useState('')
+  const [setupDialingMode, setSetupDialingMode] = useState<'power' | 'preview'>('power')
+  const [setupPhoneFields, setSetupPhoneFields] = useState('phone')
+  const [metaLibraries, setMetaLibraries] = useState<{
+    scripts: { id: string; name: string }[]
+    dispositionSets: { id: string; name: string }[]
+    vmDrops: { id: string; name: string }[]
+  }>({ scripts: [], dispositionSets: [], vmDrops: [] })
 
   const sessionStatus = runtime?.session?.status ?? null
   const lead = runtime?.next ?? null
@@ -90,7 +102,37 @@ export function PowerDialerSessionWorkspace({
         } else if (!campaignId && rows[0]) setCampaignId(rows[0].id)
       })
       .catch(() => toast.error('Could not load campaigns'))
+    void Promise.all([
+      fetch('/api/phone/power-dialer/scripts').then((r) => r.json()),
+      fetch('/api/phone/power-dialer/dispositions').then((r) => r.json()),
+      fetch('/api/phone/power-dialer/voicemail-drops').then((r) => r.json()),
+    ])
+      .then(([scripts, sets, drops]) => {
+        setMetaLibraries({
+          scripts: scripts.data || [],
+          dispositionSets: (sets.data || []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })),
+          vmDrops: drops.data || [],
+        })
+      })
+      .catch(() => undefined)
   }, [campaignId, initialCampaignId])
+
+  useEffect(() => {
+    if (!campaignId || sessionId) {
+      setSetupDetail(null)
+      return
+    }
+    setSetupLoading(true)
+    void fetchPowerCampaignDetail(campaignId)
+      .then((d) => {
+        setSetupDetail(d)
+        setSetupCallerId(d.callerIdE164)
+        setSetupDialingMode(d.rules.dialingMode === 'preview' ? 'preview' : 'power')
+        setSetupPhoneFields((d.rules.phoneFieldPriority || ['phone']).join(', '))
+      })
+      .catch(() => toast.error('Could not load campaign setup'))
+      .finally(() => setSetupLoading(false))
+  }, [campaignId, sessionId])
 
   const leadContactId = runtime?.next?.contact.id
 
@@ -182,9 +224,28 @@ export function PowerDialerSessionWorkspace({
   }, [sessionId, lead, powerMode, paused, onCall, attemptId, progression, dialLead])
 
   const startSession = async () => {
-    if (!campaignId) return
+    if (!campaignId || !setupDetail) return
+    if (!setupCallerId) {
+      toast.error('Choose an outbound caller ID')
+      return
+    }
+    if (setupEligible === 0) {
+      toast.error('No eligible contacts — adjust campaign rules or list before starting')
+      return
+    }
     setLoading(true)
     try {
+      const phoneFieldPriority = setupPhoneFields
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      await savePowerCampaignDetail(campaignId, {
+        callerIdE164: setupCallerId,
+        configJson: {
+          dialingMode: setupDialingMode,
+          phoneFieldPriority: phoneFieldPriority.length ? phoneFieldPriority : ['phone'],
+        },
+      })
       const session = await startPowerSession(campaignId, initialFocusContactId)
       await patchPowerCampaign(campaignId, { status: 'active' })
       setSessionId(session.id)
@@ -276,10 +337,20 @@ export function PowerDialerSessionWorkspace({
 
   const micBlocked = webrtcStatus !== 'ready'
 
+  const setupEligible = setupDetail?.eligibility?.counts?.eligible ?? 0
+  const activeNumbers = owned.filter((n) => n.status === 'active')
+
   const warnings: string[] = []
   if (micBlocked) warnings.push('Browser calling is not ready — check microphone permissions.')
-  if (owned.filter((n) => n.status === 'active').length === 0) warnings.push('No active outbound number assigned.')
+  if (activeNumbers.length === 0) warnings.push('No active outbound number in Numbers — assign one before dialing.')
+  if (!sessionId && setupDetail && setupEligible === 0) {
+    warnings.push('No eligible contacts in this campaign right now — check calling hours, caps, and list membership.')
+  }
+  if (!sessionId && setupDetail?.status === 'paused') warnings.push('This campaign is paused — resume it or choose another.')
   if (sessionId && eligibleTotal === 0) warnings.push('No eligible contacts in this campaign right now.')
+
+  const labelFor = (id: string | null | undefined, list: { id: string; name: string }[], fallback: string) =>
+    (id && list.find((x) => x.id === id)?.name) || fallback
 
   const log = runtime?.attempts ?? []
   const countdown = progression?.countdownSeconds ?? 0
@@ -296,17 +367,87 @@ export function PowerDialerSessionWorkspace({
                 ))}
               </ul>
             )}
-            <div className="flex max-w-md flex-col gap-4">
+            <div className="flex max-w-lg flex-col gap-4">
               <SimpleSelect
                 label="Campaign"
                 value={campaignId}
                 onChange={setCampaignId}
                 options={campaigns.map((c) => ({ value: c.id, label: c.name }))}
               />
-              <p className="text-xs text-muted-foreground">
-                Mode: {campaigns.find((c) => c.id === campaignId)?.dialingMode ?? 'power'} · Eligible contacts load after session start.
-              </p>
-              <Button onClick={() => void startSession()} disabled={!campaignId || loading || micBlocked}>
+              {setupLoading && <p className="text-xs text-muted-foreground">Loading campaign setup…</p>}
+              {setupDetail && (
+                <>
+                  <SimpleSelect
+                    label="Outbound caller ID"
+                    value={setupCallerId}
+                    onChange={setSetupCallerId}
+                    options={activeNumbers.map((n) => ({
+                      value: n.number,
+                      label: `${n.nickname || 'Number'} (${formatPhone(n.number)})`,
+                    }))}
+                  />
+                  <SimpleSelect
+                    label="Dialing mode"
+                    value={setupDialingMode}
+                    onChange={(v) => setSetupDialingMode(v as 'power' | 'preview')}
+                    options={[
+                      { value: 'power', label: 'Power (auto-advance)' },
+                      { value: 'preview', label: 'Preview (manual dial)' },
+                    ]}
+                  />
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="font-medium">Contact phone fields (priority, comma-separated)</span>
+                    <Input
+                      value={setupPhoneFields}
+                      onChange={(e) => setSetupPhoneFields(e.target.value)}
+                      aria-label="Phone field priority"
+                    />
+                  </label>
+                  <dl className="grid gap-2 rounded-lg border bg-muted/30 p-3 text-xs">
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Script</dt>
+                      <dd>{labelFor(setupDetail.extended.scriptId, metaLibraries.scripts, 'None')}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Disposition set</dt>
+                      <dd>{labelFor(setupDetail.extended.dispositionSetId, metaLibraries.dispositionSets, 'Workspace default')}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Voicemail drop</dt>
+                      <dd>{labelFor(setupDetail.extended.voicemailDropId, metaLibraries.vmDrops, 'None')}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Recording</dt>
+                      <dd>{setupDetail.extended.recordingEnabled === false ? 'Off for campaign' : 'On (workspace default)'}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Call screening</dt>
+                      <dd>{setupDetail.extended.screeningMode || 'Workspace default'}</dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Eligible contacts</dt>
+                      <dd className="font-medium tabular-nums">
+                        {setupEligible}
+                        {setupDetail.eligibility.truncated ? ' (estimate — large list)' : ''}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Calling window</dt>
+                      <dd>
+                        {setupDetail.rules.callingHoursStart}–{setupDetail.rules.callingHoursEnd} ({setupDetail.timezone})
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="text-xs text-muted-foreground">
+                    Change script, dispositions, or voicemail drop under{' '}
+                    <a href="/app/power-dialer/campaigns" className="text-primary hover:underline">Campaigns</a>.
+                  </p>
+                </>
+              )}
+              <Button
+                onClick={() => void startSession()}
+                disabled={!campaignId || !setupDetail || loading || micBlocked || setupEligible === 0}
+              >
                 <Play />
                 Start session
               </Button>

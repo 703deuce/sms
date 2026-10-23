@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { guessCsvColumnMapping } from '@/lib/phone/csv-import-mapping'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,6 +57,46 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
     [headers],
   )
 
+  const previewDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const refreshPreview = async (mappingOverride?: typeof mapping) => {
+    if (!csvText) return
+    const m = mappingOverride ?? mapping
+    setBusy(true)
+    try {
+      const data = await importListCsv(listId, {
+        csvText,
+        mapping: {
+          phone: m.phone,
+          name: m.name,
+          mobile: m.mobile,
+          work: m.work,
+          company: m.company,
+          timezone: m.timezone,
+          custom: {},
+        },
+        dryRun: true,
+      }) as { headers?: string[]; preview: PreviewRow[] }
+      if (data.headers?.length) setHeaders(data.headers)
+      setPreview(data.preview)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Preview failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (step !== 'map' || !csvText || !mapping.phone) return
+    if (previewDebounce.current) clearTimeout(previewDebounce.current)
+    previewDebounce.current = setTimeout(() => {
+      void refreshPreview()
+    }, 300)
+    return () => {
+      if (previewDebounce.current) clearTimeout(previewDebounce.current)
+    }
+  }, [step, csvText, mapping.phone, mapping.name, mapping.mobile, mapping.work, mapping.company, mapping.timezone, listId])
+
   const onFile = async (file: File | null) => {
     if (!file) return
     const text = await file.text()
@@ -69,43 +110,20 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
         dryRun: true,
       }) as { headers: string[]; preview: PreviewRow[] }
       setHeaders(data.headers)
-      setPreview(data.preview)
-      const guess = (names: string[]) =>
-        data.headers.find((h) => names.some((n) => h.toLowerCase().includes(n)))
-      setMapping((m) => ({
-        ...m,
-        phone: guess(['phone', 'mobile', 'cell']) || data.headers[0] || '',
-        name: guess(['name', 'full']) || '',
-        company: guess(['company', 'account']) || '',
-      }))
+      const guessed = guessCsvColumnMapping(data.headers)
+      const nextMapping = {
+        phone: guessed.phone,
+        name: guessed.name,
+        mobile: '',
+        work: '',
+        company: guessed.company,
+        timezone: '',
+      }
+      setMapping((m) => ({ ...m, ...nextMapping }))
+      await refreshPreview(nextMapping)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not parse CSV')
       setStep('upload')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const refreshPreview = async () => {
-    if (!csvText) return
-    setBusy(true)
-    try {
-      const data = await importListCsv(listId, {
-        csvText,
-        mapping: {
-          phone: mapping.phone,
-          name: mapping.name,
-          mobile: mapping.mobile,
-          work: mapping.work,
-          company: mapping.company,
-          timezone: mapping.timezone,
-          custom: {},
-        },
-        dryRun: true,
-      }) as { preview: PreviewRow[] }
-      setPreview(data.preview)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Preview failed')
     } finally {
       setBusy(false)
     }
@@ -193,7 +211,7 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
                 { value: 'update', label: 'Update existing contact fields' },
               ]}
             />
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => void refreshPreview()}>Refresh preview</Button>
+            {busy && <p className="text-xs text-muted-foreground">Updating preview…</p>}
             {preview.length > 0 && (
               <div className="max-h-40 overflow-auto rounded border text-xs">
                 <table className="w-full">

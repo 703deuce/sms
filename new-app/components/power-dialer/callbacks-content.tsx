@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Page, PageHeader, Panel, EmptyState } from '@/components/app/page-primitives'
 import { SegmentedFilter } from '@/components/app/filters'
@@ -24,7 +25,21 @@ const TABS = [
 ] as const
 
 export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { initialTab?: string }) {
-  const [tab, setTab] = useState(initialTab)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const tabFromUrl = searchParams.get('tab') || initialTab
+  const [tab, setTab] = useState(tabFromUrl)
+
+  useEffect(() => {
+    setTab(tabFromUrl)
+  }, [tabFromUrl])
+
+  const changeTab = (next: string) => {
+    setTab(next)
+    const q = new URLSearchParams(searchParams.toString())
+    q.set('tab', next)
+    router.replace(`/app/power-dialer/callbacks?${q.toString()}`, { scroll: false })
+  }
   const [rows, setRows] = useState<PowerDialerCallbackDto[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -79,7 +94,7 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
       />
       <Panel bodyClassName="p-0">
         <div className="border-b p-4">
-          <SegmentedFilter label="Callback queue" value={tab} onChange={setTab} options={TABS.map((t) => ({ value: t.value, label: t.label }))} />
+          <SegmentedFilter label="Callback queue" value={tab} onChange={changeTab} options={TABS.map((t) => ({ value: t.value, label: t.label }))} />
         </div>
         {error && (
           <p className="px-5 py-3 text-sm text-destructive" role="alert">{error}</p>
@@ -88,7 +103,7 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
           <EmptyState
             icon={CalendarClock}
             title="No callbacks in this queue"
-            description="Schedule a callback from the dialer disposition flow. Callbacks appear here when a disposition sets callbackAt."
+            description="Schedule a callback from the dialer disposition flow. Callbacks appear here when an outcome is saved with a follow-up time."
           />
         ) : (
           <table className="w-full text-sm">

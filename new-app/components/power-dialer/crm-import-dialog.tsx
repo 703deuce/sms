@@ -94,6 +94,7 @@ export function CrmImportDialog({
           <label className="flex flex-col gap-1">
             <span className="font-medium">List source</span>
             <SimpleSelect
+              label="List source"
               value={sourceId}
               onChange={setSourceId}
               options={providerSources.map((s) => ({ value: s.id, label: s.label }))}

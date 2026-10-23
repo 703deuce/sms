@@ -54,7 +54,7 @@ export function PowerDialerSettingsContent() {
     <Page>
       <PageHeader
         title="Settings"
-        description="Workspace defaults for dialing behavior. Campaign-level rules will override these when configured (Phase 2+)."
+        description="Workspace defaults for dialing behavior. Campaign settings override these where configured."
         actions={
           <Button onClick={() => void save()} disabled={saving}>
             {saving ? 'Saving…' : 'Save changes'}
@@ -62,20 +62,21 @@ export function PowerDialerSettingsContent() {
         }
       />
       <Tabs defaultValue="general">
-        <TabsList className="flex flex-wrap h-auto">
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="dialing">Dialing</TabsTrigger>
-          <TabsTrigger value="recording">Recording</TabsTrigger>
-          <TabsTrigger value="outcomes">Dispositions</TabsTrigger>
-          <TabsTrigger value="scripts">Scripts</TabsTrigger>
-          <TabsTrigger value="vm-drops">Voicemail drops</TabsTrigger>
-          <TabsTrigger value="compliance">VM compliance</TabsTrigger>
-          <TabsTrigger value="caller-id">Caller ID</TabsTrigger>
-          <TabsTrigger value="screening">Call screening</TabsTrigger>
-          <TabsTrigger value="calling-compliance">Calling compliance</TabsTrigger>
-          <TabsTrigger value="usage">Usage</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
-        </TabsList>
+        <div className="-mx-1 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap">
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="dialing">Dialing</TabsTrigger>
+            <TabsTrigger value="dispositions">Dispositions</TabsTrigger>
+            <TabsTrigger value="scripts">Scripts</TabsTrigger>
+            <TabsTrigger value="vm-drops">Voicemail drops</TabsTrigger>
+            <TabsTrigger value="screening">Call screening</TabsTrigger>
+            <TabsTrigger value="caller-id">Caller ID</TabsTrigger>
+            <TabsTrigger value="recording">Recording</TabsTrigger>
+            <TabsTrigger value="compliance">Compliance</TabsTrigger>
+            <TabsTrigger value="team">Team</TabsTrigger>
+            <TabsTrigger value="usage">Usage &amp; subscription</TabsTrigger>
+          </TabsList>
+        </div>
         <TabsContent value="general" className="mt-6">
           <Panel title="General">
             <div className="flex max-w-md flex-col gap-4">
@@ -136,7 +137,7 @@ export function PowerDialerSettingsContent() {
                     setSettings({ ...settings, requireDispositionBeforeNext: e.target.checked })
                   }
                 />
-                Require disposition before next call (UI enforced; auto-dial in Phase 2)
+                Require disposition before advancing to the next contact
               </label>
             </div>
           </Panel>
@@ -173,17 +174,35 @@ export function PowerDialerSettingsContent() {
                   }
                 />
               </label>
-              <p className="text-xs text-muted-foreground">Retention enforcement uses workspace media policies when available; otherwise stored for future jobs (see ledger).</p>
+              <p className="text-xs text-muted-foreground">
+                Retention follows workspace media policies when configured; older recordings may be purged automatically after this period.
+              </p>
             </div>
           </Panel>
         </TabsContent>
-        <TabsContent value="outcomes" className="mt-6">
+        <TabsContent value="dispositions" className="mt-6">
           <DispositionsLibraryPanel />
         </TabsContent>
         <TabsContent value="scripts" className="mt-6">
           <ScriptsLibraryPanel />
         </TabsContent>
         <TabsContent value="vm-drops" className="mt-6">
+          <Panel title="Compliance opt-in" className="mb-6">
+            <p className="mb-3 text-sm text-muted-foreground">
+              Prerecorded voicemail drops may be restricted in your jurisdiction. Enable only after your administrator confirms compliance.
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.prerecordedVmOptIn ?? false}
+                onChange={(e) => setSettings({ ...settings, prerecordedVmOptIn: e.target.checked })}
+              />
+              Allow voicemail drop uploads and dialer playback
+            </label>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Greeting-end detection depends on carrier AMD signals and may not be available on every call.
+            </p>
+          </Panel>
           <VoicemailDropsLibraryPanel optIn={Boolean(settings.prerecordedVmOptIn)} />
         </TabsContent>
         <TabsContent value="caller-id" className="mt-6">
@@ -276,11 +295,11 @@ export function PowerDialerSettingsContent() {
             </div>
           </Panel>
         </TabsContent>
-        <TabsContent value="calling-compliance" className="mt-6">
+        <TabsContent value="compliance" className="mt-6">
           <PowerDialerComplianceSettingsPanel />
         </TabsContent>
         <TabsContent value="usage" className="mt-6">
-          <Panel title="Usage & subscription" description="Minutes come from billable attempt seconds and workspace_limits.powerDialer — not hardcoded prices.">
+          <Panel title="Usage & subscription" description="Billable minutes are calculated from connected talk time on power-dialer attempts and your workspace subscription limits.">
             <p className="text-sm text-muted-foreground">
               Configure included minutes and overage behavior under workspace billing limits. When overage behavior is set to block, new dial sessions are prevented once included minutes are exhausted.
             </p>
@@ -320,24 +339,6 @@ export function PowerDialerSettingsContent() {
         </TabsContent>
         <TabsContent value="team" className="mt-6">
           <PowerDialerTeamSettingsPanel />
-        </TabsContent>
-        <TabsContent value="compliance" className="mt-6">
-          <Panel title="Prerecorded voicemail drops">
-            <p className="mb-3 text-sm text-muted-foreground">
-              Counsel has not reviewed prerecorded-message rules for your jurisdiction. Do not enable until your administrator confirms compliance.
-            </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={settings.prerecordedVmOptIn ?? false}
-                onChange={(e) => setSettings({ ...settings, prerecordedVmOptIn: e.target.checked })}
-              />
-              Admin opt-in: allow voicemail drop uploads and dialer playback
-            </label>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Beep-detection / greeting-end timing is not wired until Telnyx AMD events are certified for power-dialer legs (ledger).
-            </p>
-          </Panel>
         </TabsContent>
       </Tabs>
     </Page>

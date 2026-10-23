@@ -1,27 +1,17 @@
-'use client'
+import { Suspense } from 'react'
+import { PowerDialerAnalyticsTabShell } from '@/components/power-dialer/analytics-tab-shell'
 
-import { Panel } from '@/components/app/page-primitives'
-import { AnalyticsKpiStrip, AnalyticsShell, AnalyticsTrend } from '@/components/power-dialer/analytics-range-shell'
+export const metadata = { title: 'Analytics · Power Dialer' }
 
-export default function PowerDialerAnalyticsPage() {
+export default async function PowerDialerAnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab } = await searchParams
   return (
-    <AnalyticsShell
-      title="Analytics"
-      description="Shared metric definitions with Overview and Call history."
-    >
-      {({ data }) => (
-        <>
-          <AnalyticsKpiStrip data={data} />
-          {data.usage.minutesIncluded != null && (
-            <p className="text-sm text-muted-foreground">
-              Period usage: {data.usage.minutesUsed} / {data.usage.minutesIncluded} included minutes.
-            </p>
-          )}
-          <Panel title="Daily volume">
-            <AnalyticsTrend data={data} />
-          </Panel>
-        </>
-      )}
-    </AnalyticsShell>
+    <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Loading…</p>}>
+      <PowerDialerAnalyticsTabShell initialTab={tab || 'overview'} />
+    </Suspense>
   )
 }
