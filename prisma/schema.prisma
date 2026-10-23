@@ -4609,6 +4609,8 @@ model PowerDialerSession {
   repUserId         String?
   dialSequence      Int                  @default(0)
   configJson        Json?
+  parallelStateJson Json?
+  transferStateJson Json?
   workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaign    PowerDialerCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   attempts    PowerDialerAttempt[]
@@ -4661,6 +4663,7 @@ model PowerDialerAttempt {
   acwDeadlineAt        DateTime?
   failureReason        String?
   dialedPhoneE164      String?
+  metadataJson         Json?
   createdAt            DateTime           @default(now())
   dispositionDef PowerDialerDisposition? @relation(fields: [dispositionId], references: [id], onDelete: SetNull)
   session       PowerDialerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
