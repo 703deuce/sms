@@ -23,17 +23,17 @@
 | P15 | Disposition effects by flags | disposition-effects | settings, runtime | B1 | in progress | removeFromQueue, markCompleted |
 | P16 | Require notes enforcement | session-runtime, UI | dialer | B1 | in progress | backend + UI |
 | P17 | Screening runtime | screening-runtime, AMD | dialer, settings | B1 | in progress | |
-| P18 | Number-pool UI | caller-id-resolution | campaigns | B5 | not started | |
-| P19 | Free registration guidance | number-health UI | number-health | B5 | not started | |
-| P20 | Callback routing | campaign-extended-config `callbackRoutingMode`, callbacks priority | campaigns | B4 | partial | Schema + callback priority; campaign editor routing mode UI not wired |
-| P21 | Number purchase/rep assign | Numbers integration | settings | B5 | not started | |
+| P18 | Number-pool UI | `caller-id-pool.ts`, `campaign-editor-sheet.tsx` Caller ID tab | campaigns | B5 | done | Pool checkboxes, rotation, local presence, daily cap; runtime `pickCampaignCallerId` |
+| P19 | Free registration guidance | `number-health/free-tools/page.tsx` (existing) | number-health | B5 | done | Links + honest copy; no fake registration state |
+| P20 | Callback routing | `callback-routing-runtime.ts`, `callbacks-service`, campaign editor Outcomes | campaigns | B4/B5 | done | Editor + runtime assignee/pool on create |
+| P21 | Number purchase/rep assign | `/app/numbers`, `team-settings-panel.tsx` rep assignments | settings | B5 | done | Link to Numbers + `repNumberAssignments` UI/API |
 | P22 | Frequency limits | dial-policy, eligibility, CRM settings | compliance, CRM settings | B3 | done | Workspace min gap + daily cap + area codes (`dialPolicyJson`) |
 | P23 | PD recording settings | power-dialer-recording | settings, webhooks | B1 | in progress | independent of Phone global |
-| P24 | Legal/usage notices | compliance settings | settings | B5 | not started | counsel gate |
+| P24 | Legal/usage notices | `compliance-settings-panel.tsx`, compliance GET `legalNotice` | settings | B5 | done | Counsel review gate copy; not legal advice |
 | P25 | Call source display | call-list-filters | call-history | B6 | not started | |
 | P26 | Pickup analytics | analytics-service, analytics UI | analytics | B1 | done | denominator + classification panel |
 | P27 | Real AI summaries | transcription | call-history | B6 | not started | |
-| P28 | Agent number enforcement | caller-id-resolution | team, dialer | B1 | in progress | repNumberAssignments |
+| P28 | Agent number enforcement | `caller-id-resolution.ts`, team settings | team, dialer | B1/B5 | done | `repNumberAssignments` at origination |
 | P29 | CRM writeback | crm-sync-bridge | integrations | B7 | not started | SF/Zoho/Pipedrive only |
 | M01 | Hotkeys | power-dialer-session | dialer | B1 | in progress | a11y guards |
 | M02 | Session presets | PowerDialerSessionPreset API | dialer | B1 | done | user + workspace scope |
@@ -46,7 +46,7 @@
 | M09 | Machine-filtered parallel | AMD + parallel | dialer | B8 | not started | |
 | M10 | Predictive pacing | predictive engine | campaigns | B8 | not started | gated |
 | M11 | Dynamic dialer | session-queue-add, contact-actions `add_to_queue`, dialer UI | dialer | B4 | done | Live add with eligibility message |
-| M12 | Shared team queues | team-queue-claims, session-runtime | runtime | B4 | done | Claims + round-robin ordering; live multi-agent needs PSTN smoke |
+| M12 | Shared team queues | `team-queue-claims.ts`, `caller-id-pool.advanceTeamQueuePointer`, session-runtime | runtime | B4/B5 | done | `teamQueuePointer` persisted per campaign on dial |
 | M13 | Abandoned-call handling | parallel safety | analytics | B8 | not started | |
 | M14 | Alternate-number fallthrough | phone-fallthrough, session-runtime | dialer | B2 | done | next_number/next_contact in CRM settings |
 | M15 | In-session number mgmt | contact API, UI | dialer | B1 | in progress | |
@@ -69,21 +69,36 @@
 | M31 | Live vs no-answer disposition sets | campaign-extended-config, dialer-prep, session-runtime | dialer | B4 | done | Separate set IDs + answerContext filter |
 | M32 | Disposition follow-up engine | disposition-actions, disposition-effects | runtime | B4 | done | actionsJson + triggerFollowUp executes |
 | M33 | Move/requeue lists | disposition-actions `add_to_list`/`remove_from_list` | runtime | B4 | done | |
-| M34 | Owner/tags/CRM actions | disposition-actions | runtime | B4 | partial | tag/task/owner; voicemail/CRM email actions partial |
+| M34 | Owner/tags/CRM actions | `disposition-actions.ts`, `settings-library-panels.tsx` actions JSON | runtime | B4/B5 | done | vm drop (opt-in gate), crm_note, task, deal, email/SMS |
 | M35 | Disposition SMS | disposition-messaging | runtime | B4 | done | DNC + quiet hours + sendQuickSms |
-| M36 | Disposition webhooks | — | — | B4 | not done | Deferred to M81 customer webhooks |
-| M37 | Cadences | PowerDialerCadence models, cadence-engine, API | settings | B4 | partial | Engine + API; limited admin UI |
+| M36 | Disposition webhooks | — | — | B7 | deferred | **B7 with M81** — customer webhooks |
+| M37 | Cadences | `cadence-engine.ts`, `cadences-settings-panel.tsx`, enrollments API | settings | B4/B5 | done | Builder JSON, enroll, pause/resume, per-contact list |
 | M38 | Call ratings + ACW | acw-enforcement (prior) | dialer | B1 | done | |
-| M39 | Admin scripts | scripts API (prior) | settings | B1 | partial | Assignment UI unchanged |
+| M39 | Admin scripts | `scripts/[id]` `assignmentJson`, `ScriptsLibraryPanel` team checkboxes | settings | B1/B5 | done | Team assignment on script edit |
 | M49 | Callback routing pools | callbacks-service priority/visibility/source | callbacks | B4 | done | Ordering + source column UI |
 | M74 | AI receptionist → PD | ai-callback-bridge, `/api/phone/power-dialer/ai-callbacks` | API | B4 | done | Callback/enroll with source |
-| M75 | Session email | send-email API, disposition-messaging | dialer | B4 | partial | API + settings gate; webhook provider required |
+| M75 | Session email | `lib/email/brevo.ts`, `disposition-messaging.ts` | dialer | B4/B5 | done | Brevo transactional; **gate:** `BREVO_API_KEY` + from email env |
 | M38 | Call ratings + ACW timeout | acw-enforcement, settings | dialer | B1 | done | `afterCallWorkTimeoutSec`, ratings gate |
 | M40 | Beep detection auto-drop | beep-auto-drop + AMD | dialer | B1 | done | default OFF; Telnyx machine_end_* |
 | M41 | Screening intro copy | screener-intro-playback | settings | B1 | done | truthful TTS/recorded |
 | M42 | Abandonment messages | compliance | B8 | not started | counsel |
-| M43–M53 | Numbers/reputation | number-health | number-health | B5 | not started | |
-| M54–M59 | Compliance/recording | compliance panels | settings | B5 | not started | |
+| M43 | Caller ID rotation controls | `caller-id-pool.ts`, campaign editor | campaigns | B5 | done | sticky/rotate/local_presence; anti-evasion copy |
+| M44 | Local presence | `caller-id-pool.ts` area-code match | runtime | B5 | done | Owned pool only |
+| M45 | Number pools | campaign editor pool + Numbers link | campaigns | B5 | done | Inventory via global Numbers |
+| M46 | Number health heuristics | `number-health-service.ts` `healthState` | number-health | B5 | done | Not carrier spam labels |
+| M47 | Telnyx reputation | `number-health-service.ts` `telnyxReputationStatus` | number-health | B5 | external gate | Honest when not entitled/provisioned |
+| M48 | Flag alerts / suppression | healthState + failed rate | number-health | B5 | partial | Heuristic only until M47 data |
+| M49 | Callback routing pools | (see P20) | callbacks | B4 | done | |
+| M50 | CNAM/branded caller ID | — | — | B5 | external gate | Carrier product purchase |
+| M51 | BYOC caller ID | — | — | B5 | external gate | Proof-of-control validation |
+| M52 | Role-sensitive masking | `recording-access.ts` | settings | B5 | partial | Recording roles; full masking TBD |
+| M53 | STIR/SHAKEN visibility | `number-health-service` `stirShakenAttestation` | number-health | B5 | done | Unknown when Telnyx omits |
+| M54 | FTC National DNC | compliance external DNC toggle + workspace flags | compliance | B5 | external gate | Seller SAN/provider required |
+| M55 | List consent exceptions | `list-consent.ts`, `ContactList.dialConsentJson`, compliance UI | lists | B5 | done | Attestation; no opt-out override |
+| M56 | Contact consent fields | `compliance-gates.ts`, campaign `requireExplicitConsent` | runtime | B5 | done | consentSource/consentDate |
+| M57 | Area-code allow/block | (prior B3) | campaigns | B3 | done | |
+| M58 | Pause/resume recording | `recording-controls.ts`, attempts recording API | dialer | B5 | done | Telnyx record_start/stop |
+| M59 | Abandoned metrics | `abandoned-metrics.ts`, compliance panel | compliance | B5 | partial | Metadata-driven; parallel mode B8 |
 | M60–M68 | Reporting/intelligence | analytics-service | analytics | B6 | not started | |
 | M69–M73 | Team/permissions | team-settings | settings | B6 | not started | |
 | M76 | CRM field sync | crm mappings | integrations | B7 | not started | |
@@ -135,11 +150,15 @@
 | B2b native CRM complete | `9d507f706` | `test:crm-native-b2`, `test:mini-crm-native`, `test:power-dialer-b1-carryovers` PASS; migrations `20261023200000` applied |
 | Batch3 + B2 leftovers (server) | `48be73b54` | `test:power-dialer-batch3`, `test:power-dialer-b1-carryovers` PASS; migration `20261024100000` applied |
 | Batch3 + B2 leftovers (UI) | `de58cd6aa` | Manual UI: merge wizard, folders, queue tab, campaign editor advanced, callbacks reschedule |
-| Batch4 + B3 leftovers | *(this run — see git log)* | `test:power-dialer-batch4-b3`, `test:power-dialer-batch3` PASS; migration `20261024120000` |
+| Batch4 + B3 leftovers | `8ad7caacc`, `3ec1ec3a9`, `e92a00f0c` | `test:power-dialer-batch4-b3`, `test:power-dialer-batch3` PASS; migration `20261024120000` |
+| Batch5 + B4 leftovers | `4e445fbb6`, `8f201b4d1`, `89f0b4645` | `test:power-dialer-batch5-b4`, `test:power-dialer-batch4-b3` PASS; migration `20261024140000` |
 
 ## Live verification still required
 
 - Multi-rep team queue: two agents, same campaign, confirm no duplicate contact claims under concurrent sessions.
 - Standby waterfall with real list sizes and exhausted primary.
-- Disposition-triggered SMS on production Telnyx sender (not env stub).
+- Disposition-triggered SMS on production Telnyx sender.
+- Brevo email from dialer/disposition (`BREVO_API_KEY`, `BREVO_FROM_EMAIL` or `TRANSOVO_TRANSACTIONAL_FROM_EMAIL`).
+- Recording pause/resume on live Telnyx call.
+- Multi-rep team queue + pool daily caps under real load.
 - PSTN parallel/AMD paths unchanged; warm transfer still B8/M06.
