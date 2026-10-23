@@ -5,6 +5,7 @@ import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { formatWhen } from '@/lib/format'
 
 export const metadata = { title: 'Session history · Power Dialer' }
+export const dynamic = 'force-dynamic'
 
 export default async function PowerDialerSessionHistoryPage() {
   const workspaceId = await resolveWorkspaceId()
