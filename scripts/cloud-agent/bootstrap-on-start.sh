@@ -11,6 +11,8 @@ fi
 
 # shellcheck source=scripts/cloud-agent/ensure-self-hosted-redis-env.sh
 source "$ROOT/scripts/cloud-agent/ensure-self-hosted-redis-env.sh"
+# shellcheck source=scripts/cloud-agent/ensure-local-test-database.sh
+source "$ROOT/scripts/cloud-agent/ensure-local-test-database.sh"
 
 MARKER="# transovo-self-hosted-redis (managed)"
 for rc in /home/ubuntu/.bashrc /home/ubuntu/.profile; do

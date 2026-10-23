@@ -96,6 +96,12 @@ export function applyArTestSupabaseEnvOverrides(): boolean {
 
 export function hydrateProdDatabaseUrlFromCoolify(): boolean {
   if (process.env.DATABASE_URL?.trim()) return true;
+  if (process.env.MCTB_HYDRATE_DATABASE_FROM_PROD !== "1") {
+    console.warn(
+      "[hydrate-prod-test-env] Skipping DATABASE_URL from production (set MCTB_HYDRATE_DATABASE_FROM_PROD=1 to override).",
+    );
+    return false;
+  }
   const applied = hydrateFromCoolify(["DATABASE_URL"]);
   if (applied > 0) {
     console.info(`[hydrate-prod-test-env] Loaded DATABASE_URL from production web.`);
