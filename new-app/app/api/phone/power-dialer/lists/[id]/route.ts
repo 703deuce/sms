@@ -35,6 +35,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       await archiveContactList(workspaceId, id);
       return NextResponse.json({ ok: true });
     }
+    if (body.action === "save_filters") {
+      const prisma = (await import("@/lib/server/db")).getPrisma();
+      await prisma.contactList.updateMany({
+        where: { id, workspaceId },
+        data: { filtersJson: body.filters ?? [] },
+      });
+      return NextResponse.json({ ok: true });
+    }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
     return jsonError(err, 400);
