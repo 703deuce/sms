@@ -59,6 +59,7 @@ async function main() {
         checksumPrefix: m.checksum?.slice(0, 12),
       })),
       phase4Applied: phase4Finished,
+      phase6Applied: phase6Finished,
       tables: tables.map((t) => t.table_name),
       contactListFiltersJson: filtersCol.length > 0,
       attemptPhase4Columns: attemptCols.map((c) => c.column_name),
@@ -76,7 +77,7 @@ async function main() {
         rows: dispoCount,
         defaultLabels: defaultSet?.dispositions.map((d) => d.label) ?? [],
       },
-      futureDeploySafe: phase4Finished,
+      futureDeploySafe: phase4Finished && phase6Finished,
       dispositionSeedNote:
         setCount === 0
           ? "No disposition rows yet — default set is created on first API access (ensureDefaultDispositionSet)"
@@ -94,6 +95,9 @@ async function main() {
       "power_dialer_dispositions",
       "power_dialer_scripts",
       "power_dialer_voicemail_drops",
+      "power_dialer_internal_dnc",
+      "power_dialer_compliance_audit_logs",
+      "power_dialer_integration_sync_logs",
     ];
     for (const t of requiredTables) {
       if (!report.tables.includes(t)) {
