@@ -159,7 +159,13 @@ export async function applyDispositionEffects(
 }
 
 export function isHumanConversation(disposition: string | null, classification: string | null): boolean {
-  if (classification === "screener" || classification === "voicemail" || classification === "ivr") {
+  if (
+    classification === "screener" ||
+    classification === "voicemail" ||
+    classification === "machine" ||
+    classification === "ivr" ||
+    classification === "fax"
+  ) {
     return false;
   }
   if (classification === "human") return true;

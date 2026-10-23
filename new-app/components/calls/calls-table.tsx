@@ -305,7 +305,10 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                     <>
                       <th scope="col" className="px-4 py-2.5 font-medium">Outcome</th>
                       {variant === 'power_dialer' && (
-                        <th scope="col" className="px-4 py-2.5 font-medium">Source</th>
+                        <>
+                          <th scope="col" className="px-4 py-2.5 font-medium">Source</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium">Answer</th>
+                        </>
                       )}
                       {variant === 'phone' && (
                         <>
@@ -369,24 +372,41 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                           </span>
                         </td>
                         {variant === 'power_dialer' && (
-                          <td className="px-4 py-3 text-xs">
-                            {c.callSource ? (
-                              <span className="flex flex-col gap-0.5">
-                                <span>{c.callSource.label}</span>
-                                {c.callSource.campaignId && (
-                                  <Link
-                                    href={`/app/power-dialer/campaigns/${c.callSource.campaignId}`}
-                                    className="text-primary hover:underline"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    Campaign
-                                  </Link>
-                                )}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
+                          <>
+                            <td className="px-4 py-3 text-xs">
+                              {c.callSource ? (
+                                <span className="flex flex-col gap-0.5">
+                                  <span>{c.callSource.label}</span>
+                                  {c.callSource.campaignId && (
+                                    <Link
+                                      href={`/app/power-dialer/campaigns/${c.callSource.campaignId}`}
+                                      className="text-primary hover:underline"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      Campaign
+                                    </Link>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-xs">
+                              {c.callSource?.answerClassification ? (
+                                <span className="flex flex-col gap-0.5">
+                                  <span className="capitalize">{c.callSource.answerClassification}</span>
+                                  {c.callSource.screeningDetected && (
+                                    <span className="text-muted-foreground">Screening</span>
+                                  )}
+                                  {c.callSource.amdDetectionMode && (
+                                    <span className="text-muted-foreground">AMD {c.callSource.amdDetectionMode}</span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          </>
                         )}
                         {variant === 'phone' && (
                           <>

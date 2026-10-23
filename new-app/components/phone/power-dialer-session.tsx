@@ -781,8 +781,17 @@ export function PowerDialerSessionWorkspace({
                     </span>
                     {onCall && activeCall?.startedAt && (
                       <span className="text-xs text-muted-foreground">
-                        On call · {formatDuration(Math.floor((Date.now() - activeCall.startedAt) / 1000))}
+                        {runtime?.connectionIntelligence?.label &&
+                        runtime.connectionIntelligence.phase !== 'human_connected'
+                          ? runtime.connectionIntelligence.label
+                          : 'On call'}{' '}
+                        · {formatDuration(Math.floor((Date.now() - activeCall.startedAt) / 1000))}
                       </span>
+                    )}
+                    {runtime?.connectionIntelligence?.iosScreeningDetected && (
+                      <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
+                        Call screening detected. Waiting for the recipient to accept.
+                      </p>
                     )}
                   </div>
                   <div className="flex gap-2">

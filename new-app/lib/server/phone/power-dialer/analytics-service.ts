@@ -74,7 +74,12 @@ export async function getPowerDialerAnalytics(
   for (const a of attempts) {
     if (isHumanConversation(a.disposition, a.answerClassification)) human += 1;
     if (a.answerClassification === "screener") screened += 1;
-    if (a.answerClassification === "voicemail" || a.answerClassification === "ivr" || a.answerClassification === "fax") {
+    if (
+      a.answerClassification === "voicemail" ||
+      a.answerClassification === "machine" ||
+      a.answerClassification === "ivr" ||
+      a.answerClassification === "fax"
+    ) {
       machine += 1;
     }
     if (!a.answerClassification || a.answerClassification === "uncertain" || a.answerClassification === "no_answer") {
@@ -84,7 +89,7 @@ export async function getPowerDialerAnalytics(
       answeredSignals += 1;
     }
     if (a.billableSeconds) billableSec += a.billableSeconds;
-    if (a.humanCall?.answeredAt) connected += 1;
+    if (isHumanConversation(a.disposition, a.answerClassification)) connected += 1;
     if (isHumanConversation(a.disposition, a.answerClassification)) conversations += 1;
     if (a.disposition) outcomes += 1;
     if (a.billableSeconds) talkSec += a.billableSeconds;

@@ -17,7 +17,7 @@
   {
     "eventType": "call.machine.detection.ended",
     "result": "fax_detected",
-    "expectedClassification": "voicemail"
+    "expectedClassification": "fax"
   },
   {
     "eventType": "call.machine.detection.ended",
@@ -28,5 +28,15 @@
     "eventType": "call.machine.detection.ended",
     "result": "not_sure",
     "expectedClassification": "uncertain"
+  },
+  {
+    "eventType": "call.machine.premium.detection.ended",
+    "result": "machine",
+    "expectedClassification": "machine"
+  },
+  {
+    "eventType": "call.machine.premium.call_screening.detected",
+    "result": "screening",
+    "expectedClassification": "screener"
   }
 ]

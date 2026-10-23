@@ -538,7 +538,6 @@ export async function linkHumanCallControlId(
         workspaceId,
         humanCallId: callId,
         powerDialerAttemptId: meta.powerDialerAttemptId ?? null,
-        premium: true,
       }).catch(() => undefined);
     }
   }
@@ -776,6 +775,30 @@ export async function processHumanCallWebhookEvent(input: {
       }).catch(() => undefined);
     }
   }
+  if (call.source === "power_dialer" && input.eventType === "call.answered") {
+    const attemptId = (call.metadata as { powerDialerAttemptId?: string } | null)?.powerDialerAttemptId;
+    if (attemptId) {
+      const { mergeAttemptMetadata } = await import(
+        "@/lib/server/phone/power-dialer/attempt-metadata"
+      );
+      const attempt = await prisma.powerDialerAttempt.findFirst({
+        where: { id: attemptId, workspaceId: call.workspaceId },
+      });
+      if (attempt) {
+        await prisma.powerDialerAttempt.update({
+          where: { id: attemptId },
+          data: {
+            status: "answered",
+            answeredAt: attempt.answeredAt || new Date(),
+            metadataJson: mergeAttemptMetadata(attempt.metadataJson, {
+              connectionPhase: "answer_detected",
+            }),
+          },
+        });
+      }
+    }
+  }
+
   if (
     input.eventType === "call.machine.detection.ended" ||
     input.eventType === "call.machine.premium.detection.ended"
@@ -785,12 +808,42 @@ export async function processHumanCallWebhookEvent(input: {
     );
     const idem = `${input.eventType}:${eventControlId}:${amd}`;
     const { applyAmdToPowerDialerAttempt } = await import(
-      "@/lib/server/phone/power-dialer/answer-detection"
+      "@/lib/server/phone/power-dialer/amd-webhook-handler"
     );
     await applyAmdToPowerDialerAttempt({
       workspaceId: call.workspaceId,
       humanCallId: call.id,
       amdResult: amd,
+      eventType: input.eventType,
+      idempotencyKey: idem,
+    }).catch(() => undefined);
+  }
+
+  if (input.eventType === "call.machine.premium.call_screening.detected") {
+    const result = String(input.eventPayload.result || "");
+    const idem = `${input.eventType}:${eventControlId}:${result}`;
+    const { applyScreeningDetectedToAttempt } = await import(
+      "@/lib/server/phone/power-dialer/amd-webhook-handler"
+    );
+    await applyScreeningDetectedToAttempt({
+      workspaceId: call.workspaceId,
+      humanCallId: call.id,
+      result,
+      eventType: input.eventType,
+      idempotencyKey: idem,
+    }).catch(() => undefined);
+  }
+
+  if (input.eventType === "call.machine.premium.greeting.ended") {
+    const result = String(input.eventPayload.result || "");
+    const idem = `${input.eventType}:${eventControlId}:${result}`;
+    const { applyPremiumGreetingEnded } = await import(
+      "@/lib/server/phone/power-dialer/amd-webhook-handler"
+    );
+    await applyPremiumGreetingEnded({
+      workspaceId: call.workspaceId,
+      humanCallId: call.id,
+      result,
       eventType: input.eventType,
       idempotencyKey: idem,
     }).catch(() => undefined);

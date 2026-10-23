@@ -45,6 +45,10 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
           label: dto.powerDialerSource.label,
           campaignId: dto.powerDialerSource.campaignId,
           listId: dto.powerDialerSource.listId,
+          answerClassification: dto.powerDialerSource.answerClassification,
+          screeningDetected: dto.powerDialerSource.screeningDetected,
+          screeningOutcome: dto.powerDialerSource.screeningOutcome,
+          amdDetectionMode: dto.powerDialerSource.amdDetectionMode,
         }
       : undefined,
     campaignId: dto.powerDialerSource?.campaignId,

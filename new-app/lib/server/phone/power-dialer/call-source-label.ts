@@ -17,6 +17,10 @@ export type PowerDialerCallSource = {
   campaignName?: string;
   listId?: string;
   listName?: string;
+  answerClassification?: string | null;
+  screeningDetected?: boolean;
+  screeningOutcome?: string | null;
+  amdDetectionMode?: string | null;
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -56,8 +60,11 @@ export function buildPowerDialerCallSource(input: {
   campaignName?: string | null;
   listId?: string | null;
   listName?: string | null;
+  answerClassification?: string | null;
+  attemptMetadata?: Record<string, unknown> | null;
 }): PowerDialerCallSource {
   const kind = resolveCallSourceKind(input.source, input.metadata);
+  const am = input.attemptMetadata || {};
   return {
     kind,
     label: labelForCallSource(kind),
@@ -65,5 +72,11 @@ export function buildPowerDialerCallSource(input: {
     campaignName: input.campaignName || undefined,
     listId: input.listId || undefined,
     listName: input.listName || undefined,
+    answerClassification: input.answerClassification ?? null,
+    screeningDetected:
+      input.answerClassification === "screener" || am.screeningPending === true,
+    screeningOutcome:
+      typeof am.screeningOutcome === "string" ? am.screeningOutcome : null,
+    amdDetectionMode: typeof am.amdDetectionMode === "string" ? am.amdDetectionMode : null,
   };
 }

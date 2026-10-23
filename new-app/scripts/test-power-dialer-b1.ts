@@ -5,9 +5,10 @@ import { mapTelnyxAmdResult } from "../lib/server/phone/power-dialer/answer-dete
 
 const fixtures = JSON.parse(
   readFileSync(join(import.meta.dirname, "fixtures/power-dialer-amd-webhooks.json"), "utf8"),
-) as { result: string; expectedClassification: string }[];
+) as { eventType?: string; result: string; expectedClassification: string }[];
 
 for (const f of fixtures) {
+  if (f.eventType === "call.machine.premium.call_screening.detected") continue;
   const mapped = mapTelnyxAmdResult(f.result);
   assert.equal(mapped, f.expectedClassification, `AMD map ${f.result}`);
 }

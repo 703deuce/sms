@@ -102,11 +102,21 @@ export async function buildUnifiedContactTimeline(
     }
   }
   for (const a of attempts) {
+    const meta =
+      a.metadataJson && typeof a.metadataJson === "object" && !Array.isArray(a.metadataJson)
+        ? (a.metadataJson as Record<string, unknown>)
+        : {};
+    const classLine = a.answerClassification ? `Answer: ${a.answerClassification}` : null;
+    const screeningLine =
+      a.answerClassification === "screener" || meta.screeningPending
+        ? `Screening${meta.screeningOutcome ? ` · ${meta.screeningOutcome}` : ""}`
+        : null;
+    const body = [a.disposition || a.status, classLine, screeningLine].filter(Boolean).join(" · ");
     items.push({
       id: `pd-${a.id}`,
       kind: "power_dialer_call",
       title: `Power Dialer · ${a.session.campaign.name}`,
-      body: a.disposition || a.status,
+      body,
       at: a.createdAt.toISOString(),
       href: `/app/power-dialer/call-history?attempt=${a.id}`,
     });

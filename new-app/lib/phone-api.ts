@@ -534,7 +534,20 @@ export type PowerSessionStateDto = {
     phone: string;
     company: string | null;
   }[];
-  currentAttempt?: { id: string; status: string; disposition: string | null } | null;
+  connectionIntelligence?: {
+    phase: string | null;
+    label: string | null;
+    answerClassification: string | null;
+    screeningOutcome: string | null;
+    amdDetectionMode: string | null;
+    iosScreeningDetected: boolean;
+  } | null;
+  currentAttempt?: {
+    id: string;
+    status: string;
+    disposition: string | null;
+    answerClassification?: string | null;
+  } | null;
   attempts?: {
     id: string;
     disposition: string | null;

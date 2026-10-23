@@ -417,6 +417,22 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
     nextEligible &&
     !currentAttempt;
 
+  const attemptMeta =
+    currentAttempt?.metadataJson && typeof currentAttempt.metadataJson === "object"
+      ? (currentAttempt.metadataJson as Record<string, unknown>)
+      : {};
+  const { deriveConnectionPhase, connectionPhaseLabel } = await import("./connection-intelligence");
+  const connectionPhase = currentAttempt
+    ? deriveConnectionPhase({
+        attemptStatus: currentAttempt.status,
+        humanCallStatus: null,
+        answerClassification: currentAttempt.answerClassification,
+        metadataConnectionPhase:
+          typeof attemptMeta.connectionPhase === "string" ? attemptMeta.connectionPhase : null,
+        screeningPending: attemptMeta.screeningPending === true,
+      })
+    : null;
+
   return {
     session,
     rules,
@@ -437,6 +453,18 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
       autoDialReady: dialReady,
     },
     currentAttempt,
+    connectionIntelligence: currentAttempt
+      ? {
+          phase: connectionPhase,
+          label: connectionPhase ? connectionPhaseLabel(connectionPhase) : null,
+          answerClassification: currentAttempt.answerClassification,
+          screeningOutcome:
+            typeof attemptMeta.screeningOutcome === "string" ? attemptMeta.screeningOutcome : null,
+          amdDetectionMode:
+            typeof attemptMeta.amdDetectionMode === "string" ? attemptMeta.amdDetectionMode : null,
+          iosScreeningDetected: attemptMeta.screeningPending === true || currentAttempt.answerClassification === "screener",
+        }
+      : null,
     ringTimeoutHangup:
       currentAttempt?.ringTimeoutAt && currentAttempt.ringTimeoutAt < new Date()
         ? currentAttempt.humanCallId
