@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Panel } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
+import { formatCrmOperations } from '@/lib/phone/integration-op-labels'
 
 export function PowerDialerIntegrationsList() {
   const [providers, setProviders] = useState<
@@ -31,7 +32,9 @@ export function PowerDialerIntegrationsList() {
               <Link href={`/app/power-dialer/integrations/${p.provider}`} className="font-medium capitalize hover:text-primary">
                 {p.provider}
               </Link>
-              <p className="text-xs text-muted-foreground">{p.supportedOperations.join(' · ') || 'No supported ops'}</p>
+              <p className="text-xs text-muted-foreground">
+                {p.supportedOperations.length ? formatCrmOperations(p.supportedOperations) : 'No supported operations'}
+              </p>
             </div>
             <StatusBadge tone={p.connected ? 'success' : 'muted'}>{p.status}</StatusBadge>
           </li>
