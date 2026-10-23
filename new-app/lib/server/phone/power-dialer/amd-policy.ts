@@ -113,10 +113,10 @@ export async function resolvePowerDialerAmdStartPlan(input: {
       detectionMode: "premium_ios_call_screening",
       billingTier: "premium",
       iosScreeningRequested: true,
-      iosScreeningWireActive: true,
-      iosScreeningWireStatus: "wire_active_dial_origination",
+      iosScreeningWireActive: false,
+      iosScreeningWireStatus: "requested_pending_dial_origination",
       amdStartDetectionMode: null,
-      reason: "ios_screening_on_dial_origination_pending_impl",
+      reason: "ios_screening_on_dial_origination",
     };
   }
 

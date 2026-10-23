@@ -351,6 +351,46 @@ export async function createWebRtcOutboundCall(input: {
     },
   });
 
+  if (input.source === "power_dialer" && input.powerDialerAttemptId) {
+    const { resolvePowerDialerIosOrigination } = await import(
+      "@/lib/server/phone/power-dialer/ios-origination-policy"
+    );
+    const { startPowerDialerServerIosScreeningDial } = await import(
+      "@/lib/server/phone/power-dialer/power-dialer-server-pstn-dial"
+    );
+    const iosPlan = await resolvePowerDialerIosOrigination({
+      workspaceId: input.workspaceId,
+      powerDialerAttemptId: input.powerDialerAttemptId,
+    });
+    if (iosPlan.eligible) {
+      const ringSec =
+        input.powerDialerAttemptId
+          ? (
+              await prisma.powerDialerAttempt.findFirst({
+                where: { id: input.powerDialerAttemptId, workspaceId: input.workspaceId },
+                include: { session: { include: { campaign: true } } },
+              })
+            )?.session?.campaign?.ringTimeoutSeconds ?? 30
+          : 30;
+      const dial = await startPowerDialerServerIosScreeningDial({
+        workspaceId: input.workspaceId,
+        humanCallId: call.id,
+        powerDialerAttemptId: input.powerDialerAttemptId,
+        toE164: to,
+        fromE164: from,
+        ringTimeoutSec: ringSec,
+      });
+      if (dial.ok) {
+        const refreshed = await prisma.humanCall.findUnique({ where: { id: call.id } });
+        return {
+          call: refreshed || call,
+          mode: "server_pstn_ios" as const,
+          serverPstn: dial,
+        };
+      }
+    }
+  }
+
   return { call, mode: "webrtc" as const };
 }
 
@@ -477,6 +517,18 @@ export async function finalizeWebRtcClientHangup(input: {
     });
   }
 
+  const hangMeta = (call.metadata || {}) as {
+    outboundPstnMode?: string;
+    prospectCallControlId?: string;
+  };
+  if (
+    hangMeta.outboundPstnMode === "server_ios_screening" &&
+    typeof hangMeta.prospectCallControlId === "string"
+  ) {
+    const { hangupCall } = await import("@/lib/server/phone/routing/telnyx-call-control");
+    await hangupCall(hangMeta.prospectCallControlId).catch(() => undefined);
+  }
+
   return { ok: true as const, call: updated };
 }
 
@@ -529,16 +581,34 @@ export async function linkHumanCallControlId(
     }).catch(() => undefined);
 
     if (call.source === "power_dialer" && call.direction === "outbound") {
-      const meta = (call.metadata || {}) as { powerDialerAttemptId?: string };
-      const { startPowerDialerAmdOnCallControlLeg } = await import(
-        "@/lib/server/phone/power-dialer/power-dialer-amd"
-      );
-      void startPowerDialerAmdOnCallControlLeg({
-        telnyxCallControlId: controlId,
-        workspaceId,
-        humanCallId: callId,
-        powerDialerAttemptId: meta.powerDialerAttemptId ?? null,
-      }).catch(() => undefined);
+      const meta = (call.metadata || {}) as {
+        powerDialerAttemptId?: string;
+        outboundPstnMode?: string;
+        agentCallControlId?: string;
+        browserCallControlId?: string;
+      };
+      if (meta.outboundPstnMode === "server_ios_screening") {
+        await prisma.humanCall.update({
+          where: { id: callId },
+          data: {
+            metadata: {
+              ...meta,
+              agentCallControlId: meta.agentCallControlId || controlId,
+              browserCallControlId: meta.browserCallControlId || controlId,
+            },
+          },
+        });
+      } else {
+        const { startPowerDialerAmdOnCallControlLeg } = await import(
+          "@/lib/server/phone/power-dialer/power-dialer-amd"
+        );
+        void startPowerDialerAmdOnCallControlLeg({
+          telnyxCallControlId: controlId,
+          workspaceId,
+          humanCallId: callId,
+          powerDialerAttemptId: meta.powerDialerAttemptId ?? null,
+        }).catch(() => undefined);
+      }
     }
   }
   return updated;
@@ -709,13 +779,24 @@ export async function processHumanCallWebhookEvent(input: {
   if (patch.status === "completed" && call.status !== "voicemail") patch.endedAt = new Date();
   const meta = (call.metadata || {}) as { inboundBridge?: string };
   const awaitingWebrtcBridge = meta.inboundBridge === "dial_agent";
+  const outboundServerIos =
+    call.direction === "outbound" &&
+    (metaBefore as { outboundPstnMode?: string }).outboundPstnMode === "server_ios_screening";
+  const prospectLegAnswer =
+    outboundServerIos &&
+    (clientState.kind === "pd_prospect_pstn" ||
+      eventControlId === (metaBefore as { prospectCallControlId?: string }).prospectCallControlId);
+
   if (
     input.eventType === "call.answered" &&
     !call.answeredAt &&
-    !(awaitingWebrtcBridge && clientState.kind !== "webrtc_agent_leg")
+    !(awaitingWebrtcBridge && clientState.kind !== "webrtc_agent_leg") &&
+    !(outboundServerIos && clientState.kind === "pd_webrtc_agent_leg")
   ) {
-    patch.answeredAt = new Date();
-    if (call.source === "power_dialer") {
+    if (!outboundServerIos || prospectLegAnswer) {
+      patch.answeredAt = new Date();
+    }
+    if (call.source === "power_dialer" && !(outboundServerIos && prospectLegAnswer)) {
       const { maybeStartPowerDialerRecordingOnAnswer } = await import(
         "@/lib/server/phone/power-dialer/power-dialer-recording"
       );
@@ -724,7 +805,7 @@ export async function processHumanCallWebhookEvent(input: {
         humanCallId: call.id,
         telnyxCallControlId: call.telnyxCallControlId || eventControlId,
       });
-    } else {
+    } else if (!outboundServerIos) {
       const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
       await maybeStartCallRecordingOnAnswer({
         workspaceId: call.workspaceId,

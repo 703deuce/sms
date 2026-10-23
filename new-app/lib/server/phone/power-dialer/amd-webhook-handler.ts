@@ -144,6 +144,15 @@ export async function applyAmdToPowerDialerAttempt(input: {
       classification,
       amdResult: input.amdResult,
     });
+
+    const { maybeBridgePowerDialerAgentToProspect } = await import("./power-dialer-leg-bridge");
+    await maybeBridgePowerDialerAgentToProspect({
+      workspaceId: input.workspaceId,
+      humanCallId: input.humanCallId,
+      attemptId,
+      classification,
+      reason: "amd_classification",
+    }).catch(() => undefined);
   }
   return { handled: true as const, classification };
 }
