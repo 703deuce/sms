@@ -164,7 +164,7 @@
 | Batch3 + B2 leftovers (UI) | `de58cd6aa` | Manual UI: merge wizard, folders, queue tab, campaign editor advanced, callbacks reschedule |
 | Batch4 + B3 leftovers | `8ad7caacc`, `3ec1ec3a9`, `e92a00f0c` | `test:power-dialer-batch4-b3`, `test:power-dialer-batch3` PASS; migration `20261024120000` |
 | Batch5 + B4 leftovers | `4e445fbb6`, `8f201b4d1`, `89f0b4645`, `5c4924c17` | `test:power-dialer-batch5-b4`, `test:power-dialer-batch4-b3` PASS; migration `20261024140000` |
-| Batch6 + B5 leftovers | _(see commits below)_ | `test:power-dialer-batch6` PASS; migration `20261024160000` |
+| Batch6 + B5 leftovers | `0f4103c44`, `6470d4d9e`, `068b01e57`, `e8f6e4c8d` | `test:power-dialer-batch6` PASS; migration `20261024160000` |
 
 ## Live verification still required
 
