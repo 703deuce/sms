@@ -456,6 +456,8 @@ model Workspace {
   powerDialerSessions                    PowerDialerSession[]
   powerDialerSessionPresets              PowerDialerSessionPreset[]
   powerDialerAttempts                    PowerDialerAttempt[]
+  powerDialerCadences                    PowerDialerCadence[]
+  powerDialerCadenceEnrollments          PowerDialerCadenceEnrollment[]
   crmCompanies                           CrmCompany[]
   crmDealStages                          CrmDealStage[]
   crmDeals                               CrmDeal[]
@@ -1238,6 +1240,7 @@ model Contact {
   fieldLocks           CrmFieldLock[]
   powerDialerAttempts  PowerDialerAttempt[]
   powerDialerCallbacks PowerDialerCallback[]
+  powerDialerCadenceEnrollments PowerDialerCadenceEnrollment[]
   listMembers          ContactListMember[]
   tagMembers           ContactTag[]
   consentRecords       ConsentRecord[]
@@ -4683,6 +4686,10 @@ model PowerDialerDisposition {
   setId                String
   label                String
   category             String                    @default("outcome")
+  outcomeClass         String?
+  colorHex             String?
+  hotkey               String?
+  answerContext        String                    @default("any")
   sortOrder            Int                       @default(0)
   requireNotes         Boolean                   @default(false)
   markConnected        Boolean                   @default(false)
@@ -4692,11 +4699,65 @@ model PowerDialerDisposition {
   addToDnc             Boolean                   @default(false)
   triggerCrmUpdate     Boolean                   @default(false)
   triggerFollowUp      Boolean                   @default(false)
+  actionsJson          Json?
   set                  PowerDialerDispositionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
   attempts             PowerDialerAttempt[]
 
   @@index([setId, sortOrder])
   @@map("power_dialer_dispositions")
+}
+
+model PowerDialerContactClaim {
+  id          String   @id @default(cuid())
+  workspaceId String
+  campaignId  String
+  contactId   String
+  sessionId   String
+  repUserId   String?
+  claimedAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@unique([campaignId, contactId])
+  @@index([sessionId])
+  @@index([workspaceId, expiresAt])
+  @@map("power_dialer_contact_claims")
+}
+
+model PowerDialerCadence {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  status      String   @default("active")
+  stepsJson   Json
+  stopRulesJson Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  enrollments PowerDialerCadenceEnrollment[]
+
+  @@index([workspaceId])
+  @@map("power_dialer_cadences")
+}
+
+model PowerDialerCadenceEnrollment {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  cadenceId        String
+  contactId        String
+  status           String   @default("active")
+  currentStepIndex Int      @default(0)
+  nextStepAt       DateTime?
+  pausedAt         DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  cadence          PowerDialerCadence @relation(fields: [cadenceId], references: [id], onDelete: Cascade)
+  contact          Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status, nextStepAt])
+  @@index([contactId, cadenceId])
+  @@map("power_dialer_cadence_enrollments")
 }
 
 model PowerDialerScript {
@@ -4741,6 +4802,11 @@ model PowerDialerCallback {
   timezone        String              @default("America/Chicago")
   status          String              @default("scheduled")
   assignedUserId  String?
+  visibility      String              @default("personal")
+  priority        Int                 @default(0)
+  routingPool     String?
+  source          String?
+  reminderSentAt  DateTime?
   notes           String?
   disposition     String?
   completedAt     DateTime?
