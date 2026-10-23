@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
 import { PowerDialerSessionWorkspace } from '@/components/phone/power-dialer-session'
@@ -56,10 +56,12 @@ export function PowerDialer({
         <TabsTrigger value="lists">Lists</TabsTrigger>
       </TabsList>
       <TabsContent value="session">
-        <PowerDialerSessionWorkspace
-          initialCampaignId={initialCampaignId}
-          initialFocusContactId={initialFocusContactId}
-        />
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading session…</p>}>
+          <PowerDialerSessionWorkspace
+            initialCampaignId={initialCampaignId}
+            initialFocusContactId={initialFocusContactId}
+          />
+        </Suspense>
       </TabsContent>
       <TabsContent value="campaigns"><Campaigns /></TabsContent>
       <TabsContent value="lists"><Lists /></TabsContent>

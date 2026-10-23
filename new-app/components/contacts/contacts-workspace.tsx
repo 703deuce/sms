@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { MoreHorizontal, Phone, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -40,6 +40,7 @@ function statusTone(status: string): { label: string; tone: Tone } {
 
 export function ContactsWorkspace() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<Row[]>([])
   const [total, setTotal] = useState(0)
@@ -110,6 +111,10 @@ export function ContactsWorkspace() {
   useEffect(() => {
     reloadViews()
   }, [reloadViews])
+
+  useEffect(() => {
+    if (searchParams.get('openViews') === '1') setViewsSheetOpen(true)
+  }, [searchParams])
 
   useEffect(() => {
     if (viewId || folderId) return
@@ -237,7 +242,7 @@ export function ContactsWorkspace() {
                 {v.pinned ? '★ ' : ''}{v.name}
               </button>
             ))}
-            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => setViewsSheetOpen(true)}>
+            <Button type="button" variant="outline" size="sm" className="mt-2" data-testid="contacts-manage-views" onClick={() => setViewsSheetOpen(true)}>
               Manage views
             </Button>
           </div>

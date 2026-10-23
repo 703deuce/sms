@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Page, PageHeader, Panel } from '@/components/app/page-primitives'
+import { PowerDialerCallHistorySubnav } from '@/components/power-dialer/call-history-subnav'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -36,6 +37,7 @@ export default async function PowerDialerSessionHistoryPage() {
           </Link>
         }
       />
+      <PowerDialerCallHistorySubnav />
       <Panel bodyClassName="p-0">
         <Table>
           <TableHeader>

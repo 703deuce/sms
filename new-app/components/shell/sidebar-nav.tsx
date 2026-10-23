@@ -37,7 +37,11 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
   const ContextIcon = context.icon
 
   return (
-    <nav aria-label={`${context.title} navigation`} className="flex h-full flex-col">
+    <nav
+      aria-label={`${context.title} navigation`}
+      data-shell-context={context.key}
+      className="flex h-full flex-col"
+    >
       <div className={cn('flex shrink-0 items-center gap-3 px-4 pt-4 pb-3', compact && 'justify-center px-1 pt-3 pb-2')}>
         <span
           title={compact ? context.title : undefined}
@@ -82,11 +86,14 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
               return (
                 <Link
                   key={item.href}
+                  data-testid={`nav-${item.href.replace(/^\/app\//, '').replace(/\//g, '-')}`}
                   href={item.href}
-                  onClick={() => {
+                  onPointerDown={() => {
                     if (context.key === 'power_dialer' && isSharedCrmRoute(item.href)) {
                       markPowerDialerCrm()
                     }
+                  }}
+                  onClick={() => {
                     onNavigate?.()
                   }}
                   aria-current={active ? 'page' : undefined}

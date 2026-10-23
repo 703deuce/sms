@@ -17,7 +17,7 @@ export function PowerDialerCallHistoryContent({ initialFilter }: { initialFilter
 
   const setTab = (next: string) => {
     if (next === 'sessions') {
-      router.push('/app/power-dialer/call-history/sessions')
+      window.location.assign('/app/power-dialer/call-history/sessions')
       return
     }
     const q = new URLSearchParams(searchParams.toString())

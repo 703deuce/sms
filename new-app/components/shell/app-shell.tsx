@@ -5,16 +5,25 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { WorkspaceProvider } from '@/components/providers/workspace-provider'
 import { NumbersProvider } from '@/components/providers/numbers-provider'
 import { AgentProvider } from '@/components/providers/agent-provider'
+import type { PersistedShellContext } from '@/lib/nav-shell-context'
 import { AppHeader } from './app-header'
+import { ShellContextProvider } from './shell-context-provider'
 import { SidebarNav } from './sidebar-nav'
 import { ActiveCallBar, IncomingCallBar } from './active-call-bar'
 import { cn } from '@/lib/utils'
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  initialShellContext = null,
+}: {
+  children: React.ReactNode
+  initialShellContext?: PersistedShellContext | null
+}) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
 
   return (
+    <ShellContextProvider initial={initialShellContext}>
     <WorkspaceProvider>
      <NumbersProvider>
      <AgentProvider>
@@ -46,5 +55,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
      </AgentProvider>
      </NumbersProvider>
     </WorkspaceProvider>
+    </ShellContextProvider>
   )
 }

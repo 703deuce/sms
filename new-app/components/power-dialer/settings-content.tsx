@@ -247,6 +247,9 @@ export function PowerDialerSettingsContent() {
               </label>
             </div>
           </Panel>
+          <div className="mt-6">
+            <AdvancedDialModesPanel />
+          </div>
         </TabsContent>
         <TabsContent value="recording" className="mt-6">
           <Panel title="Recording">
@@ -289,9 +292,6 @@ export function PowerDialerSettingsContent() {
               </p>
             </div>
           </Panel>
-          <div className="mt-6">
-            <AdvancedDialModesPanel />
-          </div>
         </TabsContent>
         <TabsContent value="dispositions" className="mt-6">
           <DispositionsLibraryPanel />

@@ -111,7 +111,7 @@ export function ContactsSavedViewsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full max-w-md overflow-y-auto sm:max-w-lg">
+      <SheetContent className="w-full max-w-md overflow-y-auto sm:max-w-lg" data-testid="contacts-saved-views-sheet">
         <SheetHeader>
           <SheetTitle>Saved views</SheetTitle>
         </SheetHeader>

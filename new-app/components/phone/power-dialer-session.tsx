@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Pause, Phone, Play, SkipForward } from 'lucide-react'
@@ -37,6 +38,7 @@ import { cn } from '@/lib/utils'
 import { DialerContactInlineEdit } from '@/components/phone/dialer-contact-inline-edit'
 import { DialerAppointmentDialog } from '@/components/phone/dialer-appointment-dialog'
 import { SessionPresetsSheet } from '@/components/phone/session-presets-sheet'
+import { DialerLiveControlsReference } from '@/components/phone/dialer-live-controls-reference'
 
 const DISPOSITIONS = ['Booked', 'Interested', 'Callback', 'No answer', 'Voicemail', 'Not interested', 'Wrong number', 'Do not call'] as const
 
@@ -49,6 +51,8 @@ export function PowerDialerSessionWorkspace({
   initialCampaignId,
   initialFocusContactId,
 }: { initialCampaignId?: string; initialFocusContactId?: string } = {}) {
+  const searchParams = useSearchParams()
+  const liveControlsAudit = searchParams.get('pd_audit') === 'live_controls'
   const {
     startCall,
     endCall,
@@ -77,6 +81,7 @@ export function PowerDialerSessionWorkspace({
   const [dispositionOptions, setDispositionOptions] = useState<string[]>([...DISPOSITIONS])
   const [voicemailDropReady, setVoicemailDropReady] = useState(false)
   const [appointmentOpen, setAppointmentOpen] = useState(false)
+  const [recordingPaused, setRecordingPaused] = useState(false)
   const [contactCard, setContactCard] = useState<{
     refresherNotes?: string | null
     href: string
@@ -444,6 +449,7 @@ export function PowerDialerSessionWorkspace({
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {liveControlsAudit && <DialerLiveControlsReference />}
       <div className="flex flex-col gap-6 lg:col-span-2">
         {!sessionId ? (
           <Panel title="Session setup" description="Choose a campaign, confirm eligibility, then start dialing.">
@@ -483,7 +489,7 @@ export function PowerDialerSessionWorkspace({
                     : [{ value: '', label: 'No presets yet — save one below' }]
                 }
               />
-              <Button type="button" variant="outline" size="sm" onClick={() => setPresetsOpen(true)}>Manage presets</Button>
+              <Button type="button" variant="outline" size="sm" data-testid="pd-manage-presets" onClick={() => setPresetsOpen(true)}>Manage presets</Button>
               <div className="flex flex-wrap items-end gap-2">
                 <label className="flex flex-1 flex-col gap-1 text-sm">
                   <span className="font-medium">Save preset</span>
@@ -610,12 +616,17 @@ export function PowerDialerSessionWorkspace({
             actions={
               <div className="flex gap-2">
                 {(sessionStatus === 'active' || sessionStatus === 'paused') && (
-                  <Button variant="outline" size="sm" onClick={() => void togglePause()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="pd-control-pause-session"
+                    onClick={() => void togglePause()}
+                  >
                     {paused ? <Play /> : <Pause />}
                     {paused ? 'Resume' : 'Pause'}
                   </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={() => void endSession()}>
+                <Button variant="outline" size="sm" data-testid="pd-control-end-session" onClick={() => void endSession()}>
                   End session
                 </Button>
               </div>
@@ -707,6 +718,7 @@ export function PowerDialerSessionWorkspace({
                           <button
                             type="button"
                             className="text-primary underline-offset-2 hover:underline"
+                            data-testid="pd-control-schedule-appointment"
                             onClick={() => setAppointmentOpen(true)}
                           >
                             Schedule appointment
@@ -792,19 +804,58 @@ export function PowerDialerSessionWorkspace({
                     )}
                     {onCall && (
                       <>
-                        <Button size="sm" variant="outline" type="button" onClick={() => toggleMute()}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          data-testid="pd-control-mute"
+                          onClick={() => toggleMute()}
+                        >
                           {activeCall?.muted ? 'Unmute' : 'Mute'}
                         </Button>
-                        <Button size="sm" variant="outline" type="button" onClick={() => toggleHold()}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          data-testid="pd-control-hold"
+                          onClick={() => toggleHold()}
+                        >
                           {activeCall?.onHold ? 'Resume' : 'Hold'}
                         </Button>
                       </>
+                    )}
+                    {onCall && attemptId && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        data-testid="pd-control-recording"
+                        disabled={loading}
+                        onClick={() => {
+                          const next = !recordingPaused
+                          void fetch(`/api/phone/power-dialer/attempts/${attemptId}/recording`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ paused: next }),
+                          })
+                            .then(async (r) => {
+                              const j = await r.json()
+                              if (!r.ok) throw new Error(j.error || 'Recording control failed')
+                              setRecordingPaused(next)
+                              toast.success(next ? 'Recording paused' : 'Recording resumed')
+                            })
+                            .catch((e) => toast.error(e instanceof Error ? e.message : 'Recording control failed'))
+                        }}
+                      >
+                        {recordingPaused ? 'Resume recording' : 'Pause recording'}
+                      </Button>
                     )}
                     {onCall && attemptId && voicemailDropReady && (
                       <Button
                         size="sm"
                         variant="outline"
                         disabled={loading}
+                        data-testid="pd-control-voicemail-drop"
                         onClick={() => {
                           void triggerVoicemailDrop(attemptId)
                             .then(() => {
@@ -821,6 +872,7 @@ export function PowerDialerSessionWorkspace({
                         size="sm"
                         variant="outline"
                         disabled={loading}
+                        data-testid="pd-control-live-voicemail"
                         onClick={() => {
                           void fetch(`/api/phone/power-dialer/attempts/${attemptId}/live-voicemail`, {
                             method: 'POST',
@@ -839,6 +891,7 @@ export function PowerDialerSessionWorkspace({
                     )}
                     {onCall && attemptId && transferTargets.length > 0 && (
                       <>
+                        <div data-testid="pd-control-transfer-type">
                         <SimpleSelect
                           label="Transfer type"
                           value={transferMode}
@@ -850,6 +903,7 @@ export function PowerDialerSessionWorkspace({
                           ]}
                           className="min-w-[140px]"
                         />
+                        </div>
                         <SimpleSelect
                           label="Transfer target"
                           value={transferTargetId || transferTargets[0]?.id || ''}
@@ -861,6 +915,7 @@ export function PowerDialerSessionWorkspace({
                           size="sm"
                           variant="outline"
                           disabled={!transferTargetId || loading || !attemptId}
+                          data-testid="pd-control-transfer"
                           onClick={() => {
                             const target = transferTargets.find((t) => t.id === transferTargetId)
                             if (!target || !attemptId) return
@@ -888,6 +943,7 @@ export function PowerDialerSessionWorkspace({
                               size="sm"
                               variant="outline"
                               disabled={loading || !attemptId}
+                              data-testid="pd-control-warm-complete"
                               onClick={() => {
                                 void transferPowerDialerAttempt(attemptId, { to: '', action: 'complete' })
                                   .then(() => {
@@ -933,13 +989,14 @@ export function PowerDialerSessionWorkspace({
                   </p>
                 )}
 
-                <fieldset className="flex flex-col gap-2">
+                <fieldset className="flex flex-col gap-2" data-testid="pd-control-disposition-field">
                   <legend className="mb-2 text-sm font-medium">Disposition</legend>
                   <div className="flex flex-wrap gap-2">
                     {dispositionOptions.map((d) => (
                       <button
                         key={d}
                         type="button"
+                        data-testid={d === 'Callback' ? 'pd-control-disposition' : undefined}
                         aria-pressed={disposition === d}
                         onClick={() => setDisposition(d)}
                         className={cn(
@@ -986,6 +1043,7 @@ export function PowerDialerSessionWorkspace({
                 <Button
                   className="self-end"
                   disabled={!disposition || !attemptId || loading || (ratingsRequired && !callRating)}
+                  data-testid="pd-control-save-next"
                   onClick={() => void saveAndNext()}
                 >
                   Save &amp; next

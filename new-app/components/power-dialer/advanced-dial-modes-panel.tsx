@@ -70,10 +70,15 @@ export function AdvancedDialModesPanel() {
   }
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading advanced dialing…</p>
+    return (
+      <div data-testid="pd-advanced-dial-modes">
+        <p className="text-sm text-muted-foreground">Loading advanced dialing…</p>
+      </div>
+    )
   }
 
   return (
+    <div data-testid="pd-advanced-dial-modes">
     <Panel
       title="Advanced dialing modes"
       description="Workspace administrators can enable parallel, machine-filtered parallel, and predictive modes. Campaign editors read these gates — they cannot bypass the platform kill switch."
@@ -150,5 +155,6 @@ export function AdvancedDialModesPanel() {
         <Link href="/app/power-dialer/settings?tab=dialing" className="text-primary hover:underline">Dialing settings</Link>
       </p>
     </Panel>
+    </div>
   )
 }

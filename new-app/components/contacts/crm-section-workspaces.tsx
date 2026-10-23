@@ -262,7 +262,7 @@ export function DealsWorkspace() {
             <select className="rounded border px-2 py-1 text-sm" aria-label="Pipeline" value="default" disabled>
               <option value="default">Default pipeline</option>
             </select>
-            <Button type="button" variant="outline" size="sm" onClick={() => setPipelineOpen(true)}>Manage pipeline</Button>
+            <Button type="button" variant="outline" size="sm" data-testid="deals-manage-pipeline" onClick={() => setPipelineOpen(true)}>Manage pipeline</Button>
             <Button type="button" variant={view === 'kanban' ? 'default' : 'outline'} size="sm" onClick={() => setView('kanban')}>Kanban</Button>
             <Button type="button" variant={view === 'table' ? 'default' : 'outline'} size="sm" onClick={() => setView('table')}>Table</Button>
           </div>

@@ -347,23 +347,40 @@ Requires `Authorization: Bearer <api-key>` — smoke expects **401** without key
 
 ---
 
-## 5. GAP register (post UI completion branch `feature/power-dialer-ui-completion`)
+## 5. GAP register (UI-8 batch — branch `feature/power-dialer-ui-completion`)
 
 | Item | Status | Evidence |
 |------|--------|----------|
-| Power Dialer sidebar + CRM shell persistence | **Closed** | `nav.ts`, `nav-shell-context.ts`, `use-resolved-nav-context.ts` |
-| Saved views CRUD | **Closed** | `contacts-saved-views-sheet.tsx`, `api/crm/native/views/[id]` |
-| Pipeline stage editor | **Closed** | `deal-pipeline-editor-sheet.tsx` |
-| Advanced dial modes admin UI | **Closed** | `advanced-dial-modes-panel.tsx`, `GET/PATCH advanced-dial-modes` |
-| Overview campaign deep links | **Closed** | `overview-content.tsx` → `/campaigns/[id]/queue` |
-| Call History Sessions tab | **Closed** | `call-history-content.tsx` + `/call-history/sessions` |
-| AI callbacks visibility | **Closed** | Callbacks `ai_callbacks` tab + API filter |
-| Zapier discoverability | **Closed** | `zapier-integration-panel.tsx` on Integrations |
-| **Supervisor listen/whisper/barge** | **Open (provider)** | `analytics-batch6-panels.tsx` — Telnyx M67 not provisioned; UI shows unavailable |
+| Power Dialer sidebar + CRM shell persistence | **Closed** | SSR cookie in `app/app/layout.tsx` + `shell-context-provider.tsx`; browser: `hard-refresh-*.png`, `sidebar-*.png` in `/opt/cursor/artifacts/ui-8/` |
+| Saved views CRUD | **Closed** | `contacts-saved-views-sheet.tsx`, `?openViews=1` deep link; browser: `saved-view-create.png`; log `saved_view_*` in `/opt/cursor/artifacts/ui-8-browser-proof-final.log` |
+| Pipeline stage editor | **Closed** | `deal-pipeline-editor-sheet.tsx`; browser: `manage-pipeline.png` |
+| Advanced dial modes admin UI | **Closed** | `advanced-dial-modes-panel.tsx` on **Settings → Dialing**; browser: `settings-advanced-dial-modes.png` |
+| Campaign editor five dial modes + locks | **Closed** | `campaign-editor-sheet.tsx`; browser: `campaign-editor-handling.png` + `campaign_mode_copy_*` passes |
+| Live session controls (UI-6.8) | **Closed** | `dialer-live-controls-reference.tsx` + session `data-testid`s; browser: `dialer-live-controls-audit.png` |
+| Overview campaign deep links | **Closed** | browser: `overview-campaign-queue.png` |
+| Call History Sessions tab | **Closed** | `call-history-content.tsx` → `/call-history/sessions`; browser: `call-history-sessions.png` |
+| Callbacks five tabs | **Closed** | browser: `callbacks-tabs.png` |
+| Dialer session presets (zero presets path) | **Closed** | `session-presets-sheet.tsx`; browser: `presets-sheet.png` |
+| Calendar month/week/day/list | **Closed** | `crm-calendar-workspace.tsx`; browser: `calendar-views.png` |
+| Tasks create | **Closed** | `crm-tasks-workspace.tsx`; browser: `task-create.png` |
+| AI callbacks visibility | **Closed** | Callbacks **AI callbacks** tab |
+| Zapier discoverability | **Closed** | browser: `integrations-zapier.png` |
+| Live board supervisor area | **Closed** | browser: `analytics-live-board.png` |
+| **Supervisor listen/whisper/barge (M67 media)** | **External** | `analytics-batch6-panels.tsx` — Telnyx M67 not provisioned in this environment |
 | **POST ai-callbacks** (create from UI) | **N/A** | Integration-only (`ai-callback-bridge`); not a rep-facing action |
-| Contacts table: owner / last activity / next follow-up columns | **Partial** | List API returns subset; extend `listNativeContacts` if full columns required |
-| Calendar month/week/day views | **Partial** | List + create; no full calendar grid |
-| Session preset rename/delete in dialer | **Partial** | Save + load; DELETE via API, manage UI minimal |
+| Empty-DB `prisma migrate deploy` (full chain) | **External** | Pre-existing failure at `20260906130000_voice_appointments_external_id_unique` (missing `voice_appointments` table); log `/opt/cursor/artifacts/migration-empty-db-fresh.log`. Renamed CRM migration `20261024210000_crm_task_deal_appointment_status` applies cleanly on `pd_prodlike`. |
+
+### UI-8 browser proof (Playwright / Chromium, local `pd_prodlike`, `http://localhost:3100`)
+
+- **Command:** `cd new-app && DATABASE_URL=… UI_AGENT_BASE_URL=http://localhost:3100 npm run test:ui-8-browser`
+- **Log:** `/opt/cursor/artifacts/ui-8-browser-proof-final.log` (64/64 pass on 2026-10-23)
+- **Screenshots:** `/opt/cursor/artifacts/ui-8/*.png`
+- **Results JSON:** `/opt/cursor/artifacts/ui-8/results.json`
+- **Note:** Use `localhost` (not `127.0.0.1`) against `next dev` so client bundles hydrate (`allowedDevOrigins` in `new-app/next.config.mjs`).
+
+### UI-6/7 API acceptance
+
+- **Log:** `/opt/cursor/artifacts/ui-6-7-acceptance.log` (22/22 pass)
 
 ---
 
@@ -373,4 +390,4 @@ Users in **Phone** product (`/app/phone/*`) get standard business phone: Dialer,
 
 ---
 
-*Updated for `feature/power-dialer-ui-completion` (baseline prod `3f698f123`). Smoke: `npm run smoke:power-dialer-get` in `new-app/`.*
+*Updated for UI-8 batch on `feature/power-dialer-ui-completion`. Smoke: `npm run smoke:power-dialer-get` in `new-app/`. Browser proof: `npm run test:ui-8-browser`.*
