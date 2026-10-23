@@ -4,7 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useAgent } from '@/components/providers/agent-provider'
-import { groupItems, isItemActive, resolveContext } from '@/lib/nav'
+import { groupItems, isItemActive } from '@/lib/nav'
+import { usePowerDialerCrmNavEntry, useResolvedNavContext } from '@/components/shell/use-resolved-nav-context'
+import { isSharedCrmRoute } from '@/lib/nav-shell-context'
 import {
   receptionistModeStatusCopy,
   resolveRuntimeProfile,
@@ -21,7 +23,8 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
   const pathname = usePathname()
   const { draft, live, changes, unsaved } = useAgent()
   const receptionistProfile = resolveRuntimeProfile(draft)
-  const context = resolveContext(pathname, receptionistProfile)
+  const context = useResolvedNavContext(receptionistProfile)
+  const markPowerDialerCrm = usePowerDialerCrmNavEntry()
   const receptionistMode =
     context.key === 'receptionist'
       ? receptionistModeStatusCopy({
@@ -80,7 +83,12 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={onNavigate}
+                  onClick={() => {
+                    if (context.key === 'power_dialer' && isSharedCrmRoute(item.href)) {
+                      markPowerDialerCrm()
+                    }
+                    onNavigate?.()
+                  }}
                   aria-current={active ? 'page' : undefined}
                   title={compact ? item.title : undefined}
                   className={cn(

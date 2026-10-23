@@ -29,8 +29,10 @@ import {
   ListTree,
   PhoneForwarded,
   Voicemail,
+  Kanban,
   type LucideIcon,
 } from 'lucide-react'
+import { isPowerDialerContactsNavActive } from '@/lib/nav-shell-context'
 import {
   AI_RECEPTIONIST_PRODUCT_TITLE,
   type RuntimeProfile,
@@ -53,6 +55,8 @@ export type NavItem = {
   group?: string
   /** Match nested child routes so detail pages keep their parent active. */
   exact?: boolean
+  /** Override default active detection (e.g. shared CRM routes). */
+  isActive?: (pathname: string) => boolean
 }
 
 export type NavContext = {
@@ -116,6 +120,42 @@ export function receptionistProductContext(profile: RuntimeProfile): NavContext 
   }
 }
 
+export function powerDialerNavItems(): NavItem[] {
+  return [
+    { title: 'Overview', href: '/app/power-dialer', icon: LayoutDashboard, exact: true, group: 'Calling' },
+    { title: 'Dialer', href: '/app/power-dialer/dialer', icon: Grid3x3, group: 'Calling' },
+    { title: 'Campaigns', href: '/app/power-dialer/campaigns', icon: ListChecks, group: 'Calling' },
+    { title: 'Calling Lists', href: '/app/power-dialer/calling-lists', icon: ClipboardList, group: 'Calling' },
+    {
+      title: 'Contacts',
+      href: '/app/contacts',
+      icon: Contact,
+      group: 'Sales CRM',
+      isActive: isPowerDialerContactsNavActive,
+    },
+    { title: 'Deals', href: '/app/contacts/deals', icon: Kanban, group: 'Sales CRM' },
+    { title: 'Tasks', href: '/app/contacts/tasks', icon: ListChecks, group: 'Sales CRM' },
+    { title: 'Calendar', href: '/app/contacts/calendar', icon: CalendarClock, group: 'Sales CRM' },
+    { title: 'Callbacks', href: '/app/power-dialer/callbacks', icon: CalendarClock, group: 'Activity' },
+    { title: 'Call History', href: '/app/power-dialer/call-history', icon: PhoneCall, group: 'Activity' },
+    { title: 'Number Health', href: '/app/power-dialer/number-health', icon: Hash, group: 'Activity' },
+    { title: 'Analytics', href: '/app/power-dialer/analytics', icon: BarChart3, group: 'Activity' },
+    { title: 'Integrations', href: '/app/power-dialer/integrations', icon: Plug, group: 'Configuration' },
+    { title: 'Settings', href: '/app/power-dialer/settings', icon: Settings, group: 'Configuration' },
+  ]
+}
+
+export function powerDialerProductContext(): NavContext {
+  return {
+    key: 'power_dialer',
+    title: POWER_DIALER_PRODUCT_TITLE,
+    shortTitle: 'Power Dialer',
+    href: POWER_DIALER_PRODUCT_HREF,
+    icon: Headset,
+    items: powerDialerNavItems(),
+  }
+}
+
 export const PRODUCTS: NavContext[] = [
   {
     key: 'phone',
@@ -140,29 +180,7 @@ export const PRODUCTS: NavContext[] = [
     ],
   },
   receptionistProductContext('conversational_ivr'),
-  ...(POWER_DIALER_UI_ENABLED
-    ? [
-        {
-          key: 'power_dialer' as const,
-          title: POWER_DIALER_PRODUCT_TITLE,
-          shortTitle: 'Power Dialer',
-          href: POWER_DIALER_PRODUCT_HREF,
-          icon: Headset,
-          items: [
-            { title: 'Overview', href: '/app/power-dialer', icon: LayoutDashboard, exact: true, group: 'Workspace' },
-            { title: 'Dialer', href: '/app/power-dialer/dialer', icon: Grid3x3, group: 'Calling' },
-            { title: 'Campaigns', href: '/app/power-dialer/campaigns', icon: ListChecks, group: 'Calling' },
-            { title: 'Calling Lists', href: '/app/power-dialer/calling-lists', icon: ClipboardList, group: 'Calling' },
-            { title: 'Callbacks', href: '/app/power-dialer/callbacks', icon: CalendarClock, group: 'Activity' },
-            { title: 'Call History', href: '/app/power-dialer/call-history', icon: PhoneCall, group: 'Activity' },
-            { title: 'Number Health', href: '/app/power-dialer/number-health', icon: Hash, group: 'Insights' },
-            { title: 'Analytics', href: '/app/power-dialer/analytics', icon: BarChart3, group: 'Insights' },
-            { title: 'Integrations', href: '/app/power-dialer/integrations', icon: Plug, group: 'Manage' },
-            { title: 'Settings', href: '/app/power-dialer/settings', icon: Settings, group: 'Manage' },
-          ],
-        },
-      ]
-    : []),
+  ...(POWER_DIALER_UI_ENABLED ? [powerDialerProductContext()] : []),
   ...(MCTB_UI_ENABLED
     ? [
         {
@@ -205,6 +223,7 @@ export const ALL_CONTEXTS: NavContext[] = [...PRODUCTS, WORKSPACE]
 export function resolveContext(
   pathname: string,
   receptionistProfile?: RuntimeProfile,
+  options?: { shellContext?: ContextKey | null },
 ): NavContext {
   if (pathname === '/app/receptionist' || pathname.startsWith('/app/receptionist/')) {
     return receptionistProductContext(receptionistProfile ?? 'conversational_ivr')
@@ -212,10 +231,19 @@ export function resolveContext(
   const product = PRODUCTS.find(
     (p) => pathname === p.href || pathname.startsWith(`${p.href}/`),
   )
-  return product ?? WORKSPACE
+  if (product) return product
+
+  const onSharedCrm =
+    pathname === '/app/contacts' || pathname.startsWith('/app/contacts/')
+  if (onSharedCrm && POWER_DIALER_UI_ENABLED && options?.shellContext === 'power_dialer') {
+    return powerDialerProductContext()
+  }
+
+  return WORKSPACE
 }
 
 export function isItemActive(item: NavItem, pathname: string) {
+  if (item.isActive) return item.isActive(pathname)
   if (item.exact) return pathname === item.href
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
 }

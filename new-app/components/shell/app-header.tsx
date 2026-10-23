@@ -26,7 +26,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAgent } from '@/components/providers/agent-provider'
-import { PRODUCTS, resolveContext } from '@/lib/nav'
+import { PRODUCTS } from '@/lib/nav'
+import { useResolvedNavContext, useWorkspaceContactsNavEntry } from '@/components/shell/use-resolved-nav-context'
 import { resolveRuntimeProfile } from '@/lib/receptionist/runtime-profile'
 import { BUSINESS, THREADS } from '@/lib/data'
 import { cn } from '@/lib/utils'
@@ -47,7 +48,8 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { draft } = useAgent()
-  const context = resolveContext(pathname, resolveRuntimeProfile(draft))
+  const context = useResolvedNavContext(resolveRuntimeProfile(draft))
+  const markWorkspaceContacts = useWorkspaceContactsNavEntry()
   const unread = THREADS.filter((t) => t.unread).length
 
   return (
@@ -143,6 +145,9 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
                   render={
                     <Link
                       href={u.href}
+                      onClick={() => {
+                        if (u.href === '/app/contacts') markWorkspaceContacts()
+                      }}
                       aria-current={active ? 'page' : undefined}
                       className={cn(
                         buttonVariants({ variant: 'ghost', size: 'icon' }),
@@ -181,7 +186,13 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
             <DropdownMenuGroup>
               <DropdownMenuLabel>Workspace</DropdownMenuLabel>
               {UTILITIES.map((u) => (
-                <DropdownMenuItem key={u.href} onClick={() => router.push(u.href)}>
+                <DropdownMenuItem
+                  key={u.href}
+                  onClick={() => {
+                    if (u.href === '/app/contacts') markWorkspaceContacts()
+                    router.push(u.href)
+                  }}
+                >
                   <u.icon />
                   {u.title}
                   {u.title === 'Inbox' && <span className="ml-auto text-xs text-muted-foreground">{unread}</span>}
