@@ -422,14 +422,29 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
       ? (currentAttempt.metadataJson as Record<string, unknown>)
       : {};
   const { deriveConnectionPhase, connectionPhaseLabel } = await import("./connection-intelligence");
+  const iosWireActive = attemptMeta.iosScreeningWireActive === true;
+  const screenerPhaseAllowed =
+    iosWireActive &&
+    (attemptMeta.screeningPending === true || currentAttempt?.answerClassification === "screener");
+  const metadataPhase =
+    typeof attemptMeta.connectionPhase === "string" ? attemptMeta.connectionPhase : null;
+  const gatedMetadataPhase =
+    metadataPhase &&
+    (metadataPhase === "screening_detected" || metadataPhase === "waiting_for_recipient") &&
+    !iosWireActive
+      ? null
+      : metadataPhase;
+
   const connectionPhase = currentAttempt
     ? deriveConnectionPhase({
         attemptStatus: currentAttempt.status,
         humanCallStatus: null,
-        answerClassification: currentAttempt.answerClassification,
-        metadataConnectionPhase:
-          typeof attemptMeta.connectionPhase === "string" ? attemptMeta.connectionPhase : null,
-        screeningPending: attemptMeta.screeningPending === true,
+        answerClassification:
+          currentAttempt.answerClassification === "screener" && !iosWireActive
+            ? null
+            : currentAttempt.answerClassification,
+        metadataConnectionPhase: gatedMetadataPhase,
+        screeningPending: screenerPhaseAllowed && attemptMeta.screeningPending === true,
       })
     : null;
 
@@ -462,10 +477,9 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
             typeof attemptMeta.screeningOutcome === "string" ? attemptMeta.screeningOutcome : null,
           amdDetectionMode:
             typeof attemptMeta.amdDetectionMode === "string" ? attemptMeta.amdDetectionMode : null,
-          iosScreeningDetected:
-            attemptMeta.iosScreeningWireActive === true &&
-            (attemptMeta.screeningPending === true ||
-              currentAttempt.answerClassification === "screener"),
+          iosScreeningRequested: attemptMeta.iosScreeningRequested === true,
+          iosScreeningWireActive: iosWireActive,
+          iosScreeningDetected: screenerPhaseAllowed,
           iosScreeningWireStatus:
             typeof attemptMeta.iosScreeningWireStatus === "string"
               ? attemptMeta.iosScreeningWireStatus

@@ -12,6 +12,7 @@ import {
 } from "../lib/server/phone/power-dialer/answer-classification";
 import { pickBridgeWinner, assertParallelWinnerEligible } from "../lib/server/phone/power-dialer/parallel-orchestrator";
 import { deriveConnectionPhase, connectionPhaseLabel } from "../lib/server/phone/power-dialer/connection-intelligence";
+import { buildPowerDialerCallSource } from "../lib/server/phone/power-dialer/call-source-label";
 import { isHumanConversation } from "../lib/server/phone/power-dialer/disposition-effects";
 
 const fixtures = JSON.parse(
@@ -60,6 +61,20 @@ const phase = deriveConnectionPhase({
 assert.equal(phase, "waiting_for_recipient");
 assert.ok(connectionPhaseLabel(phase).includes("Waiting"));
 console.log("connection phases: PASS");
+
+const withoutWire = buildPowerDialerCallSource({
+  source: "power_dialer",
+  answerClassification: "screener",
+  attemptMetadata: { screeningPending: true, iosScreeningWireActive: false },
+});
+assert.equal(withoutWire.screeningDetected, false);
+const withWire = buildPowerDialerCallSource({
+  source: "power_dialer",
+  answerClassification: "screener",
+  attemptMetadata: { screeningPending: true, iosScreeningWireActive: true },
+});
+assert.equal(withWire.screeningDetected, true);
+console.log("call history screening flags: PASS");
 
 const amdSrc = readFileSync(
   join(import.meta.dirname, "../lib/server/phone/power-dialer/power-dialer-amd.ts"),

@@ -130,6 +130,10 @@ export function AdvancedDialModesPanel() {
           />
           Premium answering-machine detection
         </label>
+        <p className="text-xs text-muted-foreground">
+          Premium AMD powers parallel machine filtering and human vs voicemail classification. Apple iOS Call
+          Screening detection is a separate Telnyx dial-origination capability (Phase 2).
+        </p>
         <label className="text-sm">
           Max parallel lines
           <Input

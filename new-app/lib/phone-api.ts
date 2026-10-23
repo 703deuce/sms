@@ -540,7 +540,10 @@ export type PowerSessionStateDto = {
     answerClassification: string | null;
     screeningOutcome: string | null;
     amdDetectionMode: string | null;
+    iosScreeningRequested: boolean;
+    iosScreeningWireActive: boolean;
     iosScreeningDetected: boolean;
+    iosScreeningWireStatus: string | null;
   } | null;
   currentAttempt?: {
     id: string;

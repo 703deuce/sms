@@ -75,8 +75,17 @@ All passed in implementation environment. No live PSTN / Telnyx account tests.
 - Telnyx account must support Premium AMD (billable).
 - Apple iOS screening requires `premium_ios_call_screening_detection` on dial/transfer (Phase 2) or explicit Telnyx confirmation for AMD-start on WebRTC legs.
 
-## H. Deployment readiness
+## H. Phase 1 deployment readiness (approved scope)
 
-**Ready for controlled merge/live test:** parallel machine filter, premium AMD, screening policy execution, CRM/UI, analytics — without Apple screening SLA.
+| Capability | Status on branch |
+|------------|------------------|
+| Premium AMD human/machine | Ready |
+| Parallel machine filtering | Ready |
+| Screening policy execution (when provider events exist) | Ready |
+| CRM, call history, analytics | Ready |
+| Apple iOS screening detection | **Not wired** — Phase 2 dial-origination |
+| Number Reputation / Branded Calling | Out of scope |
 
-**Not production-ready without Phase 2:** Apple iOS Call Screening detection on outbound dials. See `docs/POWER-DIALER-TELNYX-IOS-SCREENING-INTEGRATION-PATH.md`. Do not merge/deploy Apple screening as a shipped guarantee until dial-origination or Telnyx AMD-start confirmation + live smoke.
+**Merge recommendation:** Phase 1 on `cursor/intelligent-connections-9779` is ready for merge and deploy after review. UI and attempt flags do not claim Apple iOS detection on the WebRTC path.
+
+**Phase 2:** Separate work — server-originated PSTN with `premium_ios_call_screening_detection`; see integration path doc constraints (single leg, no premature bridge, preserve five dial modes).

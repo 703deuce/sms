@@ -63,14 +63,27 @@ Source: [Call machine premium call screening detected](https://developers.telnyx
 - Persist `iosScreeningRequested` vs `iosScreeningWireActive` on attempts so UI/analytics do not over-promise.
 - **Merge-ready for:** parallel machine filter, premium AMD, screening runtime, CRM/history — **not** for Apple screening SLA.
 
-### Phase 2 — Controlled live test (Telnyx + product)
+### Phase 2 — Server PSTN origination (separate branch)
 
-1. Ask Telnyx support: does `answering_machine_detection_start` support iOS screening on legs created by WebRTC Credential Connection?
-2. If **yes**: document exact `detection_mode` / body; enable wire-active flag; one iPhone screening smoke.
-3. If **no**: implement **server PSTN origination** for screening-enabled workspaces only:
-   - Reuse `dialPstnLeg` in `telnyx-call-control.ts` (`link_to`, `bridge_on_answer`) pattern from inbound bridge.
-   - `POST /v2/calls` with `answering_machine_detection: "premium_ios_call_screening_detection"` + shared `client_state` / attempt correlation.
-   - Agent audio via existing WebRTC leg (avoid double-dialing callee — likely **replace** browser `newCall` to PSTN with server-originated PSTN + WebRTC agent leg, similar to inbound-webrtc-bridge inverted).
+Implement **documented** `POST /v2/calls` with `premium_ios_call_screening_detection` for screening-enabled attempts only; agent audio stays on existing WebRTC. Telnyx support can confirm account eligibility in parallel — not a blocker to engineering.
+
+**Non-negotiable constraints:**
+
+1. **One PSTN leg per attempt** — disable browser `newCall` to the prospect when the server originates PSTN; never double-dial.
+2. **No premature bridging** — treat answer ≠ human; defer agent bridge until post-screening AMD / policy allows (especially Apple screening assistant).
+3. **Five dialing modes unchanged** — power, parallel, parallel_amd, predictive, preview/manual paths keep current behavior; screening-enabled workspaces opt into server origination without regressing standard dialing.
+
+**Implementation sketch:**
+
+- Reuse `dialPstnLeg` in `telnyx-call-control.ts` (`link_to`, `bridge_on_answer`) from inbound bridge patterns.
+- Set `iosScreeningWireActive` + `iosScreeningWireStatus: wire_active_dial_origination` when dial body includes iOS screening mode.
+- Enable via `POWER_DIALER_IOS_SCREENING_DIAL_ORIGINATION=1` after implementation (flag exists; behavior pending).
+
+### Phase 2 — Controlled live test
+
+1. iPhone with Apple Call Screening on; workspace screening + premium AMD entitled.
+2. Confirm webhook sequence per Telnyx AMD iOS docs.
+3. Confirm attempt metadata, no confirmed human until post-screening `human_*`, no double PSTN legs in Telnyx debugger.
 
 ### Phase 3 — Optional product fallback
 

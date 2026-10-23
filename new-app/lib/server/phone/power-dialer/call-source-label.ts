@@ -74,7 +74,8 @@ export function buildPowerDialerCallSource(input: {
     listName: input.listName || undefined,
     answerClassification: input.answerClassification ?? null,
     screeningDetected:
-      input.answerClassification === "screener" || am.screeningPending === true,
+      am.iosScreeningWireActive === true &&
+      (input.answerClassification === "screener" || am.screeningPending === true),
     screeningOutcome:
       typeof am.screeningOutcome === "string" ? am.screeningOutcome : null,
     amdDetectionMode: typeof am.amdDetectionMode === "string" ? am.amdDetectionMode : null,
