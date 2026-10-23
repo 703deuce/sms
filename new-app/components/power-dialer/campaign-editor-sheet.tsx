@@ -328,7 +328,12 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
               onChange={setDialingMode}
               options={dialModeOptions.map((o) => ({
                 value: o.value,
-                label: o.disabled ? `${o.label} (locked)` : o.label,
+                label:
+                  o.disabled && o.hint
+                    ? `${o.label} — ${o.hint}`
+                    : o.disabled
+                      ? `${o.label} (locked)`
+                      : o.label,
               }))}
             />
             {dialModeOptions.find((o) => o.value === dialingMode && o.disabled)?.hint && (
@@ -336,6 +341,15 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
                 {dialModeOptions.find((o) => o.value === dialingMode)?.hint}
               </p>
             )}
+            <ul className="mt-2 space-y-1 text-xs text-muted-foreground" aria-label="Dial mode requirements">
+              {dialModeOptions
+                .filter((o) => o.disabled && o.hint)
+                .map((o) => (
+                  <li key={o.value}>
+                    <span className="font-medium text-foreground">{o.label}:</span> {o.hint}
+                  </li>
+                ))}
+            </ul>
             {(dialingMode === 'parallel' || dialingMode === 'parallel_amd' || dialingMode === 'predictive') && (
               <>
                 <label className="text-sm">Lines per agent (2–5)

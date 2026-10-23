@@ -19,6 +19,7 @@ export function PowerDialerComplianceSettingsPanel() {
   const [lists, setLists] = useState<ListRow[]>([])
   const [legalNotice, setLegalNotice] = useState('')
   const [externalDnc, setExternalDnc] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [abandoned, setAbandoned] = useState<
     Record<
       string,
@@ -33,9 +34,13 @@ export function PowerDialerComplianceSettingsPanel() {
   >({})
 
   const load = useCallback(() => {
+    setLoadError(null)
     void fetch('/api/phone/power-dialer/compliance')
-      .then((r) => r.json())
-      .then((j) => {
+      .then(async (r) => {
+        const j = await r.json()
+        if (!r.ok || j.error) {
+          throw new Error(typeof j.error === 'string' ? j.error : `Could not load compliance (${r.status})`)
+        }
         setDnc(j.data?.internalDnc || [])
         setAckAt(j.data?.settings?.complianceAcknowledgedAt || null)
         setAudit(j.data?.audit || [])
@@ -44,6 +49,7 @@ export function PowerDialerComplianceSettingsPanel() {
         setExternalDnc(Boolean(j.data?.externalDncConnected))
         setAbandoned(j.data?.abandonedByCampaign || {})
       })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : 'Could not load compliance'))
   }, [])
 
   useEffect(() => {
@@ -95,8 +101,13 @@ export function PowerDialerComplianceSettingsPanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      {loadError && (
+        <p className="text-sm text-destructive" role="alert">{loadError}</p>
+      )}
       <Panel title="Legal & usage (P24)" description="Not legal advice — counsel review required before commercial enablement.">
-        <p className="text-sm text-muted-foreground">{legalNotice || 'Loading…'}</p>
+        <p className="text-sm text-muted-foreground">
+          {loadError ? 'Compliance data could not be loaded.' : legalNotice || (loadError ? '' : 'Loading…')}
+        </p>
       </Panel>
       <Panel title="Admin acknowledgement" description="Required before the first power-dialer session can start.">
         <p className="mb-3 text-sm text-muted-foreground">

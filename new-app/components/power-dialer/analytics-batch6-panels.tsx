@@ -146,9 +146,15 @@ export function LiveBoardPanel() {
   useEffect(() => {
     const tick = () => {
       void fetch('/api/phone/power-dialer/analytics/live-board')
-        .then((r) => r.json())
-        .then((j) => setRows(j.data || []))
-        .catch(() => setError('Could not load live board'))
+        .then(async (r) => {
+          const j = await r.json()
+          if (!r.ok || j.error) {
+            throw new Error(typeof j.error === 'string' ? j.error : 'Could not load live board')
+          }
+          setError(null)
+          setRows(j.data || [])
+        })
+        .catch((e) => setError(e instanceof Error ? e.message : 'Could not load live board'))
     }
     tick()
     const id = setInterval(tick, 15_000)
@@ -196,9 +202,15 @@ export function ScheduledReportsPanel() {
 
   const load = () => {
     void fetch('/api/phone/power-dialer/analytics/scheduled-reports')
-      .then((r) => r.json())
-      .then((j) => setRows(j.data || []))
-      .catch(() => undefined)
+      .then(async (r) => {
+        const j = await r.json()
+        if (!r.ok || j.error) {
+          throw new Error(typeof j.error === 'string' ? j.error : 'Could not load scheduled reports')
+        }
+        setGate(null)
+        setRows(j.data || [])
+      })
+      .catch((e) => setGate(e instanceof Error ? e.message : 'Could not load scheduled reports'))
   }
 
   useEffect(() => {

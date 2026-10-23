@@ -524,7 +524,9 @@ export function ScriptsLibraryPanel() {
           <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} aria-label="Script body" />
           <Button className="self-start" onClick={() => void saveNew()}>Add script</Button>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">Preview: {renderScriptPreview(body)}</p>
+        <p className="mt-4 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Example preview</span> (sample merge data): {renderScriptPreview(body)}
+        </p>
       </Panel>
       <Panel title="Saved scripts">
         <ul className="space-y-3 text-sm">
@@ -570,7 +572,7 @@ export function ScriptsLibraryPanel() {
             <DialogTitle>{previewScript?.name} — preview</DialogTitle>
           </DialogHeader>
           <p className="whitespace-pre-wrap text-sm">{previewScript ? renderScriptPreview(previewScript.body) : ''}</p>
-          <p className="text-xs text-muted-foreground">Sample merge data: Ada, Alex, Acme Co.</p>
+          <p className="text-xs text-muted-foreground">Example preview using sample merge data (Ada, Alex, Acme Co.). Live calls use the contact and rep on the session.</p>
         </DialogContent>
       </Dialog>
       <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>

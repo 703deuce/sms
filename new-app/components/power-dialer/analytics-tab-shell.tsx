@@ -187,10 +187,10 @@ export function PowerDialerAnalyticsTabShell({ initialTab = 'overview' }: { init
           options={TABS.map((t) => ({ value: t.value, label: t.label }))}
         />
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {!data ? (
+      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      {!data && !error ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : (
+      ) : !data ? null : (
         <>
           {tab === 'overview' && (
             <>

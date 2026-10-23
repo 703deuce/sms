@@ -28,14 +28,33 @@ async function crmSend<T>(path: string, method: string, body?: unknown): Promise
   return j.data as T
 }
 
+function CrmLoadError({ message }: { message: string | null }) {
+  if (!message) return null
+  return (
+    <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+      {message}
+    </p>
+  )
+}
+
 export function CompaniesWorkspace() {
   const [rows, setRows] = useState<{ id: string; name: string; _count: { contacts: number; deals: number } }[]>([])
   const [q, setQ] = useState('')
   const [name, setName] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const load = useCallback(() => {
+    setLoadError(null)
     void crmGet<typeof rows>(`/api/crm/native/companies?q=${encodeURIComponent(q)}`)
-      .then(setRows)
-      .catch((e) => toast.error(e instanceof Error ? e.message : 'Load failed'))
+      .then((data) => {
+        setRows(data)
+        setLoadError(null)
+      })
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : 'Load failed'
+        setLoadError(msg)
+        setRows([])
+        toast.error(msg)
+      })
   }, [q])
   useEffect(() => {
     load()
@@ -43,6 +62,7 @@ export function CompaniesWorkspace() {
   return (
     <Page>
       <PageHeader title="Companies" description="Accounts linked to contacts and deals." />
+      <CrmLoadError message={loadError} />
       <Panel title="Add company">
         <div className="flex flex-wrap gap-2">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Company name" aria-label="Company name" />
@@ -63,7 +83,9 @@ export function CompaniesWorkspace() {
         </div>
       </Panel>
       <Panel title="All companies">
-        {!rows.length ? (
+        {loadError ? (
+          <p className="text-sm text-muted-foreground">Fix the error above and refresh the page.</p>
+        ) : !rows.length ? (
           <EmptyState icon={Building2} title="No companies yet" description="Create a company or link one from a contact." />
         ) : (
           <Table>
@@ -149,13 +171,22 @@ export function DealsWorkspace() {
   const [stages, setStages] = useState<{ id: string; name: string }[]>([])
   const [deals, setDeals] = useState<DealRow[]>([])
   const [view, setView] = useState<'kanban' | 'table'>('kanban')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const load = useCallback(() => {
+    setLoadError(null)
     void crmGet<{ stages: typeof stages; deals: DealRow[] }>('/api/crm/native/deals')
       .then((d) => {
         setStages(d.stages)
         setDeals(d.deals)
+        setLoadError(null)
       })
-      .catch((e) => toast.error(e.message))
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : 'Load failed'
+        setLoadError(msg)
+        setStages([])
+        setDeals([])
+        toast.error(msg)
+      })
   }, [])
   useEffect(() => {
     load()
@@ -187,7 +218,10 @@ export function DealsWorkspace() {
           </div>
         }
       />
-      {view === 'kanban' ? (
+      <CrmLoadError message={loadError} />
+      {loadError ? (
+        <p className="text-sm text-muted-foreground">Fix the error above and refresh the page.</p>
+      ) : view === 'kanban' ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {stages.map((s) => (
             <div key={s.id} className="min-w-[240px] rounded-lg border bg-card p-3">
@@ -248,8 +282,20 @@ export function DealsWorkspace() {
 export function TasksWorkspace() {
   const [bucket, setBucket] = useState<'due' | 'overdue' | 'upcoming' | 'done'>('due')
   const [tasks, setTasks] = useState<{ id: string; title: string; dueAt: string | null; status: string; contact: { id: string } | null }[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
   const load = useCallback(() => {
-    void crmGet<typeof tasks>(`/api/crm/native/tasks?bucket=${bucket}`).then(setTasks).catch((e) => toast.error(e.message))
+    setLoadError(null)
+    void crmGet<typeof tasks>(`/api/crm/native/tasks?bucket=${bucket}`)
+      .then((data) => {
+        setTasks(data)
+        setLoadError(null)
+      })
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : 'Load failed'
+        setLoadError(msg)
+        setTasks([])
+        toast.error(msg)
+      })
   }, [bucket])
   useEffect(() => {
     load()
@@ -257,6 +303,7 @@ export function TasksWorkspace() {
   return (
     <Page>
       <PageHeader title="Tasks & follow-ups" description="Due, overdue, upcoming, and completed tasks." />
+      <CrmLoadError message={loadError} />
       <div className="mb-4 flex flex-wrap gap-2">
         {(['due', 'overdue', 'upcoming', 'done'] as const).map((b) => (
           <Button key={b} type="button" size="sm" variant={bucket === b ? 'default' : 'outline'} onClick={() => setBucket(b)}>
@@ -265,7 +312,9 @@ export function TasksWorkspace() {
         ))}
       </div>
       <Panel title="Tasks">
-        {!tasks.length ? (
+        {loadError ? (
+          <p className="text-sm text-muted-foreground">Fix the error above and refresh the page.</p>
+        ) : !tasks.length ? (
           <EmptyState icon={CheckSquare} title="No tasks" description="Add a task from a contact or the dialer." />
         ) : (
           <ul className="space-y-2 text-sm">
@@ -290,8 +339,20 @@ export function TasksWorkspace() {
 export function CalendarWorkspace() {
   const [rows, setRows] = useState<{ id: string; title: string; startsAt: string; contact: { id: string } | null }[]>([])
   const [title, setTitle] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const load = useCallback(() => {
-    void crmGet<typeof rows>('/api/crm/native/appointments').then(setRows).catch((e) => toast.error(e.message))
+    setLoadError(null)
+    void crmGet<typeof rows>('/api/crm/native/appointments')
+      .then((data) => {
+        setRows(data)
+        setLoadError(null)
+      })
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : 'Load failed'
+        setLoadError(msg)
+        setRows([])
+        toast.error(msg)
+      })
   }, [])
   useEffect(() => {
     load()
@@ -315,6 +376,7 @@ export function CalendarWorkspace() {
   return (
     <Page>
       <PageHeader title="Calendar" description="Week-style list of CRM appointments." />
+      <CrmLoadError message={loadError} />
       <Panel title="Schedule">
         <div className="flex gap-2">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Appointment title" aria-label="Title" />
@@ -339,9 +401,18 @@ export function CrmSettingsWorkspace() {
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
   const [fields, setFields] = useState<{ id: string; key: string; label: string; fieldType: string }[]>([])
   const [newField, setNewField] = useState({ key: '', label: '', fieldType: 'text' })
+  const [loadError, setLoadError] = useState<string | null>(null)
   useEffect(() => {
-    void crmGet<Record<string, unknown>>('/api/crm/native/settings').then(setSettings).catch(() => undefined)
-    void crmGet<typeof fields>('/api/crm/native/custom-fields').then(setFields).catch(() => undefined)
+    setLoadError(null)
+    void crmGet<Record<string, unknown>>('/api/crm/native/settings')
+      .then(setSettings)
+      .catch((e) => setLoadError(e instanceof Error ? e.message : 'Could not load CRM settings'))
+    void crmGet<typeof fields>('/api/crm/native/custom-fields')
+      .then(setFields)
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : 'Could not load custom fields'
+        setLoadError((prev) => prev || msg)
+      })
   }, [])
   const saveSettings = () => {
     if (!settings) return
@@ -360,6 +431,7 @@ export function CrmSettingsWorkspace() {
   return (
     <Page>
       <PageHeader title="CRM settings" description="Custom fields, international dial rules, inbound contact automation, team scopes." />
+      <CrmLoadError message={loadError} />
       <Panel title="Custom fields">
         <ul className="mb-3 space-y-1 text-sm">
           {fields.map((f) => (

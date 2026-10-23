@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/server/db";
+import { ensureInternalOperatorMembership } from "@/lib/server/workspace-operator";
 
 /**
  * Until product auth ships: pin workspace via env or bootstrap the first workspace row.
@@ -8,14 +9,20 @@ export async function resolveWorkspaceId(): Promise<string> {
     process.env.DEV_WORKSPACE_ID?.trim() ||
     process.env.TRANSOVO_WORKSPACE_ID?.trim() ||
     process.env.WORKSPACE_ID?.trim();
-  if (pinned) return pinned;
+  if (pinned) {
+    await ensureInternalOperatorMembership(pinned);
+    return pinned;
+  }
 
   const prisma = getPrisma();
   const existing = await prisma.workspace.findFirst({
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });
-  if (existing) return existing.id;
+  if (existing) {
+    await ensureInternalOperatorMembership(existing.id);
+    return existing.id;
+  }
 
   const slug = process.env.TRANSOVO_WORKSPACE_SLUG?.trim() || "main";
   const created = await prisma.workspace.create({
@@ -26,5 +33,6 @@ export async function resolveWorkspaceId(): Promise<string> {
     },
     select: { id: true },
   });
+  await ensureInternalOperatorMembership(created.id);
   return created.id;
 }

@@ -44,13 +44,18 @@ export function ContactsWorkspace() {
   const [views, setViews] = useState<{ id: string; name: string; pinned: boolean }[]>([])
   const [mergeOpen, setMergeOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const reload = useCallback(() => {
     setLoading(true)
+    setLoadError(null)
     const nativeUrl = `/api/crm/native/contacts?q=${encodeURIComponent(query)}&page=1&pageSize=100${viewId ? `&viewId=${viewId}` : ''}${folderId ? `&folderId=${folderId}` : ''}`
     void fetch(nativeUrl)
-      .then((r) => r.json())
-      .then((j) => {
+      .then(async (r) => {
+        const j = await r.json()
+        if (!r.ok || j.error) {
+          throw new Error(typeof j.error === 'string' ? j.error : `Could not load contacts (${r.status})`)
+        }
         if (j.data?.contacts) {
           setRows(
             j.data.contacts.map((c: { id: string; name: string; phone: string; email: string | null; company: string | null; status: string; createdAt: string }) => ({
@@ -71,7 +76,13 @@ export function ContactsWorkspace() {
           setTotal(data.total)
         })
       })
-      .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not load contacts'))
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : 'Could not load contacts'
+        setLoadError(msg)
+        setRows([])
+        setTotal(0)
+        toast.error(msg)
+      })
       .finally(() => setLoading(false))
   }, [query, viewId, folderId])
 
@@ -153,6 +164,11 @@ export function ContactsWorkspace() {
           </div>
         }
       />
+      {loadError && (
+        <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+          {loadError}
+        </p>
+      )}
       <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
         <Panel title="Folders" className="h-fit">
           <ContactsFolderTree selectedFolderId={folderId} onSelectFolder={setFolderId} onFoldersChange={reload} />
@@ -178,6 +194,8 @@ export function ContactsWorkspace() {
       >
         {loading ? (
           <p className="p-6 text-sm text-muted-foreground">Loading contacts…</p>
+        ) : loadError ? (
+          <p className="p-6 text-sm text-muted-foreground">Fix the error above and try again.</p>
         ) : rows.length === 0 ? (
           <div className="p-6">
             <EmptyState

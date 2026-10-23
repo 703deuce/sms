@@ -53,9 +53,16 @@ export function usePowerDialerAnalytics(range: '7d' | '30d' | '90d') {
   const [data, setData] = useState<AnalyticsPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
+    setError(null)
+    setData(null)
     void fetch(`/api/phone/power-dialer/analytics?range=${range}`)
-      .then((r) => r.json())
-      .then((j) => setData(j.data))
+      .then(async (r) => {
+        const j = await r.json()
+        if (!r.ok || j.error) {
+          throw new Error(typeof j.error === 'string' ? j.error : `Request failed (${r.status})`)
+        }
+        setData(j.data as AnalyticsPayload)
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed'))
   }, [range])
   return { data, error }
@@ -76,8 +83,8 @@ export function AnalyticsShell({
     <Page>
       <PageHeader title={title} description={description} actions={<RangeSelect value={range} onChange={setRange} />} />
       <PowerDialerAnalyticsNav />
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {data ? children({ data, range }) : <p className="text-sm text-muted-foreground">Loading…</p>}
+      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      {data ? children({ data, range }) : error ? null : <p className="text-sm text-muted-foreground">Loading…</p>}
     </Page>
   )
 }
