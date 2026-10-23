@@ -788,6 +788,12 @@ export function PowerDialerSessionWorkspace({
                         · {formatDuration(Math.floor((Date.now() - activeCall.startedAt) / 1000))}
                       </span>
                     )}
+                    {runtime?.connectionIntelligence?.iosScreeningWireActive &&
+                      !runtime?.connectionIntelligence?.iosScreeningDetected && (
+                        <p className="text-xs text-muted-foreground" role="status">
+                          Apple screening detection active on this call (server-originated PSTN).
+                        </p>
+                      )}
                     {runtime?.connectionIntelligence?.iosScreeningDetected && (
                       <p className="text-xs text-amber-800 dark:text-amber-200" role="status">
                         Call screening detected. Waiting for the recipient to accept.

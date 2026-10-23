@@ -63,9 +63,9 @@ Source: [Call machine premium call screening detected](https://developers.telnyx
 - Persist `iosScreeningRequested` vs `iosScreeningWireActive` on attempts so UI/analytics do not over-promise.
 - **Merge-ready for:** parallel machine filter, premium AMD, screening runtime, CRM/history — **not** for Apple screening SLA.
 
-### Phase 2 — Server PSTN origination (separate branch)
+### Phase 2 — Server PSTN origination (branch `cursor/ios-screening-dial-origination-9779`)
 
-Implement **documented** `POST /v2/calls` with `premium_ios_call_screening_detection` for screening-enabled attempts only; agent audio stays on existing WebRTC. Telnyx support can confirm account eligibility in parallel — not a blocker to engineering.
+Implemented: **documented** `POST /v2/calls` with `premium_ios_call_screening_detection` when `POWER_DIALER_IOS_SCREENING_DIAL_ORIGINATION=1` and screening + premium AMD are enabled (power/preview single-line only; parallel/predictive keep WebRTC). Agent audio via server-dialed WebRTC SIP leg; **no `bridge_on_answer`**; manual bridge after confirmed human via `maybeBridgePowerDialerAgentToProspect`. `iosScreeningWireActive` is set only after Telnyx returns a prospect `call_control_id` (dial accepted — not detection, not human acceptance).
 
 **Non-negotiable constraints:**
 

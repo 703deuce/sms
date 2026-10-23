@@ -107,6 +107,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const telnyxClientRef = useRef<unknown>(null)
   const telnyxCallRef = useRef<unknown>(null)
+  const serverIosOutboundRef = useRef<{
+    humanCallId: string
+    name: string
+    number: string
+    callerId: string
+    source: ActiveCall['source']
+  } | null>(null)
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
   const activeWebrtcIdRef = useRef<string | null>(null)
   const activeCallRef = useRef<ActiveCall | null>(null)
@@ -398,6 +405,29 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             idempotencyKey,
           })
           const humanCallId = reg.call.id
+          if (reg.mode === 'server_pstn_ios') {
+            serverIosOutboundRef.current = {
+              humanCallId,
+              name,
+              number,
+              callerId,
+              source: source || 'power_dialer',
+            }
+            setActiveCall({
+              id: `server-ios-${humanCallId}`,
+              humanCallId,
+              name,
+              number,
+              callerId,
+              status: 'connecting',
+              muted: false,
+              onHold: false,
+              source: source || 'power_dialer',
+              startedAt: undefined,
+            })
+            return
+          }
+          serverIosOutboundRef.current = null
           const client = telnyxClientRef.current as {
             newCall: (opts: {
               destinationNumber: string
@@ -528,27 +558,43 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       telnyxCallRef.current = liveCall
       activeWebrtcIdRef.current = inc.webrtcId
       inboundSdkCallRef.current = liveCall
+      const pendingIos = serverIosOutboundRef.current
+      const isPdAgentLeg =
+        pendingIos?.humanCallId === humanCallId ||
+        (humanCallId && pendingIos?.humanCallId === humanCallId)
       setActiveCall({
         id: inc.webrtcId,
         humanCallId: humanCallId || inc.webrtcId,
-        name: displayFrom,
-        number: displayFrom,
-        callerId: inc.to,
+        name: isPdAgentLeg && pendingIos ? pendingIos.name : displayFrom,
+        number: isPdAgentLeg && pendingIos ? pendingIos.number : displayFrom,
+        callerId: isPdAgentLeg && pendingIos ? pendingIos.callerId : inc.to,
         status: 'connecting',
         muted: false,
         onHold: false,
-        source: 'inbound',
-        direction: 'inbound',
+        source: isPdAgentLeg && pendingIos ? pendingIos.source : 'inbound',
+        direction: isPdAgentLeg ? 'outbound' : 'inbound',
         webrtcId: inc.webrtcId,
       })
       setIncomingCall(null)
       setIncomingAnswering(false)
       if (humanCallId) {
-        void registerInboundAnswer(humanCallId, inc.webrtcId).catch(() => undefined)
-        void linkCallControl({ humanCallId, webrtcCallId: inc.webrtcId }).catch(() => undefined)
+        if (isPdAgentLeg) {
+          void linkCallControl({ humanCallId, webrtcCallId: inc.webrtcId }).catch(() => undefined)
+          serverIosOutboundRef.current = null
+        } else {
+          void registerInboundAnswer(humanCallId, inc.webrtcId).catch(() => undefined)
+          void linkCallControl({ humanCallId, webrtcCallId: inc.webrtcId }).catch(() => undefined)
+        }
       }
     })()
   }, [incomingCall, incomingAnswering])
+
+  useEffect(() => {
+    const pending = serverIosOutboundRef.current
+    if (!pending || !incomingCall?.humanCallId || incomingAnswering) return
+    if (incomingCall.humanCallId !== pending.humanCallId) return
+    answerIncoming()
+  }, [incomingCall, incomingAnswering, answerIncoming])
 
   const rejectIncoming = useCallback(() => {
     const inc = incomingCall

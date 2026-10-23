@@ -125,7 +125,11 @@ export async function registerOutboundCall(body: Record<string, unknown>) {
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || res.statusText);
-  return json.data as { call: { id: string; from: string; to: string }; mode: string };
+  return json.data as {
+    call: { id: string; from: string; to: string };
+    mode: "webrtc" | "server_pstn_ios";
+    serverPstn?: { ok: boolean; prospectCallControlId?: string };
+  };
 }
 
 export async function linkCallControl(body: Record<string, unknown>) {

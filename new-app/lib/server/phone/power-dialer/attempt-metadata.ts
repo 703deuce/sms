@@ -24,6 +24,14 @@ export type AttemptMetadata = {
   iosScreeningRequested?: boolean;
   iosScreeningWireActive?: boolean;
   iosScreeningWireStatus?: string;
+  iosScreeningDialAcceptedAt?: string;
+  iosScreeningDialError?: string;
+  outboundPstnMode?: string;
+  prospectCallControlId?: string;
+  agentCallControlId?: string;
+  agentProspectBridged?: boolean;
+  agentProspectBridgedAt?: string;
+  bridgeReason?: string;
   iosPromptEndedAt?: string;
   screeningNotifyRep?: boolean;
   screeningAction?: string;

@@ -11,16 +11,34 @@ export async function GET() {
     const recent = await prisma.humanCall.findMany({
       where: {
         workspaceId,
-        direction: "inbound",
-        status: { in: ["ringing", "initiated", "queued"] },
+        status: { in: ["ringing", "initiated", "queued", "in_progress"] },
+        OR: [
+          { direction: "inbound" },
+          {
+            direction: "outbound",
+            source: "power_dialer",
+          },
+        ],
       },
       orderBy: { startedAt: "desc" },
-      take: 5,
+      take: 8,
     });
 
     const call = recent.find((row) => {
-      const meta = (row.metadata || {}) as { inboundBridge?: string; inboundBridgeStatus?: string };
-      return meta.inboundBridge === "dial_agent" && meta.inboundBridgeStatus !== "bridged";
+      const meta = (row.metadata || {}) as {
+        inboundBridge?: string;
+        inboundBridgeStatus?: string;
+        outboundAgentLeg?: string;
+        outboundAgentLegStatus?: string;
+      };
+      if (meta.inboundBridge === "dial_agent" && meta.inboundBridgeStatus !== "bridged") {
+        return true;
+      }
+      return (
+        row.direction === "outbound" &&
+        meta.outboundAgentLeg === "dial_agent" &&
+        meta.outboundAgentLegStatus !== "bridged"
+      );
     });
 
     if (!call) {
@@ -36,12 +54,19 @@ export async function GET() {
       ? [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.company
       : null;
 
+    const displayFrom =
+      call.direction === "outbound" && call.to ? call.to : call.from;
+
     return NextResponse.json({
       data: {
         humanCallId: call.id,
-        fromE164: call.from,
-        callerName,
+        fromE164: displayFrom,
+        callerName:
+          call.direction === "outbound"
+            ? callerName || "Power dialer"
+            : callerName,
         startedAt: call.startedAt.toISOString(),
+        outboundPowerDialerAgentLeg: call.direction === "outbound",
       },
     });
   } catch (err) {
