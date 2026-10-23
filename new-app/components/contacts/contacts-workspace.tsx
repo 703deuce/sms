@@ -13,9 +13,11 @@ import { SearchInput } from '@/components/app/filters'
 import { StatusBadge, type Tone } from '@/components/app/status'
 import { deleteContactApi, fetchContactsPage } from '@/lib/phone-api'
 import { formatPhone, formatWhen } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { ContactsActions } from '@/components/contacts/contacts-table'
 import { ContactsFolderTree } from '@/components/contacts/contacts-folder-tree'
 import { ContactMergeWizard } from '@/components/contacts/contact-merge-wizard'
+import { ContactsSavedViewsSheet } from '@/components/contacts/contacts-saved-views-sheet'
 
 type Row = {
   id: string
@@ -43,6 +45,7 @@ export function ContactsWorkspace() {
   const [folderId, setFolderId] = useState('')
   const [views, setViews] = useState<{ id: string; name: string; pinned: boolean }[]>([])
   const [mergeOpen, setMergeOpen] = useState(false)
+  const [viewsSheetOpen, setViewsSheetOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -86,12 +89,16 @@ export function ContactsWorkspace() {
       .finally(() => setLoading(false))
   }, [query, viewId, folderId])
 
-  useEffect(() => {
+  const reloadViews = useCallback(() => {
     void fetch('/api/crm/native/views')
       .then((r) => r.json())
       .then((j) => setViews(j.data || []))
       .catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    reloadViews()
+  }, [reloadViews])
 
   useEffect(() => {
     const t = window.setTimeout(reload, query ? 250 : 0)
@@ -170,8 +177,46 @@ export function ContactsWorkspace() {
         </p>
       )}
       <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
-        <Panel title="Folders" className="h-fit">
+        <Panel title="All contacts" className="h-fit">
+          <div className="mb-3 flex flex-col gap-1 text-sm">
+            <button
+              type="button"
+              className={cn(
+                'rounded-md px-2 py-1.5 text-left',
+                !folderId && !viewId ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+              )}
+              onClick={() => {
+                setFolderId('')
+                setViewId('')
+              }}
+            >
+              All contacts
+            </button>
+          </div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Folders</p>
           <ContactsFolderTree selectedFolderId={folderId} onSelectFolder={setFolderId} onFoldersChange={reload} />
+          <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Saved views</p>
+          <div className="flex flex-col gap-1">
+            {views.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                className={cn(
+                  'rounded-md px-2 py-1.5 text-left text-sm',
+                  viewId === v.id ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted',
+                )}
+                onClick={() => {
+                  setViewId(v.id)
+                  setFolderId('')
+                }}
+              >
+                {v.pinned ? '★ ' : ''}{v.name}
+              </button>
+            ))}
+            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => setViewsSheetOpen(true)}>
+              Manage views
+            </Button>
+          </div>
         </Panel>
       <Panel
         bodyClassName="p-0"
@@ -288,6 +333,14 @@ export function ContactsWorkspace() {
       </Panel>
       </div>
       <ContactMergeWizard open={mergeOpen} onOpenChange={setMergeOpen} onMerged={reload} />
+      <ContactsSavedViewsSheet
+        open={viewsSheetOpen}
+        onOpenChange={setViewsSheetOpen}
+        views={views}
+        onViewsChange={reloadViews}
+        activeViewId={viewId}
+        onSelectView={setViewId}
+      />
     </Page>
   )
 }

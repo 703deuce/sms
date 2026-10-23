@@ -461,6 +461,16 @@ export async function upsertSavedView(
   });
 }
 
+export async function deleteSavedView(workspaceId: string, viewId: string) {
+  await assertCrmWrite(workspaceId);
+  const prisma = getPrisma();
+  const deleted = await prisma.contactSavedView.deleteMany({
+    where: { id: viewId, workspaceId },
+  });
+  if (deleted.count === 0) throw new Error("View not found");
+  return { ok: true };
+}
+
 export async function reassignContactOwner(
   workspaceId: string,
   contactId: string,

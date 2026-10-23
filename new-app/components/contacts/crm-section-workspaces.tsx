@@ -9,6 +9,8 @@ import { EmptyState, Page, PageHeader, Panel } from '@/components/app/page-primi
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Building2, CheckSquare } from 'lucide-react'
 import { formatWhen } from '@/lib/format'
+import { DealPipelineEditorSheet } from '@/components/contacts/deal-pipeline-editor-sheet'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 async function crmGet<T>(path: string): Promise<T> {
   const r = await fetch(path)
@@ -171,6 +173,9 @@ export function DealsWorkspace() {
   const [stages, setStages] = useState<{ id: string; name: string }[]>([])
   const [deals, setDeals] = useState<DealRow[]>([])
   const [view, setView] = useState<'kanban' | 'table'>('kanban')
+  const [pipelineOpen, setPipelineOpen] = useState(false)
+  const [dealTitle, setDealTitle] = useState('')
+  const [search, setSearch] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
   const load = useCallback(() => {
     setLoadError(null)
@@ -191,19 +196,37 @@ export function DealsWorkspace() {
   useEffect(() => {
     load()
   }, [load])
+  const filteredDeals = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return deals
+    return deals.filter((d) => d.title.toLowerCase().includes(q))
+  }, [deals, search])
   const byStage = useMemo(() => {
     const m = new Map<string, DealRow[]>()
     for (const s of stages) m.set(s.id, [])
-    for (const d of deals) {
+    for (const d of filteredDeals) {
       const list = m.get(d.stageId) || []
       list.push(d)
       m.set(d.stageId, list)
     }
     return m
-  }, [deals, stages])
+  }, [filteredDeals, stages])
   const moveStage = (dealId: string, stageId: string) => {
     void crmSend(`/api/crm/native/deals/${dealId}`, 'PATCH', { stageId })
       .then(load)
+      .catch((e) => toast.error(e.message))
+  }
+  const addDeal = () => {
+    const stageId = stages[0]?.id
+    if (!stageId || !dealTitle.trim()) {
+      toast.error('Enter a deal name')
+      return
+    }
+    void crmSend('/api/crm/native/deals', 'POST', { title: dealTitle.trim(), stageId })
+      .then(() => {
+        setDealTitle('')
+        load()
+      })
       .catch((e) => toast.error(e.message))
   }
   return (
@@ -212,12 +235,20 @@ export function DealsWorkspace() {
         title="Deals"
         description="Pipeline with kanban stage moves and table view."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search deals" aria-label="Search deals" className="max-w-[180px]" />
+            <Button type="button" variant="outline" size="sm" onClick={() => setPipelineOpen(true)}>Manage pipeline</Button>
             <Button type="button" variant={view === 'kanban' ? 'default' : 'outline'} size="sm" onClick={() => setView('kanban')}>Kanban</Button>
             <Button type="button" variant={view === 'table' ? 'default' : 'outline'} size="sm" onClick={() => setView('table')}>Table</Button>
           </div>
         }
       />
+      <Panel title="Add deal" className="mb-4">
+        <div className="flex flex-wrap gap-2">
+          <Input value={dealTitle} onChange={(e) => setDealTitle(e.target.value)} placeholder="Deal name" aria-label="Deal name" />
+          <Button type="button" onClick={addDeal}>Add deal</Button>
+        </div>
+      </Panel>
       <CrmLoadError message={loadError} />
       {loadError ? (
         <p className="text-sm text-muted-foreground">Fix the error above and refresh the page.</p>
@@ -263,7 +294,7 @@ export function DealsWorkspace() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deals.map((d) => (
+              {filteredDeals.map((d) => (
                 <TableRow key={d.id}>
                   <TableCell>{d.title}</TableCell>
                   <TableCell>{stages.find((s) => s.id === d.stageId)?.name}</TableCell>
@@ -275,6 +306,7 @@ export function DealsWorkspace() {
           </Table>
         </Panel>
       )}
+      <DealPipelineEditorSheet open={pipelineOpen} onOpenChange={setPipelineOpen} onSaved={load} />
     </Page>
   )
 }
@@ -402,6 +434,8 @@ export function CrmSettingsWorkspace() {
   const [fields, setFields] = useState<{ id: string; key: string; label: string; fieldType: string }[]>([])
   const [newField, setNewField] = useState({ key: '', label: '', fieldType: 'text' })
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [pipelineOpen, setPipelineOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState('general')
   useEffect(() => {
     setLoadError(null)
     void crmGet<Record<string, unknown>>('/api/crm/native/settings')
@@ -430,8 +464,24 @@ export function CrmSettingsWorkspace() {
   }
   return (
     <Page>
-      <PageHeader title="CRM settings" description="Custom fields, international dial rules, inbound contact automation, team scopes." />
+      <PageHeader title="CRM settings" description="General workspace CRM defaults, custom fields, deal pipelines, and dial rules." />
       <CrmLoadError message={loadError} />
+      <Tabs value={settingsTab} onValueChange={(v) => setSettingsTab(v ?? 'general')}>
+        <TabsList>
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="fields">Custom fields</TabsTrigger>
+          <TabsTrigger value="pipelines">Pipelines</TabsTrigger>
+          <TabsTrigger value="dial">Dial &amp; inbound</TabsTrigger>
+        </TabsList>
+        <TabsContent value="general" className="mt-4">
+          {settings && (
+            <Panel title="General">
+              <p className="text-sm text-muted-foreground">Country defaults and team scopes are stored with your workspace CRM profile.</p>
+              <Button type="button" className="mt-3" onClick={saveSettings}>Save general settings</Button>
+            </Panel>
+          )}
+        </TabsContent>
+        <TabsContent value="fields" className="mt-4">
       <Panel title="Custom fields">
         <ul className="mb-3 space-y-1 text-sm">
           {fields.map((f) => (
@@ -461,6 +511,14 @@ export function CrmSettingsWorkspace() {
           </Button>
         </div>
       </Panel>
+        </TabsContent>
+        <TabsContent value="pipelines" className="mt-4">
+          <Panel title="Deal pipelines">
+            <p className="mb-3 text-sm text-muted-foreground">Stages are shared across all deals in this workspace.</p>
+            <Button type="button" onClick={() => setPipelineOpen(true)}>Manage pipeline stages</Button>
+          </Panel>
+        </TabsContent>
+        <TabsContent value="dial" className="mt-4">
       {settings && (
         <Panel title="Dial & inbound">
           <div className="grid gap-3 max-w-lg">
@@ -547,6 +605,9 @@ export function CrmSettingsWorkspace() {
           </div>
         </Panel>
       )}
+        </TabsContent>
+      </Tabs>
+      <DealPipelineEditorSheet open={pipelineOpen} onOpenChange={setPipelineOpen} onSaved={() => undefined} />
     </Page>
   )
 }
