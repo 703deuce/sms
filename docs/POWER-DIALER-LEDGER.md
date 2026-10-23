@@ -16,13 +16,13 @@ Last updated: Phase 8 (2026-10-23).
 
 | # | Item | Implementation | Tests | Verify |
 |---|------|----------------|-------|--------|
-| 1a | Contacts + list detail remove/delete | `GET/DELETE /api/contacts`; `ContactsWorkspace` (real API); list detail Remove + Delete; `deleteOrArchiveContact`; archived campaigns excluded from “Used in” | `test:power-dialer-phase8` | Browser after deploy |
+| 1a | Contacts + list detail remove/delete | `GET/DELETE /api/contacts`; `ContactsWorkspace` (real API); list detail Remove + Delete; `deleteOrArchiveContact`; archived campaigns excluded from “Used in” | `test:power-dialer-phase8` | Code on prod; UI spot-check pending John |
 | 1b | Ada/Bob DB cleanup | SSH SQL on prod `ws_1` — see report below | — | Done (2 rows deleted) |
 | 2 | Dispositions “Add outcome” focus + toast | `useEffect` focus after expand; toast on add | — | Browser after deploy |
 | 3 | “Used in” archived campaigns | `status: { not: "archived" }` on list detail + lists API | — | Browser after deploy |
 | 4 | Scripts copy + tab labels | Call handling alignment; Voicemail Drops / Call Screening / Usage & Subscription | — | Browser after deploy |
 | 5 | Plain-language settings copy | VM drops, screening, usage panels | — | Browser after deploy |
-| 6a | CRM OAuth 405 | GET → 400; `CrmOAuthConnectButton` POST | `test:power-dialer-phase8` | Browser after deploy |
+| 6a | CRM OAuth 405 | GET → 400; `CrmOAuthConnectButton` POST | `test:power-dialer-phase8` | No GET 405 during scripts test |
 | 6b | Receptionist/inbox 502 | Coolify logs: no app errors; 502 likely deploy/cold start | — | `/api/receptionist` 200 post-deploy |
 | 7 | Scripts “Set default” | Existing PATCH `isDefault` | — | **Browser verified** on prod (`2cbe7bf`) |
 
@@ -87,8 +87,7 @@ Result: `DELETE 2` members, `DELETE 2` contacts; remaining count for those phone
 
 ### Could not verify (this agent pass)
 
-- Prod browser: Scripts set default + delete throwaway script (awaiting Phase 8 deploy + auth).
-- Prod browser: Contacts search, list remove/delete UI (awaiting deploy).
+- Prod browser: Contacts search, list remove/delete UI (John quick pass).
 - Transient **502** on `_rsc` during deploy — no matching errors in app logs after container warm; treat as cold start unless reproduced on stable SHA.
 
 ## Phase 7 (historical)
