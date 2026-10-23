@@ -12,6 +12,7 @@ import { parseExtendedConfig } from "./campaign-extended-config";
 import { parseCampaignAdvanced } from "./campaign-advanced";
 import { checkWorkspacePhoneFrequency, getWorkspaceDialPolicy } from "./dial-policy";
 import { sortCampaignQueueMembers } from "./queue-order";
+import type { QueueMemberRow } from "./standby-queue";
 import { resolveDispositionByLabel } from "./dispositions";
 import type {
   AnswerClassification,
@@ -181,9 +182,10 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
   };
 
   let nextEligible: {
-    contact: (typeof session.campaign.list.members)[number]["contact"];
+    contact: QueueMemberRow["contact"];
     attemptNumber: number;
     eligibility: EligibilityResult;
+    dialE164: string;
   } | null = null;
 
   let nextEligibleAt: string | null = null;

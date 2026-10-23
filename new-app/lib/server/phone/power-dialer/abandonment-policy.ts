@@ -16,13 +16,16 @@ export const DEFAULT_ABANDONMENT_POLICY: AbandonmentPolicy = {
   policyMessageRequired: true,
 };
 
-export type AbandonmentSnapshot = {
+export type AbandonmentCounts = {
   abandonedCount: number;
   connectedCount: number;
+};
+
+export type AbandonmentSnapshot = AbandonmentCounts & {
   ratePct: number;
 };
 
-export function computeAbandonRate(snapshot: AbandonmentSnapshot): number | null {
+export function computeAbandonRate(snapshot: AbandonmentCounts): number | null {
   const total = snapshot.abandonedCount + snapshot.connectedCount;
   if (total <= 0) return null;
   return Math.round((snapshot.abandonedCount / total) * 1000) / 10;
@@ -30,7 +33,7 @@ export function computeAbandonRate(snapshot: AbandonmentSnapshot): number | null
 
 export function evaluateAbandonmentSafeguards(
   policy: AbandonmentPolicy,
-  snapshot: AbandonmentSnapshot,
+  snapshot: AbandonmentCounts,
 ): {
   autoThrottle: boolean;
   hardStop: boolean;

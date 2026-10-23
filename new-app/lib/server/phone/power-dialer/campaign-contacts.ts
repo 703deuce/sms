@@ -95,7 +95,7 @@ async function mapMembersToRows(
       bucket: eligibility.bucket,
       reason: eligibility.reason,
       reasonLabel: reasonToUserMessage(eligibility.reason),
-      retryEligibleAt: eligibility.retryEligibleAt?.toISOString() ?? null,
+      retryEligibleAt: eligibility.retryEligibleAt ?? null,
       attemptCount: attempts.filter((a) => a.endedAt || a.disposition).length,
       latestDisposition: latest?.disposition ?? null,
       latestStatus: latest?.status ?? null,

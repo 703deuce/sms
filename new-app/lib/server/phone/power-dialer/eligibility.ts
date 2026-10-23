@@ -12,6 +12,8 @@ import type {
   PowerDialerCampaignRules,
 } from "./types";
 
+export type { EligibilityResult } from "./types";
+
 const TERMINAL_DISPOSITIONS = new Set([
   "booked",
   "not interested",

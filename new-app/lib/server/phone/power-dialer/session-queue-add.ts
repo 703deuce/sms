@@ -52,11 +52,25 @@ export async function addContactToActiveSessionQueue(
   const ctx = await loadCampaignEligibilityContext(session.campaign);
   const campaignAttempts = await prisma.powerDialerAttempt.findMany({
     where: { workspaceId, contactId, session: { campaignId: session.campaignId } },
-    select: { status: true, disposition: true, attemptNumber: true, createdAt: true, endedAt: true },
+    select: {
+      contactId: true,
+      status: true,
+      disposition: true,
+      attemptNumber: true,
+      createdAt: true,
+      endedAt: true,
+    },
   });
   const sessAttempts = await prisma.powerDialerAttempt.findMany({
     where: { sessionId, contactId },
-    select: { status: true, disposition: true, attemptNumber: true, createdAt: true, endedAt: true },
+    select: {
+      contactId: true,
+      status: true,
+      disposition: true,
+      attemptNumber: true,
+      createdAt: true,
+      endedAt: true,
+    },
   });
   const eligibility = await evaluateListMemberEligibility({
     workspaceId,

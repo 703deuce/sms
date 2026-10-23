@@ -59,8 +59,8 @@ export async function applyCustomFieldsFromImport(
     if (raw === undefined || raw === null || raw === "") continue;
     const data =
       def.fieldType === "number"
-        ? { valueNumber: Number(raw), valueText: null, valueJson: null }
-        : { valueText: String(raw), valueNumber: null, valueJson: null };
+        ? { valueNumber: Number(raw), valueText: null }
+        : { valueText: String(raw), valueNumber: null };
     await prisma.crmCustomFieldValue.upsert({
       where: { contactId_fieldId: { contactId, fieldId: def.id } },
       create: { contactId, fieldId: def.id, ...data },
@@ -83,10 +83,8 @@ export async function setContactCustomFieldValue(
   if (!field) throw new Error("Custom field not found");
   const data =
     field.fieldType === "number"
-      ? { valueNumber: Number(value), valueText: null, valueJson: null }
-      : field.fieldType === "select"
-        ? { valueText: String(value), valueNumber: null, valueJson: null }
-        : { valueText: String(value), valueNumber: null, valueJson: null };
+      ? { valueNumber: Number(value), valueText: null }
+      : { valueText: String(value), valueNumber: null };
   return prisma.crmCustomFieldValue.upsert({
     where: { contactId_fieldId: { contactId, fieldId: field.id } },
     create: { contactId, fieldId: field.id, ...data },

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
+import { User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -103,7 +104,7 @@ export function ContactDetailWorkspace({ contactId }: { contactId: string }) {
   if (!data) {
     return (
       <Page>
-        <EmptyState title="Contact not found" description="This record may have been removed." />
+        <EmptyState icon={User} title="Contact not found" description="This record may have been removed." />
       </Page>
     )
   }
@@ -119,25 +120,35 @@ export function ContactDetailWorkspace({ contactId }: { contactId: string }) {
         eyebrow={<StatusBadge tone="info">{data.status}</StatusBadge>}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" asChild>
-              <Link href={`/app/power-dialer/dialer?focusContact=${data.id}`}>Dial</Link>
+            <Button type="button" size="sm" render={<Link href={`/app/power-dialer/dialer?focusContact=${data.id}`} />}>
+              Dial
             </Button>
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href={`/app/phone/dialer?to=${encodeURIComponent(data.phone)}`}>Quick call</Link>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              render={<Link href={`/app/phone/dialer?to=${encodeURIComponent(data.phone)}`} />}
+            >
+              Quick call
             </Button>
             {data.email && (
-              <Button type="button" size="sm" variant="outline" asChild>
-                <a href={`mailto:${data.email}`}>Email</a>
+              <Button type="button" size="sm" variant="outline" render={<a href={`mailto:${data.email}`} />}>
+                Email
               </Button>
             )}
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href={`/conversations?contact=${data.id}`}>SMS</Link>
+            <Button type="button" size="sm" variant="outline" render={<Link href={`/conversations?contact=${data.id}`} />}>
+              SMS
             </Button>
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href={`/app/power-dialer/callbacks?contact=${data.id}`}>Set callback</Link>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              render={<Link href={`/app/power-dialer/callbacks?contact=${data.id}`} />}
+            >
+              Set callback
             </Button>
-            <Button type="button" size="sm" variant="outline" asChild>
-              <Link href={`/app/contacts/tasks?contact=${data.id}`}>Add task</Link>
+            <Button type="button" size="sm" variant="outline" render={<Link href={`/app/contacts/tasks?contact=${data.id}`} />}>
+              Add task
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setEditing((v) => !v)}>
               {editing ? 'Cancel edit' : 'Edit fields'}

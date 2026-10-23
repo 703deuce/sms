@@ -5,6 +5,18 @@ import {
   isHumanConversation,
 } from "./metrics-definitions";
 
+type AnalyticsAttemptRow = {
+  id: string;
+  disposition: string | null;
+  answerClassification: string | null;
+  billableSeconds: number | null;
+  createdAt: Date;
+  session: { campaignId: string; repUserId: string | null };
+  endedAt: Date | null;
+  dispositionEffectsAt: Date | null;
+  humanCall: { phoneNumberId: string | null; answeredAt: Date | null } | null;
+};
+
 function rangeStart(range: "7d" | "30d" | "90d") {
   const d = new Date();
   const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
@@ -19,7 +31,7 @@ export async function getPowerDialerAnalytics(
 ) {
   const prisma = getPrisma();
   const from = rangeStart(range);
-  const attempts = dedupeAttemptsById(
+  const attempts: AnalyticsAttemptRow[] = dedupeAttemptsById(
     await prisma.powerDialerAttempt.findMany({
       where: {
         workspaceId,
@@ -232,7 +244,6 @@ export async function getAttemptCallReview(workspaceId: string, attemptId: strin
           source: true,
           startedAt: true,
           endedAt: true,
-          billableSeconds: true,
         },
       },
     },

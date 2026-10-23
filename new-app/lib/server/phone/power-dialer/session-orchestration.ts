@@ -135,11 +135,25 @@ export async function listUpcomingEligibleContacts(
     const c = m.contact;
     const campaignAttempts = await prisma.powerDialerAttempt.findMany({
       where: { workspaceId, contactId: c.id, session: { campaignId: session.campaignId } },
-      select: { status: true, disposition: true, attemptNumber: true, createdAt: true, endedAt: true },
+      select: {
+        contactId: true,
+        status: true,
+        disposition: true,
+        attemptNumber: true,
+        createdAt: true,
+        endedAt: true,
+      },
     });
     const sessAttempts = await prisma.powerDialerAttempt.findMany({
       where: { sessionId, contactId: c.id },
-      select: { status: true, disposition: true, attemptNumber: true, createdAt: true, endedAt: true },
+      select: {
+        contactId: true,
+        status: true,
+        disposition: true,
+        attemptNumber: true,
+        createdAt: true,
+        endedAt: true,
+      },
     });
     const eligibility = await evaluateListMemberEligibility({
       workspaceId,

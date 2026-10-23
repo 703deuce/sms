@@ -26,7 +26,7 @@ export function contactVisibleToUser(
 
 export async function assertCrmWrite(workspaceId: string) {
   const ctx = await assertCrmRead(workspaceId);
-  if (!ctx.isAdmin && ctx.role === "MEMBER") {
+  if (!ctx.isAdmin && ctx.role === "READ_ONLY") {
     const { getOrCreateWorkspaceCrmSettings } = await import("./crm-settings");
     const settings = await getOrCreateWorkspaceCrmSettings(workspaceId);
     if (settings.teamScopes.contactsWrite === "owned") {

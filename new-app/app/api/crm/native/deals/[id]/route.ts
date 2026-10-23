@@ -7,12 +7,22 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   try {
     const { id } = await ctx.params;
     const workspaceId = await resolveWorkspaceId();
-    const body = (await request.json()) as { stageId?: string };
-    if (body.stageId) {
-      const data = await moveDealStage(workspaceId, id, body.stageId);
+    const body = (await request.json()) as {
+      stageId?: string;
+      title?: string;
+      amountCents?: number | null;
+      ownerUserId?: string | null;
+      closeTargetAt?: string | null;
+      nextStep?: string | null;
+      contactId?: string | null;
+      companyId?: string | null;
+    };
+    const { stageId, ...patch } = body;
+    if (stageId) {
+      const data = await moveDealStage(workspaceId, id, stageId);
       return NextResponse.json({ data });
     }
-    const data = await patchDeal(workspaceId, id, body);
+    const data = await patchDeal(workspaceId, id, patch);
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 400);

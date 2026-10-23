@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EmptyState, Page, PageHeader, Panel } from '@/components/app/page-primitives'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Building2, CheckSquare } from 'lucide-react'
 import { formatWhen } from '@/lib/format'
 
 async function crmGet<T>(path: string): Promise<T> {
@@ -63,7 +64,7 @@ export function CompaniesWorkspace() {
       </Panel>
       <Panel title="All companies">
         {!rows.length ? (
-          <EmptyState title="No companies yet" description="Create a company or link one from a contact." />
+          <EmptyState icon={Building2} title="No companies yet" description="Create a company or link one from a contact." />
         ) : (
           <Table>
             <TableHeader>
@@ -101,7 +102,9 @@ export function CompanyDetailWorkspace({ companyId }: { companyId: string }) {
     deals: { id: string; title: string; stage: { name: string } }[]
   } | null>(null)
   useEffect(() => {
-    void crmGet(`/api/crm/native/companies/${companyId}`).then(setData).catch((e) => toast.error(e.message))
+    void crmGet<NonNullable<typeof data>>(`/api/crm/native/companies/${companyId}`)
+      .then(setData)
+      .catch((e) => toast.error(e.message))
   }, [companyId])
   if (!data) return <Page><p className="text-sm text-muted-foreground">Loading…</p></Page>
   return (
@@ -262,7 +265,9 @@ export function TasksWorkspace() {
         ))}
       </div>
       <Panel title="Tasks">
-        {!tasks.length ? <EmptyState title="No tasks" description="Add a task from a contact or the dialer." /> : (
+        {!tasks.length ? (
+          <EmptyState icon={CheckSquare} title="No tasks" description="Add a task from a contact or the dialer." />
+        ) : (
           <ul className="space-y-2 text-sm">
             {tasks.map((t) => (
               <li key={t.id} className="flex items-center justify-between rounded border px-3 py-2">
@@ -335,7 +340,7 @@ export function CrmSettingsWorkspace() {
   const [fields, setFields] = useState<{ id: string; key: string; label: string; fieldType: string }[]>([])
   const [newField, setNewField] = useState({ key: '', label: '', fieldType: 'text' })
   useEffect(() => {
-    void crmGet('/api/crm/native/settings').then(setSettings).catch(() => undefined)
+    void crmGet<Record<string, unknown>>('/api/crm/native/settings').then(setSettings).catch(() => undefined)
     void crmGet<typeof fields>('/api/crm/native/custom-fields').then(setFields).catch(() => undefined)
   }, [])
   const saveSettings = () => {
@@ -372,8 +377,8 @@ export function CrmSettingsWorkspace() {
           <Button
             type="button"
             onClick={() =>
-              void crmSend('/api/crm/native/custom-fields', 'POST', newField)
-                .then((row: { id: string }) => {
+              void crmSend<{ id: string }>('/api/crm/native/custom-fields', 'POST', newField)
+                .then((row) => {
                   setFields((prev) => [...prev, { ...newField, id: row.id }])
                   setNewField({ key: '', label: '', fieldType: 'text' })
                 })

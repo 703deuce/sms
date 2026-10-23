@@ -512,7 +512,7 @@ export async function linkHumanCallControlId(
 
   const updated = await prisma.humanCall.update({
     where: { id: callId },
-    data: patch,
+    data: patch as import("@prisma/client").Prisma.HumanCallUpdateInput,
   });
 
   if (controlId && isTelnyxPhoneConfigured()) {

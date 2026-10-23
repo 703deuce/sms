@@ -111,11 +111,21 @@ export function ExportActions({ range }: { range: string }) {
   const days = range === '90d' ? 90 : range === '30d' ? 30 : 7
   return (
     <div className="flex flex-wrap gap-2">
-      <Button type="button" variant="outline" size="sm" asChild>
-        <a href={`/api/phone/power-dialer/analytics/export?days=${days}`}>Export attempts CSV (M60)</a>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        render={<a href={`/api/phone/power-dialer/analytics/export?days=${days}`} />}
+      >
+        Export attempts CSV (M60)
       </Button>
-      <Button type="button" variant="outline" size="sm" asChild>
-        <a href={`/api/phone/power-dialer/analytics/export?days=${days}&kind=sessions`}>Export sessions CSV (M60)</a>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        render={<a href={`/api/phone/power-dialer/analytics/export?days=${days}&kind=sessions`} />}
+      >
+        Export sessions CSV (M60)
       </Button>
     </div>
   )

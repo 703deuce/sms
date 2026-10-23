@@ -59,9 +59,11 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
         ? {
             intent:
               dto.source === 'power_dialer' ? 'Power dialer conversation' : 'Recorded call',
-            outcome: 'success',
+            outcome: 'message' as const,
             summary: summaryFromAiField(dto.aiSummary, dto.transcriptText),
-            followUp: dto.aiSummary?.toLowerCase().includes('suggested follow-up') ? 'open' : 'none',
+            followUp: (dto.aiSummary?.toLowerCase().includes('suggested follow-up')
+              ? 'open'
+              : 'none') as 'open' | 'done' | 'none',
             tools: [],
             transcript: dto.transcriptText
               ? [

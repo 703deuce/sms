@@ -350,7 +350,9 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                         <td className="px-4 py-3">
                           <span className="flex items-center gap-2">
                             <StatusBadge tone={CALL_OUTCOME[c.outcome].tone}>{CALL_OUTCOME[c.outcome].label}</StatusBadge>
-                            {variant === 'power_dialer' && c.metadata?.crmSync && typeof c.metadata.crmSync === 'object' && (
+                            {variant === 'power_dialer' &&
+                            c.metadata?.crmSync &&
+                            typeof c.metadata.crmSync === 'object' ? (
                               <StatusBadge
                                 tone={
                                   (c.metadata.crmSync as { status?: string }).status === 'succeeded'
@@ -362,7 +364,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                               >
                                 CRM {(c.metadata.crmSync as { status?: string }).status}
                               </StatusBadge>
-                            )}
+                            ) : null}
                             {c.callbackNeeded && !c.handled && <StatusBadge tone="warning">Follow up</StatusBadge>}
                           </span>
                         </td>

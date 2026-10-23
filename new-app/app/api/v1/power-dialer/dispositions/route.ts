@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: attempt });
     }
     const defs = await prisma.powerDialerDisposition.findMany({
-      where: { workspaceId: ctx.workspaceId },
+      where: { set: { workspaceId: ctx.workspaceId } },
       orderBy: { sortOrder: "asc" },
       select: { id: true, label: true, outcomeClass: true, hotkey: true },
     });

@@ -134,7 +134,7 @@ export async function logApiAudit(input: {
       impersonatedUserId: input.impersonatedUserId,
       action: input.action,
       resource: input.resource,
-      detailJson: input.detail ?? {},
+      detailJson: (input.detail ?? {}) as import("@prisma/client").Prisma.InputJsonValue,
     },
   });
 }

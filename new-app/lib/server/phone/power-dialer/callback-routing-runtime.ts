@@ -53,11 +53,12 @@ export async function resolveCallbackAssignment(input: {
     if (members.length) {
       const contact = await prisma.contact.findFirst({
         where: { id: input.contactId },
-        select: { assignedUserId: true },
+        select: { assignedUser: true, ownerUserId: true },
       });
-      if (contact?.assignedUserId && members.includes(contact.assignedUserId)) {
+      const ownerId = contact?.ownerUserId || contact?.assignedUser;
+      if (ownerId && members.includes(ownerId)) {
         return {
-          assignedUserId: contact.assignedUserId,
+          assignedUserId: ownerId,
           visibility: mode === "group" ? "team" : "personal",
           routingPool: mode === "group" ? "campaign_group" : null,
           reason: "contact_owner_in_group",

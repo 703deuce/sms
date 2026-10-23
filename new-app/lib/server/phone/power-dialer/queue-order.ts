@@ -1,10 +1,11 @@
 import type { CampaignAdvanced } from "./campaign-advanced";
 
-type MemberRow = {
+export type MemberRow = {
   contactId: string;
   createdAt?: Date;
   dialPriority?: number;
   queueSortOrder?: number | null;
+  member?: unknown;
 };
 
 export function sortCampaignQueueMembers<T extends MemberRow>(

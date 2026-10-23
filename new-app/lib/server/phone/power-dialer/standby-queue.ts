@@ -2,7 +2,15 @@ import { getPrisma } from "@/lib/server/db";
 import type { Contact, ContactListMember } from "@prisma/client";
 
 export type QueueMemberRow = ContactListMember & {
-  contact: Contact & { phones?: { e164: string; priority: number; isPreferred: boolean; outcome: string | null }[] };
+  contact: Contact & {
+    phones?: {
+      id: string;
+      e164: string;
+      priority: number;
+      isPreferred: boolean;
+      outcome: string | null;
+    }[];
+  };
   sourceListId: string;
   sourceListName: string;
 };
@@ -25,7 +33,7 @@ async function loadListMembers(listId: string, listName: string): Promise<QueueM
   const rows = await prisma.contactListMember.findMany({
     where: { listId },
     include: { contact: { include: { phones: true } } },
-    orderBy: [{ queueSortOrder: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ queueSortOrder: "asc" }, { contact: { createdAt: "asc" } }],
   });
   return rows.map((m) => ({
     ...m,

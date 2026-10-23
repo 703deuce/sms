@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
               colorHex: d.colorHex,
               hotkey: d.hotkey,
               answerContext: d.answerContext,
-              actionsJson: d.actionsJson,
+              actionsJson: d.actionsJson as Prisma.InputJsonValue,
               sortOrder: d.sortOrder,
               requireNotes: d.requireNotes,
               markConnected: d.markConnected,

@@ -1,6 +1,7 @@
 import { ensureFreshCrmToken } from "@/lib/crm/oauth";
+import type { ConnectorContext } from "@/lib/crm/connector";
 import { getConnector, CRM_PROVIDER_IDS } from "@/lib/crm/registry";
-import type { CrmProviderId } from "@/lib/crm/types";
+import { DEFAULT_SYNC_PREFERENCES, type CrmProviderId } from "@/lib/crm/types";
 import { getObjectMapping, upsertObjectMapping } from "@/lib/crm/mappings";
 import { listFieldMappings } from "@/lib/crm/mappings";
 import { applyInboundCrmFieldsToContact } from "@/lib/server/crm/native/sync-field-apply";
@@ -13,21 +14,23 @@ export async function syncCrmContactsInbound(workspaceId: string, provider: CrmP
     return { ok: false, reason: "CRM not connected — connect under Integrations" };
   }
   const connector = getConnector(provider);
-  const ctx = {
+  const ctx: ConnectorContext = {
     workspaceId,
     accessToken: conn.accessToken,
     refreshToken: conn.refreshToken,
     meta: (conn.configJson || {}) as Record<string, unknown>,
-    preferences: {},
+    preferences: DEFAULT_SYNC_PREFERENCES,
   };
-  const contacts = await connector.listContacts?.(ctx, { limit: 200 });
-  if (!contacts?.length) return { ok: true, synced: 0, reason: "no_contacts_returned" };
+  const contactPage = await connector.listContacts?.(ctx, null);
+  const contacts = contactPage?.items ?? [];
+  if (!contacts.length) return { ok: true, synced: 0, reason: "no_contacts_returned" };
 
   const fieldMaps = await listFieldMappings(workspaceId, provider);
   const prisma = getPrisma();
   let synced = 0;
   for (const c of contacts) {
-    const externalId = c.id;
+    const externalId = c.id ?? "";
+    if (!externalId) continue;
     const phone = c.phone ? normalizeE164(c.phone) : null;
     if (!phone) continue;
     const map = await getObjectMapping({
@@ -50,7 +53,7 @@ export async function syncCrmContactsInbound(workspaceId: string, provider: CrmP
             firstName: c.firstName || "Unknown",
             lastName: c.lastName || null,
             email: c.email || null,
-            company: c.company || null,
+            company: c.companyName || null,
             leadSource: `crm:${provider}`,
           },
         });

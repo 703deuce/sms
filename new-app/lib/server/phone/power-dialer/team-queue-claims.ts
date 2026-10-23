@@ -1,5 +1,5 @@
 import { getPrisma } from "@/lib/server/db";
-import type { CampaignAdvancedConfig } from "./campaign-advanced";
+import type { CampaignAdvanced } from "./campaign-advanced";
 
 const CLAIM_TTL_MS = 15 * 60 * 1000;
 
@@ -110,7 +110,7 @@ export function nextRoundRobinPointer(current: number, count: number) {
 }
 
 export function teamModeBlocksUnclaimedPull(
-  mode: CampaignAdvancedConfig["teamQueueMode"],
+  mode: CampaignAdvanced["teamQueueMode"],
 ): boolean {
   return mode === "pull" || mode === "round_robin";
 }

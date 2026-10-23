@@ -409,12 +409,13 @@ export function PowerDialerSessionWorkspace({
   const campaignMeta = useMemo(() => {
     const c = runtime?.session?.campaign
     if (!c) return null
-    const cfg = (c.configJson || {}) as { maxAttempts?: number }
+    const cfg = (c.configJson || {}) as { maxAttempts?: number; timezone?: string }
     return {
       name: c.name,
       callerId: c.callerIdE164,
       maxAttempts: rules?.totalAttemptCap ?? cfg.maxAttempts ?? 3,
       listName: c.list?.name,
+      timezone: cfg.timezone ?? null,
     }
   }, [runtime, rules])
 
@@ -728,7 +729,7 @@ export function PowerDialerSessionWorkspace({
                       onOpenChange={setAppointmentOpen}
                       contactId={lead.contact.id}
                       contactName={contactLabel(lead.contact)}
-                      defaultTimezone={lead.contact.timezone || campaignMeta?.timezone}
+                      defaultTimezone={lead.contact.timezone || campaignMeta?.timezone || undefined}
                     />
                     {lead.contact.customFields && typeof lead.contact.customFields === 'object' && (
                       <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">

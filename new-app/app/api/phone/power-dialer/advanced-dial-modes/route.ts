@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
@@ -46,8 +47,8 @@ export async function PATCH(request: Request) {
     root.powerDialer = pd;
     await prisma.workspaceLimits.upsert({
       where: { workspaceId },
-      create: { workspaceId, limits: root },
-      update: { limits: root },
+      create: { workspaceId, limits: root as Prisma.InputJsonValue },
+      update: { limits: root as Prisma.InputJsonValue },
     });
     return NextResponse.json({ data: adv });
   } catch (err) {

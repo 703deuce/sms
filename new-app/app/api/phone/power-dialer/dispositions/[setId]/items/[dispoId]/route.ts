@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
@@ -38,7 +39,10 @@ export async function PATCH(
           body.answerContext === "live" || body.answerContext === "no_answer" || body.answerContext === "any"
             ? body.answerContext
             : undefined,
-        actionsJson: body.actionsJson !== undefined ? body.actionsJson : undefined,
+        actionsJson:
+          body.actionsJson !== undefined
+            ? (body.actionsJson as Prisma.InputJsonValue)
+            : undefined,
       },
     });
     return NextResponse.json({ data });

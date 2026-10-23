@@ -231,7 +231,6 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         callerIdPoolNumberIds: callerIdPoolNumberIds.length ? callerIdPoolNumberIds : undefined,
         liveAnswerDispositionSetId: liveAnswerDispositionSetId || null,
         noAnswerDispositionSetId: noAnswerDispositionSetId || null,
-        dispositionSetId: dispositionSetId || null,
         requireExplicitConsent,
         recordingEnabled,
         dialMode: {

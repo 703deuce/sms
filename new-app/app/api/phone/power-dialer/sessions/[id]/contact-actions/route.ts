@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
+import type { Prisma } from "@prisma/client";
 import { getPrisma } from "@/lib/server/db";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 import { skipContactInSession } from "@/lib/server/phone/power-dialer/session-orchestration";
@@ -24,9 +25,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const contact = await prisma.contact.findFirst({ where: { id: contactId, workspaceId } });
     if (!contact) return NextResponse.json({ error: "Contact not found" }, { status: 404 });
 
-    const cf =
+    const cf: Record<string, unknown> =
       contact.customFields && typeof contact.customFields === "object"
-        ? { ...(contact.customFields as object) }
+        ? { ...(contact.customFields as Record<string, unknown>) }
         : {};
 
     if (body.action === "add_to_queue") {
@@ -45,7 +46,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           customFields: {
             ...cf,
             powerDialerRemovedFromQueueAt: new Date().toISOString(),
-          },
+          } as Prisma.InputJsonValue,
         },
       });
       return NextResponse.json({ data: { ok: true } });
@@ -74,12 +75,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       if (contact.phone === body.phone && phones[0]) {
         await prisma.contact.update({
           where: { id: contactId },
-          data: { phone: phones[0], customFields: patch },
+          data: { phone: phones[0], customFields: patch as Prisma.InputJsonValue },
         });
       } else {
         await prisma.contact.update({
           where: { id: contactId },
-          data: { customFields: patch },
+          data: { customFields: patch as Prisma.InputJsonValue },
         });
       }
       return NextResponse.json({ data: { ok: true } });

@@ -150,7 +150,7 @@ export async function runDispositionActions(
       if (action.type === "change_owner" && action.ownerUserId) {
         await prisma.contact.update({
           where: { id: input.contactId },
-          data: { assignedUserId: action.ownerUserId },
+          data: { assignedUser: action.ownerUserId },
         });
         results.push({ type: action.type, ok: true, message: "Owner updated" });
         continue;

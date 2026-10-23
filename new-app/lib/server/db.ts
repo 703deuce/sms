@@ -1,5 +1,5 @@
-// Canonical schema is generated at repo root (`prisma generate`); new-app must not use a stale nested client.
-import { PrismaClient } from "../../../node_modules/@prisma/client";
+// Canonical schema lives at repo root (`prisma/schema.prisma`); generate via `prisma generate --schema=../prisma/schema.prisma`.
+import { PrismaClient } from "@prisma/client";
 
 export type DbRow = Record<string, unknown>;
 

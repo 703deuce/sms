@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { getPrisma } from "@/lib/server/db";
 import { encryptSecret, decryptSecret } from "@/lib/messaging/crypto";
 import {
@@ -65,7 +66,7 @@ export async function emitPowerDialerWebhookEvent(input: {
         status: "pending",
         attempt: 0,
         nextRetryAt: new Date(),
-        payloadJson: payload,
+        payloadJson: payload as Prisma.InputJsonValue,
       },
       update: {},
     });
@@ -161,7 +162,9 @@ export async function replayPowerDialerWebhookDelivery(workspaceId: string, deli
     include: { endpoint: true },
   });
   if (!delivery) throw new Error("Delivery not found");
-  return deliverPowerDialerWebhook(delivery.eventId, secretForEndpoint(delivery.endpoint));
+  const secret = secretForEndpoint(delivery.endpoint);
+  if (!secret) throw new Error("Missing signing secret");
+  return deliverPowerDialerWebhook(delivery.eventId, secret);
 }
 
 export async function sendTestWebhook(workspaceId: string, endpointId: string) {
@@ -188,7 +191,7 @@ export async function sendTestWebhook(workspaceId: string, endpointId: string) {
       status: "pending",
       attempt: 0,
       nextRetryAt: new Date(),
-      payloadJson: payload,
+      payloadJson: payload as Prisma.InputJsonValue,
     },
   });
   const secret = secretForEndpoint(ep);
