@@ -9,7 +9,7 @@ Last updated: Phase 10 (2026-10-23).
 | **Phase 7 SHA (John re-test)** | `1f4f307b5d63ea1a05738390a14ea6194ab46445` |
 | **Phase 8 SHA** | `2cbe7bf891c90af0d7e41a497082f026cae56242` |
 | **Phase 9 SHA** | `e3f98897e00bfd32b437f0f03d78937beead6267` *(contacts bootstrap — **reverted Phase 10**)* |
-| **Phase 10 SHA** | *(see `/api/health` after push)* |
+| **Phase 10 SHA** | `485275b3f5ec60b7ca914ca3bfad4b65395b2ace` |
 | **Phase 6 migration** | `20261023180000_power_dialer_phase6` |
 | **Disk (Coolify)** | ~67% on `/` (2026-10-23) |
 
