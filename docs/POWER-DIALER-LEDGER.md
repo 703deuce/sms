@@ -2,59 +2,62 @@
 
 Statuses: **Not started** | **In progress** | **Implemented** | **Tested** | **Deployed** | **Browser verified** | **Blocked**
 
-Last updated: Phase 3 gap closure + Phase 4 daily workflows (batch 2 — migration fix + UI wiring).
+Last updated: Phase 4 gap closure + Phase 5 Numbers & Connectivity (batch 3).
 
 ## Migration verification
 
 | Migration | Expected | Prod status |
 |-----------|----------|-------------|
-| `20261023140000_power_dialer_lists_phase3` | ContactList `source`, `archivedAt`, `updatedAt` | Verify row in `_prisma_migrations` after deploy |
-| `20261023150000_power_dialer_phase4` | Dispositions, scripts, VM drops, callbacks + attempt columns + `ContactList.filtersJson` | **Was FAILED** (wrong FK table names `workspaces`/`contacts`/`contact_lists`) — **fixed in migration SQL**; use `scripts/power-dialer-phase4-migration-repair.sql` + `prisma migrate resolve --rolled-back` if partial DDL |
+| `20261023140000_power_dialer_lists_phase3` | ContactList `source`, `archivedAt`, `updatedAt` | Verify via `verify-power-dialer-phase4-migration-readonly.ts` |
+| `20261023150000_power_dialer_phase4` | Dispositions, scripts, VM drops, callbacks + attempt columns + `ContactList.filtersJson` | **Repaired** on prod (resolve rolled-back + repair SQL); file in git uses `Workspace`/`Contact`/`ContactList` |
+| `20261023170000_power_dialer_phase5` | `power_dialer_detection_events` | Apply on next deploy (`migrate deploy`) |
 
-## Phase 4 scope (this batch)
+Read-only script: `new-app/scripts/verify-power-dialer-phase4-migration-readonly.ts`  
+Doc: `docs/POWER-DIALER-PHASE4-MIGRATION.md`
 
-| Area | Status |
-|------|--------|
-| Disposition sets | DB + seed + API + Settings Dispositions tab + campaign Outcomes + dialer labels via `dialer-prep` |
-| Scripts | API + Settings Scripts tab + dialer rendered script (merge fields) |
-| VM drops | API + compliance opt-in + Settings library + dialer button (mock/Telnyx path) — **not live PSTN verified** |
-| Callbacks | `PowerDialerCallback` table + tabs + complete/cancel + Start call link (eligibility via contact status) |
-| Call history | Server filters (campaign, date, disposition, recording) + CallsTable UI for power_dialer |
-| Recording settings | Workspace settings stored; retention **ledger note** only |
-| CRM disposition flag | Stored on disposition row — execution **Phase 6** |
-| Transcription for PD calls | **Not verified** — wire if recording pipeline missing (ledger) |
-
-## Phase 3 gap closure
+## Phase 4 gap closure
 
 | Gap | Status |
 |-----|--------|
-| List eligibility counts | **Implemented** — `list-eligibility.ts` |
-| Add contacts / bulk remove / export / saved filters | **Implemented** |
-| Bulk add to campaign | **Implemented** — `lists/[id]/campaign-actions` |
-| Campaign members + dial access | **Implemented** — `campaign-access.ts` |
-| Cross-session lead history | **Implemented** — `contact-campaign-history` |
-| Phase 3 migration row verify | **Pending** — run on prod after deploy |
+| Disposition per-row edit / delete / reorder / set default | **Implemented** — API + Settings UI |
+| VM drops MediaRecorder + file upload + preview | **Implemented** — `/voicemail-drops/upload` + Settings UI |
+| VM mock production guard | **Implemented** — `voicemail-drop-playback.ts` |
+| Transcription + AI summary on call detail | **Implemented** — `human-call-transcription.ts` + Call detail via `phone-ui-map` |
+| Callback Start call + eligibility | **Implemented** — `/callbacks/[id]/eligibility` + dialer deep link |
 
-## VM tests
+## Phase 5 — Numbers & connectivity
 
-| Script | Result |
-|--------|--------|
-| `pnpm run test:power-dialer-engine` | Run each batch |
-| `pnpm run test:power-dialer-phase3` | Run each batch |
-| `pnpm run test:power-dialer-phase4` | Run each batch |
+| Item | Status |
+|------|--------|
+| Caller ID resolution (sticky pool) | **Implemented** — `caller-id-resolution.ts` wired in `createWebRtcOutboundCall` |
+| Settings Caller ID + Call screening tabs | **Implemented** |
+| Number health list + detail API/UI | **Implemented** |
+| Free reputation tools subpage | **Implemented** |
+| Premium reputation honest placeholder | **Implemented** + probe script |
+| AMD / screener events | **Implemented** — `answer-detection.ts` + Telnyx webhooks in `calls-service` |
+| Telnyx Number Reputation purchase | **Not done** — probe only |
+
+## Tests
+
+| Script | Result (local) |
+|--------|----------------|
+| `pnpm run test:power-dialer-phase4` | PASS |
+| `pnpm run test:power-dialer-phase5` | PASS |
 
 ## Deploy / voice
 
 | Item | Notes |
 |------|-------|
-| Voice container redeploy | **Not required** — web/new-app only |
-| Browser verified | Pending Grok pass |
-| Live VM drop / PSTN | **Could not verify** in cloud VM |
+| Voice container redeploy | **Not required** unless voice-runtime AMD changes — web handles Telnyx webhooks |
+| Browser verified | Pending |
+| Live PSTN VM drop / AMD latency | **Could not verify** |
 
 ## Could not verify (honest)
 
-- Production `_prisma_migrations` rows for phase 3/4 until Coolify deploy + `migrate deploy` succeeds
-- Browser UI for Settings tabs, dialer script panel, callbacks actions, call history filters
-- Live Telnyx voicemail-drop playback on answered leg
-- Power-dialer call transcription auto-start
-- Full disposition set CRUD (per-disposition edit/reorder UI) — sets list + clone only
+- Production read-only migration script after this deploy’s `commitSha`
+- Browser UI walkthrough (dispositions drag, VM record, number health charts)
+- Live Telnyx AMD on WebRTC outbound legs
+- Deepgram transcription on real PD recordings in prod
+- Telnyx Number Reputation API provisioned
+- Call screening intro playback on real screened phones
+- Callback inbound routing documentation on live numbers
