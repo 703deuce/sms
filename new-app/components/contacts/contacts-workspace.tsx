@@ -56,7 +56,9 @@ export function ContactsWorkspace() {
 
   const subtitle = useMemo(
     () =>
-      `${total} people in this workspace — including power-dialer imports and shared SMS contacts (one record per phone number).`,
+      total === 0
+        ? 'Contacts in this workspace — one record per phone number.'
+        : `${total} people in this workspace — power-dialer imports and manually added contacts.`,
     [total],
   )
 
@@ -87,11 +89,11 @@ export function ContactsWorkspace() {
           <div className="p-6">
             <EmptyState
               icon={Users}
-              title="No contacts match"
+              title={query ? 'No contacts match' : 'No contacts yet'}
               description={
                 query
-                  ? 'Try a different search. Power-dialer imports appear here once CSV or CRM import creates contact records.'
-                  : 'Import a calling list or add contacts from a list detail page to see them here.'
+                  ? 'Try a different search term.'
+                  : 'No contacts yet — import a calling list or add contacts from a list detail page.'
               }
             />
           </div>

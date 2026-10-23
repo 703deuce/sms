@@ -1,6 +1,6 @@
 # Power Dialer — completion ledger
 
-Last updated: Phase 9 (2026-10-23).
+Last updated: Phase 10 (2026-10-23).
 
 ## Production deploy
 
@@ -8,15 +8,42 @@ Last updated: Phase 9 (2026-10-23).
 |------|--------|
 | **Phase 7 SHA (John re-test)** | `1f4f307b5d63ea1a05738390a14ea6194ab46445` |
 | **Phase 8 SHA** | `2cbe7bf891c90af0d7e41a497082f026cae56242` |
-| **Phase 9 SHA** | `e3f98897e00bfd32b437f0f03d78937beead6267` |
+| **Phase 9 SHA** | `e3f98897e00bfd32b437f0f03d78937beead6267` *(contacts bootstrap — **reverted Phase 10**)* |
+| **Phase 10 SHA** | *(see `/api/health` after push)* |
 | **Phase 6 migration** | `20261023180000_power_dialer_phase6` |
 | **Disk (Coolify)** | ~67% on `/` (2026-10-23) |
 
-## Phase 9 (contacts regression + settings tabs)
+## Phase 10 (reject mock contact bootstrap)
 
 | # | Item | Root cause / fix | Tests | Verify |
 |---|------|------------------|-------|--------|
-| 1 | `/app/contacts` empty | Phase 8 pointed UI at Prisma `Contact` (0 rows on QA); pre–Phase 8 “16 people” was mock `lib/data` only. `ensureShellContactsCatalog()` upserts 16 catalog rows when workspace has none; CSV/dialer imports add real rows. | `test:power-dialer-phase9` | **Prod:** 16+ people, Elena search, import visible, delete/archive |
+| 1 | No fake contacts in prod | **Rejected** Phase 9 `ensureShellContactsCatalog()` — removed file + bootstrap calls. `/app/contacts` shows only real `Contact` rows; honest empty state when none. | `test:power-dialer-phase9` (asserts bootstrap removed) | **Prod:** empty → import one via list → search → delete → archive list → empty |
+| 2 | Prod DB cleanup | SSH: deleted 16 `shell_catalog` rows on `ws_1` (0 refs each). `+15555550199` absent. | — | SQL below |
+| 3 | Phase 9 settings tabs | **Retained** from Phase 9 — Call Screening tab leak fix + copy (unchanged this pass). | — | — |
+| 4 | Billing numbers | **Mock** — unchanged (`settings-tabs.tsx` `USAGE` const). | — | Code audit |
+
+### Shell catalog cleanup SQL (prod, 2026-10-23)
+
+**SELECT (16 rows, all `customFields.source = shell_catalog`, `createdAt` 2026-10-23 05:42:51 UTC):**
+
+Elena `cmvkjmzmd0001o60mjxyqv24r` +13125558821 · Marcus `cmvkjmzmd0003o60ms19xwrqe` +17735552210 · Aisha `cmvkjmzme0005o60mvcpovw5f` +13125559034 · Robert `cmvkjmzmf0007o60mzcqnj6wo` +18475551170 · Sofia `cmvkjmzmf0009o60mabj74r6y` +13125554456 · James `cmvkjmzmg000bo60mhxlex63p` +17735553389 · Hannah `cmvkjmzmh000do60m2i7r6scp` +13125557712 · Victor `cmvkjmzmi000fo60mp1ixbrx1` +16305556641 · Grace `cmvkjmzmi000ho60mvljhhk7e` +13125550987 · Derek `cmvkjmzmj000jo60mow3boskh` +17735558804 · Leila `cmvkjmzmk000lo60m9x77zo5t` +13125552267 · Owen `cmvkjmzml000no60m6wzvhkay` +18475559012 · Nadia `cmvkjmzml000po60m40rw91cz` +13125556120 · Samuel `cmvkjmzmm000ro60m8idima65` +17735557745 · Clara `cmvkjmzmn000to60mxmiae3kt` +13125553398 · Ian `cmvkjmzmn000vo60me4zv6h2t` +16305552281.
+
+Ref counts: 0 list members, tags, `power_dialer_attempts`, `power_dialer_callbacks`, conversations, `human_calls`, messages — **all deleted** (none archived).
+
+```sql
+BEGIN;
+DELETE FROM "ContactListMember" WHERE "contactId" IN (SELECT id FROM "Contact" WHERE "workspaceId" = 'ws_1' AND "customFields"::text LIKE '%shell_catalog%');
+DELETE FROM "ContactTag" WHERE "contactId" IN (SELECT id FROM "Contact" WHERE "workspaceId" = 'ws_1' AND "customFields"::text LIKE '%shell_catalog%');
+DELETE FROM "Contact" WHERE "workspaceId" = 'ws_1' AND "customFields"::text LIKE '%shell_catalog%';
+COMMIT;
+-- Result: DELETE 0 members, DELETE 0 tags, DELETE 16 contacts; ws_1 contact_count = 0
+```
+
+## Phase 9 (contacts regression + settings tabs) — superseded for item 1
+
+| # | Item | Root cause / fix | Tests | Verify |
+|---|------|------------------|-------|--------|
+| 1 | `/app/contacts` empty | ~~`ensureShellContactsCatalog()`~~ **Reverted Phase 10** — see above. | `test:power-dialer-phase9` | — |
 | 2 | Call Screening tab leak | Base UI tab exit transition kept vm-drops panel mounted/visible; controlled tab + conditional render + `data-[hidden]:hidden` on `TabsContent`. Copy → “Voicemail Drops tab”. | — | **Prod:** screening tab clean |
 | 3 | Billing numbers | **Mock** — `USAGE` const in `settings-tabs.tsx` (not Stripe/DB). PD minutes **real** in `getPowerDialerUsageSnapshot` → analytics + session `assertDialingWithinUsageLimits`; Settings > Usage & Subscription is config only, not billing dashboard. | — | Code audit (no wire to billing tab this pass) |
 
@@ -70,6 +97,7 @@ Result: `DELETE 2` members, `DELETE 2` contacts; remaining count for those phone
 | `test:power-dialer-phase6` | PASS |
 | `test:power-dialer-phase7` | PASS |
 | `test:power-dialer-phase8` | PASS |
+| `test:power-dialer-phase9` | PASS (Phase 10: no bootstrap) |
 
 ## Final consolidated status (for John)
 
@@ -80,7 +108,7 @@ Result: `DELETE 2` members, `DELETE 2` contacts; remaining count for those phone
 | PD Integrations + detail | **Done + verified** | CRM connect POST fix in Phase 8 |
 | PD Settings (11 tabs, scripts, dispositions, compliance) | **Done + mostly verified** | Phase 8: focus/toast, copy, set-default pending browser |
 | CSV import preview | **Done-code** | John verified Phase 7; not re-run Phase 8 |
-| Global `/app/contacts` | **Done-code** (Phase 8) | Was mock data; now API-backed |
+| Global `/app/contacts` | **Done** (Phase 10) | Real DB only; empty state honest; no shell catalog seed |
 | List detail remove/delete | **Done-code** (Phase 8) | |
 | ZZ test data | **Done** | User archived list/campaign; Ada/Bob deleted via SQL |
 | `/app/billing` | **Not done** | 404 — out of PD scope |
