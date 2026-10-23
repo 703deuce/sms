@@ -107,5 +107,5 @@
 
 | Batch | Commits | Tests |
 |-------|---------|-------|
-| B1 setup + docs | (this push) | — |
-| B1 core engine | (this push) | `test:power-dialer-b1` |
+| B1 setup + docs | `67a830031` | — |
+| B1 core engine | `85c8498b1` | `test:power-dialer-b1` PASS, `test:power-dialer-phase9` PASS |
