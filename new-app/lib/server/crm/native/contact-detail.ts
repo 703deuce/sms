@@ -1,7 +1,12 @@
 import { getPrisma } from "@/lib/server/db";
 import { assertCrmRead, contactVisibleToUser } from "./permissions";
+import { buildUnifiedContactTimeline } from "./contact-timeline";
 
-export async function getNativeContactDetail(workspaceId: string, contactId: string) {
+export async function getNativeContactDetail(
+  workspaceId: string,
+  contactId: string,
+  opts?: { includeRecordings?: boolean },
+) {
   const { userId, isAdmin } = await assertCrmRead(workspaceId);
   const prisma = getPrisma();
   const contact = await prisma.contact.findFirst({
@@ -18,17 +23,12 @@ export async function getNativeContactDetail(workspaceId: string, contactId: str
   if (!contact) throw new Error("Contact not found");
   if (!contactVisibleToUser(contact, userId, isAdmin)) throw new Error("Not allowed to view this contact");
 
-  const pdAttempts = await prisma.powerDialerAttempt.findMany({
-    where: { workspaceId, contactId },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      disposition: true,
-      status: true,
-      createdAt: true,
-      session: { select: { campaign: { select: { name: true, id: true } } } },
-    },
+  const custom =
+    contact.customFields && typeof contact.customFields === "object"
+      ? (contact.customFields as Record<string, unknown>)
+      : {};
+  const timeline = await buildUnifiedContactTimeline(workspaceId, contactId, {
+    includeRecordings: opts?.includeRecordings ?? isAdmin,
   });
 
   return {
@@ -55,23 +55,8 @@ export async function getNativeContactDetail(workspaceId: string, contactId: str
     })),
     deals: contact.deals,
     tasks: contact.tasks,
-    timeline: [
-      ...contact.activityEvents.map((e) => ({
-        id: e.id,
-        kind: e.kind,
-        title: e.title,
-        body: e.body,
-        at: e.occurredAt.toISOString(),
-      })),
-      ...pdAttempts.map((a) => ({
-        id: `pd-${a.id}`,
-        kind: "power_dialer_call",
-        title: `Power Dialer · ${a.session.campaign.name}`,
-        body: a.disposition || a.status,
-        at: a.createdAt.toISOString(),
-        href: `/app/power-dialer/call-history?attempt=${a.id}`,
-      })),
-    ].sort((a, b) => b.at.localeCompare(a.at)),
+    refresherNotes: typeof custom.refresherNotes === "string" ? custom.refresherNotes : null,
+    timeline,
     contactHref: `/app/contacts/${contact.id}`,
   };
 }

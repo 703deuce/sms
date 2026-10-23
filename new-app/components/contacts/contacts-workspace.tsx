@@ -37,17 +37,45 @@ export function ContactsWorkspace() {
   const [rows, setRows] = useState<Row[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [viewId, setViewId] = useState('')
+  const [views, setViews] = useState<{ id: string; name: string; pinned: boolean }[]>([])
 
   const reload = useCallback(() => {
     setLoading(true)
-    void fetchContactsPage({ q: query, page: 1, pageSize: 100 })
-      .then((data) => {
-        setRows(data.contacts)
-        setTotal(data.total)
+    const nativeUrl = `/api/crm/native/contacts?q=${encodeURIComponent(query)}&page=1&pageSize=100${viewId ? `&viewId=${viewId}` : ''}`
+    void fetch(nativeUrl)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.data?.contacts) {
+          setRows(
+            j.data.contacts.map((c: { id: string; name: string; phone: string; email: string | null; company: string | null; status: string; createdAt: string }) => ({
+              id: c.id,
+              name: c.name,
+              phone: c.phone,
+              email: c.email,
+              company: c.company,
+              status: c.status,
+              createdAt: c.createdAt,
+            })),
+          )
+          setTotal(j.data.total)
+          return
+        }
+        return fetchContactsPage({ q: query, page: 1, pageSize: 100 }).then((data) => {
+          setRows(data.contacts)
+          setTotal(data.total)
+        })
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not load contacts'))
       .finally(() => setLoading(false))
-  }, [query])
+  }, [query, viewId])
+
+  useEffect(() => {
+    void fetch('/api/crm/native/views')
+      .then((r) => r.json())
+      .then((j) => setViews(j.data || []))
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     const t = window.setTimeout(reload, query ? 250 : 0)
@@ -81,8 +109,40 @@ export function ContactsWorkspace() {
 
   return (
     <Page>
-      <PageHeader title="Contacts" description={subtitle} actions={<ContactsActions total={total} />} />
-      <Panel bodyClassName="p-0" title={<SearchInput value={query} onChange={setQuery} placeholder="Name, phone, company…" />}>
+      <PageHeader
+        title="Contacts"
+        description={subtitle}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ContactsActions total={total} />
+            <a
+              href="/api/crm/native/contacts/export"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Export
+            </a>
+          </div>
+        }
+      />
+      <Panel
+        bodyClassName="p-0"
+        title={
+          <div className="flex flex-wrap items-center gap-3">
+            <SearchInput value={query} onChange={setQuery} placeholder="Name, phone, company…" />
+            <select
+              className="rounded-md border px-2 py-1.5 text-sm"
+              aria-label="Saved view"
+              value={viewId}
+              onChange={(e) => setViewId(e.target.value)}
+            >
+              <option value="">All contacts</option>
+              {views.map((v) => (
+                <option key={v.id} value={v.id}>{v.pinned ? `★ ${v.name}` : v.name}</option>
+              ))}
+            </select>
+          </div>
+        }
+      >
         {loading ? (
           <p className="p-6 text-sm text-muted-foreground">Loading contacts…</p>
         ) : rows.length === 0 ? (

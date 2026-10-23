@@ -66,11 +66,16 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         },
       });
       if (contact) {
+        const custom =
+          contact.customFields && typeof contact.customFields === "object"
+            ? (contact.customFields as Record<string, unknown>)
+            : {};
         contactCard = {
           id: contact.id,
           href: `/app/contacts/${contact.id}`,
           email: contact.email,
           title: contact.title,
+          refresherNotes: typeof custom.refresherNotes === "string" ? custom.refresherNotes : null,
           timezone: contact.timezone,
           timezoneInferred: contact.timezoneInferred,
           localTimeNote: contact.timezone ? `Local time uses ${contact.timezone}` : null,

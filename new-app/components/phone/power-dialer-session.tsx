@@ -74,6 +74,7 @@ export function PowerDialerSessionWorkspace({
   const [dispositionOptions, setDispositionOptions] = useState<string[]>([...DISPOSITIONS])
   const [voicemailDropReady, setVoicemailDropReady] = useState(false)
   const [contactCard, setContactCard] = useState<{
+    refresherNotes?: string | null
     href: string
     email?: string | null
     title?: string | null
@@ -223,12 +224,16 @@ export function PowerDialerSessionWorkspace({
           contactId,
           attemptNumber,
           idempotencyKey,
-        }) as { id: string }
+        }) as { id: string; dialedPhoneE164?: string | null }
         setAttemptId(attempt.id)
         const contact = lead.contact
+        const dialNumber =
+          attempt.dialedPhoneE164 ||
+          (runtime?.next as { dialE164?: string } | undefined)?.dialE164 ||
+          contact.phone
         const ok = startCall({
           name: contactLabel(contact),
-          number: contact.phone,
+          number: dialNumber,
           callerId: lead.campaign.callerIdE164,
           source: 'power_dialer',
           powerDialerAttemptId: attempt.id,
@@ -245,7 +250,7 @@ export function PowerDialerSessionWorkspace({
         setLoading(false)
       }
     },
-    [sessionId, lead, startCall],
+    [sessionId, lead, startCall, runtime],
   )
 
   useEffect(() => {
@@ -621,13 +626,22 @@ export function PowerDialerSessionWorkspace({
                       <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                         {contactCard.title && <p>{contactCard.title}</p>}
                         {contactCard.email && <p>{contactCard.email}</p>}
+                        {contactCard.refresherNotes && <p>Refresher: {contactCard.refresherNotes}</p>}
                         {contactCard.localTimeNote && <p>{contactCard.localTimeNote}</p>}
                         {contactCard.deal && (
                           <p>Deal: {contactCard.deal.title} · {contactCard.deal.stage}</p>
                         )}
-                        <Link href={contactCard.href} className="text-primary underline-offset-2 hover:underline">
-                          Open contact record
-                        </Link>
+                        <div className="flex flex-wrap gap-2">
+                          <Link href={contactCard.href} className="text-primary underline-offset-2 hover:underline">
+                            Open contact record
+                          </Link>
+                          <Link
+                            href={`/app/contacts/calendar?contact=${lead.contact.id}`}
+                            className="text-primary underline-offset-2 hover:underline"
+                          >
+                            Schedule appointment
+                          </Link>
+                        </div>
                       </div>
                     )}
                     {lead.contact.customFields && typeof lead.contact.customFields === 'object' && (

@@ -107,6 +107,9 @@ export async function applyCsvImportToList(
       }
     }
 
+    const { applyCustomFieldsFromImport } = await import("@/lib/server/crm/native/custom-fields");
+    await applyCustomFieldsFromImport(workspaceId, contactId, customFields);
+
     await prisma.contactListMember.upsert({
       where: { listId_contactId: { listId, contactId } },
       create: { listId, contactId },

@@ -23,6 +23,7 @@
     "test:power-dialer-b1": "npx tsx scripts/test-power-dialer-b1.ts",
     "test:power-dialer-b1-carryovers": "npx tsx scripts/test-power-dialer-b1-carryovers.ts",
     "test:mini-crm-native": "npx tsx scripts/test-mini-crm-native.ts",
+    "test:crm-native-b2": "NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/test-crm-native-b2.ts",
     "test:power-dialer-metrics-consistency": "npx tsx scripts/test-power-dialer-metrics-consistency.ts",
     "test:power-dialer-authorization": "npx tsx scripts/test-power-dialer-authorization.ts",
     "test:phone:prod": "node scripts/test-phone-production-cert.mjs",

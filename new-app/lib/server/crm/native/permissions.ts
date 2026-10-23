@@ -23,3 +23,26 @@ export function contactVisibleToUser(
   if (!owner) return true;
   return owner === userId;
 }
+
+export async function assertCrmWrite(workspaceId: string) {
+  const ctx = await assertCrmRead(workspaceId);
+  if (!ctx.isAdmin && ctx.role === "MEMBER") {
+    const { getOrCreateWorkspaceCrmSettings } = await import("./crm-settings");
+    const settings = await getOrCreateWorkspaceCrmSettings(workspaceId);
+    if (settings.teamScopes.contactsWrite === "owned") {
+      return { ...ctx, writeScope: "owned" as const };
+    }
+  }
+  return { ...ctx, writeScope: "all" as const };
+}
+
+export function assertCanWriteContact(
+  contact: { ownerUserId?: string | null; assignedUser?: string | null },
+  userId: string,
+  isAdmin: boolean,
+  writeScope: "all" | "owned",
+) {
+  if (isAdmin || writeScope === "all") return;
+  const owner = contact.ownerUserId || contact.assignedUser;
+  if (owner && owner !== userId) throw new Error("Not allowed to edit this contact");
+}

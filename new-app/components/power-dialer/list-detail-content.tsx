@@ -28,7 +28,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
+type ListTab = 'contacts' | 'views' | 'activity' | 'sync'
+
 export function ListDetailContent({ listId }: { listId: string }) {
+  const [tab, setTab] = useState<ListTab>('contacts')
   const [data, setData] = useState<PowerListDetailDto | null>(null)
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
@@ -171,6 +174,47 @@ export function ListDetailContent({ listId }: { listId: string }) {
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <Link href="/app/power-dialer/calling-lists" className="text-primary hover:underline">← Calling lists</Link>
       </div>
+      <nav aria-label="List sections" className="mb-4 flex flex-wrap gap-2 text-sm">
+        {(
+          [
+            ['contacts', 'Contacts'],
+            ['views', 'Saved views'],
+            ['activity', 'Activity'],
+            ['sync', 'Sync settings'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={`rounded-md px-3 py-1.5 border ${tab === id ? 'border-primary bg-primary/10 text-primary' : 'border-transparent hover:bg-muted'}`}
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      {tab === 'views' && (
+        <Panel title="Saved views" description="Filters stored on this list — same as quick filters on the Contacts tab.">
+          <ul className="text-sm space-y-2">
+            {savedFilters.length ? savedFilters.map((f) => (
+              <li key={f.name}>{f.name}{f.q ? ` · query: ${f.q}` : ''}</li>
+            )) : <li className="text-muted-foreground">No saved views yet. Save a filter from the Contacts tab.</li>}
+          </ul>
+        </Panel>
+      )}
+      {tab === 'activity' && (
+        <Panel title="Activity" description="Recent list changes appear when imports or bulk edits run.">
+          <p className="text-sm text-muted-foreground">Last updated {formatWhen(data.updatedAt)} · Source {data.source}</p>
+        </Panel>
+      )}
+      {tab === 'sync' && (
+        <Panel title="Sync settings" description="CRM inbound sync respects field locks (B2). Provider writeback ships in B7.">
+          <p className="text-sm text-muted-foreground">
+            Duplicate handling and CSV import run on the Contacts tab. Native CRM field precedence prevents provider sync from overwriting user-edited values.
+          </p>
+        </Panel>
+      )}
+      {tab !== 'contacts' ? null : (
       <Panel
         title={data.name}
         description={`${data.total} contacts · Source: ${data.source} · Updated ${formatWhen(data.updatedAt)}`}
@@ -223,6 +267,25 @@ export function ListDetailContent({ listId }: { listId: string }) {
             <span>{selected.size} selected</span>
             <Button size="sm" variant="outline" onClick={() => setCampaignPickOpen(true)}>Add to campaign</Button>
             <Button size="sm" variant="destructive" onClick={() => void bulkRemove()}>Remove from list</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void fetch('/api/crm/native/contacts/bulk', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ contactIds: [...selected], patch: { leadStage: 'contacted' } }),
+                })
+                  .then((r) => r.json())
+                  .then((j) => {
+                    if (j.error) throw new Error(j.error)
+                    toast.success(`Updated ${j.data?.updated ?? 0} contacts`)
+                  })
+                  .catch((e) => toast.error(e instanceof Error ? e.message : 'Bulk edit failed'))
+              }}
+            >
+              Bulk edit (stage)
+            </Button>
           </div>
         )}
         <div className="overflow-x-auto">
@@ -246,7 +309,11 @@ export function ListDetailContent({ listId }: { listId: string }) {
                   <td className="px-2 py-2">
                     <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.phone}`} />
                   </td>
-                  <td className="px-2 py-2">{[c.firstName, c.lastName].filter(Boolean).join(' ') || '—'}</td>
+                  <td className="px-2 py-2">
+                    <Link href={`/app/contacts/${c.id}`} className="font-medium text-primary hover:underline">
+                      {[c.firstName, c.lastName].filter(Boolean).join(' ') || formatPhone(c.phone)}
+                    </Link>
+                  </td>
                   <td className="px-2 py-2 font-mono text-xs">{formatPhone(c.phone)}</td>
                   <td className="px-2 py-2 text-muted-foreground">{c.company || '—'}</td>
                   <td className="px-2 py-2 text-xs">{c.status}</td>
@@ -269,6 +336,7 @@ export function ListDetailContent({ listId }: { listId: string }) {
           </div>
         </div>
       </Panel>
+      )}
       <CsvImportWizard listId={listId} open={importOpen} onOpenChange={setImportOpen} onComplete={load} />
       <Dialog open={campaignPickOpen} onOpenChange={setCampaignPickOpen}>
         <DialogContent>

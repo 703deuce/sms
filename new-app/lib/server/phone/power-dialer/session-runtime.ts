@@ -237,7 +237,27 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
     if (!nextEligible && eligibility.eligible) {
       const attemptNumber =
         campaignAttempts.filter((a: AttemptSummary) => a.disposition || a.endedAt).length + 1;
-      nextEligible = { contact: c, attemptNumber, eligibility };
+      const { resolveSessionDialPhone } = await import("@/lib/server/crm/native/phone-fallthrough");
+      const dial = await resolveSessionDialPhone({
+        workspaceId: session.workspaceId,
+        sessionId: session.id,
+        contact: {
+          id: c.id,
+          phone: c.phone,
+          status: c.status,
+          timezone: c.timezone,
+          customFields: c.customFields,
+          phones: c.phones?.map((p) => ({
+            id: p.id,
+            e164: p.e164,
+            priority: p.priority,
+            isPreferred: p.isPreferred,
+            outcome: p.outcome,
+          })),
+        },
+        priority: rules.phoneFieldPriority,
+      });
+      nextEligible = { contact: c, attemptNumber, eligibility, dialE164: dial.e164 };
     }
     if (!eligibility.eligible && eligibility.retryEligibleAt) {
       const t = eligibility.retryEligibleAt;
@@ -284,6 +304,7 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
           attemptNumber: nextEligible.attemptNumber,
           campaign: session.campaign,
           sessionId: session.id,
+          dialE164: nextEligible.dialE164,
         }
       : null,
     progression: {
@@ -367,6 +388,35 @@ export async function createAttemptForSession(
     throw new Error("Contact is not eligible to dial");
   }
 
+  const contactRow = await prisma.contact.findFirst({
+    where: { id: input.contactId, workspaceId },
+    include: { phones: { orderBy: { priority: "asc" } } },
+  });
+  if (!contactRow) throw new Error("Contact not found");
+  const contactForDial = {
+    id: contactRow.id,
+    phone: contactRow.phone,
+    status: contactRow.status,
+    timezone: contactRow.timezone,
+    customFields: contactRow.customFields,
+    phones: contactRow.phones.map((p) => ({
+      id: p.id,
+      e164: p.e164,
+      priority: p.priority,
+      isPreferred: p.isPreferred,
+      outcome: p.outcome,
+    })),
+  };
+  const { resolveSessionDialPhone } = await import("@/lib/server/crm/native/phone-fallthrough");
+  const { assertOutboundDialAllowed } = await import("@/lib/server/crm/native/dial-gates");
+  const dial = await resolveSessionDialPhone({
+    workspaceId,
+    sessionId,
+    contact: contactForDial,
+    priority: rules.phoneFieldPriority,
+  });
+  await assertOutboundDialAllowed(workspaceId, dial.e164);
+
   const seq = session.dialSequence + 1;
   const ringTimeoutAt = new Date(Date.now() + rules.ringTimeoutSeconds * 1000);
 
@@ -382,6 +432,7 @@ export async function createAttemptForSession(
         status: "pending",
         dialedAt: new Date(),
         ringTimeoutAt,
+        dialedPhoneE164: dial.e164,
       },
     });
 
@@ -602,6 +653,16 @@ export async function saveAttemptOutcomeWithProgression(
       },
     });
   }
+
+  const { applyPhoneFallthroughAfterAttempt } = await import("@/lib/server/crm/native/phone-fallthrough");
+  await applyPhoneFallthroughAfterAttempt({
+    workspaceId,
+    sessionId: attempt.sessionId,
+    contactId: attempt.contactId,
+    disposition: input.disposition,
+    dialedPhoneE164: attempt.dialedPhoneE164,
+    phoneFieldPriority: rules.phoneFieldPriority,
+  });
 
   return attempt;
 }

@@ -860,6 +860,28 @@ export async function processHumanCallWebhookEvent(input: {
     },
   });
 
+  if (input.eventType === "call.hangup" && call.direction === "inbound") {
+    const payload = input.eventPayload as {
+      bill_duration_secs?: number;
+      billing_seconds?: number;
+      duration_secs?: number;
+    };
+    const inboundBillable =
+      Number(payload.bill_duration_secs ?? payload.billing_seconds ?? payload.duration_secs) ||
+      (updated.answeredAt && updated.endedAt
+        ? Math.max(0, Math.floor((updated.endedAt.getTime() - updated.answeredAt.getTime()) / 1000))
+        : null);
+    const { maybeAutoCreateOrUpdateInboundContact } = await import(
+      "@/lib/server/crm/native/inbound-contact"
+    );
+    await maybeAutoCreateOrUpdateInboundContact({
+      workspaceId: call.workspaceId,
+      humanCallId: call.id,
+      fromE164: call.from,
+      billableSeconds: inboundBillable,
+    }).catch(() => undefined);
+  }
+
   const attemptId = (call.metadata as { powerDialerAttemptId?: string } | null)?.powerDialerAttemptId;
   if (attemptId && input.eventType === "call.hangup") {
     const payload = input.eventPayload as {

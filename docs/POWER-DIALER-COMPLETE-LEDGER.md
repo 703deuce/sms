@@ -9,14 +9,14 @@
 | P01 | Pause & Preview dial flow | session-runtime, power-dialer-session | `/app/power-dialer/dialer` | B1 | in progress | Preview hold + manual dial |
 | P02 | Resume unfinished sessions | session-orchestration, sessions API | dialer | B1 | in progress | reconcile + resume |
 | P03 | Upcoming-contact queue | session-orchestration, UI queue panel | dialer | B1 | in progress | next N eligible |
-| P04 | Live mute/hold/transfer | workspace-provider, power-dialer-session, transfer API | dialer | B1 | done | cold transfer via `transferHumanCall`; warm 501 |
+| P04 | Live mute/hold/transfer | workspace-provider, power-dialer-session, transfer API | dialer | B1 | done | cold transfer; warm 501 → **B8/M06** |
 | P05 | CSV duplicate processing | list-import-apply | calling lists | B2 | done | imported/updated/invalid counts |
-| P06 | Custom import fields | csv-import mapping.custom | lists | B2 | partial | column map; admin defs C08 pending |
-| P07 | Standard contact fields | csv-import, Contact cols | contacts | B2 | partial | title/email on import |
+| P06 | Custom import fields | csv-import, custom-field defs, import apply | lists, settings | B2 | done | admin defs + typed values on import |
+| P07 | Standard contact fields | csv-import, contact detail, dialer-prep | contacts, dialer | B2 | done | title/email/refresher; edit on detail + card |
 | P08 | Timezone CSV mapping | csv-import validation | lists | B2 | done | IANA validate + infer flag |
-| P09 | Multiple phone numbers | ContactPhone, phone-resolve | dialer, contact | B2 | partial | import + resolve; M14 fallthrough pending |
+| P09 | Multiple phone numbers | ContactPhone, phone-resolve, fallthrough | dialer, contact | B2 | done | M14 session override + dialedPhoneE164 |
 | P10 | Complete session contact card | dialer-prep, session UI | dialer | B2 | done | link `/app/contacts/[id]` |
-| P11 | CRM ownership routing | eligibility leadOwnerRouting | campaigns | B2 | partial | `assigned_only` enforced |
+| P11 | CRM ownership routing | eligibility, reassign API | campaigns, contact | B2 | done | `assigned_only` + `PATCH` reassign_owner |
 | P12 | Callback UI complete | callbacks-service | callbacks | B4 | not started | |
 | P13 | Timezone coverage | timezone-window | campaigns | B3 | not started | |
 | P14 | Campaign schedules | campaign-config | campaigns | B3 | not started | |
@@ -48,12 +48,12 @@
 | M11 | Dynamic dialer | session queue | campaigns | B3 | not started | |
 | M12 | Shared team queues | campaign distribution | campaigns | B3 | not started | |
 | M13 | Abandoned-call handling | parallel safety | analytics | B8 | not started | |
-| M14 | Alternate-number fallthrough | phone-resolve, ContactPhone | dialer | B2 | partial | priority phones; session fallthrough pending |
+| M14 | Alternate-number fallthrough | phone-fallthrough, session-runtime | dialer | B2 | done | next_number/next_contact in CRM settings |
 | M15 | In-session number mgmt | contact API, UI | dialer | B1 | in progress | |
-| M16 | Mini CRM folders/views | ContactFolder, SavedView schema | `/app/contacts` | B2 | partial | schema only; UI pending |
+| M16 | Mini CRM folders/views | folders/views API, contacts list | `/app/contacts` | B2 | done | saved view filter + list APIs; folder CRUD API |
 | M17 | CRM list sync | crm-list-import | lists | B7 | not started | existing CRMs |
 | M18 | List API add/remove | public API | integrations | B7 | not started | |
-| M19 | Country code / intl | WorkspaceCrmSettings | settings | B2 | partial | schema; dial gates pending |
+| M19 | Country code / intl | dial-gates, createAttempt | dialer, settings | B2 | done | `assertOutboundDialAllowed` on dial |
 | M20–M30 | Campaign retry/scheduling | campaign-config | campaigns | B3 | not started | see gap doc |
 | M31–M39 | Dispositions/cadences/scripts | dispositions, jobs | settings | B4 | not started | |
 | M38 | Call ratings + ACW timeout | acw-enforcement, settings | dialer | B1 | done | `afterCallWorkTimeoutSec`, ratings gate |
@@ -74,7 +74,7 @@
 | M82 | Public API | API keys | integrations | B7 | not started | |
 | M83 | Browser extension | extension | integrations | B7 | not started | |
 | M84 | Native mobile apps | — | — | — | **EXCLUDED** | owner |
-| M85 | Auto-create inbound contact | contacts runtime | phone | B7 | not started | |
+| M85 | Auto-create inbound contact | inbound-contact, calls-service | phone | B2 | done | min duration + rules in CRM settings |
 | M86 | Billing dashboard | — | — | — | **EXCLUDED** | owner |
 | X01 | AMD initialization | power-dialer-amd, answer-detection | Telnyx webhooks | B1 | in progress | see B1 architecture note |
 | X02 | Server orchestration | session-orchestration | sessions API | B1 | in progress | |
@@ -82,27 +82,27 @@
 | X04 | PD recording runtime | power-dialer-recording | settings | B1 | in progress | |
 | X05 | Disposition flags | disposition-effects | runtime | B1 | in progress | |
 | X06 | Callback automation | callbacks-service | callbacks | B4 | not started | |
-| X07 | CSV wizard completeness | csv-import | lists | B2 | not started | |
+| X07 | CSV wizard completeness | csv-import | lists | B2 | partial | import + custom fields; wizard UX polish open |
 | X08 | Caller identity / rep numbers | caller-id-resolution | team | B1 | in progress | |
 | X09 | Screening settings → runtime | screening-runtime | settings | B1 | in progress | |
 | X10 | Honest data only | all surfaces | — | all | not started | ongoing |
 | X11 | Bounded resource use | usage-limits, kill switch | settings | B1 | in progress | |
 | C01 | CRM Contacts landing | contacts-workspace | `/app/contacts` | B2 | done | DB-backed list (existing) |
-| C02 | Contact detail timeline | contact-detail-workspace, native API | `/app/contacts/[id]` | B2 | partial | no mock data; timeline PD + events |
-| C03 | Companies | companies routes | contacts subnav | B2 | not started | |
-| C04 | Deals / pipeline | deals routes | contacts subnav | B2 | not started | |
-| C05 | Tasks & follow-ups | tasks | contacts | B2 | not started | |
-| C06 | Calendar / appointments | calendar | contacts | B2 | not started | |
-| C07 | Saved views / folders | views | contacts | B2 | not started | |
-| C08 | Custom fields admin | field definitions | CRM settings | B2 | not started | |
-| C09 | Import/export CRM | csv + export | contacts, lists | B2 | not started | |
-| C10 | Unified activity timeline | contact events | contact detail | B2 | not started | |
+| C02 | Contact detail timeline | contact-detail-workspace, native API | `/app/contacts/[id]` | B2 | done | unified timeline + edit + quick actions |
+| C03 | Companies | companies API + UI | `/app/contacts/companies` | B2 | done | list + detail |
+| C04 | Deals / pipeline | deals API + kanban/table | `/app/contacts/deals` | B2 | done | stage move + editable stages API |
+| C05 | Tasks & follow-ups | tasks API + UI | `/app/contacts/tasks` | B2 | done | buckets + campaign link field |
+| C06 | Calendar / appointments | appointments API + UI | `/app/contacts/calendar` | B2 | done | week list + create |
+| C07 | Saved views / folders | views/folders API, contacts filter | contacts | B2 | done | pinned views on list |
+| C08 | Custom fields admin | custom-fields API + settings UI | CRM settings | B2 | done | text/number/select |
+| C09 | Import/export CRM | list CSV + `/contacts/export` | contacts, lists | B2 | done | merge API; merge UI minimal |
+| C10 | Unified activity timeline | contact-timeline | contact detail | B2 | done | calls/SMS/tasks/callbacks/recordings gate |
 
 ## B1 architecture — AMD (X01)
 
 **Decision:** Power Dialer keeps the rep on **Telnyx WebRTC** (`client.newCall`) for media. AMD runs on the **linked Call Control leg** for that outbound call: when the browser links `telnyxCallControlId` to `HumanCall`, the server issues Telnyx `answering_machine_detection_start` (premium-capable) on that control ID. Webhooks `call.machine.detection.ended` / `call.machine.premium.detection.ended` feed `applyAmdToPowerDialerAttempt` with expanded result mapping (`human_residence`, `human_business`, `silence`, `fax_detected`, etc.). Future parallel mode (B8) will use **server-originated PSTN callee legs** (`dialPstnLeg` + bridge) with AMD on originate; B1 does not switch the default rep path to server-only originate.
 
-**Rollback (B1+B2 migration):** `20261023190000_power_dialer_b1_b2_native_crm` — drop new tables/columns in reverse order (see migration.sql header); revert application commit.
+**Rollback (B1+B2 migrations):** `20261023190000_power_dialer_b1_b2_native_crm`, `20261023200000_crm_b2b_columns` — drop new tables/columns in reverse order; revert application commits.
 
 ## Batch commits (feature branch)
 
@@ -110,4 +110,5 @@
 |-------|---------|-------|
 | B1 setup + docs | `67a830031` | — |
 | B1 core engine | `85c8498b1` | `test:power-dialer-b1` PASS, `test:power-dialer-phase9` PASS |
-| B1 carry-overs + B2 foundation | _(this run)_ | `test:power-dialer-b1-carryovers`, `test:mini-crm-native`, `test:power-dialer-b1`, `test:power-dialer-phase9` |
+| B1 carry-overs + B2 foundation | `5af852084` | `test:power-dialer-b1-carryovers`, `test:mini-crm-native`, `test:power-dialer-b1`, `test:power-dialer-phase9` PASS; `prisma migrate deploy` on scratch DB |
+| B2b native CRM complete | _(this commit)_ | `test:crm-native-b2`, `test:mini-crm-native`, `test:power-dialer-b1-carryovers` PASS; migrations `20261023200000` applied |

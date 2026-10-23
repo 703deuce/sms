@@ -4647,6 +4647,7 @@ model PowerDialerAttempt {
   callRating           Int?
   acwDeadlineAt        DateTime?
   failureReason        String?
+  dialedPhoneE164      String?
   createdAt            DateTime           @default(now())
   dispositionDef PowerDialerDisposition? @relation(fields: [dispositionId], references: [id], onDelete: SetNull)
   session       PowerDialerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -4840,6 +4841,8 @@ model CrmDeal {
   title       String
   amountCents Int?
   ownerUserId String?
+  closeTargetAt DateTime?
+  nextStep    String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -4862,6 +4865,8 @@ model CrmTask {
   dueAt       DateTime?
   status      String    @default("open")
   assigneeUserId String?
+  campaignId  String?
+  reminderAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
