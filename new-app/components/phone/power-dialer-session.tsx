@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/app/status'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import {
+  fetchContactCampaignHistory,
   fetchPowerCampaigns,
   fetchPowerSession,
   fetchPowerSessionSummary,
@@ -20,6 +21,7 @@ import {
   powerSessionAction,
   savePowerAttemptOutcome,
   startPowerSession,
+  triggerVoicemailDrop,
   type PowerSessionSummaryDto,
   type PowerCampaignDto,
   type PowerSessionStateDto,
@@ -48,6 +50,12 @@ export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCamp
   const [loading, setLoading] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [sessionSummary, setSessionSummary] = useState<PowerSessionSummaryDto | null>(null)
+  const [contactHistory, setContactHistory] = useState<{
+    attempts: { disposition: string | null; notes: string | null; createdAt: string }[];
+    callbacks: { scheduledAt: string; status: string; notes: string | null }[];
+  } | null>(null)
+  const [scriptText, setScriptText] = useState<string | null>(null)
+  const [dispositionOptions, setDispositionOptions] = useState<string[]>([...DISPOSITIONS])
   const autoDialLock = useRef(false)
 
   const sessionStatus = runtime?.session?.status ?? null
@@ -78,6 +86,32 @@ export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCamp
       })
       .catch(() => toast.error('Could not load campaigns'))
   }, [campaignId, initialCampaignId])
+
+  const leadContactId = runtime?.next?.contact.id
+
+  useEffect(() => {
+    if (!campaignId || !leadContactId) {
+      setContactHistory(null)
+      return
+    }
+    void fetchContactCampaignHistory(campaignId, leadContactId)
+      .then(setContactHistory)
+      .catch(() => undefined)
+  }, [campaignId, leadContactId])
+
+  useEffect(() => {
+    if (!campaignId) return
+    void fetch(`/api/phone/power-dialer/dispositions`)
+      .then((r) => r.json())
+      .then((j) => {
+        const sets = j.data as { isDefault?: boolean; dispositions?: { label: string }[] }[]
+        const def = sets.find((s) => s.isDefault) || sets[0]
+        if (def?.dispositions?.length) {
+          setDispositionOptions(def.dispositions.map((d) => d.label))
+        }
+      })
+      .catch(() => undefined)
+  }, [campaignId])
 
   useEffect(() => {
     if (!sessionId) return
@@ -318,18 +352,24 @@ export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCamp
                         ))}
                       </ul>
                     )}
-                    {runtime?.attempts && lead.contact.id && (
-                      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground" aria-label="Previous attempts this session">
-                        {runtime.attempts
-                          .filter((a) => a.contactPhone === lead.contact.phone)
-                          .slice(0, 4)
-                          .map((a) => (
-                            <li key={a.id}>
-                              Prior: {a.disposition || a.status} · {formatWhen(a.createdAt)}
-                              {a.notes ? ` — ${a.notes}` : ''}
-                            </li>
-                          ))}
+                    {contactHistory && (
+                      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground" aria-label="Campaign history">
+                        {contactHistory.attempts.slice(0, 6).map((a, i) => (
+                          <li key={i}>
+                            Attempt: {a.disposition || '—'} · {formatWhen(a.createdAt)}
+                            {a.notes ? ` — ${a.notes}` : ''}
+                          </li>
+                        ))}
+                        {contactHistory.callbacks.slice(0, 3).map((c, i) => (
+                          <li key={`cb-${i}`}>
+                            Callback {c.status}: {formatWhen(c.scheduledAt)}
+                            {c.notes ? ` — ${c.notes}` : ''}
+                          </li>
+                        ))}
                       </ul>
+                    )}
+                    {scriptText && (
+                      <p className="mt-3 rounded-md border bg-muted/40 p-2 text-xs whitespace-pre-wrap">{scriptText}</p>
                     )}
                     <span className="text-xs text-muted-foreground">
                       Attempt {lead.attemptNumber} of {campaignMeta?.maxAttempts ?? 3}
@@ -372,7 +412,7 @@ export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCamp
                 <fieldset className="flex flex-col gap-2">
                   <legend className="mb-2 text-sm font-medium">Disposition</legend>
                   <div className="flex flex-wrap gap-2">
-                    {DISPOSITIONS.map((d) => (
+                    {dispositionOptions.map((d) => (
                       <button
                         key={d}
                         type="button"

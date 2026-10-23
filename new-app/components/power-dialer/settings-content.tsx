@@ -52,9 +52,11 @@ export function PowerDialerSettingsContent() {
         }
       />
       <Tabs defaultValue="general">
-        <TabsList>
+        <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="dialing">Dialing</TabsTrigger>
+          <TabsTrigger value="recording">Recording</TabsTrigger>
+          <TabsTrigger value="compliance">Voicemail drops</TabsTrigger>
         </TabsList>
         <TabsContent value="general" className="mt-6">
           <Panel title="General">
@@ -119,6 +121,60 @@ export function PowerDialerSettingsContent() {
                 Require disposition before next call (UI enforced; auto-dial in Phase 2)
               </label>
             </div>
+          </Panel>
+        </TabsContent>
+        <TabsContent value="recording" className="mt-6">
+          <Panel title="Recording">
+            <div className="flex max-w-md flex-col gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.recordingEnabled ?? true}
+                  onChange={(e) => setSettings({ ...settings, recordingEnabled: e.target.checked })}
+                />
+                Enable call recording (workspace default)
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.recordingConsentAnnounce ?? false}
+                  onChange={(e) =>
+                    setSettings({ ...settings, recordingConsentAnnounce: e.target.checked })
+                  }
+                />
+                Announce recording / consent where required
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-medium">Retention (days)</span>
+                <Input
+                  type="number"
+                  min={30}
+                  value={settings.recordingRetentionDays ?? 365}
+                  onChange={(e) =>
+                    setSettings({ ...settings, recordingRetentionDays: Number(e.target.value) })
+                  }
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">Retention enforcement uses workspace media policies when available; otherwise stored for future jobs (see ledger).</p>
+            </div>
+          </Panel>
+        </TabsContent>
+        <TabsContent value="compliance" className="mt-6">
+          <Panel title="Prerecorded voicemail drops">
+            <p className="mb-3 text-sm text-muted-foreground">
+              Counsel has not reviewed prerecorded-message rules for your jurisdiction. Do not enable until your administrator confirms compliance.
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.prerecordedVmOptIn ?? false}
+                onChange={(e) => setSettings({ ...settings, prerecordedVmOptIn: e.target.checked })}
+              />
+              Admin opt-in: allow voicemail drop uploads and dialer playback
+            </label>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Beep-detection / greeting-end timing is not wired until Telnyx AMD events are certified for power-dialer legs (ledger).
+            </p>
           </Panel>
         </TabsContent>
       </Tabs>

@@ -213,7 +213,7 @@ export async function fetchOverviewMetrics() {
 }
 
 export async function searchContactsApi(q: string) {
-  return parse<{ id: string; name: string; phone: string; status: string }[]>(
+  return parse<{ id: string; name: string; phone: string; status?: string }[]>(
     await fetch(`/api/contacts/search?q=${encodeURIComponent(q)}`),
   );
 }
@@ -650,6 +650,7 @@ export type PowerListDetailDto = {
   name: string;
   description: string | null;
   source: string;
+  filtersJson?: unknown;
   updatedAt: string;
   total: number;
   filteredTotal: number;
@@ -723,5 +724,49 @@ export type CampaignAnalyticsDto = {
 export async function fetchCampaignAnalytics(campaignId: string) {
   return parse<CampaignAnalyticsDto>(
     await fetch(`/api/phone/power-dialer/campaigns/${campaignId}/analytics`),
+  );
+}
+
+export async function patchListMembers(listId: string, action: 'add' | 'remove', contactIds: string[]) {
+  const res = await fetch(`/api/phone/power-dialer/lists/${listId}/members`, {
+    method: 'PATCH',
+    headers: mutatingHeaders(),
+    body: JSON.stringify({ action, contactIds }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json.data;
+}
+
+export async function saveListFilters(listId: string, filters: unknown[]) {
+  const res = await fetch(`/api/phone/power-dialer/lists/${listId}`, {
+    method: 'PATCH',
+    headers: mutatingHeaders(),
+    body: JSON.stringify({ action: 'save_filters', filters }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json;
+}
+
+export type ContactCampaignHistoryDto = {
+  attempts: { id: string; disposition: string | null; notes: string | null; createdAt: string }[];
+  callbacks: { id: string; scheduledAt: string; status: string; notes: string | null }[];
+};
+
+export async function fetchContactCampaignHistory(campaignId: string, contactId: string) {
+  return parse<ContactCampaignHistoryDto>(
+    await fetch(
+      `/api/phone/power-dialer/campaigns/${campaignId}/contact-history?contactId=${encodeURIComponent(contactId)}`,
+    ),
+  );
+}
+
+export async function triggerVoicemailDrop(attemptId: string) {
+  return parse(
+    await fetch(`/api/phone/power-dialer/attempts/${attemptId}/voicemail-drop`, {
+      method: 'POST',
+      headers: mutatingHeaders(),
+    }),
   );
 }

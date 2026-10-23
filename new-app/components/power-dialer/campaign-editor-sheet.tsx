@@ -43,11 +43,23 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
   const [callingHoursEnd, setCallingHoursEnd] = useState('17:00')
   const [leadSource, setLeadSource] = useState('')
   const [duplicateBehavior, setDuplicateBehavior] = useState('add_to_list')
+  const [memberUserIds, setMemberUserIds] = useState<string[]>([])
+  const [dispositionSetId, setDispositionSetId] = useState('')
+  const [scriptId, setScriptId] = useState('')
+  const [voicemailDropId, setVoicemailDropId] = useState('')
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ userId: string; name: string }[]>([])
+  const [dispositionSets, setDispositionSets] = useState<{ id: string; name: string }[]>([])
+  const [scripts, setScripts] = useState<{ id: string; name: string }[]>([])
+  const [vmDrops, setVmDrops] = useState<{ id: string; name: string }[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) return
     void fetchPowerLists().then(setLists).catch(() => undefined)
+    void fetch('/api/phone/power-dialer/workspace-members').then((r) => r.json()).then((j) => setWorkspaceMembers(j.data || [])).catch(() => undefined)
+    void fetch('/api/phone/power-dialer/dispositions').then((r) => r.json()).then((j) => setDispositionSets((j.data || []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })))).catch(() => undefined)
+    void fetch('/api/phone/power-dialer/scripts').then((r) => r.json()).then((j) => setScripts(j.data || [])).catch(() => undefined)
+    void fetch('/api/phone/power-dialer/voicemail-drops').then((r) => r.json()).then((j) => setVmDrops(j.data || [])).catch(() => undefined)
     const active = owned.find((n) => n.status === 'active')
     if (active && !callerId) setCallerId(active.number)
   }, [open, owned, callerId])
@@ -72,6 +84,10 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         setCallingHoursEnd(d.rules.callingHoursEnd)
         setLeadSource(d.extended.leadSource || '')
         setDuplicateBehavior(d.extended.duplicateBehavior || 'add_to_list')
+        setMemberUserIds(d.extended.memberUserIds || [])
+        setDispositionSetId(d.extended.dispositionSetId || '')
+        setScriptId(d.extended.scriptId || '')
+        setVoicemailDropId(d.extended.voicemailDropId || '')
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not load campaign'))
   }, [open, campaignId])
@@ -95,9 +111,10 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         requireDispositionBeforeNext: requireDisposition,
         callingHoursStart,
         callingHoursEnd,
-        scriptId: null,
-        voicemailDropId: null,
-        dispositionSetId: null,
+        memberUserIds,
+        scriptId: scriptId || null,
+        voicemailDropId: voicemailDropId || null,
+        dispositionSetId: dispositionSetId || null,
       }
       if (campaignId) {
         await savePowerCampaignDetail(campaignId, {
@@ -142,6 +159,7 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
             <TabsTrigger value="caller">Caller ID</TabsTrigger>
             <TabsTrigger value="handling">Call handling</TabsTrigger>
             <TabsTrigger value="outcomes">Outcomes</TabsTrigger>
+            <TabsTrigger value="members">Members</TabsTrigger>
           </TabsList>
           <TabsContent value="general" className="flex flex-col gap-3">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name" aria-label="Campaign name" />
@@ -202,11 +220,37 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
             />
             <p className="text-xs text-muted-foreground">Numbers come from the global Numbers inventory. Number pools are not configured in this workspace.</p>
           </TabsContent>
-          <TabsContent value="handling" className="flex flex-col gap-3 text-sm text-muted-foreground">
-            <p>Scripts, voicemail drops, and screening profiles will wire to Phase 4 libraries. Selection fields are stored on the campaign but controls stay disabled until those entities exist.</p>
+          <TabsContent value="handling" className="flex flex-col gap-3">
+            <SimpleSelect label="Script" value={scriptId} onChange={setScriptId} options={[{ value: '', label: 'None' }, ...scripts.map((s) => ({ value: s.id, label: s.name }))]} />
+            <SimpleSelect label="Voicemail drop" value={voicemailDropId} onChange={setVoicemailDropId} options={[{ value: '', label: 'None' }, ...vmDrops.map((s) => ({ value: s.id, label: s.name }))]} />
+            <p className="text-xs text-muted-foreground">Voicemail drops require admin compliance opt-in under Settings → Voicemail drops.</p>
           </TabsContent>
-          <TabsContent value="outcomes" className="flex flex-col gap-3 text-sm text-muted-foreground">
-            <p>Default disposition set uses the standard Power Dialer dispositions. Custom disposition sets arrive in Phase 4.</p>
+          <TabsContent value="outcomes" className="flex flex-col gap-3">
+            <SimpleSelect
+              label="Disposition set"
+              value={dispositionSetId}
+              onChange={setDispositionSetId}
+              options={[{ value: '', label: 'Workspace default' }, ...dispositionSets.map((s) => ({ value: s.id, label: s.name }))]}
+            />
+          </TabsContent>
+          <TabsContent value="members" className="flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground">Only assigned reps (or owners/admins) can start dialing sessions on this campaign.</p>
+            <ul className="max-h-48 overflow-auto rounded border p-2 text-sm">
+              {workspaceMembers.map((m) => (
+                <li key={m.userId} className="flex items-center gap-2 py-1">
+                  <input
+                    type="checkbox"
+                    checked={memberUserIds.includes(m.userId)}
+                    onChange={(e) => {
+                      setMemberUserIds((prev) =>
+                        e.target.checked ? [...prev, m.userId] : prev.filter((id) => id !== m.userId),
+                      )
+                    }}
+                  />
+                  {m.name}
+                </li>
+              ))}
+            </ul>
           </TabsContent>
         </Tabs>
         <div className="mt-6 flex justify-end gap-2">
