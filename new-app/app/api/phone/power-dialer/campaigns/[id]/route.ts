@@ -23,6 +23,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
         rules: detail.rules,
         extended: detail.extended,
         eligibility: detail.eligibility,
+        configJson: c.configJson,
       },
     });
   } catch (err) {

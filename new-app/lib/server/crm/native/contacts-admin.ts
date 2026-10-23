@@ -194,7 +194,58 @@ export async function bulkPatchContacts(
   return { updated };
 }
 
-export async function mergeContacts(workspaceId: string, primaryId: string, mergedId: string) {
+export async function findDuplicateContactGroups(workspaceId: string, limit = 25) {
+  await assertCrmRead(workspaceId);
+  const prisma = getPrisma();
+  const contacts = await prisma.contact.findMany({
+    where: { workspaceId, status: { not: "INVALID" } },
+    take: 3000,
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      email: true,
+      title: true,
+      company: true,
+      updatedAt: true,
+    },
+  });
+  const byPhone = new Map<string, typeof contacts>();
+  for (const c of contacts) {
+    try {
+      const key = normalizeE164(c.phone);
+      const list = byPhone.get(key) || [];
+      list.push(c);
+      byPhone.set(key, list);
+    } catch {
+      /* invalid phone */
+    }
+  }
+  const groups = [...byPhone.values()]
+    .filter((g) => g.length > 1)
+    .slice(0, limit)
+    .map((g) => ({
+      phone: g[0].phone,
+      contacts: g.map((c) => ({
+        id: c.id,
+        name: [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown",
+        email: c.email,
+        title: c.title,
+        company: c.company,
+        updatedAt: c.updatedAt.toISOString(),
+      })),
+    }));
+  return groups;
+}
+
+export async function mergeContacts(
+  workspaceId: string,
+  primaryId: string,
+  mergedId: string,
+  fieldWinners?: Record<string, "primary" | "merged">,
+) {
   const { userId, isAdmin, writeScope } = await assertCrmWrite(workspaceId);
   const prisma = getPrisma();
   if (primaryId === mergedId) throw new Error("Cannot merge contact with itself");
@@ -206,7 +257,29 @@ export async function mergeContacts(workspaceId: string, primaryId: string, merg
   assertCanWriteContact(primary, userId, isAdmin, writeScope);
   assertCanWriteContact(merged, userId, isAdmin, writeScope);
 
-  await prisma.contactMergeRecord.create({
+  const pick = (field: keyof typeof primary) => {
+    const winner = fieldWinners?.[field as string];
+    if (winner === "merged") return merged[field];
+    if (winner === "primary") return primary[field];
+    const p = primary[field];
+    const m = merged[field];
+    if (p == null || p === "") return m;
+    return p;
+  };
+
+  await prisma.contact.update({
+    where: { id: primaryId },
+    data: {
+      firstName: pick("firstName") as string | null,
+      lastName: pick("lastName") as string | null,
+      email: pick("email") as string | null,
+      title: pick("title") as string | null,
+      company: pick("company") as string | null,
+      timezone: pick("timezone") as string | null,
+    },
+  });
+
+  const mergeRecord = await prisma.contactMergeRecord.create({
     data: {
       workspaceId,
       primaryContactId: primaryId,
@@ -232,7 +305,52 @@ export async function mergeContacts(workspaceId: string, primaryId: string, merg
     data: { status: "INVALID", customFields: { mergedInto: primaryId } },
   });
 
-  return { primaryContactId: primaryId, mergedContactId: mergedId };
+  await prisma.contactActivityEvent.create({
+    data: {
+      workspaceId,
+      contactId: primaryId,
+      kind: "merge",
+      title: "Contacts merged",
+      body: `Merged duplicate into this record (${merged.phone}).`,
+      occurredAt: new Date(),
+      metadata: { mergedContactId: mergedId, mergeRecordId: mergeRecord.id },
+    },
+  });
+
+  return {
+    primaryContactId: primaryId,
+    mergedContactId: mergedId,
+    mergeRecordId: mergeRecord.id,
+    undoUntil: new Date(Date.now() + 10 * 60_000).toISOString(),
+  };
+}
+
+export async function undoContactMerge(workspaceId: string, mergeRecordId: string) {
+  const { userId, isAdmin, writeScope } = await assertCrmWrite(workspaceId);
+  const prisma = getPrisma();
+  const record = await prisma.contactMergeRecord.findFirst({
+    where: { id: mergeRecordId, workspaceId },
+  });
+  if (!record) throw new Error("Merge record not found");
+  const ageMs = Date.now() - record.createdAt.getTime();
+  if (ageMs > 10 * 60_000) throw new Error("Undo window expired");
+  const merged = await prisma.contact.findFirst({
+    where: { id: record.mergedContactId, workspaceId },
+  });
+  if (!merged || merged.status !== "INVALID") throw new Error("Merged contact cannot be restored");
+  assertCanWriteContact(merged, userId, isAdmin, writeScope);
+  const snap = record.mergedSnapshot as Record<string, unknown> | null;
+  await prisma.contact.update({
+    where: { id: record.mergedContactId },
+    data: {
+      status: "SUBSCRIBED",
+      firstName: (snap?.firstName as string) ?? merged.firstName,
+      lastName: (snap?.lastName as string) ?? merged.lastName,
+      email: (snap?.email as string) ?? merged.email,
+      customFields: (snap?.customFields as import("@prisma/client").Prisma.InputJsonValue) ?? {},
+    },
+  });
+  return { restoredContactId: record.mergedContactId };
 }
 
 export async function exportContactsCsv(workspaceId: string) {

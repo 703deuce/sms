@@ -1,5 +1,8 @@
 import { resolveContactDialPhone } from "./phone-resolve";
-import { isCallingWindowOpen, startOfDayInTimezone } from "./timezone-window";
+import { areaCodeAllowed, type WorkspaceDialPolicy } from "./dial-policy";
+import type { CampaignAdvanced } from "./campaign-advanced";
+import { retryDelayMinutesForAttempt } from "./campaign-advanced";
+import { isCallingWindowOpen, resolveLegalHours, startOfDayInTimezone } from "./timezone-window";
 import type {
   AttemptSummary,
   ContactForEligibility,
@@ -39,6 +42,9 @@ export function evaluateContactEligibility(input: {
   usageBlocked?: boolean;
   sessionRepUserId?: string | null;
   leadOwnerRouting?: "off" | "assigned_only" | "allow_cross_rep";
+  advanced?: CampaignAdvanced;
+  workspaceFrequency?: { ok: boolean; reason?: string; retryEligibleAt?: Date };
+  workspaceDialPolicy?: WorkspaceDialPolicy;
 }): EligibilityResult {
   const {
     contact,
@@ -114,6 +120,51 @@ export function evaluateContactEligibility(input: {
     return { eligible: false, bucket: "suppressed", reason: "internal_dnc" };
   }
 
+  const advanced = input.advanced || {};
+  const acCheck = areaCodeAllowed(
+    e164,
+    advanced.allowedAreaCodes || [],
+    advanced.blockedAreaCodes || [],
+    input.workspaceDialPolicy || {
+      minMinutesBetweenCallsToPhone: 0,
+      maxCallsToPhonePerDay: 0,
+      allowedAreaCodes: [],
+      blockedAreaCodes: [],
+    },
+  );
+  if (!acCheck.ok) {
+    return {
+      eligible: false,
+      bucket: "suppressed",
+      reason: acCheck.reason === "area_code_not_allowed" ? "area_code_not_allowed" : "area_code_blocked",
+    };
+  }
+
+  if (input.workspaceFrequency && !input.workspaceFrequency.ok) {
+    const r = input.workspaceFrequency.reason;
+    if (r === "workspace_phone_daily_cap") {
+      return { eligible: false, bucket: "deferred", reason: "workspace_phone_daily_cap" };
+    }
+    return {
+      eligible: false,
+      bucket: "deferred",
+      reason: "workspace_phone_cooldown",
+      retryEligibleAt: input.workspaceFrequency.retryEligibleAt?.toISOString(),
+    };
+  }
+
+  const openCallback = campaignAttemptsForContact.find(
+    (a) => a.callbackAt && a.callbackAt > now && a.disposition?.toLowerCase() === "callback",
+  );
+  if (openCallback?.callbackAt && openCallback.callbackAt > now) {
+    return {
+      eligible: false,
+      bucket: "deferred",
+      reason: "callback_scheduled_future",
+      retryEligibleAt: openCallback.callbackAt.toISOString(),
+    };
+  }
+
   const totalAttempts = campaignAttemptsForContact.filter((a) =>
     ["completed", "no_answer", "voicemail", "failed", "answered"].includes(a.status) ||
     a.disposition,
@@ -132,8 +183,13 @@ export function evaluateContactEligibility(input: {
   const lastEnded = [...campaignAttemptsForContact]
     .filter((a) => a.endedAt)
     .sort((a, b) => (b.endedAt!.getTime() - a.endedAt!.getTime()))[0];
-  if (lastEnded?.endedAt && rules.retryIntervalMinutes > 0) {
-    const retryAt = new Date(lastEnded.endedAt.getTime() + rules.retryIntervalMinutes * 60_000);
+  const completedCount = campaignAttemptsForContact.filter((a) => a.endedAt || a.disposition).length;
+  const retryMin = retryDelayMinutesForAttempt(advanced, rules.retryIntervalMinutes, completedCount);
+  const skipRetryForCallback =
+    advanced.callbackExemptFromRetryDelay &&
+    campaignAttemptsForContact.some((a) => a.callbackAt && a.callbackAt <= now);
+  if (lastEnded?.endedAt && retryMin > 0 && !skipRetryForCallback) {
+    const retryAt = new Date(lastEnded.endedAt.getTime() + retryMin * 60_000);
     if (now < retryAt) {
       return {
         eligible: false,
@@ -144,12 +200,20 @@ export function evaluateContactEligibility(input: {
     }
   }
 
+  const legal = resolveLegalHours(
+    advanced.jurisdictionPreset,
+    rules.callingHoursStart,
+    rules.callingHoursEnd,
+    advanced.customLegalStart,
+    advanced.customLegalEnd,
+  );
   const window = isCallingWindowOpen(
     now,
     tz,
     rules.allowedDays,
-    rules.callingHoursStart,
-    rules.callingHoursEnd,
+    legal.startHm,
+    legal.endHm,
+    advanced.scheduleBreaks || [],
   );
   if (!window.open) {
     return { eligible: false, bucket: "deferred", reason: "calling_window_closed" };
@@ -198,6 +262,15 @@ export function reasonToUserMessage(code: EligibilityReasonCode): string {
     rep_not_authorized: "Not authorized",
     internal_dnc: "On workspace do-not-call list",
     usage_limit_reached: "Included minutes exhausted for this period",
+    lead_owner_mismatch: "Assigned to another rep",
+    area_code_blocked: "Area code blocked",
+    area_code_not_allowed: "Area code not on allow list",
+    workspace_phone_cooldown: "Workspace cooldown for this number",
+    workspace_phone_daily_cap: "Workspace daily cap for this number",
+    scheduled_break: "Campaign break window",
+    jurisdiction_window_closed: "Outside legal calling hours",
+    callback_scheduled_future: "Callback scheduled for later",
+    removed_from_queue: "Removed from campaign queue",
   };
   return map[code] ?? code;
 }

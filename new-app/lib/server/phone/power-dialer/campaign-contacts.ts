@@ -1,7 +1,12 @@
 import { getPrisma } from "@/lib/server/db";
-import { resolveCampaignRules } from "./campaign-config";
-import { evaluateContactEligibility, reasonToUserMessage } from "./eligibility";
+import { reasonToUserMessage } from "./eligibility";
 import { loadCampaignAttemptMap } from "./campaign-rollups";
+import {
+  evaluateListMemberEligibility,
+  loadCampaignEligibilityContext,
+} from "./campaign-eligibility-helpers";
+import { parseCampaignAdvanced } from "./campaign-advanced";
+import { sortCampaignQueueMembers } from "./queue-order";
 import type { EligibilityBucket } from "./types";
 
 const MAX_BUCKET_SCAN = 5000;
@@ -47,29 +52,28 @@ type ContactRow = {
 async function mapMembersToRows(
   workspaceId: string,
   campaignId: string,
-  campaign: { status: string; listId: string },
+  campaign: import("@prisma/client").PowerDialerCampaign,
   members: { contact: import("@prisma/client").Contact }[],
-  rules: ReturnType<typeof resolveCampaignRules>,
   bucketFilter?: EligibilityBucket | "all",
 ): Promise<ContactRow[]> {
   const contactIds = members.map((m) => m.contact.id);
   const attemptMap = await loadCampaignAttemptMap(workspaceId, campaignId, contactIds);
   const now = new Date();
+  const ctx = await loadCampaignEligibilityContext(campaign);
   const rows: ContactRow[] = [];
 
   for (const m of members) {
     const attempts = attemptMap.get(m.contact.id) || [];
-    const eligibility = evaluateContactEligibility({
+    const eligibility = await evaluateListMemberEligibility({
+      workspaceId,
+      campaign,
       contact: m.contact,
-      rules,
-      campaignAttemptsForContact: attempts,
-      sessionAttemptsForContact: [],
+      campaignAttempts: attempts,
+      sessionAttempts: [],
       now,
+      ctx,
       sessionActive: campaign.status === "active",
       sessionPaused: campaign.status === "paused",
-      hasOpenDispositionBlock: false,
-      anyLiveAttemptInSession: false,
-      repAuthorized: true,
     });
     if (bucketFilter && bucketFilter !== "all" && eligibility.bucket !== bucketFilter) {
       continue;
@@ -118,22 +122,32 @@ export async function listCampaignContacts(
   });
   if (!campaign) throw new Error("Campaign not found");
 
-  const rules = resolveCampaignRules(campaign);
   const memberWhere = buildMemberWhere(campaign.listId, input.search);
   const totalMembers = await prisma.contactListMember.count({ where: memberWhere });
   const page = Math.max(1, input.page);
   const pageSize = Math.min(100, Math.max(1, input.pageSize));
   const bucket = input.bucket ?? "all";
 
+  const advanced = parseCampaignAdvanced(campaign.configJson);
+
   if (bucket === "all") {
-    const members = await prisma.contactListMember.findMany({
+    const allForSort = await prisma.contactListMember.findMany({
       where: memberWhere,
       include: { contact: true },
-      orderBy: { contact: { lastName: "asc" } },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      take: MAX_BUCKET_SCAN,
     });
-    const rows = await mapMembersToRows(workspaceId, campaignId, campaign, members, rules, "all");
+    const sorted = sortCampaignQueueMembers(
+      allForSort.map((m) => ({
+        member: m,
+        contactId: m.contactId,
+        dialPriority: m.dialPriority,
+        queueSortOrder: m.queueSortOrder,
+        createdAt: m.contact.createdAt,
+      })),
+      advanced,
+    );
+    const pageMembers = sorted.slice((page - 1) * pageSize, page * pageSize).map((r) => r.member);
+    const rows = await mapMembersToRows(workspaceId, campaignId, campaign, pageMembers, "all");
     return {
       rows,
       page,
@@ -150,7 +164,17 @@ export async function listCampaignContacts(
     orderBy: { contact: { lastName: "asc" } },
     take: scanCap,
   });
-  const filtered = await mapMembersToRows(workspaceId, campaignId, campaign, allMembers, rules, bucket);
+  const sortedAll = sortCampaignQueueMembers(
+    allMembers.map((m) => ({
+      member: m,
+      contactId: m.contactId,
+      dialPriority: m.dialPriority,
+      queueSortOrder: m.queueSortOrder,
+      createdAt: m.contact.createdAt,
+    })),
+    advanced,
+  ).map((r) => r.member);
+  const filtered = await mapMembersToRows(workspaceId, campaignId, campaign, sortedAll, bucket);
   const filteredCount = filtered.length;
   const start = (page - 1) * pageSize;
   const rows = filtered.slice(start, start + pageSize);

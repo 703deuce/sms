@@ -10,6 +10,9 @@ import {
 import { applyDispositionEffects, isHumanConversation } from "./disposition-effects";
 import { assertCampaignDialAccess } from "./campaign-access";
 import { parseExtendedConfig } from "./campaign-extended-config";
+import { parseCampaignAdvanced } from "./campaign-advanced";
+import { checkWorkspacePhoneFrequency, getWorkspaceDialPolicy } from "./dial-policy";
+import { sortCampaignQueueMembers } from "./queue-order";
 import { resolveDispositionByLabel } from "./dispositions";
 import { resolveContactDialPhone } from "./phone-resolve";
 import type {
@@ -186,20 +189,45 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
     session.progressJson && typeof session.progressJson === "object"
       ? (session.progressJson as { focusContactId?: string })
       : {};
-  const members = [...session.campaign.list.members];
+  const advanced = parseCampaignAdvanced(session.campaign.configJson);
+  const dialPolicy = await getWorkspaceDialPolicy(workspaceId);
+  const queueRows = sortCampaignQueueMembers(
+    session.campaign.list.members.map((m) => ({
+      member: m,
+      contactId: m.contactId,
+      dialPriority: m.dialPriority,
+      queueSortOrder: m.queueSortOrder,
+      createdAt: m.contact.createdAt,
+    })),
+    advanced,
+  );
+  let members = queueRows.map((r) => r.member);
+  const { loadDueCallbackContactIds } = await import("./campaign-eligibility-helpers");
+  const dueCallbackIds = await loadDueCallbackContactIds(
+    session.workspaceId,
+    session.campaignId,
+    session.repUserId,
+    now,
+  );
+  if (dueCallbackIds.length) {
+    const dueSet = new Set(dueCallbackIds);
+    members = [
+      ...members.filter((m) => dueSet.has(m.contactId)),
+      ...members.filter((m) => !dueSet.has(m.contactId)),
+    ];
+  }
   if (progress.focusContactId) {
-    members.sort((a, b) => {
-      if (a.contactId === progress.focusContactId) return -1;
-      if (b.contactId === progress.focusContactId) return 1;
-      return 0;
-    });
+    members = [
+      ...members.filter((m) => m.contactId === progress.focusContactId),
+      ...members.filter((m) => m.contactId !== progress.focusContactId),
+    ];
   }
 
   const usageSnap = await import("./usage-limits").then((m) =>
     m.getPowerDialerUsageSnapshot(session.workspaceId),
   );
   const ext = parseExtendedConfig(session.campaign.configJson);
-  const leadOwnerRouting = ext.leadOwnerRouting || "off";
+  const leadOwnerRouting = ext.leadOwnerRouting || advanced.leadOwnerRouting || "off";
 
   for (const m of members) {
     const c = m.contact;
@@ -209,6 +237,9 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
     const onInternalDnc = e164
       ? await (await import("./internal-dnc")).isOnInternalDnc(session.workspaceId, e164)
       : false;
+    const freq = e164
+      ? await checkWorkspacePhoneFrequency(session.workspaceId, e164, now, dialPolicy)
+      : { ok: true as const };
     const eligibility = evaluateContactEligibility({
       contact: {
         ...c,
@@ -232,6 +263,9 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
       usageBlocked: usageSnap.blocked,
       sessionRepUserId: session.repUserId,
       leadOwnerRouting,
+      advanced,
+      workspaceDialPolicy: dialPolicy,
+      workspaceFrequency: freq,
     });
     counts[eligibility.bucket] += 1;
     if (!nextEligible && eligibility.eligible) {

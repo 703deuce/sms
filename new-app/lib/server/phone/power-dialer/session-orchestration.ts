@@ -88,17 +88,45 @@ export async function listUpcomingEligibleContacts(
       : {};
   for (const id of progress.skippedContactIds || []) skipped.add(id);
 
-  const { resolveCampaignRules } = await import("./campaign-config");
-  const { getPowerDialerSettings } = await import("@/lib/server/phone/power-dialer");
-  const ws = await getPowerDialerSettings(workspaceId);
-  const rules = resolveCampaignRules(session.campaign, ws);
-  const { evaluateContactEligibility } = await import("./eligibility");
-  const { resolveContactDialPhone } = await import("./phone-resolve");
+  const {
+    evaluateListMemberEligibility,
+    loadCampaignEligibilityContext,
+    loadDueCallbackContactIds,
+  } = await import("./campaign-eligibility-helpers");
+  const { parseCampaignAdvanced } = await import("./campaign-advanced");
+  const { sortCampaignQueueMembers } = await import("./queue-order");
+  const ctx = await loadCampaignEligibilityContext(session.campaign);
+  const advanced = parseCampaignAdvanced(session.campaign.configJson);
 
   const rows: UpcomingContactRow[] = [];
   const now = new Date();
 
-  for (const m of session.campaign.list.members) {
+  const sorted = sortCampaignQueueMembers(
+    session.campaign.list.members.map((m) => ({
+      member: m,
+      contactId: m.contactId,
+      dialPriority: m.dialPriority,
+      queueSortOrder: m.queueSortOrder,
+      createdAt: m.contact.createdAt,
+    })),
+    advanced,
+  );
+  const dueIds = await loadDueCallbackContactIds(
+    workspaceId,
+    session.campaignId,
+    session.repUserId,
+    now,
+  );
+  const dueSet = new Set(dueIds);
+  let ordered = sorted.map((r) => r.member);
+  if (dueSet.size) {
+    ordered = [
+      ...ordered.filter((m) => dueSet.has(m.contactId)),
+      ...ordered.filter((m) => !dueSet.has(m.contactId)),
+    ];
+  }
+
+  for (const m of ordered) {
     if (skipped.has(m.contactId)) continue;
     const c = m.contact;
     const campaignAttempts = await prisma.powerDialerAttempt.findMany({
@@ -109,23 +137,17 @@ export async function listUpcomingEligibleContacts(
       where: { sessionId, contactId: c.id },
       select: { status: true, disposition: true, attemptNumber: true, createdAt: true, endedAt: true },
     });
-    const { e164 } = resolveContactDialPhone(c, rules.phoneFieldPriority);
-    const onInternalDnc = e164
-      ? await (await import("./internal-dnc")).isOnInternalDnc(workspaceId, e164)
-      : false;
-    const eligibility = evaluateContactEligibility({
+    const eligibility = await evaluateListMemberEligibility({
+      workspaceId,
+      campaign: session.campaign,
       contact: c,
-      rules,
-      campaignAttemptsForContact: campaignAttempts,
-      sessionAttemptsForContact: sessAttempts,
+      campaignAttempts: campaignAttempts,
+      sessionAttempts: sessAttempts,
       now,
+      ctx,
       sessionActive: session.status === "active",
       sessionPaused: session.status === "paused",
-      hasOpenDispositionBlock: false,
-      anyLiveAttemptInSession: false,
-      repAuthorized: true,
-      onInternalDnc,
-      usageBlocked: false,
+      sessionRepUserId: session.repUserId,
     });
     if (!eligibility.eligible) continue;
     const attemptNumber =

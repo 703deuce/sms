@@ -51,6 +51,7 @@ export async function patchWorkspaceCrmSettings(
     phoneFallthroughMode?: "next_number" | "next_contact";
     inboundContactRules?: InboundContactRules;
     teamScopes?: TeamPermissionScopes;
+    dialPolicyJson?: Record<string, unknown>;
   },
 ) {
   const prisma = getPrisma();
@@ -67,6 +68,9 @@ export async function patchWorkspaceCrmSettings(
         ? { inboundContactRules: patch.inboundContactRules as import("@prisma/client").Prisma.InputJsonValue }
         : {}),
       prefsJson: prefs as import("@prisma/client").Prisma.InputJsonValue,
+      ...(patch.dialPolicyJson !== undefined
+        ? { dialPolicyJson: patch.dialPolicyJson as import("@prisma/client").Prisma.InputJsonValue }
+        : {}),
     },
   });
 }

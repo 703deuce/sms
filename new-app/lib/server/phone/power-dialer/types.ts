@@ -21,7 +21,15 @@ export type EligibilityReasonCode =
   | "rep_not_authorized"
   | "internal_dnc"
   | "usage_limit_reached"
-  | "lead_owner_mismatch";
+  | "lead_owner_mismatch"
+  | "area_code_blocked"
+  | "area_code_not_allowed"
+  | "workspace_phone_cooldown"
+  | "workspace_phone_daily_cap"
+  | "scheduled_break"
+  | "jurisdiction_window_closed"
+  | "callback_scheduled_future"
+  | "removed_from_queue";
 
 export type AnswerClassification =
   | "human"

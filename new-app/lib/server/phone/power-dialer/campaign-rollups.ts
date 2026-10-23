@@ -1,6 +1,8 @@
 import { getPrisma } from "@/lib/server/db";
-import { resolveCampaignRules } from "./campaign-config";
-import { evaluateContactEligibility } from "./eligibility";
+import {
+  evaluateListMemberEligibility,
+  loadCampaignEligibilityContext,
+} from "./campaign-eligibility-helpers";
 import type { AttemptSummary, EligibilityBucket } from "./types";
 
 const MAX_ROLLUP_CONTACTS = 5000;
@@ -50,7 +52,7 @@ export async function computeCampaignEligibilityRollups(
   });
   if (!campaign) throw new Error("Campaign not found");
 
-  const rules = resolveCampaignRules(campaign);
+  const ctx = await loadCampaignEligibilityContext(campaign);
   const members = campaign.list.members;
   const truncated = members.length >= MAX_ROLLUP_CONTACTS;
   const contactIds = members.map((m) => m.contactId);
@@ -66,17 +68,16 @@ export async function computeCampaignEligibilityRollups(
 
   const now = new Date();
   for (const m of members) {
-    const eligibility = evaluateContactEligibility({
+    const eligibility = await evaluateListMemberEligibility({
+      workspaceId,
+      campaign,
       contact: m.contact,
-      rules,
-      campaignAttemptsForContact: attemptMap.get(m.contact.id) || [],
-      sessionAttemptsForContact: [],
+      campaignAttempts: attemptMap.get(m.contact.id) || [],
+      sessionAttempts: [],
       now,
+      ctx,
       sessionActive: campaign.status === "active",
       sessionPaused: campaign.status === "paused",
-      hasOpenDispositionBlock: false,
-      anyLiveAttemptInSession: false,
-      repAuthorized: true,
     });
     counts[eligibility.bucket] += 1;
   }

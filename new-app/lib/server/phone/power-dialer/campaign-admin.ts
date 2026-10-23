@@ -129,6 +129,70 @@ export async function getCampaignDetail(workspaceId: string, id: string) {
   };
 }
 
+/** M20 — reopen a completed/paused campaign for another pass (queue flags only; attempt history preserved). */
+export async function rerunCampaign(
+  workspaceId: string,
+  id: string,
+  input?: { includeCompletedContacts?: boolean },
+) {
+  const prisma = getPrisma();
+  const campaign = await prisma.powerDialerCampaign.findFirst({ where: { id, workspaceId } });
+  if (!campaign) throw new Error("Campaign not found");
+  const members = await prisma.contactListMember.findMany({
+    where: { listId: campaign.listId },
+    select: { contactId: true, contact: { select: { customFields: true } } },
+  });
+  for (const m of members) {
+    const cf =
+      m.contact.customFields && typeof m.contact.customFields === "object"
+        ? { ...(m.contact.customFields as object) }
+        : {};
+    delete (cf as Record<string, unknown>).powerDialerRemovedFromQueueAt;
+    if (input?.includeCompletedContacts) {
+      delete (cf as Record<string, unknown>).powerDialerCompletedAt;
+    }
+    await prisma.contact.update({
+      where: { id: m.contactId },
+      data: { customFields: cf as import("@prisma/client").Prisma.InputJsonValue },
+    });
+  }
+  const cfg =
+    campaign.configJson && typeof campaign.configJson === "object"
+      ? { ...(campaign.configJson as object) }
+      : {};
+  delete (cfg as Record<string, unknown>).completionReason;
+  return prisma.powerDialerCampaign.update({
+    where: { id },
+    data: {
+      status: "active",
+      configJson: cfg as import("@prisma/client").Prisma.InputJsonValue,
+    },
+  });
+}
+
+export async function markCampaignCompletedIfExhausted(
+  workspaceId: string,
+  campaignId: string,
+  reason = "no_eligible_contacts",
+) {
+  const prisma = getPrisma();
+  const { counts } = await computeCampaignEligibilityRollups(workspaceId, campaignId);
+  if (counts.eligible > 0) return null;
+  const campaign = await prisma.powerDialerCampaign.findFirst({ where: { id: campaignId, workspaceId } });
+  if (!campaign || campaign.status === "completed") return null;
+  const cfg =
+    campaign.configJson && typeof campaign.configJson === "object"
+      ? { ...(campaign.configJson as object), completionReason: reason }
+      : { completionReason: reason };
+  return prisma.powerDialerCampaign.update({
+    where: { id: campaignId },
+    data: {
+      status: "completed",
+      configJson: cfg as import("@prisma/client").Prisma.InputJsonValue,
+    },
+  });
+}
+
 export async function cloneCampaign(workspaceId: string, id: string, name?: string) {
   const prisma = getPrisma();
   const src = await prisma.powerDialerCampaign.findFirst({ where: { id, workspaceId } });

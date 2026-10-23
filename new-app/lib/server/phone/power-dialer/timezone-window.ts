@@ -25,15 +25,49 @@ export function localDateParts(now: Date, timeZone: string): { weekday: number; 
   return { weekday: map[wd] ?? 1, minutes: hour * 60 + minute };
 }
 
+export type ScheduleBreak = { startHm: string; endHm: string };
+
+function minutesInBreak(minutes: number, breaks: ScheduleBreak[]): boolean {
+  for (const b of breaks) {
+    const s = parseHm(b.startHm);
+    const e = parseHm(b.endHm);
+    if (!s || !e) continue;
+    const sm = s.h * 60 + s.m;
+    const em = e.h * 60 + e.m;
+    if (sm <= em) {
+      if (minutes >= sm && minutes < em) return true;
+    } else if (minutes >= sm || minutes < em) return true;
+  }
+  return false;
+}
+
+export function resolveLegalHours(
+  preset: "none" | "us_ftc_consumer" | "custom" | undefined,
+  campaignStart: string,
+  campaignEnd: string,
+  customStart?: string,
+  customEnd?: string,
+): { startHm: string; endHm: string } {
+  if (preset === "us_ftc_consumer") return { startHm: "08:00", endHm: "21:00" };
+  if (preset === "custom" && customStart && customEnd) {
+    return { startHm: customStart, endHm: customEnd };
+  }
+  return { startHm: campaignStart, endHm: campaignEnd };
+}
+
 export function isCallingWindowOpen(
   now: Date,
   timeZone: string,
   allowedDays: number[],
   startHm: string,
   endHm: string,
+  breaks: ScheduleBreak[] = [],
 ): { open: boolean; nextOpenAt?: Date } {
   const { weekday, minutes } = localDateParts(now, timeZone);
   if (!allowedDays.includes(weekday)) {
+    return { open: false };
+  }
+  if (breaks.length && minutesInBreak(minutes, breaks)) {
     return { open: false };
   }
   const start = parseHm(startHm);
