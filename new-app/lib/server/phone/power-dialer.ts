@@ -245,55 +245,10 @@ export async function listPowerDialerCallbacks(
   workspaceId: string,
   tab: "due_today" | "upcoming" | "overdue" | "completed" | "all" = "all",
 ) {
-  const prisma = getPrisma();
-  const now = new Date();
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(now);
-  endOfDay.setHours(23, 59, 59, 999);
-
-  const where: Record<string, unknown> = {
-    workspaceId,
-    callbackAt: { not: null },
-  };
-
-  if (tab === "completed") {
-    where.status = "completed";
-    where.disposition = { not: null };
-  } else if (tab === "due_today") {
-    where.callbackAt = { gte: startOfDay, lte: endOfDay };
-    where.status = { not: "cancelled" };
-  } else if (tab === "upcoming") {
-    where.callbackAt = { gt: endOfDay };
-  } else if (tab === "overdue") {
-    where.callbackAt = { lt: startOfDay };
-    where.status = { in: ["pending", "dialing", "completed"] };
-  }
-
-  const rows = await prisma.powerDialerAttempt.findMany({
-    where,
-    orderBy: { callbackAt: "asc" },
-    take: 100,
-    include: {
-      contact: { select: { firstName: true, lastName: true, phone: true, company: true, status: true } },
-      session: { include: { campaign: { select: { id: true, name: true, timezone: true } } } },
-    },
-  });
-
-  return rows.map((a) => ({
-    id: a.id,
-    callbackAt: a.callbackAt?.toISOString() ?? null,
-    disposition: a.disposition,
-    notes: a.notes,
-    status: a.status,
-    contactName: [a.contact.firstName, a.contact.lastName].filter(Boolean).join(" ") || "Unknown",
-    contactPhone: a.contact.phone,
-    company: a.contact.company,
-    contactStatus: a.contact.status,
-    campaignId: a.session.campaign.id,
-    campaignName: a.session.campaign.name,
-    timezone: a.session.campaign.timezone,
-  }));
+  const { listPowerDialerCallbacksV2 } = await import(
+    "@/lib/server/phone/power-dialer/callbacks-service"
+  );
+  return listPowerDialerCallbacksV2(workspaceId, tab);
 }
 
 export async function getPowerDialerOverview(workspaceId: string) {
@@ -316,13 +271,9 @@ export async function getPowerDialerOverview(workspaceId: string) {
       prisma.powerDialerAttempt.count({
         where: { workspaceId, createdAt: { gte: startOfDay } },
       }),
-      prisma.powerDialerAttempt.count({
-        where: {
-          workspaceId,
-          callbackAt: { lte: new Date() },
-          status: { in: ["pending", "completed"] },
-        },
-      }),
+      import("@/lib/server/phone/power-dialer/callbacks-service").then((m) =>
+        m.countCallbacksDue(workspaceId),
+      ),
       prisma.powerDialerSession.findFirst({
         where: { workspaceId, status: { in: ["active", "paused"] } },
         include: { campaign: { select: { id: true, name: true } } },

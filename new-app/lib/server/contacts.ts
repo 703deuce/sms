@@ -25,23 +25,23 @@ export async function listContactLists(workspaceId: string) {
   const lists = await prisma.contactList.findMany({
     where: { workspaceId, archivedAt: null },
     include: {
-      members: { select: { contactId: true, contact: { select: { status: true } } } },
       powerDialerCampaigns: { select: { id: true, name: true } },
     },
     orderBy: { updatedAt: "desc" },
   });
+  const { countListEligibilityByListIds } = await import(
+    "@/lib/server/phone/power-dialer/list-eligibility"
+  );
+  const counts = await countListEligibilityByListIds(workspaceId, lists.map((l) => l.id));
   return lists.map((l) => {
-    const total = l.members.length;
-    const ineligible = l.members.filter(
-      (m) => m.contact.status === "BLOCKED" || m.contact.status === "UNSUBSCRIBED",
-    ).length;
+    const c = counts.get(l.id) || { total: 0, eligible: 0, ineligible: 0 };
     return {
       id: l.id,
       name: l.name,
       description: l.description,
-      total,
-      eligible: total - ineligible,
-      ineligible,
+      total: c.total,
+      eligible: c.eligible,
+      ineligible: c.ineligible,
       source: l.source || "manual",
       updated: l.updatedAt.toISOString(),
       campaignUsage: l.powerDialerCampaigns.map((c) => ({ id: c.id, name: c.name })),

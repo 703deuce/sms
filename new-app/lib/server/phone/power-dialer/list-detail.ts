@@ -64,6 +64,7 @@ export async function getContactListDetail(
     name: list.name,
     description: list.description,
     source: list.source,
+    filtersJson: list.filtersJson,
     archivedAt: list.archivedAt?.toISOString() ?? null,
     updatedAt: list.updatedAt.toISOString(),
     total,

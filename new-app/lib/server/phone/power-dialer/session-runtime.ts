@@ -8,6 +8,9 @@ import {
   reasonToUserMessage,
 } from "./eligibility";
 import { applyDispositionEffects, isHumanConversation } from "./disposition-effects";
+import { assertCampaignDialAccess } from "./campaign-access";
+import { parseExtendedConfig } from "./campaign-extended-config";
+import { resolveDispositionByLabel } from "./dispositions";
 import { resolveContactDialPhone } from "./phone-resolve";
 import type {
   AnswerClassification,
@@ -445,15 +448,33 @@ export async function saveAttemptOutcomeWithProgression(
     },
   });
 
+  const ext = parseExtendedConfig(attempt.session.campaign.configJson);
+  const dispositionDef = await resolveDispositionByLabel(
+    workspaceId,
+    ext.dispositionSetId,
+    input.disposition,
+  );
+
   await applyDispositionEffects(prisma, {
     workspaceId,
     attemptId,
     contactId: attempt.contactId,
+    campaignId: attempt.session.campaignId,
     disposition: input.disposition,
+    dispositionDef,
     notes: input.notes,
     callbackAt,
+    timezone: attempt.session.campaign.timezone,
+    assignedUserId: attempt.session.repUserId,
     alreadyApplied: Boolean(attempt.dispositionEffectsAt),
   });
+
+  if (dispositionDef) {
+    await prisma.powerDialerAttempt.update({
+      where: { id: attemptId },
+      data: { dispositionId: dispositionDef.id },
+    });
+  }
 
   if (!attempt.dispositionEffectsAt) {
     await prisma.powerDialerAttempt.update({
@@ -496,6 +517,7 @@ export async function saveAttemptOutcomeWithProgression(
 export async function startSessionWithRep(workspaceId: string, campaignId: string) {
   const prisma = getPrisma();
   const repUserId = await assertRepAuthorized(workspaceId);
+  await assertCampaignDialAccess(workspaceId, campaignId, repUserId);
   const campaign = await prisma.powerDialerCampaign.findFirst({
     where: { id: campaignId, workspaceId },
   });

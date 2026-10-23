@@ -13,6 +13,11 @@ export type PowerDialerWorkspaceSettings = {
   defaultMaxAttempts?: number
   requireDispositionBeforeNext?: boolean
   defaultPhoneFieldPriority?: string[]
+  prerecordedVmOptIn?: boolean
+  recordingEnabled?: boolean
+  recordingConsentAnnounce?: boolean
+  recordingRetentionDays?: number
+  recordingAccessRoles?: string[]
 }
 
 const DEFAULTS: PowerDialerWorkspaceSettings = {
@@ -48,5 +53,14 @@ export function mergePowerDialerSettings(
     defaultPhoneFieldPriority: Array.isArray(o.defaultPhoneFieldPriority)
       ? o.defaultPhoneFieldPriority.filter((x): x is string => typeof x === 'string')
       : DEFAULTS.defaultPhoneFieldPriority,
+    prerecordedVmOptIn: typeof o.prerecordedVmOptIn === 'boolean' ? o.prerecordedVmOptIn : false,
+    recordingEnabled: typeof o.recordingEnabled === 'boolean' ? o.recordingEnabled : true,
+    recordingConsentAnnounce:
+      typeof o.recordingConsentAnnounce === 'boolean' ? o.recordingConsentAnnounce : false,
+    recordingRetentionDays:
+      typeof o.recordingRetentionDays === 'number' ? o.recordingRetentionDays : 365,
+    recordingAccessRoles: Array.isArray(o.recordingAccessRoles)
+      ? o.recordingAccessRoles.filter((x): x is string => typeof x === 'string')
+      : ['OWNER', 'ADMINISTRATOR', 'MANAGER'],
   }
 }

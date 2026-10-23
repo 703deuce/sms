@@ -50,6 +50,9 @@ export async function listCalls(
     from?: string;
     to?: string;
     source?: string;
+    campaignId?: string;
+    disposition?: string;
+    hasRecording?: boolean;
   },
 ): Promise<{ data: PhoneCallDto[]; total: number }> {
   const prisma = getPrisma();
@@ -62,6 +65,17 @@ export async function listCalls(
   }
   if (query.source?.trim()) {
     where.source = query.source.trim();
+  }
+  if (query.campaignId?.trim()) {
+    where.powerDialerAttempt = { session: { campaignId: query.campaignId.trim() } };
+  }
+  if (query.disposition?.trim()) {
+    where.disposition = { contains: query.disposition.trim(), mode: "insensitive" };
+  }
+  if (query.hasRecording === true) {
+    where.recordingUrl = { not: null };
+  } else if (query.hasRecording === false) {
+    where.recordingUrl = null;
   }
   if (query.numberId && query.numberId !== "all") {
     where.phoneNumberId = query.numberId;

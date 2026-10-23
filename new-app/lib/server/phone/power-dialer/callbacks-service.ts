@@ -1,0 +1,112 @@
+import { getPrisma } from "@/lib/server/db";
+
+export type CallbackTab = "due_today" | "upcoming" | "overdue" | "completed" | "all";
+
+export async function listPowerDialerCallbacksV2(workspaceId: string, tab: CallbackTab) {
+  const prisma = getPrisma();
+  const now = new Date();
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const where: Record<string, unknown> = { workspaceId };
+
+  if (tab === "completed") {
+    where.status = "completed";
+  } else if (tab === "due_today") {
+    where.status = "scheduled";
+    where.scheduledAt = { gte: startOfDay, lte: endOfDay };
+  } else if (tab === "upcoming") {
+    where.status = "scheduled";
+    where.scheduledAt = { gt: endOfDay };
+  } else if (tab === "overdue") {
+    where.status = "scheduled";
+    where.scheduledAt = { lt: startOfDay };
+  } else if (tab === "all") {
+    // no extra filter
+  }
+
+  const rows = await prisma.powerDialerCallback.findMany({
+    where,
+    orderBy: { scheduledAt: "asc" },
+    take: 200,
+    include: {
+      contact: { select: { firstName: true, lastName: true, phone: true, company: true, status: true } },
+      campaign: { select: { id: true, name: true, timezone: true } },
+    },
+  });
+
+  return rows.map((c) => ({
+    id: c.id,
+    callbackAt: c.scheduledAt.toISOString(),
+    disposition: c.disposition,
+    notes: c.notes,
+    status: c.status,
+    contactId: c.contactId,
+    contactName: [c.contact.firstName, c.contact.lastName].filter(Boolean).join(" ") || "Unknown",
+    contactPhone: c.contact.phone,
+    company: c.contact.company,
+    contactStatus: c.contact.status,
+    campaignId: c.campaignId,
+    campaignName: c.campaign.name,
+    timezone: c.timezone || c.campaign.timezone,
+    assignedUserId: c.assignedUserId,
+  }));
+}
+
+export async function upsertCallbackFromDisposition(input: {
+  workspaceId: string;
+  campaignId: string;
+  contactId: string;
+  attemptId: string;
+  scheduledAt: Date;
+  timezone: string;
+  notes?: string;
+  disposition?: string;
+  assignedUserId?: string;
+}) {
+  const prisma = getPrisma();
+  const existing = await prisma.powerDialerCallback.findFirst({
+    where: { attemptId: input.attemptId },
+  });
+  if (existing) {
+    return prisma.powerDialerCallback.update({
+      where: { id: existing.id },
+      data: {
+        scheduledAt: input.scheduledAt,
+        timezone: input.timezone,
+        notes: input.notes,
+        disposition: input.disposition,
+        status: "scheduled",
+        assignedUserId: input.assignedUserId,
+      },
+    });
+  }
+  return prisma.powerDialerCallback.create({
+    data: {
+      workspaceId: input.workspaceId,
+      campaignId: input.campaignId,
+      contactId: input.contactId,
+      attemptId: input.attemptId,
+      scheduledAt: input.scheduledAt,
+      timezone: input.timezone,
+      notes: input.notes,
+      disposition: input.disposition,
+      assignedUserId: input.assignedUserId,
+      status: "scheduled",
+    },
+  });
+}
+
+export async function countCallbacksDue(workspaceId: string) {
+  const prisma = getPrisma();
+  const now = new Date();
+  return prisma.powerDialerCallback.count({
+    where: {
+      workspaceId,
+      status: "scheduled",
+      scheduledAt: { lte: now },
+    },
+  });
+}
