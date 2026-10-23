@@ -6,6 +6,84 @@ import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/app/page-primitives'
 import { useNumbers } from '@/components/providers/numbers-provider'
 
+function ImpersonationControls({ reps }: { reps: { userId: string; name: string; role: string }[] }) {
+  const [canImpersonate, setCanImpersonate] = useState(false)
+  const [activeTarget, setActiveTarget] = useState<string | null>(null)
+  const [targetId, setTargetId] = useState('')
+
+  const load = useCallback(() => {
+    void fetch('/api/phone/power-dialer/impersonation')
+      .then((r) => r.json())
+      .then((j) => {
+        setCanImpersonate(Boolean(j.data?.canImpersonate))
+        setActiveTarget(j.data?.active?.targetUserId || null)
+      })
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  if (!canImpersonate) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Only managers and admins can start audited impersonation. All actions are logged under your account.
+      </p>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      {activeTarget ? (
+        <p className="text-amber-700 dark:text-amber-400">
+          Impersonation active for rep {reps.find((r) => r.userId === activeTarget)?.name || activeTarget}. Use the banner to stop.
+        </p>
+      ) : (
+        <>
+          <label className="flex max-w-sm flex-col gap-1">
+            <span className="font-medium">Rep to view as</span>
+            <select
+              className="rounded-md border bg-background px-3 py-2"
+              value={targetId}
+              onChange={(e) => setTargetId(e.target.value)}
+              aria-label="Rep to impersonate"
+            >
+              <option value="">Select rep…</option>
+              {reps.map((r) => (
+                <option key={r.userId} value={r.userId}>
+                  {r.name} ({r.role})
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!targetId}
+            onClick={() => {
+              void fetch('/api/phone/power-dialer/impersonation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUserId: targetId }),
+              }).then((res) => {
+                if (!res.ok) {
+                  toast.error('Could not start impersonation')
+                  return
+                }
+                toast.success('Impersonation started')
+                load()
+                window.location.reload()
+              })
+            }}
+          >
+            Start impersonation
+          </Button>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function PowerDialerTeamSettingsPanel() {
   const { owned } = useNumbers()
   const [reps, setReps] = useState<{ userId: string; name: string; role: string }[]>([])
@@ -177,6 +255,9 @@ export function PowerDialerTeamSettingsPanel() {
             ))}
           </tbody>
         </table>
+      </Panel>
+      <Panel title="Login as rep (M70)">
+        <ImpersonationControls reps={reps} />
       </Panel>
       <Panel title="Phone presence (M73)">
         <p className="text-sm text-muted-foreground">

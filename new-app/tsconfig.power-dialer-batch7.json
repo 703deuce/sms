@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "app/api/v1/**/*.ts",
+    "app/api/phone/power-dialer/developer/**/*.ts",
+    "app/api/phone/power-dialer/impersonation/**/*.ts",
+    "app/api/phone/power-dialer/integrations/**/sync-inbound/**/*.ts",
+    "lib/server/phone/power-dialer/public-api/**/*.ts",
+    "lib/server/phone/power-dialer/webhooks/**/*.ts",
+    "lib/server/phone/power-dialer/impersonation.ts",
+    "lib/server/phone/power-dialer/session-user.ts",
+    "lib/server/phone/power-dialer/crm-inbound-sync.ts",
+    "lib/products/power-dialer-public-api.ts",
+    "components/power-dialer/developer-settings-panel.tsx",
+    "components/power-dialer/impersonation-banner.tsx",
+    "components/power-dialer/team-settings-panel.tsx",
+    "components/power-dialer/integration-detail-content.tsx"
+  ]
+}

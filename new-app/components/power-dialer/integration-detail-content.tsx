@@ -167,6 +167,41 @@ export function IntegrationDetailContent({ provider }: { provider: string }) {
           disabled={disconnected}
         />
       </Panel>
+      <Panel title="CRM sync (M17 / M76)">
+        {disconnected ? (
+          <p className="text-sm text-muted-foreground">Connect CRM to run inbound sync and list import.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void fetch(`/api/phone/power-dialer/integrations/${provider}/sync-inbound`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ mode: 'contacts' }),
+                })
+                  .then(async (r) => {
+                    const j = await r.json()
+                    if (!r.ok) throw new Error((j as { error?: string }).error || 'Sync failed')
+                    toast.success(`Inbound sync: ${JSON.stringify(j.data)}`)
+                    load()
+                  })
+                  .catch((e) => toast.error(e instanceof Error ? e.message : 'Sync failed'))
+              }}
+            >
+              Run inbound contact sync
+            </Button>
+            <Link
+              href="/app/power-dialer/integrations/sync-history"
+              className="text-sm text-primary hover:underline self-center"
+            >
+              View sync history &amp; retries
+            </Link>
+          </div>
+        )}
+      </Panel>
       <Panel title="Field mappings (contact)">
         {disconnected ? (
           <p className="text-sm text-muted-foreground">

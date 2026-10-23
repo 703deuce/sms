@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Transovo Power Dialer Click-to-Call",
+  "version": "0.1.0",
+  "description": "Click phone numbers on web pages to queue a call in your active Power Dialer session (not published to stores).",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "Transovo Click-to-Call",
+    "default_popup": "options.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -34,7 +34,7 @@
 | P26 | Pickup analytics | analytics-service, analytics UI | analytics | B1 | done | denominator + classification panel |
 | P27 | Real AI summaries | `call-intelligence.ts`, `human-call-transcription.ts`, `phone-ui-map.ts` | call-history | B6 | done | JSON intelligence labeled model-derived; gate: `DEEPGRAM_API_KEY` |
 | P28 | Agent number enforcement | `caller-id-resolution.ts`, team settings | team, dialer | B1/B5 | done | `repNumberAssignments` at origination |
-| P29 | CRM writeback | crm-sync-bridge | integrations | B7 | not started | SF/Zoho/Pipedrive only |
+| P29 | CRM writeback | `crm-sync-bridge.ts`, disposition effects | integrations | B7 | done | SF/Zoho/Pipedrive via event bus; honest skip when disconnected |
 | M01 | Hotkeys | power-dialer-session | dialer | B1 | in progress | a11y guards |
 | M02 | Session presets | PowerDialerSessionPreset API | dialer | B1 | done | user + workspace scope |
 | M03 | Cell/desk phone connect | Telnyx legs | dialer | B8 | not started | |
@@ -51,8 +51,8 @@
 | M14 | Alternate-number fallthrough | phone-fallthrough, session-runtime | dialer | B2 | done | next_number/next_contact in CRM settings |
 | M15 | In-session number mgmt | contact API, UI | dialer | B1 | in progress | |
 | M16 | Mini CRM folders/views | folders API, contacts-folder-tree | `/app/contacts` | B2/B3 | done | Folder tree, filter, bulk move into folder |
-| M17 | CRM list sync | crm-list-import | lists | B7 | not started | existing CRMs |
-| M18 | List API add/remove | public API | integrations | B7 | not started | |
+| M17 | CRM list sync | `crm-list-import.ts`, `crm-inbound-sync.ts`, sync-inbound API | lists | B7 | done | Inbound + list import; connect required |
+| M18 | List API add/remove | `/api/v1/power-dialer/lists/[id]/members` | integrations | B7 | done | Audited via API key + audit log |
 | M19 | Country code / intl | dial-gates, createAttempt | dialer, settings | B2 | done | `assertOutboundDialAllowed` on dial |
 | M20 | Rerun campaign | `rerun` API, campaign-admin | campaigns | B3 | done | Clears queue skip flags; optional completed reopen |
 | M21 | Campaign completed status | campaign-admin, session-runtime, endSessionHard | campaigns | B4 | done | Auto on zero eligible; reversible via rerun (M20) |
@@ -71,7 +71,7 @@
 | M33 | Move/requeue lists | disposition-actions `add_to_list`/`remove_from_list` | runtime | B4 | done | |
 | M34 | Owner/tags/CRM actions | `disposition-actions.ts`, `settings-library-panels.tsx` actions JSON | runtime | B4/B5 | done | vm drop (opt-in gate), crm_note, task, deal, email/SMS |
 | M35 | Disposition SMS | disposition-messaging | runtime | B4 | done | DNC + quiet hours + sendQuickSms |
-| M36 | Disposition webhooks | — | — | B7 | deferred | **B7 with M81** — customer webhooks |
+| M36 | Disposition webhooks | `disposition-actions.ts` `customer_webhook`, `disposition-effects.ts` | settings/runtime | B7 | done | M81 signed delivery + disposition.saved |
 | M37 | Cadences | `cadence-engine.ts`, `cadences-settings-panel.tsx`, enrollments API | settings | B4/B5 | done | Builder JSON, enroll, pause/resume, per-contact list |
 | M38 | Call ratings + ACW | acw-enforcement (prior) | dialer | B1 | done | |
 | M39 | Admin scripts | `scripts/[id]` `assignmentJson`, `ScriptsLibraryPanel` team checkboxes | settings | B1/B5 | done | Team assignment on script edit |
@@ -109,18 +109,18 @@
 | M67 | Supervisor coach | review API `supervisor.externalGate` | analytics | B6 | external gate | Telnyx monitor leg not provisioned |
 | M68 | Conversation intelligence | `call-intelligence.ts`, attempt review API | call review | B6 | done | Keywords/sentiment/score; transcript_rules_v1 |
 | M69 | Permission matrix | `power-dialer-permissions.ts`, team UI | settings/API | B6 | done | Scopes on analytics/settings/team/export |
-| M70 | Supervisor role | MANAGER scopes + coach gate | team | B6 | partial | No login-as impersonation |
+| M70 | Supervisor role / login-as | `impersonation.ts`, banner, team panel, analytics filter | team | B7 | done | Start/stop, role hierarchy, audited |
 | M71 | Team groups / campaign access | `team-settings-panel.tsx` (existing) | settings | B6 | done | Campaign member checkboxes |
 | M72 | Manager vs rep data | `analyticsRepFilter` on analytics/export/review | API | B6 | done | CRM export manager+ only |
 | M73 | DND / call waiting | team panel → Phone settings link | settings | B6 | done | Reuses shared Phone behavior |
-| M76 | CRM field sync | crm mappings | integrations | B7 | not started | |
+| M76 | CRM field sync | `integration-settings.ts`, `sync-field-apply`, inbound sync | integrations | B7 | done | Bidirectional mappings + precedence locks |
 | M77 | HubSpot | — | — | — | **EXCLUDED** | owner |
 | M78 | GoHighLevel | — | — | — | **EXCLUDED** | owner |
 | M79 | Other new CRMs | — | — | — | **EXCLUDED** | owner |
-| M80 | Zapier-compatible API | webhooks API | integrations | B7 | not started | |
-| M81 | Customer webhooks | webhook delivery | integrations | B7 | not started | |
-| M82 | Public API | API keys | integrations | B7 | not started | |
-| M83 | Browser extension | extension | integrations | B7 | not started | |
+| M80 | Zapier-compatible API | `/api/v1/zapier/*`, `POWER-DIALER-ZAPIER-API.md` | integrations | B7 | done | REST hooks + polling + actions |
+| M81 | Customer webhooks | `webhooks/delivery.ts`, developer UI, lifecycle emits | integrations | B7 | done | HMAC, retries, replay, test-send |
+| M82 | Public API | `/api/v1/power-dialer/*`, `public-api/*`, OpenAPI | integrations | B7 | done | Scoped keys, rate limit, audit log |
+| M83 | Browser extension | `extensions/click-to-call/` | integrations | B7 | done | MV3; not store-published |
 | M84 | Native mobile apps | — | — | — | **EXCLUDED** | owner |
 | M85 | Auto-create inbound contact | inbound-contact, calls-service | phone | B2 | done | min duration + rules in CRM settings |
 | M86 | Billing dashboard | — | — | — | **EXCLUDED** | owner |
@@ -165,6 +165,7 @@
 | Batch4 + B3 leftovers | `8ad7caacc`, `3ec1ec3a9`, `e92a00f0c` | `test:power-dialer-batch4-b3`, `test:power-dialer-batch3` PASS; migration `20261024120000` |
 | Batch5 + B4 leftovers | `4e445fbb6`, `8f201b4d1`, `89f0b4645`, `5c4924c17` | `test:power-dialer-batch5-b4`, `test:power-dialer-batch4-b3` PASS; migration `20261024140000` |
 | Batch6 + B5 leftovers | `0f4103c44`, `6470d4d9e`, `068b01e57`, `e8f6e4c8d` | `test:power-dialer-batch6` PASS; migration `20261024160000` |
+| Batch7 + B6 leftovers | _(see below after push)_ | `test:power-dialer-batch7` PASS; migration `20261024180000`; full `tsc` stack overflow (pre-existing); `tsconfig.power-dialer-batch7.json` same |
 
 ## Live verification still required
 
@@ -179,3 +180,8 @@
 - Deepgram transcription + conversation intelligence on recorded PD calls.
 - Scheduled report email send with production Brevo credentials.
 - M59 abandoned-call jurisdiction metrics (B8).
+- Public API v1 + webhook delivery against real customer HTTPS endpoints (signing verification).
+- Zapier REST hook subscribe with live Zap catch URL.
+- CRM inbound sync + writeback on connected Salesforce/Zoho/Pipedrive sandbox.
+- Click-to-call extension with active session + API key on production host.
+- Impersonation login-as on manager account with audit log review.

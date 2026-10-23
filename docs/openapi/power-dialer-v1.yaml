@@ -1,0 +1,118 @@
+openapi: 3.0.3
+info:
+  title: Transovo Power Dialer API
+  version: 1.0.0
+  description: Scoped REST API v1 for contacts, lists, campaigns, sessions, webhooks, and click-to-call.
+servers:
+  - url: https://{host}
+    variables:
+      host:
+        default: app.transovo.com
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Power Dialer API key (prefix pd_live_)
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+    Pagination:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        hasMore: { type: boolean }
+paths:
+  /api/v1/power-dialer/contacts:
+    get:
+      summary: List contacts
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer }
+        - in: query
+          name: limit
+          schema: { type: integer }
+      responses:
+        "200": { description: Paginated contacts }
+    post:
+      summary: Create or update contact by phone
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
+      responses:
+        "200": { description: Contact record }
+  /api/v1/power-dialer/lists:
+    get:
+      summary: List calling lists
+      responses:
+        "200": { description: Paginated lists }
+  /api/v1/power-dialer/lists/{id}/members:
+    post:
+      summary: Add contact to list
+    delete:
+      summary: Remove contact from list
+  /api/v1/power-dialer/campaigns:
+    get:
+      summary: List campaigns
+  /api/v1/power-dialer/sessions:
+    get:
+      summary: List dial sessions
+  /api/v1/power-dialer/attempts:
+    get:
+      summary: List call attempts
+  /api/v1/power-dialer/dispositions:
+    get:
+      summary: Disposition definitions or attempt disposition
+  /api/v1/power-dialer/callbacks:
+    get:
+      summary: List callbacks
+    post:
+      summary: Schedule callback
+  /api/v1/power-dialer/tasks:
+    get:
+      summary: List CRM tasks
+    post:
+      summary: Create task
+  /api/v1/power-dialer/dnc:
+    get:
+      summary: List internal DNC entries
+    post:
+      summary: Add DNC
+    delete:
+      summary: Remove DNC
+  /api/v1/power-dialer/webhooks:
+    get:
+      summary: List webhook endpoints
+    post:
+      summary: Create endpoint or test delivery
+    patch:
+      summary: Enable/disable endpoint
+  /api/v1/power-dialer/click-to-call:
+    post:
+      summary: Queue contact in active session (extension / integrations)
+  /api/v1/zapier/hooks:
+    post:
+      summary: Zapier REST hook subscribe
+    delete:
+      summary: Zapier REST hook unsubscribe
+  /api/v1/zapier/polling/dispositions:
+    get:
+      summary: Zapier polling sample dispositions
+  /api/v1/zapier/polling/contacts:
+    get:
+      summary: Zapier polling contacts
+  /api/v1/zapier/actions/contacts:
+    post:
+      summary: Zapier create contact action

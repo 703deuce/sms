@@ -285,7 +285,10 @@ function DispositionSetEditor({
                       }}
                       aria-label="Disposition actions JSON"
                     />
-                    <span className="text-muted-foreground">Types: tag, send_sms, send_email, voicemail_drop, crm_note, create_task, create_deal, cadence_enroll, …</span>
+                    <span className="text-muted-foreground">
+                      Types: tag, send_sms, send_email, voicemail_drop, crm_note, create_task, create_deal,
+                      cadence_enroll, customer_webhook (signed workspace webhooks), …
+                    </span>
                   </label>
                   <label className="flex flex-col gap-1 text-xs">
                     <span className="font-medium">Sort order</span>

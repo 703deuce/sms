@@ -15,6 +15,7 @@ import {
 } from '@/components/power-dialer/settings-library-panels'
 import { PowerDialerComplianceSettingsPanel } from '@/components/power-dialer/compliance-settings-panel'
 import { PowerDialerTeamSettingsPanel } from '@/components/power-dialer/team-settings-panel'
+import { PowerDialerDeveloperSettingsPanel } from '@/components/power-dialer/developer-settings-panel'
 import { CadencesSettingsPanel } from '@/components/power-dialer/cadences-settings-panel'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import { formatPhone } from '@/lib/format'
@@ -77,6 +78,7 @@ export function PowerDialerSettingsContent() {
             <TabsTrigger value="recording">Recording</TabsTrigger>
             <TabsTrigger value="compliance">Compliance</TabsTrigger>
             <TabsTrigger value="team">Team</TabsTrigger>
+            <TabsTrigger value="developer">API &amp; Webhooks</TabsTrigger>
             <TabsTrigger value="usage">Usage &amp; Subscription</TabsTrigger>
           </TabsList>
         </div>
@@ -493,6 +495,9 @@ export function PowerDialerSettingsContent() {
         </TabsContent>
         <TabsContent value="team" className="mt-6">
           <PowerDialerTeamSettingsPanel />
+        </TabsContent>
+        <TabsContent value="developer" className="mt-6">
+          <PowerDialerDeveloperSettingsPanel />
         </TabsContent>
       </Tabs>
     </Page>

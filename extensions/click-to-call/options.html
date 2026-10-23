@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Transovo Click-to-Call</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 12px; width: 320px; }
+      label { display: block; margin-top: 8px; font-size: 12px; font-weight: 600; }
+      input { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 6px; }
+      button { margin-top: 12px; padding: 8px 12px; }
+      p { font-size: 11px; color: #555; }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size: 16px">Transovo Click-to-Call</h1>
+    <p>Not published to browser stores. Use a scoped Power Dialer API key with <code>dial:write</code>.</p>
+    <label>API base URL (e.g. https://app.example.com)</label>
+    <input id="apiBaseUrl" />
+    <label>API key (Bearer)</label>
+    <input id="apiKey" type="password" />
+    <label>Active session ID</label>
+    <input id="sessionId" />
+    <label>Optional contact ID (recommended)</label>
+    <input id="contactId" />
+    <button id="save">Save</button>
+    <p id="status"></p>
+    <script src="options.js"></script>
+  </body>
+</html>
