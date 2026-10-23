@@ -49,6 +49,7 @@ export async function listCalls(
     filter?: string;
     from?: string;
     to?: string;
+    source?: string;
   },
 ): Promise<{ data: PhoneCallDto[]; total: number }> {
   const prisma = getPrisma();
@@ -58,6 +59,9 @@ export async function listCalls(
 
   if (query.direction === "inbound" || query.direction === "outbound") {
     where.direction = query.direction;
+  }
+  if (query.source?.trim()) {
+    where.source = query.source.trim();
   }
   if (query.numberId && query.numberId !== "all") {
     where.phoneNumberId = query.numberId;

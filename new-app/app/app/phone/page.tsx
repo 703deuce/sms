@@ -128,7 +128,7 @@ export default async function PhoneOverview() {
                 <span className="text-2xl font-semibold tabular">{campaign.completedPct}%</span>
                 <span className="text-xs text-muted-foreground">{campaign.attempts} attempts</span>
               </div>
-              <Link href="/app/phone/power-dialer" className={buttonVariants({ variant: 'outline', className: 'mt-1' })}>
+              <Link href="/app/power-dialer/dialer" className={buttonVariants({ variant: 'outline', className: 'mt-1' })}>
                 Continue session
               </Link>
             </div>

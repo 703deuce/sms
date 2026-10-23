@@ -82,7 +82,7 @@ export function GlobalSearch() {
           {results && results.campaigns.length > 0 && (
             <ResultGroup label="Campaigns">
               {results.campaigns.map((c) => (
-                <ResultLink key={c.id} href="/app/phone/power-dialer?tab=campaigns" onClick={close} title={c.name} meta={c.status} />
+                <ResultLink key={c.id} href="/app/power-dialer/campaigns" onClick={close} title={c.name} meta={c.status} />
               ))}
             </ResultGroup>
           )}

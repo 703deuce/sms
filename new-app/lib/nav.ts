@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
+  Headset,
   MessageSquare,
   MessageSquareReply,
   MessagesSquare,
@@ -36,8 +37,13 @@ import {
   RUNTIME_PROFILE_FULL_RECEPTIONIST,
 } from '@/lib/receptionist/runtime-profile'
 import { MCTB_UI_ENABLED } from '@/lib/products/mctb-ui'
+import {
+  POWER_DIALER_PRODUCT_HREF,
+  POWER_DIALER_PRODUCT_TITLE,
+  POWER_DIALER_UI_ENABLED,
+} from '@/lib/products/power-dialer'
 
-export type ProductKey = 'phone' | 'receptionist' | 'mctb'
+export type ProductKey = 'phone' | 'receptionist' | 'mctb' | 'power_dialer'
 export type ContextKey = ProductKey | 'workspace'
 
 export type NavItem = {
@@ -120,7 +126,6 @@ export const PRODUCTS: NavContext[] = [
     items: [
       { title: 'Overview', href: '/app/phone', icon: LayoutDashboard, exact: true, group: 'Workspace' },
       { title: 'Dialer', href: '/app/phone/dialer', icon: Grid3x3, group: 'Calling' },
-      { title: 'Power Dialer', href: '/app/phone/power-dialer', icon: ListChecks, group: 'Calling' },
       { title: 'Calls', href: '/app/phone/calls', icon: PhoneCall, group: 'Calling' },
       { title: 'Call Forwarding', href: '/app/phone/forwarding', icon: PhoneForwarded, group: 'Configure' },
       { title: 'Auto Attendant', href: '/app/phone/auto-attendant', icon: ListTree, group: 'Configure' },
@@ -135,6 +140,29 @@ export const PRODUCTS: NavContext[] = [
     ],
   },
   receptionistProductContext('conversational_ivr'),
+  ...(POWER_DIALER_UI_ENABLED
+    ? [
+        {
+          key: 'power_dialer' as const,
+          title: POWER_DIALER_PRODUCT_TITLE,
+          shortTitle: 'Power Dialer',
+          href: POWER_DIALER_PRODUCT_HREF,
+          icon: Headset,
+          items: [
+            { title: 'Overview', href: '/app/power-dialer', icon: LayoutDashboard, exact: true, group: 'Workspace' },
+            { title: 'Dialer', href: '/app/power-dialer/dialer', icon: Grid3x3, group: 'Calling' },
+            { title: 'Campaigns', href: '/app/power-dialer/campaigns', icon: ListChecks, group: 'Calling' },
+            { title: 'Calling Lists', href: '/app/power-dialer/calling-lists', icon: ClipboardList, group: 'Calling' },
+            { title: 'Callbacks', href: '/app/power-dialer/callbacks', icon: CalendarClock, group: 'Activity' },
+            { title: 'Call History', href: '/app/power-dialer/call-history', icon: PhoneCall, group: 'Activity' },
+            { title: 'Number Health', href: '/app/power-dialer/number-health', icon: Hash, group: 'Insights' },
+            { title: 'Analytics', href: '/app/power-dialer/analytics', icon: BarChart3, group: 'Insights' },
+            { title: 'Integrations', href: '/app/power-dialer/integrations', icon: Plug, group: 'Manage' },
+            { title: 'Settings', href: '/app/power-dialer/settings', icon: Settings, group: 'Manage' },
+          ],
+        },
+      ]
+    : []),
   ...(MCTB_UI_ENABLED
     ? [
         {

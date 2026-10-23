@@ -15,7 +15,7 @@ import { mapPhoneCallDtoToCall } from '@/lib/phone-ui-map'
 import { formatDuration, formatPhone, formatWhen } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-type Variant = 'phone' | 'receptionist' | 'mctb'
+type Variant = 'phone' | 'receptionist' | 'mctb' | 'power_dialer'
 const PAGE = 12
 
 const FILTERS: Record<Variant, { value: string; label: string; test: (c: Call) => boolean }[]> = {
@@ -39,6 +39,12 @@ const FILTERS: Record<Variant, { value: string; label: string; test: (c: Call) =
     { value: 'failed', label: 'Failed', test: (c) => c.ai?.outcome === 'failed' || !!c.ai?.tools.some((t) => t.status === 'failed') },
     { value: 'open', label: 'Open follow-up', test: (c) => c.ai?.followUp === 'open' },
   ],
+  power_dialer: [
+    { value: 'all', label: 'All', test: () => true },
+    { value: 'outbound', label: 'Outbound', test: (c) => c.direction === 'outbound' },
+    { value: 'missed', label: 'No answer', test: (c) => c.outcome === 'missed' },
+    { value: 'voicemail', label: 'Voicemail', test: (c) => c.outcome === 'voicemail' },
+  ],
   mctb: [
     { value: 'all', label: 'All', test: () => true },
     { value: 'needs', label: 'Needs callback', test: (c) => c.mctb?.state === 'needs_callback' || c.mctb?.state === 'replied' },
@@ -52,6 +58,7 @@ const BASE_FILTER: Record<Variant, (c: Call) => boolean> = {
   phone: () => true,
   receptionist: (c) => !!c.ai,
   mctb: (c) => !!c.mctb,
+  power_dialer: () => true,
 }
 
 export function CallsTable({ variant, basePath, initialFilter = 'all' }: { variant: Variant; basePath: string; initialFilter?: string }) {
@@ -65,7 +72,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (variant !== 'phone' && variant !== 'receptionist') return
+    if (variant !== 'phone' && variant !== 'receptionist' && variant !== 'power_dialer') return
     let cancelled = false
     void (async () => {
       try {
@@ -76,13 +83,15 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
             : filter === 'attention'
               ? 'open'
               : filter
-        if (variant === 'phone') {
+        if (variant === 'phone' || variant === 'power_dialer') {
           const res = await fetchCalls({
             page,
             limit: PAGE,
             filter: filterParam,
             numberId: numberId === 'all' ? undefined : numberId,
             q: q.trim() || undefined,
+            direction: variant === 'power_dialer' ? 'outbound' : undefined,
+            source: variant === 'power_dialer' ? 'power_dialer' : undefined,
           })
           if (cancelled) return
           setLiveCalls(res.data.map(mapPhoneCallDtoToCall))
@@ -109,7 +118,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   }, [variant, page, filter, numberId, q])
 
   const scoped = useMemo(() => {
-    if (variant === 'phone' || variant === 'receptionist') {
+    if (variant === 'phone' || variant === 'receptionist' || variant === 'power_dialer') {
       return liveCalls ?? []
     }
     return CALLS.filter(BASE_FILTER[variant])
@@ -117,7 +126,8 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   const filters = FILTERS[variant]
 
   const rows = useMemo(() => {
-    if ((variant === 'phone' || variant === 'receptionist') && liveCalls !== null) return scoped
+    if ((variant === 'phone' || variant === 'receptionist' || variant === 'power_dialer') && liveCalls !== null)
+      return scoped
     const test = filters.find((f) => f.value === filter)?.test ?? (() => true)
     const term = q.trim().toLowerCase()
     const digits = term.replace(/\D/g, '')
@@ -133,7 +143,8 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
       )
   }, [scoped, filters, filter, numberId, q, variant, liveCalls])
 
-  const livePaged = (variant === 'phone' || variant === 'receptionist') && liveCalls
+  const livePaged =
+    (variant === 'phone' || variant === 'receptionist' || variant === 'power_dialer') && liveCalls
   const pageCount = Math.max(1, Math.ceil((livePaged ? total : rows.length) / PAGE))
   const current = livePaged ? rows : rows.slice(page * PAGE, page * PAGE + PAGE)
   const reset = () => setPage(0)
@@ -160,7 +171,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
             }}
             options={[
               { value: 'all', label: 'All numbers' },
-              ...(variant === 'phone'
+              ...(variant === 'phone' || variant === 'power_dialer'
                 ? owned.map((n) => ({ value: n.id, label: n.nickname || n.number }))
                 : NUMBERS.map((n) => ({ value: n.id, label: n.label }))),
             ]}
@@ -176,7 +187,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
         </div>
       </div>
 
-      {variant === 'phone' && loadError && (
+      {(variant === 'phone' || variant === 'power_dialer') && loadError && (
         <div className="border-b border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
           {loadError}
           <Button
@@ -219,11 +230,15 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th scope="col" className="px-4 py-2.5 font-medium">Caller</th>
-                  {variant === 'phone' && (
+                  {(variant === 'phone' || variant === 'power_dialer') && (
                     <>
                       <th scope="col" className="px-4 py-2.5 font-medium">Outcome</th>
-                      <th scope="col" className="px-4 py-2.5 font-medium">Routed to</th>
-                      <th scope="col" className="px-4 py-2.5 font-medium">Line</th>
+                      {variant === 'phone' && (
+                        <>
+                          <th scope="col" className="px-4 py-2.5 font-medium">Routed to</th>
+                          <th scope="col" className="px-4 py-2.5 font-medium">Line</th>
+                        </>
+                      )}
                     </>
                   )}
                   {variant === 'receptionist' && (
@@ -256,7 +271,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                         </span>
                       </Link>
                     </td>
-                    {variant === 'phone' && (
+                    {(variant === 'phone' || variant === 'power_dialer') && (
                       <>
                         <td className="px-4 py-3">
                           <span className="flex items-center gap-2">
@@ -264,13 +279,17 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                             {c.callbackNeeded && !c.handled && <StatusBadge tone="warning">Follow up</StatusBadge>}
                           </span>
                         </td>
-                        <td className="max-w-56 px-4 py-3">
-                          <span className="block truncate">{c.routedTo}</span>
-                          {c.user && <span className="text-xs text-muted-foreground">{c.user}</span>}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {variant === 'phone' ? c.routedTo || c.lineSummary?.label || '—' : getNumber(c.numberId)?.label}
-                        </td>
+                        {variant === 'phone' && (
+                          <>
+                            <td className="max-w-56 px-4 py-3">
+                              <span className="block truncate">{c.routedTo}</span>
+                              {c.user && <span className="text-xs text-muted-foreground">{c.user}</span>}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {c.routedTo || c.lineSummary?.label || '—'}
+                            </td>
+                          </>
+                        )}
                       </>
                     )}
                     {variant === 'receptionist' && c.ai && (

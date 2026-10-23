@@ -243,6 +243,86 @@ export type PowerListDto = {
   updated: string;
 };
 
+export type PowerDialerOverviewDto = {
+  kpis: {
+    attemptsToday: number;
+    humanConversations: number;
+    answerRate: number;
+    talkSec: number;
+    sessionsToday: number;
+    callbacksDue: number;
+    outboundCallsToday: number;
+  };
+  campaigns: {
+    id: string;
+    name: string;
+    status: string;
+    listName: string;
+    completedPct: number;
+    attemptedCount: number;
+    totalContacts: number;
+  }[];
+  listCount: number;
+  activeSession: {
+    id: string;
+    status: string;
+    campaignId: string;
+    campaignName: string;
+  } | null;
+  recentActivity: {
+    id: string;
+    disposition: string | null;
+    status: string;
+    createdAt: string;
+    contactName: string;
+    contactPhone: string;
+    campaignName: string;
+  }[];
+};
+
+export type PowerDialerCallbackDto = {
+  id: string;
+  callbackAt: string | null;
+  disposition: string | null;
+  notes: string | null;
+  status: string;
+  contactName: string;
+  contactPhone: string;
+  company: string | null;
+  contactStatus: string;
+  campaignId: string;
+  campaignName: string;
+  timezone: string;
+};
+
+export async function fetchPowerDialerOverview() {
+  return parse<PowerDialerOverviewDto>(await fetch("/api/phone/power-dialer/overview"));
+}
+
+export async function fetchPowerDialerCallbacks(tab: string) {
+  return parse<PowerDialerCallbackDto[]>(
+    await fetch(`/api/phone/power-dialer/callbacks?tab=${encodeURIComponent(tab)}`),
+  );
+}
+
+export async function fetchPowerDialerSettings() {
+  return parse<import("@/lib/products/power-dialer").PowerDialerWorkspaceSettings>(
+    await fetch("/api/phone/power-dialer/settings"),
+  );
+}
+
+export async function patchPowerDialerSettings(
+  patch: Partial<import("@/lib/products/power-dialer").PowerDialerWorkspaceSettings>,
+) {
+  return parse<import("@/lib/products/power-dialer").PowerDialerWorkspaceSettings>(
+    await fetch("/api/phone/power-dialer/settings", {
+      method: "PATCH",
+      headers: mutatingHeaders(),
+      body: JSON.stringify(patch),
+    }),
+  );
+}
+
 export async function fetchPowerCampaigns() {
   return parse<PowerCampaignDto[]>(await fetch("/api/phone/power-dialer/campaigns"));
 }

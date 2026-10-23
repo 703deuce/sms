@@ -24,6 +24,7 @@ export async function GET(request: Request) {
       filter: url.searchParams.get("filter") || undefined,
       from: url.searchParams.get("from") || undefined,
       to: url.searchParams.get("to") || undefined,
+      source: url.searchParams.get("source") || undefined,
     });
     return NextResponse.json({ data, meta: { total } });
   } catch (err) {
