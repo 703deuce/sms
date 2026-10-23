@@ -26,7 +26,7 @@ import {
   powerSessionAction,
   savePowerAttemptOutcome,
   startPowerSession,
-  transferCall,
+  transferPowerDialerAttempt,
   triggerVoicemailDrop,
   type PowerSessionSummaryDto,
   type PowerCampaignDto,
@@ -86,6 +86,8 @@ export function PowerDialerSessionWorkspace({
   } | null>(null)
   const [transferTargets, setTransferTargets] = useState<{ id: string; name: string; number: string }[]>([])
   const [transferTargetId, setTransferTargetId] = useState('')
+  const [transferMode, setTransferMode] = useState<'cold' | 'warm' | 'three_way'>('cold')
+  const [warmTransferPhase, setWarmTransferPhase] = useState<string | null>(null)
   const [callRating, setCallRating] = useState<number | null>(null)
   const [ratingsRequired, setRatingsRequired] = useState(false)
   const [sessionPresets, setSessionPresets] = useState<{ id: string; name: string; config: Record<string, unknown> }[]>([])
@@ -830,7 +832,18 @@ export function PowerDialerSessionWorkspace({
                     {onCall && attemptId && transferTargets.length > 0 && (
                       <>
                         <SimpleSelect
-                          label="Transfer"
+                          label="Transfer type"
+                          value={transferMode}
+                          onChange={(v) => setTransferMode(v as 'cold' | 'warm' | 'three_way')}
+                          options={[
+                            { value: 'cold', label: 'Cold transfer' },
+                            { value: 'warm', label: 'Warm transfer' },
+                            { value: 'three_way', label: '3-way conference' },
+                          ]}
+                          className="min-w-[140px]"
+                        />
+                        <SimpleSelect
+                          label="Transfer target"
                           value={transferTargetId || transferTargets[0]?.id || ''}
                           onChange={setTransferTargetId}
                           options={transferTargets.map((t) => ({ value: t.id, label: t.name }))}
@@ -839,17 +852,62 @@ export function PowerDialerSessionWorkspace({
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={!transferTargetId || loading || !activeCall?.humanCallId}
+                          disabled={!transferTargetId || loading || !attemptId}
                           onClick={() => {
                             const target = transferTargets.find((t) => t.id === transferTargetId)
-                            if (!target || !activeCall?.humanCallId) return
-                            void transferCall(activeCall.humanCallId, target.number)
-                              .then(() => toast.success(`Transferred to ${target.name}`))
+                            if (!target || !attemptId) return
+                            void transferPowerDialerAttempt(attemptId, {
+                              to: target.number,
+                              mode: transferMode,
+                              action: 'start',
+                            })
+                              .then((data: { phase?: string }) => {
+                                setWarmTransferPhase(data?.phase || null)
+                                toast.success(
+                                  transferMode === 'cold'
+                                    ? `Transferred to ${target.name}`
+                                    : `Transfer ${data?.phase || 'started'} — ${target.name}`,
+                                )
+                              })
                               .catch((e) => toast.error(e instanceof Error ? e.message : 'Transfer failed'))
                           }}
                         >
-                          Transfer
+                          {transferMode === 'cold' ? 'Transfer' : 'Start transfer'}
                         </Button>
+                        {warmTransferPhase === 'announcing' || warmTransferPhase === 'consulting' ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={loading || !attemptId}
+                              onClick={() => {
+                                void transferPowerDialerAttempt(attemptId, { to: '', action: 'complete' })
+                                  .then(() => {
+                                    setWarmTransferPhase('completed')
+                                    toast.success('Warm transfer completed')
+                                  })
+                                  .catch((e) => toast.error(e instanceof Error ? e.message : 'Complete failed'))
+                              }}
+                            >
+                              Complete warm transfer
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={loading || !attemptId}
+                              onClick={() => {
+                                void transferPowerDialerAttempt(attemptId, { to: '', action: 'cancel' })
+                                  .then(() => {
+                                    setWarmTransferPhase(null)
+                                    toast.success('Transfer cancelled')
+                                  })
+                                  .catch((e) => toast.error(e instanceof Error ? e.message : 'Cancel failed'))
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : null}
                       </>
                     )}
                   </div>

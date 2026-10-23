@@ -19,7 +19,18 @@ export function PowerDialerComplianceSettingsPanel() {
   const [lists, setLists] = useState<ListRow[]>([])
   const [legalNotice, setLegalNotice] = useState('')
   const [externalDnc, setExternalDnc] = useState(false)
-  const [abandoned, setAbandoned] = useState<Record<string, { campaignName: string; abandonedRatePct: number | null }>>({})
+  const [abandoned, setAbandoned] = useState<
+    Record<
+      string,
+      {
+        campaignName: string
+        abandonedRatePct: number | null
+        hardStopActive?: boolean
+        autoThrottleActive?: boolean
+        reportingPeriodDays?: number
+      }
+    >
+  >({})
 
   const load = useCallback(() => {
     void fetch('/api/phone/power-dialer/compliance')
@@ -219,7 +230,11 @@ export function PowerDialerComplianceSettingsPanel() {
           <ul className="text-sm">
             {Object.entries(abandoned).map(([id, row]) => (
               <li key={id} className="border-b py-2">
-                {row.campaignName}: {row.abandonedRatePct != null ? `${row.abandonedRatePct}% abandoned (30d)` : '—'}
+                {row.campaignName}:{' '}
+                {row.abandonedRatePct != null
+                  ? `${row.abandonedRatePct}% abandoned (${row.reportingPeriodDays ?? 30}d)`
+                  : '—'}
+                {row.hardStopActive ? ' · hard stop active' : row.autoThrottleActive ? ' · auto-throttle' : ''}
               </li>
             ))}
           </ul>

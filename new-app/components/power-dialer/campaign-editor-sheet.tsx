@@ -74,6 +74,14 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
   const [noAnswerDispositionSetId, setNoAnswerDispositionSetId] = useState('')
   const [requireExplicitConsent, setRequireExplicitConsent] = useState(false)
   const [recordingEnabled, setRecordingEnabled] = useState(true)
+  const [parallelLines, setParallelLines] = useState(3)
+  const [abandonRateTargetPct, setAbandonRateTargetPct] = useState(3)
+  const [pacingAggression, setPacingAggression] = useState(1)
+  const [amdFilterMachines, setAmdFilterMachines] = useState(true)
+  const [dialModeOptions, setDialModeOptions] = useState<{ value: string; label: string; disabled?: boolean; hint?: string }[]>([
+    { value: 'power', label: 'Power (progressive)' },
+    { value: 'preview', label: 'Preview (manual)' },
+  ])
 
   useEffect(() => {
     if (!open) return
@@ -82,6 +90,22 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
     void fetch('/api/phone/power-dialer/dispositions').then((r) => r.json()).then((j) => setDispositionSets((j.data || []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })))).catch(() => undefined)
     void fetch('/api/phone/power-dialer/scripts').then((r) => r.json()).then((j) => setScripts(j.data || [])).catch(() => undefined)
     void fetch('/api/phone/power-dialer/voicemail-drops').then((r) => r.json()).then((j) => setVmDrops(j.data || [])).catch(() => undefined)
+    void fetch('/api/phone/power-dialer/dial-modes')
+      .then((r) => r.json())
+      .then((j) => {
+        const modes = (j.data?.modes || []) as { id: string; label: string; selectable: boolean; userMessage?: string }[]
+        if (modes.length) {
+          setDialModeOptions(
+            modes.map((m) => ({
+              value: m.id,
+              label: m.label,
+              disabled: !m.selectable,
+              hint: m.selectable ? undefined : m.userMessage,
+            })),
+          )
+        }
+      })
+      .catch(() => undefined)
     const active = owned.find((n) => n.status === 'active')
     if (active && !callerId) setCallerId(active.number)
   }, [open, owned, callerId])
@@ -134,6 +158,11 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         setNoAnswerDispositionSetId(String(cj.noAnswerDispositionSetId || ''))
         setRequireExplicitConsent(Boolean(cj.requireExplicitConsent))
         setRecordingEnabled(cj.recordingEnabled !== false)
+        const dm = (cj.dialMode || {}) as Record<string, unknown>
+        if (typeof dm.parallelLines === 'number') setParallelLines(dm.parallelLines)
+        if (typeof dm.abandonRateTargetPct === 'number') setAbandonRateTargetPct(dm.abandonRateTargetPct)
+        if (typeof dm.pacingAggression === 'number') setPacingAggression(dm.pacingAggression)
+        if (typeof dm.amdFilterMachines === 'boolean') setAmdFilterMachines(dm.amdFilterMachines)
         if (Array.isArray(cj.scheduleBreaks)) {
           setScheduleBreaks(
             (cj.scheduleBreaks as { startHm: string; endHm: string }[])
@@ -205,6 +234,13 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         dispositionSetId: dispositionSetId || null,
         requireExplicitConsent,
         recordingEnabled,
+        dialMode: {
+          parallelLines,
+          abandonRateTargetPct,
+          pacingAggression,
+          amdFilterMachines,
+          ringTimeoutSeconds,
+        },
       }
       if (campaignId) {
         await savePowerCampaignDetail(campaignId, {
@@ -287,7 +323,42 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
             />
           </TabsContent>
           <TabsContent value="dialing" className="flex flex-col gap-3">
-            <SimpleSelect label="Mode" value={dialingMode} onChange={setDialingMode} options={[{ value: 'power', label: 'Power (auto)' }, { value: 'preview', label: 'Preview (manual)' }]} />
+            <SimpleSelect
+              label="Dial mode"
+              value={dialingMode}
+              onChange={setDialingMode}
+              options={dialModeOptions.map((o) => ({
+                value: o.value,
+                label: o.disabled ? `${o.label} (locked)` : o.label,
+              }))}
+            />
+            {dialModeOptions.find((o) => o.value === dialingMode && o.disabled)?.hint && (
+              <p className="text-xs text-muted-foreground" role="status">
+                {dialModeOptions.find((o) => o.value === dialingMode)?.hint}
+              </p>
+            )}
+            {(dialingMode === 'parallel' || dialingMode === 'parallel_amd' || dialingMode === 'predictive') && (
+              <>
+                <label className="text-sm">Lines per agent (2–5)
+                  <Input type="number" min={2} max={5} value={parallelLines} onChange={(e) => setParallelLines(Number(e.target.value))} />
+                </label>
+                <label className="text-sm">Abandon-rate target (%)
+                  <Input type="number" min={0.5} max={10} step={0.1} value={abandonRateTargetPct} onChange={(e) => setAbandonRateTargetPct(Number(e.target.value))} />
+                </label>
+                <label className="text-sm">Pacing aggression
+                  <Input type="number" min={0.25} max={3} step={0.25} value={pacingAggression} onChange={(e) => setPacingAggression(Number(e.target.value))} />
+                </label>
+                {dialingMode === 'parallel_amd' && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={amdFilterMachines} onChange={(e) => setAmdFilterMachines(e.target.checked)} />
+                    Filter machines (AMD) before bridging
+                  </label>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Parallel and predictive modes require administrator enablement. Safety caps and kill switch cannot be disabled from this screen.
+                </p>
+              </>
+            )}
             <label className="text-sm">Ring timeout (seconds)
               <Input type="number" min={10} max={120} value={ringTimeoutSeconds} onChange={(e) => setRingTimeoutSeconds(Number(e.target.value))} />
             </label>
