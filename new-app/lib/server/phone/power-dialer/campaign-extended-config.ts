@@ -14,6 +14,11 @@ export const campaignExtendedConfigSchema = z.object({
   recordingEnabled: z.boolean().optional(),
   screeningMode: z.string().optional(),
   dispositionSetId: z.string().nullable().optional(),
+  liveAnswerDispositionSetId: z.string().nullable().optional(),
+  noAnswerDispositionSetId: z.string().nullable().optional(),
+  callbackRoutingMode: z
+    .enum(["same_rep", "best_eligible", "group", "external", "ai_receptionist"])
+    .optional(),
   callbackAction: z.string().optional(),
   leadRemovalDispositions: z.array(z.string()).optional(),
   dncDispositions: z.array(z.string()).optional(),
@@ -39,6 +44,9 @@ export function parseExtendedConfig(raw: unknown): CampaignExtendedConfig {
     recordingEnabled: o.recordingEnabled,
     screeningMode: o.screeningMode,
     dispositionSetId: o.dispositionSetId,
+    liveAnswerDispositionSetId: o.liveAnswerDispositionSetId,
+    noAnswerDispositionSetId: o.noAnswerDispositionSetId,
+    callbackRoutingMode: o.callbackRoutingMode,
     callbackAction: o.callbackAction,
     leadRemovalDispositions: o.leadRemovalDispositions,
     dncDispositions: o.dncDispositions,

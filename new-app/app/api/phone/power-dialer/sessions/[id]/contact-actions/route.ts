@@ -29,6 +29,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         ? { ...(contact.customFields as object) }
         : {};
 
+    if (body.action === "add_to_queue") {
+      const { addContactToActiveSessionQueue } = await import(
+        "@/lib/server/phone/power-dialer/session-queue-add"
+      );
+      const result = await addContactToActiveSessionQueue(workspaceId, sessionId, contactId);
+      return NextResponse.json({ data: result });
+    }
+
     if (body.action === "remove_contact") {
       await skipContactInSession(workspaceId, sessionId, contactId);
       await prisma.contact.update({

@@ -38,6 +38,11 @@ export type PowerDialerWorkspaceSettings = {
   screenerIntroMode?: 'off' | 'tts' | 'recorded'
   screenerIntroText?: string
   screenerIntroAudioUrl?: string | null
+  sessionRingTone?: "default" | "classic" | "muted"
+  skipDuplicateNumbers?: boolean
+  preventDuplicatePerContact?: boolean
+  sessionEmailDeliveryEnabled?: boolean
+  displayTimeFormat?: "12h" | "24h"
 }
 
 const DEFAULTS: PowerDialerWorkspaceSettings = {
@@ -132,5 +137,16 @@ export function mergePowerDialerSettings(
       typeof o.screenerIntroText === 'string' ? o.screenerIntroText : undefined,
     screenerIntroAudioUrl:
       typeof o.screenerIntroAudioUrl === 'string' ? o.screenerIntroAudioUrl : null,
+    sessionRingTone:
+      o.sessionRingTone === 'classic' || o.sessionRingTone === 'muted'
+        ? o.sessionRingTone
+        : 'default',
+    skipDuplicateNumbers:
+      typeof o.skipDuplicateNumbers === 'boolean' ? o.skipDuplicateNumbers : true,
+    preventDuplicatePerContact:
+      typeof o.preventDuplicatePerContact === 'boolean' ? o.preventDuplicatePerContact : true,
+    sessionEmailDeliveryEnabled:
+      typeof o.sessionEmailDeliveryEnabled === 'boolean' ? o.sessionEmailDeliveryEnabled : true,
+    displayTimeFormat: o.displayTimeFormat === '24h' ? '24h' : '12h',
   }
 }

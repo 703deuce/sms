@@ -14,6 +14,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const userId = await resolveInternalUserId();
     const url = new URL(request.url);
     const contactId = url.searchParams.get("contactId")?.trim();
+    const answerContext = url.searchParams.get("answerContext");
 
     const prisma = getPrisma();
     const campaign = await prisma.powerDialerCampaign.findFirst({
@@ -23,9 +24,21 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
     const ext = parseExtendedConfig(campaign.configJson);
     const sets = await listDispositionSets(workspaceId);
+    const pickSetId =
+      answerContext === "live" && ext.liveAnswerDispositionSetId
+        ? ext.liveAnswerDispositionSetId
+        : answerContext === "no_answer" && ext.noAnswerDispositionSetId
+          ? ext.noAnswerDispositionSetId
+          : ext.dispositionSetId;
     const set =
-      sets.find((s) => s.id === ext.dispositionSetId) || sets.find((s) => s.isDefault) || sets[0];
-    const dispositionLabels = set?.dispositions.map((d) => d.label) ?? [];
+      sets.find((s) => s.id === pickSetId) || sets.find((s) => s.isDefault) || sets[0];
+    const dispositionLabels =
+      set?.dispositions
+        .filter((d) => {
+          if (!answerContext || answerContext === "any") return true;
+          return d.answerContext === "any" || d.answerContext === answerContext;
+        })
+        .map((d) => d.label) ?? [];
 
     let scriptRendered: string | null = null;
     if (ext.scriptId && contactId) {

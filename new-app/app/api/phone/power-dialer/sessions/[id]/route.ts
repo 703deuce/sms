@@ -43,6 +43,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         emptyReasons: runtime.emptyReasons,
         nextEligibleAt: runtime.nextEligibleAt,
         upcomingQueue: upcoming,
+        queueContext: runtime.queueContext,
         attempts,
       },
     });

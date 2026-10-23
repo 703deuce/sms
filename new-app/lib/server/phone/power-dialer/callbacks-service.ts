@@ -32,6 +32,11 @@ export async function listPowerDialerCallbacksV2(workspaceId: string, tab: Callb
     campaignName: c.campaign.name,
     timezone: c.timezone || c.campaign.timezone,
     assignedUserId: c.assignedUserId,
+    visibility: c.visibility,
+    priority: c.priority,
+    source: c.source,
+    routingPool: c.routingPool,
+    overdue: c.status === "scheduled" && c.scheduledAt < new Date(),
   }));
 }
 
@@ -45,6 +50,10 @@ export async function upsertCallbackFromDisposition(input: {
   notes?: string;
   disposition?: string;
   assignedUserId?: string;
+  visibility?: string;
+  priority?: number;
+  source?: string;
+  routingPool?: string;
 }) {
   const prisma = getPrisma();
   const existing = await prisma.powerDialerCallback.findFirst({
@@ -60,6 +69,10 @@ export async function upsertCallbackFromDisposition(input: {
         disposition: input.disposition,
         status: "scheduled",
         assignedUserId: input.assignedUserId,
+        visibility: input.visibility,
+        priority: input.priority,
+        source: input.source,
+        routingPool: input.routingPool,
       },
     });
   }
@@ -75,6 +88,10 @@ export async function upsertCallbackFromDisposition(input: {
       disposition: input.disposition,
       assignedUserId: input.assignedUserId,
       status: "scheduled",
+      visibility: input.visibility || "personal",
+      priority: input.priority ?? 0,
+      source: input.source,
+      routingPool: input.routingPool,
     },
   });
 }

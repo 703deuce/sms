@@ -1,6 +1,5 @@
 import { getPrisma } from "@/lib/server/db";
 import { resolveInternalUserId } from "@/lib/server/internal-user";
-import { normalizeE164 } from "@/lib/server/phone/normalize";
 import { resolveCampaignRules } from "./campaign-config";
 import {
   evaluateContactEligibility,
@@ -14,7 +13,6 @@ import { parseCampaignAdvanced } from "./campaign-advanced";
 import { checkWorkspacePhoneFrequency, getWorkspaceDialPolicy } from "./dial-policy";
 import { sortCampaignQueueMembers } from "./queue-order";
 import { resolveDispositionByLabel } from "./dispositions";
-import { resolveContactDialPhone } from "./phone-resolve";
 import type {
   AnswerClassification,
   AttemptSummary,
@@ -127,7 +125,7 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
     include: {
       campaign: {
         include: {
-          list: { include: { members: { include: { contact: { include: { phones: true } } } } } },
+          list: { select: { id: true, name: true } },
         },
       },
     },
@@ -136,7 +134,14 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
 
   const rules = await resolveRulesForCampaign(workspaceId, session.campaign);
   const repOk = Boolean(session.repUserId);
-  const contactIds = session.campaign.list.members.map((m) => m.contactId);
+  const advancedEarly = parseCampaignAdvanced(session.campaign.configJson);
+  const { loadSessionQueueMembers, resolveWaterfallActiveList } = await import("./standby-queue");
+  const { allMembers: queueMembers, listChain } = await loadSessionQueueMembers({
+    primaryListId: session.campaign.listId,
+    primaryListName: session.campaign.list.name,
+    standbyListIds: advancedEarly.standbyListIds,
+  });
+  const contactIds = queueMembers.map((m) => m.contactId);
   const campaignMap = await loadCampaignAttemptsMap(workspaceId, session.campaignId, contactIds);
 
   const sessionAttempts = await prisma.powerDialerAttempt.findMany({
@@ -187,12 +192,21 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
 
   const progress =
     session.progressJson && typeof session.progressJson === "object"
-      ? (session.progressJson as { focusContactId?: string })
+      ? (session.progressJson as {
+          focusContactId?: string;
+          waterfallListIndex?: number;
+        })
       : {};
-  const advanced = parseCampaignAdvanced(session.campaign.configJson);
+  const advanced = advancedEarly;
   const dialPolicy = await getWorkspaceDialPolicy(workspaceId);
+  const { loadBlockedContactIds, pickRoundRobinContactIds } = await import("./team-queue-claims");
+  const blockedClaims = await loadBlockedContactIds(
+    workspaceId,
+    session.campaignId,
+    sessionId,
+  );
   const queueRows = sortCampaignQueueMembers(
-    session.campaign.list.members.map((m) => ({
+    queueMembers.map((m) => ({
       member: m,
       contactId: m.contactId,
       dialPriority: m.dialPriority,
@@ -201,7 +215,7 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
     })),
     advanced,
   );
-  let members = queueRows.map((r) => r.member);
+  let members = queueRows.map((r) => r.member).filter((m) => !blockedClaims.has(m.contactId));
   const { loadDueCallbackContactIds } = await import("./campaign-eligibility-helpers");
   const dueCallbackIds = await loadDueCallbackContactIds(
     session.workspaceId,
@@ -228,6 +242,8 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
   );
   const ext = parseExtendedConfig(session.campaign.configJson);
   const leadOwnerRouting = ext.leadOwnerRouting || advanced.leadOwnerRouting || "off";
+
+  const eligibilityByContact = new Map<string, EligibilityResult>();
 
   for (const m of members) {
     const c = m.contact;
@@ -268,43 +284,110 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
       workspaceFrequency: freq,
     });
     counts[eligibility.bucket] += 1;
-    if (!nextEligible && eligibility.eligible) {
-      const attemptNumber =
-        campaignAttempts.filter((a: AttemptSummary) => a.disposition || a.endedAt).length + 1;
-      const { resolveSessionDialPhone } = await import("@/lib/server/crm/native/phone-fallthrough");
-      const dial = await resolveSessionDialPhone({
-        workspaceId: session.workspaceId,
-        sessionId: session.id,
-        contact: {
-          id: c.id,
-          phone: c.phone,
-          status: c.status,
-          timezone: c.timezone,
-          customFields: c.customFields,
-          phones: c.phones?.map((p) => ({
-            id: p.id,
-            e164: p.e164,
-            priority: p.priority,
-            isPreferred: p.isPreferred,
-            outcome: p.outcome,
-          })),
-        },
-        priority: rules.phoneFieldPriority,
-      });
-      nextEligible = { contact: c, attemptNumber, eligibility, dialE164: dial.e164 };
-    }
+    eligibilityByContact.set(c.id, eligibility);
     if (!eligibility.eligible && eligibility.retryEligibleAt) {
       const t = eligibility.retryEligibleAt;
       if (!nextEligibleAt || t < nextEligibleAt) nextEligibleAt = t;
     }
   }
 
-  return { counts, nextEligible, nextEligibleAt, rules, session };
+  const waterfall = resolveWaterfallActiveList(
+    listChain,
+    queueMembers,
+    (row) => eligibilityByContact.get(row.contactId)?.eligible === true,
+    progress.waterfallListIndex ?? 0,
+  );
+  const activeList = listChain[waterfall.index] || listChain[0];
+  if (waterfall.index !== (progress.waterfallListIndex ?? 0)) {
+    const progressFull =
+      session.progressJson && typeof session.progressJson === "object"
+        ? { ...(session.progressJson as object) }
+        : {};
+    await prisma.powerDialerSession.update({
+      where: { id: sessionId },
+      data: {
+        progressJson: {
+          ...progressFull,
+          waterfallListIndex: waterfall.index,
+        } as import("@prisma/client").Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  let dialMembers = members.filter((m) => m.sourceListId === activeList.id);
+  const teamMode =
+    advanced.teamQueueMode === "dynamic" ? "pull" : advanced.teamQueueMode || "shared";
+  if (teamMode === "round_robin") {
+    const eligibleIds = dialMembers
+      .filter((m) => eligibilityByContact.get(m.contactId)?.eligible)
+      .map((m) => m.contactId);
+    const cfg =
+      session.campaign.configJson && typeof session.campaign.configJson === "object"
+        ? (session.campaign.configJson as { teamQueuePointer?: number })
+        : {};
+    const rotated = pickRoundRobinContactIds(
+      eligibleIds,
+      session.repUserId,
+      ext.memberUserIds || [],
+      cfg,
+    );
+    const order = new Map(rotated.map((id, i) => [id, i]));
+    dialMembers = [...dialMembers].sort(
+      (a, b) => (order.get(a.contactId) ?? 999) - (order.get(b.contactId) ?? 999),
+    );
+  }
+
+  for (const m of dialMembers) {
+    const c = m.contact;
+    const eligibility = eligibilityByContact.get(c.id);
+    if (!eligibility?.eligible) continue;
+    const campaignAttempts = campaignMap.get(c.id) || [];
+    const attemptNumber =
+      campaignAttempts.filter((a: AttemptSummary) => a.disposition || a.endedAt).length + 1;
+    const { resolveSessionDialPhone } = await import("@/lib/server/crm/native/phone-fallthrough");
+    const dial = await resolveSessionDialPhone({
+      workspaceId: session.workspaceId,
+      sessionId: session.id,
+      contact: {
+        id: c.id,
+        phone: c.phone,
+        status: c.status,
+        timezone: c.timezone,
+        customFields: c.customFields,
+        phones: c.phones?.map((p) => ({
+          id: p.id,
+          e164: p.e164,
+          priority: p.priority,
+          isPreferred: p.isPreferred,
+          outcome: p.outcome,
+        })),
+      },
+      priority: rules.phoneFieldPriority,
+    });
+    nextEligible = { contact: c, attemptNumber, eligibility, dialE164: dial.e164 };
+    break;
+  }
+
+  const queueContext = {
+    activeListId: activeList.id,
+    activeListName: activeList.name,
+    waterfallIndex: waterfall.index,
+    waterfallReason: waterfall.reason,
+    teamQueueMode: teamMode,
+    listChain,
+  };
+
+  if (!nextEligible && counts.eligible === 0) {
+    const { markCampaignCompletedIfExhausted } = await import("./campaign-admin");
+    await markCampaignCompletedIfExhausted(workspaceId, session.campaignId, "no_eligible_contacts");
+  }
+
+  return { counts, nextEligible, nextEligibleAt, rules, session, queueContext };
 }
 
 export async function getSessionRuntime(workspaceId: string, sessionId: string) {
   await sweepPowerDialerTimeouts(workspaceId, sessionId);
-  const { counts, nextEligible, nextEligibleAt, rules, session } =
+  const { counts, nextEligible, nextEligibleAt, rules, session, queueContext } =
     await buildEligibilityBreakdown(workspaceId, sessionId);
 
   const prisma = getPrisma();
@@ -358,6 +441,7 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
           .filter(([k, v]) => k !== "eligible" && v > 0)
           .map(([bucket, count]) => ({ bucket, count })),
     nextEligibleAt,
+    queueContext,
   };
 }
 
@@ -451,8 +535,31 @@ export async function createAttemptForSession(
   });
   await assertOutboundDialAllowed(workspaceId, dial.e164);
 
+  const wsSettings = await (await import("@/lib/server/phone/power-dialer")).getPowerDialerSettings(
+    workspaceId,
+  );
+  if (wsSettings.skipDuplicateNumbers) {
+    const dup = await prisma.powerDialerAttempt.findFirst({
+      where: {
+        sessionId,
+        workspaceId,
+        dialedPhoneE164: dial.e164,
+        status: { not: "cancelled" },
+      },
+    });
+    if (dup) throw new Error("Duplicate number already dialed in this session");
+  }
   const seq = session.dialSequence + 1;
   const ringTimeoutAt = new Date(Date.now() + rules.ringTimeoutSeconds * 1000);
+
+  const { claimContactForSession } = await import("./team-queue-claims");
+  await claimContactForSession({
+    workspaceId,
+    campaignId: session.campaignId,
+    contactId: input.contactId,
+    sessionId,
+    repUserId: session.repUserId,
+  });
 
   try {
     const attempt = await prisma.powerDialerAttempt.create({
@@ -599,11 +706,17 @@ export async function saveAttemptOutcomeWithProgression(
 
   const rules = await resolveRulesForCampaign(workspaceId, attempt.session.campaign);
   const ext = parseExtendedConfig(attempt.session.campaign.configJson);
-  const dispositionDef = await resolveDispositionByLabel(
-    workspaceId,
-    ext.dispositionSetId,
-    input.disposition,
-  );
+  const liveContext =
+    attempt.status === "answered" || attempt.answerClassification === "human"
+      ? "live"
+      : "no_answer";
+  const setId =
+    liveContext === "live" && ext.liveAnswerDispositionSetId
+      ? ext.liveAnswerDispositionSetId
+      : liveContext === "no_answer" && ext.noAnswerDispositionSetId
+        ? ext.noAnswerDispositionSetId
+        : ext.dispositionSetId;
+  const dispositionDef = await resolveDispositionByLabel(workspaceId, setId, input.disposition);
   if (dispositionDef?.requireNotes && !(input.notes && input.notes.trim())) {
     throw new Error("Notes are required for this disposition");
   }
@@ -751,6 +864,12 @@ export async function startSessionWithRep(
 
 export async function endSessionHard(workspaceId: string, sessionId: string) {
   const prisma = getPrisma();
+  const session = await prisma.powerDialerSession.findFirst({
+    where: { id: sessionId, workspaceId },
+    select: { campaignId: true },
+  });
+  const { releaseSessionClaims } = await import("./team-queue-claims");
+  await releaseSessionClaims(workspaceId, sessionId);
   await prisma.powerDialerAttempt.updateMany({
     where: {
       sessionId,
@@ -759,7 +878,7 @@ export async function endSessionHard(workspaceId: string, sessionId: string) {
     },
     data: { status: "cancelled", endedAt: new Date(), failureReason: "session_ended" },
   });
-  return prisma.powerDialerSession.updateMany({
+  const updated = await prisma.powerDialerSession.updateMany({
     where: { id: sessionId, workspaceId },
     data: {
       status: "completed",
@@ -769,6 +888,11 @@ export async function endSessionHard(workspaceId: string, sessionId: string) {
       currentAttemptId: null,
     },
   });
+  if (session?.campaignId) {
+    const { markCampaignCompletedIfExhausted } = await import("./campaign-admin");
+    await markCampaignCompletedIfExhausted(workspaceId, session.campaignId, "session_ended");
+  }
+  return updated;
 }
 
 export { reasonToUserMessage };

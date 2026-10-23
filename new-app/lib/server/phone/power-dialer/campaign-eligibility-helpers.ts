@@ -98,7 +98,7 @@ export async function loadDueCallbackContactIds(
           }
         : {}),
     },
-    orderBy: { scheduledAt: "asc" },
+    orderBy: [{ priority: "desc" }, { scheduledAt: "asc" }],
     take: 20,
     select: { contactId: true },
   });

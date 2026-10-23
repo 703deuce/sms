@@ -31,6 +31,14 @@ export async function PATCH(
         addToDnc: typeof body.addToDnc === "boolean" ? body.addToDnc : undefined,
         triggerCrmUpdate: typeof body.triggerCrmUpdate === "boolean" ? body.triggerCrmUpdate : undefined,
         triggerFollowUp: typeof body.triggerFollowUp === "boolean" ? body.triggerFollowUp : undefined,
+        outcomeClass: typeof body.outcomeClass === "string" ? body.outcomeClass : undefined,
+        colorHex: typeof body.colorHex === "string" ? body.colorHex : undefined,
+        hotkey: typeof body.hotkey === "string" ? body.hotkey : undefined,
+        answerContext:
+          body.answerContext === "live" || body.answerContext === "no_answer" || body.answerContext === "any"
+            ? body.answerContext
+            : undefined,
+        actionsJson: body.actionsJson !== undefined ? body.actionsJson : undefined,
       },
     });
     return NextResponse.json({ data });

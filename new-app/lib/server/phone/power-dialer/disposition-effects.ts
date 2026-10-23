@@ -107,6 +107,21 @@ export async function applyDispositionEffects(
     });
   }
 
+  if (def?.triggerFollowUp || def?.actionsJson) {
+    const { runDispositionActions } = await import("./disposition-actions");
+    await runDispositionActions(prisma, {
+      workspaceId: input.workspaceId,
+      campaignId: input.campaignId,
+      contactId: input.contactId,
+      attemptId: input.attemptId,
+      disposition: def,
+      notes: input.notes,
+      assignedUserId: input.assignedUserId,
+      callbackAt: input.callbackAt,
+      timezone: input.timezone,
+    });
+  }
+
   if (def?.triggerCrmUpdate) {
     const attempt = await prisma.powerDialerAttempt.findFirst({
       where: { id: input.attemptId, workspaceId: input.workspaceId },

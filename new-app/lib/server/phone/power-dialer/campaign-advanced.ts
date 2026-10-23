@@ -10,7 +10,7 @@ export const campaignAdvancedSchema = z.object({
   retryScheduleMinutes: z.array(z.number().int().min(0)).optional(),
   dialOrder: z.enum(["fifo", "lifo", "priority"]).optional(),
   standbyListIds: z.array(z.string()).optional(),
-  teamQueueMode: z.enum(["shared", "round_robin", "pull"]).optional(),
+  teamQueueMode: z.enum(["shared", "round_robin", "pull", "dynamic"]).optional(),
   jurisdictionPreset: z.enum(["none", "us_ftc_consumer", "custom"]).optional(),
   customLegalStart: z.string().optional(),
   customLegalEnd: z.string().optional(),
