@@ -445,6 +445,10 @@ model Workspace {
   humanCallNotes                         HumanCallNote[]
   callRouting                            WorkspaceCallRouting?
   powerDialerCampaigns                   PowerDialerCampaign[]
+  powerDialerDispositionSets             PowerDialerDispositionSet[]
+  powerDialerScripts                     PowerDialerScript[]
+  powerDialerVoicemailDrops              PowerDialerVoicemailDrop[]
+  powerDialerCallbacks                   PowerDialerCallback[]
   powerDialerSessions                    PowerDialerSession[]
   powerDialerAttempts                    PowerDialerAttempt[]
   pushSubscriptions                      PushSubscription[]
@@ -1198,6 +1202,7 @@ model Contact {
   createdAt            DateTime              @default(now())
   workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   powerDialerAttempts  PowerDialerAttempt[]
+  powerDialerCallbacks PowerDialerCallback[]
   listMembers          ContactListMember[]
   tagMembers           ContactTag[]
   consentRecords       ConsentRecord[]
@@ -1215,6 +1220,7 @@ model ContactList {
   name                 String
   description          String?
   source               String                @default("manual")
+  filtersJson          Json                  @default("[]")
   archivedAt           DateTime?
   updatedAt            DateTime              @updatedAt
   workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -4532,6 +4538,7 @@ model PowerDialerCampaign {
   workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   list           ContactList          @relation(fields: [listId], references: [id], onDelete: Restrict)
   sessions       PowerDialerSession[]
+  callbacks      PowerDialerCallback[]
 
   @@index([workspaceId, status])
   @@map("power_dialer_campaigns")
@@ -4582,8 +4589,11 @@ model PowerDialerAttempt {
   billableSeconds      Int?
   ringTimeoutAt        DateTime?
   dispositionEffectsAt DateTime?
+  dispositionId        String?
+  voicemailDropSentAt  DateTime?
   failureReason        String?
   createdAt            DateTime           @default(now())
+  dispositionDef PowerDialerDisposition? @relation(fields: [dispositionId], references: [id], onDelete: SetNull)
   session       PowerDialerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -4593,6 +4603,99 @@ model PowerDialerAttempt {
   @@index([sessionId, status])
   @@index([contactId])
   @@map("power_dialer_attempts")
+}
+
+model PowerDialerDispositionSet {
+  id          String                  @id @default(cuid())
+  workspaceId String
+  name        String
+  isDefault   Boolean                 @default(false)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  workspace   Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dispositions PowerDialerDisposition[]
+
+  @@index([workspaceId])
+  @@map("power_dialer_disposition_sets")
+}
+
+model PowerDialerDisposition {
+  id                   String                    @id @default(cuid())
+  setId                String
+  label                String
+  category             String                    @default("outcome")
+  sortOrder            Int                       @default(0)
+  requireNotes         Boolean                   @default(false)
+  markConnected        Boolean                   @default(false)
+  markContactCompleted Boolean                   @default(false)
+  scheduleCallback     Boolean                   @default(false)
+  removeFromQueue      Boolean                   @default(false)
+  addToDnc             Boolean                   @default(false)
+  triggerCrmUpdate     Boolean                   @default(false)
+  triggerFollowUp      Boolean                   @default(false)
+  set                  PowerDialerDispositionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  attempts             PowerDialerAttempt[]
+
+  @@index([setId, sortOrder])
+  @@map("power_dialer_dispositions")
+}
+
+model PowerDialerScript {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  body        String
+  isDefault   Boolean   @default(false)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("power_dialer_scripts")
+}
+
+model PowerDialerVoicemailDrop {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  storageUrl  String
+  mimeType    String?
+  sizeBytes   Int       @default(0)
+  isDefault   Boolean   @default(false)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("power_dialer_voicemail_drops")
+}
+
+model PowerDialerCallback {
+  id              String              @id @default(cuid())
+  workspaceId     String
+  campaignId      String
+  contactId       String
+  attemptId       String?
+  scheduledAt     DateTime
+  timezone        String              @default("America/Chicago")
+  status          String              @default("scheduled")
+  assignedUserId  String?
+  notes           String?
+  disposition     String?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign        PowerDialerCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact         Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scheduledAt])
+  @@index([campaignId, status])
+  @@index([contactId])
+  @@map("power_dialer_callbacks")
 }
 
 model TelnyxWebhookDedup {
