@@ -9,14 +9,14 @@
 | P01 | Pause & Preview dial flow | session-runtime, power-dialer-session | `/app/power-dialer/dialer` | B1 | in progress | Preview hold + manual dial |
 | P02 | Resume unfinished sessions | session-orchestration, sessions API | dialer | B1 | in progress | reconcile + resume |
 | P03 | Upcoming-contact queue | session-orchestration, UI queue panel | dialer | B1 | in progress | next N eligible |
-| P04 | Live mute/hold/transfer | workspace-provider, power-dialer-session | dialer | B1 | in progress | shared softphone |
-| P05 | CSV duplicate processing | csv-import | calling lists | B2 | not started | |
-| P06 | Custom import fields | csv-import, CRM | lists | B2 | not started | |
-| P07 | Standard contact fields | contacts, import | contacts | B2 | not started | |
-| P08 | Timezone CSV mapping | csv-import, eligibility | lists | B2 | not started | |
-| P09 | Multiple phone numbers | phone-resolve, contact model | dialer, contact | B2 | not started | |
-| P10 | Complete session contact card | dialer prep API | dialer | B2 | not started | |
-| P11 | CRM ownership routing | campaign-access | campaigns | B3 | not started | |
+| P04 | Live mute/hold/transfer | workspace-provider, power-dialer-session, transfer API | dialer | B1 | done | cold transfer via `transferHumanCall`; warm 501 |
+| P05 | CSV duplicate processing | list-import-apply | calling lists | B2 | done | imported/updated/invalid counts |
+| P06 | Custom import fields | csv-import mapping.custom | lists | B2 | partial | column map; admin defs C08 pending |
+| P07 | Standard contact fields | csv-import, Contact cols | contacts | B2 | partial | title/email on import |
+| P08 | Timezone CSV mapping | csv-import validation | lists | B2 | done | IANA validate + infer flag |
+| P09 | Multiple phone numbers | ContactPhone, phone-resolve | dialer, contact | B2 | partial | import + resolve; M14 fallthrough pending |
+| P10 | Complete session contact card | dialer-prep, session UI | dialer | B2 | done | link `/app/contacts/[id]` |
+| P11 | CRM ownership routing | eligibility leadOwnerRouting | campaigns | B2 | partial | `assigned_only` enforced |
 | P12 | Callback UI complete | callbacks-service | callbacks | B4 | not started | |
 | P13 | Timezone coverage | timezone-window | campaigns | B3 | not started | |
 | P14 | Campaign schedules | campaign-config | campaigns | B3 | not started | |
@@ -31,15 +31,15 @@
 | P23 | PD recording settings | power-dialer-recording | settings, webhooks | B1 | in progress | independent of Phone global |
 | P24 | Legal/usage notices | compliance settings | settings | B5 | not started | counsel gate |
 | P25 | Call source display | call-list-filters | call-history | B6 | not started | |
-| P26 | Pickup analytics | answer-detection, analytics | analytics | B1/B6 | in progress | honest classification |
+| P26 | Pickup analytics | analytics-service, analytics UI | analytics | B1 | done | denominator + classification panel |
 | P27 | Real AI summaries | transcription | call-history | B6 | not started | |
 | P28 | Agent number enforcement | caller-id-resolution | team, dialer | B1 | in progress | repNumberAssignments |
 | P29 | CRM writeback | crm-sync-bridge | integrations | B7 | not started | SF/Zoho/Pipedrive only |
 | M01 | Hotkeys | power-dialer-session | dialer | B1 | in progress | a11y guards |
-| M02 | Session presets | settings / session configJson | dialer | B1 | in progress | workspace presets |
+| M02 | Session presets | PowerDialerSessionPreset API | dialer | B1 | done | user + workspace scope |
 | M03 | Cell/desk phone connect | Telnyx legs | dialer | B8 | not started | |
 | M04 | Session convenience options | settings | settings | B3 | not started | |
-| M05 | Manual live voicemail | vm playback API | dialer | B1 | in progress | |
+| M05 | Manual live voicemail | live-voicemail API | dialer | B1 | done | distinct from prerecorded drop |
 | M06 | 3-way / warm transfer | transfer.ts | dialer | B8 | not started | |
 | M07 | Inbound during outbound | phone runtime | dialer | B8 | not started | |
 | M08 | Parallel dialing | parallel orchestrator | dialer, campaigns | B8 | not started | visible mode |
@@ -48,16 +48,17 @@
 | M11 | Dynamic dialer | session queue | campaigns | B3 | not started | |
 | M12 | Shared team queues | campaign distribution | campaigns | B3 | not started | |
 | M13 | Abandoned-call handling | parallel safety | analytics | B8 | not started | |
-| M14 | Alternate-number fallthrough | phone-resolve | dialer | B2 | not started | |
+| M14 | Alternate-number fallthrough | phone-resolve, ContactPhone | dialer | B2 | partial | priority phones; session fallthrough pending |
 | M15 | In-session number mgmt | contact API, UI | dialer | B1 | in progress | |
-| M16 | Mini CRM folders/views | contacts CRM | `/app/contacts` | B2 | not started | |
+| M16 | Mini CRM folders/views | ContactFolder, SavedView schema | `/app/contacts` | B2 | partial | schema only; UI pending |
 | M17 | CRM list sync | crm-list-import | lists | B7 | not started | existing CRMs |
 | M18 | List API add/remove | public API | integrations | B7 | not started | |
-| M19 | Country code / intl | csv-import, dial gates | settings | B2 | not started | |
+| M19 | Country code / intl | WorkspaceCrmSettings | settings | B2 | partial | schema; dial gates pending |
 | M20–M30 | Campaign retry/scheduling | campaign-config | campaigns | B3 | not started | see gap doc |
 | M31–M39 | Dispositions/cadences/scripts | dispositions, jobs | settings | B4 | not started | |
-| M40 | Beep detection auto-drop | vm-drop + AMD | dialer | B1 | in progress | opt-in + counsel gate |
-| M41 | Screening intro copy | screening-runtime | settings | B1 | in progress | |
+| M38 | Call ratings + ACW timeout | acw-enforcement, settings | dialer | B1 | done | `afterCallWorkTimeoutSec`, ratings gate |
+| M40 | Beep detection auto-drop | beep-auto-drop + AMD | dialer | B1 | done | default OFF; Telnyx machine_end_* |
+| M41 | Screening intro copy | screener-intro-playback | settings | B1 | done | truthful TTS/recorded |
 | M42 | Abandonment messages | compliance | B8 | not started | counsel |
 | M43–M53 | Numbers/reputation | number-health | number-health | B5 | not started | |
 | M54–M59 | Compliance/recording | compliance panels | settings | B5 | not started | |
@@ -86,8 +87,8 @@
 | X09 | Screening settings → runtime | screening-runtime | settings | B1 | in progress | |
 | X10 | Honest data only | all surfaces | — | all | not started | ongoing |
 | X11 | Bounded resource use | usage-limits, kill switch | settings | B1 | in progress | |
-| C01 | CRM Contacts landing | contacts-workspace | `/app/contacts` | B2 | not started | real DB only |
-| C02 | Contact detail timeline | contact detail route | `/app/contacts/[id]` | B2 | not started | |
+| C01 | CRM Contacts landing | contacts-workspace | `/app/contacts` | B2 | done | DB-backed list (existing) |
+| C02 | Contact detail timeline | contact-detail-workspace, native API | `/app/contacts/[id]` | B2 | partial | no mock data; timeline PD + events |
 | C03 | Companies | companies routes | contacts subnav | B2 | not started | |
 | C04 | Deals / pipeline | deals routes | contacts subnav | B2 | not started | |
 | C05 | Tasks & follow-ups | tasks | contacts | B2 | not started | |

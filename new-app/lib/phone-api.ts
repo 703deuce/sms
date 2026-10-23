@@ -565,7 +565,12 @@ export async function powerSessionAction(
 
 export async function savePowerAttemptOutcome(
   attemptId: string,
-  body: { disposition: string; notes?: string; callbackAt?: string | null },
+  body: {
+    disposition: string;
+    notes?: string;
+    callbackAt?: string | null;
+    callRating?: number | null;
+  },
 ) {
   return parse(
     await fetch(`/api/phone/power-dialer/attempts/${attemptId}`, {

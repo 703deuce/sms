@@ -15,12 +15,17 @@ export async function applyCsvImportToList(
   const list = await prisma.contactList.findFirst({ where: { id: listId, workspaceId } });
   if (!list) throw new Error("List not found");
 
-  const accepted: { lineNumber: number; contactId: string }[] = [];
-  const rejected: { lineNumber: number; reasons: string[] }[] = [];
+  const accepted: { lineNumber: number; contactId: string; action: "created" | "updated" }[] = [];
+  const rejected: { lineNumber: number; reasons: string[]; rowSnapshot?: Record<string, string> }[] =
+    [];
 
   for (const row of rows) {
     if (row.errors.length) {
-      rejected.push({ lineNumber: row.lineNumber, reasons: row.errors });
+      rejected.push({
+        lineNumber: row.lineNumber,
+        reasons: row.errors,
+        rowSnapshot: row.raw as Record<string, string>,
+      });
       continue;
     }
     const primary = row.phones.find((p) => p.e164);
@@ -42,11 +47,16 @@ export async function applyCsvImportToList(
     });
 
     if (existing && options.duplicateBehavior === "skip") {
-      rejected.push({ lineNumber: row.lineNumber, reasons: ["Duplicate contact skipped"] });
+      rejected.push({
+        lineNumber: row.lineNumber,
+        reasons: ["Duplicate contact skipped"],
+        rowSnapshot: row.raw as Record<string, string>,
+      });
       continue;
     }
 
     let contactId: string;
+    let action: "created" | "updated" = "created";
     if (existing) {
       if (options.duplicateBehavior === "update" || options.duplicateBehavior === "add_to_list") {
         await prisma.contact.update({
@@ -54,14 +64,18 @@ export async function applyCsvImportToList(
           data: {
             ...(firstName ? { firstName } : {}),
             ...(lastName ? { lastName } : {}),
+            ...(row.email ? { email: row.email } : {}),
+            ...(row.title ? { title: row.title } : {}),
             ...(row.company ? { company: row.company } : {}),
-            ...(row.timezone ? { timezone: row.timezone } : {}),
+            ...(row.timezone ? { timezone: row.timezone, timezoneInferred: false } : {}),
             customFields: { ...(existing.customFields as object), ...customFields },
           },
         });
         contactId = existing.id;
+        action = "updated";
       } else {
         contactId = existing.id;
+        action = "updated";
       }
     } else {
       const created = await prisma.contact.create({
@@ -70,12 +84,27 @@ export async function applyCsvImportToList(
           phone: primary.e164,
           firstName,
           lastName,
+          email: row.email || null,
+          title: row.title || null,
           company: row.company || null,
           timezone: row.timezone || null,
+          timezoneInferred: row.timezoneInferred ?? false,
           customFields: Object.keys(customFields).length ? customFields : undefined,
         },
       });
       contactId = created.id;
+      action = "created";
+      for (const p of row.phones) {
+        if (!p.e164 || p.e164 === primary.e164) continue;
+        await prisma.contactPhone.create({
+          data: {
+            contactId,
+            e164: p.e164,
+            label: p.field,
+            priority: p.priority ?? 10,
+          },
+        }).catch(() => undefined);
+      }
     }
 
     await prisma.contactListMember.upsert({
@@ -84,7 +113,7 @@ export async function applyCsvImportToList(
       update: {},
     });
 
-    accepted.push({ lineNumber: row.lineNumber, contactId });
+    accepted.push({ lineNumber: row.lineNumber, contactId, action });
   }
 
   await prisma.contactList.update({
@@ -92,8 +121,13 @@ export async function applyCsvImportToList(
     data: { source: "csv", updatedAt: new Date() },
   });
 
+  const created = accepted.filter((a) => a.action === "created").length;
+  const updated = accepted.filter((a) => a.action === "updated").length;
   return {
-    imported: accepted.length,
+    imported: created,
+    updated,
+    processed: accepted.length,
+    invalid: rejected.length,
     rejected,
     accepted,
   };

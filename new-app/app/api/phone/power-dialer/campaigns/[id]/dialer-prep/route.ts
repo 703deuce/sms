@@ -55,6 +55,39 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         })
       : null;
 
+    let contactCard: Record<string, unknown> | null = null;
+    if (contactId) {
+      const contact = await prisma.contact.findFirst({
+        where: { id: contactId, workspaceId },
+        include: {
+          phones: { orderBy: { priority: "asc" } },
+          customFieldValues: { include: { field: true } },
+          deals: { take: 1, include: { stage: true } },
+        },
+      });
+      if (contact) {
+        contactCard = {
+          id: contact.id,
+          href: `/app/contacts/${contact.id}`,
+          email: contact.email,
+          title: contact.title,
+          timezone: contact.timezone,
+          timezoneInferred: contact.timezoneInferred,
+          localTimeNote: contact.timezone ? `Local time uses ${contact.timezone}` : null,
+          company: contact.company,
+          customFields: contact.customFieldValues.map((v) => ({
+            key: v.field.key,
+            label: v.field.label,
+            value: v.valueText ?? v.valueNumber,
+          })),
+          deal: contact.deals[0]
+            ? { id: contact.deals[0].id, title: contact.deals[0].title, stage: contact.deals[0].stage.name }
+            : null,
+          phones: contact.phones,
+        };
+      }
+    }
+
     return NextResponse.json({
       data: {
         dispositionSetId: set?.id ?? null,
@@ -62,6 +95,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         scriptRendered,
         voicemailDropId: vmDrop?.id ?? null,
         voicemailDropName: vmDrop?.name ?? null,
+        contactCard,
       },
     });
   } catch (err) {

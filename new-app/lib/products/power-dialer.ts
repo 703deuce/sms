@@ -32,6 +32,12 @@ export type PowerDialerWorkspaceSettings = {
   externalDncScreeningConnected?: boolean
   teamActivityVisibility?: 'all_reps' | 'assigned_only'
   repNumberAssignments?: Record<string, string[]>
+  afterCallWorkTimeoutSec?: number
+  callRatingsEnabled?: boolean
+  beepAutoDropEnabled?: boolean
+  screenerIntroMode?: 'off' | 'tts' | 'recorded'
+  screenerIntroText?: string
+  screenerIntroAudioUrl?: string | null
 }
 
 const DEFAULTS: PowerDialerWorkspaceSettings = {
@@ -114,5 +120,17 @@ export function mergePowerDialerSettings(
       o.repNumberAssignments && typeof o.repNumberAssignments === 'object'
         ? (o.repNumberAssignments as Record<string, string[]>)
         : {},
+    afterCallWorkTimeoutSec:
+      typeof o.afterCallWorkTimeoutSec === 'number' ? o.afterCallWorkTimeoutSec : 120,
+    callRatingsEnabled: typeof o.callRatingsEnabled === 'boolean' ? o.callRatingsEnabled : false,
+    beepAutoDropEnabled: typeof o.beepAutoDropEnabled === 'boolean' ? o.beepAutoDropEnabled : false,
+    screenerIntroMode:
+      o.screenerIntroMode === 'tts' || o.screenerIntroMode === 'recorded'
+        ? o.screenerIntroMode
+        : 'off',
+    screenerIntroText:
+      typeof o.screenerIntroText === 'string' ? o.screenerIntroText : undefined,
+    screenerIntroAudioUrl:
+      typeof o.screenerIntroAudioUrl === 'string' ? o.screenerIntroAudioUrl : null,
   }
 }

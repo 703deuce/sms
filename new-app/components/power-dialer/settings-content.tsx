@@ -140,6 +140,31 @@ export function PowerDialerSettingsContent() {
                 />
                 Require disposition before advancing to the next contact
               </label>
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium">After-call work timeout (seconds)</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={900}
+                  value={settings.afterCallWorkTimeoutSec ?? 120}
+                  onChange={(e) =>
+                    setSettings({ ...settings, afterCallWorkTimeoutSec: Number(e.target.value) })
+                  }
+                />
+                <span className="text-xs text-muted-foreground">
+                  Server auto-completes disposition if the rep exceeds this window (0 = disabled).
+                </span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.callRatingsEnabled ?? false}
+                  onChange={(e) =>
+                    setSettings({ ...settings, callRatingsEnabled: e.target.checked })
+                  }
+                />
+                Require 1–5 call rating before next contact
+              </label>
             </div>
           </Panel>
         </TabsContent>
@@ -298,6 +323,52 @@ export function PowerDialerSettingsContent() {
                   <option value="hangup">End call</option>
                 </select>
               </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-medium">Screener introduction (truthful)</span>
+                <select
+                  className="rounded-md border bg-background px-3 py-2"
+                  value={settings.screenerIntroMode ?? 'off'}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      screenerIntroMode: e.target.value as PowerDialerWorkspaceSettings['screenerIntroMode'],
+                    })
+                  }
+                >
+                  <option value="off">Off</option>
+                  <option value="tts">Speak configured text (TTS)</option>
+                  <option value="recorded">Play recorded URL</option>
+                </select>
+              </label>
+              {settings.screenerIntroMode === 'tts' && (
+                <label className="flex flex-col gap-1.5">
+                  <span className="font-medium">Introduction text</span>
+                  <Input
+                    value={settings.screenerIntroText ?? ''}
+                    onChange={(e) => setSettings({ ...settings, screenerIntroText: e.target.value })}
+                  />
+                </label>
+              )}
+              {settings.screenerIntroMode === 'recorded' && (
+                <label className="flex flex-col gap-1.5">
+                  <span className="font-medium">Recorded audio URL</span>
+                  <Input
+                    value={settings.screenerIntroAudioUrl ?? ''}
+                    onChange={(e) => setSettings({ ...settings, screenerIntroAudioUrl: e.target.value })}
+                  />
+                </label>
+              )}
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.beepAutoDropEnabled ?? false}
+                  onChange={(e) => setSettings({ ...settings, beepAutoDropEnabled: e.target.checked })}
+                />
+                Auto-drop voicemail after AMD greeting end (requires prerecorded opt-in)
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Telnyx signals: machine_end_beep (preferred), machine_end_silence, machine_end_other. Default off.
+              </p>
             </div>
           </Panel>
           )}

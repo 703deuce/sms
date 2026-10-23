@@ -20,6 +20,15 @@ export type AnalyticsPayload = {
   representatives: { userId: string; attempts: number; humanConversations: number }[]
   numbers: { phoneNumberId: string; attempts: number; humanConversations: number }[]
   screening: { detected: number; uncertain: number }
+  pickup?: {
+    denominator: number
+    human: number
+    machine: number
+    screener: number
+    unclassified: number
+    humanRate: number
+    machineRate: number
+  }
   usage: { minutesUsed: number; minutesIncluded: number | null }
 }
 

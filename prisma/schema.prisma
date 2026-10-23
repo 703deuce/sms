@@ -454,7 +454,20 @@ model Workspace {
   powerDialerComplianceAuditLogs         PowerDialerComplianceAuditLog[]
   powerDialerIntegrationSyncLogs         PowerDialerIntegrationSyncLog[]
   powerDialerSessions                    PowerDialerSession[]
+  powerDialerSessionPresets              PowerDialerSessionPreset[]
   powerDialerAttempts                    PowerDialerAttempt[]
+  crmCompanies                           CrmCompany[]
+  crmDealStages                          CrmDealStage[]
+  crmDeals                               CrmDeal[]
+  crmTasks                               CrmTask[]
+  crmAppointments                        CrmAppointment[]
+  contactFolders                         ContactFolder[]
+  contactSavedViews                      ContactSavedView[]
+  crmCustomFieldDefinitions              CrmCustomFieldDefinition[]
+  contactActivityEvents                  ContactActivityEvent[]
+  contactMergeRecords                    ContactMergeRecord[]
+  crmFieldLocks                          CrmFieldLock[]
+  workspaceCrmSettings                   WorkspaceCrmSettings?
   pushSubscriptions                      PushSubscription[]
   notificationPrefs                      WorkspaceNotificationPrefs[]
   workspaceLimits                        WorkspaceLimits?
@@ -1193,6 +1206,10 @@ model Contact {
   lastName             String?
   phone                String
   email                String?
+  title                String?
+  leadSource           String?
+  leadStage            String?
+  ownerUserId          String?
   status               ContactStatus         @default(SUBSCRIBED)
   consentSource        String?
   consentDate          DateTime?
@@ -1200,11 +1217,25 @@ model Contact {
   lastReply            DateTime?
   assignedUser         String?
   company              String?
+  crmCompanyId         String?
+  folderId             String?
   /// IANA timezone for campaign calling windows (e.g. America/Chicago).
   timezone             String?
+  timezoneInferred     Boolean               @default(false)
   customFields         Json?
   createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  crmCompany           CrmCompany?           @relation(fields: [crmCompanyId], references: [id], onDelete: SetNull)
+  folder               ContactFolder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  phones               ContactPhone[]
+  customFieldValues    CrmCustomFieldValue[]
+  deals                CrmDeal[]
+  tasks                CrmTask[]
+  appointments         CrmAppointment[]
+  activityEvents       ContactActivityEvent[]
+  mergeRecords         ContactMergeRecord[]  @relation("MergePrimary")
+  fieldLocks           CrmFieldLock[]
   powerDialerAttempts  PowerDialerAttempt[]
   powerDialerCallbacks PowerDialerCallback[]
   listMembers          ContactListMember[]
@@ -1216,6 +1247,8 @@ model Contact {
   visualizerProjects   VisualizerProject[]
 
   @@unique([workspaceId, phone])
+  @@index([workspaceId, ownerUserId])
+  @@index([workspaceId, folderId])
 }
 
 model ContactList {
@@ -4571,6 +4604,21 @@ model PowerDialerSession {
   @@map("power_dialer_sessions")
 }
 
+model PowerDialerSessionPreset {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  ownerUserId     String?
+  scope           String    @default("user")
+  name            String
+  configJson      Json
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, ownerUserId])
+  @@map("power_dialer_session_presets")
+}
+
 model PowerDialerAttempt {
   id                   String             @id @default(cuid())
   workspaceId          String
@@ -4595,6 +4643,9 @@ model PowerDialerAttempt {
   dispositionEffectsAt DateTime?
   dispositionId        String?
   voicemailDropSentAt  DateTime?
+  vmDeliveryMode       String?
+  callRating           Int?
+  acwDeadlineAt        DateTime?
   failureReason        String?
   createdAt            DateTime           @default(now())
   dispositionDef PowerDialerDisposition? @relation(fields: [dispositionId], references: [id], onDelete: SetNull)
@@ -4732,6 +4783,236 @@ model PowerDialerInternalDnc {
   @@unique([workspaceId, phone])
   @@index([workspaceId])
   @@map("power_dialer_internal_dnc")
+}
+
+model WorkspaceCrmSettings {
+  workspaceId           String   @id
+  defaultCountryCode    String   @default("US")
+  allowedCountries      String[] @default([])
+  blockedCountries      String[] @default([])
+  inboundContactRules   Json?
+  phoneFallthroughMode  String   @default("next_number")
+  prefsJson             Json?
+  updatedAt             DateTime @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_crm_settings")
+}
+
+model CrmCompany {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  website     String?
+  phone       String?
+  ownerUserId String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts    Contact[]
+  deals       CrmDeal[]
+
+  @@index([workspaceId, name])
+  @@map("crm_companies")
+}
+
+model CrmDealStage {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  sortOrder   Int      @default(0)
+  isClosedWon Boolean  @default(false)
+  isClosedLost Boolean @default(false)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deals       CrmDeal[]
+
+  @@index([workspaceId, sortOrder])
+  @@map("crm_deal_stages")
+}
+
+model CrmDeal {
+  id          String       @id @default(cuid())
+  workspaceId String
+  contactId   String?
+  companyId   String?
+  stageId     String
+  title       String
+  amountCents Int?
+  ownerUserId String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  company     CrmCompany?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  stage       CrmDealStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  appointments CrmAppointment[]
+
+  @@index([workspaceId, stageId])
+  @@index([contactId])
+  @@map("crm_deals")
+}
+
+model CrmTask {
+  id          String    @id @default(cuid())
+  workspaceId String
+  contactId   String?
+  title       String
+  notes       String?
+  dueAt       DateTime?
+  status      String    @default("open")
+  assigneeUserId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, dueAt])
+  @@index([assigneeUserId, status])
+  @@map("crm_tasks")
+}
+
+model CrmAppointment {
+  id          String    @id @default(cuid())
+  workspaceId String
+  contactId   String?
+  dealId      String?
+  title       String
+  startsAt    DateTime
+  endsAt      DateTime
+  timezone    String
+  assigneeUserId String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  deal        CrmDeal?  @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, startsAt])
+  @@map("crm_appointments")
+}
+
+model ContactPhone {
+  id          String   @id @default(cuid())
+  contactId   String
+  e164        String
+  label       String   @default("mobile")
+  priority    Int      @default(0)
+  isPreferred Boolean  @default(false)
+  outcome     String?
+  createdAt   DateTime @default(now())
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, e164])
+  @@index([contactId, priority])
+  @@map("contact_phones")
+}
+
+model ContactFolder {
+  id          String          @id @default(cuid())
+  workspaceId String
+  parentId    String?
+  name        String
+  sortOrder   Int             @default(0)
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent      ContactFolder?    @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    ContactFolder[]   @relation("FolderTree")
+  contacts    Contact[]
+
+  @@index([workspaceId, parentId])
+  @@map("contact_folders")
+}
+
+model ContactSavedView {
+  id          String    @id @default(cuid())
+  workspaceId String
+  ownerUserId String?
+  name        String
+  filtersJson Json
+  pinned      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, ownerUserId])
+  @@map("contact_saved_views")
+}
+
+model CrmCustomFieldDefinition {
+  id          String   @id @default(cuid())
+  workspaceId String
+  key         String
+  label       String
+  fieldType   String
+  optionsJson Json?
+  sortOrder   Int      @default(0)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  values      CrmCustomFieldValue[]
+
+  @@unique([workspaceId, key])
+  @@map("crm_custom_field_definitions")
+}
+
+model CrmCustomFieldValue {
+  id          String   @id @default(cuid())
+  contactId   String
+  fieldId     String
+  valueText   String?
+  valueNumber Float?
+  valueJson   Json?
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  field       CrmCustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, fieldId])
+  @@map("crm_custom_field_values")
+}
+
+model ContactActivityEvent {
+  id          String   @id @default(cuid())
+  workspaceId String
+  contactId   String
+  kind        String
+  title       String
+  body        String?
+  occurredAt  DateTime @default(now())
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId, occurredAt])
+  @@map("contact_activity_events")
+}
+
+model ContactMergeRecord {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  primaryContactId String
+  mergedContactId  String
+  mergedSnapshot   Json
+  mergedByUserId   String?
+  createdAt        DateTime @default(now())
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  primaryContact   Contact  @relation("MergePrimary", fields: [primaryContactId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, primaryContactId])
+  @@map("contact_merge_records")
+}
+
+/// B7 sync: customer-edited fields win over CRM inbound unless lock cleared.
+model CrmFieldLock {
+  id          String   @id @default(cuid())
+  workspaceId String
+  contactId   String
+  fieldKey    String
+  owner       String
+  lockedAt    DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, fieldKey])
+  @@map("crm_field_locks")
 }
 
 model PowerDialerComplianceAuditLog {

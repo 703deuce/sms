@@ -102,7 +102,23 @@ export async function applyAmdToPowerDialerAttempt(input: {
         payload: { reason: decision.reason, classification },
         idempotencyKey: `${input.idempotencyKey}:screening`,
       });
+      if (classification === "screener" && decision.action === "connect_rep") {
+        const { maybePlayScreenerIntro } = await import("./screener-intro-playback");
+        await maybePlayScreenerIntro({
+          workspaceId: input.workspaceId,
+          humanCallId: input.humanCallId,
+          attemptId,
+        }).catch(() => undefined);
+      }
     }
+
+    const { maybeAutoDropVoicemailAfterAmd } = await import("./beep-auto-drop");
+    await maybeAutoDropVoicemailAfterAmd({
+      workspaceId: input.workspaceId,
+      humanCallId: input.humanCallId,
+      attemptId,
+      amdResult: input.amdResult,
+    }).catch(() => undefined);
   }
   return { handled: true, classification };
 }

@@ -75,12 +75,47 @@ function NumbersPanel({ data }: { data: AnalyticsPayload }) {
 }
 
 function ScreeningPanel({ data }: { data: AnalyticsPayload }) {
+  const pickup = data.pickup
   return (
-    <Panel title="Call screening">
-      <p className="text-sm text-muted-foreground">
-        Detected: {data.screening.detected} · Uncertain: {data.screening.uncertain}
-      </p>
-    </Panel>
+    <div className="flex flex-col gap-4">
+      <Panel title="Pickup classification (P26)">
+        {pickup ? (
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Answered-signal denominator</dt>
+              <dd className="font-medium tabular-nums">{pickup.denominator}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Human conversations</dt>
+              <dd className="font-medium tabular-nums">
+                {pickup.human} ({pickup.humanRate}%)
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Machine / voicemail</dt>
+              <dd className="font-medium tabular-nums">
+                {pickup.machine} ({pickup.machineRate}%)
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Call screeners</dt>
+              <dd className="font-medium tabular-nums">{pickup.screener}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Unclassified (answered, no AMD)</dt>
+              <dd className="font-medium tabular-nums">{pickup.unclassified}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="text-sm text-muted-foreground">No pickup data for this range.</p>
+        )}
+      </Panel>
+      <Panel title="Call screening">
+        <p className="text-sm text-muted-foreground">
+          Detected: {data.screening.detected} · Uncertain: {data.screening.uncertain}
+        </p>
+      </Panel>
+    </div>
   )
 }
 

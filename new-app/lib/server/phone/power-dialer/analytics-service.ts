@@ -31,6 +31,9 @@ export async function getPowerDialerAnalytics(workspaceId: string, range: "7d" |
 
   let human = 0;
   let screened = 0;
+  let machine = 0;
+  let unclassified = 0;
+  let answeredSignals = 0;
   let attemptsCount = attempts.length;
   let billableSec = 0;
   const byCampaign = new Map<string, { attempts: number; human: number }>();
@@ -41,6 +44,15 @@ export async function getPowerDialerAnalytics(workspaceId: string, range: "7d" |
   for (const a of attempts) {
     if (isHumanConversation(a.disposition, a.answerClassification)) human += 1;
     if (a.answerClassification === "screener") screened += 1;
+    if (a.answerClassification === "voicemail" || a.answerClassification === "ivr" || a.answerClassification === "fax") {
+      machine += 1;
+    }
+    if (!a.answerClassification || a.answerClassification === "uncertain" || a.answerClassification === "no_answer") {
+      if (a.humanCall?.answeredAt) unclassified += 1;
+    }
+    if (a.humanCall?.answeredAt || a.answerClassification === "human" || a.answerClassification === "screener" || a.answerClassification === "voicemail") {
+      answeredSignals += 1;
+    }
     if (a.billableSeconds) billableSec += a.billableSeconds;
     const day = a.createdAt.toISOString().slice(0, 10);
     byDay.set(day, (byDay.get(day) || 0) + 1);
@@ -99,6 +111,15 @@ export async function getPowerDialerAnalytics(workspaceId: string, range: "7d" |
     screening: {
       detected: screened,
       uncertain: attempts.filter((a) => a.answerClassification === "uncertain").length,
+    },
+    pickup: {
+      denominator: answeredSignals,
+      human,
+      machine,
+      screener: screened,
+      unclassified,
+      humanRate: answeredSignals ? Math.round((human / answeredSignals) * 1000) / 10 : 0,
+      machineRate: answeredSignals ? Math.round((machine / answeredSignals) * 1000) / 10 : 0,
     },
   };
 }

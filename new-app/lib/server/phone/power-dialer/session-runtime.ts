@@ -70,6 +70,8 @@ async function loadCampaignAttemptsMap(
 
 export async function sweepPowerDialerTimeouts(workspaceId: string, sessionId: string) {
   const prisma = getPrisma();
+  const { enforceAcwTimeouts } = await import("./acw-enforcement");
+  await enforceAcwTimeouts(workspaceId, sessionId);
   const session = await prisma.powerDialerSession.findFirst({
     where: { id: sessionId, workspaceId },
     include: { campaign: true },
@@ -119,7 +121,13 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
   const prisma = getPrisma();
   const session = await prisma.powerDialerSession.findFirst({
     where: { id: sessionId, workspaceId },
-    include: { campaign: { include: { list: { include: { members: { include: { contact: true } } } } } } },
+    include: {
+      campaign: {
+        include: {
+          list: { include: { members: { include: { contact: { include: { phones: true } } } } } },
+        },
+      },
+    },
   });
   if (!session) throw new Error("Session not found");
 
@@ -190,6 +198,8 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
   const usageSnap = await import("./usage-limits").then((m) =>
     m.getPowerDialerUsageSnapshot(session.workspaceId),
   );
+  const ext = parseExtendedConfig(session.campaign.configJson);
+  const leadOwnerRouting = ext.leadOwnerRouting || "off";
 
   for (const m of members) {
     const c = m.contact;
@@ -200,7 +210,15 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
       ? await (await import("./internal-dnc")).isOnInternalDnc(session.workspaceId, e164)
       : false;
     const eligibility = evaluateContactEligibility({
-      contact: c,
+      contact: {
+        ...c,
+        phones: c.phones?.map((p) => ({
+          e164: p.e164,
+          priority: p.priority,
+          isPreferred: p.isPreferred,
+          outcome: p.outcome,
+        })),
+      },
       rules,
       campaignAttemptsForContact: campaignAttempts,
       sessionAttemptsForContact: sessAttempts,
@@ -212,6 +230,8 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
       repAuthorized: repOk,
       onInternalDnc,
       usageBlocked: usageSnap.blocked,
+      sessionRepUserId: session.repUserId,
+      leadOwnerRouting,
     });
     counts[eligibility.bucket] += 1;
     if (!nextEligible && eligibility.eligible) {
@@ -432,6 +452,14 @@ export async function onPowerDialerCallEnded(
   const status = input.wasAnswered ? "answered" : "no_answer";
   const endedAt = attempt.endedAt || new Date();
 
+  const { getPowerDialerSettings } = await import("@/lib/server/phone/power-dialer");
+  const { computeAcwDeadline } = await import("./acw-enforcement");
+  const pdSettings = await getPowerDialerSettings(workspaceId);
+  const acwDeadlineAt =
+    input.wasAnswered && rules.requireDispositionBeforeNext
+      ? computeAcwDeadline(pdSettings.afterCallWorkTimeoutSec)
+      : null;
+
   await prisma.powerDialerAttempt.update({
     where: { id: attemptId },
     data: {
@@ -440,6 +468,7 @@ export async function onPowerDialerCallEnded(
       answeredAt: input.wasAnswered ? attempt.answeredAt || new Date() : attempt.answeredAt,
       endedAt,
       billableSeconds: input.billableSeconds ?? attempt.billableSeconds,
+      acwDeadlineAt,
     },
   });
 
@@ -468,7 +497,12 @@ export async function onPowerDialerCallEnded(
 export async function saveAttemptOutcomeWithProgression(
   workspaceId: string,
   attemptId: string,
-  input: { disposition: string; notes?: string; callbackAt?: string | null },
+  input: {
+    disposition: string;
+    notes?: string;
+    callbackAt?: string | null;
+    callRating?: number | null;
+  },
 ) {
   const prisma = getPrisma();
   const attempt = await prisma.powerDialerAttempt.findFirst({
@@ -488,6 +522,14 @@ export async function saveAttemptOutcomeWithProgression(
   if (dispositionDef?.requireNotes && !(input.notes && input.notes.trim())) {
     throw new Error("Notes are required for this disposition");
   }
+  const { getPowerDialerSettings } = await import("@/lib/server/phone/power-dialer");
+  const pdSettings = await getPowerDialerSettings(workspaceId);
+  if (pdSettings.callRatingsEnabled) {
+    const rating = input.callRating;
+    if (rating == null || rating < 1 || rating > 5) {
+      throw new Error("Call rating (1–5) is required");
+    }
+  }
   const callbackAt = input.callbackAt ? new Date(input.callbackAt) : null;
   const classification = attempt.answerClassification;
   const human = isHumanConversation(input.disposition, classification);
@@ -500,6 +542,8 @@ export async function saveAttemptOutcomeWithProgression(
       callbackAt: input.disposition.toLowerCase() === "callback" ? callbackAt : callbackAt,
       status: "completed",
       endedAt: attempt.endedAt || new Date(),
+      callRating: input.callRating ?? attempt.callRating,
+      acwDeadlineAt: null,
     },
   });
 

@@ -1,4 +1,5 @@
 import { normalizeE164 } from "@/lib/server/phone/normalize";
+import { inferTimezoneFromAreaCode } from "./timezone-infer";
 
 export type CsvRow = Record<string, string>;
 
@@ -8,6 +9,8 @@ export type ColumnMapping = {
   mobile?: string;
   work?: string;
   company?: string;
+  email?: string;
+  title?: string;
   timezone?: string;
   custom: Record<string, string>;
 };
@@ -15,11 +18,15 @@ export type ColumnMapping = {
 export type ParsedImportRow = {
   lineNumber: number;
   name?: string;
-  phones: { field: string; raw: string; e164: string | null }[];
+  phones: { field: string; raw: string; e164: string | null; priority?: number }[];
   company?: string;
+  email?: string;
+  title?: string;
   timezone?: string;
+  timezoneInferred?: boolean;
   customFields: Record<string, string>;
   errors: string[];
+  raw?: CsvRow;
 };
 
 export type DuplicateKey = string;
@@ -79,7 +86,14 @@ export function mapCsvRows(
 
     const name = mapping.name && row[mapping.name] ? row[mapping.name] : undefined;
     const company = mapping.company && row[mapping.company] ? row[mapping.company] : undefined;
-    const timezone = mapping.timezone && row[mapping.timezone] ? row[mapping.timezone] : undefined;
+    const email = mapping.email && row[mapping.email] ? row[mapping.email] : undefined;
+    const title = mapping.title && row[mapping.title] ? row[mapping.title] : undefined;
+    let timezone = mapping.timezone && row[mapping.timezone] ? row[mapping.timezone] : undefined;
+    let timezoneInferred = false;
+    if (timezone && !/^[A-Za-z_]+\/[A-Za-z_]+/.test(timezone)) {
+      errors.push("Invalid timezone — use IANA format (e.g. America/Chicago)");
+      timezone = undefined;
+    }
 
     const phoneCols: { field: string; col?: string }[] = [
       { field: "mobile", col: mapping.mobile },
@@ -88,20 +102,42 @@ export function mapCsvRows(
     ].filter((p) => p.col);
 
     const phones: ParsedImportRow["phones"] = [];
+    let priority = 0;
     for (const p of phoneCols) {
       const raw = p.col ? row[p.col] : "";
       if (!raw) continue;
       try {
-        phones.push({ field: p.field, raw, e164: normalizeE164(raw) });
+        phones.push({ field: p.field, raw, e164: normalizeE164(raw), priority });
+        priority += 1;
       } catch {
-        phones.push({ field: p.field, raw, e164: null });
+        phones.push({ field: p.field, raw, e164: null, priority });
         errors.push(`Invalid ${p.field} number`);
       }
     }
 
     if (!phones.length) errors.push("No phone mapped");
 
-    return { lineNumber, name, phones, company, timezone, customFields, errors };
+    if (!timezone && phones[0]?.e164) {
+      const inferred = inferTimezoneFromAreaCode(phones[0].e164);
+      if (inferred) {
+        timezone = inferred;
+        timezoneInferred = true;
+      }
+    }
+
+    return {
+      lineNumber,
+      name,
+      phones,
+      company,
+      email,
+      title,
+      timezone,
+      timezoneInferred,
+      customFields,
+      errors,
+      raw: row,
+    };
   });
 }
 

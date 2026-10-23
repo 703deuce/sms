@@ -20,7 +20,8 @@ export type EligibilityReasonCode =
   | "contact_completed"
   | "rep_not_authorized"
   | "internal_dnc"
-  | "usage_limit_reached";
+  | "usage_limit_reached"
+  | "lead_owner_mismatch";
 
 export type AnswerClassification =
   | "human"
@@ -61,6 +62,9 @@ export type ContactForEligibility = {
   status: string;
   timezone: string | null;
   customFields: unknown;
+  assignedUser?: string | null;
+  ownerUserId?: string | null;
+  phones?: { e164: string; priority: number; isPreferred: boolean; outcome?: string | null }[];
 };
 
 export type AttemptSummary = {

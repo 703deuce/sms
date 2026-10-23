@@ -151,12 +151,15 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
         dryRun: false,
       }) as {
         imported: number
+        updated?: number
+        invalid?: number
         rejected: { lineNumber: number; reasons: string[] }[]
       }
       const data = {
         imported: raw.imported,
         skipped: raw.rejected.filter((r) => r.reasons.some((x) => x.includes('Duplicate'))).length,
-        updated: 0,
+        updated: raw.updated ?? 0,
+        invalid: raw.invalid ?? raw.rejected.length,
         rejected: raw.rejected.map((r) => ({
           lineNumber: r.lineNumber,
           reason: r.reasons.join('; '),

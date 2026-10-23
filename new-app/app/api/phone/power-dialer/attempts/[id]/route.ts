@@ -15,6 +15,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       disposition: String(body.disposition || ""),
       notes: typeof body.notes === "string" ? body.notes : undefined,
       callbackAt: typeof body.callbackAt === "string" ? body.callbackAt : null,
+      callRating:
+        typeof body.callRating === "number"
+          ? body.callRating
+          : body.callRating === null
+            ? null
+            : undefined,
     });
     return NextResponse.json({ data });
   } catch (err) {

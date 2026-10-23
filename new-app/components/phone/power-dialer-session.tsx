@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Pause, Phone, Play, SkipForward } from 'lucide-react'
@@ -19,11 +20,13 @@ import {
   fetchPowerCampaigns,
   fetchPowerSession,
   fetchPowerSessionSummary,
+  fetchTransferTargets,
   patchPowerCampaign,
   savePowerCampaignDetail,
   powerSessionAction,
   savePowerAttemptOutcome,
   startPowerSession,
+  transferCall,
   triggerVoicemailDrop,
   type PowerSessionSummaryDto,
   type PowerCampaignDto,
@@ -70,6 +73,19 @@ export function PowerDialerSessionWorkspace({
   const [scriptText, setScriptText] = useState<string | null>(null)
   const [dispositionOptions, setDispositionOptions] = useState<string[]>([...DISPOSITIONS])
   const [voicemailDropReady, setVoicemailDropReady] = useState(false)
+  const [contactCard, setContactCard] = useState<{
+    href: string
+    email?: string | null
+    title?: string | null
+    localTimeNote?: string | null
+    deal?: { title: string; stage: string } | null
+  } | null>(null)
+  const [transferTargets, setTransferTargets] = useState<{ id: string; name: string; number: string }[]>([])
+  const [transferTargetId, setTransferTargetId] = useState('')
+  const [callRating, setCallRating] = useState<number | null>(null)
+  const [ratingsRequired, setRatingsRequired] = useState(false)
+  const [sessionPresets, setSessionPresets] = useState<{ id: string; name: string; config: Record<string, unknown> }[]>([])
+  const [presetName, setPresetName] = useState('')
   const autoDialLock = useRef(false)
   const [setupDetail, setSetupDetail] = useState<Awaited<ReturnType<typeof fetchPowerCampaignDetail>> | null>(null)
   const [setupLoading, setSetupLoading] = useState(false)
@@ -166,9 +182,22 @@ export function PowerDialerSessionWorkspace({
         if (prep.dispositionLabels.length) setDispositionOptions(prep.dispositionLabels)
         setScriptText(prep.scriptRendered)
         setVoicemailDropReady(Boolean(prep.voicemailDropId))
+        setContactCard((prep as { contactCard?: typeof contactCard }).contactCard ?? null)
       })
       .catch(() => undefined)
   }, [campaignId, leadContactId])
+
+  useEffect(() => {
+    void fetchTransferTargets().then(setTransferTargets).catch(() => undefined)
+    void fetch('/api/phone/power-dialer/settings')
+      .then((r) => r.json())
+      .then((j) => setRatingsRequired(Boolean(j.data?.callRatingsEnabled)))
+      .catch(() => undefined)
+    void fetch('/api/phone/power-dialer/session-presets')
+      .then((r) => r.json())
+      .then((j) => setSessionPresets(j.data || []))
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     if (!sessionId) return
@@ -306,7 +335,9 @@ export function PowerDialerSessionWorkspace({
         disposition,
         notes: notes.trim() || undefined,
         callbackAt: disposition === 'Callback' && callbackAt ? new Date(callbackAt).toISOString() : null,
+        callRating: ratingsRequired ? callRating : callRating ?? undefined,
       })
+      setCallRating(null)
       setDisposition(null)
       setNotes('')
       setCallbackAt('')
@@ -413,6 +444,61 @@ export function PowerDialerSessionWorkspace({
                 onChange={setCampaignId}
                 options={campaigns.map((c) => ({ value: c.id, label: c.name }))}
               />
+              {sessionPresets.length > 0 && (
+                <SimpleSelect
+                  label="Session preset"
+                  value={sessionPresets[0]?.id ?? ''}
+                  onChange={(id) => {
+                    const p = sessionPresets.find((x) => x.id === id)
+                    if (!p?.config) return
+                    if (typeof p.config.campaignId === 'string') setCampaignId(p.config.campaignId)
+                    if (p.config.dialingMode === 'preview' || p.config.dialingMode === 'power') {
+                      setSetupDialingMode(p.config.dialingMode)
+                    }
+                    if (Array.isArray(p.config.phoneFieldPriority)) {
+                      setSetupPhoneFields(p.config.phoneFieldPriority.join(', '))
+                    }
+                    toast.success(`Loaded preset “${p.name}”`)
+                  }}
+                  options={sessionPresets.map((p) => ({ value: p.id, label: p.name }))}
+                />
+              )}
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-1 flex-col gap-1 text-sm">
+                  <span className="font-medium">Save preset</span>
+                  <Input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="My preview setup" />
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!presetName.trim() || !campaignId}
+                  onClick={() => {
+                    void fetch('/api/phone/power-dialer/session-presets', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        name: presetName.trim(),
+                        scope: 'user',
+                        config: {
+                          campaignId,
+                          dialingMode: setupDialingMode,
+                          phoneFieldPriority: setupPhoneFields.split(',').map((s) => s.trim()).filter(Boolean),
+                        },
+                      }),
+                    })
+                      .then((r) => r.json())
+                      .then((j) => {
+                        if (j.error) throw new Error(j.error)
+                        toast.success('Preset saved')
+                        setPresetName('')
+                        setSessionPresets((prev) => [...prev, { id: j.data.id, name: presetName, config: j.data.configJson }])
+                      })
+                      .catch((e) => toast.error(e instanceof Error ? e.message : 'Save failed'))
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
               {setupLoading && <p className="text-xs text-muted-foreground">Loading campaign setup…</p>}
               {setupDetail && (
                 <>
@@ -531,6 +617,19 @@ export function PowerDialerSessionWorkspace({
                     <span className="text-xl font-semibold">{contactLabel(lead.contact)}</span>
                     <span className="font-mono text-sm text-muted-foreground">{formatPhone(lead.contact.phone)}</span>
                     {lead.contact.company && <span className="text-xs text-muted-foreground">{lead.contact.company}</span>}
+                    {contactCard && (
+                      <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                        {contactCard.title && <p>{contactCard.title}</p>}
+                        {contactCard.email && <p>{contactCard.email}</p>}
+                        {contactCard.localTimeNote && <p>{contactCard.localTimeNote}</p>}
+                        {contactCard.deal && (
+                          <p>Deal: {contactCard.deal.title} · {contactCard.deal.stage}</p>
+                        )}
+                        <Link href={contactCard.href} className="text-primary underline-offset-2 hover:underline">
+                          Open contact record
+                        </Link>
+                      </div>
+                    )}
                     {lead.contact.customFields && typeof lead.contact.customFields === 'object' && (
                       <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                         {Object.entries(lead.contact.customFields as Record<string, unknown>).slice(0, 6).map(([k, v]) => (
@@ -609,6 +708,52 @@ export function PowerDialerSessionWorkspace({
                         Voicemail drop
                       </Button>
                     )}
+                    {onCall && attemptId && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={loading}
+                        onClick={() => {
+                          void fetch(`/api/phone/power-dialer/attempts/${attemptId}/live-voicemail`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                          })
+                            .then(async (r) => {
+                              const j = await r.json()
+                              if (!r.ok) throw new Error(j.error || 'Failed')
+                              toast.success(j.data?.message || 'Live voicemail — speak after the beep')
+                            })
+                            .catch((e) => toast.error(e instanceof Error ? e.message : 'Live voicemail failed'))
+                        }}
+                      >
+                        Live voicemail
+                      </Button>
+                    )}
+                    {onCall && attemptId && transferTargets.length > 0 && (
+                      <>
+                        <SimpleSelect
+                          label="Transfer"
+                          value={transferTargetId || transferTargets[0]?.id || ''}
+                          onChange={setTransferTargetId}
+                          options={transferTargets.map((t) => ({ value: t.id, label: t.name }))}
+                          className="min-w-[140px]"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!transferTargetId || loading || !activeCall?.humanCallId}
+                          onClick={() => {
+                            const target = transferTargets.find((t) => t.id === transferTargetId)
+                            if (!target || !activeCall?.humanCallId) return
+                            void transferCall(activeCall.humanCallId, target.number)
+                              .then(() => toast.success(`Transferred to ${target.name}`))
+                              .catch((e) => toast.error(e instanceof Error ? e.message : 'Transfer failed'))
+                          }}
+                        >
+                          Transfer
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -653,9 +798,30 @@ export function PowerDialerSessionWorkspace({
                   <label htmlFor="pd-notes" className="text-sm font-medium">Notes</label>
                   <Textarea id="pd-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
                 </div>
+                {ratingsRequired && (
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="text-sm font-medium">Call rating</legend>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          aria-pressed={callRating === n}
+                          className={cn(
+                            'rounded-md border px-3 py-1 text-sm',
+                            callRating === n ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted',
+                          )}
+                          onClick={() => setCallRating(n)}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
                 <Button
                   className="self-end"
-                  disabled={!disposition || !attemptId || loading}
+                  disabled={!disposition || !attemptId || loading || (ratingsRequired && !callRating)}
                   onClick={() => void saveAndNext()}
                 >
                   Save &amp; next

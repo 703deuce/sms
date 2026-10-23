@@ -224,7 +224,12 @@ export async function getSession(workspaceId: string, sessionId: string) {
 export async function saveAttemptOutcome(
   workspaceId: string,
   attemptId: string,
-  input: { disposition: string; notes?: string; callbackAt?: string | null },
+  input: {
+    disposition: string;
+    notes?: string;
+    callbackAt?: string | null;
+    callRating?: number | null;
+  },
 ) {
   return saveAttemptOutcomeWithProgression(workspaceId, attemptId, input);
 }

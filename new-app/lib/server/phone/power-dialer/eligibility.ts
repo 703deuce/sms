@@ -37,6 +37,8 @@ export function evaluateContactEligibility(input: {
   repAuthorized: boolean;
   onInternalDnc?: boolean;
   usageBlocked?: boolean;
+  sessionRepUserId?: string | null;
+  leadOwnerRouting?: "off" | "assigned_only" | "allow_cross_rep";
 }): EligibilityResult {
   const {
     contact,
@@ -78,6 +80,14 @@ export function evaluateContactEligibility(input: {
   }
   if (contact.status === "UNSUBSCRIBED") {
     return { eligible: false, bucket: "suppressed", reason: "contact_unsubscribed" };
+  }
+
+  const ownerRouting = input.leadOwnerRouting || "off";
+  if (ownerRouting === "assigned_only" && input.sessionRepUserId) {
+    const owner = contact.ownerUserId || contact.assignedUser;
+    if (owner && owner !== input.sessionRepUserId) {
+      return { eligible: false, bucket: "deferred", reason: "lead_owner_mismatch" };
+    }
   }
 
   const cf =

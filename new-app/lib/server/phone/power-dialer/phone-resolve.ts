@@ -10,6 +10,18 @@ export function resolveContactDialPhone(
       ? (contact.customFields as Record<string, unknown>)
       : {};
 
+  const extraPhones = (contact.phones || [])
+    .filter((p) => !p.outcome || p.outcome === "retry")
+    .sort((a, b) => a.priority - b.priority);
+  const preferredExtra = extraPhones.find((p) => p.isPreferred) || extraPhones[0];
+  if (preferredExtra?.e164 && priority.includes("phones")) {
+    try {
+      return { e164: normalizeE164(preferredExtra.e164), field: "phones" };
+    } catch {
+      /* fall through */
+    }
+  }
+
   for (const field of priority) {
     if (field === "phone") {
       try {
