@@ -24,8 +24,8 @@ export const TELNYX_AMD_RESULTS = [
 /**
  * Start AMD on an existing outbound Call Control leg (linked from WebRTC).
  * WebRTC `newCall` does not accept dial-time AMD flags; detection is started server-side.
- * iOS screening: Telnyx documents `premium_ios_call_screening_detection` on POST /v2/calls;
- * we request `PremiumCallScreening` on AMD-start when workspace screening is enabled.
+ * iOS screening: Telnyx documents `premium_ios_call_screening_detection` on POST /v2/calls
+ * (and transfer), not on AMD-start. See docs/POWER-DIALER-TELNYX-IOS-SCREENING-INTEGRATION-PATH.md.
  */
 export async function startPowerDialerAmdOnCallControlLeg(input: {
   telnyxCallControlId: string;
@@ -71,6 +71,8 @@ export async function startPowerDialerAmdOnCallControlLeg(input: {
             amdDetectionMode: plan.detectionMode,
             amdBillingTier: plan.billingTier,
             iosScreeningRequested: plan.iosScreeningRequested,
+            iosScreeningWireActive: plan.iosScreeningWireActive,
+            iosScreeningWireStatus: plan.iosScreeningWireStatus,
             connectionPhase: "checking_answer",
           }),
         },
@@ -95,13 +97,6 @@ export async function startPowerDialerAmdOnCallControlLeg(input: {
     body.detection_mode = plan.amdStartDetectionMode;
   } else if (input.premium) {
     body.detection_mode = "Premium";
-  }
-  if (plan.promptEndTimeoutMillis && plan.amdStartDetectionMode === "PremiumCallScreening") {
-    body.answering_machine_detection_config = {
-      prompt_end_timeout_millis: plan.promptEndTimeoutMillis,
-      total_analysis_time_millis: 30_000,
-      greeting_duration_millis: 2_000,
-    };
   }
 
   try {

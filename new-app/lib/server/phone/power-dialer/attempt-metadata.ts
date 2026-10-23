@@ -22,6 +22,8 @@ export type AttemptMetadata = {
   amdDetectionMode?: string;
   amdBillingTier?: string;
   iosScreeningRequested?: boolean;
+  iosScreeningWireActive?: boolean;
+  iosScreeningWireStatus?: string;
   iosPromptEndedAt?: string;
   screeningNotifyRep?: boolean;
   screeningAction?: string;

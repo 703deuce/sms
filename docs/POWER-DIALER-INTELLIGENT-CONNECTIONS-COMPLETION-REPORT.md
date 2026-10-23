@@ -25,9 +25,9 @@
 
 - Standard `Detect` when premium not required.
 - `detection_mode: Premium` when premium entitlement / parallel_amd / screening settings require it.
-- `detection_mode: PremiumCallScreening` + `answering_machine_detection_config.prompt_end_timeout_millis` when workspace call screening is enabled and premium AMD is entitled (TeXML-aligned naming; live Telnyx validation required).
+- When call screening is enabled: **Premium AMD-start only**; `iosScreeningRequested` + `iosScreeningWireStatus: requested_pending_dial_origination` until PSTN is originated via documented API (see `docs/POWER-DIALER-TELNYX-IOS-SCREENING-INTEGRATION-PATH.md`).
 
-**Documented limitation:** Telnyx documents `premium_ios_call_screening_detection` on **POST /v2/calls** at origination. Power Dialer still uses WebRTC `newCall` + post-link AMD-start; iOS screening webhooks are only reliable when Telnyx honors `PremiumCallScreening` on AMD-start or when a future server-originated PSTN leg is added.
+**Apple iOS screening (blocker resolved in policy, not in live wire):** Telnyx documents `premium_ios_call_screening_detection` on **POST /v2/calls** and **transfer** — not on post-answer `answering_machine_detection_start`. We no longer send `PremiumCallScreening` on AMD-start. Webhook handlers remain for when Phase 2 dial-origination is enabled (`POWER_DIALER_IOS_SCREENING_DIAL_ORIGINATION=1`, implementation pending).
 
 **Webhooks handled:**
 
@@ -44,7 +44,7 @@ Idempotency via `powerDialerDetectionEvent.idempotencyKey`; stale events ignored
 |------|----------|
 | Human | Classification `human`; parallel winner eligible; phase `human_connected`; counts as confirmed human conversation. |
 | Voicemail / machine greeting | `voicemail` or `machine`; parallel_amd hangs up filtered legs; not a confirmed human conversation. |
-| Apple screening | Authoritative `call.machine.premium.call_screening.detected` → `screener`; intro per policy; bounded timeout; not counted as human until post-screening AMD returns `human`. |
+| Apple screening | When `iosScreeningWireActive` and `call.machine.premium.call_screening.detected` → `screener`; intro per policy; bounded timeout; not counted as human until post-screening AMD returns `human`. **Not live-wired on WebRTC-only path today.** |
 | Uncertain | `not_sure` / `silence` → `uncertain`; parallel_amd excludes from winner; policy may hang up or voicemail path. |
 | Screening timeout | No fabricated accept; leg hung up; `screeningOutcome: timeout`. |
 
@@ -72,9 +72,11 @@ All passed in implementation environment. No live PSTN / Telnyx account tests.
 
 ## G. External dependencies
 
-- Telnyx account must support Premium AMD and (for iOS) screening mode on AMD-start or dial-origination path.
-- Live validation of `PremiumCallScreening` on `answering_machine_detection_start` vs dial-time `premium_ios_call_screening_detection`.
+- Telnyx account must support Premium AMD (billable).
+- Apple iOS screening requires `premium_ios_call_screening_detection` on dial/transfer (Phase 2) or explicit Telnyx confirmation for AMD-start on WebRTC legs.
 
 ## H. Deployment readiness
 
-Implementation complete on branch `cursor/intelligent-connections-9779`; ready for review. Do not merge until product signs off on WebRTC vs dial-origination AMD strategy and live Telnyx smoke.
+**Ready for controlled merge/live test:** parallel machine filter, premium AMD, screening policy execution, CRM/UI, analytics — without Apple screening SLA.
+
+**Not production-ready without Phase 2:** Apple iOS Call Screening detection on outbound dials. See `docs/POWER-DIALER-TELNYX-IOS-SCREENING-INTEGRATION-PATH.md`. Do not merge/deploy Apple screening as a shipped guarantee until dial-origination or Telnyx AMD-start confirmation + live smoke.

@@ -65,8 +65,15 @@ const amdSrc = readFileSync(
   join(import.meta.dirname, "../lib/server/phone/power-dialer/power-dialer-amd.ts"),
   "utf8",
 );
+const policySrc = readFileSync(
+  join(import.meta.dirname, "../lib/server/phone/power-dialer/amd-policy.ts"),
+  "utf8",
+);
 assert.ok(amdSrc.includes("resolvePowerDialerAmdStartPlan"));
-assert.ok(amdSrc.includes("PremiumCallScreening"));
+assert.ok(!amdSrc.includes("PremiumCallScreening"));
+assert.ok(policySrc.includes("premium_ios_call_screening_detection"));
+assert.ok(policySrc.includes("requested_pending_dial_origination"));
+assert.ok(policySrc.includes('amdStartDetectionMode: "Premium"'));
 console.log("amd start policy wired: PASS");
 
 // assertParallelWinnerEligible needs DB — smoke import only

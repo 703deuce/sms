@@ -462,7 +462,14 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
             typeof attemptMeta.screeningOutcome === "string" ? attemptMeta.screeningOutcome : null,
           amdDetectionMode:
             typeof attemptMeta.amdDetectionMode === "string" ? attemptMeta.amdDetectionMode : null,
-          iosScreeningDetected: attemptMeta.screeningPending === true || currentAttempt.answerClassification === "screener",
+          iosScreeningDetected:
+            attemptMeta.iosScreeningWireActive === true &&
+            (attemptMeta.screeningPending === true ||
+              currentAttempt.answerClassification === "screener"),
+          iosScreeningWireStatus:
+            typeof attemptMeta.iosScreeningWireStatus === "string"
+              ? attemptMeta.iosScreeningWireStatus
+              : null,
         }
       : null,
     ringTimeoutHangup:

@@ -13,6 +13,11 @@ export type PowerDialerAmdDetectionMode =
   | "premium"
   | "premium_ios_call_screening";
 
+export type IosScreeningWireStatus =
+  | "not_requested"
+  | "requested_pending_dial_origination"
+  | "wire_active_dial_origination";
+
 export type PowerDialerAmdStartPlan = {
   shouldStart: boolean;
   detectionMode: PowerDialerAmdDetectionMode;
@@ -20,10 +25,13 @@ export type PowerDialerAmdStartPlan = {
   billingTier: "none" | "standard" | "premium";
   iosScreeningRequested: boolean;
   /**
-   * Telnyx documents iOS screening on POST /v2/calls. WebRTC legs use AMD-start;
-   * we request PremiumCallScreening on AMD-start when enabled (live validation required).
+   * True only when Telnyx iOS screening mode is on the PSTN leg per documented API
+   * (POST /v2/calls or transfer with premium_ios_call_screening_detection).
    */
-  amdStartDetectionMode: "Premium" | "PremiumCallScreening" | "Detect" | null;
+  iosScreeningWireActive: boolean;
+  iosScreeningWireStatus: IosScreeningWireStatus;
+  /** Call Control AMD-start only documents Premium / Detect — not iOS screening. */
+  amdStartDetectionMode: "Premium" | "Detect" | null;
   promptEndTimeoutMillis?: number;
   reason: string;
 };
@@ -73,6 +81,8 @@ export async function resolvePowerDialerAmdStartPlan(input: {
       detectionMode: "standard",
       billingTier: "standard",
       iosScreeningRequested: false,
+      iosScreeningWireActive: false,
+      iosScreeningWireStatus: "not_requested",
       amdStartDetectionMode: "Detect",
       reason: "default_standard_amd",
     };
@@ -84,6 +94,8 @@ export async function resolvePowerDialerAmdStartPlan(input: {
       detectionMode: "none",
       billingTier: "none",
       iosScreeningRequested: false,
+      iosScreeningWireActive: false,
+      iosScreeningWireStatus: "not_requested",
       amdStartDetectionMode: null,
       reason: "parallel_amd_requires_premium_entitlement",
     };
@@ -92,26 +104,19 @@ export async function resolvePowerDialerAmdStartPlan(input: {
   const iosScreeningRequested =
     Boolean(pd.callScreeningEnabled) && entitlements.premiumAmdEnabled;
 
-  if (iosScreeningRequested) {
-    const settings = input.powerDialerAttemptId
-      ? await prisma.powerDialerAttempt.findFirst({
-          where: { id: input.powerDialerAttemptId, workspaceId: input.workspaceId },
-          include: { session: { include: { campaign: true } } },
-        })
-      : null;
-    const dialSettings = parseDialModeSettings(settings?.session?.campaign?.configJson);
-    const promptEnd = Math.min(
-      120_000,
-      Math.max(1_000, (dialSettings.ringTimeoutSeconds || 30) * 1000),
-    );
+  const dialOriginationIos =
+    process.env.POWER_DIALER_IOS_SCREENING_DIAL_ORIGINATION === "1";
+
+  if (iosScreeningRequested && dialOriginationIos) {
     return {
-      shouldStart: true,
+      shouldStart: false,
       detectionMode: "premium_ios_call_screening",
       billingTier: "premium",
       iosScreeningRequested: true,
-      amdStartDetectionMode: "PremiumCallScreening",
-      promptEndTimeoutMillis: promptEnd,
-      reason: "ios_screening_amd_start",
+      iosScreeningWireActive: true,
+      iosScreeningWireStatus: "wire_active_dial_origination",
+      amdStartDetectionMode: null,
+      reason: "ios_screening_on_dial_origination_pending_impl",
     };
   }
 
@@ -120,9 +125,15 @@ export async function resolvePowerDialerAmdStartPlan(input: {
       shouldStart: true,
       detectionMode: "premium",
       billingTier: "premium",
-      iosScreeningRequested: false,
+      iosScreeningRequested,
+      iosScreeningWireActive: false,
+      iosScreeningWireStatus: iosScreeningRequested
+        ? "requested_pending_dial_origination"
+        : "not_requested",
       amdStartDetectionMode: "Premium",
-      reason: "premium_amd",
+      reason: iosScreeningRequested
+        ? "premium_amd_ios_screening_requires_v2_calls_origination"
+        : "premium_amd",
     };
   }
 
@@ -131,6 +142,8 @@ export async function resolvePowerDialerAmdStartPlan(input: {
     detectionMode: "standard",
     billingTier: "standard",
     iosScreeningRequested: false,
+    iosScreeningWireActive: false,
+    iosScreeningWireStatus: "not_requested",
     amdStartDetectionMode: "Detect",
     reason: "premium_unavailable_standard_fallback",
   };
