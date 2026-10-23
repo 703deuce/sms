@@ -25,6 +25,11 @@ export type PowerDialerWorkspaceSettings = {
   callScreeningRepHandles?: boolean
   callScreeningUncertainBehavior?: 'rep_handles' | 'hangup' | 'voicemail'
   premiumReputationEntitlement?: boolean
+  complianceAcknowledgedAt?: string | null
+  complianceAcknowledgedByUserId?: string | null
+  usageAlertThresholdPct?: number | null
+  overageBehavior?: 'block' | 'allow' | 'warn'
+  externalDncScreeningConnected?: boolean
 }
 
 const DEFAULTS: PowerDialerWorkspaceSettings = {
@@ -85,5 +90,21 @@ export function mergePowerDialerSettings(
         : 'rep_handles',
     premiumReputationEntitlement:
       typeof o.premiumReputationEntitlement === 'boolean' ? o.premiumReputationEntitlement : false,
+    complianceAcknowledgedAt:
+      typeof o.complianceAcknowledgedAt === 'string' ? o.complianceAcknowledgedAt : null,
+    complianceAcknowledgedByUserId:
+      typeof o.complianceAcknowledgedByUserId === 'string'
+        ? o.complianceAcknowledgedByUserId
+        : null,
+    usageAlertThresholdPct:
+      typeof o.usageAlertThresholdPct === 'number' ? o.usageAlertThresholdPct : null,
+    overageBehavior:
+      o.overageBehavior === 'block' || o.overageBehavior === 'allow' || o.overageBehavior === 'warn'
+        ? o.overageBehavior
+        : 'warn',
+    externalDncScreeningConnected:
+      typeof o.externalDncScreeningConnected === 'boolean'
+        ? o.externalDncScreeningConnected
+        : false,
   }
 }

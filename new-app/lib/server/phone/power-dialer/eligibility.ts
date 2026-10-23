@@ -35,6 +35,8 @@ export function evaluateContactEligibility(input: {
   hasOpenDispositionBlock: boolean;
   anyLiveAttemptInSession: boolean;
   repAuthorized: boolean;
+  onInternalDnc?: boolean;
+  usageBlocked?: boolean;
 }): EligibilityResult {
   const {
     contact,
@@ -51,6 +53,9 @@ export function evaluateContactEligibility(input: {
 
   if (!repAuthorized) {
     return { eligible: false, bucket: "failed", reason: "rep_not_authorized" };
+  }
+  if (input.usageBlocked) {
+    return { eligible: false, bucket: "failed", reason: "usage_limit_reached" };
   }
   if (rules.status !== "active") {
     return { eligible: false, bucket: "deferred", reason: "campaign_not_active" };
@@ -83,6 +88,9 @@ export function evaluateContactEligibility(input: {
   const { e164 } = resolveContactDialPhone(contact, rules.phoneFieldPriority);
   if (!e164) {
     return { eligible: false, bucket: "failed", reason: "invalid_phone" };
+  }
+  if (input.onInternalDnc) {
+    return { eligible: false, bucket: "suppressed", reason: "internal_dnc" };
   }
 
   const totalAttempts = campaignAttemptsForContact.filter((a) =>
@@ -167,6 +175,8 @@ export function reasonToUserMessage(code: EligibilityReasonCode): string {
     disposition_required: "Disposition required",
     contact_completed: "Contact completed",
     rep_not_authorized: "Not authorized",
+    internal_dnc: "On workspace do-not-call list",
+    usage_limit_reached: "Included minutes exhausted for this period",
   };
   return map[code] ?? code;
 }

@@ -450,6 +450,9 @@ model Workspace {
   powerDialerVoicemailDrops              PowerDialerVoicemailDrop[]
   powerDialerCallbacks                   PowerDialerCallback[]
   powerDialerDetectionEvents             PowerDialerDetectionEvent[]
+  powerDialerInternalDnc                 PowerDialerInternalDnc[]
+  powerDialerComplianceAuditLogs         PowerDialerComplianceAuditLog[]
+  powerDialerIntegrationSyncLogs         PowerDialerIntegrationSyncLog[]
   powerDialerSessions                    PowerDialerSession[]
   powerDialerAttempts                    PowerDialerAttempt[]
   pushSubscriptions                      PushSubscription[]
@@ -4714,6 +4717,58 @@ model PowerDialerDetectionEvent {
   @@index([workspaceId, createdAt])
   @@index([attemptId])
   @@map("power_dialer_detection_events")
+}
+
+model PowerDialerInternalDnc {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  phone           String
+  reason          String?
+  source          String    @default("manual")
+  createdAt       DateTime  @default(now())
+  createdByUserId String?
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, phone])
+  @@index([workspaceId])
+  @@map("power_dialer_internal_dnc")
+}
+
+model PowerDialerComplianceAuditLog {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  action          String
+  detailJson      Json?
+  actorUserId     String?
+  createdAt       DateTime  @default(now())
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("power_dialer_compliance_audit_logs")
+}
+
+model PowerDialerIntegrationSyncLog {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  provider         String
+  operation        String
+  attemptId        String?
+  humanCallId      String?
+  contactId        String?
+  idempotencyKey   String    @unique
+  status           String    @default("pending")
+  errorMessage     String?
+  externalId       String?
+  recordsAffected  Int       @default(0)
+  detailJson       Json?
+  createdAt        DateTime  @default(now())
+  finishedAt       DateTime?
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, provider])
+  @@index([attemptId])
+  @@map("power_dialer_integration_sync_logs")
 }
 
 model TelnyxWebhookDedup {

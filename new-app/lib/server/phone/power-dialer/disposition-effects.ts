@@ -30,6 +30,21 @@ export async function applyDispositionEffects(
       where: { id: input.contactId, workspaceId: input.workspaceId },
       data: { status: "BLOCKED" },
     });
+    if (typeof prisma.contact?.findFirst === "function") {
+      const contact = await prisma.contact.findFirst({
+        where: { id: input.contactId, workspaceId: input.workspaceId },
+        select: { phone: true },
+      });
+      if (contact?.phone) {
+        const { addInternalDnc } = await import("./internal-dnc");
+        await addInternalDnc({
+          workspaceId: input.workspaceId,
+          phone: contact.phone,
+          reason: `Disposition: ${d}`,
+          source: "disposition",
+        });
+      }
+    }
   }
 
   const scheduleCb =
@@ -57,7 +72,21 @@ export async function applyDispositionEffects(
   }
 
   if (def?.triggerCrmUpdate) {
-    // Phase 6 — flag stored on disposition definition only.
+    const attempt = await prisma.powerDialerAttempt.findFirst({
+      where: { id: input.attemptId, workspaceId: input.workspaceId },
+      select: { humanCallId: true },
+    });
+    const { syncPowerDialerAttemptToIntegrations } = await import("./crm-sync-bridge");
+    await syncPowerDialerAttemptToIntegrations({
+      workspaceId: input.workspaceId,
+      attemptId: input.attemptId,
+      contactId: input.contactId,
+      humanCallId: attempt?.humanCallId,
+      disposition: d,
+      notes: input.notes,
+      callbackAt: input.callbackAt,
+      triggerCrm: true,
+    });
   }
 }
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PowerDialerWorkspaceSettings } from "@/lib/products/power-dialer";
 import type { DialingMode, PowerDialerCampaignRules } from "./types";
 
 const campaignRulesSchema = z.object({
@@ -44,7 +45,10 @@ type CampaignRow = {
   configJson: unknown;
 };
 
-export function resolveCampaignRules(row: CampaignRow): PowerDialerCampaignRules {
+export function resolveCampaignRules(
+  row: CampaignRow,
+  workspaceDefaults?: PowerDialerWorkspaceSettings | null,
+): PowerDialerCampaignRules {
   const legacy = (row.configJson || {}) as Record<string, unknown>;
   const allowedRaw = row.allowedDays;
   const allowedDays = Array.isArray(allowedRaw)
@@ -61,19 +65,28 @@ export function resolveCampaignRules(row: CampaignRow): PowerDialerCampaignRules
     row.retryIntervalMinutes ||
     (typeof legacy.retryDelayMinutes === "number" ? legacy.retryDelayMinutes : 60);
 
+  const ws = workspaceDefaults;
   return {
-    ringTimeoutSeconds: row.ringTimeoutSeconds || 30,
+    ringTimeoutSeconds:
+      row.ringTimeoutSeconds || ws?.defaultRingTimeoutSec || 30,
     retryIntervalMinutes: retryMin,
     dailyAttemptCap: row.dailyAttemptCap || 50,
-    totalAttemptCap: totalCap,
-    postCallIntervalSeconds: row.postCallIntervalSeconds ?? 5,
-    requireDispositionBeforeNext: row.requireDispositionBeforeNext ?? true,
+    totalAttemptCap: totalCap || ws?.defaultMaxAttempts || 3,
+    postCallIntervalSeconds:
+      row.postCallIntervalSeconds ?? ws?.defaultPostCallIntervalSec ?? 5,
+    requireDispositionBeforeNext:
+      row.requireDispositionBeforeNext ??
+      ws?.requireDispositionBeforeNext ??
+      true,
     allowedDays: allowedDays.length ? allowedDays : [1, 2, 3, 4, 5],
     callingHoursStart: row.callingHoursStart || "09:00",
     callingHoursEnd: row.callingHoursEnd || "17:00",
-    phoneFieldPriority: phonePri.length ? phonePri : ["phone"],
+    phoneFieldPriority:
+      phonePri.length ? phonePri : ws?.defaultPhoneFieldPriority?.length
+        ? ws.defaultPhoneFieldPriority
+        : ["phone"],
     dialingMode: (row.dialingMode === "preview" ? "preview" : "power") as DialingMode,
-    timezone: row.timezone || "America/Chicago",
+    timezone: row.timezone || ws?.defaultTimezone || "America/Chicago",
     status: row.status,
   };
 }

@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/server/db";
 import { resolveCampaignRules } from "./campaign-config";
 import { evaluateContactEligibility, reasonToUserMessage } from "./eligibility";
 import { loadCampaignAttemptMap } from "./campaign-rollups";
+import { flagsForContactEligibility } from "./eligibility-context";
 
 export async function evaluatePowerDialerContactEligibility(
   workspaceId: string,
@@ -19,6 +20,7 @@ export async function evaluatePowerDialerContactEligibility(
   const rules = resolveCampaignRules(campaign);
   const attemptMap = await loadCampaignAttemptMap(workspaceId, campaignId, [contactId]);
   const attempts = attemptMap.get(contactId) || [];
+  const flags = await flagsForContactEligibility(workspaceId, member.contact, rules);
   const eligibility = evaluateContactEligibility({
     contact: member.contact,
     rules,
@@ -30,6 +32,8 @@ export async function evaluatePowerDialerContactEligibility(
     hasOpenDispositionBlock: false,
     anyLiveAttemptInSession: false,
     repAuthorized: true,
+    onInternalDnc: flags.onInternalDnc,
+    usageBlocked: flags.usageBlocked,
   });
   return {
     eligible: eligibility.eligible,

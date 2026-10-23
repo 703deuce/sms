@@ -18,7 +18,9 @@ export type EligibilityReasonCode =
   | "session_paused"
   | "disposition_required"
   | "contact_completed"
-  | "rep_not_authorized";
+  | "rep_not_authorized"
+  | "internal_dnc"
+  | "usage_limit_reached";
 
 export type AnswerClassification =
   | "human"

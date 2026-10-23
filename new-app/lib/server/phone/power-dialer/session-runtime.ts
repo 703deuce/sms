@@ -21,6 +21,15 @@ import type {
 
 const LIVE_STATUSES = new Set(["pending", "dialing", "ringing", "answered"]);
 
+async function resolveRulesForCampaign(
+  workspaceId: string,
+  campaign: Parameters<typeof resolveCampaignRules>[0],
+) {
+  const { getPowerDialerSettings } = await import("@/lib/server/phone/power-dialer");
+  const ws = await getPowerDialerSettings(workspaceId);
+  return resolveCampaignRules(campaign, ws);
+}
+
 export async function assertRepAuthorized(workspaceId: string): Promise<string> {
   const prisma = getPrisma();
   const userId = await resolveInternalUserId();
@@ -67,7 +76,7 @@ export async function sweepPowerDialerTimeouts(workspaceId: string, sessionId: s
   });
   if (!session || session.status === "completed") return;
 
-  const rules = resolveCampaignRules(session.campaign);
+  const rules = await resolveRulesForCampaign(workspaceId, session.campaign);
   const now = new Date();
   const staleMs = rules.ringTimeoutSeconds * 1000 + 120_000;
 
@@ -114,7 +123,7 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
   });
   if (!session) throw new Error("Session not found");
 
-  const rules = resolveCampaignRules(session.campaign);
+  const rules = await resolveRulesForCampaign(workspaceId, session.campaign);
   const repOk = Boolean(session.repUserId);
   const contactIds = session.campaign.list.members.map((m) => m.contactId);
   const campaignMap = await loadCampaignAttemptsMap(workspaceId, session.campaignId, contactIds);
@@ -178,10 +187,18 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
     });
   }
 
+  const usageSnap = await import("./usage-limits").then((m) =>
+    m.getPowerDialerUsageSnapshot(session.workspaceId),
+  );
+
   for (const m of members) {
     const c = m.contact;
     const campaignAttempts = campaignMap.get(c.id) || [];
     const sessAttempts = sessionByContact.get(c.id) || [];
+    const { e164 } = (await import("./phone-resolve")).resolveContactDialPhone(c, rules.phoneFieldPriority);
+    const onInternalDnc = e164
+      ? await (await import("./internal-dnc")).isOnInternalDnc(session.workspaceId, e164)
+      : false;
     const eligibility = evaluateContactEligibility({
       contact: c,
       rules,
@@ -193,6 +210,8 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
       hasOpenDispositionBlock,
       anyLiveAttemptInSession: anyLive,
       repAuthorized: repOk,
+      onInternalDnc,
+      usageBlocked: usageSnap.blocked,
     });
     counts[eligibility.bucket] += 1;
     if (!nextEligible && eligibility.eligible) {
@@ -283,7 +302,7 @@ export async function createAttemptForSession(
   if (session.status === "paused") throw new Error("Session is paused");
   if (session.status !== "active") throw new Error("Session is not active");
 
-  const rules = resolveCampaignRules(session.campaign);
+  const rules = await resolveRulesForCampaign(workspaceId, session.campaign);
 
   if (rules.requireDispositionBeforeNext) {
     const open = await prisma.powerDialerAttempt.findFirst({
@@ -398,7 +417,7 @@ export async function onPowerDialerCallEnded(
     return;
   }
 
-  const rules = resolveCampaignRules(attempt.session.campaign);
+  const rules = await resolveRulesForCampaign(workspaceId, attempt.session.campaign);
   const classification: AnswerClassification =
     input.answerClassification ||
     (input.wasAnswered ? "uncertain" : "no_answer");
@@ -452,7 +471,7 @@ export async function saveAttemptOutcomeWithProgression(
   if (!attempt) throw new Error("Attempt not found");
   if (attempt.session.status === "completed") throw new Error("Session ended");
 
-  const rules = resolveCampaignRules(attempt.session.campaign);
+  const rules = await resolveRulesForCampaign(workspaceId, attempt.session.campaign);
   const callbackAt = input.callbackAt ? new Date(input.callbackAt) : null;
   const classification = attempt.answerClassification;
   const human = isHumanConversation(input.disposition, classification);
@@ -542,6 +561,15 @@ export async function startSessionWithRep(
   const prisma = getPrisma();
   const repUserId = await assertRepAuthorized(workspaceId);
   await assertCampaignDialAccess(workspaceId, campaignId, repUserId);
+  const { getPowerDialerSettings } = await import("@/lib/server/phone/power-dialer");
+  const settings = await getPowerDialerSettings(workspaceId);
+  if (!settings.complianceAcknowledgedAt) {
+    throw new Error(
+      "Compliance acknowledgement required — an admin must accept calling responsibilities under Settings → Compliance before the first dial session.",
+    );
+  }
+  const { assertDialingWithinUsageLimits } = await import("./usage-limits");
+  await assertDialingWithinUsageLimits(workspaceId);
   const campaign = await prisma.powerDialerCampaign.findFirst({
     where: { id: campaignId, workspaceId },
   });

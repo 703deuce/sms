@@ -1,4 +1,5 @@
 import "server-only";
+/** Voicemail drop uploads use Supabase Storage REST (no @supabase/supabase-js in new-app bundle). */
 import { randomUUID } from "crypto";
 
 const BUCKET = process.env.POWER_DIALER_AUDIO_BUCKET?.trim() || "transovo-media";
