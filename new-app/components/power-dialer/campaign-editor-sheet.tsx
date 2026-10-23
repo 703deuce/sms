@@ -531,6 +531,59 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
             <Link href="/app/numbers" className="text-xs text-primary hover:underline">Purchase or assign numbers</Link>
           </TabsContent>
           <TabsContent value="handling" className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              Choose how this campaign dials. Locked modes show the exact reason from workspace entitlements — enable parallel or predictive under{' '}
+              <Link href="/app/power-dialer/settings?tab=dialing" className="text-primary hover:underline">Settings → Dialing → Advanced dialing modes</Link>.
+            </p>
+            <SimpleSelect
+              label="Dial mode"
+              value={dialingMode}
+              onChange={setDialingMode}
+              options={dialModeOptions.map((o) => ({
+                value: o.value,
+                label:
+                  o.disabled && o.hint
+                    ? `${o.label} — ${o.hint}`
+                    : o.disabled
+                      ? `${o.label} (locked)`
+                      : o.label,
+              }))}
+            />
+            <ul className="space-y-1 text-xs text-muted-foreground" aria-label="Dial mode descriptions">
+              <li><span className="font-medium text-foreground">Preview:</span> Agent reviews each contact and clicks to dial.</li>
+              <li><span className="font-medium text-foreground">Power:</span> Progressive dialing — one line, auto-advance after disposition.</li>
+              <li><span className="font-medium text-foreground">Parallel:</span> Multiple live lines per agent (2–5); first human answer wins.</li>
+              <li><span className="font-medium text-foreground">Parallel + machine filtering:</span> Parallel with AMD before bridging to the agent.</li>
+              <li><span className="font-medium text-foreground">Predictive:</span> Pacing engine balances connect rate and abandon safeguards.</li>
+            </ul>
+            {dialModeOptions.find((o) => o.value === dialingMode && o.disabled)?.hint && (
+              <p className="text-xs text-destructive" role="status">
+                {dialModeOptions.find((o) => o.value === dialingMode)?.hint}
+              </p>
+            )}
+            {(dialingMode === 'parallel' || dialingMode === 'parallel_amd' || dialingMode === 'predictive') && (
+              <>
+                <label className="text-sm">Lines per agent (2–5)
+                  <Input type="number" min={2} max={5} value={parallelLines} onChange={(e) => setParallelLines(Number(e.target.value))} />
+                </label>
+                {dialingMode === 'parallel_amd' && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={amdFilterMachines} onChange={(e) => setAmdFilterMachines(e.target.checked)} />
+                    Filter machines (AMD) before bridging
+                  </label>
+                )}
+                {dialingMode === 'predictive' && (
+                  <>
+                    <label className="text-sm">Abandon-rate target (%)
+                      <Input type="number" min={0.5} max={10} step={0.1} value={abandonRateTargetPct} onChange={(e) => setAbandonRateTargetPct(Number(e.target.value))} />
+                    </label>
+                    <label className="text-sm">Pacing aggression
+                      <Input type="number" min={0.25} max={3} step={0.25} value={pacingAggression} onChange={(e) => setPacingAggression(Number(e.target.value))} />
+                    </label>
+                  </>
+                )}
+              </>
+            )}
             <SimpleSelect label="Script" value={scriptId} onChange={setScriptId} options={[{ value: '', label: 'None' }, ...scripts.map((s) => ({ value: s.id, label: s.name }))]} />
             <SimpleSelect label="Voicemail drop" value={voicemailDropId} onChange={setVoicemailDropId} options={[{ value: '', label: 'None' }, ...vmDrops.map((s) => ({ value: s.id, label: s.name }))]} />
             <p className="text-xs text-muted-foreground">Voicemail drops require admin compliance opt-in under Settings → Voicemail drops.</p>

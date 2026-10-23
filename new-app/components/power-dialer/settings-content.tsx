@@ -20,12 +20,20 @@ import { PowerDialerDeveloperSettingsPanel } from '@/components/power-dialer/dev
 import { CadencesSettingsPanel } from '@/components/power-dialer/cadences-settings-panel'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import { formatPhone } from '@/lib/format'
+import { AdvancedDialModesPanel } from '@/components/power-dialer/advanced-dial-modes-panel'
+import { useSearchParams } from 'next/navigation'
 
 export function PowerDialerSettingsContent() {
   const { owned } = useNumbers()
   const [settings, setSettings] = useState<PowerDialerWorkspaceSettings | null>(null)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState('general')
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'general')
+
+  useEffect(() => {
+    const t = searchParams.get('tab')
+    if (t) setActiveTab(t)
+  }, [searchParams])
 
   useEffect(() => {
     void fetchPowerDialerSettings().then(setSettings).catch(() => toast.error('Could not load settings'))
@@ -281,6 +289,9 @@ export function PowerDialerSettingsContent() {
               </p>
             </div>
           </Panel>
+          <div className="mt-6">
+            <AdvancedDialModesPanel />
+          </div>
         </TabsContent>
         <TabsContent value="dispositions" className="mt-6">
           <DispositionsLibraryPanel />

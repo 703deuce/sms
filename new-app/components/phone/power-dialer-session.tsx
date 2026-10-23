@@ -458,25 +458,27 @@ export function PowerDialerSessionWorkspace({
                 onChange={setCampaignId}
                 options={campaigns.map((c) => ({ value: c.id, label: c.name }))}
               />
-              {sessionPresets.length > 0 && (
-                <SimpleSelect
-                  label="Session preset"
-                  value={sessionPresets[0]?.id ?? ''}
-                  onChange={(id) => {
-                    const p = sessionPresets.find((x) => x.id === id)
-                    if (!p?.config) return
-                    if (typeof p.config.campaignId === 'string') setCampaignId(p.config.campaignId)
-                    if (p.config.dialingMode === 'preview' || p.config.dialingMode === 'power') {
-                      setSetupDialingMode(p.config.dialingMode)
-                    }
-                    if (Array.isArray(p.config.phoneFieldPriority)) {
-                      setSetupPhoneFields(p.config.phoneFieldPriority.join(', '))
-                    }
-                    toast.success(`Loaded preset “${p.name}”`)
-                  }}
-                  options={sessionPresets.map((p) => ({ value: p.id, label: p.name }))}
-                />
-              )}
+              <SimpleSelect
+                label="Session preset"
+                value=""
+                onChange={(id) => {
+                  const p = sessionPresets.find((x) => x.id === id)
+                  if (!p?.config) return
+                  if (typeof p.config.campaignId === 'string') setCampaignId(p.config.campaignId)
+                  if (p.config.dialingMode === 'preview' || p.config.dialingMode === 'power') {
+                    setSetupDialingMode(p.config.dialingMode)
+                  }
+                  if (Array.isArray(p.config.phoneFieldPriority)) {
+                    setSetupPhoneFields(p.config.phoneFieldPriority.join(', '))
+                  }
+                  toast.success(`Loaded preset “${p.name}”`)
+                }}
+                options={
+                  sessionPresets.length
+                    ? sessionPresets.map((p) => ({ value: p.id, label: p.name }))
+                    : [{ value: '', label: 'No presets yet — save one below' }]
+                }
+              />
               <div className="flex flex-wrap items-end gap-2">
                 <label className="flex flex-1 flex-col gap-1 text-sm">
                   <span className="font-medium">Save preset</span>

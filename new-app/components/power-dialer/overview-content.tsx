@@ -105,7 +105,7 @@ export function PowerDialerOverviewContent() {
             )}
             {data?.campaigns.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                <Link href="/app/power-dialer/campaigns" className="font-medium hover:text-primary">
+                <Link href={`/app/power-dialer/campaigns/${c.id}/queue`} className="font-medium hover:text-primary">
                   {c.name}
                 </Link>
                 <span className="text-xs text-muted-foreground tabular">{c.completedPct}% · {c.status}</span>
