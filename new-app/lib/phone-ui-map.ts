@@ -33,5 +33,30 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
     callNotes: dto.notes,
     contactSummary: dto.contactSummary || undefined,
     lineSummary: dto.lineSummary || undefined,
+    ai:
+      dto.transcriptText || dto.aiSummary
+        ? {
+            intent:
+              dto.source === 'power_dialer' ? 'Power dialer conversation' : 'Recorded call',
+            outcome: 'success',
+            summary: (() => {
+              const raw = dto.aiSummary || ''
+              const stripped = raw.replace(/^Suggested follow-up:[^\n]*\n\nSummary:\s*/i, '').trim()
+              if (stripped) return stripped
+              return dto.transcriptText?.slice(0, 600) || 'Transcript available below.'
+            })(),
+            followUp: dto.aiSummary?.toLowerCase().includes('suggested follow-up') ? 'open' : 'none',
+            tools: [],
+            transcript: dto.transcriptText
+              ? [
+                  {
+                    speaker: 'caller' as const,
+                    text: dto.transcriptText,
+                    at: '0:00',
+                  },
+                ]
+              : [],
+          }
+        : undefined,
   }
 }

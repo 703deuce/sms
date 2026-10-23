@@ -6,7 +6,7 @@ export const metadata = { title: 'Dialer · Power Dialer' }
 export default async function PowerDialerDialerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ campaign?: string; session?: string }>
+  searchParams: Promise<{ campaign?: string; session?: string; contact?: string }>
 }) {
   const sp = await searchParams
   return (
@@ -15,7 +15,11 @@ export default async function PowerDialerDialerPage({
         title="Dialer"
         description="Run a sequential power-dialing session — select a campaign, dial, disposition, and move to the next contact."
       />
-      <PowerDialer initialTab="session" initialCampaignId={sp.campaign} />
+      <PowerDialer
+        initialTab="session"
+        initialCampaignId={sp.campaign}
+        initialFocusContactId={sp.contact}
+      />
     </Page>
   )
 }

@@ -13,8 +13,11 @@ import {
   ScriptsLibraryPanel,
   VoicemailDropsLibraryPanel,
 } from '@/components/power-dialer/settings-library-panels'
+import { useNumbers } from '@/components/providers/numbers-provider'
+import { formatPhone } from '@/lib/format'
 
 export function PowerDialerSettingsContent() {
+  const { owned } = useNumbers()
   const [settings, setSettings] = useState<PowerDialerWorkspaceSettings | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -65,6 +68,8 @@ export function PowerDialerSettingsContent() {
           <TabsTrigger value="scripts">Scripts</TabsTrigger>
           <TabsTrigger value="vm-drops">Voicemail drops</TabsTrigger>
           <TabsTrigger value="compliance">VM compliance</TabsTrigger>
+          <TabsTrigger value="caller-id">Caller ID</TabsTrigger>
+          <TabsTrigger value="screening">Call screening</TabsTrigger>
         </TabsList>
         <TabsContent value="general" className="mt-6">
           <Panel title="General">
@@ -175,6 +180,96 @@ export function PowerDialerSettingsContent() {
         </TabsContent>
         <TabsContent value="vm-drops" className="mt-6">
           <VoicemailDropsLibraryPanel optIn={Boolean(settings.prerecordedVmOptIn)} />
+        </TabsContent>
+        <TabsContent value="caller-id" className="mt-6">
+          <Panel
+            title="Caller ID"
+            description="Default outbound number for power dialer when a campaign does not override. Pool assignment is per campaign (sticky per rep — no aggressive rotation)."
+          >
+            <label className="flex max-w-md flex-col gap-1.5 text-sm">
+              <span className="font-medium">Default outbound number</span>
+              <select
+                className="rounded-md border bg-background px-3 py-2"
+                value={settings.defaultCallerIdPhoneNumberId || ''}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    defaultCallerIdPhoneNumberId: e.target.value || null,
+                  })
+                }
+                aria-label="Default caller ID number"
+              >
+                <option value="">Campaign line default</option>
+                {owned.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.nickname} ({formatPhone(n.number)})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Numbers come from the global{' '}
+              <a href="/app/numbers" className="text-primary hover:underline">Numbers</a> inventory. Callback routing for inbound calls to dialer lines uses existing phone routing — verify per-number assignment in Numbers.
+            </p>
+          </Panel>
+        </TabsContent>
+        <TabsContent value="screening" className="mt-6">
+          <Panel
+            title="Call screening"
+            description="Detection uses Telnyx AMD / premium screener events when available. Intro playback and bypass are not guaranteed — feature defaults off until verified on real screened devices."
+          >
+            <div className="flex max-w-lg flex-col gap-3 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.callScreeningEnabled ?? false}
+                  onChange={(e) => setSettings({ ...settings, callScreeningEnabled: e.target.checked })}
+                />
+                Enable screening detection (experimental)
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.callScreeningNotifyRep ?? true}
+                  onChange={(e) => setSettings({ ...settings, callScreeningNotifyRep: e.target.checked })}
+                />
+                Notify rep when screener detected
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.callScreeningSkipRecognized ?? false}
+                  onChange={(e) => setSettings({ ...settings, callScreeningSkipRecognized: e.target.checked })}
+                />
+                Skip recognized screener (when detection is confident)
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.callScreeningRepHandles ?? true}
+                  onChange={(e) => setSettings({ ...settings, callScreeningRepHandles: e.target.checked })}
+                />
+                Rep handles screener when connected
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-medium">Uncertain classification</span>
+                <select
+                  className="rounded-md border bg-background px-3 py-2"
+                  value={settings.callScreeningUncertainBehavior ?? 'rep_handles'}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      callScreeningUncertainBehavior: e.target.value as PowerDialerWorkspaceSettings['callScreeningUncertainBehavior'],
+                    })
+                  }
+                >
+                  <option value="rep_handles">Rep hears audio immediately</option>
+                  <option value="voicemail">Treat as voicemail</option>
+                  <option value="hangup">End call</option>
+                </select>
+              </label>
+            </div>
+          </Panel>
         </TabsContent>
         <TabsContent value="compliance" className="mt-6">
           <Panel title="Prerecorded voicemail drops">

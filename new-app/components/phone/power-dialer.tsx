@@ -42,9 +42,11 @@ const CAMPAIGN_STATUS: Record<string, { label: string; tone: Tone }> = {
 export function PowerDialer({
   initialTab = 'session',
   initialCampaignId,
+  initialFocusContactId,
 }: {
   initialTab?: string
   initialCampaignId?: string
+  initialFocusContactId?: string
 }) {
   return (
     <Tabs defaultValue={initialTab} className="gap-6">
@@ -53,7 +55,12 @@ export function PowerDialer({
         <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
         <TabsTrigger value="lists">Lists</TabsTrigger>
       </TabsList>
-      <TabsContent value="session"><PowerDialerSessionWorkspace initialCampaignId={initialCampaignId} /></TabsContent>
+      <TabsContent value="session">
+        <PowerDialerSessionWorkspace
+          initialCampaignId={initialCampaignId}
+          initialFocusContactId={initialFocusContactId}
+        />
+      </TabsContent>
       <TabsContent value="campaigns"><Campaigns /></TabsContent>
       <TabsContent value="lists"><Lists /></TabsContent>
     </Tabs>

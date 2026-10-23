@@ -37,7 +37,10 @@ function contactLabel(c: { firstName: string | null; lastName: string | null; ph
   return name || formatPhone(c.phone)
 }
 
-export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCampaignId?: string } = {}) {
+export function PowerDialerSessionWorkspace({
+  initialCampaignId,
+  initialFocusContactId,
+}: { initialCampaignId?: string; initialFocusContactId?: string } = {}) {
   const { startCall, endCall, activeCall, webrtcStatus } = useWorkspace()
   const { owned } = useNumbers()
   const [campaigns, setCampaigns] = useState<PowerCampaignDto[]>([])
@@ -182,7 +185,7 @@ export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCamp
     if (!campaignId) return
     setLoading(true)
     try {
-      const session = await startPowerSession(campaignId)
+      const session = await startPowerSession(campaignId, initialFocusContactId)
       await patchPowerCampaign(campaignId, { status: 'active' })
       setSessionId(session.id)
       await refreshSession(session.id)

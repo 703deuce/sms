@@ -328,6 +328,20 @@ export async function patchPowerDialerCallback(
   );
 }
 
+export type PowerDialerCallbackEligibility = {
+  eligible: boolean;
+  bucket: string;
+  reason: string;
+  message: string;
+  retryEligibleAt: string | null;
+};
+
+export async function fetchPowerDialerCallbackEligibility(callbackId: string) {
+  return parse<PowerDialerCallbackEligibility>(
+    await fetch(`/api/phone/power-dialer/callbacks/${callbackId}/eligibility`),
+  );
+}
+
 export async function addListContactsToCampaign(
   listId: string,
   campaignId: string,
@@ -424,12 +438,12 @@ export async function importPowerListRows(listId: string, rows: { name?: string;
   );
 }
 
-export async function startPowerSession(campaignId: string) {
+export async function startPowerSession(campaignId: string, focusContactId?: string) {
   return parse<{ id: string; status: string; campaignId: string }>(
     await fetch("/api/phone/power-dialer/sessions", {
       method: "POST",
       headers: mutatingHeaders(),
-      body: JSON.stringify({ campaignId }),
+      body: JSON.stringify({ campaignId, focusContactId: focusContactId || undefined }),
     }),
   );
 }

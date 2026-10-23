@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Page, PageHeader, Panel, EmptyState } from '@/components/app/page-primitives'
@@ -9,6 +8,7 @@ import { StatusBadge } from '@/components/app/status'
 import { Button } from '@/components/ui/button'
 import {
   fetchPowerDialerCallbacks,
+  fetchPowerDialerCallbackEligibility,
   patchPowerDialerCallback,
   type PowerDialerCallbackDto,
 } from '@/lib/phone-api'
@@ -58,6 +58,19 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
     }
   }
 
+  const startCall = async (r: PowerDialerCallbackDto) => {
+    try {
+      const elig = await fetchPowerDialerCallbackEligibility(r.id)
+      if (!elig.eligible) {
+        toast.error(elig.message || 'This contact cannot be dialed right now')
+        return
+      }
+      window.location.href = `/app/power-dialer/dialer?campaign=${encodeURIComponent(r.campaignId)}&contact=${encodeURIComponent(r.contactId)}`
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Eligibility check failed')
+    }
+  }
+
   return (
     <Page>
       <PageHeader
@@ -92,7 +105,6 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
             <tbody>
               {rows.map((r) => {
                 const suppressed = r.contactStatus === 'BLOCKED' || r.contactStatus === 'UNSUBSCRIBED'
-                const dialHref = `/app/power-dialer/dialer?campaign=${encodeURIComponent(r.campaignId)}`
                 return (
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="px-4 py-3">
@@ -112,9 +124,15 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
                         {suppressed ? (
                           <span className="text-xs text-muted-foreground">Blocked</span>
                         ) : (
-                          <Link href={dialHref} className="text-xs text-primary hover:underline">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="link"
+                            className="h-7 px-0 text-xs"
+                            onClick={() => void startCall(r)}
+                          >
                             Start call
-                          </Link>
+                          </Button>
                         )}
                         {r.status === 'scheduled' && (
                           <>
