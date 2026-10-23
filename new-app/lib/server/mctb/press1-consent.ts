@@ -44,9 +44,13 @@ export async function tryOfferMctbPress1BeforeVoicemail(input: {
   const prisma = getPrisma();
   const call = await prisma.humanCall.findFirst({
     where: { id: input.humanCallId, workspaceId: input.workspaceId },
-    include: { phoneNumber: { select: { settingsJson: true } } },
   });
-  if (!call?.phoneNumber) return { offered: false };
+  if (!call?.phoneNumberId) return { offered: false };
+  const phoneNumber = await prisma.phoneNumber.findFirst({
+    where: { id: call.phoneNumberId, workspaceId: input.workspaceId },
+    select: { settingsJson: true },
+  });
+  if (!phoneNumber) return { offered: false };
 
   const existing = readMctbPress1FromCallMetadata(call.metadata);
   if (existing !== "not_offered") return { offered: false };
@@ -54,7 +58,7 @@ export async function tryOfferMctbPress1BeforeVoicemail(input: {
   const ok = await shouldOfferPress1({
     workspaceId: input.workspaceId,
     phoneNumberId: input.phoneNumberId ?? call.phoneNumberId,
-    phoneSettingsJson: call.phoneNumber.settingsJson,
+    phoneSettingsJson: phoneNumber.settingsJson,
   });
   if (!ok) return { offered: false };
 

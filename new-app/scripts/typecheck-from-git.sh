@@ -6,6 +6,8 @@ APP="$REPO_ROOT/new-app"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+(cd "$REPO_ROOT" && npx prisma generate --schema=prisma/schema.prisma >/dev/null)
+
 git -C "$REPO_ROOT" archive HEAD new-app | tar -x -C "$TMP"
 ln -sf "$APP/node_modules" "$TMP/new-app/node_modules"
 for f in tsconfig.json tsconfig.typecheck.json next-env.d.ts; do

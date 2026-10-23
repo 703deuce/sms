@@ -124,7 +124,7 @@ export async function executePhoneFoundationTransferHandoff(input: {
 
   const meta = (call.metadata as Record<string, unknown>) || {};
   await prisma.humanCall.update({
-    where: { id: call.humanCallId },
+    where: { id: call.id },
     data: {
       metadata: {
         ...meta,

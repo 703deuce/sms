@@ -24,7 +24,11 @@ export function parseHolidayExceptions(raw: unknown): HolidayException[] {
       const o = row as Record<string, unknown>;
       const date = String(o.date || "").slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-      const mode = String(o.mode || "closed");
+      const modeRaw = String(o.mode || "closed");
+      const mode: HolidayException["mode"] =
+        modeRaw === "forward" || modeRaw === "voicemail" || modeRaw === "auto_attendant"
+          ? modeRaw
+          : "closed";
       return {
         date,
         mode,

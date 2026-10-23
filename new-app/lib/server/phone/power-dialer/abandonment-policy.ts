@@ -54,8 +54,12 @@ export function evaluateAbandonmentSafeguards(
   return { autoThrottle, hardStop, pacingMultiplier };
 }
 
+/** Shipped default: no automated abandonment audio until counsel approves copy and URL. */
+export const ABANDONMENT_POLICY_AUDIO_SHIPPED = false;
+
 export type AbandonmentSafeHarborAction = "play_policy_message" | "offer_callback" | "opt_out_prompt";
 
+/** Planning-only metadata — never plays audio while `ABANDONMENT_POLICY_AUDIO_SHIPPED` is false. */
 export function safeHarborActionsForJurisdiction(jurisdictionPreset: string): AbandonmentSafeHarborAction[] {
   if (jurisdictionPreset === "ftc_telemarketing") {
     return ["play_policy_message", "opt_out_prompt"];
