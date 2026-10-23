@@ -167,6 +167,73 @@ export function PowerDialerSettingsContent() {
               </label>
             </div>
           </Panel>
+          <Panel title="Session convenience (M04)" className="mt-6">
+            <div className="grid max-w-md grid-cols-1 gap-4 text-sm">
+              <label className="flex flex-col gap-1.5">
+                <span className="font-medium">Ring tone</span>
+                <select
+                  className="rounded-md border bg-background px-3 py-2"
+                  value={settings.sessionRingTone ?? 'default'}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      sessionRingTone: e.target.value as 'default' | 'classic' | 'muted',
+                    })
+                  }
+                >
+                  <option value="default">Default</option>
+                  <option value="classic">Classic</option>
+                  <option value="muted">Muted</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-medium">Display time format</span>
+                <select
+                  className="rounded-md border bg-background px-3 py-2"
+                  value={settings.displayTimeFormat ?? '12h'}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      displayTimeFormat: e.target.value as '12h' | '24h',
+                    })
+                  }
+                >
+                  <option value="12h">12-hour</option>
+                  <option value="24h">24-hour</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.skipDuplicateNumbers ?? true}
+                  onChange={(e) =>
+                    setSettings({ ...settings, skipDuplicateNumbers: e.target.checked })
+                  }
+                />
+                Skip duplicate phone numbers within a session
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.preventDuplicatePerContact ?? true}
+                  onChange={(e) =>
+                    setSettings({ ...settings, preventDuplicatePerContact: e.target.checked })
+                  }
+                />
+                Prevent dialing the same contact twice in one session
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={settings.sessionEmailDeliveryEnabled ?? true}
+                  onChange={(e) =>
+                    setSettings({ ...settings, sessionEmailDeliveryEnabled: e.target.checked })
+                  }
+                />
+                Allow one-touch email from the dialer session
+              </label>
+            </div>
+          </Panel>
         </TabsContent>
         <TabsContent value="recording" className="mt-6">
           <Panel title="Recording">

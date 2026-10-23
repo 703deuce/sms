@@ -326,6 +326,11 @@ export type PowerDialerCallbackDto = {
   campaignName: string;
   timezone: string;
   assignedUserId?: string | null;
+  visibility?: string;
+  priority?: number;
+  source?: string | null;
+  routingPool?: string | null;
+  overdue?: boolean;
 };
 
 export async function fetchPowerDialerOverview() {
@@ -513,6 +518,14 @@ export type PowerSessionStateDto = {
   ringTimeoutHangup?: string | null;
   emptyReasons?: { bucket: string; count: number }[];
   nextEligibleAt?: string | null;
+  queueContext?: {
+    activeListId: string;
+    activeListName: string;
+    waterfallIndex: number;
+    waterfallReason: string | null;
+    teamQueueMode: string;
+    listChain: { id: string; name: string }[];
+  };
   upcomingQueue?: {
     contactId: string;
     attemptNumber: number;

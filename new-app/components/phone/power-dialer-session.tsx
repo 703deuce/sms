@@ -109,6 +109,9 @@ export function PowerDialerSessionWorkspace({
   const powerMode = rules?.dialingMode === 'power'
   const previewMode = rules?.dialingMode === 'preview'
   const upcoming = runtime?.upcomingQueue ?? []
+  const queueContext = runtime?.queueContext
+  const [addContactId, setAddContactId] = useState('')
+  const [addQueueMessage, setAddQueueMessage] = useState<string | null>(null)
 
   const refreshSession = useCallback(async (sid: string) => {
     const data = await fetchPowerSession(sid, true)
@@ -615,6 +618,59 @@ export function PowerDialerSessionWorkspace({
                   <SkipForward />
                   Skip wait
                 </Button>
+              </div>
+            )}
+
+            {queueContext && (
+              <div className="mb-4 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                <p>
+                  Active list: <span className="font-medium text-foreground">{queueContext.activeListName}</span>
+                  {queueContext.waterfallReason === 'primary_exhausted' && (
+                    <span> — primary list has no eligible contacts; using standby list</span>
+                  )}
+                  {queueContext.teamQueueMode && queueContext.teamQueueMode !== 'shared' && (
+                    <span> · Team queue: {queueContext.teamQueueMode.replace('_', ' ')}</span>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {sessionId && (
+              <div className="mb-4 flex flex-wrap items-end gap-2">
+                <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-xs">
+                  <span className="font-medium text-foreground">Add contact to live queue</span>
+                  <Input
+                    placeholder="Contact ID"
+                    value={addContactId}
+                    onChange={(e) => setAddContactId(e.target.value)}
+                  />
+                </label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (!addContactId.trim()) return
+                    void fetch(`/api/phone/power-dialer/sessions/${sessionId}/contact-actions`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'add_to_queue', contactId: addContactId.trim() }),
+                    })
+                      .then(async (r) => {
+                        const j = await r.json()
+                        const msg =
+                          j.data?.message ||
+                          j.error ||
+                          (j.data?.eligible ? 'Added' : 'Added but not eligible yet')
+                        setAddQueueMessage(msg)
+                        if (j.data?.ok) void refreshSession(sessionId)
+                      })
+                      .catch(() => setAddQueueMessage('Could not add contact'))
+                  }}
+                >
+                  Add to queue
+                </Button>
+                {addQueueMessage && <span className="text-xs text-muted-foreground">{addQueueMessage}</span>}
               </div>
             )}
 

@@ -297,6 +297,7 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
                 { value: 'shared', label: 'Shared queue' },
                 { value: 'round_robin', label: 'Round robin' },
                 { value: 'pull', label: 'Pull / preview' },
+                { value: 'dynamic', label: 'Dynamic assignment' },
               ]}
             />
             <label className="flex items-center gap-2 text-sm">

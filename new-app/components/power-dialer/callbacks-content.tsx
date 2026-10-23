@@ -130,6 +130,7 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
                 <th scope="col" className="px-4 py-2.5 font-medium">Contact</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">Campaign</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">Scheduled</th>
+                <th scope="col" className="px-4 py-2.5 font-medium">Source</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">Last disposition</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">Actions</th>
@@ -145,7 +146,13 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
                       <span className="block font-mono text-xs text-muted-foreground">{formatPhone(r.contactPhone)}</span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{r.campaignName}</td>
-                    <td className="px-4 py-3">{r.callbackAt ? formatWhen(r.callbackAt) : '—'}</td>
+                    <td className="px-4 py-3">
+                      {r.callbackAt ? formatWhen(r.callbackAt) : '—'}
+                      {r.overdue ? (
+                        <span className="ml-1 text-xs font-medium text-destructive">Overdue</span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{r.source || 'disposition'}</td>
                     <td className="px-4 py-3">{r.disposition || '—'}</td>
                     <td className="px-4 py-3">
                       <StatusBadge tone={suppressed ? 'danger' : 'neutral'}>
