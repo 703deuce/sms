@@ -30,6 +30,23 @@ export type AnalyticsPayload = {
     machineRate: number
   }
   usage: { minutesUsed: number; minutesIncluded: number | null }
+  funnel?: { dialed: number; connected: number; conversations: number; outcomes: number }
+  dispositions?: { label: string; count: number }[]
+  byHour?: { hour: number; attempts: number }[]
+  productivity?: { talkMinutes: number; wrapMinutes: number; callsPerHour: number }
+  leaderboard?: {
+    userId: string
+    attempts: number
+    humanConversations: number
+    connectRate: number
+  }[]
+  conversions?: {
+    campaignId: string
+    campaignName: string
+    conversions: number
+    dispositioned: number
+    conversionRatePct: number
+  }[]
 }
 
 export function usePowerDialerAnalytics(range: '7d' | '30d' | '90d') {

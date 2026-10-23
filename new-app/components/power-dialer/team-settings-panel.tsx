@@ -142,6 +142,49 @@ export function PowerDialerTeamSettingsPanel() {
           ))}
         </ul>
       </Panel>
+      <Panel title="Roles & permissions (M69–M72)">
+        <p className="mb-3 text-sm text-muted-foreground">
+          Enforced server-side on analytics export, scheduled reports, settings, team management, and call review.
+          Reps see only their own analytics unless they are a manager or admin.
+        </p>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b text-left text-muted-foreground">
+              <th scope="col" className="py-2 pr-2 font-medium">Scope</th>
+              <th scope="col" className="px-2 py-2 font-medium">Rep</th>
+              <th scope="col" className="px-2 py-2 font-medium">Manager</th>
+              <th scope="col" className="px-2 py-2 font-medium">Admin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ['Dial sessions', '✓', '✓', '✓'],
+              ['Analytics (own)', '✓', '✓', '✓'],
+              ['Analytics (team)', '—', '✓', '✓'],
+              ['CSV export', '—', '✓', '✓'],
+              ['Recordings / review', '✓', '✓', '✓'],
+              ['Settings', '—', '—', '✓'],
+              ['Team & campaigns', '—', '—', '✓'],
+              ['Scheduled reports', '—', '✓', '✓'],
+              ['Supervisor coach', '—', '✓', '✓'],
+            ].map(([scope, rep, mgr, adm]) => (
+              <tr key={scope} className="border-b">
+                <th scope="row" className="py-2 pr-2 text-left font-medium">{scope}</th>
+                <td className="px-2 py-2">{rep}</td>
+                <td className="px-2 py-2">{mgr}</td>
+                <td className="px-2 py-2">{adm}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+      <Panel title="Phone presence (M73)">
+        <p className="text-sm text-muted-foreground">
+          Do not disturb, call waiting, and find-me follow shared Phone settings — configure under{' '}
+          <a href="/app/phone/settings" className="text-primary hover:underline">Phone settings</a>
+          . Power Dialer honors the same workspace phone behavior during outbound sessions.
+        </p>
+      </Panel>
     </div>
   )
 }

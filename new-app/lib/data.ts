@@ -81,6 +81,7 @@ export type Call = {
     threadId?: string
   }
   campaignId?: string
+  callSource?: { kind: string; label: string; campaignId?: string; listId?: string }
   disposition?: string
   metadata?: Record<string, unknown> | null
   callNotes?: { id: string; content: string; createdAt: string; author: string | null }[]

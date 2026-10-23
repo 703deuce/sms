@@ -11,6 +11,16 @@ import {
   usePowerDialerAnalytics,
   type AnalyticsPayload,
 } from '@/components/power-dialer/analytics-range-shell'
+import {
+  ConversionPanel,
+  DispositionSummaryPanel,
+  ExportActions,
+  FunnelPanel,
+  LeaderboardPanel,
+  LiveBoardPanel,
+  ProductivityPanel,
+  ScheduledReportsPanel,
+} from '@/components/power-dialer/analytics-batch6-panels'
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
@@ -19,6 +29,11 @@ const TABS = [
   { value: 'numbers', label: 'Numbers' },
   { value: 'screening', label: 'Screening' },
   { value: 'usage', label: 'Usage' },
+  { value: 'funnel', label: 'Funnel' },
+  { value: 'dispositions', label: 'Dispositions' },
+  { value: 'leaderboard', label: 'Leaderboard' },
+  { value: 'live', label: 'Live board' },
+  { value: 'reports', label: 'Reports' },
 ] as const
 
 type TabValue = (typeof TABS)[number]['value']
@@ -157,7 +172,12 @@ export function PowerDialerAnalyticsTabShell({ initialTab = 'overview' }: { init
       <PageHeader
         title="Analytics"
         description="Shared metric definitions with Overview and Call history."
-        actions={<RangeSelect value={range} onChange={setRange} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <ExportActions range={range} />
+            <RangeSelect value={range} onChange={setRange} />
+          </div>
+        }
       />
       <div className="mb-4 overflow-x-auto">
         <SegmentedFilter
@@ -190,6 +210,17 @@ export function PowerDialerAnalyticsTabShell({ initialTab = 'overview' }: { init
           {tab === 'numbers' && <NumbersPanel data={data} />}
           {tab === 'screening' && <ScreeningPanel data={data} />}
           {tab === 'usage' && <UsagePanel data={data} />}
+          {tab === 'funnel' && (
+            <div className="flex flex-col gap-4">
+              <FunnelPanel data={data} />
+              <ProductivityPanel data={data} />
+              <ConversionPanel data={data} />
+            </div>
+          )}
+          {tab === 'dispositions' && <DispositionSummaryPanel data={data} />}
+          {tab === 'leaderboard' && <LeaderboardPanel data={data} />}
+          {tab === 'live' && <LiveBoardPanel />}
+          {tab === 'reports' && <ScheduledReportsPanel />}
         </>
       )}
     </Page>

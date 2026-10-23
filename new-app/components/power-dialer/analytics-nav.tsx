@@ -11,6 +11,9 @@ const LINKS = [
   { href: '/app/power-dialer/analytics/numbers', label: 'Numbers' },
   { href: '/app/power-dialer/analytics/screening', label: 'Screening' },
   { href: '/app/power-dialer/analytics/usage', label: 'Usage' },
+  { href: '/app/power-dialer/analytics?tab=funnel', label: 'Funnel' },
+  { href: '/app/power-dialer/analytics?tab=live', label: 'Live board' },
+  { href: '/app/power-dialer/analytics?tab=reports', label: 'Reports' },
 ]
 
 export function PowerDialerAnalyticsNav() {

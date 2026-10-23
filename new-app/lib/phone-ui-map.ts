@@ -1,6 +1,18 @@
 import type { Call, CallOutcome } from '@/lib/data'
 import type { PhoneCallDto } from '@/lib/phone/types'
 
+function summaryFromAiField(raw: string | null, transcript: string | null): string {
+  if (!raw?.trim()) return transcript?.slice(0, 600) || 'Transcript available below.'
+  try {
+    const j = JSON.parse(raw) as { summary?: string; modelDerived?: boolean }
+    if (j?.modelDerived && j.summary) return j.summary
+  } catch {
+    /* legacy text */
+  }
+  const stripped = raw.replace(/^Suggested follow-up:[^\n]*\n\nSummary:\s*/i, '').trim()
+  return stripped || transcript?.slice(0, 600) || 'Transcript available below.'
+}
+
 export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
   const outcomeMap: Record<string, CallOutcome> = {
     answered: 'answered',
@@ -27,6 +39,15 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
     callbackNeeded: dto.callbackNeeded,
     handled: dto.handled,
     disposition: dto.disposition || undefined,
+    callSource: dto.powerDialerSource
+      ? {
+          kind: dto.powerDialerSource.kind,
+          label: dto.powerDialerSource.label,
+          campaignId: dto.powerDialerSource.campaignId,
+          listId: dto.powerDialerSource.listId,
+        }
+      : undefined,
+    campaignId: dto.powerDialerSource?.campaignId,
     voicemail: dto.voicemail
       ? { transcript: dto.voicemail.transcript || '', durationSec: dto.voicemail.durationSec }
       : undefined,
@@ -39,12 +60,7 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
             intent:
               dto.source === 'power_dialer' ? 'Power dialer conversation' : 'Recorded call',
             outcome: 'success',
-            summary: (() => {
-              const raw = dto.aiSummary || ''
-              const stripped = raw.replace(/^Suggested follow-up:[^\n]*\n\nSummary:\s*/i, '').trim()
-              if (stripped) return stripped
-              return dto.transcriptText?.slice(0, 600) || 'Transcript available below.'
-            })(),
+            summary: summaryFromAiField(dto.aiSummary, dto.transcriptText),
             followUp: dto.aiSummary?.toLowerCase().includes('suggested follow-up') ? 'open' : 'none',
             tools: [],
             transcript: dto.transcriptText

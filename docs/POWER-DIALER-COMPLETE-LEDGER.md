@@ -28,11 +28,11 @@
 | P20 | Callback routing | `callback-routing-runtime.ts`, `callbacks-service`, campaign editor Outcomes | campaigns | B4/B5 | done | Editor + runtime assignee/pool on create |
 | P21 | Number purchase/rep assign | `/app/numbers`, `team-settings-panel.tsx` rep assignments | settings | B5 | done | Link to Numbers + `repNumberAssignments` UI/API |
 | P22 | Frequency limits | dial-policy, eligibility, CRM settings | compliance, CRM settings | B3 | done | Workspace min gap + daily cap + area codes (`dialPolicyJson`) |
-| P23 | PD recording settings | power-dialer-recording | settings, webhooks | B1 | in progress | independent of Phone global |
+| P23 | PD recording settings | `recording-policy.ts`, `power-dialer-recording.ts`, settings copy | settings, webhooks | B5/B6 | done | Campaign > workspace > phone global for non-PD only; `test:power-dialer-recording-policy` |
 | P24 | Legal/usage notices | `compliance-settings-panel.tsx`, compliance GET `legalNotice` | settings | B5 | done | Counsel review gate copy; not legal advice |
-| P25 | Call source display | call-list-filters | call-history | B6 | not started | |
+| P25 | Call source display | `call-source-label.ts`, `call-source-context.ts`, `calls-table.tsx`, `call-detail.tsx` | call-history | B6 | done | Campaign/list links from attempt session |
 | P26 | Pickup analytics | analytics-service, analytics UI | analytics | B1 | done | denominator + classification panel |
-| P27 | Real AI summaries | transcription | call-history | B6 | not started | |
+| P27 | Real AI summaries | `call-intelligence.ts`, `human-call-transcription.ts`, `phone-ui-map.ts` | call-history | B6 | done | JSON intelligence labeled model-derived; gate: `DEEPGRAM_API_KEY` |
 | P28 | Agent number enforcement | `caller-id-resolution.ts`, team settings | team, dialer | B1/B5 | done | `repNumberAssignments` at origination |
 | P29 | CRM writeback | crm-sync-bridge | integrations | B7 | not started | SF/Zoho/Pipedrive only |
 | M01 | Hotkeys | power-dialer-session | dialer | B1 | in progress | a11y guards |
@@ -87,7 +87,7 @@
 | M45 | Number pools | campaign editor pool + Numbers link | campaigns | B5 | done | Inventory via global Numbers |
 | M46 | Number health heuristics | `number-health-service.ts` `healthState` | number-health | B5 | done | Not carrier spam labels |
 | M47 | Telnyx reputation | `number-health-service.ts` `telnyxReputationStatus` | number-health | B5 | external gate | Honest when not entitled/provisioned |
-| M48 | Flag alerts / suppression | healthState + failed rate | number-health | B5 | partial | Heuristic only until M47 data |
+| M48 | Flag alerts / suppression | `number-health-signals.ts`, `number-health-service.ts`, UI | number-health | B5/B6 | done | 7d/30d metrics, healthy/watch/at_risk, rotate suggestion; **based on your call data** |
 | M49 | Callback routing pools | (see P20) | callbacks | B4 | done | |
 | M50 | CNAM/branded caller ID | — | — | B5 | external gate | Carrier product purchase |
 | M51 | BYOC caller ID | — | — | B5 | external gate | Proof-of-control validation |
@@ -98,9 +98,21 @@
 | M56 | Contact consent fields | `compliance-gates.ts`, campaign `requireExplicitConsent` | runtime | B5 | done | consentSource/consentDate |
 | M57 | Area-code allow/block | (prior B3) | campaigns | B3 | done | |
 | M58 | Pause/resume recording | `recording-controls.ts`, attempts recording API | dialer | B5 | done | Telnyx record_start/stop |
-| M59 | Abandoned metrics | `abandoned-metrics.ts`, compliance panel | compliance | B5 | partial | Metadata-driven; parallel mode B8 |
-| M60–M68 | Reporting/intelligence | analytics-service | analytics | B6 | not started | |
-| M69–M73 | Team/permissions | team-settings | settings | B6 | not started | |
+| M59 | Abandoned metrics | `abandoned-metrics.ts`, compliance panel | compliance | B8 | deferred | **B8** — jurisdiction reporting periods + parallel abandon |
+| M60 | CSV export attempts/sessions | `analytics/export/route.ts` | analytics API | B6 | done | `analytics_export` scope; `kind=sessions` |
+| M61 | Disposition summary | `analytics-service.ts`, analytics UI tab | analytics | B6 | done | Real disposition counts |
+| M62 | Funnel / activity reports | funnel + byHour + productivity in analytics | analytics | B6 | done | Dialed→connected→conversation→outcome |
+| M63 | Scheduled email reports | `PowerDialerScheduledReport`, scheduled-reports API, UI | analytics | B6 | done | **Gate:** Brevo prod sender |
+| M64 | Conversion by disposition | `analytics-conversion.ts` | analytics | B6 | done | markContactCompleted / outcomeClass success |
+| M65 | Leaderboard | analytics `leaderboard` | analytics | B6 | done | By rep human conversations |
+| M66 | Live call board | `getLiveDialerBoard`, live-board API, UI | analytics | B6 | done | Active/paused sessions poll |
+| M67 | Supervisor coach | review API `supervisor.externalGate` | analytics | B6 | external gate | Telnyx monitor leg not provisioned |
+| M68 | Conversation intelligence | `call-intelligence.ts`, attempt review API | call review | B6 | done | Keywords/sentiment/score; transcript_rules_v1 |
+| M69 | Permission matrix | `power-dialer-permissions.ts`, team UI | settings/API | B6 | done | Scopes on analytics/settings/team/export |
+| M70 | Supervisor role | MANAGER scopes + coach gate | team | B6 | partial | No login-as impersonation |
+| M71 | Team groups / campaign access | `team-settings-panel.tsx` (existing) | settings | B6 | done | Campaign member checkboxes |
+| M72 | Manager vs rep data | `analyticsRepFilter` on analytics/export/review | API | B6 | done | CRM export manager+ only |
+| M73 | DND / call waiting | team panel → Phone settings link | settings | B6 | done | Reuses shared Phone behavior |
 | M76 | CRM field sync | crm mappings | integrations | B7 | not started | |
 | M77 | HubSpot | — | — | — | **EXCLUDED** | owner |
 | M78 | GoHighLevel | — | — | — | **EXCLUDED** | owner |
@@ -151,7 +163,8 @@
 | Batch3 + B2 leftovers (server) | `48be73b54` | `test:power-dialer-batch3`, `test:power-dialer-b1-carryovers` PASS; migration `20261024100000` applied |
 | Batch3 + B2 leftovers (UI) | `de58cd6aa` | Manual UI: merge wizard, folders, queue tab, campaign editor advanced, callbacks reschedule |
 | Batch4 + B3 leftovers | `8ad7caacc`, `3ec1ec3a9`, `e92a00f0c` | `test:power-dialer-batch4-b3`, `test:power-dialer-batch3` PASS; migration `20261024120000` |
-| Batch5 + B4 leftovers | `4e445fbb6`, `8f201b4d1`, `89f0b4645` | `test:power-dialer-batch5-b4`, `test:power-dialer-batch4-b3` PASS; migration `20261024140000` |
+| Batch5 + B4 leftovers | `4e445fbb6`, `8f201b4d1`, `89f0b4645`, `5c4924c17` | `test:power-dialer-batch5-b4`, `test:power-dialer-batch4-b3` PASS; migration `20261024140000` |
+| Batch6 + B5 leftovers | _(see commits below)_ | `test:power-dialer-batch6` PASS; migration `20261024160000` |
 
 ## Live verification still required
 
@@ -162,3 +175,7 @@
 - Recording pause/resume on live Telnyx call.
 - Multi-rep team queue + pool daily caps under real load.
 - PSTN parallel/AMD paths unchanged; warm transfer still B8/M06.
+- Live board with multiple active reps; supervisor listen/whisper/barge when Telnyx monitor leg exists.
+- Deepgram transcription + conversation intelligence on recorded PD calls.
+- Scheduled report email send with production Brevo credentials.
+- M59 abandoned-call jurisdiction metrics (B8).

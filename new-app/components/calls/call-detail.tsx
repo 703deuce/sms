@@ -59,6 +59,30 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
         description={
           <span className="font-mono">
             {formatPhone(call.callerNumber)} · {formatFull(call.startedAt)} · {formatDuration(call.durationSec)}
+            {call.callSource && (
+              <>
+                {' '}
+                · Source: {call.callSource.label}
+                {call.callSource.campaignId && (
+                  <>
+                    {' '}
+                    ·{' '}
+                    <Link href={`/app/power-dialer/campaigns/${call.callSource.campaignId}`} className="text-primary hover:underline">
+                      Campaign
+                    </Link>
+                  </>
+                )}
+                {call.callSource.listId && (
+                  <>
+                    {' '}
+                    ·{' '}
+                    <Link href={`/app/power-dialer/calling-lists/${call.callSource.listId}`} className="text-primary hover:underline">
+                      List
+                    </Link>
+                  </>
+                )}
+              </>
+            )}
           </span>
         }
         actions={<CallActions call={call} />}
@@ -68,8 +92,8 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
         <div className="flex flex-col gap-6 lg:col-span-2">
           {call.ai && (
             <Panel
-              title="AI summary"
-              description={`Intent: ${call.ai.intent}`}
+              title={call.callSource ? 'Conversation intelligence' : 'AI summary'}
+              description={`Intent: ${call.ai.intent}${call.callSource ? ' · Model-derived from transcript' : ''}`}
               actions={<StatusBadge tone={call.ai.followUp === 'open' ? 'warning' : 'muted'}>Follow-up {call.ai.followUp}</StatusBadge>}
             >
               <p className="text-sm leading-relaxed text-pretty">{call.ai.summary}</p>

@@ -304,6 +304,9 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                   {(variant === 'phone' || variant === 'power_dialer') && (
                     <>
                       <th scope="col" className="px-4 py-2.5 font-medium">Outcome</th>
+                      {variant === 'power_dialer' && (
+                        <th scope="col" className="px-4 py-2.5 font-medium">Source</th>
+                      )}
                       {variant === 'phone' && (
                         <>
                           <th scope="col" className="px-4 py-2.5 font-medium">Routed to</th>
@@ -363,6 +366,26 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
                             {c.callbackNeeded && !c.handled && <StatusBadge tone="warning">Follow up</StatusBadge>}
                           </span>
                         </td>
+                        {variant === 'power_dialer' && (
+                          <td className="px-4 py-3 text-xs">
+                            {c.callSource ? (
+                              <span className="flex flex-col gap-0.5">
+                                <span>{c.callSource.label}</span>
+                                {c.callSource.campaignId && (
+                                  <Link
+                                    href={`/app/power-dialer/campaigns/${c.callSource.campaignId}`}
+                                    className="text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Campaign
+                                  </Link>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        )}
                         {variant === 'phone' && (
                           <>
                             <td className="max-w-56 px-4 py-3">
