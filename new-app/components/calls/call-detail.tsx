@@ -40,6 +40,19 @@ export function CallDetail({ call, from }: { call: Call; from: { label: string; 
             <StatusBadge tone={outcome.tone}>{outcome.label}</StatusBadge>
             {call.ai && <StatusBadge tone={AI_OUTCOME[call.ai.outcome].tone}>{AI_OUTCOME[call.ai.outcome].label}</StatusBadge>}
             {call.mctb && <StatusBadge tone={MCTB_STATE[call.mctb.state].tone}>{MCTB_STATE[call.mctb.state].label}</StatusBadge>}
+            {call.metadata?.crmSync && typeof call.metadata.crmSync === 'object' && (
+              <StatusBadge
+                tone={
+                  (call.metadata.crmSync as { status?: string }).status === 'succeeded'
+                    ? 'success'
+                    : (call.metadata.crmSync as { status?: string }).status === 'failed'
+                      ? 'danger'
+                      : 'muted'
+                }
+              >
+                CRM {(call.metadata.crmSync as { status?: string }).status || 'none'}
+              </StatusBadge>
+            )}
           </>
         }
         title={call.caller}

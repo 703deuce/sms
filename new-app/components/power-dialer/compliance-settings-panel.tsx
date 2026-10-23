@@ -10,6 +10,8 @@ export function PowerDialerComplianceSettingsPanel() {
   const [dnc, setDnc] = useState<{ phone: string; reason: string | null }[]>([])
   const [ackAt, setAckAt] = useState<string | null>(null)
   const [phone, setPhone] = useState('')
+  const [search, setSearch] = useState('')
+  const [csvText, setCsvText] = useState('')
 
   const load = useCallback(() => {
     void fetch('/api/phone/power-dialer/compliance')
@@ -69,14 +71,63 @@ export function PowerDialerComplianceSettingsPanel() {
       </Panel>
       <Panel title="Internal do-not-call list">
         <div className="mb-3 flex max-w-md gap-2">
+          <Input placeholder="Search or filter" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search DNC" />
+        </div>
+        <div className="mb-3 flex max-w-md gap-2">
           <Input placeholder="+1…" value={phone} onChange={(e) => setPhone(e.target.value)} aria-label="Phone to block" />
           <Button type="button" size="sm" onClick={() => void addDnc()}>Add</Button>
         </div>
+        <label className="mb-3 flex flex-col gap-1 text-sm">
+          <span className="font-medium">Import DNC CSV (phone column required)</span>
+          <textarea
+            className="min-h-[80px] rounded-md border p-2 font-mono text-xs"
+            value={csvText}
+            onChange={(e) => setCsvText(e.target.value)}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void fetch('/api/phone/power-dialer/compliance', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'import_dnc_csv', csvText }),
+              })
+                .then((r) => r.json())
+                .then((j) => {
+                  toast.success(`DNC import: ${j.data.added} added, ${j.data.skipped} skipped, ${j.data.invalid} invalid`)
+                  setCsvText('')
+                  load()
+                })
+            }}
+          >
+            Import CSV
+          </Button>
+        </label>
         <ul className="text-sm">
-          {dnc.map((r) => (
-            <li key={r.phone} className="border-b py-2 font-mono text-xs">
-              {r.phone}
-              {r.reason && <span className="ml-2 text-muted-foreground">{r.reason}</span>}
+          {dnc
+            .filter((r) => !search.trim() || r.phone.includes(search.replace(/\D/g, '')))
+            .map((r) => (
+            <li key={r.phone} className="flex items-center justify-between border-b py-2 font-mono text-xs">
+              <span>
+                {r.phone}
+                {r.reason && <span className="ml-2 text-muted-foreground">{r.reason}</span>}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  void fetch('/api/phone/power-dialer/compliance', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'remove_dnc', phone: r.phone }),
+                  }).then(() => load())
+                }}
+              >
+                Remove
+              </Button>
             </li>
           ))}
         </ul>

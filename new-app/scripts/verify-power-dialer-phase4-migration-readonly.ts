@@ -5,6 +5,7 @@
 import { PrismaClient } from "@prisma/client";
 
 const PHASE4 = "20261023150000_power_dialer_phase4";
+const PHASE6 = "20261023180000_power_dialer_phase6";
 const PHASE3 = "20261023140000_power_dialer_lists_phase3";
 
 async function main() {
@@ -12,7 +13,11 @@ async function main() {
   try {
     const migrations = await prisma.$queryRaw<
       { migration_name: string; finished_at: Date | null; rolled_back_at: Date | null; checksum: string }[]
-    >`SELECT migration_name, finished_at, rolled_back_at, checksum FROM _prisma_migrations WHERE migration_name IN (${PHASE3}, ${PHASE4}) ORDER BY migration_name`;
+    >`SELECT migration_name, finished_at, rolled_back_at, checksum FROM _prisma_migrations WHERE migration_name IN (${PHASE3}, ${PHASE4}, ${PHASE6}) ORDER BY migration_name`;
+
+    const phase6Finished = migrations.some(
+      (m) => m.migration_name === PHASE6 && m.finished_at && !m.rolled_back_at,
+    );
 
     const tables = await prisma.$queryRaw<{ table_name: string }[]>`
       SELECT table_name FROM information_schema.tables

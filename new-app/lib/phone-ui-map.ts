@@ -58,5 +58,6 @@ export function mapPhoneCallDtoToCall(dto: PhoneCallDto): Call {
               : [],
           }
         : undefined,
+    metadata: dto.metadata,
   }
 }

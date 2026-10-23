@@ -121,10 +121,20 @@ export async function listCalls(
     : [];
   const contactMap = new Map(contacts.map((c) => [c.id, c]));
 
-  return {
-    total,
-    data: rows.map((r) => mapHumanCallToDto(r, { contact: r.contactId ? contactMap.get(r.contactId) : null })),
-  };
+  const { getCrmSyncStatusForHumanCall } = await import(
+    "@/lib/server/phone/power-dialer/call-crm-status"
+  );
+  const data = await Promise.all(
+    rows.map(async (r) => {
+      const dto = mapHumanCallToDto(r, { contact: r.contactId ? contactMap.get(r.contactId) : null });
+      if (r.source === "power_dialer") {
+        const crmSync = await getCrmSyncStatusForHumanCall(workspaceId, r.id);
+        return { ...dto, metadata: { ...(dto.metadata || {}), crmSync } };
+      }
+      return dto;
+    }),
+  );
+  return { total, data };
 }
 
 export async function getCallDetail(workspaceId: string, id: string): Promise<PhoneCallDto | null> {
@@ -149,13 +159,21 @@ export async function getCallDetail(workspaceId: string, id: string): Promise<Ph
         : null,
   ]);
 
-  return mapHumanCallToDto(call, {
+  const dto = mapHumanCallToDto(call, {
     contact,
     callNotes: notes,
     voicemail: vm,
     numberLabel: pn?.friendlyName ?? null,
     phoneNumber: pn,
   });
+  const { getCrmSyncStatusForHumanCall } = await import(
+    "@/lib/server/phone/power-dialer/call-crm-status"
+  );
+  const crmSync = await getCrmSyncStatusForHumanCall(workspaceId, id);
+  return {
+    ...dto,
+    metadata: { ...(dto.metadata || {}), crmSync },
+  };
 }
 
 export async function patchCall(

@@ -57,6 +57,19 @@ export default function PowerDialerSyncHistoryPage() {
                 <td className="px-4 py-2">
                   {r.status}
                   {r.errorMessage && <span className="block text-xs text-destructive">{r.errorMessage}</span>}
+                  {r.status === 'failed' && (
+                    <button
+                      type="button"
+                      className="mt-1 text-xs text-primary hover:underline"
+                      onClick={() => {
+                        void fetch(`/api/phone/power-dialer/integrations/sync-history/${r.id}/retry`, {
+                          method: 'POST',
+                        }).then(() => window.location.reload())
+                      }}
+                    >
+                      Retry
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

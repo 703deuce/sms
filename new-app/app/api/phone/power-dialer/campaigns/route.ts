@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { assertDevApiAccess } from "@/lib/server/dev-api-guard";
 import { jsonError } from "@/lib/server/api-error";
 import { createCampaign, listCampaigns } from "@/lib/server/phone/power-dialer";
+import { resolveInternalUserId } from "@/lib/server/internal-user";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 
 export async function GET() {
   try {
     const workspaceId = await resolveWorkspaceId();
-    const data = await listCampaigns(workspaceId);
+    const viewerUserId = await resolveInternalUserId().catch(() => undefined);
+    const data = await listCampaigns(workspaceId, { viewerUserId });
     return NextResponse.json({ data });
   } catch (err) {
     return jsonError(err, 500);

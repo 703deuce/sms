@@ -82,6 +82,7 @@ export type Call = {
   }
   campaignId?: string
   disposition?: string
+  metadata?: Record<string, unknown> | null
   callNotes?: { id: string; content: string; createdAt: string; author: string | null }[]
   contactSummary?: {
     id: string

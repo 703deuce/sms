@@ -14,6 +14,7 @@ import {
   VoicemailDropsLibraryPanel,
 } from '@/components/power-dialer/settings-library-panels'
 import { PowerDialerComplianceSettingsPanel } from '@/components/power-dialer/compliance-settings-panel'
+import { PowerDialerTeamSettingsPanel } from '@/components/power-dialer/team-settings-panel'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import { formatPhone } from '@/lib/format'
 
@@ -318,11 +319,7 @@ export function PowerDialerSettingsContent() {
           </Panel>
         </TabsContent>
         <TabsContent value="team" className="mt-6">
-          <Panel title="Team & campaign access" description="Reuses workspace membership. Reps only dial campaigns they are assigned to.">
-            <p className="text-sm text-muted-foreground">
-              Manage members in workspace settings. Campaign assignment is configured per campaign under Members.
-            </p>
-          </Panel>
+          <PowerDialerTeamSettingsPanel />
         </TabsContent>
         <TabsContent value="compliance" className="mt-6">
           <Panel title="Prerecorded voicemail drops">

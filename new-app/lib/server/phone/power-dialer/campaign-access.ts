@@ -3,6 +3,29 @@ import { parseExtendedConfig } from "./campaign-extended-config";
 
 const ADMIN_ROLES = new Set(["OWNER", "ADMINISTRATOR", "MANAGER"]);
 
+export function isPowerDialerAdminRole(role: string) {
+  return ADMIN_ROLES.has(role);
+}
+
+export async function getMembershipForUser(workspaceId: string, userId: string) {
+  const prisma = getPrisma();
+  return prisma.membership.findFirst({
+    where: { workspaceId, userId },
+    select: { role: true, userId: true },
+  });
+}
+
+export function userCanAccessCampaign(
+  role: string,
+  configJson: unknown,
+  userId: string,
+): boolean {
+  if (isPowerDialerAdminRole(role)) return true;
+  const ext = parseExtendedConfig(configJson);
+  const members = ext.memberUserIds ?? [];
+  return ext.ownerUserId === userId || members.includes(userId);
+}
+
 export async function listWorkspaceReps(workspaceId: string) {
   const prisma = getPrisma();
   const rows = await prisma.membership.findMany({

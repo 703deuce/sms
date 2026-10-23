@@ -17,14 +17,33 @@ import {
 } from "@/lib/server/phone/power-dialer/session-runtime";
 import { isHumanConversation } from "@/lib/server/phone/power-dialer/disposition-effects";
 
-export async function listCampaigns(workspaceId: string) {
+export async function listCampaigns(workspaceId: string, opts?: { viewerUserId?: string }) {
   const prisma = getPrisma();
+  const settings = await getPowerDialerSettings(workspaceId);
+  let viewerRole: string | null = null;
+  if (opts?.viewerUserId) {
+    const m = await prisma.membership.findFirst({
+      where: { workspaceId, userId: opts.viewerUserId },
+      select: { role: true },
+    });
+    viewerRole = m?.role ?? null;
+  }
   const rows = await prisma.powerDialerCampaign.findMany({
     where: { workspaceId },
     orderBy: { updatedAt: "desc" },
     include: { list: { select: { name: true } } },
   });
-  return rows.map((c) => ({
+  const { userCanAccessCampaign, isPowerDialerAdminRole } = await import(
+    "./power-dialer/campaign-access"
+  );
+  const filtered =
+    opts?.viewerUserId &&
+    settings.teamActivityVisibility === "assigned_only" &&
+    viewerRole &&
+    !isPowerDialerAdminRole(viewerRole)
+      ? rows.filter((c) => userCanAccessCampaign(viewerRole!, c.configJson, opts.viewerUserId!))
+      : rows;
+  return filtered.map((c) => ({
     id: c.id,
     name: c.name,
     description: c.description,

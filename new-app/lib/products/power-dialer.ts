@@ -30,6 +30,8 @@ export type PowerDialerWorkspaceSettings = {
   usageAlertThresholdPct?: number | null
   overageBehavior?: 'block' | 'allow' | 'warn'
   externalDncScreeningConnected?: boolean
+  teamActivityVisibility?: 'all_reps' | 'assigned_only'
+  repNumberAssignments?: Record<string, string[]>
 }
 
 const DEFAULTS: PowerDialerWorkspaceSettings = {
@@ -106,5 +108,11 @@ export function mergePowerDialerSettings(
       typeof o.externalDncScreeningConnected === 'boolean'
         ? o.externalDncScreeningConnected
         : false,
+    teamActivityVisibility:
+      o.teamActivityVisibility === 'assigned_only' ? 'assigned_only' : 'all_reps',
+    repNumberAssignments:
+      o.repNumberAssignments && typeof o.repNumberAssignments === 'object'
+        ? (o.repNumberAssignments as Record<string, string[]>)
+        : {},
   }
 }

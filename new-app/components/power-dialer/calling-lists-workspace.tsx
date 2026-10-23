@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { createPowerList, fetchPowerLists, type PowerListDto } from '@/lib/phone-api'
 import { formatWhen } from '@/lib/format'
 import { CsvImportWizard } from '@/components/power-dialer/csv-import-wizard'
+import { CrmImportDialog } from '@/components/power-dialer/crm-import-dialog'
 
 export function CallingListsWorkspace() {
   const [rows, setRows] = useState<PowerListDto[]>([])
@@ -27,6 +28,8 @@ export function CallingListsWorkspace() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [importListId, setImportListId] = useState<string | null>(null)
+  const [crmImportListId, setCrmImportListId] = useState<string | null>(null)
+  const [crmConnected, setCrmConnected] = useState(false)
 
   const reload = useCallback(() => {
     setLoading(true)
@@ -39,6 +42,13 @@ export function CallingListsWorkspace() {
   useEffect(() => {
     reload()
   }, [reload])
+
+  useEffect(() => {
+    void fetch('/api/phone/power-dialer/lists/crm-sources')
+      .then((r) => r.json())
+      .then((j) => setCrmConnected((j.data?.connected?.length ?? 0) > 0))
+      .catch(() => setCrmConnected(false))
+  }, [])
 
   const filtered = rows.filter((r) => {
     if (!q.trim()) return true
@@ -118,11 +128,16 @@ export function CallingListsWorkspace() {
                   <td className="px-3 py-3 text-xs text-muted-foreground">
                     {l.campaignUsage?.length ? l.campaignUsage.map((c) => c.name).join(', ') : '—'}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 flex flex-wrap gap-1">
                     <Button variant="ghost" size="sm" onClick={() => setImportListId(l.id)}>
                       <Upload className="size-4" />
                       Import CSV
                     </Button>
+                    {crmConnected && (
+                      <Button variant="ghost" size="sm" onClick={() => setCrmImportListId(l.id)}>
+                        Import from CRM
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -147,6 +162,14 @@ export function CallingListsWorkspace() {
         </DialogContent>
       </Dialog>
 
+      {crmImportListId && (
+        <CrmImportDialog
+          listId={crmImportListId}
+          open={!!crmImportListId}
+          onOpenChange={(open) => { if (!open) setCrmImportListId(null) }}
+          onDone={() => { setCrmImportListId(null); reload() }}
+        />
+      )}
       {importListId && (
         <CsvImportWizard
           listId={importListId}

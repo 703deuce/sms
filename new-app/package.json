@@ -17,6 +17,8 @@
     "test:power-dialer-phase4": "npx tsx scripts/test-power-dialer-phase4.ts",
     "test:power-dialer-phase5": "npx tsx scripts/test-power-dialer-phase5.ts",
     "test:power-dialer-phase6": "npx tsx scripts/test-power-dialer-phase6.ts",
+    "test:power-dialer-metrics-consistency": "npx tsx scripts/test-power-dialer-metrics-consistency.ts",
+    "test:power-dialer-authorization": "npx tsx scripts/test-power-dialer-authorization.ts",
     "test:phone:prod": "node scripts/test-phone-production-cert.mjs",
     "test:receptionist": "node scripts/test-receptionist-complete.mjs && node scripts/test-telephony-voice-catalog.mjs && node scripts/test-telephony-switch-sequence.mjs && node scripts/test-ai-receptionist-two-modes.mjs && node scripts/test-conversational-ivr-profile.mjs",
     "test:receptionist:runtime-verify": "NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/test-ai-receptionist-runtime-verification.ts",

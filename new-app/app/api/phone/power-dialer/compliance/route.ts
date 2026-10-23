@@ -68,6 +68,16 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ data: row });
     }
 
+    if (body.action === "import_dnc_csv" && typeof body.csvText === "string") {
+      const { importDncCsv } = await import("@/lib/server/phone/power-dialer/dnc-csv-import");
+      const summary = await importDncCsv({
+        workspaceId,
+        csvText: body.csvText,
+        actorUserId: userId,
+      });
+      return NextResponse.json({ data: summary });
+    }
+
     if (body.action === "remove_dnc" && typeof body.phone === "string") {
       const { removeInternalDnc } = await import("@/lib/server/phone/power-dialer/internal-dnc");
       await removeInternalDnc({ workspaceId, phone: body.phone, actorUserId: userId });
