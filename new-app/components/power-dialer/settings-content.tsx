@@ -270,6 +270,10 @@ export function PowerDialerSettingsContent() {
                 />
               </label>
               <p className="text-xs text-muted-foreground">
+                Power-dialer outbound calls use these workspace defaults unless a campaign overrides recording in the campaign editor.
+                Global Phone → recording toggles apply to non–power-dialer calls only and do not silently override dialer policy (P23).
+              </p>
+              <p className="text-xs text-muted-foreground">
                 Retention follows workspace media policies when configured; older recordings may be purged automatically after this period.
               </p>
             </div>

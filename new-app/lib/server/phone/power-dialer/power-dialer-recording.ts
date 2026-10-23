@@ -44,12 +44,18 @@ export async function resolvePowerDialerRecordingPolicy(
     (wsRow?.customFieldsConfig as { powerDialer?: unknown })?.powerDialer,
   );
 
-  const record =
-    campaignRecording !== undefined ? campaignRecording : pd.recordingEnabled !== false;
+  const phone = await getPhoneSettings(workspaceId);
+  const { mergePowerDialerRecordingPolicy } = await import("./recording-policy");
+  const merged = mergePowerDialerRecordingPolicy({
+    campaignRecordingEnabled: campaignRecording,
+    workspace: pd,
+    isPowerDialerCall: true,
+    phoneGlobalRecordCalls: phone.recordCalls,
+  });
   return {
-    record,
-    consentAnnounce: Boolean(pd.recordingConsentAnnounce),
-    retentionDays: pd.recordingRetentionDays ?? 365,
+    record: merged.record,
+    consentAnnounce: merged.consentAnnounce,
+    retentionDays: merged.retentionDays,
   };
 }
 
