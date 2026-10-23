@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/server/db";
+import { parseStoredIntelligence } from "./call-intelligence";
 import {
   dedupeAttemptsById,
   isHumanConversation,
@@ -11,12 +12,20 @@ function rangeStart(range: "7d" | "30d" | "90d") {
   return d;
 }
 
-export async function getPowerDialerAnalytics(workspaceId: string, range: "7d" | "30d" | "90d") {
+export async function getPowerDialerAnalytics(
+  workspaceId: string,
+  range: "7d" | "30d" | "90d",
+  repUserIdFilter?: string | null,
+) {
   const prisma = getPrisma();
   const from = rangeStart(range);
   const attempts = dedupeAttemptsById(
     await prisma.powerDialerAttempt.findMany({
-      where: { workspaceId, createdAt: { gte: from } },
+      where: {
+        workspaceId,
+        createdAt: { gte: from },
+        ...(repUserIdFilter ? { session: { repUserId: repUserIdFilter } } : {}),
+      },
       select: {
         id: true,
         disposition: true,
@@ -24,6 +33,8 @@ export async function getPowerDialerAnalytics(workspaceId: string, range: "7d" |
         billableSeconds: true,
         createdAt: true,
         session: { select: { campaignId: true, repUserId: true } },
+        endedAt: true,
+        dispositionEffectsAt: true,
         humanCall: { select: { phoneNumberId: true, answeredAt: true } },
       },
     }),
@@ -40,6 +51,13 @@ export async function getPowerDialerAnalytics(workspaceId: string, range: "7d" |
   const byRep = new Map<string, { attempts: number; human: number }>();
   const byNumber = new Map<string, { attempts: number; human: number }>();
   const byDay = new Map<string, number>();
+  const byHour = new Map<number, number>();
+  const byDisposition = new Map<string, number>();
+  let connected = 0;
+  let conversations = 0;
+  let outcomes = 0;
+  let wrapSec = 0;
+  let talkSec = 0;
 
   for (const a of attempts) {
     if (isHumanConversation(a.disposition, a.answerClassification)) human += 1;
@@ -54,8 +72,22 @@ export async function getPowerDialerAnalytics(workspaceId: string, range: "7d" |
       answeredSignals += 1;
     }
     if (a.billableSeconds) billableSec += a.billableSeconds;
+    if (a.humanCall?.answeredAt) connected += 1;
+    if (isHumanConversation(a.disposition, a.answerClassification)) conversations += 1;
+    if (a.disposition) outcomes += 1;
+    if (a.billableSeconds) talkSec += a.billableSeconds;
+    if (a.endedAt && a.dispositionEffectsAt) {
+      wrapSec += Math.max(
+        0,
+        Math.round((a.dispositionEffectsAt.getTime() - a.endedAt.getTime()) / 1000),
+      );
+    }
     const day = a.createdAt.toISOString().slice(0, 10);
     byDay.set(day, (byDay.get(day) || 0) + 1);
+    const hour = a.createdAt.getUTCHours();
+    byHour.set(hour, (byHour.get(hour) || 0) + 1);
+    const disp = a.disposition || "No disposition";
+    byDisposition.set(disp, (byDisposition.get(disp) || 0) + 1);
     const cid = a.session.campaignId;
     const cBucket = byCampaign.get(cid) || { attempts: 0, human: 0 };
     cBucket.attempts += 1;
@@ -121,5 +153,159 @@ export async function getPowerDialerAnalytics(workspaceId: string, range: "7d" |
       humanRate: answeredSignals ? Math.round((human / answeredSignals) * 1000) / 10 : 0,
       machineRate: answeredSignals ? Math.round((machine / answeredSignals) * 1000) / 10 : 0,
     },
+    funnel: {
+      dialed: attemptsCount,
+      connected,
+      conversations,
+      outcomes,
+    },
+    dispositions: [...byDisposition.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, count]) => ({ label, count })),
+    byHour: [...byHour.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([hour, count]) => ({ hour, attempts: count })),
+    productivity: {
+      talkMinutes: Math.round(talkSec / 60),
+      wrapMinutes: Math.round(wrapSec / 60),
+      callsPerHour:
+        attemptsCount && range === "7d"
+          ? Math.round((attemptsCount / (7 * 24)) * 10) / 10
+          : attemptsCount && range === "30d"
+            ? Math.round((attemptsCount / (30 * 24)) * 10) / 10
+            : attemptsCount
+              ? Math.round((attemptsCount / (90 * 24)) * 10) / 10
+              : 0,
+    },
+    leaderboard: [...byRep.entries()]
+      .map(([userId, v]) => ({
+        userId,
+        attempts: v.attempts,
+        humanConversations: v.human,
+        connectRate: v.attempts ? Math.round((v.human / v.attempts) * 1000) / 10 : 0,
+      }))
+      .sort((a, b) => b.humanConversations - a.humanConversations),
   };
+}
+
+export async function getLiveDialerBoard(workspaceId: string) {
+  const prisma = getPrisma();
+  const sessions = await prisma.powerDialerSession.findMany({
+    where: { workspaceId, status: { in: ["active", "paused"] }, endedAt: null },
+    include: {
+      campaign: { select: { id: true, name: true } },
+      attempts: {
+        where: { status: { in: ["pending", "ringing", "answered", "in_progress"] } },
+        take: 1,
+        orderBy: { createdAt: "desc" },
+        select: { id: true, status: true, contactId: true },
+      },
+    },
+    orderBy: { startedAt: "desc" },
+    take: 50,
+  });
+  return sessions.map((s) => ({
+    sessionId: s.id,
+    campaignId: s.campaignId,
+    campaignName: s.campaign.name,
+    repUserId: s.repUserId,
+    status: s.status,
+    progressionPhase: s.progressionPhase,
+    startedAt: s.startedAt,
+    currentAttempt: s.attempts[0] || null,
+  }));
+}
+
+export async function getAttemptCallReview(workspaceId: string, attemptId: string) {
+  const prisma = getPrisma();
+  const attempt = await prisma.powerDialerAttempt.findFirst({
+    where: { id: attemptId, workspaceId },
+    include: {
+      contact: { select: { id: true, firstName: true, lastName: true, phone: true } },
+      session: { select: { campaignId: true, repUserId: true } },
+      humanCall: {
+        select: {
+          id: true,
+          recordingUrl: true,
+          transcriptText: true,
+          aiSummary: true,
+          source: true,
+          startedAt: true,
+          endedAt: true,
+          billableSeconds: true,
+        },
+      },
+    },
+  });
+  if (!attempt) throw new Error("Attempt not found");
+  const deepgramReady = Boolean(process.env.DEEPGRAM_API_KEY?.trim());
+  const parsedIntel = parseStoredIntelligence(attempt.humanCall?.aiSummary ?? null);
+  return {
+    attempt,
+    intelligence: {
+      transcriptAvailable: Boolean(attempt.humanCall?.transcriptText),
+      summaryAvailable: Boolean(parsedIntel?.summary),
+      structured: parsedIntel,
+      deepgramConfigured: deepgramReady,
+      gate: deepgramReady
+        ? null
+        : "Set DEEPGRAM_API_KEY to generate transcripts for call review scoring.",
+    },
+    supervisor: {
+      listen: false,
+      whisper: false,
+      barge: false,
+      externalGate:
+        "Listen/whisper/barge requires a Telnyx supervisor monitor leg on the power-dialer WebRTC path — not provisioned in this release.",
+    },
+  };
+}
+
+export function attemptsToCsvRows(
+  attempts: Array<{
+    id: string;
+    createdAt: Date;
+    disposition: string | null;
+    billableSeconds: number | null;
+    session: { campaignId: string; repUserId: string | null };
+  }>,
+) {
+  const header = "attempt_id,created_at,campaign_id,rep_user_id,disposition,billable_seconds\n";
+  const lines = attempts.map((a) =>
+    [
+      a.id,
+      a.createdAt.toISOString(),
+      a.session.campaignId,
+      a.session.repUserId || "",
+      (a.disposition || "").replace(/,/g, " "),
+      a.billableSeconds ?? "",
+    ].join(","),
+  );
+  return header + lines.join("\n");
+}
+
+export function sessionsToCsvRows(
+  sessions: Array<{
+    id: string;
+    startedAt: Date;
+    endedAt: Date | null;
+    status: string;
+    repUserId: string | null;
+    campaignId: string;
+    _count?: { attempts: number };
+  }>,
+) {
+  const header = "session_id,started_at,ended_at,status,campaign_id,rep_user_id,attempts\n";
+  const lines = sessions.map((s) =>
+    [
+      s.id,
+      s.startedAt.toISOString(),
+      s.endedAt?.toISOString() || "",
+      s.status,
+      s.campaignId,
+      s.repUserId || "",
+      s._count?.attempts ?? "",
+    ].join(","),
+  );
+  return header + lines.join("\n");
 }

@@ -1,6 +1,10 @@
 import "server-only";
 import { getPrisma } from "@/lib/server/db";
 import { getPowerDialerSettings } from "@/lib/server/phone/power-dialer";
+import {
+  buildConversationIntelligence,
+  serializeIntelligenceForStorage,
+} from "@/lib/server/phone/power-dialer/call-intelligence";
 
 async function transcribeWithDeepgram(recordingUrl: string): Promise<string | null> {
   const key = process.env.DEEPGRAM_API_KEY?.trim();
@@ -21,14 +25,6 @@ async function transcribeWithDeepgram(recordingUrl: string): Promise<string | nu
   return text || null;
 }
 
-function buildFollowUpSuggestion(transcript: string): string {
-  const t = transcript.toLowerCase();
-  if (t.includes("call back") || t.includes("callback")) return "Schedule a callback at the time they mentioned.";
-  if (t.includes("not interested")) return "Mark not interested; remove from active queue if policy allows.";
-  if (t.includes("send") && t.includes("email")) return "Send requested information and log a follow-up task.";
-  return "Review transcript and set next disposition or callback.";
-}
-
 export async function maybeTranscribePowerDialerCall(workspaceId: string, humanCallId: string) {
   const prisma = getPrisma();
   const call = await prisma.humanCall.findFirst({ where: { id: humanCallId, workspaceId } });
@@ -41,13 +37,12 @@ export async function maybeTranscribePowerDialerCall(workspaceId: string, humanC
   const transcript = await transcribeWithDeepgram(call.recordingUrl);
   if (!transcript) return { skipped: true, reason: "deepgram_unavailable" };
 
-  const summary = transcript.length > 400 ? `${transcript.slice(0, 400)}…` : transcript;
-  const followUp = buildFollowUpSuggestion(transcript);
+  const intel = buildConversationIntelligence(transcript);
   await prisma.humanCall.update({
     where: { id: humanCallId },
     data: {
       transcriptText: transcript,
-      aiSummary: `Suggested follow-up: ${followUp}\n\nSummary: ${summary}`,
+      aiSummary: serializeIntelligenceForStorage(intel),
     },
   });
   return { ok: true };

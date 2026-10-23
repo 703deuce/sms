@@ -48,9 +48,10 @@ export async function PATCH(request: Request) {
     const workspaceId = await resolveWorkspaceId();
     const userId = await resolveInternalUserId();
     const membership = await getMembershipForUser(workspaceId, userId);
-    if (!membership || !isPowerDialerAdminRole(membership.role)) {
-      throw new Error("Admin role required to edit team settings");
-    }
+    const { requirePowerDialerScope } = await import(
+      "@/lib/server/phone/power-dialer/power-dialer-permissions"
+    );
+    await requirePowerDialerScope(workspaceId, userId, "team_manage");
     const body = (await request.json()) as Record<string, unknown>;
     const prisma = getPrisma();
 

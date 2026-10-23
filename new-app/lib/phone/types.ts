@@ -53,6 +53,14 @@ export type PhoneCallDto = {
     e164: string;
   } | null;
   metadata: Record<string, unknown> | null;
+  powerDialerSource?: {
+    kind: string;
+    label: string;
+    campaignId?: string;
+    campaignName?: string;
+    listId?: string;
+    listName?: string;
+  } | null;
 };
 
 export type RoutePolicyDto = {

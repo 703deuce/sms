@@ -5,6 +5,8 @@ import {
   getPowerDialerSettings,
   updatePowerDialerSettings,
 } from "@/lib/server/phone/power-dialer";
+import { resolveInternalUserId } from "@/lib/server/internal-user";
+import { requirePowerDialerScope } from "@/lib/server/phone/power-dialer/power-dialer-permissions";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 import type { PowerDialerWorkspaceSettings } from "@/lib/products/power-dialer";
 
@@ -23,6 +25,8 @@ export async function PATCH(request: Request) {
   if (denied) return denied;
   try {
     const workspaceId = await resolveWorkspaceId();
+    const userId = await resolveInternalUserId();
+    await requirePowerDialerScope(workspaceId, userId, "settings_write");
     const body = (await request.json()) as Partial<PowerDialerWorkspaceSettings>;
     const data = await updatePowerDialerSettings(workspaceId, body);
     return NextResponse.json({ data });
