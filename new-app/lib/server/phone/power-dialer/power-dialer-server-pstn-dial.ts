@@ -7,6 +7,12 @@ import { phoneServerLog } from "@/lib/server/phone/phone-log";
 import { mergeAttemptMetadata } from "./attempt-metadata";
 import { buildWebRtcAgentSipUri } from "@/lib/server/phone/telnyx-webrtc-sip";
 import { mergePowerDialerSettings } from "@/lib/products/power-dialer";
+import { isMultiLineDialMode, normalizeDialingMode } from "./dial-modes";
+import {
+  loadSharedIosAgentLegForAttempt,
+  persistSharedIosAgentLeg,
+  readSharedIosAgentLeg,
+} from "./ios-shared-agent-leg";
 
 const DEFAULT_PROMPT_END_MS = 45_000;
 
@@ -139,7 +145,13 @@ export async function startPowerDialerServerIosScreeningDial(input: {
 
   const attemptRow = await prisma.powerDialerAttempt.findFirst({
     where: { id: input.powerDialerAttemptId },
+    include: { session: { include: { campaign: true } } },
   });
+  const dialMode = normalizeDialingMode(attemptRow?.session?.campaign?.dialingMode);
+  const multiLine = isMultiLineDialMode(dialMode);
+  const sessionParallelState = attemptRow?.session?.parallelStateJson;
+  const sharedFromSession = readSharedIosAgentLeg(sessionParallelState);
+
   await prisma.powerDialerAttempt.update({
     where: { id: input.powerDialerAttemptId },
     data: {
@@ -156,6 +168,29 @@ export async function startPowerDialerServerIosScreeningDial(input: {
       }),
     },
   });
+
+  if (multiLine && sharedFromSession) {
+    const call = await prisma.humanCall.findFirst({ where: { id: input.humanCallId } });
+    const prev = (call?.metadata || {}) as Record<string, unknown>;
+    await prisma.humanCall.update({
+      where: { id: input.humanCallId },
+      data: {
+        metadata: {
+          ...prev,
+          agentCallControlId: sharedFromSession.agentCallControlId,
+          outboundAgentLeg: "dial_agent",
+          outboundAgentLegStatus: "shared_session_agent",
+          sharedIosAgentLeg: true,
+        },
+      },
+    });
+    return {
+      ok: true,
+      prospectCallControlId: prospectControlId,
+      agentDialStarted: true,
+      agentCallControlId: sharedFromSession.agentCallControlId,
+    };
+  }
 
   const sipUsername = await resolveAgentSipUsername();
   if (!sipUsername) {
@@ -210,6 +245,14 @@ export async function startPowerDialerServerIosScreeningDial(input: {
         },
       },
     });
+    if (multiLine && attemptRow?.sessionId) {
+      await persistSharedIosAgentLeg({
+        workspaceId: input.workspaceId,
+        sessionId: attemptRow.sessionId,
+        agentCallControlId: agentControlId,
+        anchorHumanCallId: input.humanCallId,
+      });
+    }
   }
 
   phoneServerLog("power-dialer-ios-dial", "origination_ok", {

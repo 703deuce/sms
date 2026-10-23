@@ -518,6 +518,11 @@ export type PowerSessionStateDto = {
     countdownSeconds: number;
     autoDialReady: boolean;
   };
+  parallelDial?: {
+    liveCount: number;
+    maxLines: number;
+    canOriginateAnother: boolean;
+  } | null;
   eligibilityCounts?: Record<string, number>;
   ringTimeoutHangup?: string | null;
   emptyReasons?: { bucket: string; count: number }[];
@@ -557,6 +562,7 @@ export type PowerSessionStateDto = {
   } | null;
   attempts?: {
     id: string;
+    contactId: string;
     disposition: string | null;
     notes: string | null;
     status: string;

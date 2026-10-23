@@ -203,6 +203,7 @@ export async function listSessionAttempts(workspaceId: string, sessionId: string
   });
   return rows.map((a) => ({
     id: a.id,
+    contactId: a.contactId,
     disposition: a.disposition,
     notes: a.notes,
     status: a.status,

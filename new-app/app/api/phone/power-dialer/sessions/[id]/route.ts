@@ -39,6 +39,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         progression: runtime.progression,
         eligibilityCounts: runtime.eligibilityCounts,
         currentAttempt: runtime.currentAttempt,
+        connectionIntelligence: runtime.connectionIntelligence,
+        parallelDial: runtime.parallelDial,
         ringTimeoutHangup: runtime.ringTimeoutHangup,
         emptyReasons: runtime.emptyReasons,
         nextEligibleAt: runtime.nextEligibleAt,

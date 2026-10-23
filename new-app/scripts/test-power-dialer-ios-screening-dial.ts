@@ -11,7 +11,8 @@ const policySrc = readFileSync(
   "utf8",
 );
 assert.ok(policySrc.includes("POWER_DIALER_IOS_SCREENING_DIAL_ORIGINATION"));
-assert.ok(policySrc.includes("multi_line_uses_webrtc_path"));
+assert.ok(!policySrc.includes("multi_line_uses_webrtc_path"));
+assert.ok(policySrc.includes("server_ios_screening"));
 console.log("ios origination policy: PASS");
 
 const dialSrc = readFileSync(
@@ -45,6 +46,14 @@ for (const m of modes) {
   }
 }
 console.log("five dial modes taxonomy: PASS");
+
+const sharedSrc = readFileSync(
+  join(import.meta.dirname, "../lib/server/phone/power-dialer/ios-shared-agent-leg.ts"),
+  "utf8",
+);
+assert.ok(sharedSrc.includes("sharedIosAgentCallControlId"));
+assert.ok(dialSrc.includes("sharedFromSession"));
+console.log("multiline shared agent leg: PASS");
 
 const callsSvc = readFileSync(
   join(import.meta.dirname, "../lib/server/phone/calls-service.ts"),

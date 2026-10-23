@@ -4,6 +4,7 @@ import { phoneServerLog } from "@/lib/server/phone/phone-log";
 import { isConfirmedHumanClassification } from "./answer-classification";
 import { mergeAttemptMetadata, readAttemptMetadata } from "./attempt-metadata";
 import type { AnswerClassification } from "./types";
+import { loadSharedIosAgentLegForAttempt } from "./ios-shared-agent-leg";
 
 export function readPowerDialerLegIds(metadata: Record<string, unknown> | null | undefined) {
   const m = metadata || {};
@@ -61,11 +62,18 @@ export async function maybeBridgePowerDialerAgentToProspect(input: {
     return { bridged: false, reason: "not_confirmed_human" };
   }
 
+  let agentFromMeta =
+    callMeta.agentCallControlId || callMeta.browserCallControlId;
+  if (!agentFromMeta) {
+    const shared = await loadSharedIosAgentLegForAttempt(input.workspaceId, input.attemptId);
+    agentFromMeta = shared?.agentCallControlId;
+  }
+
   const { prospectCallControlId, agentCallControlId } = readPowerDialerLegIds({
     ...callMeta,
     prospectCallControlId:
       callMeta.prospectCallControlId || call.telnyxCallControlId || undefined,
-    agentCallControlId: callMeta.agentCallControlId || callMeta.browserCallControlId,
+    agentCallControlId: agentFromMeta,
   });
 
   if (!prospectCallControlId || !agentCallControlId) {

@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/server/db";
 import { mergePowerDialerSettings } from "@/lib/products/power-dialer";
-import { normalizeDialingMode, parseAdvancedDialEntitlements, isMultiLineDialMode } from "./dial-modes";
+import { parseAdvancedDialEntitlements } from "./dial-modes";
 import { readAttemptMetadata } from "./attempt-metadata";
 
 export type IosOriginationDecision = {
@@ -9,7 +9,7 @@ export type IosOriginationDecision = {
   iosScreeningRequested: boolean;
 };
 
-/** Server PSTN + iOS screening only for single-line modes when flag and settings allow. */
+/** Server PSTN + iOS screening for all dial modes when flag and workspace settings allow. */
 export async function resolvePowerDialerIosOrigination(input: {
   workspaceId: string;
   powerDialerAttemptId?: string | null;
@@ -49,15 +49,6 @@ export async function resolvePowerDialerIosOrigination(input: {
   });
   if (!attempt?.session?.campaign) {
     return { eligible: false, reason: "attempt_not_found", iosScreeningRequested: true };
-  }
-
-  const dialMode = normalizeDialingMode(attempt.session.campaign.dialingMode);
-  if (isMultiLineDialMode(dialMode)) {
-    return {
-      eligible: false,
-      reason: "multi_line_uses_webrtc_path",
-      iosScreeningRequested: true,
-    };
   }
 
   const meta = readAttemptMetadata(attempt.metadataJson);

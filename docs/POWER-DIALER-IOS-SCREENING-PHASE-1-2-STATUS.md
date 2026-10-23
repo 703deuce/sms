@@ -33,7 +33,7 @@ Copy-friendly summary for merge planning and live test.
 | Telnyx `POST /v2/calls` + `premium_ios_call_screening_detection` | `new-app/lib/server/phone/power-dialer/power-dialer-server-pstn-dial.ts` — prospect leg, `bridge_on_answer: false` |
 | No browser + server double-dial | WebRTC `newCall` to prospect **skipped** when `mode === 'server_pstn_ios'`; server dials prospect + agent SIP |
 | No premature bridge | No `bridge_on_answer`; `maybeBridgePowerDialerAgentToProspect` in `power-dialer-leg-bridge.ts` only after **confirmed human** and not while `screeningPending` |
-| Five dial modes | **Power/preview** → server iOS path when flag + settings; **parallel / parallel_amd / predictive** → existing WebRTC (documented fallback) |
+| Five dial modes | **All modes** → server iOS PSTN origination when flag + screening + Premium AMD; parallel/predictive share one agent WebRTC leg per session |
 | Reuse webhooks / screening FSM | Existing AMD + screening handlers; bridge hooked from `amd-webhook-handler` |
 | `POWER_DIALER_IOS_SCREENING_DIAL_ORIGINATION` | Wired via `ios-origination-policy.ts` |
 | **`iosScreeningWireActive`** | Set **only** when Telnyx returns prospect `call_control_id` (dial accepted) |

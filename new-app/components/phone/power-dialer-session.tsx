@@ -118,6 +118,11 @@ export function PowerDialerSessionWorkspace({
   const progression = runtime?.progression
   const powerMode = rules?.dialingMode === 'power'
   const previewMode = rules?.dialingMode === 'preview'
+  const multiLineMode =
+    rules?.dialingMode === 'parallel' ||
+    rules?.dialingMode === 'parallel_amd' ||
+    rules?.dialingMode === 'predictive'
+  const LIVE_ATTEMPT_STATUSES = new Set(['pending', 'dialing', 'ringing', 'answered'])
   const upcoming = runtime?.upcomingQueue ?? []
   const queueContext = runtime?.queueContext
   const [addContactId, setAddContactId] = useState('')
@@ -232,31 +237,41 @@ export function PowerDialerSessionWorkspace({
   const eligibleTotal = runtime?.eligibilityCounts?.eligible ?? 0
 
   const dialLead = useCallback(
-    async (contactId: string, attemptNumber: number, idempotencyKey: string) => {
-      if (!sessionId || !lead) return
+    async (
+      contact: {
+        id: string
+        phone: string
+        firstName: string | null
+        lastName: string | null
+      },
+      attemptNumber: number,
+      idempotencyKey: string,
+      opts?: { parallelLeg?: boolean; callerIdE164?: string },
+    ) => {
+      if (!sessionId) return
+      const callerId = opts?.callerIdE164 || lead?.campaign.callerIdE164
+      if (!callerId) return
       setLoading(true)
       try {
         const attempt = await powerSessionAction(sessionId, 'create_attempt', {
-          contactId,
+          contactId: contact.id,
           attemptNumber,
           idempotencyKey,
         }) as { id: string; dialedPhoneE164?: string | null }
-        setAttemptId(attempt.id)
-        const contact = lead.contact
-        const dialNumber =
-          attempt.dialedPhoneE164 ||
-          (runtime?.next as { dialE164?: string } | undefined)?.dialE164 ||
-          contact.phone
+        if (!opts?.parallelLeg) setAttemptId(attempt.id)
+        const dialNumber = attempt.dialedPhoneE164 || contact.phone
+        const parallelLeg = Boolean(opts?.parallelLeg || multiLineMode)
         const ok = startCall({
           name: contactLabel(contact),
           number: dialNumber,
-          callerId: lead.campaign.callerIdE164,
+          callerId,
           source: 'power_dialer',
           powerDialerAttemptId: attempt.id,
           idempotencyKey: `pd-call-${attempt.id}`,
+          serverIosParallelLeg: parallelLeg && Boolean(activeCall),
         })
         if (!ok) {
-          setAttemptId(null)
+          if (!opts?.parallelLeg) setAttemptId(null)
           autoDialLock.current = false
         }
       } catch (e) {
@@ -266,7 +281,7 @@ export function PowerDialerSessionWorkspace({
         setLoading(false)
       }
     },
-    [sessionId, lead, startCall, runtime],
+    [sessionId, lead, startCall, runtime, multiLineMode, activeCall],
   )
 
   useEffect(() => {
@@ -276,7 +291,7 @@ export function PowerDialerSessionWorkspace({
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key === 'd' && !e.metaKey && !e.ctrlKey && lead && !onCall && !loading) {
         e.preventDefault()
-        void dialLead(lead.contact.id, lead.attemptNumber, `pd-hotkey-${Date.now()}`)
+        void dialLead(lead.contact, lead.attemptNumber, `pd-hotkey-${Date.now()}`)
       }
       if (e.key === 'h' && onCall) {
         e.preventDefault()
@@ -296,18 +311,99 @@ export function PowerDialerSessionWorkspace({
   }, [sessionId, lead, onCall, loading, dialLead, toggleHold, toggleMute, endCall])
 
   useEffect(() => {
-    if (!sessionId || !lead || !powerMode || paused || onCall || attemptId) return
-    if (!progression?.autoDialReady) return
-    if (progression.phase === 'awaiting_disposition') return
+    if (!sessionId || paused || progression?.phase === 'awaiting_disposition') return
+    if (!progression?.autoDialReady && !runtime?.parallelDial?.canOriginateAnother) return
+    if (powerMode) {
+      if (!lead || onCall || attemptId) return
+      if (!progression?.autoDialReady) return
+      if (autoDialLock.current) return
+      autoDialLock.current = true
+      const key = `pd-auto-${sessionId}-${lead.contact.id}-${lead.attemptNumber}`
+      void dialLead(lead.contact, lead.attemptNumber, key).finally(() => {
+        window.setTimeout(() => {
+          autoDialLock.current = false
+        }, 2000)
+      })
+      return
+    }
+    if (!multiLineMode || !runtime?.parallelDial?.canOriginateAnother) return
     if (autoDialLock.current) return
+    const liveContactIds = new Set(
+      (runtime.attempts ?? [])
+        .filter((a) => LIVE_ATTEMPT_STATUSES.has(a.status))
+        .map((a) => a.contactId),
+    )
+    const candidates: {
+      contactId: string
+      attemptNumber: number
+      phone: string
+      firstName: string | null
+      lastName: string | null
+    }[] = []
+    if (lead && !liveContactIds.has(lead.contact.id)) {
+      candidates.push({
+        contactId: lead.contact.id,
+        attemptNumber: lead.attemptNumber,
+        phone: lead.contact.phone,
+        firstName: lead.contact.firstName,
+        lastName: lead.contact.lastName,
+      })
+    }
+    for (const row of upcoming) {
+      if (liveContactIds.has(row.contactId)) continue
+      if (candidates.some((c) => c.contactId === row.contactId)) continue
+      candidates.push({
+        contactId: row.contactId,
+        attemptNumber: row.attemptNumber,
+        phone: row.phone,
+        firstName: row.firstName,
+        lastName: row.lastName,
+      })
+    }
+    const slots = Math.max(
+      0,
+      (runtime.parallelDial?.maxLines ?? 0) - (runtime.parallelDial?.liveCount ?? 0),
+    )
+    const toDial = candidates.slice(0, slots)
+    if (!toDial.length) return
     autoDialLock.current = true
-    const key = `pd-auto-${sessionId}-${lead.contact.id}-${lead.attemptNumber}`
-    void dialLead(lead.contact.id, lead.attemptNumber, key).finally(() => {
+    void (async () => {
+      for (const row of toDial) {
+        const key = `pd-parallel-${sessionId}-${row.contactId}-${row.attemptNumber}`
+        await dialLead(
+          {
+            id: row.contactId,
+            phone: row.phone,
+            firstName: row.firstName,
+            lastName: row.lastName,
+          },
+          row.attemptNumber,
+          key,
+          {
+            parallelLeg: Boolean(activeCall),
+            callerIdE164: lead?.campaign.callerIdE164,
+          },
+        )
+      }
+    })().finally(() => {
       window.setTimeout(() => {
         autoDialLock.current = false
-      }, 2000)
+      }, 1500)
     })
-  }, [sessionId, lead, powerMode, paused, onCall, attemptId, progression, dialLead])
+  }, [
+    sessionId,
+    lead,
+    powerMode,
+    multiLineMode,
+    paused,
+    onCall,
+    attemptId,
+    progression,
+    runtime,
+    upcoming,
+    dialLead,
+    activeCall,
+  ])
 
   const startSession = async () => {
     if (!campaignId || !setupDetail) return
@@ -810,7 +906,7 @@ export function PowerDialerSessionWorkspace({
                           if (previewMode && sessionId) {
                             void powerSessionAction(sessionId, 'preview_held', { held: false })
                           }
-                          void dialLead(lead.contact.id, lead.attemptNumber, `pd-manual-${lead.contact.id}-${Date.now()}`)
+                          void dialLead(lead.contact, lead.attemptNumber, `pd-manual-${lead.contact.id}-${Date.now()}`)
                         }}
                       >
                         <Phone />

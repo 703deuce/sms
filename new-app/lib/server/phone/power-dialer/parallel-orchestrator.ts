@@ -23,14 +23,27 @@ export type TelnyxParallelDeps = {
 };
 
 const defaultTelnyxDeps: TelnyxParallelDeps = {
-  hangupAttempt: async (_attemptId, humanCallId) => {
+  hangupAttempt: async (attemptId, humanCallId) => {
     if (!humanCallId) return;
     const { getPrisma } = await import("@/lib/server/db");
     const prisma = getPrisma();
-    const call = await prisma.humanCall.findFirst({ where: { id: humanCallId } });
-    if (!call?.telnyxCallControlId) return;
+    const [call, attempt] = await Promise.all([
+      prisma.humanCall.findFirst({ where: { id: humanCallId } }),
+      prisma.powerDialerAttempt.findFirst({ where: { id: attemptId } }),
+    ]);
+    const attemptMeta = readAttemptMetadata(attempt?.metadataJson);
+    const callMeta = (call?.metadata || {}) as Record<string, unknown>;
+    const prospectId =
+      (typeof attemptMeta.prospectCallControlId === "string"
+        ? attemptMeta.prospectCallControlId
+        : null) ||
+      (typeof callMeta.prospectCallControlId === "string"
+        ? callMeta.prospectCallControlId
+        : null) ||
+      call?.telnyxCallControlId;
+    if (!prospectId) return;
     const { telnyxCallAction } = await import("@/lib/server/phone/telnyx-call-actions");
-    await telnyxCallAction(call.telnyxCallControlId, "hangup", {});
+    await telnyxCallAction(prospectId, "hangup", {});
   },
 };
 
@@ -187,13 +200,32 @@ export async function onParallelHumanAnswered(input: {
       winnerId,
       input.deps ?? defaultTelnyxDeps,
     );
+    const prevParallel =
+      session.parallelStateJson && typeof session.parallelStateJson === "object"
+        ? (session.parallelStateJson as Record<string, unknown>)
+        : {};
     await prisma.powerDialerSession.update({
       where: { id: input.sessionId },
       data: {
         currentAttemptId: winnerId,
-        parallelStateJson: { roundComplete: true, winnerAttemptId: winnerId },
+        parallelStateJson: {
+          ...prevParallel,
+          roundComplete: true,
+          winnerAttemptId: winnerId,
+          pendingAnswers: pending,
+        },
       },
     });
+    if (attempt?.humanCallId && attempt.answerClassification === "human") {
+      const { maybeBridgePowerDialerAgentToProspect } = await import("./power-dialer-leg-bridge");
+      await maybeBridgePowerDialerAgentToProspect({
+        workspaceId: input.workspaceId,
+        humanCallId: attempt.humanCallId,
+        attemptId: winnerId,
+        classification: "human",
+        reason: "parallel_winner",
+      }).catch(() => undefined);
+    }
     return { winnerAttemptId: winnerId };
   }
 
@@ -201,6 +233,7 @@ export async function onParallelHumanAnswered(input: {
     where: { id: input.attemptId, workspaceId: input.workspaceId },
   });
   if (attempt) {
+    await (input.deps ?? defaultTelnyxDeps).hangupAttempt(attempt.id, attempt.humanCallId);
     await prisma.powerDialerAttempt.update({
       where: { id: input.attemptId },
       data: {
@@ -223,8 +256,18 @@ export async function assertParallelWinnerEligible(
     include: { session: { include: { campaign: true } } },
   });
   if (!attempt) return { eligible: false, reason: "not_found" };
+  const sessionState =
+    attempt.session.parallelStateJson && typeof attempt.session.parallelStateJson === "object"
+      ? (attempt.session.parallelStateJson as Record<string, unknown>)
+      : {};
+  const existingWinner =
+    typeof sessionState.winnerAttemptId === "string" ? sessionState.winnerAttemptId : null;
+  if (existingWinner && existingWinner !== attemptId) {
+    return { eligible: false, reason: "winner_already_selected" };
+  }
   const meta = readAttemptMetadata(attempt.metadataJson);
   if (meta.screeningPending) return { eligible: false, reason: "screening_pending" };
+  if (meta.parallelLoser) return { eligible: false, reason: "parallel_loser" };
   if (attempt.answerClassification === "screener") {
     return { eligible: false, reason: "screener_not_human" };
   }

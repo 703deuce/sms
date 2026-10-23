@@ -71,6 +71,8 @@ type WorkspaceState = {
     source?: ActiveCall['source']
     powerDialerAttemptId?: string
     idempotencyKey?: string
+    /** Extra server-originated iOS screening prospect leg (parallel/predictive). */
+    serverIosParallelLeg?: boolean
   }) => boolean
   endCall: () => void
   toggleMute: () => void
@@ -385,8 +387,28 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, [routePolicy])
 
   const startCall: WorkspaceState['startCall'] = useCallback(
-    ({ name, number, callerId, source = 'dialer', powerDialerAttemptId, idempotencyKey }) => {
-      if (activeCall && activeCall.status !== 'ended' && activeCall.status !== 'failed') {
+    ({
+      name,
+      number,
+      callerId,
+      source = 'dialer',
+      powerDialerAttemptId,
+      idempotencyKey,
+      serverIosParallelLeg,
+    }) => {
+      const parallelIosLeg =
+        serverIosParallelLeg === true &&
+        source === 'power_dialer' &&
+        activeCall &&
+        activeCall.status !== 'ended' &&
+        activeCall.status !== 'failed' &&
+        activeCall.id.startsWith('server-ios-')
+      if (
+        activeCall &&
+        activeCall.status !== 'ended' &&
+        activeCall.status !== 'failed' &&
+        !parallelIosLeg
+      ) {
         toast.error('A call is already in progress', { description: 'End the current call before starting another.' })
         return false
       }
@@ -406,25 +428,27 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           })
           const humanCallId = reg.call.id
           if (reg.mode === 'server_pstn_ios') {
-            serverIosOutboundRef.current = {
-              humanCallId,
-              name,
-              number,
-              callerId,
-              source: source || 'power_dialer',
+            if (!parallelIosLeg) {
+              serverIosOutboundRef.current = {
+                humanCallId,
+                name,
+                number,
+                callerId,
+                source: source || 'power_dialer',
+              }
+              setActiveCall({
+                id: `server-ios-${humanCallId}`,
+                humanCallId,
+                name,
+                number,
+                callerId,
+                status: 'connecting',
+                muted: false,
+                onHold: false,
+                source: source || 'power_dialer',
+                startedAt: undefined,
+              })
             }
-            setActiveCall({
-              id: `server-ios-${humanCallId}`,
-              humanCallId,
-              name,
-              number,
-              callerId,
-              status: 'connecting',
-              muted: false,
-              onHold: false,
-              source: source || 'power_dialer',
-              startedAt: undefined,
-            })
             return
           }
           serverIosOutboundRef.current = null

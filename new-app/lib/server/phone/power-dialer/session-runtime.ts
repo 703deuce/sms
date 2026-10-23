@@ -409,13 +409,41 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
       ? Math.max(0, Math.ceil((session.nextCallAt.getTime() - Date.now()) / 1000))
       : 0;
 
+  const { normalizeDialingMode, isMultiLineDialMode, parseDialModeSettings } = await import(
+    "./dial-modes"
+  );
+  const { resolveLinesForSession, assertParallelOriginationAllowed } = await import(
+    "./parallel-orchestrator"
+  );
+  const dialMode = normalizeDialingMode(rules.dialingMode);
+  const multiLine = isMultiLineDialMode(dialMode);
+  let liveParallelCount = 0;
+  let maxParallelLines = 1;
+  if (multiLine) {
+    liveParallelCount = await prisma.powerDialerAttempt.count({
+      where: { sessionId, status: { in: [...LIVE_STATUSES] } },
+    });
+    try {
+      const entitlements = await assertParallelOriginationAllowed(workspaceId, dialMode);
+      maxParallelLines = resolveLinesForSession(
+        dialMode,
+        session.campaign.configJson,
+        entitlements,
+      );
+    } catch {
+      maxParallelLines = parseDialModeSettings(session.campaign.configJson).parallelLines;
+    }
+  }
+
   const dialReady =
     session.status === "active" &&
     session.progressionPhase === "countdown" &&
     countdownSec === 0 &&
-    rules.dialingMode === "power" &&
     nextEligible &&
-    !currentAttempt;
+    session.progressionPhase !== "awaiting_disposition" &&
+    (multiLine
+      ? liveParallelCount < maxParallelLines && maxParallelLines > 0
+      : rules.dialingMode === "power" && !currentAttempt);
 
   const attemptMeta =
     currentAttempt?.metadataJson && typeof currentAttempt.metadataJson === "object"
@@ -467,6 +495,14 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
       countdownSeconds: countdownSec,
       autoDialReady: dialReady,
     },
+    parallelDial: multiLine
+      ? {
+          liveCount: liveParallelCount,
+          maxLines: maxParallelLines,
+          canOriginateAnother:
+            dialReady && liveParallelCount < maxParallelLines && Boolean(nextEligible),
+        }
+      : null,
     currentAttempt,
     connectionIntelligence: currentAttempt
       ? {
@@ -546,6 +582,25 @@ export async function createAttemptForSession(
     const liveCount = await prisma.powerDialerAttempt.count({
       where: { sessionId, status: { in: [...LIVE_STATUSES] } },
     });
+    if (liveCount === 0) {
+      const sessRow = await prisma.powerDialerSession.findFirst({
+        where: { id: sessionId, workspaceId },
+        select: { parallelStateJson: true },
+      });
+      const prev =
+        sessRow?.parallelStateJson && typeof sessRow.parallelStateJson === "object"
+          ? (sessRow.parallelStateJson as Record<string, unknown>)
+          : {};
+      await prisma.powerDialerSession.update({
+        where: { id: sessionId },
+        data: {
+          parallelStateJson: {
+            sharedIosAgentCallControlId: prev.sharedIosAgentCallControlId,
+            sharedIosAgentHumanCallId: prev.sharedIosAgentHumanCallId,
+          },
+        },
+      });
+    }
     const maxLines = resolveLinesForSession(
       dialMode,
       session.campaign.configJson,
@@ -580,9 +635,24 @@ export async function createAttemptForSession(
     sess.progressJson && typeof sess.progressJson === "object"
       ? (sess.progressJson as { focusContactId?: string }).focusContactId
       : undefined;
-  const allowed =
+  let allowed =
     nextEligible?.contact.id === input.contactId ||
     (focusId && focusId === input.contactId);
+  if (multiLine && !allowed) {
+    const liveDup = await prisma.powerDialerAttempt.findFirst({
+      where: {
+        sessionId,
+        contactId: input.contactId,
+        status: { in: [...LIVE_STATUSES] },
+      },
+    });
+    if (liveDup) {
+      throw new Error("Contact already has an active dial leg in this session");
+    }
+    const { listUpcomingEligibleContacts } = await import("./session-orchestration");
+    const upcoming = await listUpcomingEligibleContacts(workspaceId, sessionId, 24);
+    allowed = upcoming.some((row) => row.contactId === input.contactId);
+  }
   if (!allowed) {
     throw new Error("Contact is not eligible to dial");
   }

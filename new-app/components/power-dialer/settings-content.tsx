@@ -366,10 +366,11 @@ export function PowerDialerSettingsContent() {
             <div className="flex max-w-lg flex-col gap-3 text-sm">
               {(settings.callScreeningEnabled ?? false) && (
                 <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-                  Apple Call Screening uses server-originated PSTN when your environment has{' '}
+                  Apple Call Screening uses server-originated PSTN with Telnyx{' '}
+                  <code className="text-[11px]">premium_ios_call_screening_detection</code> when{' '}
                   <code className="text-[11px]">POWER_DIALER_IOS_SCREENING_DIAL_ORIGINATION=1</code>{' '}
-                  (single-line power/preview modes). Parallel and predictive modes keep the standard WebRTC
-                  path. Policies below apply when Telnyx reports a screener on an armed call.
+                  and Premium AMD are enabled — across power, preview, parallel, machine-filtered parallel,
+                  and predictive modes. Policies below apply when Telnyx reports a screener on an armed call.
                 </p>
               )}
               <label className="flex items-center gap-2">
