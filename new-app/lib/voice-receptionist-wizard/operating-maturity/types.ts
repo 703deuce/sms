@@ -195,11 +195,3 @@ export type VoiceV2CallQualityRecord = {
   transferFailure?: boolean;
   recordCompleteness?: number;
 };
-
-export type QualityStudioScenarioResult = {
-  scenarioId: string;
-  status: "PASS" | "WARNING" | "FAIL" | "NOT_APPLICABLE";
-  expected: string;
-  observed: string;
-  reason?: string;
-};

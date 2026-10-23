@@ -53,9 +53,13 @@ export async function orchestratePowerDialerSession(workspaceId: string, session
   }
 
   const { rules } = await buildEligibilityBreakdown(workspaceId, sessionId);
+  const { normalizeDialingMode, isMultiLineDialMode } = await import("./dial-modes");
+  const mode = normalizeDialingMode(rules.dialingMode);
+  const progressiveAuto =
+    mode === "power" || mode === "parallel" || mode === "parallel_amd" || mode === "predictive";
   const autoAdvanceAllowed =
     session.status === "active" &&
-    rules.dialingMode === "power" &&
+    progressiveAuto &&
     !previewHeld &&
     session.progressionPhase === "countdown" &&
     (!session.nextCallAt || session.nextCallAt <= now);

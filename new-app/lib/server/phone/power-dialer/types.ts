@@ -1,4 +1,5 @@
-export type DialingMode = "power" | "preview";
+import type { DialingMode } from "./dial-modes";
+export type { DialingMode };
 
 export type EligibilityBucket = "eligible" | "deferred" | "completed" | "suppressed" | "failed";
 

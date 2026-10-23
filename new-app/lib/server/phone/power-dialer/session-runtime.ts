@@ -479,10 +479,33 @@ export async function createAttemptForSession(
     if (open) throw new Error("Disposition required before next call");
   }
 
-  const live = await prisma.powerDialerAttempt.findFirst({
-    where: { sessionId, status: { in: [...LIVE_STATUSES] } },
-  });
-  if (live) throw new Error("A call is already in progress for this session");
+  const { isMultiLineDialMode, normalizeDialingMode, parseDialModeSettings } = await import(
+    "./dial-modes"
+  );
+  const { assertParallelOriginationAllowed, resolveLinesForSession } = await import(
+    "./parallel-orchestrator"
+  );
+  const dialMode = normalizeDialingMode(rules.dialingMode);
+  const multiLine = isMultiLineDialMode(dialMode);
+  if (multiLine) {
+    const entitlements = await assertParallelOriginationAllowed(workspaceId, dialMode);
+    const liveCount = await prisma.powerDialerAttempt.count({
+      where: { sessionId, status: { in: [...LIVE_STATUSES] } },
+    });
+    const maxLines = resolveLinesForSession(
+      dialMode,
+      session.campaign.configJson,
+      entitlements,
+    );
+    if (liveCount >= maxLines) {
+      throw new Error("Parallel line cap reached for this session — wait for a result or end active legs.");
+    }
+  } else {
+    const live = await prisma.powerDialerAttempt.findFirst({
+      where: { sessionId, status: { in: [...LIVE_STATUSES] } },
+    });
+    if (live) throw new Error("A call is already in progress for this session");
+  }
 
   const { assertPowerDialerConcurrencyLimits } = await import("./usage-limits");
   await assertPowerDialerConcurrencyLimits(workspaceId, {
@@ -586,6 +609,7 @@ export async function createAttemptForSession(
   });
 
   try {
+    const dialSettings = parseDialModeSettings(session.campaign.configJson);
     const attempt = await prisma.powerDialerAttempt.create({
       data: {
         workspaceId,
@@ -598,6 +622,13 @@ export async function createAttemptForSession(
         dialedAt: new Date(),
         ringTimeoutAt,
         dialedPhoneE164: dial.e164,
+        metadataJson: multiLine
+          ? {
+              parallelRoundId: `round-${sessionId}-${seq}`,
+              dialMode,
+              amdFilter: dialMode === "parallel_amd" ? dialSettings.amdFilterMachines : undefined,
+            }
+          : undefined,
       },
     });
 

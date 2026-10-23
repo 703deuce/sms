@@ -119,6 +119,26 @@ export async function applyAmdToPowerDialerAttempt(input: {
       attemptId,
       amdResult: input.amdResult,
     }).catch(() => undefined);
+
+    if (classification === "human" && attempt?.sessionId) {
+      const { isMultiLineDialMode, normalizeDialingMode } = await import("./dial-modes");
+      const { onParallelHumanAnswered } = await import("./parallel-orchestrator");
+      const { resolveCampaignRules } = await import("./campaign-config");
+      const campaign = await prisma.powerDialerCampaign.findFirst({
+        where: { id: attempt.session.campaignId },
+      });
+      if (campaign) {
+        const rules = resolveCampaignRules(campaign);
+        if (isMultiLineDialMode(normalizeDialingMode(rules.dialingMode))) {
+          await onParallelHumanAnswered({
+            workspaceId: input.workspaceId,
+            sessionId: attempt.sessionId,
+            attemptId,
+            answeredAt: new Date(),
+          }).catch(() => undefined);
+        }
+      }
+    }
   }
   return { handled: true, classification };
 }

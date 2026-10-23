@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { PowerDialerWorkspaceSettings } from "@/lib/products/power-dialer";
+import { normalizeDialingMode } from "./dial-modes";
 import type { DialingMode, PowerDialerCampaignRules } from "./types";
 
 const campaignRulesSchema = z.object({
@@ -13,7 +14,9 @@ const campaignRulesSchema = z.object({
   callingHoursStart: z.string().regex(/^\d{1,2}:\d{2}$/).optional(),
   callingHoursEnd: z.string().regex(/^\d{1,2}:\d{2}$/).optional(),
   phoneFieldPriority: z.array(z.string().min(1)).min(1).optional(),
-  dialingMode: z.enum(["power", "preview"]).optional(),
+  dialingMode: z
+    .enum(["power", "preview", "parallel", "parallel_amd", "predictive"])
+    .optional(),
   maxAttempts: z.number().int().min(1).max(50).optional(),
   retryDelayMinutes: z.number().int().min(0).optional(),
 });
@@ -50,6 +53,8 @@ export function resolveCampaignRules(
   workspaceDefaults?: PowerDialerWorkspaceSettings | null,
 ): PowerDialerCampaignRules {
   const legacy = (row.configJson || {}) as Record<string, unknown>;
+  const configDialMode =
+    typeof legacy.dialingMode === "string" ? legacy.dialingMode : row.dialingMode;
   const allowedRaw = row.allowedDays;
   const allowedDays = Array.isArray(allowedRaw)
     ? allowedRaw.filter((d): d is number => typeof d === "number")
@@ -85,7 +90,7 @@ export function resolveCampaignRules(
       phonePri.length ? phonePri : ws?.defaultPhoneFieldPriority?.length
         ? ws.defaultPhoneFieldPriority
         : ["phone"],
-    dialingMode: (row.dialingMode === "preview" ? "preview" : "power") as DialingMode,
+    dialingMode: normalizeDialingMode(configDialMode),
     timezone: row.timezone || ws?.defaultTimezone || "America/Chicago",
     status: row.status,
   };

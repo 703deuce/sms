@@ -616,6 +616,20 @@ export async function transferCall(humanCallId: string, toE164: string) {
   return json.data as { id: string; status: string; disposition: string | null };
 }
 
+export async function transferPowerDialerAttempt(
+  attemptId: string,
+  input: { to: string; mode?: "cold" | "warm" | "three_way"; action?: "start" | "complete" | "cancel" },
+) {
+  const res = await fetch(`/api/phone/power-dialer/attempts/${encodeURIComponent(attemptId)}/transfer`, {
+    method: "POST",
+    headers: mutatingHeaders(),
+    body: JSON.stringify(input),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || res.statusText);
+  return json.data;
+}
+
 export type TransferTargetDto = { id: string; name: string; number: string };
 
 export async function fetchTransferTargets() {
