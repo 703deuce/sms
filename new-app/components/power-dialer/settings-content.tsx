@@ -13,6 +13,7 @@ import {
   ScriptsLibraryPanel,
   VoicemailDropsLibraryPanel,
 } from '@/components/power-dialer/settings-library-panels'
+import { PowerDialerComplianceSettingsPanel } from '@/components/power-dialer/compliance-settings-panel'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import { formatPhone } from '@/lib/format'
 
@@ -70,6 +71,9 @@ export function PowerDialerSettingsContent() {
           <TabsTrigger value="compliance">VM compliance</TabsTrigger>
           <TabsTrigger value="caller-id">Caller ID</TabsTrigger>
           <TabsTrigger value="screening">Call screening</TabsTrigger>
+          <TabsTrigger value="calling-compliance">Calling compliance</TabsTrigger>
+          <TabsTrigger value="usage">Usage</TabsTrigger>
+          <TabsTrigger value="team">Team</TabsTrigger>
         </TabsList>
         <TabsContent value="general" className="mt-6">
           <Panel title="General">
@@ -269,6 +273,55 @@ export function PowerDialerSettingsContent() {
                 </select>
               </label>
             </div>
+          </Panel>
+        </TabsContent>
+        <TabsContent value="calling-compliance" className="mt-6">
+          <PowerDialerComplianceSettingsPanel />
+        </TabsContent>
+        <TabsContent value="usage" className="mt-6">
+          <Panel title="Usage & subscription" description="Minutes come from billable attempt seconds and workspace_limits.powerDialer — not hardcoded prices.">
+            <p className="text-sm text-muted-foreground">
+              Configure included minutes and overage behavior under workspace billing limits. When overage behavior is set to block, new dial sessions are prevented once included minutes are exhausted.
+            </p>
+            <label className="mt-4 flex max-w-xs flex-col gap-1.5 text-sm">
+              <span className="font-medium">Usage alert threshold (%)</span>
+              <Input
+                type="number"
+                min={50}
+                max={100}
+                value={settings.usageAlertThresholdPct ?? ''}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    usageAlertThresholdPct: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              />
+            </label>
+            <label className="mt-3 flex max-w-xs flex-col gap-1.5 text-sm">
+              <span className="font-medium">When over included minutes</span>
+              <select
+                className="rounded-md border bg-background px-3 py-2"
+                value={settings.overageBehavior ?? 'warn'}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    overageBehavior: e.target.value as 'block' | 'allow' | 'warn',
+                  })
+                }
+              >
+                <option value="warn">Warn only</option>
+                <option value="block">Block new sessions</option>
+                <option value="allow">Allow (track overage)</option>
+              </select>
+            </label>
+          </Panel>
+        </TabsContent>
+        <TabsContent value="team" className="mt-6">
+          <Panel title="Team & campaign access" description="Reuses workspace membership. Reps only dial campaigns they are assigned to.">
+            <p className="text-sm text-muted-foreground">
+              Manage members in workspace settings. Campaign assignment is configured per campaign under Members.
+            </p>
           </Panel>
         </TabsContent>
         <TabsContent value="compliance" className="mt-6">

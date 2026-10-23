@@ -10,7 +10,12 @@ export default function PowerDialerIntegrationsPage() {
     <Page>
       <PageHeader
         title="Integrations"
-        description="Connect CRMs and automation providers. Power-dialer list import and call writeback wiring continues in Phase 6."
+        description="Salesforce, Zoho, and Pipedrive reuse workspace OAuth. Supported operations reflect each provider’s real API capabilities."
+        actions={
+          <Link href="/app/power-dialer/integrations/sync-history" className="text-sm text-primary hover:underline">
+            Sync history
+          </Link>
+        }
       />
       <Panel title="Workspace integrations" description="Same connections as global Integrations — shared OAuth and credentials.">
         <p className="mb-4 text-sm text-muted-foreground">

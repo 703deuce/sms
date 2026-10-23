@@ -1,63 +1,40 @@
 # Power Dialer — completion ledger
 
-Statuses: **Not started** | **In progress** | **Implemented** | **Tested** | **Deployed** | **Browser verified** | **Blocked**
+Last updated: Phase 6 integrations, compliance, team, usage, analytics (batch 1).
 
-Last updated: Phase 4 gap closure + Phase 5 Numbers & Connectivity (batch 3).
+## Production deploy
 
-## Migration verification
-
-| Migration | Expected | Prod status |
-|-----------|----------|-------------|
-| `20261023140000_power_dialer_lists_phase3` | ContactList `source`, `archivedAt`, `updatedAt` | Verify via `verify-power-dialer-phase4-migration-readonly.ts` |
-| `20261023150000_power_dialer_phase4` | Dispositions, scripts, VM drops, callbacks + attempt columns + `ContactList.filtersJson` | **Repaired** on prod (resolve rolled-back + repair SQL); file in git uses `Workspace`/`Contact`/`ContactList` |
-| `20261023170000_power_dialer_phase5` | `power_dialer_detection_events` | Apply on next deploy (`migrate deploy`) |
-
-Read-only script: `new-app/scripts/verify-power-dialer-phase4-migration-readonly.ts`  
-Doc: `docs/POWER-DIALER-PHASE4-MIGRATION.md`
-
-## Phase 4 gap closure
-
-| Gap | Status |
-|-----|--------|
-| Disposition per-row edit / delete / reorder / set default | **Implemented** — API + Settings UI |
-| VM drops MediaRecorder + file upload + preview | **Implemented** — `/voicemail-drops/upload` + Settings UI |
-| VM mock production guard | **Implemented** — `voicemail-drop-playback.ts` |
-| Transcription + AI summary on call detail | **Implemented** — `human-call-transcription.ts` + Call detail via `phone-ui-map` |
-| Callback Start call + eligibility | **Implemented** — `/callbacks/[id]/eligibility` + dialer deep link |
-
-## Phase 5 — Numbers & connectivity
-
-| Item | Status |
+| Item | Value |
 |------|--------|
-| Caller ID resolution (sticky pool) | **Implemented** — `caller-id-resolution.ts` wired in `createWebRtcOutboundCall` |
-| Settings Caller ID + Call screening tabs | **Implemented** |
-| Number health list + detail API/UI | **Implemented** |
-| Free reputation tools subpage | **Implemented** |
-| Premium reputation honest placeholder | **Implemented** + probe script |
-| AMD / screener events | **Implemented** — `answer-detection.ts` + Telnyx webhooks in `calls-service` |
-| Telnyx Number Reputation purchase | **Not done** — probe only |
+| `master` HEAD | Phase 6 commits (after push) |
+| VM upload | Supabase Storage **REST** — `@supabase/supabase-js` **not** in `new-app/package.json` (deterministic build; see `power-dialer-audio-storage.ts`) |
+| Failed build | `41cdad126` (missing supabase-js) — fixed in `ae7e55bac` |
 
-## Tests
+## Phase 6 (in progress / batch 1)
 
-| Script | Result (local) |
-|--------|----------------|
-| `pnpm run test:power-dialer-phase4` | PASS |
-| `pnpm run test:power-dialer-phase5` | PASS |
+| Area | Status |
+|------|--------|
+| CRM integrations (SF/Zoho/Pipedrive) | Reuse `lib/crm` + `integration_connections`; disposition `triggerCrmUpdate` → `crm-sync-bridge` |
+| Sync history | `power_dialer_integration_sync_logs` + `/integrations/sync-history` |
+| Internal DNC + audit | Tables + eligibility + compliance API/UI |
+| Compliance ack before session | `startSessionWithRep` gate |
+| Usage limits | `usage-limits.ts` + workspace_limits; block when configured |
+| Analytics | `/api/phone/power-dialer/analytics` + shared `metrics-definitions.ts` |
+| Team | `/api/phone/power-dialer/team` + settings tab (read-only summary) |
+| Workspace defaults → campaigns | `resolveCampaignRules(campaign, wsSettings)` in session runtime |
 
-## Deploy / voice
+## Tests (local)
 
-| Item | Notes |
-|------|-------|
-| Voice container redeploy | **Not required** unless voice-runtime AMD changes — web handles Telnyx webhooks |
-| Browser verified | Pending |
-| Live PSTN VM drop / AMD latency | **Could not verify** |
+| Script | Result |
+|--------|--------|
+| `test:power-dialer-phase4` | PASS |
+| `test:power-dialer-phase5` | PASS |
+| `test:power-dialer-phase6` | PASS |
 
-## Could not verify (honest)
+## Could not verify
 
-- Production read-only migration script after this deploy’s `commitSha`
-- Browser UI walkthrough (dispositions drag, VM record, number health charts)
-- Live Telnyx AMD on WebRTC outbound legs
-- Deepgram transcription on real PD recordings in prod
-- Telnyx Number Reputation API provisioned
-- Call screening intro playback on real screened phones
-- Callback inbound routing documentation on live numbers
+- Production `commitSha` for `05cde2dd2` until Coolify finishes
+- Browser UI for compliance/integrations/analytics tabs
+- Live CRM OAuth writeback on connected tenant
+- External DNC registry (honestly not connected)
+- Full analytics subpages (campaign/rep/number/screening split routes) — API aggregates exist; dedicated subroutes pending
