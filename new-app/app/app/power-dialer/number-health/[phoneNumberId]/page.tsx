@@ -4,12 +4,15 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Page, PageHeader, Panel } from '@/components/app/page-primitives'
+import { StatusBadge } from '@/components/app/status'
 import { formatPhone } from '@/lib/format'
+import type { NumberHealthRow } from '@/components/power-dialer/number-health-content'
 
 type Detail = {
   e164: string
   nickname: string | null
   registrationStatus: string
+  health: NumberHealthRow | null
   trend: { month: string; attempts: number; answered: number; human: number; screened: number }[]
   recentOutcomes: {
     callId: string
@@ -40,6 +43,8 @@ export default function PowerDialerNumberDetailPage() {
     )
   }
 
+  const h = detail.health
+
   return (
     <Page>
       <PageHeader
@@ -50,6 +55,26 @@ export default function PowerDialerNumberDetailPage() {
           { label: formatPhone(detail.e164) },
         ]}
       />
+      {h && (
+        <Panel title="Health assessment (based on your call data)">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge tone={h.healthLabel === 'healthy' ? 'success' : h.healthLabel === 'at_risk' ? 'danger' : 'warning'}>
+              {h.healthLabel}
+            </StatusBadge>
+            {h.healthSuggestion && <span className="text-sm text-muted-foreground">{h.healthSuggestion}</span>}
+          </div>
+          <ul className="mt-3 list-disc pl-5 text-sm text-muted-foreground">
+            {h.healthReasons.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+          <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+            <div><dt className="text-muted-foreground">7d answer rate</dt><dd className="font-medium">{h.metrics7d.answerRatePct ?? '—'}%</dd></div>
+            <div><dt className="text-muted-foreground">30d answer rate</dt><dd className="font-medium">{h.metrics30d?.answerRatePct ?? h.answerRate ?? '—'}%</dd></div>
+            <div><dt className="text-muted-foreground">Complaint-style dispositions (30d)</dt><dd className="font-medium">{h.metrics30d?.spamFlagCount ?? 0}</dd></div>
+          </dl>
+        </Panel>
+      )}
       <Panel title="Volume trend (monthly)">
         <table className="w-full text-sm">
           <thead>

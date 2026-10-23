@@ -458,6 +458,7 @@ model Workspace {
   powerDialerAttempts                    PowerDialerAttempt[]
   powerDialerCadences                    PowerDialerCadence[]
   powerDialerCadenceEnrollments          PowerDialerCadenceEnrollment[]
+  powerDialerScheduledReports            PowerDialerScheduledReport[]
   crmCompanies                           CrmCompany[]
   crmDealStages                          CrmDealStage[]
   crmDeals                               CrmDeal[]
@@ -5090,6 +5091,24 @@ model CrmFieldLock {
 
   @@unique([contactId, fieldKey])
   @@map("crm_field_locks")
+}
+
+model PowerDialerScheduledReport {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  name          String
+  cadence       String    @default("weekly")
+  reportType    String    @default("analytics_summary")
+  recipientsJson Json
+  filtersJson   Json?
+  enabled       Boolean   @default(true)
+  lastSentAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, enabled])
+  @@map("power_dialer_scheduled_reports")
 }
 
 model PowerDialerComplianceAuditLog {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/server/api-error";
 import { getPrisma } from "@/lib/server/db";
 import { isHumanConversation } from "@/lib/server/phone/power-dialer/disposition-effects";
+import { listPowerDialerNumberHealth } from "@/lib/server/phone/power-dialer/number-health-service";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 
 export async function GET(
@@ -51,12 +52,16 @@ export async function GET(
       byMonth.set(key, bucket);
     }
 
+    const healthRows = await listPowerDialerNumberHealth(workspaceId);
+    const health = healthRows.find((h) => h.phoneNumberId === phoneNumberId) || null;
+
     return NextResponse.json({
       data: {
         phoneNumberId: num.id,
         e164: num.e164,
         nickname: num.friendlyName,
-        registrationStatus: "Unknown",
+        registrationStatus: health?.registrationStatus || "Unknown",
+        health,
         trend: [...byMonth.entries()]
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([month, m]) => ({ month, ...m })),
