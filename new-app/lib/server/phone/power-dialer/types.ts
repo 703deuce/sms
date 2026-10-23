@@ -35,6 +35,7 @@ export type EligibilityReasonCode =
 export type AnswerClassification =
   | "human"
   | "voicemail"
+  | "machine"
   | "no_answer"
   | "screener"
   | "ivr"

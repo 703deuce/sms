@@ -12,6 +12,8 @@ export async function loadPowerDialerCallSources(
     where: { workspaceId, humanCallId: { in: humanCallIds } },
     select: {
       humanCallId: true,
+      answerClassification: true,
+      metadataJson: true,
       session: {
         select: {
           campaign: { select: { id: true, name: true, listId: true } },
@@ -49,6 +51,8 @@ export async function loadPowerDialerCallSources(
         campaignName: camp.name,
         listId: camp.listId,
         listName: listName.get(camp.listId) || undefined,
+        answerClassification: a.answerClassification,
+        attemptMetadata: (a.metadataJson || {}) as Record<string, unknown>,
       }),
     );
   }

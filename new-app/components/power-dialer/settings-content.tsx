@@ -361,16 +361,23 @@ export function PowerDialerSettingsContent() {
           {activeTab === 'screening' && (
           <Panel
             title="Call screening"
-            description="When enabled, Transovo can flag automated call screeners so reps know when a person may not be on the line yet. Results depend on the callee’s carrier and device."
+            description="Configure how reps handle call screeners (introductions, notifications, uncertain outcomes). Apple iOS automatic screening detection requires Telnyx dial-origination (rolling out separately); until then, premium AMD still classifies humans vs machines on answered calls."
           >
             <div className="flex max-w-lg flex-col gap-3 text-sm">
+              {(settings.callScreeningEnabled ?? false) && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                  Apple Call Screening detection is not active on browser-originated calls yet. Policies
+                  below apply when Telnyx reports a screener after server-originated dialing is enabled for
+                  your workspace.
+                </p>
+              )}
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={settings.callScreeningEnabled ?? false}
                   onChange={(e) => setSettings({ ...settings, callScreeningEnabled: e.target.checked })}
                 />
-                Enable screening detection (experimental)
+                Enable call screening policies (Apple iOS detection pending dial-origination)
               </label>
               <label className="flex items-center gap-2">
                 <input

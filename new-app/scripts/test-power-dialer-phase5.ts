@@ -2,13 +2,17 @@
  * Phase 5 unit checks — caller ID stickiness, AMD mapping, classification exclusions.
  */
 import assert from "node:assert/strict";
-import { mapTelnyxAmdResult } from "../lib/server/phone/power-dialer/answer-detection";
+import {
+  mapTelnyxAmdResult,
+  mapTelnyxScreeningDetected,
+} from "../lib/server/phone/power-dialer/answer-classification";
 import { isHumanConversation } from "../lib/server/phone/power-dialer/disposition-effects";
 
 function testAmdMapping() {
   assert.equal(mapTelnyxAmdResult("machine_end_beep"), "voicemail");
   assert.equal(mapTelnyxAmdResult("human"), "human");
-  assert.equal(mapTelnyxAmdResult("premium_screener"), "screener");
+  assert.equal(mapTelnyxScreeningDetected("screening"), "screener");
+  assert.equal(mapTelnyxAmdResult("premium_screener"), "uncertain");
   console.log("amd-mapping: PASS");
 }
 

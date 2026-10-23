@@ -60,6 +60,10 @@ export type PhoneCallDto = {
     campaignName?: string;
     listId?: string;
     listName?: string;
+    answerClassification?: string | null;
+    screeningDetected?: boolean;
+    screeningOutcome?: string | null;
+    amdDetectionMode?: string | null;
   } | null;
 };
 

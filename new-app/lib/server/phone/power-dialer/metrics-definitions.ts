@@ -20,6 +20,7 @@ export function isNonHumanClassification(classification: string | null | undefin
   return (
     classification === "screener" ||
     classification === "voicemail" ||
+    classification === "machine" ||
     classification === "ivr" ||
     classification === "fax" ||
     classification === "uncertain"

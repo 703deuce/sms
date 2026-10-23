@@ -7,7 +7,8 @@ import {
   parseAdvancedDialEntitlements,
   parseDialModeSettings,
 } from "./dial-modes";
-import { mergeAttemptMetadata } from "./attempt-metadata";
+import { mergeAttemptMetadata, readAttemptMetadata } from "./attempt-metadata";
+import { normalizeDialingMode } from "./dial-modes";
 import { evaluateAbandonmentSafeguards, DEFAULT_ABANDONMENT_POLICY } from "./abandonment-policy";
 import { computePredictiveLines } from "./predictive-pacing";
 
@@ -99,6 +100,36 @@ export async function recordAbandonedAnswer(
   });
 }
 
+/** Hang up or cancel a parallel leg classified as machine/screener/uncertain when machine filter is on. */
+export async function hangupNonHumanParallelLeg(input: {
+  workspaceId: string;
+  sessionId: string;
+  attemptId: string;
+  classification: string;
+  deps?: TelnyxParallelDeps;
+}) {
+  const prisma = getPrisma();
+  const attempt = await prisma.powerDialerAttempt.findFirst({
+    where: { id: input.attemptId, workspaceId: input.workspaceId, sessionId: input.sessionId },
+  });
+  if (!attempt || attempt.status === "cancelled" || attempt.status === "completed") return;
+
+  await (input.deps ?? defaultTelnyxDeps).hangupAttempt(attempt.id, attempt.humanCallId);
+  await prisma.powerDialerAttempt.update({
+    where: { id: attempt.id },
+    data: {
+      status: "cancelled",
+      endedAt: new Date(),
+      answerClassification: input.classification,
+      metadataJson: mergeAttemptMetadata(attempt.metadataJson, {
+        parallelFiltered: true,
+        filterReason: input.classification,
+        connectionPhase: "voicemail",
+      }),
+    },
+  });
+}
+
 export async function onParallelHumanAnswered(input: {
   workspaceId: string;
   sessionId: string;
@@ -108,6 +139,11 @@ export async function onParallelHumanAnswered(input: {
   deps?: TelnyxParallelDeps;
 }) {
   const prisma = getPrisma();
+  const eligibility = await assertParallelWinnerEligible(input.workspaceId, input.attemptId);
+  if (!eligibility.eligible) {
+    return { winnerAttemptId: null, skipped: eligibility.reason };
+  }
+
   const session = await prisma.powerDialerSession.findFirst({
     where: { id: input.sessionId, workspaceId: input.workspaceId },
   });
@@ -175,6 +211,31 @@ export async function onParallelHumanAnswered(input: {
     });
   }
   return { winnerAttemptId: winnerId };
+}
+
+export async function assertParallelWinnerEligible(
+  workspaceId: string,
+  attemptId: string,
+): Promise<{ eligible: boolean; reason?: string }> {
+  const prisma = getPrisma();
+  const attempt = await prisma.powerDialerAttempt.findFirst({
+    where: { id: attemptId, workspaceId },
+    include: { session: { include: { campaign: true } } },
+  });
+  if (!attempt) return { eligible: false, reason: "not_found" };
+  const meta = readAttemptMetadata(attempt.metadataJson);
+  if (meta.screeningPending) return { eligible: false, reason: "screening_pending" };
+  if (attempt.answerClassification === "screener") {
+    return { eligible: false, reason: "screener_not_human" };
+  }
+  const dialMode = normalizeDialingMode(attempt.session.campaign.dialingMode);
+  const amdFilter = meta.amdFilter === true || dialMode === "parallel_amd";
+  if (amdFilter) {
+    if (attempt.answerClassification !== "human") {
+      return { eligible: false, reason: "awaiting_human_classification" };
+    }
+  }
+  return { eligible: true };
 }
 
 export async function assertParallelOriginationAllowed(
