@@ -289,6 +289,7 @@ export type PowerDialerCallbackDto = {
   disposition: string | null;
   notes: string | null;
   status: string;
+  contactId: string;
   contactName: string;
   contactPhone: string;
   company: string | null;
@@ -296,6 +297,7 @@ export type PowerDialerCallbackDto = {
   campaignId: string;
   campaignName: string;
   timezone: string;
+  assignedUserId?: string | null;
 };
 
 export async function fetchPowerDialerOverview() {
@@ -305,6 +307,53 @@ export async function fetchPowerDialerOverview() {
 export async function fetchPowerDialerCallbacks(tab: string) {
   return parse<PowerDialerCallbackDto[]>(
     await fetch(`/api/phone/power-dialer/callbacks?tab=${encodeURIComponent(tab)}`),
+  );
+}
+
+export async function patchPowerDialerCallback(
+  id: string,
+  body: {
+    action?: "complete" | "cancel" | "reschedule";
+    scheduledAt?: string;
+    assignedUserId?: string;
+    notes?: string;
+  },
+) {
+  return parse(
+    await fetch(`/api/phone/power-dialer/callbacks/${id}`, {
+      method: "PATCH",
+      headers: mutatingHeaders(),
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+export async function addListContactsToCampaign(
+  listId: string,
+  campaignId: string,
+  contactIds: string[],
+) {
+  return parse<{ added: number }>(
+    await fetch(`/api/phone/power-dialer/lists/${listId}/campaign-actions`, {
+      method: "POST",
+      headers: mutatingHeaders(),
+      body: JSON.stringify({ campaignId, contactIds }),
+    }),
+  );
+}
+
+export type DialerPrepDto = {
+  dispositionLabels: string[];
+  scriptRendered: string | null;
+  voicemailDropId: string | null;
+  voicemailDropName: string | null;
+};
+
+export async function fetchDialerPrep(campaignId: string, contactId: string) {
+  return parse<DialerPrepDto>(
+    await fetch(
+      `/api/phone/power-dialer/campaigns/${campaignId}/dialer-prep?contactId=${encodeURIComponent(contactId)}`,
+    ),
   );
 }
 

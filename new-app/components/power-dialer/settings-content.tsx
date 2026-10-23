@@ -8,6 +8,11 @@ import { Page, PageHeader, Panel } from '@/components/app/page-primitives'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { fetchPowerDialerSettings, patchPowerDialerSettings } from '@/lib/phone-api'
 import type { PowerDialerWorkspaceSettings } from '@/lib/products/power-dialer'
+import {
+  DispositionsLibraryPanel,
+  ScriptsLibraryPanel,
+  VoicemailDropsLibraryPanel,
+} from '@/components/power-dialer/settings-library-panels'
 
 export function PowerDialerSettingsContent() {
   const [settings, setSettings] = useState<PowerDialerWorkspaceSettings | null>(null)
@@ -56,7 +61,10 @@ export function PowerDialerSettingsContent() {
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="dialing">Dialing</TabsTrigger>
           <TabsTrigger value="recording">Recording</TabsTrigger>
-          <TabsTrigger value="compliance">Voicemail drops</TabsTrigger>
+          <TabsTrigger value="outcomes">Dispositions</TabsTrigger>
+          <TabsTrigger value="scripts">Scripts</TabsTrigger>
+          <TabsTrigger value="vm-drops">Voicemail drops</TabsTrigger>
+          <TabsTrigger value="compliance">VM compliance</TabsTrigger>
         </TabsList>
         <TabsContent value="general" className="mt-6">
           <Panel title="General">
@@ -158,6 +166,15 @@ export function PowerDialerSettingsContent() {
               <p className="text-xs text-muted-foreground">Retention enforcement uses workspace media policies when available; otherwise stored for future jobs (see ledger).</p>
             </div>
           </Panel>
+        </TabsContent>
+        <TabsContent value="outcomes" className="mt-6">
+          <DispositionsLibraryPanel />
+        </TabsContent>
+        <TabsContent value="scripts" className="mt-6">
+          <ScriptsLibraryPanel />
+        </TabsContent>
+        <TabsContent value="vm-drops" className="mt-6">
+          <VoicemailDropsLibraryPanel optIn={Boolean(settings.prerecordedVmOptIn)} />
         </TabsContent>
         <TabsContent value="compliance" className="mt-6">
           <Panel title="Prerecorded voicemail drops">

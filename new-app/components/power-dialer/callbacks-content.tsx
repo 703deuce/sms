@@ -2,10 +2,16 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { Page, PageHeader, Panel, EmptyState } from '@/components/app/page-primitives'
 import { SegmentedFilter } from '@/components/app/filters'
 import { StatusBadge } from '@/components/app/status'
-import { fetchPowerDialerCallbacks, type PowerDialerCallbackDto } from '@/lib/phone-api'
+import { Button } from '@/components/ui/button'
+import {
+  fetchPowerDialerCallbacks,
+  patchPowerDialerCallback,
+  type PowerDialerCallbackDto,
+} from '@/lib/phone-api'
 import { formatPhone, formatWhen } from '@/lib/format'
 import { CalendarClock } from 'lucide-react'
 
@@ -22,11 +28,35 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
   const [rows, setRows] = useState<PowerDialerCallbackDto[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const reload = () => {
     void fetchPowerDialerCallbacks(tab)
       .then(setRows)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load callbacks'))
+  }
+
+  useEffect(() => {
+    reload()
   }, [tab])
+
+  const complete = async (id: string) => {
+    try {
+      await patchPowerDialerCallback(id, { action: 'complete' })
+      toast.success('Callback completed')
+      reload()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed')
+    }
+  }
+
+  const cancel = async (id: string) => {
+    try {
+      await patchPowerDialerCallback(id, { action: 'cancel' })
+      toast.success('Callback cancelled')
+      reload()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed')
+    }
+  }
 
   return (
     <Page>
@@ -56,33 +86,55 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
                 <th scope="col" className="px-4 py-2.5 font-medium">Scheduled</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">Last disposition</th>
                 <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
+                <th scope="col" className="px-4 py-2.5 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b last:border-0">
-                  <td className="px-4 py-3">
-                    <span className="font-medium">{r.contactName}</span>
-                    <span className="block font-mono text-xs text-muted-foreground">{formatPhone(r.contactPhone)}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{r.campaignName}</td>
-                  <td className="px-4 py-3">{r.callbackAt ? formatWhen(r.callbackAt) : '—'}</td>
-                  <td className="px-4 py-3">{r.disposition || '—'}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge tone={r.contactStatus === 'BLOCKED' ? 'danger' : 'neutral'}>
-                      {r.contactStatus === 'BLOCKED' ? 'Suppressed' : r.status}
-                    </StatusBadge>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((r) => {
+                const suppressed = r.contactStatus === 'BLOCKED' || r.contactStatus === 'UNSUBSCRIBED'
+                const dialHref = `/app/power-dialer/dialer?campaign=${encodeURIComponent(r.campaignId)}`
+                return (
+                  <tr key={r.id} className="border-b last:border-0">
+                    <td className="px-4 py-3">
+                      <span className="font-medium">{r.contactName}</span>
+                      <span className="block font-mono text-xs text-muted-foreground">{formatPhone(r.contactPhone)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{r.campaignName}</td>
+                    <td className="px-4 py-3">{r.callbackAt ? formatWhen(r.callbackAt) : '—'}</td>
+                    <td className="px-4 py-3">{r.disposition || '—'}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge tone={suppressed ? 'danger' : 'neutral'}>
+                        {suppressed ? 'Ineligible' : r.status}
+                      </StatusBadge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {suppressed ? (
+                          <span className="text-xs text-muted-foreground">Blocked</span>
+                        ) : (
+                          <Link href={dialHref} className="text-xs text-primary hover:underline">
+                            Start call
+                          </Link>
+                        )}
+                        {r.status === 'scheduled' && (
+                          <>
+                            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void complete(r.id)}>
+                              Complete
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void cancel(r.id)}>
+                              Cancel
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
       </Panel>
-      <p className="text-xs text-muted-foreground">
-        Automated callback dialing is not enabled yet. Use{' '}
-        <Link href="/app/power-dialer/dialer" className="text-primary hover:underline">Dialer</Link> to call back when eligible.
-      </p>
     </Page>
   )
 }

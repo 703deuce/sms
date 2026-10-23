@@ -2,50 +2,59 @@
 
 Statuses: **Not started** | **In progress** | **Implemented** | **Tested** | **Deployed** | **Browser verified** | **Blocked**
 
-Last updated: Phase 3 (campaigns, lists, CSV) + carry-over overview/session summary. Rows stay **In progress** until Grok browser-verifies after deploy.
+Last updated: Phase 3 gap closure + Phase 4 daily workflows (batch 2 — migration fix + UI wiring).
 
-## Carry-over verification (Phase 3 session)
+## Migration verification
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Production migration `20261023130000_power_dialer_engine_phase2` | **Tested** (read-only) | `prisma migrate status` on prod web container: up to date; row in `_prisma_migrations` with `finished_at` 2026-10-23T02:02:59Z; `progressionPhase` / `nextCallAt` on `power_dialer_sessions`. |
-| Migrate deploy in pipeline | **Implemented** | `scripts/deploy-db-migrations.sh` via `nixpacks.toml` build when `DATABASE_URL` set — no additive fix required. |
-| Overview attention (mic, window, usage, CRM) | **Implemented** | Server `getPowerDialerOverview` + client mic from `webrtcStatus`. |
-| Session summary (full spec fields) | **Implemented** | `session-summary.ts` + dialer end panel (classifications, dispositions, remaining, errors). |
-| `test:phone` in VM | **Partial** | `scripts/run-phone-smoke-local.sh` added; runtime logic scripts PASS; HTTP API legs FAIL without live app+DB session (expected in cloud VM). |
+| Migration | Expected | Prod status |
+|-----------|----------|-------------|
+| `20261023140000_power_dialer_lists_phase3` | ContactList `source`, `archivedAt`, `updatedAt` | Verify row in `_prisma_migrations` after deploy |
+| `20261023150000_power_dialer_phase4` | Dispositions, scripts, VM drops, callbacks + attempt columns + `ContactList.filtersJson` | **Was FAILED** (wrong FK table names `workspaces`/`contacts`/`contact_lists`) — **fixed in migration SQL**; use `scripts/power-dialer-phase4-migration-repair.sql` + `prisma migrate resolve --rolled-back` if partial DDL |
 
-## Phase 3 scope notes
+## Phase 4 scope (this batch)
 
-| Topic | Status |
-|-------|--------|
-| Campaign table + editor sheet | **Implemented** — table API rollups; multi-tab editor (General, Contacts, Dialing, Schedule, Caller ID). Call handling / scripts / VM drops: **persist placeholders** — UI notes Phase 4 (ledger). |
-| Campaign subpages | **Implemented** — Contacts (reason codes), History, Analytics (API + UI). |
-| Calling lists workspace | **Implemented** — table, create, CSV wizard (upload, map, preview, rejected download). **CRM import button hidden** — no canonical CRM list-import path wired (ledger). |
-| List detail | **Implemented** — paginated contacts, archive, CSV import. Bulk add-to-campaign / export CSV: **Not started** (permission-gated export deferred). |
-| Bucket filter pagination | **Implemented** — in-memory filter up to 5000 members when bucket ≠ all. |
-| Large campaign rollups (>1000 list) | **Partial** — table shows `—` for eligible; full rollup skipped. |
-| Dialer `?campaign=` | **Implemented** — dialer page + session workspace preselect. |
-| Lead panel | **Partial** — custom fields + session attempt log by phone; campaign-wide attempt history not separate API yet. |
+| Area | Status |
+|------|--------|
+| Disposition sets | DB + seed + API + Settings Dispositions tab + campaign Outcomes + dialer labels via `dialer-prep` |
+| Scripts | API + Settings Scripts tab + dialer rendered script (merge fields) |
+| VM drops | API + compliance opt-in + Settings library + dialer button (mock/Telnyx path) — **not live PSTN verified** |
+| Callbacks | `PowerDialerCallback` table + tabs + complete/cancel + Start call link (eligibility via contact status) |
+| Call history | Server filters (campaign, date, disposition, recording) + CallsTable UI for power_dialer |
+| Recording settings | Workspace settings stored; retention **ledger note** only |
+| CRM disposition flag | Stored on disposition row — execution **Phase 6** |
+| Transcription for PD calls | **Not verified** — wire if recording pipeline missing (ledger) |
 
-## Phase 2 engine notes (unchanged)
+## Phase 3 gap closure
 
-See prior rows for eligibility engine, ring timeout (not live-verified), etc.
+| Gap | Status |
+|-----|--------|
+| List eligibility counts | **Implemented** — `list-eligibility.ts` |
+| Add contacts / bulk remove / export / saved filters | **Implemented** |
+| Bulk add to campaign | **Implemented** — `lists/[id]/campaign-actions` |
+| Campaign members + dial access | **Implemented** — `campaign-access.ts` |
+| Cross-session lead history | **Implemented** — `contact-campaign-history` |
+| Phase 3 migration row verify | **Pending** — run on prod after deploy |
 
-## P3 Campaigns & lists (Phase 3)
+## VM tests
 
-| Requirement | Backend | Frontend | Tests | Deploy | Browser |
-|-------------|---------|----------|-------|--------|---------|
-| Campaign list table + actions | Implemented | Implemented | phase3 unit + engine | Pending | Pending |
-| Create/edit guided sections | Partial (Phase 4 entities stubbed) | Implemented | phase3 config | Pending | Pending |
-| Campaign contacts + reason codes | Implemented | Implemented | engine | Pending | Pending |
-| History / Analytics | Implemented | Implemented | — | Pending | Pending |
-| Calling lists + CSV wizard | Implemented | Implemented | phase3 csv | Pending | Pending |
-| List detail | Partial (no bulk/export) | Implemented | — | Pending | Pending |
+| Script | Result |
+|--------|--------|
+| `pnpm run test:power-dialer-engine` | Run each batch |
+| `pnpm run test:power-dialer-phase3` | Run each batch |
+| `pnpm run test:power-dialer-phase4` | Run each batch |
 
-## Status summary
+## Deploy / voice
 
-| Status | Notes |
-|--------|-------|
-| VM tests | `pnpm run test:power-dialer-engine` PASS · `pnpm run test:power-dialer-phase3` PASS |
-| Browser verified | 0 (awaiting Grok) |
+| Item | Notes |
+|------|-------|
 | Voice container redeploy | **Not required** — web/new-app only |
+| Browser verified | Pending Grok pass |
+| Live VM drop / PSTN | **Could not verify** in cloud VM |
+
+## Could not verify (honest)
+
+- Production `_prisma_migrations` rows for phase 3/4 until Coolify deploy + `migrate deploy` succeeds
+- Browser UI for Settings tabs, dialer script panel, callbacks actions, call history filters
+- Live Telnyx voicemail-drop playback on answered leg
+- Power-dialer call transcription auto-start
+- Full disposition set CRUD (per-disposition edit/reorder UI) — sets list + clone only

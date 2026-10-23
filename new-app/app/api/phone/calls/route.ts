@@ -25,6 +25,14 @@ export async function GET(request: Request) {
       from: url.searchParams.get("from") || undefined,
       to: url.searchParams.get("to") || undefined,
       source: url.searchParams.get("source") || undefined,
+      campaignId: url.searchParams.get("campaignId") || undefined,
+      disposition: url.searchParams.get("disposition") || undefined,
+      hasRecording:
+        url.searchParams.get("hasRecording") === "1"
+          ? true
+          : url.searchParams.get("hasRecording") === "0"
+            ? false
+            : undefined,
     });
     return NextResponse.json({ data, meta: { total } });
   } catch (err) {

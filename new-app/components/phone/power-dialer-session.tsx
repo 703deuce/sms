@@ -14,6 +14,7 @@ import { useWorkspace } from '@/components/providers/workspace-provider'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import {
   fetchContactCampaignHistory,
+  fetchDialerPrep,
   fetchPowerCampaigns,
   fetchPowerSession,
   fetchPowerSessionSummary,
@@ -56,6 +57,7 @@ export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCamp
   } | null>(null)
   const [scriptText, setScriptText] = useState<string | null>(null)
   const [dispositionOptions, setDispositionOptions] = useState<string[]>([...DISPOSITIONS])
+  const [voicemailDropReady, setVoicemailDropReady] = useState(false)
   const autoDialLock = useRef(false)
 
   const sessionStatus = runtime?.session?.status ?? null
@@ -100,18 +102,19 @@ export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCamp
   }, [campaignId, leadContactId])
 
   useEffect(() => {
-    if (!campaignId) return
-    void fetch(`/api/phone/power-dialer/dispositions`)
-      .then((r) => r.json())
-      .then((j) => {
-        const sets = j.data as { isDefault?: boolean; dispositions?: { label: string }[] }[]
-        const def = sets.find((s) => s.isDefault) || sets[0]
-        if (def?.dispositions?.length) {
-          setDispositionOptions(def.dispositions.map((d) => d.label))
-        }
+    if (!campaignId || !leadContactId) {
+      setScriptText(null)
+      setVoicemailDropReady(false)
+      return
+    }
+    void fetchDialerPrep(campaignId, leadContactId)
+      .then((prep) => {
+        if (prep.dispositionLabels.length) setDispositionOptions(prep.dispositionLabels)
+        setScriptText(prep.scriptRendered)
+        setVoicemailDropReady(Boolean(prep.voicemailDropId))
       })
       .catch(() => undefined)
-  }, [campaignId])
+  }, [campaignId, leadContactId])
 
   useEffect(() => {
     if (!sessionId) return
@@ -392,6 +395,24 @@ export function PowerDialerSessionWorkspace({ initialCampaignId }: { initialCamp
                       >
                         <Phone />
                         Call
+                      </Button>
+                    )}
+                    {onCall && attemptId && voicemailDropReady && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={loading}
+                        onClick={() => {
+                          void triggerVoicemailDrop(attemptId)
+                            .then(() => {
+                              toast.success('Voicemail drop sent')
+                              endCall()
+                              setDisposition('Voicemail')
+                            })
+                            .catch((e) => toast.error(e instanceof Error ? e.message : 'Voicemail drop failed'))
+                        }}
+                      >
+                        Voicemail drop
                       </Button>
                     )}
                   </div>

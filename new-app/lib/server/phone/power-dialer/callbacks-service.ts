@@ -1,31 +1,11 @@
 import { getPrisma } from "@/lib/server/db";
+import { buildCallbackTabWhere, type CallbackTab } from "./callback-tab-filters";
 
-export type CallbackTab = "due_today" | "upcoming" | "overdue" | "completed" | "all";
+export type { CallbackTab };
 
 export async function listPowerDialerCallbacksV2(workspaceId: string, tab: CallbackTab) {
   const prisma = getPrisma();
-  const now = new Date();
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(now);
-  endOfDay.setHours(23, 59, 59, 999);
-
-  const where: Record<string, unknown> = { workspaceId };
-
-  if (tab === "completed") {
-    where.status = "completed";
-  } else if (tab === "due_today") {
-    where.status = "scheduled";
-    where.scheduledAt = { gte: startOfDay, lte: endOfDay };
-  } else if (tab === "upcoming") {
-    where.status = "scheduled";
-    where.scheduledAt = { gt: endOfDay };
-  } else if (tab === "overdue") {
-    where.status = "scheduled";
-    where.scheduledAt = { lt: startOfDay };
-  } else if (tab === "all") {
-    // no extra filter
-  }
+  const where = buildCallbackTabWhere(workspaceId, tab);
 
   const rows = await prisma.powerDialerCallback.findMany({
     where,

@@ -1,5 +1,5 @@
 -- Contact list saved filters
-ALTER TABLE "contact_lists" ADD COLUMN IF NOT EXISTS "filtersJson" JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE "ContactList" ADD COLUMN IF NOT EXISTS "filtersJson" JSONB NOT NULL DEFAULT '[]';
 
 -- Disposition library
 CREATE TABLE "power_dialer_disposition_sets" (
@@ -85,13 +85,13 @@ CREATE INDEX "power_dialer_callbacks_workspaceId_scheduledAt_idx" ON "power_dial
 CREATE INDEX "power_dialer_callbacks_campaignId_status_idx" ON "power_dialer_callbacks"("campaignId", "status");
 CREATE INDEX "power_dialer_callbacks_contactId_idx" ON "power_dialer_callbacks"("contactId");
 
-ALTER TABLE "power_dialer_disposition_sets" ADD CONSTRAINT "power_dialer_disposition_sets_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "power_dialer_disposition_sets" ADD CONSTRAINT "power_dialer_disposition_sets_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "power_dialer_dispositions" ADD CONSTRAINT "power_dialer_dispositions_setId_fkey" FOREIGN KEY ("setId") REFERENCES "power_dialer_disposition_sets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "power_dialer_scripts" ADD CONSTRAINT "power_dialer_scripts_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "power_dialer_voicemail_drops" ADD CONSTRAINT "power_dialer_voicemail_drops_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "power_dialer_callbacks" ADD CONSTRAINT "power_dialer_callbacks_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "power_dialer_scripts" ADD CONSTRAINT "power_dialer_scripts_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "power_dialer_voicemail_drops" ADD CONSTRAINT "power_dialer_voicemail_drops_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "power_dialer_callbacks" ADD CONSTRAINT "power_dialer_callbacks_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "power_dialer_callbacks" ADD CONSTRAINT "power_dialer_callbacks_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES "power_dialer_campaigns"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "power_dialer_callbacks" ADD CONSTRAINT "power_dialer_callbacks_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "contacts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "power_dialer_callbacks" ADD CONSTRAINT "power_dialer_callbacks_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "power_dialer_attempts" ADD CONSTRAINT "power_dialer_attempts_dispositionId_fkey" FOREIGN KEY ("dispositionId") REFERENCES "power_dialer_dispositions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- Backfill callbacks from legacy attempt.callbackAt

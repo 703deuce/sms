@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Panel } from '@/components/app/page-primitives'
 import {
   archivePowerList,
+  addListContactsToCampaign,
+  fetchPowerCampaigns,
   fetchPowerListDetail,
   patchListMembers,
   saveListFilters,
@@ -35,6 +37,9 @@ export function ListDetailContent({ listId }: { listId: string }) {
   const [contactQ, setContactQ] = useState('')
   const [searchHits, setSearchHits] = useState<{ id: string; name: string; phone: string }[]>([])
   const [filterName, setFilterName] = useState('')
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([])
+  const [campaignPickOpen, setCampaignPickOpen] = useState(false)
+  const [targetCampaignId, setTargetCampaignId] = useState('')
 
   const load = useCallback(() => {
     void fetchPowerListDetail(listId, { page, q })
@@ -45,6 +50,12 @@ export function ListDetailContent({ listId }: { listId: string }) {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    void fetchPowerCampaigns()
+      .then((rows) => setCampaigns(rows.map((c) => ({ id: c.id, name: c.name }))))
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     if (!contactQ.trim()) {
@@ -72,6 +83,18 @@ export function ListDetailContent({ listId }: { listId: string }) {
       toast.success('List archived')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Archive failed')
+    }
+  }
+
+  const bulkAddToCampaign = async () => {
+    if (!selected.size || !targetCampaignId) return
+    try {
+      const r = await addListContactsToCampaign(listId, targetCampaignId, [...selected])
+      toast.success(`Added ${r.added} contact(s) to campaign list`)
+      setCampaignPickOpen(false)
+      setSelected(new Set())
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Add to campaign failed')
     }
   }
 
@@ -171,8 +194,9 @@ export function ListDetailContent({ listId }: { listId: string }) {
           ))}
         </div>
         {selected.size > 0 && (
-          <div className="mb-3 flex gap-2 text-sm">
+          <div className="mb-3 flex flex-wrap gap-2 text-sm">
             <span>{selected.size} selected</span>
+            <Button size="sm" variant="outline" onClick={() => setCampaignPickOpen(true)}>Add to campaign</Button>
             <Button size="sm" variant="destructive" onClick={() => void bulkRemove()}>Remove from list</Button>
           </div>
         )}
@@ -214,6 +238,27 @@ export function ListDetailContent({ listId }: { listId: string }) {
         </div>
       </Panel>
       <CsvImportWizard listId={listId} open={importOpen} onOpenChange={setImportOpen} onComplete={load} />
+      <Dialog open={campaignPickOpen} onOpenChange={setCampaignPickOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add to campaign</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Copies selected contacts onto the campaign&apos;s calling list.</p>
+          <select
+            className="w-full rounded-md border px-3 py-2 text-sm"
+            value={targetCampaignId}
+            onChange={(e) => setTargetCampaignId(e.target.value)}
+            aria-label="Target campaign"
+          >
+            <option value="">Select campaign</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCampaignPickOpen(false)}>Cancel</Button>
+            <Button disabled={!targetCampaignId} onClick={() => void bulkAddToCampaign()}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add existing contacts</DialogTitle></DialogHeader>

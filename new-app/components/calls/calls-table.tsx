@@ -8,7 +8,8 @@ import { SearchInput, SegmentedFilter, SimpleSelect } from '@/components/app/fil
 import { EmptyState } from '@/components/app/page-primitives'
 import { AI_OUTCOME, CALL_OUTCOME, MCTB_STATE, StatusBadge } from '@/components/app/status'
 import { CALLS, NUMBERS, getNumber, type Call } from '@/lib/data'
-import { fetchCalls } from '@/lib/phone-api'
+import { fetchCalls, fetchPowerCampaigns } from '@/lib/phone-api'
+import { Input } from '@/components/ui/input'
 import { fetchReceptionistCalls } from '@/lib/receptionist-api'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import { mapPhoneCallDtoToCall } from '@/lib/phone-ui-map'
@@ -70,6 +71,19 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   const [liveCalls, setLiveCalls] = useState<Call[] | null>(null)
   const [total, setTotal] = useState(0)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [campaignId, setCampaignId] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [dispositionQ, setDispositionQ] = useState('')
+  const [recordingFilter, setRecordingFilter] = useState('all')
+  const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    if (variant !== 'power_dialer') return
+    void fetchPowerCampaigns()
+      .then((rows) => setCampaignOptions(rows.map((c) => ({ id: c.id, name: c.name }))))
+      .catch(() => undefined)
+  }, [variant])
 
   useEffect(() => {
     if (variant !== 'phone' && variant !== 'receptionist' && variant !== 'power_dialer') return
@@ -92,6 +106,18 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
             q: q.trim() || undefined,
             direction: variant === 'power_dialer' ? 'outbound' : undefined,
             source: variant === 'power_dialer' ? 'power_dialer' : undefined,
+            campaignId: variant === 'power_dialer' && campaignId !== 'all' ? campaignId : undefined,
+            from: variant === 'power_dialer' && dateFrom ? dateFrom : undefined,
+            to: variant === 'power_dialer' && dateTo ? dateTo : undefined,
+            disposition: variant === 'power_dialer' && dispositionQ.trim() ? dispositionQ.trim() : undefined,
+            hasRecording:
+              variant === 'power_dialer'
+                ? recordingFilter === 'yes'
+                  ? '1'
+                  : recordingFilter === 'no'
+                    ? '0'
+                    : undefined
+                : undefined,
           })
           if (cancelled) return
           setLiveCalls(res.data.map(mapPhoneCallDtoToCall))
@@ -115,7 +141,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
     return () => {
       cancelled = true
     }
-  }, [variant, page, filter, numberId, q])
+  }, [variant, page, filter, numberId, q, campaignId, dateFrom, dateTo, dispositionQ, recordingFilter])
 
   const scoped = useMemo(() => {
     if (variant === 'phone' || variant === 'receptionist' || variant === 'power_dialer') {
@@ -185,6 +211,51 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
             placeholder="Search caller or number"
           />
         </div>
+        {variant === 'power_dialer' && (
+          <div className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:flex-wrap">
+            <SimpleSelect
+              label="Campaign"
+              value={campaignId}
+              onChange={(v) => {
+                setCampaignId(v)
+                reset()
+              }}
+              options={[
+                { value: 'all', label: 'All campaigns' },
+                ...campaignOptions.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="font-medium text-muted-foreground">From</span>
+              <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); reset() }} aria-label="From date" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="font-medium text-muted-foreground">To</span>
+              <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); reset() }} aria-label="To date" />
+            </label>
+            <SearchInput
+              value={dispositionQ}
+              onChange={(v) => {
+                setDispositionQ(v)
+                reset()
+              }}
+              placeholder="Disposition"
+            />
+            <SimpleSelect
+              label="Recording"
+              value={recordingFilter}
+              onChange={(v) => {
+                setRecordingFilter(v)
+                reset()
+              }}
+              options={[
+                { value: 'all', label: 'Any recording' },
+                { value: 'yes', label: 'Has recording' },
+                { value: 'no', label: 'No recording' },
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       {(variant === 'phone' || variant === 'power_dialer') && loadError && (
