@@ -115,6 +115,6 @@ SELECT
 FROM "power_dialer_attempts" a
 JOIN "power_dialer_sessions" s ON s."id" = a."sessionId"
 JOIN "power_dialer_campaigns" camp ON camp."id" = s."campaignId"
-JOIN "contacts" c ON c."id" = a."contactId"
+JOIN "Contact" c ON c."id" = a."contactId"
 WHERE a."callbackAt" IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM "power_dialer_callbacks" cb WHERE cb."attemptId" = a."id");
