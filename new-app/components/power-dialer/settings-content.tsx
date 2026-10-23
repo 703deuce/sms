@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -341,7 +342,7 @@ export function PowerDialerSettingsContent() {
             </label>
             <p className="mt-3 text-xs text-muted-foreground">
               Numbers come from the global{' '}
-              <a href="/app/numbers" className="text-primary hover:underline">Numbers</a> inventory. Callback routing for inbound calls to dialer lines uses existing phone routing — verify per-number assignment in Numbers.
+              <Link href="/app/numbers" className="text-primary hover:underline">Numbers</Link> inventory. Callback routing for inbound calls to dialer lines uses existing phone routing — verify per-number assignment in Numbers.
             </p>
           </Panel>
         </TabsContent>

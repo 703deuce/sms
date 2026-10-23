@@ -21,7 +21,7 @@ assert.ok(intel.actionItems.length > 0);
 assert.ok(intel.summary.includes("Sentiment"));
 
 assert.equal(resolveCallSourceKind("power_dialer", { dialOrigin: "cadence" }), "cadence");
-assert.equal(labelForCallSource("manual_dial" as "manual_dial"), "Manual dial");
+assert.equal(labelForCallSource("manual_dial" as const), "Manual dial");
 
 const attempts = [
   { id: "1", disposition: "Interested", answerClassification: "human" },

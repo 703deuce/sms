@@ -143,6 +143,7 @@ export function ContactsWorkspace() {
                 Move {selectedIds.size} to folder
               </Button>
             )}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- file download endpoint */}
             <a
               href="/api/crm/native/contacts/export"
               className="text-sm font-medium text-primary hover:underline"

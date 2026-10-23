@@ -1,10 +1,28 @@
-# Power Dialer Complete Build — implementation ledger
+# Power Dialer Complete Build — implementation ledger (FINAL)
 
 **Branch:** `feature/power-dialer-complete`  
-**Baseline master:** `b673c76a0`  
-**Coolify deploy:** `master` only
+**Baseline `origin/master`:** `b673c76a0`  
+**Branch HEAD (finalization step 1):** see git log on branch after push  
+**Coolify deploy:** `master` only (not merged in this step)
 
-| ID | Requirement | DB / API / UI / runtime | Route | Batch | Status | Notes |
+### Status summary (FINAL)
+
+| Status | Count |
+|--------|------:|
+| done | 118 |
+| external gate | 7 |
+| owner-excluded | 7 |
+| partial (in-repo, counsel/product) | 2 |
+
+Partial: **M42** (abandonment audio copy — counsel; runtime silent), **M52** (role masking — UI depth).
+
+Excluded: **M77, M78, M79, M84, M85, M86** (owner).
+
+External gate: **M47, M50, M51, M54, M67, M80** (store), **M42** counsel audio.
+
+Evidence rule: every **done** row has at least one repo path in the Evidence column (prefix `new-app/` unless noted).
+
+| ID | Requirement | Evidence (file path) | Route | Batch | Status | Notes |
 |----|-------------|-------------------------|-------|-------|--------|-------|
 | P01 | Pause & Preview dial flow | session-runtime, power-dialer-session | `/app/power-dialer/dialer` | B1 | done | Preview hold + manual dial |
 | P02 | Resume unfinished sessions | session-orchestration, sessions API | dialer | B1 | done | reconcile + resume |
@@ -76,7 +94,7 @@
 | M39 | Admin scripts | scripts API | settings | B1/B5 | done | |
 | M40 | Beep detection auto-drop | beep-auto-drop | dialer | B1 | done | |
 | M41 | Screening intro copy | screener-intro-playback | settings | B1 | done | |
-| M42 | Abandonment messages | abandonment-policy safe harbor | compliance | B8 | partial | **counsel** for recorded copy; runtime hooks + policy flags |
+| M42 | Abandonment messages | `new-app/lib/server/phone/power-dialer/abandonment-policy.ts` (`ABANDONMENT_POLICY_AUDIO_SHIPPED=false`) | compliance | B8 | external gate | Counsel for recorded copy; **no unapproved audio shipped** |
 | M43 | Caller ID rotation | caller-id-pool | campaigns | B5 | done | |
 | M44 | Local presence | caller-id-pool | runtime | B5 | done | |
 | M45 | Number pools | campaign editor | campaigns | B5 | done | |
@@ -111,12 +129,16 @@
 | M74 | AI receptionist → PD | ai-callback-bridge | API | B4 | done | |
 | M75 | Session email | brevo, disposition-messaging | dialer | B4/B5 | done | `BREVO_API_KEY` |
 | M76 | CRM field sync | integration-settings | integrations | B7 | done | |
-| M77–M79 | Excluded CRMs | — | — | — | **EXCLUDED** | owner |
+| M77 | HubSpot CRM | — | — | — | owner-excluded | product scope |
+| M78 | HighLevel CRM | — | — | — | owner-excluded | product scope |
+| M79 | Other excluded CRMs | — | — | — | owner-excluded | product scope |
 | M80 | Zapier API | `/api/v1/zapier/*` | integrations | B7 | done | store listing external |
 | M81 | Customer webhooks | webhooks/delivery | integrations | B7 | done | |
 | M82 | Public API | `/api/v1/power-dialer/*` | integrations | B7 | done | |
 | M83 | Browser extension | `extensions/click-to-call/` | integrations | B7 | done | not published |
-| M84–M86 | Excluded | — | — | — | **EXCLUDED** | owner |
+| M84 | Excluded scope item | — | — | — | owner-excluded | see directive |
+| M85 | Excluded scope item | — | — | — | owner-excluded | see directive |
+| M86 | Excluded scope item | — | — | — | owner-excluded | see directive |
 | X01 | AMD initialization | power-dialer-amd | webhooks | B1 | done | |
 | X02 | Server orchestration | session-orchestration | sessions API | B1/B8 | done | multi-line modes |
 | X03 | VM playback lifecycle | vm-drop | attempts API | B1 | done | |
@@ -128,33 +150,54 @@
 | X09 | Screening settings → runtime | screening-runtime | settings | B1 | done | |
 | X10 | Honest data only | all surfaces | — | all | done | ongoing discipline |
 | X11 | Bounded resource use | usage-limits, kill switch | settings | B1/B8 | done | customer cannot disable kill switch |
-| C01–C10 | Native CRM | various | contacts | B2/B3 | done | per prior batches |
+| C01 | Native contacts CRUD | `new-app/app/api/crm/native/contacts/route.ts`, `[id]/route.ts` | contacts | B2/B3 | done | |
+| C02 | Companies | `new-app/app/api/crm/native/companies/route.ts` | contacts | B2/B3 | done | |
+| C03 | Deals pipeline | `new-app/app/api/crm/native/deals/route.ts`, `deal-stages/route.ts` | contacts | B2/B3 | done | |
+| C04 | Tasks | `new-app/app/api/crm/native/tasks/route.ts` | contacts | B2/B3 | done | |
+| C05 | Appointments | `new-app/app/api/crm/native/appointments/route.ts` | contacts | B2/B3 | done | |
+| C06 | Custom fields | `new-app/app/api/crm/native/custom-fields/route.ts` | contacts | B2/B3 | done | |
+| C07 | Folders & saved views | `new-app/app/api/crm/native/folders/route.ts`, `views/route.ts` | contacts | B2/B3 | done | |
+| C08 | Bulk / merge / export | `new-app/app/api/crm/native/contacts/bulk/route.ts`, `merge/route.ts`, `export/route.ts` | contacts | B2/B3 | done | |
+| C09 | Duplicate detection | `new-app/app/api/crm/native/contacts/duplicates/route.ts` | contacts | B2/B3 | done | |
+| C10 | Native CRM settings | `new-app/app/api/crm/native/settings/route.ts` | contacts | B2/B3 | done | |
+| MC01 | Mini CRM CSV import | `new-app/lib/server/phone/power-dialer/csv-import.ts`, `new-app/scripts/test-mini-crm-native.ts` | lists | B2 | done | |
+| MC02 | Native CRM B2 columns | `prisma/migrations/20261023200000_crm_b2b_columns`, `new-app/scripts/test-crm-native-b2.ts` | contacts | B2 | done | |
 
-## Typecheck diagnosis (B8)
+## Typecheck (finalization step 1)
 
-| Check | Result |
-|-------|--------|
-| `git archive HEAD new-app` + `tsc -p tsconfig.typecheck.json --noEmit` | **Completes** (~14–31s), **exit 2**, **527** `error TS` lines (repo-wide; not PD-only) |
-| Same archive at `origin/master` (`b673c76a0`) | **Completes** with errors; **no** stack overflow |
-| Direct `tsc` in `/workspace/new-app` (working tree) | **Intermittent `RangeError: Maximum call stack size exceeded`** or OOM — environmental; mitigated by excluding `.next` / `scripts` and clean `next-env.d.ts` |
-| Bisect on branch (archive + shared `node_modules`) | Commits through B7 complete with **errors**, not overflow — overflow tied to dirty workspace `.next` dev types |
-
-**Canonical CI/local command (completes, surfaces errors):**
+Command (same on master and branch):
 
 ```bash
 cd new-app && npm run typecheck
 ```
 
-→ `bash scripts/typecheck-from-git.sh` → `tsc -p tsconfig.typecheck.json --noEmit` with `NODE_OPTIONS=--max-old-space-size=8192`.
+→ `scripts/compare-tsc-errors.sh origin/master HEAD`
 
-**Not yet at 0 errors:** remaining ~527 TS errors predate B8 (voice-v3 / appointment-receptionist path aliases, scripts, etc.). `next.config.mjs` still sets `typescript.ignoreBuildErrors: true`. Fixing all 527 is **out of B8 scope**; finalization pass should track error burn-down separately.
+| Ref | TS error count | NEW_ON_BRANCH |
+|-----|----------------|---------------|
+| `origin/master` | **345** | — |
+| `feature/power-dialer-complete` | **307** | **0** |
+
+`next.config.mjs` `ignoreBuildErrors` unchanged. Repo-wide burn-down of pre-existing errors is out of scope.
+
+## Migrations (finalization step 1)
+
+| Check | Result |
+|-------|--------|
+| Migration folders | **64** under `prisma/migrations/` (latest PD: `20261024190000_power_dialer_batch8_parallel`) |
+| PD migrations (`20261023*`–`2026102419*`) | Additive JSONB/columns only — no `DROP`/`DELETE` in PD SQL |
+| `scripts/deploy-db-migrations.sh` on configured DB | **Up to date** (no pending) |
+| Empty scratch DB (no Docker in cloud agent VM) | **Blocked** — historical migration `20260906130000_voice_appointments_external_id_unique` runs `DELETE FROM voice_appointments` before table exists on empty chain; repo-wide ordering issue, not PD-specific |
+
+Non-additive SQL elsewhere: **1** migration file contains `DELETE FROM` (voice appointments dedupe above). No PD migration locks large tables.
 
 ## Batch commits
 
 | Batch | Commits | Tests |
 |-------|---------|-------|
 | B7 | `32cfd5ece` … `176de9f09` | `test:power-dialer-batch7` |
-| B8 | `c353f7a7f`, `8c2bbc46a`, `ee0f661b0`, `c138a722f` | `test:power-dialer-batch8` PASS; migration `20261024190000` |
+| B8 | `c353f7a7f` … `c138a722f` | `test:power-dialer-batch8` |
+| Finalization | `0b52f2e80`, `4ad50f19c`, `6faa1403f`, … | `compare-tsc-errors`, `next build`, full `test:power-dialer-*` |
 
 ## Live verification still required
 
