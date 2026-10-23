@@ -42,6 +42,10 @@ async function main() {
       include: { dispositions: { orderBy: { sortOrder: "asc" } } },
     });
 
+    const phase4Finished = migrations.some(
+      (m) => m.migration_name === PHASE4 && m.finished_at && !m.rolled_back_at,
+    );
+
     const report = {
       migrations: migrations.map((m) => ({
         name: m.migration_name,
@@ -49,6 +53,7 @@ async function main() {
         rolledBack: Boolean(m.rolled_back_at),
         checksumPrefix: m.checksum?.slice(0, 12),
       })),
+      phase4Applied: phase4Finished,
       tables: tables.map((t) => t.table_name),
       contactListFiltersJson: filtersCol.length > 0,
       attemptPhase4Columns: attemptCols.map((c) => c.column_name),
@@ -66,9 +71,11 @@ async function main() {
         rows: dispoCount,
         defaultLabels: defaultSet?.dispositions.map((d) => d.label) ?? [],
       },
-      futureDeploySafe:
-        migrations.find((m) => m.migration_name === PHASE4)?.finished_at &&
-        !migrations.find((m) => m.migration_name === PHASE4)?.rolled_back_at,
+      futureDeploySafe: phase4Finished,
+      dispositionSeedNote:
+        setCount === 0
+          ? "No disposition rows yet — default set is created on first API access (ensureDefaultDispositionSet)"
+          : "ok",
     };
 
     console.log(JSON.stringify(report, null, 2));
