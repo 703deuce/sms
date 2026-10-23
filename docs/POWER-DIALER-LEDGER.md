@@ -6,7 +6,7 @@ Last updated: Phase 7 acceptance fixes (2026-10-23).
 
 | Item | Value |
 |------|--------|
-| **Final `commitSha`** | _(pending deploy — see Phase 7 row below)_ |
+| **Final `commitSha`** | `1f4f307b5d63ea1a05738390a14ea6194ab46445` |
 | **Prior Phase 6b SHA** | `c262991e007541f827ce2507890ffe34bd87fd11` |
 | **Phase 6 migration** | `20261023180000_power_dialer_phase6` — verify script requires `phase6Applied: true` + DNC/sync/audit tables |
 | **Build** | `@supabase/supabase-js` not in `new-app` (Storage REST) |
@@ -58,18 +58,18 @@ Artifacts: `/opt/cursor/artifacts/overview.png`, `analytics-nav.png`, `integrati
 
 | # | Defect | Implementation | Tests | Browser verify |
 |---|--------|----------------|-------|----------------|
-| 1 | Integration detail crash when disconnected | Normalized API connection; `IntegrationDetailContent` + error boundary | `test:power-dialer-phase7` shape check | Pending deploy |
-| 2 | CSV preview auto-run + labels | `guessCsvColumnMapping` + debounced preview; `SimpleSelect` visible labels | `test:power-dialer-phase7` | Pending deploy |
-| 3 | Scripts library CRUD | `scripts/[id]` PATCH/DELETE; UI edit/preview/clone/archive/delete/default | Manual/API | Pending deploy |
-| 4 | Dialer session setup controls | Pre-session campaign detail, caller ID, mode, phone fields, readouts, eligible count | — | Pending deploy |
-| 5 | Remove debug copy | Settings, callbacks, call history, integrations labels | — | Pending deploy |
-| 6 | Settings tabs spec | 11 tabs; VM opt-in under Voicemail drops; merged Compliance | — | Pending deploy |
-| 7 | Dispositions UX | Delete confirm; add outcome focus + toast; sort order field | — | Pending deploy |
-| 8 | Campaign drawer | Inline field errors; tab overflow; empty list link | — | Pending deploy |
-| 9 | URL state | Callbacks `?tab=`; Analytics `?tab=` + path redirects | — | Pending deploy |
-| 10 | Vercel insights 404 | Analytics only when `VERCEL=1` | — | Pending deploy |
-| 11 | During hours undefined | `routing-summary` fallback | — | Pending deploy |
-| 12 | ZZ-TEST cleanup | Via app APIs on prod workspace | — | Pending auth |
+| 1 | Integration detail crash when disconnected | Normalized API connection; `IntegrationDetailContent` + error boundary | `test:power-dialer-phase7` | Browser verified (salesforce/zoho/pipedrive) |
+| 2 | CSV preview auto-run + labels | `guessCsvColumnMapping` + debounced preview; `SimpleSelect` visible labels | `test:power-dialer-phase7` | Not re-tested on prod CSV upload this pass |
+| 3 | Scripts library CRUD | `scripts/[id]` PATCH/DELETE; UI edit/preview/clone/archive/delete/default | API route added | Not browser-tested (no saved scripts in QA) |
+| 4 | Dialer session setup controls | Pre-session campaign detail, caller ID, mode, phone fields, readouts, eligible count | — | Inconclusive (no campaign in QA workspace) |
+| 5 | Remove debug copy | Settings, callbacks, call history, integrations labels | — | Settings header verified |
+| 6 | Settings tabs spec | 11 tabs; VM opt-in under Voicemail drops; merged Compliance | — | Browser verified |
+| 7 | Dispositions UX | Delete confirm; add outcome focus + toast; sort order field | — | Not browser-tested this pass |
+| 8 | Campaign drawer | Inline field errors; tab overflow; empty list link | — | Not browser-tested this pass |
+| 9 | URL state | Callbacks `?tab=`; Analytics `?tab=` + path redirects | — | Browser verified |
+| 10 | Vercel insights 404 | Analytics only when `VERCEL=1` | — | Browser verified (no 404) |
+| 11 | During hours undefined | `routing-summary` fallback | — | Browser verified on Phone overview |
+| 12 | ZZ-TEST cleanup | Via app APIs on prod workspace | — | Blocked — no prod auth in cloud agent |
 
 ## Could not verify
 
