@@ -165,7 +165,7 @@
 | Batch4 + B3 leftovers | `8ad7caacc`, `3ec1ec3a9`, `e92a00f0c` | `test:power-dialer-batch4-b3`, `test:power-dialer-batch3` PASS; migration `20261024120000` |
 | Batch5 + B4 leftovers | `4e445fbb6`, `8f201b4d1`, `89f0b4645`, `5c4924c17` | `test:power-dialer-batch5-b4`, `test:power-dialer-batch4-b3` PASS; migration `20261024140000` |
 | Batch6 + B5 leftovers | `0f4103c44`, `6470d4d9e`, `068b01e57`, `e8f6e4c8d` | `test:power-dialer-batch6` PASS; migration `20261024160000` |
-| Batch7 + B6 leftovers | _(see below after push)_ | `test:power-dialer-batch7` PASS; migration `20261024180000`; full `tsc` stack overflow (pre-existing); `tsconfig.power-dialer-batch7.json` same |
+| Batch7 + B6 leftovers | `32cfd5ece`, `071dff1da`, `f3eb70f23`, `e35ee86d8` | `test:power-dialer-batch7` PASS; migration `20261024180000`; full `tsc --noEmit` **RangeError stack overflow** (repo-wide, pre-existing); targeted `tsconfig.power-dialer-batch7.json` same |
 
 ## Live verification still required
 
