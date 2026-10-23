@@ -154,7 +154,7 @@ cd new-app && npm run typecheck
 | Batch | Commits | Tests |
 |-------|---------|-------|
 | B7 | `32cfd5ece` … `176de9f09` | `test:power-dialer-batch7` |
-| B8 | *(see git log after push)* | `test:power-dialer-batch8`; migration `20261024190000` |
+| B8 | `c353f7a7f`, `8c2bbc46a`, `ee0f661b0`, `c138a722f` | `test:power-dialer-batch8` PASS; migration `20261024190000` |
 
 ## Live verification still required
 
