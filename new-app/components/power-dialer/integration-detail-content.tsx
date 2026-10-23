@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { CrmOAuthConnectButton } from '@/components/integrations/crm-oauth-connect-button'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -80,7 +81,6 @@ export function IntegrationDetailContent({ provider }: { provider: string }) {
   }
 
   const disconnected = !data.connected
-  const connectHref = data.oauthStartUrl
 
   return (
     <Page>
@@ -93,14 +93,10 @@ export function IntegrationDetailContent({ provider }: { provider: string }) {
         ]}
         actions={
           disconnected ? (
-            <Button size="sm" asChild>
-              <Link href={connectHref}>Connect {provider}</Link>
-            </Button>
+            <CrmOAuthConnectButton provider={provider}>Connect {provider}</CrmOAuthConnectButton>
           ) : (
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" asChild>
-                <Link href={connectHref}>Reconnect</Link>
-              </Button>
+              <CrmOAuthConnectButton provider={provider} variant="outline">Reconnect</CrmOAuthConnectButton>
               <Button size="sm" onClick={() => void save()}>Save</Button>
             </div>
           )

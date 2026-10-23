@@ -1,0 +1,152 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { MoreHorizontal, Phone, Users } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { EmptyState, Page, PageHeader, Panel } from '@/components/app/page-primitives'
+import { SearchInput } from '@/components/app/filters'
+import { StatusBadge, type Tone } from '@/components/app/status'
+import { deleteContactApi, fetchContactsPage } from '@/lib/phone-api'
+import { formatPhone, formatWhen } from '@/lib/format'
+import { ContactsActions } from '@/components/contacts/contacts-table'
+
+type Row = {
+  id: string
+  name: string
+  phone: string
+  email: string | null
+  company: string | null
+  status: string
+  createdAt: string
+}
+
+function statusTone(status: string): { label: string; tone: Tone } {
+  if (status === 'archived' || status === 'invalid') return { label: 'Inactive', tone: 'muted' }
+  if (status === 'blocked' || status === 'unsubscribed') return { label: 'Blocked', tone: 'danger' }
+  return { label: 'Active', tone: 'info' }
+}
+
+export function ContactsWorkspace() {
+  const router = useRouter()
+  const [query, setQuery] = useState('')
+  const [rows, setRows] = useState<Row[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  const reload = useCallback(() => {
+    setLoading(true)
+    void fetchContactsPage({ q: query, page: 1, pageSize: 100 })
+      .then((data) => {
+        setRows(data.contacts)
+        setTotal(data.total)
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not load contacts'))
+      .finally(() => setLoading(false))
+  }, [query])
+
+  useEffect(() => {
+    const t = window.setTimeout(reload, query ? 250 : 0)
+    return () => window.clearTimeout(t)
+  }, [reload, query])
+
+  const subtitle = useMemo(
+    () =>
+      `${total} people in this workspace — including power-dialer imports and shared SMS contacts (one record per phone number).`,
+    [total],
+  )
+
+  const onDelete = async (c: Row) => {
+    if (!confirm(`Remove ${c.name} (${formatPhone(c.phone)})? Contacts with call history are marked inactive instead of deleted.`)) {
+      return
+    }
+    try {
+      const r = await deleteContactApi(c.id)
+      if (r.action === 'archived') {
+        toast.success(r.reason || 'Contact marked inactive')
+      } else {
+        toast.success('Contact deleted')
+      }
+      reload()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Delete failed')
+    }
+  }
+
+  return (
+    <Page>
+      <PageHeader title="Contacts" description={subtitle} actions={<ContactsActions total={total} />} />
+      <Panel bodyClassName="p-0" title={<SearchInput value={query} onChange={setQuery} placeholder="Name, phone, company…" />}>
+        {loading ? (
+          <p className="p-6 text-sm text-muted-foreground">Loading contacts…</p>
+        ) : rows.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              icon={Users}
+              title="No contacts match"
+              description={
+                query
+                  ? 'Try a different search. Power-dialer imports appear here once CSV or CRM import creates contact records.'
+                  : 'Import a calling list or add contacts from a list detail page to see them here.'
+              }
+            />
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Name</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead className="hidden lg:table-cell">Company</TableHead>
+                <TableHead className="hidden md:table-cell">Added</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="pr-5 text-right"><span className="sr-only">Actions</span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((c) => {
+                const st = statusTone(c.status)
+                return (
+                  <TableRow key={c.id}>
+                    <TableCell className="pl-5">
+                      <Link href={`/app/contacts/${c.id}`} className="font-medium hover:underline">{c.name}</Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{formatPhone(c.phone)}</TableCell>
+                    <TableCell className="hidden text-muted-foreground lg:table-cell">{c.company || '—'}</TableCell>
+                    <TableCell className="hidden text-muted-foreground md:table-cell">{formatWhen(c.createdAt)}</TableCell>
+                    <TableCell><StatusBadge tone={st.tone}>{st.label}</StatusBadge></TableCell>
+                    <TableCell className="pr-5 text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Call ${c.name}`}
+                          onClick={() => router.push(`/app/phone/dialer?to=${encodeURIComponent(c.phone)}`)}
+                        >
+                          <Phone />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`More for ${c.name}`} />}>
+                            <MoreHorizontal />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => router.push(`/app/contacts/${c.id}`)}>View</DropdownMenuItem>
+                            <DropdownMenuItem variant="destructive" onClick={() => void onDelete(c)}>Delete contact</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </Panel>
+    </Page>
+  )
+}

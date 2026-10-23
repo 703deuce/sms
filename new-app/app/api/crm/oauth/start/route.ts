@@ -5,6 +5,24 @@ import { startCrmOAuth } from "@/lib/crm/oauth";
 import { isCrmProvider } from "@/lib/crm/registry";
 import { requireCrmPermission } from "@/lib/crm/permissions";
 
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const provider = url.searchParams.get("provider")?.trim();
+  if (!provider) {
+    return NextResponse.json(
+      { error: "Missing provider query parameter. Use POST with JSON body to start CRM connect." },
+      { status: 400 },
+    );
+  }
+  return NextResponse.json(
+    {
+      error:
+        "CRM connect must be started with POST /api/crm/oauth/start and a JSON body { provider }. Prefetching this URL is not supported.",
+    },
+    { status: 400 },
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const auth = await requireSession();

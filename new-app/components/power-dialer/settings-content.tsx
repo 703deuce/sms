@@ -68,13 +68,13 @@ export function PowerDialerSettingsContent() {
             <TabsTrigger value="dialing">Dialing</TabsTrigger>
             <TabsTrigger value="dispositions">Dispositions</TabsTrigger>
             <TabsTrigger value="scripts">Scripts</TabsTrigger>
-            <TabsTrigger value="vm-drops">Voicemail drops</TabsTrigger>
-            <TabsTrigger value="screening">Call screening</TabsTrigger>
+            <TabsTrigger value="vm-drops">Voicemail Drops</TabsTrigger>
+            <TabsTrigger value="screening">Call Screening</TabsTrigger>
             <TabsTrigger value="caller-id">Caller ID</TabsTrigger>
             <TabsTrigger value="recording">Recording</TabsTrigger>
             <TabsTrigger value="compliance">Compliance</TabsTrigger>
             <TabsTrigger value="team">Team</TabsTrigger>
-            <TabsTrigger value="usage">Usage &amp; subscription</TabsTrigger>
+            <TabsTrigger value="usage">Usage &amp; Subscription</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="general" className="mt-6">
@@ -240,7 +240,7 @@ export function PowerDialerSettingsContent() {
         <TabsContent value="screening" className="mt-6">
           <Panel
             title="Call screening"
-            description="Detection uses Telnyx AMD / premium screener events when available. Intro playback and bypass are not guaranteed — feature defaults off until verified on real screened devices."
+            description="When enabled, Transovo can flag automated call screeners so reps know when a person may not be on the line yet. Results depend on the callee’s carrier and device."
           >
             <div className="flex max-w-lg flex-col gap-3 text-sm">
               <label className="flex items-center gap-2">
@@ -301,7 +301,7 @@ export function PowerDialerSettingsContent() {
         <TabsContent value="usage" className="mt-6">
           <Panel title="Usage & subscription" description="Billable minutes are calculated from connected talk time on power-dialer attempts and your workspace subscription limits.">
             <p className="text-sm text-muted-foreground">
-              Configure included minutes and overage behavior under workspace billing limits. When overage behavior is set to block, new dial sessions are prevented once included minutes are exhausted.
+              Included minutes and overage rules come from your Transovo subscription. When you choose to block overage, new dial sessions stop after included minutes are used up.
             </p>
             <label className="mt-4 flex max-w-xs flex-col gap-1.5 text-sm">
               <span className="font-medium">Usage alert threshold (%)</span>

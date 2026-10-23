@@ -12,6 +12,7 @@ import {
   addListContactsToCampaign,
   fetchPowerCampaigns,
   fetchPowerListDetail,
+  deleteContactApi,
   patchListMembers,
   saveListFilters,
   searchContactsApi,
@@ -100,6 +101,7 @@ export function ListDetailContent({ listId }: { listId: string }) {
 
   const bulkRemove = async () => {
     if (!selected.size) return
+    if (!confirm(`Remove ${selected.size} contact(s) from this list? Contact records stay in Contacts.`)) return
     try {
       await patchListMembers(listId, 'remove', [...selected])
       toast.success('Removed from list')
@@ -107,6 +109,29 @@ export function ListDetailContent({ listId }: { listId: string }) {
       load()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Remove failed')
+    }
+  }
+
+  const removeOne = async (contactId: string) => {
+    if (!confirm('Remove this contact from the list? The contact record stays in Contacts.')) return
+    try {
+      await patchListMembers(listId, 'remove', [contactId])
+      toast.success('Removed from list')
+      load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Remove failed')
+    }
+  }
+
+  const deleteOne = async (contactId: string, label: string) => {
+    if (!confirm(`Delete ${label}? Contacts with call history are marked inactive instead of removed.`)) return
+    try {
+      const r = await deleteContactApi(contactId)
+      if (r.action === 'archived') toast.success(r.reason || 'Contact marked inactive')
+      else toast.success('Contact deleted')
+      load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Delete failed')
     }
   }
 
@@ -209,11 +234,12 @@ export function ListDetailContent({ listId }: { listId: string }) {
                 <th className="px-2 py-2" scope="col">Phone</th>
                 <th className="px-2 py-2" scope="col">Company</th>
                 <th className="px-2 py-2" scope="col">Status</th>
+                <th className="px-2 py-2" scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
               {data.contacts.length === 0 && (
-                <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No contacts on this page.</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No contacts on this page.</td></tr>
               )}
               {data.contacts.map((c) => (
                 <tr key={c.id} className="border-b">
@@ -224,6 +250,12 @@ export function ListDetailContent({ listId }: { listId: string }) {
                   <td className="px-2 py-2 font-mono text-xs">{formatPhone(c.phone)}</td>
                   <td className="px-2 py-2 text-muted-foreground">{c.company || '—'}</td>
                   <td className="px-2 py-2 text-xs">{c.status}</td>
+                  <td className="px-2 py-2">
+                    <div className="flex flex-wrap gap-1">
+                      <Button type="button" size="sm" variant="ghost" onClick={() => void removeOne(c.id)}>Remove</Button>
+                      <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => void deleteOne(c.id, c.phone)}>Delete</Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

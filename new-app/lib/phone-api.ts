@@ -212,6 +212,34 @@ export async function fetchOverviewMetrics() {
   return json.data.totals;
 }
 
+export async function deleteContactApi(contactId: string) {
+  return parse<{ action: string; reason?: string }>(
+    await fetch(`/api/contacts/${contactId}`, { method: "DELETE" }),
+  );
+}
+
+export async function fetchContactsPage(params: { q?: string; page?: number; pageSize?: number }) {
+  const q = new URLSearchParams();
+  if (params.q) q.set("q", params.q);
+  if (params.page) q.set("page", String(params.page));
+  if (params.pageSize) q.set("pageSize", String(params.pageSize));
+  return parse<{
+    total: number;
+    page: number;
+    pageSize: number;
+    contacts: {
+      id: string;
+      name: string;
+      phone: string;
+      email: string | null;
+      company: string | null;
+      status: string;
+      createdAt: string;
+      updatedAt: string;
+    }[];
+  }>(await fetch(`/api/contacts?${q}`));
+}
+
 export async function searchContactsApi(q: string) {
   return parse<{ id: string; name: string; phone: string; status?: string }[]>(
     await fetch(`/api/contacts/search?q=${encodeURIComponent(q)}`),

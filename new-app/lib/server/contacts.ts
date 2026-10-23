@@ -1,6 +1,74 @@
 import { getPrisma } from "@/lib/server/db";
 import { normalizeE164 } from "@/lib/server/phone/normalize";
 
+export async function listWorkspaceContacts(
+  workspaceId: string,
+  opts: { q?: string; page?: number; pageSize?: number },
+) {
+  const prisma = getPrisma();
+  const term = opts.q?.trim() || "";
+  const digits = term.replace(/\D/g, "");
+  const page = Math.max(1, opts.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 50));
+  const where = {
+    workspaceId,
+    status: { not: "INVALID" as const },
+    ...(term
+      ? {
+          OR: [
+            { firstName: { contains: term, mode: "insensitive" as const } },
+            { lastName: { contains: term, mode: "insensitive" as const } },
+            { company: { contains: term, mode: "insensitive" as const } },
+            { email: { contains: term, mode: "insensitive" as const } },
+            ...(digits.length >= 3 ? [{ phone: { contains: digits } }] : []),
+          ],
+        }
+      : {}),
+  };
+  const [total, rows] = await Promise.all([
+    prisma.contact.count({ where }),
+    prisma.contact.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        email: true,
+        company: true,
+        status: true,
+        createdAt: true,
+        customFields: true,
+      },
+    }),
+  ]);
+  return {
+    total,
+    page,
+    pageSize,
+    contacts: rows.map((c) => {
+      const custom =
+        c.customFields && typeof c.customFields === "object"
+          ? (c.customFields as Record<string, unknown>)
+          : {};
+      const archived = Boolean(custom.archivedAt);
+      return {
+        id: c.id,
+        name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.phone,
+        phone: c.phone,
+        email: c.email,
+        company: c.company,
+        status: archived ? "archived" : c.status.toLowerCase(),
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.createdAt.toISOString(),
+      };
+    }),
+  };
+}
+
 export async function searchContacts(workspaceId: string, q: string, limit = 10) {
   const prisma = getPrisma();
   const term = q.trim();
@@ -25,7 +93,10 @@ export async function listContactLists(workspaceId: string) {
   const lists = await prisma.contactList.findMany({
     where: { workspaceId, archivedAt: null },
     include: {
-      powerDialerCampaigns: { select: { id: true, name: true } },
+      powerDialerCampaigns: {
+        where: { status: { not: "archived" } },
+        select: { id: true, name: true },
+      },
     },
     orderBy: { updatedAt: "desc" },
   });

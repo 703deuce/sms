@@ -61,7 +61,7 @@ function DispositionSetEditor({
   onClone,
 }: {
   set: DispositionSet
-  onRefresh: () => void
+  onRefresh: () => Promise<void>
   onClone: (id: string) => void
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -69,6 +69,17 @@ function DispositionSetEditor({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const labelInputRef = useRef<HTMLInputElement | null>(null)
+  const [focusLabelAfterExpand, setFocusLabelAfterExpand] = useState(false)
+
+  useEffect(() => {
+    if (!focusLabelAfterExpand || !expandedId) return
+    const id = window.requestAnimationFrame(() => {
+      labelInputRef.current?.focus()
+      labelInputRef.current?.select()
+      setFocusLabelAfterExpand(false)
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [focusLabelAfterExpand, expandedId, set.dispositions.length])
 
   const patchDispo = async (dispoId: string, patch: Partial<DispositionRow>) => {
     const res = await fetch(`/api/phone/power-dialer/dispositions/${set.id}/items/${dispoId}`, {
@@ -119,13 +130,15 @@ function DispositionSetEditor({
       body: JSON.stringify({ label: 'New outcome' }),
     })
     if (!res.ok) throw new Error('Could not add disposition')
-    const j = (await res.json()) as { data?: { id: string } }
-    onRefresh()
-    if (j.data?.id) {
-      setExpandedId(j.data.id)
-      setDraft(null)
+    const j = (await res.json()) as { data?: DispositionRow }
+    const newId = j.data?.id
+    await onRefresh()
+    if (newId) {
+      const fresh = j.data
+      setExpandedId(newId)
+      setDraft(fresh ? { ...fresh } : null)
+      setFocusLabelAfterExpand(true)
       toast.success('Outcome added — edit the label below')
-      window.setTimeout(() => labelInputRef.current?.focus(), 50)
     }
   }
 
@@ -295,11 +308,11 @@ export function DispositionsLibraryPanel() {
   const [sets, setSets] = useState<DispositionSet[]>([])
   const [newName, setNewName] = useState('')
 
-  const load = useCallback(() => {
-    void fetch('/api/phone/power-dialer/dispositions')
-      .then((r) => r.json())
-      .then((j) => setSets(j.data || []))
-      .catch(() => toast.error('Could not load disposition sets'))
+  const load = useCallback(async () => {
+    const r = await fetch('/api/phone/power-dialer/dispositions')
+    const j = await r.json()
+    if (!r.ok) throw new Error('Could not load disposition sets')
+    setSets(j.data || [])
   }, [])
 
   useEffect(() => {
@@ -442,7 +455,7 @@ export function ScriptsLibraryPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Panel title="Script library" description="Use merge fields: {{first_name}}, {{company}}, {{rep_name}}, and custom field keys. Assign scripts per campaign under Campaign settings.">
+      <Panel title="Script library" description="Use merge fields: {{first_name}}, {{company}}, {{rep_name}}, and custom field keys. Assign a script on each campaign under Call handling.">
         <div className="grid max-w-2xl gap-3">
           <Input placeholder="Script name" value={name} onChange={(e) => setName(e.target.value)} aria-label="Script name" />
           <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} aria-label="Script body" />
@@ -615,7 +628,7 @@ export function VoicemailDropsLibraryPanel({ optIn }: { optIn: boolean }) {
   }
 
   return (
-    <Panel title="Voicemail drops" description="Record in-browser or upload audio. Files are stored in workspace storage; dialer playback uses Telnyx call control (not mock) in production.">
+    <Panel title="Voicemail drops" description="Record in-browser or upload audio. Files are saved to your workspace and played on live calls when you use voicemail drop.">
       {!optIn && (
         <p className="mb-3 text-sm text-warning-foreground">Uploads disabled until compliance opt-in is enabled on the Voicemail drops settings tab.</p>
       )}

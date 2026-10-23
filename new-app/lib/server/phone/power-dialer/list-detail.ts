@@ -9,7 +9,10 @@ export async function getContactListDetail(
   const list = await prisma.contactList.findFirst({
     where: { id: listId, workspaceId },
     include: {
-      powerDialerCampaigns: { select: { id: true, name: true, status: true } },
+      powerDialerCampaigns: {
+        where: { status: { not: "archived" } },
+        select: { id: true, name: true, status: true },
+      },
     },
   });
   if (!list) throw new Error("List not found");

@@ -18,6 +18,7 @@
     "test:power-dialer-phase5": "npx tsx scripts/test-power-dialer-phase5.ts",
     "test:power-dialer-phase6": "npx tsx scripts/test-power-dialer-phase6.ts",
     "test:power-dialer-phase7": "npx tsx scripts/test-power-dialer-phase7.ts",
+    "test:power-dialer-phase8": "npx tsx scripts/test-power-dialer-phase8.ts",
     "test:power-dialer-metrics-consistency": "npx tsx scripts/test-power-dialer-metrics-consistency.ts",
     "test:power-dialer-authorization": "npx tsx scripts/test-power-dialer-authorization.ts",
     "test:phone:prod": "node scripts/test-phone-production-cert.mjs",

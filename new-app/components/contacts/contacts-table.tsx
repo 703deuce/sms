@@ -149,14 +149,14 @@ export function ContactsTable() {
   )
 }
 
-export function ContactsActions() {
+export function ContactsActions({ total = 0 }: { total?: number }) {
   return (
     <>
-      <Button variant="outline" onClick={() => toast('Import contacts', { description: 'Upload a CSV with name and phone columns. Duplicates with dialer leads are merged by phone.' })}>
+      <Button variant="outline" onClick={() => toast('Import contacts', { description: 'Use Power Dialer → Calling lists → Import CSV to add dialer contacts.' })}>
         <Upload />
         Import
       </Button>
-      <Button variant="outline" onClick={() => toast.success('Export started', { description: `${CONTACTS.length} contacts · CSV` })}>
+      <Button variant="outline" onClick={() => toast.success('Export started', { description: `${total} contacts · CSV` })}>
         <Download />
         Export
       </Button>
