@@ -19,6 +19,8 @@ export const campaignExtendedConfigSchema = z.object({
   dncDispositions: z.array(z.string()).optional(),
   memberUserIds: z.array(z.string()).optional(),
   callbackRoutingE164: z.string().optional(),
+  callerIdPhoneNumberId: z.string().nullable().optional(),
+  callerIdPoolNumberIds: z.array(z.string()).optional(),
 });
 
 export type CampaignExtendedConfig = z.infer<typeof campaignExtendedConfigSchema>;
@@ -41,6 +43,8 @@ export function parseExtendedConfig(raw: unknown): CampaignExtendedConfig {
     dncDispositions: o.dncDispositions,
     memberUserIds: o.memberUserIds,
     callbackRoutingE164: o.callbackRoutingE164,
+    callerIdPhoneNumberId: o.callerIdPhoneNumberId,
+    callerIdPoolNumberIds: o.callerIdPoolNumberIds,
   };
   return campaignExtendedConfigSchema.parse(slice);
 }

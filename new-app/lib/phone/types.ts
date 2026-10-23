@@ -30,6 +30,7 @@ export type PhoneCallDto = {
   source: string | null;
   status: string;
   transcriptText: string | null;
+  aiSummary: string | null;
   voicemail: {
     durationSec: number;
     transcript: string | null;

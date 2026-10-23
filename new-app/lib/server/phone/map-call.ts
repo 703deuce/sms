@@ -62,6 +62,7 @@ export function mapHumanCallToDto(
     source: call.source,
     status: call.status,
     transcriptText: call.transcriptText,
+    aiSummary: call.aiSummary,
     voicemail: opts?.voicemail
       ? {
           durationSec: opts.voicemail.durationSeconds ?? 0,

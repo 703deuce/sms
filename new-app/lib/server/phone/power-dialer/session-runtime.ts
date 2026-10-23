@@ -165,7 +165,20 @@ export async function buildEligibilityBreakdown(workspaceId: string, sessionId: 
 
   const now = new Date();
 
-  for (const m of session.campaign.list.members) {
+  const progress =
+    session.progressJson && typeof session.progressJson === "object"
+      ? (session.progressJson as { focusContactId?: string })
+      : {};
+  const members = [...session.campaign.list.members];
+  if (progress.focusContactId) {
+    members.sort((a, b) => {
+      if (a.contactId === progress.focusContactId) return -1;
+      if (b.contactId === progress.focusContactId) return 1;
+      return 0;
+    });
+  }
+
+  for (const m of members) {
     const c = m.contact;
     const campaignAttempts = campaignMap.get(c.id) || [];
     const sessAttempts = sessionByContact.get(c.id) || [];
@@ -296,8 +309,15 @@ export async function createAttemptForSession(
     if (existing) return existing;
   }
 
-  const { nextEligible } = await buildEligibilityBreakdown(workspaceId, sessionId);
-  if (!nextEligible || nextEligible.contact.id !== input.contactId) {
+  const { nextEligible, session: sess } = await buildEligibilityBreakdown(workspaceId, sessionId);
+  const focusId =
+    sess.progressJson && typeof sess.progressJson === "object"
+      ? (sess.progressJson as { focusContactId?: string }).focusContactId
+      : undefined;
+  const allowed =
+    nextEligible?.contact.id === input.contactId ||
+    (focusId && focusId === input.contactId);
+  if (!allowed) {
     throw new Error("Contact is not eligible to dial");
   }
 
@@ -514,7 +534,11 @@ export async function saveAttemptOutcomeWithProgression(
   return attempt;
 }
 
-export async function startSessionWithRep(workspaceId: string, campaignId: string) {
+export async function startSessionWithRep(
+  workspaceId: string,
+  campaignId: string,
+  opts?: { focusContactId?: string },
+) {
   const prisma = getPrisma();
   const repUserId = await assertRepAuthorized(workspaceId);
   await assertCampaignDialAccess(workspaceId, campaignId, repUserId);
@@ -535,6 +559,9 @@ export async function startSessionWithRep(workspaceId: string, campaignId: strin
       status: "active",
       repUserId,
       progressionPhase: "idle",
+      progressJson: opts?.focusContactId
+        ? ({ focusContactId: opts.focusContactId } as import("@prisma/client").Prisma.InputJsonValue)
+        : undefined,
     },
   });
 }

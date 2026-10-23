@@ -123,8 +123,12 @@ export async function updateCampaign(
   });
 }
 
-export async function startSession(workspaceId: string, campaignId: string) {
-  return startSessionWithRep(workspaceId, campaignId);
+export async function startSession(
+  workspaceId: string,
+  campaignId: string,
+  opts?: { focusContactId?: string },
+) {
+  return startSessionWithRep(workspaceId, campaignId, opts);
 }
 
 export async function pauseSession(workspaceId: string, sessionId: string) {

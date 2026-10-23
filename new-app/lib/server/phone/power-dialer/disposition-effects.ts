@@ -62,6 +62,9 @@ export async function applyDispositionEffects(
 }
 
 export function isHumanConversation(disposition: string | null, classification: string | null): boolean {
+  if (classification === "screener" || classification === "voicemail" || classification === "ivr") {
+    return false;
+  }
   if (classification === "human") return true;
   if (!disposition) return false;
   const d = disposition.toLowerCase();

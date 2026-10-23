@@ -207,10 +207,41 @@ export async function createWebRtcOutboundCall(input: {
   const prisma = getPrisma();
   const agentUserId = await resolveInternalUserId();
   const to = normalizeE164(input.to);
-  const from = await resolveCallerIdNumber(input.workspaceId, input.from);
+
+  let fromInput = input.from ?? null;
+  let resolvedPhoneNumberId: string | null = null;
+  if (
+    input.powerDialerAttemptId &&
+    (input.source === "power_dialer" || input.source === "callback" || !fromInput)
+  ) {
+    const preAttempt = await prisma.powerDialerAttempt.findFirst({
+      where: { id: input.powerDialerAttemptId, workspaceId: input.workspaceId },
+      include: { session: true },
+    });
+    if (preAttempt?.session?.campaignId) {
+      const { resolvePowerDialerOutboundCallerId } = await import(
+        "@/lib/server/phone/power-dialer/caller-id-resolution"
+      );
+      const resolved = await resolvePowerDialerOutboundCallerId({
+        workspaceId: input.workspaceId,
+        campaignId: preAttempt.session.campaignId,
+        repUserId: preAttempt.session.repUserId,
+        contactPhone: to,
+      });
+      fromInput = resolved.e164;
+      resolvedPhoneNumberId = resolved.phoneNumberId;
+    }
+  }
+
+  const from = await resolveCallerIdNumber(input.workspaceId, fromInput);
   if (!from) throw new Error("No active caller ID number configured");
 
-  const pn = await resolvePhoneNumberId(input.workspaceId, from);
+  const pn =
+    resolvedPhoneNumberId
+      ? await prisma.phoneNumber.findFirst({
+          where: { id: resolvedPhoneNumberId, workspaceId: input.workspaceId },
+        })
+      : await resolvePhoneNumberId(input.workspaceId, from);
   const contactId = await resolveContactId(input.workspaceId, to);
 
   if (input.idempotencyKey) {
@@ -662,6 +693,26 @@ export async function processHumanCallWebhookEvent(input: {
       }).catch(() => undefined);
     }
   }
+  if (
+    input.eventType === "call.machine.detection.ended" ||
+    input.eventType === "call.machine.premium.detection.ended"
+  ) {
+    const amd = String(
+      input.eventPayload.result || input.eventPayload.machine_detection_result || "",
+    );
+    const idem = `${input.eventType}:${eventControlId}:${amd}`;
+    const { applyAmdToPowerDialerAttempt } = await import(
+      "@/lib/server/phone/power-dialer/answer-detection"
+    );
+    await applyAmdToPowerDialerAttempt({
+      workspaceId: call.workspaceId,
+      humanCallId: call.id,
+      amdResult: amd,
+      eventType: input.eventType,
+      idempotencyKey: idem,
+    }).catch(() => undefined);
+  }
+
   if (input.eventType === "call.recording.saved") {
     const urls = input.eventPayload.recording_urls as Record<string, string> | undefined;
     const recordingUrl = urls?.mp3 || urls?.wav || null;
@@ -675,6 +726,12 @@ export async function processHumanCallWebhookEvent(input: {
     }
     const isVoicemail =
       call.status === "voicemail" || String(call.disposition || "").startsWith("voicemail:");
+    if (recordingUrl && call.source === "power_dialer") {
+      const { maybeTranscribePowerDialerCall } = await import(
+        "@/lib/server/phone/human-call-transcription"
+      );
+      void maybeTranscribePowerDialerCall(call.workspaceId, call.id).catch(() => undefined);
+    }
     if (recordingUrl && isVoicemail) {
       const durationMs =
         Number(

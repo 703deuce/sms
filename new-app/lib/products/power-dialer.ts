@@ -18,6 +18,13 @@ export type PowerDialerWorkspaceSettings = {
   recordingConsentAnnounce?: boolean
   recordingRetentionDays?: number
   recordingAccessRoles?: string[]
+  defaultCallerIdPhoneNumberId?: string | null
+  callScreeningEnabled?: boolean
+  callScreeningNotifyRep?: boolean
+  callScreeningSkipRecognized?: boolean
+  callScreeningRepHandles?: boolean
+  callScreeningUncertainBehavior?: 'rep_handles' | 'hangup' | 'voicemail'
+  premiumReputationEntitlement?: boolean
 }
 
 const DEFAULTS: PowerDialerWorkspaceSettings = {
@@ -62,5 +69,21 @@ export function mergePowerDialerSettings(
     recordingAccessRoles: Array.isArray(o.recordingAccessRoles)
       ? o.recordingAccessRoles.filter((x): x is string => typeof x === 'string')
       : ['OWNER', 'ADMINISTRATOR', 'MANAGER'],
+    defaultCallerIdPhoneNumberId:
+      typeof o.defaultCallerIdPhoneNumberId === 'string' ? o.defaultCallerIdPhoneNumberId : null,
+    callScreeningEnabled: typeof o.callScreeningEnabled === 'boolean' ? o.callScreeningEnabled : false,
+    callScreeningNotifyRep:
+      typeof o.callScreeningNotifyRep === 'boolean' ? o.callScreeningNotifyRep : true,
+    callScreeningSkipRecognized:
+      typeof o.callScreeningSkipRecognized === 'boolean' ? o.callScreeningSkipRecognized : false,
+    callScreeningRepHandles:
+      typeof o.callScreeningRepHandles === 'boolean' ? o.callScreeningRepHandles : true,
+    callScreeningUncertainBehavior:
+      o.callScreeningUncertainBehavior === 'hangup' ||
+      o.callScreeningUncertainBehavior === 'voicemail'
+        ? o.callScreeningUncertainBehavior
+        : 'rep_handles',
+    premiumReputationEntitlement:
+      typeof o.premiumReputationEntitlement === 'boolean' ? o.premiumReputationEntitlement : false,
   }
 }

@@ -449,6 +449,7 @@ model Workspace {
   powerDialerScripts                     PowerDialerScript[]
   powerDialerVoicemailDrops              PowerDialerVoicemailDrop[]
   powerDialerCallbacks                   PowerDialerCallback[]
+  powerDialerDetectionEvents             PowerDialerDetectionEvent[]
   powerDialerSessions                    PowerDialerSession[]
   powerDialerAttempts                    PowerDialerAttempt[]
   pushSubscriptions                      PushSubscription[]
@@ -4696,6 +4697,23 @@ model PowerDialerCallback {
   @@index([campaignId, status])
   @@index([contactId])
   @@map("power_dialer_callbacks")
+}
+
+model PowerDialerDetectionEvent {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  attemptId      String?
+  humanCallId    String?
+  eventType      String
+  result         String?
+  payload        Json?
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([attemptId])
+  @@map("power_dialer_detection_events")
 }
 
 model TelnyxWebhookDedup {

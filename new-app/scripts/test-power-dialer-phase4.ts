@@ -8,6 +8,7 @@ import { buildCallbackTabWhere, dayBoundsUtc } from "../lib/server/phone/power-d
 import { parseHasRecordingParam } from "../lib/server/phone/power-dialer/call-list-filters";
 import { applyDispositionEffects } from "../lib/server/phone/power-dialer/disposition-effects";
 
+process.env.NODE_ENV = "test";
 process.env.POWER_DIALER_VM_DROP_MOCK = "1";
 
 async function testMerge() {
