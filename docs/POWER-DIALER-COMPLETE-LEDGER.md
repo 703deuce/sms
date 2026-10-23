@@ -102,7 +102,7 @@
 
 **Decision:** Power Dialer keeps the rep on **Telnyx WebRTC** (`client.newCall`) for media. AMD runs on the **linked Call Control leg** for that outbound call: when the browser links `telnyxCallControlId` to `HumanCall`, the server issues Telnyx `answering_machine_detection_start` (premium-capable) on that control ID. Webhooks `call.machine.detection.ended` / `call.machine.premium.detection.ended` feed `applyAmdToPowerDialerAttempt` with expanded result mapping (`human_residence`, `human_business`, `silence`, `fax_detected`, etc.). Future parallel mode (B8) will use **server-originated PSTN callee legs** (`dialPstnLeg` + bridge) with AMD on originate; B1 does not switch the default rep path to server-only originate.
 
-**Rollback:** B1 has no new Prisma migrations; revert commit only.
+**Rollback (B1+B2 migration):** `20261023190000_power_dialer_b1_b2_native_crm` — drop new tables/columns in reverse order (see migration.sql header); revert application commit.
 
 ## Batch commits (feature branch)
 
@@ -110,3 +110,4 @@
 |-------|---------|-------|
 | B1 setup + docs | `67a830031` | — |
 | B1 core engine | `85c8498b1` | `test:power-dialer-b1` PASS, `test:power-dialer-phase9` PASS |
+| B1 carry-overs + B2 foundation | _(this run)_ | `test:power-dialer-b1-carryovers`, `test:mini-crm-native`, `test:power-dialer-b1`, `test:power-dialer-phase9` |
