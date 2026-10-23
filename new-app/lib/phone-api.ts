@@ -229,6 +229,7 @@ export type PowerCampaignDto = {
   completedPct: number;
   attempts: number;
   maxAttempts: number;
+  dialingMode?: string;
   created: string;
 };
 
@@ -278,6 +279,7 @@ export type PowerDialerOverviewDto = {
     contactPhone: string;
     campaignName: string;
   }[];
+  attentionRequired?: { code: string; message: string }[];
 };
 
 export type PowerDialerCallbackDto = {
@@ -394,6 +396,24 @@ export type PowerSessionStateDto = {
     status: string;
     campaign: { name: string; callerIdE164: string; configJson: unknown; list: { name: string } };
   } | null;
+  rules?: {
+    dialingMode: string;
+    postCallIntervalSeconds: number;
+    requireDispositionBeforeNext: boolean;
+    ringTimeoutSeconds: number;
+    totalAttemptCap: number;
+  };
+  progression?: {
+    phase: string;
+    nextCallAt: string | null;
+    countdownSeconds: number;
+    autoDialReady: boolean;
+  };
+  eligibilityCounts?: Record<string, number>;
+  ringTimeoutHangup?: string | null;
+  emptyReasons?: { bucket: string; count: number }[];
+  nextEligibleAt?: string | null;
+  currentAttempt?: { id: string; status: string; disposition: string | null } | null;
   attempts?: {
     id: string;
     disposition: string | null;
@@ -413,7 +433,7 @@ export async function fetchPowerSession(sessionId: string, withAttempts = true) 
 
 export async function powerSessionAction(
   sessionId: string,
-  action: "pause" | "resume" | "end" | "create_attempt",
+  action: "pause" | "resume" | "end" | "create_attempt" | "skip_countdown",
   extra?: Record<string, unknown>,
 ) {
   const res = await fetch(`/api/phone/power-dialer/sessions/${sessionId}`, {

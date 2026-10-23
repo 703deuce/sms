@@ -12,6 +12,7 @@
     "start": "node scripts/start-production.mjs",
     "typecheck": "tsc --noEmit",
     "test:phone": "node scripts/test-phone-runtime-logic.mjs && node scripts/test-phone-recording-resolve.mjs && node scripts/test-phone-complete.mjs",
+    "test:power-dialer-engine": "npx tsx scripts/test-power-dialer-engine.ts",
     "test:phone:prod": "node scripts/test-phone-production-cert.mjs",
     "test:receptionist": "node scripts/test-receptionist-complete.mjs && node scripts/test-telephony-voice-catalog.mjs && node scripts/test-telephony-switch-sequence.mjs && node scripts/test-ai-receptionist-two-modes.mjs && node scripts/test-conversational-ivr-profile.mjs",
     "test:receptionist:runtime-verify": "NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/test-ai-receptionist-runtime-verification.ts",

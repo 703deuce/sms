@@ -41,6 +41,16 @@ export function PowerDialerOverviewContent() {
         }
       />
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      {(data?.attentionRequired?.length ?? 0) > 0 && (
+        <section aria-label="Attention required" className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          <p className="font-medium">Attention required</p>
+          <ul className="list-disc pl-5 text-muted-foreground">
+            {data?.attentionRequired?.map((a) => (
+              <li key={a.code}>{a.message}</li>
+            ))}
+          </ul>
+        </section>
+      )}
       {kpis && (
         <section aria-label="Today" className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="Attempts today" value={kpis.attemptsToday} />

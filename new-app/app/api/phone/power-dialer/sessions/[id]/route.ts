@@ -5,11 +5,11 @@ import {
   endSession,
   pauseSession,
   resumeSession,
-  getNextEligibleContact,
   createAttempt,
   listSessionAttempts,
-  getSession,
+  getSessionRuntime,
 } from "@/lib/server/phone/power-dialer";
+import { getPrisma } from "@/lib/server/db";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -18,12 +18,24 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const workspaceId = await resolveWorkspaceId();
     const url = new URL(request.url);
     const includeAttempts = url.searchParams.get("attempts") === "1";
-    const [next, session, attempts] = await Promise.all([
-      getNextEligibleContact(workspaceId, id),
-      getSession(workspaceId, id),
+    const [runtime, attempts] = await Promise.all([
+      getSessionRuntime(workspaceId, id),
       includeAttempts ? listSessionAttempts(workspaceId, id) : Promise.resolve(undefined),
     ]);
-    return NextResponse.json({ data: { next, session, attempts } });
+    return NextResponse.json({
+      data: {
+        next: runtime.next,
+        session: runtime.session,
+        rules: runtime.rules,
+        progression: runtime.progression,
+        eligibilityCounts: runtime.eligibilityCounts,
+        currentAttempt: runtime.currentAttempt,
+        ringTimeoutHangup: runtime.ringTimeoutHangup,
+        emptyReasons: runtime.emptyReasons,
+        nextEligibleAt: runtime.nextEligibleAt,
+        attempts,
+      },
+    });
   } catch (err) {
     return jsonError(err, 400);
   }
@@ -39,10 +51,20 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (body.action === "pause") await pauseSession(workspaceId, id);
     else if (body.action === "resume") await resumeSession(workspaceId, id);
     else if (body.action === "end") await endSession(workspaceId, id);
-    else if (body.action === "create_attempt") {
+    else if (body.action === "skip_countdown") {
+      const prisma = getPrisma();
+      await prisma.powerDialerSession.updateMany({
+        where: { id, workspaceId, status: "active" },
+        data: { nextCallAt: new Date() },
+      });
+    } else if (body.action === "create_attempt") {
       const contactId = String((body as { contactId?: string }).contactId || "");
       const attemptNumber = Number((body as { attemptNumber?: number }).attemptNumber || 1);
-      const data = await createAttempt(workspaceId, id, contactId, attemptNumber);
+      const idempotencyKey =
+        typeof (body as { idempotencyKey?: string }).idempotencyKey === "string"
+          ? (body as { idempotencyKey?: string }).idempotencyKey
+          : undefined;
+      const data = await createAttempt(workspaceId, id, contactId, attemptNumber, idempotencyKey);
       return NextResponse.json({ data });
     }
     else return NextResponse.json({ error: "Unknown action" }, { status: 400 });

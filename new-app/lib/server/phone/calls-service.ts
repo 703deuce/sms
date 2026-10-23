@@ -231,9 +231,24 @@ export async function createWebRtcOutboundCall(input: {
   });
 
   if (input.powerDialerAttemptId) {
+    const attempt = await prisma.powerDialerAttempt.findFirst({
+      where: { id: input.powerDialerAttemptId, workspaceId: input.workspaceId },
+      include: { session: { include: { campaign: true } } },
+    });
+    const ringSec =
+      attempt?.session?.campaign?.ringTimeoutSeconds ??
+      (attempt?.ringTimeoutAt
+        ? Math.max(10, Math.round((attempt.ringTimeoutAt.getTime() - Date.now()) / 1000))
+        : 30);
     await prisma.powerDialerAttempt.updateMany({
       where: { id: input.powerDialerAttemptId, workspaceId: input.workspaceId },
-      data: { humanCallId: call.id, status: "dialing", startedAt: new Date() },
+      data: {
+        humanCallId: call.id,
+        status: "dialing",
+        startedAt: new Date(),
+        dialedAt: new Date(),
+        ringTimeoutAt: new Date(Date.now() + ringSec * 1000),
+      },
     });
   }
 
@@ -354,17 +369,13 @@ export async function finalizeWebRtcClientHangup(input: {
 
   const attemptId = (call.metadata as { powerDialerAttemptId?: string } | null)?.powerDialerAttemptId;
   if (attemptId) {
-    await prisma.powerDialerAttempt.updateMany({
-      where: {
-        id: attemptId,
-        workspaceId: input.workspaceId,
-        status: { in: ["dialing", "pending", "ringing"] },
-      },
-      data: {
-        status: "completed",
-        endedAt: new Date(),
-        disposition: wasAnswered ? "Connected" : "No answer",
-      },
+    const { onPowerDialerCallEnded } = await import(
+      "@/lib/server/phone/power-dialer/session-runtime"
+    );
+    await onPowerDialerCallEnded(input.workspaceId, attemptId, {
+      wasAnswered,
+      answerClassification: wasAnswered ? "uncertain" : "no_answer",
+      billableSeconds: null,
     });
   }
 
@@ -724,9 +735,26 @@ export async function processHumanCallWebhookEvent(input: {
 
   const attemptId = (call.metadata as { powerDialerAttemptId?: string } | null)?.powerDialerAttemptId;
   if (attemptId && input.eventType === "call.hangup") {
-    await prisma.powerDialerAttempt.updateMany({
-      where: { id: attemptId },
-      data: { status: "completed", endedAt: new Date() },
+    const payload = input.eventPayload as {
+      bill_duration_secs?: number;
+      billing_seconds?: number;
+      duration_secs?: number;
+    };
+    const billableSeconds =
+      Number(payload.bill_duration_secs ?? payload.billing_seconds ?? payload.duration_secs) ||
+      (updated.answeredAt && updated.endedAt
+        ? Math.max(
+            0,
+            Math.floor((updated.endedAt.getTime() - updated.answeredAt.getTime()) / 1000),
+          )
+        : null);
+    const { onPowerDialerCallEnded } = await import(
+      "@/lib/server/phone/power-dialer/session-runtime"
+    );
+    await onPowerDialerCallEnded(call.workspaceId, attemptId, {
+      wasAnswered: Boolean(call.answeredAt || wasAnswered),
+      answerClassification: call.answeredAt ? "uncertain" : "no_answer",
+      billableSeconds,
     });
   }
 

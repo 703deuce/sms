@@ -2,122 +2,93 @@
 
 Statuses: **Not started** | **In progress** | **Implemented** | **Tested** | **Deployed** | **Browser verified** | **Blocked**
 
-Last updated: Phase 1 (product structure & foundations).
+Last updated: Phase 2 (core engine — backend enforcement + dialer UI). Rows stay **In progress** until Grok browser-verifies after deploy.
+
+## Phase 2 engine notes (implementation)
+
+| Topic | Choice / status |
+|-------|-----------------|
+| Authoritative eligibility | `evaluateContactEligibility` in `new-app/lib/server/phone/power-dialer/eligibility.ts` — used by `createAttemptForSession` and `buildEligibilityBreakdown` (manual + auto progression). |
+| Campaign rules | Persisted columns on `PowerDialerCampaign` + Zod `parseCampaignConfigPatch` / `resolveCampaignRules`. Migration `20261023130000_power_dialer_engine_phase2`. |
+| Auto progression | Power mode: `progressionPhase` + `nextCallAt` + client `autoDialReady`; preview = manual Call. Pause/End stop progression; `endSessionHard` cancels live attempts. |
+| Session recovery | `GET /api/phone/power-dialer/sessions/:id` returns runtime (progression, counts, current attempt, countdown). Idempotency: `idempotencyKey` unique + `(sessionId, sequenceNumber)` unique. |
+| Ring timeout | **WebRTC outbound** — no Telnyx `timeout_secs` on browser leg. Server sets `ringTimeoutAt` on attempt; `sweepPowerDialerTimeouts` on session GET; client hangs up via `ringTimeoutHangup` + `endCall()`. **Not live-call verified.** |
+| Disposition gate | `createAttemptForSession` throws if prior attempt ended without disposition when `requireDispositionBeforeNext`. |
+| Hangup idempotency | `onPowerDialerCallEnded` skips duplicate progression when attempt already in terminal status; billable seconds backfilled on retry. |
+| Telnyx webhook dedup | `TelnyxWebhookDedup` on `/api/telnyx/phone` (pre-existing). |
+| Human conversation KPIs | `isHumanConversation(disposition, answerClassification)` — voicemail/uncertain non-human not counted as human conversations. |
+
+## Telnyx detection research (AMD / screening — not built)
+
+| Capability | Telnyx surface | Events / timing | Cost / notes |
+|------------|----------------|-----------------|--------------|
+| Answering Machine Detection (AMD) | Call Control `dial` / `transfer` with `answering_machine_detection` (`detect`, `detect_beep`, `detect_words`, `greeting_end`, etc.) | `call.machine.detection.ended` with `result`: `human`, `machine`, `not_sure`, `fax`, etc.; optional `call.machine.premium.detection.ended` on premium tiers | Per-minute / per-detection billing per Telnyx voice pricing; adds post-answer analysis latency (often 1–3s+). WebRTC browser outbound today does not pass AMD flags on origination. |
+| Premium / iOS screening hints | Telnyx “premium” AMD / screening-oriented detection (marketing: better mobile screening & voicemail discrimination) | Same machine-detection event family; `not_sure` / `machine` more common on screened calls | Higher per-call cost vs standard AMD; needs explicit product enablement on connection/app. |
+| Recommended Phase 3+ | Bridge power-dialer PSTN leg to Call Control with AMD enabled **or** fork WebRTC to record classification from rep disposition only | Until then: `answerClassification` stays `uncertain` on connect; rep disposition drives metrics | Screening-specific auto workflows (leave VM, skip) **not implemented** in Phase 2. |
 
 ## Teardown reconciliation (formerly “unverified”)
 
-| Item | Finding in repo (Phase 1 audit) |
-|------|----------------------------------|
-| Ring timeout | **Not enforced** for power dialer outbound; `configJson` has no runtime ring hangup; Phone inbound has `ringTimeoutAt` only. Settings store `defaultRingTimeoutSec` (not applied to dial yet). |
-| Require disposition before next dial | **Partial** — UI blocks “Save & next” without disposition; user can dial again without saving; no backend gate; `requireDispositionBeforeNext` in workspace settings only. |
-| Do not call → BLOCKED | **Implemented (Phase 1)** — `saveAttemptOutcome` sets `contact.status = BLOCKED` when disposition matches DNC. Eligibility already skips BLOCKED/UNSUBSCRIBED. |
+| Item | Finding in repo (Phase 2) |
+|------|---------------------------|
+| Ring timeout | **Implemented (server + client)** — not PSTN `timeout_secs`; not live-verified. |
+| Require disposition before next dial | **Backend enforced** when campaign `requireDispositionBeforeNext` true. |
+| Do not call → BLOCKED | **Implemented** — disposition effects idempotent via `dispositionEffectsAt`. |
 | Webhooks / public API | **Not started** — no power-dialer webhook routes or PAT APIs in `new-app`. |
-| Inbound routing for outbound caller IDs | **Partial** — numbers use shared Phone/Telnyx infra; no dialer-specific callback routing map. |
-| AI transcripts on dialer calls | **Partial** — `HumanCall` supports `transcriptText` / recording via shared phone pipeline when recording runs; no dialer-specific transcript UI beyond call detail. |
+| Campaign contacts reason codes | **Partial** — session breakdown counts; no per-contact campaign subpage API yet. |
+| Session summary metrics | **Partial** — basic session log panel; not full spec rollup UI. |
 
 ## Main nav & shell
 
 | Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
 |-------------|--------|---------|----------|-------|--------|---------|------------|
-| Power Dialer in main product nav | `lib/nav.ts`, `app-header` PRODUCTS | N/A | Implemented | Pending | Pending | Pending | In progress |
-| Remove from Phone contextual nav | Phone `nav.ts` items | N/A | Implemented | Pending | Pending | Pending | In progress |
-| Redirect `/app/phone/power-dialer` | Next redirect page | N/A | Implemented | Pending | Pending | Pending | In progress |
-| 10 sidebar routes under `/app/power-dialer` | MCTB/Phone pattern | Mixed | Implemented | Pending | Pending | Pending | In progress |
-| Workspace product settings | `workspace.settingsJson.powerDialer` | Implemented API | Settings tabs (General/Dialing) | Pending | Pending | Pending | In progress |
+| Power Dialer in main product nav | `lib/nav.ts`, `app-header` PRODUCTS | N/A | Implemented | VM engine | Pending | Pending | In progress |
+| Remove from Phone contextual nav | Phone `nav.ts` items | N/A | Implemented | — | Pending | Pending | In progress |
+| Redirect `/app/phone/power-dialer` | Next redirect page | N/A | Implemented | — | Pending | Pending | In progress |
+| 10 sidebar routes under `/app/power-dialer` | MCTB/Phone pattern | Mixed | Implemented | — | Pending | Pending | In progress |
+| Workspace product settings | `workspace_limits.limits.powerDialer` | Implemented API | Settings tabs (General/Dialing) | — | Pending | Pending | In progress |
 
 ## P1 Overview
 
 | Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
 |-------------|--------|---------|----------|-------|--------|---------|------------|
-| KPI strip (today) | `getPowerDialerOverview` | Implemented | Overview page | Pending | Pending | Pending | In progress |
-| Setup checklist | Lists/campaigns counts | Implemented | Overview panel | Pending | Pending | Pending | In progress |
-| Campaign performance strip | `listCampaigns` data | Implemented | Overview list | Pending | Pending | Pending | In progress |
-| Recent activity | `PowerDialerAttempt` | Implemented | Overview list | Pending | Pending | Pending | In progress |
-| Attention required (full) | — | In progress | Partial copy only | Not started | Pending | Pending | In progress |
-| Start dialing CTA | Dialer route | N/A | Implemented | Pending | Pending | Pending | In progress |
+| KPI strip (today) | `getPowerDialerOverview` | Implemented | Overview page | VM engine | Pending | Pending | In progress |
+| Setup checklist | Lists/campaigns counts | Implemented | Overview panel | — | Pending | Pending | In progress |
+| Campaign performance strip | `listCampaigns` data | Implemented | Overview list | — | Pending | Pending | In progress |
+| Recent activity | `PowerDialerAttempt` | Implemented | Overview list | — | Pending | Pending | In progress |
+| Attention required (full) | `attentionRequired` API | Implemented | Overview banners (lists/campaigns/eligible) | — | Pending | Pending | In progress |
+| Start dialing CTA | Dialer route | N/A | Implemented | — | Pending | Pending | In progress |
 
 ## P2 Dialer
 
 | Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
 |-------------|--------|---------|----------|-------|--------|---------|------------|
-| Session setup (campaign, list, caller ID) | `power-dialer.tsx` Session | Existing sessions API | `/dialer` | Pending | Pending | Pending | In progress |
-| Manual dial + dispositions | WebRTC `power_dialer` source | Existing | Existing | Pending | Pending | Pending | In progress |
-| Auto sequential dialing | — | Not started | Not started | Not started | — | — | Not started |
-| Session persistence / refresh | DB sessions | Partial | Client state only | Not started | — | — | In progress |
-| Session summary | — | Not started | Not started | Not started | — | — | Not started |
-| Voicemail drop / screening / transfer | Phone stack | Partial / deferred | Not in dialer UI | Not started | — | — | Not started |
+| Session setup (campaign, list, caller ID) | `power-dialer-session.tsx` | Sessions API | `/dialer` | — | Pending | Pending | In progress |
+| Manual dial + dispositions | WebRTC `power_dialer` source | Implemented | Preview mode Call + disposition | — | Pending | Pending | In progress |
+| Auto sequential dialing | `session-runtime` progression | Implemented | Power mode auto-dial + countdown | VM engine | Pending | Pending | In progress |
+| Session persistence / refresh | DB sessions + GET runtime | Implemented | Poll + idempotent create_attempt | — | Pending | Pending | In progress |
+| Session summary | — | Partial | Basic end panel | — | Pending | Pending | In progress |
+| Voicemail drop / screening / transfer | Phone stack | Deferred | Not in dialer UI | — | — | — | Not started |
 
 ## P3 Campaigns
 
 | Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
 |-------------|--------|---------|----------|-------|--------|---------|------------|
-| Campaign list + create | `PowerDialerCampaign` | Implemented | `/campaigns` tab | Pending | Pending | Pending | In progress |
-| Full create/edit wizard sections | — | Partial `configJson` | Minimal form only | Not started | — | — | In progress |
-| Campaign contacts subpage | — | Not started | Not started | Not started | — | — | Not started |
-| Campaign history / analytics subpages | — | Partial rollups | Analytics page lists campaigns | Not started | — | — | In progress |
-| Backend rule enforcement | — | Partial (maxAttempts, DNC skip) | — | Not started | — | — | In progress |
+| Campaign list + create | `PowerDialerCampaign` | Implemented | `/campaigns` tab | — | Pending | Pending | In progress |
+| Full create/edit wizard sections | Rule columns + `configJson` | Partial | Minimal form | — | — | — | In progress |
+| Campaign contacts subpage | — | Not started | Not started | — | — | — | Not started |
+| Backend rule enforcement | `eligibility.ts` + caps | Implemented | — | VM engine | Pending | Pending | In progress |
 
-## P4 Calling lists
+## P4–P10
 
-| Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
-|-------------|--------|---------|----------|-------|--------|---------|------------|
-| List CRUD | ContactList | Implemented | `/calling-lists` tab | Pending | Pending | Pending | In progress |
-| CSV paste import | `lists/import` | Implemented | Lists tab | Pending | Pending | Pending | In progress |
-| Column mapping / dedupe UI | — | Partial server | Paste only | In progress | — | — | In progress |
-| List detail / filters / bulk | — | Not started | Not started | Not started | — | — | Not started |
+Unchanged from Phase 1 scope — still **In progress** or **Not started** per row in prior inventory; no Phase 2 scope expansion except engine dependencies above.
 
-## P5 Callbacks
+## Status summary (Phase 2)
 
-| Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
-|-------------|--------|---------|----------|-------|--------|---------|------------|
-| Callback queues (tabs) | `callbackAt` on attempts | Implemented API | `/callbacks` | Pending | Pending | Pending | In progress |
-| Auto callback dial | — | Not started | Not started | Not started | — | — | Not started |
+| Status | Count (approx.) |
+|--------|-----------------|
+| Not started | 16 |
+| In progress | 34+ |
+| Tested (VM only) | `pnpm run test:power-dialer-engine` |
+| Deployed / Browser verified | 0 (awaiting Grok) |
 
-## P6 Call history
-
-| Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
-|-------------|--------|---------|----------|-------|--------|---------|------------|
-| Filtered call list | `HumanCall` + `source` filter | Implemented | `/call-history` | Pending | Pending | Pending | In progress |
-| Call detail + recording | `CallDetail` | Existing | `/call-history/[id]` | Pending | Pending | Pending | In progress |
-| Session history subpage | — | Not started | Not started | Not started | — | — | Not started |
-
-## P7 Number health
-
-| Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
-|-------------|--------|---------|----------|-------|--------|---------|------------|
-| Number list + status | Numbers provider | Existing numbers API | `/number-health` | Pending | Pending | Pending | In progress |
-| Per-number metrics | — | Not started | Not started | Not started | — | — | Not started |
-| Free reputation links | External URLs | N/A | Implemented | N/A | Pending | Pending | In progress |
-| Premium Telnyx reputation | — | Not started | Not started | Not started | — | — | Not started |
-
-## P8 Analytics
-
-| Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
-|-------------|--------|---------|----------|-------|--------|---------|------------|
-| Dashboard + campaign rollups | `getPhoneAnalytics` | Shared phone analytics | `/analytics` | Pending | Pending | Pending | In progress |
-| Rep / screening / minutes subpages | — | Not started | Not started | Not started | — | — | Not started |
-
-## P9 Integrations
-
-| Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
-|-------------|--------|---------|----------|-------|--------|---------|------------|
-| Integration catalog | `IntegrationsCatalog` | Workspace integrations | `/integrations` | Pending | Pending | Pending | In progress |
-| CRM list import / writeback | — | Not started | Not started | Not started | — | — | Not started |
-
-## P10 Settings (full spec tabs)
-
-| Requirement | Reused | Backend | Frontend | Tests | Deploy | Browser | Acceptance |
-|-------------|--------|---------|----------|-------|--------|---------|------------|
-| General + Dialing defaults | `settingsJson` | PATCH settings API | Partial tabs | Pending | Pending | Pending | In progress |
-| Dispositions / scripts / VM / screening / compliance / team / billing tabs | — | Not started | Not started | Not started | — | — | Not started |
-
-## Status summary (Phase 1)
-
-| Status | Count (line items above) |
-|--------|--------------------------|
-| Not started | 18 |
-| In progress | 32 |
-| Implemented | 0 (ledger uses In progress until test/deploy) |
-| Tested / Deployed / Browser verified | 0 |
-
-_Update counts when moving rows to Tested/Deployed/Browser verified._
+_Update counts when moving rows to Deployed/Browser verified._

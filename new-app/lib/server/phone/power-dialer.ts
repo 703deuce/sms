@@ -4,6 +4,18 @@ import {
   mergePowerDialerSettings,
   type PowerDialerWorkspaceSettings,
 } from "@/lib/products/power-dialer";
+import {
+  campaignPatchToDbData,
+  parseCampaignConfigPatch,
+} from "@/lib/server/phone/power-dialer/campaign-config";
+import {
+  createAttemptForSession,
+  endSessionHard,
+  getSessionRuntime,
+  saveAttemptOutcomeWithProgression,
+  startSessionWithRep,
+} from "@/lib/server/phone/power-dialer/session-runtime";
+import { isHumanConversation } from "@/lib/server/phone/power-dialer/disposition-effects";
 
 export async function listCampaigns(workspaceId: string) {
   const prisma = getPrisma();
@@ -26,8 +38,18 @@ export async function listCampaigns(workspaceId: string) {
     attempts: c.attemptedCount,
     owner: "Operator",
     created: c.createdAt.toISOString(),
-    maxAttempts: (c.configJson as { maxAttempts?: number })?.maxAttempts ?? 3,
+    maxAttempts: c.totalAttemptCap,
+    dialingMode: c.dialingMode,
     config: c.configJson,
+    rules: {
+      ringTimeoutSeconds: c.ringTimeoutSeconds,
+      retryIntervalMinutes: c.retryIntervalMinutes,
+      dailyAttemptCap: c.dailyAttemptCap,
+      totalAttemptCap: c.totalAttemptCap,
+      postCallIntervalSeconds: c.postCallIntervalSeconds,
+      requireDispositionBeforeNext: c.requireDispositionBeforeNext,
+      dialingMode: c.dialingMode,
+    },
   }));
 }
 
@@ -45,6 +67,8 @@ export async function createCampaign(
   const prisma = getPrisma();
   const callerIdE164 = normalizeE164(input.callerIdE164);
   const members = await prisma.contactListMember.count({ where: { listId: input.listId } });
+  const parsed = input.configJson ? parseCampaignConfigPatch(input.configJson) : {};
+  const ruleCols = campaignPatchToDbData(parsed);
   return prisma.powerDialerCampaign.create({
     data: {
       workspaceId,
@@ -56,6 +80,17 @@ export async function createCampaign(
       configJson: (input.configJson || {}) as import("@prisma/client").Prisma.InputJsonValue,
       totalContacts: members,
       status: "draft",
+      ...ruleCols,
+      totalAttemptCap:
+        (ruleCols.totalAttemptCap as number | undefined) ??
+        parsed.totalAttemptCap ??
+        parsed.maxAttempts ??
+        3,
+      retryIntervalMinutes:
+        (ruleCols.retryIntervalMinutes as number | undefined) ??
+        parsed.retryIntervalMinutes ??
+        parsed.retryDelayMinutes ??
+        60,
     },
   });
 }
@@ -68,14 +103,19 @@ export async function updateCampaign(
     description: string;
     status: string;
     configJson: Record<string, unknown>;
-  }>,
+  }> &
+    Record<string, unknown>,
 ) {
   const prisma = getPrisma();
   const { configJson, ...rest } = patch;
+  const ruleCols = configJson
+    ? campaignPatchToDbData(parseCampaignConfigPatch(configJson))
+    : {};
   return prisma.powerDialerCampaign.updateMany({
     where: { id, workspaceId },
     data: {
       ...rest,
+      ...ruleCols,
       ...(configJson !== undefined
         ? { configJson: configJson as import("@prisma/client").Prisma.InputJsonValue }
         : {}),
@@ -84,24 +124,7 @@ export async function updateCampaign(
 }
 
 export async function startSession(workspaceId: string, campaignId: string) {
-  const prisma = getPrisma();
-  const campaign = await prisma.powerDialerCampaign.findFirst({
-    where: { id: campaignId, workspaceId },
-  });
-  if (!campaign) throw new Error("Campaign not found");
-
-  const active = await prisma.powerDialerSession.findFirst({
-    where: { campaignId, status: { in: ["active", "paused"] } },
-  });
-  if (active) return active;
-
-  return prisma.powerDialerSession.create({
-    data: {
-      workspaceId,
-      campaignId,
-      status: "active",
-    },
-  });
+  return startSessionWithRep(workspaceId, campaignId);
 }
 
 export async function pauseSession(workspaceId: string, sessionId: string) {
@@ -121,52 +144,12 @@ export async function resumeSession(workspaceId: string, sessionId: string) {
 }
 
 export async function endSession(workspaceId: string, sessionId: string) {
-  const prisma = getPrisma();
-  return prisma.powerDialerSession.updateMany({
-    where: { id: sessionId, workspaceId },
-    data: { status: "completed", endedAt: new Date() },
-  });
+  return endSessionHard(workspaceId, sessionId);
 }
 
 export async function getNextEligibleContact(workspaceId: string, sessionId: string) {
-  const prisma = getPrisma();
-  const session = await prisma.powerDialerSession.findFirst({
-    where: { id: sessionId, workspaceId },
-    include: { campaign: true },
-  });
-  if (!session) throw new Error("Session not found");
-  if (session.status === "paused") throw new Error("Session is paused");
-
-  const maxAttempts = (session.campaign.configJson as { maxAttempts?: number })?.maxAttempts ?? 3;
-  const members = await prisma.contactListMember.findMany({
-    where: { listId: session.campaign.listId },
-    include: { contact: true },
-  });
-
-  const attempted = await prisma.powerDialerAttempt.findMany({
-    where: { sessionId },
-    select: { contactId: true, attemptNumber: true, status: true },
-  });
-  const attemptCount = new Map<string, number>();
-  for (const a of attempted) {
-    attemptCount.set(a.contactId, Math.max(attemptCount.get(a.contactId) || 0, a.attemptNumber));
-  }
-
-  for (const m of members) {
-    const count = attemptCount.get(m.contactId) || 0;
-    if (count >= maxAttempts) continue;
-    const blocked = m.contact.status === "UNSUBSCRIBED" || m.contact.status === "BLOCKED";
-    if (blocked) continue;
-    const pending = attempted.some((a) => a.contactId === m.contactId && a.status === "dialing");
-    if (pending) continue;
-    return {
-      contact: m.contact,
-      attemptNumber: count + 1,
-      campaign: session.campaign,
-      sessionId: session.id,
-    };
-  }
-  return null;
+  const runtime = await getSessionRuntime(workspaceId, sessionId);
+  return runtime.next;
 }
 
 export async function createAttempt(
@@ -174,18 +157,16 @@ export async function createAttempt(
   sessionId: string,
   contactId: string,
   attemptNumber: number,
+  idempotencyKey?: string,
 ) {
-  const prisma = getPrisma();
-  return prisma.powerDialerAttempt.create({
-    data: {
-      workspaceId,
-      sessionId,
-      contactId,
-      attemptNumber,
-      status: "pending",
-    },
+  return createAttemptForSession(workspaceId, sessionId, {
+    contactId,
+    attemptNumber,
+    idempotencyKey,
   });
 }
+
+export { getSessionRuntime } from "@/lib/server/phone/power-dialer/session-runtime";
 
 export async function listSessionAttempts(workspaceId: string, sessionId: string) {
   const prisma = getPrisma();
@@ -222,48 +203,7 @@ export async function saveAttemptOutcome(
   attemptId: string,
   input: { disposition: string; notes?: string; callbackAt?: string | null },
 ) {
-  const prisma = getPrisma();
-  const attempt = await prisma.powerDialerAttempt.findFirst({
-    where: { id: attemptId, workspaceId },
-    include: { session: { include: { campaign: true } } },
-  });
-  if (!attempt) throw new Error("Attempt not found");
-
-  await prisma.powerDialerAttempt.update({
-    where: { id: attemptId },
-    data: {
-      disposition: input.disposition,
-      notes: input.notes,
-      callbackAt: input.callbackAt ? new Date(input.callbackAt) : null,
-      status: "completed",
-      endedAt: new Date(),
-    },
-  });
-
-  const dnc =
-    input.disposition.toLowerCase().includes("do not call") ||
-    input.disposition.toLowerCase() === "dnc";
-  if (dnc) {
-    await prisma.contact.updateMany({
-      where: { id: attempt.contactId, workspaceId },
-      data: { status: "BLOCKED" },
-    });
-  }
-
-  const campaign = attempt.session.campaign;
-  await prisma.powerDialerCampaign.update({
-    where: { id: campaign.id },
-    data: {
-      attemptedCount: { increment: 1 },
-      connectedCount:
-        input.disposition === "Booked" || input.disposition === "Interested"
-          ? { increment: 1 }
-          : undefined,
-      completedCount: { increment: 1 },
-    },
-  });
-
-  return attempt;
+  return saveAttemptOutcomeWithProgression(workspaceId, attemptId, input);
 }
 
 export async function getPowerDialerSettings(workspaceId: string): Promise<PowerDialerWorkspaceSettings> {
@@ -389,32 +329,55 @@ export async function getPowerDialerOverview(workspaceId: string) {
       }),
     ]);
 
-  const outboundToday = await prisma.humanCall.findMany({
-    where: {
-      workspaceId,
-      direction: "outbound",
-      source: "power_dialer",
-      startedAt: { gte: startOfDay },
+  const attemptsTodayRows = await prisma.powerDialerAttempt.findMany({
+    where: { workspaceId, createdAt: { gte: startOfDay } },
+    select: {
+      disposition: true,
+      answerClassification: true,
+      billableSeconds: true,
+      status: true,
     },
-    select: { answeredAt: true, endedAt: true, startedAt: true, disposition: true },
   });
 
   let humanConversations = 0;
   let talkSec = 0;
-  for (const c of outboundToday) {
-    if (c.answeredAt) {
+  for (const a of attemptsTodayRows) {
+    if (isHumanConversation(a.disposition, a.answerClassification)) {
       humanConversations += 1;
-      if (c.endedAt) {
-        talkSec += Math.max(
-          0,
-          Math.floor((c.endedAt.getTime() - c.answeredAt.getTime()) / 1000),
-        );
-      }
     }
+    if (a.billableSeconds) talkSec += a.billableSeconds;
   }
 
-  const attemptsCount = outboundToday.length;
+  const attemptsCount = attemptsTodayRows.length;
   const answerRate = attemptsCount ? Math.round((humanConversations / attemptsCount) * 100) : 0;
+
+  const attentionRequired: { code: string; message: string }[] = [];
+  if (lists === 0) {
+    attentionRequired.push({
+      code: "no_lists",
+      message: "Create a calling list before you can run a campaign.",
+    });
+  }
+  const activeCampaigns = campaigns.filter((c) => c.status === "active");
+  if (campaigns.length > 0 && activeCampaigns.length === 0) {
+    attentionRequired.push({
+      code: "no_active_campaign",
+      message: "No active campaigns — activate a campaign to dial.",
+    });
+  }
+  if (activeSession) {
+    try {
+      const runtime = await getSessionRuntime(workspaceId, activeSession.id);
+      if ((runtime.eligibilityCounts?.eligible ?? 0) === 0) {
+        attentionRequired.push({
+          code: "no_eligible_contacts",
+          message: "Active session has no eligible contacts right now.",
+        });
+      }
+    } catch {
+      // ignore runtime errors on overview
+    }
+  }
 
   const recentAttempts = await prisma.powerDialerAttempt.findMany({
     where: { workspaceId },
@@ -465,5 +428,6 @@ export async function getPowerDialerOverview(workspaceId: string) {
       contactPhone: a.contact.phone,
       campaignName: a.session.campaign.name,
     })),
+    attentionRequired,
   };
 }
