@@ -42,6 +42,9 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
   }
   const [rows, setRows] = useState<PowerDialerCallbackDto[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editAt, setEditAt] = useState('')
+  const [editNotes, setEditNotes] = useState('')
 
   const reload = () => {
     void fetchPowerDialerCallbacks(tab)
@@ -57,6 +60,21 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
     try {
       await patchPowerDialerCallback(id, { action: 'complete' })
       toast.success('Callback completed')
+      reload()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed')
+    }
+  }
+
+  const reschedule = async (id: string) => {
+    try {
+      await patchPowerDialerCallback(id, {
+        action: 'reschedule',
+        scheduledAt: new Date(editAt).toISOString(),
+        notes: editNotes,
+      })
+      toast.success('Callback rescheduled')
+      setEditId(null)
       reload()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Update failed')
@@ -151,6 +169,19 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
                         )}
                         {r.status === 'scheduled' && (
                           <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                setEditId(r.id)
+                                setEditAt(r.callbackAt ? r.callbackAt.slice(0, 16) : '')
+                                setEditNotes('')
+                              }}
+                            >
+                              Reschedule
+                            </Button>
                             <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => void complete(r.id)}>
                               Complete
                             </Button>
@@ -168,6 +199,22 @@ export function PowerDialerCallbacksContent({ initialTab = 'due_today' }: { init
           </table>
         )}
       </Panel>
+      {editId && (
+        <Panel title="Reschedule callback" className="mt-4 max-w-md">
+          <label className="text-sm block mb-2">
+            New time
+            <input type="datetime-local" className="mt-1 w-full rounded border px-2 py-2" value={editAt} onChange={(e) => setEditAt(e.target.value)} />
+          </label>
+          <label className="text-sm block mb-2">
+            Notes
+            <input className="mt-1 w-full rounded border px-2 py-2" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+          </label>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" onClick={() => void reschedule(editId)}>Save</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setEditId(null)}>Cancel</Button>
+          </div>
+        </Panel>
+      )}
     </Page>
   )
 }

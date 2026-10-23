@@ -347,6 +347,7 @@ export function CrmSettingsWorkspace() {
       phoneFallthroughMode: settings.phoneFallthroughMode,
       inboundContactRules: settings.inboundContactRules,
       teamScopes: settings.teamScopes,
+      dialPolicyJson: settings.dialPolicyJson,
     })
       .then(() => toast.success('Settings saved'))
       .catch((e) => toast.error(e.message))
@@ -405,6 +406,66 @@ export function CrmSettingsWorkspace() {
                 <option value="next_contact">Next contact</option>
               </select>
             </label>
+            <div className="mt-4 space-y-3 rounded-lg border p-3">
+              <p className="text-sm font-medium">Workspace dial frequency (P22)</p>
+              <p className="mb-2 text-xs text-muted-foreground">Limits apply across all power-dialer campaigns for the same phone number.</p>
+              <label className="text-sm">
+                Min minutes between calls to same number
+                <Input
+                  className="mt-1"
+                  type="number"
+                  min={0}
+                  value={String((settings.dialPolicyJson as { minMinutesBetweenCallsToPhone?: number })?.minMinutesBetweenCallsToPhone ?? 0)}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      dialPolicyJson: {
+                        ...(typeof settings.dialPolicyJson === 'object' ? settings.dialPolicyJson : {}),
+                        minMinutesBetweenCallsToPhone: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+              <label className="text-sm">
+                Max calls per number per UTC day
+                <Input
+                  className="mt-1"
+                  type="number"
+                  min={0}
+                  value={String((settings.dialPolicyJson as { maxCallsToPhonePerDay?: number })?.maxCallsToPhonePerDay ?? 0)}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      dialPolicyJson: {
+                        ...(typeof settings.dialPolicyJson === 'object' ? settings.dialPolicyJson : {}),
+                        maxCallsToPhonePerDay: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+              <label className="text-sm">
+                Workspace allowed area codes (comma)
+                <Input
+                  className="mt-1"
+                  value={
+                    Array.isArray((settings.dialPolicyJson as { allowedAreaCodes?: string[] })?.allowedAreaCodes)
+                      ? ((settings.dialPolicyJson as { allowedAreaCodes: string[] }).allowedAreaCodes).join(',')
+                      : ''
+                  }
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      dialPolicyJson: {
+                        ...(typeof settings.dialPolicyJson === 'object' ? settings.dialPolicyJson : {}),
+                        allowedAreaCodes: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                      },
+                    })
+                  }
+                />
+              </label>
+            </div>
             <Button type="button" onClick={saveSettings}>Save settings</Button>
           </div>
         </Panel>

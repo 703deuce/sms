@@ -9,6 +9,7 @@ export function CampaignSubnav({ campaignId }: { campaignId: string }) {
   const base = `/app/power-dialer/campaigns/${campaignId}`
   const links = [
     { href: `${base}/contacts`, label: 'Contacts' },
+    { href: `${base}/queue`, label: 'Queue' },
     { href: `${base}/history`, label: 'History' },
     { href: `${base}/analytics`, label: 'Analytics' },
   ]

@@ -44,6 +44,8 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
     timezone: '',
   })
   const [duplicateBehavior, setDuplicateBehavior] = useState('add_to_list')
+  const [customFieldDefs, setCustomFieldDefs] = useState<{ key: string; label: string }[]>([])
+  const [customMapping, setCustomMapping] = useState<Record<string, string>>({})
   const [result, setResult] = useState<{
     imported: number
     skipped: number
@@ -73,7 +75,7 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
           work: m.work,
           company: m.company,
           timezone: m.timezone,
-          custom: {},
+          custom: customMapping,
         },
         dryRun: true,
       }) as { headers?: string[]; preview: PreviewRow[] }
@@ -87,6 +89,14 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
   }
 
   useEffect(() => {
+    if (!open) return
+    void fetch('/api/crm/native/custom-fields')
+      .then((r) => r.json())
+      .then((j) => setCustomFieldDefs((j.data || []).map((f: { key: string; label: string }) => ({ key: f.key, label: f.label }))))
+      .catch(() => undefined)
+  }, [open])
+
+  useEffect(() => {
     if (step !== 'map' || !csvText || !mapping.phone) return
     if (previewDebounce.current) clearTimeout(previewDebounce.current)
     previewDebounce.current = setTimeout(() => {
@@ -95,7 +105,7 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
     return () => {
       if (previewDebounce.current) clearTimeout(previewDebounce.current)
     }
-  }, [step, csvText, mapping.phone, mapping.name, mapping.mobile, mapping.work, mapping.company, mapping.timezone, listId])
+  }, [step, csvText, mapping.phone, mapping.name, mapping.mobile, mapping.work, mapping.company, mapping.timezone, customMapping, listId])
 
   const onFile = async (file: File | null) => {
     if (!file) return
@@ -145,7 +155,7 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
           work: mapping.work,
           company: mapping.company,
           timezone: mapping.timezone,
-          custom: {},
+          custom: customMapping,
         },
         duplicateBehavior: duplicateBehavior as 'skip' | 'update' | 'add_to_list',
         dryRun: false,
@@ -204,6 +214,21 @@ export function CsvImportWizard({ listId, open, onOpenChange, onComplete }: Prop
             <SimpleSelect label="Mobile" value={mapping.mobile} onChange={(v) => setMapping((m) => ({ ...m, mobile: v }))} options={headerOptions} />
             <SimpleSelect label="Work phone" value={mapping.work} onChange={(v) => setMapping((m) => ({ ...m, work: v }))} options={headerOptions} />
             <SimpleSelect label="Company" value={mapping.company} onChange={(v) => setMapping((m) => ({ ...m, company: v }))} options={headerOptions} />
+            <SimpleSelect label="Timezone (IANA)" value={mapping.timezone} onChange={(v) => setMapping((m) => ({ ...m, timezone: v }))} options={headerOptions} />
+            {customFieldDefs.length > 0 && (
+              <div className="rounded border p-2">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Custom fields</p>
+                {customFieldDefs.map((f) => (
+                  <SimpleSelect
+                    key={f.key}
+                    label={f.label}
+                    value={customMapping[f.key] || ''}
+                    onChange={(v) => setCustomMapping((m) => ({ ...m, [f.key]: v }))}
+                    options={headerOptions}
+                  />
+                ))}
+              </div>
+            )}
             <SimpleSelect
               label="Duplicate behavior"
               value={duplicateBehavior}

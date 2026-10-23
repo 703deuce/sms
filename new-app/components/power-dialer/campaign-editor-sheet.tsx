@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { SimpleSelect } from '@/components/app/filters'
 import { useNumbers } from '@/components/providers/numbers-provider'
+import { COMMON_IANA_TIMEZONES } from '@/lib/phone/common-timezones'
 import {
   createPowerCampaign,
   fetchPowerCampaignDetail,
@@ -54,6 +55,16 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
   const [vmDrops, setVmDrops] = useState<{ id: string; name: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [allowedDays, setAllowedDays] = useState<number[]>([1, 2, 3, 4, 5])
+  const [retryScheduleMinutes, setRetryScheduleMinutes] = useState('')
+  const [dialOrder, setDialOrder] = useState('fifo')
+  const [jurisdictionPreset, setJurisdictionPreset] = useState('none')
+  const [leadOwnerRouting, setLeadOwnerRouting] = useState('off')
+  const [callbackExemptFromRetryDelay, setCallbackExemptFromRetryDelay] = useState(false)
+  const [allowedAreaCodes, setAllowedAreaCodes] = useState('')
+  const [blockedAreaCodes, setBlockedAreaCodes] = useState('')
+  const [scheduleBreaks, setScheduleBreaks] = useState('')
+  const [teamQueueMode, setTeamQueueMode] = useState('shared')
 
   useEffect(() => {
     if (!open) return
@@ -90,6 +101,28 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         setDispositionSetId(d.extended.dispositionSetId || '')
         setScriptId(d.extended.scriptId || '')
         setVoicemailDropId(d.extended.voicemailDropId || '')
+        const full = d as typeof d & {
+          rules: { allowedDays?: number[]; retryIntervalMinutes?: number; dailyAttemptCap?: number; totalAttemptCap?: number; postCallIntervalSeconds?: number };
+          configJson?: Record<string, unknown>;
+          extended: { leadOwnerRouting?: string };
+        }
+        setAllowedDays(full.rules.allowedDays?.length ? full.rules.allowedDays : [1, 2, 3, 4, 5])
+        const cj = full.configJson || {}
+        setRetryScheduleMinutes(Array.isArray(cj.retryScheduleMinutes) ? (cj.retryScheduleMinutes as number[]).join(',') : '')
+        setDialOrder(String(cj.dialOrder || 'fifo'))
+        setJurisdictionPreset(String(cj.jurisdictionPreset || 'none'))
+        setLeadOwnerRouting(String(cj.leadOwnerRouting || full.extended.leadOwnerRouting || 'off'))
+        setCallbackExemptFromRetryDelay(Boolean(cj.callbackExemptFromRetryDelay))
+        setAllowedAreaCodes(Array.isArray(cj.allowedAreaCodes) ? (cj.allowedAreaCodes as string[]).join(',') : '')
+        setBlockedAreaCodes(Array.isArray(cj.blockedAreaCodes) ? (cj.blockedAreaCodes as string[]).join(',') : '')
+        setTeamQueueMode(String(cj.teamQueueMode || 'shared'))
+        if (Array.isArray(cj.scheduleBreaks)) {
+          setScheduleBreaks(
+            (cj.scheduleBreaks as { startHm: string; endHm: string }[])
+              .map((b) => `${b.startHm}-${b.endHm}`)
+              .join(','),
+          )
+        }
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not load campaign'))
   }, [open, campaignId])
@@ -106,6 +139,16 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
     }
     setSaving(true)
     try {
+      const parseBreaks = () =>
+        scheduleBreaks
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((pair) => {
+            const [startHm, endHm] = pair.split('-')
+            return startHm && endHm ? { startHm, endHm } : null
+          })
+          .filter(Boolean) as { startHm: string; endHm: string }[]
       const configJson = {
         leadSource,
         duplicateBehavior,
@@ -118,10 +161,22 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
         requireDispositionBeforeNext: requireDisposition,
         callingHoursStart,
         callingHoursEnd,
+        allowedDays,
         memberUserIds,
         scriptId: scriptId || null,
         voicemailDropId: voicemailDropId || null,
         dispositionSetId: dispositionSetId || null,
+        retryScheduleMinutes: retryScheduleMinutes
+          ? retryScheduleMinutes.split(',').map((n) => Number(n.trim())).filter((n) => !Number.isNaN(n))
+          : undefined,
+        dialOrder,
+        jurisdictionPreset,
+        leadOwnerRouting,
+        callbackExemptFromRetryDelay,
+        teamQueueMode,
+        allowedAreaCodes: allowedAreaCodes ? allowedAreaCodes.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
+        blockedAreaCodes: blockedAreaCodes ? blockedAreaCodes.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
+        scheduleBreaks: parseBreaks().length ? parseBreaks() : undefined,
       }
       if (campaignId) {
         await savePowerCampaignDetail(campaignId, {
@@ -176,7 +231,7 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
               {fieldErrors.name && <p className="mt-1 text-xs text-destructive">{fieldErrors.name}</p>}
             </div>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={2} />
-            <SimpleSelect label="Timezone" value={timezone} onChange={setTimezone} options={[{ value: 'America/Chicago', label: 'Central' }, { value: 'America/New_York', label: 'Eastern' }, { value: 'America/Los_Angeles', label: 'Pacific' }]} />
+            <SimpleSelect label="Timezone" value={timezone} onChange={setTimezone} options={COMMON_IANA_TIMEZONES.map((z) => ({ value: z.value, label: z.label }))} />
           </TabsContent>
           <TabsContent value="contacts" className="flex flex-col gap-3">
             {lists.length === 0 ? (
@@ -211,6 +266,49 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
             <label className="text-sm">Retry interval (minutes)
               <Input type="number" min={0} value={retryIntervalMinutes} onChange={(e) => setRetryIntervalMinutes(Number(e.target.value))} />
             </label>
+            <label className="text-sm">Multi-step retry (minutes, comma-separated)
+              <Input value={retryScheduleMinutes} onChange={(e) => setRetryScheduleMinutes(e.target.value)} placeholder="60,120,240" />
+            </label>
+            <SimpleSelect
+              label="Dial order"
+              value={dialOrder}
+              onChange={setDialOrder}
+              options={[
+                { value: 'fifo', label: 'FIFO (oldest first)' },
+                { value: 'lifo', label: 'LIFO (newest first)' },
+                { value: 'priority', label: 'Priority field' },
+              ]}
+            />
+            <SimpleSelect
+              label="Lead owner routing"
+              value={leadOwnerRouting}
+              onChange={setLeadOwnerRouting}
+              options={[
+                { value: 'off', label: 'Off' },
+                { value: 'assigned_only', label: 'Assigned rep only' },
+                { value: 'allow_cross_rep', label: 'Allow cross-rep' },
+              ]}
+            />
+            <SimpleSelect
+              label="Team queue mode"
+              value={teamQueueMode}
+              onChange={setTeamQueueMode}
+              options={[
+                { value: 'shared', label: 'Shared queue' },
+                { value: 'round_robin', label: 'Round robin' },
+                { value: 'pull', label: 'Pull / preview' },
+              ]}
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={callbackExemptFromRetryDelay} onChange={(e) => setCallbackExemptFromRetryDelay(e.target.checked)} />
+              Callbacks exempt from retry cooldown (still respect DNC/hours)
+            </label>
+            <label className="text-sm">Allowed area codes (comma)
+              <Input value={allowedAreaCodes} onChange={(e) => setAllowedAreaCodes(e.target.value)} placeholder="312,773" />
+            </label>
+            <label className="text-sm">Blocked area codes (comma)
+              <Input value={blockedAreaCodes} onChange={(e) => setBlockedAreaCodes(e.target.value)} />
+            </label>
             <label className="text-sm">Daily attempt cap
               <Input type="number" min={1} value={dailyAttemptCap} onChange={(e) => setDailyAttemptCap(Number(e.target.value))} />
             </label>
@@ -226,12 +324,50 @@ export function CampaignEditorSheet({ open, onOpenChange, campaignId, onSaved }:
             </label>
           </TabsContent>
           <TabsContent value="schedule" className="flex flex-col gap-3">
+            <fieldset className="text-sm">
+              <legend className="mb-1 font-medium">Allowed days</legend>
+              {[
+                { v: 0, l: 'Sun' },
+                { v: 1, l: 'Mon' },
+                { v: 2, l: 'Tue' },
+                { v: 3, l: 'Wed' },
+                { v: 4, l: 'Thu' },
+                { v: 5, l: 'Fri' },
+                { v: 6, l: 'Sat' },
+              ].map((d) => (
+                <label key={d.v} className="mr-3 inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={allowedDays.includes(d.v)}
+                    onChange={(e) => {
+                      setAllowedDays((prev) =>
+                        e.target.checked ? [...prev, d.v].sort() : prev.filter((x) => x !== d.v),
+                      )
+                    }}
+                  />
+                  {d.l}
+                </label>
+              ))}
+            </fieldset>
             <label className="text-sm">Calling hours start
               <Input value={callingHoursStart} onChange={(e) => setCallingHoursStart(e.target.value)} placeholder="09:00" />
             </label>
             <label className="text-sm">Calling hours end
               <Input value={callingHoursEnd} onChange={(e) => setCallingHoursEnd(e.target.value)} placeholder="17:00" />
             </label>
+            <label className="text-sm">Break windows (e.g. 12:00-13:00)
+              <Input value={scheduleBreaks} onChange={(e) => setScheduleBreaks(e.target.value)} placeholder="12:00-13:00" />
+            </label>
+            <SimpleSelect
+              label="Jurisdiction preset"
+              value={jurisdictionPreset}
+              onChange={setJurisdictionPreset}
+              options={[
+                { value: 'none', label: 'Campaign hours only' },
+                { value: 'us_ftc_consumer', label: 'US FTC consumer (8am–9pm local)' },
+                { value: 'custom', label: 'Custom legal window' },
+              ]}
+            />
             <p className="text-xs text-muted-foreground">Contact local timezone is used when set on the contact; otherwise campaign timezone applies.</p>
           </TabsContent>
           <TabsContent value="caller" className="flex flex-col gap-3">

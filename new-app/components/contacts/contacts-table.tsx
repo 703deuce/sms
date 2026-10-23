@@ -149,9 +149,14 @@ export function ContactsTable() {
   )
 }
 
-export function ContactsActions({ total = 0 }: { total?: number }) {
+export function ContactsActions({ total = 0, onMerge }: { total?: number; onMerge?: () => void }) {
   return (
     <>
+      {onMerge && (
+        <Button type="button" variant="outline" onClick={onMerge}>
+          Merge duplicates
+        </Button>
+      )}
       <Button variant="outline" onClick={() => toast('Import contacts', { description: 'Use Power Dialer → Calling lists → Import CSV to add dialer contacts.' })}>
         <Upload />
         Import

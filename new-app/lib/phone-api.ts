@@ -668,10 +668,14 @@ export async function fetchPowerCampaignDetail(id: string) {
     rules: {
       dialingMode: string;
       ringTimeoutSeconds: number;
+      retryIntervalMinutes: number;
+      dailyAttemptCap: number;
+      totalAttemptCap: number;
+      postCallIntervalSeconds: number;
       callingHoursStart: string;
       callingHoursEnd: string;
       phoneFieldPriority: string[];
-      totalAttemptCap: number;
+      allowedDays: number[];
       requireDispositionBeforeNext: boolean;
     };
     extended: {
@@ -680,7 +684,12 @@ export async function fetchPowerCampaignDetail(id: string) {
       dispositionSetId?: string | null;
       recordingEnabled?: boolean;
       screeningMode?: string;
+      leadOwnerRouting?: string;
+      leadSource?: string;
+      duplicateBehavior?: string;
+      memberUserIds?: string[];
     };
+    configJson?: Record<string, unknown>;
     eligibility: {
       counts: Record<string, number>;
       truncated: boolean;

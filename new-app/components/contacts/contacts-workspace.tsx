@@ -14,6 +14,8 @@ import { StatusBadge, type Tone } from '@/components/app/status'
 import { deleteContactApi, fetchContactsPage } from '@/lib/phone-api'
 import { formatPhone, formatWhen } from '@/lib/format'
 import { ContactsActions } from '@/components/contacts/contacts-table'
+import { ContactsFolderTree } from '@/components/contacts/contacts-folder-tree'
+import { ContactMergeWizard } from '@/components/contacts/contact-merge-wizard'
 
 type Row = {
   id: string
@@ -38,11 +40,14 @@ export function ContactsWorkspace() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [viewId, setViewId] = useState('')
+  const [folderId, setFolderId] = useState('')
   const [views, setViews] = useState<{ id: string; name: string; pinned: boolean }[]>([])
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const reload = useCallback(() => {
     setLoading(true)
-    const nativeUrl = `/api/crm/native/contacts?q=${encodeURIComponent(query)}&page=1&pageSize=100${viewId ? `&viewId=${viewId}` : ''}`
+    const nativeUrl = `/api/crm/native/contacts?q=${encodeURIComponent(query)}&page=1&pageSize=100${viewId ? `&viewId=${viewId}` : ''}${folderId ? `&folderId=${folderId}` : ''}`
     void fetch(nativeUrl)
       .then((r) => r.json())
       .then((j) => {
@@ -68,7 +73,7 @@ export function ContactsWorkspace() {
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not load contacts'))
       .finally(() => setLoading(false))
-  }, [query, viewId])
+  }, [query, viewId, folderId])
 
   useEffect(() => {
     void fetch('/api/crm/native/views')
@@ -114,7 +119,30 @@ export function ContactsWorkspace() {
         description={subtitle}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <ContactsActions total={total} />
+            <ContactsActions total={total} onMerge={() => setMergeOpen(true)} />
+            {selectedIds.size > 0 && folderId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void fetch('/api/crm/native/contacts/bulk', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contactIds: [...selectedIds], patch: { folderId } }),
+                  })
+                    .then((r) => r.json())
+                    .then(() => {
+                      toast.success(`Moved ${selectedIds.size} contact(s)`)
+                      setSelectedIds(new Set())
+                      reload()
+                    })
+                    .catch((e) => toast.error(e instanceof Error ? e.message : 'Move failed'))
+                }}
+              >
+                Move {selectedIds.size} to folder
+              </Button>
+            )}
             <a
               href="/api/crm/native/contacts/export"
               className="text-sm font-medium text-primary hover:underline"
@@ -124,6 +152,10 @@ export function ContactsWorkspace() {
           </div>
         }
       />
+      <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
+        <Panel title="Folders" className="h-fit">
+          <ContactsFolderTree selectedFolderId={folderId} onSelectFolder={setFolderId} onFoldersChange={reload} />
+        </Panel>
       <Panel
         bodyClassName="p-0"
         title={
@@ -161,7 +193,18 @@ export function ContactsWorkspace() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-5">Name</TableHead>
+                <TableHead className="pl-5 w-10">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all on page"
+                    checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedIds(new Set(rows.map((r) => r.id)))
+                      else setSelectedIds(new Set())
+                    }}
+                  />
+                </TableHead>
+                <TableHead>Name</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead className="hidden lg:table-cell">Company</TableHead>
                 <TableHead className="hidden md:table-cell">Added</TableHead>
@@ -175,6 +218,21 @@ export function ContactsWorkspace() {
                 return (
                   <TableRow key={c.id}>
                     <TableCell className="pl-5">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${c.name}`}
+                        checked={selectedIds.has(c.id)}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            if (e.target.checked) next.add(c.id)
+                            else next.delete(c.id)
+                            return next
+                          })
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
                       <Link href={`/app/contacts/${c.id}`} className="font-medium hover:underline">{c.name}</Link>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{formatPhone(c.phone)}</TableCell>
@@ -209,6 +267,8 @@ export function ContactsWorkspace() {
           </Table>
         )}
       </Panel>
+      </div>
+      <ContactMergeWizard open={mergeOpen} onOpenChange={setMergeOpen} onMerged={reload} />
     </Page>
   )
 }

@@ -34,6 +34,8 @@ import {
 } from '@/lib/phone-api'
 import { formatPhone, formatDuration, formatWhen } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { DialerContactInlineEdit } from '@/components/phone/dialer-contact-inline-edit'
+import { DialerAppointmentDialog } from '@/components/phone/dialer-appointment-dialog'
 
 const DISPOSITIONS = ['Booked', 'Interested', 'Callback', 'No answer', 'Voicemail', 'Not interested', 'Wrong number', 'Do not call'] as const
 
@@ -73,6 +75,7 @@ export function PowerDialerSessionWorkspace({
   const [scriptText, setScriptText] = useState<string | null>(null)
   const [dispositionOptions, setDispositionOptions] = useState<string[]>([...DISPOSITIONS])
   const [voicemailDropReady, setVoicemailDropReady] = useState(false)
+  const [appointmentOpen, setAppointmentOpen] = useState(false)
   const [contactCard, setContactCard] = useState<{
     refresherNotes?: string | null
     href: string
@@ -635,15 +638,40 @@ export function PowerDialerSessionWorkspace({
                           <Link href={contactCard.href} className="text-primary underline-offset-2 hover:underline">
                             Open contact record
                           </Link>
-                          <Link
-                            href={`/app/contacts/calendar?contact=${lead.contact.id}`}
+                          <button
+                            type="button"
                             className="text-primary underline-offset-2 hover:underline"
+                            onClick={() => setAppointmentOpen(true)}
                           >
                             Schedule appointment
-                          </Link>
+                          </button>
                         </div>
+                        <DialerContactInlineEdit
+                          contactId={lead.contact.id}
+                          title={contactCard.title ?? null}
+                          email={contactCard.email ?? null}
+                          customFields={
+                            lead.contact.customFields && typeof lead.contact.customFields === 'object'
+                              ? (lead.contact.customFields as Record<string, unknown>)
+                              : null
+                          }
+                          onSaved={() => {
+                            if (campaignId && lead.contact.id) {
+                              void fetchDialerPrep(campaignId, lead.contact.id).then((prep) => {
+                                setContactCard((prep as { contactCard?: typeof contactCard }).contactCard ?? null)
+                              })
+                            }
+                          }}
+                        />
                       </div>
                     )}
+                    <DialerAppointmentDialog
+                      open={appointmentOpen}
+                      onOpenChange={setAppointmentOpen}
+                      contactId={lead.contact.id}
+                      contactName={contactLabel(lead.contact)}
+                      defaultTimezone={lead.contact.timezone || campaignMeta?.timezone}
+                    />
                     {lead.contact.customFields && typeof lead.contact.customFields === 'object' && (
                       <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                         {Object.entries(lead.contact.customFields as Record<string, unknown>).slice(0, 6).map(([k, v]) => (
