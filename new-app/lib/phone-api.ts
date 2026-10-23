@@ -615,8 +615,26 @@ export async function fetchPowerCampaignDetail(id: string) {
     callerIdE164: string;
     timezone: string;
     status: string;
-    rules: Record<string, unknown>;
-    extended: Record<string, unknown>;
+    rules: {
+      dialingMode: string;
+      ringTimeoutSeconds: number;
+      callingHoursStart: string;
+      callingHoursEnd: string;
+      phoneFieldPriority: string[];
+      totalAttemptCap: number;
+      requireDispositionBeforeNext: boolean;
+    };
+    extended: {
+      scriptId?: string | null;
+      voicemailDropId?: string | null;
+      dispositionSetId?: string | null;
+      recordingEnabled?: boolean;
+      screeningMode?: string;
+    };
+    eligibility: {
+      counts: Record<string, number>;
+      truncated: boolean;
+    };
   }>(await fetch(`/api/phone/power-dialer/campaigns/${id}`));
 }
 
