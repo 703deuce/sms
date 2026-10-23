@@ -24,6 +24,24 @@ export async function resolvePowerDialerOutboundCallerId(input: {
   const pdSettings = mergePowerDialerSettings(
     (wsRow?.customFieldsConfig as { powerDialer?: unknown })?.powerDialer,
   );
+
+  if (input.repUserId && pdSettings.repNumberAssignments) {
+    const assigned = pdSettings.repNumberAssignments[input.repUserId];
+    const allowedIds = Array.isArray(assigned) ? assigned.filter((x) => typeof x === "string") : [];
+    if (allowedIds.length) {
+      const stickyKey = `${input.campaignId}:${input.repUserId}:${input.contactPhone || ""}`;
+      const idx =
+        Math.abs(stickyKey.split("").reduce((a, c) => a + c.charCodeAt(0), 0)) % allowedIds.length;
+      const phoneNumberId = allowedIds[idx];
+      const num = await prisma.phoneNumber.findFirst({
+        where: { id: phoneNumberId, workspaceId: input.workspaceId },
+        select: { id: true, e164: true },
+      });
+      if (num) {
+        return { e164: num.e164, phoneNumberId: num.id, source: "rep_assignment" };
+      }
+    }
+  }
   const poolIds = Array.isArray(ext.callerIdPoolNumberIds)
     ? ext.callerIdPoolNumberIds.filter((x): x is string => typeof x === "string")
     : [];

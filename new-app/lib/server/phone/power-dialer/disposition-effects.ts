@@ -24,7 +24,7 @@ export async function applyDispositionEffects(
   const d = input.disposition.trim();
   const lower = d.toLowerCase();
 
-  const addToDnc = def?.addToDnc || lower.includes("do not call") || lower === "dnc";
+  const addToDnc = def?.addToDnc ?? (lower.includes("do not call") || lower === "dnc");
   if (addToDnc) {
     await prisma.contact.updateMany({
       where: { id: input.contactId, workspaceId: input.workspaceId },
@@ -48,7 +48,7 @@ export async function applyDispositionEffects(
   }
 
   const scheduleCb =
-    def?.scheduleCallback || lower === "callback" || lower.includes("callback");
+    def?.scheduleCallback ?? (lower === "callback" || lower.includes("callback"));
   if (scheduleCb && input.callbackAt) {
     await prisma.powerDialerAttempt.update({
       where: { id: input.attemptId },
@@ -67,8 +67,44 @@ export async function applyDispositionEffects(
     });
   }
 
-  if (def?.removeFromQueue || def?.markContactCompleted) {
-    // Campaign queue eligibility uses attempt caps / dispositions — no list removal unless DNC.
+  if (def?.removeFromQueue) {
+    const custom =
+      (await prisma.contact.findFirst({
+        where: { id: input.contactId, workspaceId: input.workspaceId },
+        select: { customFields: true },
+      }))?.customFields;
+    const base =
+      custom && typeof custom === "object" ? (custom as Record<string, unknown>) : {};
+    await prisma.contact.update({
+      where: { id: input.contactId },
+      data: {
+        customFields: {
+          ...base,
+          powerDialerRemovedFromQueueAt: new Date().toISOString(),
+          powerDialerRemovedFromQueueCampaignId: input.campaignId,
+        },
+      },
+    });
+  }
+
+  if (def?.markContactCompleted) {
+    const custom =
+      (await prisma.contact.findFirst({
+        where: { id: input.contactId, workspaceId: input.workspaceId },
+        select: { customFields: true },
+      }))?.customFields;
+    const base =
+      custom && typeof custom === "object" ? (custom as Record<string, unknown>) : {};
+    await prisma.contact.update({
+      where: { id: input.contactId },
+      data: {
+        customFields: {
+          ...base,
+          powerDialerCompletedAt: new Date().toISOString(),
+          powerDialerCompletedCampaignId: input.campaignId,
+        },
+      },
+    });
   }
 
   if (def?.triggerCrmUpdate) {

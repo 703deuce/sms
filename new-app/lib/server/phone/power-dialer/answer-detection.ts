@@ -1,14 +1,25 @@
 import { getPrisma } from "@/lib/server/db";
 import type { AnswerClassification } from "./types";
 
-const MACHINE_RESULTS = new Set(["machine", "machine_end_beep", "machine_end_silence", "machine_end_other"]);
-const HUMAN_RESULTS = new Set(["human", "not_sure"]);
+const MACHINE_RESULTS = new Set([
+  "machine",
+  "machine_end_beep",
+  "machine_end_silence",
+  "machine_end_other",
+  "fax_detected",
+]);
+const HUMAN_RESULTS = new Set(["human", "human_residence", "human_business"]);
+const UNCERTAIN_RESULTS = new Set(["not_sure", "silence", ""]);
 
 export function mapTelnyxAmdResult(raw: string): AnswerClassification {
-  const r = raw.toLowerCase();
+  const r = raw.toLowerCase().trim();
+  if (!r) return "uncertain";
   if (MACHINE_RESULTS.has(r)) return "voicemail";
   if (r.includes("screen")) return "screener";
   if (HUMAN_RESULTS.has(r)) return "human";
+  if (UNCERTAIN_RESULTS.has(r)) return "uncertain";
+  if (r.includes("machine")) return "voicemail";
+  if (r.includes("human")) return "human";
   return "uncertain";
 }
 
@@ -71,6 +82,27 @@ export async function applyAmdToPowerDialerAttempt(input: {
       where: { id: attemptId, workspaceId: input.workspaceId },
       data: { answerClassification: classification },
     });
+    const attempt = await prisma.powerDialerAttempt.findFirst({
+      where: { id: attemptId, workspaceId: input.workspaceId },
+      include: { session: true },
+    });
+    if (attempt?.session?.campaignId) {
+      const { resolveScreeningDecision } = await import("./screening-runtime");
+      const decision = await resolveScreeningDecision({
+        workspaceId: input.workspaceId,
+        campaignId: attempt.session.campaignId,
+        classification,
+      });
+      await recordPowerDialerDetectionEvent({
+        workspaceId: input.workspaceId,
+        attemptId,
+        humanCallId: input.humanCallId,
+        eventType: "screening_decision",
+        result: decision.action,
+        payload: { reason: decision.reason, classification },
+        idempotencyKey: `${input.idempotencyKey}:screening`,
+      });
+    }
   }
   return { handled: true, classification };
 }

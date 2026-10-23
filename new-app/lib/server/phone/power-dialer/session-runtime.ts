@@ -321,6 +321,13 @@ export async function createAttemptForSession(
   });
   if (live) throw new Error("A call is already in progress for this session");
 
+  const { assertPowerDialerConcurrencyLimits } = await import("./usage-limits");
+  await assertPowerDialerConcurrencyLimits(workspaceId, {
+    sessionId,
+    campaignId: session.campaignId,
+    repUserId: session.repUserId,
+  });
+
   if (input.idempotencyKey) {
     const existing = await prisma.powerDialerAttempt.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
@@ -472,6 +479,15 @@ export async function saveAttemptOutcomeWithProgression(
   if (attempt.session.status === "completed") throw new Error("Session ended");
 
   const rules = await resolveRulesForCampaign(workspaceId, attempt.session.campaign);
+  const ext = parseExtendedConfig(attempt.session.campaign.configJson);
+  const dispositionDef = await resolveDispositionByLabel(
+    workspaceId,
+    ext.dispositionSetId,
+    input.disposition,
+  );
+  if (dispositionDef?.requireNotes && !(input.notes && input.notes.trim())) {
+    throw new Error("Notes are required for this disposition");
+  }
   const callbackAt = input.callbackAt ? new Date(input.callbackAt) : null;
   const classification = attempt.answerClassification;
   const human = isHumanConversation(input.disposition, classification);
@@ -486,13 +502,6 @@ export async function saveAttemptOutcomeWithProgression(
       endedAt: attempt.endedAt || new Date(),
     },
   });
-
-  const ext = parseExtendedConfig(attempt.session.campaign.configJson);
-  const dispositionDef = await resolveDispositionByLabel(
-    workspaceId,
-    ext.dispositionSetId,
-    input.disposition,
-  );
 
   await applyDispositionEffects(prisma, {
     workspaceId,
@@ -568,12 +577,19 @@ export async function startSessionWithRep(
       "Compliance acknowledgement required — an admin must accept calling responsibilities under Settings → Compliance before the first dial session.",
     );
   }
-  const { assertDialingWithinUsageLimits } = await import("./usage-limits");
+  const { assertDialingWithinUsageLimits, assertPowerDialerConcurrencyLimits } = await import(
+    "./usage-limits"
+  );
   await assertDialingWithinUsageLimits(workspaceId);
+  await assertPowerDialerConcurrencyLimits(workspaceId, { campaignId, repUserId });
   const campaign = await prisma.powerDialerCampaign.findFirst({
     where: { id: campaignId, workspaceId },
   });
   if (!campaign) throw new Error("Campaign not found");
+
+  const { resumeOrAttachActiveSession } = await import("./session-orchestration");
+  const resumed = await resumeOrAttachActiveSession(workspaceId, campaignId, repUserId);
+  if (resumed) return resumed;
 
   const active = await prisma.powerDialerSession.findFirst({
     where: { campaignId, status: { in: ["active", "paused"] } },

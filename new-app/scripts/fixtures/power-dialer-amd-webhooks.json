@@ -1,0 +1,32 @@
+[
+  {
+    "eventType": "call.machine.premium.detection.ended",
+    "result": "human_residence",
+    "expectedClassification": "human"
+  },
+  {
+    "eventType": "call.machine.premium.detection.ended",
+    "result": "human_business",
+    "expectedClassification": "human"
+  },
+  {
+    "eventType": "call.machine.detection.ended",
+    "result": "machine_end_beep",
+    "expectedClassification": "voicemail"
+  },
+  {
+    "eventType": "call.machine.detection.ended",
+    "result": "fax_detected",
+    "expectedClassification": "voicemail"
+  },
+  {
+    "eventType": "call.machine.detection.ended",
+    "result": "silence",
+    "expectedClassification": "uncertain"
+  },
+  {
+    "eventType": "call.machine.detection.ended",
+    "result": "not_sure",
+    "expectedClassification": "uncertain"
+  }
+]

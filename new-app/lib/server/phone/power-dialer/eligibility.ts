@@ -80,6 +80,17 @@ export function evaluateContactEligibility(input: {
     return { eligible: false, bucket: "suppressed", reason: "contact_unsubscribed" };
   }
 
+  const cf =
+    contact.customFields && typeof contact.customFields === "object"
+      ? (contact.customFields as Record<string, unknown>)
+      : {};
+  if (cf.powerDialerRemovedFromQueueAt) {
+    return { eligible: false, bucket: "suppressed", reason: "removed_from_queue" };
+  }
+  if (cf.powerDialerCompletedAt) {
+    return { eligible: false, bucket: "completed", reason: "contact_completed" };
+  }
+
   const terminal = campaignAttemptsForContact.find((a) => dispositionIsTerminal(a.disposition));
   if (terminal) {
     return { eligible: false, bucket: "completed", reason: "contact_completed" };

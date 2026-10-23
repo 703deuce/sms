@@ -513,6 +513,14 @@ export type PowerSessionStateDto = {
   ringTimeoutHangup?: string | null;
   emptyReasons?: { bucket: string; count: number }[];
   nextEligibleAt?: string | null;
+  upcomingQueue?: {
+    contactId: string;
+    attemptNumber: number;
+    firstName: string | null;
+    lastName: string | null;
+    phone: string;
+    company: string | null;
+  }[];
   currentAttempt?: { id: string; status: string; disposition: string | null } | null;
   attempts?: {
     id: string;
@@ -533,7 +541,16 @@ export async function fetchPowerSession(sessionId: string, withAttempts = true) 
 
 export async function powerSessionAction(
   sessionId: string,
-  action: "pause" | "resume" | "end" | "create_attempt" | "skip_countdown",
+  action:
+    | "pause"
+    | "resume"
+    | "end"
+    | "create_attempt"
+    | "skip_countdown"
+    | "orchestrate"
+    | "reconcile"
+    | "skip_contact"
+    | "preview_held",
   extra?: Record<string, unknown>,
 ) {
   const res = await fetch(`/api/phone/power-dialer/sessions/${sessionId}`, {

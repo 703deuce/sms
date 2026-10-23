@@ -9,6 +9,13 @@ import {
   listSessionAttempts,
   getSessionRuntime,
 } from "@/lib/server/phone/power-dialer";
+import {
+  orchestratePowerDialerSession,
+  reconcilePowerDialerSession,
+  listUpcomingEligibleContacts,
+  skipContactInSession,
+  setPreviewHeld,
+} from "@/lib/server/phone/power-dialer/session-orchestration";
 import { getPrisma } from "@/lib/server/db";
 import { resolveWorkspaceId } from "@/lib/server/workspace";
 
@@ -18,9 +25,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const workspaceId = await resolveWorkspaceId();
     const url = new URL(request.url);
     const includeAttempts = url.searchParams.get("attempts") === "1";
-    const [runtime, attempts] = await Promise.all([
+    await orchestratePowerDialerSession(workspaceId, id);
+    const [runtime, attempts, upcoming] = await Promise.all([
       getSessionRuntime(workspaceId, id),
       includeAttempts ? listSessionAttempts(workspaceId, id) : Promise.resolve(undefined),
+      listUpcomingEligibleContacts(workspaceId, id, 8),
     ]);
     return NextResponse.json({
       data: {
@@ -33,6 +42,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         ringTimeoutHangup: runtime.ringTimeoutHangup,
         emptyReasons: runtime.emptyReasons,
         nextEligibleAt: runtime.nextEligibleAt,
+        upcomingQueue: upcoming,
         attempts,
       },
     });
@@ -57,6 +67,21 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         where: { id, workspaceId, status: "active" },
         data: { nextCallAt: new Date() },
       });
+    } else if (body.action === "orchestrate") {
+      const data = await orchestratePowerDialerSession(workspaceId, id);
+      return NextResponse.json({ data });
+    } else if (body.action === "reconcile") {
+      const data = await reconcilePowerDialerSession(workspaceId, id);
+      return NextResponse.json({ data });
+    } else if (body.action === "skip_contact") {
+      const contactId = String((body as { contactId?: string }).contactId || "");
+      if (!contactId) return NextResponse.json({ error: "contactId required" }, { status: 400 });
+      await skipContactInSession(workspaceId, id, contactId);
+      return NextResponse.json({ ok: true });
+    } else if (body.action === "preview_held") {
+      const held = (body as { held?: boolean }).held === true;
+      await setPreviewHeld(workspaceId, id, held);
+      return NextResponse.json({ ok: true });
     } else if (body.action === "create_attempt") {
       const contactId = String((body as { contactId?: string }).contactId || "");
       const attemptNumber = Number((body as { attemptNumber?: number }).attemptNumber || 1);

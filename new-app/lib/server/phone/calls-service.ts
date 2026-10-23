@@ -500,6 +500,20 @@ export async function linkHumanCallControlId(
         }),
       },
     }).catch(() => undefined);
+
+    if (call.source === "power_dialer" && call.direction === "outbound") {
+      const meta = (call.metadata || {}) as { powerDialerAttemptId?: string };
+      const { startPowerDialerAmdOnCallControlLeg } = await import(
+        "@/lib/server/phone/power-dialer/power-dialer-amd"
+      );
+      void startPowerDialerAmdOnCallControlLeg({
+        telnyxCallControlId: controlId,
+        workspaceId,
+        humanCallId: callId,
+        powerDialerAttemptId: meta.powerDialerAttemptId ?? null,
+        premium: true,
+      }).catch(() => undefined);
+    }
   }
   return updated;
 }
@@ -566,8 +580,21 @@ export async function processHumanCallWebhookEvent(input: {
 
   if (
     input.eventType === "call.playback.ended" ||
+    input.eventType === "call.playback.failed" ||
     input.eventType === "call.speak.ended"
   ) {
+    if (clientState.humanCallId && clientState.workspaceId) {
+      const { finalizeVoicemailDropPlayback } = await import(
+        "@/lib/server/phone/power-dialer/voicemail-drop-lifecycle"
+      );
+      const pdVm = await finalizeVoicemailDropPlayback({
+        workspaceId: String(clientState.workspaceId),
+        humanCallId: String(clientState.humanCallId),
+        status: input.eventType === "call.playback.failed" ? "failed" : "completed",
+        telnyxEventType: input.eventType,
+      });
+      if (pdVm.handled) return { ok: true, powerDialerVoicemailDrop: true };
+    }
     const { handleVoicemailGreetingMediaEnded } = await import("@/lib/server/phone/voicemail-runtime");
     const vm = await handleVoicemailGreetingMediaEnded({
       eventType: input.eventType,
@@ -662,12 +689,23 @@ export async function processHumanCallWebhookEvent(input: {
     !(awaitingWebrtcBridge && clientState.kind !== "webrtc_agent_leg")
   ) {
     patch.answeredAt = new Date();
-    const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
-    await maybeStartCallRecordingOnAnswer({
-      workspaceId: call.workspaceId,
-      humanCallId: call.id,
-      telnyxCallControlId: call.telnyxCallControlId || eventControlId,
-    });
+    if (call.source === "power_dialer") {
+      const { maybeStartPowerDialerRecordingOnAnswer } = await import(
+        "@/lib/server/phone/power-dialer/power-dialer-recording"
+      );
+      await maybeStartPowerDialerRecordingOnAnswer({
+        workspaceId: call.workspaceId,
+        humanCallId: call.id,
+        telnyxCallControlId: call.telnyxCallControlId || eventControlId,
+      });
+    } else {
+      const { maybeStartCallRecordingOnAnswer } = await import("@/lib/server/phone/recording-runtime");
+      await maybeStartCallRecordingOnAnswer({
+        workspaceId: call.workspaceId,
+        humanCallId: call.id,
+        telnyxCallControlId: call.telnyxCallControlId || eventControlId,
+      });
+    }
   }
   if (input.eventType === "call.bridged" && awaitingWebrtcBridge) {
     const { markInboundCallBridged } = await import("@/lib/server/phone/inbound-webrtc-bridge");

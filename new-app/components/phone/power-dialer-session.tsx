@@ -43,7 +43,14 @@ export function PowerDialerSessionWorkspace({
   initialCampaignId,
   initialFocusContactId,
 }: { initialCampaignId?: string; initialFocusContactId?: string } = {}) {
-  const { startCall, endCall, activeCall, webrtcStatus } = useWorkspace()
+  const {
+    startCall,
+    endCall,
+    activeCall,
+    webrtcStatus,
+    toggleMute,
+    toggleHold,
+  } = useWorkspace()
   const { owned } = useNumbers()
   const [campaigns, setCampaigns] = useState<PowerCampaignDto[]>([])
   const [campaignId, setCampaignId] = useState('')
@@ -80,6 +87,8 @@ export function PowerDialerSessionWorkspace({
   const rules = runtime?.rules
   const progression = runtime?.progression
   const powerMode = rules?.dialingMode === 'power'
+  const previewMode = rules?.dialingMode === 'preview'
+  const upcoming = runtime?.upcomingQueue ?? []
 
   const refreshSession = useCallback(async (sid: string) => {
     const data = await fetchPowerSession(sid, true)
@@ -163,6 +172,7 @@ export function PowerDialerSessionWorkspace({
 
   useEffect(() => {
     if (!sessionId) return
+    void powerSessionAction(sessionId, 'reconcile').catch(() => undefined)
     void refreshSession(sessionId).catch((e) => toast.error(e instanceof Error ? e.message : 'Session error'))
     const t = window.setInterval(() => {
       void refreshSession(sessionId).catch(() => undefined)
@@ -210,6 +220,32 @@ export function PowerDialerSessionWorkspace({
   )
 
   useEffect(() => {
+    if (!sessionId) return
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.key === 'd' && !e.metaKey && !e.ctrlKey && lead && !onCall && !loading) {
+        e.preventDefault()
+        void dialLead(lead.contact.id, lead.attemptNumber, `pd-hotkey-${Date.now()}`)
+      }
+      if (e.key === 'h' && onCall) {
+        e.preventDefault()
+        toggleHold()
+      }
+      if (e.key === 'm' && onCall) {
+        e.preventDefault()
+        toggleMute()
+      }
+      if (e.key === 'Escape' && onCall) {
+        e.preventDefault()
+        endCall()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sessionId, lead, onCall, loading, dialLead, toggleHold, toggleMute, endCall])
+
+  useEffect(() => {
     if (!sessionId || !lead || !powerMode || paused || onCall || attemptId) return
     if (!progression?.autoDialReady) return
     if (progression.phase === 'awaiting_disposition') return
@@ -249,6 +285,9 @@ export function PowerDialerSessionWorkspace({
       const session = await startPowerSession(campaignId, initialFocusContactId)
       await patchPowerCampaign(campaignId, { status: 'active' })
       setSessionId(session.id)
+      if (setupDialingMode === 'preview') {
+        await powerSessionAction(session.id, 'preview_held', { held: true })
+      }
       await refreshSession(session.id)
       toast.success('Session started')
     } catch (e) {
@@ -528,18 +567,31 @@ export function PowerDialerSessionWorkspace({
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {!powerMode && (
+                    {(!powerMode || previewMode) && (
                       <Button
                         size="sm"
                         className="bg-success text-success-foreground hover:bg-success/90"
                         disabled={onCall || loading || paused || progression?.phase === 'awaiting_disposition'}
-                        onClick={() =>
+                        onClick={() => {
+                          if (previewMode && sessionId) {
+                            void powerSessionAction(sessionId, 'preview_held', { held: false })
+                          }
                           void dialLead(lead.contact.id, lead.attemptNumber, `pd-manual-${lead.contact.id}-${Date.now()}`)
-                        }
+                        }}
                       >
                         <Phone />
-                        Call
+                        {previewMode ? 'Preview dial' : 'Call'}
                       </Button>
+                    )}
+                    {onCall && (
+                      <>
+                        <Button size="sm" variant="outline" type="button" onClick={() => toggleMute()}>
+                          {activeCall?.muted ? 'Unmute' : 'Mute'}
+                        </Button>
+                        <Button size="sm" variant="outline" type="button" onClick={() => toggleHold()}>
+                          {activeCall?.onHold ? 'Resume' : 'Hold'}
+                        </Button>
+                      </>
                     )}
                     {onCall && attemptId && voicemailDropReady && (
                       <Button
@@ -549,9 +601,7 @@ export function PowerDialerSessionWorkspace({
                         onClick={() => {
                           void triggerVoicemailDrop(attemptId)
                             .then(() => {
-                              toast.success('Voicemail drop sent')
-                              endCall()
-                              setDisposition('Voicemail')
+                              toast.success('Voicemail drop playing — disposition when playback completes')
                             })
                             .catch((e) => toast.error(e instanceof Error ? e.message : 'Voicemail drop failed'))
                         }}
@@ -631,6 +681,33 @@ export function PowerDialerSessionWorkspace({
           </Panel>
         )}
       </div>
+
+      {sessionId && upcoming.length > 0 && (
+        <Panel title="Upcoming in queue" className="lg:col-span-3">
+          <ul className="divide-y text-sm">
+            {upcoming.map((u) => (
+              <li key={u.contactId} className="flex items-center justify-between gap-2 py-2">
+                <span className="min-w-0 truncate">
+                  {[u.firstName, u.lastName].filter(Boolean).join(' ') || formatPhone(u.phone)}
+                  {u.company ? ` · ${u.company}` : ''}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  onClick={() =>
+                    void powerSessionAction(sessionId, 'skip_contact', { contactId: u.contactId }).then(() =>
+                      refreshSession(sessionId),
+                    )
+                  }
+                >
+                  Skip
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       <Panel title="Session log" bodyClassName="p-0">
         <ul className="divide-y">

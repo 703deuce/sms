@@ -48,8 +48,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       where: { id: attemptId },
       data: {
         voicemailDropSentAt: new Date(),
-        disposition: "Voicemail",
-        dispositionEffectsAt: attempt.dispositionEffectsAt || new Date(),
+        notes: `${attempt.notes || ""} vm_drop_pending`.trim(),
       },
     });
 
