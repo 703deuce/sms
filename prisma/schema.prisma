@@ -4500,21 +4500,32 @@ model WorkspaceCallRouting {
 }
 
 model PowerDialerCampaign {
-  id             String               @id @default(cuid())
-  workspaceId    String
-  name           String
-  description    String?
-  listId         String
-  callerIdE164   String
-  status         String               @default("draft")
-  timezone       String               @default("America/Chicago")
-  configJson     Json                 @default("{}")
-  totalContacts  Int                  @default(0)
-  attemptedCount Int                  @default(0)
-  connectedCount Int                  @default(0)
-  completedCount Int                  @default(0)
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  id                           String               @id @default(cuid())
+  workspaceId                  String
+  name                         String
+  description                  String?
+  listId                       String
+  callerIdE164                 String
+  status                       String               @default("draft")
+  timezone                     String               @default("America/Chicago")
+  configJson                   Json                 @default("{}")
+  ringTimeoutSeconds           Int                  @default(30)
+  retryIntervalMinutes         Int                  @default(60)
+  dailyAttemptCap              Int                  @default(50)
+  totalAttemptCap              Int                  @default(3)
+  postCallIntervalSeconds      Int                  @default(5)
+  requireDispositionBeforeNext Boolean              @default(true)
+  allowedDays                  Json                 @default("[1,2,3,4,5]")
+  callingHoursStart            String               @default("09:00")
+  callingHoursEnd              String               @default("17:00")
+  phoneFieldPriority           Json                 @default("[\"phone\"]")
+  dialingMode                  String               @default("power")
+  totalContacts                Int                  @default(0)
+  attemptedCount               Int                  @default(0)
+  connectedCount               Int                  @default(0)
+  completedCount               Int                  @default(0)
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
   workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   list           ContactList          @relation(fields: [listId], references: [id], onDelete: Restrict)
   sessions       PowerDialerSession[]
@@ -4524,14 +4535,20 @@ model PowerDialerCampaign {
 }
 
 model PowerDialerSession {
-  id          String               @id @default(cuid())
-  workspaceId String
-  campaignId  String
-  status      String               @default("active")
-  startedAt   DateTime             @default(now())
-  endedAt     DateTime?
-  pausedAt    DateTime?
-  configJson  Json?
+  id                String               @id @default(cuid())
+  workspaceId       String
+  campaignId        String
+  status            String               @default("active")
+  startedAt         DateTime             @default(now())
+  endedAt           DateTime?
+  pausedAt          DateTime?
+  currentAttemptId  String?
+  nextCallAt        DateTime?
+  progressionPhase  String               @default("idle")
+  progressJson      Json?
+  repUserId         String?
+  dialSequence      Int                  @default(0)
+  configJson        Json?
   workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   campaign    PowerDialerCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   attempts    PowerDialerAttempt[]
@@ -4541,25 +4558,35 @@ model PowerDialerSession {
 }
 
 model PowerDialerAttempt {
-  id            String             @id @default(cuid())
-  workspaceId   String
-  sessionId     String
-  contactId     String
-  humanCallId   String?            @unique
-  attemptNumber Int                @default(1)
-  disposition   String?
-  notes         String?
-  callbackAt    DateTime?
-  status        String             @default("pending")
-  startedAt     DateTime?
-  endedAt       DateTime?
-  failureReason String?
-  createdAt     DateTime           @default(now())
+  id                   String             @id @default(cuid())
+  workspaceId          String
+  sessionId            String
+  contactId            String
+  humanCallId          String?            @unique
+  attemptNumber        Int                @default(1)
+  sequenceNumber       Int?
+  idempotencyKey       String?            @unique
+  disposition          String?
+  notes                String?
+  callbackAt           DateTime?
+  status               String             @default("pending")
+  answerClassification String?
+  startedAt            DateTime?
+  dialedAt             DateTime?
+  ringingAt            DateTime?
+  answeredAt           DateTime?
+  endedAt              DateTime?
+  billableSeconds      Int?
+  ringTimeoutAt        DateTime?
+  dispositionEffectsAt DateTime?
+  failureReason        String?
+  createdAt            DateTime           @default(now())
   session       PowerDialerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   humanCall     HumanCall?         @relation(fields: [humanCallId], references: [id], onDelete: SetNull)
 
+  @@unique([sessionId, sequenceNumber])
   @@index([sessionId, status])
   @@index([contactId])
   @@map("power_dialer_attempts")
