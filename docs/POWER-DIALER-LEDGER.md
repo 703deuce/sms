@@ -1,16 +1,24 @@
 # Power Dialer — completion ledger
 
-Last updated: Phase 8 (2026-10-23).
+Last updated: Phase 9 (2026-10-23).
 
 ## Production deploy
 
 | Item | Value |
 |------|--------|
 | **Phase 7 SHA (John re-test)** | `1f4f307b5d63ea1a05738390a14ea6194ab46445` |
-| **Pre–Phase 8 SHA** | `2979785d405eefe3afd84ca466436a2334ee6f05` |
 | **Phase 8 SHA** | `2cbe7bf891c90af0d7e41a497082f026cae56242` |
+| **Phase 9 SHA** | `e3f98897e00bfd32b437f0f03d78937beead6267` |
 | **Phase 6 migration** | `20261023180000_power_dialer_phase6` |
-| **Disk (Coolify)** | ~59% on `/` (2026-10-23) |
+| **Disk (Coolify)** | ~67% on `/` (2026-10-23) |
+
+## Phase 9 (contacts regression + settings tabs)
+
+| # | Item | Root cause / fix | Tests | Verify |
+|---|------|------------------|-------|--------|
+| 1 | `/app/contacts` empty | Phase 8 pointed UI at Prisma `Contact` (0 rows on QA); pre–Phase 8 “16 people” was mock `lib/data` only. `ensureShellContactsCatalog()` upserts 16 catalog rows when workspace has none; CSV/dialer imports add real rows. | `test:power-dialer-phase9` | **Prod:** 16+ people, Elena search, import visible, delete/archive |
+| 2 | Call Screening tab leak | Base UI tab exit transition kept vm-drops panel mounted/visible; controlled tab + conditional render + `data-[hidden]:hidden` on `TabsContent`. Copy → “Voicemail Drops tab”. | — | **Prod:** screening tab clean |
+| 3 | Billing numbers | **Mock** — `USAGE` const in `settings-tabs.tsx` (not Stripe/DB). PD minutes **real** in `getPowerDialerUsageSnapshot` → analytics + session `assertDialingWithinUsageLimits`; Settings > Usage & Subscription is config only, not billing dashboard. | — | Code audit (no wire to billing tab this pass) |
 
 ## Phase 8 (John re-test follow-up)
 
