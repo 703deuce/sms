@@ -1214,6 +1214,9 @@ model ContactList {
   workspaceId          String
   name                 String
   description          String?
+  source               String                @default("manual")
+  archivedAt           DateTime?
+  updatedAt            DateTime              @updatedAt
   workspace            Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members              ContactListMember[]
   powerDialerCampaigns PowerDialerCampaign[]
