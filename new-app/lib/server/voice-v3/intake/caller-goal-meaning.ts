@@ -6,6 +6,7 @@ export const callerGoalTypeSchema = z.enum([
   "CANCEL_APPOINTMENT",
   "CALLBACK",
   "TRANSFER",
+  "TAKE_MESSAGE",
   "GENERAL_INFORMATION",
 ]);
 

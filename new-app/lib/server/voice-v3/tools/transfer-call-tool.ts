@@ -12,6 +12,7 @@ import {
 } from "../transfer/authorize-transfer";
 import { logVoiceV3TransferEvent } from "../transfer/telemetry";
 import { ensurePhoneFoundationForTransfer } from "../transfer/ensure-phone-foundation";
+import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
 
 function catalogForSchema(config: VoiceV3AgentConfig) {
   const policy = config.transfer;
@@ -127,6 +128,9 @@ export const transferCallTool: VoiceToolDefinition<TransferCallArgs> = {
         "not_ready",
       );
     }
+
+    let snap = mergeDialogActiveGoalFromOperation(ctx.runtime.getSnapshot(), "transfer_call");
+    ctx.runtime.replaceContext(snap);
 
     logVoiceV3TransferEvent("VOICE_V3_TRANSFER_REQUESTED", {
       call_id: ctx.callId,

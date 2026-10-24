@@ -4,6 +4,7 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { authorizeTakeMessageOrError } from "./authorize-tool-for-config";
+import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
 
 const takeMessageArgsSchema = z.object({
   message: z
@@ -57,7 +58,8 @@ export const takeMessageTool: VoiceToolDefinition<TakeMessageArgs> = {
     const denied = authorizeTakeMessageOrError(config);
     if (denied) return denied;
 
-    const snap = ctx.runtime.getSnapshot();
+    let snap = mergeDialogActiveGoalFromOperation(ctx.runtime.getSnapshot(), "take_message");
+    ctx.runtime.replaceContext(snap);
     const workspaceId = config.workspaceId?.trim() || ctx.tenantId;
     const { executeTakeMessage } = await import("../callback/execute-take-message");
     const { result, nextContext } = await executeTakeMessage({

@@ -4,6 +4,7 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
+import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
 
 const searchArgsSchema = z.object({
   query: z
@@ -45,6 +46,11 @@ export const searchBusinessKnowledgeTool: VoiceToolDefinition<SearchBusinessKnow
   validate: (raw) => searchArgsSchema.parse(raw),
   execute: async (ctx, args) => {
     const config = ctx.runtime.config;
+    const snap = mergeDialogActiveGoalFromOperation(
+      ctx.runtime.getSnapshot(),
+      "search_business_knowledge",
+    );
+    ctx.runtime.replaceContext(snap);
     if (config.knowledge?.retrieval?.enabled !== true) {
       return voiceToolError(
         "KNOWLEDGE_DISABLED",

@@ -21,6 +21,8 @@ export type VoiceOperationName =
   | "send_booking_link"
   | "transfer_call"
   | "request_callback"
+  | "take_message"
+  | "search_business_knowledge"
   | "update_intake"
   | "end_call";
 
@@ -48,6 +50,12 @@ export function configuredRequiredForOperation(
   if (operation === "unresolved") return [];
   if (operation === "request_callback") {
     return resolveConfiguredCallbackRequiredKeys(config);
+  }
+  if (operation === "take_message" || operation === "search_business_knowledge") {
+    return [];
+  }
+  if (operation === "transfer_call") {
+    return [];
   }
   if (READ_OPERATIONS.includes(operation)) return [];
   if (MUTATION_INTAKE_OPERATIONS.includes(operation)) {
@@ -98,6 +106,8 @@ export function resolveActiveIntakeOperation(
       return "cancel_appointment";
     case "REQUEST_TRANSFER":
       return "transfer_call";
+    case "TAKE_MESSAGE":
+      return "take_message";
     case "BOOK_APPOINTMENT":
       if (config.scheduling?.bookingStrategy === "SEND_LINK") {
         return "send_booking_link";

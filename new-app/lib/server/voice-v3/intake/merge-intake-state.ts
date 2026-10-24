@@ -36,6 +36,7 @@ const TOOL_GOAL_MAP: Record<string, VoiceV3Goal> = {
   CANCEL_APPOINTMENT: "CANCEL_APPOINTMENT",
   REQUEST_CALLBACK: "REQUEST_CALLBACK",
   REQUEST_TRANSFER: "REQUEST_TRANSFER",
+  TAKE_MESSAGE: "TAKE_MESSAGE",
 };
 
 /** Map an explicit tool operation to dialog.activeGoal (intent routing for intake + planner). */
@@ -56,6 +57,20 @@ export function mergeDialogActiveGoalFromOperation(
       return mergeDialogActiveGoalFromTool(ctx, "RESCHEDULE_APPOINTMENT");
     case "cancel_appointment":
       return mergeDialogActiveGoalFromTool(ctx, "CANCEL_APPOINTMENT");
+    case "take_message":
+      return mergeDialogActiveGoalFromTool(ctx, "TAKE_MESSAGE");
+    case "transfer_call":
+      return mergeDialogActiveGoalFromTool(ctx, "REQUEST_TRANSFER");
+    case "search_business_knowledge":
+      return mergeDialogActiveGoalFromTool(ctx, "GENERAL");
+    case "find_appointment":
+      if (
+        ctx.dialog.activeGoal === "CANCEL_APPOINTMENT" ||
+        ctx.dialog.activeGoal === "RESCHEDULE_APPOINTMENT"
+      ) {
+        return ctx;
+      }
+      return mergeDialogActiveGoalFromTool(ctx, "RESCHEDULE_APPOINTMENT");
     default:
       return ctx;
   }

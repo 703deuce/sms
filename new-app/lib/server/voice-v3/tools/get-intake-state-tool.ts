@@ -9,16 +9,11 @@ import {
   resolveActiveIntakeOperation,
   type VoiceOperationName,
 } from "../intake-objective/operation-requirements";
+import { GET_INTAKE_STATE_OPERATIONS } from "../intent/voice-operation-intent-catalog";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk } from "./types";
 
-const OPERATIONS = [
-  "book_appointment",
-  "request_callback",
-  "take_message",
-  "send_booking_link",
-  "unresolved",
-] as const;
+const OPERATIONS = [...GET_INTAKE_STATE_OPERATIONS, "unresolved"] as const;
 
 export type GetIntakeStateArgs = {
   operation?: VoiceOperationName | null;

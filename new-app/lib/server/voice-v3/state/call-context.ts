@@ -39,7 +39,8 @@ export type VoiceV3Goal =
   | "RESCHEDULE_APPOINTMENT"
   | "CANCEL_APPOINTMENT"
   | "REQUEST_CALLBACK"
-  | "REQUEST_TRANSFER";
+  | "REQUEST_TRANSFER"
+  | "TAKE_MESSAGE";
 
 export type IntakeFieldVerificationStatus =
   | "candidate"

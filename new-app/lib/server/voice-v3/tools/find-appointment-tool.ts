@@ -18,6 +18,7 @@ import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { FIND_APPOINTMENT_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import { resolveCustomerIdentityFromIntake } from "../intake-objective/resolve-stored-intake";
+import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
 
 const findApptIdentitySchema = z.object({
   name: z
@@ -127,7 +128,15 @@ export const findAppointmentTool: VoiceToolDefinition<FindAppointmentArgs> = {
   parameters: {},
   validate: (raw) => findApptArgsSchema.parse(raw),
   execute: async (ctx, args) => {
-    const snap = ctx.runtime.getSnapshot();
+    let snap = ctx.runtime.getSnapshot();
+    const goalOp =
+      snap.dialog.activeGoal === "CANCEL_APPOINTMENT"
+        ? "cancel_appointment"
+        : snap.dialog.activeGoal === "RESCHEDULE_APPOINTMENT"
+          ? "reschedule_appointment"
+          : "find_appointment";
+    snap = mergeDialogActiveGoalFromOperation(snap, goalOp);
+    ctx.runtime.replaceContext(snap);
     const config = ctx.runtime.config;
 
     if (snap.booking.phase === "BOOKING_CONFIRMED" && snap.booking.confirmed) {
