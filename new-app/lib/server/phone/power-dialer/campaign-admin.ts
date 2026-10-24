@@ -4,6 +4,7 @@ import { campaignPatchToDbData, parseCampaignConfigPatch, resolveCampaignRules }
 import { computeCampaignEligibilityRollups } from "./campaign-rollups";
 import { parseExtendedConfig } from "./campaign-extended-config";
 import { isHumanConversation } from "./disposition-effects";
+import { reasonToUserMessage } from "./eligibility";
 
 export async function listCampaignTableRows(
   workspaceId: string,
@@ -120,14 +121,27 @@ export async function getCampaignDetail(workspaceId: string, id: string) {
     include: { list: true },
   });
   if (!c) throw new Error("Campaign not found");
-  const { counts, truncated } = await computeCampaignEligibilityRollups(workspaceId, id, {
-    setupPreview: true,
-  });
+  const { counts, truncated, reasonCounts, listMemberCount } = await computeCampaignEligibilityRollups(
+    workspaceId,
+    id,
+    {
+      setupPreview: true,
+    },
+  );
+  const reasonBreakdown = Object.entries(reasonCounts)
+    .filter(([, n]) => (n ?? 0) > 0)
+    .map(([reason, count]) => ({
+      reason,
+      count: count ?? 0,
+      label: reasonToUserMessage(reason as import("./types").EligibilityReasonCode),
+    }))
+    .sort((a, b) => b.count - a.count);
   return {
     campaign: c,
     rules: resolveCampaignRules(c),
     extended: parseExtendedConfig(c.configJson),
-    eligibility: { counts, truncated },
+    eligibility: { counts, truncated, reasonBreakdown, listMemberCount },
+    listName: c.list.name,
   };
 }
 
@@ -233,34 +247,48 @@ export async function upsertCampaign(
   workspaceId: string,
   input: {
     id?: string;
-    name: string;
+    name?: string;
     description?: string;
-    listId: string;
-    callerIdE164: string;
+    listId?: string;
+    callerIdE164?: string;
     timezone?: string;
     status?: string;
     configJson?: Record<string, unknown>;
   },
 ) {
   const prisma = getPrisma();
-  const callerIdE164 = normalizeE164(input.callerIdE164);
-  const parsed = input.configJson ? parseCampaignConfigPatch(input.configJson) : {};
-  const ruleCols = campaignPatchToDbData(parsed);
-  const members = await prisma.contactListMember.count({ where: { listId: input.listId } });
-  const configJson = {
-    ...(input.configJson || {}),
-  } as import("@prisma/client").Prisma.InputJsonValue;
 
   if (input.id) {
+    const existing = await prisma.powerDialerCampaign.findFirst({
+      where: { id: input.id, workspaceId },
+    });
+    if (!existing) throw new Error("Campaign not found");
+
+    const name = input.name?.trim() ? input.name.trim() : existing.name;
+    const listId = input.listId?.trim() ? input.listId.trim() : existing.listId;
+    const callerIdE164 = input.callerIdE164
+      ? normalizeE164(input.callerIdE164)
+      : existing.callerIdE164;
+    const timezone = input.timezone ?? existing.timezone;
+    const existingCfg =
+      existing.configJson && typeof existing.configJson === "object"
+        ? (existing.configJson as Record<string, unknown>)
+        : {};
+    const mergedConfig = { ...existingCfg, ...(input.configJson || {}) };
+    const parsed = parseCampaignConfigPatch(mergedConfig);
+    const ruleCols = campaignPatchToDbData(parsed);
+    const members = await prisma.contactListMember.count({ where: { listId } });
+    const configJson = mergedConfig as import("@prisma/client").Prisma.InputJsonValue;
+
     await prisma.powerDialerCampaign.updateMany({
       where: { id: input.id, workspaceId },
       data: {
-        name: input.name,
-        description: input.description,
-        listId: input.listId,
+        name,
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        listId,
         callerIdE164,
-        timezone: input.timezone,
-        status: input.status,
+        timezone,
+        ...(input.status !== undefined ? { status: input.status } : {}),
         totalContacts: members,
         configJson,
         ...ruleCols,
@@ -269,12 +297,23 @@ export async function upsertCampaign(
     return prisma.powerDialerCampaign.findFirst({ where: { id: input.id, workspaceId } });
   }
 
+  if (!input.name?.trim() || !input.listId?.trim() || !input.callerIdE164) {
+    throw new Error("name, listId, and callerIdE164 are required for new campaigns");
+  }
+  const callerIdE164 = normalizeE164(input.callerIdE164);
+  const parsed = input.configJson ? parseCampaignConfigPatch(input.configJson) : {};
+  const ruleCols = campaignPatchToDbData(parsed);
+  const members = await prisma.contactListMember.count({ where: { listId: input.listId } });
+  const configJson = {
+    ...(input.configJson || {}),
+  } as import("@prisma/client").Prisma.InputJsonValue;
+
   return prisma.powerDialerCampaign.create({
     data: {
       workspaceId,
-      name: input.name,
+      name: input.name.trim(),
       description: input.description,
-      listId: input.listId,
+      listId: input.listId.trim(),
       callerIdE164,
       timezone: input.timezone || "America/Chicago",
       status: input.status || "draft",

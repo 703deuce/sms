@@ -3,7 +3,7 @@ import {
   evaluateListMemberEligibility,
   loadCampaignEligibilityContext,
 } from "./campaign-eligibility-helpers";
-import type { AttemptSummary, EligibilityBucket } from "./types";
+import type { AttemptSummary, EligibilityBucket, EligibilityReasonCode } from "./types";
 
 const MAX_ROLLUP_CONTACTS = 5000;
 
@@ -45,7 +45,12 @@ export async function computeCampaignEligibilityRollups(
   workspaceId: string,
   campaignId: string,
   opts?: { setupPreview?: boolean },
-): Promise<{ counts: EligibilityRollupCounts; truncated: boolean }> {
+): Promise<{
+  counts: EligibilityRollupCounts;
+  truncated: boolean;
+  reasonCounts: Partial<Record<EligibilityReasonCode, number>>;
+  listMemberCount: number;
+}> {
   const prisma = getPrisma();
   const campaign = await prisma.powerDialerCampaign.findFirst({
     where: { id: campaignId, workspaceId },
@@ -66,6 +71,7 @@ export async function computeCampaignEligibilityRollups(
     suppressed: 0,
     failed: 0,
   };
+  const reasonCounts: Partial<Record<EligibilityReasonCode, number>> = {};
 
   const now = new Date();
   for (const m of members) {
@@ -82,7 +88,12 @@ export async function computeCampaignEligibilityRollups(
       setupPreview: opts?.setupPreview,
     });
     counts[eligibility.bucket] += 1;
+    reasonCounts[eligibility.reason] = (reasonCounts[eligibility.reason] ?? 0) + 1;
   }
 
-  return { counts, truncated };
+  const listMemberCount = await prisma.contactListMember.count({
+    where: { listId: campaign.listId },
+  });
+
+  return { counts, truncated, reasonCounts, listMemberCount };
 }
