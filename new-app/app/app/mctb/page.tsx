@@ -3,30 +3,31 @@ import { MessageSquareText, Settings2 } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Page, PageHeader, Panel, Stat } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
-import { RecentCalls } from '@/components/calls/recent-calls'
-import { CALLS, MCTB_FUNNEL, THREADS, getContact } from '@/lib/data'
-import { formatWhen } from '@/lib/format'
-import { mctbMetrics, pct } from '@/lib/metrics'
+import { requireSession } from '@/lib/api-auth'
+import { formatPhone, formatWhen } from '@/lib/format'
+import { loadMctbOverviewForNewApp } from '@/lib/server/mctb/overview-load'
 
 export const metadata = { title: 'Missed Call Text Back' }
 
-export default function McTbOverview() {
-  const m = mctbMetrics()
-  const mctbCalls = CALLS.filter((c) => c.mctb)
-  const waiting = THREADS.filter((t) => t.kind === 'mctb' && t.needsReply)
-  const top = MCTB_FUNNEL[0].value
+export default async function McTbOverview() {
+  const { workspaceId } = await requireSession()
+  const data = await loadMctbOverviewForNewApp(workspaceId)
 
   return (
     <Page>
       <PageHeader
-        eyebrow={<StatusBadge tone="success">Recovery on · 2 lines</StatusBadge>}
+        eyebrow={
+          <StatusBadge tone={data.masterEnabled ? 'success' : 'warning'}>
+            {data.masterEnabled ? `Recovery on · ${data.activeLines} line(s)` : 'Recovery paused or setup incomplete'}
+          </StatusBadge>
+        }
         title="Missed Call Text Back"
-        description="When nobody — human or AI — picks up, callers can press 1 to get a text so the conversation continues."
+        description="When nobody picks up, eligible callers can consent and receive a recovery text so the conversation continues in your inbox."
         actions={
           <>
-            <Link href="/app/mctb/recovery" className={buttonVariants({ variant: 'outline' })}>
+            <Link href="/app/mctb/setup" className={buttonVariants({ variant: 'outline' })}>
               <Settings2 />
-              Recovery settings
+              Setup
             </Link>
             <Link href="/app/mctb/conversations" className={buttonVariants()}>
               <MessageSquareText />
@@ -35,58 +36,29 @@ export default function McTbOverview() {
           </>
         }
       />
-
-      <section aria-label="Last 7 days" className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Stat label="Missed calls" value={m.missed} href="/app/mctb/calls" />
-        <Stat label="Consent rate" value={pct(m.consented, m.offered)} hint={`${m.consented} of ${m.offered} offered`} />
-        <Stat label="Delivered" value={m.delivered} tone="success" />
-        <Stat label="Replied" value={m.replied} tone="success" href="/app/mctb/conversations" />
-        <Stat label="Needs callback" value={m.needsCallback} tone="warning" href="/app/mctb/calls?filter=needs_callback" />
-      </section>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Panel title="Recovery funnel" description="Last 30 days · each step measured, not inferred" className="lg:col-span-2">
-          <ol className="flex flex-col gap-3">
-            {MCTB_FUNNEL.map((s) => (
-              <li key={s.stage} className="grid grid-cols-[9rem_1fr_3.5rem] items-center gap-3 text-sm sm:grid-cols-[11rem_1fr_4rem]">
-                <span className="flex flex-col">
-                  <span className="font-medium">{s.stage}</span>
-                  <span className="text-[11px] text-muted-foreground">{s.note}</span>
-                </span>
-                <span className="h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-                  <span className="block h-full rounded-full bg-primary" style={{ width: `${(s.value / top) * 100}%` }} />
-                </span>
-                <span className="text-right tabular-nums">
-                  {s.value} <span className="text-xs text-muted-foreground">{pct(s.value, top)}</span>
-                </span>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Missed today" value={data.missedToday} href="/app/mctb/calls" />
+        <Stat label="Texts sent today" value={data.textsSentToday} href="/app/mctb/calls?filter=texted" />
+        <Stat label="Needs reply" value={data.needsReply} tone={data.needsReply ? 'warning' : undefined} href="/app/mctb/conversations" />
+        <Stat label="Consent mode" value={data.consentMode.replace(/_/g, ' ')} />
+      </div>
+      <Panel title="Recent missed calls">
+        {data.recentMissed.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No missed calls yet.</p>
+        ) : (
+          <ul className="divide-y">
+            {data.recentMissed.map((row) => (
+              <li key={row.id}>
+                <Link href={`/app/mctb/calls/${row.id}`} className="flex flex-wrap items-center justify-between gap-2 px-1 py-3 hover:bg-muted/50">
+                  <span className="font-mono text-sm">{formatPhone(row.callerE164)}</span>
+                  <span className="text-xs text-muted-foreground">{formatWhen(row.detectedAt)}</span>
+                  <StatusBadge tone={row.smsSentAt ? 'success' : 'muted'}>{row.status}</StatusBadge>
+                </Link>
               </li>
             ))}
-          </ol>
-        </Panel>
-
-        <Panel title="Waiting on you" description={`${waiting.length} replies need a response`} bodyClassName="p-0">
-          <ul className="divide-y">
-            {waiting.map((t) => {
-              const c = getContact(t.contactId)
-              const last = t.messages.filter((x) => x.from === 'customer').at(-1)
-              return (
-                <li key={t.id}>
-                  <Link href={`/app/mctb/conversations?thread=${t.id}`} className="flex flex-col gap-1 px-5 py-3 hover:bg-muted/60">
-                    <span className="flex items-center justify-between text-sm font-medium">
-                      {c?.name}
-                      <span className="text-xs font-normal text-muted-foreground">{last && formatWhen(last.at)}</span>
-                    </span>
-                    <span className="line-clamp-2 text-xs text-muted-foreground">{last?.text}</span>
-                  </Link>
-                </li>
-              )
-            })}
-            {waiting.length === 0 && <li className="px-5 py-8 text-center text-sm text-muted-foreground">All caught up.</li>}
           </ul>
-        </Panel>
-      </div>
-
-      <RecentCalls calls={mctbCalls.slice(0, 6)} basePath="/app/mctb/calls" viewAllHref="/app/mctb/calls" title="Recent missed calls" focus="mctb" />
+        )}
+      </Panel>
     </Page>
   )
 }
