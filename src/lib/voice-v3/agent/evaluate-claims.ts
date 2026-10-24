@@ -15,7 +15,16 @@ export function evaluateAllowedClaims(ctx: VoiceV3CallContext): ClaimsEvaluation
     "CLAIM_BOOKED",
     "CLAIM_RESCHEDULED",
     "CLAIM_CANCELLED",
+    "CLAIM_BOOKING_LINK_SENT",
   ];
+
+  const linkSent =
+    ctx.bookingLink?.lastSend?.status === "sent" ||
+    ctx.bookingLink?.lastSend?.status === "already_sent";
+  if (linkSent) {
+    allowed.push("CLAIM_BOOKING_LINK_SENT");
+    forbidden = forbidden.filter((c) => c !== "CLAIM_BOOKING_LINK_SENT");
+  }
 
   const findRunning = findRunningOperation(ctx, "FIND_AVAILABILITY");
   if (findRunning) {

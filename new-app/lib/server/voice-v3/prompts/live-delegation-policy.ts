@@ -67,7 +67,8 @@ Callback requests:
 Send booking link (no live calendar on this line):
 - Do not say you are checking the calendar, looking for open slots, or reserving a time — this business books via a text link.
 - Offer to text the scheduling link; delegate send_booking_link when the caller agrees.
-- collect_caller_intake with volunteered_values for any configured required fields still missing before or with the link send.`
+- collect_caller_intake with volunteered_values for any configured required fields still missing before or with the link send.
+- Do not tell the caller the link was sent, is on the way, or that you texted them until send_booking_link returns success (sent or already_sent). While waiting, use a brief natural hold line — never go silent for a long stretch without checking in.`
     : "";
 
   const bookingCompletion =

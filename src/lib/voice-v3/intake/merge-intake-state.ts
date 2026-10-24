@@ -1,5 +1,6 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { CapturedField, VoiceV3CallContext, VoiceV3Goal } from "../state/call-context";
+import type { VoiceOperationName } from "../intake-objective/operation-requirements";
 import { mergeSchedulingMeaningIntoContext } from "./merge-scheduling-meaning";
 import type { SchedulingMeaning } from "../time/scheduling-types";
 
@@ -36,6 +37,29 @@ const TOOL_GOAL_MAP: Record<string, VoiceV3Goal> = {
   REQUEST_CALLBACK: "REQUEST_CALLBACK",
   REQUEST_TRANSFER: "REQUEST_TRANSFER",
 };
+
+/** Map an explicit tool operation to dialog.activeGoal (intent routing for intake + planner). */
+export function mergeDialogActiveGoalFromOperation(
+  ctx: VoiceV3CallContext,
+  operation: VoiceOperationName,
+): VoiceV3CallContext {
+  switch (operation) {
+    case "send_booking_link":
+    case "book_appointment":
+    case "find_availability":
+      return mergeDialogActiveGoalFromTool(ctx, "BOOK_APPOINTMENT");
+    case "request_callback":
+      return mergeDialogActiveGoalFromTool(ctx, "REQUEST_CALLBACK");
+    case "transfer_call":
+      return mergeDialogActiveGoalFromTool(ctx, "REQUEST_TRANSFER");
+    case "reschedule_appointment":
+      return mergeDialogActiveGoalFromTool(ctx, "RESCHEDULE_APPOINTMENT");
+    case "cancel_appointment":
+      return mergeDialogActiveGoalFromTool(ctx, "CANCEL_APPOINTMENT");
+    default:
+      return ctx;
+  }
+}
 
 export function mergeDialogActiveGoalFromTool(
   ctx: VoiceV3CallContext,

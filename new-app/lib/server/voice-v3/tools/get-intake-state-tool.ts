@@ -3,6 +3,7 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { deriveIntakeObjective } from "../intake-objective";
+import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
 import { resolveStoredIntakeString } from "../intake-objective/resolve-stored-intake";
 import {
   resolveActiveIntakeOperation,
@@ -52,13 +53,21 @@ export const getIntakeStateTool: VoiceToolDefinition<GetIntakeStateArgs> = {
   },
   execute: async (ctx, raw) => {
     const config = ctx.runtime.config;
-    const snap = ctx.runtime.getSnapshot();
+    let snap = ctx.runtime.getSnapshot();
     const op =
       raw.operation && raw.operation !== "unresolved"
         ? raw.operation
         : resolveActiveIntakeOperation(config, snap);
 
-    const objective = deriveIntakeObjective(config, snap);
+    if (op !== "unresolved") {
+      const withGoal = mergeDialogActiveGoalFromOperation(snap, op);
+      if (withGoal.runtime.version !== snap.runtime.version) {
+        snap = withGoal;
+        ctx.runtime.replaceContext(snap);
+      }
+    }
+
+    const objective = deriveIntakeObjective(config, snap, op);
     const values: Record<string, string> = {};
     for (const field of config.intakeFields) {
       const v = resolveStoredIntakeString(snap.intake.values, field.key);

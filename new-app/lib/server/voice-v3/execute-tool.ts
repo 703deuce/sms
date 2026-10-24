@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/voice-v3/livekit/live-context";
 import { getCurrentConversationRevision } from "@/lib/server/voice-v3/conversation/conversation-revision";
 import { maybeExecuteDelegatedTransferCallResult } from "@/lib/server/voice-v3/transfer/execute-authorized-transfer-on-node";
+import { pushAgentSnapshotToLive } from "@/lib/server/voice-v3/agent/after-state-change";
 
 function mapEngineResult(result: {
   ok: boolean;
@@ -105,6 +106,12 @@ export async function executeNativeVoiceV3Tool(input: {
         result: engineResult,
       });
     }
+
+    pushAgentSnapshotToLive({
+      runtime,
+      send: liveContext.sendContext,
+      delegationId: input.delegationId?.trim() || null,
+    });
 
     const withLive = attachLiveContextEventsToToolResult(
       engineResult as Record<string, unknown>,

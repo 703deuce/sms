@@ -39,7 +39,7 @@ function defaultRequiredIntakeKeys(config: VoiceV3AgentConfig): string[] {
   return config.intakeFields.filter((f) => f.required).map((f) => f.key);
 }
 
-function configuredRequiredForOperation(
+export function configuredRequiredForOperation(
   config: VoiceV3AgentConfig,
   operation: VoiceOperationName,
 ): string[] {

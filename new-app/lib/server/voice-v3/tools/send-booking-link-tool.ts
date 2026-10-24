@@ -8,6 +8,7 @@ import { SEND_BOOKING_LINK_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import { executeSendBookingLink } from "../booking-link/execute-send-booking-link";
 import { isSendBookingLinkToolConsentRequired } from "../booking-link/send-link-consent-policy";
 import { coerceOptionalToolPhoneArg } from "../intake-objective/coerce-llm-literal";
+import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
 
 function sendBookingLinkArgsSchemaForConfig(config: VoiceV3AgentConfig) {
   const consentGate = isSendBookingLinkToolConsentRequired(config);
@@ -87,7 +88,12 @@ export const sendBookingLinkTool: VoiceToolDefinition<SendBookingLinkArgs> = {
       confirmed: consentGate ? Boolean(args.confirmed) : args.confirmed !== false,
     };
 
-    const snap = ctx.runtime.getSnapshot();
+    let snap = ctx.runtime.getSnapshot();
+    const withGoal = mergeDialogActiveGoalFromOperation(snap, "send_booking_link");
+    if (withGoal.runtime.version !== snap.runtime.version) {
+      snap = withGoal;
+      ctx.runtime.replaceContext(snap);
+    }
     const workspaceId = config.workspaceId?.trim() || ctx.tenantId;
     const { result, nextContext } = await executeSendBookingLink({
       workspaceId,
