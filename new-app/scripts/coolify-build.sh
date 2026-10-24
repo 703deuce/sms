@@ -25,6 +25,8 @@ $PNPM exec prisma generate
 if [[ -f ../packages/transovo-voice-v3-runtime/sync-to-new-app.mjs ]]; then
   echo "[new-app/coolify-build] sync Voice V3 authority (src/lib/voice-v3 → new-app mirror)"
   node ../packages/transovo-voice-v3-runtime/sync-to-new-app.mjs
+  echo "[new-app/coolify-build] verify Amy tool contracts after authority sync"
+  node ../packages/transovo-voice-v3-runtime/verify-astra-contracts-sync.mjs
 fi
 
 if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
