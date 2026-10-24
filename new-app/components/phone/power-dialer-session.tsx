@@ -39,6 +39,17 @@ import { DialerContactInlineEdit } from '@/components/phone/dialer-contact-inlin
 import { DialerAppointmentDialog } from '@/components/phone/dialer-appointment-dialog'
 import { SessionPresetsSheet } from '@/components/phone/session-presets-sheet'
 import { DialerLiveControlsReference } from '@/components/phone/dialer-live-controls-reference'
+import { COMMON_IANA_TIMEZONES } from '@/lib/phone/common-timezones'
+
+const SETUP_WEEKDAYS = [
+  { v: 0, l: 'Sun' },
+  { v: 1, l: 'Mon' },
+  { v: 2, l: 'Tue' },
+  { v: 3, l: 'Wed' },
+  { v: 4, l: 'Thu' },
+  { v: 5, l: 'Fri' },
+  { v: 6, l: 'Sat' },
+] as const
 
 const DISPOSITIONS = ['Booked', 'Interested', 'Callback', 'No answer', 'Voicemail', 'Not interested', 'Wrong number', 'Do not call'] as const
 
@@ -107,6 +118,11 @@ export function PowerDialerSessionWorkspace({
   const [setupCallerId, setSetupCallerId] = useState('')
   const [setupDialingMode, setSetupDialingMode] = useState<'power' | 'preview'>('power')
   const [setupPhoneFields, setSetupPhoneFields] = useState('phone')
+  const [setupTimezone, setSetupTimezone] = useState('America/Chicago')
+  const [setupAllowedDays, setSetupAllowedDays] = useState<number[]>([1, 2, 3, 4, 5])
+  const [setupCallingHoursStart, setSetupCallingHoursStart] = useState('09:00')
+  const [setupCallingHoursEnd, setSetupCallingHoursEnd] = useState('17:00')
+  const [setupScheduleSaving, setSetupScheduleSaving] = useState(false)
   const [metaLibraries, setMetaLibraries] = useState<{
     scripts: { id: string; name: string }[]
     dispositionSets: { id: string; name: string }[]
@@ -177,6 +193,10 @@ export function PowerDialerSessionWorkspace({
         setSetupCallerId(d.callerIdE164)
         setSetupDialingMode(d.rules.dialingMode === 'preview' ? 'preview' : 'power')
         setSetupPhoneFields((d.rules.phoneFieldPriority || ['phone']).join(', '))
+        setSetupTimezone(d.timezone || 'America/Chicago')
+        setSetupAllowedDays(d.rules.allowedDays?.length ? d.rules.allowedDays : [1, 2, 3, 4, 5])
+        setSetupCallingHoursStart(d.rules.callingHoursStart || '09:00')
+        setSetupCallingHoursEnd(d.rules.callingHoursEnd || '17:00')
       })
       .catch(() => toast.error('Could not load campaign setup'))
       .finally(() => setSetupLoading(false))
@@ -406,6 +426,63 @@ export function PowerDialerSessionWorkspace({
     activeCall,
   ])
 
+  const persistSetupSchedule = useCallback(
+    async (overrides?: {
+      timezone?: string
+      allowedDays?: number[]
+      callingHoursStart?: string
+      callingHoursEnd?: string
+    }) => {
+      if (!campaignId || !setupDetail) return
+      const tz = overrides?.timezone ?? setupTimezone
+      const days = overrides?.allowedDays ?? setupAllowedDays
+      const start = overrides?.callingHoursStart ?? setupCallingHoursStart
+      const end = overrides?.callingHoursEnd ?? setupCallingHoursEnd
+      if (!days.length) {
+        toast.error('Select at least one allowed calling day')
+        return
+      }
+      setSetupScheduleSaving(true)
+      try {
+        const phoneFieldPriority = setupPhoneFields
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+        await savePowerCampaignDetail(campaignId, {
+          name: setupDetail.name,
+          listId: setupDetail.listId,
+          callerIdE164: setupCallerId || setupDetail.callerIdE164,
+          timezone: tz,
+          configJson: {
+            ...(setupDetail.configJson || {}),
+            dialingMode: setupDialingMode,
+            phoneFieldPriority: phoneFieldPriority.length ? phoneFieldPriority : ['phone'],
+            allowedDays: days,
+            callingHoursStart: start,
+            callingHoursEnd: end,
+          },
+        })
+        const refreshed = await fetchPowerCampaignDetail(campaignId)
+        setSetupDetail(refreshed)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not save calling schedule')
+      } finally {
+        setSetupScheduleSaving(false)
+      }
+    },
+    [
+      campaignId,
+      setupTimezone,
+      setupAllowedDays,
+      setupCallingHoursStart,
+      setupCallingHoursEnd,
+      setupDetail,
+      setupCallerId,
+      setupDialingMode,
+      setupPhoneFields,
+    ],
+  )
+
   const startSession = async () => {
     if (!campaignId || !setupDetail) return
     if (!setupCallerId) {
@@ -422,11 +499,20 @@ export function PowerDialerSessionWorkspace({
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
+      if (!setupAllowedDays.length) {
+        toast.error('Select at least one allowed calling day')
+        return
+      }
       await savePowerCampaignDetail(campaignId, {
         callerIdE164: setupCallerId,
+        timezone: setupTimezone,
         configJson: {
+          ...(setupDetail.configJson || {}),
           dialingMode: setupDialingMode,
           phoneFieldPriority: phoneFieldPriority.length ? phoneFieldPriority : ['phone'],
+          allowedDays: setupAllowedDays,
+          callingHoursStart: setupCallingHoursStart,
+          callingHoursEnd: setupCallingHoursEnd,
         },
       })
       const session = await startPowerSession(campaignId, initialFocusContactId)
@@ -677,6 +763,70 @@ export function PowerDialerSessionWorkspace({
                       { value: 'preview', label: 'Preview (manual dial)' },
                     ]}
                   />
+                  <fieldset className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 text-sm">
+                    <legend className="px-1 text-sm font-medium">Calling schedule</legend>
+                    <SimpleSelect
+                      label="Campaign timezone"
+                      value={setupTimezone}
+                      onChange={(v) => {
+                        setSetupTimezone(v)
+                        void persistSetupSchedule({ timezone: v })
+                      }}
+                      options={COMMON_IANA_TIMEZONES.map((z) => ({ value: z.value, label: z.label }))}
+                    />
+                    <div>
+                      <span className="mb-1.5 block text-sm font-medium">Allowed days</span>
+                      <div className="flex flex-wrap gap-2">
+                        {SETUP_WEEKDAYS.map((d) => (
+                          <label key={d.v} className="inline-flex items-center gap-1.5 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={setupAllowedDays.includes(d.v)}
+                              disabled={setupScheduleSaving}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...setupAllowedDays, d.v].sort((a, b) => a - b)
+                                  : setupAllowedDays.filter((x) => x !== d.v)
+                                setSetupAllowedDays(next)
+                                void persistSetupSchedule({ allowedDays: next })
+                              }}
+                            />
+                            {d.l}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Weekends are off by default — enable Sat/Sun here if you dial on those days.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex flex-col gap-1 text-sm">
+                        <span className="font-medium">Hours start</span>
+                        <Input
+                          value={setupCallingHoursStart}
+                          onChange={(e) => setSetupCallingHoursStart(e.target.value)}
+                          onBlur={() => void persistSetupSchedule()}
+                          placeholder="09:00"
+                          aria-label="Calling hours start"
+                          disabled={setupScheduleSaving}
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-sm">
+                        <span className="font-medium">Hours end</span>
+                        <Input
+                          value={setupCallingHoursEnd}
+                          onChange={(e) => setSetupCallingHoursEnd(e.target.value)}
+                          onBlur={() => void persistSetupSchedule()}
+                          placeholder="17:00"
+                          aria-label="Calling hours end"
+                          disabled={setupScheduleSaving}
+                        />
+                      </label>
+                    </div>
+                    {setupScheduleSaving && (
+                      <p className="text-xs text-muted-foreground">Updating eligibility…</p>
+                    )}
+                  </fieldset>
                   <label className="flex flex-col gap-1.5 text-sm">
                     <span className="font-medium">Contact phone fields (priority, comma-separated)</span>
                     <Input
@@ -730,7 +880,7 @@ export function PowerDialerSessionWorkspace({
                     <div className="flex justify-between gap-2">
                       <dt className="text-muted-foreground">Calling window</dt>
                       <dd>
-                        {setupDetail.rules.callingHoursStart}–{setupDetail.rules.callingHoursEnd} ({setupDetail.timezone})
+                        {setupCallingHoursStart}–{setupCallingHoursEnd} ({setupTimezone})
                       </dd>
                     </div>
                   </dl>
