@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/app/page-primitives'
 import { AI_OUTCOME, CALL_OUTCOME, MCTB_STATE, StatusBadge } from '@/components/app/status'
 import { CALLS, NUMBERS, getNumber, type Call } from '@/lib/data'
 import { fetchCalls, fetchPowerCampaigns } from '@/lib/phone-api'
+import { fetchMctbMissedCalls } from '@/lib/mctb-api'
 import { Input } from '@/components/ui/input'
 import { fetchReceptionistCalls } from '@/lib/receptionist-api'
 import { useNumbers } from '@/components/providers/numbers-provider'
@@ -86,7 +87,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   }, [variant])
 
   useEffect(() => {
-    if (variant !== 'phone' && variant !== 'receptionist' && variant !== 'power_dialer') return
+    if (variant !== 'phone' && variant !== 'receptionist' && variant !== 'power_dialer' && variant !== 'mctb') return
     let cancelled = false
     void (async () => {
       try {
@@ -97,7 +98,42 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
             : filter === 'attention'
               ? 'open'
               : filter
-        if (variant === 'phone' || variant === 'power_dialer') {
+        if (variant === 'mctb') {
+          const res = await fetchMctbMissedCalls({
+            page,
+            limit: PAGE,
+            q: q.trim() || undefined,
+          })
+          if (cancelled) return
+          const mapped: Call[] = res.data.map((row) => ({
+            id: row.id,
+            direction: 'inbound' as const,
+            outcome: 'missed' as const,
+            caller: formatPhone(row.callerE164),
+            callerNumber: row.callerE164,
+            routedTo: formatPhone(row.businessE164),
+            startedAt: row.detectedAt,
+            durationSec: 0,
+            numberId: '',
+            recording: false,
+            handled: Boolean(row.smsSentAt),
+            callbackNeeded: !row.smsSentAt && row.eligible,
+            mctb: {
+              state:
+                row.suppressionReason
+                  ? 'suppressed'
+                  : row.smsSentAt
+                    ? 'texted'
+                    : row.eligible
+                      ? 'needs_callback'
+                      : 'failed',
+              pressOne: 'not_offered',
+              messageStatus: row.smsSentAt ? 'sent' : 'not_sent',
+            },
+          }))
+          setLiveCalls(mapped)
+          setTotal(res.total)
+        } else if (variant === 'phone' || variant === 'power_dialer') {
           const res = await fetchCalls({
             page,
             limit: PAGE,
@@ -144,7 +180,7 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   }, [variant, page, filter, numberId, q, campaignId, dateFrom, dateTo, dispositionQ, recordingFilter])
 
   const scoped = useMemo(() => {
-    if (variant === 'phone' || variant === 'receptionist' || variant === 'power_dialer') {
+    if (variant === 'phone' || variant === 'receptionist' || variant === 'power_dialer' || variant === 'mctb') {
       return liveCalls ?? []
     }
     return CALLS.filter(BASE_FILTER[variant])
@@ -152,7 +188,10 @@ export function CallsTable({ variant, basePath, initialFilter = 'all' }: { varia
   const filters = FILTERS[variant]
 
   const rows = useMemo(() => {
-    if ((variant === 'phone' || variant === 'receptionist' || variant === 'power_dialer') && liveCalls !== null)
+    if (
+      (variant === 'phone' || variant === 'receptionist' || variant === 'power_dialer' || variant === 'mctb') &&
+      liveCalls !== null
+    )
       return scoped
     const test = filters.find((f) => f.value === filter)?.test ?? (() => true)
     const term = q.trim().toLowerCase()

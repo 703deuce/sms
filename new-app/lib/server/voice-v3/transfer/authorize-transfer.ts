@@ -184,10 +184,27 @@ export function authorizeVoiceV3Transfer(input: {
     }
     if (!dest.phoneE164) continue;
     const mode = (t.mode || dest.defaultMode || "DIRECT").toUpperCase();
+    const lk = callContext.telephony?.liveKit;
+    const hasLiveKitSip = Boolean(lk?.roomName?.trim() && lk?.sipParticipantIdentity?.trim());
     const canUsePhoneCallControl =
       Boolean(phoneFoundation?.humanCallId) && Boolean(phoneFoundation?.inboundCallControlId);
 
-    if (!canUsePhoneCallControl) {
+    if (hasLiveKitSip) {
+      authorizedTargets.push({
+        destination_id: dest.id,
+        mode,
+        dial_target: dest.phoneE164.trim(),
+        ringing_timeout_seconds: t.ringingTimeoutSeconds,
+        executor: "livekit_sip",
+      });
+      logVoiceV3TransferEvent("VOICE_V3_TRANSFER_ROUTED_LIVEKIT_SIP", {
+        call_id: callContext.callId,
+        live_session_id: callContext.liveSessionId,
+        route_id: route.id,
+        destination_id: dest.id,
+        mode,
+        sip_participant_prefix: lk!.sipParticipantIdentity.slice(0, 12),
+      });
       continue;
     }
 
@@ -195,7 +212,7 @@ export function authorizeVoiceV3Transfer(input: {
       authorizedTargets.push({
         destination_id: dest.id,
         mode,
-        dial_target: dest.phoneE164,
+        dial_target: dest.phoneE164.trim(),
         ringing_timeout_seconds: t.ringingTimeoutSeconds,
         executor: "phone_call_control",
         inbound_call_control_id: phoneFoundation!.inboundCallControlId,
@@ -211,6 +228,13 @@ export function authorizeVoiceV3Transfer(input: {
       continue;
     }
 
+    logVoiceV3TransferEvent("VOICE_V3_TRANSFER_SKIP_NO_EXECUTOR", {
+      call_id: callContext.callId,
+      live_session_id: callContext.liveSessionId,
+      destination_id: dest.id,
+      has_livekit_sip: hasLiveKitSip,
+      has_phone_foundation: canUsePhoneCallControl,
+    });
   }
 
   if (!authorizedTargets.length) {
