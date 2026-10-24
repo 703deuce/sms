@@ -149,6 +149,7 @@ export async function onParallelHumanAnswered(input: {
   attemptId: string;
   answeredAt: Date;
   bridgeStartedAt?: Date;
+  classification?: string;
   deps?: TelnyxParallelDeps;
 }) {
   const prisma = getPrisma();
@@ -157,91 +158,94 @@ export async function onParallelHumanAnswered(input: {
     return { winnerAttemptId: null, skipped: eligibility.reason };
   }
 
-  const session = await prisma.powerDialerSession.findFirst({
-    where: { id: input.sessionId, workspaceId: input.workspaceId },
+  const { tryAtomicParallelWinnerClaim } = await import("./parallel-winner-claim");
+  const { recordLatencyMilestone } = await import("./latency-timeline");
+  recordLatencyMilestone({
+    workspaceId: input.workspaceId,
+    sessionId: input.sessionId,
+    attemptId: input.attemptId,
+    milestone: "winner_claim_attempted",
   });
-  if (!session) throw new Error("Session not found");
-  const parallelState =
-    session.parallelStateJson && typeof session.parallelStateJson === "object"
-      ? (session.parallelStateJson as Record<string, unknown>)
-      : {};
-  const pending = Array.isArray(parallelState.pendingAnswers)
-    ? (parallelState.pendingAnswers as { attemptId: string; answeredAtMs: number }[])
-    : [];
-  pending.push({
+
+  const claim = await tryAtomicParallelWinnerClaim({
+    workspaceId: input.workspaceId,
+    sessionId: input.sessionId,
     attemptId: input.attemptId,
     answeredAtMs: input.answeredAt.getTime(),
   });
-  const winnerId = pickBridgeWinner(pending);
-  if (!winnerId) return { winnerAttemptId: null as string | null };
 
-  if (winnerId === input.attemptId) {
-    const bridgeMs =
-      input.bridgeStartedAt
-        ? Math.max(0, input.bridgeStartedAt.getTime() - input.answeredAt.getTime())
-        : undefined;
+  if (claim.outcome === "ineligible") {
+    return { winnerAttemptId: null, skipped: claim.reason };
+  }
+
+  if (claim.outcome === "lost") {
     const attempt = await prisma.powerDialerAttempt.findFirst({
-      where: { id: winnerId, workspaceId: input.workspaceId },
+      where: { id: input.attemptId, workspaceId: input.workspaceId },
     });
     if (attempt) {
+      await (input.deps ?? defaultTelnyxDeps).hangupAttempt(attempt.id, attempt.humanCallId);
       await prisma.powerDialerAttempt.update({
-        where: { id: winnerId },
+        where: { id: input.attemptId },
         data: {
-          metadataJson: mergeAttemptMetadata(attempt.metadataJson, {
-            bridgeWinner: true,
-            answerToBridgeMs: bridgeMs,
-          }),
+          status: "cancelled",
+          endedAt: new Date(),
+          metadataJson: mergeAttemptMetadata(attempt.metadataJson, { parallelLoser: true }),
         },
       });
     }
-    await cancelParallelLosers(
-      input.workspaceId,
-      input.sessionId,
-      winnerId,
-      input.deps ?? defaultTelnyxDeps,
-    );
-    const prevParallel =
-      session.parallelStateJson && typeof session.parallelStateJson === "object"
-        ? (session.parallelStateJson as Record<string, unknown>)
-        : {};
-    await prisma.powerDialerSession.update({
-      where: { id: input.sessionId },
-      data: {
-        currentAttemptId: winnerId,
-        parallelStateJson: {
-          ...prevParallel,
-          roundComplete: true,
-          winnerAttemptId: winnerId,
-          pendingAnswers: pending,
-        },
-      },
-    });
-    if (attempt?.humanCallId && attempt.answerClassification === "human") {
-      const { maybeBridgePowerDialerAgentToProspect } = await import("./power-dialer-leg-bridge");
-      await maybeBridgePowerDialerAgentToProspect({
-        workspaceId: input.workspaceId,
-        humanCallId: attempt.humanCallId,
-        attemptId: winnerId,
-        classification: "human",
-        reason: "parallel_winner",
-      }).catch(() => undefined);
-    }
-    return { winnerAttemptId: winnerId };
+    return { winnerAttemptId: claim.winnerAttemptId, skipped: "parallel_loser" };
   }
 
+  recordLatencyMilestone({
+    workspaceId: input.workspaceId,
+    sessionId: input.sessionId,
+    attemptId: input.attemptId,
+    milestone: "winner_committed",
+  });
+
+  const winnerId = claim.winnerAttemptId;
+  const bridgeMs =
+    input.bridgeStartedAt
+      ? Math.max(0, input.bridgeStartedAt.getTime() - input.answeredAt.getTime())
+      : undefined;
   const attempt = await prisma.powerDialerAttempt.findFirst({
-    where: { id: input.attemptId, workspaceId: input.workspaceId },
+    where: { id: winnerId, workspaceId: input.workspaceId },
   });
   if (attempt) {
-    await (input.deps ?? defaultTelnyxDeps).hangupAttempt(attempt.id, attempt.humanCallId);
     await prisma.powerDialerAttempt.update({
-      where: { id: input.attemptId },
+      where: { id: winnerId },
       data: {
-        status: "cancelled",
-        endedAt: new Date(),
-        metadataJson: mergeAttemptMetadata(attempt.metadataJson, { parallelLoser: true }),
+        metadataJson: mergeAttemptMetadata(attempt.metadataJson, {
+          bridgeWinner: true,
+          answerToBridgeMs: bridgeMs,
+        }),
       },
     });
+  }
+  await prisma.powerDialerSession.update({
+    where: { id: input.sessionId },
+    data: { currentAttemptId: winnerId },
+  });
+  await cancelParallelLosers(
+    input.workspaceId,
+    input.sessionId,
+    winnerId,
+    input.deps ?? defaultTelnyxDeps,
+  );
+
+  const bridgeClass =
+    input.classification ||
+    attempt?.answerClassification ||
+    "human";
+  if (attempt?.humanCallId) {
+    const { maybeBridgePowerDialerAgentToProspect } = await import("./power-dialer-leg-bridge");
+    await maybeBridgePowerDialerAgentToProspect({
+      workspaceId: input.workspaceId,
+      humanCallId: attempt.humanCallId,
+      attemptId: winnerId,
+      classification: bridgeClass,
+      reason: "parallel_winner",
+    }).catch(() => undefined);
   }
   return { winnerAttemptId: winnerId };
 }
@@ -273,7 +277,8 @@ export async function assertParallelWinnerEligible(
   }
   const dialMode = normalizeDialingMode(attempt.session.campaign.dialingMode);
   const amdFilter = meta.amdFilter === true || dialMode === "parallel_amd";
-  if (amdFilter) {
+  const iosWire = meta.iosScreeningWireActive === true;
+  if (amdFilter || iosWire) {
     if (attempt.answerClassification !== "human") {
       return { eligible: false, reason: "awaiting_human_classification" };
     }

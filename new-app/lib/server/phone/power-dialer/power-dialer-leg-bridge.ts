@@ -1,10 +1,13 @@
 import { getPrisma } from "@/lib/server/db";
-import { bridgeCalls } from "@/lib/server/phone/routing/telnyx-call-control";
 import { phoneServerLog } from "@/lib/server/phone/phone-log";
 import { isConfirmedHumanClassification } from "./answer-classification";
 import { mergeAttemptMetadata, readAttemptMetadata } from "./attempt-metadata";
 import type { AnswerClassification } from "./types";
 import { loadSharedIosAgentLegForAttempt } from "./ios-shared-agent-leg";
+import { classificationSatisfiesBridgeGate, resolveConnectionPolicy } from "./connection-policy";
+import { normalizeDialingMode, parseDialModeSettings } from "./dial-modes";
+import { recordLatencyMilestone } from "./latency-timeline";
+import { bridgeCallsWithBenchmark } from "@/lib/server/phone/routing/telnyx-call-control";
 
 export function readPowerDialerLegIds(metadata: Record<string, unknown> | null | undefined) {
   const m = metadata || {};
@@ -46,6 +49,7 @@ export async function maybeBridgePowerDialerAgentToProspect(input: {
 
   const attempt = await prisma.powerDialerAttempt.findFirst({
     where: { id: input.attemptId, workspaceId: input.workspaceId },
+    include: { session: { include: { campaign: true } } },
   });
   if (!attempt) return { bridged: false, reason: "no_attempt" };
 
@@ -58,7 +62,17 @@ export async function maybeBridgePowerDialerAgentToProspect(input: {
     return { bridged: false, reason: "screening_pending" };
   }
 
-  if (!isConfirmedHumanClassification(input.classification)) {
+  const dialMode = normalizeDialingMode(attempt.session?.campaign?.dialingMode);
+  const dialSettings = parseDialModeSettings(attempt.session?.campaign?.configJson);
+  const amdFilter = attemptMeta.amdFilter === true || dialMode === "parallel_amd";
+  const policyCtx = {
+    dialMode,
+    amdFilterMachines: amdFilter,
+    iosScreeningWireActive: attemptMeta.iosScreeningWireActive === true,
+    screeningPending: attemptMeta.screeningPending === true,
+    answerClassification: input.classification,
+  };
+  if (!classificationSatisfiesBridgeGate(input.classification, policyCtx)) {
     return { bridged: false, reason: "not_confirmed_human" };
   }
 
@@ -80,9 +94,34 @@ export async function maybeBridgePowerDialerAgentToProspect(input: {
     return { bridged: false, reason: "missing_leg_control_id" };
   }
 
+  recordLatencyMilestone({
+    workspaceId: input.workspaceId,
+    attemptId: input.attemptId,
+    humanCallId: input.humanCallId,
+    sessionId: attempt.sessionId,
+    milestone: "bridge_command_issued",
+    payload: { reason: input.reason, policy: resolveConnectionPolicy(policyCtx) },
+  });
+
   try {
-    await bridgeCalls(agentCallControlId, prospectCallControlId);
+    await bridgeCallsWithBenchmark(agentCallControlId, prospectCallControlId);
+    recordLatencyMilestone({
+      workspaceId: input.workspaceId,
+      attemptId: input.attemptId,
+      humanCallId: input.humanCallId,
+      sessionId: attempt.sessionId,
+      milestone: "bridge_api_response",
+      payload: { ok: true },
+    });
   } catch (err) {
+    recordLatencyMilestone({
+      workspaceId: input.workspaceId,
+      attemptId: input.attemptId,
+      humanCallId: input.humanCallId,
+      sessionId: attempt.sessionId,
+      milestone: "bridge_api_response",
+      payload: { ok: false, message: err instanceof Error ? err.message : String(err) },
+    });
     phoneServerLog("power-dialer-ios-bridge", "bridge_failed", {
       humanCallId: input.humanCallId,
       message: err instanceof Error ? err.message : String(err),

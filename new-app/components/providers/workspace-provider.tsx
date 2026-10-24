@@ -84,6 +84,12 @@ type WorkspaceState = {
   answerIncoming: () => void
   rejectIncoming: () => void
   transferActiveCall: (toE164: string) => Promise<void>
+  /** Pre-connect session warm agent SIP leg (server-iOS power dialer). */
+  primePowerDialerAgentLeg: (args: {
+    humanCallId: string
+    callerId: string
+    label?: string
+  }) => void
 }
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null)
@@ -321,6 +327,12 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       phoneClientLog('webrtc', 'telnyx_ready')
       phoneClientTrace('telnyx_ready')
       void reportWebRtcPresence(true).catch(() => undefined)
+      void navigator.mediaDevices
+        ?.getUserMedia({ audio: true })
+        .then((stream) => {
+          stream.getTracks().forEach((t) => t.stop())
+        })
+        .catch(() => undefined)
       if (!cancelled) {
         setWebrtcStatus('ready')
         setWebrtcError(null)
@@ -385,6 +397,30 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       })
     }
   }, [routePolicy])
+
+  const primePowerDialerAgentLeg = useCallback(
+    (args: { humanCallId: string; callerId: string; label?: string }) => {
+      serverIosOutboundRef.current = {
+        humanCallId: args.humanCallId,
+        name: args.label || 'Dialer session',
+        number: 'Session media',
+        callerId: args.callerId,
+        source: 'power_dialer',
+      }
+      setActiveCall({
+        id: `server-ios-${args.humanCallId}`,
+        humanCallId: args.humanCallId,
+        name: args.label || 'Dialer session',
+        number: 'Session media',
+        callerId: args.callerId,
+        status: 'connecting',
+        muted: false,
+        onHold: false,
+        source: 'power_dialer',
+      })
+    },
+    [],
+  )
 
   const startCall: WorkspaceState['startCall'] = useCallback(
     ({
@@ -688,6 +724,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       answerIncoming,
       rejectIncoming,
       transferActiveCall,
+      primePowerDialerAgentLeg,
     }),
     [
       routePolicy,
@@ -706,6 +743,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       answerIncoming,
       rejectIncoming,
       transferActiveCall,
+      primePowerDialerAgentLeg,
     ],
   )
 

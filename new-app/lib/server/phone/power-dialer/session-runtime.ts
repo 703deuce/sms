@@ -503,6 +503,18 @@ export async function getSessionRuntime(workspaceId: string, sessionId: string) 
             dialReady && liveParallelCount < maxParallelLines && Boolean(nextEligible),
         }
       : null,
+    agentMedia: await (async () => {
+      const { readSessionAgentMedia, sessionRequiresWarmAgentMedia } = await import(
+        "./session-agent-media"
+      );
+      const required = await sessionRequiresWarmAgentMedia(workspaceId);
+      const state = readSessionAgentMedia(session.parallelStateJson);
+      return {
+        required,
+        ready: required ? state.agentMediaReady : true,
+        warmAgentHumanCallId: state.warmAgentHumanCallId ?? null,
+      };
+    })(),
     currentAttempt,
     connectionIntelligence: currentAttempt
       ? {
@@ -722,6 +734,9 @@ export async function createAttemptForSession(
   }
   const seq = session.dialSequence + 1;
   const ringTimeoutAt = new Date(Date.now() + rules.ringTimeoutSeconds * 1000);
+
+  const { assertAgentMediaReadyForServerDial } = await import("./session-agent-media");
+  await assertAgentMediaReadyForServerDial(workspaceId, sessionId);
 
   const { claimContactForSession } = await import("./team-queue-claims");
   await claimContactForSession({
@@ -1080,6 +1095,8 @@ export async function startSessionWithRep(
 
 export async function endSessionHard(workspaceId: string, sessionId: string) {
   const prisma = getPrisma();
+  const { teardownSessionAgentMedia } = await import("./session-agent-media");
+  await teardownSessionAgentMedia(workspaceId, sessionId).catch(() => undefined);
   const session = await prisma.powerDialerSession.findFirst({
     where: { id: sessionId, workspaceId },
     select: { campaignId: true },

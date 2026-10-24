@@ -523,6 +523,11 @@ export type PowerSessionStateDto = {
     maxLines: number;
     canOriginateAnother: boolean;
   } | null;
+  agentMedia?: {
+    required: boolean;
+    ready: boolean;
+    warmAgentHumanCallId: string | null;
+  };
   eligibilityCounts?: Record<string, number>;
   ringTimeoutHangup?: string | null;
   emptyReasons?: { bucket: string; count: number }[];
@@ -589,7 +594,9 @@ export async function powerSessionAction(
     | "orchestrate"
     | "reconcile"
     | "skip_contact"
-    | "preview_held",
+    | "preview_held"
+    | "prepare_agent_media"
+    | "report_agent_media_ready",
   extra?: Record<string, unknown>,
 ) {
   const res = await fetch(`/api/phone/power-dialer/sessions/${sessionId}`, {

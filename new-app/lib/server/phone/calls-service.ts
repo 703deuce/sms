@@ -787,11 +787,34 @@ export async function processHumanCallWebhookEvent(input: {
     (clientState.kind === "pd_prospect_pstn" ||
       eventControlId === (metaBefore as { prospectCallControlId?: string }).prospectCallControlId);
 
+  if (input.eventType === "call.answered") {
+    const sessionId =
+      clientState.powerDialerSessionId ||
+      (typeof metaBefore.powerDialerSessionId === "string"
+        ? metaBefore.powerDialerSessionId
+        : null);
+    const isSessionWarmLeg =
+      clientState.kind === "pd_session_warm_agent" ||
+      (clientState.kind === "pd_webrtc_agent_leg" && metaBefore.sessionWarmAgent === true);
+    if (sessionId && isSessionWarmLeg) {
+      const { markSessionAgentMediaReady } = await import(
+        "@/lib/server/phone/power-dialer/session-agent-media"
+      );
+      await markSessionAgentMediaReady({
+        workspaceId: call.workspaceId,
+        sessionId: String(sessionId),
+        agentCallControlId: eventControlId || undefined,
+        humanCallId: call.id,
+      }).catch(() => undefined);
+    }
+  }
+
   if (
     input.eventType === "call.answered" &&
     !call.answeredAt &&
     !(awaitingWebrtcBridge && clientState.kind !== "webrtc_agent_leg") &&
-    !(outboundServerIos && clientState.kind === "pd_webrtc_agent_leg")
+    !(outboundServerIos && clientState.kind === "pd_webrtc_agent_leg") &&
+    !(outboundServerIos && clientState.kind === "pd_session_warm_agent")
   ) {
     if (!outboundServerIos || prospectLegAnswer) {
       patch.answeredAt = new Date();
@@ -862,22 +885,57 @@ export async function processHumanCallWebhookEvent(input: {
       const { mergeAttemptMetadata } = await import(
         "@/lib/server/phone/power-dialer/attempt-metadata"
       );
+      const { recordLatencyMilestone } = await import(
+        "@/lib/server/phone/power-dialer/latency-timeline"
+      );
       const attempt = await prisma.powerDialerAttempt.findFirst({
         where: { id: attemptId, workspaceId: call.workspaceId },
       });
+      const answeredAt = attempt?.answeredAt || new Date();
       if (attempt) {
         await prisma.powerDialerAttempt.update({
           where: { id: attemptId },
           data: {
             status: "answered",
-            answeredAt: attempt.answeredAt || new Date(),
+            answeredAt,
             metadataJson: mergeAttemptMetadata(attempt.metadataJson, {
               connectionPhase: "answer_detected",
             }),
           },
         });
       }
+      if (prospectLegAnswer) {
+        recordLatencyMilestone({
+          workspaceId: call.workspaceId,
+          attemptId,
+          humanCallId: call.id,
+          milestone: "answer_webhook_received",
+        });
+        const { maybeFastConnectPowerDialerOnAnswer } = await import(
+          "@/lib/server/phone/power-dialer/power-dialer-fast-connect"
+        );
+        await maybeFastConnectPowerDialerOnAnswer({
+          workspaceId: call.workspaceId,
+          humanCallId: call.id,
+          attemptId,
+          answeredAt,
+        }).catch(() => undefined);
+      }
     }
+  }
+
+  if (input.eventType === "call.bridged" && call.source === "power_dialer") {
+    const attemptId = (call.metadata as { powerDialerAttemptId?: string } | null)?.powerDialerAttemptId;
+    const { recordLatencyMilestone } = await import(
+      "@/lib/server/phone/power-dialer/latency-timeline"
+    );
+    recordLatencyMilestone({
+      workspaceId: call.workspaceId,
+      attemptId,
+      humanCallId: call.id,
+      milestone: "telnyx_bridge_completed",
+      payload: { eventControlId },
+    });
   }
 
   if (

@@ -169,7 +169,7 @@ export async function startPowerDialerServerIosScreeningDial(input: {
     },
   });
 
-  if (multiLine && sharedFromSession) {
+  if (sharedFromSession) {
     const call = await prisma.humanCall.findFirst({ where: { id: input.humanCallId } });
     const prev = (call?.metadata || {}) as Record<string, unknown>;
     await prisma.humanCall.update({
@@ -245,7 +245,7 @@ export async function startPowerDialerServerIosScreeningDial(input: {
         },
       },
     });
-    if (multiLine && attemptRow?.sessionId) {
+    if (attemptRow?.sessionId && !sharedFromSession) {
       await persistSharedIosAgentLeg({
         workspaceId: input.workspaceId,
         sessionId: attemptRow.sessionId,

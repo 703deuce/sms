@@ -85,6 +85,33 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       const held = (body as { held?: boolean }).held === true;
       await setPreviewHeld(workspaceId, id, held);
       return NextResponse.json({ ok: true });
+    } else if (body.action === "prepare_agent_media") {
+      const fromE164 = String((body as { fromE164?: string }).fromE164 || "");
+      if (!fromE164) {
+        return NextResponse.json({ error: "fromE164 required" }, { status: 400 });
+      }
+      const { prepareSessionAgentMedia } = await import(
+        "@/lib/server/phone/power-dialer/session-agent-media"
+      );
+      const data = await prepareSessionAgentMedia({
+        workspaceId,
+        sessionId: id,
+        fromE164,
+      });
+      return NextResponse.json({ data });
+    } else if (body.action === "report_agent_media_ready") {
+      const { markSessionAgentMediaReady, sessionRequiresWarmAgentMedia } = await import(
+        "@/lib/server/phone/power-dialer/session-agent-media"
+      );
+      const required = await sessionRequiresWarmAgentMedia(workspaceId);
+      if (required) {
+        return NextResponse.json(
+          { error: "Server warm agent leg required — wait for session SIP answer" },
+          { status: 400 },
+        );
+      }
+      await markSessionAgentMediaReady({ workspaceId, sessionId: id });
+      return NextResponse.json({ ok: true });
     } else if (body.action === "create_attempt") {
       const contactId = String((body as { contactId?: string }).contactId || "");
       const attemptNumber = Number((body as { attemptNumber?: number }).attemptNumber || 1);

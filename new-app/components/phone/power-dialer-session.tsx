@@ -60,6 +60,7 @@ export function PowerDialerSessionWorkspace({
     webrtcStatus,
     toggleMute,
     toggleHold,
+    primePowerDialerAgentLeg,
   } = useWorkspace()
   const { owned } = useNumbers()
   const [campaigns, setCampaigns] = useState<PowerCampaignDto[]>([])
@@ -431,6 +432,22 @@ export function PowerDialerSessionWorkspace({
       const session = await startPowerSession(campaignId, initialFocusContactId)
       await patchPowerCampaign(campaignId, { status: 'active' })
       setSessionId(session.id)
+      try {
+        const warm = await powerSessionAction(session.id, 'prepare_agent_media', {
+          fromE164: setupCallerId,
+        })
+        if (warm?.humanCallId) {
+          primePowerDialerAgentLeg({
+            humanCallId: warm.humanCallId,
+            callerId: setupCallerId,
+            label: 'Connecting audio',
+          })
+        } else if (warm?.reason === 'warm_agent_not_required') {
+          await powerSessionAction(session.id, 'report_agent_media_ready')
+        }
+      } catch {
+        toast.message('Preparing session audio — you can retry from the dialer if dialing is blocked.')
+      }
       if (setupDialingMode === 'preview') {
         await powerSessionAction(session.id, 'preview_held', { held: true })
       }

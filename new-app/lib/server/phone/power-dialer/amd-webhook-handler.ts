@@ -337,6 +337,7 @@ async function maybeParallelBridgeAfterClassification(input: {
     sessionId: input.attempt.sessionId,
     attemptId: input.attempt.id,
     answeredAt: new Date(),
+    classification: input.classification,
   }).catch(() => undefined);
 }
 

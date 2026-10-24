@@ -78,6 +78,26 @@ export async function bridgeCalls(inboundControlId: string, outboundControlId: s
   });
 }
 
+/** When POWER_DIALER_BRIDGE_BENCHMARK=conference, use Telnyx conference join for measurement only. */
+export async function bridgeCallsWithBenchmark(
+  agentControlId: string,
+  prospectControlId: string,
+) {
+  if (process.env.POWER_DIALER_BRIDGE_BENCHMARK === "conference") {
+    const conferenceId = newCommandId("pd_conf");
+    await telnyxCallAction(agentControlId, "join_conference", {
+      conference_id: conferenceId,
+      command_id: newCommandId("join_agent"),
+    });
+    await telnyxCallAction(prospectControlId, "join_conference", {
+      conference_id: conferenceId,
+      command_id: newCommandId("join_prospect"),
+    });
+    return;
+  }
+  await bridgeCalls(agentControlId, prospectControlId);
+}
+
 export async function dialPstnLeg(input: {
   connectionId: string;
   toE164: string;
