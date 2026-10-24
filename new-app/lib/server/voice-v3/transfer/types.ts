@@ -61,11 +61,17 @@ export interface VoiceV3TransferPolicyCompiled {
 }
 
 /** Runtime execution plan — trusted worker payload only. */
+export type VoiceV3TransferExecutor = "livekit_sip" | "phone_call_control";
+
 export interface VoiceV3AuthorizedTransferTarget {
   destination_id: string;
   mode: VoiceV3TransferMode;
   dial_target: string;
   ringing_timeout_seconds: number;
+  /** Default livekit_sip for Telnyx→LiveKit SIP ingress; phone_call_control when Call Control leg exists. */
+  executor?: VoiceV3TransferExecutor;
+  human_call_id?: string;
+  inbound_call_control_id?: string;
 }
 
 export interface VoiceV3AuthorizedTransferPlan {

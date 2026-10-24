@@ -5,6 +5,7 @@ import { ensurePhoneFoundationForTransfer } from "./ensure-phone-foundation";
 import { startVoiceV3TelnyxTransfer } from "./telnyx-transfer-coordinator";
 import { logVoiceV3TransferEvent } from "./telemetry";
 import { recordVoiceV3TransferOutcomeForNewApp } from "./record-transfer-outcome";
+import { planRequiresNodeTelnyxCallControlHandoff } from "./delegation-routing";
 import type { VoiceV3AuthorizedTransferPlan } from "./types";
 import type { VoiceToolResult } from "../tools/types";
 import type { VoiceV3CallRuntime } from "../state/call-runtime";
@@ -269,18 +270,9 @@ export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
   };
 }
 
-function planRequiresNodePhoneHandoff(plan: VoiceV3AuthorizedTransferPlan): boolean {
-  return (
-    plan.targets.length > 0 &&
-    plan.targets.every(
-      (t) => (t.executor || "livekit_sip").toLowerCase() === "phone_call_control",
-    )
-  );
-}
-
 /**
- * Node may only run Telnyx Phone foundation handoff. LiveKit SIP (cold REFER or
- * WarmTransferTask) must execute on the voice worker — Node REFER drops callers without bridging.
+ * Telnyx Call Control handoff runs on Node. LiveKit inbound SIP (cold REFER / warm task)
+ * runs on the Python voice worker after authorize — see transfer_executor.py.
  */
 export async function maybeExecuteDelegatedTransferCallResult(input: {
   toolName: string;
@@ -292,30 +284,23 @@ export async function maybeExecuteDelegatedTransferCallResult(input: {
   const execution = input.result.data?.execution;
   if (!execution) return input.result;
 
-  if (!planRequiresNodePhoneHandoff(execution)) {
-    logVoiceV3TransferEvent("VOICE_V3_TRANSFER_TELNYX_REQUIRED", {
-      call_id: input.runtime.getSnapshot().callId,
-      live_session_id: input.runtime.getSnapshot().liveSessionId,
-      route_id: execution.route_id,
-      modes: execution.targets.map((t) => t.mode),
-      executors: execution.targets.map((t) => t.executor || "livekit_sip"),
+  if (planRequiresNodeTelnyxCallControlHandoff(execution)) {
+    return executeAuthorizedTransferOnNodeAfterAuthorize({
+      runtime: input.runtime,
+      authorized: input.result as VoiceToolResult<{
+        execution: VoiceV3AuthorizedTransferPlan;
+        surface: Record<string, unknown>;
+      }>,
     });
-    return {
-      ok: false,
-      status: "transfer_not_ready",
-      code: "TRANSFER_NOT_READY",
-      message:
-        "This call must transfer through Telnyx Call Control. The original caller leg was not available.",
-      details: { route_id: execution.route_id },
-      retryable: true,
-    };
   }
 
-  return executeAuthorizedTransferOnNodeAfterAuthorize({
-    runtime: input.runtime,
-    authorized: input.result as VoiceToolResult<{
-      execution: VoiceV3AuthorizedTransferPlan;
-      surface: Record<string, unknown>;
-    }>,
+  logVoiceV3TransferEvent("VOICE_V3_TRANSFER_DEFER_TO_LIVEKIT_WORKER", {
+    call_id: input.runtime.getSnapshot().callId,
+    live_session_id: input.runtime.getSnapshot().liveSessionId,
+    route_id: execution.route_id,
+    modes: execution.targets.map((t) => t.mode),
+    executors: execution.targets.map((t) => t.executor || "livekit_sip"),
   });
+
+  return input.result;
 }

@@ -164,6 +164,15 @@ export function authorizeVoiceV3Transfer(input: {
     ];
   }
 
+  const pf = callContext.phoneFoundation;
+  const liveKit = callContext.telephony?.liveKit;
+  const hasCallControl = Boolean(pf?.humanCallId?.trim() && pf?.inboundCallControlId?.trim());
+  const hasLiveKitSip = Boolean(
+    liveKit?.roomName?.trim() && liveKit?.sipParticipantIdentity?.trim(),
+  );
+  const defaultExecutor: "livekit_sip" | "phone_call_control" =
+    hasLiveKitSip || !hasCallControl ? "livekit_sip" : "phone_call_control";
+
   const authorizedTargets: VoiceV3AuthorizedTransferPlan["targets"] = [];
   for (const t of targets) {
     const dest = destMap.get(t.destinationId);
@@ -173,6 +182,13 @@ export function authorizeVoiceV3Transfer(input: {
       mode: t.mode,
       dial_target: dest.phoneE164,
       ringing_timeout_seconds: t.ringingTimeoutSeconds,
+      executor: defaultExecutor,
+      ...(hasCallControl
+        ? {
+            human_call_id: pf!.humanCallId!,
+            inbound_call_control_id: pf!.inboundCallControlId!,
+          }
+        : {}),
     });
   }
 

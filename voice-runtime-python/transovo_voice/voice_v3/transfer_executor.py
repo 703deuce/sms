@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from datetime import timedelta
 from typing import Any
@@ -47,12 +48,24 @@ async def _report_transfer_outcome_to_backend(
         logger.exception("voice_v3_transfer_outcome_report_failed")
 
 
+def _telnyx_sip_transfer_domain() -> str:
+    return os.environ.get("VOICE_V3_TELNYX_SIP_TRANSFER_DOMAIN", "sip.telnyx.com").strip()
+
+
 def _normalize_transfer_to(destination: str) -> str:
     dest = destination.strip()
     if dest.startswith("tel:") or dest.startswith("sip:"):
         return dest
     if dest.startswith("+") or (dest and dest[0].isdigit()):
-        return f"tel:{dest}"
+        e164 = dest if dest.startswith("+") else f"+{dest.lstrip('+')}"
+        use_sip_uri = os.environ.get("VOICE_V3_TRANSFER_USE_TELNYX_SIP_URI", "1").lower() not in (
+            "0",
+            "false",
+            "no",
+        )
+        if use_sip_uri:
+            return f"sip:{e164}@{_telnyx_sip_transfer_domain()}"
+        return f"tel:{e164}"
     return dest
 
 
@@ -84,11 +97,11 @@ async def _direct_transfer(
         room_name=job_ctx.room.name,
         participant_identity=telephony.sip_participant_identity,
         transfer_to=transfer_to,
-        play_dialtone=False,
+        play_dialtone=True,
     )
     req.ringing_timeout.FromTimedelta(timedelta(seconds=ringing_timeout_seconds))
     await job_ctx.api.sip.transfer_sip_participant(req)
-    return "CONNECTED"
+    return "SIP_REFER_ACCEPTED"
 
 
 async def _warm_transfer(
@@ -241,7 +254,7 @@ async def execute_authorized_transfer_plan(
             },
         )
 
-        if outcome == "CONNECTED":
+        if outcome in ("CONNECTED", "SIP_REFER_ACCEPTED"):
             total_ms = int((time.monotonic() - started) * 1000)
             log_event(
                 "VOICE_V3_TRANSFER_CONNECTED",
