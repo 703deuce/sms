@@ -5,6 +5,7 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { authorizeTakeMessageOrError } from "./authorize-tool-for-config";
 import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
+import { TAKE_MESSAGE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const takeMessageArgsSchema = z.object({
   message: z
@@ -27,17 +28,11 @@ const takeMessageArgsSchema = z.object({
 
 export type TakeMessageArgs = z.infer<typeof takeMessageArgsSchema>;
 
-const TAKE_MESSAGE_DESCRIPTION = `take_message — record a message for the business team when the caller wants to leave information without scheduling or an immediate transfer.
-
-Use when the caller asks to leave a message, pass along details, or wants staff to follow up on information they provided (not necessarily a return phone call — use request_callback when they explicitly want a call back).
-
-Provide message with the substance of what they said. Include callback_phone only when a different number is needed for follow-up.`;
-
 export function buildTakeMessageOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
   const zodTool = zodResponsesFunction({
     name: "take_message",
     parameters: takeMessageArgsSchema,
-    description: TAKE_MESSAGE_DESCRIPTION,
+    description: TAKE_MESSAGE_TOOL_DESCRIPTION,
   });
   return {
     type: "function",

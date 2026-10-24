@@ -54,6 +54,17 @@ async def _wait_for_sip_participant(ctx: JobContext) -> rtc.RemoteParticipant:
     return participant
 
 
+def _registered_tool_log_name(tool: Any) -> str:
+    info = getattr(tool, "info", None)
+    name = getattr(info, "name", None) if info is not None else None
+    if name:
+        return str(name)
+    name = getattr(tool, "name", None)
+    if name:
+        return str(name)
+    return type(tool).__name__
+
+
 def _openai_tool_to_dict(tool: dict[str, Any] | Any) -> dict[str, Any]:
     if isinstance(tool, dict):
         if "name" in tool:
@@ -313,17 +324,22 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 extra={"result": result, "utterance_chars": len(utterance)},
             )
 
-        amy_tool_names = [getattr(t, "name", None) or "" for t in session_tools]
+        schema_tool_names = [str(d.get("name") or "") for d in tool_dicts if d.get("name")]
+        registered_tool_names = [_registered_tool_log_name(t) for t in session_tools]
         log_event(
             "voice_v3_session_starting",
             room=ctx.room.name,
             extra={
                 "liveSessionId": live_session_id,
                 "toolCount": len(session_tools),
+                "schemaToolCount": len(schema_tool_names),
+                "schemaToolNames": schema_tool_names,
                 "workspaceId": call_ctx.workspace_id,
                 "agentId": call_ctx.agent_id,
                 "amyNativeTools": ["end_call"],
-                "amyToolNames": [n for n in amy_tool_names if n],
+                "amyToolNames": registered_tool_names,
+                "sendBookingLinkRegistered": "send_booking_link" in schema_tool_names,
+                "collectCallerIntakeRegistered": "collect_caller_intake" in schema_tool_names,
             },
         )
         if forensics:

@@ -44,7 +44,7 @@ export async function loadMctbOverviewForNewApp(workspaceId: string): Promise<Mc
         workspaceId,
         status: "OPEN",
         unread: true,
-        productSource: "MCTB_CUSTOMER_CARE",
+        productSource: "MCTB",
       },
     }),
     prisma.missedCallEvent.findMany({

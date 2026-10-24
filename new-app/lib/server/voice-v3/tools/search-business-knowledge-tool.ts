@@ -5,6 +5,9 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { toolOk, voiceToolError } from "./types";
 import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
+import { SEARCH_BUSINESS_KNOWLEDGE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+
+export { SEARCH_BUSINESS_KNOWLEDGE_TOOL_DESCRIPTION };
 
 const searchArgsSchema = z.object({
   query: z
@@ -16,11 +19,6 @@ const searchArgsSchema = z.object({
 });
 
 export type SearchBusinessKnowledgeArgs = z.infer<typeof searchArgsSchema>;
-
-export const SEARCH_BUSINESS_KNOWLEDGE_TOOL_DESCRIPTION = `Search the connected business knowledge base for factual information needed to answer the caller.
-Use when the caller asks a factual business question that is not already clearly answered by hot business context in your instructions.
-Do not use for scheduling, availability, booking, transfers, or callbacks.
-Answer only from returned context; if no match, say you do not have that information and offer callback or message when appropriate.`;
 
 export function buildSearchBusinessKnowledgeOpenAiTool(
   _config: VoiceV3AgentConfig,

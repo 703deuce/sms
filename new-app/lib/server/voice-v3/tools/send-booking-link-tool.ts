@@ -4,7 +4,7 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { authorizeSendBookingLinkOrError } from "./authorize-tool-for-config";
-import { SEND_BOOKING_LINK_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+import { buildSendBookingLinkToolDescription } from "./astra-tool-contracts";
 import { executeSendBookingLink } from "../booking-link/execute-send-booking-link";
 import { isSendBookingLinkToolConsentRequired } from "../booking-link/send-link-consent-policy";
 import { coerceOptionalToolPhoneArg } from "../intake-objective/coerce-llm-literal";
@@ -42,10 +42,7 @@ export type SendBookingLinkArgs = {
 };
 
 export function buildSendBookingLinkOpenAiTool(config: VoiceV3AgentConfig): FunctionTool {
-  const consentGate = isSendBookingLinkToolConsentRequired(config);
-  const description = consentGate
-    ? SEND_BOOKING_LINK_TOOL_DESCRIPTION
-    : `Send the business booking link by SMS from the Transovo platform number when the caller wants to schedule or asks for the link by text. Default: ask if you should text the number they are calling from; if yes, call with confirmed=true only and omit destination_phone (inbound caller ID is used automatically). Only pass destination_phone when they want a different mobile number — use digits they spoke (any format); never pass placeholders. Do not invent URLs. Do not claim sent until the tool returns sent or already_sent.`;
+  const description = buildSendBookingLinkToolDescription();
   const zodTool = zodResponsesFunction({
     name: "send_booking_link",
     parameters: sendBookingLinkArgsSchemaForConfig(config),

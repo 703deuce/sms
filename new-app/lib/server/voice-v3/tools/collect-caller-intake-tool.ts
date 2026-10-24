@@ -4,6 +4,9 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { voiceToolError } from "./types";
+import { COLLECT_CALLER_INTAKE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
+
+export { COLLECT_CALLER_INTAKE_TOOL_DESCRIPTION };
 
 export const COLLECT_CALLER_INTAKE_TOOL_NAME = "collect_caller_intake";
 
@@ -20,14 +23,6 @@ export type CollectCallerIntakeArgs = {
   volunteered_values?: { key: string; value: string }[] | null;
   caller_turn_hint?: string | null;
 };
-
-export const COLLECT_CALLER_INTAKE_TOOL_DESCRIPTION = `Persist and/or collect configured caller intake fields (name, phone, email, address, custom wizard fields).
-
-When the caller clearly provides one or more configured intake facts in the current turn (even while also asking to book, get a link, or leave a message), call this tool in the same delegated work. Pass every clear field in volunteered_values in one call — do not wait until booking fails for missing contact info.
-
-If required fields are still missing after volunteered_values, the LiveKit intake task continues in the voice worker (conversation history + optional spoken collectors). If volunteered_values already satisfy requirements, no spoken questionnaire is started.
-
-Do not use for scheduling dates/times (use set_scheduling_preference). Do not use when all required intake is already saved — proceed with the caller's request.`;
 
 export function buildCollectCallerIntakeOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
   const zodTool = zodResponsesFunction({
