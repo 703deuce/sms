@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useNumbers } from '@/components/providers/numbers-provider'
 import { compatibility, inboundFlow, PRODUCT_LABEL, type Assignment, type NumberProduct, type OwnedNumber } from '@/lib/numbers'
+import { switchNumberProduct } from '@/lib/numbers-api'
 import { formatPhone } from '@/lib/format'
 import { SimpleSelect } from '@/components/app/filters'
 import { Callout, FlowDiagram } from './number-ui'
@@ -20,8 +21,10 @@ const TARGETS: Record<NumberProduct, string[]> = {
 
 const SCHEDULES = ['Always', 'Business hours', 'After hours', 'After hours + no answer', 'When unanswered']
 
+const VOICE_PRODUCTS: NumberProduct[] = ['phone', 'receptionist', 'mctb']
+
 export function AssignmentSheet({ number, open, onOpenChange }: { number: OwnedNumber | null; open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { setAssignments } = useNumbers()
+  const { setAssignments, refresh } = useNumbers()
   const [rows, setRows] = useState<Assignment[] | null>(null)
   const [saving, setSaving] = useState(false)
   if (!number) return null
@@ -37,13 +40,51 @@ export function AssignmentSheet({ number, open, onOpenChange }: { number: OwnedN
 
   async function save() {
     if (!number) return
+    const voiceRows = list.filter((a) => VOICE_PRODUCTS.includes(a.product))
+    const primary = voiceRows.sort((a, b) => a.priority - b.priority)[0]
+    if (!primary) {
+      toast.error('Choose at least one voice product (Phone, AI Receptionist, or MCTB).')
+      return
+    }
     setSaving(true)
-    await new Promise((r) => setTimeout(r, 500))
-    setAssignments(number.id, list)
-    setSaving(false)
-    setRows(null)
-    onOpenChange(false)
-    toast.success('Assignments updated', { description: `${formatPhone(number.number)} routing saved.` })
+    try {
+      let result = await switchNumberProduct({
+        phoneNumberId: number.id,
+        targetProduct: primary.product,
+        confirmSwitch: false,
+      })
+      if (result.needsConfirmation) {
+        result = await switchNumberProduct({
+          phoneNumberId: number.id,
+          targetProduct: primary.product,
+          confirmSwitch: true,
+        })
+      }
+      if (!result.ok) {
+        throw new Error(result.error || 'Carrier routing could not be updated')
+      }
+      if (list.some((a) => a.product === 'mctb')) {
+        await fetch('/api/phone/mctb', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            numberId: number.id,
+            line: { enabled: true },
+          }),
+        })
+      }
+      await refresh()
+      setAssignments(number.id, list)
+      setRows(null)
+      onOpenChange(false)
+      toast.success('Number routing updated', {
+        description: `${formatPhone(number.number)} → ${PRODUCT_LABEL[primary.product]}.`,
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

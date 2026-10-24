@@ -108,7 +108,7 @@ export async function patchPhoneMctbSettings(
   const prisma = getPrisma();
 
   if (body.numberId && typeof body.numberId === "string") {
-    const patch = body.line as Record<string, unknown> | undefined;
+    const patch = (body.line ?? body.mctb) as Record<string, unknown> | undefined;
     if (patch) {
       const row = await prisma.phoneNumber.findFirst({
         where: { id: body.numberId, workspaceId },
@@ -132,7 +132,14 @@ export async function patchPhoneMctbSettings(
   if (recovery) {
     const triggers = recovery.triggers as Record<string, boolean> | undefined;
     await updateMctbRecoveryConfig(workspaceId, {
-      enabled: recovery.enabled === true,
+      enabled:
+        recovery.enabled === true
+          ? true
+          : recovery.active === true
+            ? true
+            : recovery.enabled === false || recovery.active === false
+              ? false
+              : undefined,
       delaySeconds: typeof recovery.delaySeconds === "number" ? recovery.delaySeconds : undefined,
       cooldownMinutes:
         typeof recovery.cooldownMinutes === "number" ? recovery.cooldownMinutes : undefined,

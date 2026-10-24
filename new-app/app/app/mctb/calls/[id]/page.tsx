@@ -1,10 +1,12 @@
 import { notFound } from 'next/navigation'
-import { CallDetail } from '@/components/calls/call-detail'
-import { getCall } from '@/lib/data'
+import { requireSession } from '@/lib/api-auth'
+import { MctbMissedCallDetailView } from '@/components/mctb/missed-call-detail-view'
+import { loadMctbMissedCallDetail } from '@/lib/server/mctb/missed-call-detail'
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { workspaceId } = await requireSession()
   const { id } = await params
-  const call = getCall(id)
-  if (!call) notFound()
-  return <CallDetail call={call} from={{ label: 'Missed Call Text Back · Missed Calls', href: '/app/mctb/calls' }} />
+  const detail = await loadMctbMissedCallDetail(workspaceId, id)
+  if (!detail) notFound()
+  return <MctbMissedCallDetailView detail={detail} />
 }

@@ -46,13 +46,32 @@ export async function syncTelnyxIntoWorkspace(workspaceId: string): Promise<numb
 }
 
 export async function loadOwnedNumbers(workspaceId: string): Promise<OwnedNumber[]> {
+  const { detectNumberProductBindings } = await import("@/lib/server/telephony/bindings");
   const rows = await getPrisma().phoneNumber.findMany({
     where: { workspaceId },
     orderBy: { e164: "asc" },
   });
 
   const filtered = rows.filter((r) => !isPlatformSender(r.settingsJson));
-  return filtered.map(mapPhoneRowToOwned);
+  const owned: OwnedNumber[] = [];
+  for (const row of filtered) {
+    const base = mapPhoneRowToOwned(row);
+    const bindings = await detectNumberProductBindings({
+      workspaceId,
+      phoneNumberId: row.id,
+    });
+    base.assignments = bindings.map((b, index) => ({
+      id: `as_${row.id}_${b.product}`,
+      product: b.product,
+      target: b.detail,
+      schedule: "Always",
+      priority: index + 1,
+      status: "active",
+    }));
+    base.destination = base.assignments[0]?.target ?? "Not routed";
+    owned.push(base);
+  }
+  return owned;
 }
 
 export async function loadMctbConnections(_workspaceId: string): Promise<ExternalConnection[]> {
