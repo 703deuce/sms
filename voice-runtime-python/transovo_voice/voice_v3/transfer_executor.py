@@ -282,26 +282,6 @@ async def execute_authorized_transfer_plan(
         executor = str(target.get("executor") or "livekit_sip").lower()
         dial_target = str(target.get("dial_target") or "")
         timeout = float(target.get("ringing_timeout_seconds") or 30)
-        if executor == "livekit_sip":
-            log_event(
-                "VOICE_V3_TRANSFER_LIVEKIT_EXECUTOR_DISABLED",
-                extra={
-                    "transfer_request_id": transfer_request_id,
-                    "destination_id": dest_id,
-                    "mode": mode,
-                },
-            )
-            outcome = "CONFIGURATION_ERROR"
-            attempts.append(
-                {
-                    "destination_id": dest_id,
-                    "mode": mode,
-                    "outcome": outcome,
-                    "duration_ms": 0,
-                    "attempt_index": index,
-                },
-            )
-            continue
         if not dial_target and executor != "phone_call_control":
             continue
 
