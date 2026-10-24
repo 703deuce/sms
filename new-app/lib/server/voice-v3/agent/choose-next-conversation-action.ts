@@ -8,11 +8,6 @@ import type { OperationsEvaluation } from "./evaluate-operations";
 import type { GoalsEvaluation } from "./evaluate-goals";
 import { shouldOfferHandoff } from "./escalation";
 
-function isBookingLinkAlreadySent(ctx: VoiceV3CallContext): boolean {
-  const status = ctx.bookingLink?.lastSend?.status;
-  return status === "sent" || status === "already_sent";
-}
-
 function prioritizeMissingField(missing: string[], config: VoiceV3AgentConfig): string | null {
   if (missing.length === 0) return null;
   for (const field of config.intakeFields) {
@@ -122,23 +117,12 @@ export function chooseNextConversationAction(input: {
     }
   }
 
-  if (config.scheduling?.bookingStrategy === "SEND_LINK" && ctx.dialog.activeGoal === "BOOK_APPOINTMENT") {
-    if (!isBookingLinkAlreadySent(ctx)) {
-      const missingForLink = prioritizeMissingField(rules.missingRequiredFields, config);
-      if (missingForLink) {
-        return { type: "ASK_REQUIRED_FIELD", fieldKey: missingForLink };
-      }
-      return { type: "NONE" };
-    }
-  }
-
   const missing = prioritizeMissingField(rules.missingRequiredFields, config);
   if (missing && !rules.slotSelected && ctx.dialog.activeGoal === "BOOK_APPOINTMENT") {
     return { type: "ASK_REQUIRED_FIELD", fieldKey: missing };
   }
 
   if (
-    config.scheduling?.bookingStrategy !== "SEND_LINK" &&
     ctx.dialog.activeGoal === "BOOK_APPOINTMENT" &&
     !rules.hasSchedulingPreference &&
     !rules.schedulingRequiresClarification
