@@ -209,6 +209,11 @@ export function authorizeVoiceV3Transfer(input: {
     callContext,
   });
 
+  const outboundCallerId =
+    policy.telephony.outboundCallerIdE164?.trim() ||
+    callContext.dialedE164?.trim() ||
+    null;
+
   const execution: VoiceV3AuthorizedTransferPlan = {
     transfer_request_id: transferRequestId,
     route_id: route.id,
@@ -216,7 +221,7 @@ export function authorizeVoiceV3Transfer(input: {
     targets: authorizedTargets,
     handoff_instructions: handoff,
     outbound_sip_trunk_id: policy.telephony.outboundSipTrunkId,
-    outbound_caller_id_e164: policy.telephony.outboundCallerIdE164,
+    outbound_caller_id_e164: outboundCallerId,
   };
 
   logVoiceV3TransferEvent("VOICE_V3_TRANSFER_AUTHORIZED", {

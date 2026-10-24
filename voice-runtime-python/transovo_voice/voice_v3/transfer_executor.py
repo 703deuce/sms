@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
-from datetime import timedelta
 from typing import Any
 
-from livekit import api
 from livekit.agents.beta.workflows import WarmTransferTask
 from livekit.agents.llm.tool_context import ToolError
 from livekit.agents.voice.events import RunContext
 
 from transovo_voice.telemetry import log_event
+from transovo_voice.voice_v3.livekit_bridge_transfer import (
+    execute_livekit_bridge_transfer,
+    finalize_transfer_handoff,
+)
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
 
@@ -48,27 +49,6 @@ async def _report_transfer_outcome_to_backend(
         logger.exception("voice_v3_transfer_outcome_report_failed")
 
 
-def _telnyx_sip_transfer_domain() -> str:
-    return os.environ.get("VOICE_V3_TELNYX_SIP_TRANSFER_DOMAIN", "sip.telnyx.com").strip()
-
-
-def _normalize_transfer_to(destination: str) -> str:
-    dest = destination.strip()
-    if dest.startswith("tel:") or dest.startswith("sip:"):
-        return dest
-    if dest.startswith("+") or (dest and dest[0].isdigit()):
-        e164 = dest if dest.startswith("+") else f"+{dest.lstrip('+')}"
-        use_sip_uri = os.environ.get("VOICE_V3_TRANSFER_USE_TELNYX_SIP_URI", "1").lower() not in (
-            "0",
-            "false",
-            "no",
-        )
-        if use_sip_uri:
-            return f"sip:{e164}@{_telnyx_sip_transfer_domain()}"
-        return f"tel:{e164}"
-    return dest
-
-
 def _strip_execution_payload(result: dict[str, Any]) -> dict[str, Any]:
     out = dict(result)
     data = out.get("data")
@@ -78,30 +58,38 @@ def _strip_execution_payload(result: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-async def _direct_transfer(
-    telephony: LiveKitTelephonyBridge,
+async def _phone_foundation_handoff(
+    client: TransovoV3ToolClient | None,
     *,
-    dial_target: str,
-    ringing_timeout_seconds: float,
+    target: dict[str, Any],
+    transfer_request_id: str,
+    route_id: str,
 ) -> str:
-    transfer_to = _normalize_transfer_to(dial_target)
-    job_ctx = telephony.job_ctx
-    log_event(
-        "voice_v3_transfer_direct_starting",
-        extra={
-            "participant": telephony.sip_participant_identity,
-            "ringing_timeout_seconds": ringing_timeout_seconds,
-        },
-    )
-    req = api.TransferSIPParticipantRequest(
-        room_name=job_ctx.room.name,
-        participant_identity=telephony.sip_participant_identity,
-        transfer_to=transfer_to,
-        play_dialtone=True,
-    )
-    req.ringing_timeout.FromTimedelta(timedelta(seconds=ringing_timeout_seconds))
-    await job_ctx.api.sip.transfer_sip_participant(req)
-    return "SIP_REFER_ACCEPTED"
+    if client is None:
+        return "CONFIGURATION_ERROR"
+    human_call_id = str(target.get("human_call_id") or "").strip()
+    inbound_cc = str(target.get("inbound_call_control_id") or "").strip()
+    forwarding_group_id = str(target.get("forwarding_group_id") or "").strip()
+    destination_id = str(target.get("destination_id") or "").strip()
+    if not human_call_id or not inbound_cc:
+        return "CONFIGURATION_ERROR"
+    payload = {
+        "workspaceId": client._ctx.workspace_id,
+        "callId": client._ctx.call_id,
+        "agentId": client._ctx.agent_id,
+        "transferRequestId": transfer_request_id,
+        "routeId": route_id,
+        "humanCallId": human_call_id,
+        "inboundCallControlId": inbound_cc,
+        "forwardingGroupId": forwarding_group_id or None,
+        "destinationId": destination_id or None,
+    }
+    try:
+        await client._backend.call("execute_phone_foundation_transfer", payload)
+        return "PHONE_HANDOFF_STARTED"
+    except Exception:
+        logger.exception("voice_v3_phone_foundation_transfer_failed")
+        return "PROVIDER_ERROR"
 
 
 async def _warm_transfer(
@@ -113,9 +101,14 @@ async def _warm_transfer(
     handoff_instructions: str,
     sip_trunk_id: str | None,
     sip_number: str | None,
+    transfer_request_id: str,
 ) -> str:
     if context is None:
         raise ToolError("Warm transfer requires an active voice session context.")
+    if not (sip_trunk_id or "").strip():
+        return "CONFIGURATION_ERROR"
+    if not (sip_number or "").strip():
+        return "CONFIGURATION_ERROR"
 
     sip_call_to = dial_target.strip()
     if sip_call_to.startswith("tel:"):
@@ -130,7 +123,14 @@ async def _warm_transfer(
         chat_ctx=context.session.history,
     )
 
-    log_event("voice_v3_transfer_warm_starting", extra={"ringing_timeout_seconds": ringing_timeout_seconds})
+    log_event(
+        "voice_v3_transfer_warm_starting",
+        extra={
+            "transfer_request_id": transfer_request_id,
+            "ringing_timeout_seconds": ringing_timeout_seconds,
+            "executor": "livekit_warm_transfer_task",
+        },
+    )
     try:
         async with context.foreground():
             await task
@@ -148,7 +148,41 @@ async def _warm_transfer(
     except Exception:
         logger.exception("voice_v3_transfer_warm_failed")
         return "PROVIDER_ERROR"
+
+    await finalize_transfer_handoff(context)
     return "CONNECTED"
+
+
+async def _direct_bridge_transfer(
+    telephony: LiveKitTelephonyBridge,
+    context: RunContext | None,
+    *,
+    transfer_request_id: str,
+    destination_id: str,
+    dial_target: str,
+    ringing_timeout_seconds: float,
+    sip_trunk_id: str | None,
+    sip_number: str | None,
+) -> str:
+    log_event(
+        "voice_v3_transfer_bridge_starting",
+        extra={
+            "transfer_request_id": transfer_request_id,
+            "destination_id": destination_id,
+            "ringing_timeout_seconds": ringing_timeout_seconds,
+            "executor": "livekit_bridge",
+        },
+    )
+    return await execute_livekit_bridge_transfer(
+        telephony,
+        context,
+        transfer_request_id=transfer_request_id,
+        destination_id=destination_id,
+        dial_target=dial_target,
+        ringing_timeout_seconds=ringing_timeout_seconds,
+        sip_trunk_id=sip_trunk_id,
+        sip_number=sip_number,
+    )
 
 
 async def execute_authorized_transfer_plan(
@@ -193,9 +227,10 @@ async def execute_authorized_transfer_plan(
             continue
         dest_id = str(target.get("destination_id") or "")
         mode = str(target.get("mode") or "DIRECT").upper()
+        executor = str(target.get("executor") or "livekit_sip").lower()
         dial_target = str(target.get("dial_target") or "")
         timeout = float(target.get("ringing_timeout_seconds") or 30)
-        if not dial_target:
+        if not dial_target and executor != "phone_call_control":
             continue
 
         log_event(
@@ -206,12 +241,22 @@ async def execute_authorized_transfer_plan(
                 "destination_id": dest_id,
                 "mode": mode,
                 "attempt_index": index,
+                "executor": executor,
+                "room": telephony.job_ctx.room.name,
+                "caller_identity": telephony.sip_participant_identity,
             },
         )
         attempt_started = time.monotonic()
         outcome = "PROVIDER_ERROR"
         try:
-            if mode == "WARM":
+            if executor == "phone_call_control":
+                outcome = await _phone_foundation_handoff(
+                    client,
+                    target=target,
+                    transfer_request_id=transfer_request_id,
+                    route_id=route_id,
+                )
+            elif mode == "WARM":
                 outcome = await _warm_transfer(
                     telephony,
                     context,
@@ -220,12 +265,18 @@ async def execute_authorized_transfer_plan(
                     handoff_instructions=handoff,
                     sip_trunk_id=str(trunk_id) if trunk_id else None,
                     sip_number=str(caller_id) if caller_id else None,
+                    transfer_request_id=transfer_request_id,
                 )
             else:
-                outcome = await _direct_transfer(
+                outcome = await _direct_bridge_transfer(
                     telephony,
+                    context,
+                    transfer_request_id=transfer_request_id,
+                    destination_id=dest_id,
                     dial_target=dial_target,
                     ringing_timeout_seconds=timeout,
+                    sip_trunk_id=str(trunk_id) if trunk_id else None,
+                    sip_number=str(caller_id) if caller_id else None,
                 )
         except asyncio.TimeoutError:
             outcome = "TIMEOUT"
@@ -241,6 +292,7 @@ async def execute_authorized_transfer_plan(
                 "outcome": outcome,
                 "duration_ms": duration_ms,
                 "attempt_index": index,
+                "executor": executor,
             },
         )
         log_event(
@@ -254,10 +306,11 @@ async def execute_authorized_transfer_plan(
             },
         )
 
-        if outcome in ("CONNECTED", "SIP_REFER_ACCEPTED"):
+        if outcome in ("CONNECTED", "PHONE_HANDOFF_STARTED"):
             total_ms = int((time.monotonic() - started) * 1000)
+            connected = outcome == "CONNECTED"
             log_event(
-                "VOICE_V3_TRANSFER_CONNECTED",
+                "VOICE_V3_TRANSFER_CONNECTED" if connected else "VOICE_V3_TRANSFER_PHONE_HANDOFF_STARTED",
                 extra={
                     "transfer_request_id": transfer_request_id,
                     "route_id": route_id,
@@ -265,6 +318,7 @@ async def execute_authorized_transfer_plan(
                     "mode": mode,
                     "waterfall_attempt_count": index + 1,
                     "total_duration_ms": total_ms,
+                    "human_answered": connected,
                 },
             )
             log_event(
@@ -273,7 +327,7 @@ async def execute_authorized_transfer_plan(
                     "transfer_request_id": transfer_request_id,
                     "route_id": route_id,
                     "provider": "livekit",
-                    "outcome": "CONNECTED",
+                    "outcome": outcome,
                     "waterfall_attempt_count": index + 1,
                     "destination_ids": [a["destination_id"] for a in attempts],
                     "modes": [a["mode"] for a in attempts],
@@ -282,22 +336,24 @@ async def execute_authorized_transfer_plan(
                 },
             )
             sanitized = _strip_execution_payload(result)
+            status = "transfer_connected" if connected else "transfer_phone_handoff_started"
             if isinstance(sanitized.get("data"), dict):
                 sanitized["data"] = {
                     **sanitized["data"],
-                    "status": "transfer_connected",
+                    "status": status,
                     "attempts": attempts,
+                    "human_answered": connected,
                 }
-                sanitized["status"] = "transfer_connected"
+                sanitized["status"] = status
             asyncio.create_task(
                 _report_transfer_outcome_to_backend(
                     client,
                     transfer_request_id=transfer_request_id,
                     route_id=route_id,
-                    status="transfer_connected",
+                    status=status,
                     reason=transfer_reason,
                     attempts=attempts,
-                    connected_destination_id=dest_id,
+                    connected_destination_id=dest_id if connected else None,
                 ),
             )
             return sanitized

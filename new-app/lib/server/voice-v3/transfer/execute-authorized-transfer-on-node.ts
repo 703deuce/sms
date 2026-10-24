@@ -33,8 +33,8 @@ type AttemptRow = {
 };
 
 /**
- * GPT-Live delegated tools run on Node (sideband). LiveKit SIP REFER must still execute here
- * using TransferSIPParticipant — same contract as Python `transfer_executor.py` for DIRECT legs.
+ * GPT-Live delegated tools run on Node (sideband). Telnyx Call Control handoffs execute here.
+ * LiveKit inbound SIP bridge transfers run on the Python worker (`livekit_bridge_transfer.py`).
  */
 export async function executeAuthorizedTransferOnNodeAfterAuthorize(input: {
   runtime: VoiceV3CallRuntime;
