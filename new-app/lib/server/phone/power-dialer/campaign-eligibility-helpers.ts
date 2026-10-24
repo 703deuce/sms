@@ -44,6 +44,7 @@ export async function evaluateListMemberEligibility(input: {
   repAuthorized?: boolean;
   sessionRepUserId?: string | null;
   usageBlocked?: boolean;
+  setupPreview?: boolean;
 }): Promise<EligibilityResult> {
   const { e164 } = resolveContactDialPhone(input.contact, input.ctx.rules.phoneFieldPriority);
   const onInternalDnc = e164
@@ -76,6 +77,7 @@ export async function evaluateListMemberEligibility(input: {
     advanced: input.ctx.advanced,
     workspaceDialPolicy: input.ctx.dialPolicy,
     workspaceFrequency: freq,
+    setupPreview: input.setupPreview,
   });
 }
 

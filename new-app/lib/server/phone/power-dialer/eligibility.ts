@@ -47,6 +47,8 @@ export function evaluateContactEligibility(input: {
   advanced?: CampaignAdvanced;
   workspaceFrequency?: { ok: boolean; reason?: string; retryEligibleAt?: Date };
   workspaceDialPolicy?: WorkspaceDialPolicy;
+  /** Session setup screen — do not require active campaign or dial session for counts. */
+  setupPreview?: boolean;
 }): EligibilityResult {
   const {
     contact,
@@ -67,11 +69,13 @@ export function evaluateContactEligibility(input: {
   if (input.usageBlocked) {
     return { eligible: false, bucket: "failed", reason: "usage_limit_reached" };
   }
-  if (rules.status !== "active") {
-    return { eligible: false, bucket: "deferred", reason: "campaign_not_active" };
-  }
-  if (!sessionActive) {
-    return { eligible: false, bucket: "failed", reason: "session_not_active" };
+  if (!input.setupPreview) {
+    if (rules.status !== "active") {
+      return { eligible: false, bucket: "deferred", reason: "campaign_not_active" };
+    }
+    if (!sessionActive) {
+      return { eligible: false, bucket: "failed", reason: "session_not_active" };
+    }
   }
   if (sessionPaused) {
     return { eligible: false, bucket: "deferred", reason: "session_paused" };

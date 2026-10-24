@@ -120,7 +120,9 @@ export async function getCampaignDetail(workspaceId: string, id: string) {
     include: { list: true },
   });
   if (!c) throw new Error("Campaign not found");
-  const { counts, truncated } = await computeCampaignEligibilityRollups(workspaceId, id);
+  const { counts, truncated } = await computeCampaignEligibilityRollups(workspaceId, id, {
+    setupPreview: true,
+  });
   return {
     campaign: c,
     rules: resolveCampaignRules(c),

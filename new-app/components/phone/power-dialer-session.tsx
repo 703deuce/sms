@@ -412,8 +412,8 @@ export function PowerDialerSessionWorkspace({
       toast.error('Choose an outbound caller ID')
       return
     }
-    if (setupEligible === 0) {
-      toast.error('No eligible contacts — adjust campaign rules or list before starting')
+    if (setupDialableLater === 0) {
+      toast.error('No contacts left to dial on this campaign — check list membership, caps, and calling rules.')
       return
     }
     setLoading(true)
@@ -542,14 +542,31 @@ export function PowerDialerSessionWorkspace({
 
   const micBlocked = webrtcStatus !== 'ready'
 
-  const setupEligible = setupDetail?.eligibility?.counts?.eligible ?? 0
+  const setupCounts = setupDetail?.eligibility?.counts
+  const setupEligible = setupCounts?.eligible ?? 0
+  const setupDeferred = setupCounts?.deferred ?? 0
+  const setupCompleted = setupCounts?.completed ?? 0
+  const setupSuppressed = setupCounts?.suppressed ?? 0
+  const setupFailed = setupCounts?.failed ?? 0
+  const setupDialableLater = setupEligible + setupDeferred
   const activeNumbers = owned.filter((n) => n.status === 'active')
 
   const warnings: string[] = []
   if (micBlocked) warnings.push('Browser calling is not ready — check microphone permissions.')
   if (activeNumbers.length === 0) warnings.push('No active outbound number in Numbers — assign one before dialing.')
+  if (!sessionId && setupDetail && setupEligible === 0 && setupDialableLater === 0) {
+    warnings.push(
+      'No contacts ready to dial for this campaign — they may be completed, suppressed, or missing a valid phone for your phone-field priority.',
+    )
+  } else if (!sessionId && setupDetail && setupEligible === 0 && setupDeferred > 0) {
+    warnings.push(
+      `${setupDeferred} contact(s) on this list match the campaign but are not dialable right now (calling days/hours, retry delay, or daily caps). Check the calling window below.`,
+    )
+  }
   if (!sessionId && setupDetail && setupEligible === 0) {
-    warnings.push('No eligible contacts in this campaign right now — check calling hours, caps, and list membership.')
+    warnings.push(
+      'List “eligible” only means the contact is not blocked or unsubscribed. Campaign “ready now” applies calling schedule, caps, and prior attempt rules.',
+    )
   }
   if (!sessionId && setupDetail?.status === 'paused') warnings.push('This campaign is paused — resume it or choose another.')
   if (sessionId && eligibleTotal === 0) warnings.push('No eligible contacts in this campaign right now.')
@@ -690,12 +707,26 @@ export function PowerDialerSessionWorkspace({
                       <dd>{setupDetail.extended.screeningMode || 'Workspace default'}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <dt className="text-muted-foreground">Eligible contacts</dt>
+                      <dt className="text-muted-foreground">Ready to dial now</dt>
                       <dd className="font-medium tabular-nums">
                         {setupEligible}
                         {setupDetail.eligibility.truncated ? ' (estimate — large list)' : ''}
                       </dd>
                     </div>
+                    {setupDeferred > 0 && (
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-muted-foreground">Dialable later (schedule/caps)</dt>
+                        <dd className="tabular-nums">{setupDeferred}</dd>
+                      </div>
+                    )}
+                    {(setupCompleted > 0 || setupSuppressed > 0 || setupFailed > 0) && (
+                      <div className="flex justify-between gap-2 text-muted-foreground">
+                        <dt>Completed / suppressed / invalid</dt>
+                        <dd className="tabular-nums">
+                          {setupCompleted} / {setupSuppressed} / {setupFailed}
+                        </dd>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-2">
                       <dt className="text-muted-foreground">Calling window</dt>
                       <dd>
@@ -711,7 +742,7 @@ export function PowerDialerSessionWorkspace({
               )}
               <Button
                 onClick={() => void startSession()}
-                disabled={!campaignId || !setupDetail || loading || micBlocked || setupEligible === 0}
+                disabled={!campaignId || !setupDetail || loading || micBlocked || setupDialableLater === 0}
               >
                 <Play />
                 Start session

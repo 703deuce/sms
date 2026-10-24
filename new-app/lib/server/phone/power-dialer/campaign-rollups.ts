@@ -44,6 +44,7 @@ export async function loadCampaignAttemptMap(
 export async function computeCampaignEligibilityRollups(
   workspaceId: string,
   campaignId: string,
+  opts?: { setupPreview?: boolean },
 ): Promise<{ counts: EligibilityRollupCounts; truncated: boolean }> {
   const prisma = getPrisma();
   const campaign = await prisma.powerDialerCampaign.findFirst({
@@ -76,8 +77,9 @@ export async function computeCampaignEligibilityRollups(
       sessionAttempts: [],
       now,
       ctx,
-      sessionActive: campaign.status === "active",
-      sessionPaused: campaign.status === "paused",
+      sessionActive: opts?.setupPreview ? true : campaign.status === "active",
+      sessionPaused: opts?.setupPreview ? false : campaign.status === "paused",
+      setupPreview: opts?.setupPreview,
     });
     counts[eligibility.bucket] += 1;
   }
