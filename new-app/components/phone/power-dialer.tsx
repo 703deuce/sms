@@ -48,8 +48,18 @@ export function PowerDialer({
   initialCampaignId?: string
   initialFocusContactId?: string
 }) {
+  const [tab, setTab] = useState(initialTab)
+  const [setupRefreshToken, setSetupRefreshToken] = useState(0)
+
   return (
-    <Tabs defaultValue={initialTab} className="gap-6">
+    <Tabs
+      value={tab}
+      onValueChange={(next) => {
+        setTab(next)
+        if (next === 'session') setSetupRefreshToken((n) => n + 1)
+      }}
+      className="gap-6"
+    >
       <TabsList>
         <TabsTrigger value="session">Session</TabsTrigger>
         <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
@@ -60,6 +70,7 @@ export function PowerDialer({
           <PowerDialerSessionWorkspace
             initialCampaignId={initialCampaignId}
             initialFocusContactId={initialFocusContactId}
+            setupRefreshToken={setupRefreshToken}
           />
         </Suspense>
       </TabsContent>

@@ -23,6 +23,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
         rules: detail.rules,
         extended: detail.extended,
         eligibility: detail.eligibility,
+        listName: detail.listName,
         configJson: c.configJson,
       },
     });
@@ -52,13 +53,21 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
     const data = await upsertCampaign(workspaceId, {
       id,
-      name: String(body.name || ""),
+      name: typeof body.name === "string" ? body.name : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
-      listId: String(body.listId || ""),
-      callerIdE164: String(body.callerIdE164 || body.callerId || ""),
+      listId: typeof body.listId === "string" ? body.listId : undefined,
+      callerIdE164:
+        typeof body.callerIdE164 === "string"
+          ? body.callerIdE164
+          : typeof body.callerId === "string"
+            ? body.callerId
+            : undefined,
       timezone: typeof body.timezone === "string" ? body.timezone : undefined,
       status: typeof body.status === "string" ? body.status : undefined,
-      configJson: (body.configJson || body.config || {}) as Record<string, unknown>,
+      configJson:
+        body.configJson || body.config
+          ? ((body.configJson || body.config) as Record<string, unknown>)
+          : undefined,
     });
     return NextResponse.json({ data });
   } catch (err) {

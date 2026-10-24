@@ -61,7 +61,12 @@ function contactLabel(c: { firstName: string | null; lastName: string | null; ph
 export function PowerDialerSessionWorkspace({
   initialCampaignId,
   initialFocusContactId,
-}: { initialCampaignId?: string; initialFocusContactId?: string } = {}) {
+  setupRefreshToken = 0,
+}: {
+  initialCampaignId?: string
+  initialFocusContactId?: string
+  setupRefreshToken?: number
+} = {}) {
   const searchParams = useSearchParams()
   const liveControlsAudit = searchParams.get('pd_audit') === 'live_controls'
   const {
@@ -181,26 +186,48 @@ export function PowerDialerSessionWorkspace({
       .catch(() => undefined)
   }, [campaignId, initialCampaignId])
 
+  const applySetupDetail = useCallback(
+    (d: Awaited<ReturnType<typeof fetchPowerCampaignDetail>>) => {
+      setSetupDetail(d)
+      setSetupCallerId(d.callerIdE164)
+      setSetupDialingMode(d.rules.dialingMode === 'preview' ? 'preview' : 'power')
+      setSetupPhoneFields((d.rules.phoneFieldPriority || ['phone']).join(', '))
+      setSetupTimezone(d.timezone || 'America/Chicago')
+      setSetupAllowedDays(d.rules.allowedDays?.length ? d.rules.allowedDays : [1, 2, 3, 4, 5])
+      setSetupCallingHoursStart(d.rules.callingHoursStart || '09:00')
+      setSetupCallingHoursEnd(d.rules.callingHoursEnd || '17:00')
+    },
+    [],
+  )
+
+  const reloadSetupDetail = useCallback(
+    (opts?: { quiet?: boolean }) => {
+      if (!campaignId || sessionId) return
+      setSetupLoading(true)
+      void fetchPowerCampaignDetail(campaignId)
+        .then(applySetupDetail)
+        .catch(() => {
+          if (!opts?.quiet) toast.error('Could not load campaign setup')
+        })
+        .finally(() => setSetupLoading(false))
+    },
+    [campaignId, sessionId, applySetupDetail],
+  )
+
   useEffect(() => {
     if (!campaignId || sessionId) {
       setSetupDetail(null)
       return
     }
-    setSetupLoading(true)
-    void fetchPowerCampaignDetail(campaignId)
-      .then((d) => {
-        setSetupDetail(d)
-        setSetupCallerId(d.callerIdE164)
-        setSetupDialingMode(d.rules.dialingMode === 'preview' ? 'preview' : 'power')
-        setSetupPhoneFields((d.rules.phoneFieldPriority || ['phone']).join(', '))
-        setSetupTimezone(d.timezone || 'America/Chicago')
-        setSetupAllowedDays(d.rules.allowedDays?.length ? d.rules.allowedDays : [1, 2, 3, 4, 5])
-        setSetupCallingHoursStart(d.rules.callingHoursStart || '09:00')
-        setSetupCallingHoursEnd(d.rules.callingHoursEnd || '17:00')
-      })
-      .catch(() => toast.error('Could not load campaign setup'))
-      .finally(() => setSetupLoading(false))
-  }, [campaignId, sessionId])
+    reloadSetupDetail()
+  }, [campaignId, sessionId, setupRefreshToken, reloadSetupDetail])
+
+  useEffect(() => {
+    if (!campaignId || sessionId) return
+    const onFocus = () => reloadSetupDetail({ quiet: true })
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [campaignId, sessionId, reloadSetupDetail])
 
   const leadContactId = runtime?.next?.contact.id
 
@@ -463,7 +490,8 @@ export function PowerDialerSessionWorkspace({
           },
         })
         const refreshed = await fetchPowerCampaignDetail(campaignId)
-        setSetupDetail(refreshed)
+        applySetupDetail(refreshed)
+        toast.success('Calling schedule saved')
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Could not save calling schedule')
       } finally {
@@ -480,6 +508,7 @@ export function PowerDialerSessionWorkspace({
       setupCallerId,
       setupDialingMode,
       setupPhoneFields,
+      applySetupDetail,
     ],
   )
 
@@ -504,6 +533,8 @@ export function PowerDialerSessionWorkspace({
         return
       }
       await savePowerCampaignDetail(campaignId, {
+        name: setupDetail.name,
+        listId: setupDetail.listId,
         callerIdE164: setupCallerId,
         timezone: setupTimezone,
         configJson: {
@@ -655,6 +686,12 @@ export function PowerDialerSessionWorkspace({
     )
   }
   if (!sessionId && setupDetail?.status === 'paused') warnings.push('This campaign is paused — resume it or choose another.')
+  const setupListMembers = setupDetail?.eligibility?.listMemberCount
+  if (!sessionId && setupDetail && setupListMembers === 0) {
+    warnings.push(
+      'This campaign’s calling list has no contacts — attach the list with your numbers under Campaigns, then return here.',
+    )
+  }
   if (sessionId && eligibleTotal === 0) warnings.push('No eligible contacts in this campaign right now.')
 
   const labelFor = (id: string | null | undefined, list: { id: string; name: string }[], fallback: string) =>
@@ -878,11 +915,32 @@ export function PowerDialerSessionWorkspace({
                       </div>
                     )}
                     <div className="flex justify-between gap-2">
+                      <dt className="text-muted-foreground">Calling list</dt>
+                      <dd>
+                        {setupDetail.listName ?? 'List'}
+                        {typeof setupListMembers === 'number' ? ` · ${setupListMembers} contact(s)` : ''}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-2">
                       <dt className="text-muted-foreground">Calling window</dt>
                       <dd>
                         {setupCallingHoursStart}–{setupCallingHoursEnd} ({setupTimezone})
                       </dd>
                     </div>
+                    {setupDetail.eligibility.reasonBreakdown &&
+                      setupDetail.eligibility.reasonBreakdown.length > 0 &&
+                      setupEligible === 0 && (
+                        <div className="col-span-full border-t pt-2">
+                          <dt className="mb-1 text-muted-foreground">Why not ready now</dt>
+                          <dd className="flex flex-col gap-0.5">
+                            {setupDetail.eligibility.reasonBreakdown.map((row) => (
+                              <span key={row.reason}>
+                                {row.label}: {row.count}
+                              </span>
+                            ))}
+                          </dd>
+                        </div>
+                      )}
                   </dl>
                   <p className="text-xs text-muted-foreground">
                     Change script, dispositions, or voicemail drop under{' '}

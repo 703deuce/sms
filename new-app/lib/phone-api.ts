@@ -750,9 +750,12 @@ export async function fetchPowerCampaignDetail(id: string) {
       memberUserIds?: string[];
     };
     configJson?: Record<string, unknown>;
+    listName?: string;
     eligibility: {
       counts: Record<string, number>;
       truncated: boolean;
+      listMemberCount?: number;
+      reasonBreakdown?: { reason: string; count: number; label: string }[];
     };
   }>(await fetch(`/api/phone/power-dialer/campaigns/${id}`));
 }
