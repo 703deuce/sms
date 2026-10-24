@@ -1,0 +1,22 @@
+{
+  "description": "Tooling added after golden anchor — not runtime authority",
+  "path_count": 16,
+  "paths": [
+    "scripts/export-voice-v3-control-connection-list.ts",
+    "scripts/generate-voice-v3-eight-step-control-ledger.mjs",
+    "scripts/generate-voice-v3-eight-step-control-ledger.ts",
+    "scripts/report-voice-v3-runtime-launch-gaps.ts",
+    "scripts/restore-voice-v3-golden-era-full.mjs",
+    "scripts/run-voice-v3-launch-static-gate.sh",
+    "scripts/test-voice-v3-capability-parity-audit.ts",
+    "scripts/test-voice-v3-configuration-certification-contract.ts",
+    "scripts/test-voice-v3-earliest-scheduling.ts",
+    "scripts/test-voice-v3-required-fields-book-gate.ts",
+    "scripts/test-voice-v3-transfer-cold-warm-cert.ts",
+    "scripts/verify-voice-v3-golden-era-coverage.mjs",
+    "scripts/verify-voice-v3-golden-era-parity.ts",
+    "scripts/voice-v3-cert-wizard-capability-parity-audit.ts",
+    "scripts/voice-v3-published-agent-tools-inspect.ts",
+    "scripts/write-voice-v3-prompt-snapshots.ts"
+  ]
+}

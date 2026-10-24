@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Prisma } from "@/lib/domain";
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 import { getCallerTurns } from "../conversation/caller-turn-manager";
 import { exportAllCallerTurnTimingForSession } from "./caller-turn-timing";
 import type { VoiceV3CanonicalTurn, VoiceV3ForensicEvent } from "./call-forensics";

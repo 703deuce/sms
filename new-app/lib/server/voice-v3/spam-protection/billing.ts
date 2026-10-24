@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 import { readVoiceV3ScreeningFromCallMetadata } from "./call-metadata";
 
 export function isUnwantedSolicitorBillingApplied(metadata: unknown): boolean {

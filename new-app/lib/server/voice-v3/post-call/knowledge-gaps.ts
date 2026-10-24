@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 
 function normalizeQuestion(q: string): string {
   return q.trim().toLowerCase().replace(/\s+/g, " ");

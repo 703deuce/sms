@@ -1,11 +1,10 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import type { VoiceWizardBookingStrategy } from "../config/booking-strategies";
+import type { VoiceWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/types";
 
 /** Wizard strategies that use the same Voice V3 find/book/manage tool surface (provider resolved at runtime). */
 export const DIRECT_CALENDAR_BOOKING_STRATEGIES: VoiceWizardBookingStrategy[] = [
   "MICROSOFT_365",
   "GOOGLE_CALENDAR",
-  "CALENDLY",
 ];
 
 export function isDirectCalendarBookingStrategy(
@@ -24,7 +23,6 @@ export function calendarProviderForBookingStrategy(
 ): "microsoft" | "google" | null {
   if (strategy === "MICROSOFT_365") return "microsoft";
   if (strategy === "GOOGLE_CALENDAR") return "google";
-  if (strategy === "CALENDLY") return "calendly";
   return null;
 }
 

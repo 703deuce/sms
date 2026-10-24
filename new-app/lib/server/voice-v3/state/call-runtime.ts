@@ -11,7 +11,6 @@ import { afterVoiceV3StateChange, type LiveSendFn } from "../agent/after-state-c
 import { deriveVoiceV3Capabilities } from "../agent/capability-state";
 import { DEFAULT_VOICE_V3_ESCALATION_POLICY, initialEscalationCounters } from "../agent/escalation";
 import { logVoiceV3ContractVersions } from "../telemetry/contract-versions";
-import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
 
 const liveSendBySession = new Map<string, LiveSendFn>();
 
@@ -103,9 +102,6 @@ export function createVoiceV3CallRuntime(input: {
   liveSessionId: string;
   callId?: string | null;
   inboundCallerE164?: string | null;
-  liveKitRoomName?: string | null;
-  liveKitSipParticipantIdentity?: string | null;
-  phoneFoundation?: VoiceV3CallContext["phoneFoundation"];
   config?: VoiceV3AgentConfig;
   now?: Date;
 }): VoiceV3CallRuntime {
@@ -119,9 +115,6 @@ export function createVoiceV3CallRuntime(input: {
     timezone: config.timezone,
     clock,
     inboundCallerE164: input.inboundCallerE164,
-    liveKitRoomName: input.liveKitRoomName,
-    liveKitSipParticipantIdentity: input.liveKitSipParticipantIdentity,
-    phoneFoundation: input.phoneFoundation,
     now,
   });
 
@@ -191,7 +184,6 @@ export function buildAuthoritativeThinkingSnapshot(
 ): string {
   const ctx = runtime.getSnapshot();
   const rules = evaluateVoiceV3Rules(ctx, runtime.config);
-  const sharedFacts = buildSharedCallerFactsLiveSummary(runtime.config, ctx);
   const known = Object.keys(ctx.intake.values)
     .filter((k) => ctx.intake.values[k]?.value?.trim())
     .map((k) => `${k} known`)
@@ -227,7 +219,6 @@ export function buildAuthoritativeThinkingSnapshot(
     `state_version=${ctx.runtime.version}`,
     `goal=${ctx.dialog.activeGoal}`,
     known ? `captured: ${known}` : "captured: (none)",
-    sharedFacts,
     `missing_required: ${missing}`,
     `intake_complete=${rules.intakeComplete}`,
     schedLine,

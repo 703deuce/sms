@@ -1,16 +1,7 @@
-import { getPrisma } from "@/lib/server/db";
-import type { Prisma } from "@prisma/client";
-
-async function markVoiceCallBooked(callId: string): Promise<void> {
-  await getPrisma().voiceCall.update({
-    where: { id: callId },
-    data: { appointmentBooked: true, outcome: "booked" },
-  });
-}
-
-async function syncFrontDeskBookingToCrm(): Promise<void> {
-  /* CRM sync not wired in new-app standalone runtime */
-}
+import { getPrisma } from "@/lib/db";
+import type { Prisma } from "@/lib/domain";
+import { markVoiceCallBooked } from "@/lib/voice/runtime-provider/livekit-call-telemetry";
+import { syncFrontDeskBookingToCrm } from "@/lib/voice/crm/frontdesk-crm-sync";
 import type { ConfirmedBooking } from "./booking-types";
 
 export type VoiceV3BookingProvider = ConfirmedBooking["provider"] | "google";

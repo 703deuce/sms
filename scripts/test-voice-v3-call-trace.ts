@@ -17,9 +17,9 @@ function main() {
   });
   assert.equal(cfg.liveModel, "gpt-live-1");
   assert.equal(cfg.backendModel, "gpt-6-astra");
-  assert.equal(VOICE_V3_ASTRA_MODEL_DEFAULT, "gpt-6-luna");
+  assert.equal(VOICE_V3_ASTRA_MODEL_DEFAULT, "gpt-5.6-sol");
   if (!process.env.VOICE_V3_ASTRA_MODEL?.trim()) {
-    assert.equal(VOICE_V3_ASTRA_MODEL, "gpt-6-luna");
+    assert.equal(VOICE_V3_ASTRA_MODEL, "gpt-5.6-sol");
   }
   assert.equal(cfg.openaiWebhookEvent, "live.transport.incoming");
 

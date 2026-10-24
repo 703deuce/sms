@@ -1,4 +1,4 @@
-import type { VoiceV3AgentConfig } from "../types/agent-config";
+import type { VoiceV3AgentConfig } from "../config/agent-config";
 
 export function buildAstraKnowledgeInstructions(config: VoiceV3AgentConfig): string | null {
   const retrieval = config.knowledge?.retrieval;

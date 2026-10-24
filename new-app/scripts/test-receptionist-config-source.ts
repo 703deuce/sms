@@ -40,7 +40,7 @@ const ivrTools = enabledVoiceToolNamesFromEditor(base);
 assert.ok(ivrTools.includes("end_call"), "IVR default exposes end_call");
 assert.ok(ivrTools.includes("search_business_knowledge"), "IVR default exposes knowledge");
 assert.ok(!ivrTools.includes("book_appointment"), "IVR default must not expose book_appointment");
-assert.ok(!ivrTools.includes("collect_caller_intake"), "IVR default must not expose collect_caller_intake");
+assert.ok(!ivrTools.includes("update_intake"), "IVR default must not expose update_intake");
 
 const liveBook = asFullReceptionist({
   ...base,
@@ -221,7 +221,7 @@ assert.ok(
   "link booking must expose send_booking_link in Astra catalog",
 );
 assert.ok(
-  ivrLinkCatalog.includes("collect_caller_intake"),
+  ivrLinkCatalog.includes("update_intake"),
   "full receptionist link booking keeps intake tools",
 );
 

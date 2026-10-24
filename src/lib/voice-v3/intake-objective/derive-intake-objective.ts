@@ -8,24 +8,19 @@ import {
   verificationRequiredForField,
 } from "./validate-intake-value";
 import {
-  configuredRequiredForOperation,
+  configuredRequiredKeysForActiveOperation,
   getMissingFieldsForOperation,
   resolveActiveIntakeOperation,
   UNRESOLVED_INTAKE_OPERATION,
-  type VoiceOperationName,
 } from "./operation-requirements";
 
 export function deriveIntakeObjective(
   config: VoiceV3AgentConfig,
   context: VoiceV3CallContext,
-  operationOverride?: VoiceOperationName,
 ): IntakeObjectiveState {
   const values = context.intake?.values ?? {};
-  const operation =
-    operationOverride && operationOverride !== UNRESOLVED_INTAKE_OPERATION
-      ? operationOverride
-      : resolveActiveIntakeOperation(config, context);
-  const requiredKeys = configuredRequiredForOperation(config, operation);
+  const operation = resolveActiveIntakeOperation(config, context);
+  const requiredKeys = configuredRequiredKeysForActiveOperation(config, context);
   const requiredSet = new Set(requiredKeys);
 
   const optionalFields = config.intakeFields

@@ -1,7 +1,6 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceV3RuleEvaluation } from "../state/call-rules";
-import { resolveStoredIntakeField } from "../intake-objective/resolve-stored-intake";
 
 export interface RequirementsEvaluation {
   known: string[];
@@ -16,16 +15,9 @@ export function evaluateRequirements(
   rules: VoiceV3RuleEvaluation,
   _config: VoiceV3AgentConfig,
 ): RequirementsEvaluation {
-  const knownSet = new Set<string>();
-  for (const f of _config.intakeFields) {
-    if (resolveStoredIntakeField(ctx.intake.values, f.key)) {
-      knownSet.add(f.key);
-    }
-  }
-  for (const [k, row] of Object.entries(ctx.intake.values)) {
-    if (row?.value?.trim()) knownSet.add(k);
-  }
-  const known = [...knownSet];
+  const known = Object.keys(ctx.intake.values).filter((k) =>
+    Boolean(ctx.intake.values[k]?.value?.trim()),
+  );
 
   let schedulingStatus = "none";
   if (rules.schedulingRequiresClarification) schedulingStatus = "clarification_required";

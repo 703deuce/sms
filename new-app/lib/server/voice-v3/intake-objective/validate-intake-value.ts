@@ -1,9 +1,7 @@
-import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import type { IntakeFieldDefinition } from "../config/agent-config";
 import type { CapturedField } from "../state/call-context";
 import type { IntakeFieldRejection, IntakeFieldRejectionCode } from "./types";
 import { defaultCollectionStrategy } from "./types";
-import { isLlmPlaceholderString } from "./coerce-llm-literal";
 
 const EMAIL_RE =
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -50,20 +48,14 @@ export function validateAndNormalizeIntakeValue(
       return { ok: true, value: normalized };
     }
     case "phone": {
-      if (isLlmPlaceholderString(trimmed)) {
-        return {
-          ok: false,
-          rejection: reject(field.key, "EMPTY_VALUE", "Value cannot be empty."),
-        };
-      }
-      const e164 = normalizePhoneE164(trimmed);
-      if (!e164) {
+      const digits = trimmed.replace(/[^\d+]/g, "");
+      if (digits.replace(/\D/g, "").length < 10) {
         return {
           ok: false,
           rejection: reject(field.key, "INVALID_FORMAT", "Phone number is too short."),
         };
       }
-      return { ok: true, value: e164 };
+      return { ok: true, value: trimmed };
     }
     case "number": {
       const n = Number(trimmed);

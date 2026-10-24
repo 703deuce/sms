@@ -3,7 +3,6 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import type { VoiceV3RuleEvaluation } from "../state/call-rules";
 import type { VoiceV3RecoveryCode, VoiceV3RecoveryDirective } from "./types";
 import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
-import { isConversationalIvrRuntime } from "@/lib/receptionist/runtime-profile";
 
 const FIND_PENDING_TIMEOUT_MS = 45_000;
 
@@ -60,9 +59,6 @@ export function evaluateVoiceV3Recovery(input: {
   config: VoiceV3AgentConfig;
   now?: Date;
 }): VoiceV3RecoveryDirective | null {
-  if (isConversationalIvrRuntime(input.config)) {
-    return null;
-  }
   const ctx = input.ctx;
   const rules = input.rules;
   const config = input.config;

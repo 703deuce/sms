@@ -1,7 +1,5 @@
 import type { BusinessHoursWindow, VoiceV3CalendarConfig } from "../calendar/types";
-import type { VoiceWizardBookingStrategy } from "./booking-strategies";
-
-// Legacy wizard type names kept for copied audit scripts only — runtime uses new-app AgentConfig via editorToVoiceV3AgentConfig.
+import type { VoiceWizardBookingStrategy } from "@/lib/solutions/appointment-receptionist/types";
 import type { VoiceV3AfterHoursNotificationsConfig } from "../notifications/types";
 
 export type IntakeFieldType =
@@ -30,14 +28,6 @@ export interface IntakeFieldDefinition {
   verificationRequired?: boolean;
   /** When set, update_intake schema uses enum constraint (drive-through pattern). */
   enumValues?: string[];
-  /** LiveKit prebuilt collector routing — mirrors Python intake_collection.py */
-  collectionKind?:
-    | "livekit_get_name"
-    | "livekit_get_email"
-    | "livekit_get_phone"
-    | "livekit_get_address"
-    | "livekit_get_dob"
-    | "livekit_function_tool";
 }
 
 export interface VoiceV3TransferDestination {
@@ -203,7 +193,7 @@ export interface VoiceV3CallHandlingConfig {
     timeoutSeconds?: number;
   }>;
   urgencyEnabled: boolean;
-  urgencyRules?: import("@/lib/receptionist/after-hours-types").VoiceV2UrgencyRuleRow[];
+  urgencyRules?: import("@/lib/voice-receptionist-wizard/after-hours-handling-types").VoiceV2UrgencyRuleRow[];
   callbackRequestsEnabled: boolean;
   callbackUseAniByDefault: boolean;
   callbackAskPreferredTime: boolean;
@@ -299,16 +289,13 @@ export interface VoiceV3AgentConfig {
   integrations: VoiceV3IntegrationsConfig;
   bookingStrategyDetail: VoiceV3BookingStrategyConfig;
   spamProtection?: import("../spam-protection/types").VoiceV3SpamProtectionConfig;
-  operatingPolicy?: import("@/lib/agent").OperatingMaturityConfig;
+  operatingPolicy?: import("@/lib/voice-receptionist-wizard/operating-maturity/types").VoiceV2OperatingMaturityPublishedConfig;
 
   /** Hash / version for observability at accept time. */
   configVersion?: string;
-  source?: "wizard_published" | "env_fallback" | "wizard_draft_test" | "new_app_published";
+  source?: "wizard_published" | "env_fallback" | "wizard_draft_test";
 
   /** PSTN wizard binding — required for workspace-scoped tools (SMS, consent ledger). */
   workspaceId?: string;
   agentId?: string;
-
-  /** When `conversational_ivr`, booking/intake enforcement tools are disabled. */
-  runtimeProfile?: "conversational_ivr" | "full_receptionist";
 }

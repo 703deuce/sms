@@ -9,7 +9,7 @@ export {
   VOICE_V3_DEFAULT_AGENT_NAME,
   VOICE_V3_DEFAULT_BUSINESS_NAME,
   VOICE_V3_DEFAULT_BUSINESS_TIMEZONE,
-} from "../build-voice-v3-prompts";
+} from "./build-voice-v3-prompts";
 export {
   buildLiveFrontendGreetingLine,
   buildLiveFrontendInstructions,

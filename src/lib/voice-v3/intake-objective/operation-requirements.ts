@@ -5,11 +5,7 @@ import {
   getMissingCallbackRequirementKeys,
   resolveConfiguredCallbackRequiredKeys,
 } from "../callback/callback-requirements";
-import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
-import { resolveStoredIntakeField } from "./resolve-stored-intake";
 import { fieldSatisfiesObjectiveRequirement } from "./validate-intake-value";
-import { mapServiceRequiredFieldToV3IntakeKey } from "@/lib/solutions/appointment-receptionist/required-fields";
-import type { IntakeFieldDefinition } from "../config/agent-config";
 
 export type VoiceOperationName =
   | "unresolved"
@@ -39,7 +35,7 @@ function defaultRequiredIntakeKeys(config: VoiceV3AgentConfig): string[] {
   return config.intakeFields.filter((f) => f.required).map((f) => f.key);
 }
 
-export function configuredRequiredForOperation(
+function configuredRequiredForOperation(
   config: VoiceV3AgentConfig,
   operation: VoiceOperationName,
 ): string[] {
@@ -54,30 +50,6 @@ export function configuredRequiredForOperation(
     return defaultRequiredIntakeKeys(config);
   }
   return [];
-}
-
-function intakeFieldForRequirementKey(
-  config: VoiceV3AgentConfig,
-  key: string,
-): IntakeFieldDefinition | undefined {
-  const direct = config.intakeFields.find((f) => f.key === key);
-  if (direct) return direct;
-  const normalized = mapServiceRequiredFieldToV3IntakeKey(key);
-  if (normalized !== key) {
-    return config.intakeFields.find((f) => f.key === normalized);
-  }
-  return undefined;
-}
-
-function requiredKeysForBookAppointment(
-  config: VoiceV3AgentConfig,
-  context: VoiceV3CallContext,
-): string[] {
-  const globalRequired = defaultRequiredIntakeKeys(config);
-  const service = resolveBookingServiceForRuntime(config, context);
-  const perService = service.requiredIntakeKeys ?? [];
-  const merged = new Set<string>([...globalRequired, ...perService]);
-  return [...merged];
 }
 
 /** Intake requirements follow the active dialog goal — shared facts, operation-specific gaps. */
@@ -126,16 +98,11 @@ export function getMissingFieldsForOperation(
   if (operation === "request_callback") {
     return getMissingCallbackRequirementKeys(config, context);
   }
-  const requiredKeys =
-    operation === "book_appointment"
-      ? requiredKeysForBookAppointment(config, context)
-      : configuredRequiredForOperation(config, operation);
+  const requiredKeys = configuredRequiredForOperation(config, operation);
   const values = context.intake.values;
   return requiredKeys.filter((key) => {
-    const field = intakeFieldForRequirementKey(config, key);
-    if (!field) return false;
-    const stored =
-      resolveStoredIntakeField(values, field.key) ?? resolveStoredIntakeField(values, key);
-    return !fieldSatisfiesObjectiveRequirement(field, stored);
+    const field = config.intakeFields.find((f) => f.key === key);
+    if (!field) return true;
+    return !fieldSatisfiesObjectiveRequirement(field, values[key]);
   });
 }

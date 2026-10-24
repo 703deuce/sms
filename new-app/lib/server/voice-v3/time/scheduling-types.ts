@@ -5,7 +5,6 @@ export type SchedulingDateRelation =
   | "THIS_WEEKDAY"
   | "NEXT_WEEKDAY"
   | "EXPLICIT_DATE"
-  | "EARLIEST_AVAILABLE"
   | "UNSPECIFIED";
 
 export type SchedulingWeekday =

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 import type { VoiceV3SpamLikelyPolicy } from "./types";
 
 export type VoiceV3ScreeningCallMetadata = {

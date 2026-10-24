@@ -4,28 +4,15 @@ import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
 import { authorizeSendBookingLinkOrError } from "./authorize-tool-for-config";
-import { buildSendBookingLinkToolDescription } from "./astra-tool-contracts";
+import { SEND_BOOKING_LINK_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import { executeSendBookingLink } from "../booking-link/execute-send-booking-link";
-import { isSendBookingLinkToolConsentRequired } from "../booking-link/send-link-consent-policy";
-import { coerceOptionalToolPhoneArg } from "../intake-objective/coerce-llm-literal";
-import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
 
-function sendBookingLinkArgsSchemaForConfig(config: VoiceV3AgentConfig) {
-  const consentGate = isSendBookingLinkToolConsentRequired(config);
-  return z.object({
-    confirmed: consentGate
-      ? z
-          .boolean()
-          .describe(
-            "True only after the caller explicitly agrees to receive the booking link by SMS following the required disclosure.",
-          )
-      : z
-          .boolean()
-          .optional()
-          .default(true)
-          .describe(
-            "True when sending the link (platform sender — no separate SMS consent gate).",
-          ),
+const sendBookingLinkArgsSchema = z.object({
+  confirmed: z
+    .boolean()
+    .describe(
+      "True only after the caller explicitly agrees to receive the booking link by SMS following the required disclosure.",
+    ),
   destination_phone: z
     .string()
     .nullable()
@@ -33,20 +20,15 @@ function sendBookingLinkArgsSchemaForConfig(config: VoiceV3AgentConfig) {
     .describe(
       "Only when the caller explicitly requested the link at a different phone number. Omit to use the trusted inbound caller number.",
     ),
-  });
-}
+});
 
-export type SendBookingLinkArgs = {
-  confirmed: boolean;
-  destination_phone?: string | null;
-};
+export type SendBookingLinkArgs = z.infer<typeof sendBookingLinkArgsSchema>;
 
-export function buildSendBookingLinkOpenAiTool(config: VoiceV3AgentConfig): FunctionTool {
-  const description = buildSendBookingLinkToolDescription();
+export function buildSendBookingLinkOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
   const zodTool = zodResponsesFunction({
     name: "send_booking_link",
-    parameters: sendBookingLinkArgsSchemaForConfig(config),
-    description,
+    parameters: sendBookingLinkArgsSchema,
+    description: SEND_BOOKING_LINK_TOOL_DESCRIPTION,
   });
   return {
     type: "function",
@@ -61,43 +43,20 @@ export const sendBookingLinkTool: VoiceToolDefinition<SendBookingLinkArgs> = {
   name: "send_booking_link",
   description: "send_booking_link",
   parameters: {},
-  validate: (raw) => {
-    const parsed = z
-      .object({
-        confirmed: z.boolean().optional(),
-        destination_phone: z.string().nullable().optional(),
-      })
-      .parse(raw);
-    const destination_phone = coerceOptionalToolPhoneArg(parsed.destination_phone);
-    return {
-      confirmed: parsed.confirmed ?? false,
-      destination_phone: destination_phone ?? null,
-    };
-  },
+  validate: (raw) => sendBookingLinkArgsSchema.parse(raw),
   execute: async (ctx, args) => {
     const config = ctx.runtime.config;
     const denied = authorizeSendBookingLinkOrError(config);
     if (denied) return denied;
 
-    const consentGate = isSendBookingLinkToolConsentRequired(config);
-    const normalizedArgs: SendBookingLinkArgs = {
-      ...args,
-      confirmed: consentGate ? Boolean(args.confirmed) : args.confirmed !== false,
-    };
-
-    let snap = ctx.runtime.getSnapshot();
-    const withGoal = mergeDialogActiveGoalFromOperation(snap, "send_booking_link");
-    if (withGoal.runtime.version !== snap.runtime.version) {
-      snap = withGoal;
-      ctx.runtime.replaceContext(snap);
-    }
+    const snap = ctx.runtime.getSnapshot();
     const workspaceId = config.workspaceId?.trim() || ctx.tenantId;
     const { result, nextContext } = await executeSendBookingLink({
       workspaceId,
       agentId: config.agentId ?? null,
       config,
       context: snap,
-      args: normalizedArgs,
+      args,
     });
     ctx.runtime.replaceContext(nextContext);
     return result;

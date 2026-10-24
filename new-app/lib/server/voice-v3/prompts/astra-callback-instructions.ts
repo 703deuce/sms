@@ -1,4 +1,4 @@
-import type { VoiceV3AgentConfig } from "../types/agent-config";
+import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { resolveConfiguredCallbackRequiredKeys } from "../callback/callback-requirements";
 
 /** Config-driven callback context for Astra — not hardcoded per-tenant field lists. */

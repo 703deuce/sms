@@ -39,8 +39,7 @@ export type VoiceV3Goal =
   | "RESCHEDULE_APPOINTMENT"
   | "CANCEL_APPOINTMENT"
   | "REQUEST_CALLBACK"
-  | "REQUEST_TRANSFER"
-  | "TAKE_MESSAGE";
+  | "REQUEST_TRANSFER";
 
 export type IntakeFieldVerificationStatus =
   | "candidate"
@@ -69,11 +68,6 @@ export interface VoiceV3CallContext {
   /** Trusted telephony metadata — not LLM-supplied. */
   telephony: {
     inboundCallerE164: string | null;
-    /** Inbound PSTN leg on LiveKit — required for delegated transfer_call SIP REFER from Node. */
-    liveKit?: {
-      roomName: string;
-      sipParticipantIdentity: string;
-    };
   };
   clock: VoiceV3CallClock;
   dialog: {
@@ -156,13 +150,6 @@ export interface VoiceV3CallContext {
   runtime: {
     version: number;
   };
-  /** Present when Conversational IVR runs behind Phone Call Control (not exclusive LiveKit ingress). */
-  phoneFoundation?: {
-    humanCallId: string;
-    inboundCallControlId: string;
-    workspaceId: string;
-    phoneNumberId: string;
-  };
 }
 
 export function createInitialVoiceV3CallContext(input: {
@@ -171,27 +158,16 @@ export function createInitialVoiceV3CallContext(input: {
   timezone: string;
   clock: VoiceV3CallClock;
   inboundCallerE164?: string | null;
-  liveKitRoomName?: string | null;
-  liveKitSipParticipantIdentity?: string | null;
-  phoneFoundation?: VoiceV3CallContext["phoneFoundation"];
   now?: Date;
 }): VoiceV3CallContext {
   const now = (input.now ?? new Date()).toISOString();
-  const room = input.liveKitRoomName?.trim();
-  const sipIdentity = input.liveKitSipParticipantIdentity?.trim();
   return {
     callId: input.callId,
     liveSessionId: input.liveSessionId,
     createdAt: now,
     updatedAt: now,
     business: { timezone: input.timezone },
-    telephony: {
-      inboundCallerE164: input.inboundCallerE164?.trim() || null,
-      ...(room && sipIdentity
-        ? { liveKit: { roomName: room, sipParticipantIdentity: sipIdentity } }
-        : {}),
-    },
-    phoneFoundation: input.phoneFoundation,
+    telephony: { inboundCallerE164: input.inboundCallerE164?.trim() || null },
     clock: input.clock,
     dialog: { activeGoal: "UNKNOWN" },
     conversation: {

@@ -23,13 +23,12 @@ export async function resolveVoiceV3GoogleCalendar(
     return { ok: false, message: "Calendar not configured on agent" };
   }
 
-  const { getPrisma } = await import("@/lib/server/db");
+  const { getPrisma } = await import("@/lib/db");
   const prisma = getPrisma();
   const connection = await prisma.voiceCalendarConnection.findFirst({
     where: { id: connectionId, provider: "google" },
   });
-  const connected = connection && ["connected", "active", "ok"].includes(connection.status);
-  if (!connection || !connected) {
+  if (!connection || connection.status !== "connected") {
     return { ok: false, message: "Google Calendar connection not found or not connected" };
   }
 

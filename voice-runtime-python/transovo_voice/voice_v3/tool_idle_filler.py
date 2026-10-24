@@ -25,14 +25,6 @@ _FILLER_INSTRUCTIONS = (
     "Use one short conversational sentence."
 )
 
-TRANSFER_FILLER_INSTRUCTIONS = (
-    "Say one brief, natural sentence that you are connecting the caller now "
-    "(for example to billing or the right team). "
-    "Do not ask a question. Do not say the transfer already succeeded."
-)
-
-TRANSFER_FILLER_DELAY_SEC = 1.0
-
 T = TypeVar("T")
 
 
@@ -42,7 +34,6 @@ def build_tool_filler_source(
     tool_name: str,
     function_call_id: str | None,
     on_filler_requested: Callable[[], None] | None = None,
-    filler_instructions: str | None = None,
 ) -> Callable[[int], SpeechHandle]:
     """Synchronous filler source for RunContext.with_filler (GPT-Live generate_reply)."""
 
@@ -58,7 +49,7 @@ def build_tool_filler_source(
             },
         )
         handle = context.session.generate_reply(
-            instructions=filler_instructions or _FILLER_INSTRUCTIONS,
+            instructions=_FILLER_INSTRUCTIONS,
             tool_choice="none",
             allow_interruptions=True,
         )
@@ -80,8 +71,6 @@ async def execute_with_idle_filler(
     tool_name: str,
     function_call_id: str | None,
     execute: Callable[[], Awaitable[T]],
-    filler_delay_sec: float | None = None,
-    filler_instructions: str | None = None,
 ) -> T:
     """Run awaited tool work under LiveKit idle-aware filler (no separate TTS)."""
     filler_fired = False
@@ -90,14 +79,11 @@ async def execute_with_idle_filler(
         nonlocal filler_fired
         filler_fired = True
 
-    delay_s = filler_delay_sec if filler_delay_sec is not None else FILLER_DELAY_SEC
-
     filler_source = build_tool_filler_source(
         context,
         tool_name=tool_name,
         function_call_id=function_call_id,
         on_filler_requested=_mark_filler_requested,
-        filler_instructions=filler_instructions,
     )
 
     log_event(
@@ -105,14 +91,14 @@ async def execute_with_idle_filler(
         extra={
             "tool": tool_name,
             "function_call_id": function_call_id,
-            "delay_s": delay_s,
+            "delay_s": FILLER_DELAY_SEC,
         },
     )
 
     try:
         async with context.with_filler(
             filler_source,
-            delay=delay_s,
+            delay=FILLER_DELAY_SEC,
             interval=FILLER_INTERVAL,
             max_steps=FILLER_MAX_STEPS,
         ):

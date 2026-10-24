@@ -49,7 +49,7 @@ async function sectionModeAndPublish() {
   const base = defaultReceptionistEditorConfig();
   const ivrTools = enabledVoiceToolNamesFromEditor(base);
   assert.ok(!ivrTools.includes("book_appointment"));
-  assert.ok(!ivrTools.includes("collect_caller_intake"));
+  assert.ok(!ivrTools.includes("update_intake"));
 
   const full = {
     ...base,
@@ -59,7 +59,7 @@ async function sectionModeAndPublish() {
   full.appointments = { ...full.appointments, strategy: "live", provider: "microsoft" };
   const fullTools = enabledVoiceToolNamesFromEditor(full);
   assert.ok(fullTools.includes("book_appointment"));
-  assert.ok(fullTools.includes("collect_caller_intake"));
+  assert.ok(fullTools.includes("update_intake"));
 
   const bundleIvr = compilePublishedBundle({
     editor: base,

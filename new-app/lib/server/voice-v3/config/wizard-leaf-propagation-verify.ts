@@ -228,21 +228,6 @@ function wizardRecoveryField(
   return map[statePath] ?? null;
 }
 
-/** Mirrors compileVoiceV3AgentConfig retrievalEnabled gate (not a 1:1 wizard scalar). */
-function expectedKnowledgeRetrievalEnabled(
-  wizard: AppointmentReceptionistWizardState,
-): boolean {
-  const kbIds = wizard.linkedKnowledgeBaseId ? [wizard.linkedKnowledgeBaseId] : [];
-  return (
-    wizard.knowledgeBaseEnabled !== false &&
-    kbIds.length > 0 &&
-    (Boolean(wizard.linkedKnowledgeBaseId) ||
-      wizard.knowledgeSource === "upload_docs" ||
-      wizard.knowledgeSource === "website" ||
-      wizard.knowledgeSource === "connect_data")
-  );
-}
-
 function assertCompiledForRow(
   row: WizardV3FieldManifestRow,
   wizard: AppointmentReceptionistWizardState,
@@ -449,30 +434,6 @@ function assertCompiledForRow(
     return { ok: true };
   }
 
-  if (row.statePath === "knowledgeSource") {
-    const expected = expectedKnowledgeRetrievalEnabled(wizard);
-    const actual = config.knowledge?.retrieval?.enabled === true;
-    if (expected !== actual) {
-      return {
-        ok: false,
-        reason: `knowledgeSource retrieval gate: expected enabled=${expected} got ${actual}`,
-      };
-    }
-    return { ok: true };
-  }
-
-  if (row.statePath === "knowledgeBaseEnabled") {
-    const expected = expectedKnowledgeRetrievalEnabled(wizard);
-    const actual = config.knowledge?.retrieval?.enabled === true;
-    if (expected !== actual) {
-      return {
-        ok: false,
-        reason: `knowledge.retrieval.enabled expected ${expected} got ${actual}`,
-      };
-    }
-    return { ok: true };
-  }
-
   const wizardScalar = getAtPath(wizard, row.statePath);
   const configScalar = getAtPath(config, row.v3ConfigPath.split("+")[0]?.trim() ?? "");
   if (
@@ -504,7 +465,6 @@ function assertPersistedWizardField(
 
 function assertRuntimeForRow(
   row: WizardV3FieldManifestRow,
-  wizard: AppointmentReceptionistWizardState,
   config: VoiceV3AgentConfig,
 ): { ok: boolean; reason?: string } {
   if (
@@ -616,26 +576,6 @@ function assertRuntimeForRow(
     return { ok: true };
   }
 
-  if (row.statePath === "linkedKnowledgeBaseId") {
-    const ids = config.knowledge?.retrieval?.knowledgeBaseIds ?? [];
-    if (wizard.linkedKnowledgeBaseId && !ids.includes(wizard.linkedKnowledgeBaseId)) {
-      return { ok: false, reason: "knowledge.retrieval.knowledgeBaseIds missing wizard link" };
-    }
-    return { ok: true };
-  }
-
-  if (row.statePath === "knowledgeBaseEnabled") {
-    const retrievalOn = config.knowledge?.retrieval?.enabled === true;
-    const searchAuth = isVoiceV3ToolAuthorized(config, "search_business_knowledge");
-    if (retrievalOn && !searchAuth) {
-      return { ok: false, reason: "search_business_knowledge not authorized when retrieval enabled" };
-    }
-    if (!retrievalOn && searchAuth) {
-      return { ok: false, reason: "search_business_knowledge authorized when retrieval disabled" };
-    }
-    return { ok: true };
-  }
-
   return { ok: true };
 }
 
@@ -703,7 +643,7 @@ export function runWizardBackendPropagationCert(input?: {
       }
     }
 
-    const runtime = assertRuntimeForRow(row, wizard, config);
+    const runtime = assertRuntimeForRow(row, config);
 
     if (compiled.ok) compilerPropagatedCount += 1;
     if (persisted.ok) persistedBackendCount += 1;

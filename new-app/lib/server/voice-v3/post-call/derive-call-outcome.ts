@@ -1,4 +1,4 @@
-import type { CallHistoryStructuredFacts } from "../call-history/call-facts";
+import type { CallHistoryStructuredFacts } from "../call-history/summary";
 
 export function deriveVoiceV3PostCallOutcome(
   facts: CallHistoryStructuredFacts,

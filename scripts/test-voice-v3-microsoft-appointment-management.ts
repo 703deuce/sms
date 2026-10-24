@@ -410,10 +410,6 @@ async function main() {
     "reschedule_appointment must not return ok/pending when slot is bound",
   );
 
-  console.log("MICROSOFT_CONTRACT: PASS");
-  console.log(
-    "MICROSOFT_LIVE_E2E: NOT_RUN (requires connected Microsoft tenant; run cert:voice-v3-microsoft-appointment-live on staging/production)",
-  );
   console.log("PASS voice-v3 microsoft appointment management");
 }
 

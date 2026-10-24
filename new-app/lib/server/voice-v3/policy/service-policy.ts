@@ -104,7 +104,7 @@ export function servicePolicyFromWizardType(
     minNotice?: string;
     maxDaysAhead?: string;
     requiredFields?: string[];
-    bookingPermission?: VoiceV3ServiceConfig["bookingPermission"];
+    bookingPermission?: import("@/lib/solutions/appointment-receptionist/types").BookingPermission;
     enabled: boolean;
   },
   slotStepMinutes: number,
@@ -121,9 +121,9 @@ export function servicePolicyFromWizardType(
     location: t.location,
     modality: t.modality,
     bookingPermission: t.bookingPermission,
-    minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice) ?? 0,
-    maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead) ?? 0,
-    requiredIntakeKeys: (t.requiredFields ?? []).map((k) => k.trim()).filter(Boolean),
+    minimumBookingNoticeMinutes: parseNoticeMinutes(t.minNotice),
+    maximumBookingDaysAhead: parseDaysAhead(t.maxDaysAhead),
+    requiredIntakeKeys: t.requiredFields?.length ? [...t.requiredFields] : undefined,
     bookingHoursProse: t.bookingHours?.trim() || undefined,
   };
 }

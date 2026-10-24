@@ -1,10 +1,6 @@
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
-import {
-  resolveStoredIntakeField,
-  resolveStoredIntakeString,
-} from "../intake-objective/resolve-stored-intake";
 import { fieldSatisfiesObjectiveRequirement } from "../intake-objective/validate-intake-value";
 import type { RequestCallbackToolArgs } from "./types";
 
@@ -50,13 +46,7 @@ function phoneSatisfied(
   if (explicit && normalizePhoneE164(explicit)) return true;
 
   const phoneField = config.intakeFields.find((f) => f.key === "phone");
-  if (
-    phoneField &&
-    fieldSatisfiesObjectiveRequirement(
-      phoneField,
-      resolveStoredIntakeField(context.intake.values, "phone"),
-    )
-  ) {
+  if (phoneField && fieldSatisfiesObjectiveRequirement(phoneField, context.intake.values.phone)) {
     return true;
   }
 
@@ -90,10 +80,7 @@ export function getMissingCallbackRequirementKeys(
       continue;
     }
     const field = config.intakeFields.find((f) => f.key === key);
-    const stored = field
-      ? resolveStoredIntakeField(values, field.key)
-      : resolveStoredIntakeField(values, key);
-    if (!field || !fieldSatisfiesObjectiveRequirement(field, stored)) {
+    if (!field || !fieldSatisfiesObjectiveRequirement(field, values[key])) {
       missing.push(key);
     }
   }
@@ -109,7 +96,7 @@ export function resolveCallbackPhoneE164(
   if (fromArg) {
     return normalizePhoneE164(fromArg) || null;
   }
-  const captured = resolveStoredIntakeField(context.intake.values, "phone")?.value?.trim();
+  const captured = context.intake.values.phone?.value?.trim();
   if (captured) {
     const normalized = normalizePhoneE164(captured);
     if (normalized) return normalized;
@@ -122,7 +109,8 @@ export function resolveCallbackPhoneE164(
 }
 
 export function resolveCallbackCallerName(context: VoiceV3CallContext): string | null {
-  return resolveStoredIntakeString(context.intake.values, "name");
+  const name = context.intake.values.name?.value?.trim();
+  return name || null;
 }
 
 export function resolveCallbackReasonText(

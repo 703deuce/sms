@@ -4,11 +4,6 @@ import type { VoiceToolDefinition } from "./types";
 import type { VoiceToolKind } from "./concurrency-policy";
 import { buildUpdateIntakeOpenAiTool, updateIntakeTool } from "./update-intake-tool";
 import {
-  buildCollectCallerIntakeOpenAiTool,
-  collectCallerIntakeTool,
-} from "./collect-caller-intake-tool";
-import { buildGetIntakeStateOpenAiTool, getIntakeStateTool } from "./get-intake-state-tool";
-import {
   buildSetSchedulingPreferenceOpenAiTool,
   setSchedulingPreferenceTool,
 } from "./set-scheduling-preference-tool";
@@ -46,7 +41,6 @@ import {
   isSendBookingLinkAuthorized,
 } from "./authorize-tool-for-config";
 import { isDirectCalendarBookingConfig } from "../calendar/direct-booking-strategy";
-import { isConversationalIvrRuntime } from "@/lib/receptionist/runtime-profile";
 
 export type VoiceToolCatalogEntry = {
   name: string;
@@ -54,34 +48,15 @@ export type VoiceToolCatalogEntry = {
   telemetryName: string;
   definition: VoiceToolDefinition<unknown>;
   buildOpenAiTool: (config: VoiceV3AgentConfig) => FunctionTool;
-  /** When false, tool is registered for Node/worker execution but not advertised to the model. */
-  exposeToModel?: boolean;
 };
 
 export const VOICE_TOOL_CATALOG: VoiceToolCatalogEntry[] = [
-  {
-    name: "collect_caller_intake",
-    kind: "state_update",
-    telemetryName: "collect_caller_intake",
-    definition: collectCallerIntakeTool as VoiceToolDefinition<unknown>,
-    buildOpenAiTool: buildCollectCallerIntakeOpenAiTool,
-    exposeToModel: true,
-  },
-  {
-    name: "get_intake_state",
-    kind: "read",
-    telemetryName: "get_intake_state",
-    definition: getIntakeStateTool as VoiceToolDefinition<unknown>,
-    buildOpenAiTool: buildGetIntakeStateOpenAiTool,
-    exposeToModel: false,
-  },
   {
     name: "update_intake",
     kind: "state_update",
     telemetryName: "update_intake",
     definition: updateIntakeTool as VoiceToolDefinition<unknown>,
     buildOpenAiTool: buildUpdateIntakeOpenAiTool,
-    exposeToModel: false,
   },
   {
     name: "set_scheduling_preference",
@@ -188,24 +163,9 @@ function isDirectCalendarStrategy(config: VoiceV3AgentConfig): boolean {
 }
 
 function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3AgentConfig): boolean {
-  if (isConversationalIvrRuntime(config)) {
-    const allow = new Set([
-      "end_call",
-      "search_business_knowledge",
-      "transfer_call",
-      "take_message",
-    ]);
-    if (isSendBookingLinkAuthorized(config)) {
-      allow.add("send_booking_link");
-    }
-    if (isRequestCallbackAuthorized(config)) {
-      allow.add("request_callback");
-    }
-    return allow.has(entry.name);
-  }
   const caps = config.capabilities;
   if (!caps) {
-    return entry.name === "collect_caller_intake" || entry.name === "end_call";
+    return entry.name === "update_intake" || entry.name === "end_call";
   }
   switch (entry.name) {
     case "book_appointment":
@@ -242,8 +202,6 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
       return isTakeMessageAuthorized(config);
     case "report_unwanted_solicitor":
       return isReportUnwantedSolicitorAuthorized(config);
-    case "collect_caller_intake":
-    case "get_intake_state":
     case "update_intake":
     case "end_call":
       return true;
@@ -255,15 +213,8 @@ function isToolEnabledForConfig(entry: VoiceToolCatalogEntry, config: VoiceV3Age
 export function buildVoiceV3AstraFunctionToolsFromCatalog(
   config: VoiceV3AgentConfig,
 ): FunctionTool[] {
-  return VOICE_TOOL_CATALOG.filter(
-    (entry) => isToolEnabledForConfig(entry, config) && entry.exposeToModel !== false,
-  ).map((entry) => entry.buildOpenAiTool(config));
-}
-
-/** Tools executed on Node (includes internal persistence helpers). */
-export function listRegisteredVoiceToolNamesForConfig(config: VoiceV3AgentConfig): string[] {
   return VOICE_TOOL_CATALOG.filter((entry) => isToolEnabledForConfig(entry, config)).map(
-    (e) => e.name,
+    (entry) => entry.buildOpenAiTool(config),
   );
 }
 

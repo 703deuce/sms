@@ -3,8 +3,8 @@ import type { VoiceV3CallContext } from "../state/call-context";
 import type {
   VoiceV2QualificationRuleRow,
   VoiceV2QualificationStatus,
-} from "./qualification-types";
-import { evaluateDeterministicFieldRule } from "./deterministic-rules";
+} from "@/lib/voice-receptionist-wizard/qualification-types";
+import { evaluateDeterministicFieldRule } from "@/lib/voice-receptionist-wizard/deterministic-rules";
 
 export type VoiceV3QualificationEvaluation = {
   status: VoiceV2QualificationStatus;

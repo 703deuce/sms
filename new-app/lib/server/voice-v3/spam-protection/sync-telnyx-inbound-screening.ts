@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 import { telnyxRequest } from "@/lib/messaging/telnyx/client";
 import {
   telnyxInboundScreeningForPolicy,

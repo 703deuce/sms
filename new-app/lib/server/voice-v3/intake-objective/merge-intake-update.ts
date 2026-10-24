@@ -63,7 +63,7 @@ export function mergeIntakeUpdate(input: MergeIntakeUpdateInput): MergeIntakeUpd
     values[key] = {
       value: validated.value,
       source: "caller",
-      confidence: 0.85,
+      confidence: 1,
       updatedAt,
       revision: valueChanged ? (existing?.revision ?? 0) + 1 : (existing?.revision ?? 0),
       verificationStatus,

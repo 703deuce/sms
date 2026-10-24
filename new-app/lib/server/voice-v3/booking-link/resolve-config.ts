@@ -1,6 +1,5 @@
 import { validateBookingLinkUrl } from "@/lib/mctb/booking-links/validate-url";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import { isSendBookingLinkToolConsentRequired } from "./send-link-consent-policy";
 
 export type ResolvedSendLinkConfig = {
   strategy: VoiceV3AgentConfig["scheduling"]["bookingStrategy"];
@@ -40,7 +39,7 @@ export function resolveSendLinkConfig(
     bookingLabel: detail?.bookingLinkLabel?.trim() || "Book your appointment",
     businessName: config.businessName?.trim() || "our office",
     configVersion: config.configVersion || "unknown",
-    consentRequired: isSendBookingLinkToolConsentRequired(config),
+    consentRequired: detail?.sendLinkConsentRequired !== false,
     senderPhoneNumberId: config.telephony?.outboundSmsPhoneNumberId ?? null,
     senderE164: config.telephony?.outboundSmsE164 ?? null,
     outboundSmsMode: config.telephony?.outboundSmsMode,

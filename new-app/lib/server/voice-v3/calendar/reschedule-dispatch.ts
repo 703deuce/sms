@@ -12,7 +12,6 @@ import { pushLiveThinkingEvent } from "../live-runtime-hooks";
 import type { RevalidateBusyFetcher } from "./book-dispatch";
 import { runAuthoritativeOperation } from "../operations/run-authoritative-operation";
 import { mapProviderFailureToRecoveryCode } from "../operations/provider-failure-map";
-import { resolveCustomerIdentityFromIntake } from "../intake-objective/resolve-stored-intake";
 
 export type UpdateBookingExecutor = (input: {
   providerEventId: string;
@@ -151,8 +150,7 @@ export async function dispatchRescheduleIfRequired(
       return;
     }
 
-    const identity = resolveCustomerIdentityFromIntake(runtime.config, ctx.intake.values);
-    const summary = `${runtime.config.service.name} — ${identity.name ?? "Guest"}`;
+    const summary = `${runtime.config.service.name} — ${ctx.intake.values.name?.value ?? "Guest"}`;
     const slotSnapshot = selected;
     await runAuthoritativeOperation({
       runtime,

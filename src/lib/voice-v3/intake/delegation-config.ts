@@ -10,18 +10,12 @@ import { resolveVoiceV3IntakeTransport } from "./intake-transport";
 import { buildVoiceV3AstraFunctionTools } from "../tools/build-openai-tools";
 import { voiceV3DelegationParallelToolCallsEnabled } from "../tools/concurrency-policy";
 
-/** Default GPT-Live delegated Responses backend (GPT-6 Luna — production default). */
-export const VOICE_V3_ASTRA_MODEL_DEFAULT = "gpt-6-luna";
-
-/** Rollback / A-B: GPT-6 Sol. */
-export const VOICE_V3_ASTRA_MODEL_SOL = "gpt-6-sol";
-
-/** Previous production default before GPT-6 family (rollback only). */
-export const VOICE_V3_ASTRA_MODEL_LEGACY_SOL = "gpt-5.6-sol";
+/** Default GPT-Live delegated Responses backend (rollback target). */
+export const VOICE_V3_ASTRA_MODEL_DEFAULT = "gpt-5.6-sol";
 
 /**
  * Delegated backend for tool/reasoning (`delegation.responses.model` / LiveKit `responses_options.model`).
- * Override: `VOICE_V3_ASTRA_MODEL=gpt-6-sol` | `gpt-5.6-sol` (legacy) — OpenAI Live delegation guide.
+ * Override for tests: `VOICE_V3_ASTRA_MODEL=gpt-6-luna` (see OpenAI Live delegation guide).
  */
 export function resolveVoiceV3AstraModel(): string {
   const fromEnv = process.env.VOICE_V3_ASTRA_MODEL?.trim();

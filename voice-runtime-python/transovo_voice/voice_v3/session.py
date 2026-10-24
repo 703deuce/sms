@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from typing import Any
 
@@ -12,30 +11,10 @@ from livekit.plugins.openai.realtime import GPTLiveModel
 from livekit.plugins.openai.tools import FileSearch
 
 from transovo_voice.integrations.backend_client import TransovoBackend
-from transovo_voice.session.dispatch_resolver import (
-    extract_call_numbers,
-    is_sip_participant_dialed_source,
-    resolve_dialed_e164_source,
-)
-
-
-def _metadata_dict(raw: str | None) -> dict[str, Any]:
-    if not raw or not str(raw).strip():
-        return {}
-    try:
-        import json
-
-        parsed = json.loads(str(raw))
-        return parsed if isinstance(parsed, dict) else {}
-    except Exception:
-        return {}
+from transovo_voice.session.dispatch_resolver import extract_call_numbers
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.gpt_live_delegation_telemetry import attach_gpt_live_delegation_telemetry
-from transovo_voice.voice_v3.delegation_runtime_hydration import (
-    attach_voice_v3_delegation_runtime_hydration,
-)
-from transovo_voice.voice_v3.delegation_execution_context import DelegationExecutionContext
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient, VoiceV3CallContext
 from transovo_voice.voice_v3.end_call_tool import build_voice_v3_end_call_toolset
 from transovo_voice.voice_v3.tools import LiveKitTelephonyBridge, build_livekit_tools
@@ -52,17 +31,6 @@ def _attrs_dict(participant: rtc.RemoteParticipant) -> dict[str, str]:
 async def _wait_for_sip_participant(ctx: JobContext) -> rtc.RemoteParticipant:
     participant = await asyncio.wait_for(ctx.wait_for_participant(), timeout=20.0)
     return participant
-
-
-def _registered_tool_log_name(tool: Any) -> str:
-    info = getattr(tool, "info", None)
-    name = getattr(info, "name", None) if info is not None else None
-    if name:
-        return str(name)
-    name = getattr(tool, "name", None)
-    if name:
-        return str(name)
-    return type(tool).__name__
 
 
 def _openai_tool_to_dict(tool: dict[str, Any] | Any) -> dict[str, Any]:
@@ -124,7 +92,6 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 sip_participant_identity="",
                 caller_e164=None,
                 dialed_e164=None,
-                dialed_e164_source=None,
                 sip_call_id=None,
                 provider_call_id=None,
                 trunk_id=None,
@@ -147,21 +114,6 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             ctx.room.metadata,
             sip_participant.identity,
         )
-        dialed_e164_source = resolve_dialed_e164_source(attrs, ctx.room.metadata)
-
-        browser_test_prefix = (
-            os.environ.get("LIVEKIT_BROWSER_TEST_ROOM_PREFIX") or "transovo-browser-test-"
-        ).strip()
-        is_browser_test_room = ctx.room.name.startswith(browser_test_prefix)
-        if not is_browser_test_room:
-            if not dialed_e164 or not dialed_e164_source:
-                raise RuntimeError(
-                    "PSTN bootstrap requires dialed E.164 from LiveKit SIP participant attributes",
-                )
-            if not is_sip_participant_dialed_source(dialed_e164_source):
-                raise RuntimeError(
-                    f"PSTN bootstrap requires SIP-participant dialed source, got: {dialed_e164_source}",
-                )
 
         screening_raw = attrs.get(TELNYX_CALL_SCREENING_ATTR)
         provisional_ctx = VoiceV3CallContext(
@@ -169,7 +121,6 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             sip_participant_identity=sip_participant.identity,
             caller_e164=caller_e164,
             dialed_e164=dialed_e164,
-            dialed_e164_source=dialed_e164_source,
             sip_call_id=attrs.get("sip.callID"),
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
@@ -180,15 +131,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             workspace_id="",
             agent_id="",
         )
-        job_meta = _metadata_dict(ctx.job.metadata)
-        room_meta = _metadata_dict(ctx.room.metadata)
-        client = TransovoV3ToolClient(
-            backend,
-            provisional_ctx,
-            job_metadata=job_meta,
-            room_metadata=room_meta,
-            participant_attributes=attrs,
-        )
+        client = TransovoV3ToolClient(backend, provisional_ctx)
         forensics.append("AGENTSESSION_START_REQUESTED")
         config = await client.resolve_session_config()
 
@@ -198,7 +141,6 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             sip_participant_identity=sip_participant.identity,
             caller_e164=caller_e164,
             dialed_e164=dialed_e164,
-            dialed_e164_source=dialed_e164_source,
             sip_call_id=attrs.get("sip.callID"),
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
@@ -209,15 +151,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             workspace_id=str(config.get("workspaceId") or ""),
             agent_id=str(config.get("agentId") or ""),
         )
-        delegation_execution = DelegationExecutionContext()
-        client = TransovoV3ToolClient(
-            backend,
-            call_ctx,
-            job_metadata=job_meta,
-            room_metadata=room_meta,
-            participant_attributes=attrs,
-            delegation_context=delegation_execution,
-        )
+        client = TransovoV3ToolClient(backend, call_ctx)
         forensics.ctx = call_ctx
 
         raw_tools = config.get("toolSchemas") or []
@@ -267,7 +201,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         ctx.room.on("participant_disconnected", _on_participant_disconnected)
 
         responses_options: dict[str, Any] = {
-            "model": config.get("astraModel") or "gpt-6-luna",
+            "model": config.get("astraModel") or "gpt-5.6-sol",
             "instructions": config.get("astraInstructions") or "",
             "tool_choice": "auto",
             "parallel_tool_calls": bool(config.get("parallelToolCalls", False)),
@@ -278,30 +212,11 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         if config.get("textVerbosity"):
             responses_options["text"] = {"verbosity": config["textVerbosity"]}
 
-        schema_tool_names = [str(d.get("name") or "") for d in tool_dicts if d.get("name")]
-
         gpt_live = GPTLiveModel(
             model="gpt-live-1",
             voice=str(config.get("liveVoiceId") or "marin"),
             delegation="responses",
             responses_options=responses_options,
-        )
-
-        log_event(
-            "voice_v3_gpt_live_session_config",
-            room=ctx.room.name,
-            extra={
-                "liveSessionId": live_session_id,
-                "gptLiveModel": "gpt-live-1",
-                "delegation": "responses",
-                "responsesModel": responses_options.get("model"),
-                "responsesToolChoice": responses_options.get("tool_choice"),
-                "responsesParallelToolCalls": responses_options.get("parallel_tool_calls"),
-                "backendToolSchemaNames": schema_tool_names,
-                "sessionToolRegistrationNames": [
-                    _registered_tool_log_name(t) for t in session_tools
-                ],
-            },
         )
 
         max_tool_steps = int(config.get("maxToolSteps") or 5)
@@ -343,21 +258,17 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 extra={"result": result, "utterance_chars": len(utterance)},
             )
 
-        registered_tool_names = [_registered_tool_log_name(t) for t in session_tools]
+        amy_tool_names = [getattr(t, "name", None) or "" for t in session_tools]
         log_event(
             "voice_v3_session_starting",
             room=ctx.room.name,
             extra={
                 "liveSessionId": live_session_id,
                 "toolCount": len(session_tools),
-                "schemaToolCount": len(schema_tool_names),
-                "schemaToolNames": schema_tool_names,
                 "workspaceId": call_ctx.workspace_id,
                 "agentId": call_ctx.agent_id,
                 "amyNativeTools": ["end_call"],
-                "amyToolNames": registered_tool_names,
-                "sendBookingLinkRegistered": "send_booking_link" in schema_tool_names,
-                "collectCallerIntakeRegistered": "collect_caller_intake" in schema_tool_names,
+                "amyToolNames": [n for n in amy_tool_names if n],
             },
         )
         if forensics:
@@ -379,15 +290,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         if forensics:
             forensics.append("AGENTSESSION_START_COMPLETED")
             try:
-                attach_gpt_live_delegation_telemetry(
-                    forensics,
-                    agent.duplex_session,
-                    delegation_context=delegation_execution,
-                )
-                attach_voice_v3_delegation_runtime_hydration(
-                    duplex_session=agent.duplex_session,
-                    tool_client=client,
-                )
+                attach_gpt_live_delegation_telemetry(forensics, agent.duplex_session)
             except Exception:
                 logger.exception("voice_v3_gpt_live_delegation_telemetry_attach_failed")
     except Exception as err:

@@ -1,4 +1,4 @@
-import type { VoiceV3AgentConfig } from "../types/agent-config";
+import type { VoiceV3AgentConfig } from "../config/agent-config";
 
 export type SpeakingPaceLevel = "slower" | "normal" | "faster";
 export type BackchannelLevel = "none" | "minimal" | "natural";

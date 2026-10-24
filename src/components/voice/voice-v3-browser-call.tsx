@@ -1,8 +1,6 @@
 "use client";
 
-import { Button as LegacyButton } from "@/components/ui/button";
-import { Button as OpusButton } from "@/newui-transplant/components/ui/button";
-import { OpusDensePanel, OpusInlineAlert, OpusKeyValueRows } from "@/components/solutions/appointment-receptionist/wizard-opus-ui";
+import { Button } from "@/components/ui/button";
 import { toErrorMessage } from "@/lib/errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -26,17 +24,13 @@ export function VoiceV3BrowserCall({
   onSessionSuccess,
   onSessionFailure,
   onNeedSave,
-  presentation = "legacy",
 }: {
   agentId: string;
   voiceLabel?: string;
   onSessionSuccess?: (probe: LiveProbe) => void;
   onSessionFailure?: (message: string) => void;
   onNeedSave?: () => Promise<void>;
-  presentation?: "legacy" | "opus";
 }) {
-  const isOpus = presentation === "opus";
-  const Button = isOpus ? OpusButton : LegacyButton;
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
   const [probe, setProbe] = useState<LiveProbe | null>(null);
@@ -159,8 +153,8 @@ export function VoiceV3BrowserCall({
     setPhase("ended");
   }
 
-  const body = (
-    <>
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -188,73 +182,40 @@ export function VoiceV3BrowserCall({
         </div>
       </div>
 
-      {error ? (
-        isOpus ? (
-          <OpusInlineAlert isOpus>{error}</OpusInlineAlert>
-        ) : (
-          <p className="text-xs text-danger">{error}</p>
-        )
-      ) : null}
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
 
       {probe ? (
-        isOpus ? (
-          <OpusKeyValueRows
-            items={[
-              { label: "source", value: probe.source },
-              { label: "configVersion", value: probe.configVersion },
-              { label: "agentName", value: probe.agentName },
-              { label: "liveVoiceId", value: probe.liveVoiceId },
-              { label: "live session", value: probe.sessionId },
-              { label: "models", value: `${probe.liveModel} → ${probe.backendModel}` },
-              {
-                label: "intakeFieldKeys",
-                value: probe.intakeFieldKeys.join(", ") || "—",
-              },
-            ]}
-          />
-        ) : (
-          <dl className="grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
-            <div>
-              <dt className="font-medium text-foreground">source</dt>
-              <dd>{probe.source}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-foreground">configVersion</dt>
-              <dd className="truncate">{probe.configVersion}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-foreground">agentName</dt>
-              <dd>{probe.agentName}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-foreground">liveVoiceId</dt>
-              <dd>{probe.liveVoiceId}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-foreground">live session</dt>
-              <dd className="truncate">{probe.sessionId}</dd>
-            </div>
-            <div>
-              <dt className="font-medium text-foreground">models</dt>
-              <dd>{probe.liveModel} → {probe.backendModel}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="font-medium text-foreground">intakeFieldKeys</dt>
-              <dd>{probe.intakeFieldKeys.join(", ") || "—"}</dd>
-            </div>
-          </dl>
-        )
+        <dl className="grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
+          <div>
+            <dt className="font-medium text-foreground">source</dt>
+            <dd>{probe.source}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-foreground">configVersion</dt>
+            <dd className="truncate">{probe.configVersion}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-foreground">agentName</dt>
+            <dd>{probe.agentName}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-foreground">liveVoiceId</dt>
+            <dd>{probe.liveVoiceId}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-foreground">live session</dt>
+            <dd className="truncate">{probe.sessionId}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-foreground">models</dt>
+            <dd>{probe.liveModel} → {probe.backendModel}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="font-medium text-foreground">intakeFieldKeys</dt>
+            <dd>{probe.intakeFieldKeys.join(", ") || "—"}</dd>
+          </div>
+        </dl>
       ) : null}
-    </>
+    </div>
   );
-
-  if (isOpus) {
-    return (
-      <OpusDensePanel title="Live browser test" bodyClassName="space-y-3 p-4">
-        {body}
-      </OpusDensePanel>
-    );
-  }
-
-  return <div className="space-y-3 rounded-xl border border-border bg-card p-4">{body}</div>;
 }

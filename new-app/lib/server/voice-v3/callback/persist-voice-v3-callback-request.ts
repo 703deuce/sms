@@ -1,13 +1,13 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 import type { VoiceV3CallbackPersistInput, VoiceV3CallbackPersistResult } from "./types";
 import { callbackSlaMetadataPatch } from "@/lib/voice-receptionist-wizard/operating-maturity/callback-sla";
 
 const V3_METADATA_SOURCE = "VOICE_V3";
 
 export async function persistVoiceV3CallbackRequest(
-  input: VoiceV3CallbackPersistInput & { sourceRoute?: string },
+  input: VoiceV3CallbackPersistInput,
 ): Promise<VoiceV3CallbackPersistResult> {
   const prisma = getPrisma();
   const existing = await prisma.callbackRequest.findFirst({
@@ -49,7 +49,7 @@ export async function persistVoiceV3CallbackRequest(
         reason: input.reason,
         notes: input.notes,
         status: "new",
-        sourceRoute: input.sourceRoute?.trim() || "voice_v3_request_callback",
+        sourceRoute: "voice_v3_request_callback",
         metadata: {
           source: V3_METADATA_SOURCE,
           ...slaPatch,

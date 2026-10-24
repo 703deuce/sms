@@ -8,9 +8,7 @@ import {
   mergeIntakeUpdate,
   normalizeUpdateIntakeArguments,
 } from "../intake-objective";
-import { hasLiveKitActiveCollector } from "../intake-objective/resolve-intake-collection-kind";
 import { logIntakeTelemetry } from "../intake-objective/telemetry";
-import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
 import { LiveContextPublisher } from "../live/live-context-publisher";
 import { UPDATE_INTAKE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import type { VoiceToolDefinition } from "./types";
@@ -148,10 +146,6 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
 
     const publisher = new LiveContextPublisher(ctx.sendContext);
     publisher.appendThinking(buildIntakeObjectiveContext(config, after), ctx.delegationId);
-    publisher.appendCommentary(
-      buildSharedCallerFactsLiveSummary(config, after),
-      ctx.delegationId,
-    );
 
     if (merged.updatedFields.length === 0 && merged.rejectedFields.length > 0) {
       return voiceToolError(
@@ -168,20 +162,10 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
 
     return toolOk("INTAKE_UPDATED", {
       updated_fields: merged.updatedFields,
-      rejected_fields: merged.rejectedFields.map((r) => {
-        const field = config.intakeFields.find((f) => f.key === r.field);
-        const suggestCollect =
-          field &&
-          (r.code === "INVALID_FORMAT" || r.code === "EMPTY_VALUE") &&
-          hasLiveKitActiveCollector(field)
-            ? { use_collect_intake_field: true, field_key: r.field }
-            : undefined;
-        return {
-          field: r.field,
-          code: r.code,
-          ...(suggestCollect ? { recovery: suggestCollect } : {}),
-        };
-      }),
+      rejected_fields: merged.rejectedFields.map((r) => ({
+        field: r.field,
+        code: r.code,
+      })),
       missing_required_fields: objective.missingRequiredFields,
       objective: {
         status: objective.status,

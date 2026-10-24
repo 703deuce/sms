@@ -11,7 +11,7 @@ import {
 } from "../lib/server/voice-v3/tools/amy-live-tool-description-spec";
 
 const SEND_LINK_AMY_TOOLS = new Set([
-  "collect_caller_intake",
+  "update_intake",
   "send_booking_link",
   "transfer_call",
   "request_callback",

@@ -17,8 +17,7 @@ export function mergeActiveGoalFromMeaning(
     incoming === "RESCHEDULE_APPOINTMENT" ||
     incoming === "CANCEL_APPOINTMENT" ||
     incoming === "REQUEST_CALLBACK" ||
-    incoming === "REQUEST_TRANSFER" ||
-    incoming === "TAKE_MESSAGE"
+    incoming === "REQUEST_TRANSFER"
   ) {
     return incoming;
   }

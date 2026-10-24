@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 import { sendTransactionalEmail } from "@/lib/email/brevo";
 import type { VoiceV3AfterHoursNotificationsConfig } from "./types";
 import type { VoiceV3NotificationDispatchInput } from "./types";

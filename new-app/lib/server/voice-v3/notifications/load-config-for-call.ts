@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 import { resolveVoiceV3AgentConfigForAgent } from "../config/from-published-agent";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 

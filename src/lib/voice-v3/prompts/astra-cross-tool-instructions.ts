@@ -53,7 +53,7 @@ When no tool is needed:
 - Pleasantries, hold, or clarification that does not require external data or state mutation — no function call.
 
 Persistent vs temporary state:
-- Save durable caller/business facts with update_intake when clearly known (name, reason, email candidate, configured fields), during the same delegated work when the caller supplies them — not only at book time. If the caller switches from booking to callback (or any other operation), persist any clearly supplied shared facts with update_intake before or alongside request_callback so callback requirements reuse them.
+- Save durable caller/business facts with update_intake when clearly known (name, reason, email candidate, configured fields), during the same delegated work when the caller supplies them — not only at book time.
 - Scheduling preferences do not belong in update_intake. Use set_scheduling_preference for date/time semantics, then find_availability / book_appointment with authoritative ids when ready.
 - Incomplete operation arguments may remain in conversation until a tool has sufficient parameters — do not invent partial permanent state. Clearly supplied configured intake is not "incomplete operation arguments"; persist it with update_intake.
 

@@ -3,9 +3,8 @@ import { zodResponsesFunction } from "openai/helpers/zod";
 import type { FunctionTool } from "openai/resources/live/live";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceToolDefinition } from "./types";
+import { mergeDialogActiveGoalFromTool } from "../intake/merge-intake-state";
 import { authorizeTakeMessageOrError } from "./authorize-tool-for-config";
-import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
-import { TAKE_MESSAGE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 
 const takeMessageArgsSchema = z.object({
   message: z
@@ -28,11 +27,17 @@ const takeMessageArgsSchema = z.object({
 
 export type TakeMessageArgs = z.infer<typeof takeMessageArgsSchema>;
 
+const TAKE_MESSAGE_DESCRIPTION = `take_message — record a message for the business team when the caller wants to leave information without scheduling or an immediate transfer.
+
+Use when the caller asks to leave a message, pass along details, or wants staff to follow up on information they provided (not necessarily a return phone call — use request_callback when they explicitly want a call back).
+
+Provide message with the substance of what they said. Include callback_phone only when a different number is needed for follow-up.`;
+
 export function buildTakeMessageOpenAiTool(_config: VoiceV3AgentConfig): FunctionTool {
   const zodTool = zodResponsesFunction({
     name: "take_message",
     parameters: takeMessageArgsSchema,
-    description: TAKE_MESSAGE_TOOL_DESCRIPTION,
+    description: TAKE_MESSAGE_DESCRIPTION,
   });
   return {
     type: "function",
@@ -53,16 +58,26 @@ export const takeMessageTool: VoiceToolDefinition<TakeMessageArgs> = {
     const denied = authorizeTakeMessageOrError(config);
     if (denied) return denied;
 
-    let snap = mergeDialogActiveGoalFromOperation(ctx.runtime.getSnapshot(), "take_message");
+    let snap = mergeDialogActiveGoalFromTool(ctx.runtime.getSnapshot(), "REQUEST_CALLBACK");
     ctx.runtime.replaceContext(snap);
     const workspaceId = config.workspaceId?.trim() || ctx.tenantId;
-    const { executeTakeMessage } = await import("../callback/execute-take-message");
-    const { result, nextContext } = await executeTakeMessage({
+    const { executeRequestCallback } = await import("../callback/execute-request-callback");
+    const reasonParts = [args.message.trim()];
+    if (args.caller_name?.trim()) {
+      reasonParts.unshift(`From ${args.caller_name.trim()}:`);
+    }
+    const { result, nextContext } = await executeRequestCallback({
       workspaceId,
       agentId: config.agentId ?? null,
       config,
       context: snap,
-      args,
+      args: {
+        callback_phone: args.callback_phone,
+        reason: reasonParts.join(" ").trim(),
+        preferred_time: null,
+        notes: args.message.trim(),
+        phone_confirmed: null,
+      },
     });
     ctx.runtime.replaceContext(nextContext);
     return result;

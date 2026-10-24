@@ -14,13 +14,10 @@ export const VOICE_V3_DEFAULT_BUSINESS_TIMEZONE = "America/New_York";
 function serviceCatalogForAstra(config: VoiceV3AgentConfig): string {
   const services = config.services?.length ? config.services : [config.service];
   return services
-    .map((s) => {
-      const req =
-        s.requiredIntakeKeys?.length
-          ? ` requiredIntakeKeys=${s.requiredIntakeKeys.join(",")}`
-          : "";
-      return `- id=${s.id} name="${s.name}" durationMinutes=${s.durationMinutes}${req}${s.description ? ` (${s.description})` : ""}`;
-    })
+    .map(
+      (s) =>
+        `- id=${s.id} name="${s.name}" durationMinutes=${s.durationMinutes}${s.description ? ` (${s.description})` : ""}`,
+    )
     .join("\n");
 }
 

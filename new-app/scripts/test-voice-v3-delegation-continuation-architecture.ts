@@ -57,7 +57,7 @@ async function testLiveKitExecutorAcceptsDelegationIdForLiveContext(): Promise<v
       tenantId: "ws_test",
       sendContext: liveContext.sendContext,
     },
-    "collect_caller_intake",
+    "update_intake",
     { name: "Test Caller" },
   );
 
@@ -82,7 +82,7 @@ async function testSidebandPathStillSubmitsContinuation(): Promise<void> {
       type: "response.output_item.done",
       item: {
         type: "function_call",
-        name: "collect_caller_intake",
+        name: "update_intake",
         call_id: "fc_sideband_1",
         arguments: JSON.stringify({ name: "Sideband" }),
       },

@@ -22,9 +22,6 @@ export function buildWarmTransferHandoffInstructions(input: {
     `You are ${input.agentName} with ${input.businessName}. Briefly summarize the caller for the human agent.`,
   );
   lines.push("Keep it to 2–4 short sentences. Do not mention tools, software, or internal IDs.");
-  lines.push(
-    "Introduce who is on the line and why they are being transferred (department and reason) before asking if they can take the call.",
-  );
   lines.push("Ask whether they are available to take the call, then use connect_to_caller if they accept.");
 
   const intake = input.callContext.intake?.values ?? {};

@@ -4,7 +4,6 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { toolOk, voiceToolError, type VoiceToolResult } from "../tools/types";
 import { getMissingFieldsForOperation } from "../intake-objective/operation-requirements";
-import { resolveCustomerIdentityFromIntake } from "../intake-objective/resolve-stored-intake";
 import { persistVoiceV3AppointmentRequest } from "./persist-appointment-request";
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import { notifyVoiceV3AppointmentBooked } from "../notifications/notify-appointment-booked";
@@ -44,9 +43,8 @@ export async function executeSubmitAppointmentRequest(input: {
     };
   }
 
-  const identity = resolveCustomerIdentityFromIntake(config, ctx.intake.values);
   const phone =
-    normalizePhoneE164(identity.phone) ||
+    normalizePhoneE164(ctx.intake.values.phone?.value) ||
     normalizePhoneE164(ctx.telephony.inboundCallerE164) ||
     null;
   if (!phone) {
@@ -59,7 +57,7 @@ export async function executeSubmitAppointmentRequest(input: {
     };
   }
 
-  const name = identity.name?.trim() || null;
+  const name = ctx.intake.values.name?.value?.trim() || null;
   const reason =
     ctx.intake.values.service_reason?.value?.trim() ||
     ctx.intake.values.service?.value?.trim() ||

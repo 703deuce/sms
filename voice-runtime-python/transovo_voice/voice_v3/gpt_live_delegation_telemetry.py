@@ -7,8 +7,6 @@ from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 
-from transovo_voice.telemetry import log_event
-
 logger = logging.getLogger("transovo-voice.voice_v3.gpt_live_delegation_telemetry")
 
 _SERVER_INNER_TYPES = frozenset(
@@ -263,27 +261,12 @@ def record_delegation_provider_event(forensics: VoiceV3CallForensics, raw: dict[
         logger.exception("gpt_live_delegation_telemetry_record_failed")
 
 
-def attach_gpt_live_delegation_telemetry(
-    forensics: VoiceV3CallForensics,
-    duplex_session: Any,
-    *,
-    delegation_context: Any | None = None,
-) -> None:
+def attach_gpt_live_delegation_telemetry(forensics: VoiceV3CallForensics, duplex_session: Any) -> None:
     """Passive listeners on GPTLiveSession; fail-open."""
 
     def _on_server(raw: dict[str, Any]) -> None:
         if not isinstance(raw, dict):
             return
-        if delegation_context is not None:
-            note = getattr(delegation_context, "note_openai_server_event", None)
-            if callable(note):
-                note(raw)
-        etype = str(raw.get("type") or "")
-        if "responses_validation_failed" in etype or etype == "responses.validation.failed":
-            log_event(
-                "voice_v3_responses_validation_failed",
-                extra={"event": raw},
-            )
         record_delegation_provider_event(forensics, raw, direction="server")
 
     def _on_client(raw: dict[str, Any]) -> None:

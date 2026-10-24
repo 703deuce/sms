@@ -10,7 +10,6 @@ import {
   requestInitialLiveGreeting,
 } from "./greeting";
 import { getVoiceV3LiveResponseCoordinator } from "./delegation/live-response-coordinator";
-import { pushDelegatedRuntimeContextToLive } from "./delegation/push-delegated-runtime-context";
 import {
   markGreetingCompleted,
   markGreetingSpeaking,
@@ -135,11 +134,6 @@ async function attachVoiceV3LiveSidebandInner(input: {
         getVoiceV3LiveResponseCoordinator(sessionId, send).onDelegationCreated({
           ...delegation,
           offset_ms,
-        });
-        pushDelegatedRuntimeContextToLive({
-          liveSessionId: sessionId,
-          delegationId: typeof delegation.id === "string" ? delegation.id : null,
-          send,
         });
         console.log("FRESH_DELEGATION_CREATED", {
           live_session_id: sessionId,

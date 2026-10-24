@@ -11,23 +11,15 @@ from livekit.agents.llm.tool_context import DuplicateScope, ToolError, ToolFlag
 from livekit.agents.voice.events import RunContext
 
 from transovo_voice.telemetry import log_event
-from transovo_voice.voice_v3.intake_bridge import (
-    COLLECT_CALLER_INTAKE_TOOL,
-    execute_collect_caller_intake,
-)
+from transovo_voice.voice_v3.intake_active_collection import run_active_intake_collection
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.transfer_executor import execute_authorized_transfer_plan
-from transovo_voice.voice_v3.tool_idle_filler import (
-    TRANSFER_FILLER_DELAY_SEC,
-    TRANSFER_FILLER_INSTRUCTIONS,
-    execute_with_idle_filler,
-)
-from transovo_voice.voice_v3.live_context_hydration import apply_live_context_from_tool_result
+from transovo_voice.voice_v3.tool_idle_filler import execute_with_idle_filler
 
-_LEGACY_COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
-_LEGACY_SET_INTAKE_PREFIX = "set_intake_"
+COLLECT_INTAKE_FIELD_TOOL = "collect_intake_field"
+_SET_INTAKE_PREFIX = "set_intake_"
 
 logger = logging.getLogger("transovo-voice.voice_v3.tools")
 
@@ -77,8 +69,6 @@ async def _execute_transovo_tool(
         arguments=raw_arguments,
         function_call_id=fc_id_str,
     )
-    if isinstance(result, dict):
-        result = apply_live_context_from_tool_result(result, context=context)
 
     if forensics:
         elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -91,12 +81,47 @@ async def _execute_transovo_tool(
     return result
 
 
-def _is_retired_intake_tool(name: str) -> bool:
-    return (
-        name == "update_intake"
-        or name == _LEGACY_COLLECT_INTAKE_FIELD_TOOL
-        or name.startswith(_LEGACY_SET_INTAKE_PREFIX)
-    )
+def _intake_field_key_from_set_tool(tool_name: str, intake_fields: list[dict[str, Any]]) -> str | None:
+    if not tool_name.startswith(_SET_INTAKE_PREFIX):
+        return None
+    for row in intake_fields:
+        if str(row.get("liveKitToolName") or "") == tool_name:
+            return str(row.get("key") or "")
+    suffix = tool_name[len(_SET_INTAKE_PREFIX) :]
+    for row in intake_fields:
+        key = str(row.get("key") or "")
+        safe = "".join(c if c.isalnum() or c == "_" else "_" for c in key).strip("_")
+        if safe == suffix:
+            return key
+    return None
+
+
+async def _dispatch_intake_tool(
+    *,
+    tool_name: str,
+    args: dict[str, Any],
+    context: RunContext,
+    client: TransovoV3ToolClient,
+    intake_fields: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if tool_name == COLLECT_INTAKE_FIELD_TOOL:
+        field_key = str(args.get("field_key") or "").strip()
+        if not field_key:
+            raise ToolError("field_key is required for collect_intake_field.")
+        collected = await run_active_intake_collection(
+            context,
+            field_key=field_key,
+            intake_fields=intake_fields,
+        )
+        return await client.execute(tool_name="update_intake", arguments=collected)
+
+    field_key = _intake_field_key_from_set_tool(tool_name, intake_fields)
+    if field_key:
+        value = args.get("value")
+        payload: dict[str, Any] = {field_key: value}
+        return await client.execute(tool_name="update_intake", arguments=payload)
+
+    raise ToolError(f"Unknown intake tool: {tool_name}")
 
 
 def build_livekit_tools(
@@ -111,7 +136,7 @@ def build_livekit_tools(
 
     for schema in tool_schemas:
         name = str(schema.get("name") or "").strip()
-        if not name or name in _SKIP_SCHEMA_TOOLS or _is_retired_intake_tool(name):
+        if not name or name in _SKIP_SCHEMA_TOOLS:
             continue
         description = str(schema.get("description") or "")
         parameters = schema.get("parameters") or {"type": "object", "properties": {}}
@@ -149,13 +174,15 @@ def build_livekit_tools(
             fc_id_str = str(function_call_id) if function_call_id else None
 
             async def _run_tool() -> dict[str, Any]:
-                if _tool_name == COLLECT_CALLER_INTAKE_TOOL:
-                    return await execute_collect_caller_intake(
+                if _tool_name == COLLECT_INTAKE_FIELD_TOOL or _tool_name.startswith(
+                    _SET_INTAKE_PREFIX,
+                ):
+                    return await _dispatch_intake_tool(
+                        tool_name=_tool_name,
+                        args=args,
                         context=context,
                         client=_client,
                         intake_fields=intake_meta,
-                        arguments=args,
-                        function_call_id=fc_id_str,
                     )
                 return await _execute_transovo_tool(
                     tool_name=_tool_name,
@@ -167,19 +194,11 @@ def build_livekit_tools(
                 )
 
             try:
-                _filler_delay = (
-                    TRANSFER_FILLER_DELAY_SEC if _tool_name == "transfer_call" else None
-                )
-                _filler_instructions = (
-                    TRANSFER_FILLER_INSTRUCTIONS if _tool_name == "transfer_call" else None
-                )
                 result = await execute_with_idle_filler(
                     context,
                     tool_name=_tool_name,
                     function_call_id=fc_id_str,
                     execute=_run_tool,
-                    filler_delay_sec=_filler_delay,
-                    filler_instructions=_filler_instructions,
                 )
             except asyncio.CancelledError:
                 log_event(

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 
 /** Active indexed document sources for linked knowledge bases (RAG retrieval). */
 export async function resolveDocumentSourceIdsForKnowledgeBases(

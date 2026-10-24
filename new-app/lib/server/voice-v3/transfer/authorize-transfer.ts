@@ -10,9 +10,9 @@ import type {
 } from "./types";
 import { voiceToolError, toolOk } from "../tools/types";
 import type { VoiceToolResult } from "../tools/types";
-import { resolveActiveOnCallTarget } from "@/lib/server/voice-v3/operating-maturity/on-call";
-import { resolveVoiceV2OperatingState } from "@/lib/server/voice-v3/operating-maturity/operating-state";
-import { gateCapabilitiesForOperatingState } from "@/lib/server/voice-v3/operating-maturity/behavior-gating";
+import { resolveActiveOnCallTarget } from "@/lib/voice-receptionist-wizard/operating-maturity/on-call";
+import { resolveVoiceV2OperatingState } from "@/lib/voice-receptionist-wizard/operating-maturity/operating-state";
+import { gateCapabilitiesForOperatingState } from "@/lib/voice-receptionist-wizard/operating-maturity/behavior-gating";
 import { evaluateVoiceV3Urgency } from "../urgency/evaluate-urgency";
 import { isVoiceV3ToolAuthorizedBase } from "../tools/authorize-tool-for-config";
 
@@ -165,84 +165,21 @@ export function authorizeVoiceV3Transfer(input: {
   }
 
   const authorizedTargets: VoiceV3AuthorizedTransferPlan["targets"] = [];
-  const phoneFoundation = callContext.phoneFoundation;
   for (const t of targets) {
     const dest = destMap.get(t.destinationId);
-    if (!dest?.enabled) continue;
-    if (dest.forwardingGroupId) {
-      authorizedTargets.push({
-        destination_id: dest.id,
-        mode: t.mode,
-        dial_target: `phone_foundation:forwarding_group:${dest.forwardingGroupId}`,
-        ringing_timeout_seconds: t.ringingTimeoutSeconds,
-        executor: "phone_call_control",
-        forwarding_group_id: dest.forwardingGroupId,
-        inbound_call_control_id: phoneFoundation?.inboundCallControlId ?? null,
-        human_call_id: phoneFoundation?.humanCallId ?? null,
-      });
-      continue;
-    }
-    if (!dest.phoneE164) continue;
-    const mode = (t.mode || dest.defaultMode || "DIRECT").toUpperCase();
-    const lk = callContext.telephony?.liveKit;
-    const hasLiveKitSip = Boolean(lk?.roomName?.trim() && lk?.sipParticipantIdentity?.trim());
-    const canUsePhoneCallControl =
-      Boolean(phoneFoundation?.humanCallId) && Boolean(phoneFoundation?.inboundCallControlId);
-
-    if (hasLiveKitSip) {
-      authorizedTargets.push({
-        destination_id: dest.id,
-        mode,
-        dial_target: dest.phoneE164.trim(),
-        ringing_timeout_seconds: t.ringingTimeoutSeconds,
-        executor: "livekit_sip",
-      });
-      logVoiceV3TransferEvent("VOICE_V3_TRANSFER_ROUTED_LIVEKIT_SIP", {
-        call_id: callContext.callId,
-        live_session_id: callContext.liveSessionId,
-        route_id: route.id,
-        destination_id: dest.id,
-        mode,
-        sip_participant_prefix: lk!.sipParticipantIdentity.slice(0, 12),
-      });
-      continue;
-    }
-
-    if (canUsePhoneCallControl) {
-      authorizedTargets.push({
-        destination_id: dest.id,
-        mode,
-        dial_target: dest.phoneE164.trim(),
-        ringing_timeout_seconds: t.ringingTimeoutSeconds,
-        executor: "phone_call_control",
-        inbound_call_control_id: phoneFoundation!.inboundCallControlId,
-        human_call_id: phoneFoundation!.humanCallId,
-      });
-      logVoiceV3TransferEvent("VOICE_V3_TRANSFER_ROUTED_PHONE_CALL_CONTROL", {
-        call_id: callContext.callId,
-        live_session_id: callContext.liveSessionId,
-        route_id: route.id,
-        destination_id: dest.id,
-        mode,
-      });
-      continue;
-    }
-
-    logVoiceV3TransferEvent("VOICE_V3_TRANSFER_SKIP_NO_EXECUTOR", {
-      call_id: callContext.callId,
-      live_session_id: callContext.liveSessionId,
+    if (!dest?.enabled || !dest.phoneE164) continue;
+    authorizedTargets.push({
       destination_id: dest.id,
-      has_livekit_sip: hasLiveKitSip,
-      has_phone_foundation: canUsePhoneCallControl,
+      mode: t.mode,
+      dial_target: dest.phoneE164,
+      ringing_timeout_seconds: t.ringingTimeoutSeconds,
     });
   }
 
   if (!authorizedTargets.length) {
     return voiceToolError(
-      "TRANSFER_NOT_READY",
-      phoneFoundation?.humanCallId
-        ? "Transfer destination is not available."
-        : "Transfer requires an active phone call on Telnyx. The caller leg could not be correlated.",
+      "TRANSFER_NOT_CONFIGURED",
+      "No authorized transfer targets are available.",
       { route_id: route.id },
       "not_ready",
     );
@@ -274,8 +211,6 @@ export function authorizeVoiceV3Transfer(input: {
     destination_id: destId,
     target_count: authorizedTargets.length,
     modes: authorizedTargets.map((t) => t.mode),
-    executors: authorizedTargets.map((t) => t.executor || "livekit_sip"),
-    phone_foundation: Boolean(phoneFoundation?.humanCallId),
     waterfall: policy.routing === "waterfall",
   });
   logVoiceV3TransferBillingUsage({

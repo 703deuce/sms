@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
+import { getPrisma } from "@/lib/db";
 import { applyUnwantedSolicitorCustomerBilling } from "./billing";
 import { blockCallerForWorkspace } from "./blocklist";
 import { readVoiceV3ScreeningFromCallMetadata } from "./call-metadata";

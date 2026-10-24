@@ -81,7 +81,7 @@ function prepareCancelContext(
     };
   }
 
-  // Tool-confirmed cancellation (PSTN path): set lastCancellationConfirmation CONFIRM so
+  // Tool-confirmed cancellation (PSTN path): mirror apply-caller-meaning CONFIRM so
   // evaluateVoiceV3Rules cancelReady arms dispatchCancellationIfRequired.
   if (!boundEventId) return null;
 

@@ -2,7 +2,6 @@ import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { resolveBookingServiceForRuntime } from "../config/resolve-booking-service";
 import type { VoiceV3CallContext } from "../state/call-context";
 import type { CreateBookingRequest } from "./booking-types";
-import { resolveCustomerIdentityFromIntake } from "../intake-objective/resolve-stored-intake";
 import { isSelectedSlotAuthoritative } from "./selected-slot";
 
 export function buildCreateBookingRequest(
@@ -26,8 +25,7 @@ export function buildCreateBookingRequest(
   const calendarId = config.calendar?.calendarIds[0];
   if (!calendarId || !config.calendar?.connectionId) return null;
 
-  const identity = resolveCustomerIdentityFromIntake(config, ctx.intake.values);
-  const name = identity.name?.trim();
+  const name = ctx.intake.values.name?.value?.trim();
   if (!name) return null;
 
   const slot = offer.slots.find((s) => s.slotId === selected.slotId);
@@ -47,8 +45,8 @@ export function buildCreateBookingRequest(
     timezone: selected.timezone,
     customer: {
       name,
-      email: identity.email?.trim() || undefined,
-      phone: identity.phone?.trim() || undefined,
+      email: ctx.intake.values.email?.value?.trim() || undefined,
+      phone: ctx.intake.values.phone?.value?.trim() || undefined,
     },
     service: {
       id: service.id,

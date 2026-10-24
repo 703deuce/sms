@@ -17,7 +17,6 @@ import {
   shouldBlockStaleToolPreDispatch,
 } from "../delegation/conversation-freshness";
 import type { VoiceToolResult } from "./types";
-import { maybeExecuteDelegatedTransferCallResult } from "../transfer/execute-authorized-transfer-on-node";
 
 const executedCallIds = new Set<string>();
 
@@ -142,11 +141,6 @@ export async function handleDelegatedVoiceToolCall(input: {
       completed.name,
       rawArgs,
     );
-    result = await maybeExecuteDelegatedTransferCallResult({
-      toolName: completed.name,
-      runtime,
-      result,
-    });
   } else {
     result = voiceToolError(
       "UNKNOWN_TOOL",

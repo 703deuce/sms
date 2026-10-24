@@ -6,7 +6,6 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { evaluateVoiceV3Rules } from "../state/call-rules";
-import { resolveStoredIntakeString } from "../intake-objective/resolve-stored-intake";
 
 export type AstraBusinessContext = {
   caller_information: Record<string, string>;
@@ -38,7 +37,7 @@ export function buildAstraBusinessContext(
   const rules = evaluateVoiceV3Rules(ctx, config);
   const caller_information: Record<string, string> = {};
   for (const f of config.intakeFields) {
-    const v = resolveStoredIntakeString(ctx.intake.values, f.key);
+    const v = ctx.intake.values[f.key]?.value?.trim();
     if (v) caller_information[f.key] = v;
   }
 

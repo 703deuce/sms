@@ -40,7 +40,7 @@ export function enabledVoiceToolNamesFromEditor(editor: AgentConfig): string[] {
   if (isConversationalIvrEditor(editor)) {
     return conversationalIvrToolAllowlist(editor);
   }
-  const names: string[] = ["collect_caller_intake", "end_call"];
+  const names: string[] = ["update_intake", "end_call"];
   const on = (c: Capability) => editor.capabilities[c] === true;
   const bookLive =
     on("book") &&

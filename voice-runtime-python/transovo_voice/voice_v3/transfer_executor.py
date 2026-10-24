@@ -9,18 +9,11 @@ from typing import Any
 from livekit import api
 from livekit.agents.beta.workflows import WarmTransferTask
 from livekit.agents.llm.tool_context import ToolError
-from livekit.agents.utils.participant import wait_for_participant_attribute
 from livekit.agents.voice.events import RunContext
 
 from transovo_voice.telemetry import log_event
-from transovo_voice.session.sip_status import (
-    SIP_CALL_STATUS_ACTIVE,
-    SIP_CALL_STATUS_ATTR,
-    read_sip_call_status,
-)
 from transovo_voice.voice_v3.telephony_bridge import LiveKitTelephonyBridge
 from transovo_voice.voice_v3.tool_client import TransovoV3ToolClient
-from transovo_voice.voice_v3.transfer_targets import normalize_transfer_to
 
 logger = logging.getLogger("transovo-voice.voice_v3.transfer")
 
@@ -54,6 +47,15 @@ async def _report_transfer_outcome_to_backend(
         logger.exception("voice_v3_transfer_outcome_report_failed")
 
 
+def _normalize_transfer_to(destination: str) -> str:
+    dest = destination.strip()
+    if dest.startswith("tel:") or dest.startswith("sip:"):
+        return dest
+    if dest.startswith("+") or (dest and dest[0].isdigit()):
+        return f"tel:{dest}"
+    return dest
+
+
 def _strip_execution_payload(result: dict[str, Any]) -> dict[str, Any]:
     out = dict(result)
     data = out.get("data")
@@ -63,101 +65,14 @@ def _strip_execution_payload(result: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-async def _phone_foundation_handoff(
-    client: TransovoV3ToolClient | None,
-    *,
-    target: dict[str, Any],
-    transfer_request_id: str,
-    route_id: str,
-) -> str:
-    if client is None:
-        raise ToolError("Phone foundation transfer requires an active backend session.")
-
-    workspace_id = str(client._ctx.workspace_id)
-    human_call_id = str(target.get("human_call_id") or "").strip()
-    inbound_cc = str(target.get("inbound_call_control_id") or "").strip()
-    group_id = target.get("forwarding_group_id")
-    dest_id = target.get("destination_id")
-
-    if not human_call_id or not inbound_cc:
-        log_event(
-            "voice_v3_transfer_phone_foundation_missing_context",
-            extra={"transfer_request_id": transfer_request_id, "route_id": route_id},
-        )
-        return "CONFIGURATION_ERROR"
-
-    payload: dict[str, Any] = {
-        "workspaceId": workspace_id,
-        "humanCallId": human_call_id,
-        "inboundCallControlId": inbound_cc,
-    }
-    if group_id:
-        payload["forwardingGroupId"] = str(group_id)
-    elif dest_id:
-        payload["destinationId"] = str(dest_id)
-    else:
-        dial = str(target.get("dial_target") or "")
-        if dial.startswith("phone_foundation:forwarding_group:"):
-            payload["forwardingGroupId"] = dial.split(":")[-1]
-        elif dial and not dial.startswith("phone_foundation:"):
-            payload["destinationE164"] = dial
-
-    log_event(
-        "voice_v3_transfer_phone_foundation_starting",
-        extra={
-            "transfer_request_id": transfer_request_id,
-            "route_id": route_id,
-            "has_group": bool(payload.get("forwardingGroupId")),
-        },
-    )
-    try:
-        result = await client._backend.call("execute_phone_foundation_transfer", payload)
-    except Exception:
-        logger.exception("voice_v3_transfer_phone_foundation_failed")
-        return "PROVIDER_ERROR"
-
-    if isinstance(result, dict) and result.get("ok"):
-        return "PHONE_HANDOFF_STARTED"
-    return "PROVIDER_ERROR"
-
-
 async def _direct_transfer(
     telephony: LiveKitTelephonyBridge,
     *,
     dial_target: str,
     ringing_timeout_seconds: float,
 ) -> str:
-    transfer_to = normalize_transfer_to(dial_target)
+    transfer_to = _normalize_transfer_to(dial_target)
     job_ctx = telephony.job_ctx
-    remote_participants = getattr(job_ctx.room, "remote_participants", None)
-    participant = None
-    if isinstance(remote_participants, dict):
-        participant = remote_participants.get(telephony.sip_participant_identity)
-    if participant is not None:
-        status = read_sip_call_status(participant)
-        if status != SIP_CALL_STATUS_ACTIVE:
-            try:
-                await asyncio.wait_for(
-                    wait_for_participant_attribute(
-                        job_ctx.room,
-                        identity=telephony.sip_participant_identity,
-                        attribute=SIP_CALL_STATUS_ATTR,
-                        value=SIP_CALL_STATUS_ACTIVE,
-                    ),
-                    timeout=min(8.0, max(2.0, ringing_timeout_seconds / 2)),
-                )
-            except asyncio.TimeoutError:
-                log_event(
-                    "voice_v3_transfer_direct_sip_not_active",
-                    extra={
-                        "participant": telephony.sip_participant_identity,
-                        "sip_call_status": status,
-                    },
-                )
-                return "PROVIDER_ERROR"
-            except RuntimeError:
-                # Participant left before active — do not REFER a non-established leg.
-                return "PROVIDER_ERROR"
     log_event(
         "voice_v3_transfer_direct_starting",
         extra={
@@ -172,17 +87,8 @@ async def _direct_transfer(
         play_dialtone=False,
     )
     req.ringing_timeout.FromTimedelta(timedelta(seconds=ringing_timeout_seconds))
-    try:
-        await job_ctx.api.sip.transfer_sip_participant(req)
-    except asyncio.TimeoutError:
-        raise
-    except Exception as exc:
-        msg = str(exc).lower()
-        if "timeout" in msg or "deadline" in msg or "no answer" in msg:
-            raise asyncio.TimeoutError(str(exc)) from exc
-        raise
-    # SIP REFER accepted by provider — not proof the destination party answered.
-    return "SIP_REFER_ACCEPTED"
+    await job_ctx.api.sip.transfer_sip_participant(req)
+    return "CONNECTED"
 
 
 async def _warm_transfer(
@@ -241,14 +147,9 @@ async def execute_authorized_transfer_plan(
     if not result.get("ok"):
         return result
 
-    status = str(result.get("status") or "")
-    if status == "transfer_dialing":
-        return result
-
     data = result.get("data")
     if not isinstance(data, dict):
-        # new-app connector may flatten toolOk fields at the top level
-        data = result if isinstance(result, dict) else {}
+        return result
 
     plan = data.get("execution")
     if not isinstance(plan, dict):
@@ -279,10 +180,9 @@ async def execute_authorized_transfer_plan(
             continue
         dest_id = str(target.get("destination_id") or "")
         mode = str(target.get("mode") or "DIRECT").upper()
-        executor = str(target.get("executor") or "livekit_sip").lower()
         dial_target = str(target.get("dial_target") or "")
         timeout = float(target.get("ringing_timeout_seconds") or 30)
-        if not dial_target and executor != "phone_call_control":
+        if not dial_target:
             continue
 
         log_event(
@@ -298,14 +198,7 @@ async def execute_authorized_transfer_plan(
         attempt_started = time.monotonic()
         outcome = "PROVIDER_ERROR"
         try:
-            if executor == "phone_call_control":
-                outcome = await _phone_foundation_handoff(
-                    client,
-                    target=target,
-                    transfer_request_id=transfer_request_id,
-                    route_id=route_id,
-                )
-            elif mode == "WARM":
+            if mode == "WARM":
                 outcome = await _warm_transfer(
                     telephony,
                     context,
@@ -348,11 +241,10 @@ async def execute_authorized_transfer_plan(
             },
         )
 
-        if outcome in ("CONNECTED", "SIP_REFER_ACCEPTED", "PHONE_HANDOFF_STARTED"):
-            is_refer_only = outcome in ("SIP_REFER_ACCEPTED", "PHONE_HANDOFF_STARTED")
+        if outcome == "CONNECTED":
             total_ms = int((time.monotonic() - started) * 1000)
             log_event(
-                "VOICE_V3_TRANSFER_CONNECTED" if not is_refer_only else "VOICE_V3_TRANSFER_REFER_ACCEPTED",
+                "VOICE_V3_TRANSFER_CONNECTED",
                 extra={
                     "transfer_request_id": transfer_request_id,
                     "route_id": route_id,
@@ -376,32 +268,23 @@ async def execute_authorized_transfer_plan(
                     "warm_consult_duration_ms": duration_ms if mode == "WARM" else None,
                 },
             )
-            if outcome == "PHONE_HANDOFF_STARTED":
-                backend_status = "transfer_phone_handoff_started"
-                surface_status = backend_status
-            else:
-                backend_status = (
-                    "transfer_refer_accepted" if is_refer_only else "transfer_connected"
-                )
-                surface_status = backend_status
             sanitized = _strip_execution_payload(result)
             if isinstance(sanitized.get("data"), dict):
                 sanitized["data"] = {
                     **sanitized["data"],
-                    "status": surface_status,
+                    "status": "transfer_connected",
                     "attempts": attempts,
-                    "human_answered": not is_refer_only,
                 }
-                sanitized["status"] = surface_status
+                sanitized["status"] = "transfer_connected"
             asyncio.create_task(
                 _report_transfer_outcome_to_backend(
                     client,
                     transfer_request_id=transfer_request_id,
                     route_id=route_id,
-                    status=backend_status,
+                    status="transfer_connected",
                     reason=transfer_reason,
                     attempts=attempts,
-                    connected_destination_id=dest_id if not is_refer_only else None,
+                    connected_destination_id=dest_id,
                 ),
             )
             return sanitized

@@ -3,7 +3,7 @@ import "server-only";
 import { normalizePhoneE164 } from "@/lib/messaging/preferred-sending-number";
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import { sendVoiceV3BookingLinkSms } from "./send-voice-v3-booking-link-sms";
-import { resolveSendLinkSmsSender } from "./resolve-send-link-sms-sender";
+import { resolveVoiceOutboundSmsFrom } from "@/lib/voice/sms/voice-outbound-sms-from";
 import type { VoiceV3CallContext } from "../state/call-context";
 import { voiceToolError, toolOk, type VoiceToolResult } from "../tools/types";
 import { buildSendBookingLinkSmsBody } from "./sms-body";
@@ -11,7 +11,6 @@ import { compileVoiceBookingLinkSpokenDisclosure } from "./spoken-disclosure";
 import { isSendLinkStrategy, resolveSendLinkConfig } from "./resolve-config";
 import type { VoiceV3BookingLinkCallState } from "./types";
 import { recordVoiceBookingLinkVerbalConsent } from "./record-verbal-consent";
-import { resolveStoredIntakeStringFromConfig } from "../intake-objective/resolve-stored-intake";
 
 export type SendBookingLinkToolArgs = {
   confirmed: boolean;
@@ -25,13 +24,12 @@ export type SendBookingLinkDeps = {
     from: string;
     body: string;
     idempotencyKey: string;
-    phoneNumberId: string;
   }) => Promise<{ providerMessageId: string; status: string }>;
-  resolveSmsSender?: (input: {
+  resolveFromE164?: (input: {
     workspaceId: string;
-    agentId?: string | null;
     config: VoiceV3AgentConfig;
-  }) => Promise<{ fromE164: string; phoneNumberId: string } | null>;
+    calledE164: string | null;
+  }) => Promise<string>;
 };
 
 function initialBookingLinkState(): VoiceV3BookingLinkCallState {
@@ -46,6 +44,29 @@ function bookingLinkFromContext(ctx: VoiceV3CallContext): VoiceV3BookingLinkCall
   return ctx.bookingLink ?? initialBookingLinkState();
 }
 
+/** Published wizard telephony wins for SEND_LINK — not LLM, not env default HP sender. */
+async function resolveSendLinkSenderE164(input: {
+  workspaceId: string;
+  agentId?: string | null;
+  config: VoiceV3AgentConfig;
+}): Promise<string> {
+  const tel = input.config.telephony;
+  const explicit = normalizePhoneE164(tel?.outboundSmsE164);
+  if (explicit) return explicit;
+
+  if (tel?.outboundSmsMode === "same_as_voice_line") {
+    const voiceDid = normalizePhoneE164(tel.phoneNumberE164);
+    if (voiceDid) return voiceDid;
+  }
+
+  return resolveVoiceOutboundSmsFrom({
+    workspaceId: input.workspaceId,
+    calledE164: tel?.phoneNumberE164 ?? null,
+    agentId: input.agentId,
+    config: null,
+  });
+}
+
 function buildAttemptId(input: {
   callId: string;
   destinationE164: string;
@@ -55,46 +76,20 @@ function buildAttemptId(input: {
   return `${input.callId}:${input.destinationE164}:${input.configVersion}:${input.bookingUrl}`;
 }
 
-/** LiveKit session ids embed PSTN ANI: `lk_transovo-call-_+15714776175_<suffix>`. */
-function inferAniFromLiveSessionId(liveSessionId: string | null | undefined): string | null {
-  const id = liveSessionId?.trim();
-  if (!id) return null;
-  const match = id.match(/_(\+\d{10,15})_/);
-  return match?.[1] ?? null;
-}
-
 function resolveDestinationE164(
   ctx: VoiceV3CallContext,
   args: SendBookingLinkToolArgs,
-  config: VoiceV3AgentConfig,
 ): { e164: string; source: "INBOUND_ANI" | "CALLER_PROVIDED" } | null {
   const alt = args.destination_phone?.trim();
   if (alt) {
     const normalized = normalizePhoneE164(alt);
-    if (normalized) {
-      return { e164: normalized, source: "CALLER_PROVIDED" };
-    }
+    if (!normalized) return null;
+    return { e164: normalized, source: "CALLER_PROVIDED" };
   }
-  const ani =
-    ctx.telephony.inboundCallerE164?.trim() ||
-    inferAniFromLiveSessionId(ctx.liveSessionId) ||
-    inferAniFromLiveSessionId(ctx.callId);
-  if (ani) {
-    const normalized = normalizePhoneE164(ani) || ani;
-    return { e164: normalized, source: "INBOUND_ANI" };
-  }
-  const intakePhone = resolveStoredIntakeStringFromConfig(
-    ctx.intake.values,
-    "phone",
-    config.intakeFields,
-  );
-  if (intakePhone) {
-    const normalized = normalizePhoneE164(intakePhone);
-    if (normalized) {
-      return { e164: normalized, source: "CALLER_PROVIDED" };
-    }
-  }
-  return null;
+  const ani = ctx.telephony.inboundCallerE164?.trim();
+  if (!ani) return null;
+  const normalized = normalizePhoneE164(ani) || ani;
+  return { e164: normalized, source: "INBOUND_ANI" };
 }
 
 function withBookingLink(
@@ -151,7 +146,7 @@ export async function executeSendBookingLink(input: {
     };
   }
 
-  const dest = resolveDestinationE164(ctx, args, config);
+  const dest = resolveDestinationE164(ctx, args);
   if (!dest) {
     return {
       result: voiceToolError(
@@ -226,39 +221,37 @@ export async function executeSendBookingLink(input: {
   console.log("SEND_BOOKING_LINK_ATTEMPT_STARTED", { call_id: ctx.callId, attempt_id: attemptId });
 
   let fromE164: string;
-  let phoneNumberId: string;
   try {
-    const resolveSender =
-      input.deps?.resolveSmsSender ??
+    const resolveFrom =
+      input.deps?.resolveFromE164 ??
       (async (r) =>
-        resolveSendLinkSmsSender({
+        resolveSendLinkSenderE164({
           workspaceId: r.workspaceId,
-          agentId: r.agentId,
+          agentId: input.agentId,
           config: r.config,
         }));
-    const sender = await resolveSender({
+    fromE164 = await resolveFrom({
       workspaceId: input.workspaceId,
-      agentId: input.agentId,
       config,
+      calledE164: config.telephony?.phoneNumberE164 ?? null,
     });
-    if (!sender?.fromE164 || !sender.phoneNumberId) {
-      return {
-        result: voiceToolError(
-          "SMS_SENDER_NOT_AUTHORIZED",
-          "Outbound SMS sender is not configured for this agent.",
-          {},
-          "not_configured",
-        ),
-        nextContext: ctx,
-      };
-    }
-    fromE164 = sender.fromE164;
-    phoneNumberId = sender.phoneNumberId;
   } catch {
     return {
       result: voiceToolError(
         "SMS_SENDER_NOT_AUTHORIZED",
         "Outbound SMS sender is not configured for this agent.",
+        {},
+        "not_configured",
+      ),
+      nextContext: ctx,
+    };
+  }
+
+  if (!fromE164) {
+    return {
+      result: voiceToolError(
+        "SMS_SENDER_NOT_AUTHORIZED",
+        "Outbound SMS sender is not authorized.",
         {},
         "not_configured",
       ),
@@ -295,6 +288,19 @@ export async function executeSendBookingLink(input: {
     });
   }
 
+  const phoneNumberId = config.telephony?.outboundSmsPhoneNumberId?.trim() || null;
+  if (!phoneNumberId && !input.deps?.sendSms) {
+    return {
+      result: voiceToolError(
+        "SMS_SENDER_NOT_AUTHORIZED",
+        "Outbound SMS sender phone is not configured for this agent.",
+        {},
+        "not_configured",
+      ),
+      nextContext: ctx,
+    };
+  }
+
   const sendFn =
     input.deps?.sendSms ??
     (async (sms) => {
@@ -304,7 +310,7 @@ export async function executeSendBookingLink(input: {
         callId: ctx.callId,
         toE164: sms.to,
         fromE164: sms.from,
-        phoneNumberId: sms.phoneNumberId,
+        phoneNumberId: phoneNumberId!,
         body: sms.body,
         idempotencyKey: sms.idempotencyKey,
       });
@@ -321,7 +327,6 @@ export async function executeSendBookingLink(input: {
       from: fromE164,
       body,
       idempotencyKey,
-      phoneNumberId,
     });
     console.log("SEND_BOOKING_LINK_PROVIDER_ACCEPTED", {
       call_id: ctx.callId,
@@ -386,13 +391,7 @@ export function assertSendLinkPublishable(
   if (!url) {
     return { ok: false, reason: "Booking URL missing" };
   }
-  const platformFrom = process.env.VOICE_OUTBOUND_SMS_FROM_E164?.trim();
-  const platformId = process.env.VOICE_OUTBOUND_SMS_PHONE_NUMBER_ID?.trim();
-  const hasPlatformSender = Boolean(platformFrom && platformId);
-  const hasTelephonySender = Boolean(
-    config.telephony?.outboundSmsE164?.trim() || config.telephony?.outboundSmsPhoneNumberId?.trim(),
-  );
-  if (!hasTelephonySender && !hasPlatformSender) {
+  if (!config.telephony?.outboundSmsE164 && !config.telephony?.outboundSmsPhoneNumberId) {
     return { ok: false, reason: "SMS sender not configured" };
   }
   return { ok: true };

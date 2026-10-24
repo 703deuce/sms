@@ -108,9 +108,6 @@ export function wizardPropagationBaseline(): AppointmentReceptionistWizardState 
         fallbackAction: "TAKE_MESSAGE",
       },
     ],
-    linkedKnowledgeBaseId: "kb_propagation_cert_fixture",
-    knowledgeBaseEnabled: true,
-    knowledgeSource: "website",
     knowledgeItems: base.knowledgeItems.map((item) =>
       item.id === "hours"
         ? {

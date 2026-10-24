@@ -1,5 +1,4 @@
-import { isSendLinkStrategy } from "../booking-link/resolve-config";
-import type { VoiceV3AgentConfig } from "../types/agent-config";
+import type { VoiceV3AgentConfig } from "../config/agent-config";
 
 /**
  * Canonical GPT-Live (Amy) delegation policy — backend capabilities and when to delegate.
@@ -14,15 +13,11 @@ export function buildLiveDelegationPolicySection(
   if (!caps || caps.collectIntake) {
     backendCaps.push("- Save or correct caller information required by the business.");
   }
-  const sendLinkOnly = config ? isSendLinkStrategy(config) : false;
-  if (!sendLinkOnly && (!caps || caps.checkAvailability)) {
+  if (!caps || caps.checkAvailability) {
     backendCaps.push("- Check real appointment availability.");
   }
-  if (!sendLinkOnly && (!caps || caps.bookAppointments)) {
+  if (!caps || caps.bookAppointments) {
     backendCaps.push("- Create new appointments.");
-  }
-  if (sendLinkOnly) {
-    backendCaps.push("- Text the published booking link by SMS (send_booking_link) — no live calendar lookup.");
   }
   if (!caps || caps.findAppointments) {
     backendCaps.push("- Find existing appointments.");
@@ -62,26 +57,6 @@ Callback requests:
 - Once authoritative callback success is returned, you may confirm it to the caller.`
       : "";
 
-  const sendLinkCompletion = sendLinkOnly
-    ? `
-Send booking link (no live calendar on this line):
-- Do not say you are checking the calendar, looking for open slots, or reserving a time — this business books via a text link.
-- Offer to text the scheduling link; delegate send_booking_link when the caller agrees.
-- collect_caller_intake with volunteered_values for any configured required fields still missing before or with the link send.
-- Do not tell the caller the link was sent, is on the way, or that you texted them until send_booking_link returns success (sent or already_sent). While waiting, use a brief natural hold line — never go silent for a long stretch without checking in.`
-    : "";
-
-  const bookingCompletion =
-    !sendLinkOnly && caps?.bookAppointments === true
-      ? `
-Appointment booking (live calendar):
-- Do not quote specific open times, offer a slot, say you will reserve or hold a time, or tell the caller they are booked until the backend has checked availability and completed booking.
-- When the caller wants an appointment or accepts a time, delegate immediately — do not invent Tuesday at 10 or any other time from conversation alone.
-- You may acknowledge intent ("I'll check what we have open") while backend work runs; do not state a concrete time until backend results support it.
-- If the caller asks "did you actually book it?" or "is it confirmed?", delegate so the backend can verify — do not answer from memory alone.
-- After backend confirms booking, you may tell the caller the appointment is set.`
-      : "";
-
   return `
 # DELEGATION POLICY
 
@@ -116,7 +91,6 @@ Delegate to the backend when:
 - The caller wants to cancel an existing appointment.
 - The caller provides or corrects information that must be stored in authoritative business state.
 - The caller asks for a real call transfer or accepts a transfer.
-- The caller wants to pay a bill, handle billing, invoices, payments, or speak with billing — delegate immediately so transfer_call can run (do not only explain process in conversation).
 - A correction changes backend work that has already been requested or is currently in progress.
 - The answer depends on authoritative application state, provider state, or an external action.
 - Careful backend reasoning is required beyond a simple conversational response.${callbackDelegateWhen}
@@ -136,7 +110,5 @@ If the caller corrects, redirects, or replaces a backend request while work is s
 If the caller corrects or changes a backend request, delegate the correction so the backend can update the active work.
 Do not promise that an external action succeeded until verified backend/provider state supports that claim.
 ${callbackCompletion}
-${sendLinkCompletion}
-${bookingCompletion}
 `.trim();
 }

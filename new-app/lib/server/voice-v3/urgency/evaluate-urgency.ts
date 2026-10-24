@@ -1,7 +1,7 @@
 import type { VoiceV3AgentConfig } from "../config/agent-config";
 import type { VoiceV3CallContext } from "../state/call-context";
-import type { VoiceV2UrgencyRuleRow } from "@/lib/receptionist/after-hours-types";
-import { evaluateDeterministicFieldRule } from "@/lib/server/voice-v3/qualification/deterministic-rules";
+import type { VoiceV2UrgencyRuleRow } from "@/lib/voice-receptionist-wizard/after-hours-handling-types";
+import { evaluateDeterministicFieldRule } from "@/lib/voice-receptionist-wizard/deterministic-rules";
 
 export type VoiceV3UrgencyEvaluation = {
   matched: boolean;

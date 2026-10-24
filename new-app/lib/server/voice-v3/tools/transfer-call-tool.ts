@@ -11,8 +11,6 @@ import {
   type TransferCallArgs,
 } from "../transfer/authorize-transfer";
 import { logVoiceV3TransferEvent } from "../transfer/telemetry";
-import { ensurePhoneFoundationForTransfer } from "../transfer/ensure-phone-foundation";
-import { mergeDialogActiveGoalFromOperation } from "../intake/merge-intake-state";
 
 function catalogForSchema(config: VoiceV3AgentConfig) {
   const policy = config.transfer;
@@ -129,9 +127,6 @@ export const transferCallTool: VoiceToolDefinition<TransferCallArgs> = {
       );
     }
 
-    let snap = mergeDialogActiveGoalFromOperation(ctx.runtime.getSnapshot(), "transfer_call");
-    ctx.runtime.replaceContext(snap);
-
     logVoiceV3TransferEvent("VOICE_V3_TRANSFER_REQUESTED", {
       call_id: ctx.callId,
       live_session_id: ctx.liveSessionId,
@@ -140,25 +135,10 @@ export const transferCallTool: VoiceToolDefinition<TransferCallArgs> = {
       reason: strict.data.reason,
     });
 
-    const workspaceId = config.workspaceId?.trim();
-    if (!workspaceId) {
-      return voiceToolError(
-        "CONFIGURATION_ERROR",
-        "Workspace is not available for transfer.",
-        {},
-        "not_ready",
-      );
-    }
-
-    const callContext = await ensurePhoneFoundationForTransfer({
-      runtime: ctx.runtime,
-      workspaceId,
-    });
-
     const authorized = authorizeVoiceV3Transfer({
       config,
       policy,
-      callContext,
+      callContext: ctx.runtime.getSnapshot(),
       args: strict.data,
     });
     if (!authorized.ok) return authorized;

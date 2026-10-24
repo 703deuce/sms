@@ -4,7 +4,6 @@ import {
   WIZARD_URGENCY_RULE_CONTROL_PATHS,
 } from "./wizard-control-inventory";
 import type { WizardV3ExecutionStatus } from "./wizard-execution-status";
-import { classifyWizardRuntimeLeaf } from "./wizard-v3-runtime-launch-classification";
 
 export type WizardV3Destination =
   | "LIVE_FRONTEND_CONTEXT"
@@ -100,62 +99,6 @@ function microsoftExecution(strategyPath: string): WizardV3ExecutionStatus {
     : "CONFIGURED_NOT_IMPLEMENTED";
 }
 
-function executionStatusFromLaunchClassification(
-  statePath: string,
-  current: WizardV3ExecutionStatus,
-): WizardV3ExecutionStatus {
-  if (
-    current === "ACTIVE_EXECUTION" ||
-    current === "LIVE_PROMPT_CONTROL" ||
-    current === "CONTROL_PLANE_ONLY" ||
-    current === "PROVIDER_CONFIG" ||
-    current === "UNSUPPORTED_BY_CURRENT_LIVE_API"
-  ) {
-    return current;
-  }
-  const { classification, runtimeConsumer } = classifyWizardRuntimeLeaf(statePath);
-  switch (classification) {
-    case "CURRENT_VISIBLE_IMPLEMENTED":
-    case "CHILD_IMPLEMENTED_BY_PARENT":
-      return "ACTIVE_EXECUTION";
-    case "CONTROL_PLANE_ACTIVE":
-      return "ACTIVE_CONTROL_PLANE";
-    case "OUT_OF_SCOPE_RETIRED":
-      return "OUT_OF_SCOPE_RETIRED";
-    case "UI_METADATA_ONLY":
-      return "UI_METADATA_ONLY";
-    case "HIDDEN_STATE_ONLY":
-      return "HIDDEN_STATE_ONLY";
-    case "MCTB_ONLY":
-      return "MCTB_ONLY";
-    case "LEGACY_OBSOLETE":
-      return "LEGACY_OBSOLETE";
-    case "DEFERRED_NOT_EXPOSED":
-      return "DEFERRED_NOT_EXPOSED";
-    case "CURRENT_VISIBLE_STILL_BROKEN":
-      return "CONFIGURED_NOT_IMPLEMENTED";
-    default:
-      return current;
-  }
-}
-
-function applyLaunchClassificationToManifest(
-  rows: WizardV3FieldManifestRow[],
-): WizardV3FieldManifestRow[] {
-  return rows.map((r) => {
-    const nextStatus = executionStatusFromLaunchClassification(r.statePath, r.executionStatus);
-    if (nextStatus === r.executionStatus) return r;
-    const launch = classifyWizardRuntimeLeaf(r.statePath);
-    const runtimeConsumer =
-      launch.runtimeConsumer?.trim() ||
-      (launch.classification === "CURRENT_VISIBLE_IMPLEMENTED" ||
-      launch.classification === "CHILD_IMPLEMENTED_BY_PARENT"
-        ? launch.evidence
-        : r.runtimeConsumer);
-    return { ...r, executionStatus: nextStatus, runtimeConsumer };
-  });
-}
-
 /** Exhaustive wizard Steps 1–8 control inventory → V3 manifest. */
 export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
   const rows: WizardV3FieldManifestRow[] = [];
@@ -186,10 +129,10 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       valueType: "AnswerWhen",
       v3ConfigPath: "telephony.answerWhen",
       destinations: ["PROVIDER_CONFIG", "CONTROL_PLANE_ONLY"],
-      executionStatus: "DEFERRED_NOT_EXPOSED",
+      executionStatus: "CONTROL_PLANE_ONLY",
       scope: "YES_GENERAL",
-      compilerFunction: "compileVoiceV3AgentConfig.telephony (legacy compatibility)",
-      runtimeConsumer: "CFNA ingress — not customer-facing on after_hours launch",
+      compilerFunction: "compileVoiceV3AgentConfig.telephony",
+      runtimeConsumer: "Telnyx routing (legacy); V3 PSTN ingress policy",
       republishBehavior: "next_call",
     }),
     row({
@@ -214,8 +157,8 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     ["outboundSmsMode", "Outbound SMS mode", "telephony.outboundSmsMode", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
     ["outboundSmsPhoneNumberId", "Outbound SMS number id", "telephony.outboundSmsPhoneNumberId", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
     ["outboundSmsE164", "Outbound SMS E.164", "telephony.outboundSmsE164", ["PROVIDER_CONFIG"], "CONFIGURED_NOT_IMPLEMENTED"],
-    ["ringBehavior", "Ring behavior", "telephony.ringBehavior", ["PROVIDER_CONFIG"], "DEFERRED_NOT_EXPOSED"],
-    ["ringTeamSeconds", "Ring team seconds", "telephony.ringTeamSeconds", ["PROVIDER_CONFIG"], "DEFERRED_NOT_EXPOSED"],
+    ["ringBehavior", "Ring behavior", "telephony.ringBehavior", ["PROVIDER_CONFIG"], "CONTROL_PLANE_ONLY"],
+    ["ringTeamSeconds", "Ring team seconds", "telephony.ringTeamSeconds", ["PROVIDER_CONFIG"], "CONTROL_PLANE_ONLY"],
     ["callRecording", "Call recording", "telephony.callRecording", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
     ["connectionGreeting", "Connection greeting mode", "telephony.connectionGreetingMode", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
     ["connectionGreetingText", "Connection greeting text", "telephony.connectionGreetingText", ["PROVIDER_CONFIG"], "ACTIVE_EXECUTION"],
@@ -831,12 +774,12 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
       uiLabel: "Appointment type required intake keys",
       statePath: "appointmentTypes[].requiredFields[]",
       valueType: "string[]",
-      v3ConfigPath: "services[].requiredIntakeKeys[]",
+      v3ConfigPath: "services[].requiredIntakeKeys[] (future)",
       destinations: ["DETERMINISTIC_CONFIG"],
-      executionStatus: "ACTIVE_EXECUTION",
+      executionStatus: "CONFIGURED_NOT_IMPLEMENTED",
       scope: "YES_MICROSOFT_BOOKING",
-      compilerFunction: "servicePolicyFromWizardType + operation-requirements",
-      runtimeConsumer: "getMissingFieldsForOperation(book_appointment)",
+      compilerFunction: "wizardServices",
+      runtimeConsumer: "per-service intake (future)",
       republishBehavior: "next_call",
     }),
   );
@@ -891,9 +834,7 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
           path === "callbackRequestsEnabled" ||
           path === "callbackRequiredCollectFieldIds"
             ? "ACTIVE_EXECUTION"
-            : path === "detectVoicemailOnTransfer"
-              ? "DEFERRED_NOT_EXPOSED"
-              : "CONFIGURED_NOT_IMPLEMENTED",
+            : "CONFIGURED_NOT_IMPLEMENTED",
         scope: "YES_GENERAL",
         compilerFunction: "compileVoiceV3AgentConfig.callHandling",
         runtimeConsumer:
@@ -1141,34 +1082,22 @@ export function buildWizardV3FieldManifest(): WizardV3FieldManifestRow[] {
     );
   }
 
-  return applyLaunchClassificationToManifest(rows);
+  return rows;
 }
 
 export function summarizeWizardV3Manifest(rows: WizardV3FieldManifestRow[]) {
-  const totals: Record<string, number> = {
+  const totals = {
     total: rows.length,
     WIRED_V3_CONFIG: rows.length,
     ACTIVE_EXECUTION: 0,
     LIVE_PROMPT_CONTROL: 0,
-    ACTIVE_CONTROL_PLANE: 0,
     CONFIGURED_NOT_IMPLEMENTED: 0,
     CONTROL_PLANE_ONLY: 0,
-    OUT_OF_SCOPE_RETIRED: 0,
-    UI_METADATA_ONLY: 0,
-    HIDDEN_STATE_ONLY: 0,
-    MCTB_ONLY: 0,
-    LEGACY_OBSOLETE: 0,
-    PROVIDER_CONFIG: 0,
     UNSUPPORTED_BY_CURRENT_LIVE_API: 0,
-    DEFERRED_NOT_EXPOSED: 0,
     unmapped: 0,
   };
   for (const r of rows) {
-    if (totals[r.executionStatus] !== undefined) {
-      totals[r.executionStatus] += 1;
-    } else {
-      totals.unmapped += 1;
-    }
+    totals[r.executionStatus] += 1;
   }
   return totals;
 }

@@ -1,7 +1,6 @@
-import "server-only";
-
 import type { VoiceV3AgentConfig } from "../config/agent-config";
-import { searchBusinessKnowledge } from "./search";
+import { searchKnowledge } from "@/lib/voice/knowledge-processor";
+import { resolveBusinessAnswer } from "@/lib/voice/knowledge/resolve-business-answer";
 
 export type SearchBusinessKnowledgeResult =
   | {
@@ -28,35 +27,48 @@ export async function executeSearchBusinessKnowledge(input: {
     return { status: "NO_MATCH" };
   }
 
-  const { matches } = await searchBusinessKnowledge({
-    workspaceId: input.workspaceId,
-    query: q,
-  });
-
-  if (!matches.length) {
-    const faq = input.config.business?.faqFacts?.join("\n")?.trim();
-    if (faq) {
+  const kbIds = retrieval.knowledgeBaseIds?.filter(Boolean) ?? [];
+  if (kbIds.length) {
+    const hits: Array<{ sourceId: string; title?: string; snippet: string }> = [];
+    for (const kbId of kbIds.slice(0, 3)) {
+      const rows = await searchKnowledge(input.workspaceId, kbId, q);
+      for (const row of rows.slice(0, 5)) {
+        hits.push({
+          sourceId: row.sourceId,
+          title: row.name,
+          snippet: row.snippet,
+        });
+      }
+    }
+    if (hits.length) {
+      const answerContext = hits
+        .slice(0, 3)
+        .map((h) => h.snippet.trim())
+        .filter(Boolean)
+        .join("\n\n");
       return {
         status: "FOUND",
-        answerContext: faq.slice(0, 2000),
-        sources: [{ sourceId: "faq_facts", title: "FAQ" }],
+        answerContext,
+        sources: hits.slice(0, 3).map((h) => ({
+          sourceId: h.sourceId,
+          title: h.title,
+        })),
       };
     }
-    return { status: "NO_MATCH" };
   }
 
-  const answerContext = matches
-    .slice(0, 3)
-    .map((m) => `${m.question}: ${m.answer}`.trim())
-    .filter(Boolean)
-    .join("\n\n");
+  const hot = await resolveBusinessAnswer({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    topic: q,
+  });
+  if (hot.ok && hot.speak.trim()) {
+    return {
+      status: "FOUND",
+      answerContext: hot.speak.trim(),
+      sources: [{ sourceId: "hot_context", title: "Business context" }],
+    };
+  }
 
-  return {
-    status: "FOUND",
-    answerContext,
-    sources: matches.slice(0, 3).map((m) => ({
-      sourceId: m.sourceId,
-      title: m.question,
-    })),
-  };
+  return { status: "NO_MATCH" };
 }

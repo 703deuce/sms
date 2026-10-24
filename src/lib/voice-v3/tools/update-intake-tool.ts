@@ -9,7 +9,6 @@ import {
   normalizeUpdateIntakeArguments,
 } from "../intake-objective";
 import { logIntakeTelemetry } from "../intake-objective/telemetry";
-import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
 import { LiveContextPublisher } from "../live/live-context-publisher";
 import { UPDATE_INTAKE_TOOL_DESCRIPTION } from "./astra-tool-contracts";
 import type { VoiceToolDefinition } from "./types";
@@ -147,10 +146,6 @@ export const updateIntakeTool: VoiceToolDefinition<UpdateIntakeArgs> = {
 
     const publisher = new LiveContextPublisher(ctx.sendContext);
     publisher.appendThinking(buildIntakeObjectiveContext(config, after), ctx.delegationId);
-    publisher.appendCommentary(
-      buildSharedCallerFactsLiveSummary(config, after),
-      ctx.delegationId,
-    );
 
     if (merged.updatedFields.length === 0 && merged.rejectedFields.length > 0) {
       return voiceToolError(

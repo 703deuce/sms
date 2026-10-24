@@ -1,35 +1,9 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db";
-import { decryptSecret } from "@/lib/messaging/crypto";
 import { enqueueJob } from "@/lib/messaging/enqueue-advance";
 import { signWebhookPayload, verifyWebhookSigningSecret } from "./signing";
 import type { VoiceWebhookEventType } from "./events";
-
-function resolveWebhookSigningSecret(webhook: {
-  metadata: unknown;
-}): string | null {
-  const meta =
-    webhook.metadata && typeof webhook.metadata === "object" && !Array.isArray(webhook.metadata)
-      ? (webhook.metadata as Record<string, unknown>)
-      : {};
-  const enc = typeof meta.signingSecretEnc === "string" ? meta.signingSecretEnc : null;
-  if (enc) {
-    try {
-      return decryptSecret(enc);
-    } catch {
-      return null;
-    }
-  }
-  const plain = typeof meta.signingSecret === "string" ? meta.signingSecret : null;
-  if (plain) return plain;
-  const env = process.env.INTEGRATION_SECRET_KEY?.trim();
-  if (env) return env;
-  if (process.env.NODE_ENV !== "production") {
-    return "transovo-webhook-dev";
-  }
-  return null;
-}
 
 const RETRY_SECONDS = [0, 60, 300, 1800, 7200];
 
@@ -95,19 +69,15 @@ export async function executeVoiceWebhookDeliverJob(payload: Record<string, unkn
 
   const rawBody = JSON.stringify(body);
   const timestamp = String(Math.floor(Date.now() / 1000));
-  const secret = resolveWebhookSigningSecret(webhook);
-  if (!secret) {
-    await prisma.voiceWebhookDelivery.update({
-      where: { id: delivery.id },
-      data: {
-        attempt: delivery.attempt + 1,
-        status: "failed",
-        errorMessage: "Missing signing secret — recreate webhook endpoint",
-        attemptedAt: new Date(),
-      },
-    });
-    return { ok: false };
-  }
+  const meta =
+    webhook.metadata && typeof webhook.metadata === "object" && !Array.isArray(webhook.metadata)
+      ? (webhook.metadata as Record<string, unknown>)
+      : {};
+  const storedSecret = typeof meta.signingSecret === "string" ? meta.signingSecret : null;
+  const secret =
+    storedSecret ||
+    process.env.INTEGRATION_SECRET_KEY?.trim() ||
+    "transovo-webhook-dev";
   const signature = signWebhookPayload(secret, timestamp, rawBody);
 
   const attempt = delivery.attempt + 1;

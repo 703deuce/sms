@@ -1,7 +1,7 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/server/db";
-import { loadDeterministicCallFacts } from "../call-history/call-facts";
+import { getPrisma } from "@/lib/db";
+import { loadDeterministicCallFacts } from "../call-history/summary";
 import { deriveVoiceV3PostCallOutcome } from "./derive-call-outcome";
 import { mapSummaryOutcomeToWebhookType } from "../webhooks/events";
 import { queueVoiceWebhookDelivery } from "../webhooks/delivery";

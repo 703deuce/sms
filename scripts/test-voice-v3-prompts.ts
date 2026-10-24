@@ -18,8 +18,6 @@ import { buildLiveFrontendInstructions } from "../src/lib/voice-v3/prompts/live-
 import {
   assertLiveDelegationAcceptPayloadCompatible,
   buildVoiceV3AstraDelegationResponses,
-  VOICE_V3_ASTRA_MODEL,
-  VOICE_V3_ASTRA_REASONING_EFFORT,
 } from "../src/lib/voice-v3/intake/delegation-config";
 import { resolveVoiceV3AgentConfig } from "../src/lib/voice-v3/state/call-runtime";
 
@@ -46,8 +44,8 @@ function main() {
     "Do not delegate to the backend when",
     "primary caller",
     "background noise",
-    "SIDE CONVERSATIONS",
-    "primary caller",
+    "OTHER PEOPLE SPEAKING",
+    "side conversation",
     "thinking",
     "INTERRUPTIONS",
     "backchannel",
@@ -55,7 +53,6 @@ function main() {
     "CORRECTIONS",
     "WAITING FOR BACKEND",
     "one question at a time",
-    "COLLECTING CALLER INFORMATION",
     "GREETING",
     "Never invent",
   ], "live frontend");
@@ -64,14 +61,12 @@ function main() {
     businessName: "Acme",
     timezone: "America/New_York",
     currentLocalDateTime: "Friday, September 18, 2026 at 1:00:00 PM EDT",
-    bookingStrategy: "MICROSOFT_365",
-    agentConfig: resolveVoiceV3AgentConfig(),
   });
   includesAll(astra, [
     "reasoning and tool-use backend",
     "function call is a request",
-    "Direct calendar booking",
-    "Cancel:",
+    "New booking path",
+    "Cancel path",
     "America/New_York",
     "September 18, 2026",
     "update_intake",
@@ -91,9 +86,9 @@ function main() {
   if (session.delegation?.type !== "responses") {
     throw new Error("expected responses delegation");
   }
-  assert.equal(session.delegation.responses.model, VOICE_V3_ASTRA_MODEL);
+  assert.equal(session.delegation.responses.model, VOICE_V3_BASIC_BACKEND_MODEL);
   assert.equal(session.delegation.responses.instructions, prompts.astraInstructions);
-  assert.equal(session.delegation.responses.reasoning?.effort, VOICE_V3_ASTRA_REASONING_EFFORT);
+  assert.equal(session.delegation.responses.reasoning?.effort, "low");
 
   const expectedDelegation = buildVoiceV3AstraDelegationResponses(
     prompts.astraInstructions,

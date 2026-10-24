@@ -39,7 +39,6 @@ const WORKFLOW_EXECUTION_ORDER: WorkflowGoalType[] = [
   "BOOK_APPOINTMENT",
   "CALLBACK",
   "TRANSFER",
-  "TAKE_MESSAGE",
   "GENERAL_INFORMATION",
 ];
 
@@ -73,8 +72,6 @@ function dialogGoalToWorkflowType(goal: VoiceV3Goal): WorkflowGoalType | null {
       return "CALLBACK";
     case "REQUEST_TRANSFER":
       return "TRANSFER";
-    case "TAKE_MESSAGE":
-      return "TAKE_MESSAGE";
     case "GENERAL":
       return "GENERAL_INFORMATION";
     default:
@@ -94,8 +91,6 @@ function callerGoalToDialog(type: WorkflowGoalType): VoiceV3Goal {
       return "REQUEST_CALLBACK";
     case "TRANSFER":
       return "REQUEST_TRANSFER";
-    case "TAKE_MESSAGE":
-      return "TAKE_MESSAGE";
     case "GENERAL_INFORMATION":
       return "GENERAL";
   }

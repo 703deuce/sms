@@ -44,10 +44,7 @@ export function evaluateVoiceV3Rules(
   const hasSchedulingPreference = Boolean(
     normalized &&
       normalized.precision !== "UNRESOLVED" &&
-      (normalized.localDate ||
-        normalized.localStartDateTime ||
-        normalized.localEndDateTime ||
-        (normalized.utcStart && normalized.utcEnd)),
+      (normalized.localDate || normalized.localStartDateTime || normalized.localEndDateTime),
   );
 
   const clarification = ctx.scheduling.clarification;
