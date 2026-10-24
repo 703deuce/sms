@@ -278,11 +278,30 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
         if config.get("textVerbosity"):
             responses_options["text"] = {"verbosity": config["textVerbosity"]}
 
+        schema_tool_names = [str(d.get("name") or "") for d in tool_dicts if d.get("name")]
+
         gpt_live = GPTLiveModel(
             model="gpt-live-1",
             voice=str(config.get("liveVoiceId") or "marin"),
             delegation="responses",
             responses_options=responses_options,
+        )
+
+        log_event(
+            "voice_v3_gpt_live_session_config",
+            room=ctx.room.name,
+            extra={
+                "liveSessionId": live_session_id,
+                "gptLiveModel": "gpt-live-1",
+                "delegation": "responses",
+                "responsesModel": responses_options.get("model"),
+                "responsesToolChoice": responses_options.get("tool_choice"),
+                "responsesParallelToolCalls": responses_options.get("parallel_tool_calls"),
+                "backendToolSchemaNames": schema_tool_names,
+                "sessionToolRegistrationNames": [
+                    _registered_tool_log_name(t) for t in session_tools
+                ],
+            },
         )
 
         max_tool_steps = int(config.get("maxToolSteps") or 5)
@@ -324,7 +343,6 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
                 extra={"result": result, "utterance_chars": len(utterance)},
             )
 
-        schema_tool_names = [str(d.get("name") or "") for d in tool_dicts if d.get("name")]
         registered_tool_names = [_registered_tool_log_name(t) for t in session_tools]
         log_event(
             "voice_v3_session_starting",

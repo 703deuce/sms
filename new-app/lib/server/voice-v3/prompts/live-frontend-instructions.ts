@@ -1,12 +1,14 @@
 import { isSendLinkStrategy } from "../booking-link/resolve-config";
 import type { VoiceV3AgentConfig } from "../types/agent-config";
-import { buildLiveDelegationPolicySection } from "./live-delegation-policy";
+import {
+  buildGptLiveBackendCapabilityPolicy,
+  buildGptLiveSpawnThinkingSection,
+} from "./gpt-live-amy-instructions";
 import {
   buildLivePromptControlsInstructionBlock,
   livePromptControlsFromAgentConfig,
 } from "./live-prompt-controls";
 import { buildAmyEndCallInstructions } from "./amy-end-call-instructions";
-import { buildAmyTransferInstructions } from "./amy-transfer-instructions";
 import { AMY_LIVE_TELEPHONY_STATIC_CANON } from "./prompt-canon-export";
 
 export type LiveFrontendPromptContext = {
@@ -16,24 +18,15 @@ export type LiveFrontendPromptContext = {
 };
 
 function buildAmyCapabilitySummary(config: VoiceV3AgentConfig): string {
-  const c = config.capabilities;
   const sendLink = isSendLinkStrategy(config);
-  const lines: string[] = ["You can help callers with:"];
-  if (c.answerQuestions) lines.push("- Answering common business questions from configured facts below.");
+  const lines: string[] = [
+    "You help callers with everyday phone reception needs for this business.",
+    "Authoritative scheduling, texting, transfers, and records are handled by the backend — you keep the conversation natural on the line.",
+  ];
   if (sendLink) {
-    lines.push("- Texting the business scheduling link by SMS when they want to book (no live calendar on this line).");
-  } else if (c.bookAppointments) {
-    lines.push("- Booking new appointments when calendar booking is enabled.");
-  }
-  if (c.rescheduleAppointments) lines.push("- Rescheduling existing appointments.");
-  if (c.cancelAppointments) lines.push("- Cancelling appointments when allowed.");
-  if (c.transferCalls) lines.push("- Transferring to a human when appropriate.");
-  if (config.callHandling.callbackRequestsEnabled === true) {
-    lines.push("- Arranging a callback when the caller wants the business to call them back.");
-  }
-  if (c.takeMessages) lines.push("- Taking a message when needed.");
-  if (!c.bookAppointments) {
-    lines.push("- You must not promise live calendar booking if it is disabled for this business.");
+    lines.push(
+      "This line books by sending a scheduling link via text; do not promise live calendar slots on the call.",
+    );
   }
   return lines.join("\n");
 }
@@ -126,7 +119,8 @@ export function buildLiveFrontendInstructions(
     context.agentName ?? config?.identity.agentName ?? "Amy";
   const businessName =
     context.businessName ?? config?.businessName ?? "the business";
-  const delegationPolicy = buildLiveDelegationPolicySection(config);
+  const spawnThinking = buildGptLiveSpawnThinkingSection(config);
+  const backendCapabilityPolicy = buildGptLiveBackendCapabilityPolicy(config);
 
   const businessFacts = config ? buildAmyBusinessFactsSection(config) : "";
   const persona = config ? buildAmyPersonaSection(config) : "";
@@ -134,11 +128,6 @@ export function buildLiveFrontendInstructions(
   const liveTuning = config
     ? buildLivePromptControlsInstructionBlock(livePromptControlsFromAgentConfig(config))
     : "";
-  const transferBehavior = config ? buildAmyTransferInstructions(config) : "";
-  const transferSpeechGuard =
-    config?.capabilities?.transferCalls && config.transfer?.enabled
-      ? "\n# TRANSFER SPEECH (critical)\nNever tell the caller you are transferring, connecting them, or putting them through unless transfer_call has already succeeded in this turn. If they need a human or billing, delegate and run transfer_call first; only then may you say you are connecting them."
-      : "";
   const endCallBehavior = buildAmyEndCallInstructions();
 
   const greetingHint =
@@ -161,11 +150,12 @@ ${capabilities ? `${capabilities}\n` : ""}
 ${businessFacts ? `${businessFacts}\n` : ""}
 ${persona ? `${persona}\n` : ""}
 ${liveTuning ? `${liveTuning}\n` : ""}
-${transferBehavior ? `${transferBehavior}\n` : ""}
-${transferSpeechGuard ? `${transferSpeechGuard}\n` : ""}
 ${endCallBehavior ? `${endCallBehavior}\n` : ""}
 
-${delegationPolicy}
+# BACKEND CAPABILITIES (delegation policy)
+${backendCapabilityPolicy}
+
+${spawnThinking}
 
 ${AMY_LIVE_TELEPHONY_STATIC_CANON}
 

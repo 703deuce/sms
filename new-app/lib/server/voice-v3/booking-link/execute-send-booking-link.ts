@@ -346,6 +346,9 @@ export async function executeSendBookingLink(input: {
     return {
       result: toolOk("sent", {
         status: "sent",
+        speech_line:
+          "I sent the booking link to your phone. You should receive the text shortly.",
+        idempotency_key: idempotencyKey,
         provider_message_id: provider.providerMessageId,
         provider_initial_status: provider.status,
         booking_url: sendConfig.bookingUrl,

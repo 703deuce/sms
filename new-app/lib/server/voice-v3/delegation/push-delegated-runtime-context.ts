@@ -1,17 +1,8 @@
-import {
-  buildAstraBusinessContext,
-  formatAstraBusinessContextForThinking,
-} from "../agent/astra-business-context";
-import { buildIntakeObjectiveContext } from "../intake-objective";
-import { isConversationalIvrRuntime } from "@/lib/receptionist/runtime-profile";
 import { buildSharedCallerFactsLiveSummary } from "../intake-objective/build-shared-caller-facts";
 import { capLiveContextAppendText } from "../live/live-context-append-limits";
 import { LiveContextPublisher } from "../live/live-context-publisher";
 import { logVoiceV3Pipeline } from "../telemetry/pipeline-log";
-import {
-  buildAuthoritativeThinkingSnapshot,
-  getVoiceV3CallRuntime,
-} from "../state/call-runtime";
+import { getVoiceV3CallRuntime } from "../state/call-runtime";
 
 /**
  * Golden-era parity: every fresh Amy→Astra delegation must see the same authoritative
@@ -37,16 +28,7 @@ export function pushDelegatedRuntimeContextToLive(input: {
   const publisher = new LiveContextPublisher(input.send);
   const delegationId = input.delegationId;
 
-  const thinkingParts = [
-    buildAuthoritativeThinkingSnapshot(runtime),
-    formatAstraBusinessContextForThinking(buildAstraBusinessContext(ctx, config)),
-  ];
-  if (!isConversationalIvrRuntime(config)) {
-    thinkingParts.push(buildIntakeObjectiveContext(config, ctx));
-  }
-  const thinking = thinkingParts.join("\n\n");
-
-  publisher.appendThinking(capLiveContextAppendText(thinking), delegationId);
+  // GPT-Live: avoid mid-call instruction-sized thinking updates; short commentary only.
   publisher.appendCommentary(
     capLiveContextAppendText(buildSharedCallerFactsLiveSummary(config, ctx)),
     delegationId,
