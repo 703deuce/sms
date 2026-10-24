@@ -40,6 +40,15 @@ export function buildAgentSnapshotLiveAppend(
   const allowed = snapshot.allowedClaims.join(", ") || "(none)";
   const forbidden = snapshot.forbiddenClaims.join(", ") || "(none)";
   const need = formatConversationAction(snapshot.nextConversationAction);
+  const sendLinkStrategy = runtime.config.scheduling?.bookingStrategy === "SEND_LINK";
+  const linkPending =
+    sendLinkStrategy &&
+    snapshot.activeGoal === "BOOK_APPOINTMENT" &&
+    ctx.bookingLink?.lastSend?.status !== "sent" &&
+    ctx.bookingLink?.lastSend?.status !== "already_sent";
+  const sendLinkDirective = linkPending
+    ? "required_native_tool=send_booking_link(confirmed=true) — call this tool before claiming the booking link was texted; forbidden_claims includes CLAIM_BOOKING_LINK_SENT until success."
+    : null;
 
   const content = [
     "Authoritative agent snapshot (runtime-owned).",
@@ -62,6 +71,7 @@ export function buildAgentSnapshotLiveAppend(
     `authoritative_state_version=${snapshot.stateVersion}`,
     "Live: phrase naturally; obey allowed/forbidden claims.",
     "If an earlier snapshot had a lower state_version, ignore its conversational need — only this state_version is authoritative.",
+    ...(sendLinkDirective ? [sendLinkDirective] : []),
   ].join("\n");
 
   return {

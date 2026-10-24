@@ -12,6 +12,7 @@ from livekit.plugins.openai.realtime import GPTLiveModel
 from livekit.plugins.openai.tools import FileSearch
 
 from transovo_voice.integrations.backend_client import TransovoBackend
+from transovo_voice.voice_v3.live_context_hydration import apply_live_context_from_tool_result
 from transovo_voice.session.dispatch_resolver import (
     extract_call_numbers,
     is_sip_participant_dialed_source,
@@ -300,6 +301,12 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
 
         async def _commit_utterance(tool_client: TransovoV3ToolClient, utterance: str) -> None:
             result = await tool_client.commit_caller_utterance(utterance)
+            try:
+                duplex = getattr(agent, "duplex_session", None)
+                if isinstance(result, dict):
+                    apply_live_context_from_tool_result(result, duplex_session=duplex)
+            except Exception:
+                logger.exception("voice_v3_commit_live_context_failed")
             if forensics:
                 forensics.append(
                     "CALLER_UTTERANCE_COMMITTED",
