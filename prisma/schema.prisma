@@ -508,6 +508,7 @@ model Workspace {
   clipProjects                           ClipProject[]
   clipBrandTemplates                     ClipBrandTemplate[]
   clipRenders                            ClipRender[]
+  clipEvents                             ClipEvent[]
   forwardingUsageMonthly                 ForwardingUsageMonthly[]
   softphonePresence                      SoftphonePresence[]
   softphoneDevices                       SoftphoneDevice[]
@@ -8913,9 +8914,25 @@ model Clip {
 
   project ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   renders ClipRender[]
+  events  ClipEvent[]
 
   @@index([projectId])
   @@map("clips")
+}
+
+model ClipEvent {
+  id          String   @id
+  clipId      String
+  workspaceId String
+  eventType   String
+  createdAt   DateTime @default(now())
+
+  clip      Clip      @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([clipId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("clip_events")
 }
 
 model ClipRender {

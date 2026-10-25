@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { can } from '@/lib/billing/entitlements'
 import { jsonError } from '@/lib/server/api-error'
 import { exportFilename, getClipForWorkspace } from '@/lib/server/clips/clips'
+import { logClipEvent } from '@/lib/server/clips/events'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import { createId } from '@/lib/supabase/id'
@@ -31,6 +32,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       },
     })
 
+    await logClipEvent(workspaceId, clip.id, 'download')
     const url = await getClipStorage().createSignedDownloadUrl(clip.previewKey, 3600)
     return NextResponse.json({
       data: {

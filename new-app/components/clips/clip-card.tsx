@@ -27,7 +27,14 @@ export function ClipCard({
             muted
             playsInline
             loop
-            onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+            onMouseEnter={(e) => {
+              void fetch(`/api/clips/clips/${clip.id}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ eventType: 'preview_play' }),
+              }).catch(() => {})
+              e.currentTarget.play().catch(() => {})
+            }}
             onMouseLeave={(e) => {
               e.currentTarget.pause()
               e.currentTarget.currentTime = 0
