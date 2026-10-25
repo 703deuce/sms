@@ -1,0 +1,180 @@
+{
+  "default_genre": "podcast",
+  "max_candidate_windows": 300,
+  "overlap_drop": 0.4,
+  "padding_ms": 150,
+  "clip_length_buckets": {
+    "auto": {
+      "min_ms": 15000,
+      "max_ms": 60000,
+      "prefer_min_ms": 25000,
+      "prefer_max_ms": 45000
+    },
+    "lt30": { "min_ms": 10000, "max_ms": 30000 },
+    "30_60": { "min_ms": 30000, "max_ms": 60000 },
+    "60_90": { "min_ms": 60000, "max_ms": 90000 }
+  },
+  "scoring": {
+    "weights": {
+      "hook": 0.3,
+      "self_contained": 0.2,
+      "payoff": 0.2,
+      "energy": 0.15,
+      "value": 0.15
+    },
+    "min_score": 60,
+    "top_n": 10
+  },
+  "genres": {
+    "podcast": {
+      "prompt_file": "podcast",
+      "aliases": ["interview"],
+      "score_weights": {
+        "hook": 0.3,
+        "self_contained": 0.2,
+        "payoff": 0.2,
+        "energy": 0.15,
+        "value": 0.15
+      },
+      "signal_preferences": {
+        "favor_laughter": true,
+        "favor_overlap_dialogue": true,
+        "favor_questions": true,
+        "favor_entities": true,
+        "favor_high_rms": true
+      }
+    },
+    "interview": {
+      "prompt_file": "interview",
+      "score_weights": {
+        "hook": 0.32,
+        "self_contained": 0.2,
+        "payoff": 0.18,
+        "energy": 0.15,
+        "value": 0.15
+      },
+      "signal_preferences": {
+        "favor_laughter": true,
+        "favor_overlap_dialogue": true,
+        "favor_questions": true,
+        "favor_entities": true,
+        "favor_high_rms": true
+      }
+    },
+    "education": {
+      "prompt_file": "education",
+      "score_weights": {
+        "hook": 0.22,
+        "self_contained": 0.28,
+        "payoff": 0.25,
+        "energy": 0.1,
+        "value": 0.15
+      },
+      "signal_preferences": {
+        "favor_entities": true,
+        "favor_questions": true,
+        "favor_high_rms": false
+      }
+    },
+    "comedy": {
+      "prompt_file": "comedy",
+      "score_weights": {
+        "hook": 0.28,
+        "self_contained": 0.15,
+        "payoff": 0.22,
+        "energy": 0.2,
+        "value": 0.15
+      },
+      "signal_preferences": {
+        "favor_laughter": true,
+        "favor_high_rms": true,
+        "favor_overlap_dialogue": false
+      }
+    },
+    "marketing": {
+      "prompt_file": "marketing",
+      "score_weights": {
+        "hook": 0.3,
+        "self_contained": 0.22,
+        "payoff": 0.23,
+        "energy": 0.1,
+        "value": 0.15
+      },
+      "signal_preferences": {
+        "favor_entities": true,
+        "favor_questions": true
+      }
+    },
+    "talk": {
+      "prompt_file": "talk",
+      "score_weights": {
+        "hook": 0.3,
+        "self_contained": 0.18,
+        "payoff": 0.17,
+        "energy": 0.2,
+        "value": 0.15
+      },
+      "signal_preferences": {
+        "favor_overlap_dialogue": true,
+        "favor_questions": true,
+        "favor_laughter": true
+      }
+    },
+    "vlog": {
+      "prompt_file": "vlog",
+      "score_weights": {
+        "hook": 0.28,
+        "self_contained": 0.22,
+        "payoff": 0.18,
+        "energy": 0.17,
+        "value": 0.15
+      },
+      "signal_preferences": {
+        "favor_entities": true,
+        "favor_high_rms": true
+      }
+    },
+    "gaming": {
+      "prompt_file": "gaming",
+      "score_weights": {
+        "hook": 0.32,
+        "self_contained": 0.15,
+        "payoff": 0.18,
+        "energy": 0.25,
+        "value": 0.1
+      },
+      "signal_preferences": {
+        "favor_high_rms": true,
+        "favor_laughter": true
+      }
+    },
+    "sports": {
+      "prompt_file": "sports",
+      "score_weights": {
+        "hook": 0.3,
+        "self_contained": 0.18,
+        "payoff": 0.2,
+        "energy": 0.22,
+        "value": 0.1
+      },
+      "signal_preferences": {
+        "favor_entities": true,
+        "favor_high_rms": true
+      }
+    },
+    "other": {
+      "prompt_file": "other",
+      "score_weights": {
+        "hook": 0.3,
+        "self_contained": 0.2,
+        "payoff": 0.2,
+        "energy": 0.15,
+        "value": 0.15
+      },
+      "signal_preferences": {
+        "favor_questions": true,
+        "favor_entities": true
+      }
+    }
+  }
+}

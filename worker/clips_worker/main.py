@@ -56,6 +56,18 @@ def log_models() -> None:
     )
 
 
+def log_picker_config() -> None:
+    try:
+        from clips_worker.picker.config import genres_config, load_core_rubric
+
+        cfg = genres_config()
+        genres = sorted((cfg.get("genres") or {}).keys())
+        core_ok = bool(load_core_rubric())
+        log(f"picker config loaded core_rubric={core_ok} genres={','.join(genres) or '(none)'}")
+    except Exception as exc:
+        log(f"picker config load failed: {exc}")
+
+
 def count_queued_jobs(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -200,6 +212,7 @@ def main() -> None:
     host = db_host_label(dsn)
     log(f"clips-worker starting worker_id={os.environ.get('WORKER_ID', 'worker-1')} db={host}")
     log_models()
+    log_picker_config()
     try:
         with psycopg2.connect(dsn) as conn:
             queued = count_queued_jobs(conn)

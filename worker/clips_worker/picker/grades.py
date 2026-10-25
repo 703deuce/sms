@@ -1,3 +1,6 @@
+from clips_worker.picker.config import score_weights
+
+
 def letter_grade(score_0_10: float) -> str:
     s = score_0_10 * 10
     if s >= 93:
@@ -31,6 +34,20 @@ def badge_scores(hook: float, self_contained: float, payoff: float, energy: floa
     }
 
 
-def final_score(hook: float, self_contained: float, payoff: float, energy: float, value: float) -> int:
-    raw = 0.30 * hook + 0.20 * self_contained + 0.20 * payoff + 0.15 * energy + 0.15 * value
+def final_score(
+    hook: float,
+    self_contained: float,
+    payoff: float,
+    energy: float,
+    value: float,
+    genre: str,
+) -> int:
+    w = score_weights(genre)
+    raw = (
+        w["hook"] * hook
+        + w["self_contained"] * self_contained
+        + w["payoff"] * payoff
+        + w["energy"] * energy
+        + w["value"] * value
+    )
     return int(round(raw * 10))

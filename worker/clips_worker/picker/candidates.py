@@ -3,16 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from clips_worker.picker.config import cleanup_settings, length_bucket
 from clips_worker.picker.sentences import Sentence
-
-LENGTH_MS = {
-    "auto": (15_000, 60_000),
-    "lt30": (10_000, 30_000),
-    "30_60": (30_000, 60_000),
-    "60_90": (60_000, 90_000),
-}
-PREFER_MS = (25_000, 45_000)
-MAX_WINDOWS = 300
 
 
 @dataclass
@@ -23,9 +15,19 @@ class CandidateWindow:
     end_ms: int
 
 
-def build_candidates(sentences: list[Sentence], clip_length: str, range_start_ms: int, range_end_ms: int) -> list[CandidateWindow]:
-    lo, hi = LENGTH_MS.get(clip_length, LENGTH_MS["auto"])
-    prefer_lo, prefer_hi = PREFER_MS
+def build_candidates(
+    sentences: list[Sentence],
+    clip_length: str,
+    range_start_ms: int,
+    range_end_ms: int,
+    genre: str = "podcast",
+) -> list[CandidateWindow]:
+    bucket = length_bucket(clip_length, genre)
+    lo = int(bucket.get("min_ms", 15_000))
+    hi = int(bucket.get("max_ms", 60_000))
+    prefer_lo = int(bucket.get("prefer_min_ms", 25_000))
+    prefer_hi = int(bucket.get("prefer_max_ms", 45_000))
+    max_windows = cleanup_settings()["max_windows"]
     windows: list[CandidateWindow] = []
 
     for i in range(len(sentences)):
@@ -46,14 +48,13 @@ def build_candidates(sentences: list[Sentence], clip_length: str, range_start_ms
     if not windows:
         return windows
 
-    # prefer 25-45s when auto
-    if clip_length == "auto":
+    if clip_length == "auto" and prefer_lo and prefer_hi:
         preferred = [w for w in windows if prefer_lo <= (w.end_ms - w.start_ms) <= prefer_hi]
         if preferred:
             windows = preferred
 
-    if len(windows) <= MAX_WINDOWS:
+    if len(windows) <= max_windows:
         return windows
-    step = len(windows) / MAX_WINDOWS
-    idxs = [int(k * step) for k in range(MAX_WINDOWS)]
+    step = len(windows) / max_windows
+    idxs = [int(k * step) for k in range(max_windows)]
     return [windows[i] for i in idxs]

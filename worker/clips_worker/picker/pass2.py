@@ -55,6 +55,7 @@ def score_moments(
     moments: list[dict],
     sentences: list[Sentence],
     signals: list[SentenceSignals],
+    genre: str = "podcast",
 ) -> list[dict]:
     if not moments:
         return []
@@ -108,7 +109,7 @@ def score_moments(
                 "title": str(row["title"])[:60],
                 "hook": str(row["hook_line"])[:300],
                 "reason": str(row["reason"])[:500],
-                "score": final_score(hook, scf, pay, en, val),
+                "score": final_score(hook, scf, pay, en, val, genre),
                 "scores": badge_scores(hook, scf, pay, en, val),
                 "score_detail": sc,
                 "pass1_why": moments[int(row["moment_index"])].get("why", "") if int(row["moment_index"]) < len(moments) else "",
