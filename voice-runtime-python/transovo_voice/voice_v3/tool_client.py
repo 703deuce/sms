@@ -23,6 +23,7 @@ class VoiceV3CallContext:
     call_id: str
     workspace_id: str
     agent_id: str
+    dialed_e164_source: str | None = None
 
 
 class TransovoV3ToolClient:
@@ -33,9 +34,11 @@ class TransovoV3ToolClient:
     async def resolve_session_config(self) -> dict[str, Any]:
         payload = {
             "roomName": self._ctx.room_name,
+            "bootstrapPath": "livekit_sip",
             "sipParticipantIdentity": self._ctx.sip_participant_identity,
             "callerE164": self._ctx.caller_e164,
             "dialedE164": self._ctx.dialed_e164,
+            "dialedE164Source": self._ctx.dialed_e164_source,
             "sipCallId": self._ctx.sip_call_id,
             "providerCallId": self._ctx.provider_call_id,
             "trunkId": self._ctx.trunk_id,
