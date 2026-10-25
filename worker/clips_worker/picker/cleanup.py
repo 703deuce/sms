@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from clips_worker.picker.config import genre_meta, resolve_genre_key, snap_settings
+from clips_worker.picker.log_util import picker_info
 from clips_worker.picker.selection import select_clips
 
 
@@ -35,9 +36,12 @@ def finalize_picks(
     laugh_tail = gmeta.get("preferences", {}).get("end_after_laugh_s") or snap.get("comedy_laugh_tail_s")
 
     picks = []
+    dropped_short = 0
+    dropped_bounds = 0
     for row in scored:
         ss, es = row["start_sentence"], row["end_sentence"]
         if ss < 0 or es >= len(sentences) or ss > es:
+            dropped_bounds += 1
             continue
         start_ms = max(range_start_ms, sentences[ss].start_ms)
         end_ms = min(range_end_ms, sentences[es].end_ms)
@@ -47,7 +51,16 @@ def finalize_picks(
         start_ms = snap_ms(start_ms, words, "start", pad_start)
         end_ms = snap_ms(end_ms, words, "end", pad_end)
         if end_ms - start_ms < 5000:
+            dropped_short += 1
             continue
         picks.append({**row, "start_ms": start_ms, "end_ms": end_ms})
 
-    return select_clips(picks, range_end_ms - range_start_ms)
+    selected = select_clips(picks, range_end_ms - range_start_ms)
+    picker_info(
+        "selection",
+        candidates=len(picks),
+        selected=len(selected),
+        dropped_short=dropped_short,
+        dropped_bounds=dropped_bounds,
+    )
+    return selected

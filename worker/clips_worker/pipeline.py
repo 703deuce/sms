@@ -84,8 +84,21 @@ def run_m4_pipeline(
             ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-ac", "1", "-ar", "16000", str(audio_wav)],
         )
         post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_pass1", "progress": 52, "jobStatus": "RUNNING"})
-        picks = pick_talking_clips(words, str(audio_wav), settings, range_start, range_end)
+        picks, picker_message = pick_talking_clips(words, str(audio_wav), settings, range_start, range_end)
         post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
+
+        if not picks:
+            post_progress(
+                job_id,
+                {
+                    "projectStatus": "READY",
+                    "stage": "ready",
+                    "progress": 100,
+                    "jobStatus": "DONE",
+                    "error": picker_message or "No complete, self-contained moments found.",
+                },
+            )
+            return
 
         total = max(1, len(picks))
         for idx, pick in enumerate(picks):
@@ -146,5 +159,5 @@ def run_m4_pipeline(
 
     post_progress(
         job_id,
-        {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE"},
+        {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE", "error": None},
     )

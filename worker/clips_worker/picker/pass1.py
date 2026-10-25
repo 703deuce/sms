@@ -5,6 +5,7 @@ from clips_worker.picker.chunking import chunk_sentences, slice_sentence_range
 from clips_worker.picker.config import load_core_rubric, load_examples, load_genre_prompt
 from clips_worker.picker.formatting import format_sentence_line
 from clips_worker.picker.llm import chat_json
+from clips_worker.picker.log_util import json_snippet, picker_info
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
 
@@ -63,19 +64,38 @@ def find_moments(
     if not sentences:
         return []
     sig_by = {s.sentence_idx: s for s in signals}
+    chunks = chunk_sentences(sentences)
+    picker_info(
+        "pass1_start",
+        sentences=len(sentences),
+        candidate_windows=len(chunks),
+        genre=genre,
+    )
     all_moments: list[dict] = []
-    for lo_ms, hi_ms in chunk_sentences(sentences):
+    for lo_ms, hi_ms in chunks:
         chunk = slice_sentence_range(sentences, lo_ms, hi_ms)
         if not chunk:
+            picker_info("pass1_chunk_empty", lo_ms=lo_ms, hi_ms=hi_ms)
             continue
         lines = [format_sentence_line(s, sig_by[s.idx]) for s in chunk]
         transcript = "\n".join(lines)
+        picker_info(
+            "pass1_chunk",
+            lo_ms=lo_ms,
+            hi_ms=hi_ms,
+            sentences_in_chunk=len(chunk),
+            transcript_chars=len(transcript),
+        )
         user = (
             f"User focus: {user_prompt or '(none)'}\n"
             "Return PASS 1 JSON. Find up to 3 candidates per 3 min of transcript; overgenerate.\n\n"
             f"Transcript chunk ({lo_ms}-{hi_ms} ms):\n{transcript}"
         )
         data = chat_json(_pass1_system(genre), user, PASS1_SCHEMA, "moments_pass1")
+        if not (data.get("moments") or []):
+            picker_info("pass1_empty_retry", lo_ms=lo_ms, hi_ms=hi_ms)
+            data = chat_json(_pass1_system(genre), user, PASS1_SCHEMA, "moments_pass1")
+        picker_info("pass1_raw", lo_ms=lo_ms, hi_ms=hi_ms, raw=json_snippet(data))
         for m in data.get("moments") or []:
             all_moments.append(
                 {
@@ -87,4 +107,30 @@ def find_moments(
                     "why": m.get("why", ""),
                 }
             )
+    if len(all_moments) < 2 and len(sentences) >= 6:
+        n = len(sentences)
+        extras = [
+            (0, min(n - 1, max(3, n // 2))),
+            (max(0, n // 3), n - 1),
+        ]
+        seen = {(m["start_sentence"], m["end_sentence"]) for m in all_moments}
+        for ss, es in extras:
+            if (ss, es) in seen or es <= ss:
+                continue
+            all_moments.append(
+                {
+                    "start_sentence": ss,
+                    "end_sentence": es,
+                    "anchor_id": ss,
+                    "archetype": "story",
+                    "locator": "",
+                    "why": "coverage_span",
+                }
+            )
+            seen.add((ss, es))
+            if len(all_moments) >= 2:
+                break
+        picker_info("pass1_coverage_extra", moments=len(all_moments))
+
+    picker_info("pass1_done", moments=len(all_moments))
     return all_moments

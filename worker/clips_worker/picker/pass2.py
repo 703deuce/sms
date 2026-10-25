@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
+from typing import Any
 
 from clips_worker.picker.config import genres_config, load_core_rubric, load_examples, load_genre_prompt
 from clips_worker.picker.formatting import format_sentence_line
 from clips_worker.picker.llm import chat_json
+from clips_worker.picker.log_util import json_snippet, picker_info
+from clips_worker.picker.rejects import is_hard_llm_reject
 from clips_worker.picker.scoring import _sent_dict, score_clip
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
@@ -79,6 +83,7 @@ def _pass2_system(genre: str) -> str:
     return "\n\n".join(
         [
             "Return PASS 2 JSON only. Score and tighten each moment; cite sentence ids.",
+            "Return exactly one clip object in clips[] for the single moment in the user payload.",
             load_core_rubric(),
             load_genre_prompt(genre),
             "FEW-SHOT EXAMPLES:\n" + (ex[:12000] if ex else ""),
@@ -86,74 +91,138 @@ def _pass2_system(genre: str) -> str:
     )
 
 
+def _clip_row_from_llm(
+    row: dict,
+    moment: dict,
+    sentences: list[Sentence],
+    sig_by: dict,
+    genre: str,
+    source_duration_s: float | None,
+) -> dict[str, Any] | None:
+    reason = str(row.get("reject_reason") or "")
+    hard = bool(row.get("reject")) and is_hard_llm_reject(reason)
+    if row.get("reject"):
+        return {
+            "hard_reject": hard,
+            "reject_reason": reason,
+            "llm_reject": True,
+            "start_sentence": int(moment["start_sentence"]),
+            "end_sentence": int(moment["end_sentence"]),
+        }
+    ss = int(row["start_id"])
+    es = int(row["end_id"])
+    payoff_id = int(row["payoff_id"])
+    ss = max(0, min(ss, len(sentences) - 1))
+    es = max(ss, min(es, len(sentences) - 1))
+    sc = row["scores"]
+    sent_rows = []
+    for k in range(ss, es + 1):
+        s = sentences[k]
+        sig = sig_by.get(s.idx)
+        if sig:
+            sent_rows.append(_sent_dict(s, sig))
+    scored = score_clip(
+        sent_rows,
+        f"s{payoff_id}",
+        {k: float(sc[k]) for k in sc},
+        genre,
+        teaser=(row.get("archetype") == "teaser"),
+        llm_reject=False,
+        source_duration_s=source_duration_s,
+    )
+    base = {
+        "start_sentence": ss,
+        "end_sentence": es,
+        "payoff_id": payoff_id,
+        "title": str(row.get("title") or moment.get("locator") or "Clip")[:60],
+        "hook": str(row.get("why_care", ""))[:300],
+        "reason": str(row.get("why_care", ""))[:500],
+        "archetype": row.get("archetype") or moment.get("archetype"),
+        "pass1_why": moment.get("why", ""),
+        "llm_reject": False,
+        "hard_reject": False,
+        "reject_reason": scored.get("reject_reason") if scored.get("reject") else "",
+    }
+    if scored.get("reject"):
+        base["gate_reject"] = True
+        base["final"] = scored.get("final")
+        base["score"] = scored.get("score_0_100")
+        return base
+    base.update(
+        {
+            "final": scored["final"],
+            "score": scored["score_0_100"],
+            "scores": scored["scores"],
+            "score_detail": scored["score_detail"],
+            "scoring": scored,
+            "gate_reject": False,
+        }
+    )
+    return base
+
+
 def score_moments(
     moments: list[dict],
     sentences: list[Sentence],
     signals: list[SentenceSignals],
     genre: str = "podcast",
-) -> list[dict]:
+    source_duration_s: float | None = None,
+) -> tuple[list[dict], list[dict]]:
     if not moments:
-        return []
+        return [], []
     ctx_s = float(genres_config().get("pass2_context_seconds", 120))
     sig_by = {s.sentence_idx: s for s in signals}
     out: list[dict] = []
-    batch_size = 5
-    for batch_start in range(0, len(moments), batch_size):
-        batch = moments[batch_start : batch_start + batch_size]
-        blocks = []
-        for mi, m in enumerate(batch):
-            ss = max(0, min(int(m["start_sentence"]), len(sentences) - 1))
-            es = max(ss, min(int(m["end_sentence"]), len(sentences) - 1))
-            blocks.append(
-                {
-                    "moment_index": batch_start + mi,
-                    "pass1_why": m.get("why", ""),
-                    "archetype": m.get("archetype"),
-                    "context_transcript": _context_lines(sentences, sig_by, ss, es, ctx_s),
-                }
-            )
-        user = json.dumps(blocks, indent=0)
+    audit: list[dict] = []
+    reject_counts: Counter[str] = Counter()
+
+    picker_info("pass2_start", moments_in=len(moments))
+
+    for mi, m in enumerate(moments):
+        ss = max(0, min(int(m["start_sentence"]), len(sentences) - 1))
+        es = max(ss, min(int(m["end_sentence"]), len(sentences) - 1))
+        block = {
+            "moment_index": mi,
+            "pass1_why": m.get("why", ""),
+            "archetype": m.get("archetype"),
+            "approx_start_id": ss,
+            "approx_end_id": es,
+            "context_transcript": _context_lines(sentences, sig_by, ss, es, ctx_s),
+        }
+        user = json.dumps([block], indent=0)
         data = chat_json(_pass2_system(genre), user, PASS2_SCHEMA, "moments_pass2")
-        for row in data.get("clips") or []:
-            if row.get("reject"):
-                continue
-            ss = int(row["start_id"])
-            es = int(row["end_id"])
-            payoff_id = int(row["payoff_id"])
-            ss = max(0, min(ss, len(sentences) - 1))
-            es = max(ss, min(es, len(sentences) - 1))
-            sc = row["scores"]
-            sent_rows = []
-            for k in range(ss, es + 1):
-                s = sentences[k]
-                sig = sig_by.get(s.idx)
-                if sig:
-                    sent_rows.append(_sent_dict(s, sig))
-            scored = score_clip(
-                sent_rows,
-                f"s{payoff_id}",
-                {k: float(sc[k]) for k in sc},
-                genre,
-                teaser=(row.get("archetype") == "teaser"),
-                llm_reject=bool(row.get("reject")),
-            )
-            if scored.get("reject"):
-                continue
-            out.append(
+        picker_info("pass2_raw", moment_index=mi, raw=json_snippet(data))
+        clips = data.get("clips") or []
+        if not clips:
+            reject_counts["empty_clips"] += 1
+            audit.append(
                 {
+                    "hard_reject": False,
+                    "llm_reject": True,
+                    "reject_reason": "empty_pass2_response",
                     "start_sentence": ss,
                     "end_sentence": es,
-                    "payoff_id": payoff_id,
-                    "title": str(row.get("title", "Clip"))[:60],
-                    "hook": str(row.get("why_care", ""))[:300],
-                    "reason": str(row.get("why_care", ""))[:500],
-                    "archetype": row.get("archetype") or moments[0].get("archetype"),
-                    "final": scored["final"],
-                    "score": scored["score_0_100"],
-                    "scores": scored["scores"],
-                    "score_detail": scored["score_detail"],
-                    "scoring": scored,
-                    "pass1_why": "",
                 }
             )
-    return out
+            continue
+        row = clips[0]
+        parsed = _clip_row_from_llm(row, m, sentences, sig_by, genre, source_duration_s)
+        if not parsed:
+            continue
+        audit.append(parsed)
+        if parsed.get("llm_reject"):
+            code = (parsed.get("reject_reason") or "llm_reject").split(":")[0].strip()
+            reject_counts[code] += 1
+            continue
+        if parsed.get("gate_reject"):
+            reject_counts[parsed.get("reject_reason") or "gate"] += 1
+            continue
+        out.append({k: v for k, v in parsed.items() if k not in ("hard_reject", "llm_reject", "gate_reject")})
+
+    picker_info(
+        "pass2_done",
+        scored=len(out),
+        audited=len(audit),
+        rejected=dict(reject_counts),
+    )
+    return out, audit

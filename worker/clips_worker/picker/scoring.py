@@ -91,6 +91,8 @@ def score_clip(
     platform: str = "tiktok",
     teaser: bool = False,
     llm_reject: bool = False,
+    source_duration_s: float | None = None,
+    relax_ending: bool = False,
 ) -> dict[str, Any]:
     g = global_config()
     G = genre_meta(genre)
@@ -108,7 +110,7 @@ def score_clip(
         return {"reject": True, "reject_reason": "payoff below global gate"}
 
     last = sents[-1]
-    if last["pause_after"] < 0.2 and last["text"].rstrip()[-1:] not in ".?!":
+    if not relax_ending and last["pause_after"] < 0.2 and last["text"].rstrip()[-1:] not in ".?!":
         return {"reject": True, "reject_reason": "ends mid-thought"}
 
     f, xt, dur = features(sents, payoff_id)
@@ -126,6 +128,9 @@ def score_clip(
     lengths = (G.get("lengths") or {}).get(platform) or (G.get("lengths") or {}).get("tiktok") or {}
     min_s = float(lengths.get("min_s", 10))
     max_s = float(lengths.get("max_s", 90))
+    if source_duration_s and source_duration_s > 0:
+        max_s = min(max_s, float(source_duration_s))
+        min_s = min(min_s, max_s)
     over = max(0.0, min_s - dur, dur - max_s)
     lor = P.get("length_out_of_range") or {}
     pen += min(float(lor.get("max", 2)), over * float(lor.get("per_second", 0.05)))

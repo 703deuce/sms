@@ -27,7 +27,7 @@ def _request_body(system: str, user: str, schema: dict[str, Any], schema_name: s
     if re.search(r"gpt-[56]|^o[134]", model, re.I):
         body["max_completion_tokens"] = max_tok
         if re.search(r"gpt-6", model, re.I):
-            body["reasoning_effort"] = os.environ.get("CLIP_LLM_REASONING_EFFORT", "none")
+            body["reasoning_effort"] = os.environ.get("CLIP_LLM_REASONING_EFFORT", "low")
     else:
         body["max_tokens"] = max_tok
         body["temperature"] = 0.3

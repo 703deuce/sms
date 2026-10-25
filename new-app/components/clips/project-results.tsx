@@ -94,7 +94,11 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
         }
       >
         {clips.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No clips yet.</p>
+          <EmptyState
+            icon={Clapperboard}
+            title="No clips found"
+            description={error || 'No complete, self-contained moments were found in this segment.'}
+          />
         ) : (
           <ClipGrid clips={clips} onDownload={(id) => void onDownload(id)} />
         )}
