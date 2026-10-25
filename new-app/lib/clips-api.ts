@@ -71,3 +71,26 @@ export function estimateCredits(body: { durationMs: number; rangeStartMs: number
     body: JSON.stringify(body),
   })
 }
+
+export function listProjectClips(projectId: string, sort: 'score' | 'timeline' = 'score') {
+  return clipsFetch<{ clips: unknown[] }>(`/api/clips/projects/${projectId}/clips?sort=${sort}`)
+}
+
+export function exportClip(clipId: string) {
+  return clipsFetch<{ renderId: string; downloadUrl: string; filename: string; watermark: boolean }>(
+    `/api/clips/clips/${clipId}/export`,
+    { method: 'POST', body: '{}' },
+  )
+}
+
+export function exportProjectAll(projectId: string) {
+  return clipsFetch<{ watermark: boolean; items: { clipId: string; title: string; downloadUrl: string; filename: string }[] }>(
+    `/api/clips/projects/${projectId}/export-all`,
+  )
+}
+
+export function listExports() {
+  return clipsFetch<{ exports: { id: string; title: string; filename: string | null; downloadUrl: string | null; createdAt: string }[] }>(
+    '/api/clips/exports',
+  )
+}

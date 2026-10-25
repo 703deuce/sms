@@ -9,7 +9,7 @@ from mediapipe.tasks.python import vision, BaseOptions
 HERE = os.path.dirname(os.path.abspath(__file__))
 INP, OUT = sys.argv[1], sys.argv[2]
 E = lambda k, d: float(os.environ.get(k, d))
-OUT_W, OUT_H = 720, 1280
+OUT_W, OUT_H = int(E('OUT_W', 720)), int(E('OUT_H', 1280))
 SAMPLE_FPS = 5.0
 MIN_SEG = E('MIN_SEG', 0.8)   # drop shots shorter than this (s)
 HYST = E('HYST', 0.5)         # visual score needed to switch

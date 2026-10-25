@@ -1,4 +1,4 @@
-"""Clips CPU worker: claim ClipJob rows, PREPARING + TRANSCRIBING (faster-whisper)."""
+"""Clips CPU worker: claim ClipJob rows, full M3–M4 pipeline."""
 from __future__ import annotations
 
 import hashlib
@@ -17,9 +17,11 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+from clips_worker.pipeline import run_m4_pipeline
 from clips_worker.storage import download_object
 
 TRANSCRIBE = Path(os.environ.get("TRANSCRIBE_SCRIPT", "/app/transcribe.py"))
+V3 = Path(os.environ.get("SPEAKERCROP_DIR", "/app/v3"))
 
 
 def env(name: str, default: str | None = None) -> str:
@@ -42,6 +44,16 @@ def db_host_label(dsn: str) -> str:
         return f"{host}:{port}/{db}"
     except Exception:
         return "unknown"
+
+
+def log_models() -> None:
+    yunet = V3 / "yunet.onnx"
+    land = V3 / "face_landmarker.task"
+    fonts = V3 / "fonts" / "Poppins-ExtraBold.ttf"
+    log(
+        f"models yunet={yunet.exists()} face_landmarker={land.exists()} "
+        f"poppins={fonts.exists()} v3_dir={V3.is_dir()}"
+    )
 
 
 def count_queued_jobs(conn) -> int:
@@ -70,7 +82,7 @@ def post_progress(job_id: str, payload: dict) -> None:
         headers={"Content-Type": "application/json", "x-worker-signature": sign_body(secret, body)},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=300) as resp:
         resp.read()
 
 
@@ -121,17 +133,23 @@ def load_project(conn, project_id: str) -> dict:
 
 def ffprobe_duration(path: Path) -> float:
     out = subprocess.check_output(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
         text=True,
     ).strip()
     return float(out)
 
 
 def process_job(conn, job: dict) -> None:
-    project_id = job.get("projectId") or job.get("projectid")
-    if not project_id:
-        raise RuntimeError("job missing projectId")
-    project = load_project(conn, project_id)
+    project = load_project(conn, job["projectId"])
     if project.get("status") == "CANCELED":
         post_progress(job["id"], {"jobStatus": "FAILED", "error": "canceled"})
         return
@@ -140,7 +158,7 @@ def process_job(conn, job: dict) -> None:
     if not key:
         raise RuntimeError("missing source key")
 
-    log(f"processing job={job['id']} project={project_id}")
+    log(f"processing job={job['id']} project={project['id']}")
     post_progress(
         job["id"],
         {"projectStatus": "PREPARING", "stage": "preparing", "progress": 2, "jobStatus": "RUNNING"},
@@ -151,14 +169,14 @@ def process_job(conn, job: dict) -> None:
         download_object(key, src)
         post_progress(job["id"], {"projectStatus": "PREPARING", "stage": "preparing", "progress": 8})
 
-        duration = ffprobe_duration(src)
+        _ = ffprobe_duration(src)
         post_progress(
             job["id"],
             {"projectStatus": "TRANSCRIBING", "stage": "transcribing", "progress": 12, "jobStatus": "RUNNING"},
         )
 
         words_path = Path(td) / "words.json"
-        model = os.environ.get("ASR_MODEL", "small")
+        model = os.environ.get("ASR_MODEL", "small.en")
         subprocess.check_call([sys.executable, str(TRANSCRIBE), str(src), str(words_path), model])
         words = json.loads(words_path.read_text())
 
@@ -173,23 +191,15 @@ def process_job(conn, job: dict) -> None:
             },
         )
 
-        post_progress(
-            job["id"],
-            {
-                "projectStatus": "FINDING_CLIPS",
-                "stage": "transcript_ready",
-                "progress": 45,
-                "transcriptWords": words,
-                "jobStatus": "DONE",
-            },
-        )
-    log(f"finished job={job['id']} words={len(words)}")
+    run_m4_pipeline(conn, job["id"], project, words, key, post_progress)
+    log(f"finished job={job['id']}")
 
 
 def main() -> None:
     dsn = env("DATABASE_URL")
     host = db_host_label(dsn)
     log(f"clips-worker starting worker_id={os.environ.get('WORKER_ID', 'worker-1')} db={host}")
+    log_models()
     try:
         with psycopg2.connect(dsn) as conn:
             queued = count_queued_jobs(conn)
@@ -210,8 +220,8 @@ def main() -> None:
                         try:
                             n = count_queued_jobs(conn)
                             log(f"poll idle queued_jobs={n}")
-                        except Exception as exc:
-                            log(f"poll count failed: {exc}")
+                        except Exception as poll_exc:
+                            log(f"poll count failed: {poll_exc}")
                     time.sleep(2)
                     continue
                 idle_polls = 0
