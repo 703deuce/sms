@@ -2,7 +2,7 @@ import type { ClipProjectStatus } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
-import { projectWordsKey } from '@/lib/storage/s3'
+import { projectWordsKey } from '@/lib/storage'
 
 export async function listClipProjects(workspaceId: string, opts: { q?: string; status?: string; limit?: number }) {
   const prisma = getPrisma()

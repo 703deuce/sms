@@ -1,0 +1,19 @@
+# Clips CPU worker — run on Coolify host on network `coolify`.
+# Build: docker build -f worker/Dockerfile -t clips-worker:latest .
+# Env: copy from web app (DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, WORKER_SHARED_SECRET, APP_URL).
+services:
+  clips-worker:
+    image: clips-worker:latest
+    restart: unless-stopped
+    networks:
+      - coolify
+    environment:
+      STORAGE_DRIVER: supabase
+      STORAGE_BUCKET: clips
+      ASR_MODEL: small.en
+      WORKER_ID: clips-worker-1
+    # DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, APP_URL, WORKER_SHARED_SECRET via env_file
+
+networks:
+  coolify:
+    external: true

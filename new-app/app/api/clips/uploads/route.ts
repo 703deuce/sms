@@ -17,8 +17,14 @@ export async function POST(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId()
     const body = bodySchema.parse(await request.json())
-    const data = await createClipUpload(workspaceId, body)
-    return NextResponse.json({ data })
+    const created = await createClipUpload(workspaceId, body)
+    return NextResponse.json({
+      data: {
+        uploadId: created.uploadId,
+        key: created.key,
+        storage: created.storage,
+      },
+    })
   } catch (err) {
     return jsonError(err, 400)
   }

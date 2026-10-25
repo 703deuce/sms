@@ -1,18 +1,6 @@
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
-import {
-  abortMultipartUpload,
-  completeMultipartUpload,
-  createMultipartUpload,
-  getInternalS3Client,
-  getS3Client,
-  getS3Config,
-  presignUploadPartUrl,
-  uploadSourceKey,
-} from '@/lib/storage/s3'
-
-const PART_SIZE = 10 * 1024 * 1024
-const MAX_PARTS = 10_000
+import { getClipStorage, uploadSourceKey, type CreateUploadResult } from '@/lib/storage'
 
 export function extFromFilename(name: string) {
   const m = name.toLowerCase().match(/\.([a-z0-9]+)$/)
@@ -20,22 +8,20 @@ export function extFromFilename(name: string) {
 }
 
 export async function createClipUpload(workspaceId: string, input: { filename: string; bytes: number; mime: string }) {
-  const cfg = getS3Config()
-  if (!cfg) throw new Error('Object storage is not configured')
+  if (!input.bytes || input.bytes < 1) throw new Error('Invalid file size')
+  const storage = getClipStorage()
   const uploadId = createId('upl')
   const ext = extFromFilename(input.filename)
   const key = uploadSourceKey(workspaceId, uploadId, ext)
-  const signClient = getS3Client(cfg)
-  const internal = getInternalS3Client(cfg)
-  const s3UploadId = await createMultipartUpload(internal, cfg.bucket, key, input.mime)
-  const partCount = Math.min(MAX_PARTS, Math.max(1, Math.ceil(input.bytes / PART_SIZE)))
-  const partUrls: { partNumber: number; url: string }[] = []
-  for (let partNumber = 1; partNumber <= partCount; partNumber++) {
-    partUrls.push({
-      partNumber,
-      url: await presignUploadPartUrl(signClient, cfg.bucket, key, s3UploadId, partNumber),
-    })
-  }
+  const session: CreateUploadResult = await storage.createUpload({
+    workspaceId,
+    uploadId,
+    filename: input.filename,
+    bytes: input.bytes,
+    mime: input.mime,
+    objectKey: key,
+  })
+  const s3UploadId = session.s3Multipart?.uploadId ?? null
   const prisma = getPrisma()
   await prisma.clipUpload.create({
     data: {
@@ -49,22 +35,28 @@ export async function createClipUpload(workspaceId: string, input: { filename: s
       s3UploadId,
     },
   })
-  return { uploadId, key, partSize: PART_SIZE, partUrls }
+  return {
+    uploadId,
+    key,
+    storage: session,
+  }
 }
 
 export async function completeClipUpload(
   workspaceId: string,
   uploadId: string,
-  parts: { partNumber: number; etag: string }[],
+  parts?: { partNumber: number; etag: string }[],
   meta?: { durationMs?: number; width?: number; height?: number },
 ) {
-  const cfg = getS3Config()
-  if (!cfg) throw new Error('Object storage is not configured')
+  const storage = getClipStorage()
   const prisma = getPrisma()
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
-  if (!row || !row.s3UploadId) throw new Error('Upload not found')
-  const client = getInternalS3Client(cfg)
-  await completeMultipartUpload(client, cfg.bucket, row.key, row.s3UploadId, parts)
+  if (!row) throw new Error('Upload not found')
+  await storage.completeUpload({
+    objectKey: row.key,
+    s3UploadId: row.s3UploadId,
+    parts,
+  })
   await prisma.clipUpload.update({
     where: { id: uploadId },
     data: {
@@ -78,14 +70,10 @@ export async function completeClipUpload(
 }
 
 export async function abortClipUpload(workspaceId: string, uploadId: string) {
-  const cfg = getS3Config()
+  const storage = getClipStorage()
   const prisma = getPrisma()
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row) return
-  if (cfg && row.s3UploadId) {
-    await abortMultipartUpload(getInternalS3Client(cfg), cfg.bucket, row.key, row.s3UploadId)
-  }
+  await storage.abortUpload({ objectKey: row.key, s3UploadId: row.s3UploadId }).catch(() => {})
   await prisma.clipUpload.update({ where: { id: uploadId }, data: { status: 'ABORTED' } })
 }
-
-export { PART_SIZE }

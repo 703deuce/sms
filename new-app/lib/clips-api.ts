@@ -9,8 +9,12 @@ export async function clipsFetch<T>(path: string, init?: RequestInit): Promise<T
 export type ClipUploadStart = {
   uploadId: string
   key: string
-  partSize: number
-  partUrls: { partNumber: number; url: string }[]
+  storage: {
+    mode: 'tus' | 'signed_put' | 's3_multipart'
+    tus?: { endpoint: string; bucket: string; objectKey: string; token: string }
+    signedPut?: { url: string; token: string }
+    s3Multipart?: { uploadId: string; partSize: number; partUrls: { partNumber: number; url: string }[] }
+  }
 }
 
 export function startUpload(body: { filename: string; bytes: number; mime: string }) {
@@ -19,7 +23,7 @@ export function startUpload(body: { filename: string; bytes: number; mime: strin
 
 export function completeUpload(
   uploadId: string,
-  body: { parts: { partNumber: number; etag: string }[]; durationMs?: number; width?: number; height?: number },
+  body: { parts?: { partNumber: number; etag: string }[]; durationMs?: number; width?: number; height?: number },
 ) {
   return clipsFetch<{ id: string }>(`/api/clips/uploads/${uploadId}/complete`, {
     method: 'POST',

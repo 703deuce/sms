@@ -4,7 +4,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { applyJobProgress } from '@/lib/server/clips/jobs'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
-import { putObjectJson, getInternalS3Client, getS3Config, projectWordsKey } from '@/lib/storage/s3'
+import { getClipStorage } from '@/lib/storage'
 
 const schema = z.object({
   projectStatus: z.string().optional(),
@@ -27,11 +27,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const job = await prisma.clipJob.findUnique({ where: { id: jobId }, include: { project: true } })
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (body.transcriptWords) {
-      const cfg = getS3Config()
-      if (cfg && job.project.transcriptKey) {
-        await putObjectJson(getInternalS3Client(cfg), cfg.bucket, job.project.transcriptKey, body.transcriptWords)
-      }
+    if (body.transcriptWords && job.project.transcriptKey) {
+      await getClipStorage().putJson(job.project.transcriptKey, body.transcriptWords)
     }
 
     await applyJobProgress({

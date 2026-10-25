@@ -6,7 +6,9 @@ import { completeClipUpload } from '@/lib/server/clips/uploads'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const bodySchema = z.object({
-  parts: z.array(z.object({ partNumber: z.number().int().min(1), etag: z.string().min(1) })).min(1),
+  parts: z
+    .array(z.object({ partNumber: z.number().int().min(1), etag: z.string().min(1) }))
+    .optional(),
   durationMs: z.number().int().optional(),
   width: z.number().int().optional(),
   height: z.number().int().optional(),

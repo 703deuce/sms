@@ -10,7 +10,7 @@ import { ProjectSettingsForm } from '@/components/clips/project-settings-form'
 import { Page, PageHeader } from '@/components/app/page-primitives'
 import { createProject, estimateCredits } from '@/lib/clips-api'
 import { defaultClipSettings, TOOL_PRESET_MAP, type ClipProjectSettings } from '@/lib/clips/settings'
-import { cancelMultipartUpload, multipartUploadFile, type UploadProgress } from '@/lib/clips/upload'
+import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
 
 export function NewProjectWorkspace() {
@@ -31,7 +31,7 @@ export function NewProjectWorkspace() {
   const [submitting, setSubmitting] = useState(false)
 
   const onFile = (file: File) => {
-    void multipartUploadFile(file, (p) => {
+    void uploadClipFile(file, (p) => {
       setUpload(p)
       if (p.state === 'complete' && p.uploadId) {
         setUploadId(p.uploadId)
@@ -71,7 +71,7 @@ export function NewProjectWorkspace() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-4">
           {!upload && <Dropzone onFile={onFile} />}
-          {upload && <UploadProgressItem progress={upload} onCancel={() => uploadId && void cancelMultipartUpload(uploadId)} />}
+          {upload && <UploadProgressItem progress={upload} onCancel={() => uploadId && void cancelClipUpload(uploadId)} />}
           {durationMs > 0 && (
             <p className="text-sm text-muted-foreground tabular-nums">Detected duration {(durationMs / 1000).toFixed(1)}s</p>
           )}

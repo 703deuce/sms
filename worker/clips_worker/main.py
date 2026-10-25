@@ -12,9 +12,10 @@ import time
 import urllib.request
 from pathlib import Path
 
-import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
+
+from clips_worker.storage import download_object
 
 TRANSCRIBE = Path(os.environ.get("TRANSCRIBE_SCRIPT", "/app/transcribe.py"))
 
@@ -42,16 +43,6 @@ def post_progress(job_id: str, payload: dict) -> None:
     )
     with urllib.request.urlopen(req, timeout=120) as resp:
         resp.read()
-
-
-def s3_client():
-    return boto3.client(
-        "s3",
-        endpoint_url=os.environ.get("S3_ENDPOINT"),
-        aws_access_key_id=env("S3_ACCESS_KEY_ID"),
-        aws_secret_access_key=env("S3_SECRET_ACCESS_KEY"),
-        region_name=os.environ.get("S3_REGION", "us-east-1"),
-    )
 
 
 def claim_job(conn) -> dict | None:
@@ -108,8 +99,6 @@ def process_job(conn, job: dict) -> None:
         post_progress(job["id"], {"jobStatus": "FAILED", "error": "canceled"})
         return
 
-    bucket = env("S3_BUCKET")
-    client = s3_client()
     key = project["source_key"]
     if not key:
         raise RuntimeError("missing source key")
@@ -121,7 +110,7 @@ def process_job(conn, job: dict) -> None:
 
     with tempfile.TemporaryDirectory() as td:
         src = Path(td) / "source.mp4"
-        client.download_file(bucket, key, str(src))
+        download_object(key, src)
         post_progress(job["id"], {"projectStatus": "PREPARING", "stage": "preparing", "progress": 8})
 
         duration = ffprobe_duration(src)
