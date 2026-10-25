@@ -53,6 +53,43 @@ export const AI_OUTCOME: Record<AiOutcome, { label: string; tone: Tone }> = {
   failed: { label: 'Ended — spam', tone: 'muted' },
 }
 
+export type ClipProjectStatusUi =
+  | 'DRAFT'
+  | 'UPLOADING'
+  | 'QUEUED'
+  | 'PREPARING'
+  | 'TRANSCRIBING'
+  | 'SCANNING'
+  | 'FINDING_CLIPS'
+  | 'REFRAMING'
+  | 'RENDERING'
+  | 'READY'
+  | 'FAILED'
+  | 'CANCELED'
+
+export const CLIP_JOB_STATE: Record<ClipProjectStatusUi, { label: string; tone: Tone }> = {
+  DRAFT: { label: 'Draft', tone: 'muted' },
+  UPLOADING: { label: 'Uploading', tone: 'muted' },
+  QUEUED: { label: 'Queued', tone: 'neutral' },
+  PREPARING: { label: 'Transcribing', tone: 'info' },
+  TRANSCRIBING: { label: 'Transcribing', tone: 'info' },
+  SCANNING: { label: 'Scanning scenes', tone: 'info' },
+  FINDING_CLIPS: { label: 'Finding clips', tone: 'info' },
+  REFRAMING: { label: 'Reframing & captioning', tone: 'info' },
+  RENDERING: { label: 'Reframing & captioning', tone: 'info' },
+  READY: { label: 'Ready', tone: 'success' },
+  FAILED: { label: 'Failed', tone: 'danger' },
+  CANCELED: { label: 'Canceled', tone: 'muted' },
+}
+
+export const CLIP_RENDER_STATE = {
+  QUEUED: { label: 'Queued', tone: 'neutral' as Tone },
+  RENDERING: { label: 'Rendering', tone: 'info' as Tone },
+  READY: { label: 'Ready', tone: 'success' as Tone },
+  FAILED: { label: 'Failed', tone: 'danger' as Tone },
+  EXPIRED: { label: 'Expired', tone: 'muted' as Tone },
+}
+
 export const MCTB_STATE: Record<McTbState, { label: string; tone: Tone }> = {
   eligible: { label: 'Eligible', tone: 'neutral' },
   consent_pending: { label: 'No consent', tone: 'muted' },

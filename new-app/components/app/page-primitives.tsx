@@ -168,6 +168,10 @@ const STAT_ICONS: { match: RegExp; icon: LucideIcon }[] = [
   { match: /callback/i, icon: PhoneCall },
   { match: /unread|message/i, icon: Inbox },
   { match: /integration/i, icon: Plug },
+  { match: /clip/i, icon: Sparkles },
+  { match: /credit/i, icon: Percent },
+  { match: /minute/i, icon: Clock },
+  { match: /export/i, icon: CheckCheck },
 ]
 
 function iconForLabel(label: string): LucideIcon {

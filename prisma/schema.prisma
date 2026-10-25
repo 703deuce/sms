@@ -504,6 +504,9 @@ model Workspace {
   phoneNumberAnsweringPolicies           PhoneNumberAnsweringPolicy[]
   phoneCallRoutingSessions               PhoneCallRoutingSession[]
   forwardingSetupDraft                   ForwardingSetupDraft?
+  clipUploads                            ClipUpload[]
+  clipProjects                           ClipProject[]
+  clipBrandTemplates                     ClipBrandTemplate[]
   forwardingUsageMonthly                 ForwardingUsageMonthly[]
   softphonePresence                      SoftphonePresence[]
   softphoneDevices                       SoftphoneDevice[]
@@ -8781,4 +8784,150 @@ model ForwardingUsageMonthly {
 
   @@unique([workspaceId, yearMonth])
   @@map("forwarding_usage_monthly")
+}
+
+// --- Clips product (see docs/clips/clipping_build_plan.md) ---
+
+enum ClipProjectStatus {
+  DRAFT
+  UPLOADING
+  QUEUED
+  PREPARING
+  TRANSCRIBING
+  SCANNING
+  FINDING_CLIPS
+  REFRAMING
+  RENDERING
+  READY
+  FAILED
+  CANCELED
+}
+
+enum ClipRenderStatus {
+  QUEUED
+  RENDERING
+  READY
+  FAILED
+  EXPIRED
+}
+
+model ClipUpload {
+  id          String   @id
+  workspaceId String
+  key         String
+  filename    String
+  bytes       BigInt
+  mime        String
+  durationMs  Int?
+  width       Int?
+  height      Int?
+  status      String   @default("PENDING")
+  s3UploadId  String?
+  kind        String   @default("source")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects  ClipProject[]
+
+  @@index([workspaceId, createdAt])
+  @@map("clip_uploads")
+}
+
+model ClipProject {
+  id              String            @id
+  workspaceId     String
+  createdById     String            @default("dev")
+  title           String
+  uploadId        String?
+  sourceUrl       String?
+  settings        Json
+  rangeStartMs    Int               @default(0)
+  rangeEndMs      Int               @default(0)
+  status          ClipProjectStatus @default(DRAFT)
+  stage           String?
+  progress        Int               @default(0)
+  error           String?
+  creditsReserved Int               @default(0)
+  creditsCaptured Int               @default(0)
+  transcriptKey   String?
+  transcriptWords Json?
+  proxyKey        String?
+  thumbKey        String?
+  expiresAt       DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  upload    ClipUpload? @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+  clips     Clip[]
+  jobs      ClipJob[]
+
+  @@index([workspaceId, createdAt])
+  @@map("clip_projects")
+}
+
+model ClipJob {
+  id         String    @id
+  projectId  String
+  clipId     String?
+  type       String
+  status     String    @default("QUEUED")
+  payload    Json      @default("{}")
+  attempts   Int       @default(0)
+  lockedBy   String?
+  lockedAt   DateTime?
+  runAfter   DateTime  @default(now())
+  error      String?
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+  priority   Int       @default(0)
+
+  project ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([status, priority, runAfter])
+  @@map("clip_jobs")
+}
+
+model Clip {
+  id          String    @id
+  projectId   String
+  workspaceId String
+  title       String
+  reason      String?
+  startMs     Int
+  endMs       Int
+  score       Int       @default(0)
+  scores      Json      @default("{}")
+  cropKey     String?
+  wordsKey    String?
+  previewKey  String?
+  posterKey   String?
+  edits       Json      @default("{}")
+  aiMeta      Json?
+  favorite    Boolean   @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("clips")
+}
+
+model ClipBrandTemplate {
+  id          String   @id
+  workspaceId String
+  name        String
+  settings    Json
+  logoKey     String?
+  isDefault   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("clip_brand_templates")
 }

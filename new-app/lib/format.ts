@@ -1,5 +1,4 @@
-const TZ = 'America/Chicago'
-const NOW = Date.UTC(2026, 9, 18, 16, 40)
+const TZ = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago' : 'America/Chicago'
 
 const timeFmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })
 const dateFmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric' })
@@ -36,7 +35,7 @@ function parseInstantMs(iso: string): number | null {
 export function formatWhen(iso: string) {
   const t = parseInstantMs(iso)
   if (t === null) return '—'
-  const diffH = (NOW - t) / 3600_000
+  const diffH = (Date.now() - t) / 3600_000
   if (diffH < 1) return `${Math.max(1, Math.round(diffH * 60))}m ago`
   if (diffH < 12) return `${timeFmt.format(t)}`
   if (diffH < 24 * 6) return `${dateFmt.format(t)}, ${timeFmt.format(t)}`
