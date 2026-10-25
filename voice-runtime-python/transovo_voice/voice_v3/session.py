@@ -11,7 +11,7 @@ from livekit.plugins.openai.realtime import GPTLiveModel
 from livekit.plugins.openai.tools import FileSearch
 
 from transovo_voice.integrations.backend_client import TransovoBackend
-from transovo_voice.session.dispatch_resolver import extract_call_numbers
+from transovo_voice.session.dispatch_resolver import extract_call_numbers, resolve_dialed_e164_source
 from transovo_voice.telemetry import log_event
 from transovo_voice.voice_v3.forensics import VoiceV3CallForensics
 from transovo_voice.voice_v3.gpt_live_delegation_telemetry import attach_gpt_live_delegation_telemetry
@@ -114,6 +114,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             ctx.room.metadata,
             sip_participant.identity,
         )
+        dialed_e164_source = resolve_dialed_e164_source(attrs, ctx.room.metadata)
 
         screening_raw = attrs.get(TELNYX_CALL_SCREENING_ATTR)
         provisional_ctx = VoiceV3CallContext(
@@ -121,6 +122,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             sip_participant_identity=sip_participant.identity,
             caller_e164=caller_e164,
             dialed_e164=dialed_e164,
+            dialed_e164_source=dialed_e164_source,
             sip_call_id=attrs.get("sip.callID"),
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
@@ -141,6 +143,7 @@ async def run_voice_v3_livekit_session(ctx: JobContext) -> None:
             sip_participant_identity=sip_participant.identity,
             caller_e164=caller_e164,
             dialed_e164=dialed_e164,
+            dialed_e164_source=dialed_e164_source,
             sip_call_id=attrs.get("sip.callID"),
             provider_call_id=attrs.get("sip.callIDFull"),
             trunk_id=attrs.get("sip.trunkID"),
