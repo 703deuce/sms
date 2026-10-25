@@ -1,0 +1,17 @@
+GENRE: SOLO TALKING-HEAD / EDUCATIONAL
+- Best unit: one complete teaching moment. One claim + why/how + an example or proof. If the lesson is a list, include all items or pick one item that stands alone with its own payoff.
+- Start on the claim or the mistake ("Most people do X wrong."), not on "Today I want to talk about".
+- End on the takeaway sentence or the result of the example, never on "and the second thing is".
+- Payoff and self_contained matter most; energy matters least. A calm, clear explanation with a concrete example beats an excited vague one.
+- Signals:
+  - num_ent=1 (data, names, tools)
+  - q=1 used rhetorically and then answered inside the clip
+  - pitch_var peaks on the key claim
+  - pause_after ≥ 0.6 s after the takeaway, a natural end
+- Reject:
+  - "as I mentioned earlier"
+  - references to visuals not shown
+  - generic advice with no specific example or number
+  - lesson #2 without lesson #1's setup
+- Hook lines that work: a warning ("Stop doing X"), a counterintuitive claim, the result first ("This one change doubled..."), a specific number.
+- Typical length: 30-60 s for one lesson, 60-90 s for a framework (LinkedIn and YouTube tolerate longer).

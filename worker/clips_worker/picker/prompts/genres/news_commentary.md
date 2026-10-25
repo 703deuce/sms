@@ -1,0 +1,20 @@
+GENRE: NEWS / POLITICS / DEBATE / COMMENTARY
+- Best unit: the full exchange.
+  - claim (5-15 s) → rebuttal or answer (10-30 s) → reaction (2-8 s), 30-90 s total
+  - for solo commentary, one argued point plus its evidence
+- Fairness gates (hard):
+  - Never pair an answer with a different question.
+  - Never drop a qualifier, condition or "because" that changes meaning.
+  - Never splice non-adjacent sentences.
+  - For anything inflammatory, include one extra sentence of context at both ends.
+  - If the clip could mislead someone who later sees the full source, reject it.
+- A cold open on the sharpest line is allowed only if the claim it answers follows within the clip.
+- Signals:
+  - q=1 → answer
+  - xtalk in a face-off (keep both voices)
+  - num_ent=1 (names, bills, figures)
+  - pitch_var spikes on the rebuttal
+- Reject: half-exchanges (the attack without the response), mid-answer starts, moderator logistics, a punch that relies on omission.
+- Titles: use the literal verb (asks, challenges, answers, corrects, refuses), never "destroys" or "owns". Name the speaker and the event.
+- Hook lines that work: the sharpest line (with the context following), a direct question to the official, a surprising figure.
+- Typical length: 30-90 s.

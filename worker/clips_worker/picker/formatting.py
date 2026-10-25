@@ -10,14 +10,13 @@ def _ts(ms: int) -> str:
 
 
 def format_sentence_line(s: Sentence, sig: SentenceSignals) -> str:
-    tags = [f"loud{sig.rms_z:+.1f}", f"pitch{sig.pitch_z:+.1f}", f"pause_before {sig.pause_before_ms}ms"]
-    if sig.laugh:
-        tags.append("laugh?")
-    if sig.overlap:
-        tags.append("overlap")
-    if sig.question:
-        tags.append("question")
-    if sig.has_entity:
-        tags.append("entity")
-    tag_str = ", ".join(tags)
-    return f"[#{s.idx} {_ts(s.start_ms)} {s.speaker}] {s.text} {{{tag_str}}}"
+    pitch_var = max(0.0, min(1.0, (sig.pitch_z + 2) / 4.0))
+    pause_b = sig.pause_before_ms / 1000.0
+    pause_a = sig.pause_after_ms / 1000.0
+    return (
+        f"[s{s.idx} {_ts(s.start_ms)}-{_ts(s.end_ms)} spk={s.speaker} "
+        f"loud_z={sig.rms_z:+.1f} pitch_var={pitch_var:.2f} "
+        f"pause_before={pause_b:.1f} pause_after={pause_a:.1f} "
+        f"laugh={int(sig.laugh)} xtalk={int(sig.overlap)} q={int(sig.question)} num_ent={int(sig.has_entity)}] "
+        f"{s.text}"
+    )

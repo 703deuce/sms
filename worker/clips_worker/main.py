@@ -62,8 +62,11 @@ def log_picker_config() -> None:
 
         cfg = genres_config()
         genres = sorted((cfg.get("genres") or {}).keys())
+        ui = sorted((cfg.get("ui_genre_map") or {}).keys())
         core_ok = bool(load_core_rubric())
-        log(f"picker config loaded core_rubric={core_ok} genres={','.join(genres) or '(none)'}")
+        log(
+            f"picker config loaded core_rubric={core_ok} playbook_genres={','.join(genres)} ui_genres={','.join(ui)}"
+        )
     except Exception as exc:
         log(f"picker config load failed: {exc}")
 

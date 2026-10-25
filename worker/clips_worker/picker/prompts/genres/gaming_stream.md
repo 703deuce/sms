@@ -1,0 +1,16 @@
+GENRE: GAMING / LIVESTREAM / JUST CHATTING
+- Best units:
+  - a reaction moment (the clutch play, the fail, the jump scare, the rage, the laugh)
+  - a story told to chat
+  - a funny co-streamer exchange
+- Locate with loud_z spikes (often > +2), laugh=1, xtalk bursts and pitch_var peaks. If chat-rate or emote-burst data is provided, treat it as the strongest signal.
+- Start 1-3 s before the event (the setup line: "wait, there's someone behind...", or the chat question read aloud). End shortly after the reaction peaks; cut the long celebration.
+- self_contained here means a stranger can tell what happened from the speech plus the screen. If the transcript is just "NO WAY NO WAY", note that the visual must carry it and keep the clip short.
+- Reject:
+  - long quiet gameplay
+  - menu or loading talk
+  - reading donations or subs
+  - inside jokes with chat that need history
+  - reactions where the cause is off-screen or unclear
+- Hook lines that work: the reaction itself as a cold open (then the replay), a chat question ("Chat asked what my worst date was..."), a bold boast before the attempt.
+- Typical length: 10-40 s for reactions, 30-60 s for stories.

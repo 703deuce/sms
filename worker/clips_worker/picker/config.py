@@ -1,4 +1,4 @@
-"""Load picker prompts and genre config from files (hot-swappable without code changes)."""
+"""Load picker prompts and genre config (hot-swappable files)."""
 from __future__ import annotations
 
 import json
@@ -17,6 +17,7 @@ def genres_config() -> dict[str, Any]:
 def reload_config() -> None:
     genres_config.cache_clear()
     load_core_rubric.cache_clear()
+    load_examples.cache_clear()
 
 
 @lru_cache(maxsize=1)
@@ -24,76 +25,81 @@ def load_core_rubric() -> str:
     return (PICKER_ROOT / "prompts" / "core.md").read_text(encoding="utf-8").strip()
 
 
+@lru_cache(maxsize=1)
+def load_examples() -> str:
+    path = PICKER_ROOT / "prompts" / "examples.md"
+    return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+
+
+def load_cut_rules() -> str:
+    return ""  # included in core.md
+
+
 def resolve_genre_key(genre: str) -> str:
     cfg = genres_config()
-    g = (genre or cfg.get("default_genre", "podcast")).strip().lower()
+    g = (genre or "podcast").strip().lower()
+    ui_map = cfg.get("ui_genre_map") or {}
+    if g in ui_map:
+        return ui_map[g]
     genres = cfg.get("genres") or {}
     if g in genres:
         return g
     for key, meta in genres.items():
-        aliases = meta.get("aliases") or []
-        if g in aliases or g in str(key).lower():
-            return key
-    return cfg.get("default_genre", "podcast")
+        for alias in meta.get("aliases") or []:
+            if g == alias:
+                return key
+    return cfg.get("default_genre", "podcast_interview")
 
 
 def genre_meta(genre: str) -> dict[str, Any]:
     key = resolve_genre_key(genre)
     cfg = genres_config()
     genres = cfg.get("genres") or {}
-    base = genres.get(key) or genres.get(cfg.get("default_genre", "podcast")) or {}
+    base = genres.get(key) or genres.get(cfg.get("default_genre", "podcast_interview")) or {}
     return {"key": key, **base}
 
 
 def load_genre_prompt(genre: str) -> str:
-    meta = genre_meta(genre)
-    prompt_file = meta.get("prompt_file") or meta.get("key") or "podcast"
-    path = PICKER_ROOT / "prompts" / "genres" / f"{prompt_file}.md"
+    key = resolve_genre_key(genre)
+    path = PICKER_ROOT / "prompts" / "genres" / f"{key}.md"
     if not path.is_file():
-        path = PICKER_ROOT / "prompts" / "genres" / "podcast.md"
+        path = PICKER_ROOT / "prompts" / "genres" / "podcast_interview.md"
     return path.read_text(encoding="utf-8").strip()
 
 
-def score_weights(genre: str) -> dict[str, float]:
-    cfg = genres_config()
-    default = (cfg.get("scoring") or {}).get("weights") or {}
-    meta = genre_meta(genre)
-    weights = meta.get("score_weights") or default
-    return {
-        "hook": float(weights.get("hook", 0.3)),
-        "self_contained": float(weights.get("self_contained", 0.2)),
-        "payoff": float(weights.get("payoff", 0.2)),
-        "energy": float(weights.get("energy", 0.15)),
-        "value": float(weights.get("value", 0.15)),
-    }
+def global_config() -> dict[str, Any]:
+    return genres_config().get("global") or {}
 
 
-def signal_preferences_text(genre: str) -> str:
-    prefs = genre_meta(genre).get("signal_preferences") or {}
-    if not prefs:
-        return ""
-    lines = [f"- {k}: {prefs[k]}" for k in sorted(prefs.keys())]
-    return "Signal preferences for this genre:\n" + "\n".join(lines)
-
-
-def length_bucket(clip_length: str, genre: str) -> dict[str, int]:
+def length_bucket(clip_length: str, genre: str, platform: str = "tiktok") -> dict[str, int]:
     cfg = genres_config()
     buckets = cfg.get("clip_length_buckets") or {}
     bucket = dict(buckets.get(clip_length) or buckets.get("auto") or {})
-    overrides = genre_meta(genre).get("length_bucket_overrides") or {}
-    for k, v in overrides.items():
-        if clip_length in (k, "all"):
-            bucket.update(v)
+    g_lengths = genre_meta(genre).get("lengths") or {}
+    plat = g_lengths.get(platform) or g_lengths.get("youtube_shorts") or {}
+    if plat:
+        bucket.setdefault("min_ms", int(plat.get("min_s", 15) * 1000))
+        bucket.setdefault("max_ms", int(plat.get("max_s", 90) * 1000))
+        spot = plat.get("sweet_spot_s") or []
+        if len(spot) == 2:
+            bucket.setdefault("prefer_min_ms", int(spot[0] * 1000))
+            bucket.setdefault("prefer_max_ms", int(spot[1] * 1000))
     return bucket
 
 
-def cleanup_settings() -> dict[str, Any]:
-    cfg = genres_config()
-    scoring = cfg.get("scoring") or {}
+def selection_settings() -> dict[str, Any]:
+    g = global_config()
+    sel = g.get("selection") or {}
     return {
-        "min_score": int(scoring.get("min_score", 60)),
-        "top_n": int(scoring.get("top_n", 10)),
-        "overlap_drop": float(cfg.get("overlap_drop", 0.4)),
-        "padding_ms": int(cfg.get("padding_ms", 150)),
-        "max_windows": int(cfg.get("max_candidate_windows", 300)),
+        "min_final": float(sel.get("min_final", 6.5)),
+        "max_clips": int(sel.get("max_clips", 20)),
+        "clips_per_minute": float(sel.get("clips_per_minute", 1 / 3)),
+        "min_archetypes_per_hour": int(sel.get("min_archetypes_per_hour", 2)),
+        "max_same_archetype_share": float(sel.get("max_same_archetype_share", 0.5)),
+        "near_duplicate_jaccard": float(sel.get("near_duplicate_text_jaccard", 0.5)),
+        "overlap_drop": 0.4,
     }
+
+
+def snap_settings() -> dict[str, Any]:
+    return global_config().get("snap") or {}

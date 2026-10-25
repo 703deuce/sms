@@ -1,0 +1,14 @@
+GENRE: BUSINESS / MARKETING / SALES / WEBINAR
+- Best units:
+  - a specific costly lesson ("We lost $2M because...")
+  - a contrarian strategy claim with its reason
+  - a framework explained with one example
+  - an objection handled crisply
+  - a sharp answer to an audience question
+  - a stat with its implication
+- Specificity is king. Rank num_ent=1 sentences (dollars, %, company names, timeframes) highly for value even when loud_z is low. "A $2M mistake" beats "a big mistake".
+- Start on the claim or the number, not "So the next slide shows". End on the implication ("...which is why we stopped doing X").
+- Reject: housekeeping ("can everyone hear me"), slide references the viewer can't see, the pitch/CTA segment, agenda overviews, platitudes with no example, jargon-only answers.
+- Energy weight is low; value and payoff are high. LinkedIn-bound clips may run longer if the framework is complete.
+- Hook lines that work: a money or number confession, "The biggest mistake I see founders make is...", "We tested X; it failed", a before/after metric.
+- Typical length: 30-60 s (TikTok/Shorts/Reels), 45-90 s (LinkedIn).

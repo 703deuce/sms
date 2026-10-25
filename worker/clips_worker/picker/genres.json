@@ -1,180 +1,965 @@
 {
-  "default_genre": "podcast",
-  "max_candidate_windows": 300,
-  "overlap_drop": 0.4,
-  "padding_ms": 150,
-  "clip_length_buckets": {
-    "auto": {
-      "min_ms": 15000,
-      "max_ms": 60000,
-      "prefer_min_ms": 25000,
-      "prefer_max_ms": 45000
+  "_meta": {
+    "version": "2026-10-25",
+    "status": "DRAFT. All weights, lambdas, thresholds and sweet spots are JUDGMENT calls derived from clip_playbook_research.md, not measured. Tune them against labeled clips and post performance (VVSA, sends, completion).",
+    "score_keys": [
+      "hook",
+      "self_contained",
+      "payoff",
+      "energy",
+      "value"
+    ],
+    "signal_keys": [
+      "laugh_in_landing",
+      "peak_arousal",
+      "hook_pitch_var",
+      "opening_clean",
+      "ending_clean",
+      "specificity",
+      "qa_contained"
+    ],
+    "formula": "base=sum(w[k]*score[k]); sig=sum(sw[f]*feature[f]); final=clamp(10*((1-lambda)*base/10 + lambda*sig) - penalties, 0, 10)",
+    "ui_mapping": {
+      "Hook": "hook",
+      "Flow": "round(mean(self_contained,payoff))",
+      "Value": "value",
+      "Overall": "round(final)"
     },
+    "platform_hard_limits": {
+      "youtube_shorts": {
+        "max_s": 180,
+        "max_s_with_content_id_claim": 60,
+        "note": "3-min Shorts since 2024-10-15; >1 min with active Content ID claim is blocked (YouTube Help)"
+      },
+      "instagram_reels": {
+        "max_s": 180,
+        "note": "Reels up to 3 min recommendation-eligible (Instagram/Mosseri, see research \u00a71.4)"
+      },
+      "tiktok": {
+        "max_s": null,
+        "note": "verify: upload limits change often; do not hard-code"
+      },
+      "linkedin": {
+        "max_s": null,
+        "note": "verify"
+      },
+      "x": {
+        "max_s": null,
+        "note": "verify (depends on account tier)"
+      }
+    },
+    "length_note": "min_s/max_s are soft by genre; sweet_spot_s is where to land when the thought allows. Length follows the thought; never cut a payoff to hit a range. Sweet spots are source-reported starting points plus judgment."
+  },
+  "default_genre": "podcast_interview",
+  "ui_genre_map": {
+    "podcast": "podcast_interview",
+    "interview": "podcast_interview",
+    "talk": "podcast_interview",
+    "education": "solo_educational",
+    "comedy": "comedy_standup",
+    "business": "business_marketing",
+    "motivational": "motivational_sermon",
+    "gaming": "gaming_stream",
+    "sports": "sports_tv",
+    "news": "news_commentary",
+    "howto": "howto_tutorial",
+    "vlog": "solo_educational",
+    "other": "podcast_interview"
+  },
+  "clip_length_buckets": {
+    "auto": { "min_ms": 15000, "max_ms": 60000, "prefer_min_ms": 25000, "prefer_max_ms": 45000 },
     "lt30": { "min_ms": 10000, "max_ms": 30000 },
     "30_60": { "min_ms": 30000, "max_ms": 60000 },
     "60_90": { "min_ms": 60000, "max_ms": 90000 }
   },
-  "scoring": {
-    "weights": {
-      "hook": 0.3,
-      "self_contained": 0.2,
-      "payoff": 0.2,
-      "energy": 0.15,
-      "value": 0.15
+  "chunk_minutes": 20,
+  "chunk_overlap_minutes": 2,
+  "pass2_context_seconds": 120,
+  "global": {
+    "hard_gates": {
+      "self_contained_min": 5,
+      "payoff_min": 4,
+      "payoff_min_waived_for": [
+        "teaser"
+      ],
+      "reject_if_ends_mid_sentence": true,
+      "reject_if_ends_mid_list": true,
+      "reject_if_meaning_changed": true
     },
-    "min_score": 60,
-    "top_n": 10
+    "snap": {
+      "min_boundary_pause_s": 0.3,
+      "preferred_end_pause_s": 0.4,
+      "pad_start_s": 0.15,
+      "pad_end_s": 0.35,
+      "comedy_laugh_tail_s": [
+        2,
+        4
+      ]
+    },
+    "penalties": {
+      "crosstalk": {
+        "threshold": 0.15,
+        "per_unit": 10,
+        "multiplier_by_genre": {
+          "podcast_interview": 0.3,
+          "solo_educational": 1.0,
+          "comedy_standup": 0.0,
+          "business_marketing": 1.0,
+          "motivational_sermon": 1.0,
+          "gaming_stream": 0.2,
+          "sports_tv": 1.0,
+          "news_commentary": 0.2,
+          "howto_tutorial": 1.0
+        }
+      },
+      "dead_air": {
+        "internal_pause_s": 1.0,
+        "threshold_ratio": 0.15,
+        "per_unit": 10,
+        "exempt": "comedy pre-punch pause"
+      },
+      "length_out_of_range": {
+        "per_second": 0.05,
+        "max": 2.0
+      },
+      "filler_open": {
+        "value": 0.5,
+        "tokens": [
+          "so",
+          "um",
+          "uh",
+          "yeah",
+          "like",
+          "and",
+          "but",
+          "anyway",
+          "okay",
+          "i mean",
+          "great question"
+        ]
+      },
+      "dangling_reference_open": {
+        "value": 1.5,
+        "tokens": [
+          "he",
+          "she",
+          "they",
+          "it",
+          "that",
+          "this",
+          "those",
+          "these",
+          "but",
+          "which",
+          "also"
+        ]
+      }
+    },
+    "selection": {
+      "min_final": 6.5,
+      "max_clips": 20,
+      "clips_per_minute": 0.333,
+      "min_archetypes_per_hour": 2,
+      "max_same_archetype_share": 0.5,
+      "overlap": "forbid",
+      "near_duplicate_text_jaccard": 0.5
+    },
+    "feature_definitions": {
+      "laugh_in_landing": "1 if a laugh=1 sentence starts within 4 s after the payoff sentence ends (or is the payoff) and is inside the clip; else 0",
+      "peak_arousal": "clip(max loud_z in clip,0,3)/3",
+      "hook_pitch_var": "mean pitch_var of sentences overlapping the first 3 s",
+      "opening_clean": "1 if first sentence pause_before>=0.3 AND does not start with filler/dangling token; 0.5 if only one; 0 if neither",
+      "ending_clean": "1 if last sentence pause_after>=0.4 and not an unanswered q=1; 0.5 if pause_after 0.2-0.4; else 0",
+      "specificity": "min(1, 2*share of sentences with num_ent=1)",
+      "qa_contained": "1 if every q=1 in clip (except the first sentence's question) is answered inside; 1 if the clip opens on a q=1 and contains its answer; 0.5 if no questions; 0 if a question is left unanswered or the answer's question is missing",
+      "crosstalk_ratio": "share of clip duration in xtalk=1 sentences"
+    }
   },
   "genres": {
-    "podcast": {
-      "prompt_file": "podcast",
-      "aliases": ["interview"],
-      "score_weights": {
-        "hook": 0.3,
-        "self_contained": 0.2,
+    "podcast_interview": {
+      "weights": {
+        "hook": 0.25,
+        "self_contained": 0.25,
         "payoff": 0.2,
-        "energy": 0.15,
-        "value": 0.15
+        "energy": 0.1,
+        "value": 0.2
       },
-      "signal_preferences": {
-        "favor_laughter": true,
-        "favor_overlap_dialogue": true,
-        "favor_questions": true,
-        "favor_entities": true,
-        "favor_high_rms": true
-      }
-    },
-    "interview": {
-      "prompt_file": "interview",
-      "score_weights": {
-        "hook": 0.32,
-        "self_contained": 0.2,
-        "payoff": 0.18,
-        "energy": 0.15,
-        "value": 0.15
+      "lambda": 0.2,
+      "signal_weights": {
+        "laugh_in_landing": 0.15,
+        "peak_arousal": 0.1,
+        "hook_pitch_var": 0.1,
+        "opening_clean": 0.15,
+        "ending_clean": 0.15,
+        "specificity": 0.15,
+        "qa_contained": 0.2
       },
-      "signal_preferences": {
-        "favor_laughter": true,
-        "favor_overlap_dialogue": true,
-        "favor_questions": true,
-        "favor_entities": true,
-        "favor_high_rms": true
-      }
+      "crosstalk_penalty_multiplier": 0.3,
+      "lengths": {
+        "tiktok": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            20,
+            60
+          ],
+          "max_s": 90
+        },
+        "youtube_shorts": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            25,
+            60
+          ],
+          "max_s": 90
+        },
+        "instagram_reels": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            20,
+            60
+          ],
+          "max_s": 90
+        },
+        "linkedin": {
+          "min_s": 30,
+          "sweet_spot_s": [
+            45,
+            90
+          ],
+          "max_s": 180
+        },
+        "x": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 120
+        }
+      },
+      "archetypes": [
+        "question_answer",
+        "story",
+        "hot_take",
+        "stat",
+        "exchange",
+        "confession"
+      ],
+      "locate_signals": [
+        "q=1 followed by long answer",
+        "num_ent=1 even at low loud_z",
+        "laugh=1 (walk back 1-3 sentences)",
+        "reversal/negation phrases",
+        "story openers -> read ahead 120 s"
+      ],
+      "preferences": {
+        "low_energy_ok": true,
+        "xtalk": "positive_if_followable"
+      },
+      "gates": {
+        "self_contained_min": 5,
+        "payoff_min": 4
+      },
+      "research_refs": [
+        "\u00a74.1",
+        "Klap archetypes",
+        "Kompozy missed-moment types",
+        "Sentarys debate unit"
+      ]
     },
-    "education": {
-      "prompt_file": "education",
-      "score_weights": {
-        "hook": 0.22,
-        "self_contained": 0.28,
+    "solo_educational": {
+      "weights": {
+        "hook": 0.2,
+        "self_contained": 0.25,
         "payoff": 0.25,
-        "energy": 0.1,
-        "value": 0.15
+        "energy": 0.05,
+        "value": 0.25
       },
-      "signal_preferences": {
-        "favor_entities": true,
-        "favor_questions": true,
-        "favor_high_rms": false
-      }
+      "lambda": 0.15,
+      "signal_weights": {
+        "laugh_in_landing": 0.05,
+        "peak_arousal": 0.05,
+        "hook_pitch_var": 0.1,
+        "opening_clean": 0.2,
+        "ending_clean": 0.2,
+        "specificity": 0.25,
+        "qa_contained": 0.15
+      },
+      "crosstalk_penalty_multiplier": 1.0,
+      "lengths": {
+        "tiktok": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "youtube_shorts": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "instagram_reels": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "linkedin": {
+          "min_s": 30,
+          "sweet_spot_s": [
+            60,
+            90
+          ],
+          "max_s": 180
+        },
+        "x": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 120
+        }
+      },
+      "archetypes": [
+        "lesson",
+        "mistake_fix",
+        "framework",
+        "stat",
+        "myth_bust"
+      ],
+      "locate_signals": [
+        "claim sentence + example",
+        "num_ent=1",
+        "rhetorical q=1 answered inside",
+        "pitch_var peak on claim",
+        "pause_after>=0.6 after takeaway"
+      ],
+      "preferences": {
+        "low_energy_ok": true,
+        "xtalk": "penalty"
+      },
+      "gates": {
+        "self_contained_min": 6,
+        "payoff_min": 5
+      },
+      "research_refs": [
+        "\u00a74.2"
+      ]
     },
-    "comedy": {
-      "prompt_file": "comedy",
-      "score_weights": {
-        "hook": 0.28,
+    "comedy_standup": {
+      "weights": {
+        "hook": 0.2,
         "self_contained": 0.15,
-        "payoff": 0.22,
-        "energy": 0.2,
-        "value": 0.15
-      },
-      "signal_preferences": {
-        "favor_laughter": true,
-        "favor_high_rms": true,
-        "favor_overlap_dialogue": false
-      }
-    },
-    "marketing": {
-      "prompt_file": "marketing",
-      "score_weights": {
-        "hook": 0.3,
-        "self_contained": 0.22,
-        "payoff": 0.23,
-        "energy": 0.1,
-        "value": 0.15
-      },
-      "signal_preferences": {
-        "favor_entities": true,
-        "favor_questions": true
-      }
-    },
-    "talk": {
-      "prompt_file": "talk",
-      "score_weights": {
-        "hook": 0.3,
-        "self_contained": 0.18,
-        "payoff": 0.17,
-        "energy": 0.2,
-        "value": 0.15
-      },
-      "signal_preferences": {
-        "favor_overlap_dialogue": true,
-        "favor_questions": true,
-        "favor_laughter": true
-      }
-    },
-    "vlog": {
-      "prompt_file": "vlog",
-      "score_weights": {
-        "hook": 0.28,
-        "self_contained": 0.22,
-        "payoff": 0.18,
-        "energy": 0.17,
-        "value": 0.15
-      },
-      "signal_preferences": {
-        "favor_entities": true,
-        "favor_high_rms": true
-      }
-    },
-    "gaming": {
-      "prompt_file": "gaming",
-      "score_weights": {
-        "hook": 0.32,
-        "self_contained": 0.15,
-        "payoff": 0.18,
+        "payoff": 0.3,
         "energy": 0.25,
         "value": 0.1
       },
-      "signal_preferences": {
-        "favor_high_rms": true,
-        "favor_laughter": true
-      }
-    },
-    "sports": {
-      "prompt_file": "sports",
-      "score_weights": {
-        "hook": 0.3,
-        "self_contained": 0.18,
-        "payoff": 0.2,
-        "energy": 0.22,
-        "value": 0.1
+      "lambda": 0.3,
+      "signal_weights": {
+        "laugh_in_landing": 0.4,
+        "peak_arousal": 0.15,
+        "hook_pitch_var": 0.05,
+        "opening_clean": 0.1,
+        "ending_clean": 0.2,
+        "specificity": 0,
+        "qa_contained": 0.1
       },
-      "signal_preferences": {
-        "favor_entities": true,
-        "favor_high_rms": true
-      }
+      "crosstalk_penalty_multiplier": 0.0,
+      "lengths": {
+        "tiktok": {
+          "min_s": 10,
+          "sweet_spot_s": [
+            30,
+            45
+          ],
+          "max_s": 60
+        },
+        "youtube_shorts": {
+          "min_s": 10,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "instagram_reels": {
+          "min_s": 10,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "x": {
+          "min_s": 10,
+          "sweet_spot_s": [
+            20,
+            45
+          ],
+          "max_s": 90
+        }
+      },
+      "archetypes": [
+        "bit",
+        "crowd_work",
+        "one_liner",
+        "story_bit",
+        "banter"
+      ],
+      "locate_signals": [
+        "laugh=1 -> punchline -> walk back to premise",
+        "xtalk in crowd work",
+        "pause_before on punchline (protect)"
+      ],
+      "preferences": {
+        "end_after_laugh_s": [
+          2,
+          4
+        ],
+        "setup_share": [
+          0.6,
+          0.7
+        ],
+        "protect_pre_punch_pause": true,
+        "xtalk": "neutral"
+      },
+      "gates": {
+        "self_contained_min": 5,
+        "payoff_min": 5,
+        "require_laugh_or_payoff_min": 6
+      },
+      "research_refs": [
+        "\u00a74.3"
+      ]
     },
-    "other": {
-      "prompt_file": "other",
-      "score_weights": {
-        "hook": 0.3,
-        "self_contained": 0.2,
+    "business_marketing": {
+      "weights": {
+        "hook": 0.2,
+        "self_contained": 0.25,
         "payoff": 0.2,
+        "energy": 0.05,
+        "value": 0.3
+      },
+      "lambda": 0.15,
+      "signal_weights": {
+        "laugh_in_landing": 0.05,
+        "peak_arousal": 0.05,
+        "hook_pitch_var": 0.1,
+        "opening_clean": 0.15,
+        "ending_clean": 0.2,
+        "specificity": 0.35,
+        "qa_contained": 0.1
+      },
+      "crosstalk_penalty_multiplier": 1.0,
+      "lengths": {
+        "tiktok": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "youtube_shorts": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "instagram_reels": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "linkedin": {
+          "min_s": 30,
+          "sweet_spot_s": [
+            45,
+            90
+          ],
+          "max_s": 180
+        },
+        "x": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 120
+        }
+      },
+      "archetypes": [
+        "costly_lesson",
+        "contrarian_strategy",
+        "framework",
+        "objection_handled",
+        "stat"
+      ],
+      "locate_signals": [
+        "num_ent=1 ($, %, company, timeframe)",
+        "claim + implication",
+        "audience q=1 -> answer"
+      ],
+      "preferences": {
+        "low_energy_ok": true,
+        "xtalk": "penalty"
+      },
+      "gates": {
+        "self_contained_min": 6,
+        "payoff_min": 5
+      },
+      "research_refs": [
+        "\u00a74.4"
+      ]
+    },
+    "motivational_sermon": {
+      "weights": {
+        "hook": 0.25,
+        "self_contained": 0.2,
+        "payoff": 0.25,
         "energy": 0.15,
         "value": 0.15
       },
-      "signal_preferences": {
-        "favor_questions": true,
-        "favor_entities": true
-      }
+      "lambda": 0.2,
+      "signal_weights": {
+        "laugh_in_landing": 0.15,
+        "peak_arousal": 0.25,
+        "hook_pitch_var": 0.15,
+        "opening_clean": 0.15,
+        "ending_clean": 0.25,
+        "specificity": 0.05,
+        "qa_contained": 0
+      },
+      "crosstalk_penalty_multiplier": 1.0,
+      "lengths": {
+        "tiktok": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            20,
+            45
+          ],
+          "max_s": 60
+        },
+        "youtube_shorts": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "instagram_reels": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "linkedin": {
+          "min_s": 30,
+          "sweet_spot_s": [
+            45,
+            90
+          ],
+          "max_s": 180
+        },
+        "x": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 120
+        }
+      },
+      "archetypes": [
+        "contrast",
+        "story_turn",
+        "challenge_application"
+      ],
+      "locate_signals": [
+        "contrast/negation syntax",
+        "rising loud_z+pitch_var then pause_after>=0.8 (land/applause)",
+        "audience laugh"
+      ],
+      "preferences": {
+        "end_after_land": true,
+        "xtalk": "penalty"
+      },
+      "gates": {
+        "self_contained_min": 5,
+        "payoff_min": 5
+      },
+      "research_refs": [
+        "\u00a74.5"
+      ]
+    },
+    "gaming_stream": {
+      "weights": {
+        "hook": 0.25,
+        "self_contained": 0.1,
+        "payoff": 0.25,
+        "energy": 0.35,
+        "value": 0.05
+      },
+      "lambda": 0.3,
+      "signal_weights": {
+        "laugh_in_landing": 0.25,
+        "peak_arousal": 0.4,
+        "hook_pitch_var": 0.15,
+        "opening_clean": 0.05,
+        "ending_clean": 0.1,
+        "specificity": 0.05,
+        "qa_contained": 0
+      },
+      "crosstalk_penalty_multiplier": 0.2,
+      "lengths": {
+        "tiktok": {
+          "min_s": 8,
+          "sweet_spot_s": [
+            15,
+            40
+          ],
+          "max_s": 60
+        },
+        "youtube_shorts": {
+          "min_s": 8,
+          "sweet_spot_s": [
+            15,
+            45
+          ],
+          "max_s": 60
+        },
+        "instagram_reels": {
+          "min_s": 8,
+          "sweet_spot_s": [
+            15,
+            45
+          ],
+          "max_s": 60
+        },
+        "x": {
+          "min_s": 8,
+          "sweet_spot_s": [
+            15,
+            40
+          ],
+          "max_s": 60
+        }
+      },
+      "archetypes": [
+        "reaction",
+        "fail",
+        "clutch",
+        "story_to_chat",
+        "co_streamer_exchange"
+      ],
+      "locate_signals": [
+        "loud_z>+2 spikes",
+        "laugh=1",
+        "xtalk bursts",
+        "chat-rate/emote bursts if provided (strongest)"
+      ],
+      "preferences": {
+        "pre_roll_s": [
+          1,
+          3
+        ],
+        "needs_visual": true,
+        "xtalk": "mild_penalty"
+      },
+      "gates": {
+        "self_contained_min": 4,
+        "payoff_min": 4
+      },
+      "research_refs": [
+        "\u00a74.6"
+      ]
+    },
+    "sports_tv": {
+      "weights": {
+        "hook": 0.3,
+        "self_contained": 0.1,
+        "payoff": 0.25,
+        "energy": 0.3,
+        "value": 0.05
+      },
+      "lambda": 0.3,
+      "signal_weights": {
+        "laugh_in_landing": 0.1,
+        "peak_arousal": 0.5,
+        "hook_pitch_var": 0.15,
+        "opening_clean": 0.05,
+        "ending_clean": 0.15,
+        "specificity": 0.05,
+        "qa_contained": 0
+      },
+      "crosstalk_penalty_multiplier": 1.0,
+      "lengths": {
+        "tiktok": {
+          "min_s": 8,
+          "sweet_spot_s": [
+            10,
+            30
+          ],
+          "max_s": 60
+        },
+        "youtube_shorts": {
+          "min_s": 8,
+          "sweet_spot_s": [
+            10,
+            30
+          ],
+          "max_s": 60
+        },
+        "instagram_reels": {
+          "min_s": 8,
+          "sweet_spot_s": [
+            10,
+            30
+          ],
+          "max_s": 60
+        },
+        "x": {
+          "min_s": 8,
+          "sweet_spot_s": [
+            10,
+            30
+          ],
+          "max_s": 60
+        }
+      },
+      "archetypes": [
+        "play",
+        "reaction",
+        "record_moment",
+        "call"
+      ],
+      "locate_signals": [
+        "crowd loud_z>=+2",
+        "commentator pitch_var peak",
+        "num_ent=1 (score/record/names)",
+        "vision tags outrank audio"
+      ],
+      "preferences": {
+        "payoff_within_s": 3,
+        "needs_visual": true,
+        "content_id_max_s_shorts": 60,
+        "xtalk": "neutral"
+      },
+      "gates": {
+        "self_contained_min": 4,
+        "payoff_min": 5,
+        "payoff_within_first_s": 3
+      },
+      "research_refs": [
+        "\u00a74.7",
+        "AutoClip sports filters",
+        "YouTube Shorts 3-min / Content ID rule"
+      ]
+    },
+    "news_commentary": {
+      "weights": {
+        "hook": 0.2,
+        "self_contained": 0.3,
+        "payoff": 0.2,
+        "energy": 0.1,
+        "value": 0.2
+      },
+      "lambda": 0.15,
+      "signal_weights": {
+        "laugh_in_landing": 0.05,
+        "peak_arousal": 0.15,
+        "hook_pitch_var": 0.1,
+        "opening_clean": 0.15,
+        "ending_clean": 0.2,
+        "specificity": 0.15,
+        "qa_contained": 0.2
+      },
+      "crosstalk_penalty_multiplier": 0.2,
+      "lengths": {
+        "tiktok": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 90
+        },
+        "youtube_shorts": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 120
+        },
+        "instagram_reels": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            60
+          ],
+          "max_s": 120
+        },
+        "linkedin": {
+          "min_s": 30,
+          "sweet_spot_s": [
+            60,
+            90
+          ],
+          "max_s": 180
+        },
+        "x": {
+          "min_s": 20,
+          "sweet_spot_s": [
+            30,
+            90
+          ],
+          "max_s": 140
+        }
+      },
+      "archetypes": [
+        "exchange",
+        "argued_point",
+        "question_to_official",
+        "fact_check"
+      ],
+      "locate_signals": [
+        "q=1 -> answer",
+        "face-off xtalk (keep both voices)",
+        "num_ent=1",
+        "pitch_var spike on rebuttal"
+      ],
+      "preferences": {
+        "no_splice": true,
+        "keep_qualifiers": true,
+        "context_pad_sentences_if_inflammatory": 1,
+        "literal_title_verbs": true,
+        "xtalk": "keep_both_voices"
+      },
+      "gates": {
+        "self_contained_min": 6,
+        "payoff_min": 4,
+        "fairness_required": true
+      },
+      "research_refs": [
+        "\u00a74.8",
+        "\u00a73.4 NPR/PBS editing ethics",
+        "Sentarys"
+      ]
+    },
+    "howto_tutorial": {
+      "weights": {
+        "hook": 0.2,
+        "self_contained": 0.3,
+        "payoff": 0.3,
+        "energy": 0.05,
+        "value": 0.15
+      },
+      "lambda": 0.1,
+      "signal_weights": {
+        "laugh_in_landing": 0,
+        "peak_arousal": 0,
+        "hook_pitch_var": 0.05,
+        "opening_clean": 0.25,
+        "ending_clean": 0.25,
+        "specificity": 0.3,
+        "qa_contained": 0.15
+      },
+      "crosstalk_penalty_multiplier": 1.0,
+      "lengths": {
+        "tiktok": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            20,
+            45
+          ],
+          "max_s": 75
+        },
+        "youtube_shorts": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            25,
+            60
+          ],
+          "max_s": 90
+        },
+        "instagram_reels": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            25,
+            60
+          ],
+          "max_s": 90
+        },
+        "linkedin": {
+          "min_s": 30,
+          "sweet_spot_s": [
+            45,
+            90
+          ],
+          "max_s": 180
+        },
+        "x": {
+          "min_s": 15,
+          "sweet_spot_s": [
+            25,
+            60
+          ],
+          "max_s": 120
+        }
+      },
+      "archetypes": [
+        "result_steps",
+        "tip",
+        "mistake_fix",
+        "shortcut"
+      ],
+      "locate_signals": [
+        "imperative verbs/step markers",
+        "num_ent=1 (menus, tools, shortcuts)",
+        "result statement"
+      ],
+      "preferences": {
+        "length_by_steps_s": {
+          "3": [
+            15,
+            20
+          ],
+          "5": [
+            25,
+            40
+          ],
+          "7+": [
+            45,
+            75
+          ]
+        },
+        "all_steps_required": true,
+        "xtalk": "penalty"
+      },
+      "gates": {
+        "self_contained_min": 6,
+        "payoff_min": 5
+      },
+      "research_refs": [
+        "\u00a74.9"
+      ]
     }
   }
 }

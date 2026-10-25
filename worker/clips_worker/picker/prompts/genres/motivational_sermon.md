@@ -1,0 +1,18 @@
+GENRE: MOTIVATIONAL / KEYNOTE / SPEECH / SERMON
+- Best units:
+  - Contrast statement (15-30 s): "The world says X. [Truth] says Y."
+  - Story turn (30-60 s): a personal setup → the turning moment → what it means for "you".
+  - Direct challenge or application (15-45 s).
+- Structure = Hook → Turn → Land. The Land is the application line that follows the rhetorical peak. Do not cut at the peak; end after the land.
+- Signals:
+  - a rising loud_z and pitch_var into the peak, followed by pause_after ≥ 0.8 s (the land, or applause)
+  - laugh=1 from the audience
+  - negation or contrast syntax
+- Reject:
+  - announcements, offering, prayer, worship transitions, scripture reading with no application, greetings
+  - inside references to the congregation or organization
+  - generic exhortation with no image, story or contrast
+  - stories without their turn
+- Emotion: favor awe, hope, conviction and resolution. Pure sadness without resolution shares less.
+- Hook lines that work: the contrast line, the story-turn line ("...who hadn't spoken to me in six years, said one word"), "You are not X. You are Y."
+- Typical length: 15-60 s; complete story turns up to 90 s.

@@ -9,13 +9,34 @@ export const clipAspectRatios = ['9:16', '1:1', '16:9'] as const
 export const clipGenres = [
   'podcast',
   'interview',
-  'talk',
-  'vlog',
+  'education',
+  'comedy',
+  'business',
+  'motivational',
   'gaming',
   'sports',
-  'education',
+  'news',
+  'howto',
+  'talk',
+  'vlog',
   'other',
 ] as const
+
+export const clipGenreLabels: Record<(typeof clipGenres)[number], string> = {
+  podcast: 'Podcast / interview',
+  interview: 'Interview',
+  education: 'Education / solo',
+  comedy: 'Comedy / stand-up',
+  business: 'Business / marketing',
+  motivational: 'Motivational / keynote',
+  gaming: 'Gaming / stream',
+  sports: 'Sports / TV',
+  news: 'News / debate',
+  howto: 'How-to / tutorial',
+  talk: 'Talk show',
+  vlog: 'Vlog',
+  other: 'Other',
+}
 
 export const clipProjectSettingsSchema = z.object({
   v: z.literal(CLIP_SETTINGS_VERSION),

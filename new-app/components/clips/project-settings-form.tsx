@@ -8,6 +8,7 @@ import { Panel } from '@/components/app/page-primitives'
 import { CaptionPresetPicker } from '@/components/clips/caption-preset-picker'
 import {
   clipAspectRatios,
+  clipGenreLabels,
   clipGenres,
   clipLayoutModes,
   clipLengthBuckets,
@@ -80,7 +81,7 @@ export function ProjectSettingsForm({
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {clipGenres.map((g) => (
-                  <SelectItem key={g} value={g}>{g}</SelectItem>
+                  <SelectItem key={g} value={g}>{clipGenreLabels[g]}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

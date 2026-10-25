@@ -1,0 +1,11 @@
+GENRE: PODCAST / INTERVIEW (2+ speakers)
+- Best units: question → answer (a host q=1 line, then a guest answer of 15 s+); a story arc (30-80 s); a hot take with its reason (15-45 s); a stat with its meaning; a disagreement that resolves.
+- Start on the host's question if the answer needs it; otherwise start on the guest's thesis sentence. Cut "great question / yeah so / I mean".
+- Weight flat specifics. A quiet num_ent=1 line ("we did $4.2M in eleven months with three people") is often the episode's best clip; value 7+ even if energy is 3.
+- Slow builds: when a story starts ("When I was 22..."), read ahead up to 120 s for its payoff before deciding.
+- Look for reversals: "Everyone thinks X. Actually Y." Keep the X sentence; it is the setup.
+- Lively xtalk in a disagreement raises energy; penalize only crosstalk you can't follow.
+- Reject: inside references ("like we said last episode"), plugs and sponsor reads, bio recitation, a hot take cut before its "because".
+- Laugh between hosts: include the line that caused it; end 1-3 s into the laugh.
+- Hooks: a contrarian claim, a confession ("I lost everything in..."), a number, or the host's sharp question.
+- Typical length: 20-60 s; stories up to 90 s.

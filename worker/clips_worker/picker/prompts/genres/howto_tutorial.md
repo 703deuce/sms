@@ -1,0 +1,16 @@
+GENRE: HOW-TO / TUTORIAL / DEMO
+- Best unit: one result reached in a few clear steps, or one tip, trick or mistake fix.
+  - Open on the result or the problem ("Here's how to freeze the top row", "If your X keeps doing Y...").
+  - Then each step in order, then the result confirmed.
+- Length follows the step count: about 15-20 s for 3 steps, 25-40 s for 5, 45-75 s for 7+. If there are more steps than fit, clip one sub-result.
+- self_contained is strict:
+  - Reject clips that depend on earlier setup ("the file from part one") unless the clip states it.
+  - Every step needed to reproduce the result must be inside the clip. A missing final step means payoff ≤ 3.
+- Signals:
+  - imperative verbs and step markers (first, next, then, click, press)
+  - num_ent=1 (menu names, tools, quantities, shortcuts)
+  - a result statement ("and now it...")
+  - Energy weight is low.
+- Reject: greetings, "today I'm going to show you", supply lists before the result, failed attempts and tangents (unless the fix is the clip), waiting and loading.
+- Hook lines that work: the result first, "The fastest way to X", "Stop doing X manually", "You've been doing X wrong".
+- Typical length: 15-75 s by step count.

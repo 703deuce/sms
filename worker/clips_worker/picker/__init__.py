@@ -1,10 +1,8 @@
-"""Multi-pass talking-mode clip picker (signals → candidates → LLM ×2 → cleanup)."""
+"""Multi-pass talking-mode clip picker."""
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from clips_worker.picker.candidates import build_candidates
 from clips_worker.picker.cleanup import finalize_picks
 from clips_worker.picker.pass1 import find_moments
 from clips_worker.picker.pass2 import score_moments
@@ -36,29 +34,29 @@ def pick_talking_clips(
 
     genre = settings.get("genre", "podcast")
     prompt = (settings.get("prompt") or "").strip()
-    clip_length = settings.get("clipLength", "auto")
 
     sentences = build_sentences(words, range_start_ms, range_end_ms)
     if not sentences:
         return []
 
     signals = compute_signals(sentences, audio_path, sentences)
-    _ = build_candidates(sentences, clip_length, range_start_ms, range_end_ms, genre)
+    sig_by = {s.sentence_idx: s for s in signals}
 
     moments = find_moments(sentences, signals, genre, prompt)
     if not moments:
-        moments = [{"start_sentence": 0, "end_sentence": min(len(sentences) - 1, 3), "why": "fallback"}]
+        moments = [{"start_sentence": 0, "end_sentence": min(len(sentences) - 1, 3), "why": "fallback", "archetype": "story"}]
 
     scored = score_moments(moments, sentences, signals, genre)
-    picks = finalize_picks(scored, sentences, words, range_start_ms, range_end_ms, genre)
+    picks = finalize_picks(scored, sentences, sig_by, words, range_start_ms, range_end_ms, genre)
 
-    sig_by = {s.sentence_idx: s for s in signals}
     for p in picks:
         ss, es = p["start_sentence"], p["end_sentence"]
         p["aiMeta"] = {
             "hook": p.get("hook"),
+            "archetype": p.get("archetype"),
             "pass1_why": p.get("pass1_why"),
             "score_detail": p.get("score_detail"),
+            "scoring": p.get("scoring"),
             "signals": [
                 {"sentence": k, **vars(sig_by[sentences[k].idx])}
                 for k in range(ss, es + 1)
