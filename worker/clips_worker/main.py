@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -25,6 +27,33 @@ def env(name: str, default: str | None = None) -> str:
     if not v:
         raise RuntimeError(f"Missing env {name}")
     return v
+
+
+def log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+def db_host_label(dsn: str) -> str:
+    try:
+        parsed = urllib.parse.urlparse(dsn)
+        host = parsed.hostname or "unknown"
+        port = parsed.port or 5432
+        db = (parsed.path or "").lstrip("/") or "postgres"
+        return f"{host}:{port}/{db}"
+    except Exception:
+        return "unknown"
+
+
+def count_queued_jobs(conn) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT count(*)::int FROM clip_jobs
+            WHERE status = 'QUEUED' AND type = 'PROCESS_PROJECT'
+              AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
+            """,
+        )
+        return int(cur.fetchone()[0])
 
 
 def sign_body(secret: str, body: str) -> str:
@@ -51,11 +80,16 @@ def claim_job(conn) -> dict | None:
         cur.execute(
             """
             UPDATE clip_jobs
-            SET status = 'RUNNING', locked_by = %s, locked_at = NOW(), attempts = attempts + 1
+            SET status = 'RUNNING',
+                "lockedBy" = %s,
+                "lockedAt" = NOW(),
+                attempts = attempts + 1
             WHERE id = (
               SELECT id FROM clip_jobs
-              WHERE status = 'QUEUED' AND type = 'PROCESS_PROJECT' AND run_after <= NOW()
-              ORDER BY priority DESC, run_after ASC
+              WHERE status = 'QUEUED'
+                AND type = 'PROCESS_PROJECT'
+                AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
+              ORDER BY priority DESC, "runAfter" ASC
               FOR UPDATE SKIP LOCKED
               LIMIT 1
             )
@@ -94,7 +128,10 @@ def ffprobe_duration(path: Path) -> float:
 
 
 def process_job(conn, job: dict) -> None:
-    project = load_project(conn, job["projectId"])
+    project_id = job.get("projectId") or job.get("projectid")
+    if not project_id:
+        raise RuntimeError("job missing projectId")
+    project = load_project(conn, project_id)
     if project.get("status") == "CANCELED":
         post_progress(job["id"], {"jobStatus": "FAILED", "error": "canceled"})
         return
@@ -103,6 +140,7 @@ def process_job(conn, job: dict) -> None:
     if not key:
         raise RuntimeError("missing source key")
 
+    log(f"processing job={job['id']} project={project_id}")
     post_progress(
         job["id"],
         {"projectStatus": "PREPARING", "stage": "preparing", "progress": 2, "jobStatus": "RUNNING"},
@@ -135,7 +173,6 @@ def process_job(conn, job: dict) -> None:
             },
         )
 
-        # M3 stops after transcript; later milestones continue pipeline.
         post_progress(
             job["id"],
             {
@@ -146,20 +183,44 @@ def process_job(conn, job: dict) -> None:
                 "jobStatus": "DONE",
             },
         )
+    log(f"finished job={job['id']} words={len(words)}")
 
 
 def main() -> None:
     dsn = env("DATABASE_URL")
+    host = db_host_label(dsn)
+    log(f"clips-worker starting worker_id={os.environ.get('WORKER_ID', 'worker-1')} db={host}")
+    try:
+        with psycopg2.connect(dsn) as conn:
+            queued = count_queued_jobs(conn)
+            log(f"connected to db host={host} queued_jobs={queued}")
+    except Exception as exc:
+        log(f"FATAL database startup failed: {exc}")
+        traceback.print_exc()
+        sys.exit(1)
+
+    idle_polls = 0
     while True:
         try:
             with psycopg2.connect(dsn) as conn:
                 job = claim_job(conn)
                 if not job:
+                    idle_polls += 1
+                    if idle_polls % 30 == 1:
+                        try:
+                            n = count_queued_jobs(conn)
+                            log(f"poll idle queued_jobs={n}")
+                        except Exception as exc:
+                            log(f"poll count failed: {exc}")
                     time.sleep(2)
                     continue
+                idle_polls = 0
+                log(f"claimed job={job['id']}")
                 try:
                     process_job(conn, job)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
+                    log(f"job {job['id']} failed: {exc}")
+                    traceback.print_exc()
                     post_progress(
                         job["id"],
                         {
@@ -170,7 +231,9 @@ def main() -> None:
                             "jobStatus": "FAILED",
                         },
                     )
-        except Exception:
+        except Exception as exc:
+            log(f"worker loop error: {exc}")
+            traceback.print_exc()
             time.sleep(5)
 
 

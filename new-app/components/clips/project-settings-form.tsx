@@ -29,6 +29,13 @@ const LAYOUT_LABELS: Record<string, string> = {
   fit: 'Fit with blur',
 }
 
+function formatMmSs(ms: number) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 export function ProjectSettingsForm({
   settings,
   onChange,
@@ -38,8 +45,9 @@ export function ProjectSettingsForm({
   onChange: (s: ClipProjectSettings) => void
   durationMs: number
 }) {
-  const end = settings.rangeEndMs || durationMs || 0
-  const start = settings.rangeStartMs
+  const sourceMs = durationMs > 0 ? durationMs : 60_000
+  const end = Math.min(sourceMs, settings.rangeEndMs > 0 ? settings.rangeEndMs : sourceMs)
+  const start = Math.min(end, settings.rangeStartMs)
 
   return (
     <div className="flex flex-col gap-4">
@@ -97,30 +105,46 @@ export function ProjectSettingsForm({
               </button>
             ))}
           </div>
-          {durationMs > 0 && (
-            <div className="flex flex-col gap-2">
-              <Label>Processing range (ms)</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="number"
-                  className="rounded-md border px-2 py-1 text-sm"
-                  value={start}
-                  min={0}
-                  max={end}
-                  onChange={(e) => onChange({ ...settings, rangeStartMs: Number(e.target.value) })}
-                />
-                <input
-                  type="number"
-                  className="rounded-md border px-2 py-1 text-sm"
-                  value={end}
-                  min={start}
-                  max={durationMs}
-                  onChange={(e) => onChange({ ...settings, rangeEndMs: Number(e.target.value) })}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground tabular-nums">Source {(durationMs / 1000).toFixed(1)}s</p>
+          <div className="flex min-h-[7.5rem] flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Processing range</Label>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {formatMmSs(start)} – {formatMmSs(end)}
+                {durationMs > 0 ? ` · source ${formatMmSs(durationMs)}` : ''}
+              </span>
             </div>
-          )}
+            <input
+              type="range"
+              className="w-full accent-primary disabled:opacity-40"
+              min={0}
+              max={sourceMs}
+              step={1000}
+              value={start}
+              disabled={durationMs <= 0}
+              aria-label="Range start"
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                onChange({ ...settings, rangeStartMs: Math.min(v, end) })
+              }}
+            />
+            <input
+              type="range"
+              className="w-full accent-primary disabled:opacity-40"
+              min={0}
+              max={sourceMs}
+              step={1000}
+              value={end}
+              disabled={durationMs <= 0}
+              aria-label="Range end"
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                onChange({ ...settings, rangeEndMs: Math.max(v, start) })
+              }}
+            />
+            {durationMs <= 0 ? (
+              <p className="text-xs text-muted-foreground">Upload a video to adjust the trim range.</p>
+            ) : null}
+          </div>
         </div>
       </Panel>
 
