@@ -12,6 +12,7 @@ import { createProject, estimateCredits } from '@/lib/clips-api'
 import { defaultClipSettings, TOOL_PRESET_MAP, type ClipProjectSettings } from '@/lib/clips/settings'
 import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
+import { Loader2 } from 'lucide-react'
 
 export function NewProjectWorkspace() {
   const router = useRouter()
@@ -85,8 +86,18 @@ export function NewProjectWorkspace() {
                 : `Est. ${estimate.credits} credits`}
             </p>
           )}
-          <Button disabled={!uploadId || upload?.state !== 'complete' || submitting} onClick={() => void submit()}>
-            Get clips
+          <Button
+            disabled={!uploadId || upload?.state !== 'complete' || submitting}
+            onClick={() => void submit()}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                Creating project…
+              </>
+            ) : (
+              'Get clips'
+            )}
           </Button>
         </div>
       </div>

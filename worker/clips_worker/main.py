@@ -18,6 +18,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.pipeline import run_m4_pipeline
+from clips_worker.probe import format_subprocess_error, probe_duration
 from clips_worker.storage import download_object
 
 TRANSCRIBE = Path(os.environ.get("TRANSCRIBE_SCRIPT", "/app/transcribe.py"))
@@ -146,23 +147,6 @@ def load_project(conn, project_id: str) -> dict:
     return dict(row)
 
 
-def ffprobe_duration(path: Path) -> float:
-    out = subprocess.check_output(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path),
-        ],
-        text=True,
-    ).strip()
-    return float(out)
-
-
 def process_job(conn, job: dict) -> None:
     project = load_project(conn, job["projectId"])
     if project.get("status") == "CANCELED":
@@ -184,7 +168,7 @@ def process_job(conn, job: dict) -> None:
         download_object(key, src)
         post_progress(job["id"], {"projectStatus": "PREPARING", "stage": "preparing", "progress": 8})
 
-        _ = ffprobe_duration(src)
+        _ = probe_duration(src)
         post_progress(
             job["id"],
             {"projectStatus": "TRANSCRIBING", "stage": "transcribing", "progress": 12, "jobStatus": "RUNNING"},
@@ -245,7 +229,8 @@ def main() -> None:
                 try:
                     process_job(conn, job)
                 except Exception as exc:
-                    log(f"job {job['id']} failed: {exc}")
+                    msg = format_subprocess_error(exc)
+                    log(f"job {job['id']} failed: {msg}")
                     traceback.print_exc()
                     post_progress(
                         job["id"],
@@ -253,7 +238,7 @@ def main() -> None:
                             "projectStatus": "FAILED",
                             "stage": "failed",
                             "progress": 0,
-                            "error": str(exc)[:500],
+                            "error": msg[:500],
                             "jobStatus": "FAILED",
                         },
                     )

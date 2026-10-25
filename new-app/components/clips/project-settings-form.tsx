@@ -78,7 +78,9 @@ export function ProjectSettingsForm({
           <div className="flex flex-col gap-1.5">
             <Label>Genre</Label>
             <Select value={settings.genre} onValueChange={(v) => v && onChange({ ...settings, genre: v as ClipProjectSettings['genre'] })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full">
+                <SelectValue>{clipGenreLabels[settings.genre]}</SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 {clipGenres.map((g) => (
                   <SelectItem key={g} value={g}>{clipGenreLabels[g]}</SelectItem>
