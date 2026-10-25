@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from clips_worker.picker.config import genre_meta, global_config
-from clips_worker.picker.grades import badge_scores, letter_grade_from_final
+from clips_worker.picker.grades import letter_grade_from_final
 
 
 def _sent_dict(s, sig) -> dict[str, Any]:
