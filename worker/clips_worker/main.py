@@ -16,8 +16,7 @@ import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-PROTOTYPE = Path(__file__).resolve().parents[1] / "prototype" / "v3"
-TRANSCRIBE = PROTOTYPE / "transcribe.py"
+TRANSCRIBE = Path(os.environ.get("TRANSCRIBE_SCRIPT", "/app/transcribe.py"))
 
 
 def env(name: str, default: str | None = None) -> str:

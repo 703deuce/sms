@@ -4,6 +4,7 @@ import {
   abortMultipartUpload,
   completeMultipartUpload,
   createMultipartUpload,
+  getInternalS3Client,
   getS3Client,
   getS3Config,
   presignUploadPartUrl,
@@ -24,14 +25,15 @@ export async function createClipUpload(workspaceId: string, input: { filename: s
   const uploadId = createId('upl')
   const ext = extFromFilename(input.filename)
   const key = uploadSourceKey(workspaceId, uploadId, ext)
-  const client = getS3Client(cfg)
-  const s3UploadId = await createMultipartUpload(client, cfg.bucket, key, input.mime)
+  const signClient = getS3Client(cfg)
+  const internal = getInternalS3Client(cfg)
+  const s3UploadId = await createMultipartUpload(internal, cfg.bucket, key, input.mime)
   const partCount = Math.min(MAX_PARTS, Math.max(1, Math.ceil(input.bytes / PART_SIZE)))
   const partUrls: { partNumber: number; url: string }[] = []
   for (let partNumber = 1; partNumber <= partCount; partNumber++) {
     partUrls.push({
       partNumber,
-      url: await presignUploadPartUrl(client, cfg.bucket, key, s3UploadId, partNumber),
+      url: await presignUploadPartUrl(signClient, cfg.bucket, key, s3UploadId, partNumber),
     })
   }
   const prisma = getPrisma()
@@ -61,7 +63,7 @@ export async function completeClipUpload(
   const prisma = getPrisma()
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row || !row.s3UploadId) throw new Error('Upload not found')
-  const client = getS3Client(cfg)
+  const client = getInternalS3Client(cfg)
   await completeMultipartUpload(client, cfg.bucket, row.key, row.s3UploadId, parts)
   await prisma.clipUpload.update({
     where: { id: uploadId },
@@ -81,7 +83,7 @@ export async function abortClipUpload(workspaceId: string, uploadId: string) {
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row) return
   if (cfg && row.s3UploadId) {
-    await abortMultipartUpload(getS3Client(cfg), cfg.bucket, row.key, row.s3UploadId)
+    await abortMultipartUpload(getInternalS3Client(cfg), cfg.bucket, row.key, row.s3UploadId)
   }
   await prisma.clipUpload.update({ where: { id: uploadId }, data: { status: 'ABORTED' } })
 }

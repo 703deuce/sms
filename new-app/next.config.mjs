@@ -7,6 +7,9 @@ const isCoolifyBuild = Boolean(process.env.COOLIFY_RESOURCE_UUID);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    agentUpgrade: "security",
+  },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   output: "standalone",
   serverExternalPackages: ["@prisma/client", "prisma", "livekit-server-sdk"],

@@ -4,7 +4,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { applyJobProgress } from '@/lib/server/clips/jobs'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
-import { putObjectJson, getS3Client, getS3Config, projectWordsKey } from '@/lib/storage/s3'
+import { putObjectJson, getInternalS3Client, getS3Config, projectWordsKey } from '@/lib/storage/s3'
 
 const schema = z.object({
   projectStatus: z.string().optional(),
@@ -30,7 +30,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (body.transcriptWords) {
       const cfg = getS3Config()
       if (cfg && job.project.transcriptKey) {
-        await putObjectJson(getS3Client(cfg), cfg.bucket, job.project.transcriptKey, body.transcriptWords)
+        await putObjectJson(getInternalS3Client(cfg), cfg.bucket, job.project.transcriptKey, body.transcriptWords)
       }
     }
 

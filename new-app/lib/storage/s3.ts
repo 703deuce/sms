@@ -21,23 +21,27 @@ export type S3Config = {
 
 export function getS3Config(): S3Config | null {
   const endpoint = process.env.S3_ENDPOINT?.trim()
+  const publicEndpoint = process.env.S3_PUBLIC_ENDPOINT?.trim()
   const bucket = process.env.S3_BUCKET?.trim()
   const accessKeyId = process.env.S3_ACCESS_KEY_ID?.trim()
   const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY?.trim()
   if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) return null
   return {
-    endpoint,
+    endpoint: publicEndpoint || endpoint,
     region: process.env.S3_REGION?.trim() || 'us-east-1',
     bucket,
     accessKeyId,
     secretAccessKey,
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
-  }
+    _internalEndpoint: endpoint,
+  } as S3Config & { _internalEndpoint?: string }
 }
 
-export function getS3Client(cfg: S3Config): S3Client {
+export function getS3Client(cfg: S3Config, opts?: { internal?: boolean }): S3Client {
+  const internal = (cfg as S3Config & { _internalEndpoint?: string })._internalEndpoint
+  const endpoint = opts?.internal && internal ? internal : cfg.endpoint
   return new S3Client({
-    endpoint: cfg.endpoint,
+    endpoint,
     region: cfg.region,
     credentials: {
       accessKeyId: cfg.accessKeyId,
@@ -137,6 +141,10 @@ export async function abortMultipartUpload(client: S3Client, bucket: string, key
       UploadId: uploadId,
     }),
   )
+}
+
+export function getInternalS3Client(cfg: S3Config): S3Client {
+  return getS3Client(cfg, { internal: true })
 }
 
 export async function putObjectJson(client: S3Client, bucket: string, key: string, data: unknown) {
