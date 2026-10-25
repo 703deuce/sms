@@ -21,36 +21,52 @@ def clip_keys(workspace_id: str, project_id: str, clip_id: str) -> dict[str, str
     }
 
 
-def insert_clip_row(conn, row: dict) -> None:
+def insert_clips_batch(conn, rows: list[dict]) -> None:
+    if not rows:
+        return
+    with conn.cursor() as cur:
+        for row in rows:
+            cur.execute(
+                """
+                INSERT INTO clips (
+                  id, "projectId", "workspaceId", title, reason,
+                  "startMs", "endMs", score, scores,
+                  "previewKey", "posterKey", "wordsKey", edits, "aiMeta",
+                  favorite, "createdAt", "updatedAt"
+                ) VALUES (
+                  %s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
+                )
+                ON CONFLICT (id) DO NOTHING
+                """,
+                (
+                    row["id"],
+                    row["projectId"],
+                    row["workspaceId"],
+                    row["title"],
+                    row.get("reason"),
+                    row["startMs"],
+                    row["endMs"],
+                    row["score"],
+                    json.dumps(row.get("scores") or {}),
+                    row.get("previewKey"),
+                    row.get("posterKey"),
+                    row.get("wordsKey"),
+                    json.dumps(row.get("edits") or {}),
+                    json.dumps(row.get("aiMeta") or {}),
+                ),
+            )
+    conn.commit()
+
+
+def mark_project_ready(conn, project_id: str, error: str | None = None) -> None:
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO clips (
-              id, "projectId", "workspaceId", title, reason,
-              "startMs", "endMs", score, scores,
-              "previewKey", "posterKey", "wordsKey", edits, "aiMeta",
-              favorite, "createdAt", "updatedAt"
-            ) VALUES (
-              %s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
-            )
-            ON CONFLICT (id) DO NOTHING
+            UPDATE clip_projects
+            SET status = 'READY', stage = 'ready', progress = 100, error = %s, "updatedAt" = NOW()
+            WHERE id = %s
             """,
-            (
-                row["id"],
-                row["projectId"],
-                row["workspaceId"],
-                row["title"],
-                row.get("reason"),
-                row["startMs"],
-                row["endMs"],
-                row["score"],
-                json.dumps(row.get("scores") or {}),
-                row.get("previewKey"),
-                row.get("posterKey"),
-                row.get("wordsKey"),
-                json.dumps(row.get("edits") or {}),
-                json.dumps(row.get("aiMeta") or {}),
-            ),
+            (error, project_id),
         )
     conn.commit()
 
@@ -88,6 +104,8 @@ def run_m4_pipeline(
         post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
 
         if not picks:
+            empty_msg = picker_message or "No complete, self-contained moments found."
+            mark_project_ready(conn, project_id, error=empty_msg)
             post_progress(
                 job_id,
                 {
@@ -95,12 +113,13 @@ def run_m4_pipeline(
                     "stage": "ready",
                     "progress": 100,
                     "jobStatus": "DONE",
-                    "error": picker_message or "No complete, self-contained moments found.",
+                    "error": empty_msg,
                 },
             )
             return
 
         total = max(1, len(picks))
+        clip_rows: list[dict] = []
         for idx, pick in enumerate(picks):
             post_progress(
                 job_id,
@@ -128,8 +147,7 @@ def run_m4_pipeline(
             upload_file(keys["poster"], poster, "image/jpeg")
             put_json(keys["words"], clip_words)
 
-            insert_clip_row(
-                conn,
+            clip_rows.append(
                 {
                     "id": clip_id,
                     "projectId": project_id,
@@ -145,7 +163,7 @@ def run_m4_pipeline(
                     "wordsKey": keys["words"],
                     "edits": {"captions": settings.get("captions", {})},
                     "aiMeta": pick.get("aiMeta") or {"hook": pick.get("hook")},
-                },
+                }
             )
             post_progress(
                 job_id,
@@ -157,7 +175,9 @@ def run_m4_pipeline(
                 },
             )
 
-    post_progress(
-        job_id,
-        {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE", "error": None},
-    )
+        insert_clips_batch(conn, clip_rows)
+        mark_project_ready(conn, project_id)
+        post_progress(
+            job_id,
+            {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE", "error": None},
+        )

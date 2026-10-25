@@ -53,7 +53,7 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
         if final < min_final and kept:
             continue
         span = (p["start_ms"], p["end_ms"])
-        if any(_overlap(span, (k["start_ms"], k["end_ms"])) > overlap_drop for k in kept):
+        if any(_overlap(span, (k["start_ms"], k["end_ms"])) > overlap_thr for k in kept):
             continue
         text = p.get("title", "") + " " + p.get("reason", "")
         if any(jaccard(text, k.get("title", "") + " " + k.get("reason", "")) >= jac_thr for k in kept):
@@ -76,6 +76,14 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
             arch = p.get("archetype")
             if arch and arch not in {k.get("archetype") for k in kept}:
                 kept.append(p)
+                break
+
+    if short_source and len(kept) < 2 and len(ranked) >= 2:
+        for p in ranked:
+            if p in kept:
+                continue
+            kept.append(p)
+            if len(kept) >= 2:
                 break
 
     if not kept and ranked:

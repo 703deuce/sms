@@ -7,7 +7,18 @@ import { listExports } from '@/lib/clips-api'
 import { Download } from 'lucide-react'
 
 export function ExportsList() {
-  const [rows, setRows] = useState<{ id: string; title: string; filename: string | null; downloadUrl: string | null; createdAt: string }[]>([])
+  const [rows, setRows] = useState<
+    {
+      id: string
+      title: string
+      projectId: string
+      clipId: string
+      filename: string | null
+      downloadUrl: string | null
+      createdAt: string
+      sizeBytes: number | null
+    }[]
+  >([])
 
   useEffect(() => {
     void listExports()
@@ -26,7 +37,10 @@ export function ExportsList() {
           <li key={r.id} className="flex items-center justify-between gap-4 py-3">
             <div>
               <p className="text-sm font-medium">{r.title}</p>
-              <p className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">
+                {new Date(r.createdAt).toLocaleString()}
+                {r.sizeBytes ? ` · ${(r.sizeBytes / (1024 * 1024)).toFixed(1)} MB` : ''}
+              </p>
             </div>
             {r.downloadUrl ? (
               <Button size="sm" variant="outline" render={<a href={r.downloadUrl} download={r.filename || undefined} />}>

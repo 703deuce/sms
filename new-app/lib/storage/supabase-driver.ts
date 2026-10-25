@@ -81,11 +81,29 @@ export function createSupabaseStorageDriver(): ClipStorageDriver {
       const text = await data.text()
       return JSON.parse(text) as T
     },
-    async createSignedDownloadUrl(objectKey: string, expiresInSec: number): Promise<string> {
+    async createSignedDownloadUrl(
+      objectKey: string,
+      expiresInSec: number,
+      options?: { downloadFilename?: string },
+    ): Promise<string> {
       const { supabase, bucket } = client()
-      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(objectKey, expiresInSec)
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(objectKey, expiresInSec, {
+        download: options?.downloadFilename ?? false,
+      })
       if (error || !data?.signedUrl) throw new Error(error?.message || 'signed download failed')
       return data.signedUrl
+    },
+    async getObjectSizeBytes(objectKey: string): Promise<number | null> {
+      const { supabase, bucket } = client()
+      const parts = objectKey.split('/')
+      const name = parts.pop()
+      const folder = parts.join('/')
+      if (!name) return null
+      const { data, error } = await supabase.storage.from(bucket).list(folder, { search: name, limit: 1 })
+      if (error || !data?.length) return null
+      const row = data.find((r) => r.name === name) ?? data[0]
+      const meta = row.metadata as { size?: number } | undefined
+      return typeof meta?.size === 'number' ? meta.size : null
     },
   }
 }

@@ -62,16 +62,26 @@ export function createS3StorageDriver(): ClipStorageDriver {
       if (!cfg) throw new Error('S3 not configured')
       return getObjectJson<T>(getInternalS3Client(cfg), cfg.bucket, objectKey)
     },
-    async createSignedDownloadUrl(objectKey: string, expiresInSec: number): Promise<string> {
+    async createSignedDownloadUrl(
+      objectKey: string,
+      expiresInSec: number,
+      options?: { downloadFilename?: string },
+    ): Promise<string> {
       const cfg = getS3Config()
       if (!cfg) throw new Error('S3 not configured')
       const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner')
       const { GetObjectCommand } = await import('@aws-sdk/client-s3')
-      return getSignedUrl(
-        getS3Client(cfg),
-        new GetObjectCommand({ Bucket: cfg.bucket, Key: objectKey }),
-        { expiresIn: expiresInSec },
-      )
+      const cmd = new GetObjectCommand({
+        Bucket: cfg.bucket,
+        Key: objectKey,
+        ResponseContentDisposition: options?.downloadFilename
+          ? `attachment; filename="${options.downloadFilename.replace(/"/g, '')}"`
+          : undefined,
+      })
+      return getSignedUrl(getS3Client(cfg), cmd, { expiresIn: expiresInSec })
+    },
+    async getObjectSizeBytes(_objectKey: string): Promise<number | null> {
+      return null
     },
   }
 }

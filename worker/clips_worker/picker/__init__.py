@@ -5,12 +5,16 @@ from typing import Any
 
 from clips_worker.picker.cleanup import finalize_picks
 from clips_worker.picker.config import length_bucket
-from clips_worker.picker.fallback import pass1_heuristic_candidates, soft_pass2_fallback
 from clips_worker.picker.log_util import picker_info
 from clips_worker.picker.pass1 import find_moments
 from clips_worker.picker.pass2 import score_moments
 from clips_worker.picker.sentences import build_sentences
 from clips_worker.picker.signals import compute_signals
+from clips_worker.picker.titles import ensure_clip_title
+
+
+def _slice_words(words: list[dict], range_start_ms: int, range_end_ms: int) -> list[dict]:
+    return [w for w in words if w["e"] * 1000 >= range_start_ms and w["s"] * 1000 <= range_end_ms]
 
 
 def pick_talking_clips(
@@ -59,6 +63,7 @@ def pick_talking_clips(
         length_max_ms=bucket_max,
     )
 
+    range_words = _slice_words(words, range_start_ms, range_end_ms)
     sentences = build_sentences(words, range_start_ms, range_end_ms)
     picker_info("sentences_built", count=len(sentences))
     if not sentences:
@@ -80,36 +85,13 @@ def pick_talking_clips(
         picker_info("pass1_fallback_span", end_sentence=moments[0]["end_sentence"])
 
     source_duration_s = source_ms / 1000.0
-    scored, pass2_audit = score_moments(
+    scored, _pass2_audit = score_moments(
         moments, sentences, signals, genre, source_duration_s=source_duration_s
     )
-    picks = finalize_picks(scored, sentences, sig_by, words, range_start_ms, range_end_ms, genre)
+    picks = finalize_picks(
+        scored, sentences, sig_by, range_words, range_start_ms, range_end_ms, genre
+    )
     picker_info("after_finalize", count=len(picks))
-
-    if not picks:
-        fallback = soft_pass2_fallback(pass2_audit)
-        if fallback:
-            picks = finalize_picks(fallback, sentences, sig_by, words, range_start_ms, range_end_ms, genre)
-            picker_info("fallback_soft_pass2", count=len(picks))
-    min_wanted = 2 if source_ms < 120_000 else 1
-    if len(picks) < min_wanted:
-        heuristic = pass1_heuristic_candidates(
-            moments, sentences, sig_by, genre, source_duration_s=source_duration_s
-        )
-        if heuristic:
-            extra = finalize_picks(
-                heuristic, sentences, sig_by, words, range_start_ms, range_end_ms, genre
-            )
-            picker_info("fallback_pass1_heuristic", count=len(extra))
-            seen = {(p["start_ms"], p["end_ms"]) for p in picks}
-            for p in extra:
-                key = (p["start_ms"], p["end_ms"])
-                if key in seen:
-                    continue
-                picks.append(p)
-                seen.add(key)
-                if len(picks) >= min_wanted:
-                    break
 
     if not picks:
         msg = "No complete, self-contained moments found in this segment."
@@ -117,6 +99,7 @@ def pick_talking_clips(
         return [], msg
 
     for p in picks:
+        ensure_clip_title(p, words, genre)
         ss, es = p["start_sentence"], p["end_sentence"]
         p["aiMeta"] = {
             "hook": p.get("hook"),

@@ -44,5 +44,10 @@ export interface ClipStorageDriver {
   abortUpload(input: { objectKey: string; s3UploadId?: string | null }): Promise<void>
   putJson(objectKey: string, data: unknown): Promise<void>
   getJson<T>(objectKey: string): Promise<T>
-  createSignedDownloadUrl(objectKey: string, expiresInSec: number): Promise<string>
+  createSignedDownloadUrl(
+    objectKey: string,
+    expiresInSec: number,
+    options?: { downloadFilename?: string },
+  ): Promise<string>
+  getObjectSizeBytes(objectKey: string): Promise<number | null>
 }

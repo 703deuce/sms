@@ -8,6 +8,8 @@ export type ClipCardData = {
   score: number
   scores: unknown
   durationMs: number
+  startMs: number
+  endMs: number
   previewUrl: string | null
   posterUrl: string | null
   reason?: string | null

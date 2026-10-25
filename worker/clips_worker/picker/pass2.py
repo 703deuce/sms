@@ -11,6 +11,7 @@ from clips_worker.picker.llm import chat_json
 from clips_worker.picker.log_util import json_snippet, picker_info
 from clips_worker.picker.rejects import is_hard_llm_reject
 from clips_worker.picker.scoring import _sent_dict, score_clip
+from clips_worker.picker.titles import trim_title
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
 
@@ -40,7 +41,7 @@ PASS2_SCHEMA = {
                     },
                     "reject": {"type": "boolean"},
                     "reject_reason": {"type": "string"},
-                    "title": {"type": "string"},
+                    "title": {"type": "string", "maxLength": 60},
                     "why_care": {"type": "string"},
                 },
                 "required": [
@@ -84,6 +85,7 @@ def _pass2_system(genre: str) -> str:
         [
             "Return PASS 2 JSON only. Score and tighten each moment; cite sentence ids.",
             "Return exactly one clip object in clips[] for the single moment in the user payload.",
+            "title must be <= 60 characters, honest, using the speaker's words; never internal codes like coverage_span.",
             load_core_rubric(),
             load_genre_prompt(genre),
             "FEW-SHOT EXAMPLES:\n" + (ex[:12000] if ex else ""),
@@ -134,7 +136,7 @@ def _clip_row_from_llm(
         "start_sentence": ss,
         "end_sentence": es,
         "payoff_id": payoff_id,
-        "title": str(row.get("title") or moment.get("locator") or "Clip")[:60],
+        "title": trim_title(str(row.get("title") or moment.get("locator") or "")),
         "hook": str(row.get("why_care", ""))[:300],
         "reason": str(row.get("why_care", ""))[:500],
         "archetype": row.get("archetype") or moment.get("archetype"),

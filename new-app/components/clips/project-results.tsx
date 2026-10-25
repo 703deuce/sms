@@ -9,31 +9,51 @@ import { JobStatus } from '@/components/clips/job-status'
 import { exportClip, exportProjectAll, listProjectClips } from '@/lib/clips-api'
 import { Clapperboard } from 'lucide-react'
 
+type ProjectStatusPayload = {
+  status: string
+  error?: string | null
+  clipCount?: number
+}
+
 export function ProjectResults({ projectId, initialStatus }: { projectId: string; initialStatus: string }) {
   const [status, setStatus] = useState(initialStatus)
   const [clips, setClips] = useState<ClipCardData[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [readyHydrated, setReadyHydrated] = useState(initialStatus !== 'READY')
 
-  const refreshClips = useCallback(async () => {
+  const hydrateReady = useCallback(async (payload: ProjectStatusPayload) => {
     const data = await listProjectClips(projectId, 'score')
-    setClips(data.clips as ClipCardData[])
+    const list = data.clips as ClipCardData[]
+    setClips(list)
+    setError(payload.error ?? null)
+    setStatus('READY')
+    setReadyHydrated(true)
+    if (payload.clipCount !== undefined && payload.clipCount > 0 && list.length === 0) {
+      await new Promise((r) => setTimeout(r, 800))
+      const retry = await listProjectClips(projectId, 'score')
+      setClips(retry.clips as ClipCardData[])
+    }
   }, [projectId])
 
   useEffect(() => {
-    if (status !== 'READY') return
-    void refreshClips().catch(() => {})
-  }, [status, refreshClips])
+    if (initialStatus === 'READY' && !readyHydrated) {
+      void hydrateReady({ status: 'READY', clipCount: undefined }).catch(() => setReadyHydrated(true))
+    }
+  }, [initialStatus, readyHydrated, hydrateReady])
 
   useEffect(() => {
     let stop = false
     const tick = async () => {
       try {
         const res = await fetch(`/api/clips/projects/${projectId}/status`)
-        const json = (await res.json()) as { data?: { status: string; error?: string | null } }
+        const json = (await res.json()) as { data?: ProjectStatusPayload }
         if (stop || !json.data) return
-        setStatus(json.data.status)
-        setError(json.data.error ?? null)
-        if (json.data.status === 'READY') await refreshClips()
+        if (json.data.status === 'READY') {
+          await hydrateReady(json.data)
+        } else {
+          setStatus(json.data.status)
+          setError(json.data.error ?? null)
+        }
       } catch {
         /* ignore */
       }
@@ -45,12 +65,22 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
     return () => {
       stop = true
     }
-  }, [projectId, refreshClips, status])
+  }, [projectId, hydrateReady, status])
+
+  const triggerDownload = (url: string, filename: string) => {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
 
   const onDownload = async (clipId: string) => {
     try {
       const data = await exportClip(clipId)
-      if (data.downloadUrl) window.open(data.downloadUrl, '_blank', 'noopener')
+      if (data.downloadUrl) triggerDownload(data.downloadUrl, data.filename || 'clip.mp4')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed')
     }
@@ -60,9 +90,9 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
     try {
       const data = await exportProjectAll(projectId)
       for (const item of data.items) {
-        if (item.downloadUrl) window.open(item.downloadUrl, '_blank', 'noopener')
+        if (item.downloadUrl) triggerDownload(item.downloadUrl, item.filename || 'clip.mp4')
       }
-      toast.success(`Opened ${data.items.length} downloads`)
+      toast.success(`Started ${data.items.length} downloads`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export all failed')
     }
@@ -78,9 +108,11 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
     )
   }
 
-  if (status !== 'READY') {
-    return <JobStatus projectId={projectId} initialStatus={status} />
+  if (status !== 'READY' || !readyHydrated) {
+    return <JobStatus projectId={projectId} initialStatus={status === 'READY' ? 'RENDERING' : status} />
   }
+
+  const showEmpty = clips.length === 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -93,7 +125,7 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
           ) : null
         }
       >
-        {clips.length === 0 ? (
+        {showEmpty ? (
           <EmptyState
             icon={Clapperboard}
             title="No clips found"

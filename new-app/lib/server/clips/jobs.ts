@@ -9,6 +9,10 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
   if (!project) return null
   const sourceMin = Math.max(1, Math.ceil((project.rangeEndMs - project.rangeStartMs) / 60_000))
   const etaSec = TERMINAL.includes(project.status) ? 0 : sourceMin * 45
+  const clipCount =
+    project.status === 'READY'
+      ? await prisma.clip.count({ where: { projectId, deletedAt: null } })
+      : undefined
   return {
     status: project.status,
     stage: project.stage,
@@ -16,6 +20,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
     error: project.error,
     etaSec,
     wordCount: Array.isArray(project.transcriptWords) ? (project.transcriptWords as unknown[]).length : 0,
+    clipCount,
   }
 }
 

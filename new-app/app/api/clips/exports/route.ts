@@ -16,16 +16,22 @@ export async function GET() {
     })
     const storage = getClipStorage()
     const exports = await Promise.all(
-      rows.map(async (r) => ({
-        id: r.id,
-        clipId: r.clipId,
-        projectId: r.clip.projectId,
-        title: r.clip.title,
-        filename: r.filename,
-        watermark: r.watermark,
-        createdAt: r.createdAt.toISOString(),
-        downloadUrl: r.outputKey ? await storage.createSignedDownloadUrl(r.outputKey, 3600) : null,
-      })),
+      rows.map(async (r) => {
+        const fname = r.filename || 'clip.mp4'
+        return {
+          id: r.id,
+          clipId: r.clipId,
+          projectId: r.clip.projectId,
+          title: r.clip.title,
+          filename: fname,
+          watermark: r.watermark,
+          createdAt: r.createdAt.toISOString(),
+          sizeBytes: r.outputKey ? await storage.getObjectSizeBytes(r.outputKey) : null,
+          downloadUrl: r.outputKey
+            ? await storage.createSignedDownloadUrl(r.outputKey, 3600, { downloadFilename: fname })
+            : null,
+        }
+      }),
     )
     return NextResponse.json({ data: { exports } })
   } catch (err) {

@@ -33,13 +33,17 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     })
 
     await logClipEvent(workspaceId, clip.id, 'download')
-    const url = await getClipStorage().createSignedDownloadUrl(clip.previewKey, 3600)
+    const storage = getClipStorage()
+    const sizeBytes = await storage.getObjectSizeBytes(clip.previewKey)
+    const url = await storage.createSignedDownloadUrl(clip.previewKey, 3600, { downloadFilename: filename })
     return NextResponse.json({
       data: {
         renderId,
         downloadUrl: url,
         filename,
         watermark,
+        sizeBytes,
+        projectId: clip.projectId,
       },
     })
   } catch (err) {
