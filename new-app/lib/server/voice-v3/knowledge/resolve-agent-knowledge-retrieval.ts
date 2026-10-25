@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getPrisma } from "@/lib/db";
+import { getPrisma } from "@/lib/server/db";
 import type { AppointmentReceptionistWizardState } from "@/lib/solutions/appointment-receptionist/types";
 import {
   computeKnowledgeRevisionFingerprint,
@@ -9,7 +9,7 @@ import {
 import {
   listOpenAiVectorStoreIdsForKnowledgeBases,
   useGptLiveFileSearchRag,
-} from "@/lib/voice/gpt-live-file-search-rag";
+} from "@/lib/server/voice-v3/knowledge/gpt-live-file-search-rag";
 import { resolveDocumentSourceIdsForKnowledgeBases } from "./resolve-document-source-ids";
 
 export type ResolvedAgentKnowledgeRetrieval = {
