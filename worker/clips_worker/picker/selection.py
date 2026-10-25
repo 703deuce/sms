@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from clips_worker.picker.config import selection_settings
+from clips_worker.picker.log_util import picker_info
 
 
 def _overlap(a: tuple[int, int], b: tuple[int, int]) -> float:
@@ -27,6 +28,37 @@ def jaccard(a: str, b: str) -> float:
     return len(ta & tb) / len(ta | tb)
 
 
+def _clip_score(p: dict) -> float:
+    return float(p.get("final", p.get("score", 0) / 10))
+
+
+def _r10_near_duplicate(a: dict, b: dict) -> bool:
+    """R10: >50% overlap on shorter span, or starts within 3s (post-snap)."""
+    if abs(int(a["start_ms"]) - int(b["start_ms"])) < 3000:
+        return True
+    span_a = (int(a["start_ms"]), int(a["end_ms"]))
+    span_b = (int(b["start_ms"]), int(b["end_ms"]))
+    lo = max(span_a[0], span_b[0])
+    hi = min(span_a[1], span_b[1])
+    if hi <= lo:
+        return False
+    overlap_ms = hi - lo
+    shorter = min(span_a[1] - span_a[0], span_b[1] - span_b[0])
+    return overlap_ms / max(shorter, 1) > 0.5
+
+
+def dedupe_r10(picks: list[dict]) -> list[dict]:
+    ranked = sorted(picks, key=lambda x: -_clip_score(x))
+    kept: list[dict] = []
+    for p in ranked:
+        if any(_r10_near_duplicate(p, k) for k in kept):
+            continue
+        kept.append(p)
+    if len(kept) != len(picks):
+        picker_info("dedupe_r10", before=len(picks), after=len(kept))
+    return kept
+
+
 def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
     cfg = selection_settings()
     min_final = cfg["min_final"]
@@ -39,21 +71,17 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
 
     minutes = max(1, source_duration_ms / 60_000)
     cap = min(max_clips, max(1, int(round(minutes * per_min))))
-    short_source = source_duration_ms < 120_000
-    if short_source:
-        cap = max(cap, min(3, max_clips))
-    overlap_thr = 0.85 if short_source else overlap_drop
 
-    ranked = sorted(picks, key=lambda x: -x.get("final", x.get("score", 0) / 10))
+    ranked = sorted(picks, key=lambda x: -_clip_score(x))
     kept: list[dict] = []
     archetypes: dict[str, int] = {}
 
     for p in ranked:
-        final = p.get("final", p.get("score", 0) / 10)
+        final = _clip_score(p)
         if final < min_final and kept:
             continue
         span = (p["start_ms"], p["end_ms"])
-        if any(_overlap(span, (k["start_ms"], k["end_ms"])) > overlap_thr for k in kept):
+        if any(_overlap(span, (k["start_ms"], k["end_ms"])) > overlap_drop for k in kept):
             continue
         text = p.get("title", "") + " " + p.get("reason", "")
         if any(jaccard(text, k.get("title", "") + " " + k.get("reason", "")) >= jac_thr for k in kept):
@@ -78,16 +106,10 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
                 kept.append(p)
                 break
 
-    if short_source and len(kept) < 2 and len(ranked) >= 2:
-        for p in ranked:
-            if p in kept:
-                continue
-            kept.append(p)
-            if len(kept) >= 2:
-                break
-
     if not kept and ranked:
         for p in ranked[: min(3, cap)]:
             p["low_confidence"] = True
             kept.append(p)
+
+    kept = dedupe_r10(kept)
     return kept[:cap]

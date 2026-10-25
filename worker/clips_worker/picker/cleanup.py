@@ -41,6 +41,7 @@ def finalize_picks(
             continue
         picks.append(pick)
 
+    # select_clips runs after snap_bounds; includes R10 near-duplicate dedupe on final ms spans
     selected = select_clips(picks, range_end_ms - range_start_ms)
     picker_info(
         "selection",

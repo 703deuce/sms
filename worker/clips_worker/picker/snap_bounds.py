@@ -20,6 +20,16 @@ FILLERS = {
     "okay",
     "ok",
     "right",
+    "no",
+    "yeah",
+    "yes",
+    "yep",
+    "mhm",
+    "exactly",
+    "totally",
+    "sure",
+    "wow",
+    "oh",
 }
 PAD_START_S = 0.15
 PAD_END_S = 0.35
@@ -36,6 +46,34 @@ def _norm_token(w: str) -> str:
 def _is_filler_token(w: str) -> bool:
     t = _norm_token(w)
     return t in FILLERS
+
+
+def _sentence_word_tokens(sentence: Sentence) -> list[str]:
+    return [_norm_token(p) for p in sentence.text.split() if _norm_token(p)]
+
+
+def _is_micro_filler_sentence(sentence: Sentence) -> bool:
+    """<=3 words and every token is a filler/reaction (dangling opener)."""
+    toks = _sentence_word_tokens(sentence)
+    if not toks or len(toks) > 3:
+        return False
+    return all(t in FILLERS for t in toks)
+
+
+def _sentence_list_index(sentences: list[Sentence], s: Sentence) -> int:
+    for i, row in enumerate(sentences):
+        if row.idx == s.idx:
+            return i
+    return 0
+
+
+def _advance_to_substantive_start(sentences: list[Sentence], s: Sentence) -> int:
+    i = _sentence_list_index(sentences, s)
+    while i < len(sentences) and _is_micro_filler_sentence(sentences[i]):
+        i += 1
+    if i < len(sentences):
+        return sentences[i].start_ms
+    return s.start_ms
 
 
 def _sentence_at_ms(sentences: list[Sentence], ms: int) -> Sentence | None:
@@ -117,7 +155,8 @@ def snap_bounds(
     s_start = _sentence_at_ms(sentences, start_ms)
     s_end = _sentence_at_ms(sentences, end_ms)
     if s_start:
-        start_ms = s_start.start_ms
+        start_ms = _advance_to_substantive_start(sentences, s_start)
+        s_start = _sentence_at_ms(sentences, start_ms) or s_start
     if s_end:
         end_ms = s_end.end_ms
 
@@ -128,6 +167,7 @@ def snap_bounds(
     wi = _word_index_at_ms(words, start_ms, "start")
     while wi < len(words) and _is_filler_token(words[wi]["w"]):
         wi += 1
+    substantive_wi = wi
     if wi < len(words):
         start_ms = int(words[wi]["s"] * 1000)
 
@@ -154,11 +194,21 @@ def snap_bounds(
     else:
         end_ms = int(words[we]["e"] * 1000)
 
-    start_ms = int(start_ms - PAD_START_S * 1000)
-    end_ms = int(end_ms + PAD_END_S * 1000)
-    start_ms = max(range_start_ms, start_ms)
+    pad_start_ms = int(PAD_START_S * 1000)
+    pad_end_ms = int(PAD_END_S * 1000)
+    if substantive_wi < len(words):
+        w_s = int(words[substantive_wi]["s"] * 1000)
+        prev_is_filler = substantive_wi > 0 and _is_filler_token(words[substantive_wi - 1]["w"])
+        if prev_is_filler:
+            start_ms = w_s
+        else:
+            start_ms = max(range_start_ms, w_s - pad_start_ms)
+            if _word_index_at_ms(words, start_ms, "start") < substantive_wi:
+                start_ms = w_s
+    else:
+        start_ms = max(range_start_ms, int(start_ms - pad_start_ms))
+    end_ms = int(end_ms + pad_end_ms)
     end_ms = min(range_end_ms, end_ms)
-    start_ms = _clamp_ms_to_words(start_ms, words, "start")
     end_ms = _clamp_ms_to_words(end_ms, words, "end")
     if end_ms <= start_ms:
         start_ms, end_ms = before
