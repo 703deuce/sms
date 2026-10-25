@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { assertClipsRouteAccess } from '@/lib/server/clips-route-access'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
 import { createClipProject, listClipProjects } from '@/lib/server/clips/projects'
@@ -8,8 +7,6 @@ import { serializeProject } from '@/lib/server/clips/serialize'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export async function GET(request: Request) {
-  const denied = assertClipsRouteAccess(request)
-  if (denied) return denied
   try {
     const workspaceId = await resolveWorkspaceId()
     const url = new URL(request.url)

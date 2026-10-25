@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { costOf } from '@/lib/billing/entitlements'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { jsonError } from '@/lib/server/api-error'
-import { assertClipsRouteAccess } from '@/lib/server/clips-route-access'
 
 const schema = z.object({
   durationMs: z.number().int().min(0),
@@ -13,8 +12,6 @@ const schema = z.object({
 })
 
 export async function POST(request: Request) {
-  const denied = assertClipsRouteAccess(request)
-  if (denied) return denied
   try {
     const workspaceId = await resolveWorkspaceId()
     const body = schema.parse(await request.json())
