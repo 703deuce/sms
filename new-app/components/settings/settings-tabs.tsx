@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { UserPlus } from 'lucide-react'
@@ -13,9 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Panel } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
-import { BusinessHours } from '@/components/routing/business-hours'
 import { BUSINESS, TEAM } from '@/lib/data'
-import { fetchPhoneSettings, patchPhoneSettings } from '@/lib/phone-api'
+import { featuresAllUnlocked } from '@/lib/billing/entitlements'
 
 const TABS = [
   { value: 'business', label: 'Business' },
@@ -27,10 +25,8 @@ const TABS = [
 ] as const
 
 const USAGE = [
-  { label: 'Calling minutes', used: 1842, limit: 3000, unit: 'min' },
-  { label: 'AI Receptionist minutes', used: 412, limit: 500, unit: 'min' },
-  { label: 'SMS segments', used: 638, limit: 1500, unit: 'segments' },
-  { label: 'Phone numbers', used: 3, limit: 5, unit: 'numbers' },
+  { label: 'Source minutes processed', used: 0, limit: 300, unit: 'min' },
+  { label: 'Clips exported', used: 0, limit: 100, unit: 'clips' },
 ]
 
 function Field({ id, label, defaultValue, type = 'text' }: { id: string; label: string; defaultValue: string; type?: string }) {
@@ -47,15 +43,11 @@ function ToggleRow({
   label,
   hint,
   defaultChecked,
-  checked,
-  onCheckedChange,
 }: {
   id: string
   label: string
   hint: string
   defaultChecked?: boolean
-  checked?: boolean
-  onCheckedChange?: (v: boolean) => void
 }) {
   return (
     <div className="flex items-start justify-between gap-4 py-3">
@@ -63,77 +55,8 @@ function ToggleRow({
         <Label htmlFor={id}>{label}</Label>
         <p className="text-sm text-muted-foreground">{hint}</p>
       </div>
-      <Switch
-        id={id}
-        defaultChecked={checked === undefined ? defaultChecked : undefined}
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-      />
+      <Switch id={id} defaultChecked={defaultChecked} />
     </div>
-  )
-}
-
-function PhonePreferences() {
-  const [recordCalls, setRecordCalls] = useState(true)
-  const [transcribeVoicemail, setTranscribeVoicemail] = useState(true)
-  const [noiseSuppression, setNoiseSuppression] = useState(true)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    void fetchPhoneSettings()
-      .then((s) => {
-        setRecordCalls(s.recordCalls)
-        setTranscribeVoicemail(s.transcribeVoicemail)
-        setNoiseSuppression(s.noiseSuppression)
-        setLoaded(true)
-      })
-      .catch(() => setLoaded(true))
-  }, [])
-
-  const save = async (patch: Record<string, boolean>) => {
-    try {
-      await patchPhoneSettings(patch)
-      toast.success('Phone preferences saved')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save preferences')
-    }
-  }
-
-  if (!loaded) return <p className="px-5 py-4 text-sm text-muted-foreground">Loading phone preferences…</p>
-
-  return (
-    <>
-      <ToggleRow
-        id="pref-record"
-        label="Record calls"
-        hint="Plays a recording disclosure at the start of each call."
-        checked={recordCalls}
-        onCheckedChange={(v) => {
-          setRecordCalls(v)
-          void save({ recordCalls: v })
-        }}
-      />
-      <ToggleRow
-        id="pref-transcribe"
-        label="Transcribe voicemail"
-        hint="Voicemails are transcribed and attached to the call."
-        checked={transcribeVoicemail}
-        onCheckedChange={(v) => {
-          setTranscribeVoicemail(v)
-          void save({ transcribeVoicemail: v })
-        }}
-      />
-      <ToggleRow
-        id="pref-noise"
-        label="Noise suppression"
-        hint="Filters background noise in the browser dialer."
-        checked={noiseSuppression}
-        onCheckedChange={(v) => {
-          setNoiseSuppression(v)
-          void save({ noiseSuppression: v })
-        }}
-      />
-    </>
   )
 }
 
@@ -141,6 +64,7 @@ export function SettingsTabs() {
   const router = useRouter()
   const params = useSearchParams()
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab')! : 'business'
+  const testMode = featuresAllUnlocked()
 
   return (
     <Tabs value={tab} onValueChange={(v) => router.replace(`/app/settings?tab=${v}`, { scroll: false })} className="flex flex-col gap-6">
@@ -155,7 +79,7 @@ export function SettingsTabs() {
       </div>
 
       <TabsContent value="business" className="flex flex-col gap-6">
-        <Panel title="Business profile" description="Used by the AI Receptionist and in outbound caller ID.">
+        <Panel title="Business profile" description="Shown on exports and team invites.">
           <form
             className="grid grid-cols-1 gap-4 md:grid-cols-2"
             onSubmit={(e) => {
@@ -172,9 +96,6 @@ export function SettingsTabs() {
               <Button type="submit">Save profile</Button>
             </div>
           </form>
-        </Panel>
-        <Panel title="Business hours" description="Shared with call routing and the AI Receptionist.">
-          <BusinessHours />
         </Panel>
       </TabsContent>
 
@@ -205,7 +126,9 @@ export function SettingsTabs() {
                   <TableCell className="hidden text-muted-foreground md:table-cell">{m.email}</TableCell>
                   <TableCell>{m.role}</TableCell>
                   <TableCell className="pr-5">
-                    <StatusBadge tone={m.status === 'active' ? 'success' : 'warning'}>{m.status === 'active' ? 'Active' : 'Invited'}</StatusBadge>
+                    <StatusBadge tone={m.status === 'active' ? 'success' : 'warning'}>
+                      {m.status === 'active' ? 'Active' : 'Invited'}
+                    </StatusBadge>
                   </TableCell>
                 </TableRow>
               ))}
@@ -215,10 +138,14 @@ export function SettingsTabs() {
       </TabsContent>
 
       <TabsContent value="billing" className="flex flex-col gap-6">
-        <Panel title="Growth plan" description="Renews Nov 1, 2026 · usage resets each billing cycle" actions={<Button size="sm" variant="outline">Manage plan</Button>}>
+        <Panel
+          title={testMode ? 'Test mode' : 'Plan'}
+          description={testMode ? 'All features unlocked — billing enforcement ships in M16.' : 'Usage and credits'}
+          actions={<Button size="sm" variant="outline">Manage plan</Button>}
+        >
           <ul className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {USAGE.map((u) => {
-              const ratio = u.used / u.limit
+              const ratio = u.limit ? u.used / u.limit : 0
               return (
                 <li key={u.label} className="flex flex-col gap-2">
                   <div className="flex items-baseline justify-between text-sm">
@@ -228,7 +155,6 @@ export function SettingsTabs() {
                     </span>
                   </div>
                   <Progress value={ratio * 100} aria-label={`${u.label} usage`} />
-                  {ratio >= 0.8 && <p className="text-xs text-warning-foreground">{Math.round(ratio * 100)}% used — consider upgrading</p>}
                 </li>
               )
             })}
@@ -237,30 +163,29 @@ export function SettingsTabs() {
       </TabsContent>
 
       <TabsContent value="preferences">
-        <Panel title="Phone & audio" bodyClassName="divide-y py-0">
-          <PhonePreferences />
+        <Panel title="Clips defaults" bodyClassName="divide-y py-0">
+          <ToggleRow id="pref-captions" label="Captions on by default" hint="New projects start with animated captions enabled." defaultChecked />
+          <ToggleRow id="pref-follow" label="Speaker-follow layout" hint="Default 9:16 crop follows the active speaker." defaultChecked />
         </Panel>
       </TabsContent>
 
       <TabsContent value="notifications">
-        <Panel title="Notify me when" bodyClassName="divide-y py-0">
-          <ToggleRow id="n-callback" label="A callback is requested" hint="From AI Receptionist or text-back replies." defaultChecked />
-          <ToggleRow id="n-missed" label="A call is missed with no recovery" hint="Nobody answered and text-back was not sent." defaultChecked />
-          <ToggleRow id="n-int" label="An integration disconnects" hint="Calendar, CRM or notification channels." defaultChecked />
-          <ToggleRow id="n-digest" label="Daily digest" hint="Summary email at 6 PM local time." />
+        <Panel title="Email notifications" bodyClassName="divide-y py-0">
+          <ToggleRow id="n-ready" label="Clips are ready" hint="When processing finishes for a project." defaultChecked />
+          <ToggleRow id="n-fail" label="Processing failed" hint="When a project fails and credits are refunded." defaultChecked />
+          <ToggleRow id="n-digest" label="Weekly digest" hint="Summary of clips created and exported." />
         </Panel>
       </TabsContent>
 
       <TabsContent value="security">
         <Panel title="Security" bodyClassName="divide-y py-0">
-          <ToggleRow id="s-2fa" label="Require two-factor authentication" hint="All team members must enable 2FA to sign in." defaultChecked />
-          <ToggleRow id="s-ip" label="Restrict admin access by IP" hint="Only allow settings changes from approved networks." />
+          <ToggleRow id="s-2fa" label="Require two-factor authentication" hint="All team members must enable 2FA to sign in." />
           <div className="flex items-center justify-between gap-4 py-3">
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-medium">Delete workspace</span>
-              <p className="text-sm text-muted-foreground">Releases all numbers and permanently deletes recordings and messages.</p>
+              <p className="text-sm text-muted-foreground">Permanently deletes projects, uploads and exports.</p>
             </div>
-            <Button variant="destructive" onClick={() => toast.error('Contact the workspace owner to delete this workspace.')}>
+            <Button variant="destructive" onClick={() => toast.error('Contact support to delete this workspace.')}>
               Delete
             </Button>
           </div>

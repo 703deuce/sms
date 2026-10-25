@@ -3,15 +3,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
-import { useAgent } from '@/components/providers/agent-provider'
+import { useClipsWorkspace } from '@/components/providers/clips-workspace-provider'
 import { groupItems, isItemActive } from '@/lib/nav'
-import { usePowerDialerCrmNavEntry, useResolvedNavContext } from '@/components/shell/use-resolved-nav-context'
-import { isSharedCrmRoute } from '@/lib/nav-shell-context'
-import {
-  receptionistModeStatusCopy,
-  resolveRuntimeProfile,
-} from '@/lib/receptionist/runtime-profile'
+import { useResolvedNavContext } from '@/components/shell/use-resolved-nav-context'
 import { cn } from '@/lib/utils'
+import { Progress } from '@/components/ui/progress'
 
 type SidebarNavProps = {
   compact?: boolean
@@ -21,18 +17,8 @@ type SidebarNavProps = {
 
 export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNavProps) {
   const pathname = usePathname()
-  const { draft, live, changes, unsaved } = useAgent()
-  const receptionistProfile = resolveRuntimeProfile(draft)
-  const context = useResolvedNavContext(receptionistProfile)
-  const markPowerDialerCrm = usePowerDialerCrmNavEntry()
-  const receptionistMode =
-    context.key === 'receptionist'
-      ? receptionistModeStatusCopy({
-          draftProfile: receptionistProfile,
-          liveProfile: resolveRuntimeProfile(live),
-          hasUnpublishedDraft: changes.length > 0 || unsaved,
-        })
-      : null
+  const context = useResolvedNavContext()
+  const { testMode } = useClipsWorkspace()
   const groups = groupItems(context.items)
   const ContextIcon = context.icon
 
@@ -53,18 +39,7 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
         {!compact && (
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-sidebar-accent-foreground">{context.title}</p>
-            <p className="text-xs text-sidebar-muted">
-              {context.key === 'workspace'
-                ? 'Shared across products'
-                : receptionistMode
-                  ? receptionistMode.liveLine
-                  : 'Subscribed · Active'}
-            </p>
-            {receptionistMode && receptionistProfile !== resolveRuntimeProfile(live) && (
-              <p className="truncate text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                {receptionistMode.editingLine}
-              </p>
-            )}
+            <p className="text-xs text-sidebar-muted">Clips workspace</p>
           </div>
         )}
       </div>
@@ -86,37 +61,17 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
               return (
                 <Link
                   key={item.href}
-                  data-testid={`nav-${item.href.replace(/^\/app\//, '').replace(/\//g, '-')}`}
                   href={item.href}
-                  onPointerDown={() => {
-                    if (context.key === 'power_dialer' && isSharedCrmRoute(item.href)) {
-                      markPowerDialerCrm()
-                    }
-                  }}
-                  onClick={() => {
-                    onNavigate?.()
-                  }}
+                  onClick={onNavigate}
                   aria-current={active ? 'page' : undefined}
                   title={compact ? item.title : undefined}
                   className={cn(
-                    'group relative flex items-center rounded-lg text-sidebar-foreground transition-all focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
-                    compact
-                      ? 'flex-col justify-center gap-0.5 px-1 py-1'
-                      : 'h-8 gap-2.5 px-1.5 text-sm hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground',
-                    !compact && active && 'surface font-medium text-sidebar-accent-foreground hover:bg-sidebar-accent',
-                    compact && active && 'font-medium text-sidebar-accent-foreground',
+                    'flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
+                    active && 'bg-sidebar-accent text-sidebar-accent-foreground',
+                    compact && 'flex-col gap-1 px-1 py-2',
                   )}
                 >
-                  <span
-                    className={cn(
-                      'flex shrink-0 items-center justify-center rounded-md transition-all',
-                      compact ? 'size-7' : 'size-6',
-                      active
-                        ? 'tile-primary'
-                        : 'text-sidebar-muted group-hover:text-sidebar-accent-foreground',
-                      compact && !active && 'group-hover:surface',
-                    )}
-                  >
+                  <span className={cn('flex shrink-0 items-center justify-center', compact ? 'size-8' : 'size-6')}>
                     <Icon className={compact ? 'size-4' : 'size-3.5'} aria-hidden />
                   </span>
                   <span className={cn(compact ? 'w-full truncate text-center text-[10px] leading-tight' : 'truncate')}>
@@ -129,15 +84,11 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
         ))}
       </div>
 
-      {!compact && (
-        <div className="mx-3 mb-2 flex shrink-0 items-center gap-2 rounded-lg surface px-3 py-2">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
-            <span className="relative inline-flex size-2 rounded-full bg-success" />
-          </span>
-          <p className="truncate text-xs font-medium whitespace-nowrap text-sidebar-accent-foreground" title="(312) 555-0142">
-            Main line connected
-          </p>
+      {!compact && testMode && (
+        <div className="mx-3 mb-2 shrink-0 rounded-lg surface px-3 py-2">
+          <p className="text-xs font-medium text-sidebar-accent-foreground">Test mode</p>
+          <p className="text-[11px] text-sidebar-muted">All features unlocked</p>
+          <Progress value={100} className="mt-2 h-1" />
         </div>
       )}
 
@@ -153,7 +104,11 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
               compact ? 'flex-col gap-0.5 px-1 py-1.5' : 'h-8 gap-3 px-2.5 text-sm',
             )}
           >
-            {compact ? <PanelLeftOpen className="size-4 shrink-0" aria-hidden /> : <PanelLeftClose className="size-4 shrink-0" aria-hidden />}
+            {compact ? (
+              <PanelLeftOpen className="size-4 shrink-0" aria-hidden />
+            ) : (
+              <PanelLeftClose className="size-4 shrink-0" aria-hidden />
+            )}
             <span className={compact ? 'text-[10px] leading-tight' : undefined}>{compact ? 'Expand' : 'Collapse'}</span>
           </button>
         </div>

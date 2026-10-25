@@ -1,3 +1,6 @@
+// Phone, receptionist, power-dialer, MCTB and SMS models below are legacy, unused by new-app
+// (retained so production Postgres is not destructively migrated). Clips models are appended at EOF.
+
 generator client {
   provider = "prisma-client-js"
 }

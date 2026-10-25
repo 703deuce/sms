@@ -16,8 +16,11 @@ import {
 } from '@/components/ui/dialog'
 import { StatusBadge, type Tone } from '@/components/app/status'
 import { INTEGRATION_CATALOG, type IntegrationCatalogItem } from '@/lib/integrations/catalog'
-import { isBookingLinkOnlyLaunch } from '@/lib/receptionist/booking-launch-mode'
 import { formatWhen } from '@/lib/format'
+
+function isBookingLinkOnlyLaunch() {
+  return false
+}
 
 type Status = 'connected' | 'available' | 'error' | 'loading'
 
@@ -305,7 +308,7 @@ export function IntegrationsCatalog() {
                     </dl>
                     <div className="mt-auto flex gap-2">
                       {(s === 'available' || s === 'error') && (
-                        <Button className="flex-1" disabled={busy || s === 'loading'} onClick={() => onConnect(item)}>
+                        <Button className="flex-1" disabled={busy} onClick={() => onConnect(item)}>
                           {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
                           {s === 'error' ? 'Reconnect' : 'Connect'}
                         </Button>

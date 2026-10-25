@@ -1,16 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
-import { resolveContext, type ContextKey, type NavContext } from '@/lib/nav'
-import type { RuntimeProfile } from '@/lib/receptionist/runtime-profile'
-import {
-  readPersistedShellContext,
-  type PersistedShellContext,
-  shellContextToNavKey,
-  syncShellContextFromPath,
-  writePersistedShellContext,
-} from '@/lib/nav-shell-context'
+import { resolveContext, type NavContext } from '@/lib/nav'
+import type { PersistedShellContext } from '@/lib/nav-shell-context'
 
 const ShellContextState = createContext<PersistedShellContext | null>(null)
 
@@ -21,42 +14,26 @@ export function ShellContextProvider({
   initial: PersistedShellContext | null
   children: React.ReactNode
 }) {
-  const pathname = usePathname()
-  const [persisted, setPersisted] = useState<PersistedShellContext | null>(initial)
-
-  useEffect(() => {
-    syncShellContextFromPath(pathname)
-    setPersisted(readPersistedShellContext() ?? initial)
-  }, [pathname, initial])
-
-  return <ShellContextState.Provider value={persisted}>{children}</ShellContextState.Provider>
+  return <ShellContextState.Provider value={initial}>{children}</ShellContextState.Provider>
 }
 
 export function useShellPersistedContext(): PersistedShellContext | null {
   return useContext(ShellContextState)
 }
 
-export function useResolvedNavContext(receptionistProfile: RuntimeProfile): NavContext {
+export function useResolvedNavContext(): NavContext {
   const pathname = usePathname()
-  const persisted = useShellPersistedContext()
-  const shellContext = shellContextToNavKey(persisted)
-
-  return useMemo(
-    () => resolveContext(pathname, receptionistProfile, { shellContext }),
-    [pathname, receptionistProfile, shellContext],
-  )
+  return useMemo(() => resolveContext(pathname), [pathname])
 }
 
 export function useWorkspaceContactsNavEntry() {
-  return () => writePersistedShellContext('workspace')
+  return () => {}
 }
 
 export function usePowerDialerCrmNavEntry() {
-  return () => writePersistedShellContext('power_dialer')
+  return () => {}
 }
 
-export function shellContextKeyFromCookie(value: string | undefined): ContextKey | null {
-  if (value === 'power_dialer') return 'power_dialer'
-  if (value === 'workspace') return 'workspace'
+export function shellContextKeyFromCookie(_value: string | undefined): null {
   return null
 }

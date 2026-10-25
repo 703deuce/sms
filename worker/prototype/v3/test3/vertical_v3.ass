@@ -1,0 +1,152 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 720
+PlayResY: 1280
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,Poppins ExtraBold,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&H99000000,0,0,0,0,100,100,0,0,1,7,4,2,40,40,380,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.08,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}I{\r} LOVE ANIMALS
+Dialogue: 0,0:00:00.08,0:00:00.20,Cap,,0,0,0,,I {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}LOVE{\r} ANIMALS
+Dialogue: 0,0:00:00.20,0:00:00.97,Cap,,0,0,0,,I LOVE {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ANIMALS{\r}
+Dialogue: 0,0:00:01.86,0:00:02.08,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THAT'S{\r} AWESOME
+Dialogue: 0,0:00:02.08,0:00:02.43,Cap,,0,0,0,,THAT'S {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}AWESOME{\r}
+Dialogue: 0,0:00:02.43,0:00:02.62,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THAT'S{\r} REALLY GREAT
+Dialogue: 0,0:00:02.62,0:00:02.78,Cap,,0,0,0,,THAT'S {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}REALLY{\r} GREAT
+Dialogue: 0,0:00:02.78,0:00:03.37,Cap,,0,0,0,,THAT'S REALLY {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}GREAT{\r}
+Dialogue: 0,0:00:03.38,0:00:03.52,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THANK{\r} YOU
+Dialogue: 0,0:00:03.52,0:00:04.27,Cap,,0,0,0,,THANK {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}YOU{\r}
+Dialogue: 0,0:00:04.98,0:00:05.39,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}SO{\r}
+Dialogue: 0,0:00:05.59,0:00:05.84,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}NOT{\r} TO KIND
+Dialogue: 0,0:00:05.84,0:00:06.06,Cap,,0,0,0,,NOT {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TO{\r} KIND
+Dialogue: 0,0:00:06.06,0:00:06.28,Cap,,0,0,0,,NOT TO {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}KIND{\r}
+Dialogue: 0,0:00:06.28,0:00:06.62,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OF{\r} MOVE US
+Dialogue: 0,0:00:06.62,0:00:06.90,Cap,,0,0,0,,OF {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}MOVE{\r} US
+Dialogue: 0,0:00:06.90,0:00:07.06,Cap,,0,0,0,,OF MOVE {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}US{\r}
+Dialogue: 0,0:00:07.06,0:00:07.43,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}AWAY{\r}
+Dialogue: 0,0:00:07.43,0:00:07.52,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}BUT{\r} I KNOW
+Dialogue: 0,0:00:07.52,0:00:07.88,Cap,,0,0,0,,BUT {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}I{\r} KNOW
+Dialogue: 0,0:00:07.88,0:00:08.18,Cap,,0,0,0,,BUT I {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}KNOW{\r}
+Dialogue: 0,0:00:08.18,0:00:08.44,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WE'VE{\r} GOT LIMITED
+Dialogue: 0,0:00:08.44,0:00:08.58,Cap,,0,0,0,,WE'VE {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}GOT{\r} LIMITED
+Dialogue: 0,0:00:08.58,0:00:08.84,Cap,,0,0,0,,WE'VE GOT {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}LIMITED{\r}
+Dialogue: 0,0:00:08.84,0:00:09.14,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TIME{\r} WITH YOU
+Dialogue: 0,0:00:09.14,0:00:09.34,Cap,,0,0,0,,TIME {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WITH{\r} YOU
+Dialogue: 0,0:00:09.34,0:00:09.75,Cap,,0,0,0,,TIME WITH {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}YOU{\r}
+Dialogue: 0,0:00:09.75,0:00:10.68,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}SO{\r}
+Dialogue: 0,0:00:10.68,0:00:10.94,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TALK{\r} ALL DAY
+Dialogue: 0,0:00:10.94,0:00:11.44,Cap,,0,0,0,,TALK {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ALL{\r} DAY
+Dialogue: 0,0:00:11.44,0:00:11.76,Cap,,0,0,0,,TALK ALL {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}DAY{\r}
+Dialogue: 0,0:00:11.76,0:00:12.42,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}LONG{\r}
+Dialogue: 0,0:00:12.42,0:00:12.64,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THERE'S{\r} NO PROBLEM
+Dialogue: 0,0:00:12.64,0:00:12.82,Cap,,0,0,0,,THERE'S {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}NO{\r} PROBLEM
+Dialogue: 0,0:00:12.82,0:00:13.42,Cap,,0,0,0,,THERE'S NO {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}PROBLEM{\r}
+Dialogue: 0,0:00:13.42,0:00:13.72,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}BUT{\r} LET'S MOVE
+Dialogue: 0,0:00:13.72,0:00:14.06,Cap,,0,0,0,,BUT {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}LET'S{\r} MOVE
+Dialogue: 0,0:00:14.06,0:00:14.12,Cap,,0,0,0,,BUT LET'S {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}MOVE{\r}
+Dialogue: 0,0:00:14.12,0:00:14.24,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ON{\r} TO OTHER
+Dialogue: 0,0:00:14.24,0:00:14.44,Cap,,0,0,0,,ON {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TO{\r} OTHER
+Dialogue: 0,0:00:14.44,0:00:14.78,Cap,,0,0,0,,ON TO {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OTHER{\r}
+Dialogue: 0,0:00:14.78,0:00:15.72,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TYPES{\r} OF COMICS
+Dialogue: 0,0:00:15.72,0:00:15.98,Cap,,0,0,0,,TYPES {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OF{\r} COMICS
+Dialogue: 0,0:00:15.98,0:00:16.26,Cap,,0,0,0,,TYPES OF {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMICS{\r}
+Dialogue: 0,0:00:16.26,0:00:16.44,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}IF{\r} THAT'S WHAT
+Dialogue: 0,0:00:16.44,0:00:16.70,Cap,,0,0,0,,IF {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THAT'S{\r} WHAT
+Dialogue: 0,0:00:16.70,0:00:16.80,Cap,,0,0,0,,IF THAT'S {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WHAT{\r}
+Dialogue: 0,0:00:16.80,0:00:16.90,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}YOU{\r} WANT TO
+Dialogue: 0,0:00:16.90,0:00:17.08,Cap,,0,0,0,,YOU {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WANT{\r} TO
+Dialogue: 0,0:00:17.08,0:00:17.18,Cap,,0,0,0,,YOU WANT {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TO{\r}
+Dialogue: 0,0:00:17.18,0:00:17.51,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}DO{\r}
+Dialogue: 0,0:00:17.51,0:00:17.76,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WELL{\r}
+Dialogue: 0,0:00:17.76,0:00:18.00,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}NO{\r}
+Dialogue: 0,0:00:18.00,0:00:18.08,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WHAT{\r} I WANTED
+Dialogue: 0,0:00:18.08,0:00:18.24,Cap,,0,0,0,,WHAT {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}I{\r} WANTED
+Dialogue: 0,0:00:18.24,0:00:18.46,Cap,,0,0,0,,WHAT I {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WANTED{\r}
+Dialogue: 0,0:00:18.46,0:00:18.64,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TO{\r} ASK YOU
+Dialogue: 0,0:00:18.64,0:00:18.78,Cap,,0,0,0,,TO {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ASK{\r} YOU
+Dialogue: 0,0:00:18.78,0:00:18.96,Cap,,0,0,0,,TO ASK {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}YOU{\r}
+Dialogue: 0,0:00:18.96,0:00:19.20,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ACTUALLY{\r} WAS
+Dialogue: 0,0:00:19.20,0:00:19.85,Cap,,0,0,0,,ACTUALLY {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WAS{\r}
+Dialogue: 0,0:00:20.17,0:00:21.16,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WHAT'S{\r} YOUR FIRST
+Dialogue: 0,0:00:21.16,0:00:21.42,Cap,,0,0,0,,WHAT'S {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}YOUR{\r} FIRST
+Dialogue: 0,0:00:21.42,0:00:22.02,Cap,,0,0,0,,WHAT'S YOUR {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}FIRST{\r}
+Dialogue: 0,0:00:22.02,0:00:22.38,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OR{\r} EARLIEST COMIC
+Dialogue: 0,0:00:22.38,0:00:22.98,Cap,,0,0,0,,OR {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}EARLIEST{\r} COMIC
+Dialogue: 0,0:00:22.98,0:00:23.60,Cap,,0,0,0,,OR EARLIEST {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMIC{\r}
+Dialogue: 0,0:00:23.60,0:00:24.41,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}MEMORY?{\r}
+Dialogue: 0,0:00:24.52,0:00:24.70,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}YOU{\r} KNOW
+Dialogue: 0,0:00:24.70,0:00:24.84,Cap,,0,0,0,,YOU {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}KNOW{\r}
+Dialogue: 0,0:00:24.84,0:00:24.92,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}AND{\r} IT DOESN'T
+Dialogue: 0,0:00:24.92,0:00:25.00,Cap,,0,0,0,,AND {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}IT{\r} DOESN'T
+Dialogue: 0,0:00:25.00,0:00:25.20,Cap,,0,0,0,,AND IT {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}DOESN'T{\r}
+Dialogue: 0,0:00:25.20,0:00:25.64,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}NECESSARILY{\r} HAVE TO
+Dialogue: 0,0:00:25.64,0:00:25.96,Cap,,0,0,0,,NECESSARILY {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}HAVE{\r} TO
+Dialogue: 0,0:00:25.96,0:00:26.08,Cap,,0,0,0,,NECESSARILY HAVE {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TO{\r}
+Dialogue: 0,0:00:26.08,0:00:26.24,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}BE{\r} WORK
+Dialogue: 0,0:00:26.24,0:00:26.50,Cap,,0,0,0,,BE {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WORK{\r}
+Dialogue: 0,0:00:26.50,0:00:26.74,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}JUST{\r} THE FIRST
+Dialogue: 0,0:00:26.74,0:00:27.10,Cap,,0,0,0,,JUST {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THE{\r} FIRST
+Dialogue: 0,0:00:27.10,0:00:27.34,Cap,,0,0,0,,JUST THE {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}FIRST{\r}
+Dialogue: 0,0:00:27.34,0:00:28.01,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}MEMORY{\r}
+Dialogue: 0,0:00:28.04,0:00:28.36,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}YOU'RE{\r} ASKING QUESTIONS
+Dialogue: 0,0:00:28.36,0:00:28.60,Cap,,0,0,0,,YOU'RE {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ASKING{\r} QUESTIONS
+Dialogue: 0,0:00:28.60,0:00:28.96,Cap,,0,0,0,,YOU'RE ASKING {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}QUESTIONS{\r}
+Dialogue: 0,0:00:28.96,0:00:29.22,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}NOBODY{\r} ELSE ASKS
+Dialogue: 0,0:00:29.22,0:00:29.52,Cap,,0,0,0,,NOBODY {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ELSE{\r} ASKS
+Dialogue: 0,0:00:29.52,0:00:29.76,Cap,,0,0,0,,NOBODY ELSE {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ASKS{\r}
+Dialogue: 0,0:00:29.76,0:00:29.84,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}I{\r} GOT TIRED
+Dialogue: 0,0:00:29.84,0:00:30.02,Cap,,0,0,0,,I {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}GOT{\r} TIRED
+Dialogue: 0,0:00:30.02,0:00:30.34,Cap,,0,0,0,,I GOT {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}TIRED{\r}
+Dialogue: 0,0:00:30.34,0:00:30.54,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OF{\r} THOSE OTHER
+Dialogue: 0,0:00:30.54,0:00:30.70,Cap,,0,0,0,,OF {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THOSE{\r} OTHER
+Dialogue: 0,0:00:30.70,0:00:30.94,Cap,,0,0,0,,OF THOSE {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OTHER{\r}
+Dialogue: 0,0:00:30.94,0:00:31.61,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}QUESTIONS{\r}
+Dialogue: 0,0:00:32.18,0:00:32.32,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}MY{\r} FIRST COMIC
+Dialogue: 0,0:00:32.32,0:00:32.52,Cap,,0,0,0,,MY {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}FIRST{\r} COMIC
+Dialogue: 0,0:00:32.52,0:00:32.92,Cap,,0,0,0,,MY FIRST {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMIC{\r}
+Dialogue: 0,0:00:32.92,0:00:33.38,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}MEMORY{\r} IS COMIC
+Dialogue: 0,0:00:33.38,0:00:34.34,Cap,,0,0,0,,MEMORY {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}IS{\r} COMIC
+Dialogue: 0,0:00:34.34,0:00:35.90,Cap,,0,0,0,,MEMORY IS {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMIC{\r}
+Dialogue: 0,0:00:35.90,0:00:36.20,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}BOOK{\r} OR COMICS
+Dialogue: 0,0:00:36.20,0:00:36.36,Cap,,0,0,0,,BOOK {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OR{\r} COMICS
+Dialogue: 0,0:00:36.36,0:00:37.60,Cap,,0,0,0,,BOOK OR {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMICS{\r}
+Dialogue: 0,0:00:37.60,0:00:38.55,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WHATEVER{\r}
+Dialogue: 0,0:00:38.56,0:00:38.66,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}KIND{\r} OF ANYTHING
+Dialogue: 0,0:00:38.66,0:00:38.78,Cap,,0,0,0,,KIND {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OF{\r} ANYTHING
+Dialogue: 0,0:00:38.78,0:00:39.12,Cap,,0,0,0,,KIND OF {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ANYTHING{\r}
+Dialogue: 0,0:00:39.12,0:00:39.32,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}IN{\r} THE COMIC
+Dialogue: 0,0:00:39.32,0:00:39.42,Cap,,0,0,0,,IN {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THE{\r} COMIC
+Dialogue: 0,0:00:39.42,0:00:39.66,Cap,,0,0,0,,IN THE {\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMIC{\r}
+Dialogue: 0,0:00:39.66,0:00:40.12,Cap,,0,0,0,,{\c&H0014FF39&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMICS{\r}
+Dialogue: 0,0:00:40.12,0:00:40.65,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}FIELD{\r}
+Dialogue: 0,0:00:41.53,0:00:42.34,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}FIRST{\r} COMICS MEMORY
+Dialogue: 0,0:00:42.34,0:00:42.80,Cap,,0,0,0,,FIRST {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMICS{\r} MEMORY
+Dialogue: 0,0:00:42.80,0:00:43.45,Cap,,0,0,0,,FIRST COMICS {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}MEMORY{\r}
+Dialogue: 0,0:00:43.46,0:00:44.15,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}PEANUTS{\r}
+Dialogue: 0,0:00:46.12,0:00:46.78,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}FIRST{\r} COMIC BOOK
+Dialogue: 0,0:00:46.78,0:00:47.06,Cap,,0,0,0,,FIRST {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}COMIC{\r} BOOK
+Dialogue: 0,0:00:47.06,0:00:47.42,Cap,,0,0,0,,FIRST COMIC {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}BOOK{\r}
+Dialogue: 0,0:00:47.42,0:00:48.43,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}MEMORY{\r}
+Dialogue: 0,0:00:48.55,0:00:49.15,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ARCHIE{\r}
+Dialogue: 0,0:00:51.86,0:00:52.52,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THAT'S{\r} WHEN I
+Dialogue: 0,0:00:52.52,0:00:52.74,Cap,,0,0,0,,THAT'S {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WHEN{\r} I
+Dialogue: 0,0:00:52.74,0:00:53.78,Cap,,0,0,0,,THAT'S WHEN {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}I{\r}
+Dialogue: 0,0:00:53.78,0:00:54.28,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WAS{\r} LIKE
+Dialogue: 0,0:00:54.28,0:00:54.57,Cap,,0,0,0,,WAS {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}LIKE{\r}
+Dialogue: 0,0:00:54.57,0:00:54.97,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OH{\r}
+Dialogue: 0,0:00:55.22,0:00:55.54,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}LOOK{\r} AT THIS
+Dialogue: 0,0:00:55.54,0:00:55.68,Cap,,0,0,0,,LOOK {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}AT{\r} THIS
+Dialogue: 0,0:00:55.68,0:00:56.27,Cap,,0,0,0,,LOOK AT {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THIS{\r}
+Dialogue: 0,0:00:56.50,0:00:57.14,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}I{\r} NEED ALL
+Dialogue: 0,0:00:57.14,0:00:57.34,Cap,,0,0,0,,I {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}NEED{\r} ALL
+Dialogue: 0,0:00:57.34,0:00:57.60,Cap,,0,0,0,,I NEED {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}ALL{\r}
+Dialogue: 0,0:00:57.60,0:00:57.78,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}OF{\r} THESE
+Dialogue: 0,0:00:57.78,0:00:58.06,Cap,,0,0,0,,OF {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}THESE{\r}
+Dialogue: 0,0:00:58.06,0:00:58.77,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}UM{\r}
+Dialogue: 0,0:00:58.84,0:00:58.94,Cap,,0,0,0,,{\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}IT{\r} WAS
+Dialogue: 0,0:00:58.94,0:00:59.91,Cap,,0,0,0,,IT {\c&H0000E6FF&\fscx100\fscy100\t(0,90,\fscx116\fscy116)\t(90,180,\fscx110\fscy110)}WAS{\r}

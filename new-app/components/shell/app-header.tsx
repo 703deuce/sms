@@ -1,19 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import {
-  Bell,
-  ChevronDown,
-  Contact,
-  Grid3x3,
-  HelpCircle,
-  Home,
-  Inbox,
-  Menu,
-  Plug,
-  Settings,
-} from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { HelpCircle, Menu, Plug, Settings, Upload } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -25,20 +15,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAgent } from '@/components/providers/agent-provider'
-import { PRODUCTS } from '@/lib/nav'
-import { useResolvedNavContext, useWorkspaceContactsNavEntry } from '@/components/shell/use-resolved-nav-context'
-import { resolveRuntimeProfile } from '@/lib/receptionist/runtime-profile'
-import { BUSINESS, THREADS } from '@/lib/data'
+import { useClipsWorkspace } from '@/components/providers/clips-workspace-provider'
+import { useResolvedNavContext } from '@/components/shell/use-resolved-nav-context'
+import { BUSINESS } from '@/lib/data'
 import { cn } from '@/lib/utils'
 import { GlobalSearch } from './global-search'
 import { NotificationsPopover } from './notifications-popover'
-import { useRouter } from 'next/navigation'
 
 const UTILITIES = [
-  { title: 'Home', href: '/app/home', icon: Home },
-  { title: 'Inbox', href: '/app/inbox', icon: Inbox },
-  { title: 'Contacts', href: '/app/contacts', icon: Contact },
   { title: 'Integrations', href: '/app/integrations', icon: Plug },
   { title: 'Settings', href: '/app/settings', icon: Settings },
   { title: 'Help', href: '/app/help', icon: HelpCircle },
@@ -47,10 +31,8 @@ const UTILITIES = [
 export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { draft } = useAgent()
-  const context = useResolvedNavContext(resolveRuntimeProfile(draft))
-  const markWorkspaceContacts = useWorkspaceContactsNavEntry()
-  const unread = THREADS.filter((t) => t.unread).length
+  const context = useResolvedNavContext()
+  const { testMode } = useClipsWorkspace()
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-card/85 px-3 backdrop-blur-xl backdrop-saturate-150 md:px-4">
@@ -58,80 +40,47 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
         <Menu />
       </Button>
 
-      <Link href="/app/home" className="flex items-center gap-2 rounded-md pr-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" aria-label="Transovo home">
+      <Link
+        href="/app/clips"
+        className="flex items-center gap-2 rounded-md pr-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        aria-label="Clips home"
+      >
         <span className="flex size-8 items-center justify-center rounded-lg tile-primary text-sm font-bold tracking-tight">
           T
         </span>
-        <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">Transovo</span>
+        <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">Transovo Clips</span>
       </Link>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button variant="ghost" size="sm" className="hidden gap-1.5 text-muted-foreground lg:inline-flex">
-              <span className="max-w-32 truncate">{BUSINESS.workspace}</span>
-              <ChevronDown className="size-3.5" />
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-            <DropdownMenuItem>Harbor &amp; Pine</DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <span className="hidden text-sm text-muted-foreground lg:inline">{BUSINESS.workspace}</span>
 
-      <span aria-hidden className="hidden h-6 w-px bg-border lg:block" />
-
-      <nav aria-label="Products" className="hidden items-center gap-1 lg:flex">
-        {PRODUCTS.map((p) => {
-          const active = context.key === p.key
-          return (
-            <Link
-              key={p.key}
-              href={p.href}
-              aria-current={active ? 'true' : undefined}
-              className={cn(
-                'relative flex h-16 items-center px-3 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
-                active && 'text-foreground',
-              )}
-            >
-              {p.title}
-              {active && <span aria-hidden className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-primary" />}
-            </Link>
-          )
-        })}
+      <nav aria-label="Product" className="hidden items-center gap-1 lg:flex">
+        <Link
+          href="/app/clips"
+          aria-current={context.key === 'clips' ? 'true' : undefined}
+          className={cn(
+            'relative flex h-16 items-center px-3 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
+            context.key === 'clips' && 'text-foreground',
+          )}
+        >
+          Clips
+          {context.key === 'clips' && (
+            <span aria-hidden className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-primary" />
+          )}
+        </Link>
       </nav>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button variant="outline" size="sm" className="gap-1.5 lg:hidden">
-              <span className="max-w-36 truncate">{context.key === 'workspace' ? 'Product' : context.title}</span>
-              <ChevronDown className="size-3.5" />
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="start" className="w-60">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Product</DropdownMenuLabel>
-            {PRODUCTS.map((p) => (
-              <DropdownMenuItem key={p.key} onClick={() => router.push(p.href)}>
-                <p.icon />
-                {p.title}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
 
       <div className="ml-auto flex items-center gap-1">
         <GlobalSearch />
 
-        <Link href="/app/phone/dialer" className={cn(buttonVariants({ size: 'sm' }), 'hidden gap-1.5 sm:inline-flex')}>
-          <Grid3x3 />
-          Dial
+        {testMode && (
+          <Badge variant="secondary" className="hidden sm:inline-flex">
+            Test mode · all features unlocked
+          </Badge>
+        )}
+
+        <Link href="/app/clips/new" className={cn(buttonVariants({ size: 'sm' }), 'hidden gap-1.5 sm:inline-flex')}>
+          <Upload />
+          New project
         </Link>
 
         <span aria-hidden className="mx-1 hidden h-6 w-px bg-border xl:block" />
@@ -145,9 +94,6 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
                   render={
                     <Link
                       href={u.href}
-                      onClick={() => {
-                        if (u.href === '/app/contacts') markWorkspaceContacts()
-                      }}
                       aria-current={active ? 'page' : undefined}
                       className={cn(
                         buttonVariants({ variant: 'ghost', size: 'icon' }),
@@ -156,15 +102,7 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
                       )}
                     >
                       <u.icon />
-                      <span className="sr-only">
-                        {u.title}
-                        {u.title === 'Inbox' ? `, ${unread} unread` : ''}
-                      </span>
-                      {u.title === 'Inbox' && unread > 0 && (
-                        <span aria-hidden className="absolute top-1 right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                          {unread}
-                        </span>
-                      )}
+                      <span className="sr-only">{u.title}</span>
                     </Link>
                   }
                 />
@@ -173,34 +111,6 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
             )
           })}
         </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="icon" className="xl:hidden" aria-label="Workspace shortcuts">
-                <Inbox />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Workspace</DropdownMenuLabel>
-              {UTILITIES.map((u) => (
-                <DropdownMenuItem
-                  key={u.href}
-                  onClick={() => {
-                    if (u.href === '/app/contacts') markWorkspaceContacts()
-                    router.push(u.href)
-                  }}
-                >
-                  <u.icon />
-                  {u.title}
-                  {u.title === 'Inbox' && <span className="ml-auto text-xs text-muted-foreground">{unread}</span>}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         <NotificationsPopover />
 
@@ -217,8 +127,8 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuGroup>
               <DropdownMenuLabel>
-                <span className="block text-sm font-medium text-foreground">Maya Okafor</span>
-                <span className="block text-xs font-normal text-muted-foreground">Owner · maya@harborpine.com</span>
+                <span className="block text-sm font-medium text-foreground">Account</span>
+                <span className="block text-xs font-normal text-muted-foreground">Settings & billing</span>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
@@ -227,8 +137,11 @@ export function AppHeader({ onOpenMenu }: { onOpenMenu: () => void }) {
               Settings
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push('/app/settings?tab=billing')}>
-              <Bell />
               Billing &amp; usage
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push('/app/help')}>
+              <HelpCircle />
+              Help
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

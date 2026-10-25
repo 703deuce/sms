@@ -325,7 +325,7 @@
     "@livekit/agents-plugin-elevenlabs": "^1.6.2",
     "@livekit/agents-plugin-openai": "^1.6.2",
     "@livekit/agents-plugin-silero": "^1.6.2",
-    "@prisma/client": "^6.19.0",
+    "@prisma/client": "^6.19.3",
     "@supabase/supabase-js": "^2.111.0",
     "@telnyx/video": "^1.0.2",
     "@telnyx/webrtc": "^2.27.8",
@@ -374,7 +374,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "playwright": "^1.62.1",
-    "prisma": "6.19.0",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "typescript": "^5",
     "undici": "^6.28.0"
