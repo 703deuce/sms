@@ -5,6 +5,7 @@
 [variables]
 HOSTNAME = "0.0.0.0"
 PORT = "3000"
+PRISMA_GENERATE_SKIP_AUTOINSTALL = "true"
 
 [phases.setup]
 nixPkgs = ["nodejs_22"]

@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "next dev --port 3100",
-    "build": "prisma generate --schema=../prisma/schema.prisma && next build",
+    "build": "prisma generate --schema=prisma/schema.prisma && next build",
     "start": "node scripts/start-production.mjs",
     "typecheck": "bash scripts/typecheck-from-git.sh",
     "test:phone": "node scripts/test-phone-runtime-logic.mjs && node scripts/test-phone-recording-resolve.mjs && node scripts/test-phone-complete.mjs",

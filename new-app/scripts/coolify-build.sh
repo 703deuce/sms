@@ -3,6 +3,8 @@
 # Expects cwd=new-app; Prisma schema from ../prisma when Coolify build context is repo root.
 set -euo pipefail
 
+export PRISMA_GENERATE_SKIP_AUTOINSTALL="${PRISMA_GENERATE_SKIP_AUTOINSTALL:-true}"
+
 heartbeat_interval="${COOLIFY_BUILD_HEARTBEAT_SECS:-20}"
 
 PNPM="${PNPM:-npx --yes pnpm@12.3.4}"
@@ -14,6 +16,10 @@ if [[ -f ../prisma/schema.prisma ]]; then
   echo "[new-app/coolify-build] syncing Prisma schema from monorepo parent"
   rm -rf prisma
   cp -a ../prisma prisma
+  # Keep generated client in new-app/node_modules (default); never point output outside new-app.
+  if grep -qE '^[[:space:]]*output[[:space:]]*=' prisma/schema.prisma; then
+    sed -i '/^[[:space:]]*output[[:space:]]*=/d' prisma/schema.prisma
+  fi
 elif [[ ! -f prisma/schema.prisma ]]; then
   echo "[new-app/coolify-build] ERROR: missing prisma/schema.prisma (expected ../prisma in Coolify monorepo checkout)"
   exit 1
@@ -34,7 +40,11 @@ if [[ -n "${COOLIFY_RESOURCE_UUID:-}" ]]; then
 fi
 
 set -o pipefail
-$PNPM run build > >(stdbuf -oL -eL tee /tmp/new-app-next-build.log) 2>&1 &
+echo "[new-app/coolify-build] prisma generate start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+$PNPM exec prisma generate --schema=prisma/schema.prisma
+echo "[new-app/coolify-build] prisma generate end $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "[new-app/coolify-build] next build start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+$PNPM exec next build > >(stdbuf -oL -eL tee /tmp/new-app-next-build.log) 2>&1 &
 build_pid=$!
 
 while kill -0 "$build_pid" 2>/dev/null; do
@@ -46,6 +56,7 @@ done
 
 wait "$build_pid"
 build_status=$?
+echo "[new-app/coolify-build] next build end $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 if [[ "$build_status" -ne 0 ]]; then
   echo "[new-app/coolify-build] build failed with status $build_status"
