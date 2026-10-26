@@ -1,0 +1,5 @@
+ALTER TABLE "clip_renders" ADD COLUMN IF NOT EXISTS "editsVersionHash" TEXT;
+ALTER TABLE "clip_renders" ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP(3);
+ALTER TABLE "clip_renders" ADD COLUMN IF NOT EXISTS "sizeBytes" BIGINT;
+ALTER TABLE "clip_renders" ADD COLUMN IF NOT EXISTS "error" TEXT;
+ALTER TABLE "clip_renders" ADD COLUMN IF NOT EXISTS "srtKey" TEXT;

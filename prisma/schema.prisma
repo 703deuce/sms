@@ -8936,17 +8936,22 @@ model ClipEvent {
 }
 
 model ClipRender {
-  id          String           @id
-  clipId      String
-  workspaceId String
-  status      ClipRenderStatus @default(READY)
-  outputKey   String?
-  format      String           @default("mp4")
-  resolution  String           @default("720p")
-  watermark   Boolean          @default(false)
-  filename    String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id                String           @id
+  clipId            String
+  workspaceId       String
+  status            ClipRenderStatus @default(READY)
+  outputKey         String?
+  format            String           @default("mp4")
+  resolution        String           @default("720p")
+  watermark         Boolean          @default(false)
+  filename          String?
+  editsVersionHash  String?
+  srtKey            String?
+  sizeBytes         BigInt?
+  expiresAt         DateTime?
+  error             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   clip      Clip      @relation(fields: [clipId], references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
