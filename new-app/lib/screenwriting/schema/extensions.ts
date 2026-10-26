@@ -59,12 +59,23 @@ export function createScreenplayElementNode(formatSpec: FormatSpec) {
           parseHTML: (el) => el.getAttribute('data-image-src'),
           renderHTML: (a) => (a.imageSrc ? { 'data-image-src': a.imageSrc } : {}),
         },
+        synopsis: {
+          default: null,
+          parseHTML: (el) => el.getAttribute('data-synopsis'),
+          renderHTML: (a) => (a.synopsis ? { 'data-synopsis': a.synopsis } : {}),
+        },
+        revisedMark: {
+          default: null,
+          parseHTML: (el) => el.getAttribute('data-revised'),
+          renderHTML: (a) => (a.revisedMark ? { 'data-revised': a.revisedMark } : {}),
+        },
       }
     },
     parseHTML: () => [{ tag: 'div[data-screenplay-element]' }],
     renderHTML({ node, HTMLAttributes }) {
       const type = (node.attrs.elementType || 'action') as ScreenplayElementType
       const style = cssPropertiesToString(elementStyle(formatSpec, type))
+      const revised = node.attrs.revisedMark ? '*' : ''
       return [
         'div',
         mergeAttributes(HTMLAttributes, {
@@ -72,6 +83,7 @@ export function createScreenplayElementNode(formatSpec: FormatSpec) {
           class: 'sw-element',
           style,
         }),
+        ['span', { class: 'sw-revised-mark', style: 'display:none' }, revised],
         0,
       ]
     },

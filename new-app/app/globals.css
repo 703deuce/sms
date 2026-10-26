@@ -294,11 +294,21 @@
 .sw-fd-page {
   background: linear-gradient(to bottom, #faf8f5 0%, #fff 12rem);
 }
-.sw-fd-shell .sw-fd-toolbar {
-  border-bottom: 1px solid var(--border);
+.dark .sw-fd-page {
+  background: linear-gradient(to bottom, var(--card) 0%, var(--background) 12rem);
 }
-.sw-fd-navigator {
+.sw-fd-shell .sw-fd-toolbar,
+.sw-fd-shell .sw-fd-menubar,
+.sw-fd-shell .sw-fd-element-bar {
+  border-bottom: 1px solid var(--border);
   background: var(--card);
+}
+.sw-fd-navigator,
+.sw-fd-notes {
+  background: var(--card);
+}
+.sw-editor .sw-element[data-element-type='sceneHeading'] {
+  text-transform: uppercase;
 }
 
 @media print {

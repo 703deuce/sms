@@ -32,6 +32,10 @@ import { useScreenplayYjsCollab } from '@/components/screenwriting/use-screenpla
 import { CollabStatusBanner } from '@/components/screenwriting/collab-status-banner'
 import { PanelEmpty } from '@/components/screenwriting/panel-empty'
 import { shouldRecoverLocalDraft, offlineDraftKeys } from '@/lib/screenwriting/persistence/offline-draft'
+import { ImportDialog, type ImportMode } from '@/components/screenwriting/import-dialog'
+import { BeatBoardPanel, type BeatBoardState } from '@/components/screenwriting/beat-board-panel'
+import { SceneCardsPanel } from '@/components/screenwriting/scene-cards-panel'
+import { VersionsPanel } from '@/components/screenwriting/versions-panel'
 
 type Panel =
   | 'navigator'
@@ -95,6 +99,9 @@ export function ScreenplayWorkspace({
   const [insertElementType, setInsertElementType] = useState<string | null>(null)
   const [insertImageUrl, setInsertImageUrl] = useState<string | null>(null)
   const [saveReconcileNote, setSaveReconcileNote] = useState<string | null>(null)
+  const [fdMode, setFdMode] = useState<'script' | 'cards' | 'beat'>('script')
+  const [importPending, setImportPending] = useState<{ file: File; format: string } | null>(null)
+  const [importReport, setImportReport] = useState<string[]>([])
 
   const activeSpec = useMemo(() => getTemplateSpec(templateKey), [templateKey])
   const layout = useScriptLayout(editorDoc)
@@ -183,7 +190,7 @@ export function ScreenplayWorkspace({
       .then((j) => setVersions(j.data ?? []))
   }, [scriptId])
 
-  const importFile = async (file: File, format: string) => {
+  const runImport = async (file: File, format: string, mode: ImportMode) => {
     const text = await file.text()
     const policy = restorePolicyWithLiveCollaborators(liveEditors, 'import')
     if (policy.action === 'block') {
@@ -193,17 +200,21 @@ export function ScreenplayWorkspace({
     const res = await fetch(`/api/sw/scripts/${scriptId}/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ format, text }),
+      body: JSON.stringify({ format, text, mode }),
     })
     if (!res.ok) throw new Error('Import failed')
     const j = await res.json()
     const msgs = (j.data?.warnings ?? []).map((w: { message: string }) => w.message)
-    try {
-      sessionStorage.setItem(`sw:import-warn:${scriptId}`, JSON.stringify(msgs))
-    } catch {
-      /* ignore */
+    setImportReport(msgs)
+    if (j.data?.scriptId && mode === 'new') {
+      window.location.href = `/app/sw/scripts/${j.data.scriptId}`
+      return
     }
     window.location.reload()
+  }
+
+  const queueImport = (file: File, format: string) => {
+    setImportPending({ file, format })
   }
 
   const runFindReplace = () => {
@@ -326,6 +337,24 @@ export function ScreenplayWorkspace({
       />
       </div>
       <CollabStatusBanner status={collabStatus} />
+      <nav className="sw-fd-menubar flex flex-wrap gap-1 px-2 py-1 text-xs">
+        {['File', 'Edit', 'Format', 'Document', 'Production', 'Tools', 'Window', 'Help'].map((m) => (
+          <span key={m} className="rounded px-2 py-0.5 text-muted-foreground">{m}</span>
+        ))}
+      </nav>
+      <div className="flex gap-2 border-b px-2 py-1 text-xs">
+        {(['script', 'cards', 'beat'] as const).map((m) => (
+          <Button key={m} size="sm" variant={fdMode === m ? 'default' : 'outline'} onClick={() => setFdMode(m)}>
+            {m === 'beat' ? 'Beat Board' : m === 'cards' ? 'Cards' : 'Script'}
+          </Button>
+        ))}
+      </div>
+      {importReport.length ? (
+        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          <strong>Import warnings</strong>
+          <ul className="mt-1 list-disc pl-4">{importReport.map((w, i) => <li key={i}>{w}</li>)}</ul>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2 border-b pb-2">
         <span className="text-sm font-medium">{scriptTitle}</span>
         <select
@@ -383,7 +412,7 @@ export function ScreenplayWorkspace({
               const f = e.target.files?.[0]
               if (!f) return
               const fmt = f.name.endsWith('.fdx') ? 'fdx' : 'fountain'
-              void importFile(f, fmt)
+              queueImport(f, fmt)
             }}
           />
         </label>
@@ -453,34 +482,20 @@ export function ScreenplayWorkspace({
             </div>
           )}
           {panel === 'cards' && (
-            <ul className="space-y-2">
-              {!scenes.length ? <PanelEmpty title="No scene cards" hint="Scene headings in the script become cards here." /> : null}
-              {scenes.map((s, i) => (
-                <li key={s.id} className="rounded border p-2">
-                  <strong>{s.heading}</strong>
-                  <p>{s.synopsis || '—'}</p>
-                  <div className="mt-1 flex gap-1">
-                    <Button size="sm" variant="ghost" disabled={i === 0} onClick={() => {
-                      const next = reorderScenesInDoc(editorDoc, i, i - 1)
-                      setDoc(next)
-                      setEditorDoc(next)
-                    }}>↑</Button>
-                    <Button size="sm" variant="ghost" disabled={i >= scenes.length - 1} onClick={() => {
-                      const next = reorderScenesInDoc(editorDoc, i, i + 1)
-                      setDoc(next)
-                      setEditorDoc(next)
-                    }}>↓</Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <SceneCardsPanel
+              doc={editorDoc}
+              onDocChange={(next) => {
+                setDoc(next)
+                setEditorDoc(next)
+                setExternalDocKey((k) => k + 1)
+              }}
+            />
           )}
           {panel === 'beat' && (
-            <textarea
-              className="w-full min-h-[200px] rounded border p-2"
-              value={(meta.beatBoard as string) || ''}
-              onChange={(e) => void persistMeta({ ...meta, beatBoard: e.target.value })}
-              placeholder="Beat board notes…"
+            <BeatBoardPanel
+              doc={editorDoc}
+              board={meta.beatBoard as BeatBoardState | undefined}
+              onChange={(b) => void persistMeta({ ...meta, beatBoard: b })}
             />
           )}
           {panel === 'title' && (
@@ -536,39 +551,21 @@ export function ScreenplayWorkspace({
           )}
           {panel === 'versions' && (
             <div className="space-y-2">
-              {!versions.length ? (
-                <PanelEmpty title="No snapshots" hint="Save a manual snapshot before major rewrites." />
-              ) : null}
               <Button size="sm" onClick={() => void snapshotVersion()}>Snapshot</Button>
-              <Button size="sm" variant="outline" onClick={() => void snapshotVersion('LOCK')}>Lock snapshot</Button>
-              <ul>
-                {(versions as { id: string; label?: string; createdAt: string; kind?: string }[]).map((v) => (
-                  <li key={v.id} className="space-y-1">
-                    <button
-                      type="button"
-                      className="underline"
-                      onClick={() => {
-                      const policy = restorePolicyWithLiveCollaborators(liveEditors, 'restore')
-                      if (policy.action === 'block') {
-                        alert(policy.message)
-                        return
-                      }
-                      void fetch(`/api/sw/versions/${v.id}/restore`, { method: 'POST' }).then(() => window.location.reload())
-                    }}
-                    >
-                      Restore {v.label || v.id.slice(0, 8)}
-                    </button>
-                    {exportPresetForFrozenVersion(v.kind || 'MANUAL') ? (
-                      <a
-                        className="block text-[10px] underline"
-                        href={`/api/sw/scripts/${scriptId}/export?format=pdf&versionKind=${v.kind}&frozenExport=1`}
-                      >
-                        Frozen PDF preset
-                      </a>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+              <VersionsPanel
+                scriptId={scriptId}
+                versions={versions as { id: string; label?: string; createdAt: string; kind?: string; pmJson?: JSONContent }[]}
+                currentDoc={editorDoc}
+                onRefresh={() => void fetch(`/api/sw/scripts/${scriptId}/versions`).then((r) => r.json()).then((j) => setVersions(j.data ?? []))}
+                onRestore={(vid) => {
+                  const policy = restorePolicyWithLiveCollaborators(liveEditors, 'restore')
+                  if (policy.action === 'block') {
+                    alert(policy.message)
+                    return
+                  }
+                  void fetch(`/api/sw/versions/${vid}/restore`, { method: 'POST' }).then(() => window.location.reload())
+                }}
+              />
             </div>
           )}
           {panel === 'ai' && (
@@ -614,6 +611,23 @@ export function ScreenplayWorkspace({
             {issues.length ? <span>{issues.length} script notes</span> : null}
           </div>
           <div className={meta.splitView ? 'grid grid-cols-2 gap-2' : ''}>
+            {fdMode === 'cards' ? (
+              <SceneCardsPanel
+                doc={editorDoc}
+                onDocChange={(next) => {
+                  setDoc(next)
+                  setEditorDoc(next)
+                  setExternalDocKey((k) => k + 1)
+                }}
+              />
+            ) : fdMode === 'beat' ? (
+              <BeatBoardPanel
+                doc={editorDoc}
+                board={meta.beatBoard as BeatBoardState | undefined}
+                onChange={(b) => void persistMeta({ ...meta, beatBoard: b })}
+              />
+            ) : null}
+            {fdMode === 'script' ? (
             <ScreenplayEditor
               key={scriptId}
               scriptId={scriptId}
@@ -637,7 +651,8 @@ export function ScreenplayWorkspace({
               smartTypeLists={(meta.smartType as SmartTypeLists) || DEFAULT_SMARTTYPE}
               onSmartTypeChange={(lists) => void persistMeta({ ...meta, smartType: lists })}
             />
-            {meta.splitView ? (
+            ) : null}
+            {meta.splitView && fdMode === 'script' ? (
               <aside className="sw-fd-navigator max-h-[70vh] overflow-auto border-l p-2 text-xs">
                 <p className="mb-2 font-medium">Navigator (split)</p>
                 <ul className="space-y-1">
@@ -659,6 +674,15 @@ export function ScreenplayWorkspace({
           />
         </div>
       </div>
+      <ImportDialog
+        open={Boolean(importPending)}
+        filename={importPending?.file.name ?? ''}
+        onClose={() => setImportPending(null)}
+        onConfirm={(mode) => {
+          if (importPending) void runImport(importPending.file, importPending.format, mode)
+          setImportPending(null)
+        }}
+      />
     </div>
   )
 }

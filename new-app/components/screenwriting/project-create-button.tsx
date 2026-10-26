@@ -21,6 +21,7 @@ export function SwProjectCreateButton() {
       if (!res.ok) throw new Error(json.error || 'Create failed')
       const scriptId = json.data?.script?.id
       if (!scriptId) throw new Error('No script id')
+      router.prefetch(`/app/sw/scripts/${scriptId}`)
       router.push(`/app/sw/scripts/${scriptId}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Create failed')
