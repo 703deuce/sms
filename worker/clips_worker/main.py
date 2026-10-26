@@ -356,6 +356,9 @@ def main() -> None:
     log_picker_config()
     try:
         with psycopg2.connect(dsn) as conn:
+            from clips_worker.boot_recovery import requeue_running_lane_jobs_on_boot
+
+            requeue_running_lane_jobs_on_boot(conn)
             queued = count_queued_jobs(conn)
             log(f"connected to db host={host} queued_jobs={queued}")
     except Exception as exc:
