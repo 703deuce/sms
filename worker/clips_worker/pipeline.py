@@ -223,6 +223,48 @@ def run_m4_pipeline(
                 job_id,
                 {"projectStatus": "FINDING_CLIPS", "stage": "vision_rank", "progress": 58, "jobStatus": "RUNNING"},
             )
+        elif settings.get("streamer") and not job_payload.get("singleClip"):
+            from clips_worker.streamer.keys import stream_signals_key
+            from clips_worker.streamer.rank import rank_moments
+
+            post_progress(
+                job_id,
+                {"projectStatus": "FINDING_CLIPS", "stage": "Finding moments", "progress": 52, "jobStatus": "RUNNING"},
+            )
+            dur_ms = range_end if range_end > range_start else int(round(probe_duration(src) * 1000))
+            fusion_picks, signals_payload = rank_moments(
+                audio_path=audio_wav,
+                words=words,
+                duration_ms=dur_ms,
+                settings=settings,
+            )
+            picks = [
+                {
+                    "start_ms": p.start_ms,
+                    "end_ms": p.end_ms,
+                    "score": p.score,
+                    "title": p.title,
+                    "reason": p.hook,
+                    "hook": p.hook,
+                    "scores": p.scores,
+                    "aiMeta": p.ai_meta,
+                }
+                for p in fusion_picks
+            ]
+            picker_message = None
+            with conn.cursor() as cur:
+                cur.execute('SELECT id FROM stream_vods WHERE "projectId" = %s LIMIT 1', (project_id,))
+                row = cur.fetchone()
+            if row:
+                sig_key = stream_signals_key(workspace_id, row[0])
+                put_json(sig_key, signals_payload)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        'UPDATE stream_vods SET "signalsKey" = %s, "updatedAt" = NOW() WHERE id = %s',
+                        (sig_key, row[0]),
+                    )
+                conn.commit()
+            post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
         else:
             post_progress(
                 job_id,

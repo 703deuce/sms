@@ -28,6 +28,7 @@ export async function listProjectClips(workspaceId: string, projectId: string, s
         ? await storage.createSignedDownloadUrl(c.previewKey, SIGNED_TTL)
         : null,
       posterUrl: c.posterKey ? await storage.createSignedDownloadUrl(c.posterKey, SIGNED_TTL) : null,
+      aiMeta: c.aiMeta,
     })),
   )
 }

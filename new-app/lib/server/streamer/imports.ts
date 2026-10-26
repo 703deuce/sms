@@ -4,6 +4,8 @@ import { parseStreamUrl } from '@/lib/streamer/url'
 import { projectWordsKey } from '@/lib/storage'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
+import { STREAMER_MAX_VOD_HOURS } from '@/lib/server/streamer/limits'
+import { assertStreamCap } from '@/lib/server/streamer/usage'
 
 export async function createStreamerImport(
   workspaceId: string,
@@ -32,6 +34,16 @@ export async function createStreamerImport(
   let channelLogin: string | null = null
   let url = input.url?.trim() || null
   let title = 'Streamer upload'
+
+  const rangeStart = input.rangeStartMs ?? 0
+  const rangeEnd = input.rangeEndMs ?? 0
+  if (rangeEnd > rangeStart) {
+    const rangeH = (rangeEnd - rangeStart) / 3_600_000
+    if (rangeH > STREAMER_MAX_VOD_HOURS) {
+      throw new Error(`Range exceeds ${STREAMER_MAX_VOD_HOURS} hour limit`)
+    }
+    await assertStreamCap(workspaceId, Math.floor((rangeEnd - rangeStart) / 1000))
+  }
 
   if (url) {
     const parsed = parseStreamUrl(url)

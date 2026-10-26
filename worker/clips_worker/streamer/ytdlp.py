@@ -84,3 +84,37 @@ def download_video(url: str, dest: str, section: str | None = None, progress_cb=
     proc.wait()
     if proc.returncode != 0:
         raise RuntimeError("Video download failed")
+
+
+def download_audio(
+    url: str,
+    dest: str,
+    section: str | None = None,
+    progress_cb=None,
+) -> None:
+    cmd = [
+        "yt-dlp",
+        "-f",
+        "ba/b",
+        "-x",
+        "--audio-format",
+        "opus",
+        "--postprocessor-args",
+        "ffmpeg:-ac 1 -ar 16000 -b:a 24k",
+        "-o",
+        dest,
+        "--newline",
+    ]
+    if section:
+        cmd.extend(["--download-sections", section])
+    cmd.append(url)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    assert proc.stdout
+    for line in proc.stdout:
+        if progress_cb and "[download]" in line:
+            m = re.search(r"(\d+(?:\.\d+)?)%", line)
+            if m:
+                progress_cb(float(m.group(1)))
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError("Audio download failed")

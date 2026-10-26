@@ -508,6 +508,7 @@ model Workspace {
   clipProjects                           ClipProject[]
   streamChannels                         StreamChannel[]
   streamVods                             StreamVod[]
+  streamUsage                            StreamUsage[]
   clipBrandTemplates                     ClipBrandTemplate[]
   captionPresets                         CaptionPreset[]
   clipRenders                            ClipRender[]
@@ -8935,6 +8936,22 @@ model StreamVod {
   @@map("stream_vods")
 }
 
+model StreamUsage {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  periodStart     DateTime @db.Date
+  sourceSeconds   Int      @default(0)
+  vodCount        Int      @default(0)
+  modalGpuSeconds Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, periodStart])
+  @@index([workspaceId, periodStart])
+  @@map("stream_usage")
+}
+
 model ClipJob {
   id         String    @id
   projectId  String
@@ -8974,6 +8991,9 @@ model Clip {
   edits       Json      @default("{}")
   aiMeta      Json?
   favorite    Boolean   @default(false)
+  sourceSegKey     String?
+  sourceSegStartMs Int?
+  sourceSegEndMs   Int?
   deletedAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

@@ -13,6 +13,7 @@ export type ClipCardData = {
   previewUrl: string | null
   posterUrl: string | null
   reason?: string | null
+  aiMeta?: unknown
 }
 
 export function ClipGrid({

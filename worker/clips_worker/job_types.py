@@ -4,6 +4,9 @@ from __future__ import annotations
 JOB_TYPES: tuple[str, ...] = (
     "IMPORT_URL",
     "STREAM_IMPORT",
+    "STREAM_ANALYZE",
+    "STREAM_RENDER",
+    "STREAM_CLEANUP",
     "PROCESS_PROJECT",
     "RENDER_CLIP",
     "REFRAME_CROP",

@@ -9,6 +9,7 @@ import { DurationChip } from '@/components/clips/ui/duration-chip'
 import type { ClipCardData } from '@/components/clips/clip-grid'
 import { clipsFetch } from '@/lib/clips-api'
 import { formatDur, formatTimecode } from '@/lib/clips/format'
+import { ReasonChips } from '@/components/streamer/reason-chips'
 
 export function ClipCard({
   clip,
@@ -44,6 +45,7 @@ export function ClipCard({
 
   return (
     <article
+      id={`clip-card-${clip.id}`}
       data-testid="clip-card"
       className="group flex flex-col gap-2 overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
     >
@@ -90,6 +92,13 @@ export function ClipCard({
         {clip.reason ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{clip.reason}</p>
         ) : null}
+        <ReasonChips
+          score={clip.score}
+          reasons={
+            ((clip.aiMeta as { streamer?: { reasons?: { kind: string; label: string; value?: string }[] } })?.streamer
+              ?.reasons) ?? []
+          }
+        />
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="default" render={<Link href={`/app/clips/${projectId}/edit/${clip.id}`} />}>
             Edit

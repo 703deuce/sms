@@ -15,11 +15,12 @@
 
 | ID | Status | Notes |
 |----|--------|--------|
-| **S0** | 🟡 READY TO PUSH | `GPU_PROVIDER` (default `local`), Modal `transovo-gpu`, job_types + heartbeat, signed URLs |
-| **S1** | 🟡 READY TO PUSH | Paste Twitch/Kick + Streamer tab, `STREAM_IMPORT`, Prisma `stream_channels` / `stream_vods` |
-| S2 | ⏳ | Long-VOD pipeline, worker lanes |
-| S3 | ⏳ | Usage cap, Modal budget UI |
-| S4–S12 | ⏳ | Signals, facecam, layout, montage, notifications, channels hub |
+| **S0** | ✅ deployed | `GPU_PROVIDER`, Modal `transovo-gpu`, job_types + heartbeat |
+| **S1** | ✅ deployed | Paste Twitch/Kick + Streamer tab, `STREAM_IMPORT`, `stream_vods` |
+| **S2** | 🟡 READY TO PUSH | Long-VOD audio → `STREAM_ANALYZE` → `STREAM_RENDER`, lanes, segment keys |
+| **S3** | 🟡 READY TO PUSH | `stream_usage`, cap 402, `STREAM_CLEANUP`, usage meter API + UI |
+| **S4** | 🟡 READY TO PUSH | Signals + fusion, reason chips, hype timeline, `/signals` API |
+| S5–S12 | ⏳ | Chat signal, facecam, layout, montage, notifications, channels hub |
 | **S13** | ⏳ | **Needs Twitch dev app** (OAuth + EventSub) — register before S13 |
 | **S14** | ⏳ | **Needs Kick dev app** (OAuth 2.1 PKCE) — register before S14 |
 | S15 | ⏳ | Modal render + face tracking |

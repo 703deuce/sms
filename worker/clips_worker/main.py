@@ -18,6 +18,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.job_types import JOB_TYPES, job_types_sql_in
+from clips_worker.streamer.lanes import lane_types_sql_in, worker_lane
 from clips_worker.pipeline import run_m4_pipeline
 from clips_worker.render_job import run_render_clip_job
 from clips_worker.probe import format_subprocess_error, probe_duration
@@ -99,7 +100,7 @@ def count_queued_jobs(conn) -> int:
         cur.execute(
             f"""
             SELECT count(*)::int FROM clip_jobs
-            WHERE status = 'QUEUED' AND type IN ({job_types_sql_in()})
+            WHERE status = 'QUEUED' AND type IN ({lane_types_sql_in()})
               AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
             """,
         )
@@ -137,8 +138,19 @@ def claim_job(conn) -> dict | None:
             WHERE id = (
               SELECT id FROM clip_jobs
               WHERE status = 'QUEUED'
-                AND type IN ({job_types_sql_in()})
+                AND type IN ({lane_types_sql_in()})
                 AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
+                AND (
+                  type <> 'STREAM_ANALYZE'
+                  OR NOT EXISTS (
+                    SELECT 1 FROM clip_jobs r
+                    JOIN clip_projects p ON p.id = r."projectId"
+                    WHERE r.status = 'RUNNING' AND r.type = 'STREAM_ANALYZE'
+                      AND p."workspaceId" = (
+                        SELECT p2."workspaceId" FROM clip_projects p2 WHERE p2.id = clip_jobs."projectId"
+                      )
+                  )
+                )
               ORDER BY priority DESC, "runAfter" ASC
               FOR UPDATE SKIP LOCKED
               LIMIT 1
@@ -262,6 +274,27 @@ def handle_stream_import(conn, job: dict) -> None:
     _mark_job_done(conn, job["id"])
 
 
+def handle_stream_analyze(conn, job: dict) -> None:
+    from clips_worker.streamer.analyze_job import run_stream_analyze_job
+
+    run_stream_analyze_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+def handle_stream_render(conn, job: dict) -> None:
+    from clips_worker.streamer.render_job import run_stream_render_job
+
+    run_stream_render_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+def handle_stream_cleanup(conn, job: dict) -> None:
+    from clips_worker.streamer.cleanup_job import run_stream_cleanup_job
+
+    run_stream_cleanup_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
 def handle_import_url(conn, job: dict) -> None:
     from clips_worker.import_url import run_import_url_job
 
@@ -273,6 +306,9 @@ def handle_import_url(conn, job: dict) -> None:
 DISPATCH: dict[str, object] = {
     "IMPORT_URL": handle_import_url,
     "STREAM_IMPORT": handle_stream_import,
+    "STREAM_ANALYZE": handle_stream_analyze,
+    "STREAM_RENDER": handle_stream_render,
+    "STREAM_CLEANUP": handle_stream_cleanup,
     "PROCESS_PROJECT": process_job,
     "RENDER_CLIP": handle_render_clip,
     "REFRAME_CROP": handle_reframe_crop,
@@ -285,7 +321,10 @@ DISPATCH: dict[str, object] = {
 def main() -> None:
     dsn = env("DATABASE_URL")
     host = db_host_label(dsn)
-    log(f"clips-worker starting worker_id={os.environ.get('WORKER_ID', 'worker-1')} db={host}")
+    log(
+        f"clips-worker starting worker_id={os.environ.get('WORKER_ID', 'worker-1')} "
+        f"lane={worker_lane()} db={host}"
+    )
     log_models()
     log_picker_config()
     try:

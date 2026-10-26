@@ -1,5 +1,6 @@
 import { Page } from '@/components/app/page-primitives'
 import { StreamHeader } from '@/components/streamer/stream-header'
+import { StreamerProjectChrome } from '@/components/streamer/streamer-project-chrome'
 import { ProjectClipsView } from '@/components/clips/project-clips-view'
 import { listProjectClips } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -22,12 +23,18 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   return (
     <Page>
       {streamVod ? (
-        <div className="mb-4">
+        <div className="mb-4 space-y-3">
           <StreamHeader
             platform={streamVod.platform}
             title={streamVod.title}
             category={streamVod.category}
             url={streamVod.url}
+          />
+          <StreamerProjectChrome
+            vodId={streamVod.id}
+            stage={project.stage}
+            progress={project.progress}
+            sourceDeletedAt={streamVod.sourceDeletedAt?.toISOString() ?? null}
           />
         </div>
       ) : null}

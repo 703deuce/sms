@@ -20,6 +20,7 @@ def load_render_context(conn, render_id: str) -> dict:
                    r.status, r."outputKey", r."editsVersionHash",
                    r."aspectRatio", r.resolution,
                    c."startMs", c."endMs", c."previewKey", c.edits, c."projectId",
+                   c."sourceSegKey", c."sourceSegStartMs", c."sourceSegEndMs",
                    p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key
             FROM clip_renders r
             JOIN clips c ON c.id = r."clipId"
@@ -116,6 +117,16 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
 
     clip_start = int(ctx["startMs"])
     clip_end = int(ctx["endMs"])
+    source_offset_ms = 0
+    if ctx.get("sourceSegKey"):
+        source_key = ctx["sourceSegKey"]
+        source_offset_ms = int(ctx.get("sourceSegStartMs") or 0)
+        clip_start = max(clip_start, source_offset_ms)
+        seg_end = ctx.get("sourceSegEndMs")
+        if seg_end is not None:
+            clip_end = min(clip_end, int(seg_end))
+    else:
+        source_key = ctx["source_key"]
     edits = normalize_edits(ctx["edits"], clip_start, clip_end)
     settings = ctx["settings"] or {}
     if isinstance(settings, str):
@@ -138,7 +149,6 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})
         return
 
-    source_key = ctx["source_key"]
     if not source_key:
         raise RuntimeError("missing source")
 
@@ -151,7 +161,9 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         src = td_path / "source.mp4"
         download_object(source_key, src)
         clip_file = td_path / "clip.mp4"
-        ffmpeg_cut(src, clip_file, clip_start, clip_end)
+        rel_start = clip_start - source_offset_ms
+        rel_end = clip_end - source_offset_ms
+        ffmpeg_cut(src, clip_file, rel_start, rel_end)
         source_words = load_source_words(ctx, td_path)
 
         from clips_worker.broll_render import load_broll_specs

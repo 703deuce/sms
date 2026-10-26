@@ -26,6 +26,13 @@ export async function POST(request: Request) {
     const data = await createStreamerImport(workspaceId, body)
     return NextResponse.json({ data })
   } catch (err) {
+    const e = err as Error & { code?: string; usedH?: number; capH?: number }
+    if (e.code === 'stream_cap') {
+      return NextResponse.json(
+        { code: 'stream_cap', usedH: e.usedH, capH: e.capH, error: e.message },
+        { status: 402 },
+      )
+    }
     return jsonError(err, 400)
   }
 }

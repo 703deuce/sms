@@ -45,6 +45,31 @@ def upload_file(object_key: str, path: Path, content_type: str | None = None) ->
         _upload_supabase(object_key, path, content_type)
 
 
+def delete_object(object_key: str) -> None:
+    if storage_driver() == "s3":
+        client = boto3.client(
+            "s3",
+            endpoint_url=os.environ.get("S3_ENDPOINT"),
+            aws_access_key_id=env("S3_ACCESS_KEY_ID"),
+            aws_secret_access_key=env("S3_SECRET_ACCESS_KEY"),
+            region_name=os.environ.get("S3_REGION", "us-east-1"),
+        )
+        client.delete_object(Bucket=storage_bucket(), Key=object_key)
+        return
+    base = env("SUPABASE_URL").rstrip("/")
+    token = env("SUPABASE_SERVICE_ROLE_KEY")
+    bucket = storage_bucket()
+    encoded = "/".join(urllib.parse.quote(part, safe="") for part in object_key.split("/"))
+    url = f"{base}/storage/v1/object/{bucket}/{encoded}"
+    req = urllib.request.Request(
+        url,
+        method="DELETE",
+        headers={"Authorization": f"Bearer {token}", "apikey": token},
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        resp.read()
+
+
 def _download_supabase(object_key: str, dest: Path) -> None:
     base = env("SUPABASE_URL").rstrip("/")
     token = env("SUPABASE_SERVICE_ROLE_KEY")
