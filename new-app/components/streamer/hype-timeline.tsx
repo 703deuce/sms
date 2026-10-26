@@ -31,21 +31,27 @@ export function HypeTimeline({ vodId }: { vodId: string }) {
   useEffect(() => {
     setLoadState('loading')
     setData(null)
+    let cancelled = false
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) setLoadState('unavailable')
+    }, 12_000)
     void (async () => {
       try {
         const payload = await clipsFetch<SignalsPayload>(`/api/streamer/vods/${vodId}/signals`)
+        if (cancelled) return
         setData(payload)
         setLoadState('ready')
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : ''
-        if (/not ready|404|signals/i.test(msg)) {
-          setLoadState('unavailable')
-        } else {
-          setLoadState('unavailable')
-        }
+      } catch {
+        if (!cancelled) setLoadState('unavailable')
         setData(null)
+      } finally {
+        window.clearTimeout(timeout)
       }
     })()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
   }, [vodId])
 
   const series =

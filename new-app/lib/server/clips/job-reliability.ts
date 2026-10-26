@@ -1,6 +1,9 @@
 /** Pure helpers for job watchdog / reaper (unit-tested). */
 
-export const JOB_HEARTBEAT_STALE_MS = 15 * 60_000
+/** No heartbeat on RUNNING jobs → requeue (worker crash / deploy mid-job). */
+export const JOB_HEARTBEAT_STALE_MS = 5 * 60_000
+/** Non-terminal streamer project with no QUEUED/RUNNING job for this long → recovery enqueue. */
+export const STREAMER_ORPHAN_PROJECT_GRACE_MS = 2 * 60_000
 export const JOB_MAX_ATTEMPTS_BEFORE_FAIL = 8
 export const STREAMER_PROJECT_STUCK_MS = 90 * 60_000
 

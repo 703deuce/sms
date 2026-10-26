@@ -2,12 +2,14 @@ import type { ClipProjectStatus } from '@prisma/client'
 import {
   JOB_HEARTBEAT_STALE_MS,
   JOB_MAX_ATTEMPTS_BEFORE_FAIL,
+  STREAMER_ORPHAN_PROJECT_GRACE_MS,
   STREAMER_PROJECT_STUCK_MS,
   reaperBackoffSeconds,
   shouldFailJobAfterStale,
   stalledProjectErrorMessage,
 } from '@/lib/server/clips/job-reliability'
 import { getPrisma } from '@/lib/server/db'
+import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
 
@@ -167,7 +169,10 @@ export async function reapStaleJobs() {
   const prisma = getPrisma()
   const heartbeatCutoff = new Date(Date.now() - JOB_HEARTBEAT_STALE_MS)
   const stale = await prisma.clipJob.findMany({
-    where: { status: 'RUNNING', lockedAt: { lt: heartbeatCutoff } },
+    where: {
+      status: 'RUNNING',
+      OR: [{ lockedAt: { lt: heartbeatCutoff } }, { lockedAt: null }],
+    },
     take: 30,
     include: { project: { select: { id: true, status: true } } },
   })
@@ -219,12 +224,29 @@ export async function reapStaleJobs() {
     requeued += 1
   }
 
+  const orphanCutoff = new Date(Date.now() - STREAMER_ORPHAN_PROJECT_GRACE_MS)
+  const orphanStatuses: ClipProjectStatus[] = [...STUCK_PROJECT_STATUSES, 'QUEUED']
+  const orphanCandidates = await prisma.clipProject.findMany({
+    where: {
+      status: { in: orphanStatuses },
+      updatedAt: { lt: orphanCutoff },
+      streamVod: { is: {} },
+      jobs: { none: { status: { in: ['QUEUED', 'RUNNING'] } } },
+    },
+    select: { id: true },
+    take: 15,
+  })
+  for (const project of orphanCandidates) {
+    const recovered = await enqueueStreamerRecoveryJob(project.id, 'watchdog_orphan')
+    if (recovered) requeued += 1
+  }
+
   const stuckCutoff = new Date(Date.now() - STREAMER_PROJECT_STUCK_MS)
   const stuckProjects = await prisma.clipProject.findMany({
     where: {
       status: { in: STUCK_PROJECT_STATUSES },
       updatedAt: { lt: stuckCutoff },
-      streamVod: { isNot: null },
+      streamVod: { is: {} },
     },
     select: { id: true, status: true },
     take: 10,

@@ -9,10 +9,13 @@ export function UploadProgressItem({
   progress,
   onCancel,
   onRetry,
+  onChooseFile,
 }: {
   progress: UploadProgress
   onCancel?: () => void
   onRetry?: () => void
+  /** Opens file picker to resume an interrupted upload */
+  onChooseFile?: () => void
 }) {
   const isError = progress.state === 'error'
   return (
@@ -36,11 +39,25 @@ export function UploadProgressItem({
         {isError && progress.error ? (
           <p className="mt-2 text-xs text-destructive" role="alert">{progress.error}</p>
         ) : null}
-        {isError && onRetry ? (
-          <Button type="button" variant="outline" size="sm" className="mt-2 gap-1.5" onClick={onRetry}>
-            <RotateCcw className="size-3.5" aria-hidden />
-            Retry
-          </Button>
+        {isError ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {onChooseFile ? (
+              <Button type="button" size="sm" className="gap-1.5" onClick={onChooseFile}>
+                Choose file to resume
+              </Button>
+            ) : null}
+            {onRetry ? (
+              <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={onRetry}>
+                <RotateCcw className="size-3.5" aria-hidden />
+                Retry
+              </Button>
+            ) : null}
+            {onCancel ? (
+              <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+                Cancel upload
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
       {onCancel && progress.state === 'uploading' && (

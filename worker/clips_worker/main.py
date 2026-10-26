@@ -370,7 +370,7 @@ def main() -> None:
                 job = claim_job(conn)
                 if not job:
                     idle_polls += 1
-                    if worker_lane() == "stream" and idle_polls % 1800 == 1:
+                    if worker_lane() == "stream" and idle_polls % 60 == 1:
                         try:
                             from clips_worker.streamer.maintenance import maybe_run_streamer_maintenance
 
