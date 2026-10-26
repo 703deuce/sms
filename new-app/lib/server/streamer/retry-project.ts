@@ -28,7 +28,12 @@ export async function retryStreamerProject(workspaceId: string, projectId: strin
     prisma.clipProject.update({
       where: { id: projectId },
       data: {
-        status: jobType === 'STREAM_RENDER' ? 'RENDERING' : jobType === 'STREAM_ANALYZE' ? 'QUEUED' : 'IMPORTING',
+        status:
+          jobType === 'STREAM_RENDER'
+            ? 'RENDERING'
+            : jobType === 'STREAM_ANALYZE'
+              ? 'TRANSCRIBING'
+              : 'PREPARING',
         stage: 'queued',
         progress: 0,
         error: null,
