@@ -13,4 +13,18 @@ test.describe('clips a11y smoke', () => {
     const focused = page.locator(':focus-visible')
     await expect(focused).toBeVisible()
   })
+
+  test('respects reduced motion preference', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/app/clips')
+    const duration = await page.evaluate(() => {
+      const el = document.createElement('div')
+      el.className = 'animate-bounce'
+      document.body.appendChild(el)
+      const d = getComputedStyle(el).animationDuration
+      el.remove()
+      return d
+    })
+    expect(duration === '0s' || duration === '0ms').toBeTruthy()
+  })
 })

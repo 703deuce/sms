@@ -95,7 +95,41 @@ export function ExportsList({
           </Button>
         ))}
       </div>
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="flex flex-col gap-3 md:hidden">
+        {rows.map((r) => (
+          <article key={r.id} className="rounded-xl border border-border bg-card p-3 shadow-xs">
+            <div className="flex gap-3">
+              {r.posterUrl ? (
+                <img src={r.posterUrl} alt="" className="size-14 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <div className="size-14 shrink-0 rounded-lg bg-muted" />
+              )}
+              <div className="min-w-0 flex-1">
+                <Link href={r.editorUrl} className="line-clamp-2 text-sm font-medium hover:text-primary">
+                  {r.title}
+                </Link>
+                <p className="mt-1 text-xs text-muted-foreground tabular-nums">{r.resolution} · {formatSize(r.sizeBytes)}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <StatusBadge tone={r.status === 'READY' ? 'success' : r.status === 'FAILED' ? 'danger' : 'info'}>
+                    {r.status}
+                  </StatusBadge>
+                  {r.downloadUrl ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      nativeButton={false}
+                      render={<a href={r.downloadUrl} download={r.filename} />}
+                    >
+                      Download
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
             <tr>

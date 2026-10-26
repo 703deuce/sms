@@ -1,7 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { PrimaryButton } from '@/components/app/primary-button'
+import { Panel } from '@/components/app/page-primitives'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { CAPTION_PRESETS, presetSlugToId } from '@/lib/clips/caption-presets'
 import { clipsFetch } from '@/lib/clips-api'
@@ -49,6 +57,9 @@ export function BrandEditor() {
         method: 'PUT',
         body: JSON.stringify({ name, settings, logoKey, isDefault: useDefault }),
       })
+      toast.success('Brand kit saved')
+    } catch {
+      toast.error('Could not save brand kit')
     } finally {
       setBusy(false)
     }
@@ -77,12 +88,15 @@ export function BrandEditor() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <div className="space-y-3 text-sm">
-        <input className="w-full rounded border px-2 py-1" value={name} onChange={(e) => setName(e.target.value)} />
-        <label className="flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={useDefault} onChange={(e) => setUseDefault(e.target.checked)} />
-          Use as default for new projects
-        </label>
+      <Panel title="Brand kit" description="Logo, colors, and default caption style for new projects." className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="brand-name">Template name</Label>
+          <Input id="brand-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="brand-default">Use as default for new projects</Label>
+          <Switch id="brand-default" checked={useDefault} onCheckedChange={setUseDefault} />
+        </div>
         <div className="space-y-1">
           <p className="text-xs font-medium">Logo (PNG or SVG)</p>
           <input
@@ -97,35 +111,49 @@ export function BrandEditor() {
           />
           {logoKey && <p className="text-[10px] text-muted-foreground">{logoKey}</p>}
         </div>
-        <label className="block text-xs">Logo position</label>
-        <select
-          className="w-full rounded border px-2 py-1"
-          value={settings.logoPosition}
-          onChange={(e) =>
-            setSettings({ ...settings, logoPosition: e.target.value as BrandTemplateSettings['logoPosition'] })
-          }
-        >
-          {['TL', 'TR', 'BL', 'BR'].map((p) => (
-            <option key={p}>{p}</option>
-          ))}
-        </select>
-        <label className="block text-xs">Logo size % ({settings.logoSizePct})</label>
-        <input
-          type="range"
-          min={5}
-          max={25}
-          value={settings.logoSizePct}
-          onChange={(e) => setSettings({ ...settings, logoSizePct: Number(e.target.value) })}
-        />
-        <label className="block text-xs">Logo opacity</label>
-        <input
-          type="range"
-          min={0.1}
-          max={1}
-          step={0.05}
-          value={settings.logoOpacity}
-          onChange={(e) => setSettings({ ...settings, logoOpacity: Number(e.target.value) })}
-        />
+        <div className="space-y-2">
+          <Label>Logo position</Label>
+          <Select
+            value={settings.logoPosition}
+            onValueChange={(v) =>
+              setSettings({ ...settings, logoPosition: v as BrandTemplateSettings['logoPosition'] })
+            }
+          >
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {['TL', 'TR', 'BL', 'BR'].map((p) => (
+                <SelectItem key={p} value={p}>{p}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Logo size ({settings.logoSizePct}%)</Label>
+          <Slider
+            min={5}
+            max={25}
+            value={[settings.logoSizePct]}
+            onValueChange={(v) => {
+              const n = Array.isArray(v) ? v[0] : v
+              setSettings({ ...settings, logoSizePct: typeof n === 'number' ? n : settings.logoSizePct })
+            }}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Logo opacity</Label>
+          <Slider
+            min={0.1}
+            max={1}
+            step={0.05}
+            value={[settings.logoOpacity]}
+            onValueChange={(v) => {
+              const n = Array.isArray(v) ? v[0] : v
+              setSettings({ ...settings, logoOpacity: typeof n === 'number' ? n : settings.logoOpacity })
+            }}
+          />
+        </div>
         <p className="text-xs font-medium pt-2">Default captions</p>
         <div className="grid grid-cols-2 gap-2">
           {CAPTION_PRESETS.slice(0, 4).map((p) => {
@@ -167,9 +195,10 @@ export function BrandEditor() {
           value={settings.primaryColor}
           onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
         />
-        <Button size="sm" disabled={busy} onClick={() => void save()}>Save template</Button>
-      </div>
-      <div className="relative aspect-[9/16] max-w-sm overflow-hidden rounded-xl border bg-black">
+        <PrimaryButton size="sm" disabled={busy} onClick={() => void save()}>Save brand kit</PrimaryButton>
+      </Panel>
+      <Panel title="Live preview" description="Caption and logo placement on a 9:16 frame." className="flex justify-center">
+      <div className="relative aspect-[9/16] w-full max-w-sm overflow-hidden rounded-xl border border-border bg-black shadow-lg ring-1 ring-white/10">
         <CaptionOverlay
           words={[{ w: 'Brand', s: 0, e: 1.2, spk: 0 }]}
           edits={{
@@ -199,6 +228,7 @@ export function BrandEditor() {
           />
         )}
       </div>
+      </Panel>
       <BrandTemplatesManager />
     </div>
   )

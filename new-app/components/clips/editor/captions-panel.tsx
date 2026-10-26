@@ -159,8 +159,10 @@ export function CaptionsPanel({
 
       <label className="text-xs font-medium text-muted-foreground">Animation</label>
       <Select
-        value={cap.animation || preset.animation}
-        onValueChange={(v) => patch({ animation: v })}
+        value={cap.animation || preset.animation || 'pop'}
+        onValueChange={(v) => {
+          if (typeof v === 'string') patch({ animation: v })
+        }}
       >
         <SelectTrigger className="h-9 w-full">
           <SelectValue />

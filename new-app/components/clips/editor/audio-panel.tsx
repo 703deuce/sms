@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { Button } from '@/components/ui/button'
+import { Slider } from '@/components/ui/slider'
 import { musicCostUsd, SFX_PRESETS } from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
@@ -125,26 +126,28 @@ export function AudioPanel({
         {music && (
           <div className="space-y-2 rounded border border-border p-2">
             <p className="text-xs">Status: {musicGen.status || '—'}</p>
-            <label className="block text-xs">
-              Volume {Math.round((music.volume ?? 0.25) * 100)}%
-              <input
-                type="range"
+            <label className="block space-y-2 text-xs">
+              <span>Volume {Math.round((music.volume ?? 0.25) * 100)}%</span>
+              <Slider
                 min={0}
                 max={100}
-                value={Math.round((music.volume ?? 0.25) * 100)}
-                onChange={(e) => onPatchMusic({ volume: Number(e.target.value) / 100 })}
-                className="w-full"
+                value={[Math.round((music.volume ?? 0.25) * 100)]}
+                onValueChange={(v) => {
+                  const n = Array.isArray(v) ? v[0] : v
+                  onPatchMusic({ volume: (typeof n === 'number' ? n : 25) / 100 })
+                }}
               />
             </label>
-            <label className="block text-xs">
-              Duck depth {Math.round((music.duckDepth ?? 0.7) * 100)}%
-              <input
-                type="range"
+            <label className="block space-y-2 text-xs">
+              <span>Duck depth {Math.round((music.duckDepth ?? 0.7) * 100)}%</span>
+              <Slider
                 min={0}
                 max={100}
-                value={Math.round((music.duckDepth ?? 0.7) * 100)}
-                onChange={(e) => onPatchMusic({ duckDepth: Number(e.target.value) / 100 })}
-                className="w-full"
+                value={[Math.round((music.duckDepth ?? 0.7) * 100)]}
+                onValueChange={(v) => {
+                  const n = Array.isArray(v) ? v[0] : v
+                  onPatchMusic({ duckDepth: (typeof n === 'number' ? n : 70) / 100 })
+                }}
               />
             </label>
             <div className="flex gap-2">
