@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Production build for transovo-new-app (no legacy monolith compile).
-# Expects cwd=new-app; Prisma schema from ../prisma when Coolify build context is repo root.
+# Expects cwd=new-app; Prisma schema from new-app/prisma/ only (committed).
 set -euo pipefail
 
 export PRISMA_GENERATE_SKIP_AUTOINSTALL="${PRISMA_GENERATE_SKIP_AUTOINSTALL:-true}"
@@ -12,17 +12,12 @@ PNPM="${PNPM:-npx --yes pnpm@12.3.4}"
 echo "[new-app/coolify-build] starting next production build ($PNPM)"
 echo "[new-app/coolify-build] node=$(node -v) cwd=$(pwd)"
 
-if [[ -f ../prisma/schema.prisma ]]; then
-  echo "[new-app/coolify-build] syncing Prisma schema from monorepo parent"
-  rm -rf prisma
-  cp -a ../prisma prisma
-  # Keep generated client in new-app/node_modules (default); never point output outside new-app.
-  if grep -qE '^[[:space:]]*output[[:space:]]*=' prisma/schema.prisma; then
-    sed -i '/^[[:space:]]*output[[:space:]]*=/d' prisma/schema.prisma
-  fi
-elif [[ ! -f prisma/schema.prisma ]]; then
-  echo "[new-app/coolify-build] ERROR: missing prisma/schema.prisma (expected ../prisma in Coolify monorepo checkout)"
+if [[ ! -f prisma/schema.prisma ]]; then
+  echo "[new-app/coolify-build] ERROR: missing prisma/schema.prisma — commit new-app/prisma/schema.prisma"
   exit 1
+fi
+if grep -qE '^[[:space:]]*output[[:space:]]*=' prisma/schema.prisma; then
+  sed -i '/^[[:space:]]*output[[:space:]]*=/d' prisma/schema.prisma
 fi
 
 echo "[new-app/coolify-build] caption parity (vitest)"

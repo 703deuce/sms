@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SCHEMA="${ROOT}/prisma/schema.prisma"
+SCHEMA="${ROOT}/new-app/prisma/schema.prisma"
 prisma() {
   # --schema must follow the subcommand (e.g. migrate deploy --schema=...)
   (cd "${ROOT}/new-app" && npx --yes pnpm@12.3.4 exec prisma "$@" --schema="${SCHEMA}")

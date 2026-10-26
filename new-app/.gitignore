@@ -15,6 +15,5 @@ node_modules
 .next/
 .DS_Store
 
-# Copied from ../prisma at build/dev — not committed
-/prisma/
+# Prisma schema + migrations are committed under new-app/prisma/ (source of truth).
 test-results/
