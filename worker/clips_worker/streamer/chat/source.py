@@ -6,6 +6,11 @@ import os
 from pathlib import Path
 from typing import Iterable
 
+def _live_capture_enabled() -> bool:
+    raw = (os.environ.get("STREAMER_LIVE_REALTIME_ENABLED") or "").strip().lower()
+    return raw in ("1", "true", "yes")
+
+
 def _replay_disabled() -> bool:
     if os.environ.get("TWITCH_VOD_CHAT_REPLAY", "").lower() in ("off", "0", "false"):
         return True
@@ -25,7 +30,7 @@ def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
     channel_id = vod.get("channelId")
     start_ms = int(vod.get("rangeStartMs") or 0)
     end_ms = int(vod.get("durationMs") or vod.get("rangeEndMs") or 0) + start_ms
-    if conn and channel_id and end_ms > start_ms:
+    if _live_capture_enabled() and conn and channel_id and end_ms > start_ms:
         from clips_worker.streamer.chat.live import fetch_live_chat_messages
 
         live = fetch_live_chat_messages(conn, str(channel_id), start_ms, end_ms)

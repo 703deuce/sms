@@ -3,6 +3,7 @@
  */
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
+import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
 
 const HYPE = /\b(pog|poggers|lmao|lol|wtf|insane|clutch|let's go|gg)\b/i
 const MAX_PER_SEC = 4
@@ -19,6 +20,7 @@ function bucketStart(d: Date): Date {
 }
 
 export function ingestLiveChatMessage(channelId: string, msg: { at: Date; user: string; color?: string; text: string }) {
+  if (!streamerLiveRealtimeEnabled()) return
   const buf = buffers.get(channelId) ?? { msgs: [], chatters: new Set<string>(), lastFlush: Date.now() }
   buf.msgs.push(msg)
   buf.chatters.add(msg.user)

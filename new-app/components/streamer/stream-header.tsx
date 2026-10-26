@@ -3,7 +3,7 @@ function chatLabel(source: string | null | undefined, count: number | null | und
     return 'Chat: unavailable (replay not configured or not supported for this source)'
   }
   if (source === 'kick_unavailable') {
-    return 'Chat: unavailable (Kick VOD replay is not available; live capture comes later)'
+    return 'Chat: unavailable (Kick VOD replay is not available for this source yet)'
   }
   const n = count ?? 0
   const via =

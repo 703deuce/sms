@@ -3,9 +3,10 @@ import { notFound } from 'next/navigation'
 import { Page, PageHeader } from '@/components/app/page-primitives'
 import { ObsFallbackDocs } from '@/components/streamer/obs-fallback-docs'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { ChannelAutoProcessToggle } from '@/components/streamer/channel-auto-process'
+import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-coming-soon'
 import { getPrisma } from '@/lib/server/db'
-import { streamerPublicFlags } from '@/lib/server/streamer/env'
+import { streamerLiveRealtimeEnabled, streamerPublicFlags } from '@/lib/server/streamer/env'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export default async function StreamerChannelPage({ params }: { params: Promise<{ channelId: string }> }) {
@@ -50,11 +51,13 @@ export default async function StreamerChannelPage({ params }: { params: Promise<
               <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
             ) : null}
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={channel.autoProcess} disabled={channel.status !== 'CONNECTED'} />
-            Auto-process when stream ends
-          </label>
+          <ChannelAutoProcessToggle
+            channelId={channel.id}
+            connected={channel.status === 'CONNECTED'}
+            initial={channel.autoProcess}
+          />
         </section>
+        {!streamerLiveRealtimeEnabled() ? <StreamerLiveComingSoon /> : null}
         <ObsFallbackDocs />
       </div>
     </Page>

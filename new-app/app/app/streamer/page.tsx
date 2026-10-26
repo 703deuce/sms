@@ -9,6 +9,8 @@ import { listStreamerVodsForWorkspace } from '@/lib/server/streamer/vod-list'
 import { getStreamUsage } from '@/lib/server/streamer/usage'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { StreamerUsageMeter } from '@/components/streamer/usage-meter'
+import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-coming-soon'
+import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
 import { Radio } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -27,10 +29,11 @@ export default async function StreamerHubPage() {
         icon={Radio}
         iconTone="brand"
         title="Streamer"
-        description="Import finished Twitch or Kick VODs. We find highlight clips with chat and audio signals."
+        description="VOD-first: import finished streams by link or upload. Chat replay and clip cues run on the recording after it is available."
       />
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
         <StreamerUsageMeter initial={usage} />
+        {!streamerLiveRealtimeEnabled() ? <StreamerLiveComingSoon /> : null}
         <StreamerImportPanel usageInitial={usage} />
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="text-sm font-semibold">Channels</h2>

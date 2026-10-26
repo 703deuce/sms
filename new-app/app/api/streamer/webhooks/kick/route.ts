@@ -1,6 +1,7 @@
 import { createVerify } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
+import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
 import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
 import { getPrisma } from '@/lib/server/db'
 
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
   const event = body.event
   const data = body.data || {}
 
-  if (event === 'chat.message.sent') {
+  if (event === 'chat.message.sent' && streamerLiveRealtimeEnabled()) {
     const broadcaster = data.broadcaster as { channel_slug?: string } | undefined
     const slug = String(broadcaster?.channel_slug || (data as { channel_slug?: string }).channel_slug || '')
     const ch = await prisma.streamChannel.findFirst({ where: { platform: 'kick', login: slug.toLowerCase() } })

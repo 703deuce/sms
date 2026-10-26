@@ -18,6 +18,9 @@ REQUIRED_ENV_KEYS=(
   STORAGE_DRIVER
 )
 
+# Streamer v1 is VOD-first. Live EventSub chat capture stays off unless worker.env sets:
+# STREAMER_LIVE_REALTIME_ENABLED=true
+
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 

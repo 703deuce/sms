@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
+import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
 import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
 import { verifyTwitchEventSubSignature } from '@/lib/server/streamer/twitch-webhook'
 import { handleStreamerNotify } from '@/lib/server/streamer/notify'
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   const subType = body.subscription?.type
   const event = body.event || {}
 
-  if (subType === 'channel.chat.message') {
+  if (subType === 'channel.chat.message' && streamerLiveRealtimeEnabled()) {
     const broadcasterId = String(event.broadcaster_user_id || '')
     const ch = await prisma.streamChannel.findFirst({
       where: { platform: 'twitch', externalId: broadcasterId, deletedAt: null },

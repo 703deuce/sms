@@ -1,5 +1,5 @@
 import { encryptIntegrationSecret, decryptIntegrationSecret } from '@/lib/integrations/framework/secrets'
-import { twitchRedirectUri, twitchWebhookUrl } from '@/lib/server/streamer/env'
+import { streamerLiveRealtimeEnabled, twitchRedirectUri, twitchWebhookUrl } from '@/lib/server/streamer/env'
 
 export { twitchRedirectUri }
 import { getPrisma } from '@/lib/server/db'
@@ -130,16 +130,18 @@ export async function createTwitchEventsubSubscriptions(broadcasterId: string): 
   const secret = process.env.TWITCH_EVENTSUB_SECRET?.trim()
   if (!secret) throw new Error('TWITCH_EVENTSUB_SECRET not configured')
   const callback = twitchWebhookUrl()
-  const types = [
+  const types: { type: string; version: string; condition: Record<string, string> }[] = [
     { type: 'stream.online', version: '1', condition: { broadcaster_user_id: broadcasterId } },
     { type: 'stream.offline', version: '1', condition: { broadcaster_user_id: broadcasterId } },
     { type: 'channel.update', version: '2', condition: { broadcaster_user_id: broadcasterId } },
-    {
+  ]
+  if (streamerLiveRealtimeEnabled()) {
+    types.push({
       type: 'channel.chat.message',
       version: '1',
       condition: { broadcaster_user_id: broadcasterId, user_id: broadcasterId },
-    },
-  ]
+    })
+  }
   const ids: string[] = []
   for (const sub of types) {
     const res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {

@@ -24,11 +24,21 @@ export function kickWebhookUrl(): string {
   return `${getIntegrationAppUrl()}/api/streamer/webhooks/kick`
 }
 
+/** S13/S14 live EventSub chat capture + live clipping (frozen for Streamer v1; VOD replay stays on). */
+export function streamerLiveRealtimeEnabled(): boolean {
+  const raw = process.env.STREAMER_LIVE_REALTIME_ENABLED?.trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
 export function streamerPublicFlags() {
+  const liveRealtime = streamerLiveRealtimeEnabled()
   return {
     twitchOAuth: streamerTwitchConfigured(),
     kickOAuth: streamerKickConfigured(),
     twitchWebhook: twitchWebhookUrl(),
     kickWebhook: kickWebhookUrl(),
+    /** When false, UI shows live clipping as coming soon; webhooks skip live chat ingest. */
+    liveRealtimeEnabled: liveRealtime,
+    vodFirst: true,
   }
 }
