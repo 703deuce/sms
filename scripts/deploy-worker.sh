@@ -64,10 +64,10 @@ docker run -d \\
 
 sleep 2
 docker exec clips-worker python3 -c "
-import inspect
-from clips_worker import main
-src = inspect.getsource(main.claim_job)
-assert 'MUSIC' in src and 'RENDER_CLIP' in src and 'THUMBNAIL' in src
+from clips_worker.job_types import JOB_TYPES
+from clips_worker.main import DISPATCH
+assert set(JOB_TYPES) == set(DISPATCH)
+assert 'STREAM_IMPORT' in JOB_TYPES
 print('claim_list_ok')
 "
 
