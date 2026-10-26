@@ -74,12 +74,12 @@ function ClientTime({ iso }: { iso: string | null }) {
 
 function AspectResolution({ aspect, resolution }: { aspect: string; resolution: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 text-xs text-foreground/75">
       <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
         <AspectGlyph ratio={aspect} />
         {aspect}
       </span>
-      <span className="tabular-nums">{resolution}</span>
+      <span className="tabular-nums text-foreground/80">{resolution}</span>
     </span>
   )
 }

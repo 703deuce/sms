@@ -6,11 +6,11 @@ export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'mute
 
 const toneCls: Record<Tone, string> = {
   neutral: 'bg-secondary text-secondary-foreground ring-foreground/10',
-  info: 'bg-accent text-accent-foreground ring-primary/15',
-  success: 'bg-success/10 text-success ring-success/20',
+  info: 'bg-accent text-accent-foreground ring-primary/20',
+  success: 'bg-success/12 text-success ring-success/25',
   warning: 'bg-warning/15 text-warning-foreground ring-warning/30',
-  danger: 'bg-destructive/8 text-destructive ring-destructive/20',
-  muted: 'bg-muted text-muted-foreground ring-foreground/8',
+  danger: 'bg-destructive/10 text-destructive ring-destructive/25',
+  muted: 'bg-muted text-foreground/70 ring-foreground/8',
 }
 
 const dotCls: Record<Tone, string> = {
