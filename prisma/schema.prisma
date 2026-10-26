@@ -508,6 +508,7 @@ model Workspace {
   clipProjects                           ClipProject[]
   streamChannels                         StreamChannel[]
   streamVods                             StreamVod[]
+  streamLayoutPresets                    StreamLayoutPreset[]
   streamUsage                            StreamUsage[]
   clipBrandTemplates                     ClipBrandTemplate[]
   captionPresets                         CaptionPreset[]
@@ -8875,28 +8876,53 @@ model ClipProject {
 }
 
 model StreamChannel {
-  id           String    @id @default(cuid())
-  workspaceId  String
-  platform     String
-  login        String
-  externalId   String?
-  displayName  String?
-  avatarUrl    String?
-  connectionId String?
-  status       String    @default("PASTE_ONLY")
-  autoProcess  Boolean   @default(false)
-  settings     Json      @default("{}")
-  platformState Json     @default("{}")
-  lastVodAt    DateTime?
-  deletedAt    DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  vods         StreamVod[]
+  id              String                @id @default(cuid())
+  workspaceId     String
+  platform        String
+  login           String
+  externalId      String?
+  displayName     String?
+  avatarUrl       String?
+  connectionId    String?
+  status          String                @default("PASTE_ONLY")
+  autoProcess     Boolean               @default(false)
+  settings        Json                  @default("{}")
+  platformState   Json                  @default("{}")
+  defaultPresetId String?
+  lastVodAt       DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vods            StreamVod[]
+  layoutPresets   StreamLayoutPreset[]
 
   @@unique([workspaceId, platform, login])
   @@index([platform, externalId])
   @@map("stream_channels")
+}
+
+model StreamLayoutPreset {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  channelId       String?
+  name            String         @default("Default")
+  layout          String         @default("stack")
+  facecam         Json?
+  gameplay        Json?
+  split           Float          @default(0.4)
+  facecamPosition String         @default("top")
+  source          String         @default("auto")
+  confidence      Float?
+  sampleFrameKey  String?
+  deletedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channel         StreamChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, channelId])
+  @@map("stream_layout_presets")
 }
 
 model StreamVod {
