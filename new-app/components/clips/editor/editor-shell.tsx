@@ -1,7 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { EditorRail, type EditorPanelId } from '@/components/clips/editor/editor-rail'
+import { EditorRail, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
+import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
+import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
+import { PanelRightOpen } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
@@ -74,6 +80,13 @@ export function EditorShell({
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
+  const selectPanel = useCallback((id: EditorPanelId) => {
+    setPanel(id)
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+      setMobilePanelOpen(true)
+    }
+  }, [])
   const [outputMs, setOutputMs] = useState(0)
   const [playing, setPlaying] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -256,10 +269,113 @@ export function EditorShell({
     return () => clearTimeout(t)
   }, [clipId, initialTitle, title])
 
+  const TabIcon = editorRailIcon(panel)
+  const meta = TAB_META[panel]
+
+  const panelBody = (
+    <>
+      <div className={panel === 'producer' ? 'min-h-[min(60vh,520px)]' : 'hidden'} aria-hidden={panel !== 'producer'}>
+        <ProducerPanel
+          clipId={clipId}
+          bounds={bounds}
+          edits={edits}
+          onUndo={() => {
+            undo()
+            clearProducerStrip()
+          }}
+          onApplyEdits={(next, n, before) => {
+            applyProducerPatch(next, before, n)
+          }}
+        />
+      </div>
+      <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
+        <TranscriptPanel
+          words={words}
+          shots={cropShots}
+          edits={edits}
+          onSeek={seekSource}
+          onAddCut={addCutRange}
+          onWordFix={setWordFix}
+          onRestoreWord={restoreWord}
+          onExtendTrim={(ms) => {
+            if (ms < edits.trim.in) setTrim({ in: ms, out: edits.trim.out })
+            else if (ms > edits.trim.out) setTrim({ in: edits.trim.in, out: ms })
+          }}
+          onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
+          selectionRef={selectionRef}
+        />
+      </div>
+      <div className={panel === 'layout' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layout'}>
+        <LayoutPanel
+          edits={edits}
+          shots={cropShots}
+          onMode={setLayoutMode}
+          onShotFocus={setShotOverride}
+          onRerunReframe={() => void requestClipReframe(clipId)}
+          onApplyBrand={() => void applyBrand()}
+          onEdits={setEdits}
+        />
+      </div>
+      <div className={panel === 'captions' ? undefined : 'hidden'} aria-hidden={panel !== 'captions'}>
+        <CaptionsPanel
+          clipId={clipId}
+          edits={edits}
+          onChange={setCaptions}
+          onApplyBrand={() => void applyBrand()}
+        />
+      </div>
+      <div className={panel === 'broll' ? undefined : 'hidden'} aria-hidden={panel !== 'broll'}>
+        <BrollPanel
+          clipId={clipId}
+          edits={edits}
+          outputDurationMs={outDur}
+          playheadMs={outputMs}
+          aiMeta={aiMeta}
+          brollMedia={brollMedia}
+          onMergeBroll={mergeBroll}
+          onSetBroll={setBroll}
+          onRemoveBroll={removeBroll}
+          onBrollMedia={mergeBrollMedia}
+          onFlushEdits={flushSave}
+        />
+      </div>
+      <div className={panel === 'audio' ? undefined : 'hidden'} aria-hidden={panel !== 'audio'}>
+        <AudioPanel
+          clipId={clipId}
+          edits={edits}
+          outputDurationMs={outDur}
+          playheadMs={outputMs}
+          onSuggestMusic={() => {}}
+          onAttachMusic={attachMusicGeneration}
+          onPatchMusic={patchMusic}
+          onRemoveMusic={() => setMusic(null)}
+          onAddSfx={(generationId, atMs) => addSfx({ generationId, atMs, volume: 0.8 })}
+          onUpdateSfx={updateSfx}
+          onRemoveSfx={removeSfx}
+        />
+      </div>
+      <div className={panel === 'thumbnail' ? undefined : 'hidden'} aria-hidden={panel !== 'thumbnail'}>
+        <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
+      </div>
+      <div className={panel === 'dub' ? undefined : 'hidden'} aria-hidden={panel !== 'dub'}>
+        <DubPanel
+          clipId={clipId}
+          durationMs={outDur}
+          edits={edits}
+          onEdits={setEdits}
+          onRefresh={refreshDubs}
+          dubs={dubs}
+        />
+      </div>
+      <div className={panel === 'brand' ? undefined : 'hidden'} aria-hidden={panel !== 'brand'}>
+        <BrandPanel edits={edits} onEdits={setEdits} />
+      </div>
+    </>
+  )
+
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
-      <div className="shrink-0 border-b border-border px-4 py-2">
-        <EditorTopBar
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col bg-background">
+      <EditorTopBar
           backHref={`/app/clips/${projectId}`}
           title={title}
           onTitleChange={setTitle}
@@ -269,7 +385,7 @@ export function EditorShell({
           onUndo={undo}
           onRedo={redo}
           onExport={() => setExportOpen(true)}
-          onOpenProducer={() => setPanel('producer')}
+          onOpenProducer={() => selectPanel('producer')}
           producerStrip={
             producerStrip
               ? {
@@ -282,10 +398,11 @@ export function EditorShell({
               : null
           }
         />
-      </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="flex min-h-0 min-w-0 flex-col gap-3">
-          <div className="relative min-h-[320px] flex-1">
+      <EditorMobileRail active={panel} onChange={selectPanel} />
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_56px_380px] xl:grid-cols-[minmax(0,1fr)_56px_420px]">
+        <section className="flex min-h-0 min-w-0 flex-col gap-3 p-3 md:p-4">
+          <div className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4">
+            <div className="aspect-[9/16] h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
             <PreviewStage
               videoUrl={videoUrl}
               edits={edits}
@@ -297,6 +414,7 @@ export function EditorShell({
               videoRef={videoRef}
               onTick={onTick}
             />
+            </div>
           </div>
           <PlayerControls
             playing={playing}
@@ -317,111 +435,44 @@ export function EditorShell({
               onBrollChange={updateBrollItem}
             />
           </div>
-        </div>
-        <aside className="flex min-h-0 overflow-hidden rounded-xl border border-border">
-          <EditorRail active={panel} onChange={setPanel} />
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-            <div className={panel === 'producer' ? 'h-[min(60vh,520px)]' : 'hidden'} aria-hidden={panel !== 'producer'}>
-              <ProducerPanel
-                clipId={clipId}
-                bounds={bounds}
-                edits={edits}
-                onUndo={() => {
-                  undo()
-                  clearProducerStrip()
-                }}
-                onApplyEdits={(next, n, before) => {
-                  applyProducerPatch(next, before, n)
-                }}
-              />
-            </div>
-            <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
-              <TranscriptPanel
-                words={words}
-                shots={cropShots}
-                edits={edits}
-                onSeek={seekSource}
-                onAddCut={addCutRange}
-                onWordFix={setWordFix}
-                onRestoreWord={restoreWord}
-                onExtendTrim={(ms) => {
-                  if (ms < edits.trim.in) setTrim({ in: ms, out: edits.trim.out })
-                  else if (ms > edits.trim.out) setTrim({ in: edits.trim.in, out: ms })
-                }}
-                onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
-                selectionRef={selectionRef}
-              />
-            </div>
-            <div className={panel === 'layout' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layout'}>
-              <LayoutPanel
-                edits={edits}
-                shots={cropShots}
-                onMode={setLayoutMode}
-                onShotFocus={setShotOverride}
-                onRerunReframe={() => void requestClipReframe(clipId)}
-                onApplyBrand={() => void applyBrand()}
-                onEdits={setEdits}
-              />
-            </div>
-            <div className={panel === 'captions' ? undefined : 'hidden'} aria-hidden={panel !== 'captions'}>
-              <CaptionsPanel
-                clipId={clipId}
-                edits={edits}
-                onChange={setCaptions}
-                onApplyBrand={() => void applyBrand()}
-              />
-            </div>
-            <div className={panel === 'broll' ? undefined : 'hidden'} aria-hidden={panel !== 'broll'}>
-              <BrollPanel
-                clipId={clipId}
-                edits={edits}
-                outputDurationMs={outDur}
-                playheadMs={outputMs}
-                aiMeta={aiMeta}
-                brollMedia={brollMedia}
-                onMergeBroll={mergeBroll}
-                onSetBroll={setBroll}
-                onRemoveBroll={removeBroll}
-                onBrollMedia={mergeBrollMedia}
-                onFlushEdits={flushSave}
-              />
-            </div>
-            <div className={panel === 'audio' ? undefined : 'hidden'} aria-hidden={panel !== 'audio'}>
-              <AudioPanel
-                clipId={clipId}
-                edits={edits}
-                outputDurationMs={outDur}
-                playheadMs={outputMs}
-                onSuggestMusic={() => {}}
-                onAttachMusic={attachMusicGeneration}
-                onPatchMusic={patchMusic}
-                onRemoveMusic={() => setMusic(null)}
-                onAddSfx={(generationId, atMs) =>
-                  addSfx({ generationId, atMs, volume: 0.8 })
-                }
-                onUpdateSfx={updateSfx}
-                onRemoveSfx={removeSfx}
-              />
-            </div>
-            <div className={panel === 'thumbnail' ? undefined : 'hidden'} aria-hidden={panel !== 'thumbnail'}>
-              <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
-            </div>
-            <div className={panel === 'dub' ? undefined : 'hidden'} aria-hidden={panel !== 'dub'}>
-              <DubPanel
-                clipId={clipId}
-                durationMs={outDur}
-                edits={edits}
-                onEdits={setEdits}
-                onRefresh={refreshDubs}
-                dubs={dubs}
-              />
-            </div>
-            <div className={panel === 'brand' ? undefined : 'hidden'} aria-hidden={panel !== 'brand'}>
-              <BrandPanel edits={edits} onEdits={setEdits} />
-            </div>
+        </section>
+        <EditorRail active={panel} onChange={selectPanel} />
+        <aside
+          className={cn(
+            'flex min-h-0 flex-col border-border bg-card',
+            'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-50 max-md:max-h-[85dvh] max-md:rounded-t-xl max-md:border-t max-md:shadow-2xl',
+            !mobilePanelOpen && 'max-md:hidden',
+            'md:relative md:border-l md:max-h-none',
+          )}
+        >
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+            <TabIcon className="size-4 text-muted-foreground" aria-hidden />
+            <h2 className="text-sm font-semibold">{meta.label}</h2>
+            <span className="ml-auto text-xs text-muted-foreground">{meta.hint}</span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="md:hidden"
+              onClick={() => setMobilePanelOpen(false)}
+            >
+              Close
+            </Button>
           </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="p-4">{panelBody}</div>
+          </ScrollArea>
         </aside>
       </div>
+      <Button
+        type="button"
+        size="icon"
+        className="fixed bottom-4 right-4 z-40 size-12 rounded-full shadow-lg md:hidden"
+        aria-label="Open editor panel"
+        onClick={() => setMobilePanelOpen(true)}
+      >
+        <PanelRightOpen className="size-5" />
+      </Button>
       <ExportDialog
         clipId={clipId}
         title={title}
