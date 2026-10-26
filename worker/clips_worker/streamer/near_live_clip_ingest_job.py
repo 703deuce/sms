@@ -51,8 +51,22 @@ def run_near_live_clip_ingest_job(conn, job: dict, post_progress) -> None:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute('SELECT "workspaceId" FROM clip_projects WHERE id=%s', (project_id,))
         proj = cur.fetchone()
+        cur.execute(
+            """
+            SELECT id FROM clips
+            WHERE "projectId"=%s AND "deletedAt" IS NULL
+              AND "aiMeta"#>>'{streamer,twitchClipId}' = %s
+            LIMIT 1
+            """,
+            (project_id, clip_id),
+        )
+        existing = cur.fetchone()
     if not proj:
         raise RuntimeError("project missing")
+    if existing:
+        dedupe_project_clips(conn, project_id)
+        post_progress(job["id"], {"jobStatus": "DONE", "stage": "twitch_clip_ingested"})
+        return
 
     new_id = f"clip_{uuid.uuid4().hex}"
     ai_meta = {

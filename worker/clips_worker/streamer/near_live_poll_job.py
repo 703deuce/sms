@@ -96,6 +96,25 @@ def run_near_live_poll_job(conn, job: dict, post_progress) -> None:
     vstate = {**vstate, "processedEndMs": watermark, "nearLiveChunk": {"startMs": start_ms, "endMs": end_ms}}
     nl_update["processedEndMs"] = watermark
 
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1 FROM clip_jobs
+            WHERE "projectId"=%s AND type='STREAM_IMPORT' AND status IN ('QUEUED','RUNNING')
+            LIMIT 1
+            """,
+            (project_id,),
+        )
+        if cur.fetchone():
+            cur.execute(
+                'UPDATE stream_channels SET "platformState"=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
+                (json.dumps({**ps, "nearLive": nl_update}), channel_id),
+            )
+            conn.commit()
+            _schedule_next_poll(conn, project_id, channel_id, vod_id)
+            post_progress(job["id"], {"jobStatus": "DONE", "stage": "near_live_import_in_flight"})
+            return
+
     import_id = f"job_{uuid.uuid4().hex}"
     pri = job_priority(conn, "near_live")
     with conn.cursor() as cur:

@@ -20,4 +20,5 @@ Kick does **not** expose a reliable in-progress archive VOD API equivalent to Tw
 ## Reliability
 
 - Poll jobs use `RetryableError` on Helix failures; chunk watermarks in `platformState.nearLive.processedEndMs` + vod `state` (idempotent re-poll).
+- No second `STREAM_IMPORT` while one is `QUEUED`/`RUNNING`; `!clip` ingest dedupes on `twitchClipId` in `aiMeta` + recent ingest jobs.
 - No near-live code runs unless flag is set.
