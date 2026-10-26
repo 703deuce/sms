@@ -3,20 +3,22 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { JSONContent } from '@tiptap/core'
+import type { Extension, JSONContent } from '@tiptap/core'
 import { createScreenplayExtensions } from '@/lib/screenwriting/schema/extensions'
 import type { FormatSpec, ScreenplayElementType } from '@/lib/screenwriting/formats/types'
 import { autoDetectElementType, nextElementType } from '@/lib/screenwriting/editor/element-keys'
 import { elementTypeForDigit } from '@/lib/screenwriting/editor/shortcuts'
 import { newElementId } from '@/lib/screenwriting/schema/empty-doc'
 import { usePageDecorations } from '@/components/screenwriting/use-page-decorations'
-import { useScreenplayCollab } from '@/components/screenwriting/use-screenplay-collab'
 import { shouldDisablePmHistory, collabUndoStackLabel } from '@/lib/screenwriting/collab/undo-policy'
 import { attachYjsUndoHook } from '@/lib/screenwriting/collab/yjs-undo-hook'
+import type * as Y from 'yjs'
+import { replaceYdocFromPmJson, seedYdocFromPmJson } from '@/lib/screenwriting/collab/seed-ydoc'
 import { pastePlainTextToElements } from '@/lib/screenwriting/editor/clipboard'
 import { elementDirection } from '@/lib/screenwriting/editor/rtl'
 import { macroForHotkey, type Macro } from '@/lib/screenwriting/editor/macros'
 import { hashPmJson, reconcileSave } from '@/lib/screenwriting/persistence/save-reconcile'
+import { offlineDraftKeys } from '@/lib/screenwriting/persistence/offline-draft'
 import { DEFAULT_SMARTTYPE, learnToken, type SmartTypeLists } from '@/lib/screenwriting/smarttype/store'
 import { SmartTypeMenu, suggestionsForElement } from '@/components/screenwriting/smarttype-menu'
 import '@/components/screenwriting/screenplay-editor.css'
@@ -29,8 +31,10 @@ export function ScreenplayEditor({
   onDocChange,
   revisionColor,
   layoutDoc,
-  collabActive,
-  onCollabActive,
+  collabLive,
+  onCollabLive,
+  collabExtensions,
+  ydoc,
   highlightCharacter,
   rtl,
   insertElementType,
@@ -38,6 +42,8 @@ export function ScreenplayEditor({
   insertImageUrl,
   smartTypeLists,
   onSmartTypeChange,
+  externalDoc,
+  externalDocKey,
 }: {
   scriptId: string
   formatSpec: FormatSpec
@@ -46,8 +52,10 @@ export function ScreenplayEditor({
   onSaveState?: (state: 'saving' | 'saved' | 'error' | 'offline') => void
   onDocChange?: (doc: JSONContent) => void
   revisionColor?: string
-  collabActive?: boolean
-  onCollabActive?: (v: boolean) => void
+  collabLive?: boolean
+  onCollabLive?: (v: boolean) => void
+  collabExtensions: Extension[]
+  ydoc: Y.Doc
   highlightCharacter?: string
   rtl?: boolean
   insertElementType?: string | null
@@ -55,33 +63,35 @@ export function ScreenplayEditor({
   insertImageUrl?: string | null
   smartTypeLists?: SmartTypeLists
   onSmartTypeChange?: (lists: SmartTypeLists) => void
+  externalDoc?: JSONContent | null
+  externalDocKey?: number
 }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const serverUpdatedAt = useRef(0)
   const lists = smartTypeLists ?? DEFAULT_SMARTTYPE
   const [suggestItems, setSuggestItems] = useState<string[]>([])
   const [suggestOpen, setSuggestOpen] = useState(false)
-
   const extensions = useMemo(() => {
-    const base = createScreenplayExtensions(formatSpec)
-    if (shouldDisablePmHistory(Boolean(collabActive))) {
-      return base.filter((e) => e.name !== 'history')
-    }
-    return base
-  }, [formatSpec, collabActive])
+    const base = createScreenplayExtensions(formatSpec).filter((e) => {
+      if (shouldDisablePmHistory()) return e.name !== 'history'
+      return true
+    })
+    return [...base, ...collabExtensions]
+  }, [formatSpec, collabExtensions])
 
   const dir = elementDirection(Boolean(rtl))
 
   const editor = useEditor({
     extensions,
-    content: initialDoc,
+    content: undefined,
     immediatelyRender: false,
     editorProps: {
       attributes: {
         class: 'sw-editor max-w-none focus:outline-none sw-print-preview',
         spellcheck: 'true',
         style: `direction: ${dir.direction}; text-align: ${dir.textAlign}`,
-        'data-undo-label': collabUndoStackLabel(Boolean(collabActive)),
+        'data-undo-label': collabUndoStackLabel(Boolean(collabLive)),
+        'data-yjs-undo': '1',
       },
       handlePaste: (view, event) => {
         const text = event.clipboardData?.getData('text/plain')
@@ -158,6 +168,10 @@ export function ScreenplayEditor({
         return false
       },
     },
+    onCreate: ({ editor: ed }) => {
+      seedYdocFromPmJson(ydoc, ed.schema, initialDoc)
+      onCollabLive?.(Boolean(collabLive))
+    },
     onUpdate: ({ editor: ed }) => {
       onSaveState?.('saving')
       if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -205,12 +219,29 @@ export function ScreenplayEditor({
               serverHash: deviceHash,
             })
             serverUpdatedAt.current = serverAt
+            const keys = offlineDraftKeys(scriptId)
+            try {
+              localStorage.setItem(keys.syncedHash, deviceHash)
+              localStorage.setItem(keys.updatedAt, String(serverAt))
+              localStorage.setItem(keys.doc, JSON.stringify(json))
+            } catch {
+              /* quota */
+            }
             onSaveState?.('saved')
           })
           .catch(() => onSaveState?.('error'))
       }, 600)
     },
   })
+
+  const lastExternalKey = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    if (!editor || externalDocKey === undefined || !externalDoc) return
+    if (lastExternalKey.current === externalDocKey) return
+    lastExternalKey.current = externalDocKey
+    if (externalDocKey === 0) return
+    replaceYdocFromPmJson(ydoc, editor.schema, externalDoc)
+  }, [editor, externalDoc, externalDocKey, ydoc])
 
   const applySmartPick = (value: string) => {
     if (!editor) return
@@ -289,14 +320,13 @@ export function ScreenplayEditor({
   }, [editor, highlightCharacter])
 
   usePageDecorations(editor, layoutDoc ?? null)
-  useScreenplayCollab(editor, scriptId)
+
   useEffect(() => {
     const root = editor?.view.dom
     if (!root) return
-    const ready = root.getAttribute('data-collab-ready') === '1'
-    if (ready) onCollabActive?.(true)
-    attachYjsUndoHook(root, ready || Boolean(collabActive))
-  }, [editor, collabActive, onCollabActive])
+    attachYjsUndoHook(root, true)
+    root.setAttribute('data-undo-label', collabUndoStackLabel(Boolean(collabLive)))
+  }, [editor, collabLive])
 
   useEffect(() => {
     const root = editor?.view.dom

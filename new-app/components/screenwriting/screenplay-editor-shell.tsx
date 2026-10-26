@@ -5,6 +5,7 @@ import type { JSONContent } from '@tiptap/core'
 import type { FormatSpec } from '@/lib/screenwriting/formats/types'
 import { ScreenplayEditor } from '@/components/screenwriting/screenplay-editor'
 import { ScriptStatusBar } from '@/components/screenwriting/script-status-bar'
+import { useScreenplayYjsCollab } from '@/components/screenwriting/use-screenplay-yjs-collab'
 
 export function ScreenplayEditorShell({
   scriptId,
@@ -16,6 +17,7 @@ export function ScreenplayEditorShell({
   initialDoc: object
 }) {
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error' | 'offline'>('saved')
+  const { ydoc, collabExtensions } = useScreenplayYjsCollab(scriptId)
 
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -30,8 +32,11 @@ export function ScreenplayEditorShell({
         formatSpec={formatSpec}
         initialDoc={initialDoc as JSONContent}
         onSaveState={setSaveState}
+        collabExtensions={collabExtensions}
+        ydoc={ydoc}
+        externalDocKey={0}
       />
-      <ScriptStatusBar pmJson={initialDoc as JSONContent} />
+      <ScriptStatusBar pmJson={initialDoc as JSONContent} saveState={saveState} />
     </div>
   )
 }
