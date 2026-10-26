@@ -61,10 +61,13 @@ describe('format-flow acceptance (28)', () => {
   it('T16 Dialogue ( prefix → parenthetical', () => {
     expect(autoDetectElementType('(whispering)', 'dialogue')).toBe('parenthetical')
   })
-  it('T17–T18 Fountain cluster without extra blanks', () => {
+  it('T17 Fountain: no blank between character and parenthetical', () => {
     const f = pmJsonToFountainLines(sample)
     expect(f).not.toMatch(/JACK\n\n\(/)
-    expect(f).toMatch(/JACK\n\(quiet\)/)
+  })
+  it('T18 Fountain: no blank between character and dialogue', () => {
+    const f = pmJsonToFountainLines(sample)
+    expect(f).toMatch(/JACK\n\(quiet\)\nHello/)
   })
   it('T19 Scene heading uppercase in fountain', () => {
     const f = pmJsonToFountainLines(sample)
