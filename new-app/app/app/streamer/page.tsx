@@ -2,10 +2,9 @@ import { Page, PageHeader } from '@/components/app/page-primitives'
 import { StreamerImportPanel } from '@/components/streamer/streamer-import-panel'
 import { ObsFallbackDocs } from '@/components/streamer/obs-fallback-docs'
 import { StreamerVodList } from '@/components/streamer/streamer-vod-list'
-import { streamerPublicFlags } from '@/lib/server/streamer/env'
 import { listStreamerChannels } from '@/lib/server/streamer/channels'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { StreamerOAuthButtons } from '@/components/streamer/streamer-oauth-buttons'
 import { listStreamerVodsForWorkspace } from '@/lib/server/streamer/vod-list'
 import { getStreamUsage } from '@/lib/server/streamer/usage'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -22,7 +21,6 @@ export default async function StreamerHubPage() {
     getStreamUsage(workspaceId),
     listStreamerChannels(workspaceId),
   ])
-  const flags = streamerPublicFlags()
   return (
     <Page>
       <PageHeader
@@ -36,18 +34,7 @@ export default async function StreamerHubPage() {
         <StreamerImportPanel usageInitial={usage} />
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="text-sm font-semibold">Channels</h2>
-          <div className="flex flex-wrap gap-2">
-            {flags.twitchOAuth ? (
-              <Button size="sm" variant="outline" render={<Link href="/api/streamer/oauth/twitch/start" />} nativeButton={false}>
-                Connect Twitch
-              </Button>
-            ) : null}
-            {flags.kickOAuth ? (
-              <Button size="sm" variant="outline" render={<Link href="/api/streamer/oauth/kick/start" />} nativeButton={false}>
-                Connect Kick
-              </Button>
-            ) : null}
-          </div>
+          <StreamerOAuthButtons />
           <ul className="space-y-2 text-sm">
             {channels.map((ch) => (
               <li key={ch.id}>

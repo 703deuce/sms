@@ -10,7 +10,12 @@ export type CreateUploadInput = {
 }
 
 export type CreateUploadResult = {
-  mode: 'tus' | 'signed_put' | 's3_multipart'
+  mode: 'tus' | 'signed_put' | 's3_multipart' | 'app_chunked'
+  /** Resumable upload through the web app (bypasses Supabase TUS limits). */
+  appChunked?: {
+    chunkBytes: number
+    chunkUrl: string
+  }
   /** For TUS resumable (Supabase). */
   tus?: {
     endpoint: string
@@ -44,6 +49,7 @@ export interface ClipStorageDriver {
   abortUpload(input: { objectKey: string; s3UploadId?: string | null }): Promise<void>
   putJson(objectKey: string, data: unknown): Promise<void>
   putBytes(objectKey: string, body: Buffer, contentType: string): Promise<void>
+  putStream(objectKey: string, body: NodeJS.ReadableStream, contentType: string): Promise<void>
   getJson<T>(objectKey: string): Promise<T>
   createSignedDownloadUrl(
     objectKey: string,

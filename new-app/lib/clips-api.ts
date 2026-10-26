@@ -10,10 +10,11 @@ export type ClipUploadStart = {
   uploadId: string
   key: string
   storage: {
-    mode: 'tus' | 'signed_put' | 's3_multipart'
+    mode: 'tus' | 'signed_put' | 's3_multipart' | 'app_chunked'
     tus?: { endpoint: string; bucket: string; objectKey: string; token: string }
     signedPut?: { url: string; token: string }
     s3Multipart?: { uploadId: string; partSize: number; partUrls: { partNumber: number; url: string }[] }
+    appChunked?: { chunkBytes: number; chunkUrl: string }
   }
 }
 

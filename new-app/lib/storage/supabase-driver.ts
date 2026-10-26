@@ -1,6 +1,8 @@
 import 'server-only'
 import { createClient } from '@supabase/supabase-js'
+import type { Readable } from 'node:stream'
 import type { ClipStorageDriver, CompleteUploadInput, CreateUploadInput, CreateUploadResult } from '@/lib/storage/types'
+import { CLIPS_APP_CHUNK_BYTES, shouldUseAppChunkedUpload } from '@/lib/server/clips/upload-limits'
 
 const TUS_CHUNK_BYTES = 6 * 1024 * 1024
 const SIGNED_PUT_MAX_BYTES = 50 * 1024 * 1024
@@ -27,7 +29,17 @@ export function createSupabaseStorageDriver(): ClipStorageDriver {
   return {
     name: 'supabase',
     async createUpload(input: CreateUploadInput): Promise<CreateUploadResult> {
-      const { supabase, url, bucket } = client()
+      const { url, bucket } = client()
+      if (shouldUseAppChunkedUpload(input.bytes)) {
+        return {
+          mode: 'app_chunked',
+          appChunked: {
+            chunkBytes: CLIPS_APP_CHUNK_BYTES,
+            chunkUrl: `/api/clips/uploads/${input.uploadId}/chunk`,
+          },
+        }
+      }
+      const { supabase } = client()
       const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(input.objectKey, {
         upsert: false,
       })
@@ -70,6 +82,15 @@ export function createSupabaseStorageDriver(): ClipStorageDriver {
       const { error } = await supabase.storage.from(bucket).upload(objectKey, body, {
         contentType,
         upsert: true,
+      })
+      if (error) throw new Error(error.message)
+    },
+    async putStream(objectKey: string, stream: Readable, contentType: string): Promise<void> {
+      const { supabase, bucket } = client()
+      const { error } = await supabase.storage.from(bucket).upload(objectKey, stream, {
+        contentType,
+        upsert: true,
+        duplex: 'half',
       })
       if (error) throw new Error(error.message)
     },

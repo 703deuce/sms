@@ -9,6 +9,7 @@ const isCoolifyBuild = Boolean(process.env.COOLIFY_RESOURCE_UUID);
 const nextConfig = {
   experimental: {
     agentUpgrade: "security",
+    proxyClientMaxBodySize: "12mb",
   },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   output: "standalone",

@@ -37,12 +37,12 @@ export default async function StreamerChannelPage({ params }: { params: Promise<
           </p>
           <div className="flex flex-wrap gap-2">
             {flags.twitchOAuth && channel.platform === 'twitch' && channel.status !== 'CONNECTED' ? (
-              <Button size="sm" render={<Link href="/api/streamer/oauth/twitch/start" />} nativeButton={false}>
+              <Button size="sm" render={<a href="/api/streamer/oauth/twitch/start" />} nativeButton={false}>
                 Connect Twitch
               </Button>
             ) : null}
             {flags.kickOAuth && channel.platform === 'kick' && channel.status !== 'CONNECTED' ? (
-              <Button size="sm" render={<Link href="/api/streamer/oauth/kick/start" />} nativeButton={false}>
+              <Button size="sm" render={<a href="/api/streamer/oauth/kick/start" />} nativeButton={false}>
                 Connect Kick
               </Button>
             ) : null}

@@ -37,12 +37,15 @@ export function NewProjectWorkspace() {
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
   const [upload, setUpload] = useState<UploadProgress | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [durationMs, setDurationMs] = useState(0)
   const [estimate, setEstimate] = useState<{ credits: number; providerCostUsd?: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
 
   const onFile = (file: File) => {
+    setPendingFile(file)
+    setUploadId(null)
     void uploadClipFile(file, (p) => {
       setUpload(p)
       if (p.state === 'complete' && p.uploadId) {
@@ -53,10 +56,8 @@ export function NewProjectWorkspace() {
           void estimateCredits({ durationMs: ms, rangeStartMs: 0, rangeEndMs: ms, settings }).then(setEstimate).catch(() => {})
         })
       }
-    }).catch((e) => {
-      toast.error(e instanceof Error ? e.message : 'Upload failed')
-      setUpload((u) => (u ? { ...u, state: 'error', error: String(e) } : u))
-    })
+      if (p.state === 'error' && p.error) toast.error(p.error)
+    }).catch(() => {})
   }
 
   const submitUpload = async () => {
@@ -141,10 +142,16 @@ export function NewProjectWorkspace() {
             <StreamerImportPanel />
           ) : tab === 'upload' ? (
             <div className="flex flex-col gap-4">
-              {!upload && <Dropzone onFile={onFile} />}
-              {upload && (
-                <UploadProgressItem progress={upload} onCancel={() => uploadId && void cancelClipUpload(uploadId)} />
-              )}
+              {(!upload || upload.state === 'error') && upload?.state !== 'error' ? (
+                <Dropzone onFile={onFile} />
+              ) : null}
+              {upload ? (
+                <UploadProgressItem
+                  progress={upload}
+                  onCancel={() => upload.uploadId && void cancelClipUpload(upload.uploadId)}
+                  onRetry={upload.state === 'error' && pendingFile ? () => onFile(pendingFile) : undefined}
+                />
+              ) : null}
               {durationMs > 0 && (
                 <p className="text-sm text-muted-foreground tabular-nums">
                   Detected duration {(durationMs / 1000).toFixed(1)}s

@@ -24,6 +24,18 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [submitting, setSubmitting] = useState(false)
   const [upload, setUpload] = useState<UploadProgress | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+
+  const startFileUpload = (file: File) => {
+    setPendingFile(file)
+    setUploadId(null)
+    void uploadClipFile(file, (p) => {
+      setUpload(p)
+      if (p.state === 'complete' && p.uploadId) setUploadId(p.uploadId)
+    }).catch(() => {
+      /* state + message set in uploadClipFile */
+    })
+  }
 
   useEffect(() => {
     const trimmed = url.trim()
@@ -120,18 +132,19 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       </PrimaryButton>
       <div className="border-t border-border pt-4">
         <p className="mb-2 text-sm font-medium">Or upload a recording</p>
-        {!upload && (
-          <Dropzone onFile={(file) => {
-            void uploadClipFile(file, (p) => {
-              setUpload(p)
-              if (p.state === 'complete' && p.uploadId) setUploadId(p.uploadId)
-            })
-          }} />
-        )}
-        {upload && (
+        {!upload || upload.state === 'error' ? (
+          upload?.state === 'error' ? (
+            <UploadProgressItem
+              progress={upload}
+              onRetry={() => pendingFile && startFileUpload(pendingFile)}
+            />
+          ) : (
+            <Dropzone onFile={startFileUpload} />
+          )
+        ) : (
           <UploadProgressItem
             progress={upload}
-            onCancel={() => uploadId && void cancelClipUpload(uploadId)}
+            onCancel={() => upload.uploadId && void cancelClipUpload(upload.uploadId)}
           />
         )}
         <PrimaryButton
