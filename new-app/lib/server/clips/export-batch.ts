@@ -1,8 +1,9 @@
 import { can } from '@/lib/billing/entitlements'
-import { editsVersionHash, isDefaultEdits, normalizeEdits } from '@/lib/clips/edits'
+import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
+import { editsVersionHash, normalizeEdits } from '@/lib/clips/edits'
 import type { ExportAspect, ExportResolution } from '@/lib/clips/export-aspect'
 import { renderVersionHash } from '@/lib/clips/export-aspect'
-import { exportFilename } from '@/lib/server/clips/clips'
+import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
@@ -40,26 +41,27 @@ export async function enqueueProjectExportAll(
       queued.push({ clipId: clip.id, renderId: existing.id, status: 'READY' })
       continue
     }
-    if (isDefaultEdits(edits, bounds) && clip.previewKey && opts.aspect === '9:16' && opts.resolution === '720p') {
-      const renderId = createId('rnd')
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      await prisma.clipRender.create({
-        data: {
-          id: renderId,
-          clipId: clip.id,
-          workspaceId,
-          status: 'READY',
-          outputKey: clip.previewKey,
-          watermark,
-          filename: exportFilename(clip.title),
-          resolution: opts.resolution,
-          aspectRatio: opts.aspect,
-          batchId,
-          editsVersionHash: hash,
-          expiresAt,
-        },
+    if (
+      clip.previewKey &&
+      canReuseClipPreviewForExport({
+        aspect: opts.aspect,
+        resolution: opts.resolution,
+        edits,
+        bounds,
       })
-      queued.push({ clipId: clip.id, renderId, status: 'READY' })
+    ) {
+      const ready = await createReadyRenderFromPreview({
+        workspaceId,
+        clipId: clip.id,
+        previewKey: clip.previewKey,
+        title: clip.title,
+        watermark,
+        resolution: opts.resolution,
+        aspect: opts.aspect,
+        edits,
+        batchId,
+      })
+      queued.push({ clipId: clip.id, renderId: ready.renderId, status: 'READY' })
       continue
     }
     const result = await enqueueRenderClip(workspaceId, clip.id, {

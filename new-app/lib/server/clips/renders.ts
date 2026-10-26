@@ -109,6 +109,21 @@ export async function retryFailedRender(workspaceId: string, renderId: string) {
   const clip = await prisma.clip.findUnique({ where: { id: render.clipId } })
   if (!clip?.previewKey) throw new Error('Clip preview is not available')
 
+  const activeJobs = await prisma.clipJob.findMany({
+    where: {
+      clipId: clip.id,
+      type: 'RENDER_CLIP',
+      status: { in: ['QUEUED', 'RUNNING'] },
+    },
+    select: { id: true, payload: true },
+  })
+  for (const job of activeJobs) {
+    const payload = job.payload as { renderId?: string } | null
+    if (payload?.renderId === renderId) {
+      return { renderId, status: 'QUEUED' as const, jobId: job.id }
+    }
+  }
+
   await prisma.clipRender.update({
     where: { id: renderId },
     data: {
@@ -133,6 +148,31 @@ export async function retryFailedRender(workspaceId: string, renderId: string) {
   })
 
   return { renderId, status: 'QUEUED' as const, jobId }
+}
+
+/** Idempotent: retries each FAILED render once (skips if a job is already queued). */
+export async function requeueFailedClipRenders(workspaceId: string) {
+  const prisma = getPrisma()
+  const failed = await prisma.clipRender.findMany({
+    where: { workspaceId, status: 'FAILED' },
+    select: { id: true },
+    orderBy: { updatedAt: 'asc' },
+    take: 50,
+  })
+  const results: { renderId: string; jobId?: string; status: string; skipped?: string }[] = []
+  for (const row of failed) {
+    try {
+      const res = await retryFailedRender(workspaceId, row.id)
+      results.push({ renderId: row.id, jobId: res.jobId, status: res.status })
+    } catch (err) {
+      results.push({
+        renderId: row.id,
+        status: 'skipped',
+        skipped: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  return results
 }
 
 export async function markRenderReady(

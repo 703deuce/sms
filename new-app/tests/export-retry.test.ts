@@ -12,6 +12,7 @@ const prismaMock = {
   },
   clipJob: {
     create: vi.fn(),
+    findMany: vi.fn(),
   },
 }
 
@@ -37,7 +38,25 @@ describe('retryFailedRender', () => {
     vi.clearAllMocks()
   })
 
+  it('returns existing queued job when retry is idempotent', async () => {
+    prismaMock.clipRender.findFirst.mockResolvedValue({
+      id: 'rnd_1',
+      status: 'FAILED',
+      clipId: 'clip_1',
+      editsVersionHash: 'hash1',
+    })
+    prismaMock.clip.findUnique.mockResolvedValue({ id: 'clip_1', projectId: 'proj_1', previewKey: 'k' })
+    prismaMock.clipJob.findMany.mockResolvedValue([
+      { id: 'job_existing', payload: { renderId: 'rnd_1' } },
+    ])
+
+    const res = await retryFailedRender('ws_1', 'rnd_1')
+    expect(res).toEqual({ renderId: 'rnd_1', status: 'QUEUED', jobId: 'job_existing' })
+    expect(prismaMock.clipJob.create).not.toHaveBeenCalled()
+  })
+
   it('re-queues the same failed render row', async () => {
+    prismaMock.clipJob.findMany.mockResolvedValue([])
     prismaMock.clipRender.findFirst.mockResolvedValue({
       id: 'rnd_1',
       status: 'FAILED',

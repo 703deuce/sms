@@ -8,6 +8,29 @@ from pathlib import Path
 from clips_worker.ffmpeg_util import run_ffmpeg
 
 
+def probe_video_duration_s(video: Path) -> float | None:
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(video),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        val = float((proc.stdout or "").strip())
+        return val if val > 0.05 else None
+    except Exception:
+        return None
+
+
 def clip_window_duration_s(spec: dict) -> float:
     return max(0.1, float(spec["end_s"]) - float(spec["start_s"]))
 
@@ -68,6 +91,10 @@ def build_broll_filtergraph(
         end = float(spec["end_s"])
         inp = f"{i + 1}:v"
         local = Path(spec["local_path"])
+        probed = probe_video_duration_s(local)
+        if probed is not None:
+            clip_dur = min(clip_dur, probed)
+        clip_dur = max(0.1, clip_dur)
         bar_crop = detect_letterbox_crop(local)
         bar_vf = f"{bar_crop}," if bar_crop else ""
         parts.append(
@@ -132,6 +159,8 @@ def apply_broll_overlays(
     if not fc:
         shutil.copy(base_video, out_video)
         return
+    if "[0:v]format=yuv420p[base]" not in fc:
+        raise RuntimeError(f"broll filtergraph missing base label: {fc[:200]}")
 
     cmd = ["ffmpeg", "-y", "-hide_banner", "-i", str(base_video)]
     cmd.extend(extra)

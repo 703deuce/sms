@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { can } from '@/lib/billing/entitlements'
-import { isDefaultEdits, normalizeEdits } from '@/lib/clips/edits'
+import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
+import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
-import { exportFilename, getClipForWorkspace } from '@/lib/server/clips/clips'
+import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { logClipEvent } from '@/lib/server/clips/events'
+import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
-import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
-import { createId } from '@/lib/supabase/id'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const bodySchema = z.object({
@@ -32,41 +31,33 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
     const resolution = body.resolution
     const aspect = body.aspect
-    const filename = exportFilename(clip.title)
-    const storage = getClipStorage()
-    const prisma = getPrisma()
-
-    if (isDefaultEdits(edits, bounds)) {
-      const renderId = createId('rnd')
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      const sizeBytes = await storage.getObjectSizeBytes(clip.previewKey)
-      const { editsVersionHash } = await import('@/lib/clips/edits')
-      const hash = editsVersionHash(edits)
-      await prisma.clipRender.create({
-        data: {
-          id: renderId,
-          clipId: clip.id,
-          workspaceId,
-          status: 'READY',
-          outputKey: clip.previewKey,
-          watermark,
-          filename,
-          resolution,
-          editsVersionHash: hash,
-          expiresAt,
-          sizeBytes: sizeBytes ? BigInt(sizeBytes) : null,
-        },
+    if (
+      canReuseClipPreviewForExport({
+        aspect,
+        resolution,
+        edits,
+        bounds,
+      })
+    ) {
+      const ready = await createReadyRenderFromPreview({
+        workspaceId,
+        clipId: clip.id,
+        previewKey: clip.previewKey,
+        title: clip.title,
+        watermark,
+        resolution,
+        aspect,
+        edits,
       })
       await logClipEvent(workspaceId, clip.id, 'download')
-      const url = await storage.createSignedDownloadUrl(clip.previewKey, 3600, { downloadFilename: filename })
       return NextResponse.json({
         data: {
-          renderId,
-          downloadUrl: url,
-          filename,
-          download: filename,
+          renderId: ready.renderId,
+          downloadUrl: ready.downloadUrl,
+          filename: ready.filename,
+          download: ready.filename,
           watermark,
-          sizeBytes,
+          sizeBytes: ready.sizeBytes,
           projectId: clip.projectId,
           status: 'READY',
         },

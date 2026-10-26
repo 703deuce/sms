@@ -5,7 +5,6 @@ import { pickStreamerRetryJobType } from '@/lib/server/streamer/retry-project'
 
 const NON_TERMINAL: ClipProjectStatus[] = [
   'QUEUED',
-  'IMPORTING',
   'PREPARING',
   'TRANSCRIBING',
   'FINDING_CLIPS',

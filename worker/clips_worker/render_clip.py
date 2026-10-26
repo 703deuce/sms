@@ -98,6 +98,37 @@ def layout_env(layout: str) -> dict[str, str]:
     return env
 
 
+def ffmpeg_fit_export(clip_src: Path, out_mp4: Path, width: int, height: int) -> None:
+    """Fallback when speakercrop fails (short clips, missing faces, etc.)."""
+    vf = (
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1"
+    )
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(clip_src),
+            "-vf",
+            vf,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+            str(out_mp4),
+        ],
+    )
+
+
 def run_speakercrop(
     clip_src: Path,
     out_mp4: Path,
@@ -131,11 +162,14 @@ def run_speakercrop(
         env["NORENDER"] = "1"
         env["CAPTIONS"] = "0"
     preset = env["CAPTION_PRESET"]
-    subprocess.check_call(
-        [sys.executable, str(V3 / "speakercrop.py"), str(clip_src), str(out_mp4)],
-        cwd=str(V3),
-        env=env,
-    )
+    try:
+        subprocess.check_call(
+            [sys.executable, str(V3 / "speakercrop.py"), str(clip_src), str(out_mp4)],
+            cwd=str(V3),
+            env=env,
+        )
+    except subprocess.CalledProcessError:
+        ffmpeg_fit_export(clip_src, out_mp4, w, h)
     ass = Path(str(out_mp4).replace(".mp4", ".ass"))
     if ass.exists() and preset != "bold_pop":
         from clips_worker.caption_presets import apply_preset_to_ass

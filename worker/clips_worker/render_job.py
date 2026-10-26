@@ -7,7 +7,8 @@ from pathlib import Path
 
 from psycopg2.extras import RealDictCursor
 
-from clips_worker.edits_render import is_default_edits, normalize_edits, render_edited_clip
+from clips_worker.edits_render import normalize_edits, render_edited_clip
+from clips_worker.preview_reuse import can_reuse_clip_preview_for_render
 from clips_worker.render_clip import ffmpeg_cut
 from clips_worker.storage import download_object, upload_file
 
@@ -138,7 +139,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         settings = {**settings, "layout": "fit"}
 
     preview_key = ctx["previewKey"]
-    if is_default_edits(edits, clip_start, clip_end) and preview_key:
+    if preview_key and can_reuse_clip_preview_for_render(aspect, resolution, edits, clip_start, clip_end):
         tmp = Path(tempfile.mkdtemp()) / "probe.mp4"
         try:
             download_object(preview_key, tmp)
