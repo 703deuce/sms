@@ -155,8 +155,8 @@ def fuse_moments(
                     "total": total,
                     "audio": _peak_in_window(signals.get("audio"), cand["start_ms"], cand["end_ms"]),
                     "transcript": _peak_in_window(signals.get("transcript"), cand["start_ms"], cand["end_ms"]),
-                    "chat": None,
-                    "viewerClips": None,
+                    "chat": _peak_in_window(signals.get("chat"), cand["start_ms"], cand["end_ms"]),
+                    "viewerClips": _peak_in_window(signals.get("viewerClips"), cand["start_ms"], cand["end_ms"]),
                     "llm": llm_score,
                 },
                 ai_meta={
@@ -198,8 +198,8 @@ def fuse_moments(
         "hz": 1,
         "audio": signals.get("audio"),
         "transcript": signals.get("transcript"),
-        "chat": None,
-        "viewerClips": None,
+        "chat": signals.get("chat"),
+        "viewerClips": signals.get("viewerClips"),
         "chapters": chapters or [],
         "combined": curve,
         "clipCues": signals.get("clipCues"),
@@ -282,6 +282,18 @@ def _reasons_for(cand: dict, signals: dict, llm: dict) -> list[dict]:
         hi = min(len(transcript), cand["end_ms"] // 1000 + 1)
         if hi > lo and max(transcript[lo:hi]) >= 0.5:
             reasons.append({"kind": "transcript", "label": "Hype speech", "value": "high"})
+    chat = signals.get("chat")
+    if chat:
+        sec = cand["peak_ms"] // 1000
+        if 0 <= sec < len(chat) and chat[sec] >= 0.5:
+            ratio = max(2.0, chat[sec] * 8)
+            reasons.append({"kind": "chat", "label": "Chat spike", "value": f"{ratio:.0f}× baseline"})
+    viewer = signals.get("viewerClips")
+    if viewer:
+        lo = cand["start_ms"] // 1000
+        hi = min(len(viewer), cand["end_ms"] // 1000 + 1)
+        if hi > lo and max(viewer[lo:hi]) >= 0.5:
+            reasons.append({"kind": "viewer_clip", "label": "Viewer clips", "value": "overlap"})
     if llm.get("category"):
         reasons.append({"kind": "llm", "label": str(llm["category"]).replace("_", " ").title(), "value": ""})
     cues = signals.get("clipCues")

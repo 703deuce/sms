@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from psycopg2.extras import RealDictCursor
@@ -17,6 +18,7 @@ from clips_worker.storage import download_object, put_json, sign_url, upload_fil
 from clips_worker.streamer.chunking import ffmpeg_slice_opus, merge_words, plan_chunks
 from clips_worker.streamer.config import CHUNK_MIN, CHUNK_OVERLAP_S, SCRATCH
 from clips_worker.streamer.keys import stream_audio_key, stream_chunk_key, stream_signals_key
+from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.rank import rank_moments
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
 
@@ -96,6 +98,8 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         download_object(audio_key, audio_path)
 
         chunk_started = time.time()
+        chat_executor = ThreadPoolExecutor(max_workers=1)
+        chat_future = chat_executor.submit(get_chat, vod)
         all_word_chunks: list[list[dict] | None] = [None] * len(ranges)
         for idx, (start_ms, end_ms) in enumerate(ranges):
             if idx in done:
@@ -161,12 +165,22 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         chapters = vod.get("chapters")
         if isinstance(chapters, str):
             chapters = json.loads(chapters)
+        chat_messages, chat_source = chat_future.result()
+        chat_executor.shutdown(wait=False)
+        if chat_messages:
+            with conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE stream_vods SET "chatSource" = %s, "chatMessages" = %s, "updatedAt" = NOW() WHERE id = %s',
+                    (chat_source, len(chat_messages), vod_id),
+                )
+            conn.commit()
         picks, signals_payload = rank_moments(
             audio_path=audio_path,
             words=words,
             duration_ms=duration_ms,
             settings=settings,
             chapters=chapters if isinstance(chapters, list) else None,
+            chat_messages=chat_messages,
         )
         sig_key = stream_signals_key(workspace_id, vod_id)
         put_json(sig_key, signals_payload)

@@ -1,0 +1,42 @@
+"""Chat message sources for streamer VODs (S5+)."""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from typing import Iterable
+
+from clips_worker.storage import download_object
+
+
+def _replay_disabled() -> bool:
+    if os.environ.get("TWITCH_VOD_CHAT_REPLAY", "").lower() in ("off", "0", "false"):
+        return True
+    return not (os.environ.get("TWITCH_GQL_CLIENT_ID") and os.environ.get("TWITCH_GQL_COMMENTS_HASH"))
+
+
+def get_chat(vod: dict) -> tuple[list[dict] | None, str]:
+    """
+    Returns (messages, chatSource).
+    chatSource: twitch_replay | none | captured (future S13)
+    """
+    state = vod.get("state") or {}
+    if isinstance(state, str):
+        state = json.loads(state)
+    chat_key = state.get("chatKey")
+    if chat_key:
+        scratch = Path("/tmp/streamer_chat.jsonl.gz")
+        download_object(chat_key, scratch)
+        from clips_worker.streamer.chat.twitch_gql import load_jsonl_gz
+
+        return load_jsonl_gz(scratch), str(vod.get("chatSource") or "twitch_replay")
+
+    platform = str(vod.get("platform") or "").lower()
+    external_id = vod.get("externalId") or vod.get("external_id")
+    if platform == "twitch" and external_id and not _replay_disabled():
+        from clips_worker.streamer.chat.twitch_gql import fetch_all_vod_comments
+
+        messages, _cursor = fetch_all_vod_comments(str(external_id), state.get("chatCursor"))
+        if messages:
+            return messages, "twitch_replay"
+    return None, "none"
