@@ -19,6 +19,7 @@ function clamp(n: number, lo: number, hi: number) {
 
 export function PreviewStage({
   videoUrl,
+  posterUrl = null,
   edits,
   words,
   previewWords,
@@ -29,6 +30,7 @@ export function PreviewStage({
   onTick,
 }: {
   videoUrl: string | null
+  posterUrl?: string | null
   edits: ClipEditsV2
   words: SourceWord[]
   previewWords?: ClipWord[]
@@ -47,6 +49,7 @@ export function PreviewStage({
   trackRef.current = cropTrack
   const [box, setBox] = useState({ w: 0, h: 0 })
   const [playing, setPlaying] = useState(false)
+  const [canPlay, setCanPlay] = useState(false)
   const [captionTimeSec, setCaptionTimeSec] = useState(0)
   const brollRefs = useRef<Record<string, HTMLVideoElement | null>>({})
 
@@ -71,7 +74,11 @@ export function PreviewStage({
   useEffect(() => {
     const v = videoRefInner.current
     const b = blurRef.current
-    if (!v || !videoUrl) return
+    if (!v || !videoUrl) {
+      setCanPlay(false)
+      return
+    }
+    setCanPlay(false)
     v.src = videoUrl
     if (b) b.src = videoUrl
     v.currentTime = edits.trim.in / 1000
@@ -167,6 +174,19 @@ export function PreviewStage({
   return (
     <div ref={wrapRef} className="absolute inset-0 flex items-center justify-center">
       <div style={{ width: box.w || undefined, height: box.h || undefined }} className="relative overflow-hidden rounded-xl bg-black">
+        {posterUrl && !canPlay ? (
+          <img
+            src={posterUrl}
+            alt=""
+            className="absolute inset-0 z-0 size-full object-cover"
+          />
+        ) : null}
+        {!canPlay && videoUrl ? (
+          <div
+            className="absolute inset-0 z-[2] animate-pulse bg-gradient-to-b from-muted/40 via-muted/20 to-muted/40"
+            aria-hidden
+          />
+        ) : null}
         {videoUrl && cropTrack ? (
           <>
             <video
@@ -178,14 +198,16 @@ export function PreviewStage({
             />
             <video
               ref={videoRefInner}
-              className="absolute left-0 top-0 z-[1] max-w-none"
+              className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
               style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
               playsInline
+              poster={posterUrl ?? undefined}
               onLoadedMetadata={() => {
                 const v = videoRefInner.current
                 const b = blurRef.current
                 if (v && b) b.currentTime = v.currentTime
               }}
+              onCanPlay={() => setCanPlay(true)}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
             />
@@ -193,8 +215,10 @@ export function PreviewStage({
         ) : videoUrl ? (
           <video
             ref={videoRefInner}
-            className="size-full object-cover"
+            className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
+            poster={posterUrl ?? undefined}
+            onCanPlay={() => setCanPlay(true)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
           />

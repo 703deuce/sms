@@ -88,10 +88,20 @@ export function AppTopBar() {
               </DropdownMenuItem>
             ))}
             <DropdownMenuItem
-              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+              role="menuitemradio"
+              aria-checked={resolvedTheme === 'light'}
+              onClick={() => setTheme('light')}
             >
-              <SunMoon className="size-4" />
-              Theme
+              <SunMoon className="size-4" aria-hidden />
+              Light theme
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              role="menuitemradio"
+              aria-checked={resolvedTheme === 'dark'}
+              onClick={() => setTheme('dark')}
+            >
+              <SunMoon className="size-4" aria-hidden />
+              Dark theme
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

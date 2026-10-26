@@ -58,6 +58,7 @@ export function EditorShell({
   cropShots,
   cropTrack,
   videoUrl,
+  posterUrl = null,
   aiMeta,
   brollMedia: initialBrollMedia = [],
 }: {
@@ -71,6 +72,7 @@ export function EditorShell({
   cropShots: CropShot[]
   cropTrack: CropTrack | null
   videoUrl: string | null
+  posterUrl?: string | null
   aiMeta?: { brollIdeas?: string[] } | null
   brollMedia?: BrollMediaRow[]
 }) {
@@ -81,10 +83,16 @@ export function EditorShell({
   const [exportOpen, setExportOpen] = useState(false)
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
+  const producerPanelRef = useRef<HTMLDivElement>(null)
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
     if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
       setMobilePanelOpen(true)
+    }
+    if (id === 'producer') {
+      requestAnimationFrame(() => {
+        producerPanelRef.current?.focus()
+      })
     }
   }, [])
   const [outputMs, setOutputMs] = useState(0)
@@ -274,7 +282,13 @@ export function EditorShell({
 
   const panelBody = (
     <>
-      <div className={panel === 'producer' ? 'min-h-[min(60vh,520px)]' : 'hidden'} aria-hidden={panel !== 'producer'}>
+      <div
+        ref={producerPanelRef}
+        tabIndex={-1}
+        id="editor-panel-producer"
+        className={panel === 'producer' ? 'min-h-[min(60vh,520px)] outline-none' : 'hidden'}
+        aria-hidden={panel !== 'producer'}
+      >
         <ProducerPanel
           clipId={clipId}
           bounds={bounds}
@@ -291,6 +305,8 @@ export function EditorShell({
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
         <TranscriptPanel
           words={words}
+          clipStartMs={bounds.clipStartMs}
+          clipEndMs={bounds.clipEndMs}
           shots={cropShots}
           edits={edits}
           onSeek={seekSource}
@@ -386,6 +402,7 @@ export function EditorShell({
           onRedo={redo}
           onExport={() => setExportOpen(true)}
           onOpenProducer={() => selectPanel('producer')}
+          producerOpen={panel === 'producer'}
           producerStrip={
             producerStrip
               ? {
@@ -405,6 +422,7 @@ export function EditorShell({
             <div className="aspect-[9/16] h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
             <PreviewStage
               videoUrl={videoUrl}
+              posterUrl={posterUrl}
               edits={edits}
               words={words}
               previewWords={previewWords}

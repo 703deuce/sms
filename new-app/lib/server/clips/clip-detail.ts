@@ -1,7 +1,8 @@
 import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
 import { shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
 import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
-import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
+import { resolveEditorWords } from '@/lib/server/clips/editor-words'
+import type { SourceWord } from '@/lib/clips/source-words'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
@@ -50,21 +51,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
   const edits = normalizeEdits(clip.edits, bounds)
 
-  let transcript = await loadProjectTranscript(storage, project)
-  if (!transcript.length && clip.wordsKey) {
-    try {
-      const clipWords = await storage.getJson<ClipWord[]>(clip.wordsKey)
-      transcript = clipWords.map((w) => ({
-        ...w,
-        s: w.s + clip.startMs / 1000,
-        e: w.e + clip.startMs / 1000,
-      }))
-    } catch {
-      transcript = []
-    }
-  }
-
-  const words: SourceWord[] = loadSourceWords(transcript)
+  const projectTranscript = await loadProjectTranscript(storage, project)
+  const words: SourceWord[] = await resolveEditorWords(storage, workspaceId, clip, projectTranscript)
 
   const cropTrackKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clip.id}/crop_track.json`
   let cropTrack: CropTrack | null = null

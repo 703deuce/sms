@@ -14,6 +14,7 @@ export type ClipExportRowDto = {
   batchId: string | null
   watermark: boolean
   status: string
+  error: string | null
   createdAt: string
   expiresAt: string | null
   sizeBytes: number | null
@@ -47,6 +48,7 @@ export async function mapRenderRows(
     id: string
     clipId: string
     status: ClipRenderStatus
+    error: string | null
     resolution: string
     aspectRatio: string
     batchId: string | null
@@ -88,6 +90,7 @@ export async function mapRenderRows(
       batchId: r.batchId,
       watermark: r.watermark,
       status: r.status,
+      error: r.error,
       createdAt: toIso(r.createdAt) ?? new Date(0).toISOString(),
       expiresAt: toIso(r.expiresAt),
       sizeBytes,

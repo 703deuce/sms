@@ -53,6 +53,7 @@ export function ProjectsToolbar({
           placeholder="Search projects…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
       </div>
       <div className="flex flex-wrap gap-1" role="group" aria-label="Project status">

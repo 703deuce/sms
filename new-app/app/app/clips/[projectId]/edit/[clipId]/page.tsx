@@ -16,6 +16,7 @@ export default async function ClipEditorPage({
   if (!data || data.clip.projectId !== projectId) notFound()
 
   const videoUrl = data.mediaUrls.proxy || data.mediaUrls.source || data.mediaUrls.preview
+  const posterUrl = data.mediaUrls.poster || data.mediaUrls.preview
 
   return (
     <EditorShell
@@ -29,6 +30,7 @@ export default async function ClipEditorPage({
       cropShots={data.crop.shots}
       cropTrack={data.crop.track}
       videoUrl={videoUrl}
+      posterUrl={posterUrl}
       aiMeta={data.aiMeta}
       brollMedia={data.brollMedia}
     />

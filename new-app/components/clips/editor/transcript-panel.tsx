@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { FILLER_RE, isWordCut, wordDisplayText } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
-import { wordSourceMs } from '@/lib/clips/source-words'
+import { wordSourceMs, wordsInRange } from '@/lib/clips/source-words'
 import { speakerLabelForWord } from '@/lib/clips/crop-shots'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
@@ -41,8 +41,12 @@ export function TranscriptPanel({
   onExtendTrim,
   onToggleEmphasis,
   selectionRef,
+  clipStartMs,
+  clipEndMs,
 }: {
   words: SourceWord[]
+  clipStartMs?: number
+  clipEndMs?: number
   shots: CropShot[]
   edits: ClipEditsV2
   onSeek: (sourceMs: number) => void
@@ -57,10 +61,24 @@ export function TranscriptPanel({
   const [selEnd, setSelEnd] = useState<number | null>(null)
   const [editingI, setEditingI] = useState<number | null>(null)
   const [search, setSearch] = useState('')
-  const pad = 5000
-  const viewMin = edits.trim.in - pad
-  const viewMax = edits.trim.out + pad
-  const visible = words.filter((w) => w.e * 1000 >= viewMin && w.s * 1000 <= viewMax)
+  const visible = useMemo(() => {
+    if (!words.length) return []
+    const pad = 5000
+    const viewMin = edits.trim.in - pad
+    const viewMax = edits.trim.out + pad
+    const inView = words.filter((w) => w.e * 1000 >= viewMin && w.s * 1000 <= viewMax)
+    if (inView.length) return inView
+    const inTrim = words.filter((w) => {
+      const { startMs, endMs } = wordSourceMs(w)
+      return endMs >= edits.trim.in && startMs <= edits.trim.out
+    })
+    if (inTrim.length) return inTrim
+    if (clipStartMs != null && clipEndMs != null) {
+      const ranged = wordsInRange(words, clipStartMs, clipEndMs)
+      if (ranged.length) return ranged
+    }
+    return words
+  }, [words, edits.trim.in, edits.trim.out, clipStartMs, clipEndMs])
   const spkOrder = useMemo(() => speakerOrder(visible, shots), [visible, shots])
 
   useEffect(() => {
@@ -237,6 +255,11 @@ export function TranscriptPanel({
         <Button size="sm" variant="outline" onClick={removeFillers}>Remove filler words</Button>
       </div>
       <div className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed">
+        {!visible.length ? (
+          <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+            No transcript words for this clip yet. They appear after processing finishes.
+          </p>
+        ) : null}
         {blocks.map((block, bi) => {
           const dot = SPEAKER_DOT[(block.speakerNum - 1) % SPEAKER_DOT.length]
           return (

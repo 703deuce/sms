@@ -112,8 +112,10 @@ export type ExportRenderRow = {
   projectId: string
   title: string
   resolution: string
+  aspectRatio: string
   watermark: boolean
   status: string
+  error: string | null
   createdAt: string
   expiresAt: string | null
   sizeBytes: number | null
@@ -147,6 +149,13 @@ export function patchClip(clipId: string, body: { title?: string; edits?: unknow
     method: 'PATCH',
     body: JSON.stringify(body),
   })
+}
+
+export function retryExportRender(
+  clipId: string,
+  body: { resolution?: '720p' | '1080p'; aspect?: '9:16' | '1:1' | '16:9'; watermark?: boolean },
+) {
+  return exportClipWithOptions(clipId, body)
 }
 
 export function retryProject(projectId: string) {

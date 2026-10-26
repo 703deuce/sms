@@ -30,6 +30,7 @@ export function EditorTopBar({
   onRedo,
   onExport,
   onOpenProducer,
+  producerOpen = false,
   producerStrip,
   pendingPaidCount = 0,
 }: {
@@ -43,6 +44,7 @@ export function EditorTopBar({
   onRedo: () => void
   onExport: () => void
   onOpenProducer?: () => void
+  producerOpen?: boolean
   producerStrip?: { changeCount: number; onUndo: () => void } | null
   pendingPaidCount?: number
 }) {
@@ -127,8 +129,13 @@ export function EditorTopBar({
           type="button"
           size="sm"
           variant="outline"
-          className="relative gap-1.5"
-          onClick={onOpenProducer}
+          className={cn(
+            'relative gap-1.5',
+            producerOpen && 'border-primary/50 bg-primary/10 text-foreground',
+          )}
+          onClick={() => onOpenProducer?.()}
+          aria-pressed={producerOpen}
+          aria-controls="editor-panel-producer"
         >
           <Sparkles className="size-4 text-lane-ai" aria-hidden />
           AI Producer

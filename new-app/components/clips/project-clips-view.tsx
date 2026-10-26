@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/app/page-primitives'
+import { ProjectStatusBadge } from '@/components/app/status'
+import { DurationChip } from '@/components/clips/ui/duration-chip'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { Button } from '@/components/ui/button'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
@@ -14,7 +16,7 @@ import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { exportClip, listProjectClips, retryProject } from '@/lib/clips-api'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { Clapperboard, Sparkles } from 'lucide-react'
+import { Clapperboard, Film, Sparkles } from 'lucide-react'
 
 type ProjectStatusPayload = {
   status: string
@@ -39,6 +41,8 @@ export function ProjectClipsView({
   initialClips,
   initialError,
   fromLink,
+  createdAt,
+  sourceDurationMs = 0,
 }: {
   projectId: string
   projectTitle: string
@@ -46,6 +50,8 @@ export function ProjectClipsView({
   initialClips?: ClipCardData[] | null
   initialError?: string | null
   fromLink?: boolean
+  createdAt?: string
+  sourceDurationMs?: number
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
 
@@ -132,7 +138,28 @@ export function ProjectClipsView({
 
   return (
     <>
-      <PageHeader title={projectTitle} description={desc} />
+      <PageHeader
+        icon={Film}
+        title={projectTitle}
+        description={desc}
+        meta={
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <ProjectStatusBadge status={status} />
+            {sourceDurationMs > 0 ? (
+              <DurationChip
+                ms={sourceDurationMs}
+                className="relative rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-foreground"
+              />
+            ) : null}
+            <span>{clipCountLabel(clips.length)}</span>
+            {createdAt ? (
+              <time dateTime={createdAt} className="text-xs">
+                {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(createdAt))}
+              </time>
+            ) : null}
+          </div>
+        }
+      />
       {status === 'FAILED' ? (
         <Panel title="Project" description="This upload could not be processed.">
           <ProjectFailedAlert

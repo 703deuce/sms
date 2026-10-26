@@ -26,6 +26,8 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         initialClips={initialClips}
         initialError={project.error}
         fromLink={Boolean(project.sourceUrl)}
+        createdAt={project.createdAt.toISOString()}
+        sourceDurationMs={Math.max(0, project.rangeEndMs - project.rangeStartMs)}
       />
     </Page>
   )
