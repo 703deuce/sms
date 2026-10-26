@@ -1,3 +1,4 @@
+import type { Readable } from 'stream'
 import type { ClipStorageDriver, CompleteUploadInput, CreateUploadInput, CreateUploadResult } from '@/lib/storage/types'
 import type { S3Config } from '@/lib/storage/s3'
 import {
@@ -14,15 +15,14 @@ import {
 const MAX_PARTS = 10_000
 
 export function createS3CompatibleStorageDriver(
-  name: 's3' | 'r2',
   getConfig: () => S3Config | null,
   partSizeBytes: number,
 ): ClipStorageDriver {
   return {
-    name,
+    name: 's3',
     async createUpload(input: CreateUploadInput): Promise<CreateUploadResult> {
       const cfg = getConfig()
-      if (!cfg) throw new Error(`${name} storage is not configured`)
+      if (!cfg) throw new Error('S3 storage is not configured')
       const signClient = getS3Client(cfg)
       const internal = getInternalS3Client(cfg)
       const s3UploadId = await createMultipartUpload(internal, cfg.bucket, input.objectKey, input.mime)
@@ -55,9 +55,9 @@ export function createS3CompatibleStorageDriver(
       if (!cfg || !input.s3UploadId) return
       await abortMultipartUpload(getInternalS3Client(cfg), cfg.bucket, input.objectKey, input.s3UploadId)
     },
-    async putStream(objectKey: string, body: NodeJS.ReadableStream, contentType: string): Promise<void> {
+    async putStream(objectKey: string, body: Readable, contentType: string): Promise<void> {
       const cfg = getConfig()
-      if (!cfg) throw new Error(`${name} not configured`)
+      if (!cfg) throw new Error('S3 not configured')
       const { PutObjectCommand } = await import('@aws-sdk/client-s3')
       await getInternalS3Client(cfg).send(
         new PutObjectCommand({ Bucket: cfg.bucket, Key: objectKey, Body: body, ContentType: contentType }),
@@ -65,7 +65,7 @@ export function createS3CompatibleStorageDriver(
     },
     async putBytes(objectKey: string, body: Buffer, contentType: string): Promise<void> {
       const cfg = getConfig()
-      if (!cfg) throw new Error(`${name} not configured`)
+      if (!cfg) throw new Error('S3 not configured')
       const { PutObjectCommand } = await import('@aws-sdk/client-s3')
       await getInternalS3Client(cfg).send(
         new PutObjectCommand({ Bucket: cfg.bucket, Key: objectKey, Body: body, ContentType: contentType }),
@@ -73,12 +73,12 @@ export function createS3CompatibleStorageDriver(
     },
     async putJson(objectKey: string, data: unknown): Promise<void> {
       const cfg = getConfig()
-      if (!cfg) throw new Error(`${name} not configured`)
+      if (!cfg) throw new Error('S3 not configured')
       await putObjectJson(getInternalS3Client(cfg), cfg.bucket, objectKey, data)
     },
     async getJson<T>(objectKey: string): Promise<T> {
       const cfg = getConfig()
-      if (!cfg) throw new Error(`${name} not configured`)
+      if (!cfg) throw new Error('S3 not configured')
       return getObjectJson<T>(getInternalS3Client(cfg), cfg.bucket, objectKey)
     },
     async createSignedDownloadUrl(
@@ -87,7 +87,7 @@ export function createS3CompatibleStorageDriver(
       options?: { downloadFilename?: string },
     ): Promise<string> {
       const cfg = getConfig()
-      if (!cfg) throw new Error(`${name} not configured`)
+      if (!cfg) throw new Error('S3 not configured')
       const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner')
       const { GetObjectCommand } = await import('@aws-sdk/client-s3')
       const cmd = new GetObjectCommand({

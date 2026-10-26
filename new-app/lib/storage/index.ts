@@ -1,9 +1,7 @@
 import 'server-only'
 import { storageDriverName, usesS3CompatibleMultipart } from '@/lib/storage/driver-name'
 import { getClipStorage, getClipStorageForObjectKey, normalizeStorageDriver } from '@/lib/storage/resolve'
-import { isR2Configured } from '@/lib/storage/r2'
 import { getS3Config } from '@/lib/storage/s3'
-import { createSupabaseStorageDriver } from '@/lib/storage/supabase-driver'
 import { getSupabaseStorageConfig } from '@/lib/storage/supabase-driver'
 
 export * from '@/lib/storage/paths'
@@ -13,7 +11,6 @@ export { getClipStorage, getClipStorageForObjectKey }
 
 export function isStorageConfigured(): boolean {
   const driver = storageDriverName()
-  if (driver === 'r2') return isR2Configured()
   if (driver === 's3') return Boolean(getS3Config())
   return Boolean(getSupabaseStorageConfig())
 }

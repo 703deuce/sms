@@ -1,9 +1,0 @@
-[
-  {
-    "AllowedOrigins": ["https://transovo.ai"],
-    "AllowedMethods": ["GET", "PUT", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]

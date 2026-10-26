@@ -10,6 +10,16 @@ import {
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
+/** B2 multipart requires 5 MB–5 GB per part; browser uploads use 16–64 MB (default 32 MB). */
+export const S3_MULTIPART_PART_BYTES = (() => {
+  const raw = process.env.S3_MULTIPART_PART_BYTES?.trim()
+  if (raw) {
+    const n = Number(raw)
+    if (Number.isFinite(n) && n >= 5 * 1024 * 1024) return Math.floor(n)
+  }
+  return 32 * 1024 * 1024
+})()
+
 export type S3Config = {
   endpoint: string
   region: string

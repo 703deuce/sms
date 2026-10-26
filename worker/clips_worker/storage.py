@@ -1,4 +1,4 @@
-"""Object storage for clips worker (Supabase, S3, or Cloudflare R2)."""
+"""Object storage for clips worker (Supabase or S3-compatible e.g. Backblaze B2)."""
 from __future__ import annotations
 
 import json
@@ -24,17 +24,14 @@ def storage_driver() -> str:
 
 
 def _uses_s3_api() -> bool:
-    return storage_driver() in ("s3", "r2")
+    return storage_driver() == "s3"
 
 
 def storage_bucket() -> str:
-    driver = storage_driver()
-    if driver == "r2":
-        return env("R2_BUCKET")
     return (
-        os.environ.get("STORAGE_BUCKET")
+        os.environ.get("S3_BUCKET")
+        or os.environ.get("STORAGE_BUCKET")
         or os.environ.get("CLIPS_STORAGE_BUCKET")
-        or os.environ.get("S3_BUCKET")
         or "clips"
     ).strip()
 
@@ -59,16 +56,6 @@ def _download_staging(upload_id: str, dest: Path) -> None:
 
 
 def _s3_client():
-    driver = storage_driver()
-    if driver == "r2":
-        account = env("R2_ACCOUNT_ID")
-        return boto3.client(
-            "s3",
-            endpoint_url=f"https://{account}.r2.cloudflarestorage.com",
-            aws_access_key_id=env("R2_ACCESS_KEY_ID"),
-            aws_secret_access_key=env("R2_SECRET_ACCESS_KEY"),
-            region_name=os.environ.get("R2_REGION", "auto"),
-        )
     return boto3.client(
         "s3",
         endpoint_url=os.environ.get("S3_ENDPOINT"),
@@ -88,8 +75,6 @@ def download_object(object_key: str, dest: Path) -> None:
             _download_s3(object_key, dest)
             return
         except ClientError:
-            if storage_driver() == "supabase":
-                raise
             _download_supabase(object_key, dest)
             return
     _download_supabase(object_key, dest)

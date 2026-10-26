@@ -1,8 +1,6 @@
 import { createS3CompatibleStorageDriver } from '@/lib/storage/s3-compatible-driver'
-import { getS3Config } from '@/lib/storage/s3'
-
-const S3_PART_SIZE = 10 * 1024 * 1024
+import { getS3Config, S3_MULTIPART_PART_BYTES } from '@/lib/storage/s3'
 
 export function createS3StorageDriver() {
-  return createS3CompatibleStorageDriver('s3', getS3Config, S3_PART_SIZE)
+  return createS3CompatibleStorageDriver(getS3Config, S3_MULTIPART_PART_BYTES)
 }

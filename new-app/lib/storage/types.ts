@@ -1,4 +1,6 @@
-export type StorageDriverName = 'supabase' | 's3' | 'r2'
+import type { Readable } from 'stream'
+
+export type StorageDriverName = 'supabase' | 's3'
 
 export type CreateUploadInput = {
   workspaceId: string
@@ -49,7 +51,7 @@ export interface ClipStorageDriver {
   abortUpload(input: { objectKey: string; s3UploadId?: string | null }): Promise<void>
   putJson(objectKey: string, data: unknown): Promise<void>
   putBytes(objectKey: string, body: Buffer, contentType: string): Promise<void>
-  putStream(objectKey: string, body: NodeJS.ReadableStream, contentType: string): Promise<void>
+  putStream(objectKey: string, body: Readable, contentType: string): Promise<void>
   getJson<T>(objectKey: string): Promise<T>
   createSignedDownloadUrl(
     objectKey: string,
