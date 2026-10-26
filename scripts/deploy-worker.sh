@@ -37,6 +37,13 @@ set -euo pipefail
 REMOTE_SRC="${REMOTE_SRC}"
 REMOTE_ENV="${REMOTE_ENV}"
 
+disk_pct=\$(df / --output=pcent | tail -1 | tr -dc '0-9')
+if [ -n "\${disk_pct}" ] && [ "\${disk_pct}" -gt 80 ]; then
+  echo "[deploy-worker] disk at \${disk_pct}% — pruning docker builder cache and unused images (not volumes)"
+  docker builder prune -af 2>/dev/null || true
+  docker image prune -af 2>/dev/null || true
+fi
+
 if [ ! -f "\${REMOTE_ENV}" ]; then
   echo "[deploy-worker] FATAL: missing \${REMOTE_ENV}" >&2
   exit 1

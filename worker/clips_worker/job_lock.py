@@ -1,13 +1,17 @@
 """RUNNING job lock heartbeats and stale-lock recovery."""
 from __future__ import annotations
 
+import os
 import threading
-import time
 from typing import Callable
 
 import psycopg2
 
-from clips_worker.job_reliability import JOB_LOCK_HEARTBEAT_SECONDS, JOB_LOCK_STALE_SECONDS, stale_lock_interval_sql
+from clips_worker.job_reliability import (
+    JOB_LOCK_HEARTBEAT_SECONDS,
+    JOB_LOCK_STALE_SECONDS,
+    stale_lock_interval_sql,
+)
 from clips_worker.streamer.lanes import lane_types_sql_in
 from clips_worker.worker_identity import worker_instance_id
 
@@ -69,6 +73,8 @@ def requeue_stale_running_jobs(conn, stale_seconds: int = JOB_LOCK_STALE_SECONDS
 
 
 def requeue_running_not_owned_by_instance(conn, instance_id: str) -> int:
+    worker_id = os.environ.get("WORKER_ID", "worker-1")
+    instance_prefix = f"{worker_id}:"
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -83,9 +89,16 @@ def requeue_running_not_owned_by_instance(conn, instance_id: str) -> int:
                 )
             WHERE status = 'RUNNING'
               AND type IN ({lane_types_sql_in()})
-              AND ("lockedBy" IS DISTINCT FROM %s)
+              AND (
+                "lockedBy" IS NULL
+                OR "lockedBy" = %s
+                OR (
+                  "lockedBy" LIKE %s
+                  AND "lockedBy" IS DISTINCT FROM %s
+                )
+              )
             """,
-            (instance_id,),
+            (worker_id, f"{instance_prefix}%", instance_id),
         )
         n = int(cur.rowcount or 0)
     conn.commit()
