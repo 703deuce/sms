@@ -8,8 +8,7 @@ import modal
 
 from modal_app.app import app
 
-# ffmpeg scratch image has no apt; uploads use urllib in Python.
-image = modal.Image.from_registry("jrottenberg/ffmpeg:7-scratch").pip_install("numpy")
+image = modal.Image.debian_slim(python_version="3.12").apt_install("ffmpeg")
 
 
 @app.cls(image=image, gpu="L4", timeout=1800, scaledown_window=int(os.environ.get("MODAL_SCALEDOWN_S", "60")))
