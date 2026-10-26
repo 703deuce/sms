@@ -6,6 +6,9 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
+
+from clips_worker.ffmpeg_util import stderr_tail
 
 V3 = Path(os.environ.get("SPEAKERCROP_DIR", "/app/v3"))
 
@@ -139,6 +142,8 @@ def run_speakercrop(
     shot_overrides: list | None = None,
     crop_track_out: Path | None = None,
     no_render: bool = False,
+    render_id: str | None = None,
+    render_meta: dict[str, Any] | None = None,
 ) -> Path:
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
@@ -162,13 +167,18 @@ def run_speakercrop(
         env["NORENDER"] = "1"
         env["CAPTIONS"] = "0"
     preset = env["CAPTION_PRESET"]
-    try:
-        subprocess.check_call(
-            [sys.executable, str(V3 / "speakercrop.py"), str(clip_src), str(out_mp4)],
-            cwd=str(V3),
-            env=env,
+    cmd = [sys.executable, str(V3 / "speakercrop.py"), str(clip_src), str(out_mp4)]
+    proc = subprocess.run(cmd, cwd=str(V3), env=env, capture_output=True, text=True)
+    if proc.returncode != 0:
+        tail = stderr_tail(proc.stderr or proc.stdout or "", lines=25)
+        rid = render_id or "unknown"
+        print(
+            f"WARN speakercrop failed renderId={rid}; using ffmpeg_fit_export. stderr_tail={tail[:800]}",
+            flush=True,
         )
-    except subprocess.CalledProcessError:
+        if render_meta is not None:
+            render_meta["fit_fallback"] = True
+            render_meta["speakercrop_tail"] = tail[:2000]
         ffmpeg_fit_export(clip_src, out_mp4, w, h)
     ass = Path(str(out_mp4).replace(".mp4", ".ass"))
     if ass.exists() and preset != "bold_pop":

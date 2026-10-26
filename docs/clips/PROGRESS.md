@@ -44,7 +44,7 @@
 - **Effective UI limit** = `min(CLIPS_MAX_UPLOAD_BYTES | CLIPS_UPLOAD_MAX_BYTES, SUPABASE_OBJECT_MAX_BYTES)` when `STORAGE_DRIVER=supabase`. Set env on web after upgrade, e.g. `SUPABASE_OBJECT_MAX_BYTES=5368709120` and `CLIPS_MAX_UPLOAD_BYTES` to match product policy.
 - Client preflight + `/api/clips/uploads/limits` must show the **effective** cap so the “up to X” hint never over-promises (e.g. not 150 MB / 20 GB while plan is still 50 MB).
 
-**Backblaze B2 (in progress):** `STORAGE_DRIVER=s3` with `S3_ENDPOINT` (e.g. `https://s3.us-east-005.backblazeb2.com`), `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET=transovo-clips`. Browser SigV4 multipart (default **32 MB** parts, B2 allows 5 MB–5 GB; override `S3_MULTIPART_PART_BYTES`). Resume via `clip_upload_parts`. CORS (B2 native JSON): `docs/clips/b2-cors.json` — apply with `b2 bucket update --cors-rules …`. `clip_uploads.storageDriver` / `clips.storageDriver` for mixed Supabase legacy reads. **Do not flip prod env until credentials land.**
+**Backblaze B2:** `STORAGE_DRIVER=s3` with `S3_ENDPOINT` (e.g. `https://s3.us-east-005.backblazeb2.com`), `S3_REGION`, keys, `S3_BUCKET=transovo-clips`, `CLIPS_MAX_UPLOAD_BYTES=5368709120`. Apply via `scripts/apply-b2-env-coolify.sh` (Coolify API + `/opt/clips-worker/worker.env`). CORS: `docs/clips/b2-cors.json` (B2 native API).
 
 **No shared-password gate** — `DEV_BYPASS_AUTH` unchanged; UI opens without clips login.
 

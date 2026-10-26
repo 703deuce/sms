@@ -9,6 +9,11 @@ from psycopg2.extras import RealDictCursor
 
 from clips_worker.edits_render import normalize_edits, render_edited_clip
 from clips_worker.preview_reuse import can_reuse_clip_preview_for_render
+from clips_worker.render_fit_fallback import (
+    RENDER_FORMAT_DEFAULT,
+    RENDER_FORMAT_FIT_FALLBACK,
+    merge_job_fit_fallback_payload,
+)
 from clips_worker.render_clip import ffmpeg_cut
 from clips_worker.storage import download_object, upload_file
 
@@ -45,6 +50,7 @@ def mark_render(
     size_bytes: int | None = None,
     error: str | None = None,
     srt_key: str | None = None,
+    render_format: str | None = None,
 ) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -55,10 +61,11 @@ def mark_render(
                 "sizeBytes" = COALESCE(%s, "sizeBytes"),
                 error = %s,
                 "srtKey" = COALESCE(%s, "srtKey"),
+                format = COALESCE(%s, format),
                 "updatedAt" = NOW()
             WHERE id = %s
             """,
-            (status, output_key, size_bytes, error, srt_key, render_id),
+            (status, output_key, size_bytes, error, srt_key, render_format, render_id),
         )
     conn.commit()
 
@@ -181,6 +188,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             audio_assets = {**(audio_assets or {}), "dub_assets": dub}
 
         out_mp4 = td_path / "render.mp4"
+        render_meta: dict = {}
         _, _edited_words, srt_body = render_edited_clip(
             clip_file,
             out_mp4,
@@ -192,6 +200,8 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             td_path,
             broll_specs=broll_specs or None,
             audio_assets=audio_assets,
+            render_id=render_id,
+            render_meta=render_meta,
         )
 
         brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
@@ -219,5 +229,8 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         upload_file(out_key, out_mp4, "video/mp4")
         upload_text(srt_key, srt_body, "text/plain; charset=utf-8")
         size = out_mp4.stat().st_size
-        mark_render(conn, render_id, "READY", out_key, size, None, srt_key)
+        out_format = RENDER_FORMAT_FIT_FALLBACK if render_meta.get("fit_fallback") else RENDER_FORMAT_DEFAULT
+        mark_render(conn, render_id, "READY", out_key, size, None, srt_key, render_format=out_format)
+        if render_meta.get("fit_fallback"):
+            merge_job_fit_fallback_payload(conn, job["id"], str(render_meta.get("speakercrop_tail") or ""))
         post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})

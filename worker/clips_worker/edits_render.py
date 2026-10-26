@@ -285,6 +285,8 @@ def render_edited_clip(
     work_dir: Path,
     broll_specs: list[dict] | None = None,
     audio_assets: dict | None = None,
+    render_id: str | None = None,
+    render_meta: dict | None = None,
 ) -> tuple[Path, list[dict], str]:
     from clips_worker.silence_trim import effective_cut_ranges
 
@@ -304,6 +306,8 @@ def render_edited_clip(
             work_dir,
             clip_start_ms=clip_start_ms,
             shot_overrides=shot_overrides,
+            render_id=render_id,
+            render_meta=render_meta,
         )
         return out_mp4, remapped, build_srt(remapped)
 
@@ -331,6 +335,8 @@ def render_edited_clip(
         work_dir,
         clip_start_ms=clip_start_ms,
         shot_overrides=shot_overrides,
+        render_id=render_id,
+        render_meta=render_meta,
     )
 
     cut_mp4 = work_dir / "cut.mp4"
