@@ -19,6 +19,7 @@ COPY worker/prototype/v3/transcribe.py /app/transcribe.py
 COPY worker/clips_worker /app/clips_worker
 COPY worker/tests /app/tests
 
+ENV PYTHONPATH=/app
 RUN pip install --no-cache-dir pytest && pytest -q /app/tests/test_caption_parity.py
 
 ENV PYTHONUNBUFFERED=1
