@@ -8,6 +8,7 @@ import type { CropTrack } from '@/lib/clips/crop-track'
 import { shotAt } from '@/lib/clips/crop-track'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
+import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { applyPlaybackTime } from '@/lib/clips/editor-playback'
 
 function clamp(n: number, lo: number, hi: number) {
@@ -19,6 +20,7 @@ export function PreviewStage({
   edits,
   words,
   cropTrack,
+  brollMedia = [],
   videoRef,
   onTick,
 }: {
@@ -26,6 +28,7 @@ export function PreviewStage({
   edits: ClipEditsV2
   words: SourceWord[]
   cropTrack: CropTrack | null
+  brollMedia?: BrollMediaRow[]
   videoRef: React.RefObject<HTMLVideoElement | null>
   onTick: (tick: { sourceMs: number; outputMs: number; playing: boolean }) => void
 }) {
@@ -39,6 +42,7 @@ export function PreviewStage({
   const [box, setBox] = useState({ w: 0, h: 0 })
   const [playing, setPlaying] = useState(false)
   const [captionTimeSec, setCaptionTimeSec] = useState(0)
+  const brollRefs = useRef<Record<string, HTMLVideoElement | null>>({})
 
   useEffect(() => {
     const el = videoRefInner.current
@@ -95,6 +99,20 @@ export function PreviewStage({
       }
       const out = applyPlaybackTime(src, e).outputMs
       setCaptionTimeSec(out / 1000)
+      const outMs = out
+      for (const item of editsRef.current.broll || []) {
+        const media = brollMedia.find((m) => m.id === item.id)
+        const el = brollRefs.current[item.id]
+        if (!el || !media?.url) continue
+        const active = item.startMs <= outMs && outMs < item.endMs
+        el.style.opacity = active ? '1' : '0'
+        if (active) {
+          const rel = (outMs - item.startMs) / 1000
+          if (Math.abs(el.currentTime - rel) > 0.15) el.currentTime = rel
+          if (v && !v.paused && el.paused) void el.play()
+          if (v && v.paused && !el.paused) el.pause()
+        } else if (!el.paused) el.pause()
+      }
       onTick({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
 
       if (v && track && box.h > 0) {
@@ -174,6 +192,24 @@ export function PreviewStage({
         ) : (
           <div className="flex size-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">No video</div>
         )}
+        {(edits.broll || []).map((item) => {
+          const media = brollMedia.find((m) => m.id === item.id)
+          if (!media?.url) return null
+          return (
+            <video
+              key={item.id}
+              ref={(el) => {
+                brollRefs.current[item.id] = el
+              }}
+              src={media.url}
+              className="pointer-events-none absolute inset-0 z-[5] size-full object-cover"
+              muted
+              playsInline
+              preload="auto"
+              style={{ opacity: 0 }}
+            />
+          )
+        })}
         {edits.captions?.enabled !== false && (
           <CaptionOverlay
             words={captionWords}

@@ -28,6 +28,8 @@ export default async function ClipEditorPage({
       cropShots={data.crop.shots}
       cropTrack={data.crop.track}
       videoUrl={videoUrl}
+      aiMeta={data.aiMeta}
+      brollMedia={data.brollMedia}
     />
   )
 }

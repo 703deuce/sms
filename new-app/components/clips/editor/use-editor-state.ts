@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useReducer, useRef } from 'react'
+import type { BrollItem } from '@/lib/clips/broll'
 import {
   canonicalEditsJson,
   defaultEdits,
@@ -158,6 +159,30 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     [setEdits, state.edits],
   )
 
+  const mergeBroll = useCallback(
+    (items: BrollItem[], replace = false) => {
+      const cur = state.edits.broll || []
+      const next = replace ? items : [...cur, ...items]
+      setEdits({ ...state.edits, broll: next })
+    },
+    [setEdits, state.edits],
+  )
+
+  const updateBrollItem = useCallback(
+    (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => {
+      const next = (state.edits.broll || []).map((b) => (b.id === id ? { ...b, ...patch } : b))
+      setEdits({ ...state.edits, broll: next })
+    },
+    [setEdits, state.edits],
+  )
+
+  const removeBroll = useCallback(
+    (id: string) => {
+      setEdits({ ...state.edits, broll: (state.edits.broll || []).filter((b) => b.id !== id) })
+    },
+    [setEdits, state.edits],
+  )
+
   const setTrim = useCallback(
     (trim: { in: number; out: number }) => {
       const pad = 5000
@@ -202,6 +227,9 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     setTrim,
     setCaptions,
     toggleEmphasis,
+    mergeBroll,
+    updateBrollItem,
+    removeBroll,
     resetEdits: () => setEdits(defaultEdits(bounds), false),
   }
 }

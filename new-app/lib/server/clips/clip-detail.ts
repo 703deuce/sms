@@ -4,6 +4,7 @@ import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
 import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
+import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { getClipStorage } from '@/lib/storage'
 
 const SIGNED_TTL = 3600
@@ -91,6 +92,9 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
 
   const proxyKey = project.proxyKey
   const sourceKey = project.upload?.key
+  const brollMedia = edits.broll?.length ? await resolveBrollMedia(edits.broll) : []
+  const aiMeta = (clip.aiMeta || null) as { brollIdeas?: string[] } | null
+
   return {
     clip: {
       id: clip.id,
@@ -113,6 +117,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       cropTrack: cropTrack ? await storage.createSignedDownloadUrl(cropTrackKey, SIGNED_TTL) : null,
     },
     project: { id: project.id, title: project.title, settings: project.settings },
+    aiMeta,
+    brollMedia,
   }
 }
 

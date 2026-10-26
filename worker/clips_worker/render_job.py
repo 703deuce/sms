@@ -148,6 +148,10 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         ffmpeg_cut(src, clip_file, clip_start, clip_end)
         source_words = load_source_words(ctx, td_path)
 
+        from clips_worker.broll_render import load_broll_specs
+
+        broll_specs = load_broll_specs(conn, edits, td_path)
+
         out_mp4 = td_path / "render.mp4"
         _, _edited_words, srt_body = render_edited_clip(
             clip_file,
@@ -158,6 +162,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             clip_end,
             settings,
             td_path,
+            broll_specs=broll_specs or None,
         )
 
         out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.mp4"

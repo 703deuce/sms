@@ -2,16 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
 
 export function ExportDialog({
   clipId,
   title,
+  edits,
   open,
   onClose,
 }: {
   clipId: string
   title: string
+  edits: ClipEditsV2
   open: boolean
   onClose: () => void
 }) {
@@ -73,6 +76,10 @@ export function ExportDialog({
           Also download .srt
         </label>
         <p className="mt-2 text-xs text-muted-foreground">No watermark</p>
+        {(edits.broll || []).some((b) => b.source === 'ai') && (
+          <p className="mt-2 text-xs text-muted-foreground">Includes AI-generated B-roll.</p>
+        )}
+        <MediaCredits clipId={clipId} edits={edits} />
         {status && status !== 'READY' && <p className="mt-3 text-sm">Status: {status}…</p>}
         <div className="mt-4 flex flex-wrap gap-2">
           {!downloadUrl ? (
@@ -84,6 +91,28 @@ export function ExportDialog({
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function MediaCredits({ clipId, edits }: { clipId: string; edits: ClipEditsV2 }) {
+  const [lines, setLines] = useState<string[]>([])
+  useEffect(() => {
+    if (!(edits.broll || []).some((b) => b.source === 'stock')) return
+    void fetch(`/api/clips/clips/${clipId}/broll/credits`)
+      .then((r) => r.json())
+      .then((j) => setLines((j.data?.lines as string[]) || []))
+      .catch(() => {})
+  }, [clipId, edits.broll])
+  if (!lines.length) return null
+  const text = lines.join('\n')
+  return (
+    <div className="mt-3 rounded border border-border p-2 text-xs">
+      <p className="font-medium">Media credits</p>
+      <pre className="mt-1 whitespace-pre-wrap text-muted-foreground">{text}</pre>
+      <Button variant="outline" size="sm" className="mt-2" onClick={() => void navigator.clipboard.writeText(text)}>
+        Copy credits
+      </Button>
     </div>
   )
 }

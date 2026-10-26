@@ -507,6 +507,7 @@ model Workspace {
   clipUploads                            ClipUpload[]
   clipProjects                           ClipProject[]
   clipBrandTemplates                     ClipBrandTemplate[]
+  aiGenerations                          AiGeneration[]
   clipRenders                            ClipRender[]
   clipEvents                             ClipEvent[]
   forwardingUsageMonthly                 ForwardingUsageMonthly[]
@@ -8974,4 +8975,69 @@ model ClipBrandTemplate {
 
   @@index([workspaceId])
   @@map("clip_brand_templates")
+}
+
+model StockAsset {
+  id         String   @id @default(cuid())
+  provider   String
+  providerId String
+  pageUrl    String
+  author     String
+  authorId   String?
+  tags       String
+  width      Int
+  height     Int
+  durationS  Float
+  storageKey String?
+  thumbUrl   String
+  createdAt  DateTime @default(now())
+
+  @@unique([provider, providerId])
+  @@map("stock_assets")
+}
+
+model BrollSearchCache {
+  q         String   @id
+  json      Json
+  createdAt DateTime @default(now())
+
+  @@map("broll_search_cache")
+}
+
+enum GenerationKind {
+  BROLL_VIDEO
+  MUSIC
+  SFX
+  THUMBNAIL
+  DUB
+}
+
+enum GenerationStatus {
+  PENDING
+  RUNNING
+  READY
+  FAILED
+}
+
+model AiGeneration {
+  id             String           @id @default(cuid())
+  workspaceId    String
+  clipId         String?
+  kind           GenerationKind
+  status         GenerationStatus @default(PENDING)
+  provider       String           @default("kie")
+  providerTaskId String?
+  prompt         String
+  params         Json             @default("{}")
+  storageKey     String?
+  costUsd        Decimal?         @db.Decimal(10, 4)
+  error          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([clipId])
+  @@map("ai_generations")
 }

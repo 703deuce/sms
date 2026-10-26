@@ -1,5 +1,7 @@
 'use client'
 
+import type { BrollItem } from '@/lib/clips/broll'
+import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { keepSegments, outputDurationMs, wordDisplayText } from '@/lib/clips/edits'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
@@ -13,15 +15,19 @@ export function Timeline({
   words,
   shots,
   outputMs,
+  clipOutputDurationMs,
   onSeekOutput,
   onTrimChange,
+  onBrollChange,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
   shots: CropShot[]
   outputMs: number
+  clipOutputDurationMs: number
   onSeekOutput: (outputMs: number) => void
   onTrimChange: (trim: { in: number; out: number }) => void
+  onBrollChange?: (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => void
 }) {
   const span = Math.max(1, edits.trim.out - edits.trim.in)
   const outDur = outputDurationMs(edits)
@@ -39,9 +45,12 @@ export function Timeline({
     return edits.trim.out
   }
 
+  const broll = edits.broll || []
+  const outSpan = Math.max(1, clipOutputDurationMs)
+
   return (
     <div className="min-w-0 overflow-x-auto">
-      <div className="relative h-24" style={{ width: widthPx }}>
+      <div className="relative h-32" style={{ width: widthPx }}>
         <div className="absolute inset-x-0 top-8 h-8 rounded bg-muted">
           {words.map((w) => {
             const { startMs, endMs } = wordSourceMs(w)
@@ -82,7 +91,82 @@ export function Timeline({
           trimIn={edits.trim.in}
           onChange={(outMs) => onTrimChange({ in: edits.trim.in, out: outMs })}
         />
+        <div className="absolute inset-x-0 bottom-0 h-6 rounded bg-muted/80">
+          {broll.map((item) => {
+            const left = (item.startMs / outSpan) * 100
+            const wPct = ((item.endMs - item.startMs) / outSpan) * 100
+            const color = item.source === 'ai' ? 'bg-sky-500/80' : 'bg-neutral-500/80'
+            return (
+              <BrollBar
+                key={item.id}
+                className={color}
+                leftPct={left}
+                widthPct={wPct}
+                item={item}
+                outSpan={outSpan}
+                onChange={onBrollChange}
+              />
+            )
+          })}
+        </div>
       </div>
+    </div>
+  )
+}
+
+function BrollBar({
+  item,
+  leftPct,
+  widthPct,
+  className,
+  outSpan,
+  onChange,
+}: {
+  item: BrollItem
+  leftPct: number
+  widthPct: number
+  className: string
+  outSpan: number
+  onChange?: (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => void
+}) {
+  const drag = (mode: 'move' | 'start' | 'end', e: React.MouseEvent) => {
+    if (!onChange) return
+    e.preventDefault()
+    const startX = e.clientX
+    const start = { ...item }
+    const parent = (e.target as HTMLElement).parentElement
+    const onMove = (ev: MouseEvent) => {
+      const w = parent?.clientWidth ?? 640
+      const deltaMs = ((ev.clientX - startX) / w) * outSpan
+      if (mode === 'move') {
+        const len = start.endMs - start.startMs
+        let s = Math.round(start.startMs + deltaMs)
+        s = Math.max(0, Math.min(outSpan - len, s))
+        onChange(item.id, { startMs: s, endMs: s + len })
+      } else if (mode === 'start') {
+        const s = Math.max(0, Math.min(start.endMs - BROLL_MIN_MS, Math.round(start.startMs + deltaMs)))
+        onChange(item.id, { startMs: s })
+      } else {
+        const end = Math.max(start.startMs + BROLL_MIN_MS, Math.min(outSpan, Math.round(start.endMs + deltaMs)))
+        onChange(item.id, { endMs: end })
+      }
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  return (
+    <div
+      className={`absolute top-1 h-4 rounded ${className}`}
+      style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 0.5)}%` }}
+      onMouseDown={(e) => drag('move', e)}
+    >
+      <span className="absolute left-0 top-0 h-full w-1 cursor-ew-resize" onMouseDown={(e) => drag('start', e)} />
+      <span className="absolute right-0 top-0 h-full w-1 cursor-ew-resize" onMouseDown={(e) => drag('end', e)} />
     </div>
   )
 }

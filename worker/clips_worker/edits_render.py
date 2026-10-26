@@ -283,6 +283,7 @@ def render_edited_clip(
     clip_end_ms: int,
     settings: dict,
     work_dir: Path,
+    broll_specs: list[dict] | None = None,
 ) -> tuple[Path, list[dict], str]:
     shot_overrides = (edits.get("layout") or {}).get("shotOverrides") or []
     src_words = ensure_word_i(source_words)
@@ -335,9 +336,18 @@ def render_edited_clip(
         ffmpeg_concat_segments(full_render, cut_mp4, segs_sec)
 
     remapped, _ = words_after_edits(src_words, edits)
+    caption_src = cut_mp4
+    if broll_specs:
+        from clips_worker.broll_render import apply_broll_overlays
+
+        w, h = probe_video_size(cut_mp4)
+        broll_out = work_dir / "with_broll.mp4"
+        apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h)
+        caption_src = broll_out
+
     final = work_dir / "final.mp4"
     if int(edits.get("captions", {}).get("enabled", True)):
-        burn_captions(cut_mp4, remapped, final, work_dir, edits.get("captions") or {})
+        burn_captions(caption_src, remapped, final, work_dir, edits.get("captions") or {})
         shutil.copy(final, out_mp4)
     else:
         shutil.copy(cut_mp4, out_mp4)

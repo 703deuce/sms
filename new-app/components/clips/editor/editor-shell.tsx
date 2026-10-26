@@ -16,7 +16,9 @@ import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { Timeline } from '@/components/clips/editor/timeline'
+import { BrollPanel } from '@/components/clips/editor/broll-panel'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
+import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 
@@ -40,6 +42,8 @@ export function EditorShell({
   cropShots,
   cropTrack,
   videoUrl,
+  aiMeta,
+  brollMedia = [],
 }: {
   projectId: string
   clipId: string
@@ -50,6 +54,8 @@ export function EditorShell({
   cropShots: CropShot[]
   cropTrack: CropTrack | null
   videoUrl: string | null
+  aiMeta?: { brollIdeas?: string[] } | null
+  brollMedia?: BrollMediaRow[]
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [exportOpen, setExportOpen] = useState(false)
@@ -72,6 +78,9 @@ export function EditorShell({
     setTrim,
     setCaptions,
     toggleEmphasis,
+    mergeBroll,
+    removeBroll,
+    updateBrollItem,
   } = useEditorState(clipId, bounds, initialEdits)
 
   const outDur = outputDurationFromEdits(edits)
@@ -172,6 +181,7 @@ export function EditorShell({
               edits={edits}
               words={words}
               cropTrack={cropTrack}
+              brollMedia={brollMedia}
               videoRef={videoRef}
               onTick={onTick}
             />
@@ -189,8 +199,10 @@ export function EditorShell({
               words={words}
               shots={cropShots}
               outputMs={outputMs}
+              clipOutputDurationMs={outDur}
               onSeekOutput={seekOutput}
               onTrimChange={setTrim}
+              onBrollChange={updateBrollItem}
             />
           </div>
         </div>
@@ -235,7 +247,18 @@ export function EditorShell({
             <TabsContent value="captions" className="mt-0">
               <CaptionsPanel edits={edits} onChange={setCaptions} />
             </TabsContent>
-            <TabsContent value="broll"><ComingSoon /></TabsContent>
+            <TabsContent value="broll" className="mt-0">
+              <BrollPanel
+                clipId={clipId}
+                edits={edits}
+                outputDurationMs={outDur}
+                playheadMs={outputMs}
+                aiMeta={aiMeta}
+                brollMedia={brollMedia}
+                onMergeBroll={mergeBroll}
+                onRemoveBroll={removeBroll}
+              />
+            </TabsContent>
             <TabsContent value="audio"><ComingSoon /></TabsContent>
             <TabsContent value="thumbnail"><ComingSoon /></TabsContent>
             <TabsContent value="dub"><ComingSoon /></TabsContent>
@@ -243,7 +266,13 @@ export function EditorShell({
           </Tabs>
         </aside>
       </div>
-      <ExportDialog clipId={clipId} title={title} open={exportOpen} onClose={() => setExportOpen(false)} />
+      <ExportDialog
+        clipId={clipId}
+        title={title}
+        edits={edits}
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+      />
     </div>
   )
 }
