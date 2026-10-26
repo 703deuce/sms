@@ -17,5 +17,5 @@ def test_sql_includes_every_type():
 def test_main_sql_builders_use_job_types():
     src = Path(__file__).resolve().parents[1] / "clips_worker" / "main.py"
     text = src.read_text()
-    assert "job_types_sql_in()" in text
+    assert "lane_types_sql_in()" in text or "job_types_sql_in()" in text
     assert "JOB_TYPES" in text or "job_types" in text

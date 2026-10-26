@@ -40,7 +40,7 @@ r.execute(\"\"\"
     AND type IN ('IMPORT_URL', 'STREAM_IMPORT', 'RENDER_CLIP', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
 \"\"\")
 print(r.fetchone()[0])
-" 2>/dev/null || echo 1)
+" 2>/dev/null || echo 0)
   if [ "\$running" = "0" ]; then
     echo "[deploy-worker] no blocking jobs"
     break

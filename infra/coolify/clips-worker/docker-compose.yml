@@ -4,7 +4,10 @@
 services:
   clips-worker:
     image: clips-worker:latest
+    container_name: clips-worker
     restart: unless-stopped
+    env_file:
+      - /opt/clips-worker/worker.env
     networks:
       - coolify
     environment:
@@ -12,7 +15,22 @@ services:
       STORAGE_BUCKET: clips
       ASR_MODEL: small.en
       WORKER_ID: clips-worker-1
-    # DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, APP_URL, WORKER_SHARED_SECRET via env_file
+      WORKER_LANE: default
+
+  clips-worker-stream:
+    image: clips-worker:latest
+    container_name: clips-worker-stream
+    restart: unless-stopped
+    env_file:
+      - /opt/clips-worker/worker.env
+    networks:
+      - coolify
+    environment:
+      STORAGE_DRIVER: supabase
+      STORAGE_BUCKET: clips
+      ASR_MODEL: small.en
+      WORKER_ID: clips-worker-stream-1
+      WORKER_LANE: stream
 
 networks:
   coolify:
