@@ -8,7 +8,9 @@ import { buildCaptionWords, captionWordsToClipWords } from '@/lib/clips/caption-
 import type { CropTrack } from '@/lib/clips/crop-track'
 import { shotAt } from '@/lib/clips/crop-track'
 import type { SourceWord } from '@/lib/clips/source-words'
+import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
+import { outputDurationFromEdits } from '@/lib/clips/edits'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { applyPlaybackTime } from '@/lib/clips/editor-playback'
 
@@ -204,17 +206,14 @@ export function PreviewStage({
           const media = brollMedia.find((m) => m.id === item.id)
           if (!media?.url) return null
           return (
-            <video
+            <BrollPreviewVideo
               key={item.id}
-              ref={(el) => {
+              src={media.url}
+              videoRef={(el) => {
                 brollRefs.current[item.id] = el
               }}
-              src={media.url}
-              className="pointer-events-none absolute inset-0 z-[15] size-full object-cover"
-              muted
-              playsInline
-              preload="auto"
-              style={{ opacity: 0 }}
+              className="pointer-events-none absolute z-[15] overflow-hidden"
+              style={{ inset: 0, opacity: 0 }}
             />
           )
         })}
@@ -239,6 +238,7 @@ export function PreviewStage({
             currentTimeSec={captionTimeSec}
             edits={edits as ClipEditsV2}
             boxHeightPx={box.h}
+            outputDurationSec={outputDurationFromEdits(edits) / 1000}
           />
         )}
       </div>

@@ -343,8 +343,8 @@ export function EditorShell({
                   undo()
                   setProducerStrip(null)
                 }}
-                onApplyEdits={(next, n) => {
-                  applyProducerPatch(next)
+                onApplyEdits={(next, n, before) => {
+                  applyProducerPatch(next, before)
                   if (n > 0) {
                     setProducerStrip({ changeCount: n, until: Date.now() + 15_000 })
                   }
@@ -385,27 +385,6 @@ export function EditorShell({
                 edits={edits}
                 onChange={setCaptions}
                 onApplyBrand={() => void applyBrand()}
-                onSavePreset={async () => {
-                  const name = window.prompt('Preset name')
-                  if (!name?.trim()) return
-                  const cap = edits.captions ?? {}
-                  await clipsFetch('/api/clips/caption-presets', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      name: name.trim(),
-                      config: {
-                        presetId: cap.presetId,
-                        animation: cap.animation,
-                        size: cap.size,
-                        position: cap.position,
-                        case: cap.case,
-                        wordsPerLine: cap.wordsPerLine,
-                        colors: cap.colors,
-                      },
-                    }),
-                  })
-                  toast.success('Preset saved')
-                }}
               />
             </TabsContent>
             <TabsContent value="broll" className="mt-0">

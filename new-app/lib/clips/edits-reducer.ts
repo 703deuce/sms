@@ -59,7 +59,21 @@ export function applyProducerTool(
     }
     case 'set_captions': {
       const captions = { ...base.captions, ...(call.args as Record<string, unknown>) }
-      return { edits: { ...base, captions }, summary: 'Updated captions' }
+      const next = { ...base, captions }
+      const beforeKey = JSON.stringify({
+        presetId: base.captions?.presetId,
+        animation: base.captions?.animation,
+        size: base.captions?.size,
+      })
+      const afterKey = JSON.stringify({
+        presetId: next.captions?.presetId,
+        animation: next.captions?.animation,
+        size: next.captions?.size,
+      })
+      if (beforeKey === afterKey) {
+        return { edits: base, summary: 'No caption change needed' }
+      }
+      return { edits: next, summary: 'Updated captions' }
     }
     case 'set_layout': {
       const mode = String(call.args.mode || base.layout.mode) as ClipEditsV2['layout']['mode']

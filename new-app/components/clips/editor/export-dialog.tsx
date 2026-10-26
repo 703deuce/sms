@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
@@ -26,6 +27,7 @@ export function ExportDialog({
   onClose: () => void
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
+  const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16')
   const [busy, setBusy] = useState(false)
   const [renderId, setRenderId] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
@@ -61,15 +63,19 @@ export function ExportDialog({
   }, [open, clipId, edits.thumbnailId])
 
   useEffect(() => {
-    if (!renderId || status === 'READY') return
+    if (!renderId || status === 'READY' || status === 'FAILED') return
     const t = setInterval(() => {
       void getRenderStatus(renderId).then((r) => {
         setStatus(r.status)
-        if (r.status === 'FAILED' && r.error) setErrorDetail(r.error)
+        if (r.status === 'FAILED' && r.error) {
+          setErrorDetail(r.error)
+          toast.error(r.error)
+        }
         if (r.status === 'READY' && r.downloadUrl) {
           setDownloadUrl(r.downloadUrl)
           setFilename(r.filename)
           setErrorDetail(null)
+          toast.success('Export ready — download below')
         }
       })
     }, 2000)
@@ -77,16 +83,31 @@ export function ExportDialog({
   }, [renderId, status])
 
   const startExport = async () => {
+    if (busy) return
     setBusy(true)
+    setErrorDetail(null)
+    const toastId = toast.loading('Starting export…')
     try {
-      const data = await exportClipWithOptions(clipId, { resolution: 720, watermark: false, alsoSrt })
+      const data = await exportClipWithOptions(clipId, {
+        resolution: '720p',
+        aspect,
+        watermark: false,
+        alsoSrt,
+      })
       setRenderId(data.renderId)
       setStatus(data.status)
       if (data.downloadUrl) {
         setDownloadUrl(data.downloadUrl)
         setFilename(data.filename)
+        toast.success('Export ready', { id: toastId })
+      } else {
+        toast.loading('Rendering…', { id: toastId })
       }
       if (alsoSrt) window.open(`/api/clips/clips/${clipId}/srt`, '_blank')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Export failed'
+      setErrorDetail(msg)
+      toast.error(msg, { id: toastId })
     } finally {
       setBusy(false)
     }
@@ -99,6 +120,21 @@ export function ExportDialog({
       <div className="w-full max-w-md rounded-xl border border-border bg-background p-4 shadow-lg">
         <h2 className="text-lg font-semibold">Export</h2>
         <p className="mt-1 text-sm text-muted-foreground">720p · captions burned in</p>
+        <div className="mt-3">
+          <p className="text-xs font-medium">Aspect ratio</p>
+          <div className="mt-1 flex gap-2">
+            {(['9:16', '1:1', '16:9'] as const).map((a) => (
+              <Button
+                key={a}
+                size="sm"
+                variant={aspect === a ? 'default' : 'outline'}
+                onClick={() => setAspect(a)}
+              >
+                {a}
+              </Button>
+            ))}
+          </div>
+        </div>
         <div className="mt-3 space-y-1 text-sm">
           <p className="text-xs font-medium">Audio track</p>
           <select

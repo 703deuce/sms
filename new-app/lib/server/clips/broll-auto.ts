@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto'
 import type { BrollItem } from '@/lib/clips/broll'
 import { outputDurationMs, type ClipEditsV2, type ClipWord } from '@/lib/clips/edits'
 import { wordsAfterEdits } from '@/lib/clips/edits'
+import { cleanPixabayQuery, manualBrollOccupied } from '@/lib/clips/broll-auto-utils'
 import { filterAndRankPixabayHits } from '@/lib/clips/pixabay-rerank'
 import { ensureStockAsset, findCachedHit, searchVideos } from '@/lib/server/ai/pixabay'
 import { suggestAutoBrollPlacements } from '@/lib/server/clips/broll-auto-llm'
@@ -34,8 +35,7 @@ export async function buildAutoBrollItems(
 ): Promise<AutoBrollBuildResult> {
   const { words } = wordsAfterEdits(sourceWords, edits)
   const outDur = outputDurationMs(edits)
-  const existing = (edits.broll || []).map((b) => ({ startMs: b.startMs, endMs: b.endMs }))
-  const occupied = [...existing]
+  const occupied = manualBrollOccupied(edits.broll || [])
 
   const placements = await suggestAutoBrollPlacements({
     clipTitle: options.clipTitle || 'Clip',
@@ -48,16 +48,19 @@ export async function buildAutoBrollItems(
   let attempted = 0
 
   for (const p of placements) {
-    if (items.length >= 3) break
+    if (items.length >= 5) break
     attempted += 1
     const startMs = p.atMs
     const endMs = Math.min(outDur - END_PAD_MS, startMs + p.durationMs)
     if (endMs - startMs < 2000) continue
     if (overlapsAny(startMs, endMs, occupied)) continue
 
+    const query = cleanPixabayQuery(p.query)
+    if (!query) continue
+
     try {
-      const hits = await searchVideos(p.query, 1)
-      const ranked = filterAndRankPixabayHits(hits, p.query, p.must_include)
+      const hits = await searchVideos(query, 1)
+      const ranked = filterAndRankPixabayHits(hits, query, p.must_include || [])
       const pub = ranked.find((h) => (h.durationS ?? 0) >= 3) || ranked[0]
       if (!pub) continue
 
@@ -74,7 +77,7 @@ export async function buildAutoBrollItems(
         placement: 'auto',
       })
       occupied.push({ startMs, endMs })
-      queriesUsed.push(p.query)
+      queriesUsed.push(query)
     } catch {
       /* skip failed placement */
     }

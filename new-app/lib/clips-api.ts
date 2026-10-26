@@ -149,9 +149,21 @@ export function patchClip(clipId: string, body: { title?: string; edits?: unknow
   })
 }
 
+export function retryProject(projectId: string) {
+  return clipsFetch<{ ok: boolean; jobId: string; status: string }>(
+    `/api/clips/projects/${projectId}/retry`,
+    { method: 'POST', body: '{}' },
+  )
+}
+
 export function exportClipWithOptions(
   clipId: string,
-  body: { resolution?: 720 | '720p'; watermark?: boolean; alsoSrt?: boolean },
+  body: {
+    resolution?: 720 | '720p' | '1080p'
+    aspect?: '9:16' | '1:1' | '16:9'
+    watermark?: boolean
+    alsoSrt?: boolean
+  },
 ) {
   return clipsFetch<{
     renderId: string

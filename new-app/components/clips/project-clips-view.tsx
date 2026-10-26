@@ -8,7 +8,7 @@ import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
 import { JobStatus } from '@/components/clips/job-status'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
-import { exportClip, listProjectClips } from '@/lib/clips-api'
+import { exportClip, listProjectClips, retryProject } from '@/lib/clips-api'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Clapperboard, Sparkles } from 'lucide-react'
@@ -127,7 +127,27 @@ export function ProjectClipsView({
         <EmptyState
           icon={Clapperboard}
           title="Processing failed"
-          description={error || 'Something went wrong while processing this project.'}
+          description={
+            error?.includes('heavy traffic')
+              ? `${error} The upstream model was overloaded (503). Use Retry to re-queue with backoff.`
+              : error || 'Something went wrong while processing this project.'
+          }
+          action={
+            <Button
+              size="sm"
+              onClick={() => {
+                void retryProject(projectId)
+                  .then(() => {
+                    setStatus('QUEUED')
+                    setError(null)
+                    toast.success('Processing restarted')
+                  })
+                  .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))
+              }}
+            >
+              Retry processing
+            </Button>
+          }
         />
       ) : !showResults ? (
         <JobStatus projectId={projectId} initialStatus={status} fromLink={fromLink} />

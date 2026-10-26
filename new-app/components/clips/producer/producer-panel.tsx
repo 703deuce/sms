@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ToolCallCard } from '@/components/clips/producer/tool-call-card'
 import type { ClipBounds, ClipEditsV2 } from '@/lib/clips/edits'
@@ -18,7 +18,7 @@ export function ProducerPanel({
   clipId: string
   bounds: ClipBounds
   edits: ClipEditsV2
-  onApplyEdits: (edits: ClipEditsV2, changeCount: number) => void
+  onApplyEdits: (edits: ClipEditsV2, changeCount: number, before: ClipEditsV2) => void
   onUndo: () => void
 }) {
   const [messages, setMessages] = useState<Msg[]>([])
@@ -26,7 +26,8 @@ export function ProducerPanel({
   const [busy, setBusy] = useState(false)
   const [summaries, setSummaries] = useState<string[]>([])
   const [pendingPaid, setPendingPaid] = useState<{ name: string; args: Record<string, unknown> }[]>([])
-  const [appliedCount, setAppliedCount] = useState(0)
+  const editsBeforeSend = useRef(edits)
+  editsBeforeSend.current = edits
 
   const loadThread = useCallback(async () => {
     const data = await clipsFetch<{ thread: { messages: Msg[] } | null }>(`/api/clips/clips/${clipId}/producer`)
@@ -41,7 +42,7 @@ export function ProducerPanel({
     const text = input.trim()
     if (!text || busy) return
     setBusy(true)
-    setAppliedCount(0)
+    editsBeforeSend.current = edits
     setInput('')
     setMessages((m) => [...m, { role: 'user', content: text }])
     try {
@@ -86,8 +87,7 @@ export function ProducerPanel({
           }
           if (event === 'edits' && payload.edits) {
             const n = Number(payload.changeCount ?? 0)
-            onApplyEdits(payload.edits as ClipEditsV2, n)
-            if (n > 0) setAppliedCount(n)
+            onApplyEdits(payload.edits as ClipEditsV2, n, editsBeforeSend.current)
           }
         }
       }
@@ -113,12 +113,6 @@ export function ProducerPanel({
 
   return (
     <div className="flex h-full flex-col gap-2 p-3 text-sm">
-      {appliedCount > 0 && (
-        <div className="flex items-center justify-between rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5 text-xs">
-          <span>{appliedCount} change{appliedCount === 1 ? '' : 's'} applied</span>
-          <Button size="sm" variant="outline" onClick={() => { onUndo(); setAppliedCount(0) }}>Undo</Button>
-        </div>
-      )}
       <div className="flex-1 space-y-2 overflow-y-auto">
         {messages.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'text-right' : ''}>

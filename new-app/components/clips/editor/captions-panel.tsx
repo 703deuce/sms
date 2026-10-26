@@ -18,13 +18,11 @@ export function CaptionsPanel({
   clipId,
   edits,
   onChange,
-  onSavePreset,
   onApplyBrand,
 }: {
   clipId?: string
   edits: ClipEditsV2
   onChange: (captions: ClipEditsV2['captions']) => void
-  onSavePreset?: () => void
   onApplyBrand?: () => void
 }) {
   const cap = edits.captions ?? {}
@@ -70,6 +68,7 @@ export function CaptionsPanel({
         <Switch checked={cap.enabled !== false} onCheckedChange={(v) => patch({ enabled: v })} />
       </div>
 
+      {customPresets.length > 0 && <p className="text-xs font-medium text-muted-foreground">My presets</p>}
       <div className="grid grid-cols-2 gap-2">
         {customPresets.map((p) => {
           const active = cap.customPresetId === p.id
@@ -141,16 +140,17 @@ export function CaptionsPanel({
       </select>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm">Auto emojis</span>
-        <Switch checked={!!cap.autoEmojis} onCheckedChange={(v) => patch({ autoEmojis: v })} />
+        <label htmlFor="cap-auto-emojis" className="text-sm">Auto emojis</label>
+        <Switch id="cap-auto-emojis" checked={!!cap.autoEmojis} onCheckedChange={(v) => patch({ autoEmojis: v })} />
       </div>
       {cap.autoEmojis && clipId ? (
         <Button size="sm" variant="outline" onClick={() => void suggestEmojis()}>Suggest emojis</Button>
       ) : null}
 
       <div className="flex items-center justify-between">
-        <span className="text-sm">Progress bar</span>
+        <label htmlFor="cap-progress-bar" className="text-sm">Progress bar</label>
         <Switch
+          id="cap-progress-bar"
           checked={!!cap.progressBar?.enabled}
           onCheckedChange={(v) =>
             patch({
@@ -281,9 +281,42 @@ export function CaptionsPanel({
       {onApplyBrand ? (
         <Button size="sm" variant="outline" onClick={onApplyBrand}>Apply brand</Button>
       ) : null}
-      {onSavePreset ? (
-        <Button size="sm" variant="outline" onClick={onSavePreset}>Save as preset</Button>
-      ) : null}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={async () => {
+          const name = window.prompt('Preset name')
+          if (!name?.trim()) {
+            toast.error('Enter a preset name')
+            return
+          }
+          try {
+            await clipsFetch('/api/clips/caption-presets', {
+              method: 'POST',
+              body: JSON.stringify({
+                name: name.trim(),
+                config: {
+                  presetId: cap.presetId,
+                  animation: cap.animation,
+                  size: cap.size,
+                  position: cap.position,
+                  case: cap.case,
+                  wordsPerLine: cap.wordsPerLine,
+                  colors: cap.colors,
+                  progressBar: cap.progressBar,
+                  autoEmojis: cap.autoEmojis,
+                },
+              }),
+            })
+            toast.success('Preset saved')
+            await loadCustom()
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Save failed')
+          }
+        }}
+      >
+        Save as preset
+      </Button>
     </div>
   )
 }

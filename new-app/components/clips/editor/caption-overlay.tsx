@@ -4,6 +4,7 @@ import './caption-anim.css'
 
 import { useMemo } from 'react'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
+import { wordKey } from '@/lib/clips/edits'
 import { resolvePreset, type CaptionPreset } from '@/lib/clips/caption-presets'
 
 function positionClass(position: string) {
@@ -30,11 +31,13 @@ export function CaptionOverlay({
   currentTimeSec,
   edits,
   boxHeightPx,
+  outputDurationSec = 1,
 }: {
   words: ClipWord[]
   currentTimeSec: number
   edits: ClipEditsV2
   boxHeightPx: number
+  outputDurationSec?: number
 }) {
   const cap = edits.captions ?? {}
   const preset = resolvePreset(cap.presetId)
@@ -53,11 +56,28 @@ export function CaptionOverlay({
     [lineStart, wpl, words],
   )
 
-  if (activeIdx < 0 || !lineWords.length) return null
+  const pb = cap.progressBar
+  const showProgress = pb?.enabled && outputDurationSec > 0
+  const progressPct = showProgress ? Math.min(100, (currentTimeSec / outputDurationSec) * 100) : 0
+
+  if (activeIdx < 0 && !showProgress) return null
 
   const position = (cap.position || preset.position) as string
 
   return (
+    <>
+      {showProgress && (
+        <div
+          className={`pointer-events-none absolute inset-x-0 z-[24] ${pb?.position === 'top' ? 'top-0' : 'bottom-0'}`}
+          style={{ height: pb?.thickness || 8, background: 'rgba(0,0,0,0.25)' }}
+        >
+          <div
+            className="h-full transition-[width] duration-75"
+            style={{ width: `${progressPct}%`, background: pb?.color || '#FFFFFF' }}
+          />
+        </div>
+      )}
+      {activeIdx >= 0 && lineWords.length ? (
     <div
       className={`pointer-events-none absolute inset-x-2 z-[25] flex flex-wrap justify-center gap-1 text-center ${positionClass(position)}`}
       style={{ fontFamily: preset.font, fontWeight: preset.weight }}
@@ -71,7 +91,9 @@ export function CaptionOverlay({
             ? colors?.a || preset.active
             : colors?.b || preset.activeB
         const isEmph = emphasis.has(w.idx ?? globalIdx)
-        const text = displayCase(w.w, caseMode)
+        const idx = wordKey(w) ?? globalIdx
+        const emoji = cap.autoEmojis ? cap.emojiByWord?.[String(idx)] : undefined
+        const text = displayCase(w.w, caseMode) + (emoji ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
         const inactiveColor = preset.slug === 'boxed' ? '#FFFFFF' : preset.primary
         const style: React.CSSProperties = {
@@ -112,6 +134,8 @@ export function CaptionOverlay({
         )
       })}
     </div>
+      ) : null}
+    </>
   )
 }
 

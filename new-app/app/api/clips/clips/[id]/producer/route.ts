@@ -99,6 +99,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         send('edits', { edits: applied.edits, changeCount: applied.changeCount })
 
         const prisma = getPrisma()
+        if (applied.changeCount > 0) {
+          await prisma.clip.update({
+            where: { id: clipId },
+            data: { edits: applied.edits as object },
+          })
+        }
         let thread = await prisma.producerThread.findUnique({ where: { clipId } })
         if (!thread) {
           thread = await prisma.producerThread.create({

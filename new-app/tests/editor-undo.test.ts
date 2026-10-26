@@ -35,7 +35,11 @@ describe('editor undo', () => {
       future: [] as typeof base[],
       saveState: 'saved' as const,
     }
-    const afterBatch = editorEditsReducer(initial, { type: 'BATCH', edits: base })
+    const before = { ...base, captions: { ...base.captions, size: 1.05 } }
+    const afterBatch = editorEditsReducer(
+      { ...initial, edits: before },
+      { type: 'BATCH', edits: base, before },
+    )
     expect(afterBatch.past).toHaveLength(1)
     const undone = editorEditsReducer(afterBatch, { type: 'undo' })
     expect(undone.past).toHaveLength(0)

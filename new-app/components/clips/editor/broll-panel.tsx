@@ -85,6 +85,7 @@ export function BrollPanel({
         assetId: data.assetId,
         startMs,
         endMs,
+        placement: 'manual',
       },
     ])
   }
@@ -110,14 +111,7 @@ export function BrollPanel({
       if (data.media?.length) onBrollMedia(data.media)
       onMergeBroll(data.items, true)
       onFlushEdits?.()
-      const q = (data.queriesUsed || []).join(', ')
-      if (q) {
-        toast.success(`Placed ${placed}${attempted > placed ? ` of ${attempted}` : ''}: ${q}`)
-      } else if (attempted > placed) {
-        toast.success(`Placed ${placed} of ${attempted}`)
-      } else {
-        toast.success(`Added ${placed} B-roll clip${placed === 1 ? '' : 's'}`)
-      }
+      toast.success(`Placed ${placed} B-roll clip${placed === 1 ? '' : 's'}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Auto B-roll failed')
     } finally {
