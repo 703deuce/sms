@@ -6,7 +6,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCHEMA="${ROOT}/prisma/schema.prisma"
 prisma() {
-  (cd "${ROOT}/new-app" && npx --yes pnpm@12.3.4 exec prisma --schema="${SCHEMA}" "$@")
+  # --schema must follow the subcommand (e.g. migrate deploy --schema=...)
+  (cd "${ROOT}/new-app" && npx --yes pnpm@12.3.4 exec prisma "$@" --schema="${SCHEMA}")
 }
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
