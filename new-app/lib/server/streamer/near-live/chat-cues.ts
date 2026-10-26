@@ -1,4 +1,5 @@
 import { createId } from '@/lib/supabase/id'
+import { enqueueTwitchClipIngest } from '@/lib/server/streamer/near-live/clip-ingest-queue'
 import { createTwitchClipForChannel } from '@/lib/server/streamer/near-live/twitch-create-clip'
 import { streamerNearLiveEnabled } from '@/lib/server/streamer/env'
 import { getPrisma } from '@/lib/server/db'
@@ -27,5 +28,5 @@ export async function handleNearLiveChatLine(channelId: string, text: string, us
       text: `!clip → Twitch clip ${created.clipId}`,
     },
   })
-  // Clip ingest into project (captions/reframe) is completed in worker when Helix clip is ready.
+  await enqueueTwitchClipIngest(nl.projectId, channelId, created.clipId)
 }

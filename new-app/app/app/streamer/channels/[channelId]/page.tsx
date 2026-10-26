@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import { ChannelAutoProcessToggle } from '@/components/streamer/channel-auto-process'
 import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-coming-soon'
 import { getPrisma } from '@/lib/server/db'
+import { TwitchClipsScopeBanner } from '@/components/streamer/twitch-clips-scope-banner'
 import { streamerLiveRealtimeEnabled, streamerPublicFlags } from '@/lib/server/streamer/env'
+import { twitchConnectionHasClipsEdit } from '@/lib/server/streamer/twitch'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export default async function StreamerChannelPage({ params }: { params: Promise<{ channelId: string }> }) {
@@ -17,7 +19,18 @@ export default async function StreamerChannelPage({ params }: { params: Promise<
     where: { id: channelId, workspaceId, deletedAt: null },
   })
   if (!channel) notFound()
+  const conn =
+    channel.connectionId
+      ? await prisma.integrationConnection.findUnique({
+          where: { id: channel.connectionId },
+          select: { configJson: true },
+        })
+      : null
   const flags = streamerPublicFlags()
+  const needsClipsEdit =
+    channel.platform === 'twitch' &&
+    channel.status === 'CONNECTED' &&
+    !twitchConnectionHasClipsEdit(conn?.configJson)
 
   return (
     <Page>
@@ -31,6 +44,7 @@ export default async function StreamerChannelPage({ params }: { params: Promise<
         }
       />
       <div className="mx-auto flex max-w-2xl flex-col gap-6">
+        <TwitchClipsScopeBanner needsClipsEdit={needsClipsEdit} />
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="text-sm font-semibold">Connection</h2>
           <p className="text-xs text-muted-foreground">

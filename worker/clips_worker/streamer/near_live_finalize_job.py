@@ -61,6 +61,11 @@ def run_near_live_finalize_job(conn, job: dict, post_progress) -> None:
             )
         conn.commit()
 
+    from clips_worker.streamer.near_live.dedupe import dedupe_project_clips
+
+    if project_id:
+        dedupe_project_clips(conn, project_id)
+
     post_progress(
         job["id"],
         {"jobStatus": "DONE", "stage": "near_live_finalize", "projectStatus": "PREPARING"},

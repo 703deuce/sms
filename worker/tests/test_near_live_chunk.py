@@ -6,4 +6,4 @@ def test_plan_waits_for_min_chunk():
 
 
 def test_plan_advances_watermark():
-    assert plan_near_live_chunk(30 * 60 * 1000, 10 * 60 * 1000) == (600_000, 1_280_000, 1_280_000)
+    assert plan_near_live_chunk(30 * 60 * 1000, 10 * 60 * 1000) == (600_000, 1_800_000, 1_800_000)

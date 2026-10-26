@@ -16,6 +16,7 @@ _STREAM_TYPES = frozenset(
         "STREAM_AUTOPULL",
         "STREAM_NEAR_LIVE_POLL",
         "STREAM_NEAR_LIVE_FINALIZE",
+        "STREAM_NEAR_LIVE_CLIP_INGEST",
     }
 )
 

@@ -1,12 +1,29 @@
 import { encryptIntegrationSecret, decryptIntegrationSecret } from '@/lib/integrations/framework/secrets'
-import { streamerLiveRealtimeEnabled, twitchRedirectUri, twitchWebhookUrl } from '@/lib/server/streamer/env'
+import {
+  streamerLiveRealtimeEnabled,
+  streamerNearLiveEnabled,
+  twitchRedirectUri,
+  twitchWebhookUrl,
+} from '@/lib/server/streamer/env'
 
 export { twitchRedirectUri }
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
-/** Add `clips:edit` before enabling near-live !clip in production. */
-const SCOPES = ['user:read:chat', 'user:bot', 'channel:bot']
+export const TWITCH_STREAMER_BASE_SCOPES = ['user:read:chat', 'user:bot', 'channel:bot'] as const
+export const TWITCH_NEAR_LIVE_SCOPES = ['clips:edit'] as const
+
+export function twitchOAuthScopes(includeNearLive = true): string[] {
+  const base = [...TWITCH_STREAMER_BASE_SCOPES]
+  if (includeNearLive) base.push(...TWITCH_NEAR_LIVE_SCOPES)
+  return base
+}
+
+export function twitchConnectionHasClipsEdit(configJson: unknown): boolean {
+  const scopes = (configJson as { scopes?: string[] } | null)?.scopes
+  if (!Array.isArray(scopes)) return false
+  return scopes.includes('clips:edit')
+}
 
 export function twitchClientId(): string {
   const id = process.env.TWITCH_CLIENT_ID?.trim()
@@ -136,7 +153,7 @@ export async function createTwitchEventsubSubscriptions(broadcasterId: string): 
     { type: 'stream.offline', version: '1', condition: { broadcaster_user_id: broadcasterId } },
     { type: 'channel.update', version: '2', condition: { broadcaster_user_id: broadcasterId } },
   ]
-  if (streamerLiveRealtimeEnabled()) {
+  if (streamerLiveRealtimeEnabled() || streamerNearLiveEnabled()) {
     types.push({
       type: 'channel.chat.message',
       version: '1',
@@ -178,12 +195,12 @@ export function decryptTwitchToken(enc: string | null | undefined): string | nul
   }
 }
 
-export function twitchAuthorizeUrl(state: string, redirectUri: string): string {
+export function twitchAuthorizeUrl(state: string, redirectUri: string, opts?: { includeNearLiveScopes?: boolean }) {
   const params = new URLSearchParams({
     client_id: twitchClientId(),
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: SCOPES.join(' '),
+    scope: twitchOAuthScopes(opts?.includeNearLiveScopes !== false).join(' '),
     state,
     force_verify: 'true',
   })

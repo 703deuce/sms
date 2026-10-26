@@ -6,6 +6,10 @@ import { getPrisma } from '@/lib/server/db'
 import { nearLivePollDelayMs } from '@/lib/server/streamer/near-live/chunk-range'
 import type { NearLiveSessionState } from '@/lib/server/streamer/near-live/types'
 
+export function nearLiveSessionIsActive(nl: NearLiveSessionState | null | undefined): boolean {
+  return Boolean(nl && !nl.finalized && nl.projectId && nl.vodId)
+}
+
 export async function startNearLiveSession(channelId: string, streamStartedAt: Date) {
   const prisma = getPrisma()
   const channel = await prisma.streamChannel.findUnique({ where: { id: channelId } })
@@ -13,8 +17,8 @@ export async function startNearLiveSession(channelId: string, streamStartedAt: D
 
   const ps = (channel.platformState as Record<string, unknown>) || {}
   const existing = ps.nearLive as NearLiveSessionState | undefined
-  if (existing && !existing.finalized) {
-    return { projectId: existing.projectId, vodId: existing.vodId, resumed: true }
+  if (nearLiveSessionIsActive(existing)) {
+    return { projectId: existing!.projectId, vodId: existing!.vodId, resumed: true }
   }
 
   const workspaceId = channel.workspaceId

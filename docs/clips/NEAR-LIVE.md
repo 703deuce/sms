@@ -9,7 +9,9 @@
 2. **Poll job:** Helix `videos?type=archive&first=1` (in-progress archive grows while live). Plan chunk from `processedEndMs` → enqueue **section** `STREAM_IMPORT` (yt-dlp `--continue`, existing retry path).
 3. **stream.offline:** `finalizeNearLiveSession` → `STREAM_NEAR_LIVE_FINALIZE` (full archive import + dedupe hook).
 4. **Chat:** EventSub chat ingest when near-live OR live-realtime flag; hype buckets unchanged.
-5. **!clip:** Helix `POST /clips` (`clips:edit` scope on channel OAuth — add to Twitch OAuth scopes before prod).
+5. **!clip:** Helix `POST /clips` → `STREAM_NEAR_LIVE_CLIP_INGEST` polls until URL ready, inserts clip + dedupe.
+6. **OAuth:** `clips:edit` in default Twitch connect; channel page prompts **Re-authorize** if missing.
+7. **Dedupe:** after each near-live analyze + finalize, IoU&gt;0.3 overlaps soft-deleted (keep best score).
 
 ## Kick
 

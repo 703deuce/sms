@@ -8,6 +8,6 @@ describe('near-live chunk range', () => {
 
   it('plans next window from watermark', () => {
     const p = planNearLiveChunk(30 * 60_000, 10 * 60_000)
-    expect(p).toEqual({ startMs: 600_000, endMs: 1_280_000, nextWatermarkMs: 1_280_000 })
+    expect(p).toEqual({ startMs: 600_000, endMs: 1_800_000, nextWatermarkMs: 1_800_000 })
   })
 })

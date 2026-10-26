@@ -238,6 +238,11 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             )
         insert_clips_batch(conn, clip_rows)
 
+        if vod.get("sourceType") == "near_live" or (isinstance(state, dict) and state.get("nearLive")):
+            from clips_worker.streamer.near_live.dedupe import dedupe_project_clips
+
+            dedupe_project_clips(conn, project_id)
+
         pri = job_priority(conn, vod.get("triggeredBy") or "paste")
         render_id = f"job_{uuid.uuid4().hex}"
         with conn.cursor() as cur:
