@@ -9,18 +9,28 @@ import { CLIP_JOB_STATE, StatusBadge } from '@/components/app/status'
 import { cancelProject, getProjectStatus } from '@/lib/clips-api'
 import type { ClipProjectStatusUi } from '@/components/app/status'
 
-const STEPS = ['Upload', 'Transcribe', 'Find clips', 'Reframe & caption', 'Ready']
+const STEPS = ['Upload', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
 
-function stepIndex(status: string) {
+function stepIndex(status: string, mode?: string) {
+  const anything = mode === 'anything'
   if (status === 'UPLOADING' || status === 'DRAFT' || status === 'QUEUED') return 0
-  if (status === 'PREPARING' || status === 'TRANSCRIBING' || status === 'SCANNING') return 1
-  if (status === 'FINDING_CLIPS') return 2
-  if (status === 'REFRAMING' || status === 'RENDERING') return 3
-  if (status === 'READY') return 4
+  if (status === 'PREPARING' || status === 'TRANSCRIBING') return 1
+  if (status === 'SCANNING') return 2
+  if (status === 'FINDING_CLIPS') return anything ? 3 : 2
+  if (status === 'REFRAMING' || status === 'RENDERING') return anything ? 4 : 3
+  if (status === 'READY') return 5
   return 1
 }
 
-export function JobStatus({ projectId, initialStatus }: { projectId: string; initialStatus?: string }) {
+export function JobStatus({
+  projectId,
+  initialStatus,
+  mode,
+}: {
+  projectId: string
+  initialStatus?: string
+  mode?: 'talking' | 'anything' | 'captions'
+}) {
   const [status, setStatus] = useState(initialStatus || 'QUEUED')
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState<string | null>(null)
@@ -65,7 +75,7 @@ export function JobStatus({ projectId, initialStatus }: { projectId: string; ini
             <span className="text-sm text-muted-foreground tabular-nums">ETA ~{Math.ceil(etaSec / 60)} min</span>
           )}
         </div>
-        <StepRail steps={STEPS} current={stepIndex(status)} />
+        <StepRail steps={STEPS} current={stepIndex(status, mode)} />
         <Progress value={progress} aria-label="Processing progress" />
         {error && <p className="text-sm text-destructive">{error}</p>}
         {!terminal && (

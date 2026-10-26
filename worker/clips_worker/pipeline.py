@@ -7,6 +7,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
+from clips_worker.anything_picker import pick_anything_clips
 from clips_worker.picker import pick_talking_clips
 from clips_worker.render_clip import ffmpeg_cut, poster_jpg, run_speakercrop, slice_words
 from clips_worker.storage import download_object, put_json, upload_file
@@ -88,10 +89,7 @@ def run_m4_pipeline(
     range_start = int(project.get("rangeStartMs") or 0)
     range_end = int(project.get("rangeEndMs") or 0)
 
-    post_progress(
-        job_id,
-        {"projectStatus": "FINDING_CLIPS", "stage": "finding_clips", "progress": 52, "jobStatus": "RUNNING"},
-    )
+    mode = settings.get("mode") or "talking"
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         src = td_path / "source.mp4"
@@ -100,9 +98,34 @@ def run_m4_pipeline(
         subprocess.check_call(
             ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-ac", "1", "-ar", "16000", str(audio_wav)],
         )
-        post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_pass1", "progress": 52, "jobStatus": "RUNNING"})
-        picks, picker_message = pick_talking_clips(words, str(audio_wav), settings, range_start, range_end)
-        post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
+        if mode == "anything":
+            post_progress(
+                job_id,
+                {"projectStatus": "SCANNING", "stage": "scanning", "progress": 55, "jobStatus": "RUNNING"},
+            )
+            picks, picker_message = pick_anything_clips(
+                conn,
+                src,
+                words,
+                settings,
+                range_start,
+                range_end,
+                workspace_id,
+                project_id,
+                td_path,
+            )
+            post_progress(
+                job_id,
+                {"projectStatus": "FINDING_CLIPS", "stage": "vision_rank", "progress": 58, "jobStatus": "RUNNING"},
+            )
+        else:
+            post_progress(
+                job_id,
+                {"projectStatus": "FINDING_CLIPS", "stage": "finding_clips", "progress": 52, "jobStatus": "RUNNING"},
+            )
+            post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_pass1", "progress": 52, "jobStatus": "RUNNING"})
+            picks, picker_message = pick_talking_clips(words, str(audio_wav), settings, range_start, range_end)
+            post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
 
         if not picks:
             empty_msg = picker_message or "No complete, self-contained moments found."

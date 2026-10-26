@@ -64,7 +64,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const genById = new Map(gens.map((g) => [g.id, g]))
     const storage = (await import('@/lib/storage')).getClipStorage()
     const items = await Promise.all(
-      rows.map(async (r) => {
+      rows.map(async (r: (typeof rows)[number]) => {
         const gen = genById.get(r.generationId)
         const key = r.imageKey || gen?.storageKey
         return {

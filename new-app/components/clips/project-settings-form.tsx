@@ -206,7 +206,11 @@ export function ProjectSettingsForm({
 
       <Panel title="Prompt">
         <Textarea
-          placeholder="Optional: moments about pricing, product launch, etc."
+          placeholder={
+            settings.mode === 'anything'
+              ? 'What moments? e.g. goals, funny reactions'
+              : 'Optional: moments about pricing, product launch, etc.'
+          }
           value={settings.prompt || ''}
           onChange={(e) => onChange({ ...settings, prompt: e.target.value })}
           rows={3}
