@@ -4,8 +4,9 @@ Spec: Rick's `screenwriting` product doc (Oct 2026). **Local commits only** unti
 
 | Milestone | Status | Local SHA (when done) |
 |-----------|--------|------------------------|
-| W1 Skeleton & schema | in progress | — |
-| W2 Element behavior | — | — |
+| W1 Skeleton & schema | done | `4da9e4582` |
+| W2 Element behavior | done | see `git log -1` |
+| W3 Fountain + TXT | next | — |
 | W10 Collab (deferred last) | — | — |
 
 Open decisions locked: OpenAI + Elevenlabs, Supabase Storage, credit stub, collab W10 last, fixtures via `scripts/sw-fetch-fixtures.sh`, offline thesaurus, mobile read+comment only.
