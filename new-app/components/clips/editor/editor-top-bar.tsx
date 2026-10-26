@@ -42,7 +42,10 @@ export function EditorTopBar({
       />
       <span className="text-xs text-muted-foreground">{saveLabel}</span>
       {producerStrip && producerStrip.changeCount > 0 ? (
-        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs">
+        <div
+          data-testid="producer-undo-strip"
+          className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs"
+        >
           <span>{producerStrip.changeCount} producer change{producerStrip.changeCount === 1 ? '' : 's'}</span>
           <Button size="sm" variant="outline" onClick={producerStrip.onUndo}>Undo</Button>
         </div>

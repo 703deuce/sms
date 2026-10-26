@@ -13,6 +13,7 @@ describe('editor undo', () => {
       past: [] as typeof base[],
       future: [] as typeof base[],
       saveState: 'saved' as const,
+      producerStrip: null,
     }
     const { edits: patched } = applyProducerPatch(initial.edits, bounds, [
       { name: 'set_captions', args: { presetId: 'karaoke', animation: 'karaoke', size: 1.2 } },
@@ -34,6 +35,7 @@ describe('editor undo', () => {
       past: [] as typeof base[],
       future: [] as typeof base[],
       saveState: 'saved' as const,
+      producerStrip: null,
     }
     const before = { ...base, captions: { ...base.captions, size: 1.05 } }
     const afterBatch = editorEditsReducer(

@@ -68,32 +68,49 @@ export function CaptionsPanel({
         <Switch checked={cap.enabled !== false} onCheckedChange={(v) => patch({ enabled: v })} />
       </div>
 
-      {customPresets.length > 0 && <p className="text-xs font-medium text-muted-foreground">My presets</p>}
+      {customPresets.length > 0 ? (
+        <div className="space-y-2" data-testid="caption-custom-presets">
+          <p className="text-xs font-medium text-muted-foreground">My presets</p>
+          <ul className="space-y-1">
+            {customPresets.map((p) => (
+              <li key={p.id} className="flex items-center gap-2 rounded-md border border-border p-2">
+                <button
+                  type="button"
+                  className="flex-1 text-left text-xs font-medium hover:underline"
+                  onClick={() =>
+                    onChange({
+                      ...cap,
+                      customPresetId: p.id,
+                      ...(p.config as ClipEditsV2['captions']),
+                    })
+                  }
+                >
+                  {p.name}
+                </button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-destructive"
+                  onClick={async () => {
+                    if (!window.confirm(`Delete preset "${p.name}"?`)) return
+                    try {
+                      await clipsFetch(`/api/clips/caption-presets/${p.id}`, { method: 'DELETE' })
+                      if (cap.customPresetId === p.id) patch({ customPresetId: undefined })
+                      await loadCustom()
+                      toast.success('Preset deleted')
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : 'Delete failed')
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2">
-        {customPresets.map((p) => {
-          const active = cap.customPresetId === p.id
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() =>
-                onChange({
-                  ...cap,
-                  customPresetId: p.id,
-                  presetId: 'bold_pop',
-                  presetConfig: p.config,
-                })
-              }
-              className={cn(
-                'rounded-lg border p-2 text-left transition-colors',
-                active ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:bg-muted/40',
-              )}
-            >
-              <p className="mb-1 text-xs font-medium">{p.name}</p>
-              <span className="text-[10px] text-muted-foreground">Custom</span>
-            </button>
-          )
-        })}
         {CAPTION_PRESETS.map((p) => {
           const id = presetSlugToId(p.slug)
           const active = id === presetId

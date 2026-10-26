@@ -18,7 +18,7 @@ Return JSON {"placements":[...]} where each placement has:
 - must_include: 1-2 generic visual keywords that must appear in stock video tags
 
 Rules:
-- At most 3 placements
+- Between 3 and 5 placements when the clip is long enough; never fewer than 3 unless duration is under 8s
 - Only where a concrete visual noun is spoken (objects, actions you can film)
 - Never place in the first 1500ms (hook)
 - Queries must relate to the transcript, not random associations
@@ -48,7 +48,7 @@ Full transcript: ${transcript}
 Suggest placements with atMs spread across the clip. For each placement, the query must match words spoken near that time.`
 
   const raw = await openAiJsonResponse<{ placements?: AutoBrollPlacement[] }>(SYSTEM, user)
-  const placements = (raw.placements || []).slice(0, 3)
+  const placements = (raw.placements || []).slice(0, 5)
   const out: AutoBrollPlacement[] = []
   for (const p of placements) {
     const atMs = Math.max(0, Math.floor(Number(p.atMs)))

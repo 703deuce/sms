@@ -207,7 +207,7 @@ export function PreviewStage({
           if (!media?.url) return null
           return (
             <BrollPreviewVideo
-              key={item.id}
+              key={`${item.id}:${media.url}`}
               src={media.url}
               videoRef={(el) => {
                 brollRefs.current[item.id] = el

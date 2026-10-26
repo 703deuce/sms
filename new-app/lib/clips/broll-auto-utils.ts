@@ -1,5 +1,10 @@
 import type { BrollItem } from '@/lib/clips/broll'
 
+/** Manual placements are kept when auto B-roll runs again. */
+export function isManualBroll(item: BrollItem): boolean {
+  return item.placement === 'manual'
+}
+
 /** One clean Pixabay query (no comma-joined keyword lists). */
 export function cleanPixabayQuery(raw: string): string {
   const first = raw.split(',')[0]?.trim() || raw.trim()
@@ -8,10 +13,10 @@ export function cleanPixabayQuery(raw: string): string {
 }
 
 export function mergeAutoBrollItems(existing: BrollItem[], newItems: BrollItem[]): BrollItem[] {
-  const kept = existing.filter((b) => b.placement === 'manual')
+  const kept = existing.filter(isManualBroll)
   return [...kept, ...newItems]
 }
 
 export function manualBrollOccupied(existing: BrollItem[]) {
-  return existing.filter((b) => b.placement === 'manual').map((b) => ({ startMs: b.startMs, endMs: b.endMs }))
+  return existing.filter(isManualBroll).map((b) => ({ startMs: b.startMs, endMs: b.endMs }))
 }

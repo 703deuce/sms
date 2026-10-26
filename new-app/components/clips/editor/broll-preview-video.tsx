@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { brollCoverCropStyle } from '@/lib/clips/broll-cover-crop'
 
 /** Cover-crop B-roll in preview using real video dimensions after metadata loads. */
 export function BrollPreviewVideo({
@@ -15,29 +16,33 @@ export function BrollPreviewVideo({
   style?: React.CSSProperties
 }) {
   const [cropStyle, setCropStyle] = useState<React.CSSProperties>({})
+  const elRef = useRef<HTMLVideoElement | null>(null)
 
   const onMeta = useCallback((el: HTMLVideoElement) => {
     const pw = el.parentElement?.clientWidth || 0
     const ph = el.parentElement?.clientHeight || 0
-    const vw = el.videoWidth
-    const vh = el.videoHeight
-    if (!pw || !ph || !vw || !vh) return
-    const scale = Math.max(pw / vw, ph / vh)
-    const dw = vw * scale
-    const dh = vh * scale
+    const box = brollCoverCropStyle(pw, ph, el.videoWidth, el.videoHeight)
+    if (!box) return
     setCropStyle({
-      width: dw,
-      height: dh,
-      left: (pw - dw) / 2,
-      top: (ph - dh) / 2,
+      width: box.width,
+      height: box.height,
+      left: box.left,
+      top: box.top,
       position: 'absolute',
       maxWidth: 'none',
     })
   }, [])
 
+  useEffect(() => {
+    const el = elRef.current
+    if (!el || !src) return
+    el.load()
+  }, [src])
+
   return (
     <video
       ref={(el) => {
+        elRef.current = el
         videoRef(el)
         if (el) onMeta(el)
       }}
@@ -48,6 +53,7 @@ export function BrollPreviewVideo({
       playsInline
       preload="auto"
       onLoadedMetadata={(e) => onMeta(e.currentTarget)}
+      onLoadedData={(e) => onMeta(e.currentTarget)}
     />
   )
 }

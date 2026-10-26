@@ -4,6 +4,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'react'
 import type { ClipAudioMusic, ClipAudioSfx, ClipEditsAudio } from '@/lib/clips/audio'
 import { DEFAULT_DUCK_DEPTH, DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS, DEFAULT_MUSIC_VOLUME } from '@/lib/clips/audio'
 import type { BrollItem } from '@/lib/clips/broll'
+import { isManualBroll } from '@/lib/clips/broll-auto-utils'
 import {
   canonicalEditsJson,
   defaultEdits,
@@ -19,20 +20,24 @@ import { wordSourceMs } from '@/lib/clips/source-words'
 
 const MAX_UNDO = 100
 
+export type ProducerStripState = { changeCount: number; expiresAt: number }
+
 type State = {
   edits: ClipEditsV2
   past: ClipEditsV2[]
   future: ClipEditsV2[]
   saveState: 'saved' | 'saving' | 'dirty'
+  producerStrip: ProducerStripState | null
 }
 
 type Action =
   | { type: 'set'; edits: ClipEditsV2; pushHistory?: boolean }
   | { type: 'APPLY_PATCH'; edits: ClipEditsV2 }
   /** Producer batch: always one undo step even when canonical edits match (e.g. no-op patch). */
-  | { type: 'BATCH'; edits: ClipEditsV2; before?: ClipEditsV2 }
+  | { type: 'BATCH'; edits: ClipEditsV2; before?: ClipEditsV2; producerChangeCount?: number }
   | { type: 'undo' }
   | { type: 'redo' }
+  | { type: 'clearProducerStrip' }
   | { type: 'saved' }
   | { type: 'saving' }
 
@@ -56,22 +61,30 @@ export function editorEditsReducer(state: State, action: Action): State {
     case 'BATCH': {
       const snap = action.before ?? state.edits
       const past = [...state.past, snap].slice(-MAX_UNDO)
-      return { ...state, edits: action.edits, past, future: [], saveState: 'dirty' }
+      const n = action.producerChangeCount ?? 0
+      const producerStrip =
+        n > 0 ? { changeCount: n, expiresAt: Date.now() + 15_000 } : state.producerStrip
+      return { ...state, edits: action.edits, past, future: [], saveState: 'dirty', producerStrip }
     }
+    case 'clearProducerStrip':
+      return { ...state, producerStrip: null }
     case 'undo': {
       if (!state.past.length) return state
       const prev = state.past[state.past.length - 1]
       return {
+        ...state,
         edits: prev,
         past: state.past.slice(0, -1),
         future: [state.edits, ...state.future].slice(0, MAX_UNDO),
         saveState: 'dirty',
+        producerStrip: state.producerStrip ? null : state.producerStrip,
       }
     }
     case 'redo': {
       if (!state.future.length) return state
       const next = state.future[0]
       return {
+        ...state,
         edits: next,
         past: [...state.past, state.edits].slice(-MAX_UNDO),
         future: state.future.slice(1),
@@ -93,6 +106,7 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     past: [],
     future: [],
     saveState: 'saved',
+    producerStrip: null,
   })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editsRef = useRef(state.edits)
@@ -103,12 +117,16 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
   }, [])
 
   /** One undo step for a full producer patch (not per-field). */
-  const applyProducerPatch = useCallback((edits: ClipEditsV2, before?: ClipEditsV2) => {
-    dispatch({ type: 'BATCH', edits, before })
-  }, [])
+  const applyProducerPatch = useCallback(
+    (edits: ClipEditsV2, before?: ClipEditsV2, producerChangeCount?: number) => {
+      dispatch({ type: 'BATCH', edits, before, producerChangeCount })
+    },
+    [],
+  )
 
   const undo = useCallback(() => dispatch({ type: 'undo' }), [])
   const redo = useCallback(() => dispatch({ type: 'redo' }), [])
+  const clearProducerStrip = useCallback(() => dispatch({ type: 'clearProducerStrip' }), [])
 
   const addCutRange = useCallback(
     (range: CutRange) => {
@@ -182,7 +200,7 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
   const mergeBroll = useCallback(
     (items: BrollItem[], replace = false) => {
       const cur = state.edits.broll || []
-      const kept = replace ? cur.filter((b) => b.placement === 'manual') : cur
+      const kept = replace ? cur.filter(isManualBroll) : cur
       const next = [...kept, ...items]
       setEdits({ ...state.edits, broll: next })
     },
@@ -303,6 +321,17 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     }
   }, [clipId, state.edits, state.saveState])
 
+  useEffect(() => {
+    if (!state.producerStrip) return
+    const ms = state.producerStrip.expiresAt - Date.now()
+    if (ms <= 0) {
+      dispatch({ type: 'clearProducerStrip' })
+      return
+    }
+    const t = setTimeout(() => dispatch({ type: 'clearProducerStrip' }), ms)
+    return () => clearTimeout(t)
+  }, [state.producerStrip])
+
   return {
     edits: state.edits,
     setEdits,
@@ -311,6 +340,8 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     canUndo: state.past.length > 0,
     canRedo: state.future.length > 0,
     saveState: state.saveState,
+    producerStrip: state.producerStrip,
+    clearProducerStrip,
     addCutRange,
     setWordFix,
     restoreWord,

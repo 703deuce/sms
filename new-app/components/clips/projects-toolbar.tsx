@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 export function ProjectsToolbar({
   q,
@@ -56,26 +55,28 @@ export function ProjectsToolbar({
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-      <ToggleGroup
-        type="single"
-        value={statusValue}
-        onValueChange={(v) => v && setStatus(v)}
-        className="flex flex-wrap gap-1"
-      >
-        <ToggleGroupItem value="all" className="h-9 rounded-lg px-3 text-xs">All</ToggleGroupItem>
-        <ToggleGroupItem value="processing" className="h-9 gap-1.5 rounded-lg px-3 text-xs">
-          <span className="size-1.5 rounded-full bg-sky-500" />
-          Processing
-        </ToggleGroupItem>
-        <ToggleGroupItem value="ready" className="h-9 gap-1.5 rounded-lg px-3 text-xs">
-          <span className="size-1.5 rounded-full bg-emerald-500" />
-          Ready
-        </ToggleGroupItem>
-        <ToggleGroupItem value="failed" className="h-9 gap-1.5 rounded-lg px-3 text-xs">
-          <span className="size-1.5 rounded-full bg-red-500" />
-          Failed
-        </ToggleGroupItem>
-      </ToggleGroup>
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Project status">
+        {(
+          [
+            { value: 'all', label: 'All' },
+            { value: 'processing', label: 'Processing', dot: 'bg-sky-500' },
+            { value: 'ready', label: 'Ready', dot: 'bg-emerald-500' },
+            { value: 'failed', label: 'Failed', dot: 'bg-red-500' },
+          ] as const
+        ).map((opt) => (
+          <Button
+            key={opt.value}
+            type="button"
+            size="sm"
+            variant={statusValue === opt.value ? 'default' : 'outline'}
+            className="h-9 gap-1.5 rounded-lg px-3 text-xs"
+            onClick={() => setStatus(opt.value)}
+          >
+            {opt.dot ? <span className={`size-1.5 rounded-full ${opt.dot}`} /> : null}
+            {opt.label}
+          </Button>
+        ))}
+      </div>
       {(q || status) && (
         <Button size="sm" variant="outline" render={<Link href="/app/clips" />}>Clear</Button>
       )}

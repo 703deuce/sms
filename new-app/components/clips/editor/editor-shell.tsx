@@ -98,6 +98,8 @@ export function EditorShell({
     removeSfx,
     setEdits,
     applyProducerPatch,
+    producerStrip,
+    clearProducerStrip,
     flushSave,
   } = useEditorState(clipId, bounds, initialEdits)
 
@@ -117,19 +119,6 @@ export function EditorShell({
     words,
   )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
-  const [producerStrip, setProducerStrip] = useState<{ changeCount: number; until: number } | null>(null)
-
-  useEffect(() => {
-    if (!producerStrip) return
-    const ms = producerStrip.until - Date.now()
-    if (ms <= 0) {
-      setProducerStrip(null)
-      return
-    }
-    const t = setTimeout(() => setProducerStrip(null), ms)
-    return () => clearTimeout(t)
-  }, [producerStrip])
-
   const outDur = outputDurationFromEdits(edits)
 
   useAudioMix({
@@ -279,7 +268,7 @@ export function EditorShell({
                   changeCount: producerStrip.changeCount,
                   onUndo: () => {
                     undo()
-                    setProducerStrip(null)
+                    clearProducerStrip()
                   },
                 }
               : null
@@ -341,13 +330,10 @@ export function EditorShell({
                 edits={edits}
                 onUndo={() => {
                   undo()
-                  setProducerStrip(null)
+                  clearProducerStrip()
                 }}
                 onApplyEdits={(next, n, before) => {
-                  applyProducerPatch(next, before)
-                  if (n > 0) {
-                    setProducerStrip({ changeCount: n, until: Date.now() + 15_000 })
-                  }
+                  applyProducerPatch(next, before, n)
                 }}
               />
             </TabsContent>
