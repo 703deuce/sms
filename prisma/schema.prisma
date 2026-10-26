@@ -9328,3 +9328,283 @@ model ProducerMessage {
   @@index([threadId, createdAt])
   @@map("producer_messages")
 }
+
+// --- Transovo Screenwriting (Sw*) ---
+
+enum SwProjectKind {
+  FEATURE
+  TV_SERIES
+  STAGE
+  OTHER
+}
+
+enum SwPhase {
+  WRITING
+  PRODUCTION
+}
+
+enum SwVersionKind {
+  AUTO
+  MANUAL
+  IMPORT
+  PRODUCTION_DRAFT
+  PRE_RESTORE
+  LOCK
+}
+
+enum SwRole {
+  OWNER
+  EDITOR
+  COMMENTER
+  VIEWER
+}
+
+model SwProject {
+  id        String        @id @default(cuid())
+  ownerId   String?
+  title     String
+  kind      SwProjectKind @default(FEATURE)
+  scripts   SwScript[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@map("sw_projects")
+}
+
+model SwScript {
+  id           String     @id @default(cuid())
+  projectId    String
+  project      SwProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  episodeNo    String?
+  templateKey  String     @default("feature")
+  formatSpec   Json
+  yState       Bytes?
+  pmJson       Json?
+  phase        SwPhase    @default(WRITING)
+  pageCount    Int        @default(0)
+  sceneCount   Int        @default(0)
+  wordCount    Int        @default(0)
+  searchText   String?
+  versions     SwVersion[]
+  scenes       SwScene[]
+  characters   SwCharacter[]
+  locations    SwLocation[]
+  threads      SwCommentThread[]
+  shareLinks   SwShareLink[]
+  members      SwMember[]
+  jobs         SwJob[]
+  breakdownItems SwBreakdownItem[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([projectId])
+  @@map("sw_scripts")
+}
+
+model SwVersion {
+  id          String         @id @default(cuid())
+  scriptId    String
+  script      SwScript       @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  kind        SwVersionKind
+  label       String?
+  yState      Bytes
+  pmJson      Json
+  pageCount   Int            @default(0)
+  createdById String?
+  createdAt   DateTime       @default(now())
+
+  @@index([scriptId, createdAt])
+  @@map("sw_versions")
+}
+
+model SwScene {
+  id         String   @id
+  scriptId   String
+  script     SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  ord        Int
+  number     String?
+  heading    String
+  intExt     String?
+  location   String?
+  tod        String?
+  pageStart  String?
+  eighths    Int?
+  synopsis   String?
+  characters String[] @default([])
+
+  @@index([scriptId, ord])
+  @@map("sw_scenes")
+}
+
+model SwCharacter {
+  id          String   @id @default(cuid())
+  scriptId    String
+  script      SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  name        String
+  aliases     String[] @default([])
+  gender      String?
+  color       String?
+  voiceId     String?
+  description String?
+  lines       Int      @default(0)
+  words       Int      @default(0)
+
+  @@unique([scriptId, name])
+  @@map("sw_characters")
+}
+
+model SwLocation {
+  id         String   @id @default(cuid())
+  scriptId   String
+  script     SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  name       String
+  sceneCount Int      @default(0)
+
+  @@unique([scriptId, name])
+  @@map("sw_locations")
+}
+
+model SwBreakdownCategory {
+  id       String  @id @default(cuid())
+  scriptId String?
+  key      String
+  name     String
+  color    String
+  ord      Int
+
+  @@map("sw_breakdown_categories")
+}
+
+model SwBreakdownItem {
+  id         String   @id @default(cuid())
+  scriptId   String
+  script     SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  categoryId String
+  name       String
+  notes      String?
+
+  @@index([scriptId])
+  @@map("sw_breakdown_items")
+}
+
+model SwCommentThread {
+  id         String      @id @default(cuid())
+  scriptId   String
+  script     SwScript    @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  anchorFrom String
+  anchorTo   String
+  elementId  String
+  status     String      @default("open")
+  comments   SwComment[]
+  createdAt  DateTime    @default(now())
+
+  @@map("sw_comment_threads")
+}
+
+model SwComment {
+  id         String          @id @default(cuid())
+  threadId   String
+  thread     SwCommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorId   String?
+  authorName String?
+  body       String
+  createdAt  DateTime        @default(now())
+
+  @@map("sw_comments")
+}
+
+model SwMember {
+  scriptId String
+  script   SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  userId   String
+  role     SwRole
+
+  @@id([scriptId, userId])
+  @@map("sw_members")
+}
+
+model SwShareLink {
+  id              String    @id @default(cuid())
+  scriptId        String
+  script          SwScript  @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  tokenHash       String    @unique
+  role            SwRole
+  expiresAt       DateTime?
+  passwordHash    String?
+  watermark       Boolean   @default(false)
+  allowDownload   Boolean   @default(true)
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@map("sw_share_links")
+}
+
+model SwDictionaryWord {
+  id    String @id @default(cuid())
+  scope String
+  word  String
+
+  @@unique([scope, word])
+  @@map("sw_dictionary_words")
+}
+
+model SwTemplate {
+  id      String  @id @default(cuid())
+  ownerId String?
+  key     String
+  name    String
+  spec    Json
+  builtIn Boolean @default(false)
+
+  @@map("sw_templates")
+}
+
+model SwJob {
+  id             String    @id @default(cuid())
+  scriptId       String?
+  script         SwScript? @relation(fields: [scriptId], references: [id], onDelete: SetNull)
+  type           String
+  status         String    @default("queued")
+  input          Json
+  output         Json?
+  error          String?
+  progress       Int       @default(0)
+  creditCost     Int?
+  creditsCharged Int?
+  actorId        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, type])
+  @@map("sw_jobs")
+}
+
+model SwAiResult {
+  id        String   @id @default(cuid())
+  scriptId  String
+  kind      String
+  versionId String?
+  scope     Json
+  inputHash String
+  output    Json
+  model     String
+  createdAt DateTime @default(now())
+
+  @@index([scriptId, kind])
+  @@map("sw_ai_results")
+}
+
+model SwTableRead {
+  id        String   @id @default(cuid())
+  scriptId  String
+  versionId String
+  castMap   Json
+  status    String
+  segments  Json?
+  audioUrl  String?
+  jobId     String?
+  createdAt DateTime @default(now())
+
+  @@map("sw_table_reads")
+}
