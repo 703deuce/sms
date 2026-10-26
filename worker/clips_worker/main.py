@@ -78,7 +78,7 @@ def count_queued_jobs(conn) -> int:
         cur.execute(
             """
             SELECT count(*)::int FROM clip_jobs
-            WHERE status = 'QUEUED' AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP')
+            WHERE status = 'QUEUED' AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP')
               AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
             """,
         )
