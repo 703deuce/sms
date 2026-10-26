@@ -5,7 +5,6 @@ import { getPrisma } from '@/lib/server/db'
 const NON_TERMINAL: ClipProjectStatus[] = [
   'UPLOADING',
   'QUEUED',
-  'IMPORTING',
   'PREPARING',
   'TRANSCRIBING',
   'SCANNING',

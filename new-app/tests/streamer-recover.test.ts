@@ -6,7 +6,7 @@ import {
 
 describe('streamer recovery', () => {
   it('flags non-terminal projects', () => {
-    expect(streamerProjectNeedsRecovery('IMPORTING')).toBe(true)
+    expect(streamerProjectNeedsRecovery('PREPARING')).toBe(true)
     expect(streamerProjectNeedsRecovery('READY')).toBe(false)
     expect(streamerProjectNeedsRecovery('FAILED')).toBe(false)
   })
