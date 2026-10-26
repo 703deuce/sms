@@ -13,7 +13,10 @@ Spec: `uploads/screenwriting.md` (W1–W19). Addendum: `uploads/screenwriting-ad
 | SmartType autocomplete | DONE (retest) | `smarttype-menu.tsx`, `screenplay-editor.tsx` |
 | PDF formatted export | DONE (retest) | `pdf/render.ts`, `pdf/line-position.ts` |
 | Read aloud | DONE (retest) | `segmentTableRead` + TTS fallback in workspace |
+| Yjs undo (single UndoManager) | DONE (retest) | `use-screenplay-yjs-collab.ts`, `collab/yjs-undo.ts`, PM History off |
+| Collab honesty banner | DONE (retest) | `collab-status-banner.tsx`, `collab-token` `liveCollabConfigured` |
 | Doc normalization | DONE | `schema/normalize-doc.ts` |
+| P1 panels (#8–#14) | DONE (retest) | `panel-empty.tsx`, find/replace → editor, comments POST |
 
 ## W1–W19 (core)
 
