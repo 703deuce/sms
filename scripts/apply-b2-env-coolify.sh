@@ -108,8 +108,19 @@ for ln in lines:
     out.append(ln)
 for k in keys:
     out.append(f"{k}={pairs[k]}")
-Path(envfile).write_text("\n".join(out) + "\n")
-os.chmod(envfile, 0o600)
+worker_body = "\n".join(out) + "\n"
+if os.access(envfile, os.W_OK):
+    Path(envfile).write_text(worker_body)
+    os.chmod(envfile, 0o600)
+else:
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
+        tmp.write(worker_body)
+        tmp_path = tmp.name
+    subprocess.check_call(["sudo", "cp", tmp_path, envfile])
+    subprocess.check_call(["sudo", "chmod", "600", envfile])
+    os.unlink(tmp_path)
 print("worker_env_written")
 
 # Verify Coolify real_value lengths
@@ -128,8 +139,12 @@ for k in keys:
     if len(coolify_by_key[k]) != expected_len[k]:
         errors.append(f"coolify {k} len {len(coolify_by_key[k])} != expected {expected_len[k]}")
 
+if os.access(envfile, os.R_OK):
+    worker_read = Path(envfile).read_text()
+else:
+    worker_read = subprocess.check_output(["sudo", "cat", envfile], text=True)
 worker_vals: dict[str, str] = {}
-for ln in Path(envfile).read_text().splitlines():
+for ln in worker_read.splitlines():
     if "=" not in ln:
         continue
     k, v = ln.split("=", 1)
