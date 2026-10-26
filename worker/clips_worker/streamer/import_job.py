@@ -225,11 +225,14 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 },
             )
 
+            from clips_worker.progress_throttle import ThrottledProgressPoster
+
+            throttled = ThrottledProgressPoster(post_progress, job["id"])
+
             def on_pct(pct: float) -> None:
                 prog = 8 + int(min(12, pct * 0.12))
                 hb.update(stage="Downloading audio", progress=prog)
-                post_progress(
-                    job["id"],
+                throttled.post(
                     {
                         "projectStatus": "PREPARING",
                         "stage": "Downloading audio",

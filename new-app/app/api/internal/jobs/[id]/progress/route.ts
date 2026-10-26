@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
-import { applyJobProgress, shouldTouchLockedAt } from '@/lib/server/clips/jobs'
+import { applyWorkerJobProgress } from '@/lib/server/clips/job-progress'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
+
+export const runtime = 'nodejs'
+export const maxDuration = 30
 
 const schema = z.object({
   projectStatus: z.string().optional(),
@@ -27,43 +30,34 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { id: jobId } = await ctx.params
     const body = schema.parse(JSON.parse(raw))
     const prisma = getPrisma()
-    const job = await prisma.clipJob.findUnique({ where: { id: jobId }, include: { project: true } })
+    const job = await prisma.clipJob.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true,
+        projectId: true,
+        status: true,
+        project: { select: { transcriptKey: true } },
+      },
+    })
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (body.transcriptWords && job.project.transcriptKey) {
+    if (body.transcriptWords?.length && job.project.transcriptKey) {
       await getClipStorage().putJson(job.project.transcriptKey, body.transcriptWords)
     }
 
-    await applyJobProgress({
+    await applyWorkerJobProgress({
       jobId,
+      projectId: job.projectId,
+      storedJobStatus: job.status,
       projectStatus: body.projectStatus as import('@prisma/client').ClipProjectStatus | undefined,
       stage: body.stage,
       progress: body.progress,
       error: body.error,
-      transcriptWords: body.transcriptWords,
+      jobStatus: body.jobStatus,
       etaSeconds: body.etaSeconds,
       chunkDone: body.chunkDone,
       chunkTotal: body.chunkTotal,
     })
-
-    const heartbeat = shouldTouchLockedAt(job.status, body.jobStatus)
-    const terminalFromBody = body.jobStatus === 'DONE' || body.jobStatus === 'FAILED'
-
-    if (body.jobStatus) {
-      await prisma.clipJob.update({
-        where: { id: jobId },
-        data: {
-          status: body.jobStatus,
-          finishedAt: terminalFromBody ? new Date() : undefined,
-          ...(heartbeat ? { lockedAt: new Date() } : {}),
-        },
-      })
-    } else if (heartbeat) {
-      await prisma.clipJob.update({
-        where: { id: jobId },
-        data: { lockedAt: new Date() },
-      })
-    }
 
     return NextResponse.json({ data: { ok: true } })
   } catch (err) {
