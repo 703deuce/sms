@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -240,10 +241,13 @@ def render_edited_clip(
     trim_out = edits["trim"]["out"] / 1000.0
     cuts = [[c[0] / 1000.0, c[1] / 1000.0] for c in edits.get("cutRanges") or []]
     segs = keep_segments(trim_in, trim_out, cuts)
-    cut_path = work_dir / "cut.mp4"
-    ffmpeg_concat_segments(clip_src, cut_path, segs)
     edited_words, _ = words_after_edits(words, edits)
     words_path = work_dir / "words.json"
     words_path.write_text(json.dumps(edited_words))
-    run_speakercrop(cut_path, out_mp4, words_path, settings, work_dir)
+    full_render = work_dir / "full_render.mp4"
+    run_speakercrop(clip_src, full_render, words_path, settings, work_dir)
+    if len(segs) == 1 and segs[0][0] == trim_in and abs(segs[0][1] - trim_out) < 0.05:
+        shutil.copy(full_render, out_mp4)
+    else:
+        ffmpeg_concat_segments(full_render, out_mp4, segs)
     return out_mp4, edited_words, build_srt(edited_words)
