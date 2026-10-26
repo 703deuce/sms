@@ -287,7 +287,7 @@ def _reasons_for(cand: dict, signals: dict, llm: dict) -> list[dict]:
         sec = cand["peak_ms"] // 1000
         if 0 <= sec < len(chat) and chat[sec] >= 0.5:
             ratio = max(2.0, chat[sec] * 8)
-            reasons.append({"kind": "chat", "label": "Chat spike", "value": f"{ratio:.0f}× baseline"})
+            reasons.append({"kind": "chat", "label": "Chat spike", "value": f"Chat {ratio:.0f}× baseline"})
     viewer = signals.get("viewerClips")
     if viewer:
         lo = cand["start_ms"] // 1000

@@ -37,6 +37,34 @@ def _load_vod(conn, vod_id: str) -> dict:
     return dict(row)
 
 
+def _load_channel_preset_layout(conn, channel_id: str | None) -> dict | None:
+    if not channel_id:
+        return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('SELECT "defaultPresetId" FROM stream_channels WHERE id = %s', (channel_id,))
+            ch = cur.fetchone()
+            if not ch or not ch.get("defaultPresetId"):
+                return None
+            cur.execute(
+                """
+                SELECT layout, facecam, gameplay, split, "facecamPosition", confidence, source
+                FROM stream_layout_presets
+                WHERE id = %s AND "deletedAt" IS NULL
+                """,
+                (ch["defaultPresetId"],),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        out = dict(row)
+        out["layout"] = out.get("layout") or "stack"
+        out["source"] = "preset"
+        return out
+    except Exception:
+        return None
+
+
 def _save_state(conn, vod_id: str, state: dict) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -95,16 +123,24 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
             audio_path = td_path / "audio.opus"
             download_object(audio_key, audio_path)
 
-            if vod.get("platform") == "upload" and vod.get("uploadId"):
+            if vod.get("platform") == "upload":
                 up = td_path / "full.mp4"
-                with conn.cursor() as cur:
-                    cur.execute('SELECT key FROM clip_uploads WHERE id = %s', (vod["uploadId"],))
-                    row = cur.fetchone()
-                if row:
-                    download_object(row[0], up)
+                local_key = state.get("localUploadKey")
+                if local_key:
+                    download_object(str(local_key), up)
                     local_upload = up
+                elif vod.get("uploadId"):
+                    with conn.cursor() as cur:
+                        cur.execute('SELECT key FROM clip_uploads WHERE id = %s', (vod["uploadId"],))
+                        row = cur.fetchone()
+                    if row:
+                        download_object(row[0], up)
+                        local_upload = up
 
-            layout_state = state.get("layout")
+            layout_state = state.get("layout") or _load_channel_preset_layout(conn, vod.get("channelId"))
+            if layout_state and not state.get("layout"):
+                state["layout"] = layout_state
+                _save_state(conn, vod_id, state)
             if not layout_state and clips:
                 sample = td_path / "layout_sample.mp4"
                 first = clips[0]

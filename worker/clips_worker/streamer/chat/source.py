@@ -6,9 +6,6 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-from clips_worker.storage import download_object
-
-
 def _replay_disabled() -> bool:
     if os.environ.get("TWITCH_VOD_CHAT_REPLAY", "").lower() in ("off", "0", "false"):
         return True
@@ -25,6 +22,8 @@ def get_chat(vod: dict) -> tuple[list[dict] | None, str]:
         state = json.loads(state)
     chat_key = state.get("chatKey")
     if chat_key:
+        from clips_worker.storage import download_object
+
         scratch = Path("/tmp/streamer_chat.jsonl.gz")
         download_object(chat_key, scratch)
         from clips_worker.streamer.chat.twitch_gql import load_jsonl_gz
