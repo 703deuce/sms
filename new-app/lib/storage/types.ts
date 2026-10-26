@@ -1,4 +1,4 @@
-export type StorageDriverName = 'supabase' | 's3'
+export type StorageDriverName = 'supabase' | 's3' | 'r2'
 
 export type CreateUploadInput = {
   workspaceId: string

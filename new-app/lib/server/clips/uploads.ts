@@ -22,7 +22,8 @@ export async function createClipUpload(workspaceId: string, input: { filename: s
   if (input.bytes > maxBytes) {
     throw new Error(`File exceeds maximum upload size (${formatClipUploadMaxLabel(maxBytes)})`)
   }
-  const storage = getClipStorage()
+  const driver = storageDriverName()
+  const storage = getClipStorage(driver)
   const uploadId = createId('upl')
   const ext = extFromFilename(input.filename)
   const key = uploadSourceKey(workspaceId, uploadId, ext)
@@ -47,6 +48,7 @@ export async function createClipUpload(workspaceId: string, input: { filename: s
       status: 'PENDING',
       s3UploadId,
       uploadMode: session.mode,
+      storageDriver: driver,
     },
   })
   return {
@@ -92,10 +94,10 @@ export async function completeClipUpload(
   parts?: { partNumber: number; etag: string }[],
   meta?: { durationMs?: number; width?: number; height?: number },
 ) {
-  const storage = getClipStorage()
   const prisma = getPrisma()
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row) throw new Error('Upload not found')
+  const storage = getClipStorage(row.storageDriver)
   if (row.status === 'COMPLETE') {
     return row
   }
@@ -149,10 +151,10 @@ export async function completeClipUpload(
 }
 
 export async function abortClipUpload(workspaceId: string, uploadId: string) {
-  const storage = getClipStorage()
   const prisma = getPrisma()
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row) return
+  const storage = getClipStorage(row.storageDriver)
   await storage.abortUpload({ objectKey: row.key, s3UploadId: row.s3UploadId }).catch(() => {})
   await prisma.clipUploadPart.deleteMany({ where: { uploadId } })
   await prisma.clipUpload.update({ where: { id: uploadId }, data: { status: 'ABORTED' } })
@@ -163,7 +165,7 @@ export async function getClipUploadResume(workspaceId: string, uploadId: string)
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId, status: 'PENDING' } })
   if (!row) throw new Error('Upload not found or already completed')
   const totalBytes = Number(row.bytes)
-  const storage = getClipStorage()
+  const storage = getClipStorage(row.storageDriver)
 
   if (row.uploadMode === 's3_multipart' && row.s3UploadId) {
     const parts = await listUploadParts(uploadId)

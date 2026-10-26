@@ -1,6 +1,6 @@
 import 'server-only'
 import { SIGNED_PUT_MAX_BYTES } from '@/lib/storage/supabase-driver'
-import { storageDriverName } from '@/lib/storage'
+import { storageDriverName, usesS3CompatibleMultipart } from '@/lib/storage/driver-name'
 
 /** Per-object limit on many Supabase buckets (raise in dashboard when plan allows). */
 export const SUPABASE_OBJECT_MAX_BYTES_DEFAULT = 50 * 1024 * 1024
@@ -47,14 +47,14 @@ export function shouldUseAppChunkedUpload(_bytes: number): boolean {
 /** Bytes the browser may actually upload (app cap ∩ storage per-object / plan limit). */
 export function clipUploadEffectiveMaxBytes(): number {
   const appMax = clipUploadMaxBytes()
-  if (storageDriverName() === 's3') return appMax
+  if (usesS3CompatibleMultipart()) return appMax
   return Math.min(appMax, supabaseObjectMaxBytes())
 }
 
 export function clipUploadLimitsPublic() {
   const policyMaxBytes = clipUploadMaxBytes()
   const effectiveMaxBytes = clipUploadEffectiveMaxBytes()
-  const objectMax = storageDriverName() === 's3' ? policyMaxBytes : supabaseObjectMaxBytes()
+  const objectMax = usesS3CompatibleMultipart() ? policyMaxBytes : supabaseObjectMaxBytes()
   return {
     /** Effective limit — use for UI hints and client-side rejection. */
     maxBytes: effectiveMaxBytes,

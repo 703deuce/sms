@@ -6,7 +6,7 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
-import { getClipStorage } from '@/lib/storage'
+import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 
 const SIGNED_TTL = 3600
 
@@ -50,7 +50,10 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     include: { upload: true },
   })
   if (!project) return null
-  const storage = getClipStorage()
+  const driverHint = clip.storageDriver ?? project.upload?.storageDriver ?? null
+  const storage = project.transcriptKey
+    ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
+    : getClipStorage(driverHint)
   const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
   const edits = normalizeEdits(clip.edits, bounds)
 

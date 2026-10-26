@@ -44,6 +44,8 @@
 - **Effective UI limit** = `min(CLIPS_MAX_UPLOAD_BYTES | CLIPS_UPLOAD_MAX_BYTES, SUPABASE_OBJECT_MAX_BYTES)` when `STORAGE_DRIVER=supabase`. Set env on web after upgrade, e.g. `SUPABASE_OBJECT_MAX_BYTES=5368709120` and `CLIPS_MAX_UPLOAD_BYTES` to match product policy.
 - Client preflight + `/api/clips/uploads/limits` must show the **effective** cap so the “up to X” hint never over-promises (e.g. not 150 MB / 20 GB while plan is still 50 MB).
 
+**Cloudflare R2 (in progress):** `STORAGE_DRIVER=r2` with `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET=transovo-clips`. Browser multipart (32 MB parts, `clip_upload_parts` resume). CORS template: `docs/clips/r2-cors.json`. `clip_uploads.storageDriver` / `clips.storageDriver` for mixed Supabase legacy objects. **Do not flip prod env until credentials land.**
+
 **No shared-password gate** — `DEV_BYPASS_AUTH` unchanged; UI opens without clips login.
 
 ## Deploy rules

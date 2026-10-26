@@ -1,25 +1,19 @@
 import 'server-only'
-import { createS3StorageDriver } from '@/lib/storage/s3-driver'
+import { storageDriverName, usesS3CompatibleMultipart } from '@/lib/storage/driver-name'
+import { getClipStorage, getClipStorageForObjectKey, normalizeStorageDriver } from '@/lib/storage/resolve'
+import { isR2Configured } from '@/lib/storage/r2'
+import { getS3Config } from '@/lib/storage/s3'
 import { createSupabaseStorageDriver } from '@/lib/storage/supabase-driver'
-import type { ClipStorageDriver, StorageDriverName } from '@/lib/storage/types'
+import { getSupabaseStorageConfig } from '@/lib/storage/supabase-driver'
 
 export * from '@/lib/storage/paths'
-export type { ClipStorageDriver, CreateUploadResult } from '@/lib/storage/types'
-
-export function storageDriverName(): StorageDriverName {
-  const raw = (process.env.STORAGE_DRIVER?.trim() || 'supabase').toLowerCase()
-  return raw === 's3' ? 's3' : 'supabase'
-}
-
-export function getClipStorage(): ClipStorageDriver {
-  return storageDriverName() === 's3' ? createS3StorageDriver() : createSupabaseStorageDriver()
-}
+export type { ClipStorageDriver, CreateUploadResult, StorageDriverName } from '@/lib/storage/types'
+export { storageDriverName, usesS3CompatibleMultipart, normalizeStorageDriver }
+export { getClipStorage, getClipStorageForObjectKey }
 
 export function isStorageConfigured(): boolean {
-  if (storageDriverName() === 's3') {
-    const { getS3Config } = require('@/lib/storage/s3') as typeof import('@/lib/storage/s3')
-    return Boolean(getS3Config())
-  }
-  const { getSupabaseStorageConfig } = require('@/lib/storage/supabase-driver') as typeof import('@/lib/storage/supabase-driver')
+  const driver = storageDriverName()
+  if (driver === 'r2') return isR2Configured()
+  if (driver === 's3') return Boolean(getS3Config())
   return Boolean(getSupabaseStorageConfig())
 }

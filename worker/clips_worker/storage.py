@@ -1,4 +1,4 @@
-"""Supabase Storage download/upload for clips worker."""
+"""Object storage for clips worker (Supabase, S3, or Cloudflare R2)."""
 from __future__ import annotations
 
 import json
@@ -9,6 +9,7 @@ import urllib.request
 from pathlib import Path
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 def env(name: str, default: str | None = None) -> str:
@@ -22,7 +23,14 @@ def storage_driver() -> str:
     return (os.environ.get("STORAGE_DRIVER") or "supabase").strip().lower()
 
 
+def _uses_s3_api() -> bool:
+    return storage_driver() in ("s3", "r2")
+
+
 def storage_bucket() -> str:
+    driver = storage_driver()
+    if driver == "r2":
+        return env("R2_BUCKET")
     return (
         os.environ.get("STORAGE_BUCKET")
         or os.environ.get("CLIPS_STORAGE_BUCKET")
@@ -50,33 +58,53 @@ def _download_staging(upload_id: str, dest: Path) -> None:
     shutil.copy2(src, dest)
 
 
+def _s3_client():
+    driver = storage_driver()
+    if driver == "r2":
+        account = env("R2_ACCOUNT_ID")
+        return boto3.client(
+            "s3",
+            endpoint_url=f"https://{account}.r2.cloudflarestorage.com",
+            aws_access_key_id=env("R2_ACCESS_KEY_ID"),
+            aws_secret_access_key=env("R2_SECRET_ACCESS_KEY"),
+            region_name=os.environ.get("R2_REGION", "auto"),
+        )
+    return boto3.client(
+        "s3",
+        endpoint_url=os.environ.get("S3_ENDPOINT"),
+        aws_access_key_id=env("S3_ACCESS_KEY_ID"),
+        aws_secret_access_key=env("S3_SECRET_ACCESS_KEY"),
+        region_name=os.environ.get("S3_REGION", "us-east-1"),
+    )
+
+
 def download_object(object_key: str, dest: Path) -> None:
     if object_key.startswith(STAGING_KEY_PREFIX):
         upload_id = object_key[len(STAGING_KEY_PREFIX) :]
         _download_staging(upload_id, dest)
         return
-    if storage_driver() == "s3":
-        _download_s3(object_key, dest)
-    else:
-        _download_supabase(object_key, dest)
+    if _uses_s3_api():
+        try:
+            _download_s3(object_key, dest)
+            return
+        except ClientError:
+            if storage_driver() == "supabase":
+                raise
+            _download_supabase(object_key, dest)
+            return
+    _download_supabase(object_key, dest)
 
 
 def upload_file(object_key: str, path: Path, content_type: str | None = None) -> None:
-    if storage_driver() == "s3":
+    if _uses_s3_api():
         _upload_s3(object_key, path, content_type)
     else:
         _upload_supabase(object_key, path, content_type)
 
 
 def delete_object(object_key: str) -> None:
-    if storage_driver() == "s3":
-        client = boto3.client(
-            "s3",
-            endpoint_url=os.environ.get("S3_ENDPOINT"),
-            aws_access_key_id=env("S3_ACCESS_KEY_ID"),
-            aws_secret_access_key=env("S3_SECRET_ACCESS_KEY"),
-            region_name=os.environ.get("S3_REGION", "us-east-1"),
-        )
+    if _uses_s3_api():
+        client = _s3_client()
         client.delete_object(Bucket=storage_bucket(), Key=object_key)
         return
     base = env("SUPABASE_URL").rstrip("/")
@@ -131,29 +159,24 @@ def _upload_supabase(object_key: str, path: Path, content_type: str | None) -> N
 
 
 def _download_s3(object_key: str, dest: Path) -> None:
-    client = boto3.client(
-        "s3",
-        endpoint_url=os.environ.get("S3_ENDPOINT"),
-        aws_access_key_id=env("S3_ACCESS_KEY_ID"),
-        aws_secret_access_key=env("S3_SECRET_ACCESS_KEY"),
-        region_name=os.environ.get("S3_REGION", "us-east-1"),
-    )
+    client = _s3_client()
     client.download_file(storage_bucket(), object_key, str(dest))
 
 
 def _upload_s3(object_key: str, path: Path, content_type: str | None) -> None:
-    client = boto3.client(
-        "s3",
-        endpoint_url=os.environ.get("S3_ENDPOINT"),
-        aws_access_key_id=env("S3_ACCESS_KEY_ID"),
-        aws_secret_access_key=env("S3_SECRET_ACCESS_KEY"),
-        region_name=os.environ.get("S3_REGION", "us-east-1"),
-    )
+    client = _s3_client()
     extra = {"ContentType": content_type} if content_type else {}
     client.upload_file(str(path), storage_bucket(), object_key, ExtraArgs=extra)
 
 
 def sign_url(object_key: str, expires_s: int = 3600) -> str:
+    if _uses_s3_api():
+        client = _s3_client()
+        return client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": storage_bucket(), "Key": object_key},
+            ExpiresIn=expires_s,
+        )
     base = env("SUPABASE_URL").rstrip("/")
     token = env("SUPABASE_SERVICE_ROLE_KEY")
     bucket = storage_bucket()

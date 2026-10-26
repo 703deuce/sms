@@ -8831,9 +8831,10 @@ model ClipUpload {
   height      Int?
   status      String   @default("PENDING")
   s3UploadId  String?
-  uploadMode  String?
-  kind        String   @default("source")
-  createdAt   DateTime @default(now())
+  uploadMode     String?
+  storageDriver  String?
+  kind           String   @default("source")
+  createdAt      DateTime @default(now())
 
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   projects  ClipProject[]
@@ -9089,9 +9090,10 @@ model Clip {
   scores      Json      @default("{}")
   cropKey     String?
   wordsKey    String?
-  previewKey  String?
-  posterKey   String?
-  edits       Json      @default("{}")
+  previewKey     String?
+  posterKey      String?
+  storageDriver  String?
+  edits          Json      @default("{}")
   aiMeta      Json?
   favorite    Boolean   @default(false)
   sourceSegKey     String?
