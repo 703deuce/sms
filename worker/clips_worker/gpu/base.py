@@ -31,12 +31,19 @@ class FaceTrackReq:
 
 @dataclass
 class RenderReq:
-    pass
+    segment_url: str | None = None
+    filtergraph: str | None = None
+    out_upload_url: str | None = None
+    encoder: str = "libx264"
 
 
 @dataclass
 class RenderRes:
-    pass
+    ok: bool = True
+    duration_ms: int = 0
+    size_bytes: int = 0
+    gpu_seconds: float = 0.0
+    provider: str = "modal"
 
 
 class GpuProvider(Protocol):

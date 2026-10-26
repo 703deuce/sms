@@ -62,7 +62,44 @@ class ModalProvider:
         return out
 
     def face_track(self, req: FaceTrackReq) -> dict:
-        raise NotImplementedError("modal face_track ships in S15")
+        from clips_worker.gpu.modal_inflight import ModalInflight
+
+        if not req.video_url:
+            raise ValueError("modal face_track requires video_url")
+        with ModalInflight():
+            import modal
+
+            Cls = modal.Cls.from_name(APP_NAME, "FaceTracker")
+            return Cls().face_track.remote(req.video_url, {})
 
     def render_batch(self, reqs: list[RenderReq]) -> list[RenderRes]:
-        raise NotImplementedError("modal render_batch ships in S15")
+        from clips_worker.gpu.modal_inflight import ModalInflight
+
+        if not reqs:
+            return []
+        items = [
+            {
+                "segment_url": r.segment_url,
+                "filtergraph": r.filtergraph,
+                "out_upload_url": r.out_upload_url,
+                "encoder": r.encoder,
+            }
+            for r in reqs
+        ]
+        with ModalInflight():
+            import modal
+
+            Cls = modal.Cls.from_name(APP_NAME, "Renderer")
+            raws = Cls().render_batch.remote(items)
+        out: list[RenderRes] = []
+        for raw in raws:
+            out.append(
+                RenderRes(
+                    ok=bool(raw.get("ok")),
+                    duration_ms=int(raw.get("duration_ms") or 0),
+                    size_bytes=int(raw.get("size_bytes") or 0),
+                    gpu_seconds=float(raw.get("gpu_seconds") or 0),
+                    provider="modal",
+                )
+            )
+        return out
