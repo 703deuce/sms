@@ -10,9 +10,8 @@ import { shotAt } from '@/lib/clips/crop-track'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
-import { outputDurationFromEdits } from '@/lib/clips/edits'
+import { applyPlaybackTime, outputDurationFromEdits } from '@/lib/clips/editor-playback'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
-import { applyPlaybackTime } from '@/lib/clips/editor-playback'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
