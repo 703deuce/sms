@@ -9,6 +9,7 @@ import {
 import { KIE_IMAGE_COST_USD_2K, parseResultImageUrl } from '@/lib/server/ai/kie-image'
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
+import { mp4BufferToJpegPoster } from '@/lib/server/clips/kie-poster'
 import { getClipStorage } from '@/lib/storage'
 
 export async function POST(request: Request) {
@@ -52,6 +53,25 @@ export async function POST(request: Request) {
       : `ws/${gen.workspaceId}/clips/${gen.clipId || 'none'}/gen/${gen.id}.mp4`
 
     const buf = Buffer.from(await res.arrayBuffer())
+    let posterKey: string | undefined
+    if (!isThumb && gen.kind === 'BROLL_VIDEO') {
+      try {
+        const jpg = await mp4BufferToJpegPoster(buf)
+        posterKey = `ws/${gen.workspaceId}/clips/${gen.clipId || 'none'}/gen/${gen.id}.jpg`
+        const { getSupabaseStorageConfig } = await import('@/lib/storage/supabase-driver')
+        const cfgPoster = getSupabaseStorageConfig()
+        if (cfgPoster) {
+          const { createClient } = await import('@supabase/supabase-js')
+          const supabasePoster = createClient(cfgPoster.url, cfgPoster.key, { auth: { persistSession: false } })
+          await supabasePoster.storage.from(cfgPoster.bucket).upload(posterKey, jpg, {
+            contentType: 'image/jpeg',
+            upsert: true,
+          })
+        }
+      } catch {
+        posterKey = undefined
+      }
+    }
     const { getSupabaseStorageConfig } = await import('@/lib/storage/supabase-driver')
     const cfg = getSupabaseStorageConfig()
     if (!cfg) throw new Error('storage not configured')
@@ -63,11 +83,13 @@ export async function POST(request: Request) {
     })
     if (error) throw new Error(error.message)
 
+    const nextParams = { ...(params as Record<string, unknown>), ...(posterKey ? { posterKey } : {}) }
     await prisma.aiGeneration.update({
       where: { id: gen.id },
       data: {
         status: 'READY',
         storageKey,
+        params: nextParams,
         costUsd: new Decimal(isThumb ? KIE_IMAGE_COST_USD_2K : kieVideoCostUsd(durationS, resolution)),
         error: null,
       },
