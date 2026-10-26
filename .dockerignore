@@ -47,4 +47,4 @@ docker-compose*.yml
 Dockerfile.sms-worker
 nixpacks.legacy-monolith.toml
 
-# Keep: new-app/, prisma/, packages/, scripts/deploy-db-migrations.sh, nixpacks.toml, Dockerfile.transovo-new-app
+# Keep: new-app/ (includes prisma/), packages/, scripts/deploy-db-migrations.sh, nixpacks.toml, Dockerfile.transovo-new-app

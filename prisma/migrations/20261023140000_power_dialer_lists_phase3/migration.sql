@@ -1,5 +1,0 @@
--- Power Dialer Phase 3: calling list metadata
-
-ALTER TABLE "ContactList" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'manual';
-ALTER TABLE "ContactList" ADD COLUMN IF NOT EXISTS "archivedAt" TIMESTAMP(3);
-ALTER TABLE "ContactList" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

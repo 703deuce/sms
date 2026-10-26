@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS "stream_usage" (
     "vodCount" INTEGER NOT NULL DEFAULT 0,
     "modalGpuSeconds" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "stream_usage_pkey" PRIMARY KEY ("id")
 );
@@ -19,4 +19,4 @@ CREATE INDEX IF NOT EXISTS "stream_usage_workspaceId_periodStart_idx"
 
 ALTER TABLE "stream_usage" DROP CONSTRAINT IF EXISTS "stream_usage_workspaceId_fkey";
 ALTER TABLE "stream_usage" ADD CONSTRAINT "stream_usage_workspaceId_fkey"
-  FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
