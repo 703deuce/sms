@@ -10,6 +10,9 @@ export function friendlyUploadError(err: unknown, httpStatus?: number): string {
     return `Upload server error (${status}). Try again in a moment.`
   }
   const msg = err instanceof Error ? err.message : String(err ?? 'Upload failed')
+  if (/exceeded the maximum allowed size|object exceeded/i.test(msg)) {
+    return 'Storage rejected this file size. Large stream uploads use server staging — retry to resume, or paste a VOD link.'
+  }
   if (/413|payload too large|too large/i.test(msg)) {
     return 'File is too large for storage. Try a smaller file or paste a VOD link instead.'
   }

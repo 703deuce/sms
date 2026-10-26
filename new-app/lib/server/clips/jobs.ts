@@ -1,5 +1,15 @@
 import type { ClipProjectStatus } from '@prisma/client'
+import {
+  JOB_HEARTBEAT_STALE_MS,
+  JOB_MAX_ATTEMPTS_BEFORE_FAIL,
+  STREAMER_ORPHAN_PROJECT_GRACE_MS,
+  STREAMER_PROJECT_STUCK_MS,
+  reaperBackoffSeconds,
+  shouldFailJobAfterStale,
+  stalledProjectErrorMessage,
+} from '@/lib/server/clips/job-reliability'
 import { getPrisma } from '@/lib/server/db'
+import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
 
@@ -147,24 +157,126 @@ export async function applyJobProgress(input: {
   }
 }
 
+const STUCK_PROJECT_STATUSES: ClipProjectStatus[] = [
+  'UPLOADING',
+  'PREPARING',
+  'TRANSCRIBING',
+  'SCANNING',
+  'FINDING_CLIPS',
+  'REFRAMING',
+  'RENDERING',
+]
+
 export async function reapStaleJobs() {
   const prisma = getPrisma()
-  const cutoff = new Date(Date.now() - 5 * 60_000)
+  const heartbeatCutoff = new Date(Date.now() - JOB_HEARTBEAT_STALE_MS)
   const stale = await prisma.clipJob.findMany({
-    where: { status: 'RUNNING', lockedAt: { lt: cutoff }, attempts: { lt: 3 } },
-    take: 20,
+    where: {
+      status: 'RUNNING',
+      OR: [{ lockedAt: { lt: heartbeatCutoff } }, { lockedAt: null }],
+    },
+    take: 30,
+    include: { project: { select: { id: true, status: true } } },
   })
+
+  let requeued = 0
+  let failed = 0
+
   for (const job of stale) {
+    if (shouldFailJobAfterStale(job.attempts)) {
+      const msg =
+        job.error?.slice(0, 200) ||
+        `Job timed out (no heartbeat for ${Math.round(JOB_HEARTBEAT_STALE_MS / 60_000)} min).`
+      await prisma.$transaction([
+        prisma.clipJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'FAILED',
+            error: msg,
+            finishedAt: new Date(),
+            lockedBy: null,
+            lockedAt: null,
+          },
+        }),
+        prisma.clipProject.update({
+          where: { id: job.projectId },
+          data: {
+            status: 'FAILED',
+            stage: 'failed',
+            progress: 0,
+            error: `${msg} Use Retry processing to resume.`,
+          },
+        }),
+      ])
+      failed += 1
+      continue
+    }
+
+    const delaySec = reaperBackoffSeconds(job.attempts)
     await prisma.clipJob.update({
       where: { id: job.id },
       data: {
         status: 'QUEUED',
         lockedBy: null,
         lockedAt: null,
-        attempts: { increment: 1 },
-        runAfter: new Date(),
+        runAfter: new Date(Date.now() + delaySec * 1000),
+        error: `Watchdog requeued (retry in ~${delaySec}s)`,
       },
     })
+    requeued += 1
   }
-  return stale.length
+
+  const orphanCutoff = new Date(Date.now() - STREAMER_ORPHAN_PROJECT_GRACE_MS)
+  const orphanStatuses: ClipProjectStatus[] = [...STUCK_PROJECT_STATUSES, 'QUEUED']
+  const orphanCandidates = await prisma.clipProject.findMany({
+    where: {
+      status: { in: orphanStatuses },
+      updatedAt: { lt: orphanCutoff },
+      streamVod: { is: {} },
+      jobs: { none: { status: { in: ['QUEUED', 'RUNNING'] } } },
+    },
+    select: { id: true },
+    take: 15,
+  })
+  for (const project of orphanCandidates) {
+    const recovered = await enqueueStreamerRecoveryJob(project.id, 'watchdog_orphan')
+    if (recovered) requeued += 1
+  }
+
+  const stuckCutoff = new Date(Date.now() - STREAMER_PROJECT_STUCK_MS)
+  const stuckProjects = await prisma.clipProject.findMany({
+    where: {
+      status: { in: STUCK_PROJECT_STATUSES },
+      updatedAt: { lt: stuckCutoff },
+      streamVod: { is: {} },
+    },
+    select: { id: true, status: true },
+    take: 10,
+  })
+  for (const project of stuckProjects) {
+    await prisma.$transaction([
+      prisma.clipProject.update({
+        where: { id: project.id },
+        data: {
+          status: 'FAILED',
+          stage: 'failed',
+          progress: 0,
+          error: stalledProjectErrorMessage(project.status),
+        },
+      }),
+      prisma.clipJob.updateMany({
+        where: { projectId: project.id, status: { in: ['QUEUED', 'RUNNING'] } },
+        data: {
+          status: 'FAILED',
+          error: 'Stalled — use Retry processing',
+          finishedAt: new Date(),
+          lockedBy: null,
+          lockedAt: null,
+        },
+      }),
+    ])
+    failed += 1
+  }
+
+  return requeued + failed
 }

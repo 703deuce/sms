@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { fetchUploadLimits } from '@/lib/clips/upload'
 
 const ACCEPT = 'video/mp4,video/quicktime,video/webm,video/x-m4v,audio/mpeg,audio/wav,.mp4,.mov,.webm,.m4v,.mp3,.wav'
-export const CLIP_UPLOAD_MAX_LABEL_FALLBACK = '50 MB'
+export const CLIP_UPLOAD_MAX_LABEL_FALLBACK = '20 GB'
 
 export function Dropzone({ onFile, disabled }: { onFile: (file: File) => void; disabled?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null)

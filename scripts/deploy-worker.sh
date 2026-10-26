@@ -18,6 +18,8 @@ REQUIRED_ENV_KEYS=(
   STORAGE_DRIVER
 )
 
+# Large stream uploads: set CLIPS_UPLOAD_STAGING_DIR on web + workers (shared volume).
+
 # Streamer v1 is VOD-first. Live EventSub chat capture stays off unless worker.env sets:
 # STREAMER_LIVE_REALTIME_ENABLED=true
 
@@ -34,6 +36,13 @@ ssh "$HOST" "sudo bash -s" <<REMOTE
 set -euo pipefail
 REMOTE_SRC="${REMOTE_SRC}"
 REMOTE_ENV="${REMOTE_ENV}"
+
+disk_pct=\$(df / --output=pcent | tail -1 | tr -dc '0-9')
+if [ -n "\${disk_pct}" ] && [ "\${disk_pct}" -gt 80 ]; then
+  echo "[deploy-worker] disk at \${disk_pct}% — pruning docker builder cache and unused images (not volumes)"
+  docker builder prune -af 2>/dev/null || true
+  docker image prune -af 2>/dev/null || true
+fi
 
 if [ ! -f "\${REMOTE_ENV}" ]; then
   echo "[deploy-worker] FATAL: missing \${REMOTE_ENV}" >&2
@@ -87,6 +96,14 @@ start_worker() {
   local name="\$1"
   local lane="\$2"
   local worker_id="\$3"
+  echo "[deploy-worker] stopping \${name} (no overlap with new container)"
+  docker stop "\$name" 2>/dev/null || true
+  for _wait in \$(seq 1 45); do
+    if ! docker ps -q -f name="^\${name}\$" | grep -q .; then
+      break
+    fi
+    sleep 1
+  done
   docker rm -f "\$name" 2>/dev/null || true
   docker run -d \\
     --name "\$name" \\

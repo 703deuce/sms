@@ -2,18 +2,28 @@ import 'server-only'
 import { SIGNED_PUT_MAX_BYTES } from '@/lib/storage/supabase-driver'
 import { storageDriverName } from '@/lib/storage'
 
-/** Default cap when using Supabase (free-tier global limit is often 50 MB per object). */
-export const CLIPS_UPLOAD_MAX_BYTES_SUPABASE_DEFAULT = 50 * 1024 * 1024
-export const CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT = 5 * 1024 * 1024 * 1024
+/** Per-object limit on many Supabase buckets (raise in dashboard when plan allows). */
+export const SUPABASE_OBJECT_MAX_BYTES_DEFAULT = 50 * 1024 * 1024
+export const CLIPS_UPLOAD_MAX_BYTES_STREAMER_DEFAULT = 20 * 1024 * 1024 * 1024
+export const CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT = 20 * 1024 * 1024 * 1024
 export const CLIPS_APP_CHUNK_BYTES = 8 * 1024 * 1024
 
-export function clipUploadMaxBytes(): number {
-  const raw = process.env.CLIPS_UPLOAD_MAX_BYTES?.trim()
+export function supabaseObjectMaxBytes(): number {
+  const raw = process.env.SUPABASE_OBJECT_MAX_BYTES?.trim() || process.env.SUPABASE_BUCKET_FILE_SIZE_LIMIT?.trim()
   if (raw) {
     const n = Number(raw)
     if (Number.isFinite(n) && n > 0) return Math.floor(n)
   }
-  return storageDriverName() === 's3' ? CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT : CLIPS_UPLOAD_MAX_BYTES_SUPABASE_DEFAULT
+  return SUPABASE_OBJECT_MAX_BYTES_DEFAULT
+}
+
+export function clipUploadMaxBytes(): number {
+  const raw = process.env.CLIPS_UPLOAD_MAX_BYTES?.trim() || process.env.STREAMER_UPLOAD_MAX_BYTES?.trim()
+  if (raw) {
+    const n = Number(raw)
+    if (Number.isFinite(n) && n > 0) return Math.floor(n)
+  }
+  return storageDriverName() === 's3' ? CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT : CLIPS_UPLOAD_MAX_BYTES_STREAMER_DEFAULT
 }
 
 export function formatClipUploadMaxLabel(bytes: number): string {
@@ -28,15 +38,20 @@ export function formatClipUploadMaxLabel(bytes: number): string {
 /** Browser uploads above signed-PUT size should not use Supabase TUS (413 on many plans). */
 export function shouldUseAppChunkedUpload(bytes: number): boolean {
   if (storageDriverName() === 's3') return false
+  if (bytes > supabaseObjectMaxBytes()) return true
   return bytes > SIGNED_PUT_MAX_BYTES
 }
 
 export function clipUploadLimitsPublic() {
   const maxBytes = clipUploadMaxBytes()
+  const objectMax = storageDriverName() === 's3' ? maxBytes : supabaseObjectMaxBytes()
   return {
     maxBytes,
     maxLabel: formatClipUploadMaxLabel(maxBytes),
     chunkBytes: CLIPS_APP_CHUNK_BYTES,
     driver: storageDriverName(),
+    supabaseObjectMaxBytes: objectMax,
+    supabaseObjectMaxLabel: formatClipUploadMaxLabel(objectMax),
+    usesStagingAboveObjectMax: storageDriverName() !== 's3' && maxBytes > objectMax,
   }
 }

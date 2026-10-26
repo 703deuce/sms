@@ -1,4 +1,4 @@
-# Coolify/Nixpacks: transovo-new-app with repository-root build context (shared prisma/).
+# Coolify/Nixpacks: transovo-new-app; Prisma source of truth is new-app/prisma/.
 # Coolify web app (ds8s3hjin60qs6g7s0iqkixs): Base Directory = / (empty), Build pack = Nixpacks.
 # Legacy monolith: nixpacks.legacy-monolith.toml — see docs/COOLIFY-NEW-APP-WEB.md.
 

@@ -1,4 +1,4 @@
-// Canonical schema lives at repo root (`prisma/schema.prisma`); generate via `prisma generate --schema=../prisma/schema.prisma`.
+// Canonical schema: `new-app/prisma/schema.prisma` (generate via `pnpm prisma generate --schema=prisma/schema.prisma`).
 import { PrismaClient } from "@prisma/client";
 
 export type DbRow = Record<string, unknown>;

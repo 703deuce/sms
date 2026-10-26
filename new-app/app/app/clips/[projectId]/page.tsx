@@ -44,6 +44,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
             url={streamVod.url}
             chatSource={streamVod.chatSource}
             chatMessages={streamVod.chatMessages}
+            sourceType={streamVod.sourceType}
           />
           <StreamerProjectChrome
             vodId={streamVod.id}

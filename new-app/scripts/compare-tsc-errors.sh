@@ -13,7 +13,7 @@ run_tsc_for_ref() {
   local out="$2"
   local tmp
   tmp="$(mktemp -d)"
-  (cd "$REPO_ROOT" && npx prisma generate --schema=prisma/schema.prisma >/dev/null)
+  (cd "$REPO_ROOT" && npx prisma generate --schema=new-app/prisma/schema.prisma >/dev/null)
   git -C "$REPO_ROOT" archive "$ref" new-app | tar -x -C "$tmp"
   ln -sf "$APP/node_modules" "$tmp/new-app/node_modules"
   for f in tsconfig.json tsconfig.typecheck.json; do

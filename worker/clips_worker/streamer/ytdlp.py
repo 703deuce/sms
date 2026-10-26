@@ -17,6 +17,12 @@ def map_ytdlp_error(stderr: str) -> str:
         return "VOD not found or deleted."
     if "403" in s or "geo" in s:
         return "Twitch/Kick refused the download. Try again later or upload the file."
+    if "502" in s or "bad gateway" in s:
+        return "Twitch/Kick CDN returned 502 Bad Gateway."
+    if "503" in s or "service unavailable" in s:
+        return "Upstream temporarily unavailable (503)."
+    if "429" in s or "too many requests" in s:
+        return "Rate limited by Twitch/Kick."
     return stderr.strip()[:500] or "Download failed"
 
 
@@ -61,8 +67,15 @@ def parse_metadata(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def download_video(url: str, dest: str, section: str | None = None, progress_cb=None) -> None:
+    from clips_worker.streamer.http_download import run_ytdlp
+
     cmd = [
         "yt-dlp",
+        "--retries",
+        "5",
+        "--fragment-retries",
+        "10",
+        "--continue",
         "-f",
         "bv*[height<=1080][fps<=60]+ba/b[height<=1080]/b",
         "--merge-output-format",
@@ -74,16 +87,7 @@ def download_video(url: str, dest: str, section: str | None = None, progress_cb=
     if section:
         cmd.extend(["--download-sections", section])
     cmd.append(url)
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    assert proc.stdout
-    for line in proc.stdout:
-        if progress_cb and "[download]" in line:
-            m = re.search(r"(\d+(?:\.\d+)?)%", line)
-            if m:
-                progress_cb(float(m.group(1)))
-    proc.wait()
-    if proc.returncode != 0:
-        raise RuntimeError("Video download failed")
+    run_ytdlp(cmd, progress_cb, step="Downloading video")
 
 
 def download_audio(
@@ -92,10 +96,21 @@ def download_audio(
     section: str | None = None,
     progress_cb=None,
 ) -> None:
+    from clips_worker.streamer.http_download import run_ytdlp
+
     cmd = [
         "yt-dlp",
+        "--retries",
+        "5",
+        "--fragment-retries",
+        "10",
+        "--continue",
+        "--concurrent-fragments",
+        "8",
+        "--throttled-rate",
+        "100K",
         "-f",
-        "ba/b",
+        "audio_only/ba/bestaudio/b",
         "-x",
         "--audio-format",
         "opus",
@@ -108,13 +123,4 @@ def download_audio(
     if section:
         cmd.extend(["--download-sections", section])
     cmd.append(url)
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    assert proc.stdout
-    for line in proc.stdout:
-        if progress_cb and "[download]" in line:
-            m = re.search(r"(\d+(?:\.\d+)?)%", line)
-            if m:
-                progress_cb(float(m.group(1)))
-    proc.wait()
-    if proc.returncode != 0:
-        raise RuntimeError("Audio download failed")
+    run_ytdlp(cmd, progress_cb, step="Downloading audio")

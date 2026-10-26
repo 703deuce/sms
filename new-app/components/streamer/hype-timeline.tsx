@@ -20,13 +20,38 @@ type SignalsPayload = {
 
 type SeriesKey = 'combined' | 'audio' | 'chat' | 'viewerClips'
 
+type LoadState = 'loading' | 'ready' | 'unavailable'
+
 export function HypeTimeline({ vodId }: { vodId: string }) {
   const [data, setData] = useState<SignalsPayload | null>(null)
+  const [loadState, setLoadState] = useState<LoadState>('loading')
   const [active, setActive] = useState<SeriesKey>('combined')
   const svgRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
-    void clipsFetch<SignalsPayload>(`/api/streamer/vods/${vodId}/signals`).then(setData).catch(() => setData(null))
+    setLoadState('loading')
+    setData(null)
+    let cancelled = false
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) setLoadState('unavailable')
+    }, 12_000)
+    void (async () => {
+      try {
+        const payload = await clipsFetch<SignalsPayload>(`/api/streamer/vods/${vodId}/signals`)
+        if (cancelled) return
+        setData(payload)
+        setLoadState('ready')
+      } catch {
+        if (!cancelled) setLoadState('unavailable')
+        setData(null)
+      } finally {
+        window.clearTimeout(timeout)
+      }
+    })()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
   }, [vodId])
 
   const series =
@@ -38,18 +63,27 @@ export function HypeTimeline({ vodId }: { vodId: string }) {
           ? data?.series?.chat
           : data?.series?.viewerClips
 
-  if (!data) {
+  if (loadState === 'loading') {
     return (
       <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
         Loading hype timeline…
       </div>
     )
   }
-  if (!series?.length) {
+
+  if (loadState === 'unavailable' || !data) {
     return (
       <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
         Hype timeline will appear after analysis. If chat replay was unavailable, audio and transcript signals still
         drive clip picks.
+      </div>
+    )
+  }
+
+  if (!series?.length) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+        No hype signal data for this VOD yet.
       </div>
     )
   }
@@ -64,7 +98,7 @@ export function HypeTimeline({ vodId }: { vodId: string }) {
     })
     .join(' ')
 
-  const durationMs = (series.length / (data!.hz || 1)) * 1000
+  const durationMs = (series.length / (data.hz || 1)) * 1000
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-2">
@@ -94,7 +128,7 @@ export function HypeTimeline({ vodId }: { vodId: string }) {
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${w} ${h}`} className="w-full h-16">
         <polyline fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" points={points} />
-        {data!.clips.map((c) => {
+        {data.clips.map((c) => {
           const x0 = (c.startMs / durationMs) * w
           const x1 = (c.endMs / durationMs) * w
           return (

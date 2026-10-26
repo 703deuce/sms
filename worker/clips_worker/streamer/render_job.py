@@ -126,12 +126,20 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
             audio_path = td_path / "audio.opus"
             download_object(audio_key, audio_path)
 
+            layout_video: Path | None = None
             if vod.get("platform") == "upload":
                 up = td_path / "full.mp4"
                 local_key = state.get("localUploadKey")
                 if local_key:
                     download_object(str(local_key), up)
                     local_upload = up
+                proxy_key = state.get("analysisProxyKey")
+                if proxy_key:
+                    proxy_path = td_path / "analysis_proxy.mp4"
+                    download_object(str(proxy_key), proxy_path)
+                    layout_video = proxy_path
+                else:
+                    layout_video = local_upload
                 elif vod.get("uploadId"):
                     with conn.cursor() as cur:
                         cur.execute('SELECT key FROM clip_uploads WHERE id = %s', (vod["uploadId"],))
@@ -149,8 +157,9 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 first = clips[0]
                 fs = max(0.0, int(first["startMs"]) / 1000.0 - 2)
                 fe = fs + 30
-                if local_upload:
-                    cut_local_segment(local_upload, sample, fs, fe)
+                seg_src = layout_video or local_upload
+                if seg_src:
+                    cut_local_segment(seg_src, sample, fs, fe)
                 elif url:
                     download_segment(url, sample, fs, fe)
                 if sample.exists():

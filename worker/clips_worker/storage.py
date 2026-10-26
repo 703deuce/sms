@@ -31,7 +31,30 @@ def storage_bucket() -> str:
     ).strip()
 
 
+STAGING_KEY_PREFIX = "@staging/"
+
+
+def _staging_root() -> Path:
+    return Path(os.environ.get("CLIPS_UPLOAD_STAGING_DIR") or "/opt/clips-upload-staging")
+
+
+def _download_staging(upload_id: str, dest: Path) -> None:
+    root = _staging_root()
+    matches = list(root.glob(f"{upload_id}.*"))
+    if not matches:
+        raise RuntimeError(f"Staged upload file missing for {upload_id}")
+    src = matches[0]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    import shutil
+
+    shutil.copy2(src, dest)
+
+
 def download_object(object_key: str, dest: Path) -> None:
+    if object_key.startswith(STAGING_KEY_PREFIX):
+        upload_id = object_key[len(STAGING_KEY_PREFIX) :]
+        _download_staging(upload_id, dest)
+        return
     if storage_driver() == "s3":
         _download_s3(object_key, dest)
     else:

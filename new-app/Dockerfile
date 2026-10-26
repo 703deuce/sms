@@ -1,4 +1,4 @@
-# Coolify: Base Directory = repo root, Dockerfile location = new-app/Dockerfile (ships new-app + root prisma).
+# Coolify: Base Directory = repo root, Dockerfile location = new-app/Dockerfile (Prisma in new-app/prisma).
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app/new-app
 RUN npm install -g pnpm@12.3.4
@@ -7,7 +7,6 @@ RUN pnpm install --frozen-lockfile
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
-COPY prisma ./prisma
 COPY new-app ./new-app
 WORKDIR /app/new-app
 RUN npm install -g pnpm@12.3.4

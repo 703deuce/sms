@@ -101,7 +101,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
 
         chunk_started = time.time()
         chat_executor = ThreadPoolExecutor(max_workers=1)
-        chat_future = chat_executor.submit(get_chat, vod, conn)
+        chat_future = chat_executor.submit(get_chat, vod, None)
         all_word_chunks: list[list[dict] | None] = [None] * len(ranges)
         for idx, (start_ms, end_ms) in enumerate(ranges):
             if idx in done:

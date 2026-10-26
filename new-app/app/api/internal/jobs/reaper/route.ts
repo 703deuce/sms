@@ -7,6 +7,14 @@ export async function POST(request: Request) {
   if (!verifyWorkerHmac(request, raw)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const count = await reapStaleJobs()
-  return NextResponse.json({ data: { requeued: count } })
+  try {
+    const count = await reapStaleJobs()
+    return NextResponse.json({ data: { requeued: count } })
+  } catch (err) {
+    console.error('[jobs/reaper]', err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Reaper failed' },
+      { status: 500 },
+    )
+  }
 }

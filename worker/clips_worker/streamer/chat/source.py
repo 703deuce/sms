@@ -63,7 +63,7 @@ def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
         try:
             messages, _cursor = fetch_all_vod_comments(str(external_id), state.get("chatCursor"))
             if messages:
-                return messages, "twitch_replay"
+                return messages, "twitch_gql"
         except Exception:
             return None, "none"
     return None, "none"

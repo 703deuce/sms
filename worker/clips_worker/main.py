@@ -125,8 +125,18 @@ def post_progress(job_id: str, payload: dict) -> None:
         resp.read()
 
 
+def post_progress_resilient(job_id: str, payload: dict) -> None:
+    """Progress posts must not abort long downloads on transient gateway timeouts."""
+    try:
+        post_progress(job_id, payload)
+    except Exception as exc:
+        log(f"progress post failed (continuing) job={job_id}: {exc}")
+
+
 def claim_job(conn) -> dict | None:
-    worker_id = os.environ.get("WORKER_ID", "worker-1")
+    from clips_worker.worker_identity import worker_instance_id
+
+    worker_id = worker_instance_id()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             f"""
@@ -270,14 +280,14 @@ def handle_reframe_crop(conn, job: dict) -> None:
 def handle_stream_import(conn, job: dict) -> None:
     from clips_worker.streamer.import_job import run_stream_import_job
 
-    run_stream_import_job(conn, job, post_progress)
+    run_stream_import_job(conn, job, post_progress_resilient)
     _mark_job_done(conn, job["id"])
 
 
 def handle_stream_analyze(conn, job: dict) -> None:
     from clips_worker.streamer.analyze_job import run_stream_analyze_job
 
-    run_stream_analyze_job(conn, job, post_progress)
+    run_stream_analyze_job(conn, job, post_progress_resilient)
     _mark_job_done(conn, job["id"])
 
 
@@ -343,16 +353,24 @@ DISPATCH: dict[str, object] = {
 
 
 def main() -> None:
+    from clips_worker.startup_check import validate_worker_env
+
+    validate_worker_env()
     dsn = env("DATABASE_URL")
     host = db_host_label(dsn)
+    from clips_worker.worker_identity import worker_instance_id
+
     log(
         f"clips-worker starting worker_id={os.environ.get('WORKER_ID', 'worker-1')} "
-        f"lane={worker_lane()} db={host}"
+        f"instance={worker_instance_id()} lane={worker_lane()} db={host}"
     )
     log_models()
     log_picker_config()
     try:
         with psycopg2.connect(dsn) as conn:
+            from clips_worker.boot_recovery import requeue_running_lane_jobs_on_boot
+
+            requeue_running_lane_jobs_on_boot(conn)
             queued = count_queued_jobs(conn)
             log(f"connected to db host={host} queued_jobs={queued}")
     except Exception as exc:
@@ -364,10 +382,13 @@ def main() -> None:
     while True:
         try:
             with psycopg2.connect(dsn) as conn:
+                from clips_worker.job_lock import requeue_stale_running_jobs, run_job_with_lock_heartbeat
+
+                requeue_stale_running_jobs(conn)
                 job = claim_job(conn)
                 if not job:
                     idle_polls += 1
-                    if worker_lane() == "stream" and idle_polls % 1800 == 1:
+                    if worker_lane() == "stream" and idle_polls % 60 == 1:
                         try:
                             from clips_worker.streamer.maintenance import maybe_run_streamer_maintenance
 
@@ -388,7 +409,7 @@ def main() -> None:
                     handler = DISPATCH.get(job.get("type") or "")
                     if not handler:
                         raise RuntimeError(f"unknown job type {job.get('type')}")
-                    handler(conn, job)  # type: ignore[operator]
+                    run_job_with_lock_heartbeat(dsn, conn, job, handler)  # type: ignore[arg-type]
                 except Exception as exc:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")
