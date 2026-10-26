@@ -8,7 +8,8 @@ import modal
 
 from modal_app.app import app
 
-image = modal.Image.from_registry("jrottenberg/ffmpeg:7-scratch").apt_install("curl")
+# ffmpeg scratch image has no apt; uploads use urllib in Python.
+image = modal.Image.from_registry("jrottenberg/ffmpeg:7-scratch").pip_install("numpy")
 
 
 @app.cls(image=image, gpu="L4", timeout=1800, scaledown_window=int(os.environ.get("MODAL_SCALEDOWN_S", "60")))
