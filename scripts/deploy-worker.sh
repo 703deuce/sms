@@ -67,6 +67,7 @@ r.execute(\"\"\"
   SELECT count(*) FROM clip_jobs
   WHERE status = 'RUNNING'
     AND type IN ('IMPORT_URL', 'STREAM_IMPORT', 'RENDER_CLIP', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
+    AND "lockedAt" > NOW() - interval '3 minutes'
 \"\"\")
 print(r.fetchone()[0])
 " 2>/dev/null || echo 0)
