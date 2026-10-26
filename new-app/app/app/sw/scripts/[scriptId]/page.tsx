@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Page, PageHeader } from '@/components/app/page-primitives'
+import { FountainIoButtons } from '@/components/screenwriting/fountain-io-buttons'
 import { ScreenplayEditorShell } from '@/components/screenwriting/screenplay-editor-shell'
 import { getActor } from '@/lib/screenwriting/server/actor'
 import { getScriptForOwner } from '@/lib/screenwriting/server/scripts'
@@ -29,6 +30,7 @@ export default async function ScreenplayEditorPage({ params }: { params: Promise
           </Link>
         }
       />
+      <FountainIoButtons scriptId={script.id} />
       <ScreenplayEditorShell scriptId={script.id} formatSpec={formatSpec} initialDoc={pmJson} />
     </Page>
   )
