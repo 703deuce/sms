@@ -38,12 +38,12 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [uploadId, setUploadId] = useState<string | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [pendingMeta, setPendingMeta] = useState<PendingUploadMeta | null>(null)
-  const [maxUploadLabel, setMaxUploadLabel] = useState('20 GB')
+  const [maxUploadLabel, setMaxUploadLabel] = useState<string | null>(null)
 
   useEffect(() => {
     void fetchUploadLimits()
-      .then((l) => setMaxUploadLabel(l.maxLabel))
-      .catch(() => setMaxUploadLabel('20 GB'))
+      .then((l) => setMaxUploadLabel(l.effectiveMaxLabel ?? l.maxLabel))
+      .catch(() => setMaxUploadLabel(null))
   }, [])
 
   const persistPending = (meta: PendingUploadMeta) => {
@@ -244,7 +244,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       </PrimaryButton>
       <div className="border-t border-border pt-4">
         <p className="mb-2 text-sm font-medium">Or upload a recording</p>
-        <p className="mb-2 text-xs text-muted-foreground">MP4, MOV, WebM, MP3, WAV · up to {maxUploadLabel}</p>
+        <p className="mb-2 text-xs text-muted-foreground">MP4, MOV, WebM, MP3, WAV · up to {maxUploadLabel ?? '…'}</p>
         <input
           ref={resumeInputRef}
           type="file"
