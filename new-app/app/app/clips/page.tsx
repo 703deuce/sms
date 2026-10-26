@@ -5,7 +5,7 @@ import { EmptyState, Page, PageHeader } from '@/components/app/page-primitives'
 import { ProjectGrid } from '@/components/clips/project-card'
 import { ProjectsAutoRefresh } from '@/components/clips/projects-auto-refresh'
 import { ProjectsToolbar } from '@/components/clips/projects-toolbar'
-import { listClipProjects } from '@/lib/server/clips/projects'
+import { listClipProjectsForPage } from '@/lib/server/clips/project-list'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +22,7 @@ export default async function ClipsProjectsPage({
 }) {
   const { q, status } = await searchParams
   const workspaceId = await resolveWorkspaceId()
-  const projects = await listClipProjects(workspaceId, {
+  const projects = await listClipProjectsForPage(workspaceId, {
     q,
     status,
     limit: 50,

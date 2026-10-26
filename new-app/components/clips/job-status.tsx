@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { AlertTriangle, CircleStop, Loader2, RotateCcw } from 'lucide-react'
+import { CircleStop, Loader2 } from 'lucide-react'
+import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -88,19 +88,7 @@ export function JobStatus({
     <Panel title="Processing your video" description={stage || 'Working on your video…'}>
       <div className="flex flex-col gap-4">
         {status === 'FAILED' && (
-          <div role="alert" className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/8 p-4 sm:flex-row sm:items-start">
-            <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-destructive/15 text-destructive">
-              <AlertTriangle className="size-4" aria-hidden />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Processing failed</p>
-              <p className="mt-0.5 text-sm text-muted-foreground">{error || 'Something went wrong. You can try again with a new upload.'}</p>
-            </div>
-            <Button variant="outline" size="sm" className="shrink-0" render={<Link href="/app/clips/new" />}>
-              <RotateCcw className="size-3.5" aria-hidden />
-              Start over
-            </Button>
-          </div>
+          <ProjectFailedAlert errorMessage={error || 'Something went wrong. You can try again with a new upload.'} />
         )}
         {processing && (
           <>

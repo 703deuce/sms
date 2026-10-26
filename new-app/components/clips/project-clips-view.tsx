@@ -7,7 +7,9 @@ import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { Button } from '@/components/ui/button'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
+import { ClipGridSkeleton } from '@/components/clips/clip-grid-skeleton'
 import { JobStatus } from '@/components/clips/job-status'
+import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { exportClip, listProjectClips, retryProject } from '@/lib/clips-api'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
@@ -122,38 +124,43 @@ export function ProjectClipsView({
 
   const desc = pageDescription(status, error)
   const showResults = status === 'READY' && readyHydrated
+  const processing = !showResults && status !== 'FAILED' && status !== 'CANCELED'
+  const failedMsg =
+    error?.includes('heavy traffic')
+      ? `${error} The upstream model was overloaded (503). Use Retry to re-queue with backoff.`
+      : error || 'Something went wrong while processing this project.'
 
   return (
     <>
       <PageHeader title={projectTitle} description={desc} />
       {status === 'FAILED' ? (
-        <EmptyState
-          icon={Clapperboard}
-          title="Processing failed"
-          description={
-            error?.includes('heavy traffic')
-              ? `${error} The upstream model was overloaded (503). Use Retry to re-queue with backoff.`
-              : error || 'Something went wrong while processing this project.'
-          }
-          action={
-            <Button
-              size="sm"
-              onClick={() => {
-                void retryProject(projectId)
-                  .then(() => {
-                    setStatus('QUEUED')
-                    setError(null)
-                    toast.success('Processing restarted')
-                  })
-                  .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))
-              }}
-            >
-              Retry processing
-            </Button>
-          }
-        />
+        <Panel title="Project" description="This upload could not be processed.">
+          <ProjectFailedAlert
+            errorMessage={failedMsg}
+            retryAction={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void retryProject(projectId)
+                    .then(() => {
+                      setStatus('QUEUED')
+                      setError(null)
+                      toast.success('Processing restarted')
+                    })
+                    .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))
+                }}
+              >
+                Retry processing
+              </Button>
+            }
+          />
+        </Panel>
       ) : !showResults ? (
-        <JobStatus projectId={projectId} initialStatus={status} fromLink={fromLink} />
+        <div className="flex flex-col gap-6">
+          <JobStatus projectId={projectId} initialStatus={status} fromLink={fromLink} />
+          {processing && <ClipGridSkeleton />}
+        </div>
       ) : (
         <div className="flex flex-col gap-4">
           <Panel
