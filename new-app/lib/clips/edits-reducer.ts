@@ -9,6 +9,7 @@ import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
 import { brandTemplateSettingsSchema } from '@/lib/clips/brand'
 import type { BrollItem } from '@/lib/clips/broll'
 import { createId } from '@/lib/supabase/id'
+import { normalizeSetCaptionsArgs, resolvedCaptionStyle } from '@/lib/clips/producer-captions'
 import { defaultEdits, type ClipBounds, type ClipEditsV2, type ClipWord } from '@/lib/clips/edits'
 import { applySilenceTrimToEdits } from '@/lib/clips/silence-trim'
 
@@ -58,19 +59,13 @@ export function applyProducerTool(
       }
     }
     case 'set_captions': {
-      const captions = { ...base.captions, ...(call.args as Record<string, unknown>) }
+      const args = normalizeSetCaptionsArgs(call.args || {}, base.captions)
+      const captions = { ...base.captions, ...args }
       const next = { ...base, captions }
-      const beforeKey = JSON.stringify({
-        presetId: base.captions?.presetId,
-        animation: base.captions?.animation,
-        size: base.captions?.size,
-      })
-      const afterKey = JSON.stringify({
-        presetId: next.captions?.presetId,
-        animation: next.captions?.animation,
-        size: next.captions?.size,
-      })
-      if (beforeKey === afterKey) {
+      if (
+        JSON.stringify(resolvedCaptionStyle(base.captions)) ===
+        JSON.stringify(resolvedCaptionStyle(next.captions))
+      ) {
         return { edits: base, summary: 'No caption change needed' }
       }
       return { edits: next, summary: 'Updated captions' }

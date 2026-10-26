@@ -1,7 +1,13 @@
 import 'server-only'
 
 import { applyProducerToolsWithWords, type ProducerToolCall } from '@/lib/clips/edits-reducer'
-import { captionsUnchanged, countProducerFieldChanges } from '@/lib/clips/producer-diff'
+import {
+  captionStylesEqual,
+  pickAlternateCaptionPreset,
+  resolvedCaptionStyle,
+  sanitizeProducerCaptionReply,
+} from '@/lib/clips/producer-captions'
+import { countProducerFieldChanges } from '@/lib/clips/producer-diff'
 import { normalizeEdits, type ClipBounds, type ClipEditsV2, type ClipWord } from '@/lib/clips/edits'
 import { getClipStorage } from '@/lib/storage'
 
@@ -42,18 +48,32 @@ export function runProducerOnClip(
   bounds: ClipBounds,
   tools: ProducerToolCall[],
   words: ClipWord[],
+  assistantReply?: string,
 ) {
   let applied = applyProducerToolsWithWords(edits, bounds, tools, words)
   const wantedCaptions = tools.some((t) => t.name === 'set_captions')
-  if (wantedCaptions && captionsUnchanged(edits, applied.edits)) {
-    const alt = applyProducerToolsWithWords(edits, bounds, [
-      { name: 'set_captions', args: { presetId: 'karaoke', animation: 'karaoke', size: 1.1 } },
-    ], words)
-    if (!captionsUnchanged(edits, alt.edits)) {
+  if (wantedCaptions && captionStylesEqual(edits, applied.edits)) {
+    const cur = resolvedCaptionStyle(edits.captions).presetId
+    const altArgs = pickAlternateCaptionPreset(cur)
+    const alt = applyProducerToolsWithWords(
+      edits,
+      bounds,
+      [{ name: 'set_captions', args: { ...altArgs, size: 1.05 } }],
+      words,
+    )
+    if (!captionStylesEqual(edits, alt.edits)) {
       applied = {
         ...alt,
-        summaries: [...applied.summaries.filter((s) => s !== 'No caption change needed'), 'Updated captions'],
+        summaries: [
+          ...applied.summaries.filter((s) => s !== 'Updated captions' && s !== 'No caption change needed'),
+          'Updated captions',
+        ],
         pendingPaid: applied.pendingPaid,
+      }
+    } else {
+      applied = {
+        ...applied,
+        summaries: applied.summaries.filter((s) => s !== 'Updated captions'),
       }
     }
   }
@@ -62,5 +82,8 @@ export function runProducerOnClip(
   ).length
   const fieldCount = countProducerFieldChanges(edits, applied.edits)
   const changeCount = Math.max(summaryCount, fieldCount)
-  return { ...applied, changeCount }
+  const reply = assistantReply
+    ? sanitizeProducerCaptionReply(assistantReply, edits, applied.edits, wantedCaptions)
+    : undefined
+  return { ...applied, changeCount, reply }
 }

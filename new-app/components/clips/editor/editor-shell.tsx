@@ -88,6 +88,7 @@ export function EditorShell({
     setCaptions,
     toggleEmphasis,
     mergeBroll,
+    setBroll,
     removeBroll,
     updateBrollItem,
     attachMusicGeneration,
@@ -382,6 +383,7 @@ export function EditorShell({
                 aiMeta={aiMeta}
                 brollMedia={brollMedia}
                 onMergeBroll={mergeBroll}
+                onSetBroll={setBroll}
                 onRemoveBroll={removeBroll}
                 onBrollMedia={mergeBrollMedia}
                 onFlushEdits={flushSave}

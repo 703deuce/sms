@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { jsonError } from '@/lib/server/api-error'
+import { mergeAutoBrollItems } from '@/lib/clips/broll-auto-utils'
 import { buildAutoBrollItems } from '@/lib/server/clips/broll-auto'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
@@ -47,9 +48,15 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       })
     }
 
+    const mergedBroll = mergeAutoBrollItems(edits.broll || [], items)
+    await prisma.clip.update({
+      where: { id: clipId },
+      data: { edits: { ...edits, broll: mergedBroll } as object },
+    })
+
     const media = await resolveBrollMedia(items)
     return NextResponse.json({
-      data: { items, media, count: items.length, attempted, placed, queriesUsed },
+      data: { items, mergedBroll, media, count: items.length, attempted, placed, queriesUsed },
     })
   } catch (err) {
     return jsonError(err, 500)

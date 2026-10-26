@@ -207,6 +207,13 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     [setEdits, state.edits],
   )
 
+  const setBroll = useCallback(
+    (items: BrollItem[]) => {
+      setEdits({ ...state.edits, broll: items })
+    },
+    [setEdits, state.edits],
+  )
+
   const updateBrollItem = useCallback(
     (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => {
       const next = (state.edits.broll || []).map((b) => (b.id === id ? { ...b, ...patch } : b))
@@ -351,6 +358,7 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     setCaptions,
     toggleEmphasis,
     mergeBroll,
+    setBroll,
     updateBrollItem,
     removeBroll,
     setAudio,

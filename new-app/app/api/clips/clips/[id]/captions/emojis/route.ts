@@ -60,6 +60,12 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     const picks = (raw.picks || [])
       .filter((p) => EMOJI_WHITELIST_SET.has(p.emoji))
       .slice(0, maxPicks)
+      .map((p) => {
+        const idx = Number(p.wordIndex)
+        const byPos = words[idx]
+        const key = byPos?.i ?? idx
+        return { wordIndex: key, emoji: p.emoji }
+      })
 
     return NextResponse.json({ data: { picks } })
   } catch (err) {

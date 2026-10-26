@@ -4,6 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolvePreset } from '@/lib/clips/caption-presets'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -29,6 +37,8 @@ export function CaptionsPanel({
   const presetId = cap.presetId || 'bold_pop'
   const preset = resolvePreset(presetId)
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>([])
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [saveName, setSaveName] = useState('')
 
   const loadCustom = useCallback(async () => {
     try {
@@ -53,7 +63,9 @@ export function CaptionsPanel({
         { method: 'POST', body: '{}' },
       )
       const map: Record<string, string> = { ...(cap.emojiByWord || {}) }
-      for (const p of data.picks) map[String(p.wordIndex)] = p.emoji
+      for (const p of data.picks) {
+        map[String(p.wordIndex)] = p.emoji
+      }
       patch({ autoEmojis: true, emojiByWord: map })
       toast.success(`Added ${data.picks.length} emoji(s)`)
     } catch (e) {
@@ -298,42 +310,60 @@ export function CaptionsPanel({
       {onApplyBrand ? (
         <Button size="sm" variant="outline" onClick={onApplyBrand}>Apply brand</Button>
       ) : null}
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={async () => {
-          const name = window.prompt('Preset name')
-          if (!name?.trim()) {
-            toast.error('Enter a preset name')
-            return
-          }
-          try {
-            await clipsFetch('/api/clips/caption-presets', {
-              method: 'POST',
-              body: JSON.stringify({
-                name: name.trim(),
-                config: {
-                  presetId: cap.presetId,
-                  animation: cap.animation,
-                  size: cap.size,
-                  position: cap.position,
-                  case: cap.case,
-                  wordsPerLine: cap.wordsPerLine,
-                  colors: cap.colors,
-                  progressBar: cap.progressBar,
-                  autoEmojis: cap.autoEmojis,
-                },
-              }),
-            })
-            toast.success('Preset saved')
-            await loadCustom()
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : 'Save failed')
-          }
-        }}
-      >
-        Save as preset
-      </Button>
+      <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)}>Save as preset</Button>
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Save caption preset</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="Preset name"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            autoFocus
+          />
+          <DialogFooter className="mt-2">
+            <Button size="sm" variant="outline" onClick={() => setSaveOpen(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={async () => {
+                const name = saveName.trim()
+                if (!name) {
+                  toast.error('Enter a preset name')
+                  return
+                }
+                try {
+                  await clipsFetch('/api/clips/caption-presets', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      name,
+                      config: {
+                        presetId: cap.presetId,
+                        animation: cap.animation,
+                        size: cap.size,
+                        position: cap.position,
+                        case: cap.case,
+                        wordsPerLine: cap.wordsPerLine,
+                        colors: cap.colors,
+                        progressBar: cap.progressBar,
+                        autoEmojis: cap.autoEmojis,
+                      },
+                    }),
+                  })
+                  toast.success('Preset saved')
+                  setSaveName('')
+                  setSaveOpen(false)
+                  await loadCustom()
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : 'Save failed')
+                }
+              }}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -26,6 +26,7 @@ export function BrollPanel({
   aiMeta,
   brollMedia,
   onMergeBroll,
+  onSetBroll,
   onRemoveBroll,
   onBrollMedia,
   onFlushEdits,
@@ -37,6 +38,7 @@ export function BrollPanel({
   aiMeta?: { brollIdeas?: string[] } | null
   brollMedia: BrollMediaRow[]
   onMergeBroll: (items: BrollItem[], replace?: boolean) => void
+  onSetBroll?: (items: BrollItem[]) => void
   onRemoveBroll: (id: string) => void
   onBrollMedia: (rows: BrollMediaRow[]) => void
   onFlushEdits?: () => void
@@ -95,6 +97,7 @@ export function BrollPanel({
     try {
       const data = await clipsFetch<{
         items: BrollItem[]
+        mergedBroll?: BrollItem[]
         media?: BrollMediaRow[]
         message?: string
         count?: number
@@ -109,7 +112,12 @@ export function BrollPanel({
         return
       }
       if (data.media?.length) onBrollMedia(data.media)
-      onMergeBroll(data.items, true)
+      if (data.mergedBroll !== undefined) {
+        if (onSetBroll) onSetBroll(data.mergedBroll)
+        else onMergeBroll(data.mergedBroll, true)
+      } else {
+        onMergeBroll(data.items, true)
+      }
       onFlushEdits?.()
       toast.success(`Placed ${placed} B-roll clip${placed === 1 ? '' : 's'}`)
     } catch (e) {

@@ -81,10 +81,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/react": "^16.3.3",
     "@types/archiver": "^8.0.0",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "happy-dom": "^21.0.4",
     "playwright": "^1.52.0",
     "postcss": "^8.5",
     "tailwindcss": "^4.3.3",

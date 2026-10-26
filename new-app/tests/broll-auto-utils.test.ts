@@ -6,6 +6,17 @@ describe('broll-auto-utils', () => {
     expect(cleanPixabayQuery('comic book,reading a comic book,comic book pages')).toBe('comic book')
   })
 
+  it('treats missing placement as auto (legacy clips)', () => {
+    const merged = mergeAutoBrollItems(
+      [
+        { id: 'ostrich', source: 'stock', assetId: 'a', startMs: 4000, endMs: 6000 },
+        { id: 'manual', source: 'stock', assetId: 'b', startMs: 2000, endMs: 3000, placement: 'manual' },
+      ],
+      [{ id: 'new', source: 'stock', assetId: 'c', startMs: 5000, endMs: 6000, placement: 'auto' }],
+    )
+    expect(merged.map((b) => b.id)).toEqual(['manual', 'new'])
+  })
+
   it('replaces auto stock and keeps manual', () => {
     const merged = mergeAutoBrollItems(
       [

@@ -57,10 +57,11 @@ export function CaptionOverlay({
   )
 
   const pb = cap.progressBar
-  const showProgress = pb?.enabled && outputDurationSec > 0
+  const showProgress = Boolean(pb?.enabled) && outputDurationSec > 0
+  const showEmojis = Boolean(cap.autoEmojis)
   const progressPct = showProgress ? Math.min(100, (currentTimeSec / outputDurationSec) * 100) : 0
 
-  if (activeIdx < 0 && !showProgress) return null
+  if (activeIdx < 0 && !showProgress && !showEmojis) return null
 
   const position = (cap.position || preset.position) as string
 
@@ -68,6 +69,7 @@ export function CaptionOverlay({
     <>
       {showProgress && (
         <div
+          data-testid="caption-progress-bar"
           className={`pointer-events-none absolute inset-x-0 z-[24] ${pb?.position === 'top' ? 'top-0' : 'bottom-0'}`}
           style={{ height: pb?.thickness || 8, background: 'rgba(0,0,0,0.25)' }}
         >
@@ -92,7 +94,9 @@ export function CaptionOverlay({
             : colors?.b || preset.activeB
         const isEmph = emphasis.has(w.idx ?? globalIdx)
         const idx = wordKey(w) ?? globalIdx
-        const emoji = cap.autoEmojis ? cap.emojiByWord?.[String(idx)] : undefined
+        const emoji = showEmojis
+          ? cap.emojiByWord?.[String(idx)] ?? cap.emojiByWord?.[String(globalIdx)]
+          : undefined
         const text = displayCase(w.w, caseMode) + (emoji ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
         const inactiveColor = preset.slug === 'boxed' ? '#FFFFFF' : preset.primary
@@ -128,6 +132,7 @@ export function CaptionOverlay({
             key={`${w.idx ?? globalIdx}-${w.s}`}
             className={`inline-block px-1 ${active ? animClass(animation) : ''}`}
             style={style}
+            data-testid={emoji ? 'caption-word-emoji' : undefined}
           >
             {content}
           </span>
