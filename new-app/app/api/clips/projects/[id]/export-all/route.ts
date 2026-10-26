@@ -6,7 +6,7 @@ import { enqueueProjectExportAll } from '@/lib/server/clips/export-batch'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
-import archiver from 'archiver'
+import { ZipArchive } from 'archiver'
 
 const postSchema = z.object({
   clipIds: z.array(z.string().min(1)).max(10).optional(),
@@ -48,7 +48,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     }
 
     const storage = getClipStorage()
-    const archive = archiver('zip', { store: true })
+    const archive = new ZipArchive({ store: true })
     const chunks: Buffer[] = []
     archive.on('data', (c: Buffer) => chunks.push(c))
     const done = new Promise<Buffer>((resolve, reject) => {
