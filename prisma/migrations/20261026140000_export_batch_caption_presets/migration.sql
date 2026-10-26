@@ -16,5 +16,22 @@ CREATE TABLE IF NOT EXISTS "caption_presets" (
 
 CREATE INDEX IF NOT EXISTS "caption_presets_workspaceId_idx" ON "caption_presets"("workspaceId");
 
-ALTER TABLE "caption_presets" ADD CONSTRAINT "caption_presets_workspaceId_fkey"
-  FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'Workspace'
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'caption_presets_workspaceId_fkey'
+  ) THEN
+    ALTER TABLE "caption_presets"
+      ADD CONSTRAINT "caption_presets_workspaceId_fkey"
+      FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+      ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
