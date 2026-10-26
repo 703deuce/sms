@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EditorRail, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
@@ -73,6 +73,7 @@ export function EditorShell({
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
+  const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [outputMs, setOutputMs] = useState(0)
   const [playing, setPlaying] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -316,20 +317,10 @@ export function EditorShell({
             />
           </div>
         </div>
-        <aside className="min-h-0 overflow-y-auto rounded-xl border border-border">
-          <Tabs defaultValue="transcript">
-            <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent px-2">
-              <TabsTrigger value="producer">Producer</TabsTrigger>
-              <TabsTrigger value="transcript">Transcript</TabsTrigger>
-              <TabsTrigger value="layout">Layout</TabsTrigger>
-              <TabsTrigger value="captions">Captions</TabsTrigger>
-              <TabsTrigger value="broll">B-roll</TabsTrigger>
-              <TabsTrigger value="audio">Audio</TabsTrigger>
-              <TabsTrigger value="thumbnail">Thumbnail</TabsTrigger>
-              <TabsTrigger value="dub">Dub</TabsTrigger>
-              <TabsTrigger value="brand">Brand</TabsTrigger>
-            </TabsList>
-            <TabsContent value="producer" className="mt-0 h-[min(60vh,520px)]">
+        <aside className="flex min-h-0 overflow-hidden rounded-xl border border-border">
+          <EditorRail active={panel} onChange={setPanel} />
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+            <div className={panel === 'producer' ? 'h-[min(60vh,520px)]' : 'hidden'} aria-hidden={panel !== 'producer'}>
               <ProducerPanel
                 clipId={clipId}
                 bounds={bounds}
@@ -342,8 +333,8 @@ export function EditorShell({
                   applyProducerPatch(next, before, n)
                 }}
               />
-            </TabsContent>
-            <TabsContent value="transcript" className="mt-0">
+            </div>
+            <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
               <TranscriptPanel
                 words={words}
                 shots={cropShots}
@@ -359,8 +350,8 @@ export function EditorShell({
                 onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
                 selectionRef={selectionRef}
               />
-            </TabsContent>
-            <TabsContent value="layout" className="mt-0 p-3">
+            </div>
+            <div className={panel === 'layout' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layout'}>
               <LayoutPanel
                 edits={edits}
                 shots={cropShots}
@@ -370,16 +361,16 @@ export function EditorShell({
                 onApplyBrand={() => void applyBrand()}
                 onEdits={setEdits}
               />
-            </TabsContent>
-            <TabsContent value="captions" className="mt-0">
+            </div>
+            <div className={panel === 'captions' ? undefined : 'hidden'} aria-hidden={panel !== 'captions'}>
               <CaptionsPanel
                 clipId={clipId}
                 edits={edits}
                 onChange={setCaptions}
                 onApplyBrand={() => void applyBrand()}
               />
-            </TabsContent>
-            <TabsContent value="broll" className="mt-0">
+            </div>
+            <div className={panel === 'broll' ? undefined : 'hidden'} aria-hidden={panel !== 'broll'}>
               <BrollPanel
                 clipId={clipId}
                 edits={edits}
@@ -393,8 +384,8 @@ export function EditorShell({
                 onBrollMedia={mergeBrollMedia}
                 onFlushEdits={flushSave}
               />
-            </TabsContent>
-            <TabsContent value="audio" className="mt-0">
+            </div>
+            <div className={panel === 'audio' ? undefined : 'hidden'} aria-hidden={panel !== 'audio'}>
               <AudioPanel
                 clipId={clipId}
                 edits={edits}
@@ -410,11 +401,11 @@ export function EditorShell({
                 onUpdateSfx={updateSfx}
                 onRemoveSfx={removeSfx}
               />
-            </TabsContent>
-            <TabsContent value="thumbnail" className="mt-0">
+            </div>
+            <div className={panel === 'thumbnail' ? undefined : 'hidden'} aria-hidden={panel !== 'thumbnail'}>
               <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
-            </TabsContent>
-            <TabsContent value="dub" className="mt-0">
+            </div>
+            <div className={panel === 'dub' ? undefined : 'hidden'} aria-hidden={panel !== 'dub'}>
               <DubPanel
                 clipId={clipId}
                 durationMs={outDur}
@@ -423,11 +414,11 @@ export function EditorShell({
                 onRefresh={refreshDubs}
                 dubs={dubs}
               />
-            </TabsContent>
-            <TabsContent value="brand" className="mt-0">
+            </div>
+            <div className={panel === 'brand' ? undefined : 'hidden'} aria-hidden={panel !== 'brand'}>
               <BrandPanel edits={edits} onEdits={setEdits} />
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
         </aside>
       </div>
       <ExportDialog
