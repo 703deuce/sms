@@ -75,15 +75,15 @@ export function createScreenplayElementNode(formatSpec: FormatSpec) {
     renderHTML({ node, HTMLAttributes }) {
       const type = (node.attrs.elementType || 'action') as ScreenplayElementType
       const style = cssPropertiesToString(elementStyle(formatSpec, type))
-      const revised = node.attrs.revisedMark ? '*' : ''
+      const revised = Boolean(node.attrs.revisedMark)
       return [
         'div',
         mergeAttributes(HTMLAttributes, {
           'data-screenplay-element': '',
-          class: 'sw-element',
+          class: revised ? 'sw-element sw-revised-line' : 'sw-element',
           style,
         }),
-        ['span', { class: 'sw-revised-mark', style: 'display:none' }, revised],
+        revised ? ['span', { class: 'sw-revised-mark', 'aria-hidden': 'true' }, '*'] : '',
         0,
       ]
     },
