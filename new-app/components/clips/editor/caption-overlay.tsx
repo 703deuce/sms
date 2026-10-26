@@ -59,7 +59,7 @@ export function CaptionOverlay({
 
   return (
     <div
-      className={`pointer-events-none absolute inset-x-2 z-10 flex flex-wrap justify-center gap-1 text-center ${positionClass(position)}`}
+      className={`pointer-events-none absolute inset-x-2 z-[25] flex flex-wrap justify-center gap-1 text-center ${positionClass(position)}`}
       style={{ fontFamily: preset.font, fontWeight: preset.weight }}
     >
       {lineWords.map((w, i) => {

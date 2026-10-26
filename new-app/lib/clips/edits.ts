@@ -27,6 +27,7 @@ export type ClipEditsV2 = {
   }
   broll?: BrollItem[]
   audio?: ClipEditsAudio
+  thumbnailId?: string | null
   audioTrack?: string
   brand?: unknown
 }

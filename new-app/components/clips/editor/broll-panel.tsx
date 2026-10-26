@@ -95,14 +95,22 @@ export function BrollPanel({
         media?: BrollMediaRow[]
         message?: string
         count?: number
+        attempted?: number
+        placed?: number
       }>(`/api/clips/clips/${clipId}/broll/auto`, { method: 'POST', body: '{}' })
+      const attempted = data.attempted ?? data.items?.length ?? 0
+      const placed = data.placed ?? data.items?.length ?? 0
       if (!data.items?.length) {
         toast.error(data.message || 'No B-roll placements found')
         return
       }
       if (data.media?.length) onBrollMedia(data.media)
       onMergeBroll(data.items, true)
-      toast.success(`Added ${data.items.length} B-roll clip${data.items.length === 1 ? '' : 's'}`)
+      if (attempted > placed) {
+        toast.success(`Placed ${placed} of ${attempted}`)
+      } else {
+        toast.success(`Added ${placed} B-roll clip${placed === 1 ? '' : 's'}`)
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Auto B-roll failed')
     } finally {
@@ -164,7 +172,7 @@ export function BrollPanel({
   }
 
   useEffect(() => {
-    if (gen.status !== 'READY' || !activeGen || !pendingAi.current) return
+    if (gen.status !== 'READY' || !gen.downloadUrl || !activeGen || !pendingAi.current) return
     const p = pendingAi.current
     if (gen.error) {
       toast.error(gen.error)
@@ -179,6 +187,7 @@ export function BrollPanel({
         startMs: p.atMs,
         endMs: p.atMs + p.durationS * 1000,
         url: gen.downloadUrl,
+        thumbUrl: gen.downloadUrl,
         generationId: activeGen,
       },
     ])
@@ -213,6 +222,8 @@ export function BrollPanel({
                 <li key={item.id} className="flex gap-2 rounded border p-2 text-xs">
                   {m?.thumbUrl ? (
                     <img src={m.thumbUrl} alt="" className="h-14 w-8 rounded object-cover" />
+                  ) : m?.url && item.source === 'ai' ? (
+                    <video src={m.url} muted playsInline preload="metadata" className="h-14 w-8 rounded object-cover" />
                   ) : (
                     <div className="h-14 w-8 rounded bg-muted" />
                   )}

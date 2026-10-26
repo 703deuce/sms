@@ -18,16 +18,47 @@ export type PixabayHitPublic = {
   height: number
 }
 
-type PixabayHitInternal = PixabayHitPublic & { srcUrl: string }
+type PixabayHitInternal = PixabayHitPublic & { srcUrl: string; fallbackSrcUrl?: string }
 
 function cacheKey(q: string, page: number) {
   return `${q.toLowerCase().trim()}|${page}`
 }
 
-function pickSrc(videos: Record<string, { url?: string; width?: number; height?: number }>) {
-  const large = videos.large
-  if (large?.url && (large.width ?? 0) > 0) return large
-  return videos.medium
+const MAX_STOCK_CACHE_BYTES = 45 * 1024 * 1024
+
+type VideoRendition = { url?: string; width?: number; height?: number; thumbnail?: string }
+
+/** Rendition cached in Supabase — never use Pixabay `large`. */
+export function pickCacheRendition(videos: Record<string, VideoRendition>) {
+  const small = videos.small
+  const medium = videos.medium
+  if (small?.url && (small.width ?? 0) >= 540) return small
+  if (medium?.url) return medium
+  if (small?.url) return small
+  return videos.tiny
+}
+
+function pickSrc(videos: Record<string, VideoRendition>) {
+  return pickCacheRendition(videos || {}) || videos.medium
+}
+
+async function downloadRenditionToBuffer(primaryUrl: string, fallbackUrl?: string): Promise<Buffer> {
+  const tryOne = async (url: string): Promise<Buffer | null> => {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('Failed to download stock video')
+    const len = res.headers.get('content-length')
+    if (len && Number(len) > MAX_STOCK_CACHE_BYTES) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (buf.length > MAX_STOCK_CACHE_BYTES) return null
+    return buf
+  }
+  const primary = await tryOne(primaryUrl)
+  if (primary) return primary
+  if (fallbackUrl && fallbackUrl !== primaryUrl) {
+    const fb = await tryOne(fallbackUrl)
+    if (fb) return fb
+  }
+  throw new Error('Stock video exceeds maximum cache size; try another clip')
 }
 
 function mapHit(raw: Record<string, unknown>): PixabayHitInternal | null {
@@ -37,6 +68,9 @@ function mapHit(raw: Record<string, unknown>): PixabayHitInternal | null {
   const src = pickSrc(videos || {})
   if (!src?.url) return null
   const tiny = videos.tiny
+  const small = videos.small
+  const fallbackSrcUrl =
+    src.url === tiny?.url ? small?.url : tiny?.url || (src.url === small?.url ? tiny?.url : small?.url)
   return {
     providerId: String(id),
     pageUrl: String(raw.pageURL || ''),
@@ -49,6 +83,7 @@ function mapHit(raw: Record<string, unknown>): PixabayHitInternal | null {
     width: Number(src.width || 0),
     height: Number(src.height || 0),
     srcUrl: String(src.url),
+    fallbackSrcUrl: fallbackSrcUrl ? String(fallbackSrcUrl) : undefined,
   }
 }
 
@@ -160,9 +195,7 @@ export async function ensureStockAsset(hit: PixabayHitInternal) {
     }))
 
   if (!row.storageKey) {
-    const res = await fetch(hit.srcUrl)
-    if (!res.ok) throw new Error('Failed to download stock video')
-    const buf = Buffer.from(await res.arrayBuffer())
+    const buf = await downloadRenditionToBuffer(hit.srcUrl, hit.fallbackSrcUrl)
     const { supabase, bucket } = await import('@/lib/storage/supabase-driver').then((m) => {
       const c = m.getSupabaseStorageConfig()
       if (!c) throw new Error('storage not configured')

@@ -15,7 +15,6 @@ export async function openAiJsonResponse<T>(system: string, user: string): Promi
     },
     body: JSON.stringify({
       model,
-      temperature: 0.5,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: system },

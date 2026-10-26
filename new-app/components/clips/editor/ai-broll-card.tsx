@@ -2,6 +2,12 @@
 
 import { Button } from '@/components/ui/button'
 
+function formatInsertAt(ms: number) {
+  const s = Math.floor(ms / 1000)
+  const m = Math.floor(s / 60)
+  return `${m}:${String(s % 60).padStart(2, '0')}`
+}
+
 export function AiBrollCard({
   prompt,
   durationS,
@@ -52,8 +58,13 @@ export function AiBrollCard({
             <option value="720p">720p</option>
           </select>
         </label>
-        <span className="text-xs text-muted-foreground">@ {Math.floor(atMs / 1000)}s · ${costUsd.toFixed(2)}</span>
+        <span className="text-xs text-muted-foreground">
+          {durationS}s · {resolution} · about ${costUsd.toFixed(2)}
+        </span>
       </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Inserts at {formatInsertAt(atMs)}
+      </p>
       <Button size="sm" className="mt-2" disabled={busy} onClick={onGenerate}>
         {busy ? 'Generating…' : 'Generate'}
       </Button>

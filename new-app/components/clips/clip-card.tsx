@@ -1,9 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ScoreBadge } from '@/components/clips/score-badge'
 import type { ClipCardData } from '@/components/clips/clip-grid'
+import { clipsFetch } from '@/lib/clips-api'
 
 function formatClock(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -26,6 +29,21 @@ export function ClipCard({
   projectId: string
   onDownload: (clipId: string) => void
 }) {
+  const [thumbBusy, setThumbBusy] = useState(false)
+  const makeThumbnail = async () => {
+    setThumbBusy(true)
+    try {
+      await clipsFetch(`/api/clips/clips/${clip.id}/thumbnail`, {
+        method: 'POST',
+        body: JSON.stringify({ aspect: '9:16' }),
+      })
+      toast.success('Thumbnail generation started — open editor to pick a cover')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Thumbnail failed')
+    } finally {
+      setThumbBusy(false)
+    }
+  }
   const scores = (clip.scores || {}) as Record<string, string>
   const dims = [
     ['Hook', scores.hook],
@@ -83,6 +101,9 @@ export function ClipCard({
             Edit
           </Button>
           <Button size="sm" variant="outline" onClick={() => onDownload(clip.id)}>Download</Button>
+          <Button size="sm" variant="outline" disabled={thumbBusy} onClick={() => void makeThumbnail()}>
+            Make thumbnail
+          </Button>
         </div>
       </div>
     </article>

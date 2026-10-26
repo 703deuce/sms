@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
+import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
 
 export function ExportDialog({
   clipId,
@@ -25,6 +25,7 @@ export function ExportDialog({
   const [filename, setFilename] = useState('clip.mp4')
   const [status, setStatus] = useState<string | null>(null)
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) {
@@ -33,8 +34,24 @@ export function ExportDialog({
       setStatus(null)
       setBusy(false)
       setErrorDetail(null)
+      setThumbnailUrl(null)
     }
   }, [open])
+
+  useEffect(() => {
+    if (!open || !edits.thumbnailId) {
+      setThumbnailUrl(null)
+      return
+    }
+    void clipsFetch<{ items: { id: string; downloadUrl: string | null }[] }>(
+      `/api/clips/clips/${clipId}/thumbnail`,
+    )
+      .then((data) => {
+        const row = data.items.find((i) => i.id === edits.thumbnailId)
+        setThumbnailUrl(row?.downloadUrl ?? null)
+      })
+      .catch(() => setThumbnailUrl(null))
+  }, [open, clipId, edits.thumbnailId])
 
   useEffect(() => {
     if (!renderId || status === 'READY') return
@@ -81,7 +98,9 @@ export function ExportDialog({
         </label>
         <p className="mt-2 text-xs text-muted-foreground">No watermark</p>
         {(edits.broll || []).some((b) => b.source === 'ai') && (
-          <p className="mt-2 text-xs text-muted-foreground">Includes AI-generated B-roll.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Includes AI-generated B-roll. AI B-roll generated with Kie.ai (Wan 3.0).
+          </p>
         )}
         {(edits.audio?.music || (edits.audio?.sfx?.length ?? 0) > 0) && (
           <p className="mt-2 text-xs text-muted-foreground">
@@ -101,6 +120,11 @@ export function ExportDialog({
           ) : (
             <Button render={<a href={downloadUrl} download={filename} />}>Download MP4</Button>
           )}
+          {thumbnailUrl ? (
+            <Button variant="outline" render={<a href={thumbnailUrl} download />} nativeButton={false}>
+              Download thumbnail
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => navigator.clipboard.writeText(title)}>Copy title</Button>
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>

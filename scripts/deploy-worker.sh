@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Build clips-worker image on coolify-server from a git tree (no git clone on host).
+# Usage: ./scripts/deploy-worker.sh [git-ref] [ssh-host]
+set -euo pipefail
+
+REF="${1:-HEAD}"
+HOST="${2:-coolify-server}"
+REMOTE_SRC="/opt/clips-worker/src"
+REMOTE_ENV="/opt/clips-worker/worker.env"
+TARBALL="/tmp/worker-${REF//\//_}.tgz"
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+echo "[deploy-worker] archiving worker/ @ ${REF}"
+git archive --format=tar.gz -o "$TARBALL" "${REF}" worker/
+
+echo "[deploy-worker] scp → ${HOST}:/tmp/worker.tgz"
+scp -q "$TARBALL" "${HOST}:/tmp/worker.tgz"
+
+ssh "$HOST" "sudo bash -s" <<REMOTE
+set -euo pipefail
+REMOTE_SRC="${REMOTE_SRC}"
+REMOTE_ENV="${REMOTE_ENV}"
+
+echo "[deploy-worker] extract to \${REMOTE_SRC}"
+rm -rf "\${REMOTE_SRC}"
+mkdir -p "\${REMOTE_SRC}"
+tar xzf /tmp/worker.tgz -C "\${REMOTE_SRC}"
+
+echo "[deploy-worker] waiting for RUNNING RENDER_* / MUSIC jobs"
+for i in \$(seq 1 120); do
+  running=\$(docker exec clips-worker python3 -c "
+import os, psycopg2
+c = psycopg2.connect(os.environ['DATABASE_URL'])
+r = c.cursor()
+r.execute(\"\"\"
+  SELECT count(*) FROM clip_jobs
+  WHERE status = 'RUNNING'
+    AND type IN ('RENDER_CLIP', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
+\"\"\")
+print(r.fetchone()[0])
+" 2>/dev/null || echo 1)
+  if [ "\$running" = "0" ]; then
+    echo "[deploy-worker] no blocking jobs"
+    break
+  fi
+  echo "[deploy-worker] still running=\$running"
+  sleep 10
+done
+
+echo "[deploy-worker] docker build"
+cd "\${REMOTE_SRC}"
+docker build -f worker/Dockerfile -t clips-worker:latest .
+
+echo "[deploy-worker] restart container"
+docker rm -f clips-worker 2>/dev/null || true
+docker run -d \\
+  --name clips-worker \\
+  --restart unless-stopped \\
+  --network coolify \\
+  --env-file "\${REMOTE_ENV}" \\
+  clips-worker:latest
+
+sleep 2
+docker exec clips-worker python3 -c "
+import inspect
+from clips_worker import main
+src = inspect.getsource(main.claim_job)
+assert 'MUSIC' in src and 'RENDER_CLIP' in src and 'THUMBNAIL' in src
+print('claim_list_ok')
+"
+
+docker exec clips-worker python3 -m pytest -q \\
+  /app/tests/test_broll_ffmpeg.py \\
+  /app/tests/test_audio_mix.py \\
+  /app/tests/test_captions_ass_render.py \\
+  /app/tests/test_frame_sampler.py
+
+echo "[deploy-worker] done"
+REMOTE
+
+echo "[deploy-worker] complete (${REF} → clips-worker:latest on ${HOST})"

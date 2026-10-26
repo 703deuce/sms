@@ -46,14 +46,23 @@ export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaR
       })
     } else {
       const gen = await prisma.aiGeneration.findUnique({ where: { id: item.generationId } })
-      if (!gen?.storageKey) continue
-      const url = await storage.createSignedDownloadUrl(gen.storageKey, 3600)
+      if (!gen) continue
+      const params = (gen.params || {}) as { posterKey?: string }
+      let url: string | null = null
+      let thumbUrl: string | undefined
+      if (gen.storageKey) {
+        url = await storage.createSignedDownloadUrl(gen.storageKey, 3600)
+        thumbUrl = params.posterKey
+          ? await storage.createSignedDownloadUrl(params.posterKey, 3600)
+          : url
+      }
       out.push({
         id: item.id,
         source: 'ai',
         startMs: item.startMs,
         endMs: item.endMs,
         url,
+        thumbUrl,
         generationId: gen.id,
       })
     }

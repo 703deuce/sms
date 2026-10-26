@@ -41,47 +41,59 @@ function sentenceStartForIdea(words: ClipWord[], idea: string): number | null {
   return null
 }
 
+export type AutoBrollBuildResult = {
+  items: BrollItem[]
+  attempted: number
+  placed: number
+}
+
 export async function buildAutoBrollItems(
   edits: ClipEditsV2,
   sourceWords: ClipWord[],
   ideas: string[],
-): Promise<BrollItem[]> {
+): Promise<AutoBrollBuildResult> {
   const { words } = wordsAfterEdits(sourceWords, edits)
   const outDur = outputDurationMs(edits)
   const queries = ideas.length ? ideas.slice(0, 3) : topNounsFromWords(words, 3)
   const items: BrollItem[] = []
   let lastStart = -MIN_GAP_MS
+  let attempted = 0
 
   for (const idea of queries) {
     if (items.length >= MAX_SHOTS) break
-    const hits = await searchVideos(idea, 1)
-    let internal = null
-    for (const pub of hits) {
-      if (pub.durationS < 3) continue
-      internal = await findCachedHit(pub.providerId)
-      if (internal) break
-    }
-    if (!internal) continue
-    const { asset } = await ensureStockAsset(internal)
+    attempted += 1
+    try {
+      const hits = await searchVideos(idea, 1)
+      let internal = null
+      for (const pub of hits) {
+        if (pub.durationS < 3) continue
+        internal = await findCachedHit(pub.providerId)
+        if (internal) break
+      }
+      if (!internal) continue
+      const { asset } = await ensureStockAsset(internal)
 
-    let startMs = sentenceStartForIdea(words, idea) ?? 0
-    if (startMs < MIN_START_MS) startMs = MIN_START_MS
-    if (startMs - lastStart < MIN_GAP_MS) startMs = lastStart + MIN_GAP_MS
-    if (startMs + SHOT_MS > outDur - END_PAD_MS) {
-      const slots = MAX_SHOTS - items.length
-      startMs = Math.max(MIN_START_MS, Math.floor((outDur - END_PAD_MS - SHOT_MS) / (slots + 1)) * (items.length + 1))
-    }
-    if (startMs + SHOT_MS > outDur - END_PAD_MS) continue
+      let startMs = sentenceStartForIdea(words, idea) ?? 0
+      if (startMs < MIN_START_MS) startMs = MIN_START_MS
+      if (startMs - lastStart < MIN_GAP_MS) startMs = lastStart + MIN_GAP_MS
+      if (startMs + SHOT_MS > outDur - END_PAD_MS) {
+        const slots = MAX_SHOTS - items.length
+        startMs = Math.max(MIN_START_MS, Math.floor((outDur - END_PAD_MS - SHOT_MS) / (slots + 1)) * (items.length + 1))
+      }
+      if (startMs + SHOT_MS > outDur - END_PAD_MS) continue
 
-    items.push({
-      id: randomUUID(),
-      source: 'stock',
-      assetId: asset.id,
-      startMs,
-      endMs: startMs + SHOT_MS,
-    })
-    lastStart = startMs
+      items.push({
+        id: randomUUID(),
+        source: 'stock',
+        assetId: asset.id,
+        startMs,
+        endMs: startMs + SHOT_MS,
+      })
+      lastStart = startMs
+    } catch {
+      /* skip failed placement */
+    }
   }
 
-  return items
+  return { items, attempted, placed: items.length }
 }

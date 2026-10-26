@@ -78,7 +78,7 @@ def count_queued_jobs(conn) -> int:
         cur.execute(
             """
             SELECT count(*)::int FROM clip_jobs
-            WHERE status = 'QUEUED' AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC')
+            WHERE status = 'QUEUED' AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC', 'THUMBNAIL')
               AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
             """,
         )
@@ -116,7 +116,7 @@ def claim_job(conn) -> dict | None:
             WHERE id = (
               SELECT id FROM clip_jobs
               WHERE status = 'QUEUED'
-                AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC')
+                AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC', 'THUMBNAIL')
                 AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
               ORDER BY priority DESC, "runAfter" ASC
               FOR UPDATE SKIP LOCKED
@@ -233,6 +233,16 @@ def main() -> None:
                 try:
                     if job.get("type") == "RENDER_CLIP":
                         run_render_clip_job(conn, job, post_progress)
+                    elif job.get("type") == "THUMBNAIL":
+                        from clips_worker.thumbnail_job import run_thumbnail_job
+
+                        run_thumbnail_job(conn, job, post_progress)
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                'UPDATE clip_jobs SET status = %s, "finishedAt" = NOW(), error = NULL WHERE id = %s',
+                                ("DONE", job["id"]),
+                            )
+                        conn.commit()
                     elif job.get("type") == "MUSIC":
                         from clips_worker.music_job import run_music_job
 

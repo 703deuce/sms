@@ -18,6 +18,7 @@ import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-
 import { Timeline } from '@/components/clips/editor/timeline'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
 import { BrollPanel } from '@/components/clips/editor/broll-panel'
+import { ThumbnailPanel } from '@/components/clips/editor/thumbnail-panel'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
@@ -91,6 +92,7 @@ export function EditorShell({
     addSfx,
     updateSfx,
     removeSfx,
+    setEdits,
   } = useEditorState(clipId, bounds, initialEdits)
 
   const mergeBrollMedia = useCallback((rows: BrollMediaRow[]) => {
@@ -308,7 +310,9 @@ export function EditorShell({
                 onRemoveSfx={removeSfx}
               />
             </TabsContent>
-            <TabsContent value="thumbnail"><ComingSoon /></TabsContent>
+            <TabsContent value="thumbnail" className="mt-0">
+              <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
+            </TabsContent>
             <TabsContent value="dub"><ComingSoon /></TabsContent>
             <TabsContent value="brand"><ComingSoon /></TabsContent>
           </Tabs>

@@ -9067,3 +9067,21 @@ model SfxCache {
   @@unique([workspaceId, promptHash])
   @@map("sfx_cache")
 }
+
+model ClipThumbnail {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  clipId         String
+  generationId   String
+  aspect         String
+  sourceFrameMs  Int
+  prompt         String
+  titleText      String?
+  imageKey       String?
+  picked         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([clipId])
+  @@index([workspaceId])
+  @@map("clip_thumbnails")
+}

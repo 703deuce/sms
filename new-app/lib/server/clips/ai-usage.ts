@@ -1,6 +1,12 @@
 import 'server-only'
 
-import type { ElevenLabsUsage } from '@/lib/server/ai/elevenlabs'
+export type AiUsageRecord = {
+  provider: string
+  model: string
+  units: number
+  unitType: string
+  costUsdMicros: number
+}
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
@@ -9,7 +15,7 @@ export async function recordAiUsage(input: {
   projectId?: string | null
   clipId?: string | null
   generationId?: string | null
-  usage: ElevenLabsUsage
+  usage: AiUsageRecord
 }) {
   const prisma = getPrisma()
   await prisma.aiUsage.create({
