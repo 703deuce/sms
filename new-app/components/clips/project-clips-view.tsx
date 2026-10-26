@@ -32,12 +32,14 @@ export function ProjectClipsView({
   initialStatus,
   initialClips,
   initialError,
+  fromLink,
 }: {
   projectId: string
   projectTitle: string
   initialStatus: string
   initialClips?: ClipCardData[] | null
   initialError?: string | null
+  fromLink?: boolean
 }) {
   const readyFromServer = initialStatus === 'READY' && initialClips != null
   const [status, setStatus] = useState(initialStatus)
@@ -136,7 +138,7 @@ export function ProjectClipsView({
           description={error || 'Something went wrong while processing this project.'}
         />
       ) : !showResults ? (
-        <JobStatus projectId={projectId} initialStatus={status} />
+        <JobStatus projectId={projectId} initialStatus={status} fromLink={fromLink} />
       ) : (
         <div className="flex flex-col gap-4">
           <Panel

@@ -8,7 +8,9 @@ import { Dropzone } from '@/components/clips/dropzone'
 import { UploadProgressItem } from '@/components/clips/upload-progress-item'
 import { ProjectSettingsForm } from '@/components/clips/project-settings-form'
 import { Page, PageHeader } from '@/components/app/page-primitives'
-import { createProject, estimateCredits } from '@/lib/clips-api'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { createProject, createProjectFromLink, estimateCredits } from '@/lib/clips-api'
+import { validateImportUrlForSubmit, YOUTUBE_UNSUPPORTED_MSG } from '@/lib/clips/import-url'
 import { defaultClipSettings, TOOL_PRESET_MAP, type ClipProjectSettings } from '@/lib/clips/settings'
 import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
@@ -24,12 +26,14 @@ export function NewProjectWorkspace() {
     return base
   }, [preset])
 
+  const [tab, setTab] = useState<'upload' | 'link'>('upload')
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
   const [upload, setUpload] = useState<UploadProgress | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
   const [durationMs, setDurationMs] = useState(0)
   const [estimate, setEstimate] = useState<{ credits: number; providerCostUsd?: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
 
   const onFile = (file: File) => {
     void uploadClipFile(file, (p) => {
@@ -48,7 +52,7 @@ export function NewProjectWorkspace() {
     })
   }
 
-  const submit = async () => {
+  const submitUpload = async () => {
     if (!uploadId) {
       toast.error('Wait for the upload to finish')
       return
@@ -64,41 +68,89 @@ export function NewProjectWorkspace() {
     }
   }
 
+  const submitLink = async () => {
+    const check = validateImportUrlForSubmit(linkUrl)
+    if (!check.ok) {
+      toast.error(check.message)
+      return
+    }
+    setSubmitting(true)
+    try {
+      const project = await createProjectFromLink({ sourceUrl: linkUrl.trim(), settings })
+      router.push(`/app/clips/${project.id}`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not start import'
+      toast.error(msg === YOUTUBE_UNSUPPORTED_MSG ? msg : msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const testMode = featuresAllUnlocked()
 
   return (
     <Page>
-      <PageHeader title="New project" description="Upload starts immediately while you tune settings." />
+      <PageHeader title="New project" description="Upload a file or import from Google Drive or Dropbox." />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="flex flex-col gap-4">
-          {!upload && <Dropzone onFile={onFile} />}
-          {upload && <UploadProgressItem progress={upload} onCancel={() => uploadId && void cancelClipUpload(uploadId)} />}
-          {durationMs > 0 && (
-            <p className="text-sm text-muted-foreground tabular-nums">Detected duration {(durationMs / 1000).toFixed(1)}s</p>
-          )}
-        </div>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'upload' | 'link')} className="flex flex-col gap-4">
+          <TabsList>
+            <TabsTrigger value="upload">Upload file</TabsTrigger>
+            <TabsTrigger value="link">Paste a link</TabsTrigger>
+          </TabsList>
+          <TabsContent value="upload" className="flex flex-col gap-4">
+            {!upload && <Dropzone onFile={onFile} />}
+            {upload && <UploadProgressItem progress={upload} onCancel={() => uploadId && void cancelClipUpload(uploadId)} />}
+            {durationMs > 0 && (
+              <p className="text-sm text-muted-foreground tabular-nums">Detected duration {(durationMs / 1000).toFixed(1)}s</p>
+            )}
+          </TabsContent>
+          <TabsContent value="link" className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              Public Google Drive or Dropbox share links only (max 4GB, 3 hours). YouTube is not supported — upload the file instead.
+            </p>
+            <input
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              placeholder="https://drive.google.com/... or https://www.dropbox.com/..."
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+            />
+          </TabsContent>
+        </Tabs>
         <div className="flex flex-col gap-4">
           <ProjectSettingsForm settings={settings} onChange={setSettings} durationMs={durationMs} />
-          {estimate && (
+          {estimate && tab === 'upload' && (
             <p className="text-xs text-muted-foreground">
               {testMode
                 ? `Test mode · est. provider cost $${(estimate.providerCostUsd ?? 0).toFixed(3)}`
                 : `Est. ${estimate.credits} credits`}
             </p>
           )}
-          <Button
-            disabled={!uploadId || upload?.state !== 'complete' || submitting}
-            onClick={() => void submit()}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-                Creating project…
-              </>
-            ) : (
-              'Get clips'
-            )}
-          </Button>
+          {tab === 'upload' ? (
+            <Button
+              disabled={!uploadId || upload?.state !== 'complete' || submitting}
+              onClick={() => void submitUpload()}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Creating project…
+                </>
+              ) : (
+                'Get clips'
+              )}
+            </Button>
+          ) : (
+            <Button disabled={!linkUrl.trim() || submitting} onClick={() => void submitLink()}>
+              {submitting ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Starting import…
+                </>
+              ) : (
+                'Import and get clips'
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </Page>

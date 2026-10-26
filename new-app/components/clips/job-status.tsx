@@ -9,10 +9,13 @@ import { CLIP_JOB_STATE, StatusBadge } from '@/components/app/status'
 import { cancelProject, getProjectStatus } from '@/lib/clips-api'
 import type { ClipProjectStatusUi } from '@/components/app/status'
 
-const STEPS = ['Upload', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
+const STEPS_UPLOAD = ['Upload', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
+const STEPS_IMPORT = ['Importing', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
 
-function stepIndex(status: string, mode?: string) {
+function stepIndex(status: string, mode?: string, stage?: string | null, fromLink?: boolean) {
   const anything = mode === 'anything'
+  const importing = fromLink && (stage === 'importing' || (status === 'QUEUED' && stage !== 'queued'))
+  if (importing) return 0
   if (status === 'UPLOADING' || status === 'DRAFT' || status === 'QUEUED') return 0
   if (status === 'PREPARING' || status === 'TRANSCRIBING') return 1
   if (status === 'SCANNING') return 2
@@ -26,10 +29,12 @@ export function JobStatus({
   projectId,
   initialStatus,
   mode,
+  fromLink,
 }: {
   projectId: string
   initialStatus?: string
   mode?: 'talking' | 'anything' | 'captions'
+  fromLink?: boolean
 }) {
   const [status, setStatus] = useState(initialStatus || 'QUEUED')
   const [progress, setProgress] = useState(0)
@@ -75,7 +80,10 @@ export function JobStatus({
             <span className="text-sm text-muted-foreground tabular-nums">ETA ~{Math.ceil(etaSec / 60)} min</span>
           )}
         </div>
-        <StepRail steps={STEPS} current={stepIndex(status, mode)} />
+        <StepRail
+          steps={fromLink ? STEPS_IMPORT : STEPS_UPLOAD}
+          current={stepIndex(status, mode, stage, fromLink)}
+        />
         <Progress value={progress} aria-label="Processing progress" />
         {error && <p className="text-sm text-destructive">{error}</p>}
         {!terminal && (

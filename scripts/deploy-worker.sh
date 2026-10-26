@@ -37,7 +37,7 @@ r = c.cursor()
 r.execute(\"\"\"
   SELECT count(*) FROM clip_jobs
   WHERE status = 'RUNNING'
-    AND type IN ('RENDER_CLIP', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
+    AND type IN ('IMPORT_URL', 'RENDER_CLIP', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
 \"\"\")
 print(r.fetchone()[0])
 " 2>/dev/null || echo 1)

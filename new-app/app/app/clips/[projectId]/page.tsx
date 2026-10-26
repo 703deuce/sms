@@ -25,6 +25,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         initialStatus={project.status}
         initialClips={initialClips}
         initialError={project.error}
+        fromLink={Boolean(project.sourceUrl)}
       />
     </Page>
   )

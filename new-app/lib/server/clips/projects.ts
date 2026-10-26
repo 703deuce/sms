@@ -75,6 +75,64 @@ export async function createClipProject(
   return project
 }
 
+export async function createClipProjectFromImportUrl(
+  workspaceId: string,
+  input: { sourceUrl: string; title?: string; settings?: unknown },
+) {
+  const { validateImportUrlForSubmit } = await import('@/lib/clips/import-url')
+  const check = validateImportUrlForSubmit(input.sourceUrl)
+  if (!check.ok) throw new Error(check.message)
+
+  const prisma = getPrisma()
+  const brandRow = await prisma.clipBrandTemplate.findFirst({
+    where: { workspaceId, isDefault: true },
+  })
+  const baseSettings = clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings())
+  const settings = brandRow
+    ? clipProjectSettingsSchema.parse({
+        ...baseSettings,
+        brand: {
+          templateId: brandRow.id,
+          logoKey: brandRow.logoKey,
+          ...(typeof brandRow.settings === 'object' ? brandRow.settings : {}),
+        },
+      })
+    : baseSettings
+
+  const projectId = createId('proj')
+  const title =
+    input.title?.trim() ||
+    (check.kind === 'drive' ? 'Google Drive import' : 'Dropbox import')
+  const normalizedUrl = input.sourceUrl.trim()
+
+  const project = await prisma.clipProject.create({
+    data: {
+      id: projectId,
+      workspaceId,
+      title,
+      sourceUrl: normalizedUrl,
+      settings: JSON.parse(JSON.stringify(settings)),
+      rangeStartMs: settings.rangeStartMs,
+      rangeEndMs: settings.rangeEndMs || 0,
+      status: 'QUEUED',
+      stage: 'importing',
+      progress: 0,
+      transcriptKey: projectWordsKey(workspaceId, projectId),
+    },
+  })
+  const jobId = createId('job')
+  await prisma.clipJob.create({
+    data: {
+      id: jobId,
+      projectId: project.id,
+      type: 'IMPORT_URL',
+      status: 'QUEUED',
+      payload: { sourceUrl: normalizedUrl, kind: check.kind },
+    },
+  })
+  return project
+}
+
 export function parseSettings(raw: unknown): ClipProjectSettings {
   return clipProjectSettingsSchema.parse(raw)
 }

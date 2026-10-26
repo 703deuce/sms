@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
-import { createClipProject, listClipProjects } from '@/lib/server/clips/projects'
+import { createClipProject, createClipProjectFromImportUrl, listClipProjects } from '@/lib/server/clips/projects'
 import { serializeProject } from '@/lib/server/clips/serialize'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -21,11 +21,18 @@ export async function GET(request: Request) {
   }
 }
 
-const createSchema = z.object({
-  uploadId: z.string().min(1),
-  title: z.string().optional(),
-  settings: z.unknown().optional(),
-})
+const createSchema = z.union([
+  z.object({
+    uploadId: z.string().min(1),
+    title: z.string().optional(),
+    settings: z.unknown().optional(),
+  }),
+  z.object({
+    sourceUrl: z.string().min(8).max(2000),
+    title: z.string().optional(),
+    settings: z.unknown().optional(),
+  }),
+])
 
 export async function POST(request: Request) {
   const denied = assertDevApiAccess(request)
@@ -33,7 +40,10 @@ export async function POST(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId()
     const body = createSchema.parse(await request.json())
-    const project = await createClipProject(workspaceId, body)
+    const project =
+      'sourceUrl' in body
+        ? await createClipProjectFromImportUrl(workspaceId, body)
+        : await createClipProject(workspaceId, body)
     return NextResponse.json({ data: serializeProject(project) })
   } catch (err) {
     return jsonError(err, 400)
