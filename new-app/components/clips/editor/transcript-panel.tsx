@@ -23,6 +23,7 @@ export function TranscriptPanel({
   onAddCut,
   onWordFix,
   onRestoreWord,
+  onExtendTrim,
   selectionRef,
 }: {
   words: SourceWord[]
@@ -32,13 +33,16 @@ export function TranscriptPanel({
   onAddCut: (range: [number, number]) => void
   onWordFix: (index: number, text: string) => void
   onRestoreWord: (word: SourceWord) => void
+  onExtendTrim: (sourceMs: number) => void
   selectionRef: React.MutableRefObject<TranscriptSelection | null>
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
-  const [editingIdx, setEditingIdx] = useState<number | null>(null)
-  const [editDraft, setEditDraft] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [editingI, setEditingI] = useState<number | null>(null)
+  const pad = 5000
+  const viewMin = edits.trim.in - pad
+  const viewMax = edits.trim.out + pad
+  const visible = words.filter((w) => w.e * 1000 >= viewMin && w.s * 1000 <= viewMax)
 
   useEffect(() => {
     selectionRef.current = {
@@ -51,27 +55,35 @@ export function TranscriptPanel({
     }
   }, [selEnd, selStart, selectionRef])
 
-  useEffect(() => {
-    if (editingIdx !== null) inputRef.current?.focus()
-  }, [editingIdx])
-
   const deleteSelection = () => {
     if (selStart === null || selEnd === null) return
     const a = Math.min(selStart, selEnd)
     const b = Math.max(selStart, selEnd)
-    onAddCut([a, b])
+    const selected = visible.filter((w) => {
+      const { startMs, endMs } = wordSourceMs(w)
+      return endMs > a && startMs < b
+    })
+    if (!selected.length) return
+    const wa = selected[0]
+    const wb = selected[selected.length - 1]
+    onAddCut([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
     setSelStart(null)
     setSelEnd(null)
   }
 
   const removeFillers = () => {
-    for (const w of words) {
+    for (const w of visible) {
       const text = wordDisplayText(w, edits.wordFixes)
       if (FILLER_RE.test(text.trim())) {
         const { startMs, endMs } = wordSourceMs(w)
         onAddCut([Math.round(startMs), Math.round(endMs)])
       }
     }
+  }
+
+  const inTrim = (w: SourceWord) => {
+    const { startMs, endMs } = wordSourceMs(w)
+    return endMs >= edits.trim.in && startMs <= edits.trim.out
   }
 
   return (
@@ -81,36 +93,37 @@ export function TranscriptPanel({
         <Button size="sm" variant="outline" onClick={removeFillers}>Remove filler words</Button>
       </div>
       <div className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed">
-        {words.map((w) => {
+        {visible.map((w) => {
           const { startMs, endMs, midMs } = wordSourceMs(w)
           const cut = isWordCut(w, edits.cutRanges)
           const display = wordDisplayText(w, edits.wordFixes)
           const shotI = shotIndexAt(shots, midMs)
           const spk = speakerLabelForWord(shots, midMs)
+          const muted = !inTrim(w)
           const selected =
             selStart !== null &&
             selEnd !== null &&
             startMs >= Math.min(selStart, selEnd) &&
             endMs <= Math.max(selStart, selEnd)
 
-          if (editingIdx === w.idx) {
+          if (editingI === w.i) {
             return (
-              <span key={w.idx} className="mr-1 inline-flex items-center gap-1">
+              <span key={w.i} className="mr-1 inline-flex items-center gap-1">
                 <input
-                  ref={inputRef}
+                  autoFocus
                   className="w-24 rounded border border-border bg-background px-1 py-0.5 text-sm"
-                  value={editDraft}
-                  onChange={(e) => setEditDraft(e.target.value)}
+                  defaultValue={display}
+                  onFocus={(e) => e.currentTarget.select()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      if (editDraft.trim()) onWordFix(w.idx, editDraft.trim())
-                      setEditingIdx(null)
+                      onWordFix(w.i, e.currentTarget.value)
+                      setEditingI(null)
                     }
-                    if (e.key === 'Escape') setEditingIdx(null)
+                    if (e.key === 'Escape') setEditingI(null)
                   }}
-                  onBlur={() => {
-                    if (editDraft.trim()) onWordFix(w.idx, editDraft.trim())
-                    setEditingIdx(null)
+                  onBlur={(e) => {
+                    onWordFix(w.i, e.currentTarget.value)
+                    setEditingI(null)
                   }}
                 />
               </span>
@@ -118,17 +131,22 @@ export function TranscriptPanel({
           }
 
           return (
-            <span key={w.idx} className="mr-1 inline">
+            <span key={w.i} className={`mr-1 inline ${muted ? 'text-muted-foreground/50' : ''}`}>
               <span className="text-[10px] text-muted-foreground">
                 S{shotI + 1}
-                {spk} 
+                {spk}
               </span>
               <button
                 type="button"
+                disabled={muted}
                 className={`rounded px-0.5 hover:bg-muted ${cut ? 'line-through opacity-50' : ''} ${
                   selected ? 'bg-primary/20' : ''
                 }`}
                 onClick={(e) => {
+                  if (muted) {
+                    if (window.confirm('Extend clip to here?')) onExtendTrim(Math.round(midMs))
+                    return
+                  }
                   if (e.shiftKey && selStart !== null) {
                     setSelEnd(Math.round(endMs))
                   } else {
@@ -139,8 +157,8 @@ export function TranscriptPanel({
                 }}
                 onDoubleClick={(e) => {
                   e.preventDefault()
-                  setEditingIdx(w.idx)
-                  setEditDraft(display)
+                  if (muted) return
+                  setEditingI(w.i)
                 }}
               >
                 {display}

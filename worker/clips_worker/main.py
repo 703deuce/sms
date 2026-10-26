@@ -179,6 +179,9 @@ def process_job(conn, job: dict) -> None:
         model = os.environ.get("ASR_MODEL", "small.en")
         subprocess.check_call([sys.executable, str(TRANSCRIBE), str(src), str(words_path), model])
         words = json.loads(words_path.read_text())
+        for pos, w in enumerate(words):
+            if "i" not in w:
+                w["i"] = pos
 
         post_progress(
             job["id"],
@@ -230,6 +233,11 @@ def main() -> None:
                 try:
                     if job.get("type") == "RENDER_CLIP":
                         run_render_clip_job(conn, job, post_progress)
+                    elif job.get("type") == "REFRAME_CROP":
+                        from clips_worker.reframe_crop import run_reframe_crop_job
+
+                        run_reframe_crop_job(conn, job)
+                        post_progress(job["id"], {"jobStatus": "DONE"})
                     else:
                         process_job(conn, job)
                 except Exception as exc:

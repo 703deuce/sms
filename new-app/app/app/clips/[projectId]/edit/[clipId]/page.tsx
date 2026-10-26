@@ -26,6 +26,7 @@ export default async function ClipEditorPage({
       initialEdits={data.edits}
       words={data.words}
       cropShots={data.crop.shots}
+      cropTrack={data.crop.track}
       videoUrl={videoUrl}
     />
   )

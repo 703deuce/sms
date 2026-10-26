@@ -149,18 +149,25 @@ export function outputDurationMs(edits: ClipEditsV2): number {
   return segs.reduce((sum, [a, b]) => sum + (b - a), 0)
 }
 
-export type ClipWord = { w: string; s: number; e: number; p?: number; spk?: number; idx?: number }
+export type ClipWord = { w: string; s: number; e: number; p?: number; spk?: number; i?: number; idx?: number }
+
+export function wordKey(w: ClipWord): number | undefined {
+  if (w.i !== undefined) return w.i
+  if (w.idx !== undefined) return w.idx
+  return undefined
+}
 
 export function applyWordFixesByIndex<T extends ClipWord>(words: T[], fixes: Record<string, string>): T[] {
   return words.map((w) => {
-    const key = String(w.idx ?? '')
-    if (w.idx !== undefined && fixes[key] !== undefined) return { ...w, w: fixes[key] }
+    const key = wordKey(w)
+    if (key !== undefined && fixes[String(key)] !== undefined) return { ...w, w: fixes[String(key)] }
     return w
   })
 }
 
 export function wordDisplayText(w: ClipWord, fixes: Record<string, string>): string {
-  if (w.idx !== undefined && fixes[String(w.idx)] !== undefined) return fixes[String(w.idx)]
+  const key = wordKey(w)
+  if (key !== undefined && fixes[String(key)] !== undefined) return fixes[String(key)]
   return w.w
 }
 
@@ -237,18 +244,27 @@ export function formatSrtTime(sec: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`
 }
 
-export function buildSrt(words: ClipWord[]): string {
+export function buildSrtFromCaptionWords(
+  words: { text: string; s_ms: number; e_ms: number }[],
+): string {
   const lines: string[] = []
-  let i = 1
+  let n = 1
   for (const w of words) {
-    if (!w.w.trim()) continue
-    if (w.e <= w.s) continue
-    lines.push(String(i++))
-    lines.push(`${formatSrtTime(w.s)} --> ${formatSrtTime(w.e)}`)
-    lines.push(w.w)
+    if (!w.text.trim()) continue
+    if (w.e_ms <= w.s_ms) continue
+    lines.push(String(n++))
+    lines.push(`${formatSrtTime(w.s_ms / 1000)} --> ${formatSrtTime(w.e_ms / 1000)}`)
+    lines.push(w.text)
     lines.push('')
   }
   return lines.join('\n')
+}
+
+/** @deprecated use buildSrtFromCaptionWords(buildCaptionWords(...)) */
+export function buildSrt(words: ClipWord[]): string {
+  return buildSrtFromCaptionWords(
+    words.map((w) => ({ text: w.w, s_ms: w.s * 1000, e_ms: w.e * 1000 })),
+  )
 }
 
 export const FILLER_RE = /^(um+|uh+|erm|ah+)$/i

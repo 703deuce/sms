@@ -9,11 +9,12 @@ const SIGNED_TTL = 3600
 
 export async function listClipRenders(workspaceId: string, statusFilter?: 'all' | 'ready' | 'failed') {
   const prisma = getPrisma()
-  const where: { workspaceId: string; status?: 'READY' | 'FAILED' | 'QUEUED' | 'RENDERING' | 'EXPIRED' } = {
+  const map = { ready: 'READY', failed: 'FAILED' } as const
+  const q = statusFilter ?? 'all'
+  const where: { workspaceId: string; status?: ClipRenderStatus } = {
     workspaceId,
+    ...(map[q as keyof typeof map] ? { status: map[q as keyof typeof map] } : {}),
   }
-  if (statusFilter === 'ready') where.status = 'READY'
-  else if (statusFilter === 'failed') where.status = 'FAILED'
   const rows = await prisma.clipRender.findMany({
     where,
     orderBy: { createdAt: 'desc' },

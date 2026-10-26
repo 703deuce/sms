@@ -17,6 +17,9 @@ RUN chmod +x /tmp/download-models.sh && bash /tmp/download-models.sh /app/v3
 
 COPY worker/prototype/v3/transcribe.py /app/transcribe.py
 COPY worker/clips_worker /app/clips_worker
+COPY worker/tests /app/tests
+
+RUN pip install --no-cache-dir pytest && pytest -q /app/tests/test_caption_parity.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en

@@ -94,7 +94,11 @@ def load_source_words(ctx: dict, work_dir: Path) -> list[dict]:
         clip_words = json.loads(p.read_text())
         start = int(ctx["startMs"])
         words = [{**w, "s": w["s"] + start / 1000.0, "e": w["e"] + start / 1000.0} for w in clip_words]
-    return [{**w, "idx": i} for i, w in enumerate(words)]
+    out = []
+    for pos, w in enumerate(words):
+        wi = w.get("i", w.get("idx", pos))
+        out.append({**w, "i": int(wi)})
+    return out
 
 
 def run_render_clip_job(conn, job: dict, post_progress) -> None:

@@ -22,17 +22,24 @@ def slice_words(words: list[dict], start_ms: int, end_ms: int) -> list[dict]:
     s = start_ms / 1000.0
     e = end_ms / 1000.0
     out = []
-    for w in words:
+    for pos, w in enumerate(words):
         if w["e"] < s or w["s"] > e:
             continue
-        out.append(
-            {
-                "w": w["w"],
-                "s": round(max(0.0, w["s"] - s), 3),
-                "e": round(min(e - s, w["e"] - s), 3),
-                "p": w.get("p", 1),
-            }
-        )
+        row = {
+            "w": w["w"],
+            "s": round(max(0.0, w["s"] - s), 3),
+            "e": round(min(e - s, w["e"] - s), 3),
+            "p": w.get("p", 1),
+        }
+        if w.get("spk") is not None:
+            row["spk"] = w["spk"]
+        if w.get("i") is not None:
+            row["i"] = int(w["i"])
+        elif w.get("idx") is not None:
+            row["i"] = int(w["idx"])
+        else:
+            row["i"] = pos
+        out.append(row)
     return out
 
 
@@ -91,6 +98,10 @@ def run_speakercrop(
     words_path: Path,
     settings: dict,
     work_dir: Path,
+    clip_start_ms: int = 0,
+    shot_overrides: list | None = None,
+    crop_track_out: Path | None = None,
+    no_render: bool = False,
 ) -> Path:
     aspect = settings.get("aspectRatio", "9:16")
     w, h = aspect_size(aspect)
@@ -101,6 +112,16 @@ def run_speakercrop(
     env["OUT_H"] = str(h)
     env["CAPTION_PRESET"] = settings.get("captions", {}).get("presetId", "bold_pop")
     if not settings.get("captions", {}).get("enabled", True):
+        env["CAPTIONS"] = "0"
+    env["CLIP_START_MS"] = str(int(clip_start_ms))
+    if crop_track_out is not None:
+        env["CROP_TRACK_OUT"] = str(crop_track_out)
+    elif int(os.environ.get("WRITE_CROP_TRACK", "1")):
+        env["CROP_TRACK_OUT"] = str(out_mp4.with_suffix(".crop_track.json"))
+    if shot_overrides:
+        env["SHOT_OVERRIDES"] = json.dumps(shot_overrides)
+    if no_render:
+        env["NORENDER"] = "1"
         env["CAPTIONS"] = "0"
     preset = env["CAPTION_PRESET"]
     subprocess.check_call(

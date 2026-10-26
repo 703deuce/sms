@@ -1,4 +1,5 @@
 import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
+import { shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
 import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
 import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
@@ -64,6 +65,14 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
 
   const words: SourceWord[] = loadSourceWords(transcript)
 
+  const cropTrackKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clip.id}/crop_track.json`
+  let cropTrack: CropTrack | null = null
+  try {
+    cropTrack = await storage.getJson<CropTrack>(cropTrackKey)
+  } catch {
+    cropTrack = null
+  }
+
   let cropRaw: unknown = null
   if (clip.cropKey) {
     try {
@@ -72,7 +81,9 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       cropRaw = null
     }
   }
-  let shots = shotsFromCropJson(cropRaw as { shots?: CropShot[] }, clip.startMs, clip.endMs)
+  let shots: CropShot[] = cropTrack?.shots?.length
+    ? shotsToCropShots(cropTrack)
+    : shotsFromCropJson(cropRaw as { shots?: CropShot[] }, clip.startMs, clip.endMs)
   if (shots.length <= 1) {
     const inferred = inferShotsFromWords(words, clip.startMs, clip.endMs)
     if (inferred.length > 1) shots = inferred
@@ -93,12 +104,13 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     bounds,
     edits,
     words,
-    crop: { shots },
+    crop: { shots, track: cropTrack },
     mediaUrls: {
       preview: clip.previewKey ? await storage.createSignedDownloadUrl(clip.previewKey, SIGNED_TTL) : null,
       poster: clip.posterKey ? await storage.createSignedDownloadUrl(clip.posterKey, SIGNED_TTL) : null,
       proxy: proxyKey ? await storage.createSignedDownloadUrl(proxyKey, SIGNED_TTL) : null,
       source: sourceKey ? await storage.createSignedDownloadUrl(sourceKey, SIGNED_TTL) : null,
+      cropTrack: cropTrack ? await storage.createSignedDownloadUrl(cropTrackKey, SIGNED_TTL) : null,
     },
     project: { id: project.id, title: project.title, settings: project.settings },
   }

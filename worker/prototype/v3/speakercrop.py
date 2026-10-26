@@ -210,6 +210,74 @@ target = np.array([xpos[min(s, 1), j] if s < 2 else W / 2 for j, s in enumerate(
 json.dump(dict(t=T.tolist(), speaker=spk.tolist(), raw=raw.tolist(), act=np.nan_to_num(act).tolist(), aud=aud.tolist(),
                voiced=voiced.tolist(), target_x=target.tolist(), face_rate=face_rate, lmk_rate=lmk_rate), open('analysis.json', 'w'))
 
+# ---------- 3a. crop track (same math as render loop) ----------
+cw = int(round(H * 9 / 16)) // 2 * 2
+t0_ms = int(float(os.environ.get('CLIP_START_MS', '0')))
+nframes = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+def _eased_x0(target_arr):
+    c = float(target_arr[0]) if len(target_arr) else W / 2
+    if np.isnan(c):
+        ok = ~np.isnan(target_arr)
+        c = float(np.interp(0, np.where(ok)[0], target_arr[ok])) if ok.any() else W / 2
+    out = []
+    for fi in range(nframes):
+        tgt = float(np.interp(fi / fps, T, target_arr))
+        c += EASE * (tgt - c)
+        out.append(int(np.clip(c - cw / 2, 0, W - cw)))
+    return out
+
+x0_A = _eased_x0(xpos[0])
+x0_B = _eased_x0(xpos[1])
+cx_tr = float(target[0]); x0s = []
+for fi in range(nframes):
+    j = min(n - 1, int(round(fi / fps * SAMPLE_FPS)))
+    if spk[j] == 2:
+        x0s.append(-1)
+    else:
+        tgt = float(np.interp(fi / fps, T, target))
+        cx_tr += EASE * (tgt - cx_tr)
+        x0s.append(int(np.clip(cx_tr - cw / 2, 0, W - cw)))
+
+shots_track = []
+s = 0
+for j in range(1, n + 1):
+    if j == n or spk[j] != spk[s]:
+        end_t = T[min(j, n - 1)]
+        start_t = T[s]
+        label = 'split' if spk[s] == 2 else ('A' if spk[s] == 0 else 'B')
+        shots_track.append(dict(start_ms=int(round(start_t * 1000)) + t0_ms, end_ms=int(round(end_t * 1000)) + t0_ms, spk=label))
+        s = j
+
+shot_overrides = json.loads(os.environ.get('SHOT_OVERRIDES', '[]'))
+ov_by_shot = {int(o['i']): o.get('focus', 'auto') for o in shot_overrides if 'i' in o}
+
+def _shot_index_at_ms(ms):
+    for i, sh in enumerate(shots_track):
+        if sh['start_ms'] <= ms < sh['end_ms']:
+            return i
+    return max(0, len(shots_track) - 1)
+
+def _x0_for_frame(fi):
+    src_ms = t0_ms + int(round(fi / fps * 1000))
+    j = min(n - 1, int(round(fi / fps * SAMPLE_FPS)))
+    si = _shot_index_at_ms(src_ms)
+    focus = ov_by_shot.get(si, 'auto')
+    if focus in ('both', 'wide'):
+        return -2, 'wide'
+    if focus == 'A':
+        return x0_A[min(fi, len(x0_A) - 1)], 'A'
+    if focus == 'B':
+        return x0_B[min(fi, len(x0_B) - 1)], 'B'
+    if spk[j] == 2:
+        return -1, 'split'
+    return x0s[min(fi, len(x0s) - 1)], 'auto'
+
+crop_track = dict(v=1, W=W, H=H, cw=cw, fps=fps, t0_ms=t0_ms, x0=x0s, x0_A=x0_A, x0_B=x0_B, shots=shots_track)
+crop_out = os.environ.get('CROP_TRACK_OUT', os.path.splitext(OUT)[0] + '.crop_track.json')
+json.dump(crop_track, open(crop_out, 'w'), separators=(',', ':'))
+
 if int(E('NORENDER', 0)): sys.exit(0)
 # ---------- 3b. captions (ASS for burn-in + SRT sidecar) ----------
 vf = []
@@ -226,25 +294,36 @@ if int(E('CAPTIONS', 1)) and os.path.exists(WORDS):
     fontsdir = os.path.join(HERE, 'fonts')
     vf = ['-vf', f"ass={base}.ass:fontsdir={fontsdir}".replace(',', r'\,')]
 # ---------- 4. render ----------
-cw = int(round(H * 9 / 16)) // 2 * 2
-cap = cv2.VideoCapture(INP)
-ff = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{OUT_W}x{OUT_H}', '-r', str(fps),
-                       '-i', '-', '-i', INP, '-map', '0:v', '-map', '1:a?', *vf, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
-                       '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', OUT], stdin=subprocess.PIPE)
-cx = target[0]; fi = 0
 def tile(fr, j, k):            # 9:8 tile (720x640 out) around person k's face
     th = int(H * 0.62); tw = int(th * 9 / 8)
     x0 = int(np.clip(xpos[k, j] - tw / 2, 0, W - tw)); y0 = int(np.clip(ypos[k, j] - th * 0.4, 0, H - th))
     return cv2.resize(fr[y0:y0 + th, x0:x0 + tw], (OUT_W, OUT_H // 2), interpolation=cv2.INTER_CUBIC)
+
+def render_wide(fr):
+    bg = cv2.resize(fr, (OUT_W, OUT_H))
+    bg = cv2.GaussianBlur(bg, (51, 51), 0)
+    scale = OUT_W / max(W, 1)
+    nh = int(H * scale)
+    fg = cv2.resize(fr, (OUT_W, nh), interpolation=cv2.INTER_CUBIC)
+    y0 = max(0, (OUT_H - nh) // 2)
+    out = bg.copy()
+    out[y0:y0 + nh, :] = fg
+    return out
+
+ff = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{OUT_W}x{OUT_H}', '-r', str(fps),
+                       '-i', '-', '-i', INP, '-map', '0:v', '-map', '1:a?', *vf, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+                       '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', OUT], stdin=subprocess.PIPE)
+fi = 0
 while True:
     ok, fr = cap.read()
     if not ok: break
     j = min(n - 1, int(round(fi / fps * SAMPLE_FPS)))
-    if spk[j] == 2:
+    x0, mode = _x0_for_frame(fi)
+    if mode == 'split' or x0 == -1:
         out = np.vstack([tile(fr, j, 0), tile(fr, j, 1)])
+    elif mode == 'wide' or x0 == -2:
+        out = render_wide(fr)
     else:
-        tgt = np.interp(fi / fps, T, target); cx += EASE * (tgt - cx)
-        x0 = int(np.clip(cx - cw / 2, 0, W - cw))
         out = cv2.resize(fr[:, x0:x0 + cw], (OUT_W, OUT_H), interpolation=cv2.INTER_CUBIC)
     ff.stdin.write(out.tobytes()); fi += 1
 ff.stdin.close(); ff.wait()

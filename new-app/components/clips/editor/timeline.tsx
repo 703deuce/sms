@@ -1,7 +1,8 @@
 'use client'
 
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { keepSegments, outputDurationMs } from '@/lib/clips/edits'
+import { keepSegments, outputDurationMs, wordDisplayText } from '@/lib/clips/edits'
+import { buildCaptionWords } from '@/lib/clips/caption-words'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { shotIndexAt } from '@/lib/clips/crop-shots'
@@ -25,6 +26,7 @@ export function Timeline({
   const span = Math.max(1, edits.trim.out - edits.trim.in)
   const outDur = outputDurationMs(edits)
   const widthPx = Math.max(640, Math.round(span / 20))
+  const captionByI = new Map(buildCaptionWords(words, edits).map((c) => [c.i, c]))
 
   const outputToSource = (outMs: number) => {
     const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
@@ -50,14 +52,14 @@ export function Timeline({
             const bg = shotI % 2 === 0 ? 'bg-sky-500/70' : 'bg-violet-500/70'
             return (
               <button
-                key={w.idx}
+                key={w.i}
                 type="button"
                 className={`absolute top-1 h-6 truncate rounded px-0.5 text-[9px] text-white ${bg}`}
                 style={{ left: `${left}%`, width: `${Math.max(wPct, 0.4)}%` }}
                 onClick={() => onSeekOutput(remapSourceToOutput(startMs, edits))}
-                title={w.w}
+                title={wordDisplayText(w, edits.wordFixes)}
               >
-                {w.w}
+                {captionByI.get(w.i)?.text ?? wordDisplayText(w, edits.wordFixes)}
               </button>
             )
           })}

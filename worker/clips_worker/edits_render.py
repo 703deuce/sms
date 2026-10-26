@@ -9,6 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from clips_worker.caption_words import build_caption_words, caption_words_to_render
 from clips_worker.render_clip import run_speakercrop
 
 V3 = Path(__import__("os").environ.get("SPEAKERCROP_DIR", "/app/v3"))
@@ -116,63 +117,35 @@ def word_mid_ms(w: dict) -> float:
     return (float(w["s"]) + float(w["e"])) * 500.0
 
 
-def apply_word_fixes(words: list[dict], fixes: dict) -> list[dict]:
+def ensure_word_i(words: list[dict]) -> list[dict]:
     out = []
-    for i, w in enumerate(words):
-        key = str(w.get("idx", i))
-        if key in fixes:
-            out.append({**w, "w": fixes[key]})
-        else:
-            out.append(w)
+    for pos, w in enumerate(words):
+        wi = w.get("i", w.get("idx", pos))
+        row = {**w, "i": int(wi)}
+        row.pop("idx", None)
+        out.append(row)
     return out
 
 
 def words_after_edits(words: list[dict], edits: dict) -> tuple[list[dict], list[tuple[int, int]]]:
     segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
-    fixes = edits.get("wordFixes") or {}
-    out_words: list[dict] = []
-    for i, w in enumerate(words):
-        s_ms = int(float(w["s"]) * 1000)
-        e_ms = int(float(w["e"]) * 1000)
-        mid = (s_ms + e_ms) // 2
-        seg = next((s for s in segs if s[0] <= mid < s[1]), None)
-        if not seg:
-            continue
-        a, b = seg
-        cs = max(s_ms, a)
-        ce = min(e_ms, b)
-        if ce - cs < 20:
-            continue
-        out_s = remap_time_ms(cs, segs)
-        out_e = remap_time_ms(ce, segs)
-        if out_s is None or out_e is None or out_e <= out_s:
-            continue
-        key = str(w.get("idx", i))
-        text = fixes.get(key, w["w"])
-        out_words.append(
-            {
-                "w": text,
-                "s": round(out_s / 1000.0, 3),
-                "e": round(out_e / 1000.0, 3),
-                "p": w.get("p", 1),
-                "spk": w.get("spk"),
-                "idx": w.get("idx", i),
-            }
-        )
-    return out_words, segs
+    capped = build_caption_words(ensure_word_i(words), edits)
+    remapped = caption_words_to_render(capped)
+    return remapped, segs
 
 
 def words_for_reframe(words: list[dict], edits: dict, clip_start_ms: int, clip_end_ms: int) -> list[dict]:
     fixes = edits.get("wordFixes") or {}
     cuts = edits.get("cutRanges") or []
     out: list[dict] = []
-    for i, w in enumerate(words):
+    for pos, w in enumerate(words):
+        wi = int(w.get("i", w.get("idx", pos)))
         mid = word_mid_ms(w)
         if mid < clip_start_ms or mid >= clip_end_ms:
             continue
         if any(mid >= c[0] and mid < c[1] for c in cuts):
             continue
-        key = str(w.get("idx", i))
+        key = str(wi)
         out.append(
             {
                 "w": fixes.get(key, w["w"]),
@@ -286,11 +259,22 @@ def render_edited_clip(
     settings: dict,
     work_dir: Path,
 ) -> tuple[Path, list[dict], str]:
+    shot_overrides = (edits.get("layout") or {}).get("shotOverrides") or []
+    src_words = ensure_word_i(source_words)
+
     if is_default_edits(edits, clip_start_ms, clip_end_ms):
-        remapped, _ = words_after_edits(source_words, edits)
+        remapped, _ = words_after_edits(src_words, edits)
         wpath = work_dir / "words.json"
         wpath.write_text(json.dumps(remapped))
-        run_speakercrop(clip_src, out_mp4, wpath, settings, work_dir)
+        run_speakercrop(
+            clip_src,
+            out_mp4,
+            wpath,
+            settings,
+            work_dir,
+            clip_start_ms=clip_start_ms,
+            shot_overrides=shot_overrides,
+        )
         return out_mp4, remapped, build_srt(remapped)
 
     segs_ms = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
@@ -309,7 +293,15 @@ def render_edited_clip(
     if not isinstance(settings_nc, dict):
         settings_nc = {}
     settings_nc["captions"] = {**(settings_nc.get("captions") or {}), "enabled": False}
-    run_speakercrop(clip_src, full_render, wpath, settings_nc, work_dir)
+    run_speakercrop(
+        clip_src,
+        full_render,
+        wpath,
+        settings_nc,
+        work_dir,
+        clip_start_ms=clip_start_ms,
+        shot_overrides=shot_overrides,
+    )
 
     cut_mp4 = work_dir / "cut.mp4"
     if len(segs_sec) == 1 and segs_sec[0][0] <= 0.01 and abs(segs_sec[0][1] - (clip_end_ms - clip_start_ms) / 1000) < 0.1:
@@ -317,7 +309,7 @@ def render_edited_clip(
     else:
         ffmpeg_concat_segments(full_render, cut_mp4, segs_sec)
 
-    remapped, _ = words_after_edits(source_words, edits)
+    remapped, _ = words_after_edits(src_words, edits)
     final = work_dir / "final.mp4"
     if int(edits.get("captions", {}).get("enabled", True)):
         burn_captions(cut_mp4, remapped, final, work_dir)

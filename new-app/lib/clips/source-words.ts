@@ -1,9 +1,13 @@
 import type { ClipWord } from '@/lib/clips/edits'
 
-export type SourceWord = ClipWord & { idx: number }
+export type SourceWord = ClipWord & { i: number }
 
 export function loadSourceWords(raw: ClipWord[]): SourceWord[] {
-  return raw.map((w, idx) => ({ ...w, idx }))
+  return raw.map((w, pos) => {
+    const i = w.i ?? w.idx ?? pos
+    const { idx: _idx, ...rest } = w
+    return { ...rest, i }
+  })
 }
 
 /** Words overlapping [startMs, endMs] on the source timeline (seconds in w.s/w.e). */

@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
+import type { CropTrack } from '@/lib/clips/crop-track'
+import { requestClipReframe } from '@/lib/clips-api'
 import { patchClip } from '@/lib/clips-api'
 import { outputDurationFromEdits } from '@/lib/clips/editor-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
@@ -35,6 +37,7 @@ export function EditorShell({
   initialEdits,
   words,
   cropShots,
+  cropTrack,
   videoUrl,
 }: {
   projectId: string
@@ -44,6 +47,7 @@ export function EditorShell({
   initialEdits: ClipEditsV2
   words: SourceWord[]
   cropShots: CropShot[]
+  cropTrack: CropTrack | null
   videoUrl: string | null
 }) {
   const [title, setTitle] = useState(initialTitle)
@@ -99,9 +103,17 @@ export function EditorShell({
     if (!sel || sel.startMs === sel.endMs) return
     const a = Math.min(sel.startMs, sel.endMs)
     const b = Math.max(sel.startMs, sel.endMs)
-    addCutRange([a, b])
+    const selected = words.filter((w) => {
+      const s = w.s * 1000
+      const e = w.e * 1000
+      return e > a && s < b
+    })
+    if (!selected.length) return
+    const wa = selected[0]
+    const wb = selected[selected.length - 1]
+    addCutRange([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
     sel.clear()
-  }, [addCutRange])
+  }, [addCutRange, words])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -156,7 +168,7 @@ export function EditorShell({
               videoUrl={videoUrl}
               edits={edits}
               words={words}
-              cropShots={cropShots}
+              cropTrack={cropTrack}
               videoRef={videoRef}
               onTick={onTick}
             />
@@ -200,6 +212,10 @@ export function EditorShell({
                 onAddCut={addCutRange}
                 onWordFix={setWordFix}
                 onRestoreWord={restoreWord}
+                onExtendTrim={(ms) => {
+                  if (ms < edits.trim.in) setTrim({ in: ms, out: edits.trim.out })
+                  else if (ms > edits.trim.out) setTrim({ in: edits.trim.in, out: ms })
+                }}
                 selectionRef={selectionRef}
               />
             </TabsContent>
@@ -209,7 +225,7 @@ export function EditorShell({
                 shots={cropShots}
                 onMode={setLayoutMode}
                 onShotFocus={setShotOverride}
-                onRerunReframe={() => {}}
+                onRerunReframe={() => void requestClipReframe(clipId)}
               />
             </TabsContent>
             <TabsContent value="captions"><ComingSoon /></TabsContent>

@@ -95,6 +95,10 @@ export function listRenders(status: 'all' | 'ready' | 'failed' = 'all') {
   return clipsFetch<{ exports: ExportRenderRow[] }>(`/api/clips/renders?status=${status}`)
 }
 
+export function requestClipReframe(clipId: string) {
+  return clipsFetch<{ jobId: string }>(`/api/clips/clips/${clipId}/reframe`, { method: 'POST' })
+}
+
 export type ExportRenderRow = {
   id: string
   clipId: string

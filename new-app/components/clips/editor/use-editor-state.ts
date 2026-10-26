@@ -99,9 +99,12 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
 
   const setWordFix = useCallback(
     (index: number, text: string) => {
+      const fixes = { ...state.edits.wordFixes }
+      if (!text.trim()) delete fixes[String(index)]
+      else fixes[String(index)] = text.trim()
       setEdits({
         ...state.edits,
-        wordFixes: { ...state.edits.wordFixes, [String(index)]: text },
+        wordFixes: fixes,
       })
     },
     [setEdits, state.edits],

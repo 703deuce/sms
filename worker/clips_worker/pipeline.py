@@ -18,6 +18,7 @@ def clip_keys(workspace_id: str, project_id: str, clip_id: str) -> dict[str, str
         "preview": f"{base}/preview.mp4",
         "poster": f"{base}/poster.jpg",
         "words": f"{base}/words.json",
+        "crop_track": f"{base}/crop_track.json",
     }
 
 
@@ -138,7 +139,16 @@ def run_m4_pipeline(
             words_path.write_text(json.dumps(clip_words))
 
             out_mp4 = td_path / f"out_{idx}.mp4"
-            rendered = run_speakercrop(clip_file, out_mp4, words_path, settings, td_path)
+            crop_track_path = td_path / f"crop_track_{idx}.json"
+            rendered = run_speakercrop(
+                clip_file,
+                out_mp4,
+                words_path,
+                settings,
+                td_path,
+                clip_start_ms=pick["start_ms"],
+                crop_track_out=crop_track_path,
+            )
             poster = td_path / f"poster_{idx}.jpg"
             poster_jpg(rendered, poster)
 
@@ -146,6 +156,8 @@ def run_m4_pipeline(
             upload_file(keys["preview"], rendered, "video/mp4")
             upload_file(keys["poster"], poster, "image/jpeg")
             put_json(keys["words"], clip_words)
+            if crop_track_path.exists():
+                upload_file(keys["crop_track"], crop_track_path, "application/json")
 
             clip_rows.append(
                 {

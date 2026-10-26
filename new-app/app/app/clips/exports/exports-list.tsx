@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { Button } from '@/components/ui/button'
 import { listRenders, type ExportRenderRow } from '@/lib/clips-api'
@@ -15,23 +16,59 @@ function formatSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
-export function ExportsList() {
-  const [filter, setFilter] = useState<Filter>('all')
-  const [rows, setRows] = useState<ExportRenderRow[]>([])
-  const [loading, setLoading] = useState(true)
+function ClientTime({ iso }: { iso: string | null }) {
+  const [text, setText] = useState('—')
+  useEffect(() => {
+    if (!iso) {
+      setText('—')
+      return
+    }
+    setText(
+      new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZoneName: 'short',
+      }).format(new Date(iso)),
+    )
+  }, [iso])
+  return <>{text}</>
+}
+
+export function ExportsList({ initialRows }: { initialRows: ExportRenderRow[] }) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const filter = (searchParams.get('status') || 'all') as Filter
+  const [rows, setRows] = useState<ExportRenderRow[]>(initialRows)
+  const [loading, setLoading] = useState(false)
+
+  const setFilter = useCallback(
+    (f: Filter) => {
+      const q = new URLSearchParams(searchParams.toString())
+      if (f === 'all') q.delete('status')
+      else q.set('status', f)
+      router.replace(`/app/clips/exports?${q.toString()}`)
+    },
+    [router, searchParams],
+  )
 
   useEffect(() => {
     setLoading(true)
-    setRows([])
     void listRenders(filter)
       .then((d) => setRows(d.exports))
       .catch(() => setRows([]))
       .finally(() => setLoading(false))
   }, [filter])
 
-  const formatWhen = (iso: string | null) => {
-    if (!iso) return '—'
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
+  if (loading && !rows.length) {
+    return (
+      <Panel title="Exports" description="Rendered downloads for your workspace.">
+        <div className="space-y-2 p-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
+      </Panel>
+    )
   }
 
   if (!loading && !rows.length) {
@@ -90,8 +127,12 @@ export function ExportsList() {
                 </td>
                 <td className="px-3 py-2 tabular-nums">{r.resolution}</td>
                 <td className="px-3 py-2">{r.watermark ? 'Yes' : 'No'}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{formatWhen(r.createdAt)}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{formatWhen(r.expiresAt)}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">
+                  <ClientTime iso={r.createdAt} />
+                </td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">
+                  <ClientTime iso={r.expiresAt} />
+                </td>
                 <td className="px-3 py-2">{r.status}</td>
                 <td className="px-3 py-2 tabular-nums">{formatSize(r.sizeBytes)}</td>
                 <td className="px-3 py-2">
