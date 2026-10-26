@@ -1,4 +1,5 @@
-import { editsVersionHash, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { editsVersionHash, type ClipEditsV2 } from '@/lib/clips/edits'
+import { type ExportAspect, type ExportResolution, renderVersionHash } from '@/lib/clips/export-aspect'
 import { exportFilename } from '@/lib/server/clips/clips'
 import { mapRenderRows, parseExportStatusFilter, renderStatusWhere } from '@/lib/server/clips/export-rows'
 import { getPrisma } from '@/lib/server/db'
@@ -35,17 +36,20 @@ export async function enqueueRenderClip(
   workspaceId: string,
   clipId: string,
   opts: {
-    resolution: string
+    resolution: ExportResolution
+    aspect: ExportAspect
     watermark: boolean
     edits: ClipEditsV2
     clipStartMs: number
     clipEndMs: number
     previewKey: string
     title: string
+    batchId?: string
   },
 ) {
   const prisma = getPrisma()
-  const hash = editsVersionHash(opts.edits)
+  const editsHash = editsVersionHash(opts.edits)
+  const hash = renderVersionHash(editsHash, opts.aspect, opts.resolution)
   const existing = await prisma.clipRender.findFirst({
     where: { clipId, workspaceId, status: 'READY', editsVersionHash: hash },
     orderBy: { createdAt: 'desc' },
@@ -71,6 +75,8 @@ export async function enqueueRenderClip(
       workspaceId,
       status: 'QUEUED',
       resolution: opts.resolution,
+      aspectRatio: opts.aspect,
+      batchId: opts.batchId ?? null,
       watermark: opts.watermark,
       filename,
       editsVersionHash: hash,

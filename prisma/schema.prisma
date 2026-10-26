@@ -507,6 +507,7 @@ model Workspace {
   clipUploads                            ClipUpload[]
   clipProjects                           ClipProject[]
   clipBrandTemplates                     ClipBrandTemplate[]
+  captionPresets                         CaptionPreset[]
   clipRenders                            ClipRender[]
   clipEvents                             ClipEvent[]
   forwardingUsageMonthly                 ForwardingUsageMonthly[]
@@ -8964,6 +8965,8 @@ model ClipRender {
   outputKey         String?
   format            String           @default("mp4")
   resolution        String           @default("720p")
+  aspectRatio       String           @default("9:16")
+  batchId           String?
   watermark         Boolean          @default(false)
   filename          String?
   editsVersionHash  String?
@@ -8978,7 +8981,22 @@ model ClipRender {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, createdAt])
+  @@index([batchId])
   @@map("clip_renders")
+}
+
+model CaptionPreset {
+  id          String   @id
+  workspaceId String
+  name        String
+  config      Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("caption_presets")
 }
 
 model ClipBrandTemplate {

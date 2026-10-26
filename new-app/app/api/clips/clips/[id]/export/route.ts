@@ -12,7 +12,8 @@ import { createId } from '@/lib/supabase/id'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const bodySchema = z.object({
-  resolution: z.union([z.literal(720), z.literal('720p')]).optional(),
+  resolution: z.enum(['720p', '1080p']).default('720p'),
+  aspect: z.enum(['9:16', '1:1', '16:9']).default('9:16'),
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
 })
@@ -29,7 +30,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const edits = normalizeEdits(clip.edits, bounds)
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
-    const resolution = '720p'
+    const resolution = body.resolution
+    const aspect = body.aspect
     const filename = exportFilename(clip.title)
     const storage = getClipStorage()
     const prisma = getPrisma()
@@ -73,6 +75,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const result = await enqueueRenderClip(workspaceId, clipId, {
       resolution,
+      aspect,
       watermark,
       edits,
       clipStartMs: clip.startMs,

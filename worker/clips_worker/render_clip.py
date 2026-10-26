@@ -10,7 +10,13 @@ from pathlib import Path
 V3 = Path(os.environ.get("SPEAKERCROP_DIR", "/app/v3"))
 
 
-def aspect_size(aspect: str) -> tuple[int, int]:
+def aspect_size(aspect: str, resolution: str = "720p") -> tuple[int, int]:
+    if resolution == "1080p":
+        if aspect == "1:1":
+            return 1080, 1080
+        if aspect == "16:9":
+            return 1920, 1080
+        return 1080, 1920
     if aspect == "1:1":
         return 720, 720
     if aspect == "16:9":
@@ -104,7 +110,8 @@ def run_speakercrop(
     no_render: bool = False,
 ) -> Path:
     aspect = settings.get("aspectRatio", "9:16")
-    w, h = aspect_size(aspect)
+    resolution = settings.get("exportResolution", "720p")
+    w, h = aspect_size(aspect, resolution)
     env = os.environ.copy()
     env.update(layout_env(settings.get("layout", "speaker_follow")))
     env["WORDS"] = str(words_path)

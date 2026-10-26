@@ -18,6 +18,7 @@ def load_render_context(conn, render_id: str) -> dict:
             """
             SELECT r.id AS render_id, r."clipId", r."workspaceId",
                    r.status, r."outputKey", r."editsVersionHash",
+                   r."aspectRatio", r.resolution,
                    c."startMs", c."endMs", c."previewKey", c.edits, c."projectId",
                    p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key
             FROM clip_renders r
@@ -119,6 +120,11 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
     settings = ctx["settings"] or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
+    aspect = ctx.get("aspectRatio") or settings.get("aspectRatio") or "9:16"
+    resolution = ctx.get("resolution") or "720p"
+    settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}
+    if aspect == "16:9":
+        settings = {**settings, "layout": "fit"}
 
     preview_key = ctx["previewKey"]
     if is_default_edits(edits, clip_start, clip_end) and preview_key:

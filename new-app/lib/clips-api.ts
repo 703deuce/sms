@@ -175,6 +175,20 @@ export function exportProjectAll(projectId: string) {
   )
 }
 
+export function exportProjectAllBatch(
+  projectId: string,
+  body: { clipIds: string[]; aspect: '9:16' | '1:1' | '16:9'; resolution: '720p' | '1080p' },
+) {
+  return clipsFetch<{
+    batchId: string
+    watermark: boolean
+    items: { clipId: string; renderId: string; status: string }[]
+  }>(`/api/clips/projects/${projectId}/export-all`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export function listExports(status: 'all' | 'ready' | 'failed' = 'all') {
   return listRenders(status)
 }

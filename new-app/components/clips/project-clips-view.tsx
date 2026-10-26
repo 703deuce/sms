@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
 import { JobStatus } from '@/components/clips/job-status'
-import { exportClip, exportProjectAll, listProjectClips } from '@/lib/clips-api'
+import { ExportAllDialog } from '@/components/clips/export-all-dialog'
+import { exportClip, listProjectClips } from '@/lib/clips-api'
 import { Clapperboard } from 'lucide-react'
 
 type ProjectStatusPayload = {
@@ -113,17 +114,6 @@ export function ProjectClipsView({
     }
   }
 
-  const onExportAll = async () => {
-    try {
-      const data = await exportProjectAll(projectId)
-      for (const item of data.items) {
-        if (item.downloadUrl) triggerDownload(item.downloadUrl, item.filename || 'clip.mp4')
-      }
-      toast.success(`Started ${data.items.length} downloads`)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export all failed')
-    }
-  }
 
   const desc = pageDescription(status, error)
   const showResults = status === 'READY' && readyHydrated
@@ -144,11 +134,7 @@ export function ProjectClipsView({
           <Panel
             title={clipCountLabel(clips.length)}
             description="Sorted by score. Hover a card to preview."
-            actions={
-              clips.length > 0 ? (
-                <Button size="sm" variant="outline" onClick={() => void onExportAll()}>Export all</Button>
-              ) : null
-            }
+            actions={clips.length > 0 ? <ExportAllDialog projectId={projectId} clips={clips} /> : null}
           >
             {clips.length === 0 ? (
               <EmptyState
