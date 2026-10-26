@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { AiBrollCard } from '@/components/clips/editor/ai-broll-card'
 import { StockBrollPicker } from '@/components/clips/editor/stock-broll-picker'
 import { useGeneration } from '@/components/clips/editor/use-generation'
@@ -26,6 +27,7 @@ export function BrollPanel({
   brollMedia,
   onMergeBroll,
   onRemoveBroll,
+  onBrollMedia,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -35,10 +37,16 @@ export function BrollPanel({
   brollMedia: BrollMediaRow[]
   onMergeBroll: (items: BrollItem[], replace?: boolean) => void
   onRemoveBroll: (id: string) => void
+  onBrollMedia: (rows: BrollMediaRow[]) => void
 }) {
   const [mode, setMode] = useState<'stock' | 'ai'>('stock')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [suggestions, setSuggestions] = useState<{ atMs: number; durationS: number; prompt: string }[]>([])
+  const [manualAi, setManualAi] = useState({
+    prompt: aiMeta?.brollIdeas?.[0] || '',
+    durationS: 3,
+    resolution: '480p' as '480p' | '720p',
+  })
   const [activeGen, setActiveGen] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const gen = useGeneration(activeGen)
@@ -47,13 +55,30 @@ export function BrollPanel({
   const defaultQuery = aiMeta?.brollIdeas?.[0] || ''
 
   const insertStock = async (providerId: string, startMs: number, endMs: number) => {
-    const data = await clipsFetch<{ assetId: string; url: string }>(`/api/clips/clips/${clipId}/broll`, {
+    const itemId = crypto.randomUUID()
+    const data = await clipsFetch<{
+      assetId: string
+      url: string
+      thumbUrl?: string
+      previewUrl?: string
+    }>(`/api/clips/clips/${clipId}/broll`, {
       method: 'POST',
       body: JSON.stringify({ providerId, startMs, endMs }),
     })
+    onBrollMedia([
+      {
+        id: itemId,
+        source: 'stock',
+        startMs,
+        endMs,
+        url: data.url || data.previewUrl || null,
+        thumbUrl: data.thumbUrl,
+        assetId: data.assetId,
+      },
+    ])
     onMergeBroll([
       {
-        id: crypto.randomUUID(),
+        id: itemId,
         source: 'stock',
         assetId: data.assetId,
         startMs,
@@ -65,11 +90,21 @@ export function BrollPanel({
   const autoBroll = async () => {
     setBusy(true)
     try {
-      const data = await clipsFetch<{ items: BrollItem[] }>(`/api/clips/clips/${clipId}/broll/auto`, {
-        method: 'POST',
-        body: '{}',
-      })
+      const data = await clipsFetch<{
+        items: BrollItem[]
+        media?: BrollMediaRow[]
+        message?: string
+        count?: number
+      }>(`/api/clips/clips/${clipId}/broll/auto`, { method: 'POST', body: '{}' })
+      if (!data.items?.length) {
+        toast.error(data.message || 'No B-roll placements found')
+        return
+      }
+      if (data.media?.length) onBrollMedia(data.media)
       onMergeBroll(data.items, true)
+      toast.success(`Added ${data.items.length} B-roll clip${data.items.length === 1 ? '' : 's'}`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Auto B-roll failed')
     } finally {
       setBusy(false)
     }
@@ -82,16 +117,27 @@ export function BrollPanel({
         `/api/clips/clips/${clipId}/broll/ai/suggest`,
         { method: 'POST', body: '{}' },
       )
+      if (!data.suggestions?.length) {
+        toast.error('No shot suggestions returned')
+        return
+      }
       setSuggestions(data.suggestions)
       setMode('ai')
+      toast.success(`${data.suggestions.length} shot suggestion(s)`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Suggest shots failed')
     } finally {
       setBusy(false)
     }
   }
 
-  const pendingAi = useRef<{ generationId: string; atMs: number; durationS: number } | null>(null)
+  const pendingAi = useRef<{ generationId: string; atMs: number; durationS: number; itemId: string } | null>(null)
 
   const startAi = async (s: { atMs: number; durationS: number; prompt: string; resolution?: '480p' | '720p' }) => {
+    if (!s.prompt.trim()) {
+      toast.error('Enter a prompt')
+      return
+    }
     setBusy(true)
     try {
       const data = await clipsFetch<{ generationId: string }>(`/api/clips/clips/${clipId}/broll/ai`, {
@@ -103,8 +149,15 @@ export function BrollPanel({
           resolution: s.resolution || '480p',
         }),
       })
-      pendingAi.current = { generationId: data.generationId, atMs: s.atMs, durationS: s.durationS }
+      pendingAi.current = {
+        generationId: data.generationId,
+        atMs: s.atMs,
+        durationS: s.durationS,
+        itemId: crypto.randomUUID(),
+      }
       setActiveGen(data.generationId)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'AI B-roll failed')
     } finally {
       setBusy(false)
     }
@@ -113,9 +166,25 @@ export function BrollPanel({
   useEffect(() => {
     if (gen.status !== 'READY' || !activeGen || !pendingAi.current) return
     const p = pendingAi.current
+    if (gen.error) {
+      toast.error(gen.error)
+      pendingAi.current = null
+      setActiveGen(null)
+      return
+    }
+    onBrollMedia([
+      {
+        id: p.itemId,
+        source: 'ai',
+        startMs: p.atMs,
+        endMs: p.atMs + p.durationS * 1000,
+        url: gen.downloadUrl,
+        generationId: activeGen,
+      },
+    ])
     onMergeBroll([
       {
-        id: crypto.randomUUID(),
+        id: p.itemId,
         source: 'ai',
         generationId: activeGen,
         startMs: p.atMs,
@@ -124,7 +193,8 @@ export function BrollPanel({
     ])
     pendingAi.current = null
     setActiveGen(null)
-  }, [gen.status, activeGen, onMergeBroll])
+    toast.success('AI B-roll added')
+  }, [gen.status, gen.downloadUrl, gen.error, activeGen, onMergeBroll, onBrollMedia])
 
   return (
     <div className="flex flex-col gap-3 p-3">
@@ -141,7 +211,11 @@ export function BrollPanel({
               const m = mediaById.get(item.id)
               return (
                 <li key={item.id} className="flex gap-2 rounded border p-2 text-xs">
-                  {m?.thumbUrl ? <img src={m.thumbUrl} alt="" className="h-14 w-8 rounded object-cover" /> : <div className="h-14 w-8 rounded bg-muted" />}
+                  {m?.thumbUrl ? (
+                    <img src={m.thumbUrl} alt="" className="h-14 w-8 rounded object-cover" />
+                  ) : (
+                    <div className="h-14 w-8 rounded bg-muted" />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div>{msLabel(item.startMs)}–{msLabel(item.endMs)}</div>
                     {m?.author && m.pageUrl ? (
@@ -164,12 +238,13 @@ export function BrollPanel({
             defaultQuery={defaultQuery}
             clipEndMs={outputDurationMs}
             playheadMs={playheadMs}
-            onInsert={(pid, a, b) => void insertStock(pid, a, b)}
+            onInsert={(pid, a, b) => void insertStock(pid, a, b).catch((e) => toast.error(e instanceof Error ? e.message : 'Insert failed'))}
           />
         </>
       ) : (
         <>
           <Button size="sm" variant="outline" onClick={() => void suggest()} disabled={busy}>Suggest shots</Button>
+          {gen.status === 'RUNNING' && <p className="text-xs text-muted-foreground">Generating AI B-roll…</p>}
           {suggestions.map((s, i) => (
             <AiBrollCard
               key={i}
@@ -179,16 +254,24 @@ export function BrollPanel({
               atMs={s.atMs}
               costUsd={kieVideoCostUsd(s.durationS, '480p')}
               onChange={(p) =>
-                setSuggestions((prev) =>
-                  prev.map((row, j) => (j === i ? { ...row, ...p } : row)),
-                )
+                setSuggestions((prev) => prev.map((row, j) => (j === i ? { ...row, ...p } : row)))
               }
               onGenerate={() => void startAi({ ...s, resolution: '480p' })}
               busy={busy || gen.status === 'RUNNING'}
             />
           ))}
+          <AiBrollCard
+            prompt={manualAi.prompt}
+            durationS={manualAi.durationS}
+            resolution={manualAi.resolution}
+            atMs={playheadMs}
+            costUsd={kieVideoCostUsd(manualAi.durationS, manualAi.resolution)}
+            onChange={(p) => setManualAi((m) => ({ ...m, ...p }))}
+            onGenerate={() => void startAi({ ...manualAi, atMs: playheadMs })}
+            busy={busy || gen.status === 'RUNNING'}
+          />
           {!suggestions.length && (
-            <p className="text-sm text-muted-foreground">Suggest shots to generate AI B-roll with Kie Wan 3.0.</p>
+            <p className="text-sm text-muted-foreground">Generate AI B-roll (9:16) at the playhead, or suggest shots first.</p>
           )}
         </>
       )}

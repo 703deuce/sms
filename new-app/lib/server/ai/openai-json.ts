@@ -22,6 +22,7 @@ export async function openAiJsonResponse<T>(system: string, user: string): Promi
         { role: 'user', content: user },
       ],
     }),
+    signal: AbortSignal.timeout(45_000),
   })
   if (!res.ok) {
     const errText = await res.text()

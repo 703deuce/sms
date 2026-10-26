@@ -263,9 +263,15 @@ def main() -> None:
                             with conn.cursor() as cur:
                                 cur.execute(
                                     'UPDATE clip_renders SET status = %s, error = %s, "updatedAt" = NOW() WHERE id = %s',
-                                    ("FAILED", msg[:500], rid),
+                                    ("FAILED", msg[:4000], rid),
                                 )
                             conn.commit()
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                'UPDATE clip_jobs SET status = %s, error = %s, "finishedAt" = NOW() WHERE id = %s',
+                                ("FAILED", msg[:4000], job["id"]),
+                            )
+                        conn.commit()
                         post_progress(job["id"], {"jobStatus": "FAILED", "error": msg[:500]})
                     else:
                         post_progress(

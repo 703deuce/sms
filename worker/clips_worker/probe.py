@@ -30,7 +30,6 @@ def probe_duration(path: str | Path) -> float:
 
 
 def format_subprocess_error(exc: BaseException) -> str:
-    if isinstance(exc, subprocess.CalledProcessError):
-        err = (exc.stderr or exc.stdout or str(exc)).strip()
-        return f"{exc.cmd[0] if exc.cmd else 'command'} failed: {err[:500]}"
-    return str(exc)
+    from clips_worker.ffmpeg_util import format_subprocess_error as fmt
+
+    return fmt(exc)

@@ -46,7 +46,7 @@ export function EditorShell({
   cropTrack,
   videoUrl,
   aiMeta,
-  brollMedia = [],
+  brollMedia: initialBrollMedia = [],
 }: {
   projectId: string
   clipId: string
@@ -60,6 +60,7 @@ export function EditorShell({
   aiMeta?: { brollIdeas?: string[] } | null
   brollMedia?: BrollMediaRow[]
 }) {
+  const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
   const [title, setTitle] = useState(initialTitle)
   const [exportOpen, setExportOpen] = useState(false)
   const [outputMs, setOutputMs] = useState(0)
@@ -91,6 +92,14 @@ export function EditorShell({
     updateSfx,
     removeSfx,
   } = useEditorState(clipId, bounds, initialEdits)
+
+  const mergeBrollMedia = useCallback((rows: BrollMediaRow[]) => {
+    setBrollMedia((prev) => {
+      const map = new Map(prev.map((r) => [r.id, r]))
+      for (const row of rows) map.set(row.id, row)
+      return [...map.values()]
+    })
+  }, [])
 
   const musicGenId = edits.audio?.music?.generationId ?? null
   const musicGen = useGeneration(musicGenId)
@@ -279,6 +288,7 @@ export function EditorShell({
                 brollMedia={brollMedia}
                 onMergeBroll={mergeBroll}
                 onRemoveBroll={removeBroll}
+                onBrollMedia={mergeBrollMedia}
               />
             </TabsContent>
             <TabsContent value="audio" className="mt-0">

@@ -63,6 +63,12 @@ export function StockBrollPicker({
             className="flex-1 rounded-md border border-border px-2 py-1 text-sm"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void search()
+              }
+            }}
           />
           <Button size="sm" onClick={() => void search()} disabled={loading}>Search</Button>
         </div>

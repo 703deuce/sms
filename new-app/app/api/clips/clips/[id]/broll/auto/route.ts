@@ -3,6 +3,7 @@ import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { jsonError } from '@/lib/server/api-error'
 import { buildAutoBrollItems } from '@/lib/server/clips/broll-auto'
+import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
@@ -33,8 +34,14 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     const words = loadSourceWords(transcript)
     const aiMeta = (clip.aiMeta || {}) as { brollIdeas?: string[] }
     const items = await buildAutoBrollItems(edits, words, aiMeta.brollIdeas || [])
+    if (!items.length) {
+      return NextResponse.json({
+        data: { items, message: 'No stock B-roll placements matched this clip (try manual search).' },
+      })
+    }
 
-    return NextResponse.json({ data: { items } })
+    const media = await resolveBrollMedia(items)
+    return NextResponse.json({ data: { items, media, count: items.length } })
   } catch (err) {
     return jsonError(err, 500)
   }

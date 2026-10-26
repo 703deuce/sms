@@ -55,9 +55,12 @@ export async function buildAutoBrollItems(
   for (const idea of queries) {
     if (items.length >= MAX_SHOTS) break
     const hits = await searchVideos(idea, 1)
-    const hit = hits.find((h) => h.durationS >= 3)
-    if (!hit) continue
-    const internal = await findCachedHit(hit.providerId)
+    let internal = null
+    for (const pub of hits) {
+      if (pub.durationS < 3) continue
+      internal = await findCachedHit(pub.providerId)
+      if (internal) break
+    }
     if (!internal) continue
     const { asset } = await ensureStockAsset(internal)
 

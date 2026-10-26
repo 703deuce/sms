@@ -27,6 +27,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       data: {
         assetId: asset.id,
         url,
+        thumbUrl: asset.thumbUrl || hit.thumbUrl,
+        previewUrl: hit.preview,
         credit: { author: asset.author, pageUrl: asset.pageUrl },
         startMs: body.startMs,
         endMs: body.endMs,

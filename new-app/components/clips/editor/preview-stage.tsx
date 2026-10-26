@@ -169,7 +169,7 @@ export function PreviewStage({
             />
             <video
               ref={videoRefInner}
-              className="absolute left-0 top-0 max-w-none"
+              className="absolute left-0 top-0 z-[1] max-w-none"
               style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
               playsInline
               onLoadedMetadata={() => {
@@ -202,7 +202,7 @@ export function PreviewStage({
                 brollRefs.current[item.id] = el
               }}
               src={media.url}
-              className="pointer-events-none absolute inset-0 z-[5] size-full object-cover"
+              className="pointer-events-none absolute inset-0 z-[15] size-full object-cover"
               muted
               playsInline
               preload="auto"

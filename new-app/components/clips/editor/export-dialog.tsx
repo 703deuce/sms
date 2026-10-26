@@ -24,6 +24,7 @@ export function ExportDialog({
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [filename, setFilename] = useState('clip.mp4')
   const [status, setStatus] = useState<string | null>(null)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) {
@@ -31,6 +32,7 @@ export function ExportDialog({
       setDownloadUrl(null)
       setStatus(null)
       setBusy(false)
+      setErrorDetail(null)
     }
   }, [open])
 
@@ -39,9 +41,11 @@ export function ExportDialog({
     const t = setInterval(() => {
       void getRenderStatus(renderId).then((r) => {
         setStatus(r.status)
+        if (r.status === 'FAILED' && r.error) setErrorDetail(r.error)
         if (r.status === 'READY' && r.downloadUrl) {
           setDownloadUrl(r.downloadUrl)
           setFilename(r.filename)
+          setErrorDetail(null)
         }
       })
     }, 2000)
@@ -85,7 +89,12 @@ export function ExportDialog({
           </p>
         )}
         <MediaCredits clipId={clipId} edits={edits} />
-        {status && status !== 'READY' && <p className="mt-3 text-sm">Status: {status}…</p>}
+        {status && status !== 'READY' && status !== 'FAILED' && <p className="mt-3 text-sm">Status: {status}…</p>}
+        {status === 'FAILED' && errorDetail && (
+          <pre className="mt-3 max-h-40 overflow-auto rounded border border-destructive/30 bg-destructive/5 p-2 text-xs whitespace-pre-wrap text-destructive">
+            {errorDetail}
+          </pre>
+        )}
         <div className="mt-4 flex flex-wrap gap-2">
           {!downloadUrl ? (
             <Button onClick={() => void startExport()} disabled={busy}>{busy ? 'Exporting…' : 'Export MP4'}</Button>
