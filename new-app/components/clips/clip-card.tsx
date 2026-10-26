@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ScoreBadge } from '@/components/clips/score-badge'
 import type { ClipCardData } from '@/components/clips/clip-grid'
@@ -18,9 +19,11 @@ function formatDur(ms: number) {
 
 export function ClipCard({
   clip,
+  projectId,
   onDownload,
 }: {
   clip: ClipCardData
+  projectId: string
   onDownload: (clipId: string) => void
 }) {
   const scores = (clip.scores || {}) as Record<string, string>
@@ -75,7 +78,12 @@ export function ClipCard({
         {clip.reason ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{clip.reason}</p>
         ) : null}
-        <Button size="sm" variant="outline" onClick={() => onDownload(clip.id)}>Download</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="default" render={<Link href={`/app/clips/${projectId}/edit/${clip.id}`} />}>
+            Edit
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onDownload(clip.id)}>Download</Button>
+        </div>
       </div>
     </article>
   )

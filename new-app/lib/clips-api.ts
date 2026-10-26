@@ -77,9 +77,84 @@ export function listProjectClips(projectId: string, sort: 'score' | 'timeline' =
 }
 
 export function exportClip(clipId: string) {
-  return clipsFetch<{ renderId: string; downloadUrl: string; filename: string; watermark: boolean }>(
-    `/api/clips/clips/${clipId}/export`,
-    { method: 'POST', body: '{}' },
+  return clipsFetch<{
+    renderId: string
+    downloadUrl: string | null
+    filename: string
+    download?: string
+    watermark: boolean
+    status?: string
+    jobId?: string
+  }>(`/api/clips/clips/${clipId}/export`, {
+    method: 'POST',
+    body: JSON.stringify({ resolution: 720, watermark: false }),
+  })
+}
+
+export function listRenders(status: 'all' | 'ready' | 'failed' = 'all') {
+  return clipsFetch<{ exports: ExportRenderRow[] }>(`/api/clips/renders?status=${status}`)
+}
+
+export type ExportRenderRow = {
+  id: string
+  clipId: string
+  projectId: string
+  title: string
+  resolution: string
+  watermark: boolean
+  status: string
+  createdAt: string
+  expiresAt: string | null
+  sizeBytes: number | null
+  filename: string
+  posterUrl: string | null
+  editorUrl: string
+  downloadUrl: string | null
+}
+
+export function getClipEditor(clipId: string) {
+  return clipsFetch<{
+    clip: {
+      id: string
+      projectId: string
+      title: string
+      startMs: number
+      endMs: number
+      durationMs: number
+      score: number
+    }
+    edits: import('@/lib/clips/edits').ClipEditsV2
+    words: import('@/lib/clips/edits').ClipWord[]
+    crop: { shots: unknown[] }
+    mediaUrls: { preview: string | null; poster: string | null; proxy: string | null; source: string | null }
+    project: { id: string; title: string; settings: unknown }
+  }>(`/api/clips/clips/${clipId}`)
+}
+
+export function patchClip(clipId: string, body: { title?: string; edits?: unknown }) {
+  return clipsFetch<{ id: string; title: string; edits: unknown }>(`/api/clips/clips/${clipId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export function exportClipWithOptions(
+  clipId: string,
+  body: { resolution?: 720 | '720p'; watermark?: boolean; alsoSrt?: boolean },
+) {
+  return clipsFetch<{
+    renderId: string
+    downloadUrl: string | null
+    filename: string
+    watermark: boolean
+    status: string
+    jobId?: string
+  }>(`/api/clips/clips/${clipId}/export`, { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function getRenderStatus(renderId: string) {
+  return clipsFetch<{ id: string; status: string; downloadUrl: string | null; filename: string; error: string | null }>(
+    `/api/clips/renders/${renderId}`,
   )
 }
 

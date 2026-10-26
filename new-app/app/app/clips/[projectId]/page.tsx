@@ -1,5 +1,6 @@
-import { Page, PageHeader } from '@/components/app/page-primitives'
-import { ProjectResults } from '@/components/clips/project-results'
+import { Page } from '@/components/app/page-primitives'
+import { ProjectClipsView } from '@/components/clips/project-clips-view'
+import { listProjectClips } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { notFound } from 'next/navigation'
@@ -13,17 +14,18 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId } })
   if (!project) notFound()
 
-  const desc =
-    project.status === 'READY'
-      ? 'Your clips are ready.'
-      : project.status === 'FAILED'
-        ? project.error || 'Processing failed.'
-        : 'Processing your source video.'
+  const initialClips =
+    project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null
 
   return (
     <Page>
-      <PageHeader title={project.title} description={desc} />
-      <ProjectResults projectId={project.id} initialStatus={project.status} />
+      <ProjectClipsView
+        projectId={project.id}
+        projectTitle={project.title}
+        initialStatus={project.status}
+        initialClips={initialClips}
+        initialError={project.error}
+      />
     </Page>
   )
 }

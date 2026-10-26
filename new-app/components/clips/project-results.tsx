@@ -117,7 +117,7 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
   return (
     <div className="flex flex-col gap-4">
       <Panel
-        title={`${clips.length} clips`}
+        title={clips.length === 1 ? '1 clip' : `${clips.length} clips`}
         description="Sorted by score. Hover a card to preview."
         actions={
           clips.length > 0 ? (
@@ -132,7 +132,7 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
             description={error || 'No complete, self-contained moments were found in this segment.'}
           />
         ) : (
-          <ClipGrid clips={clips} onDownload={(id) => void onDownload(id)} />
+          <ClipGrid clips={clips} projectId={projectId} onDownload={(id) => void onDownload(id)} />
         )}
       </Panel>
     </div>
