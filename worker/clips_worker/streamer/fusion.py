@@ -79,10 +79,17 @@ def fuse_moments(
     settings: dict,
     chapters: list[dict] | None = None,
     llm_ranker=None,
+    cue_events: list[dict] | None = None,
 ) -> tuple[list[FusionPick], dict]:
     """Return ranked clip candidates and signals.json payload."""
     weights = (settings.get("signalWeights") or {}) if isinstance(settings, dict) else {}
-    default_w = {"audio": 0.35, "chat": 0.30, "viewerClips": 0.25, "transcript": 0.10}
+    default_w = {
+        "audio": 0.25,
+        "chat": 0.20,
+        "viewerClips": 0.15,
+        "transcript": 0.08,
+        "clipCues": 0.32,
+    }
     default_w.update(weights)
     streamer = (settings.get("streamer") or {}) if isinstance(settings, dict) else {}
     clip_count = int(streamer.get("clipCount") or settings.get("clipCount") or 12)
@@ -174,6 +181,18 @@ def fuse_moments(
         if len(deduped) >= clip_count:
             break
 
+    if cue_events:
+        deduped = _inject_clip_cue_picks(
+            deduped,
+            cue_events,
+            duration_s=duration_s,
+            min_clip_s=min_clip_s,
+            max_clip_s=max_clip_s,
+            lead_s=lead_s,
+            tail_s=tail_s,
+            clip_count=clip_count,
+        )
+
     payload = {
         "v": 1,
         "hz": 1,
@@ -183,8 +202,59 @@ def fuse_moments(
         "viewerClips": None,
         "chapters": chapters or [],
         "combined": curve,
+        "clipCues": signals.get("clipCues"),
     }
     return deduped, payload
+
+
+def _inject_clip_cue_picks(
+    picks: list[FusionPick],
+    cue_events: list[dict],
+    *,
+    duration_s: int,
+    min_clip_s: int,
+    max_clip_s: int,
+    lead_s: int,
+    tail_s: int,
+    clip_count: int,
+) -> list[FusionPick]:
+    """Guarantee clip-call moments survive cutoff (unless duplicate IoU)."""
+    out = list(picks)
+    for ev in cue_events:
+        sec = int(ev.get("sec", 0))
+        kind = str(ev.get("kind") or "")
+        start_ms = max(0, (sec - lead_s) * 1000)
+        end_ms = min(duration_s * 1000, (sec + tail_s) * 1000)
+        if end_ms - start_ms < min_clip_s * 1000:
+            end_ms = min(duration_s * 1000, start_ms + min_clip_s * 1000)
+        label, chip_kind = {
+            "streamer_call": ("Streamer called it", "streamer_call"),
+            "chat_call": ("Chat called it", "chat_call"),
+            "viewer_clip": ("Viewer clipped", "viewer_clip"),
+        }.get(kind, ("Clip cue", "clip_cue"))
+        candidate = FusionPick(
+            start_ms=start_ms,
+            end_ms=end_ms,
+            title=label,
+            hook=label,
+            score=98,
+            scores={"total": 98, "clipCues": 98, "audio": None, "transcript": None, "chat": None, "viewerClips": None, "llm": None},
+            ai_meta={
+                "streamer": {
+                    "reasons": [{"kind": chip_kind, "label": label, "value": ""}],
+                    "category": "reaction",
+                    "peakMs": sec * 1000,
+                    "signalPeak": float(ev.get("weight", 1.0)),
+                    "clipCue": True,
+                }
+            },
+            peak_ms=sec * 1000,
+        )
+        if any(_iou(candidate.start_ms, candidate.end_ms, d.start_ms, d.end_ms) > 0.5 for d in out):
+            continue
+        out.insert(0, candidate)
+    out.sort(key=lambda p: p.score, reverse=True)
+    return out[: max(clip_count, len([e for e in cue_events]))]
 
 
 def _peak_in_window(series: list[float] | None, start_ms: int, end_ms: int) -> int | None:
@@ -214,4 +284,10 @@ def _reasons_for(cand: dict, signals: dict, llm: dict) -> list[dict]:
             reasons.append({"kind": "transcript", "label": "Hype speech", "value": "high"})
     if llm.get("category"):
         reasons.append({"kind": "llm", "label": str(llm["category"]).replace("_", " ").title(), "value": ""})
+    cues = signals.get("clipCues")
+    if cues:
+        lo = cand["start_ms"] // 1000
+        hi = min(len(cues), cand["end_ms"] // 1000 + 1)
+        if hi > lo and max(cues[lo:hi]) >= 0.5:
+            reasons.append({"kind": "streamer_call", "label": "Streamer called it", "value": ""})
     return reasons

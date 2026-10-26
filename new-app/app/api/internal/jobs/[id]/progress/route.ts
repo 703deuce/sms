@@ -13,6 +13,9 @@ const schema = z.object({
   error: z.string().nullable().optional(),
   transcriptWords: z.array(z.unknown()).optional(),
   jobStatus: z.enum(['RUNNING', 'DONE', 'FAILED']).optional(),
+  etaSeconds: z.number().int().min(0).optional(),
+  chunkDone: z.number().int().min(0).optional(),
+  chunkTotal: z.number().int().min(0).optional(),
 })
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -38,6 +41,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       progress: body.progress,
       error: body.error,
       transcriptWords: body.transcriptWords,
+      etaSeconds: body.etaSeconds,
+      chunkDone: body.chunkDone,
+      chunkTotal: body.chunkTotal,
     })
 
     const heartbeat = shouldTouchLockedAt(job.status, body.jobStatus)

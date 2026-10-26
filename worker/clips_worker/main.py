@@ -362,6 +362,31 @@ def main() -> None:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")
                     traceback.print_exc()
+                    from clips_worker.streamer.errors import RetryableError
+
+                    if isinstance(exc, RetryableError) and (job.get("type") or "").startswith("STREAM_"):
+                        delay_s = min(300, 15 * max(1, int(job.get("attempts") or 1)))
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                UPDATE clip_jobs
+                                SET status='QUEUED', "lockedBy"=NULL, "lockedAt"=NULL,
+                                    "runAfter"=NOW() + (%s || ' seconds')::interval,
+                                    error=%s
+                                WHERE id=%s
+                                """,
+                                (str(delay_s), msg[:500], job["id"]),
+                            )
+                        conn.commit()
+                        post_progress(
+                            job["id"],
+                            {
+                                "jobStatus": "RUNNING",
+                                "stage": "retrying",
+                                "error": f"Retrying in {delay_s}s: {msg[:200]}",
+                            },
+                        )
+                        continue
                     if job.get("type") in ("RENDER_CLIP", "MUSIC", "THUMBNAIL", "DUB"):
                         if job.get("type") == "DUB":
                             payload = job.get("payload") or {}

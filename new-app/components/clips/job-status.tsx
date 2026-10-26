@@ -55,6 +55,8 @@ export function JobStatus({
   const [error, setError] = useState<string | null>(null)
   const [wordCount, setWordCount] = useState(0)
   const [etaSec, setEtaSec] = useState(0)
+  const [chunkDone, setChunkDone] = useState<number | undefined>()
+  const [chunkTotal, setChunkTotal] = useState<number | undefined>()
 
   useEffect(() => {
     let stop = false
@@ -68,6 +70,8 @@ export function JobStatus({
         setError(data.error)
         setWordCount(data.wordCount)
         setEtaSec(data.etaSec)
+        setChunkDone(data.chunkDone)
+        setChunkTotal(data.chunkTotal)
         if (['READY', 'FAILED', 'CANCELED'].includes(data.status)) return
       } catch {
         /* ignore transient */
@@ -95,6 +99,11 @@ export function JobStatus({
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge tone={ui.tone}>{ui.label}</StatusBadge>
               {wordCount > 0 && <span className="text-sm text-muted-foreground">{wordCount} words transcribed</span>}
+              {chunkTotal != null && chunkTotal > 0 && (
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  Chunk {chunkDone ?? 0}/{chunkTotal}
+                </span>
+              )}
               {etaSec > 0 && (
                 <span className="text-sm text-muted-foreground tabular-nums">ETA ~{Math.ceil(etaSec / 60)} min</span>
               )}

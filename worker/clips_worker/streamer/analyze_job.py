@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from pathlib import Path
 
 from psycopg2.extras import RealDictCursor
 
-from clips_worker.gpu import get_provider, transcribe_with_fallback
 from clips_worker.gpu.base import TranscribeReq
+from clips_worker.streamer.chunk_transcribe import transcribe_chunk_with_retry
+from clips_worker.streamer.progress import analyze_progress_payload
 from clips_worker.heartbeat import Heartbeat
 from clips_worker.pipeline import insert_clips_batch
 from clips_worker.storage import download_object, put_json, sign_url, upload_file
@@ -93,13 +95,14 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         audio_path = scratch / "audio.opus"
         download_object(audio_key, audio_path)
 
-        all_word_chunks: list[list[dict]] = []
+        chunk_started = time.time()
+        all_word_chunks: list[list[dict] | None] = [None] * len(ranges)
         for idx, (start_ms, end_ms) in enumerate(ranges):
             if idx in done:
                 wkey = chunks_state[str(idx)]["wordsKey"]
                 wp = scratch / f"words_{idx}.json"
                 download_object(wkey, wp)
-                all_word_chunks.append(json.loads(wp.read_text()))
+                all_word_chunks[idx] = json.loads(wp.read_text())
                 continue
 
             chunk_path = scratch / f"chunk_{idx}.opus"
@@ -113,27 +116,35 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 offset_ms=start_ms,
                 language=(settings.get("streamer") or {}).get("language"),
             )
-            res = transcribe_with_fallback(conn, req, workspace_id, project_id)
+            prior = int((chunks_state.get(str(idx)) or {}).get("attempts") or 0)
+            res = transcribe_chunk_with_retry(
+                conn, req, workspace_id, project_id, idx, prior_attempts=prior
+            )
             wkey = stream_chunk_key(workspace_id, vod_id, idx, "words.json")
             put_json(wkey, res.words)
-            chunks_state[str(idx)] = {"wordsKey": wkey, "startMs": start_ms, "endMs": end_ms}
+            chunks_state[str(idx)] = {
+                "wordsKey": wkey,
+                "startMs": start_ms,
+                "endMs": end_ms,
+                "attempts": prior + 1,
+                "done": True,
+            }
             state["chunks"] = chunks_state
+            state["analyzeStartedAt"] = state.get("analyzeStartedAt") or chunk_started
             _save_state(conn, vod_id, state)
-            all_word_chunks.append(res.words)
+            all_word_chunks[idx] = res.words
 
-            pct = 22 + int(33 * (idx + 1) / max(1, len(ranges)))
-            hb.update(stage=f"Transcribing {idx + 1}/{len(ranges)}", progress=pct)
-            post_progress(
-                job["id"],
-                {
-                    "projectStatus": "TRANSCRIBING",
-                    "stage": f"Transcribing {idx + 1}/{len(ranges)}",
-                    "progress": pct,
-                    "jobStatus": "RUNNING",
-                },
+            done_n = len([k for k, v in chunks_state.items() if v.get("wordsKey")])
+            payload_prog = analyze_progress_payload(
+                stage=f"Transcribing {done_n}/{len(ranges)}",
+                chunk_done=done_n,
+                chunk_total=len(ranges),
+                started_at=float(state.get("analyzeStartedAt") or chunk_started),
             )
+            hb.update(stage=payload_prog["stage"], progress=payload_prog["progress"])
+            post_progress(job["id"], payload_prog)
 
-        words = merge_words(all_word_chunks, ranges)
+        words = merge_words([c for c in all_word_chunks if c], ranges)
         transcript_key = vod["transcriptKey"]
         put_json(transcript_key, words)
         with conn.cursor() as cur:

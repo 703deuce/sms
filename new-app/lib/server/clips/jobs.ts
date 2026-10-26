@@ -8,7 +8,10 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId } })
   if (!project) return null
   const sourceMin = Math.max(1, Math.ceil((project.rangeEndMs - project.rangeStartMs) / 60_000))
-  const etaSec = TERMINAL.includes(project.status) ? 0 : sourceMin * 45
+  const settings = (project.settings ?? {}) as Record<string, unknown>
+  const sp = (settings.streamerProgress ?? {}) as Record<string, number>
+  const workerEta = typeof sp.etaSeconds === 'number' ? sp.etaSeconds : 0
+  const etaSec = TERMINAL.includes(project.status) ? 0 : workerEta > 0 ? workerEta : sourceMin * 45
   const clipCount =
     project.status === 'READY'
       ? await prisma.clip.count({ where: { projectId, deletedAt: null } })
@@ -21,6 +24,8 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
     etaSec,
     wordCount: Array.isArray(project.transcriptWords) ? (project.transcriptWords as unknown[]).length : 0,
     clipCount,
+    chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,
+    chunkTotal: typeof sp.chunkTotal === 'number' ? sp.chunkTotal : undefined,
   }
 }
 
@@ -56,6 +61,9 @@ export async function applyJobProgress(input: {
   progress?: number
   error?: string | null
   transcriptWords?: unknown
+  etaSeconds?: number
+  chunkDone?: number
+  chunkTotal?: number
 }) {
   const prisma = getPrisma()
   const job = await prisma.clipJob.findUnique({ where: { id: input.jobId } })
@@ -66,6 +74,22 @@ export async function applyJobProgress(input: {
   if (input.progress !== undefined) data.progress = input.progress
   if (input.error !== undefined) data.error = input.error
   if (input.transcriptWords !== undefined) data.transcriptWords = input.transcriptWords
+  if (
+    input.etaSeconds !== undefined ||
+    input.chunkDone !== undefined ||
+    input.chunkTotal !== undefined
+  ) {
+    const project = await prisma.clipProject.findUnique({ where: { id: job.projectId } })
+    const settings = (project?.settings ?? {}) as Record<string, unknown>
+    const streamerProgress = {
+      ...((settings.streamerProgress as Record<string, unknown>) ?? {}),
+      ...(input.etaSeconds !== undefined ? { etaSeconds: input.etaSeconds } : {}),
+      ...(input.chunkDone !== undefined ? { chunkDone: input.chunkDone } : {}),
+      ...(input.chunkTotal !== undefined ? { chunkTotal: input.chunkTotal } : {}),
+      updatedAt: new Date().toISOString(),
+    }
+    data.settings = { ...settings, streamerProgress }
+  }
   if (Object.keys(data).length) {
     await prisma.clipProject.update({ where: { id: job.projectId }, data })
   }
