@@ -163,15 +163,62 @@ def run_m4_pipeline(
 
             out_mp4 = td_path / f"out_{idx}.mp4"
             crop_track_path = td_path / f"crop_track_{idx}.json"
-            rendered = run_speakercrop(
-                clip_file,
-                out_mp4,
-                words_path,
-                settings,
-                td_path,
-                clip_start_ms=pick["start_ms"],
-                crop_track_out=crop_track_path,
-            )
+            reframe_settings = dict(settings)
+            ai_meta = pick.get("aiMeta") or {}
+            if mode == "anything":
+                from clips_worker.subject_reframe import (
+                    has_face_and_speech,
+                    write_motion_crop_track,
+                )
+
+                clip_words = json.loads(words_path.read_text())
+                if has_face_and_speech(clip_file, clip_words):
+                    rendered = run_speakercrop(
+                        clip_file,
+                        out_mp4,
+                        words_path,
+                        reframe_settings,
+                        td_path,
+                        clip_start_ms=pick["start_ms"],
+                        crop_track_out=crop_track_path,
+                    )
+                else:
+                    wide = write_motion_crop_track(
+                        clip_file,
+                        crop_track_path,
+                        ai_meta,
+                        pick["start_ms"],
+                        td_path / f"motion_{idx}",
+                    )
+                    if wide:
+                        reframe_settings["layout"] = "fit"
+                    rendered = run_speakercrop(
+                        clip_file,
+                        out_mp4,
+                        words_path,
+                        reframe_settings,
+                        td_path,
+                        clip_start_ms=pick["start_ms"],
+                        crop_track_out=crop_track_path,
+                    )
+                    if crop_track_path.exists() and not wide:
+                        write_motion_crop_track(
+                            clip_file,
+                            crop_track_path,
+                            ai_meta,
+                            pick["start_ms"],
+                            td_path / f"motion_{idx}",
+                        )
+            else:
+                rendered = run_speakercrop(
+                    clip_file,
+                    out_mp4,
+                    words_path,
+                    reframe_settings,
+                    td_path,
+                    clip_start_ms=pick["start_ms"],
+                    crop_track_out=crop_track_path,
+                )
             poster = td_path / f"poster_{idx}.jpg"
             poster_jpg(rendered, poster)
 
