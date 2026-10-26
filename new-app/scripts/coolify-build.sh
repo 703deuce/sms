@@ -23,7 +23,7 @@ echo "[new-app/coolify-build] prisma generate"
 $PNPM exec prisma generate
 
 echo "[new-app/coolify-build] caption parity (vitest)"
-$PNPM exec vitest run tests/caption-parity
+$PNPM exec vitest run tests/caption-parity --config vitest.config.mts
 
 if [[ "${SKIP_VOICE_V3_SYNC:-}" != "1" && -f ../packages/transovo-voice-v3-runtime/sync-to-new-app.mjs ]]; then
   echo "[new-app/coolify-build] sync Voice V3 authority (src/lib/voice-v3 → new-app mirror)"
