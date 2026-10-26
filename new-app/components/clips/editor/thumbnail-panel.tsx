@@ -92,7 +92,11 @@ export function ThumbnailPanel({
             <p className="text-xs text-muted-foreground">{t.titleText || 'Thumbnail'}</p>
             <div className="mt-2 flex gap-2">
               {t.downloadUrl && (
-                <Button size="sm" variant="outline" render={<a href={t.downloadUrl} download />} >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<a href={`/api/clips/thumbnails/${t.id}/download`} />}
+                >
                   Download
                 </Button>
               )}

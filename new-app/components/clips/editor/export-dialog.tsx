@@ -120,8 +120,12 @@ export function ExportDialog({
           ) : (
             <Button render={<a href={downloadUrl} download={filename} />}>Download MP4</Button>
           )}
-          {thumbnailUrl ? (
-            <Button variant="outline" render={<a href={thumbnailUrl} download />} nativeButton={false}>
+          {edits.thumbnailId ? (
+            <Button
+              variant="outline"
+              render={<a href={`/api/clips/thumbnails/${edits.thumbnailId}/download`} />}
+              nativeButton={false}
+            >
               Download thumbnail
             </Button>
           ) : null}
