@@ -95,8 +95,14 @@ bulk = {"data": [{"key": k, "value": pairs[k], "is_preview": False} for k in key
 api("PATCH", "/envs/bulk", bulk)
 print(f"coolify_bulk_ok keys={len(keys)}")
 
-# worker.env — single line per key
-worker_text = Path(envfile).read_text() if Path(envfile).exists() else ""
+# worker.env — single line per key (preserve all non-B2 keys)
+if os.path.exists(envfile):
+    if os.access(envfile, os.R_OK):
+        worker_text = Path(envfile).read_text()
+    else:
+        worker_text = subprocess.check_output(["sudo", "cat", envfile], text=True)
+else:
+    worker_text = ""
 lines = worker_text.splitlines()
 out: list[str] = []
 seen: set[str] = set()
