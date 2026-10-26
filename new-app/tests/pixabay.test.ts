@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { filterAndRankPixabayHits } from '@/lib/clips/pixabay-rerank'
 import { pickCacheRendition } from '@/lib/server/ai/pixabay'
 
 describe('pixabay cache rendition', () => {
@@ -11,6 +12,15 @@ describe('pixabay cache rendition', () => {
     }
     const picked = pickCacheRendition(videos)
     expect(picked?.url).toBe('https://small.mp4')
+  })
+
+  it('drops squirrel/peanut-only hits for newspaper comic strip query', () => {
+    const hits = [
+      { providerId: '1', tags: 'squirrel, peanut, animal, wildlife', durationS: 10 },
+      { providerId: '2', tags: 'newspaper, comic, strip, reading, books', durationS: 12 },
+    ]
+    const ranked = filterAndRankPixabayHits(hits, 'newspaper comic strip', ['comic', 'newspaper'])
+    expect(ranked.map((h) => h.providerId)).toEqual(['2'])
   })
 
   it('uses medium when small is too narrow', () => {

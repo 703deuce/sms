@@ -33,10 +33,10 @@ def insert_clips_batch(conn, rows: list[dict]) -> None:
                 INSERT INTO clips (
                   id, "projectId", "workspaceId", title, reason,
                   "startMs", "endMs", score, scores,
-                  "previewKey", "posterKey", "wordsKey", edits, "aiMeta",
+                  "previewKey", "posterKey", "wordsKey", "cropKey", edits, "aiMeta",
                   favorite, "createdAt", "updatedAt"
                 ) VALUES (
-                  %s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
+                  %s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
                 )
                 ON CONFLICT (id) DO NOTHING
                 """,
@@ -53,11 +53,73 @@ def insert_clips_batch(conn, rows: list[dict]) -> None:
                     row.get("previewKey"),
                     row.get("posterKey"),
                     row.get("wordsKey"),
+                    row.get("cropKey"),
                     json.dumps(row.get("edits") or {}),
                     json.dumps(row.get("aiMeta") or {}),
                 ),
             )
     conn.commit()
+
+
+def write_fit_blur_crop_track(video: Path, crop_out: Path, clip_start_ms: int) -> None:
+    """Static wide crop track (x0=-1) for fit-blur fallback."""
+    import subprocess as sp
+
+    out = sp.check_output(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,r_frame_rate",
+            "-of",
+            "json",
+            str(video),
+        ],
+        text=True,
+    )
+    data = json.loads(out)["streams"][0]
+    w, h = int(data["width"]), int(data["height"])
+    fps_s = str(data.get("r_frame_rate", "30/1"))
+    if "/" in fps_s:
+        a, b = fps_s.split("/")
+        fps = float(a) / max(1.0, float(b))
+    else:
+        fps = float(fps_s)
+    dur_ms = int(
+        float(
+            sp.check_output(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(video),
+                ],
+                text=True,
+            ).strip()
+        )
+        * 1000
+    )
+    n = max(1, int(dur_ms / 1000 * fps))
+    track = {
+        "v": 1,
+        "W": w,
+        "H": h,
+        "cw": w,
+        "fps": fps,
+        "t0_ms": clip_start_ms,
+        "x0": [-1] * n,
+        "x0_A": [-1] * n,
+        "x0_B": [-1] * n,
+        "shots": [{"start_ms": clip_start_ms, "end_ms": clip_start_ms + dur_ms, "spk": "A"}],
+    }
+    crop_out.write_text(json.dumps(track, separators=(",", ":")))
 
 
 def initial_clip_edits(settings: dict) -> dict:
@@ -184,6 +246,7 @@ def run_m4_pipeline(
             crop_track_path = td_path / f"crop_track_{idx}.json"
             reframe_settings = dict(settings)
             ai_meta = pick.get("aiMeta") or {}
+            crop_method = "speaker_follow"
             if mode == "anything":
                 from clips_worker.subject_reframe import (
                     has_face_and_speech,
@@ -192,6 +255,7 @@ def run_m4_pipeline(
 
                 clip_words = json.loads(words_path.read_text())
                 if has_face_and_speech(clip_file, clip_words):
+                    crop_method = "speaker_follow"
                     rendered = run_speakercrop(
                         clip_file,
                         out_mp4,
@@ -210,7 +274,11 @@ def run_m4_pipeline(
                         td_path / f"motion_{idx}",
                     )
                     if wide:
-                        reframe_settings["layout"] = "fit"
+                        crop_method = "fit_blur"
+                        reframe_settings = {**reframe_settings, "layout": "fit"}
+                        write_fit_blur_crop_track(clip_file, crop_track_path, pick["start_ms"])
+                    else:
+                        crop_method = "subject_follow"
                     rendered = run_speakercrop(
                         clip_file,
                         out_mp4,
@@ -220,15 +288,12 @@ def run_m4_pipeline(
                         clip_start_ms=pick["start_ms"],
                         crop_track_out=crop_track_path,
                     )
-                    if crop_track_path.exists() and not wide:
-                        write_motion_crop_track(
-                            clip_file,
-                            crop_track_path,
-                            ai_meta,
-                            pick["start_ms"],
-                            td_path / f"motion_{idx}",
-                        )
+                if not crop_track_path.exists():
+                    write_fit_blur_crop_track(clip_file, crop_track_path, pick["start_ms"])
+                    crop_method = "fit_blur"
+                    reframe_settings = {**reframe_settings, "layout": "fit"}
             else:
+                crop_method = "speaker_follow"
                 rendered = run_speakercrop(
                     clip_file,
                     out_mp4,
@@ -245,8 +310,16 @@ def run_m4_pipeline(
             upload_file(keys["preview"], rendered, "video/mp4")
             upload_file(keys["poster"], poster, "image/jpeg")
             put_json(keys["words"], clip_words)
+            crop_key = None
             if crop_track_path.exists():
                 upload_file(keys["crop_track"], crop_track_path, "application/json")
+                crop_key = keys["crop_track"]
+            elif mode == "anything":
+                raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
+
+            ai_meta_out = {**(pick.get("aiMeta") or {}), "cropMethod": crop_method}
+            if mode == "anything" and not crop_key:
+                raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
 
             clip_rows.append(
                 {
@@ -262,8 +335,9 @@ def run_m4_pipeline(
                     "previewKey": keys["preview"],
                     "posterKey": keys["poster"],
                     "wordsKey": keys["words"],
+                    "cropKey": crop_key,
                     "edits": initial_clip_edits(settings),
-                    "aiMeta": pick.get("aiMeta") or {"hook": pick.get("hook")},
+                    "aiMeta": ai_meta_out if mode == "anything" else (pick.get("aiMeta") or {"hook": pick.get("hook")}),
                 }
             )
             post_progress(
@@ -275,6 +349,11 @@ def run_m4_pipeline(
                     "jobStatus": "RUNNING",
                 },
             )
+
+        if mode == "anything":
+            for row in clip_rows:
+                if not row.get("cropKey"):
+                    raise RuntimeError(f"pipeline invariant: missing cropKey for clip {row.get('id')}")
 
         insert_clips_batch(conn, clip_rows)
         mark_project_ready(conn, project_id)

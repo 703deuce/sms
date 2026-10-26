@@ -41,6 +41,13 @@ export function ThumbnailPanel({
     return () => clearInterval(t)
   }, [refresh])
 
+  useEffect(() => {
+    const picked = items.find((t) => t.picked)
+    if (picked && !edits.thumbnailId) {
+      onEdits({ ...edits, thumbnailId: picked.id })
+    }
+  }, [items, edits, onEdits])
+
   const generate = async () => {
     setBusy(true)
     try {

@@ -233,12 +233,19 @@ def _extend_to_cuts(start_s: float, end_s: float, cuts: list[float], duration_s:
     return lo, hi
 
 
+def shortlist_window_cap(range_start_s: float, range_end_s: float, max_clips: int) -> int:
+    duration_s = max(1.0, range_end_s - range_start_s)
+    return min(60, max(max_clips * 3, int(math.ceil(0.25 * duration_s / 30.0))))
+
+
 def build_candidate_windows(
     video: Path,
     words: list[dict],
     work: Path,
     range_start_s: float = 0.0,
     range_end_s: float | None = None,
+    *,
+    max_clips: int = 10,
 ) -> list[CandidateWindow]:
     duration_s = probe_duration_s(video)
     if range_end_s is None or range_end_s <= 0:
@@ -256,7 +263,7 @@ def build_candidate_windows(
     rs = int(range_start_s)
     re = int(range_end_s)
     local = scores[rs : re + 1]
-    cap = min(60, max(1, int(math.ceil(0.25 * (range_end_s - range_start_s) / 30.0))))
+    cap = max(1, shortlist_window_cap(range_start_s, range_end_s, max_clips))
     peaks = _nms_peaks(local, min_gap_s=20)[: cap * 2]
     cuts = _scene_cuts(events)
 

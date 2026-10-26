@@ -52,9 +52,11 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   try {
     const { id: clipId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
+    const clip = await getClipForWorkspace(workspaceId, clipId)
+    if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const prisma = getPrisma()
     const rows = await prisma.clipThumbnail.findMany({
-      where: { clipId, workspaceId },
+      where: { clipId, workspaceId: clip.workspaceId },
       orderBy: { createdAt: 'desc' },
       take: 12,
     })

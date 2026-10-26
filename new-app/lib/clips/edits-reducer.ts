@@ -143,6 +143,17 @@ export function applyProducerTool(
   }
 }
 
+/** Apply many producer tools as one logical patch (single undo step on the client). */
+export function applyProducerPatch(
+  initial: ClipEditsV2,
+  bounds: ClipBounds,
+  calls: ProducerToolCall[],
+): { edits: ClipEditsV2; summaries: string[]; pendingPaid: ProducerToolCall[]; changeCount: number } {
+  const { edits, summaries, pendingPaid } = applyProducerTools(initial, bounds, calls)
+  const changeCount = summaries.filter((s) => !/^Pending /.test(s)).length
+  return { edits, summaries, pendingPaid, changeCount }
+}
+
 export function applyProducerTools(
   initial: ClipEditsV2,
   bounds: ClipBounds,
@@ -151,7 +162,22 @@ export function applyProducerTools(
   let edits = initial
   const summaries: string[] = []
   const pendingPaid: ProducerToolCall[] = []
-  for (const call of calls) {
+  const captionCalls = calls.filter((c) => c.name === 'set_captions')
+  const otherCalls = calls.filter((c) => c.name !== 'set_captions')
+  if (captionCalls.length > 1) {
+    const merged: ProducerToolCall = {
+      name: 'set_captions',
+      args: captionCalls.reduce((acc, c) => ({ ...acc, ...(c.args || {}) }), {}),
+    }
+    const res = applyProducerTool(edits, bounds, merged)
+    edits = res.edits
+    summaries.push(res.summary)
+  } else if (captionCalls.length === 1) {
+    const res = applyProducerTool(edits, bounds, captionCalls[0])
+    edits = res.edits
+    summaries.push(res.summary)
+  }
+  for (const call of otherCalls) {
     const res = applyProducerTool(edits, bounds, call)
     edits = res.edits
     summaries.push(res.summary)

@@ -89,6 +89,14 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     dispatch({ type: 'set', edits, pushHistory })
   }, [])
 
+  /** One undo step for a full producer patch (not per-field). */
+  const applyProducerPatch = useCallback(
+    (edits: ClipEditsV2) => {
+      dispatch({ type: 'set', edits, pushHistory: true })
+    },
+    [],
+  )
+
   const undo = useCallback(() => dispatch({ type: 'undo' }), [])
   const redo = useCallback(() => dispatch({ type: 'redo' }), [])
 
@@ -311,5 +319,14 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     removeSfx,
     attachMusicGeneration,
     resetEdits: () => setEdits(defaultEdits(bounds), false),
+    applyProducerPatch,
+    flushSave: () => {
+      if (state.saveState === 'dirty') {
+        dispatch({ type: 'saving' })
+        void patchClip(clipId, { edits: editsRef.current })
+          .then(() => dispatch({ type: 'saved' }))
+          .catch(() => dispatch({ type: 'saved' }))
+      }
+    },
   }
 }

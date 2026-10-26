@@ -1,11 +1,49 @@
 """FFmpeg B-roll overlay filtergraph for export."""
 from __future__ import annotations
 
+import re
+import subprocess
+from pathlib import Path
+
 from clips_worker.ffmpeg_util import run_ffmpeg
 
 
 def clip_window_duration_s(spec: dict) -> float:
     return max(0.1, float(spec["end_s"]) - float(spec["start_s"]))
+
+
+def detect_letterbox_crop(video: Path) -> str | None:
+    """Median cropdetect box from first ~2s (removes baked-in black bars)."""
+    try:
+        proc = subprocess.run(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-i",
+                str(video),
+                "-t",
+                "2",
+                "-vf",
+                "cropdetect=24:16:0",
+                "-f",
+                "null",
+                "-",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        out = proc.stderr or ""
+    except Exception:
+        out = ""
+    crops = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", out)
+    if not crops:
+        return None
+    crops.sort()
+    mid = crops[len(crops) // 2]
+    w, h, x, y = mid
+    if int(w) < 80 or int(h) < 80:
+        return None
+    return f"crop={w}:{h}:{x}:{y}"
 
 
 def build_broll_filtergraph(
@@ -29,8 +67,12 @@ def build_broll_filtergraph(
         start = float(spec["start_s"])
         end = float(spec["end_s"])
         inp = f"{i + 1}:v"
+        local = Path(spec["local_path"])
+        bar_crop = detect_letterbox_crop(local)
+        bar_vf = f"{bar_crop}," if bar_crop else ""
         parts.append(
             f"[{inp}]trim=0:{clip_dur:.3f},setpts=PTS-STARTPTS+{start:.3f}/TB,"
+            f"{bar_vf}"
             f"scale={width}:{height}:force_original_aspect_ratio=increase,"
             f"crop={width}:{height},fps=30,format=yuv420p[b{i}]"
         )

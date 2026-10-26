@@ -14,14 +14,16 @@ const SYSTEM = `You suggest stock B-roll placements for a short social clip.
 Return JSON {"placements":[...]} where each placement has:
 - atMs: integer ms on the clip timeline (output time, after edits)
 - durationMs: 2000-4000
-- query: 2-4 concrete visual nouns matching what is spoken (stock footage search)
-- must_include: 1-2 keywords from the spoken words that must appear in stock video tags
+- query: 2-4 generic stock-footage search terms (objects, actions, settings you can film)
+- must_include: 1-2 generic visual keywords that must appear in stock video tags
 
 Rules:
 - At most 3 placements
 - Only where a concrete visual noun is spoken (objects, actions you can film)
 - Never place in the first 1500ms (hook)
-- Queries must relate to the transcript, not random associations`
+- Queries must relate to the transcript, not random associations
+- NEVER use proper nouns, brand names, character names, franchises, or licensed IP (no "Peanuts", "Marvel", "Disney", celebrity names, etc.)
+- Use generic visuals only: e.g. "newspaper comic strip", "stack of comic books", "reading a comic book" — not character-specific terms`
 
 function excerptAroundMs(words: ClipWord[], atMs: number, padMs = 2000): string {
   const lo = (atMs - padMs) / 1000

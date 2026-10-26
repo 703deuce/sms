@@ -96,6 +96,8 @@ export function EditorShell({
     updateSfx,
     removeSfx,
     setEdits,
+    applyProducerPatch,
+    flushSave,
   } = useEditorState(clipId, bounds, initialEdits)
 
   const mergeBrollMedia = useCallback((rows: BrollMediaRow[]) => {
@@ -300,7 +302,13 @@ export function EditorShell({
               <TabsTrigger value="brand">Brand</TabsTrigger>
             </TabsList>
             <TabsContent value="producer" className="mt-0 h-[min(60vh,520px)]">
-              <ProducerPanel clipId={clipId} bounds={bounds} edits={edits} onApplyEdits={setEdits} />
+              <ProducerPanel
+                clipId={clipId}
+                bounds={bounds}
+                edits={edits}
+                onUndo={undo}
+                onApplyEdits={(next, _n) => applyProducerPatch(next)}
+              />
             </TabsContent>
             <TabsContent value="transcript" className="mt-0">
               <TranscriptPanel
@@ -343,6 +351,7 @@ export function EditorShell({
                 onMergeBroll={mergeBroll}
                 onRemoveBroll={removeBroll}
                 onBrollMedia={mergeBrollMedia}
+                onFlushEdits={flushSave}
               />
             </TabsContent>
             <TabsContent value="audio" className="mt-0">

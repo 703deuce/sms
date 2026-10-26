@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyProducerTool } from '@/lib/clips/edits-reducer'
+import { applyProducerPatch, applyProducerTool } from '@/lib/clips/edits-reducer'
 import { defaultEdits } from '@/lib/clips/edits'
 
 const bounds = { clipStartMs: 0, clipEndMs: 60_000 }
@@ -44,6 +44,30 @@ describe('edits-reducer', () => {
     expect((edits.brand as { logoKey?: string })?.logoKey).toBe('brand/ws/logo.png')
     expect(edits.captions?.presetId).toBe('minimal')
     expect(edits.captions?.colors?.a).toBe('#ff00aa')
+  })
+
+  it('one undo step restores full merged caption patch', () => {
+    const base = defaultEdits(bounds)
+    const before = { ...base, captions: { ...base.captions, presetId: 'bold_pop', size: 1 } }
+    const { edits: after } = applyProducerPatch(before, bounds, [
+      { name: 'set_captions', args: { presetId: 'karaoke', animation: 'karaoke', size: 1.2 } },
+    ])
+    expect(after.captions?.presetId).toBe('karaoke')
+    expect(after.captions?.size).toBe(1.2)
+    // Client keeps `before` on undo stack once; reverting equals before.
+    expect(before.captions?.presetId).toBe('bold_pop')
+    expect(before.captions?.size).toBe(1)
+  })
+
+  it('merges multiple set_captions into one patch', () => {
+    const base = defaultEdits(bounds)
+    const { edits } = applyProducerPatch(base, bounds, [
+      { name: 'set_captions', args: { presetId: 'karaoke', animation: 'karaoke' } },
+      { name: 'set_captions', args: { size: 1.2 } },
+    ])
+    expect(edits.captions?.presetId).toBe('karaoke')
+    expect(edits.captions?.animation).toBe('karaoke')
+    expect(edits.captions?.size).toBe(1.2)
   })
 
   it('dub tool requires confirmation', () => {

@@ -46,6 +46,8 @@ def rank_clipanything_candidates(
     project_id: str,
     candidates: list[dict],
     user_prompt: str,
+    max_clips: int = 10,
+    min_score: int = 40,
 ) -> list[dict[str, Any]]:
     """candidates: {id, start_s, end_s, transcript, frames:[{jpeg,index}]}"""
     model = discover_model()
@@ -77,9 +79,17 @@ def rank_clipanything_candidates(
         },
     }
 
-    batch = candidates[:8]
+    want = min(max_clips, len(candidates))
+    batch = candidates[: min(len(candidates), 24)]
     frame_budget = 300
-    parts: list[dict] = [{"text": PLAYBOOK}]
+    parts: list[dict] = [
+        {
+            "text": (
+                f"{PLAYBOOK}\nReturn exactly {want} ranked clips when possible (never more than {want}). "
+                f"Each clip score must be >= {min_score}. Sort best-first."
+            ),
+        },
+    ]
     if user_prompt.strip():
         parts.append({"text": f"User prompt: {user_prompt.strip()}"})
     used_frames = 0

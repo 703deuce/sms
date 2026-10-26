@@ -13,17 +13,20 @@ export function ProducerPanel({
   bounds,
   edits,
   onApplyEdits,
+  onUndo,
 }: {
   clipId: string
   bounds: ClipBounds
   edits: ClipEditsV2
-  onApplyEdits: (edits: ClipEditsV2) => void
+  onApplyEdits: (edits: ClipEditsV2, changeCount: number) => void
+  onUndo: () => void
 }) {
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [summaries, setSummaries] = useState<string[]>([])
   const [pendingPaid, setPendingPaid] = useState<{ name: string; args: Record<string, unknown> }[]>([])
+  const [appliedCount, setAppliedCount] = useState(0)
 
   const loadThread = useCallback(async () => {
     const data = await clipsFetch<{ thread: { messages: Msg[] } | null }>(`/api/clips/clips/${clipId}/producer`)
@@ -38,6 +41,7 @@ export function ProducerPanel({
     const text = input.trim()
     if (!text || busy) return
     setBusy(true)
+    setAppliedCount(0)
     setInput('')
     setMessages((m) => [...m, { role: 'user', content: text }])
     try {
@@ -57,20 +61,33 @@ export function ProducerPanel({
         const chunks = buf.split('\n\n')
         buf = chunks.pop() || ''
         for (const chunk of chunks) {
+          if (chunk.startsWith(':')) continue
           const lines = chunk.split('\n')
           const event = lines.find((l) => l.startsWith('event: '))?.slice(7)
           const dataLine = lines.find((l) => l.startsWith('data: '))?.slice(6)
           if (!event || !dataLine) continue
           const payload = JSON.parse(dataLine)
+          if (event === 'error') {
+            throw new Error(payload.message || 'Producer failed')
+          }
           if (event === 'message') {
             setMessages((m) => [...m, { role: 'assistant', content: payload.content }])
+          }
+          if (event === 'confirm' && payload.tool) {
+            setPendingPaid((p) => {
+              const exists = p.some((t) => t.name === payload.tool.name)
+              if (exists) return p
+              return [...p, payload.tool]
+            })
           }
           if (event === 'tools') {
             setSummaries(payload.summaries || [])
             setPendingPaid(payload.pendingPaid || [])
           }
           if (event === 'edits' && payload.edits) {
-            onApplyEdits(payload.edits as ClipEditsV2)
+            const n = Number(payload.changeCount ?? 0)
+            onApplyEdits(payload.edits as ClipEditsV2, n)
+            if (n > 0) setAppliedCount(n)
           }
         }
       }
@@ -96,6 +113,12 @@ export function ProducerPanel({
 
   return (
     <div className="flex h-full flex-col gap-2 p-3 text-sm">
+      {appliedCount > 0 && (
+        <div className="flex items-center justify-between rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5 text-xs">
+          <span>{appliedCount} change{appliedCount === 1 ? '' : 's'} applied</span>
+          <Button size="sm" variant="outline" onClick={() => { onUndo(); setAppliedCount(0) }}>Undo</Button>
+        </div>
+      )}
       <div className="flex-1 space-y-2 overflow-y-auto">
         {messages.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'text-right' : ''}>

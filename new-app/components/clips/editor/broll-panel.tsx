@@ -28,6 +28,7 @@ export function BrollPanel({
   onMergeBroll,
   onRemoveBroll,
   onBrollMedia,
+  onFlushEdits,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -38,6 +39,7 @@ export function BrollPanel({
   onMergeBroll: (items: BrollItem[], replace?: boolean) => void
   onRemoveBroll: (id: string) => void
   onBrollMedia: (rows: BrollMediaRow[]) => void
+  onFlushEdits?: () => void
 }) {
   const [mode, setMode] = useState<'stock' | 'ai'>('stock')
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -107,6 +109,7 @@ export function BrollPanel({
       }
       if (data.media?.length) onBrollMedia(data.media)
       onMergeBroll(data.items, false)
+      onFlushEdits?.()
       const q = (data.queriesUsed || []).join(', ')
       if (q) {
         toast.success(`Placed ${placed}${attempted > placed ? ` of ${attempted}` : ''}: ${q}`)
