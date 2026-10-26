@@ -1,6 +1,6 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-26 (owner reprioritized: clipper first; screenwriting hidden behind `FEATURE_SCREENWRITING=0`)
+**Last updated:** 2026-10-26 — clipper guard for legacy `app_chunked` sessions; `FEATURE_SCREENWRITING` off on web
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.
 
