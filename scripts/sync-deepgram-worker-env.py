@@ -64,7 +64,11 @@ def main() -> int:
     import subprocess
 
     subprocess.check_call(["sudo", "cp", "-a", str(WORKER_ENV), str(bak)])
-    lines = [ln for ln in _read_text(WORKER_ENV).splitlines() if not ln.startswith("DEEPGRAM")]
+    lines = [
+        ln
+        for ln in _read_text(WORKER_ENV).splitlines()
+        if not ln.startswith("DEEPGRAM") and not re.match(r"^DEEPGRAM_API_KEY\s*=\s*$", ln.strip())
+    ]
     lines.append(f"{dg_key}={val}")
     new_body = "\n".join(lines) + "\n"
     subprocess.run(
