@@ -21,5 +21,5 @@ CREATE TABLE IF NOT EXISTS "clip_montages" (
 
 CREATE INDEX IF NOT EXISTS "clip_montages_workspaceId_projectId_idx" ON "clip_montages"("workspaceId", "projectId");
 
-ALTER TABLE "clip_montages" ADD CONSTRAINT "clip_montages_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "clip_montages" ADD CONSTRAINT "clip_montages_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "clip_montages" ADD CONSTRAINT "clip_montages_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "clip_projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;

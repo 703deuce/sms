@@ -20,6 +20,15 @@ FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATION="20260916190000_voice_v2_ai_call_reco
 FAILED_VOICE_OPERATIONAL_OVERRIDES_MIGRATION="20260916194500_voice_operational_overrides"
 FAILED_AI_GENERATIONS_MIGRATION="20261026090000_ai_generations"
 FAILED_EXPORT_BATCH_CAPTION_PRESETS_MIGRATION="20261026140000_export_batch_caption_presets"
+FAILED_S10_MONTAGE_MIGRATION="20261026180000_s10_montage"
+
+recover_failed_s10_montage_migration() {
+  echo "[db-deploy] Recovering failed migration ${FAILED_S10_MONTAGE_MIGRATION} (drop partial clip_montages + mark rolled back)..."
+  prisma db execute --stdin <<'SQL' || true
+DROP TABLE IF EXISTS "clip_montages" CASCADE;
+SQL
+  prisma migrate resolve --rolled-back "${FAILED_S10_MONTAGE_MIGRATION}" || true
+}
 
 recover_failed_export_batch_caption_presets_migration() {
   echo "[db-deploy] Recovering failed migration ${FAILED_EXPORT_BATCH_CAPTION_PRESETS_MIGRATION} (drop bad FK if any + mark rolled back)..."
@@ -118,6 +127,10 @@ if [[ "$deploy_code" -ne 0 ]]; then
   elif echo "$deploy_out" | grep -q "${FAILED_EXPORT_BATCH_CAPTION_PRESETS_MIGRATION}"; then
     recover_failed_export_batch_caption_presets_migration
     echo "[db-deploy] Retrying prisma migrate deploy after export batch / caption presets recovery..."
+    prisma migrate deploy
+  elif echo "$deploy_out" | grep -q "${FAILED_S10_MONTAGE_MIGRATION}"; then
+    recover_failed_s10_montage_migration
+    echo "[db-deploy] Retrying prisma migrate deploy after s10 montage recovery..."
     prisma migrate deploy
   else
     exit "$deploy_code"
