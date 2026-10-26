@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { can } from '@/lib/billing/entitlements'
 import { exportProjectAllBatch } from '@/lib/clips-api'
 import type { ClipCardData } from '@/components/clips/clip-grid'
 
@@ -15,7 +16,9 @@ export function ExportAllDialog({
 }) {
   const [open, setOpen] = useState(false)
   const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16')
-  const [resolution, setResolution] = useState<'720p' | '1080p'>('720p')
+  const [resolution, setResolution] = useState<'720p' | '1080p'>(() =>
+    can('', 'export_1080p') ? '1080p' : '720p',
+  )
   const [selected, setSelected] = useState<Set<string>>(() => new Set(clips.map((c) => c.id)))
   const [busy, setBusy] = useState(false)
 

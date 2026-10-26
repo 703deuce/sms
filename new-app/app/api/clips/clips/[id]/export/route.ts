@@ -29,7 +29,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const edits = normalizeEdits(clip.edits, bounds)
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
-    const resolution = body.resolution
+    let resolution = body.resolution
+    if (resolution === '1080p' && !can(workspaceId, 'export_1080p')) {
+      resolution = '720p'
+    }
     const aspect = body.aspect
     if (
       canReuseClipPreviewForExport({

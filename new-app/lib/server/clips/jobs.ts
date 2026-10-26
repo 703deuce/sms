@@ -10,6 +10,7 @@ import {
 } from '@/lib/server/clips/job-reliability'
 import { getPrisma } from '@/lib/server/db'
 import { enqueueClipperRecoveryJob, isTranscriptReadyOrphan } from '@/lib/server/clips/recover-project'
+import { computeNonStreamerClipEtaSec } from '@/lib/server/clips/project-eta'
 import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
@@ -18,7 +19,6 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId } })
   if (!project) return null
-  const sourceMin = Math.max(1, Math.ceil((project.rangeEndMs - project.rangeStartMs) / 60_000))
   const settings = (project.settings ?? {}) as Record<string, unknown>
   const sp = (settings.streamerProgress ?? {}) as Record<string, number>
   const workerEta = typeof sp.etaSeconds === 'number' ? sp.etaSeconds : 0
@@ -64,10 +64,16 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
       } else if (workerEta > 0) {
         etaSec = workerEta
       } else if (!isStreamer) {
-        etaSec = sourceMin * 45
+        etaSec = computeNonStreamerClipEtaSec({
+          progress: project.progress,
+          createdAtMs: project.createdAt.getTime(),
+        })
       }
-    } else if (!isStreamer) {
-      etaSec = sourceMin * 45
+    } else if (!isStreamer && project.progress > 0) {
+      etaSec = computeNonStreamerClipEtaSec({
+        progress: project.progress,
+        createdAtMs: project.createdAt.getTime(),
+      })
     }
   }
   const clipCount =

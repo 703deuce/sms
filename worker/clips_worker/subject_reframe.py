@@ -184,20 +184,37 @@ def has_face_and_speech(video: Path, words: list[dict], min_words: int = 8) -> b
         0.3,
         50,
     )
-    hits = 0
-    frames = 0
-    while frames < 45:
-        ok, fr = cap.read()
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+    sample_positions: list[int] = []
+    if total > 0:
+        for ratio in (0.08, 0.22, 0.42, 0.62, 0.82):
+            sample_positions.append(min(total - 1, max(0, int(total * ratio))))
+    else:
+        sample_positions = list(range(0, 45, 5))
+
+    hits_by_region: list[bool] = []
+    for pos in sample_positions:
+        if total > 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, pos)
+            ok, fr = cap.read()
+        else:
+            ok, fr = cap.read()
         if not ok:
-            break
-        frames += 1
-        if frames % 5 != 0:
             continue
         _, faces = yunet.detect(fr)
-        if faces is not None and len(faces):
-            hits += 1
+        hits_by_region.append(faces is not None and len(faces) > 0)
+
     cap.release()
-    return hits >= 3
+    if not hits_by_region:
+        return False
+    hits = sum(1 for h in hits_by_region if h)
+    if hits < 2:
+        return False
+    mid = len(hits_by_region) // 2
+    late_hits = sum(1 for h in hits_by_region[mid:] if h)
+    if late_hits == 0 and hits_by_region[0]:
+        return False
+    return True
 
 
 def write_motion_crop_track(

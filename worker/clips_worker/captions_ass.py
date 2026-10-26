@@ -38,6 +38,11 @@ def margin_v_px(play_h: int, margin_pct: float) -> int:
     return round(play_h * margin_pct / 100)
 
 
+def margin_lr_px(play_w: int) -> int:
+    """Horizontal safe area so captions do not clip at frame edges."""
+    return max(56, round(play_w * 0.08))
+
+
 def chunk_words(words: list[dict], wpl: int) -> list[list[dict]]:
     out: list[list[dict]] = []
     cur: list[dict] = []
@@ -97,6 +102,7 @@ def build_ass(
     fontsize = round(size_pct / 100 * play_h)
     position = edits_captions.get("position") or preset["position"]
     margin_v = margin_v_px(play_h, float(edits_captions.get("marginVPct") or preset["marginVPct"]))
+    margin_lr = margin_lr_px(play_w)
     colors = edits_captions.get("colors") if isinstance(edits_captions.get("colors"), dict) else None
     emphasis = set(edits_captions.get("emphasis") or [])
     emph_scale = float(preset.get("emphasisScale") or 1.15)
@@ -111,13 +117,13 @@ def build_ass(
 ScriptType: v4.00+
 PlayResX: {play_w}
 PlayResY: {play_h}
-WrapStyle: 0
+WrapStyle: 2
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,Poppins ExtraBold,{fontsize},{cap_pri},{cap_pri},{cap_out},&H99000000,0,0,0,0,100,100,0,0,1,{cap_ow},0,{alignment_for(position)},40,40,{margin_v},1
-Style: Box,Poppins ExtraBold,{fontsize},{box_pri},{box_pri},{box_outline},&H99000000,0,0,0,0,100,100,0,0,3,{box_pad},0,{alignment_for(position)},40,40,{margin_v},1
+Style: Cap,Poppins ExtraBold,{fontsize},{cap_pri},{cap_pri},{cap_out},&H99000000,0,0,0,0,100,100,0,0,1,{cap_ow},0,{alignment_for(position)},{margin_lr},{margin_lr},{margin_v},1
+Style: Box,Poppins ExtraBold,{fontsize},{box_pri},{box_pri},{box_outline},&H99000000,0,0,0,0,100,100,0,0,3,{box_pad},0,{alignment_for(position)},{margin_lr},{margin_lr},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

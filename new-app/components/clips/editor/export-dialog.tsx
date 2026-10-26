@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
+import { can } from '@/lib/billing/entitlements'
 import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
@@ -32,6 +33,9 @@ export function ExportDialog({
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
   const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16')
+  const [resolution, setResolution] = useState<'720p' | '1080p'>(() =>
+    can('', 'export_1080p') ? '1080p' : '720p',
+  )
   const [busy, setBusy] = useState(false)
   const [renderId, setRenderId] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
@@ -93,7 +97,7 @@ export function ExportDialog({
     const toastId = toast.loading('Starting export…')
     try {
       const data = await exportClipWithOptions(clipId, {
-        resolution: '720p',
+        resolution,
         aspect,
         watermark: false,
         alsoSrt,
@@ -133,7 +137,28 @@ export function ExportDialog({
           </span>
           <div>
             <h2 id="export-dialog-title" className="text-lg font-semibold">Export clip</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">720p · captions burned in</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {resolution} · captions burned in
+            </p>
+          </div>
+        </div>
+        <div className="mt-3">
+          <p className="text-xs font-medium">Resolution</p>
+          <div className="mt-1 flex gap-2">
+            {(['720p', '1080p'] as const).map((r) => {
+              const locked = r === '1080p' && !can('', 'export_1080p')
+              return (
+                <Button
+                  key={r}
+                  size="sm"
+                  variant={resolution === r ? 'default' : 'outline'}
+                  disabled={locked}
+                  onClick={() => setResolution(r)}
+                >
+                  {r}
+                </Button>
+              )
+            })}
           </div>
         </div>
         <div className="mt-3">

@@ -34,6 +34,7 @@ FILLERS = {
 PAD_START_S = 0.15
 PAD_END_S = 0.35
 MAX_EXTEND_S = 8.0
+SENTENCE_EXTEND_MAX_S = 3.0
 GAP_SENTENCE_END_S = 0.4
 
 _WORD_NORM = re.compile(r"[^\w\s']+")
@@ -98,7 +99,11 @@ def _word_index_at_ms(words: list[dict], ms: int, edge: str = "start") -> int:
                 return i
         return max(0, len(words) - 1)
     for i in range(len(words) - 1, -1, -1):
-        if words[i]["s"] <= t:
+        w = words[i]
+        if w["s"] <= t <= w["e"] + 1e-6:
+            return i
+    for i in range(len(words) - 1, -1, -1):
+        if words[i]["e"] <= t + 1e-6:
             return i
     return 0
 
@@ -130,6 +135,38 @@ def _prev_sentence_end_ms(sentences: list[Sentence], before_ms: int) -> int | No
     return prev
 
 
+def _sentence_final_word_index_at_or_before(words: list[dict], idx: int) -> int:
+    for j in range(idx, -1, -1):
+        if _is_sentence_final_word(words, j):
+            return j
+    return idx
+
+
+def _new_incomplete_sentence_after(words: list[dict], we: int, last_final: int) -> bool:
+    """Picked end sits in a new sentence that has not reached a sentence-final word yet."""
+    if last_final >= we:
+        return False
+    if _is_sentence_final_word(words, we):
+        return False
+    tail = words[last_final]["w"].rstrip()
+    if re.search(r"[.?!]$", tail):
+        return True
+    if last_final + 1 <= we:
+        gap = words[last_final + 1]["s"] - words[last_final]["e"]
+        if gap >= GAP_SENTENCE_END_S:
+            return True
+    return False
+
+
+def _length_limit_ms(clip: dict[str, Any], range_end_ms: int) -> int:
+    start = int(clip.get("start_ms", 0))
+    for key in ("length_max_ms", "lengthMaxMs"):
+        raw = clip.get(key)
+        if isinstance(raw, (int, float)) and raw > 0:
+            return min(range_end_ms, start + int(raw))
+    return range_end_ms
+
+
 def _clamp_ms_to_words(ms: int, words: list[dict], edge: str) -> int:
     if not words:
         return ms
@@ -152,13 +189,11 @@ def snap_bounds(
     start_ms = before[0]
     end_ms = before[1]
 
+    picked_end_ms = end_ms
     s_start = _sentence_at_ms(sentences, start_ms)
-    s_end = _sentence_at_ms(sentences, end_ms)
     if s_start:
         start_ms = _advance_to_substantive_start(sentences, s_start)
         s_start = _sentence_at_ms(sentences, start_ms) or s_start
-    if s_end:
-        end_ms = s_end.end_ms
 
     if not words:
         clip["start_ms"], clip["end_ms"] = start_ms, end_ms
@@ -171,28 +206,32 @@ def snap_bounds(
     if wi < len(words):
         start_ms = int(words[wi]["s"] * 1000)
 
-    we = _word_index_at_ms(words, end_ms, "end")
+    length_limit = _length_limit_ms(clip, range_end_ms)
+    we = _word_index_at_ms(words, picked_end_ms, "end")
     while we > wi and _is_filler_token(words[we]["w"]):
         we -= 1
 
-    if not _is_sentence_final_word(words, we):
-        extend_limit = int(end_ms + MAX_EXTEND_S * 1000)
-        extend_limit = min(extend_limit, range_end_ms)
-        nxt = _next_sentence_end_ms(sentences, int(words[we]["e"] * 1000), extend_limit)
-        if nxt is not None:
-            end_ms = nxt
-            we = _word_index_at_ms(words, end_ms, "end")
-            while we > wi and _is_filler_token(words[we]["w"]):
-                we -= 1
-        else:
-            prev_end = _prev_sentence_end_ms(sentences, int(words[we]["e"] * 1000))
-            if prev_end is not None and prev_end > start_ms + 5000:
-                end_ms = prev_end
-                we = _word_index_at_ms(words, end_ms, "end")
-                while we > wi and _is_filler_token(words[we]["w"]):
-                    we -= 1
-    else:
+    last_final = _sentence_final_word_index_at_or_before(words, we)
+    if _is_sentence_final_word(words, we):
         end_ms = int(words[we]["e"] * 1000)
+    elif _new_incomplete_sentence_after(words, we, last_final):
+        we = last_final
+        end_ms = int(words[we]["e"] * 1000)
+    else:
+        extend_limit = int(picked_end_ms + SENTENCE_EXTEND_MAX_S * 1000)
+        extend_limit = min(extend_limit, length_limit, range_end_ms)
+        extended = False
+        for j in range(we + 1, len(words)):
+            if int(words[j]["e"] * 1000) > extend_limit:
+                break
+            if _is_sentence_final_word(words, j):
+                we = j
+                end_ms = int(words[we]["e"] * 1000)
+                extended = True
+                break
+        if not extended:
+            we = last_final
+            end_ms = int(words[we]["e"] * 1000)
 
     pad_start_ms = int(PAD_START_S * 1000)
     pad_end_ms = int(PAD_END_S * 1000)
@@ -209,7 +248,10 @@ def snap_bounds(
         start_ms = max(range_start_ms, int(start_ms - pad_start_ms))
     end_ms = int(end_ms + pad_end_ms)
     end_ms = min(range_end_ms, end_ms)
-    end_ms = _clamp_ms_to_words(end_ms, words, "end")
+    we_end = _word_index_at_ms(words, end_ms, "end")
+    if not _is_sentence_final_word(words, we_end):
+        we_end = _sentence_final_word_index_at_or_before(words, we_end)
+    end_ms = min(range_end_ms, int(words[we_end]["e"] * 1000))
     if end_ms <= start_ms:
         start_ms, end_ms = before
 

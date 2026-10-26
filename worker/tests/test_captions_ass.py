@@ -1,7 +1,7 @@
 from pathlib import Path
 import tempfile
 
-from clips_worker.captions_ass import build_ass
+from clips_worker.captions_ass import build_ass, margin_lr_px
 
 SAMPLE = [
     {"w": "one", "s": 0.0, "e": 0.3, "spk": 0, "i": 0},
@@ -24,6 +24,17 @@ EXPECTED = {
     "slide_up": "\\move",
     "highlighter": "Box",
 }
+
+
+def test_caption_horizontal_margins_scale_with_play_res():
+    assert margin_lr_px(720) >= 56
+    assert margin_lr_px(1080) >= 86
+    with tempfile.TemporaryDirectory() as td:
+        ass = Path(td) / "t.ass"
+        build_ass(SAMPLE, {"presetId": "clean_white"}, ass, play_w=1080, play_h=1920)
+        text = ass.read_text()
+        assert f",{margin_lr_px(1080)},{margin_lr_px(1080)}," in text
+        assert "WrapStyle: 2" in text
 
 
 def test_all_presets_ass_tags():

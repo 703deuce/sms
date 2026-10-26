@@ -123,6 +123,72 @@ def write_fit_blur_crop_track(video: Path, crop_out: Path, clip_start_ms: int) -
     crop_out.write_text(json.dumps(track, separators=(",", ":")))
 
 
+def reframe_clip_preview(
+    clip_file: Path,
+    out_mp4: Path,
+    words_path: Path,
+    settings: dict,
+    work_dir: Path,
+    clip_start_ms: int,
+    crop_track_path: Path,
+    ai_meta: dict,
+    *,
+    motion_subject: bool,
+) -> tuple[Path, str, dict]:
+    """Pick speaker-follow vs fit-blur based on sustained face presence."""
+    from clips_worker.subject_reframe import has_face_and_speech, write_motion_crop_track
+
+    reframe_settings = dict(settings)
+    clip_words = json.loads(words_path.read_text())
+    crop_method = "speaker_follow"
+
+    if has_face_and_speech(clip_file, clip_words):
+        rendered = run_speakercrop(
+            clip_file,
+            out_mp4,
+            words_path,
+            reframe_settings,
+            work_dir,
+            clip_start_ms=clip_start_ms,
+            crop_track_out=crop_track_path,
+        )
+        return rendered, crop_method, reframe_settings
+
+    if motion_subject:
+        wide = write_motion_crop_track(
+            clip_file,
+            crop_track_path,
+            ai_meta,
+            clip_start_ms,
+            work_dir / "motion",
+        )
+        if wide:
+            crop_method = "fit_blur"
+            reframe_settings = {**reframe_settings, "layout": "fit"}
+            write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
+        else:
+            crop_method = "subject_follow"
+    else:
+        crop_method = "fit_blur"
+        reframe_settings = {**reframe_settings, "layout": "fit"}
+        write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
+
+    rendered = run_speakercrop(
+        clip_file,
+        out_mp4,
+        words_path,
+        reframe_settings,
+        work_dir,
+        clip_start_ms=clip_start_ms,
+        crop_track_out=crop_track_path,
+    )
+    if not crop_track_path.exists():
+        write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
+        crop_method = "fit_blur"
+        reframe_settings = {**reframe_settings, "layout": "fit"}
+    return rendered, crop_method, reframe_settings
+
+
 def initial_clip_edits(settings: dict) -> dict:
     brand = settings.get("brand") or {}
     cap = dict(settings.get("captions") or {})
@@ -310,65 +376,18 @@ def run_m4_pipeline(
 
             out_mp4 = td_path / f"out_{idx}.mp4"
             crop_track_path = td_path / f"crop_track_{idx}.json"
-            reframe_settings = dict(settings)
             ai_meta = pick.get("aiMeta") or {}
-            crop_method = "speaker_follow"
-            if mode == "anything":
-                from clips_worker.subject_reframe import (
-                    has_face_and_speech,
-                    write_motion_crop_track,
-                )
-
-                clip_words = json.loads(words_path.read_text())
-                if has_face_and_speech(clip_file, clip_words):
-                    crop_method = "speaker_follow"
-                    rendered = run_speakercrop(
-                        clip_file,
-                        out_mp4,
-                        words_path,
-                        reframe_settings,
-                        td_path,
-                        clip_start_ms=pick["start_ms"],
-                        crop_track_out=crop_track_path,
-                    )
-                else:
-                    wide = write_motion_crop_track(
-                        clip_file,
-                        crop_track_path,
-                        ai_meta,
-                        pick["start_ms"],
-                        td_path / f"motion_{idx}",
-                    )
-                    if wide:
-                        crop_method = "fit_blur"
-                        reframe_settings = {**reframe_settings, "layout": "fit"}
-                        write_fit_blur_crop_track(clip_file, crop_track_path, pick["start_ms"])
-                    else:
-                        crop_method = "subject_follow"
-                    rendered = run_speakercrop(
-                        clip_file,
-                        out_mp4,
-                        words_path,
-                        reframe_settings,
-                        td_path,
-                        clip_start_ms=pick["start_ms"],
-                        crop_track_out=crop_track_path,
-                    )
-                if not crop_track_path.exists():
-                    write_fit_blur_crop_track(clip_file, crop_track_path, pick["start_ms"])
-                    crop_method = "fit_blur"
-                    reframe_settings = {**reframe_settings, "layout": "fit"}
-            else:
-                crop_method = "speaker_follow"
-                rendered = run_speakercrop(
-                    clip_file,
-                    out_mp4,
-                    words_path,
-                    reframe_settings,
-                    td_path,
-                    clip_start_ms=pick["start_ms"],
-                    crop_track_out=crop_track_path,
-                )
+            rendered, crop_method, reframe_settings = reframe_clip_preview(
+                clip_file,
+                out_mp4,
+                words_path,
+                settings,
+                td_path,
+                pick["start_ms"],
+                crop_track_path,
+                ai_meta,
+                motion_subject=mode == "anything",
+            )
             poster = td_path / f"poster_{idx}.jpg"
             poster_jpg(rendered, poster)
 
