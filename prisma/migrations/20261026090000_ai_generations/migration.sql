@@ -29,6 +29,3 @@ CREATE INDEX "ai_generations_workspaceId_idx" ON "ai_generations"("workspaceId")
 
 -- CreateIndex
 CREATE INDEX "ai_generations_clipId_idx" ON "ai_generations"("clipId");
-
--- AddForeignKey
-ALTER TABLE "ai_generations" ADD CONSTRAINT "ai_generations_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE CASCADE;

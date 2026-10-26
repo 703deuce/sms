@@ -18,6 +18,7 @@ fi
 FAILED_MCTB_DURABLE_OPS_MIGRATION="20260914220000_mctb_durable_operations"
 FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATION="20260916190000_voice_v2_ai_call_recovery"
 FAILED_VOICE_OPERATIONAL_OVERRIDES_MIGRATION="20260916194500_voice_operational_overrides"
+FAILED_AI_GENERATIONS_MIGRATION="20261026090000_ai_generations"
 
 recover_failed_voice_operational_overrides_migration() {
   echo "[db-deploy] Recovering failed migration ${FAILED_VOICE_OPERATIONAL_OVERRIDES_MIGRATION} (drop partial table + mark rolled back)..."
@@ -35,6 +36,16 @@ SQL
   prisma migrate resolve --rolled-back "${FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATION}" || true
 }
 
+recover_failed_ai_generations_migration() {
+  echo "[db-deploy] Recovering failed migration ${FAILED_AI_GENERATIONS_MIGRATION} (drop partial ai_generations + mark rolled back)..."
+  prisma db execute --stdin <<'SQL' || true
+DROP TABLE IF EXISTS "ai_generations" CASCADE;
+DROP TYPE IF EXISTS "GenerationKind";
+DROP TYPE IF EXISTS "GenerationStatus";
+SQL
+  prisma migrate resolve --rolled-back "${FAILED_AI_GENERATIONS_MIGRATION}" || true
+}
+
 recover_failed_mctb_durable_operations_migration() {
   echo "[db-deploy] Recovering failed migration ${FAILED_MCTB_DURABLE_OPS_MIGRATION} (drop partial table + mark rolled back)..."
   prisma db execute --stdin <<'SQL' || true
@@ -49,6 +60,9 @@ if echo "$migrate_status" | grep -F "${FAILED_VOICE_V2_AI_CALL_RECOVERY_MIGRATIO
 fi
 if echo "$migrate_status" | grep -F "${FAILED_VOICE_OPERATIONAL_OVERRIDES_MIGRATION}" | grep -qiE 'failed|not yet applied'; then
   recover_failed_voice_operational_overrides_migration
+fi
+if echo "$migrate_status" | grep -F "${FAILED_AI_GENERATIONS_MIGRATION}" | grep -qiE 'failed|not yet applied'; then
+  recover_failed_ai_generations_migration
 fi
 
 echo "[db-deploy] Applying Prisma migrations..."
@@ -70,6 +84,10 @@ if [[ "$deploy_code" -ne 0 ]]; then
   elif echo "$deploy_out" | grep -q "${FAILED_MCTB_DURABLE_OPS_MIGRATION}"; then
     recover_failed_mctb_durable_operations_migration
     echo "[db-deploy] Retrying prisma migrate deploy after recovery..."
+    prisma migrate deploy
+  elif echo "$deploy_out" | grep -q "${FAILED_AI_GENERATIONS_MIGRATION}"; then
+    recover_failed_ai_generations_migration
+    echo "[db-deploy] Retrying prisma migrate deploy after ai_generations recovery..."
     prisma migrate deploy
   else
     exit "$deploy_code"

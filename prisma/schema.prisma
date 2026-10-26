@@ -507,7 +507,6 @@ model Workspace {
   clipUploads                            ClipUpload[]
   clipProjects                           ClipProject[]
   clipBrandTemplates                     ClipBrandTemplate[]
-  aiGenerations                          AiGeneration[]
   clipRenders                            ClipRender[]
   clipEvents                             ClipEvent[]
   forwardingUsageMonthly                 ForwardingUsageMonthly[]
@@ -9034,8 +9033,6 @@ model AiGeneration {
   error          String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([clipId])
