@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { isScreenwritingEnabled } from '@/lib/features/screenwriting'
 
 const NO_STORE = 'private, no-store, must-revalidate'
 
+function screenwritingBlocked(pathname: string): boolean {
+  if (isScreenwritingEnabled()) return false
+  return (
+    pathname === '/app/sw' ||
+    pathname.startsWith('/app/sw/') ||
+    pathname.startsWith('/api/sw/') ||
+    pathname.startsWith('/s/')
+  )
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  if (screenwritingBlocked(pathname)) {
+    return new NextResponse('Not Found', { status: 404 })
+  }
 
   if (pathname === '/app/clips/exports') {
     const url = request.nextUrl.clone()

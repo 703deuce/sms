@@ -4,9 +4,13 @@ import { fileURLToPath } from "node:url";
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 
 const isCoolifyBuild = Boolean(process.env.COOLIFY_RESOURCE_UUID);
+const featureScreenwriting = process.env.FEATURE_SCREENWRITING ?? "0";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_FEATURE_SCREENWRITING: featureScreenwriting,
+  },
   experimental: {
     agentUpgrade: "security",
     proxyClientMaxBodySize: "12mb",
