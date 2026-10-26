@@ -78,3 +78,10 @@ def run_reframe_crop_job(conn, job: dict) -> None:
         )
         key = crop_track_key(clip["workspaceId"], clip["projectId"], clip_id)
         upload_file(key, crop_out, "application/json")
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE clip_jobs SET status = %s, \"finishedAt\" = NOW(), error = NULL WHERE id = %s",
+            ("DONE", job["id"]),
+        )
+    conn.commit()
