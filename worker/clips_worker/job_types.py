@@ -6,6 +6,7 @@ JOB_TYPES: tuple[str, ...] = (
     "STREAM_IMPORT",
     "STREAM_ANALYZE",
     "STREAM_RENDER",
+    "STREAM_RELAYOUT",
     "STREAM_CLEANUP",
     "PROCESS_PROJECT",
     "RENDER_CLIP",

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import tempfile
 import uuid
 from pathlib import Path
@@ -10,7 +11,7 @@ from pathlib import Path
 from clips_worker.heartbeat import Heartbeat
 from clips_worker.import_url import probe_video, upload_source_key
 from clips_worker.probe import probe_duration
-from clips_worker.storage import upload_file
+from clips_worker.storage import download_object, upload_file
 from clips_worker.streamer.config import FULL_DOWNLOAD_MAX_MIN, MAX_VOD_HOURS, SCRATCH
 from clips_worker.streamer.keys import stream_audio_key
 from clips_worker.streamer.usage import check_cap, job_priority
@@ -58,12 +59,109 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
         vod = dict(cur.fetchone())
 
     url = vod.get("url")
-    if not url:
-        raise RuntimeError("missing stream url")
-
     workspace_id = vod["workspaceId"]
     project_id = vod["project_id"]
     SCRATCH.mkdir(parents=True, exist_ok=True)
+
+    if not url and (vod.get("platform") == "upload" or vod.get("sourceType") == "upload"):
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute('SELECT "uploadId", "rangeEndMs" FROM clip_projects WHERE id=%s', (project_id,))
+            prow = cur.fetchone()
+            cur.execute('SELECT key FROM clip_uploads WHERE id=%s', (prow["uploadId"],))
+            urow = cur.fetchone()
+        if not prow or not urow:
+            raise RuntimeError("missing upload for stream import")
+        effective_ms = int(prow["rangeEndMs"] or vod.get("durationMs") or 0)
+        if effective_ms <= 0:
+            raise RuntimeError("missing duration on upload")
+        cap_err = check_cap(conn, workspace_id, effective_ms // 1000)
+        if cap_err:
+            raise RuntimeError(cap_err)
+        use_long = effective_ms > FULL_DOWNLOAD_MAX_MIN * 60 * 1000
+        with Heartbeat(job["id"], post_progress, every_s=45) as hb:
+            with tempfile.TemporaryDirectory(dir=SCRATCH) as td:
+                src = Path(td) / "upload.mp4"
+                download_object(urow["key"], src)
+                dur_s = probe_duration(src)
+                duration_ms = effective_ms or int(dur_s * 1000)
+                if use_long:
+                    audio_out = Path(td) / "audio.opus"
+                    subprocess.check_call(
+                        [
+                            "ffmpeg",
+                            "-y",
+                            "-v",
+                            "error",
+                            "-i",
+                            str(src),
+                            "-vn",
+                            "-c:a",
+                            "libopus",
+                            "-b:a",
+                            "64k",
+                            str(audio_out),
+                        ]
+                    )
+                    audio_key = stream_audio_key(workspace_id, vod_id)
+                    upload_file(audio_key, audio_out, "audio/opus")
+                    state = {"audioKey": audio_key}
+                    pri = job_priority(conn, vod.get("triggeredBy") or "upload")
+                    analyze_id = f"job_{uuid.uuid4().hex}"
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            'UPDATE stream_vods SET durationMs=%s, state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
+                            (duration_ms, json.dumps(state), vod_id),
+                        )
+                        cur.execute(
+                            """
+                            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
+                            VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
+                            """,
+                            (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
+                        )
+                    conn.commit()
+                else:
+                    pri = job_priority(conn, vod.get("triggeredBy") or "upload")
+                    analyze_id = f"job_{uuid.uuid4().hex}"
+                    audio_key = stream_audio_key(workspace_id, vod_id)
+                    audio_out = Path(td) / "audio.opus"
+                    subprocess.check_call(
+                        [
+                            "ffmpeg",
+                            "-y",
+                            "-v",
+                            "error",
+                            "-i",
+                            str(src),
+                            "-vn",
+                            "-c:a",
+                            "libopus",
+                            str(audio_out),
+                        ]
+                    )
+                    upload_file(audio_key, audio_out, "audio/opus")
+                    state = {"audioKey": audio_key, "localUploadKey": urow["key"]}
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            'UPDATE stream_vods SET durationMs=%s, state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
+                            (duration_ms, json.dumps(state), vod_id),
+                        )
+                        cur.execute(
+                            """
+                            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
+                            VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
+                            """,
+                            (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
+                        )
+                    conn.commit()
+        post_progress(
+            job["id"],
+            {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
+        )
+        return
+
+    if not url:
+        raise RuntimeError("missing stream url")
 
     with Heartbeat(job["id"], post_progress, every_s=45) as hb:
         hb.update(stage="Downloading", progress=5)

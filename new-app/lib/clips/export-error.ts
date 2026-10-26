@@ -24,6 +24,18 @@ export function formatExportError(raw: string | null | undefined): ExportErrorVi
   if (lower.includes('not found') || lower.includes('missing')) {
     return { message: 'Source media is missing. Re-open the project or re-upload.', details }
   }
+  if (lower.includes('download_object') && lower.includes('not associated with a value')) {
+    return {
+      message: 'Export hit an internal storage bug. Retry the export; if it persists, contact support.',
+      details,
+    }
+  }
+  if (lower.includes('unboundlocalerror')) {
+    return {
+      message: 'Export hit an internal processing error. Retry the export.',
+      details,
+    }
+  }
   if (details.length <= 140 && !details.includes('\n')) {
     return { message: details, details: null }
   }

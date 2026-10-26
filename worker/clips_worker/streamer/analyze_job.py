@@ -17,7 +17,8 @@ from clips_worker.pipeline import insert_clips_batch
 from clips_worker.storage import download_object, put_json, sign_url, upload_file
 from clips_worker.streamer.chunking import ffmpeg_slice_opus, merge_words, plan_chunks
 from clips_worker.streamer.config import CHUNK_MIN, CHUNK_OVERLAP_S, SCRATCH
-from clips_worker.streamer.keys import stream_audio_key, stream_chunk_key, stream_signals_key
+from clips_worker.streamer.keys import stream_audio_key, stream_chat_key, stream_chunk_key, stream_signals_key
+from clips_worker.streamer.viewer_clips.fetch import fetch_viewer_clips_for_vod
 from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.rank import rank_moments
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
@@ -165,15 +166,28 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         chapters = vod.get("chapters")
         if isinstance(chapters, str):
             chapters = json.loads(chapters)
-        chat_messages, chat_source = chat_future.result()
-        chat_executor.shutdown(wait=False)
+        try:
+            chat_messages, chat_source = chat_future.result()
+        except Exception:
+            chat_messages, chat_source = None, "none"
+        finally:
+            chat_executor.shutdown(wait=False)
         if chat_messages:
-            with conn.cursor() as cur:
-                cur.execute(
-                    'UPDATE stream_vods SET "chatSource" = %s, "chatMessages" = %s, "updatedAt" = NOW() WHERE id = %s',
-                    (chat_source, len(chat_messages), vod_id),
-                )
-            conn.commit()
+            from clips_worker.streamer.chat.twitch_gql import save_jsonl_gz
+
+            chat_path = scratch / "chat.jsonl.gz"
+            save_jsonl_gz(chat_path, chat_messages)
+            ck = stream_chat_key(workspace_id, vod_id)
+            upload_file(ck, chat_path, "application/gzip")
+            state["chatKey"] = ck
+            _save_state(conn, vod_id, state)
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE stream_vods SET "chatSource" = %s, "chatMessages" = %s, "updatedAt" = NOW() WHERE id = %s',
+                (chat_source, len(chat_messages) if chat_messages else 0, vod_id),
+            )
+        conn.commit()
+        viewer_clips = fetch_viewer_clips_for_vod(vod, conn)
         picks, signals_payload = rank_moments(
             audio_path=audio_path,
             words=words,
@@ -181,6 +195,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             settings=settings,
             chapters=chapters if isinstance(chapters, list) else None,
             chat_messages=chat_messages,
+            viewer_clips=viewer_clips or None,
         )
         sig_key = stream_signals_key(workspace_id, vod_id)
         put_json(sig_key, signals_payload)

@@ -11,6 +11,8 @@ from psycopg2.extras import RealDictCursor
 from clips_worker.heartbeat import Heartbeat
 from clips_worker.pipeline import clip_keys, initial_clip_edits, mark_project_ready
 from clips_worker.render_clip import ffmpeg_cut, poster_jpg, run_speakercrop, slice_words
+from clips_worker.streamer.layout.detect_facecam import detect_facecam_layout
+from clips_worker.streamer.layout.render_stack import render_stack_mp4
 from clips_worker.storage import download_object, put_json, upload_file
 from clips_worker.streamer.align import align_segment_ms
 from clips_worker.streamer.config import SCRATCH, SEGMENT_PAD_S, SOURCE_RETENTION_HOURS
@@ -33,6 +35,15 @@ def _load_vod(conn, vod_id: str) -> dict:
     if not row:
         raise RuntimeError("vod missing")
     return dict(row)
+
+
+def _save_state(conn, vod_id: str, state: dict) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            'UPDATE stream_vods SET state = %s::jsonb, "updatedAt" = NOW() WHERE id = %s',
+            (json.dumps(state), vod_id),
+        )
+    conn.commit()
 
 
 def _clips_for_project(conn, project_id: str) -> list[dict]:
@@ -92,6 +103,22 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 if row:
                     download_object(row[0], up)
                     local_upload = up
+
+            layout_state = state.get("layout")
+            if not layout_state and clips:
+                sample = td_path / "layout_sample.mp4"
+                first = clips[0]
+                fs = max(0.0, int(first["startMs"]) / 1000.0 - 2)
+                fe = fs + 30
+                if local_upload:
+                    cut_local_segment(local_upload, sample, fs, fe)
+                elif url:
+                    download_segment(url, sample, fs, fe)
+                if sample.exists():
+                    layout_state = detect_facecam_layout(sample, td_path)
+                    state["layout"] = layout_state
+                    _save_state(conn, vod_id, state)
+
             transcript_key = vod.get("transcriptKey")
 
             for idx, clip in enumerate(clips):
@@ -135,15 +162,33 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 ffmpeg_cut(seg_path, clip_file, rel_start, rel_end)
                 out_mp4 = td_path / f"out_{clip_id}.mp4"
                 crop_track = td_path / f"crop_{clip_id}.json"
-                rendered = run_speakercrop(
-                    clip_file,
-                    out_mp4,
-                    words_path,
-                    settings,
-                    td_path,
-                    clip_start_ms=start_ms,
-                    crop_track_out=crop_track,
+                streamer_layout = (settings.get("streamer") or {}).get("layout", "stack")
+                ai_meta = clip.get("aiMeta") or {}
+                if isinstance(ai_meta, str):
+                    ai_meta = json.loads(ai_meta)
+                clip_layout = (ai_meta.get("streamer") or {}).get("layout") or layout_state or {}
+                use_stack = (
+                    streamer_layout == "stack"
+                    and isinstance(clip_layout, dict)
+                    and clip_layout.get("layout") == "stack"
+                    and clip_layout.get("facecam")
                 )
+                if use_stack:
+                    render_stack_mp4(clip_file, out_mp4, clip_layout)
+                    rendered = out_mp4
+                else:
+                    rendered = run_speakercrop(
+                        clip_file,
+                        out_mp4,
+                        words_path,
+                        settings,
+                        td_path,
+                        clip_start_ms=start_ms,
+                        crop_track_out=crop_track,
+                    )
+                ai_streamer = dict((ai_meta.get("streamer") or {}))
+                if clip_layout:
+                    ai_streamer["layout"] = clip_layout if isinstance(clip_layout, dict) else {"layout": clip_layout}
                 poster = td_path / f"poster_{clip_id}.jpg"
                 poster_jpg(rendered, poster)
                 keys = clip_keys(workspace_id, project_id, clip_id)
@@ -155,12 +200,15 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     upload_file(keys["crop_track"], crop_track, "application/json")
                     crop_key = keys["crop_track"]
 
+                if ai_streamer:
+                    ai_meta = {**ai_meta, "streamer": ai_streamer}
                 with conn.cursor() as cur:
                     cur.execute(
                         """
                         UPDATE clips SET
                           "previewKey"=%s, "posterKey"=%s, "wordsKey"=%s, "cropKey"=%s,
                           "sourceSegKey"=%s, "sourceSegStartMs"=%s, "sourceSegEndMs"=%s,
+                          "aiMeta"=%s::jsonb,
                           edits=%s::jsonb, "updatedAt"=NOW()
                         WHERE id=%s
                         """,
@@ -172,6 +220,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             seg_key,
                             true_start_ms,
                             true_end_ms,
+                            json.dumps(ai_meta),
                             json.dumps(initial_clip_edits(settings)),
                             clip_id,
                         ),

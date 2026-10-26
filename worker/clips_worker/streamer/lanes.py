@@ -10,6 +10,7 @@ _STREAM_TYPES = frozenset(
         "STREAM_IMPORT",
         "STREAM_ANALYZE",
         "STREAM_RENDER",
+        "STREAM_RELAYOUT",
         "STREAM_CLEANUP",
     }
 )

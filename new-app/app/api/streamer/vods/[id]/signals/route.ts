@@ -53,21 +53,23 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     }>(vod.signalsKey)
     const combined = downsample(raw.combined ?? [])
     const res = NextResponse.json({
-      hz: raw.hz ?? 1,
-      combined,
-      series: {
-        audio: raw.audio ? downsample(raw.audio) : null,
-        chat: raw.chat,
-        viewerClips: raw.viewerClips,
-        transcript: raw.transcript ? downsample(raw.transcript) : null,
+      data: {
+        hz: raw.hz ?? 1,
+        combined,
+        series: {
+          audio: raw.audio ? downsample(raw.audio) : null,
+          chat: raw.chat ? downsample(raw.chat) : null,
+          viewerClips: raw.viewerClips ? downsample(raw.viewerClips) : null,
+          transcript: raw.transcript ? downsample(raw.transcript) : null,
+        },
+        clips: vod.project.clips.map((c) => ({
+          id: c.id,
+          startMs: c.startMs,
+          endMs: c.endMs,
+          total: c.score,
+        })),
+        chapters: raw.chapters ?? [],
       },
-      clips: vod.project.clips.map((c) => ({
-        id: c.id,
-        startMs: c.startMs,
-        endMs: c.endMs,
-        total: c.score,
-      })),
-      chapters: raw.chapters ?? [],
     })
     res.headers.set('Cache-Control', 'private, max-age=300')
     return res

@@ -10,12 +10,12 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { StreamerTosNote } from '@/components/streamer/tos-note'
-import { StreamerUsageMeter } from '@/components/streamer/usage-meter'
+import { StreamerUsageMeter, type StreamUsageView } from '@/components/streamer/usage-meter'
 import { clipsFetch } from '@/lib/clips-api'
 import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { Loader2 } from 'lucide-react'
 
-export function StreamerImportPanel() {
+export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsageView | null }) {
   const router = useRouter()
   const [url, setUrl] = useState('')
   const [attest, setAttest] = useState(false)
@@ -86,7 +86,7 @@ export function StreamerImportPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <StreamerUsageMeter />
+      {usageInitial ? null : <StreamerUsageMeter />}
       <p className="text-xs text-muted-foreground">
         Long VODs (over ~20 min): we fetch audio first, then only the clip ranges (up to 12 h).
       </p>

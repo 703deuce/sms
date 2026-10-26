@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (denied) return denied
   try {
     const workspaceId = await resolveWorkspaceId()
-    return NextResponse.json(await getStreamUsage(workspaceId))
+    return NextResponse.json({ data: await getStreamUsage(workspaceId) })
   } catch (err) {
     return jsonError(err, 400)
   }

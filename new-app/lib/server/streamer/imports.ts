@@ -144,9 +144,10 @@ export async function createStreamerImport(
         data: {
           id: createId('job'),
           projectId,
-          type: 'PROCESS_PROJECT',
+          type: 'STREAM_IMPORT',
           status: 'QUEUED',
-          payload: {},
+          priority: 10,
+          payload: { vodId },
         },
       })
     }

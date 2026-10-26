@@ -199,7 +199,6 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         if intro_key or outro_key:
             from clips_worker.brand_concat import concat_brand_bookends
             from clips_worker.render_clip import aspect_size
-            from clips_worker.storage import download_object
 
             intro_p = td_path / "intro.mp4" if intro_key else None
             outro_p = td_path / "outro.mp4" if outro_key else None

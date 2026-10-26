@@ -33,10 +33,21 @@ def get_chat(vod: dict) -> tuple[list[dict] | None, str]:
 
     platform = str(vod.get("platform") or "").lower()
     external_id = vod.get("externalId") or vod.get("external_id")
+    if platform == "kick":
+        from clips_worker.streamer.chat.kick_chat import fetch_kick_vod_chat
+
+        messages = fetch_kick_vod_chat(vod.get("url"), external_id)
+        if messages:
+            return messages, "kick_replay"
+        return None, "kick_unavailable"
+
     if platform == "twitch" and external_id and not _replay_disabled():
         from clips_worker.streamer.chat.twitch_gql import fetch_all_vod_comments
 
-        messages, _cursor = fetch_all_vod_comments(str(external_id), state.get("chatCursor"))
-        if messages:
-            return messages, "twitch_replay"
+        try:
+            messages, _cursor = fetch_all_vod_comments(str(external_id), state.get("chatCursor"))
+            if messages:
+                return messages, "twitch_replay"
+        except Exception:
+            return None, "none"
     return None, "none"

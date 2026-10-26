@@ -288,6 +288,13 @@ def handle_stream_render(conn, job: dict) -> None:
     _mark_job_done(conn, job["id"])
 
 
+def handle_stream_relayout(conn, job: dict) -> None:
+    from clips_worker.streamer.relayout_job import run_stream_relayout_job
+
+    run_stream_relayout_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
 def handle_stream_cleanup(conn, job: dict) -> None:
     from clips_worker.streamer.cleanup_job import run_stream_cleanup_job
 
@@ -308,6 +315,7 @@ DISPATCH: dict[str, object] = {
     "STREAM_IMPORT": handle_stream_import,
     "STREAM_ANALYZE": handle_stream_analyze,
     "STREAM_RENDER": handle_stream_render,
+    "STREAM_RELAYOUT": handle_stream_relayout,
     "STREAM_CLEANUP": handle_stream_cleanup,
     "PROCESS_PROJECT": process_job,
     "RENDER_CLIP": handle_render_clip,

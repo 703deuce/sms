@@ -27,6 +27,11 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   const initialClips =
     project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null
   const streamVod = await prisma.streamVod.findUnique({ where: { projectId: project.id } })
+  const vodState =
+    streamVod?.state && typeof streamVod.state === 'object' && !Array.isArray(streamVod.state)
+      ? (streamVod.state as Record<string, unknown>)
+      : null
+  const vodLayout = (vodState?.layout as Record<string, unknown> | undefined) ?? null
 
   return (
     <Page>
@@ -37,12 +42,16 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
             title={streamVod.title}
             category={streamVod.category}
             url={streamVod.url}
+            chatSource={streamVod.chatSource}
+            chatMessages={streamVod.chatMessages}
           />
           <StreamerProjectChrome
             vodId={streamVod.id}
+            projectId={project.id}
             stage={project.stage}
             progress={project.progress}
             sourceDeletedAt={streamVod.sourceDeletedAt?.toISOString() ?? null}
+            layout={vodLayout}
           />
         </div>
       ) : null}
