@@ -54,6 +54,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       progress: body.progress,
       error: body.error,
       jobStatus: body.jobStatus,
+      transcriptWords: body.transcriptWords,
       etaSeconds: body.etaSeconds,
       chunkDone: body.chunkDone,
       chunkTotal: body.chunkTotal,

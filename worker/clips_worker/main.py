@@ -191,6 +191,9 @@ def load_project(conn, project_id: str) -> dict:
     return dict(row)
 
 
+from clips_worker.process_helpers import job_payload, stored_transcript_words
+
+
 def process_job(conn, job: dict) -> None:
     project = load_project(conn, job["projectId"])
     if project.get("status") == "CANCELED":
@@ -200,6 +203,9 @@ def process_job(conn, job: dict) -> None:
     key = project["source_key"]
     if not key:
         raise RuntimeError("missing source key")
+
+    payload = job_payload(job)
+    words = stored_transcript_words(project) if payload.get("resume") else None
 
     log(f"processing job={job['id']} project={project['id']}")
     post_progress(
@@ -213,24 +219,37 @@ def process_job(conn, job: dict) -> None:
         post_progress(job["id"], {"projectStatus": "PREPARING", "stage": "preparing", "progress": 8})
 
         _ = probe_duration(src)
-        post_progress(
-            job["id"],
-            {"projectStatus": "TRANSCRIBING", "stage": "transcribing", "progress": 12, "jobStatus": "RUNNING"},
-        )
+        if words:
+            log(f"resume: skipping transcribe ({len(words)} words on project)")
+            post_progress(
+                job["id"],
+                {
+                    "projectStatus": "FINDING_CLIPS",
+                    "stage": "finding_clips",
+                    "progress": 45,
+                    "transcriptWords": words,
+                    "jobStatus": "RUNNING",
+                },
+            )
+        else:
+            post_progress(
+                job["id"],
+                {"projectStatus": "TRANSCRIBING", "stage": "transcribing", "progress": 12, "jobStatus": "RUNNING"},
+            )
 
-        model = os.environ.get("ASR_MODEL", "small.en")
-        words = transcribe_video_file(conn, project, src, model=model)
+            model = os.environ.get("ASR_MODEL", "small.en")
+            words = transcribe_video_file(conn, project, src, model=model)
 
-        post_progress(
-            job["id"],
-            {
-                "projectStatus": "TRANSCRIBING",
-                "stage": "transcribing",
-                "progress": 45,
-                "transcriptWords": words,
-                "jobStatus": "RUNNING",
-            },
-        )
+            post_progress(
+                job["id"],
+                {
+                    "projectStatus": "TRANSCRIBING",
+                    "stage": "transcribing",
+                    "progress": 45,
+                    "transcriptWords": words,
+                    "jobStatus": "RUNNING",
+                },
+            )
 
     run_m4_pipeline(conn, job["id"], project, words, key, post_progress, job=job)
     log(f"finished job={job['id']}")

@@ -6,7 +6,10 @@ export const JOB_HEARTBEAT_STALE_MS = 3 * 60_000
 /** Non-terminal streamer project with no QUEUED/RUNNING job for this long → recovery enqueue. */
 export const STREAMER_ORPHAN_PROJECT_GRACE_MS = 2 * 60_000
 export const JOB_MAX_ATTEMPTS_BEFORE_FAIL = 8
-export const STREAMER_PROJECT_STUCK_MS = 90 * 60_000
+/** Non-terminal project with no progress → FAILED (Retry/Cancel in UI). */
+export const PROJECT_STUCK_MS = 90 * 60_000
+/** @deprecated use PROJECT_STUCK_MS */
+export const STREAMER_PROJECT_STUCK_MS = PROJECT_STUCK_MS
 
 export function reaperBackoffSeconds(attempts: number): number {
   const n = Math.max(1, attempts)

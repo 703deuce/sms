@@ -11,7 +11,7 @@ Single source of truth for build order and status. Update the **Last updated** l
 | # | Product | Status (2026-10-26) |
 |---|---------|---------------------|
 | **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS — TOP PRIORITY, NOW** |
-| **2** | **Script editor** — Descript-style transcript editor | **WAITING** — owner will send full look-and-feature spec; **do not start implementation until then** |
+| **2** | **Script editor** — Descript-style transcript editor | **SPEC READY** — see `docs/clips/script-editor.md`; **do not implement until regular clipper passes prod browser test** |
 | **3** | **Streamer** — VOD-first only (link import, auto-import after stream, uploads, chat signals, clip-that, near-live polling). **No live clipping.** | **PARTIAL** — after script editor spec + clipper ship |
 | **4** | **AI Studio** (Higgsfield-like) | **NOT STARTED** |
 | **5** | **Screenwriting** (Final Draft parity) | **ON HOLD** — `FEATURE_SCREENWRITING=0`; all code, migrations, and data kept (`screenwriting-wip`) |
@@ -41,11 +41,17 @@ Single source of truth for build order and status. Update the **Last updated** l
 
 ---
 
-## 2. Script editor (blocked on spec)
+## 2. Script editor (spec ready — gated on clipper)
 
-Descript-style transcript editing. Reference only until owner spec lands: `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md`.
+Descript-style transcript editing.
 
-**Gate:** Full look-and-feature spec from owner → then schedule build.
+| Doc | Purpose |
+|-----|---------|
+| **`docs/clips/script-editor.md`** | Implementation spec v1.0 (layout, EDL, tests) |
+| **`docs/clips/script-editor-SOURCES.txt`** | Reference screenshot URLs (Descript help, Kapwing) |
+| `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md` | Earlier notes (superseded by script-editor.md for build order) |
+
+**Gate:** Owner confirms regular clipper prod browser test → then schedule editor milestones (§D in spec).
 
 ---
 

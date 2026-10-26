@@ -12,6 +12,7 @@ export async function applyWorkerJobProgress(input: {
   progress?: number
   error?: string | null
   jobStatus?: 'RUNNING' | 'DONE' | 'FAILED'
+  transcriptWords?: unknown
   etaSeconds?: number
   chunkDone?: number
   chunkTotal?: number
@@ -22,6 +23,7 @@ export async function applyWorkerJobProgress(input: {
   if (input.stage !== undefined) projectPatch.stage = input.stage
   if (input.progress !== undefined) projectPatch.progress = input.progress
   if (input.error !== undefined) projectPatch.error = input.error
+  if (input.transcriptWords !== undefined) projectPatch.transcriptWords = input.transcriptWords
 
   if (
     input.etaSeconds !== undefined ||

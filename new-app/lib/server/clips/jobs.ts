@@ -3,12 +3,13 @@ import {
   JOB_HEARTBEAT_STALE_MS,
   JOB_MAX_ATTEMPTS_BEFORE_FAIL,
   STREAMER_ORPHAN_PROJECT_GRACE_MS,
-  STREAMER_PROJECT_STUCK_MS,
+  PROJECT_STUCK_MS,
   reaperBackoffSeconds,
   shouldFailJobAfterStale,
   stalledProjectErrorMessage,
 } from '@/lib/server/clips/job-reliability'
 import { getPrisma } from '@/lib/server/db'
+import { enqueueClipperRecoveryJob, isTranscriptReadyOrphan } from '@/lib/server/clips/recover-project'
 import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
@@ -228,7 +229,7 @@ export async function reapStaleJobs() {
 
   const orphanCutoff = new Date(Date.now() - STREAMER_ORPHAN_PROJECT_GRACE_MS)
   const orphanStatuses: ClipProjectStatus[] = [...STUCK_PROJECT_STATUSES, 'QUEUED']
-  const orphanCandidates = await prisma.clipProject.findMany({
+  const streamerOrphans = await prisma.clipProject.findMany({
     where: {
       status: { in: orphanStatuses },
       updatedAt: { lt: orphanCutoff },
@@ -238,17 +239,48 @@ export async function reapStaleJobs() {
     select: { id: true },
     take: 15,
   })
-  for (const project of orphanCandidates) {
+  for (const project of streamerOrphans) {
     const recovered = await enqueueStreamerRecoveryJob(project.id, 'watchdog_orphan')
     if (recovered) requeued += 1
   }
 
-  const stuckCutoff = new Date(Date.now() - STREAMER_PROJECT_STUCK_MS)
+  const legacyOrphans = await prisma.clipProject.findMany({
+    where: {
+      status: 'FINDING_CLIPS',
+      stage: 'transcript_ready',
+      streamVod: { is: null },
+      jobs: { none: { status: { in: ['QUEUED', 'RUNNING'] } } },
+    },
+    select: { id: true, stage: true, status: true },
+    take: 20,
+  })
+  for (const project of legacyOrphans) {
+    if (!isTranscriptReadyOrphan(project.stage, project.status)) continue
+    const recovered = await enqueueClipperRecoveryJob(project.id, 'watchdog_transcript_ready')
+    if (recovered) requeued += 1
+  }
+
+  const clipperOrphans = await prisma.clipProject.findMany({
+    where: {
+      status: { in: orphanStatuses },
+      updatedAt: { lt: orphanCutoff },
+      streamVod: { is: null },
+      jobs: { none: { status: { in: ['QUEUED', 'RUNNING'] } } },
+    },
+    select: { id: true, stage: true, status: true },
+    take: 15,
+  })
+  for (const project of clipperOrphans) {
+    if (isTranscriptReadyOrphan(project.stage, project.status)) continue
+    const recovered = await enqueueClipperRecoveryJob(project.id, 'watchdog_orphan')
+    if (recovered) requeued += 1
+  }
+
+  const stuckCutoff = new Date(Date.now() - PROJECT_STUCK_MS)
   const stuckProjects = await prisma.clipProject.findMany({
     where: {
       status: { in: STUCK_PROJECT_STATUSES },
       updatedAt: { lt: stuckCutoff },
-      streamVod: { is: {} },
     },
     select: { id: true, status: true },
     take: 10,
