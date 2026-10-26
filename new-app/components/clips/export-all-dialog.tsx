@@ -44,7 +44,7 @@ export function ExportAllDialog({
         window.location.href = `/api/clips/projects/${projectId}/export-all?batchId=${encodeURIComponent(data.batchId)}`
       } else {
         toast.message('Exports processing — open Exports when ready', {
-          action: { label: 'Exports', onClick: () => { window.location.href = '/app/clips/exports' } },
+          action: { label: 'Exports', onClick: () => { window.location.href = '/app/exports' } },
         })
       }
       setOpen(false)

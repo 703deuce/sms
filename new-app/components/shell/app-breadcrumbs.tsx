@@ -42,8 +42,10 @@ export function AppBreadcrumbs() {
     crumbs.push({ label: 'Brand' })
     const tab = searchParams.get('tab')
     crumbs.push({ label: tab === 'templates' ? 'Templates' : 'Brand kit' })
-  } else if (pathname.startsWith('/app/clips/exports')) {
+  } else if (pathname === '/app/exports' || pathname.startsWith('/app/clips/exports')) {
     crumbs.push({ label: 'Exports' })
+  } else if (pathname.startsWith('/app/streamer')) {
+    crumbs.push({ label: 'Streamer' })
   } else if (pathname.startsWith('/app/settings')) {
     crumbs.push({ label: 'Settings' })
   } else if (pathname.startsWith('/app/integrations')) {

@@ -58,7 +58,7 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
             )}
             {group.items.map((item) => {
               const active = isItemActive(item, pathname)
-              if (item.href === '/app/clips/exports') {
+              if (item.href === '/app/exports') {
                 return (
                   <ClipsExportsSidebarLink
                     key={item.href}

@@ -23,6 +23,28 @@ const nextConfig = {
   turbopack: {
     root: appDir,
   },
+  async headers() {
+    return [
+      {
+        source: "/app/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, no-store, must-revalidate",
+          },
+        ],
+      },
+      {
+        source: "/",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, no-store, must-revalidate",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

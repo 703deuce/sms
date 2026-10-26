@@ -19,6 +19,7 @@ export function ClipCardVideo({
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(true)
   const [needsUnmute, setNeedsUnmute] = useState(false)
+  const [controlsRevealed, setControlsRevealed] = useState(false)
   const [volume, setVolume] = useState(100)
 
   const firePreviewEvent = useCallback(() => {
@@ -37,6 +38,7 @@ export function ClipCardVideo({
       setPlaying(false)
       return
     }
+    setControlsRevealed(true)
     firePreviewEvent()
     const mode = await playWithSound(v)
     if (mode === 'muted') {
@@ -122,18 +124,35 @@ export function ClipCardVideo({
         onMouseEnter={() => void hoverPreview()}
         onMouseLeave={hoverLeave}
       />
-      <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1 rounded-md bg-black/60 p-1.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+      <div
+        className={
+          playing || controlsRevealed
+            ? 'absolute bottom-2 left-2 right-2 flex items-center gap-1 rounded-md bg-black/60 p-1.5 opacity-100 transition'
+            : 'absolute bottom-2 left-2 right-2 flex items-center gap-1 rounded-md bg-black/60 p-1.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100'
+        }
+      >
         <Button type="button" size="icon" variant="ghost" className="size-7 text-white" onClick={() => void togglePlay()} aria-label={playing ? 'Pause' : 'Play'}>
           {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
         </Button>
-        <Button type="button" size="icon" variant="ghost" className="size-7 text-white" onClick={() => void toggleMute()} aria-label={muted ? 'Unmute' : 'Mute'}>
-          {muted || needsUnmute ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
-        </Button>
-        <Slider className="min-w-0 flex-1" min={0} max={100} value={[volume]} onValueChange={(v) => onVolume(Array.isArray(v) ? v[0] ?? 100 : 100)} aria-label="Volume" />
-        {needsUnmute ? (
-          <button type="button" className="text-[10px] font-medium text-amber-300 underline" onClick={() => void toggleMute()}>
-            Unmute
-          </button>
+        {playing || controlsRevealed ? (
+          <>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 text-white"
+              onClick={() => void toggleMute()}
+              aria-label={muted || needsUnmute ? 'Unmute' : 'Mute'}
+            >
+              {muted || needsUnmute ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+            </Button>
+            <Slider className="min-w-0 flex-1" min={0} max={100} value={[volume]} onValueChange={(v) => onVolume(Array.isArray(v) ? v[0] ?? 100 : 100)} aria-label="Volume" />
+            {needsUnmute ? (
+              <button type="button" className="text-[10px] font-medium text-amber-300 underline" onClick={() => void toggleMute()}>
+                Unmute
+              </button>
+            ) : null}
+          </>
         ) : null}
       </div>
     </div>

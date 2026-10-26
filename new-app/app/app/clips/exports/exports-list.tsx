@@ -184,7 +184,7 @@ export function ExportsList({
             variant={filter === f ? 'default' : 'outline'}
             render={
               <Link
-                href={f === 'all' ? '/app/clips/exports' : `/app/clips/exports?status=${f}`}
+                href={f === 'all' ? '/app/exports' : `/app/exports?status=${f}`}
               />
             }
           >

@@ -9,6 +9,7 @@ import {
   Palette,
   Plug,
   Plus,
+  Radio,
   Scissors,
   Settings,
   Video,
@@ -48,6 +49,7 @@ export const CLIPS: NavContext = {
   icon: Scissors,
   items: [
     { title: 'New project', href: '/app/clips/new', icon: Plus, group: 'Create' },
+    { title: 'Streamer', href: '/app/streamer', icon: Radio, group: 'Create' },
     {
       title: 'Record',
       href: '/app/record',
@@ -80,7 +82,7 @@ export const CLIPS: NavContext = {
       icon: LayoutTemplate,
       group: 'Brand',
     },
-    { title: 'Exports', href: '/app/clips/exports', icon: Download, group: 'Exports' },
+    { title: 'Exports', href: '/app/exports', icon: Download, group: 'Exports' },
   ],
 }
 
@@ -103,7 +105,12 @@ export const WORKSPACE: NavContext = {
 export const ALL_CONTEXTS: NavContext[] = [WORKSPACE, CLIPS]
 
 export function resolveContext(pathname: string): NavContext {
-  if (pathname === '/app/clips' || pathname.startsWith('/app/clips/')) {
+  if (
+    pathname === '/app/clips' ||
+    pathname.startsWith('/app/clips/') ||
+    pathname === '/app/exports' ||
+    pathname.startsWith('/app/streamer')
+  ) {
     return CLIPS
   }
   if (

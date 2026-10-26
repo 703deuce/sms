@@ -16,7 +16,7 @@ export function ClipsExportsSidebarLink({
 }) {
   return (
     <Link
-      href="/app/clips/exports"
+      href="/app/exports"
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       title={compact ? 'Exports' : undefined}

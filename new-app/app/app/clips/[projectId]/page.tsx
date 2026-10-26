@@ -5,12 +5,20 @@ import { ProjectClipsView } from '@/components/clips/project-clips-view'
 import { listProjectClips } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+
+const RESERVED_PROJECT_SLUGS: Record<string, string> = {
+  exports: '/app/exports',
+  brand: '/app/clips/brand',
+  new: '/app/clips/new',
+}
 
 export const metadata = { title: 'Project · Clips' }
 
 export default async function ClipProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
+  const reserved = RESERVED_PROJECT_SLUGS[projectId]
+  if (reserved) redirect(reserved)
   const workspaceId = await resolveWorkspaceId()
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId } })
