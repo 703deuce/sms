@@ -242,8 +242,9 @@ def render_edited_clip(
     cuts = [[c[0] / 1000.0, c[1] / 1000.0] for c in edits.get("cutRanges") or []]
     segs = keep_segments(trim_in, trim_out, cuts)
     edited_words, _ = words_after_edits(words, edits)
+    words_for_crop = apply_word_fixes(words, edits.get("wordFixes") or {})
     words_path = work_dir / "words.json"
-    words_path.write_text(json.dumps(edited_words))
+    words_path.write_text(json.dumps(words_for_crop))
     full_render = work_dir / "full_render.mp4"
     run_speakercrop(clip_src, full_render, words_path, settings, work_dir)
     if len(segs) == 1 and segs[0][0] == trim_in and abs(segs[0][1] - trim_out) < 0.05:
