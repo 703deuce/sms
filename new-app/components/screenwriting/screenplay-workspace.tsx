@@ -28,6 +28,10 @@ import { DEFAULT_AI_PRIVACY, redactNamesForAi, type AiPrivacySettings } from '@/
 import { normalizeScreenplayDoc } from '@/lib/screenwriting/schema/normalize-doc'
 import { DEFAULT_SMARTTYPE, type SmartTypeLists } from '@/lib/screenwriting/smarttype/store'
 import { segmentTableRead } from '@/lib/screenwriting/table-read/segment'
+import { useScreenplayYjsCollab } from '@/components/screenwriting/use-screenplay-yjs-collab'
+import { CollabStatusBanner } from '@/components/screenwriting/collab-status-banner'
+import { PanelEmpty } from '@/components/screenwriting/panel-empty'
+import { shouldRecoverLocalDraft, offlineDraftKeys } from '@/lib/screenwriting/persistence/offline-draft'
 
 type Panel =
   | 'navigator'
@@ -79,7 +83,15 @@ export function ScreenplayWorkspace({
   const [importWarnings, setImportWarnings] = useState<string[]>([])
   const [highlightCharacter, setHighlightCharacter] = useState('')
   const [liveEditors, setLiveEditors] = useState(1)
-  const [collabActive, setCollabActive] = useState(false)
+  const [collabLive, setCollabLive] = useState(false)
+  const [externalDocKey, setExternalDocKey] = useState(0)
+  const [commentBody, setCommentBody] = useState('')
+  const [commentElementId, setCommentElementId] = useState('')
+  const { ydoc, collabExtensions, status: collabStatus } = useScreenplayYjsCollab(scriptId)
+
+  useEffect(() => {
+    setCollabLive(collabStatus.mode === 'live')
+  }, [collabStatus.mode])
   const [insertElementType, setInsertElementType] = useState<string | null>(null)
   const [insertImageUrl, setInsertImageUrl] = useState<string | null>(null)
   const [saveReconcileNote, setSaveReconcileNote] = useState<string | null>(null)
@@ -108,15 +120,6 @@ export function ScreenplayWorkspace({
   )
 
   useEffect(() => {
-    try {
-      localStorage.setItem(`sw:offline:${scriptId}`, JSON.stringify(editorDoc))
-      localStorage.setItem(`sw:offline-at:${scriptId}`, String(Date.now()))
-    } catch {
-      /* quota */
-    }
-  }, [editorDoc, scriptId])
-
-  useEffect(() => {
     void (async () => {
       try {
         const res = await fetch(`/api/sw/scripts/${scriptId}`)
@@ -124,26 +127,28 @@ export function ScreenplayWorkspace({
         const j = await res.json()
         const serverDoc = j.data?.pmJson as JSONContent | undefined
         const serverAt = j.data?.updatedAt ? new Date(j.data.updatedAt).getTime() : 0
-        const localRaw = localStorage.getItem(`sw:offline:${scriptId}`)
-        const localAt = Number(localStorage.getItem(`sw:offline-at:${scriptId}`) || 0)
+        const keys = offlineDraftKeys(scriptId)
+        const localRaw = localStorage.getItem(keys.doc)
+        const localAt = Number(localStorage.getItem(keys.updatedAt) || 0)
         const localDoc = localRaw ? (JSON.parse(localRaw) as JSONContent) : null
-        const merged = mergeOfflineRecovery(localDoc, serverDoc ?? initialDoc)
-        const winner = reconcileSave({
+        const merged = mergeOfflineRecovery(localDoc, serverDoc ?? normalizedInitial)
+        const recover = shouldRecoverLocalDraft({
           deviceUpdatedAt: localAt,
           serverUpdatedAt: serverAt,
-          deviceHash: localDoc ? hashPmJson(localDoc) : hashPmJson(serverDoc),
-          serverHash: hashPmJson(serverDoc ?? initialDoc),
+          deviceHash: localDoc ? hashPmJson(localDoc) : hashPmJson(serverDoc ?? normalizedInitial),
+          serverHash: hashPmJson(serverDoc ?? normalizedInitial),
         })
-        if (winner === 'device' && localDoc) {
+        if (recover && localDoc) {
           setDoc(merged)
           setEditorDoc(merged)
-          setSaveReconcileNote('Recovered newer local draft')
+          setExternalDocKey((k) => k + 1)
+          setSaveReconcileNote('Recovered unsynced local draft')
         }
       } catch {
         /* ignore */
       }
     })()
-  }, [scriptId, initialDoc])
+  }, [scriptId, normalizedInitial])
 
   useEffect(() => {
     try {
@@ -202,18 +207,38 @@ export function ScreenplayWorkspace({
   }
 
   const runFindReplace = () => {
-    const next = applyFindReplace(doc, {
+    const next = applyFindReplace(editorDoc, {
       query: findQuery,
       replacement: findReplace,
       scope: 'all',
     })
     setDoc(next)
     setEditorDoc(next)
+    setExternalDocKey((k) => k + 1)
   }
 
   useEffect(() => {
-    if (collabActive) setLiveEditors((n) => Math.max(n, 2))
-  }, [collabActive])
+    if (collabLive) setLiveEditors((n) => Math.max(n, 2))
+  }, [collabLive])
+
+  const postComment = async () => {
+    if (!commentBody.trim()) return
+    const elementId = commentElementId.trim() || scenes[0]?.id || 'unknown'
+    const res = await fetch(`/api/sw/scripts/${scriptId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        elementId,
+        anchorFrom: '0',
+        anchorTo: '0',
+        body: commentBody.trim(),
+      }),
+    })
+    if (!res.ok) return
+    const j = await res.json()
+    setComments((prev) => [j.data, ...(prev as unknown[])])
+    setCommentBody('')
+  }
 
   const runAi = async () => {
     setAiLoading(true)
@@ -300,6 +325,7 @@ export function ScreenplayWorkspace({
         onImageUrl={(url) => setInsertImageUrl(url)}
       />
       </div>
+      <CollabStatusBanner status={collabStatus} />
       <div className="flex flex-wrap items-center gap-2 border-b pb-2">
         <span className="text-sm font-medium">{scriptTitle}</span>
         <select
@@ -390,6 +416,9 @@ export function ScreenplayWorkspace({
           />
           {panel === 'navigator' && (
             <ul className="space-y-1">
+              {!scenes.length ? (
+                <PanelEmpty title="No scenes yet" hint="Add a Scene Heading (INT./EXT.) in the editor." />
+              ) : null}
               {scenes.map((s, i) => (
                 <li key={s.id} className="flex gap-1">
                   <span className="text-muted-foreground">{i + 1}.</span>
@@ -416,13 +445,16 @@ export function ScreenplayWorkspace({
           )}
           {panel === 'outline' && (
             <div>
-              {(meta.outline as string[])?.map((line, i) => (
-                <p key={i}>{line}</p>
-              )) ?? <p className="text-muted-foreground">Acts / sequences (edit in Beat board)</p>}
+              {(meta.outline as string[])?.length ? (
+                (meta.outline as string[]).map((line, i) => <p key={i}>{line}</p>)
+              ) : (
+                <PanelEmpty title="Outline empty" hint="Add act/sequence lines in Beat board or import a script." />
+              )}
             </div>
           )}
           {panel === 'cards' && (
             <ul className="space-y-2">
+              {!scenes.length ? <PanelEmpty title="No scene cards" hint="Scene headings in the script become cards here." /> : null}
               {scenes.map((s, i) => (
                 <li key={s.id} className="rounded border p-2">
                   <strong>{s.heading}</strong>
@@ -477,14 +509,36 @@ export function ScreenplayWorkspace({
           )}
           {panel === 'revisions' && <p>Revision set: <strong>{revisionSet}</strong>. Use toolbar color; page locks in layout engine.</p>}
           {panel === 'comments' && (
-            <ul className="space-y-2">
-              {(comments as { id: string; comments?: { body: string }[] }[]).map((t) => (
-                <li key={t.id} className="border-b pb-1">{t.comments?.[0]?.body}</li>
-              ))}
-            </ul>
+            <div className="space-y-2">
+              <input
+                className="w-full rounded border px-2 py-1"
+                placeholder="Element id (optional)"
+                value={commentElementId}
+                onChange={(e) => setCommentElementId(e.target.value)}
+              />
+              <textarea
+                className="w-full min-h-[80px] rounded border p-2"
+                placeholder="New comment…"
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+              />
+              <Button size="sm" onClick={() => void postComment()}>Post comment</Button>
+              {!comments.length ? <PanelEmpty title="No threads" hint="Post a note or select an element id from the navigator." /> : null}
+              <ul className="space-y-2">
+                {(comments as { id: string; elementId?: string; comments?: { body: string }[] }[]).map((t) => (
+                  <li key={t.id} className="border-b pb-1">
+                    <span className="text-[10px] text-muted-foreground">{t.elementId}</span>
+                    <p>{t.comments?.[0]?.body}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           {panel === 'versions' && (
             <div className="space-y-2">
+              {!versions.length ? (
+                <PanelEmpty title="No snapshots" hint="Save a manual snapshot before major rewrites." />
+              ) : null}
               <Button size="sm" onClick={() => void snapshotVersion()}>Snapshot</Button>
               <Button size="sm" variant="outline" onClick={() => void snapshotVersion('LOCK')}>Lock snapshot</Button>
               <ul>
@@ -529,9 +583,12 @@ export function ScreenplayWorkspace({
               <pre className="whitespace-pre-wrap text-[10px]">{aiResult}</pre>
             </div>
           )}
-          {panel === 'breakdown' && <p>Select text in editor and tag via breakdown hotkey (coming in editor marks).</p>}
+          {panel === 'breakdown' && (
+            <PanelEmpty title="Breakdown tags" hint="Select dialogue in the editor; tagging marks ship in a later milestone." />
+          )}
           {panel === 'reports' && (
             <div>
+              {!characters.length ? <PanelEmpty title="No speaking characters" hint="Add CHARACTER / DIALOGUE pairs to populate reports." /> : null}
               <ul>
                 {characters.map((c) => (
                   <li key={c.name}>{c.name}: {c.lines} lines, {c.words} words</li>
@@ -552,7 +609,7 @@ export function ScreenplayWorkspace({
             <span>
               {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Error' : 'Saved'}
               {saveReconcileNote ? ` · ${saveReconcileNote}` : null}
-              {collabActive ? ' · Yjs undo' : ''}
+              {collabLive ? ' · Live collab' : ' · Yjs undo (local)'}
             </span>
             {issues.length ? <span>{issues.length} script notes</span> : null}
           </div>
@@ -566,10 +623,14 @@ export function ScreenplayWorkspace({
               onDocChange={setEditorDoc}
               layoutDoc={editorDoc}
               revisionColor={revisionSet}
-              collabActive={collabActive}
+              collabLive={collabLive}
+              onCollabLive={setCollabLive}
+              collabExtensions={collabExtensions}
+              ydoc={ydoc}
+              externalDoc={editorDoc}
+              externalDocKey={externalDocKey}
               highlightCharacter={highlightCharacter}
               rtl={Boolean(meta.rtl)}
-              onCollabActive={setCollabActive}
               insertElementType={insertElementType}
               insertImageUrl={insertImageUrl}
               macros={(meta.macros as Macro[]) ?? []}
@@ -591,7 +652,11 @@ export function ScreenplayWorkspace({
               </aside>
             ) : null}
           </div>
-          <ScriptStatusBar pmJson={editorDoc} />
+          <ScriptStatusBar
+            pmJson={editorDoc}
+            saveState={saveState}
+            collabLabel={collabStatus.mode === 'live' ? 'Live collab' : collabStatus.mode === 'connecting' ? 'Collab connecting' : 'Local editing'}
+          />
         </div>
       </div>
     </div>

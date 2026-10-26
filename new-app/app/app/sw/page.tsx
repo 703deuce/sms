@@ -18,7 +18,7 @@ export default async function ScreenwritingHomePage() {
       <PageHeader
         icon={FileText}
         title="Screenwriting"
-        description="Final Draft–style scripts. V1 runs in local save mode until collab ships (W10)."
+        description="Final Draft–style scripts. HTTP autosave always on; live Yjs collab when SW_COLLAB_WS_URL + services/collab are deployed (status shown in the editor)."
         meta={<SwProjectCreateButton />}
       />
       <div className="mx-auto flex max-w-2xl flex-col gap-4">

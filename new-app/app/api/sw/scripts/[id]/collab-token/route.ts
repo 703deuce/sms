@@ -11,10 +11,13 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     const row = await getScriptForOwner(id, actor.id)
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const token = signCollabToken({ scriptId: id, actorId: actor.id, role: 'OWNER' })
+    const wsUrl = process.env.SW_COLLAB_WS_URL || ''
+    const liveCollabConfigured = Boolean(wsUrl && process.env.SW_COLLAB_SECRET)
     return NextResponse.json({
       data: {
         token,
-        url: process.env.SW_COLLAB_WS_URL || 'wss://collab.transovo.ai',
+        url: wsUrl || 'wss://collab.transovo.ai',
+        liveCollabConfigured,
       },
     })
   } catch (err) {
