@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Editor } from '@tiptap/react'
 import type { JSONContent } from '@tiptap/core'
 import type { FormatSpec } from '@/lib/screenwriting/formats/types'
 import { ScreenplayEditor } from '@/components/screenwriting/screenplay-editor'
@@ -36,6 +37,15 @@ import { ImportDialog, type ImportMode } from '@/components/screenwriting/import
 import { BeatBoardPanel, type BeatBoardState } from '@/components/screenwriting/beat-board-panel'
 import { SceneCardsPanel } from '@/components/screenwriting/scene-cards-panel'
 import { VersionsPanel } from '@/components/screenwriting/versions-panel'
+import { FdMenuBar } from '@/components/screenwriting/fd-menu-bar'
+import { ScriptNotesColumn, ScriptNoteMarginMarkers, type ScriptNoteThread } from '@/components/screenwriting/script-notes-column'
+import { RevisionsPanel } from '@/components/screenwriting/revisions-panel'
+import { BreakdownPanel } from '@/components/screenwriting/breakdown-panel'
+import type { BreakdownTag } from '@/lib/screenwriting/breakdown/types'
+import { newElementId } from '@/lib/screenwriting/schema/empty-doc'
+import { revisionSetById } from '@/lib/screenwriting/revisions/palette'
+import { useScriptNoteMarkerPositions } from '@/components/screenwriting/use-script-note-markers'
+import type { CommentHighlight } from '@/components/screenwriting/use-comment-inline-highlights'
 
 type Panel =
   | 'navigator'
@@ -102,6 +112,26 @@ export function ScreenplayWorkspace({
   const [fdMode, setFdMode] = useState<'script' | 'cards' | 'beat'>('script')
   const [importPending, setImportPending] = useState<{ file: File; format: string } | null>(null)
   const [importReport, setImportReport] = useState<string[]>([])
+  const [notesOpen, setNotesOpen] = useState(true)
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const editorRef = useRef<Editor | null>(null)
+  const editorStageRef = useRef<HTMLDivElement | null>(null)
+
+  const breakdownTags = (meta.breakdownTags as BreakdownTag[]) ?? []
+  const pageLocks = (meta.pageLocks as number[]) ?? []
+  const noteThreads = comments as ScriptNoteThread[]
+  const commentHighlights: CommentHighlight[] = useMemo(
+    () =>
+      noteThreads.map((t) => ({
+        threadId: t.id,
+        elementId: t.elementId,
+        anchorFrom: Number(t.anchorFrom) || 0,
+        anchorTo: Number(t.anchorTo) || 0,
+      })),
+    [noteThreads],
+  )
+
+  useScriptNoteMarkerPositions(editorStageRef, noteThreads)
 
   const activeSpec = useMemo(() => getTemplateSpec(templateKey), [templateKey])
   const layout = useScriptLayout(editorDoc)
@@ -234,14 +264,26 @@ export function ScreenplayWorkspace({
 
   const postComment = async () => {
     if (!commentBody.trim()) return
-    const elementId = commentElementId.trim() || scenes[0]?.id || 'unknown'
+    let elementId = commentElementId.trim()
+    let anchorFrom = '0'
+    let anchorTo = '0'
+    const ed = editorRef.current
+    if (ed) {
+      const { $from, from, to } = ed.state.selection
+      if ($from.parent.type.name === 'screenplayElement') {
+        elementId = ($from.parent.attrs.id as string) || elementId
+        anchorFrom = String(Math.max(0, from - $from.start()))
+        anchorTo = String(Math.max(0, to - $from.start()))
+      }
+    }
+    if (!elementId) elementId = scenes[0]?.id || 'unknown'
     const res = await fetch(`/api/sw/scripts/${scriptId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         elementId,
-        anchorFrom: '0',
-        anchorTo: '0',
+        anchorFrom,
+        anchorTo,
         body: commentBody.trim(),
       }),
     })
@@ -320,8 +362,77 @@ export function ScreenplayWorkspace({
     setVersions(v.data ?? [])
   }
 
+  const addBreakdownTag = (payload: { elementId: string; from: number; to: number; text: string }) => {
+    const categories = ['cast', 'props', 'wardrobe', 'vehicles', 'locations', 'sfx', 'music'] as const
+    const category = categories[breakdownTags.length % categories.length]
+    const tag: BreakdownTag = {
+      id: newElementId(),
+      elementId: payload.elementId,
+      from: payload.from,
+      to: payload.to,
+      category,
+      label: payload.text.slice(0, 80) || payload.elementId,
+    }
+    void persistMeta({ ...meta, breakdownTags: [...breakdownTags, tag] })
+    setPanel('breakdown')
+  }
+
+  const markSelectionRevised = () => {
+    const ed = editorRef.current
+    if (!ed) return
+    const { $from } = ed.state.selection
+    if ($from.parent.type.name !== 'screenplayElement') return
+    const pos = $from.before($from.depth)
+    const node = $from.parent
+    const setId = revisionSetById(revisionSet).id
+    ed.view.dispatch(
+      ed.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, revisedMark: setId }),
+    )
+  }
+
+  const fdMenus = useMemo(
+    () => ({
+      File: [
+        { label: 'Import…', action: () => document.querySelector<HTMLInputElement>('input[type=file].sw-import-input')?.click() },
+        { label: 'Export Fountain', action: () => window.open(`/api/sw/scripts/${scriptId}/export?format=fountain`, '_blank') },
+        { label: 'Export PDF', action: () => window.open(`/api/sw/scripts/${scriptId}/export?format=pdf`, '_blank') },
+        { label: 'Export FDX', action: () => window.open(`/api/sw/scripts/${scriptId}/export?format=fdx`, '_blank') },
+        { label: 'Share link', action: () => void createShareLink() },
+      ],
+      Edit: [
+        { label: 'Find / Replace panel', action: () => setPanel('find') },
+        { label: 'Replace all (current query)', action: () => runFindReplace() },
+      ],
+      View: [
+        { label: 'Script mode', action: () => setFdMode('script') },
+        { label: 'Cards mode', action: () => setFdMode('cards') },
+        { label: 'Beat Board', action: () => { setFdMode('beat'); setPanel('beat') } },
+        { label: 'Navigator', action: () => setPanel('navigator') },
+        { label: 'Toggle ScriptNotes column', action: () => setNotesOpen((o) => !o) },
+        { label: 'Night theme', action: () => { setTheme('night'); void persistMeta({ ...meta, theme: 'night' }) } },
+        { label: 'Midnight theme', action: () => { setTheme('midnight'); void persistMeta({ ...meta, theme: 'midnight' }) } },
+      ],
+      Format: [
+        { label: 'Title page', action: () => setPanel('title') },
+        { label: 'Revisions', action: () => setPanel('revisions') },
+      ],
+      Tools: [
+        { label: 'Breakdown report', action: () => setPanel('breakdown') },
+        { label: 'Read aloud', action: () => void readAloud() },
+        { label: 'AI assist', action: () => setPanel('ai') },
+        { label: 'Snapshots', action: () => setPanel('versions') },
+      ],
+      Production: [
+        { label: 'Breakdown tagging (Ctrl+Shift+B)', action: () => setPanel('breakdown') },
+        { label: 'Character report', action: () => setPanel('reports') },
+      ],
+    }),
+    [meta, scriptId, breakdownTags, revisionSet],
+  )
+
   const themeClass = SW_THEME_CLASS[theme]
   const viewClass = viewModeClass(viewMode)
+  const revPaper = revisionSetById(revisionSet).color
 
   return (
     <div className={`sw-fd-shell flex flex-col gap-2 ${themeClass} ${viewClass}`}>
@@ -337,11 +448,7 @@ export function ScreenplayWorkspace({
       />
       </div>
       <CollabStatusBanner status={collabStatus} />
-      <nav className="sw-fd-menubar flex flex-wrap gap-1 px-2 py-1 text-xs">
-        {['File', 'Edit', 'Format', 'Document', 'Production', 'Tools', 'Window', 'Help'].map((m) => (
-          <span key={m} className="rounded px-2 py-0.5 text-muted-foreground">{m}</span>
-        ))}
-      </nav>
+      <FdMenuBar menus={fdMenus} />
       <div className="flex gap-2 border-b px-2 py-1 text-xs">
         {(['script', 'cards', 'beat'] as const).map((m) => (
           <Button key={m} size="sm" variant={fdMode === m ? 'default' : 'outline'} onClick={() => setFdMode(m)}>
@@ -406,7 +513,7 @@ export function ScreenplayWorkspace({
           Import
           <input
             type="file"
-            className="hidden"
+            className="sw-import-input hidden"
             accept=".fountain,.fdx,.txt,.xml"
             onChange={(e) => {
               const f = e.target.files?.[0]
@@ -426,7 +533,7 @@ export function ScreenplayWorkspace({
         {shareUrl ? <span className="text-xs text-muted-foreground truncate max-w-[200px]">{shareUrl}</span> : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[240px_1fr]">
+      <div className="grid grid-cols-1 gap-0 lg:grid-cols-[240px_minmax(0,1fr)_auto]">
         <aside className="sw-fd-navigator max-h-[70vh] overflow-auto rounded border p-2 text-xs">
           <AddendumPanelBody
             scriptId={scriptId}
@@ -522,7 +629,19 @@ export function ScreenplayWorkspace({
               <Button size="sm" onClick={runFindReplace}>Replace all</Button>
             </div>
           )}
-          {panel === 'revisions' && <p>Revision set: <strong>{revisionSet}</strong>. Use toolbar color; page locks in layout engine.</p>}
+          {panel === 'revisions' && (
+            <RevisionsPanel
+              revisionSet={revisionSet}
+              onRevisionSet={(id) => {
+                setRevisionSet(id)
+                void persistMeta({ ...meta, revisionSet: id })
+              }}
+              pageLocks={pageLocks}
+              onPageLocks={(pages) => void persistMeta({ ...meta, pageLocks: pages })}
+              pageCount={pageCount}
+              onMarkRevised={markSelectionRevised}
+            />
+          )}
           {panel === 'comments' && (
             <div className="space-y-2">
               <input
@@ -581,7 +700,10 @@ export function ScreenplayWorkspace({
             </div>
           )}
           {panel === 'breakdown' && (
-            <PanelEmpty title="Breakdown tags" hint="Select dialogue in the editor; tagging marks ship in a later milestone." />
+            <BreakdownPanel
+              tags={breakdownTags}
+              onRemove={(id) => void persistMeta({ ...meta, breakdownTags: breakdownTags.filter((t) => t.id !== id) })}
+            />
           )}
           {panel === 'reports' && (
             <div>
@@ -601,7 +723,10 @@ export function ScreenplayWorkspace({
           )}
         </aside>
 
-        <div className={`sw-fd-page rounded-lg border bg-card shadow-sm ${meta.splitView ? 'lg:col-span-1' : ''}`}>
+        <div
+          className={`sw-fd-page rounded-lg border bg-card shadow-sm ${meta.splitView ? 'lg:col-span-1' : ''}`}
+          style={{ background: fdMode === 'script' ? revPaper : undefined }}
+        >
           <div className="flex justify-between border-b px-3 py-1 text-xs text-muted-foreground">
             <span>
               {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Error' : 'Saved'}
@@ -628,6 +753,8 @@ export function ScreenplayWorkspace({
               />
             ) : null}
             {fdMode === 'script' ? (
+            <div ref={editorStageRef} className="relative">
+            <ScriptNoteMarginMarkers threads={noteThreads} onSelect={(id) => { setSelectedNoteId(id); setNotesOpen(true) }} />
             <ScreenplayEditor
               key={scriptId}
               scriptId={scriptId}
@@ -650,7 +777,13 @@ export function ScreenplayWorkspace({
               macros={(meta.macros as Macro[]) ?? []}
               smartTypeLists={(meta.smartType as SmartTypeLists) || DEFAULT_SMARTTYPE}
               onSmartTypeChange={(lists) => void persistMeta({ ...meta, smartType: lists })}
+              commentHighlights={commentHighlights}
+              activeCommentThreadId={selectedNoteId}
+              onBreakdownTag={addBreakdownTag}
+              onEditorReady={(ed) => { editorRef.current = ed }}
+              pageLocked={false}
             />
+            </div>
             ) : null}
             {meta.splitView && fdMode === 'script' ? (
               <aside className="sw-fd-navigator max-h-[70vh] overflow-auto border-l p-2 text-xs">
@@ -673,6 +806,14 @@ export function ScreenplayWorkspace({
             collabLabel={collabStatus.mode === 'live' ? 'Live collab' : collabStatus.mode === 'connecting' ? 'Collab connecting' : 'Local editing'}
           />
         </div>
+        <ScriptNotesColumn
+          open={notesOpen}
+          onToggle={() => setNotesOpen((o) => !o)}
+          threads={noteThreads}
+          selectedId={selectedNoteId}
+          onSelect={setSelectedNoteId}
+          onJumpToElement={(id) => document.getElementById(`el-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+        />
       </div>
       <ImportDialog
         open={Boolean(importPending)}

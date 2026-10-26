@@ -10,6 +10,7 @@ import { autoDetectElementType, nextElementType } from '@/lib/screenwriting/edit
 import { elementTypeForDigit } from '@/lib/screenwriting/editor/shortcuts'
 import { newElementId } from '@/lib/screenwriting/schema/empty-doc'
 import { usePageDecorations } from '@/components/screenwriting/use-page-decorations'
+import { useCommentInlineHighlights, type CommentHighlight } from '@/components/screenwriting/use-comment-inline-highlights'
 import { shouldDisablePmHistory, collabUndoStackLabel } from '@/lib/screenwriting/collab/undo-policy'
 import { attachYjsUndoHook } from '@/lib/screenwriting/collab/yjs-undo-hook'
 import type * as Y from 'yjs'
@@ -44,6 +45,11 @@ export function ScreenplayEditor({
   onSmartTypeChange,
   externalDoc,
   externalDocKey,
+  commentHighlights,
+  activeCommentThreadId,
+  onBreakdownTag,
+  onEditorReady,
+  pageLocked,
 }: {
   scriptId: string
   formatSpec: FormatSpec
@@ -65,6 +71,11 @@ export function ScreenplayEditor({
   onSmartTypeChange?: (lists: SmartTypeLists) => void
   externalDoc?: JSONContent | null
   externalDocKey?: number
+  commentHighlights?: CommentHighlight[]
+  activeCommentThreadId?: string | null
+  onBreakdownTag?: (payload: { elementId: string; from: number; to: number; text: string }) => void
+  onEditorReady?: (editor: import('@tiptap/react').Editor) => void
+  pageLocked?: boolean
 }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const serverUpdatedAt = useRef(0)
@@ -150,6 +161,24 @@ export function ScreenplayEditor({
           const { state, dispatch } = view
           dispatch(state.tr.replaceSelectionWith(state.schema.nodes.pageBreak.create()))
           return true
+        }
+        if (mod && event.shiftKey && event.key.toLowerCase() === 'b') {
+          event.preventDefault()
+          const { state } = view
+          const { $from, from, to } = state.selection
+          if ($from.parent.type.name !== 'screenplayElement') return true
+          const elementId = $from.parent.attrs.id as string
+          const text = state.doc.textBetween(from, to, '')
+          onBreakdownTag?.({
+            elementId,
+            from: from - $from.start(),
+            to: to - $from.start(),
+            text,
+          })
+          return true
+        }
+        if (pageLocked) {
+          return false
         }
         if (event.key === 'Backspace') {
           const { state, dispatch } = view
@@ -320,6 +349,11 @@ export function ScreenplayEditor({
   }, [editor, highlightCharacter])
 
   usePageDecorations(editor, layoutDoc ?? null)
+  useCommentInlineHighlights(editor, commentHighlights ?? [], activeCommentThreadId)
+
+  useEffect(() => {
+    if (editor) onEditorReady?.(editor)
+  }, [editor, onEditorReady])
 
   useEffect(() => {
     const root = editor?.view.dom
@@ -337,7 +371,7 @@ export function ScreenplayEditor({
   if (!editor) return <p className="text-sm text-muted-foreground">Loading editor…</p>
 
   return (
-    <div className="relative">
+    <div className="sw-editor-stage relative">
       {suggestOpen ? (
         <div className="absolute left-8 top-2 z-50">
           <SmartTypeMenu items={suggestItems} onPick={applySmartPick} />

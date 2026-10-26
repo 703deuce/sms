@@ -1,3 +1,35 @@
+.sw-editor-stage {
+  position: relative;
+  padding-right: 1.25rem;
+}
+
+.sw-revised-mark {
+  position: absolute;
+  left: -1.25rem;
+  width: 1rem;
+  text-align: center;
+  color: #c00;
+  font-weight: bold;
+}
+
+.sw-element.sw-revised-line {
+  position: relative;
+}
+
+.sw-comment-highlight {
+  background: rgba(124, 58, 237, 0.15);
+  border-bottom: 1px dashed #7c3aed;
+}
+
+.sw-comment-highlight-active {
+  background: rgba(124, 58, 237, 0.28);
+  border-bottom: 2px solid #7c3aed;
+}
+
+.sw-scriptnote-marker {
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.15);
+}
+
 .sw-editor {
   font-family: 'Courier Prime', 'Courier New', Courier, monospace;
   font-size: 12pt;
