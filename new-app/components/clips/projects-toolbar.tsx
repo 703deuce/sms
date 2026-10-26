@@ -62,7 +62,7 @@ export function ProjectsToolbar({
             { value: 'processing', label: 'Processing', dot: 'bg-sky-500' },
             { value: 'ready', label: 'Ready', dot: 'bg-emerald-500' },
             { value: 'failed', label: 'Failed', dot: 'bg-red-500' },
-          ] as const
+          ] satisfies Array<{ value: string; label: string; dot?: string }>
         ).map((opt) => (
           <Button
             key={opt.value}
@@ -72,7 +72,7 @@ export function ProjectsToolbar({
             className="h-9 gap-1.5 rounded-lg px-3 text-xs"
             onClick={() => setStatus(opt.value)}
           >
-            {opt.dot ? <span className={`size-1.5 rounded-full ${opt.dot}`} /> : null}
+            {'dot' in opt && opt.dot ? <span className={`size-1.5 rounded-full ${opt.dot}`} /> : null}
             {opt.label}
           </Button>
         ))}

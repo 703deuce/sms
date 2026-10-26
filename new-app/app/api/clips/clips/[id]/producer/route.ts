@@ -119,7 +119,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
               threadId: thread.id,
               role: 'assistant',
               content: llm.reply,
-              toolCalls: llm.tools || [],
+              toolCalls: (llm.tools ?? []) as object,
             },
           ],
         })

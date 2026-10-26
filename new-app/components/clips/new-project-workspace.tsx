@@ -15,7 +15,7 @@ import { validateImportUrlForSubmit, YOUTUBE_UNSUPPORTED_MSG } from '@/lib/clips
 import { defaultClipSettings, TOOL_PRESET_MAP, type ClipProjectSettings } from '@/lib/clips/settings'
 import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
-import { Globe, Link2, Loader2, Plus, Youtube } from 'lucide-react'
+import { Globe, Link2, Loader2, Plus } from 'lucide-react'
 
 export function NewProjectWorkspace() {
   const router = useRouter()
@@ -134,7 +134,6 @@ export function NewProjectWorkspace() {
               </PrimaryButton>
             </div>
             <p className="flex items-center gap-3 text-xs text-muted-foreground">
-              <Youtube className="size-3.5" aria-hidden />
               <Globe className="size-3.5" aria-hidden />
               Drive & Dropbox supported
             </p>

@@ -11,10 +11,16 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const prisma = getPrisma()
     const row = await prisma.clipThumbnail.findFirst({
       where: { id, workspaceId },
-      include: { generation: true },
     })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const key = row.imageKey || row.generation?.storageKey
+    let key = row.imageKey
+    if (!key && row.generationId) {
+      const gen = await prisma.aiGeneration.findFirst({
+        where: { id: row.generationId, workspaceId },
+        select: { storageKey: true },
+      })
+      key = gen?.storageKey ?? null
+    }
     if (!key) return NextResponse.json({ error: 'Not ready' }, { status: 404 })
     const storage = getClipStorage()
     const url = await storage.createSignedDownloadUrl(key, 300, {

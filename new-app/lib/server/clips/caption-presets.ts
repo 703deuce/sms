@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 
@@ -17,7 +18,7 @@ export async function createCaptionPreset(workspaceId: string, name: string, con
       id: createId('cpre'),
       workspaceId,
       name: name.trim(),
-      config,
+      config: config as Prisma.InputJsonValue,
     },
   })
 }

@@ -24,7 +24,6 @@ import {
   Voicemail,
   type LucideIcon,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { TONE_TILE, type ToneTileKey } from '@/lib/ui/tones'
 import { cn } from '@/lib/utils'
 
