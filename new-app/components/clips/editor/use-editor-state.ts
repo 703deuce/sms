@@ -138,6 +138,26 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     [setEdits, state.edits],
   )
 
+  const setCaptions = useCallback(
+    (captions: ClipEditsV2['captions']) => {
+      setEdits({ ...state.edits, captions: { ...state.edits.captions, ...captions } })
+    },
+    [setEdits, state.edits],
+  )
+
+  const toggleEmphasis = useCallback(
+    (wordIndex: number) => {
+      const cur = state.edits.captions?.emphasis ?? []
+      const has = cur.includes(wordIndex)
+      const emphasis = has ? cur.filter((i) => i !== wordIndex) : [...cur, wordIndex]
+      setEdits({
+        ...state.edits,
+        captions: { ...state.edits.captions, emphasis, keywordHighlight: true },
+      })
+    },
+    [setEdits, state.edits],
+  )
+
   const setTrim = useCallback(
     (trim: { in: number; out: number }) => {
       const pad = 5000
@@ -180,6 +200,8 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     setLayoutMode,
     setShotOverride,
     setTrim,
+    setCaptions,
+    toggleEmphasis,
     resetEdits: () => setEdits(defaultEdits(bounds), false),
   }
 }

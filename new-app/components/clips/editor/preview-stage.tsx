@@ -175,7 +175,12 @@ export function PreviewStage({
           <div className="flex size-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">No video</div>
         )}
         {edits.captions?.enabled !== false && (
-          <CaptionOverlay words={captionWords} currentTimeSec={captionTimeSec} presetId={edits.captions?.presetId} />
+          <CaptionOverlay
+            words={captionWords}
+            currentTimeSec={captionTimeSec}
+            edits={edits as ClipEditsV2}
+            boxHeightPx={box.h}
+          />
         )}
       </div>
     </div>

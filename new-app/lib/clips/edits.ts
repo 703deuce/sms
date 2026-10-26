@@ -15,6 +15,9 @@ export type ClipEditsV2 = {
     position?: string
     case?: string
     wordsPerLine?: number
+    colors?: { a?: string; b?: string }
+    emphasis?: number[]
+    keywordHighlight?: boolean
   }
   layout: {
     mode: 'speaker_follow' | 'fit_blur' | 'center_crop' | 'subject_follow'

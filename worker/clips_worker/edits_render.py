@@ -228,20 +228,22 @@ def ffmpeg_concat_segments(src: Path, dest: Path, segs_sec: list[tuple[float, fl
     )
 
 
-def burn_captions(video: Path, words: list[dict], out: Path, work_dir: Path) -> None:
-    import numpy as np
+def burn_captions(
+    video: Path,
+    words: list[dict],
+    out: Path,
+    work_dir: Path,
+    edits_captions: dict | None = None,
+    play_w: int = 720,
+    play_h: int = 1280,
+) -> None:
+    from clips_worker.captions_ass import build_ass
 
-    raw = work_dir / "cap.pcm"
-    subprocess.check_call(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-ac", "1", "-ar", "16000", "-f", "s16le", str(raw)],
-    )
-    a = np.fromfile(raw, dtype=np.int16) if raw.exists() else np.zeros(16000, dtype=np.int16)
     ass = work_dir / "cap.ass"
-    srt = work_dir / "cap.srt"
-    sys.path.insert(0, str(V3))
-    import captions
-
-    captions.build(words, a, str(ass), str(srt), split_times=None)
+    cap = edits_captions if isinstance(edits_captions, dict) else {}
+    if not cap.get("presetId") and not cap.get("preset"):
+        cap = {**cap, "presetId": "bold_pop", "animation": "pop"}
+    build_ass(words, cap, ass, play_w=play_w, play_h=play_h)
     fontsdir = V3 / "fonts"
     vf = f"ass={ass}:fontsdir={fontsdir}".replace(",", r"\,")
     subprocess.check_call(
@@ -312,7 +314,7 @@ def render_edited_clip(
     remapped, _ = words_after_edits(src_words, edits)
     final = work_dir / "final.mp4"
     if int(edits.get("captions", {}).get("enabled", True)):
-        burn_captions(cut_mp4, remapped, final, work_dir)
+        burn_captions(cut_mp4, remapped, final, work_dir, edits.get("captions") or {})
         shutil.copy(final, out_mp4)
     else:
         shutil.copy(cut_mp4, out_mp4)

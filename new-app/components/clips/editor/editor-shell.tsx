@@ -10,6 +10,7 @@ import { requestClipReframe } from '@/lib/clips-api'
 import { patchClip } from '@/lib/clips-api'
 import { outputDurationFromEdits } from '@/lib/clips/editor-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
+import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
@@ -69,6 +70,8 @@ export function EditorShell({
     setLayoutMode,
     setShotOverride,
     setTrim,
+    setCaptions,
+    toggleEmphasis,
   } = useEditorState(clipId, bounds, initialEdits)
 
   const outDur = outputDurationFromEdits(edits)
@@ -216,6 +219,7 @@ export function EditorShell({
                   if (ms < edits.trim.in) setTrim({ in: ms, out: edits.trim.out })
                   else if (ms > edits.trim.out) setTrim({ in: edits.trim.in, out: ms })
                 }}
+                onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
                 selectionRef={selectionRef}
               />
             </TabsContent>
@@ -228,7 +232,9 @@ export function EditorShell({
                 onRerunReframe={() => void requestClipReframe(clipId)}
               />
             </TabsContent>
-            <TabsContent value="captions"><ComingSoon /></TabsContent>
+            <TabsContent value="captions" className="mt-0">
+              <CaptionsPanel edits={edits} onChange={setCaptions} />
+            </TabsContent>
             <TabsContent value="broll"><ComingSoon /></TabsContent>
             <TabsContent value="audio"><ComingSoon /></TabsContent>
             <TabsContent value="thumbnail"><ComingSoon /></TabsContent>

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CAPTION_PRESETS as CAPTION_PRESET_DEFS, presetSlugToId } from '@/lib/clips/caption-presets'
 
 export const CLIP_SETTINGS_VERSION = 2
 
@@ -83,14 +84,11 @@ export function defaultClipSettings(overrides?: Partial<ClipProjectSettings>): C
   })
 }
 
-export const CAPTION_PRESETS = [
-  { id: 'bold_pop', label: 'Bold Pop', description: 'UPPER · pop highlight' },
-  { id: 'clean_white', label: 'Clean White', description: 'Sentence case · sapphire active' },
-  { id: 'boxed', label: 'Boxed', description: 'Active word box' },
-  { id: 'karaoke', label: 'Karaoke', description: 'Fill animation' },
-  { id: 'minimal', label: 'Minimal', description: 'Small bottom third' },
-  { id: 'neon', label: 'Neon', description: 'Glow pulse' },
-] as const
+export const CAPTION_PRESETS = CAPTION_PRESET_DEFS.map((p) => ({
+  id: presetSlugToId(p.slug),
+  label: p.name,
+  description: `${p.case} · ${p.animation}`,
+}))
 
 export const TOOL_PRESET_MAP: Record<string, Partial<ClipProjectSettings>> = {
   'ai-clip-maker': { mode: 'talking' },
