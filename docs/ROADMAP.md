@@ -1,72 +1,75 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-26 — streamer `render_job.py` syntax fix; RENDER_CLIP `download_object` guarded by worker tests; clipper E2E audit
+**Last updated:** 2026-10-26 — owner final priority order (clipper → script editor → Streamer VOD → AI Studio); screenwriting on hold behind flag
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.
 
 ---
 
-## Launch scope (ship order)
+## Build order (owner final)
 
 | # | Product | Status (2026-10-26) |
 |---|---------|---------------------|
-| **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS (TOP PRIORITY)** |
-| **2** | **Streamer** — VOD-first only (link import, auto-import after stream, uploads, chat signals, clip-that, near-live polling). **No live clipping.** | **PARTIAL** |
-| **3** | **Script editor** — Descript-style transcript editor | **NOT STARTED** — `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md` |
-| **4** | **AI Studio** (Higgsfield-like) | **Launch: TBD** (owner decides in-launch vs immediately post-launch) |
+| **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS — TOP PRIORITY, NOW** |
+| **2** | **Script editor** — Descript-style transcript editor | **WAITING** — owner will send full look-and-feature spec; **do not start implementation until then** |
+| **3** | **Streamer** — VOD-first only (link import, auto-import after stream, uploads, chat signals, clip-that, near-live polling). **No live clipping.** | **PARTIAL** — after script editor spec + clipper ship |
+| **4** | **AI Studio** (Higgsfield-like) | **NOT STARTED** |
+| **5** | **Screenwriting** (Final Draft parity) | **ON HOLD** — `FEATURE_SCREENWRITING=0`; all code, migrations, and data kept (`screenwriting-wip`) |
 
-### Launch blocker (before charging)
+### Before charging (launch blocker)
 
 | Blocker | Status |
 |---------|--------|
-| **Login, credits, billing** | **PARTIAL** — auth/credits exist; billing + charge-ready flows must ship before paid launch |
+| **Login, credits, billing** | **PARTIAL** — auth/credits exist; billing + charge-ready flows required before paid launch |
 
 ---
 
-## Post-launch
+## 1. Regular clipper (active — NOW)
 
-| # | Product | Status |
-|---|---------|--------|
-| **5** | **Screenwriting** (Final Draft parity) | **PAUSED / HIDDEN** — `FEATURE_SCREENWRITING=0`; code + migrations + data kept on branch `screenwriting-wip` |
-
-**Re-enable screenwriting:** `FEATURE_SCREENWRITING=1` on web + redeploy.
-
-**Docs:** `docs/clips/SCREENWRITING-BUILD.md`, `docs/clips/screenwriting-ui.md`, `docs/clips/screenwriting-format-flow.md`, `docs/clips/sw-browser-test-1.md`  
-**Open on branch:** L07 notes column, L19 breakdown, L20 revisions/locks, inline comment anchors, real menus, live collab deploy, **D01–D41** addendum verify.
-
----
-
-## 1. Regular clipper (active)
-
-**Goal:** `PROCESS_PROJECT` → worker download by storage key → transcribe → pick → `RENDER_CLIP` → thumbnails → export.
+**Goal:** End-to-end: direct-to-storage upload → `completeClipUpload` → `createClipProject` / `PROCESS_PROJECT` → worker download by storage key → transcribe → pick clips → preview → `RENDER_CLIP` → thumbnails → export.
 
 | Layer | Notes |
 |-------|--------|
-| Upload | S3 multipart + Supabase TUS; `clip_upload_parts`; `/chunk` → 410; resume after reload/deploy |
-| Web | `completeClipUpload` → `createClipProject` enqueues `PROCESS_PROJECT` |
-| Worker | `pipeline.py` + `render_job.py` (`test_render_job_storage.py` — no `download_object` shadow) |
-| **Open** | Prod `clips-worker` image may lag master — **redeploy worker when owner approves** (not during VOD job). Repo: `render_job.py` has no inner `download_object` import; `test_render_job_storage.py` + `test_download_object_shadow.py` |
-| **Fixed (master)** | `streamer/render_job.py` invalid `elif` after `else` (SyntaxError broke worker import/AST checks) |
+| Upload | S3 multipart + Supabase TUS; `clip_upload_parts`; resume; `/chunk` → 410; legacy `app_chunked` rejected on client |
+| Web | `lib/clips/upload.ts`, `lib/server/clips/uploads.ts` |
+| Worker | `pipeline.py`, `clips_worker/render_job.py` |
+| **RENDER_CLIP / `download_object`** | No inner re-import in `run_render_clip_job` — `test_render_job_storage.py`, `test_download_object_shadow.py` |
+| **Worker syntax** | Fixed `streamer/render_job.py` upload `elif` branch (`e3264ed9a`) |
+| **Prod** | Redeploy `clips-worker` when owner approves (not during active VOD jobs) |
 
 **Specs:** `docs/clips/clipping_build_plan.md`, `docs/clips/PROGRESS.md`
 
 ---
 
-## 2. Streamer (VOD)
+## 2. Script editor (blocked on spec)
 
-**Spec:** `docs/clips/STREAMER_BUILD_SPEC.md` — live clip path stays frozen.
+Descript-style transcript editing. Reference only until owner spec lands: `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md`.
+
+**Gate:** Full look-and-feature spec from owner → then schedule build.
 
 ---
 
-## 3. Script editor
+## 3. Streamer (VOD)
 
-Descript-style transcript editing; spec in `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md`.
+**Spec:** `docs/clips/STREAMER_BUILD_SPEC.md`. Live clipping stays frozen.
 
 ---
 
 ## 4. AI Studio
 
-**Launch: TBD.** Spec TBD when scheduled.
+Higgsfield-like product; spec and schedule TBD after prior priorities.
+
+---
+
+## 5. Screenwriting (on hold)
+
+**Hidden in prod:** `FEATURE_SCREENWRITING` unset or `0` → no nav link; `/app/sw/*`, `/api/sw/*`, `/s/*` → 404.
+
+**Re-enable:** `FEATURE_SCREENWRITING=1` on web + redeploy.
+
+**Branch:** `screenwriting-wip`  
+**Docs:** `docs/clips/SCREENWRITING-BUILD.md`, `docs/clips/screenwriting-ui.md`, `docs/clips/screenwriting-format-flow.md`, `docs/clips/sw-browser-test-1.md`  
+**Open when resumed:** L07 notes column, L19 breakdown, L20 revisions/locks, inline comments, menus, live collab deploy, **D01–D41**
 
 ---
 
@@ -74,7 +77,7 @@ Descript-style transcript editing; spec in `new-app/docs/clips/DESCRIPT_BUILD_SP
 
 | Date | Milestone |
 |------|-----------|
-| 2026-10-26 | Fix `streamer/render_job.py` upload branch syntax; worker shadow tests green |
-| 2026-10-26 | Launch scope: clipper → Streamer VOD → script editor; AI Studio TBD; billing = launch blocker |
-| 2026-10-26 | Screenwriting hidden (`FEATURE_SCREENWRITING`); `ddd3d010d` clipper `app_chunked` guard |
-| 2026-10-26 | Upload direct-to-storage `64d759c87` |
+| 2026-10-26 | Roadmap: clipper → script editor (wait for spec) → Streamer VOD → AI Studio → screenwriting on hold |
+| 2026-10-26 | `FEATURE_SCREENWRITING` off; middleware 404; nav hidden (`a8f126228`) |
+| 2026-10-26 | Clipper: direct upload `64d759c87`, `app_chunked` guard `ddd3d010d`, worker render fixes `e3264ed9a` |
+| 2026-10-26 | `screenwriting-wip` @ `979106404` merged with master flag/roadmap |
