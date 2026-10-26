@@ -33,6 +33,34 @@ type ElevenLabsErrorBody = {
   detail?: { status?: string; message?: string; data?: { prompt_suggestion?: string } }
 }
 
+function isRetryable(status: number, message: string): boolean {
+  if (status === 429 || status === 503) return true
+  const low = message.toLowerCase()
+  return low.includes('heavy traffic') || low.includes('busy') || low.includes('rate limit')
+}
+
+async function sleep(ms: number) {
+  await new Promise((r) => setTimeout(r, ms))
+}
+
+async function fetchWithElevenLabsRetry(url: string, init: RequestInit): Promise<Response> {
+  const delays = [5000, 15000, 30000]
+  let last: Response | null = null
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, init)
+    last = res
+    if (res.ok) return res
+    const text = await res.text()
+    const err = parseElevenLabsError(res.status, text)
+    if (attempt < 3 && isRetryable(res.status, err.message)) {
+      await sleep(delays[attempt] + Math.random() * 2000)
+      continue
+    }
+    throw err
+  }
+  throw parseElevenLabsError(last?.status ?? 500, await last?.text() ?? 'ElevenLabs failed')
+}
+
 function parseElevenLabsError(status: number, text: string): Error {
   let body: ElevenLabsErrorBody | null = null
   try {
@@ -57,7 +85,7 @@ export async function generateMusic(input: {
   const musicLengthMs = clamp(Math.round(input.lengthMs), 3000, 300_000)
   const url =
     'https://api.elevenlabs.io/v1/music?output_format=mp3_44100_128'
-  const res = await fetch(url, {
+  const res = await fetchWithElevenLabsRetry(url, {
     method: 'POST',
     headers: {
       'xi-api-key': apiKey,
@@ -71,10 +99,6 @@ export async function generateMusic(input: {
       force_instrumental: Boolean(input.instrumental),
     }),
   })
-  if (!res.ok) {
-    const text = await res.text()
-    throw parseElevenLabsError(res.status, text)
-  }
   const buf = Buffer.from(await res.arrayBuffer())
   const seconds = musicLengthMs / 1000
   return {
@@ -97,7 +121,7 @@ export async function generateSfx(input: {
   const durationSeconds = clamp(Number(input.durationSec), 0.5, 5)
   const url =
     'https://api.elevenlabs.io/v1/sound-generation?output_format=mp3_44100_128'
-  const res = await fetch(url, {
+  const res = await fetchWithElevenLabsRetry(url, {
     method: 'POST',
     headers: {
       'xi-api-key': apiKey,
@@ -110,10 +134,6 @@ export async function generateSfx(input: {
       prompt_influence: 0.4,
     }),
   })
-  if (!res.ok) {
-    const text = await res.text()
-    throw parseElevenLabsError(res.status, text)
-  }
   const buf = Buffer.from(await res.arrayBuffer())
   return {
     result: buf,

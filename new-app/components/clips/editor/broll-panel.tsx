@@ -176,6 +176,11 @@ export function BrollPanel({
   }
 
   useEffect(() => {
+    if (gen.failed && activeGen) {
+      pendingAi.current = null
+      setActiveGen(null)
+      return
+    }
     if (gen.status !== 'READY' || !gen.downloadUrl || !activeGen || !pendingAi.current) return
     const p = pendingAi.current
     if (gen.error) {

@@ -2,30 +2,61 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { clipsFetch } from '@/lib/clips-api'
+import { toast } from 'sonner'
 
 export function useGeneration(generationId: string | null) {
   const [status, setStatus] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const failedToastRef = useRef<string | null>(null)
 
   const poll = useCallback(async () => {
     if (!generationId) return
-    const data = await clipsFetch<{
+    const res = await clipsFetch<{
       status: string
       downloadUrl: string | null
       error: string | null
     }>(`/api/clips/generations/${generationId}`)
-    setStatus(data.status)
-    setDownloadUrl(data.downloadUrl)
-    setError(data.error)
+    setStatus(res.status)
+    setDownloadUrl(res.downloadUrl)
+    setError(res.error)
+    if (res.status === 'FAILED' && failedToastRef.current !== generationId) {
+      failedToastRef.current = generationId
+      toast.error(res.error || 'Generation failed', {
+        action: {
+          label: 'Try again',
+          onClick: () => {
+            failedToastRef.current = null
+          },
+        },
+      })
+    }
   }, [generationId])
 
   useEffect(() => {
-    if (!generationId) return
-    const t = setInterval(() => void poll().catch(() => {}), 5000)
-    void poll()
+    if (!generationId) {
+      setStatus(null)
+      setDownloadUrl(null)
+      setError(null)
+      return
+    }
+    failedToastRef.current = null
+    const tick = () => {
+      void poll().catch(() => {})
+    }
+    const t = setInterval(tick, 5000)
+    tick()
     return () => clearInterval(t)
   }, [generationId, poll])
 
-  return { status, downloadUrl, error, refresh: poll }
+  useEffect(() => {
+    if (!generationId || !status) return
+    if (status === 'FAILED' || status === 'READY') {
+      return
+    }
+  }, [generationId, status])
+
+  const running = status === 'PENDING' || status === 'RUNNING'
+
+  return { status, downloadUrl, error, refresh: poll, running, failed: status === 'FAILED' }
 }

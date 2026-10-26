@@ -73,6 +73,26 @@ def log_picker_config() -> None:
         log(f"picker config load failed: {exc}")
 
 
+def mark_generation_failed(conn, job: dict, message: str) -> None:
+    payload = job.get("payload") or {}
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    generation_id = payload.get("generationId")
+    if generation_id:
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE ai_generations SET status=%s, error=%s, "updatedAt"=NOW() WHERE id=%s',
+                ("FAILED", message[:4000], generation_id),
+            )
+    with conn.cursor() as cur:
+        cur.execute(
+            'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
+            ("FAILED", message[:4000], job["id"]),
+        )
+    conn.commit()
+    post_progress(job["id"], {"jobStatus": "FAILED", "error": message[:500]})
+
+
 def count_queued_jobs(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -264,25 +284,20 @@ def main() -> None:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")
                     traceback.print_exc()
-                    if job.get("type") == "RENDER_CLIP":
-                        payload = job.get("payload") or {}
-                        if isinstance(payload, str):
-                            payload = json.loads(payload)
-                        rid = payload.get("renderId")
-                        if rid:
-                            with conn.cursor() as cur:
-                                cur.execute(
-                                    'UPDATE clip_renders SET status = %s, error = %s, "updatedAt" = NOW() WHERE id = %s',
-                                    ("FAILED", msg[:4000], rid),
-                                )
-                            conn.commit()
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                'UPDATE clip_jobs SET status = %s, error = %s, "finishedAt" = NOW() WHERE id = %s',
-                                ("FAILED", msg[:4000], job["id"]),
-                            )
-                        conn.commit()
-                        post_progress(job["id"], {"jobStatus": "FAILED", "error": msg[:500]})
+                    if job.get("type") in ("RENDER_CLIP", "MUSIC", "THUMBNAIL"):
+                        if job.get("type") == "RENDER_CLIP":
+                            payload = job.get("payload") or {}
+                            if isinstance(payload, str):
+                                payload = json.loads(payload)
+                            rid = payload.get("renderId")
+                            if rid:
+                                with conn.cursor() as cur:
+                                    cur.execute(
+                                        'UPDATE clip_renders SET status = %s, error = %s, "updatedAt" = NOW() WHERE id = %s',
+                                        ("FAILED", msg[:4000], rid),
+                                    )
+                                conn.commit()
+                        mark_generation_failed(conn, job, msg)
                     else:
                         post_progress(
                             job["id"],

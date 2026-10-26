@@ -72,11 +72,15 @@ export function AudioPanel({
   }
 
   useEffect(() => {
+    if (gen.failed && activeGen) {
+      setActiveGen(null)
+      return
+    }
     if (gen.status === 'READY' && activeGen) {
       onAttachMusic(activeGen)
       setActiveGen(null)
     }
-  }, [gen.status, activeGen, onAttachMusic])
+  }, [gen.status, gen.failed, activeGen, onAttachMusic])
 
   const placeSfx = async (presetId?: string, promptText?: string) => {
     setBusy(true)
@@ -112,7 +116,12 @@ export function AudioPanel({
         <Button size="sm" disabled={busy || !prompt.trim()} onClick={() => void generateMusic()}>
           Generate
         </Button>
-        {activeGen && <p className="text-xs text-muted-foreground">Generating… {gen.status}</p>}
+        {activeGen && !gen.failed && (
+          <p className="text-xs text-muted-foreground">Generating… {gen.status}</p>
+        )}
+        {activeGen && gen.failed && (
+          <p className="text-xs text-destructive">{gen.error || 'Music generation failed'}</p>
+        )}
         {music && (
           <div className="space-y-2 rounded border border-border p-2">
             <p className="text-xs">Status: {musicGen.status || '—'}</p>
