@@ -112,7 +112,7 @@ export async function searchVideos(q: string, page = 1): Promise<PixabayHitPubli
 
   const url =
     `https://pixabay.com/api/videos/?key=${encodeURIComponent(key)}` +
-    `&q=${encodeURIComponent(query)}&per_page=24&page=${page}&safesearch=true&video_type=film`
+    `&q=${encodeURIComponent(query)}&per_page=20&page=${page}&safesearch=true&video_type=film&order=popular`
 
   let res: Response
   try {

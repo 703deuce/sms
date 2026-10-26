@@ -32,21 +32,25 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       }
     }
     const words = loadSourceWords(transcript)
-    const aiMeta = (clip.aiMeta || {}) as { brollIdeas?: string[] }
-    const { items, attempted, placed } = await buildAutoBrollItems(edits, words, aiMeta.brollIdeas || [])
+    const { items, attempted, placed, queriesUsed } = await buildAutoBrollItems(edits, words, {
+      clipTitle: clip.title,
+    })
     if (!items.length) {
       return NextResponse.json({
         data: {
           items,
           attempted,
           placed,
+          queriesUsed,
           message: 'No stock B-roll placements matched this clip (try manual search).',
         },
       })
     }
 
     const media = await resolveBrollMedia(items)
-    return NextResponse.json({ data: { items, media, count: items.length, attempted, placed } })
+    return NextResponse.json({
+      data: { items, media, count: items.length, attempted, placed, queriesUsed },
+    })
   } catch (err) {
     return jsonError(err, 500)
   }

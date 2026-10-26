@@ -97,6 +97,7 @@ export function BrollPanel({
         count?: number
         attempted?: number
         placed?: number
+        queriesUsed?: string[]
       }>(`/api/clips/clips/${clipId}/broll/auto`, { method: 'POST', body: '{}' })
       const attempted = data.attempted ?? data.items?.length ?? 0
       const placed = data.placed ?? data.items?.length ?? 0
@@ -105,8 +106,11 @@ export function BrollPanel({
         return
       }
       if (data.media?.length) onBrollMedia(data.media)
-      onMergeBroll(data.items, true)
-      if (attempted > placed) {
+      onMergeBroll(data.items, false)
+      const q = (data.queriesUsed || []).join(', ')
+      if (q) {
+        toast.success(`Placed ${placed}${attempted > placed ? ` of ${attempted}` : ''}: ${q}`)
+      } else if (attempted > placed) {
         toast.success(`Placed ${placed} of ${attempted}`)
       } else {
         toast.success(`Added ${placed} B-roll clip${placed === 1 ? '' : 's'}`)
