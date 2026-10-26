@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { clipUploadMaxBytes, formatClipUploadMaxLabel } from '@/lib/server/clips/upload-limits'
 import { shouldStoreUploadOnStaging } from '@/lib/server/clips/upload-staging'
+import { shouldUseAppChunkedUpload } from '@/lib/server/clips/upload-limits'
 
 describe('upload limits', () => {
   it('formats MB labels', () => {
@@ -20,5 +21,9 @@ describe('upload limits', () => {
 
   it('never uses local disk staging for workers', () => {
     expect(shouldStoreUploadOnStaging(200 * 1024 * 1024)).toBe(false)
+  })
+
+  it('[U] never routes browser chunks through the web app', () => {
+    expect(shouldUseAppChunkedUpload(200 * 1024 * 1024)).toBe(false)
   })
 })
