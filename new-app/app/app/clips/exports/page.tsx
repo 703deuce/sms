@@ -1,20 +1,23 @@
-import { Suspense } from 'react'
 import { Page, PageHeader } from '@/components/app/page-primitives'
 import { ExportsList } from '@/app/app/clips/exports/exports-list'
+import { parseExportStatusFilter } from '@/lib/server/clips/export-rows'
 import { listClipRenders } from '@/lib/server/clips/renders'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export const metadata = { title: 'Exports · Clips' }
 
-export default async function ClipsExportsPage() {
+export default async function ClipsExportsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>
+}) {
   const workspaceId = await resolveWorkspaceId()
-  const initialRows = await listClipRenders(workspaceId, 'all')
+  const filter = parseExportStatusFilter((await searchParams).status)
+  const initialRows = await listClipRenders(workspaceId, filter)
   return (
     <Page>
       <PageHeader title="Exports" description="Download history for rendered clips." />
-      <Suspense fallback={<div className="h-32 animate-pulse rounded-lg bg-muted" />}>
-        <ExportsList initialRows={initialRows} />
-      </Suspense>
+      <ExportsList key={filter} initialRows={initialRows} filter={filter} />
     </Page>
   )
 }

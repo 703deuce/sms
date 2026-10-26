@@ -29,17 +29,25 @@
 
 ## Deploy rules
 
-- **Only the latest commit builds.** After every `git push` to `master`, over SSH on the Coolify host run:
+### Agent protocol (Rick)
+
+1. **Before any `git push`:** stop and end the run with a message that starts with **`READY TO PUSH`**. Include: local `HEAD` SHA, commits since `origin/master`, one-line summary per changed file, and `pnpm tsc --noEmit` output (plus `pytest` when worker code changed). **Do not push** until the manager replies **`PUSH`**.
+2. **After `PUSH`:** push once, cancel every older active deploy for app `ds8s3hjin60qs6g7s0iqkixs` via Coolify API, report the new deployment `uuid`, then end the run. Manager watches build/container logs over SSH (`grokbot` login) and sends failure log lines if needed.
+3. **Server-only work** (worker image rebuild, `/opt/clips-worker/worker.env`, `docker run`) is **not** gated on `PUSH` — do it immediately and report exact commands run.
+
+### Coolify (after manager `PUSH`)
+
+- **Only the latest commit builds.** After `git push` to `master`, on the Coolify host:
   ```bash
   curl -s -H "Authorization: Bearer $(cat ~/.coolify-api-token)" http://localhost:8000/api/v1/deployments
   ```
-- For web app `ds8s3hjin60qs6g7s0iqkixs` (`application_id` `1` in the API), **cancel every queued or in-progress deployment whose `commit` is not the commit you just pushed** — including an older build that is already running if a newer commit supersedes it:
+- For web app `ds8s3hjin60qs6g7s0iqkixs` (`application_id` `1`), **cancel every queued or in-progress deployment whose `commit` is not the commit just pushed**:
   ```bash
   curl -s -X POST -H "Authorization: Bearer $(cat ~/.coolify-api-token)" \
     "http://localhost:8000/api/v1/deployments/{deployment_uuid}/cancel"
   ```
-- Confirm with the same GET that **exactly one** deployment remains queued or running for that app (the newest commit).
-- Do not stack pushes: one fix → one push → cancel duplicates → wait for that single deploy to finish (`GET /api/health` `commitSha` matches).
+- Confirm **exactly one** deployment remains queued or running for that app (newest commit).
+- One fix → one push → cancel duplicates → manager verifies deploy (`GET /api/health` `commitSha`).
 
 ## Worker deploy
 

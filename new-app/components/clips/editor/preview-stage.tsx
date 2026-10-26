@@ -52,7 +52,7 @@ export function PreviewStage({
     const ro = new ResizeObserver(([e]) => {
       const { width: W, height: H } = e.contentRect
       const h = Math.floor(Math.min(H, (W * 16) / 9))
-      setBox({ w: Math.floor((h * 9) / 16), h })
+      if (h > 0) setBox({ w: Math.floor((h * 9) / 16), h })
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -98,7 +98,6 @@ export function PreviewStage({
       onTick({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
 
       if (v && track && box.h > 0) {
-        const scale = track.W > 0 ? v.videoWidth / track.W : 1
         const s = box.h / track.H
         const fi = Math.round(((src - track.t0_ms) / 1000) * track.fps)
         const { i: shotI } = shotAt(track, src)
@@ -124,7 +123,9 @@ export function PreviewStage({
           if (blur) blur.style.display = 'none'
           v.style.height = `${box.h}px`
           v.style.width = `${track.W * s}px`
-          const x0s = x0 * scale * s
+          v.style.left = '0'
+          v.style.top = '0'
+          const x0s = x0 * s
           v.style.transform = `translate3d(${-x0s}px,0,0)`
         }
       }
@@ -137,7 +138,7 @@ export function PreviewStage({
   const captionWords = captionWordsToClipWords(buildCaptionWords(words, edits))
 
   return (
-    <div ref={wrapRef} className="flex min-h-0 flex-1 items-center justify-center">
+    <div ref={wrapRef} className="absolute inset-0 flex items-center justify-center">
       <div style={{ width: box.w || undefined, height: box.h || undefined }} className="relative overflow-hidden rounded-xl bg-black">
         {videoUrl && cropTrack ? (
           <>

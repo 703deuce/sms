@@ -62,10 +62,14 @@ export async function mapRenderRows(
     const fname = r.filename || exportFilename(r.clip.title)
     let posterUrl: string | null = null
     let downloadUrl: string | null = null
+    let sizeBytes: number | null = r.sizeBytes != null ? Number(r.sizeBytes) : null
     try {
       if (r.clip.posterKey) posterUrl = await storage.createSignedDownloadUrl(r.clip.posterKey, SIGNED_TTL)
       if (r.status === 'READY' && r.outputKey) {
         downloadUrl = await storage.createSignedDownloadUrl(r.outputKey, SIGNED_TTL, { downloadFilename: fname })
+        if (sizeBytes == null) {
+          sizeBytes = await storage.getObjectSizeBytes(r.outputKey)
+        }
       }
     } catch {
       /* signed URL failure should not break exports page */
@@ -80,7 +84,7 @@ export async function mapRenderRows(
       status: r.status,
       createdAt: toIso(r.createdAt) ?? new Date(0).toISOString(),
       expiresAt: toIso(r.expiresAt),
-      sizeBytes: r.sizeBytes != null ? Number(r.sizeBytes) : null,
+      sizeBytes,
       filename: fname,
       posterUrl,
       editorUrl: `/app/clips/${r.clip.projectId}/edit/${r.clipId}`,

@@ -168,8 +168,6 @@ export function exportProjectAll(projectId: string) {
   )
 }
 
-export function listExports() {
-  return clipsFetch<{ exports: { id: string; title: string; filename: string | null; downloadUrl: string | null; createdAt: string }[] }>(
-    '/api/clips/exports',
-  )
+export function listExports(status: 'all' | 'ready' | 'failed' = 'all') {
+  return listRenders(status)
 }

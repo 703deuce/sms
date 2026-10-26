@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId()
     const url = new URL(request.url)
-    const filter = parseExportStatusFilter(url.searchParams.get('status'))
+    const filter = parseExportStatusFilter(url.searchParams.get('status') ?? undefined)
     const exports = await listClipRenders(workspaceId, filter)
     return NextResponse.json({ data: { exports } })
   } catch (err) {

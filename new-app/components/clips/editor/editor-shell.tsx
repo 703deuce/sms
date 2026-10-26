@@ -163,7 +163,7 @@ export function EditorShell({
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
-          <div className="flex min-h-0 flex-1 items-center justify-center">
+          <div className="relative min-h-[320px] flex-1">
             <PreviewStage
               videoUrl={videoUrl}
               edits={edits}

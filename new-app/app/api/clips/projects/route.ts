@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 const createSchema = z.object({
   uploadId: z.string().min(1),
   title: z.string().optional(),
-  settings: z.unknown(),
+  settings: z.unknown().optional(),
 })
 
 export async function POST(request: Request) {

@@ -1,11 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { Button } from '@/components/ui/button'
-import { listRenders, type ExportRenderRow } from '@/lib/clips-api'
+import type { ExportRenderRow } from '@/lib/clips-api'
 import { Download } from 'lucide-react'
 
 type Filter = 'all' | 'ready' | 'failed'
@@ -16,8 +15,17 @@ function formatSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
+export function formatUtcFallback(iso: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  }).format(new Date(iso))
+}
+
 function ClientTime({ iso }: { iso: string | null }) {
-  const [text, setText] = useState('—')
+  const [text, setText] = useState(() => (iso ? formatUtcFallback(iso) : '—'))
   useEffect(() => {
     if (!iso) {
       setText('—')
@@ -40,69 +48,23 @@ function ClientTime({ iso }: { iso: string | null }) {
       setText('—')
     }
   }, [iso])
-  return <>{text}</>
-}
-
-function normalizeFilter(raw: string | null): Filter {
-  const q = (raw || 'all').toLowerCase()
-  if (q === 'ready' || q === 'failed') return q
-  return 'all'
-}
-
-export function ExportsList({ initialRows }: { initialRows: ExportRenderRow[] }) {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const filter = normalizeFilter(searchParams.get('status'))
-  const [rows, setRows] = useState<ExportRenderRow[]>(initialRows)
-  const [loading, setLoading] = useState(false)
-  const [hydrated, setHydrated] = useState(false)
-
-  const setFilter = useCallback(
-    (f: Filter) => {
-      const q = new URLSearchParams(searchParams.toString())
-      if (f === 'all') q.delete('status')
-      else q.set('status', f)
-      router.replace(`/app/clips/exports?${q.toString()}`)
-    },
-    [router, searchParams],
+  return (
+    <time dateTime={iso ?? undefined} suppressHydrationWarning>
+      {text}
+    </time>
   )
+}
 
-  useEffect(() => {
-    setHydrated(true)
-  }, [])
+export function ExportsList({
+  initialRows,
+  filter,
+}: {
+  initialRows: ExportRenderRow[]
+  filter: Filter
+}) {
+  const rows = initialRows
 
-  useEffect(() => {
-    if (!hydrated) return
-    setLoading(true)
-    void listRenders(filter)
-      .then((d) => setRows(d.exports ?? []))
-      .catch(() => {
-        /* keep SSR initialRows on client fetch failure */
-      })
-      .finally(() => setLoading(false))
-  }, [filter, hydrated])
-
-  if (!hydrated && !initialRows.length) {
-    return (
-      <Panel title="Exports" description="Rendered downloads for your workspace.">
-        <div className="h-32 animate-pulse rounded-lg bg-muted" />
-      </Panel>
-    )
-  }
-
-  if (loading && !rows.length) {
-    return (
-      <Panel title="Exports" description="Rendered downloads for your workspace.">
-        <div className="space-y-2 p-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />
-          ))}
-        </div>
-      </Panel>
-    )
-  }
-
-  if (!loading && !rows.length) {
+  if (!rows.length) {
     return (
       <EmptyState
         icon={Download}
@@ -116,7 +78,16 @@ export function ExportsList({ initialRows }: { initialRows: ExportRenderRow[] })
     <Panel title="Exports" description="Rendered downloads for your workspace.">
       <div className="mb-4 flex flex-wrap gap-2">
         {(['all', 'ready', 'failed'] as const).map((f) => (
-          <Button key={f} size="sm" variant={filter === f ? 'default' : 'outline'} onClick={() => setFilter(f)}>
+          <Button
+            key={f}
+            size="sm"
+            variant={filter === f ? 'default' : 'outline'}
+            render={
+              <Link
+                href={f === 'all' ? '/app/clips/exports' : `/app/clips/exports?status=${f}`}
+              />
+            }
+          >
             {f === 'all' ? 'All' : f === 'ready' ? 'Ready' : 'Failed'}
           </Button>
         ))}
@@ -168,7 +139,12 @@ export function ExportsList({ initialRows }: { initialRows: ExportRenderRow[] })
                 <td className="px-3 py-2 tabular-nums">{formatSize(r.sizeBytes)}</td>
                 <td className="px-3 py-2">
                   {r.downloadUrl ? (
-                    <Button size="sm" variant="outline" render={<a href={r.downloadUrl} download={r.filename} />}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      nativeButton={false}
+                      render={<a href={r.downloadUrl} download={r.filename} />}
+                    >
                       Download
                     </Button>
                   ) : (

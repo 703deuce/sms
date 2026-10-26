@@ -23,7 +23,7 @@ export async function listClipProjects(workspaceId: string, opts: { q?: string; 
 
 export async function createClipProject(
   workspaceId: string,
-  input: { uploadId: string; title?: string; settings: unknown },
+  input: { uploadId: string; title?: string; settings?: unknown },
 ) {
   const prisma = getPrisma()
   const upload = await prisma.clipUpload.findFirst({
