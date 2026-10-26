@@ -192,7 +192,7 @@ export function PreviewStage({
         ) : videoUrl ? (
           <video
             ref={videoRefInner}
-            className="size-full object-contain"
+            className="size-full object-cover"
             playsInline
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}

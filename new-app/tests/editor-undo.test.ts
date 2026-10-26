@@ -26,4 +26,18 @@ describe('editor undo', () => {
     expect(undone.edits.captions?.presetId).toBe('bold_pop')
     expect(undone.edits.captions?.size).toBe(1)
   })
+
+  it('BATCH pushes undo even when edits are unchanged', () => {
+    const base = defaultEdits(bounds)
+    const initial = {
+      edits: base,
+      past: [] as typeof base[],
+      future: [] as typeof base[],
+      saveState: 'saved' as const,
+    }
+    const afterBatch = editorEditsReducer(initial, { type: 'BATCH', edits: base })
+    expect(afterBatch.past).toHaveLength(1)
+    const undone = editorEditsReducer(afterBatch, { type: 'undo' })
+    expect(undone.past).toHaveLength(0)
+  })
 })

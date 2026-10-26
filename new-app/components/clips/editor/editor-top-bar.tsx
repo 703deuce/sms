@@ -14,6 +14,7 @@ export function EditorTopBar({
   onUndo,
   onRedo,
   onExport,
+  producerStrip,
 }: {
   backHref: string
   title: string
@@ -24,6 +25,7 @@ export function EditorTopBar({
   onUndo: () => void
   onRedo: () => void
   onExport: () => void
+  producerStrip?: { changeCount: number; onUndo: () => void } | null
 }) {
   const saveLabel = saveState === 'saving' ? 'Saving…' : saveState === 'dirty' ? 'Unsaved' : 'Saved'
 
@@ -39,6 +41,12 @@ export function EditorTopBar({
         onChange={(e) => onTitleChange(e.target.value)}
       />
       <span className="text-xs text-muted-foreground">{saveLabel}</span>
+      {producerStrip && producerStrip.changeCount > 0 ? (
+        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs">
+          <span>{producerStrip.changeCount} producer change{producerStrip.changeCount === 1 ? '' : 's'}</span>
+          <Button size="sm" variant="outline" onClick={producerStrip.onUndo}>Undo</Button>
+        </div>
+      ) : null}
       <Button size="sm" variant="outline" disabled={!canUndo} onClick={onUndo}>
         <Undo2 className="size-4" />
       </Button>

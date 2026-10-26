@@ -1,6 +1,6 @@
 export type BrollItem =
-  | { id: string; source: 'stock'; assetId: string; startMs: number; endMs: number }
-  | { id: string; source: 'ai'; generationId: string; startMs: number; endMs: number }
+  | { id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; placement?: 'auto' | 'manual' }
+  | { id: string; source: 'ai'; generationId: string; startMs: number; endMs: number; placement?: 'auto' | 'manual' }
 
 export const BROLL_MIN_MS = 1000
 export const BROLL_DEFAULT_SHOT_MS = 3000
@@ -22,14 +22,15 @@ export function normalizeBrollItems(raw: unknown, clipDurationMs: number): Broll
     const startMs = Number(o.startMs)
     const endMs = Number(o.endMs)
     if (!id || !Number.isFinite(startMs) || !Number.isFinite(endMs)) continue
+    const placement = o.placement === 'auto' ? 'auto' : o.placement === 'manual' ? 'manual' : undefined
     if (source === 'ai') {
       const generationId = String(o.generationId ?? '')
       if (!generationId) continue
-      out.push(clampBrollItem({ id, source: 'ai', generationId, startMs, endMs }, clipDurationMs))
+      out.push(clampBrollItem({ id, source: 'ai', generationId, startMs, endMs, placement }, clipDurationMs))
     } else {
       const assetId = String(o.assetId ?? '')
       if (!assetId) continue
-      out.push(clampBrollItem({ id, source: 'stock', assetId, startMs, endMs }, clipDurationMs))
+      out.push(clampBrollItem({ id, source: 'stock', assetId, startMs, endMs, placement }, clipDurationMs))
     }
   }
   return out

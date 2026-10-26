@@ -108,7 +108,7 @@ export function BrollPanel({
         return
       }
       if (data.media?.length) onBrollMedia(data.media)
-      onMergeBroll(data.items, false)
+      onMergeBroll(data.items, true)
       onFlushEdits?.()
       const q = (data.queriesUsed || []).join(', ')
       if (q) {
@@ -226,7 +226,9 @@ export function BrollPanel({
 
       {mode === 'stock' ? (
         <>
-          <Button size="sm" onClick={() => void autoBroll()} disabled={busy}>Auto B-roll</Button>
+          <Button size="sm" onClick={() => void autoBroll()} disabled={busy}>
+            {busy ? 'Placing B-roll…' : 'Auto B-roll'}
+          </Button>
           <ul className="space-y-2">
             {(edits.broll || []).map((item) => {
               const m = mediaById.get(item.id)

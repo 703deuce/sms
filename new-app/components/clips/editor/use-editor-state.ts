@@ -29,6 +29,8 @@ type State = {
 type Action =
   | { type: 'set'; edits: ClipEditsV2; pushHistory?: boolean }
   | { type: 'APPLY_PATCH'; edits: ClipEditsV2 }
+  /** Producer batch: always one undo step even when canonical edits match (e.g. no-op patch). */
+  | { type: 'BATCH'; edits: ClipEditsV2 }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'saved' }
@@ -48,6 +50,10 @@ export function editorEditsReducer(state: State, action: Action): State {
     }
     case 'APPLY_PATCH': {
       if (editsEqual(state.edits, action.edits)) return state
+      const past = [...state.past, state.edits].slice(-MAX_UNDO)
+      return { ...state, edits: action.edits, past, future: [], saveState: 'dirty' }
+    }
+    case 'BATCH': {
       const past = [...state.past, state.edits].slice(-MAX_UNDO)
       return { ...state, edits: action.edits, past, future: [], saveState: 'dirty' }
     }
@@ -97,7 +103,7 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
 
   /** One undo step for a full producer patch (not per-field). */
   const applyProducerPatch = useCallback((edits: ClipEditsV2) => {
-    dispatch({ type: 'APPLY_PATCH', edits })
+    dispatch({ type: 'BATCH', edits })
   }, [])
 
   const undo = useCallback(() => dispatch({ type: 'undo' }), [])
@@ -175,7 +181,8 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
   const mergeBroll = useCallback(
     (items: BrollItem[], replace = false) => {
       const cur = state.edits.broll || []
-      const next = replace ? items : [...cur, ...items]
+      const kept = replace ? cur.filter((b) => b.placement !== 'auto') : cur
+      const next = [...kept, ...items]
       setEdits({ ...state.edits, broll: next })
     },
     [setEdits, state.edits],

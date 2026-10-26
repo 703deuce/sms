@@ -28,15 +28,21 @@ export function ThumbnailPanel({
   const [aspect, setAspect] = useState<'9:16' | '16:9'>('9:16')
   const [titleOverride, setTitleOverride] = useState('')
   const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<ThumbRow[]>([])
 
   const refresh = useCallback(async () => {
-    const data = await clipsFetch<{ items: ThumbRow[] }>(`/api/clips/clips/${clipId}/thumbnail`)
-    setItems(data.items)
+    try {
+      const data = await clipsFetch<{ items: ThumbRow[] }>(`/api/clips/clips/${clipId}/thumbnail`)
+      setItems(data.items)
+    } finally {
+      setLoading(false)
+    }
   }, [clipId])
 
   useEffect(() => {
-    void refresh().catch(() => {})
+    setLoading(true)
+    void refresh().catch(() => setLoading(false))
     const t = setInterval(() => void refresh().catch(() => {}), 8000)
     return () => clearInterval(t)
   }, [refresh])
@@ -89,6 +95,18 @@ export function ThumbnailPanel({
       <p className="text-xs text-muted-foreground">About $0.18 (3 × 2K images + vision)</p>
       <Button size="sm" disabled={busy} onClick={() => void generate()}>Generate</Button>
       <div className="grid grid-cols-1 gap-2">
+        {loading && items.length === 0 ? (
+          <>
+            <div className="animate-pulse rounded border border-border p-2">
+              <div className="mb-2 aspect-video w-full rounded bg-muted" />
+              <div className="h-3 w-2/3 rounded bg-muted" />
+            </div>
+            <div className="animate-pulse rounded border border-border p-2">
+              <div className="mb-2 aspect-video w-full rounded bg-muted" />
+              <div className="h-3 w-1/2 rounded bg-muted" />
+            </div>
+          </>
+        ) : null}
         {items.map((t) => (
           <div key={t.id} className="rounded border border-border p-2">
             {t.downloadUrl ? (

@@ -116,6 +116,18 @@ export function EditorShell({
     words,
   )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
+  const [producerStrip, setProducerStrip] = useState<{ changeCount: number; until: number } | null>(null)
+
+  useEffect(() => {
+    if (!producerStrip) return
+    const ms = producerStrip.until - Date.now()
+    if (ms <= 0) {
+      setProducerStrip(null)
+      return
+    }
+    const t = setTimeout(() => setProducerStrip(null), ms)
+    return () => clearTimeout(t)
+  }, [producerStrip])
 
   const outDur = outputDurationFromEdits(edits)
 
@@ -251,6 +263,17 @@ export function EditorShell({
           onUndo={undo}
           onRedo={redo}
           onExport={() => setExportOpen(true)}
+          producerStrip={
+            producerStrip
+              ? {
+                  changeCount: producerStrip.changeCount,
+                  onUndo: () => {
+                    undo()
+                    setProducerStrip(null)
+                  },
+                }
+              : null
+          }
         />
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_400px]">
@@ -306,8 +329,16 @@ export function EditorShell({
                 clipId={clipId}
                 bounds={bounds}
                 edits={edits}
-                onUndo={undo}
-                onApplyEdits={(next, _n) => applyProducerPatch(next)}
+                onUndo={() => {
+                  undo()
+                  setProducerStrip(null)
+                }}
+                onApplyEdits={(next, n) => {
+                  applyProducerPatch(next)
+                  if (n > 0) {
+                    setProducerStrip({ changeCount: n, until: Date.now() + 15_000 })
+                  }
+                }}
               />
             </TabsContent>
             <TabsContent value="transcript" className="mt-0">

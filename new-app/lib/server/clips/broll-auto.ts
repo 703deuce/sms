@@ -71,6 +71,7 @@ export async function buildAutoBrollItems(
         assetId: asset.id,
         startMs,
         endMs,
+        placement: 'auto',
       })
       occupied.push({ startMs, endMs })
       queriesUsed.push(p.query)
