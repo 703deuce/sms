@@ -15,6 +15,8 @@ import { clipsFetch } from '@/lib/clips-api'
 import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { Loader2 } from 'lucide-react'
 
+const PENDING_UPLOAD_KEY = 'streamer-upload-resume-v1'
+
 export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsageView | null }) {
   const router = useRouter()
   const [url, setUrl] = useState('')
@@ -26,16 +28,54 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [uploadId, setUploadId] = useState<string | null>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
 
-  const startFileUpload = (file: File) => {
+  const startFileUpload = (file: File, resumeUploadId?: string) => {
     setPendingFile(file)
-    setUploadId(null)
-    void uploadClipFile(file, (p) => {
-      setUpload(p)
-      if (p.state === 'complete' && p.uploadId) setUploadId(p.uploadId)
-    }).catch(() => {
+    if (!resumeUploadId) setUploadId(null)
+    void uploadClipFile(
+      file,
+      (p) => {
+        setUpload(p)
+        if (p.uploadId) {
+          setUploadId(p.uploadId)
+          if (p.state === 'uploading') {
+            localStorage.setItem(
+              PENDING_UPLOAD_KEY,
+              JSON.stringify({ uploadId: p.uploadId, filename: p.filename, bytes: p.bytes }),
+            )
+          }
+          if (p.state === 'complete') localStorage.removeItem(PENDING_UPLOAD_KEY)
+        }
+      },
+      resumeUploadId ? { resumeUploadId } : undefined,
+    ).catch(() => {
       /* state + message set in uploadClipFile */
     })
   }
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PENDING_UPLOAD_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw) as { uploadId: string; filename: string; bytes: number }
+      void fetch(`/api/clips/uploads/${saved.uploadId}/progress`)
+        .then((res) => res.json())
+        .then((json: { data?: { received: number; bytes: number; canResume: boolean; status: string } }) => {
+          if (!json.data?.canResume || json.data.status !== 'PENDING') return
+          setUploadId(saved.uploadId)
+          setUpload({
+            filename: saved.filename,
+            bytes: saved.bytes,
+            loaded: json.data.received,
+            percent: Math.min(99, Math.round((json.data.received / saved.bytes) * 100)),
+            state: 'error',
+            error: 'Upload interrupted — choose the same file to resume.',
+            uploadId: saved.uploadId,
+          })
+        })
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   useEffect(() => {
     const trimmed = url.trim()
@@ -136,7 +176,9 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           upload?.state === 'error' ? (
             <UploadProgressItem
               progress={upload}
-              onRetry={() => pendingFile && startFileUpload(pendingFile)}
+              onRetry={() =>
+                pendingFile && startFileUpload(pendingFile, upload?.uploadId && upload.state === 'error' ? upload.uploadId : undefined)
+              }
             />
           ) : (
             <Dropzone onFile={startFileUpload} />

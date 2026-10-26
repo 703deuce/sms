@@ -24,6 +24,15 @@ const nextConfig = {
   turbopack: {
     root: appDir,
   },
+  async redirects() {
+    return [
+      {
+        source: "/streamer",
+        destination: "/app/streamer",
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {

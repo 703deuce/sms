@@ -17,6 +17,9 @@ export type UploadLimits = {
   maxLabel: string
   chunkBytes: number
   driver: string
+  supabaseObjectMaxBytes?: number
+  supabaseObjectMaxLabel?: string
+  usesStagingAboveObjectMax?: boolean
 }
 
 let limitsCache: UploadLimits | null = null
@@ -51,6 +54,18 @@ async function probeDurationMs(file: File): Promise<number | undefined> {
   }
 }
 
+async function uploadAppChunkedFromOffset(
+  file: File,
+  uploadId: string,
+  chunkUrl: string,
+  chunkBytes: number,
+  startOffset: number,
+  base: UploadProgress,
+  onProgress: (p: UploadProgress) => void,
+) {
+  await uploadAppChunked(file, uploadId, chunkUrl, chunkBytes, base, onProgress, startOffset)
+}
+
 async function uploadAppChunked(
   file: File,
   uploadId: string,
@@ -58,8 +73,9 @@ async function uploadAppChunked(
   chunkBytes: number,
   base: UploadProgress,
   onProgress: (p: UploadProgress) => void,
+  startOffset = 0,
 ) {
-  let offset = 0
+  let offset = startOffset
   while (offset < file.size) {
     const slice = file.slice(offset, Math.min(file.size, offset + chunkBytes))
     const res = await fetch(chunkUrl, {
@@ -118,9 +134,17 @@ async function uploadS3Multipart(
   return parts
 }
 
+async function fetchUploadProgress(uploadId: string): Promise<{ received: number; bytes: number; canResume: boolean }> {
+  const res = await fetch(`/api/clips/uploads/${uploadId}/progress`)
+  const json = (await res.json()) as { data?: { received: number; bytes: number; canResume: boolean } }
+  if (!res.ok || !json.data) throw new Error('Could not read upload progress')
+  return json.data
+}
+
 export async function uploadClipFile(
   file: File,
   onProgress: (p: UploadProgress) => void,
+  opts?: { resumeUploadId?: string },
 ): Promise<{ uploadId: string }> {
   const limits = await fetchUploadLimits()
   if (file.size > limits.maxBytes) {
@@ -136,24 +160,73 @@ export async function uploadClipFile(
     throw new Error(err)
   }
 
+  let uploadId: string | undefined = opts?.resumeUploadId
   const base: UploadProgress = {
     filename: file.name,
     bytes: file.size,
     loaded: 0,
     percent: 0,
     state: 'uploading',
+    uploadId,
   }
   onProgress(base)
 
   try {
-    const started = await startUpload({ filename: file.name, bytes: file.size, mime: file.type || 'video/mp4' })
-    const { uploadId, storage } = started
+    let storage: Awaited<ReturnType<typeof startUpload>>['storage']
+    let resumeOffset = 0
+
+    if (opts?.resumeUploadId) {
+      const res = await fetch(`/api/clips/uploads/${opts.resumeUploadId}/resume`)
+      const json = (await res.json()) as {
+        data?: { uploadId: string; bytes: number; received: number; chunkUrl: string; chunkBytes: number }
+      }
+      if (!res.ok || !json.data || json.data.bytes !== file.size) {
+        throw new Error('Cannot resume this upload — start again')
+      }
+      uploadId = json.data.uploadId
+      resumeOffset = json.data.received
+      storage = {
+        mode: 'app_chunked',
+        appChunked: { chunkUrl: json.data.chunkUrl, chunkBytes: json.data.chunkBytes },
+      }
+      if (resumeOffset >= file.size) {
+        await completeUpload(uploadId, { durationMs: await probeDurationMs(file) })
+        onProgress({ ...base, uploadId, loaded: file.size, percent: 100, state: 'complete' })
+        return { uploadId }
+      }
+      onProgress({
+        ...base,
+        uploadId,
+        loaded: resumeOffset,
+        percent: Math.min(99, Math.round((resumeOffset / file.size) * 100)),
+        state: 'uploading',
+      })
+    } else {
+      const started = await startUpload({ filename: file.name, bytes: file.size, mime: file.type || 'video/mp4' })
+      uploadId = started.uploadId
+      storage = started.storage
+    }
+
     const durationMs = await probeDurationMs(file)
 
     let multipartParts: { partNumber: number; etag: string }[] | undefined
 
+    if (!uploadId) throw new Error('Upload session missing')
+
     if (storage.mode === 'app_chunked' && storage.appChunked) {
-      await uploadAppChunked(file, uploadId, storage.appChunked.chunkUrl, storage.appChunked.chunkBytes, base, onProgress)
+      if (resumeOffset > 0) {
+        await uploadAppChunkedFromOffset(
+          file,
+          uploadId,
+          storage.appChunked.chunkUrl,
+          storage.appChunked.chunkBytes,
+          resumeOffset,
+          base,
+          onProgress,
+        )
+      } else {
+        await uploadAppChunked(file, uploadId, storage.appChunked.chunkUrl, storage.appChunked.chunkBytes, base, onProgress)
+      }
     } else if (storage.mode === 's3_multipart' && storage.s3Multipart) {
       multipartParts = await uploadS3Multipart(file, storage.s3Multipart, base, uploadId, onProgress)
     } else if (storage.mode === 'signed_put' && storage.signedPut && file.size <= 50 * 1024 * 1024) {
@@ -205,10 +278,12 @@ export async function uploadClipFile(
     return { uploadId }
   } catch (err) {
     const message = friendlyUploadError(err, (err as { status?: number }).status)
+    const loaded = base.loaded
     onProgress({
       ...base,
-      loaded: base.loaded,
-      percent: base.bytes ? Math.min(99, Math.round((base.loaded / base.bytes) * 100)) : 0,
+      uploadId,
+      loaded,
+      percent: base.bytes ? Math.min(99, Math.round((loaded / base.bytes) * 100)) : 0,
       state: 'error',
       error: message,
     })

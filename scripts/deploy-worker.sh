@@ -18,6 +18,8 @@ REQUIRED_ENV_KEYS=(
   STORAGE_DRIVER
 )
 
+# Large stream uploads: set CLIPS_UPLOAD_STAGING_DIR on web + workers (shared volume).
+
 # Streamer v1 is VOD-first. Live EventSub chat capture stays off unless worker.env sets:
 # STREAMER_LIVE_REALTIME_ENABLED=true
 

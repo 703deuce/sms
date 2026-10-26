@@ -147,6 +147,14 @@ export async function applyJobProgress(input: {
   }
 }
 
+const STUCK_PROJECT_STATUSES: ClipProjectStatus[] = [
+  'IMPORTING',
+  'PREPARING',
+  'TRANSCRIBING',
+  'FINDING_CLIPS',
+  'RENDERING',
+]
+
 export async function reapStaleJobs() {
   const prisma = getPrisma()
   const cutoff = new Date(Date.now() - 5 * 60_000)
@@ -166,5 +174,40 @@ export async function reapStaleJobs() {
       },
     })
   }
-  return stale.length
+
+  const stuckCutoff = new Date(Date.now() - 90 * 60_000)
+  const stuckProjects = await prisma.clipProject.findMany({
+    where: {
+      status: { in: STUCK_PROJECT_STATUSES },
+      updatedAt: { lt: stuckCutoff },
+      streamVod: { isNot: null },
+    },
+    select: { id: true, status: true },
+    take: 10,
+  })
+  for (const project of stuckProjects) {
+    await prisma.$transaction([
+      prisma.clipProject.update({
+        where: { id: project.id },
+        data: {
+          status: 'FAILED',
+          stage: 'failed',
+          progress: 0,
+          error: 'Processing stalled. Use Retry processing to run again.',
+        },
+      }),
+      prisma.clipJob.updateMany({
+        where: { projectId: project.id, status: { in: ['QUEUED', 'RUNNING'] } },
+        data: {
+          status: 'FAILED',
+          error: 'Stalled — requeue via Retry',
+          finishedAt: new Date(),
+          lockedBy: null,
+          lockedAt: null,
+        },
+      }),
+    ])
+  }
+
+  return stale.length + stuckProjects.length
 }

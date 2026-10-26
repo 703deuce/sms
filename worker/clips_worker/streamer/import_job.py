@@ -14,8 +14,39 @@ from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, upload_file
 from clips_worker.streamer.config import FULL_DOWNLOAD_MAX_MIN, MAX_VOD_HOURS, SCRATCH
 from clips_worker.streamer.keys import stream_audio_key
+from clips_worker.streamer.upload_proxy import (
+    build_analysis_proxy,
+    should_build_upload_proxy,
+    stream_analysis_proxy_key,
+)
 from clips_worker.streamer.usage import check_cap, job_priority
 from clips_worker.streamer.ytdlp import download_audio, download_video, metadata, parse_metadata
+
+
+def _extract_upload_audio(src: Path, audio_out: Path, long_form: bool) -> None:
+    args = ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vn", "-c:a", "libopus"]
+    if long_form:
+        args.extend(["-b:a", "64k"])
+    args.append(str(audio_out))
+    subprocess.check_call(args)
+
+
+def _state_for_upload(
+    workspace_id: str,
+    vod_id: str,
+    master_key: str,
+    src: Path,
+    td: str,
+) -> dict:
+    """Master stays at master_key; optional 720p proxy for analysis/layout only."""
+    state: dict = {"localUploadKey": master_key}
+    if should_build_upload_proxy(src.stat().st_size):
+        proxy_path = Path(td) / "analysis_proxy.mp4"
+        build_analysis_proxy(src, proxy_path)
+        proxy_key = stream_analysis_proxy_key(workspace_id, vod_id)
+        upload_file(proxy_key, proxy_path, "video/mp4")
+        state["analysisProxyKey"] = proxy_key
+    return state
 
 
 def _section_from_range(start_ms: int, end_ms: int | None) -> str | None:
@@ -84,76 +115,27 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 download_object(urow["key"], src)
                 dur_s = probe_duration(src)
                 duration_ms = effective_ms or int(dur_s * 1000)
-                if use_long:
-                    audio_out = Path(td) / "audio.opus"
-                    subprocess.check_call(
-                        [
-                            "ffmpeg",
-                            "-y",
-                            "-v",
-                            "error",
-                            "-i",
-                            str(src),
-                            "-vn",
-                            "-c:a",
-                            "libopus",
-                            "-b:a",
-                            "64k",
-                            str(audio_out),
-                        ]
+                audio_out = Path(td) / "audio.opus"
+                _extract_upload_audio(src, audio_out, long_form=use_long)
+                audio_key = stream_audio_key(workspace_id, vod_id)
+                upload_file(audio_key, audio_out, "audio/opus")
+                state = _state_for_upload(workspace_id, vod_id, urow["key"], src, td)
+                state["audioKey"] = audio_key
+                pri = job_priority(conn, vod.get("triggeredBy") or "upload")
+                analyze_id = f"job_{uuid.uuid4().hex}"
+                with conn.cursor() as cur:
+                    cur.execute(
+                        'UPDATE stream_vods SET durationMs=%s, state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
+                        (duration_ms, json.dumps(state), vod_id),
                     )
-                    audio_key = stream_audio_key(workspace_id, vod_id)
-                    upload_file(audio_key, audio_out, "audio/opus")
-                    state = {"audioKey": audio_key}
-                    pri = job_priority(conn, vod.get("triggeredBy") or "upload")
-                    analyze_id = f"job_{uuid.uuid4().hex}"
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            'UPDATE stream_vods SET durationMs=%s, state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
-                            (duration_ms, json.dumps(state), vod_id),
-                        )
-                        cur.execute(
-                            """
-                            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
-                            VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
-                            """,
-                            (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
-                        )
-                    conn.commit()
-                else:
-                    pri = job_priority(conn, vod.get("triggeredBy") or "upload")
-                    analyze_id = f"job_{uuid.uuid4().hex}"
-                    audio_key = stream_audio_key(workspace_id, vod_id)
-                    audio_out = Path(td) / "audio.opus"
-                    subprocess.check_call(
-                        [
-                            "ffmpeg",
-                            "-y",
-                            "-v",
-                            "error",
-                            "-i",
-                            str(src),
-                            "-vn",
-                            "-c:a",
-                            "libopus",
-                            str(audio_out),
-                        ]
+                    cur.execute(
+                        """
+                        INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
+                        VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
+                        """,
+                        (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
                     )
-                    upload_file(audio_key, audio_out, "audio/opus")
-                    state = {"audioKey": audio_key, "localUploadKey": urow["key"]}
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            'UPDATE stream_vods SET durationMs=%s, state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
-                            (duration_ms, json.dumps(state), vod_id),
-                        )
-                        cur.execute(
-                            """
-                            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
-                            VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
-                            """,
-                            (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
-                        )
-                    conn.commit()
+                conn.commit()
         post_progress(
             job["id"],
             {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},

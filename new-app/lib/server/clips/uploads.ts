@@ -1,8 +1,13 @@
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, storageDriverName, uploadSourceKey, type CreateUploadResult } from '@/lib/storage'
-import { appendChunk, chunkBytesReceived, openChunkReadStream, removeChunkFile } from '@/lib/server/clips/app-chunk-store'
-import { clipUploadMaxBytes, shouldUseAppChunkedUpload } from '@/lib/server/clips/upload-limits'
+import { appendChunk, chunkBytesReceived, chunkFilePath, openChunkReadStream, removeChunkFile } from '@/lib/server/clips/app-chunk-store'
+import {
+  CLIPS_APP_CHUNK_BYTES,
+  clipUploadMaxBytes,
+  shouldUseAppChunkedUpload,
+} from '@/lib/server/clips/upload-limits'
+import { finalizeStagingUpload, shouldStoreUploadOnStaging } from '@/lib/server/clips/upload-staging'
 
 export function extFromFilename(name: string) {
   const m = name.toLowerCase().match(/\.([a-z0-9]+)$/)
@@ -66,11 +71,17 @@ export async function completeClipUpload(
     if (received !== totalBytes) {
       throw new Error(`Incomplete upload (${received} of ${totalBytes} bytes received)`)
     }
-    const stream = await openChunkReadStream(uploadId)
-    try {
-      await storage.putStream(row.key, stream, row.mime)
-    } finally {
-      await removeChunkFile(uploadId)
+    const ext = extFromFilename(row.filename)
+    if (shouldStoreUploadOnStaging(totalBytes)) {
+      const stagingKey = await finalizeStagingUpload(uploadId, ext, chunkFilePath(uploadId))
+      await prisma.clipUpload.update({ where: { id: uploadId }, data: { key: stagingKey } })
+    } else {
+      const stream = await openChunkReadStream(uploadId)
+      try {
+        await storage.putStream(row.key, stream, row.mime)
+      } finally {
+        await removeChunkFile(uploadId)
+      }
     }
   } else {
     await storage.completeUpload({
@@ -115,4 +126,41 @@ export async function writeClipUploadChunk(
   if (offset + body.length > totalBytes) throw new Error('Chunk exceeds declared file size')
   const received = await appendChunk(uploadId, offset, body)
   return { received }
+}
+
+export async function getClipUploadResume(workspaceId: string, uploadId: string) {
+  const prisma = getPrisma()
+  const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId, status: 'PENDING' } })
+  if (!row) throw new Error('Upload not found or already completed')
+  const totalBytes = Number(row.bytes)
+  if (!shouldUseAppChunkedUpload(totalBytes)) throw new Error('Resume not supported for this upload type')
+  const received = await chunkBytesReceived(uploadId)
+  return {
+    uploadId: row.id,
+    bytes: totalBytes,
+    received,
+    chunkBytes: CLIPS_APP_CHUNK_BYTES,
+    chunkUrl: `/api/clips/uploads/${uploadId}/chunk`,
+  }
+}
+
+export async function getClipUploadProgress(workspaceId: string, uploadId: string) {
+  const prisma = getPrisma()
+  const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
+  if (!row) throw new Error('Upload not found')
+  const totalBytes = Number(row.bytes)
+  let received = 0
+  if (row.status === 'PENDING' && shouldUseAppChunkedUpload(totalBytes)) {
+    received = await chunkBytesReceived(uploadId)
+  } else if (row.status === 'COMPLETE') {
+    received = totalBytes
+  }
+  return {
+    uploadId: row.id,
+    status: row.status,
+    bytes: totalBytes,
+    received,
+    filename: row.filename,
+    canResume: row.status === 'PENDING' && shouldUseAppChunkedUpload(totalBytes),
+  }
 }
