@@ -1,3 +1,4 @@
+import { Ban, CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AiOutcome, CallOutcome, McTbState } from '@/lib/data'
 
@@ -21,19 +22,59 @@ const dotCls: Record<Tone, string> = {
   muted: 'bg-muted-foreground/50',
 }
 
-export function StatusBadge({ tone = 'neutral', children, className }: { tone?: Tone; children: React.ReactNode; className?: string }) {
+export function StatusBadge({
+  tone = 'neutral',
+  children,
+  className,
+  icon,
+}: {
+  tone?: Tone
+  children: React.ReactNode
+  className?: string
+  icon?: React.ReactNode
+}) {
   return (
     <span
       className={cn(
-        'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2 text-[11px] font-medium whitespace-nowrap ring-1 ring-inset',
+        'inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium whitespace-nowrap ring-1 ring-inset',
         toneCls[tone],
         className,
       )}
     >
-      <span aria-hidden className={cn('size-1.5 rounded-full', dotCls[tone])} />
+      {icon ?? <span aria-hidden className={cn('size-1.5 rounded-full', dotCls[tone])} />}
       {children}
     </span>
   )
+}
+
+export function ProjectStatusBadge({ status }: { status: string }) {
+  const ui = CLIP_JOB_STATE[status as ClipProjectStatusUi]
+  if (!ui) {
+    return <StatusBadge tone="neutral">{status}</StatusBadge>
+  }
+  const processing = !['READY', 'FAILED', 'CANCELED', 'DRAFT'].includes(status)
+  if (processing) {
+    return (
+      <StatusBadge tone="info" icon={<Loader2 className="size-3 animate-spin" aria-hidden />}>
+        {ui.label}
+      </StatusBadge>
+    )
+  }
+  if (status === 'READY') {
+    return (
+      <StatusBadge tone="success" icon={<CheckCircle2 className="size-3" aria-hidden />}>
+        Ready
+      </StatusBadge>
+    )
+  }
+  if (status === 'FAILED') {
+    return (
+      <StatusBadge tone="danger" icon={<XCircle className="size-3" aria-hidden />}>
+        Failed
+      </StatusBadge>
+    )
+  }
+  return <StatusBadge tone={ui.tone}>{ui.label}</StatusBadge>
 }
 
 export const CALL_OUTCOME: Record<CallOutcome, { label: string; tone: Tone }> = {

@@ -7,18 +7,7 @@ import { Button } from '@/components/ui/button'
 import { ScoreBadge } from '@/components/clips/score-badge'
 import type { ClipCardData } from '@/components/clips/clip-grid'
 import { clipsFetch } from '@/lib/clips-api'
-
-function formatClock(ms: number) {
-  const s = Math.floor(ms / 1000)
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return `${m}:${sec.toString().padStart(2, '0')}`
-}
-
-function formatDur(ms: number) {
-  const s = Math.round(ms / 1000)
-  return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`
-}
+import { formatDur, formatTimecode } from '@/lib/clips/format'
 
 export function ClipCard({
   clip,
@@ -84,7 +73,7 @@ export function ClipCard({
       <div className="flex flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">{clip.title}</h3>
         <p className="text-xs text-muted-foreground tabular-nums">
-          Source {formatClock(clip.startMs)}–{formatClock(clip.endMs)} · {formatDur(clip.durationMs)} · score {clip.score}
+          Source {formatTimecode(clip.startMs)}–{formatTimecode(clip.endMs)} · {formatDur(clip.durationMs)} · score {clip.score}
         </p>
         <div className="flex flex-wrap gap-1.5">
           {dims.map(([label, grade]) => (

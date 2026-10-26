@@ -24,13 +24,15 @@ import {
   Voicemail,
   type LucideIcon,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { TONE_TILE, type ToneTileKey } from '@/lib/ui/tones'
 import { cn } from '@/lib/utils'
 
 export function Page({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div className="relative">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-grid-fade" />
-      <div className={cn('relative mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 md:px-8 md:py-8', className)}>{children}</div>
+      <div className={cn('relative mx-auto flex w-full max-w-[1400px] flex-col gap-6 px-4 py-6 md:px-6 xl:px-8 md:py-8', className)}>{children}</div>
     </div>
   )
 }
@@ -41,12 +43,18 @@ export function PageHeader({
   eyebrow,
   actions,
   breadcrumbs,
+  icon: Icon,
+  iconTone = 'brand',
+  meta,
 }: {
   title: string
   description?: React.ReactNode
   eyebrow?: React.ReactNode
   actions?: React.ReactNode
   breadcrumbs?: { label: string; href?: string }[]
+  icon?: LucideIcon
+  iconTone?: ToneTileKey
+  meta?: React.ReactNode
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -70,14 +78,27 @@ export function PageHeader({
           </ol>
         </nav>
       )}
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="flex min-w-0 flex-col gap-2">
-          {eyebrow && <div className="flex flex-wrap items-center gap-2">{eyebrow}</div>}
-          <h1 className="text-2xl font-semibold tracking-tight text-balance md:text-[30px] md:leading-tight">{title}</h1>
-          {description && <p className="max-w-2xl text-sm leading-relaxed text-pretty text-muted-foreground">{description}</p>}
+      <header className="flex flex-col gap-4 pb-2 md:flex-row md:items-end md:justify-between">
+        <div className="flex min-w-0 items-start gap-3.5">
+          {Icon && (
+            <div
+              className={cn(
+                'grid size-11 shrink-0 place-items-center rounded-xl shadow-sm ring-1 ring-inset ring-white/10',
+                TONE_TILE[iconTone],
+              )}
+            >
+              <Icon className="size-5" />
+            </div>
+          )}
+          <div className="min-w-0 flex flex-col gap-2">
+            {eyebrow && <div className="flex flex-wrap items-center gap-2">{eyebrow}</div>}
+            <h1 className="truncate text-2xl font-semibold tracking-tight md:text-[28px]">{title}</h1>
+            {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
+            {meta && <div className="flex flex-wrap items-center gap-2">{meta}</div>}
+          </div>
         </div>
         {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
-      </div>
+      </header>
     </div>
   )
 }
@@ -130,7 +151,7 @@ export function Panel({
   icon?: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <section className={cn('flex flex-col overflow-hidden rounded-xl surface text-card-foreground', className)}>
+    <section className={cn('flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs text-card-foreground', className)}>
       {(title || actions) && (
         <header className="flex items-start justify-between gap-4 border-b border-border/70 bg-linear-to-b from-muted/40 to-transparent px-5 py-3.5">
           <div className="flex min-w-0 items-start gap-3">
@@ -245,8 +266,8 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-      <span className="relative flex size-12 items-center justify-center rounded-xl surface-raised text-primary">
-        <Icon className="size-5" />
+      <span className="relative flex size-14 items-center justify-center rounded-2xl tile-primary shadow-glow">
+        <Icon className="size-7 text-white" />
       </span>
       <div className="flex max-w-sm flex-col gap-1">
         <p className="text-sm font-semibold">{title}</p>
