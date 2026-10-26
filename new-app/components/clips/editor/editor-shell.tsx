@@ -19,6 +19,7 @@ import { Timeline } from '@/components/clips/editor/timeline'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
 import { BrollPanel } from '@/components/clips/editor/broll-panel'
 import { ThumbnailPanel } from '@/components/clips/editor/thumbnail-panel'
+import { ProducerPanel } from '@/components/clips/producer/producer-panel'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
@@ -242,6 +243,7 @@ export function EditorShell({
         <aside className="min-h-0 overflow-y-auto rounded-xl border border-border">
           <Tabs defaultValue="transcript">
             <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent px-2">
+              <TabsTrigger value="producer">Producer</TabsTrigger>
               <TabsTrigger value="transcript">Transcript</TabsTrigger>
               <TabsTrigger value="layout">Layout</TabsTrigger>
               <TabsTrigger value="captions">Captions</TabsTrigger>
@@ -251,6 +253,9 @@ export function EditorShell({
               <TabsTrigger value="dub">Dub</TabsTrigger>
               <TabsTrigger value="brand">Brand</TabsTrigger>
             </TabsList>
+            <TabsContent value="producer" className="mt-0 h-[min(60vh,520px)]">
+              <ProducerPanel clipId={clipId} bounds={bounds} edits={edits} onApplyEdits={setEdits} />
+            </TabsContent>
             <TabsContent value="transcript" className="mt-0">
               <TranscriptPanel
                 words={words}

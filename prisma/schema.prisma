@@ -9085,3 +9085,30 @@ model ClipThumbnail {
   @@index([workspaceId])
   @@map("clip_thumbnails")
 }
+
+model ProducerThread {
+  id          String   @id @default(cuid())
+  clipId      String   @unique
+  workspaceId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages ProducerMessage[]
+
+  @@index([workspaceId])
+  @@map("producer_threads")
+}
+
+model ProducerMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  role      String
+  content   String?
+  toolCalls Json?
+  createdAt DateTime @default(now())
+
+  thread ProducerThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("producer_messages")
+}
