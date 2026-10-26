@@ -1,14 +1,17 @@
 import {
+  AudioLines,
   Clapperboard,
   Download,
   HelpCircle,
   Home,
+  LayoutTemplate,
   LifeBuoy,
   Palette,
   Plug,
+  Plus,
   Scissors,
   Settings,
-  Upload,
+  Video,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -21,6 +24,8 @@ export type NavItem = {
   icon: LucideIcon
   group?: string
   exact?: boolean
+  badge?: 'soon' | 'new'
+  disabled?: boolean
   isActive?: (pathname: string) => boolean
 }
 
@@ -33,6 +38,8 @@ export type NavContext = {
   items: NavItem[]
 }
 
+export const GROUP_ORDER = ['Create', 'Library', 'Brand', 'Exports'] as const
+
 export const CLIPS: NavContext = {
   key: 'clips',
   title: 'Clips',
@@ -40,10 +47,40 @@ export const CLIPS: NavContext = {
   href: '/app/clips',
   icon: Scissors,
   items: [
-    { title: 'Projects', href: '/app/clips', icon: Clapperboard, exact: true, group: 'Create' },
-    { title: 'New project', href: '/app/clips/new', icon: Upload, group: 'Create' },
-    { title: 'Brand template', href: '/app/clips/brand', icon: Palette, group: 'Customize' },
-    { title: 'Exports', href: '/app/clips/exports', icon: Download, group: 'Library' },
+    { title: 'New project', href: '/app/clips/new', icon: Plus, group: 'Create' },
+    {
+      title: 'Record',
+      href: '/app/record',
+      icon: Video,
+      group: 'Create',
+      badge: 'soon',
+      disabled: true,
+    },
+    { title: 'Projects', href: '/app/clips', icon: Clapperboard, group: 'Library', exact: true },
+    {
+      title: 'Editor',
+      href: '/app/editor',
+      icon: Scissors,
+      group: 'Library',
+      badge: 'soon',
+      disabled: true,
+    },
+    {
+      title: 'Voice',
+      href: '/app/voice',
+      icon: AudioLines,
+      group: 'Library',
+      badge: 'soon',
+      disabled: true,
+    },
+    { title: 'Brand kit', href: '/app/clips/brand', icon: Palette, group: 'Brand' },
+    {
+      title: 'Templates',
+      href: '/app/clips/brand?tab=templates',
+      icon: LayoutTemplate,
+      group: 'Brand',
+    },
+    { title: 'Exports', href: '/app/clips/exports', icon: Download, group: 'Exports' },
   ],
 }
 
@@ -59,7 +96,7 @@ export const WORKSPACE: NavContext = {
     { title: 'Home', href: '/app/clips', icon: Home, group: 'Workspace' },
     { title: 'Integrations', href: '/app/integrations', icon: Plug, group: 'Manage' },
     { title: 'Settings', href: '/app/settings', icon: Settings, group: 'Manage' },
-    { title: 'Help', href: '/app/help', icon: LifeBuoy, group: 'Manage' },
+    { title: 'Help', href: '/app/help', icon: HelpCircle, group: 'Manage' },
   ],
 }
 
@@ -80,13 +117,26 @@ export function resolveContext(pathname: string): NavContext {
   return WORKSPACE
 }
 
-export function isItemActive(item: NavItem, pathname: string) {
-  if (item.isActive) return item.isActive(pathname)
+export function isItemActive(item: NavItem, pathname: string, searchParams?: URLSearchParams) {
+  if (item.isActive) {
+    if (item.href.includes('?tab=templates') && searchParams) {
+      return pathname === '/app/clips/brand' && searchParams.get('tab') === 'templates'
+    }
+    return item.isActive(pathname)
+  }
   if (item.href === '/app/clips' && item.exact) {
     return pathname === '/app/clips'
   }
   if (item.href.startsWith('/app/clips/') && item.href.includes('/edit/')) {
     return pathname === item.href || pathname.startsWith(`${item.href}/`)
+  }
+  if (item.href.includes('?')) {
+    const base = item.href.split('?')[0]
+    if (pathname !== base) return false
+    if (item.href.includes('tab=templates')) {
+      return searchParams?.get('tab') === 'templates'
+    }
+    return pathname === base
   }
   if (item.exact) return pathname === item.href
   return pathname === item.href || pathname.startsWith(`${item.href}/`)
@@ -101,6 +151,17 @@ export function groupItems(items: NavItem[]) {
     else groups.push({ label, items: [item] })
   }
   return groups
+}
+
+export function sortGroups(groups: { label: string; items: NavItem[] }[]) {
+  return [...groups].sort((a, b) => {
+    const ai = GROUP_ORDER.indexOf(a.label as (typeof GROUP_ORDER)[number])
+    const bi = GROUP_ORDER.indexOf(b.label as (typeof GROUP_ORDER)[number])
+    if (ai === -1 && bi === -1) return a.label.localeCompare(b.label)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
 }
 
 export const PRIMARY_DESTINATION_COUNT = ALL_CONTEXTS.reduce((sum, c) => sum + c.items.length, 0)

@@ -20,6 +20,7 @@ export default async function ClipEditorPage({
   return (
     <EditorShell
       projectId={projectId}
+      projectTitle={data.project.title}
       clipId={clipId}
       initialTitle={data.clip.title}
       bounds={data.bounds}

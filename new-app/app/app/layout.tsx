@@ -6,6 +6,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const cookieStore = await cookies()
   const raw = cookieStore.get('transovo_shell_context')?.value
   const initialShellContext: PersistedShellContext | null = raw === 'workspace' ? 'workspace' : null
+  const defaultSidebarOpen = cookieStore.get('sidebar_state')?.value !== 'false'
 
-  return <AppShell initialShellContext={initialShellContext}>{children}</AppShell>
+  return (
+    <AppShell initialShellContext={initialShellContext} defaultSidebarOpen={defaultSidebarOpen}>
+      {children}
+    </AppShell>
+  )
 }

@@ -1,50 +1,48 @@
 'use client'
 
-import { useState } from 'react'
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { ClipsWorkspaceProvider } from '@/components/providers/clips-workspace-provider'
+import { AppSidebar } from '@/components/shell/app-sidebar'
+import { AppTopBar } from '@/components/shell/app-topbar'
+import { BreadcrumbTitleProvider } from '@/components/shell/breadcrumb-context'
+import { ShellContextProvider } from '@/components/shell/shell-context-provider'
 import type { PersistedShellContext } from '@/lib/nav-shell-context'
-import { AppHeader } from './app-header'
-import { ShellContextProvider } from './shell-context-provider'
-import { SidebarNav } from './sidebar-nav'
-import { cn } from '@/lib/utils'
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 export function AppShell({
   children,
   initialShellContext = null,
+  defaultSidebarOpen = true,
 }: {
   children: React.ReactNode
   initialShellContext?: PersistedShellContext | null
+  defaultSidebarOpen?: boolean
 }) {
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [expanded, setExpanded] = useState(false)
-
   return (
     <ShellContextProvider initial={initialShellContext}>
       <ClipsWorkspaceProvider>
-        <div className="flex min-h-dvh flex-col">
-          <AppHeader onOpenMenu={() => setMobileOpen(true)} />
-          <div className="flex flex-1">
-            <aside
-              className={cn(
-                'sticky top-16 hidden h-[calc(100dvh-4rem)] shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out md:block',
-                expanded ? 'w-60' : 'w-20',
-              )}
+        <BreadcrumbTitleProvider>
+          <SidebarProvider
+            defaultOpen={defaultSidebarOpen}
+            style={
+              {
+                '--sidebar-width': '15rem',
+                '--sidebar-width-icon': '3.5rem',
+              } as React.CSSProperties
+            }
+          >
+            <a
+              href="#main"
+              className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
             >
-              <SidebarNav compact={!expanded} onToggle={() => setExpanded((value) => !value)} />
-            </aside>
-            <main id="main" className="min-w-0 flex-1">
-              {children}
-            </main>
-          </div>
-        </div>
-
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-64 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground">
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <SidebarNav onNavigate={() => setMobileOpen(false)} />
-          </SheetContent>
-        </Sheet>
+              Skip to content
+            </a>
+            <AppSidebar />
+            <SidebarInset className="min-w-0 bg-background">
+              <AppTopBar />
+              <main id="main" className="min-h-[calc(100dvh-3.5rem)]">{children}</main>
+            </SidebarInset>
+          </SidebarProvider>
+        </BreadcrumbTitleProvider>
       </ClipsWorkspaceProvider>
     </ShellContextProvider>
   )

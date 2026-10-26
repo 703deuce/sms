@@ -32,6 +32,7 @@ import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
 import type { BrandTemplateSettings } from '@/lib/clips/brand'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
+import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { toast } from 'sonner'
 
 function isEditableTarget(t: EventTarget | null) {
@@ -42,6 +43,7 @@ function isEditableTarget(t: EventTarget | null) {
 
 export function EditorShell({
   projectId,
+  projectTitle,
   clipId,
   initialTitle,
   bounds,
@@ -54,6 +56,7 @@ export function EditorShell({
   brollMedia: initialBrollMedia = [],
 }: {
   projectId: string
+  projectTitle?: string
   clipId: string
   initialTitle: string
   bounds: ClipBounds
@@ -67,6 +70,8 @@ export function EditorShell({
 }) {
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
   const [title, setTitle] = useState(initialTitle)
+  useSetBreadcrumbTitle('project', projectTitle)
+  useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
   const [outputMs, setOutputMs] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -251,7 +256,7 @@ export function EditorShell({
   }, [clipId, initialTitle, title])
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
       <div className="shrink-0 border-b border-border px-4 py-2">
         <EditorTopBar
           backHref={`/app/clips/${projectId}`}

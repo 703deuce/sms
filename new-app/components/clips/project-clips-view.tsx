@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/app/page-primitives'
+import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { Button } from '@/components/ui/button'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
@@ -44,6 +45,8 @@ export function ProjectClipsView({
   initialError?: string | null
   fromLink?: boolean
 }) {
+  useSetBreadcrumbTitle('project', projectTitle)
+
   const readyFromServer = initialStatus === 'READY' && initialClips != null
   const [status, setStatus] = useState(initialStatus)
   const [clips, setClips] = useState<ClipCardData[]>(initialClips ?? [])
