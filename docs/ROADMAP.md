@@ -49,6 +49,7 @@ Descript-style transcript editing.
 |-----|---------|
 | **`docs/clips/script-editor.md`** | Implementation spec v1.0 (layout, EDL, tests) |
 | **`docs/clips/script-editor-SOURCES.txt`** | Reference screenshot URLs (Descript help, Kapwing) |
+| **`docs/clips/SCRIPT-EDITOR-BUILD.md`** | Milestones (§D), Prisma draft, APIs, component tree, EDL/render bridge |
 | `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md` | Earlier notes (superseded by script-editor.md for build order) |
 
 **Gate:** Owner confirms regular clipper prod browser test → then schedule editor milestones (§D in spec).
