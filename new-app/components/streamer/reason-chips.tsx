@@ -7,9 +7,13 @@ type Reason = { kind: string; label: string; value?: string }
 const ICONS: Record<string, typeof Volume2> = {
   audio: Volume2,
   chat: MessageSquare,
+  chat_call: MessageSquare,
   viewer_clips: Scissors,
+  viewer_clip: Scissors,
   transcript: FileText,
   llm: Sparkles,
+  streamer_call: Sparkles,
+  clip_cue: Sparkles,
 }
 
 export function ReasonChips({ reasons, score }: { reasons?: Reason[]; score?: number }) {

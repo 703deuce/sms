@@ -9,6 +9,7 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { shotIndexAt } from '@/lib/clips/crop-shots'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
+import { AudioWaveformLane } from '@/components/clips/editor/audio-waveform-lane'
 
 export function Timeline({
   edits,
@@ -16,6 +17,7 @@ export function Timeline({
   shots,
   outputMs,
   clipOutputDurationMs,
+  videoUrl = null,
   onSeekOutput,
   onTrimChange,
   onBrollChange,
@@ -25,6 +27,7 @@ export function Timeline({
   shots: CropShot[]
   outputMs: number
   clipOutputDurationMs: number
+  videoUrl?: string | null
   onSeekOutput: (outputMs: number) => void
   onTrimChange: (trim: { in: number; out: number }) => void
   onBrollChange?: (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => void
@@ -110,10 +113,11 @@ export function Timeline({
           trimIn={edits.trim.in}
           onChange={(outMs) => onTrimChange({ in: edits.trim.in, out: outMs })}
         />
-        <div className="absolute inset-x-0 bottom-8 h-5 rounded bg-emerald-950/40">
+        <div className="absolute inset-x-0 top-[88px] h-5 overflow-hidden rounded bg-emerald-950/40">
+          <AudioWaveformLane videoUrl={videoUrl} className="absolute inset-0 size-full text-emerald-400/90" />
           {audio?.music && (
             <div
-              className="absolute top-0.5 h-4 rounded bg-emerald-500/70"
+              className="pointer-events-none absolute top-0.5 h-4 rounded bg-emerald-500/40 mix-blend-screen"
               style={{ left: 0, width: '100%' }}
               title="Music"
             />

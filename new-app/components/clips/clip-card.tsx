@@ -10,6 +10,7 @@ import type { ClipCardData } from '@/components/clips/clip-grid'
 import { clipsFetch } from '@/lib/clips-api'
 import { formatDur, formatTimecode } from '@/lib/clips/format'
 import { ReasonChips } from '@/components/streamer/reason-chips'
+import { ClipCardVideo } from '@/components/clips/clip-card-video'
 
 export function ClipCard({
   clip,
@@ -50,27 +51,8 @@ export function ClipCard({
       className="group flex flex-col gap-2 overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
     >
       <div className="relative aspect-[9/16] bg-muted">
-        {clip.posterUrl ? (
-          <video
-            className="size-full object-cover"
-            poster={clip.posterUrl}
-            src={clip.previewUrl || undefined}
-            muted
-            playsInline
-            loop
-            onMouseEnter={(e) => {
-              void fetch(`/api/clips/clips/${clip.id}/events`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ eventType: 'preview_play' }),
-              }).catch(() => {})
-              e.currentTarget.play().catch(() => {})
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.pause()
-              e.currentTarget.currentTime = 0
-            }}
-          />
+        {clip.previewUrl || clip.posterUrl ? (
+          <ClipCardVideo clipId={clip.id} previewUrl={clip.previewUrl} posterUrl={clip.posterUrl} />
         ) : null}
         <div className="absolute left-2 top-2">
           <ScoreRing score={clip.score} />

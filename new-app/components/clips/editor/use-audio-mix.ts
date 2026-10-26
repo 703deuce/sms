@@ -42,7 +42,12 @@ export function useAudioMix({
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    video.muted = Boolean(useDubAudio)
+    if (useDubAudio) {
+      video.muted = true
+    } else {
+      video.muted = false
+      if (video.volume <= 0) video.volume = 1
+    }
   }, [useDubAudio, videoRef])
 
   useEffect(() => {

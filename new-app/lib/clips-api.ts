@@ -65,6 +65,8 @@ export function getProjectStatus(projectId: string) {
     error: string | null
     etaSec: number
     wordCount: number
+    chunkDone?: number
+    chunkTotal?: number
   }>(`/api/clips/projects/${projectId}/status`)
 }
 

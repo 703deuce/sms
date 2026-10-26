@@ -15,6 +15,7 @@ import type { CropTrack } from '@/lib/clips/crop-track'
 import { requestClipReframe } from '@/lib/clips-api'
 import { patchClip } from '@/lib/clips-api'
 import { outputDurationFromEdits } from '@/lib/clips/editor-playback'
+import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
@@ -97,6 +98,8 @@ export function EditorShell({
   }, [])
   const [outputMs, setOutputMs] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [playerMuted, setPlayerMuted] = useState(false)
+  const [playerVolume, setPlayerVolume] = useState(100)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const selectionRef = useRef<TranscriptSelection | null>(null)
   const {
@@ -222,12 +225,28 @@ export function EditorShell({
     [edits],
   )
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const v = videoRef.current
     if (!v) return
-    if (v.paused) void v.play()
-    else v.pause()
+    if (!v.paused) {
+      v.pause()
+      return
+    }
+    v.volume = playerVolume / 100
+    const mode = await playWithSound(v)
+    if (mode === 'muted') {
+      setPlayerMuted(true)
+    } else {
+      setPlayerMuted(false)
+    }
   }
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || useDubAudio) return
+    v.muted = playerMuted
+    v.volume = playerVolume / 100
+  }, [playerMuted, playerVolume, useDubAudio, videoUrl])
 
   const deleteSelection = useCallback(() => {
     const sel = selectionRef.current
@@ -438,8 +457,32 @@ export function EditorShell({
             playing={playing}
             outputMs={outputMs}
             outputDurationMs={outDur}
-            onToggle={togglePlay}
+            onToggle={() => void togglePlay()}
             onScrub={seekOutput}
+            muted={playerMuted}
+            volume={playerVolume}
+            onMuteToggle={() => {
+              const v = videoRef.current
+              if (!v) return
+              const next = !playerMuted
+              setPlayerMuted(next)
+              v.muted = next
+              if (!next) {
+                v.volume = playerVolume / 100
+                void playWithSound(v)
+              }
+            }}
+            onVolumeChange={(pct) => {
+              setPlayerVolume(pct)
+              const v = videoRef.current
+              if (v) {
+                v.volume = pct / 100
+                if (pct > 0) {
+                  v.muted = false
+                  setPlayerMuted(false)
+                }
+              }
+            }}
           />
           <div className="min-w-0 overflow-x-auto">
             <Timeline
@@ -448,6 +491,7 @@ export function EditorShell({
               shots={cropShots}
               outputMs={outputMs}
               clipOutputDurationMs={outDur}
+              videoUrl={videoUrl}
               onSeekOutput={seekOutput}
               onTrimChange={setTrim}
               onBrollChange={updateBrollItem}

@@ -1,6 +1,6 @@
 'use client'
 
-import { Pause, Play } from 'lucide-react'
+import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 
@@ -17,12 +17,20 @@ export function PlayerControls({
   outputDurationMs,
   onToggle,
   onScrub,
+  muted,
+  volume,
+  onMuteToggle,
+  onVolumeChange,
 }: {
   playing: boolean
   outputMs: number
   outputDurationMs: number
   onToggle: () => void
   onScrub: (outputMs: number) => void
+  muted?: boolean
+  volume?: number
+  onMuteToggle?: () => void
+  onVolumeChange?: (pct: number) => void
 }) {
   const max = Math.max(1, outputDurationMs)
   const pct = outputDurationMs > 0 ? (outputMs / outputDurationMs) * 100 : 0
@@ -34,6 +42,21 @@ export function PlayerControls({
       <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
         {formatClock(outputMs)} / {formatClock(outputDurationMs)}
       </span>
+      {onMuteToggle ? (
+        <Button type="button" size="icon" variant="ghost" onClick={onMuteToggle} aria-label={muted ? 'Unmute' : 'Mute'}>
+          {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+        </Button>
+      ) : null}
+      {onVolumeChange ? (
+        <Slider
+          className="w-24 shrink-0"
+          min={0}
+          max={100}
+          value={[volume ?? 100]}
+          onValueChange={(v) => onVolumeChange(Array.isArray(v) ? v[0] ?? 100 : 100)}
+          aria-label="Volume"
+        />
+      ) : null}
       <Slider
         className="min-w-0 flex-1"
         min={0}
