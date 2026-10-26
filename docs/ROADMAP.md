@@ -1,86 +1,71 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-26 — clipper guard for legacy `app_chunked` sessions; `FEATURE_SCREENWRITING` off on web
+**Last updated:** 2026-10-26 — launch scope clarified (clipper → Streamer VOD → script editor); clipper E2E in progress
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.
 
 ---
 
-## Build order (current)
+## Launch scope (ship order)
 
-| Priority | Product | Status (2026-10-26) |
-|----------|---------|---------------------|
-| **1** | **Regular clipper** (upload → process → clips → render/export) | **IN PROGRESS** — direct-to-storage uploads on web (`64d759c87+`); retest large uploads; worker RENDER_CLIP regression test in repo |
-| **2** | **Streamer** (VOD-first: link import, auto-import, chat signals, clip-that, near-live polling) | **PARTIAL** — live clipping frozen |
-| **3** | **AI Studio** (Higgsfield-like) | **NOT STARTED** |
-| **4** | **Descript-style transcript editor** | **NOT STARTED** — see `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md` |
-| **5** | **Screenwriting** (Final Draft parity) | **PAUSED / HIDDEN** — `FEATURE_SCREENWRITING=0`; branch `screenwriting-wip` |
-| **6** | **Login, credits, billing** | **PARTIAL** — existing auth/credits; polish TBD |
+| # | Product | Status (2026-10-26) |
+|---|---------|---------------------|
+| **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS (TOP PRIORITY)** |
+| **2** | **Streamer** — VOD-first only (link import, auto-import after stream, uploads, chat signals, clip-that, near-live polling). **No live clipping.** | **PARTIAL** |
+| **3** | **Script editor** — Descript-style transcript editor | **NOT STARTED** — `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md` |
+| **4** | **AI Studio** (Higgsfield-like) | **Launch: TBD** (owner decides in-launch vs immediately post-launch) |
+
+### Launch blocker (before charging)
+
+| Blocker | Status |
+|---------|--------|
+| **Login, credits, billing** | **PARTIAL** — auth/credits exist; billing + charge-ready flows must ship before paid launch |
 
 ---
 
-## 1. Regular clipper (TOP PRIORITY)
+## Post-launch
 
-**Goal:** Any-size upload, resumable, survives web deploys; `PROCESS_PROJECT` → worker download by storage key → transcribe → pick clips → `RENDER_CLIP` → thumbnails → export.
+| # | Product | Status |
+|---|---------|--------|
+| **5** | **Screenwriting** (Final Draft parity) | **PAUSED / HIDDEN** — `FEATURE_SCREENWRITING=0`; code + migrations + data kept on branch `screenwriting-wip` |
+
+**Re-enable screenwriting:** `FEATURE_SCREENWRITING=1` on web + redeploy.
+
+**Docs:** `docs/clips/SCREENWRITING-BUILD.md`, `docs/clips/screenwriting-ui.md`, `docs/clips/screenwriting-format-flow.md`, `docs/clips/sw-browser-test-1.md`  
+**Open on branch:** L07 notes column, L19 breakdown, L20 revisions/locks, inline comment anchors, real menus, live collab deploy, **D01–D41** addendum verify.
+
+---
+
+## 1. Regular clipper (active)
+
+**Goal:** `PROCESS_PROJECT` → worker download by storage key → transcribe → pick → `RENDER_CLIP` → thumbnails → export.
 
 | Layer | Notes |
 |-------|--------|
-| Upload | S3 multipart + Supabase TUS; parts in `clip_upload_parts`; `/chunk` → 410; `upload-part-bookkeeping` tests |
-| Web complete | `completeClipUpload` → `createClipProject` enqueues `PROCESS_PROJECT` |
-| Worker | `pipeline.py` download; `render_job.py` export (no inner `download_object` re-import — `test_render_job_storage.py`) |
-| **Open** | Prod worker image may lag master (RENDER_CLIP `download_object` UnboundLocalError reported ~13:52 UTC 2026-10-26) — **schedule worker redeploy** after VOD job; do not restart workers without owner OK |
+| Upload | S3 multipart + Supabase TUS; `clip_upload_parts`; `/chunk` → 410; resume after reload/deploy |
+| Web | `completeClipUpload` → `createClipProject` enqueues `PROCESS_PROJECT` |
+| Worker | `pipeline.py` + `render_job.py` (`test_render_job_storage.py` — no `download_object` shadow) |
+| **Open** | Prod `clips-worker` image may lag master (RENDER_CLIP `download_object` error ~13:52 UTC 2026-10-26) — **redeploy worker when owner approves** (not during VOD job) |
 
 **Specs:** `docs/clips/clipping_build_plan.md`, `docs/clips/PROGRESS.md`
 
 ---
 
-## 2. Streamer
+## 2. Streamer (VOD)
 
-VOD import, analyze, montage, stream render; near-live polling. True live clip path frozen.
-
-**Spec:** `docs/clips/STREAMER_BUILD_SPEC.md`
+**Spec:** `docs/clips/STREAMER_BUILD_SPEC.md` — live clip path stays frozen.
 
 ---
 
-## 3–4. AI Studio & Descript editor
+## 3. Script editor
 
-Not active. Specs under `docs/clips/` when scheduled.
-
----
-
-## 5. Screenwriting (LAST — feature flag)
-
-**Enable:** set `FEATURE_SCREENWRITING=1` on web app and redeploy (nav + `/app/sw/*`, `/api/sw/*`, `/s/*`).
-
-**Tracker:** `docs/clips/SCREENWRITING-BUILD.md`  
-**UI spec:** `docs/clips/screenwriting-ui.md` (22 look checks)  
-**Format / flow:** `docs/clips/screenwriting-format-flow.md` (28 `[U]` tests)  
-**Browser tracker:** `docs/clips/sw-browser-test-1.md`  
-**WIP branch:** `screenwriting-wip` @ `191a790b9` (import modes, FD chrome, 28 format tests, ScriptNotes column WIP, collab service code — deploy not finished)
-
-### Done (on `screenwriting-wip`, not prod-flagged)
-
-- P0 editor: Yjs undo, collab banner honesty, SmartType, PDF, normalize doc, read aloud
-- P1 #8–#14: import Replace/Append/New + PRE_IMPORT; beat board; cards; versions diff; FDX title page; fountain clusters; Ctrl+1–7; fast open
-- 28 format-flow unit tests; breakdown/revisions/menu/notes column **partial** on WIP
-
-### Open (before prod ship)
-
-| Area | Item |
-|------|------|
-| L07 | Dedicated right ScriptNotes column + margin markers (WIP on branch) |
-| L19 | Breakdown hotkey, tagging, report (WIP) |
-| L20 | Revision colors, `*` marks, page locking (WIP) |
-| Comments | Inline range anchors in editor (WIP) |
-| Menus | Full File/Edit/View/Format/Tools/Production wiring (WIP) |
-| Collab | Deploy `services/collab`, `SW_COLLAB_WS_URL` + `SW_COLLAB_SECRET`, 2-tab verify |
-| Addendum | **D01–D41** (`SCREENWRITING-BUILD.md` §D) — verify after P0 browser pass |
+Descript-style transcript editing; spec in `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md`.
 
 ---
 
-## 6. Login, credits, billing
+## 4. AI Studio
 
-Existing workspace auth and clip credits; full billing roadmap TBD.
+**Launch: TBD.** Spec TBD when scheduled.
 
 ---
 
@@ -88,5 +73,6 @@ Existing workspace auth and clip credits; full billing roadmap TBD.
 
 | Date | Milestone |
 |------|-----------|
-| 2026-10-26 | Screenwriting hidden (`FEATURE_SCREENWRITING`); roadmap created; clipper reprioritized |
-| 2026-10-26 | Upload direct-to-storage shipped `64d759c87` |
+| 2026-10-26 | Launch scope: clipper → Streamer VOD → script editor; AI Studio TBD; billing = launch blocker |
+| 2026-10-26 | Screenwriting hidden (`FEATURE_SCREENWRITING`); `ddd3d010d` clipper `app_chunked` guard |
+| 2026-10-26 | Upload direct-to-storage `64d759c87` |
