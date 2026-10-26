@@ -158,10 +158,12 @@ export async function applyJobProgress(input: {
 }
 
 const STUCK_PROJECT_STATUSES: ClipProjectStatus[] = [
-  'IMPORTING',
+  'UPLOADING',
   'PREPARING',
   'TRANSCRIBING',
+  'SCANNING',
   'FINDING_CLIPS',
+  'REFRAMING',
   'RENDERING',
 ]
 
