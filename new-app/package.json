@@ -40,6 +40,9 @@
     "test:power-dialer-post-deploy": "npx tsx scripts/test-power-dialer-post-deploy-fixes.ts",
     "smoke:power-dialer-get": "npx tsx scripts/smoke-power-dialer-get-routes.ts",
     "test:ui-8-browser": "node scripts/ui-8-browser-proof.mjs",
+    "test:e2e:a11y": "node ./node_modules/@playwright/test/cli.js test e2e/a11y.spec.ts --config=playwright.config.mjs",
+    "test:e2e:shots": "node ./node_modules/@playwright/test/cli.js test e2e/ui-screenshots.spec.ts --config=playwright.config.mjs",
+    "test": "vitest run",
     "lint:changed-vs-master": "bash scripts/compare-eslint-changed.sh",
     "test:phone:prod": "node scripts/test-phone-production-cert.mjs",
     "test:receptionist": "node scripts/test-receptionist-complete.mjs && node scripts/test-telephony-voice-catalog.mjs && node scripts/test-telephony-switch-sequence.mjs && node scripts/test-ai-receptionist-two-modes.mjs && node scripts/test-conversational-ivr-profile.mjs",
@@ -80,6 +83,8 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "1.52.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/react": "^16.3.3",
     "@types/archiver": "^8.0.0",

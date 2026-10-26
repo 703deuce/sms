@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
 import type { BrandTemplateSettings } from '@/lib/clips/brand'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -60,40 +63,42 @@ export function BrandPanel({
       <p className="text-xs text-muted-foreground">
         Pick a brand kit for this clip. Intro/outro apply on export when enabled.
       </p>
-      <label className="block text-xs font-medium">Template</label>
-      <select
-        className="w-full rounded border border-border bg-background px-2 py-1 text-xs"
+      <Label className="text-xs font-medium">Template</Label>
+      <Select
         value={brand.templateId || ''}
-        onChange={(e) => {
-          const tpl = templates.find((t) => t.id === e.target.value)
+        onValueChange={(v) => {
+          if (typeof v !== 'string' || !v) return
+          const tpl = templates.find((t) => t.id === v)
           if (tpl) applyTemplate(tpl)
         }}
       >
-        <option value="">Select template…</option>
-        {templates.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}{t.isDefault ? ' (default)' : ''}
-          </option>
-        ))}
-      </select>
-      <label className="flex items-center gap-2 text-xs">
-        <input
-          type="checkbox"
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select template…" />
+        </SelectTrigger>
+        <SelectContent>
+          {templates.map((t) => (
+            <SelectItem key={t.id} value={t.id}>
+              {t.name}{t.isDefault ? ' (default)' : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-xs">Include intro bumper</Label>
+        <Switch
           checked={brand.useIntro ?? false}
           disabled={!templates.find((t) => t.id === brand.templateId)?.introVideoKey}
-          onChange={(e) => patchBrand({ useIntro: e.target.checked })}
+          onCheckedChange={(checked) => patchBrand({ useIntro: Boolean(checked) })}
         />
-        Include intro bumper
-      </label>
-      <label className="flex items-center gap-2 text-xs">
-        <input
-          type="checkbox"
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-xs">Include outro bumper</Label>
+        <Switch
           checked={brand.useOutro ?? false}
           disabled={!templates.find((t) => t.id === brand.templateId)?.outroVideoKey}
-          onChange={(e) => patchBrand({ useOutro: e.target.checked })}
+          onCheckedChange={(checked) => patchBrand({ useOutro: Boolean(checked) })}
         />
-        Include outro bumper
-      </label>
+      </div>
       <Button size="sm" variant="outline" render={<a href="/app/clips/brand" />}>
         Manage templates
       </Button>

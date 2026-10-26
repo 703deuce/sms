@@ -66,8 +66,11 @@ export function AppTopBar() {
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="icon" className="size-9 rounded-full" aria-label="Account menu">
-                <span className="flex size-7 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
+              <Button variant="ghost" size="icon" className="size-9 rounded-full" aria-label="Account menu, MO">
+                <span
+                  className="flex size-7 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+                  aria-hidden
+                >
                   MO
                 </span>
               </Button>

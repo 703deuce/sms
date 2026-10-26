@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
@@ -150,25 +153,29 @@ export function ExportDialog({
         </div>
         <div className="mt-3 space-y-1 text-sm">
           <p className="text-xs font-medium">Audio track</p>
-          <select
-            className="w-full rounded border border-border px-2 py-1 text-xs"
+          <Select
             value={edits.audioTrack || 'original'}
-            onChange={(e) => onAudioTrack?.(e.target.value)}
+            onValueChange={(v) => typeof v === 'string' && onAudioTrack?.(v)}
           >
-            <option value="original">Original</option>
-            {dubs
-              .filter((d) => d.status === 'READY')
-              .map((d) => (
-                <option key={d.id} value={`dub:${d.id}`}>
-                  Dub — {DUB_LANGUAGES.find((l) => l.code === d.targetLang)?.label || d.targetLang}
-                </option>
-              ))}
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="original">Original</SelectItem>
+              {dubs
+                .filter((d) => d.status === 'READY')
+                .map((d) => (
+                  <SelectItem key={d.id} value={`dub:${d.id}`}>
+                    Dub — {DUB_LANGUAGES.find((l) => l.code === d.targetLang)?.label || d.targetLang}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         </div>
-        <label className="mt-4 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={alsoSrt} onChange={(e) => setAlsoSrt(e.target.checked)} />
-          Also download .srt
-        </label>
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <Label className="text-sm">Also download .srt</Label>
+          <Switch checked={alsoSrt} onCheckedChange={(checked) => setAlsoSrt(Boolean(checked))} />
+        </div>
         <p className="mt-2 text-xs text-muted-foreground">No watermark</p>
         {(edits.broll || []).some((b) => b.source === 'ai') && (
           <p className="mt-2 text-xs text-muted-foreground">

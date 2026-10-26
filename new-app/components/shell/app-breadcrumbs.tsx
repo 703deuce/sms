@@ -1,5 +1,6 @@
 'use client'
 
+import { Fragment } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -72,12 +73,12 @@ export function AppBreadcrumbs() {
       <Breadcrumb className="min-w-0 max-md:[&_li:not(:last-child)]:hidden">
         <BreadcrumbList>
           {crumbs.map((c, i) => (
-            <span key={`${c.label}-${i}`} className="contents">
-              {i > 0 && (
+            <Fragment key={`${c.label}-${i}`}>
+              {i > 0 ? (
                 <BreadcrumbSeparator>
                   <ChevronRight className="size-3.5" />
                 </BreadcrumbSeparator>
-              )}
+              ) : null}
               <BreadcrumbItem>
                 {c.href && i < crumbs.length - 1 ? (
                   <BreadcrumbLink render={<Link href={c.href} className="max-w-[22ch] truncate" />}>
@@ -89,7 +90,7 @@ export function AppBreadcrumbs() {
                   <BreadcrumbPage className="max-w-[22ch] truncate">{c.label}</BreadcrumbPage>
                 )}
               </BreadcrumbItem>
-            </span>
+            </Fragment>
           ))}
         </BreadcrumbList>
       </Breadcrumb>

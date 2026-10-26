@@ -1,6 +1,10 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
@@ -38,42 +42,42 @@ export function LayoutPanel({
         </Button>
       )}
       {onEdits && (
-        <div className="space-y-2 rounded-lg border border-border p-3">
-          <label className="flex items-center gap-2 text-xs font-medium">
-            <input
-              type="checkbox"
+        <div className="space-y-3 rounded-lg border border-border p-3">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs font-medium">Auto zoom on emphasis</Label>
+            <Switch
               checked={Boolean(zoom.enabled)}
-              onChange={(e) =>
-                onEdits({ ...edits, zoom: { ...zoom, enabled: e.target.checked } })
+              onCheckedChange={(checked) =>
+                onEdits({ ...edits, zoom: { ...zoom, enabled: Boolean(checked) } })
               }
             />
-            Auto zoom on emphasis
-          </label>
+          </div>
           {zoom.enabled && (
-            <label className="flex items-center gap-2 text-xs">
-              Intensity
-              <input
-                type="range"
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                Intensity {(zoom.intensity ?? 1.15).toFixed(2)}
+              </Label>
+              <Slider
                 min={1.1}
                 max={1.3}
                 step={0.05}
-                value={zoom.intensity ?? 1.15}
-                onChange={(e) =>
-                  onEdits({ ...edits, zoom: { ...zoom, intensity: Number(e.target.value) } })
-                }
+                value={[zoom.intensity ?? 1.15]}
+                onValueChange={(v) => {
+                  const n = Array.isArray(v) ? v[0] : v
+                  if (typeof n === 'number') onEdits({ ...edits, zoom: { ...zoom, intensity: n } })
+                }}
               />
-            </label>
+            </div>
           )}
-          <label className="flex items-center gap-2 text-xs font-medium">
-            <input
-              type="checkbox"
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs font-medium">Silence trim on export</Label>
+            <Switch
               checked={Boolean(silence.enabled)}
-              onChange={(e) =>
-                onEdits({ ...edits, silenceTrim: { ...silence, enabled: e.target.checked } })
+              onCheckedChange={(checked) =>
+                onEdits({ ...edits, silenceTrim: { ...silence, enabled: Boolean(checked) } })
               }
             />
-            Silence trim on export
-          </label>
+          </div>
           {silence.enabled && (
             <label className="flex items-center gap-2 text-xs">
               Min gap (ms)
@@ -120,19 +124,25 @@ export function LayoutPanel({
                 </p>
                 <p className="text-xs text-muted-foreground">Auto speaker {shot.speaker}</p>
               </div>
-              <label className="flex items-center gap-2 text-xs">
-                Focus on
-                <select
-                  className="rounded border border-border bg-background px-2 py-1"
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">Focus on</span>
+                <Select
                   value={focus}
-                  onChange={(e) => onShotFocus(i, e.target.value as 'auto' | 'A' | 'B' | 'both')}
+                  onValueChange={(v) => {
+                    if (typeof v === 'string') onShotFocus(i, v as 'auto' | 'A' | 'B' | 'both')
+                  }}
                 >
-                  <option value="auto">Auto</option>
-                  <option value="A">Speaker A</option>
-                  <option value="B">Speaker B</option>
-                  <option value="both">Both-wide</option>
-                </select>
-              </label>
+                  <SelectTrigger size="sm" className="w-[130px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto</SelectItem>
+                    <SelectItem value="A">Speaker A</SelectItem>
+                    <SelectItem value="B">Speaker B</SelectItem>
+                    <SelectItem value="both">Both-wide</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button size="sm" variant="outline" onClick={() => onRerunReframe(i)}>Re-run auto reframe</Button>
             </li>
           )

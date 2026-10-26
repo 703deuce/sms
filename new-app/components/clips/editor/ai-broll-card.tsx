@@ -1,6 +1,8 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 function formatInsertAt(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -35,29 +37,37 @@ export function AiBrollCard({
         onChange={(e) => onChange({ prompt: e.target.value })}
       />
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label className="text-xs text-muted-foreground">
-          Duration
-          <select
-            className="ml-1 rounded border px-1"
-            value={durationS}
-            onChange={(e) => onChange({ durationS: Number(e.target.value) })}
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground">Duration</Label>
+          <Select
+            value={String(durationS)}
+            onValueChange={(v) => typeof v === 'string' && onChange({ durationS: Number(v) })}
           >
-            {[3, 4, 5].map((d) => (
-              <option key={d} value={d}>{d}s</option>
-            ))}
-          </select>
-        </label>
-        <label className="text-xs text-muted-foreground">
-          Resolution
-          <select
-            className="ml-1 rounded border px-1"
+            <SelectTrigger size="sm" className="w-[72px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[3, 4, 5].map((d) => (
+                <SelectItem key={d} value={String(d)}>{d}s</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground">Resolution</Label>
+          <Select
             value={resolution}
-            onChange={(e) => onChange({ resolution: e.target.value as '480p' | '720p' })}
+            onValueChange={(v) => typeof v === 'string' && onChange({ resolution: v as '480p' | '720p' })}
           >
-            <option value="480p">480p</option>
-            <option value="720p">720p</option>
-          </select>
-        </label>
+            <SelectTrigger size="sm" className="w-[80px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="480p">480p</SelectItem>
+              <SelectItem value="720p">720p</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <span className="text-xs text-muted-foreground">
           {durationS}s · {resolution} · about ${costUsd.toFixed(2)}
         </span>

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DUB_LANGUAGES, dubCostUsd } from '@/lib/clips/dub'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
@@ -69,16 +71,17 @@ export function DubPanel({
 
   return (
     <div className="space-y-3 p-3 text-sm">
-      <label className="block text-xs font-medium">Target language</label>
-      <select
-        className="w-full rounded border border-border px-2 py-1 text-xs"
-        value={lang}
-        onChange={(e) => setLang(e.target.value)}
-      >
-        {DUB_LANGUAGES.map((l) => (
-          <option key={l.code} value={l.code}>{l.label}</option>
-        ))}
-      </select>
+      <Label className="text-xs font-medium">Target language</Label>
+      <Select value={lang} onValueChange={(v) => typeof v === 'string' && setLang(v)}>
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {DUB_LANGUAGES.map((l) => (
+            <SelectItem key={l.code} value={l.code}>{l.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <p className="text-xs text-muted-foreground">About ${cost.toFixed(2)} for this clip</p>
       <Button size="sm" disabled={busy} onClick={() => void generate()}>Generate dub</Button>
       <div className="space-y-2">

@@ -17,3 +17,4 @@ node_modules
 
 # Copied from ../prisma at build/dev — not committed
 /prisma/
+test-results/
