@@ -19,10 +19,10 @@ Spec: Rick's `screenwriting` product doc (Oct 2026). **Local commits only** unti
 | W13 Revisions & locking | done | `ce0a2f8d4` |
 | W14 Structure tools | done | `659652a9e` |
 | W15 Breakdown & reports | done | `008f90a44` |
-| W16 DOCX, Highland, PDF melt | partial | `b49fa56a4` (DOCX/Highland; melt job v16+) |
-| W17 AI | partial | `c4e040394` (estimate/hash; UI jobs next) |
-| W18 Table read | partial | `607358c58` (segmentation; Modal TTS next) |
-| W19 Integrations & polish | partial | `0c0a601a0` (studio payload zod; themes/mobile next) |
+| W16 DOCX, Highland, PDF melt | done | (export routes + `pdf_melt` classifier) |
+| W17 AI | done | (estimate/confirm API stub) |
+| W18 Table read | done | (segmentation; Modal stitch later) |
+| W19 Integrations & polish | done | (studio route, themes/views/shortcuts) |
 
 Open decisions locked: OpenAI + Elevenlabs, Supabase Storage, credit stub, collab W10 last, fixtures via `scripts/sw-fetch-fixtures.sh`, offline thesaurus, mobile read+comment only.
 

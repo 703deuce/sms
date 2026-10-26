@@ -5,6 +5,8 @@ import { requireSwActor } from '@/lib/screenwriting/server/actor'
 import { pmJsonToFountain, pmJsonToPlainTxt } from '@/lib/screenwriting/fountain/convert'
 import { pmJsonToFdx } from '@/lib/screenwriting/fdx/serialize'
 import { renderScriptPdf } from '@/lib/screenwriting/pdf/render'
+import { pmJsonToDocxBuffer } from '@/lib/screenwriting/export/docx'
+import { pmJsonToHighlandZip } from '@/lib/screenwriting/export/highland'
 import { getScriptForOwner } from '@/lib/screenwriting/server/scripts'
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -30,6 +32,24 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `attachment; filename="${row.title || 'script'}.pdf"`,
+        },
+      })
+    }
+    if (format === 'docx') {
+      const buf = await pmJsonToDocxBuffer(doc)
+      return new NextResponse(buf, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'Content-Disposition': `attachment; filename="${row.title || 'script'}.docx"`,
+        },
+      })
+    }
+    if (format === 'highland') {
+      const buf = await pmJsonToHighlandZip(doc, row.title || 'Script')
+      return new NextResponse(buf, {
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="${row.title || 'script'}.highland"`,
         },
       })
     }
