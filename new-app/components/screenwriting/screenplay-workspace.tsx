@@ -16,6 +16,14 @@ import { viewModeClass, type EditorViewMode } from '@/lib/screenwriting/editor/v
 import { getTemplateSpec } from '@/lib/screenwriting/formats/templates'
 import { characterReport } from '@/lib/screenwriting/reports/characters'
 import { genderAnalysisFromNames } from '@/lib/screenwriting/reports/gender-analysis'
+import { dualDialoguePaginationWarning } from '@/lib/screenwriting/layout/dual-dialogue-warn'
+import { hashPmJson, mergeOfflineRecovery, reconcileSave } from '@/lib/screenwriting/persistence/save-reconcile'
+import { exportPresetForFrozenVersion } from '@/lib/screenwriting/versions/export-presets'
+import { useScriptLayout } from '@/components/screenwriting/use-script-layout'
+import type { Macro } from '@/lib/screenwriting/editor/macros'
+import { AddendumPanelBar, AddendumPanelBody, type AddendumPanel } from '@/components/screenwriting/screenplay-workspace-addendum'
+import { restorePolicyWithLiveCollaborators } from '@/lib/screenwriting/collab/restore-policy'
+import { ScreenplayToolbar } from '@/components/screenwriting/screenplay-toolbar'
 
 type Panel =
   | 'navigator'
@@ -62,8 +70,22 @@ export function ScreenplayWorkspace({
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [templateKey, setTemplateKey] = useState((meta.templateKey as string) || formatSpec.key)
   const [revisionSet, setRevisionSet] = useState((meta.revisionSet as string) || 'white')
+  const [addendumPanel, setAddendumPanel] = useState<AddendumPanel | null>('stats')
+  const [importWarnings, setImportWarnings] = useState<string[]>([])
+  const [highlightCharacter, setHighlightCharacter] = useState('')
+  const [liveEditors, setLiveEditors] = useState(1)
+  const [collabActive, setCollabActive] = useState(false)
+  const [insertElementType, setInsertElementType] = useState<string | null>(null)
+  const [insertImageUrl, setInsertImageUrl] = useState<string | null>(null)
+  const [saveReconcileNote, setSaveReconcileNote] = useState<string | null>(null)
 
   const activeSpec = useMemo(() => getTemplateSpec(templateKey), [templateKey])
+  const layout = useScriptLayout(editorDoc)
+  const pageCount = layout?.pageCount ?? 0
+  const dualWarn = useMemo(
+    () => dualDialoguePaginationWarning(editorDoc, { spec: activeSpec, bodyLinesPerPage: activeSpec.page.bodyLines }),
+    [editorDoc, activeSpec],
+  )
   const scenes = useMemo(() => scenesFromPmJson(editorDoc), [editorDoc])
   const issues = useMemo(() => checkScript(editorDoc), [editorDoc])
   const characters = useMemo(() => characterReport(editorDoc), [editorDoc])
@@ -83,10 +105,64 @@ export function ScreenplayWorkspace({
   useEffect(() => {
     try {
       localStorage.setItem(`sw:offline:${scriptId}`, JSON.stringify(editorDoc))
+      localStorage.setItem(`sw:offline-at:${scriptId}`, String(Date.now()))
     } catch {
       /* quota */
     }
   }, [editorDoc, scriptId])
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`/api/sw/scripts/${scriptId}`)
+        if (!res.ok) return
+        const j = await res.json()
+        const serverDoc = j.data?.pmJson as JSONContent | undefined
+        const serverAt = j.data?.updatedAt ? new Date(j.data.updatedAt).getTime() : 0
+        const localRaw = localStorage.getItem(`sw:offline:${scriptId}`)
+        const localAt = Number(localStorage.getItem(`sw:offline-at:${scriptId}`) || 0)
+        const localDoc = localRaw ? (JSON.parse(localRaw) as JSONContent) : null
+        const merged = mergeOfflineRecovery(localDoc, serverDoc ?? initialDoc)
+        const winner = reconcileSave({
+          deviceUpdatedAt: localAt,
+          serverUpdatedAt: serverAt,
+          deviceHash: localDoc ? hashPmJson(localDoc) : hashPmJson(serverDoc),
+          serverHash: hashPmJson(serverDoc ?? initialDoc),
+        })
+        if (winner === 'device' && localDoc) {
+          setDoc(merged)
+          setEditorDoc(merged)
+          setSaveReconcileNote('Recovered newer local draft')
+        }
+      } catch {
+        /* ignore */
+      }
+    })()
+  }, [scriptId, initialDoc])
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(`sw:import-warn:${scriptId}`)
+      if (raw) {
+        setImportWarnings(JSON.parse(raw) as string[])
+        sessionStorage.removeItem(`sw:import-warn:${scriptId}`)
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [scriptId])
+
+  useEffect(() => {
+    if (!insertElementType) return
+    const t = setTimeout(() => setInsertElementType(null), 50)
+    return () => clearTimeout(t)
+  }, [insertElementType])
+
+  useEffect(() => {
+    if (!insertImageUrl) return
+    const t = setTimeout(() => setInsertImageUrl(null), 50)
+    return () => clearTimeout(t)
+  }, [insertImageUrl])
 
   useEffect(() => {
     void fetch(`/api/sw/scripts/${scriptId}/comments`)
@@ -99,12 +175,24 @@ export function ScreenplayWorkspace({
 
   const importFile = async (file: File, format: string) => {
     const text = await file.text()
+    const policy = restorePolicyWithLiveCollaborators(liveEditors, 'import')
+    if (policy.action === 'block') {
+      alert(policy.message)
+      return
+    }
     const res = await fetch(`/api/sw/scripts/${scriptId}/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ format, text }),
     })
     if (!res.ok) throw new Error('Import failed')
+    const j = await res.json()
+    const msgs = (j.data?.warnings ?? []).map((w: { message: string }) => w.message)
+    try {
+      sessionStorage.setItem(`sw:import-warn:${scriptId}`, JSON.stringify(msgs))
+    } catch {
+      /* ignore */
+    }
     window.location.reload()
   }
 
@@ -179,6 +267,15 @@ export function ScreenplayWorkspace({
 
   return (
     <div className={`flex flex-col gap-2 ${themeClass} ${viewClass}`}>
+      <AddendumPanelBar panel={addendumPanel} setPanel={setAddendumPanel} />
+      <ScreenplayToolbar
+        scriptId={scriptId}
+        onElement={(t) => {
+          setInsertElementType(t)
+          void persistMeta({ ...meta, lastElement: t })
+        }}
+        onImageUrl={(url) => setInsertImageUrl(url)}
+      />
       <div className="flex flex-wrap items-center gap-2 border-b pb-2">
         <span className="text-sm font-medium">{scriptTitle}</span>
         <select
@@ -252,6 +349,21 @@ export function ScreenplayWorkspace({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[240px_1fr]">
         <aside className="max-h-[70vh] overflow-auto rounded border p-2 text-xs">
+          <AddendumPanelBody
+            scriptId={scriptId}
+            panel={addendumPanel}
+            editorDoc={editorDoc}
+            pageCount={pageCount}
+            onSimulateEditors={setLiveEditors}
+            meta={meta}
+            persistMeta={persistMeta}
+            highlightCharacter={highlightCharacter}
+            setHighlightCharacter={setHighlightCharacter}
+            importWarnings={importWarnings}
+            dualWarn={dualWarn}
+            liveEditors={liveEditors}
+            onRestoreBlocked={(m) => alert(m)}
+          />
           {panel === 'navigator' && (
             <ul className="space-y-1">
               {scenes.map((s, i) => (
@@ -351,15 +463,30 @@ export function ScreenplayWorkspace({
             <div className="space-y-2">
               <Button size="sm" onClick={() => void snapshotVersion()}>Snapshot</Button>
               <ul>
-                {(versions as { id: string; label?: string; createdAt: string }[]).map((v) => (
-                  <li key={v.id}>
+                {(versions as { id: string; label?: string; createdAt: string; kind?: string }[]).map((v) => (
+                  <li key={v.id} className="space-y-1">
                     <button
                       type="button"
                       className="underline"
-                      onClick={() => void fetch(`/api/sw/versions/${v.id}/restore`, { method: 'POST' }).then(() => window.location.reload())}
+                      onClick={() => {
+                      const policy = restorePolicyWithLiveCollaborators(liveEditors, 'restore')
+                      if (policy.action === 'block') {
+                        alert(policy.message)
+                        return
+                      }
+                      void fetch(`/api/sw/versions/${v.id}/restore`, { method: 'POST' }).then(() => window.location.reload())
+                    }}
                     >
                       Restore {v.label || v.id.slice(0, 8)}
                     </button>
+                    {exportPresetForFrozenVersion(v.kind || 'MANUAL') ? (
+                      <a
+                        className="block text-[10px] underline"
+                        href={`/api/sw/scripts/${scriptId}/export?format=pdf&versionKind=${v.kind}&frozenExport=1`}
+                      >
+                        Frozen PDF preset
+                      </a>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -395,21 +522,39 @@ export function ScreenplayWorkspace({
           )}
         </aside>
 
-        <div className="rounded-lg border bg-card">
+        <div className={`rounded-lg border bg-card ${meta.splitView ? 'lg:col-span-1' : ''}`}>
           <div className="flex justify-between border-b px-3 py-1 text-xs text-muted-foreground">
-            <span>{saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Error' : 'Saved'}</span>
+            <span>
+              {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Error' : 'Saved'}
+              {saveReconcileNote ? ` · ${saveReconcileNote}` : null}
+              {collabActive ? ' · Yjs undo' : ''}
+            </span>
             {issues.length ? <span>{issues.length} script notes</span> : null}
           </div>
-          <ScreenplayEditor
-            key={JSON.stringify(doc).length}
-            scriptId={scriptId}
-            formatSpec={activeSpec}
-            initialDoc={doc}
-            onSaveState={setSaveState}
-            onDocChange={setEditorDoc}
-            layoutDoc={editorDoc}
-            revisionColor={revisionSet}
-          />
+          <div className={meta.splitView ? 'grid grid-cols-2 gap-2' : ''}>
+            <ScreenplayEditor
+              key={JSON.stringify(doc).length}
+              scriptId={scriptId}
+              formatSpec={activeSpec}
+              initialDoc={doc}
+              onSaveState={setSaveState}
+              onDocChange={setEditorDoc}
+              layoutDoc={editorDoc}
+              revisionColor={revisionSet}
+              collabActive={collabActive}
+              highlightCharacter={highlightCharacter}
+              rtl={Boolean(meta.rtl)}
+              onCollabActive={setCollabActive}
+              insertElementType={insertElementType}
+              insertImageUrl={insertImageUrl}
+              macros={(meta.macros as Macro[]) ?? []}
+            />
+            {meta.splitView ? (
+              <div className="max-h-[70vh] overflow-auto border-l p-2 text-xs opacity-80">
+                <pre className="whitespace-pre-wrap">{JSON.stringify(editorDoc, null, 2).slice(0, 8000)}</pre>
+              </div>
+            ) : null}
+          </div>
           <ScriptStatusBar pmJson={editorDoc} />
         </div>
       </div>

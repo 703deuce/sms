@@ -1,32 +1,64 @@
-# Screenwriting build tracker & audit (W1–W19)
+# Screenwriting build tracker (W1–W27)
 
-Spec: `uploads/screenwriting.md` (Oct 2026). **Shipped on `master` after merge.**
+Spec: `uploads/screenwriting.md` (W1–W19). Addendum A: `uploads/screenwriting-addendum.md` (W20–W27).
 
-## Milestone summary
+## Milestone summary (W1–W19)
 
 | W | Theme | Status |
 |---|--------|--------|
-| W1 | Skeleton & schema | DONE |
-| W2 | Elements & SmartType | DONE |
-| W3 | Fountain + TXT | DONE |
-| W4 | Pagination core | DONE |
-| W5 | FDX | DONE (full FD parity / golden fixtures optional) |
-| W6 | Paged editor | DONE |
-| W7 | PDF export | DONE |
-| W8 | Writing aids | DONE |
-| W9 | Versions & offline | DONE |
-| W10 | Collab | DONE (token + Hocuspocus service; WS optional) |
-| W11 | Comments & sharing | DONE |
-| W12 | Templates | DONE (feature, TV hour, multi-cam) |
-| W13 | Revisions & locking | DONE (engine + UI revision set) |
-| W14 | Structure tools | DONE |
-| W15 | Breakdown & reports | DONE |
-| W16 | DOCX/Highland/PDF melt | DONE |
-| W17 | AI | DONE (OpenAI wired) |
-| W18 | Table read / read-aloud | DONE |
-| W19 | Polish & Studio | DONE |
+| W1–W19 | See prior audit below | DONE on master `7503c92ce` |
 
-## Detailed audit (spec bullet → code)
+## Section D — Addendum A (41 rows)
+
+| ID | Milestone | Feature | Status | Path |
+|----|-----------|---------|--------|------|
+| D01 | W20 | Single Yjs undo (disable PM History when collab) | DONE | `collab/undo-policy.ts`, `screenplay-editor.tsx` |
+| D02 | W20 | Screenplay clipboard paste (plain elements) | DONE | `editor/clipboard.ts`, `screenplay-editor.tsx` |
+| D03 | W20 | Device vs server save reconciliation | DONE | `persistence/save-reconcile.ts`, `screenplay-editor.tsx` |
+| D04 | W20 | Restore/import policy with live collaborators | DONE | `collab/restore-policy.ts`, workspace import + versions |
+| D05 | W20 | Import warnings list | DONE | `import/warnings.ts`, `import/fdx-stats.ts`, import API + sidebar |
+| D06 | W21 | Scene versions (per-scene snapshot) | DONE | `api/.../scene-versions/`, addendum `sceneVersions` |
+| D07 | W21 | Story bible entries | DONE | `api/.../bible/`, `bible/entries.ts`, addendum `bible` |
+| D08 | W21 | Export presets on frozen snapshot | DONE | `versions/export-presets.ts`, versions panel frozen PDF link |
+| D09 | W21 | Font fallback chain | DONE | `editor/font-fallback.ts`, editor inline style |
+| D10 | W21 | Dual-dialogue pagination warning | DONE | `layout/dual-dialogue-warn.ts`, addendum bar |
+| D11 | W21 | RTL block direction | DONE | `editor/rtl.ts`, stats panel + editor |
+| D12 | W21 | AI privacy controls | DONE | `ai/privacy.ts`, addendum `privacy` |
+| D13 | W22 | Embedded images on elements | DONE | `schema/extensions.ts` (`imageSrc`), toolbar + editor |
+| D14 | W22 | Print/PDF options dialog | DONE | addendum `print` panel + export query params |
+| D15 | W22 | Character sides PDF export | DONE | `pdf/character-sides.ts`, export `format=character-sides` |
+| D16 | W22 | Print preview stylesheet | DONE | `app/globals.css` `@media print`, `.sw-print-preview` |
+| D17 | W22 | Character dialogue highlighting | DONE | `screenplay-editor.tsx`, addendum `names` |
+| D18 | W23 | Writing goals and stats | DONE | `writing/stats.ts`, addendum `stats` |
+| D19 | W23 | Custom element toolbar | DONE | `screenplay-toolbar.tsx`, workspace |
+| D20 | W23 | Split view layout | DONE | stats panel + workspace split JSON pane |
+| D21 | W23 | Text macros | DONE | `editor/macros.ts`, addendum `macros` + editor F-keys |
+| D22 | W23 | Name database | DONE | `names/database.ts`, addendum `names` |
+| D23 | W24 | Episode header fields | DONE | `tv/episode-header.ts`, print panel |
+| D24 | W24 | Collab chat messages | DONE | `api/.../chat/`, addendum `chat` |
+| D25 | W24 | Branch draft create | DONE | `api/.../branch-drafts/` POST |
+| D26 | W24 | Branch merge suggestions | DONE | `branch/merge.ts`, branch panel PATCH |
+| D27 | W24 | Offline thesaurus lookup | DONE | `writing/thesaurus.ts`, addendum `thesaurus` |
+| D28 | W24 | Story-time axis | DONE | `structure/story-time.ts`, addendum `timeline` |
+| D29 | W25 | Big Fish page-start parity check | STUB | `parity/big-fish.ts` — no golden FDX fixtures in repo |
+| D30 | W25 | Collab undo stack flag | DONE | `undo-policy.ts` `collabUndoStackLabel`, status bar hint |
+| D31 | W25 | Offline recovery merge | DONE | `save-reconcile.ts` `mergeOfflineRecovery`, workspace boot |
+| D32 | W25 | Frozen snapshot export guard | DONE | `export-presets.ts`, export API 403 without `frozenExport=1` |
+| D33 | W25 | FDX import warnings API field | DONE | import route `data.warnings` |
+| D34 | W26 | Scene version restore | DONE | scene-versions PATCH, addendum Restore |
+| D35 | W26 | Bible character link | DONE | `bible/entries.ts`, bible panel Link char |
+| D36 | W26 | PDF dialog watermark toggle | DONE | print panel + `render.ts` watermark |
+| D37 | W26 | Filter dialogue by character | DONE | `character-sides.ts` extract + sides export |
+| D38 | W26 | Macro hotkey slot | DONE | `macros.ts` `macroForHotkey`, default F1 macro |
+| D39 | W27 | Episode header on PDF | DONE | `render.ts` + `formatEpisodeHeaderPdfLine` |
+| D40 | W27 | Chat persistence API | DONE | `SwChatMessage`, `api/.../chat/` |
+| D41 | W27 | Yjs undo plugin hook in editor | DONE | `collab/yjs-undo-hook.ts`, `use-screenplay-collab.ts`, editor |
+
+Prisma (additive): `new-app/prisma/migrations/20261026220000_sw_addendum_w20_w27/`
+
+Tests: `new-app/tests/screenwriting-addendum.test.ts` (41 `[U]` rows + catalog)
+
+## W1–W19 detailed audit (unchanged)
 
 ### W1
 | Bullet | Status | Path |
@@ -37,147 +69,23 @@ Spec: `uploads/screenwriting.md` (Oct 2026). **Shipped on `master` after merge.*
 | `/app/sw` list + editor | DONE | `new-app/app/app/sw/page.tsx`, `new-app/app/app/sw/scripts/[scriptId]/page.tsx` |
 | Local save | DONE | `new-app/components/screenwriting/screenplay-editor.tsx` |
 
-### W2
-| Bullet | Status | Path |
-|--------|--------|------|
-| Enter/Tab machine | DONE | `new-app/lib/screenwriting/editor/element-keys.ts`, `screenplay-editor.tsx` |
-| Auto-convert, ⌘1–8 | DONE | `element-keys.ts`, `shortcuts.ts`, editor keymap |
-| SmartType + rename | DONE | `new-app/lib/screenwriting/smarttype/store.ts` |
-| Caps display | DONE | `new-app/lib/screenwriting/editor/element-style.ts` |
-
-### W3
-| Bullet | Status | Path |
-|--------|--------|------|
-| Fountain 1.1 parse/serialize | DONE | `new-app/lib/screenwriting/fountain/` |
-| Import/export API | DONE | `new-app/app/api/sw/scripts/[id]/import|export/route.ts` |
-| TXT export | DONE | export route `format=txt` |
-
-### W4
-| Bullet | Status | Path |
-|--------|--------|------|
-| Wrap + paginate R1–R10 subset | DONE | `new-app/lib/screenwriting/layout/` |
-| MORE/CONT'D, eighths, incremental | DONE | `layout/paginate.ts` |
-| Tests | DONE | `new-app/tests/screenwriting-w4.test.ts` |
-
-### W5
-| Bullet | Status | Path |
-|--------|--------|------|
-| FDX import/export | DONE | `new-app/lib/screenwriting/fdx/` |
-| unknown XML bag | DONE | `fdx/parse.ts` (`unknownFdx`) |
-| Golden Big Fish page parity | STUB | fixtures not committed; run `scripts/sw-fetch-fixtures.sh` locally |
-
-### W6
-| Bullet | Status | Path |
-|--------|--------|------|
-| Layout worker protocol | DONE | `new-app/lib/screenwriting/layout/worker-protocol.ts` |
-| Page decorations | DONE | `new-app/components/screenwriting/use-page-decorations.ts` |
-| Status bar + views | DONE | `script-status-bar.tsx`, `screenplay-workspace.tsx` |
-
-### W7
-| Bullet | Status | Path |
-|--------|--------|------|
-| pdfkit renderer | DONE | `new-app/lib/screenwriting/pdf/render.ts` |
-| Title page option | DONE | PDF render + workspace title panel |
-
-### W8
-| Bullet | Status | Path |
-|--------|--------|------|
-| Title page editor | DONE | workspace `title` panel |
-| Find/replace | DONE | `writing/find-replace.ts`, workspace |
-| Error check | DONE | `writing/error-check.ts` |
-| Spellcheck seed | DONE | `writing/spellcheck.ts` |
-| Shelf | DONE | `meta/shelf.ts` |
-
-### W9
-| Bullet | Status | Path |
-|--------|--------|------|
-| Versions API + restore | DONE | `app/api/sw/scripts/[id]/versions/`, `app/api/sw/versions/[vid]/restore/` |
-| Compare diff | DONE | `versions/compare.ts`, compare route |
-| Offline localStorage | DONE | `screenplay-workspace.tsx` |
-| PRE_RESTORE | DONE | restore route |
-
-### W10 (built last)
-| Bullet | Status | Path |
-|--------|--------|------|
-| Hocuspocus service | DONE | `services/collab/` |
-| HMAC collab token | DONE | `lib/screenwriting/collab/token.ts`, collab-token route |
-| Editor collab hook | DONE | `use-screenplay-collab.ts` |
-
-### W11
-| Bullet | Status | Path |
-|--------|--------|------|
-| Comments API + UI list | DONE | `comments/route.ts`, workspace panel |
-| Share links + `/s/:token` | DONE | `share-links/route.ts`, `app/s/[token]/page.tsx` |
-
-### W12
-| Bullet | Status | Path |
-|--------|--------|------|
-| Templates (feature, TV, multi-cam) | DONE | `formats/templates.ts`, workspace selector |
-
-### W13
-| Bullet | Status | Path |
-|--------|--------|------|
-| Page locks | DONE | `layout/locks.ts` |
-| Scene numbers 5A/A1 | DONE | `revisions/scene-numbers.ts` |
-| Revision set UI | DONE | workspace revision selector |
-
-### W14
-| Bullet | Status | Path |
-|--------|--------|------|
-| Navigator + CSV | DONE | `structure/navigator.ts`, workspace |
-| Index cards + reorder | DONE | workspace `cards` + `scene-reorder.ts` |
-| Beat board | DONE | workspace `beat` + `editorMeta` |
-| Outline | DONE | workspace `outline` |
-
-### W15
-| Bullet | Status | Path |
-|--------|--------|------|
-| Character report | DONE | `reports/characters.ts` |
-| Gender heuristic | DONE | `reports/gender-analysis.ts` |
-| Breakdown tags | DONE | `breakdown/tagging.ts` |
-
-### W16
-| Bullet | Status | Path |
-|--------|--------|------|
-| DOCX / Highland | DONE | `export/docx.ts`, `export/highland.ts`, export route |
-| PDF melt classifier | DONE | `worker/clips_worker/sw/pdf_melt.py` |
-
-### W17
-| Bullet | Status | Path |
-|--------|--------|------|
-| OpenAI run | DONE | `lib/screenwriting/ai/openai-run.ts` |
-| AI API + cache | DONE | `app/api/sw/scripts/[id]/ai/[kind]/route.ts`, `SwAiResult` |
-| Credit gate | DONE | `server/credits.ts` (no-op charge) |
-
-### W18
-| Bullet | Status | Path |
-|--------|--------|------|
-| Segmentation | DONE | `table-read/segment.ts` |
-| Read aloud | DONE | workspace + `read-aloud/route.ts` (ElevenLabs) + `speechSynthesis` fallback |
-
-### W19
-| Bullet | Status | Path |
-|--------|--------|------|
-| Studio payload | DONE | `integrations/studio-payload.ts`, studio route |
-| Themes / view modes / shortcuts | DONE | `editor/themes.ts`, `view-modes.ts`, `shortcut-map.ts`, workspace |
-| App nav | DONE | `new-app/lib/nav.ts` → Screenwriting |
+### W2–W19
+See git history on `7503c92ce` — full table in prior revision of this doc.
 
 ## Browser flows (Rick)
 
+### W1–W19 (core)
 1. **Dashboard:** Clips sidebar → **Screenwriting** → `/app/sw`
-2. **Create:** “New project” → open script → `/app/sw/scripts/{id}`
-3. **Write:** Type in editor; ⌘1–8 elements; ⌘D dual; ⌘↩ page break; autosave
-4. **Import:** Toolbar Import → `.fountain` / `.fdx`
-5. **Export:** fountain, fdx, pdf, txt, docx, highland links in toolbar
-6. **Structure:** Panels navigator / cards / beat / outline
-7. **Title page:** `title` panel
-8. **Find/replace:** `find` panel
-9. **AI:** `ai` panel → Run (needs `OPENAI_API_KEY`)
-10. **Read aloud:** Read aloud button (ElevenLabs if `ELEVENLABS_API_KEY`, else browser TTS)
-11. **Versions:** `versions` panel → Snapshot / Restore
-12. **Share:** Share → open `/s/{token}` read-only
-13. **Reports:** `reports` panel (characters + gender heuristic)
+2. **Editor:** `/app/sw/scripts/{id}` — write, import/export, structure panels, AI, versions, share
 
-## Streamer note (same repo)
+### W20–W27 (addendum bar)
+3. **Addendum tabs** (top): `bible`, `sceneVersions`, `chat`, `branch`, `stats`, `macros`, `names`, `print`, `thesaurus`, `timeline`, `privacy`
+4. **stats:** word goal, split view, RTL, simulate collaborators (import/restore policy)
+5. **print:** watermark PDF, character sides, print preview (browser), episode header fields
+6. **toolbar:** element buttons + image URL attach on selection
+7. **Import warnings:** after FDX import, warnings show in sidebar when addendum panel closed
+8. **Collab undo:** when collab token loads, PM History off + “Yjs undo” in save line
 
-`scripts/deploy-worker.sh` wait loop ignores stale `RUNNING` locks (`lockedAt` older than 3 minutes).
+## Streamer / workers
+
+Do **not** restart `clips-worker` or `clips-worker-stream` during long VOD imports (stream lane download resets on deploy).

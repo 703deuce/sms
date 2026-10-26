@@ -291,6 +291,24 @@
   opacity: 0.5;
 }
 
+@media print {
+  .sw-print-preview {
+    background: white !important;
+    color: black !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    padding: 0.5in !important;
+  }
+  .sw-print-preview .sw-page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+  aside,
+  button,
+  nav {
+    display: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,

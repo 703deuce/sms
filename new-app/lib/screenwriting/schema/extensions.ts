@@ -47,6 +47,11 @@ export const ScreenplayElement = Node.create({
         parseHTML: (el) => el.getAttribute('data-element-type') || 'action',
         renderHTML: (a) => ({ 'data-element-type': a.elementType }),
       },
+      imageSrc: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-image-src'),
+        renderHTML: (a) => (a.imageSrc ? { 'data-image-src': a.imageSrc } : {}),
+      },
     }
   },
   parseHTML: () => [{ tag: 'div[data-screenplay-element]' }],

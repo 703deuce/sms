@@ -9396,11 +9396,69 @@ model SwScript {
   members      SwMember[]
   jobs         SwJob[]
   breakdownItems SwBreakdownItem[]
+  sceneVersions  SwSceneVersion[]
+  bibleEntries   SwStoryBibleEntry[]
+  branchDrafts   SwBranchDraft[]
+  chatMessages   SwChatMessage[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
   @@index([projectId])
   @@map("sw_scripts")
+}
+
+model SwSceneVersion {
+  id             String   @id @default(cuid())
+  scriptId       String
+  script         SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  sceneElementId String
+  label          String?
+  pmJson         Json
+  createdAt      DateTime @default(now())
+
+  @@index([scriptId, sceneElementId])
+  @@map("sw_scene_versions")
+}
+
+model SwStoryBibleEntry {
+  id        String   @id @default(cuid())
+  scriptId  String
+  script    SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  kind      String
+  name      String
+  body      String
+  linkedCharacter String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scriptId, kind])
+  @@map("sw_story_bible_entries")
+}
+
+model SwBranchDraft {
+  id        String   @id @default(cuid())
+  scriptId  String
+  script    SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  label     String
+  pmJson    Json
+  mergedAt  DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([scriptId])
+  @@map("sw_branch_drafts")
+}
+
+model SwChatMessage {
+  id        String   @id @default(cuid())
+  scriptId  String
+  script    SwScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  authorId  String?
+  authorName String?
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([scriptId, createdAt])
+  @@map("sw_chat_messages")
 }
 
 model SwVersion {
