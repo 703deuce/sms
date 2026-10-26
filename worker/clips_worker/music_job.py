@@ -84,5 +84,26 @@ def run_music_job(conn, job: dict, post_progress) -> None:
                 usage["costUsdMicros"],
             ),
         )
+    if clip_id:
+        with conn.cursor() as cur:
+            cur.execute('SELECT edits FROM clips WHERE id=%s', (clip_id,))
+            row = cur.fetchone()
+            if row and row[0]:
+                edits = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+            else:
+                edits = {"v": 2, "trim": {"in": 0, "out": length_ms}, "cutRanges": [], "wordFixes": {}, "layout": {"mode": "speaker_follow", "shotOverrides": []}}
+            audio = edits.get("audio") or {}
+            audio["music"] = {
+                "generationId": generation_id,
+                "volume": 0.25,
+                "duckDepth": 0.7,
+                "fadeInMs": 500,
+                "fadeOutMs": 1000,
+            }
+            edits["audio"] = audio
+            cur.execute(
+                'UPDATE clips SET edits=%s, "updatedAt"=NOW() WHERE id=%s',
+                (json.dumps(edits), clip_id),
+            )
     conn.commit()
     post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})
