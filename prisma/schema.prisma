@@ -9000,12 +9000,14 @@ model CaptionPreset {
 }
 
 model ClipBrandTemplate {
-  id          String   @id
-  workspaceId String
-  name        String
-  settings    Json
-  logoKey     String?
-  isDefault   Boolean  @default(true)
+  id             String   @id
+  workspaceId    String
+  name           String
+  settings       Json
+  logoKey        String?
+  introVideoKey  String?
+  outroVideoKey  String?
+  isDefault      Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -9127,7 +9129,8 @@ model ClipThumbnail {
 
 model ProducerThread {
   id          String   @id @default(cuid())
-  clipId      String   @unique
+  clipId      String?  @unique
+  projectId   String?  @unique
   workspaceId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -9135,6 +9138,7 @@ model ProducerThread {
   messages ProducerMessage[]
 
   @@index([workspaceId])
+  @@index([projectId])
   @@map("producer_threads")
 }
 

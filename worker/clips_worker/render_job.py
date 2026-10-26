@@ -181,6 +181,27 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             audio_assets=audio_assets,
         )
 
+        brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
+        intro_key = brand.get("introVideoKey") if brand.get("useIntro", True) else None
+        outro_key = brand.get("outroVideoKey") if brand.get("useOutro", True) else None
+        if intro_key or outro_key:
+            from clips_worker.brand_concat import concat_brand_bookends
+            from clips_worker.render_clip import aspect_size
+            from clips_worker.storage import download_object
+
+            intro_p = td_path / "intro.mp4" if intro_key else None
+            outro_p = td_path / "outro.mp4" if outro_key else None
+            if intro_p:
+                download_object(str(intro_key), intro_p)
+            if outro_p:
+                download_object(str(outro_key), outro_p)
+            aspect = settings.get("aspectRatio", "9:16")
+            resolution = settings.get("exportResolution", "720p")
+            w, h = aspect_size(aspect, resolution)
+            bookended = td_path / "bookended.mp4"
+            concat_brand_bookends(out_mp4, bookended, intro_p, outro_p, w, h, td_path)
+            out_mp4 = bookended
+
         out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.mp4"
         srt_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.srt"
         upload_file(out_key, out_mp4, "video/mp4")

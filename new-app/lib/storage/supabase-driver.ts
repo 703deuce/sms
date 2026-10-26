@@ -65,6 +65,14 @@ export function createSupabaseStorageDriver(): ClipStorageDriver {
       const { supabase, bucket } = client()
       await supabase.storage.from(bucket).remove([input.objectKey])
     },
+    async putBytes(objectKey: string, body: Buffer, contentType: string): Promise<void> {
+      const { supabase, bucket } = client()
+      const { error } = await supabase.storage.from(bucket).upload(objectKey, body, {
+        contentType,
+        upsert: true,
+      })
+      if (error) throw new Error(error.message)
+    },
     async putJson(objectKey: string, data: unknown): Promise<void> {
       const { supabase, bucket } = client()
       const body = JSON.stringify(data)

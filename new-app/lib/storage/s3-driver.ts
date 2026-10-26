@@ -52,6 +52,14 @@ export function createS3StorageDriver(): ClipStorageDriver {
       if (!cfg || !input.s3UploadId) return
       await abortMultipartUpload(getInternalS3Client(cfg), cfg.bucket, input.objectKey, input.s3UploadId)
     },
+    async putBytes(objectKey: string, body: Buffer, contentType: string): Promise<void> {
+      const cfg = getS3Config()
+      if (!cfg) throw new Error('S3 not configured')
+      const { PutObjectCommand } = await import('@aws-sdk/client-s3')
+      await getInternalS3Client(cfg).send(
+        new PutObjectCommand({ Bucket: cfg.bucket, Key: objectKey, Body: body, ContentType: contentType }),
+      )
+    },
     async putJson(objectKey: string, data: unknown): Promise<void> {
       const cfg = getS3Config()
       if (!cfg) throw new Error('S3 not configured')

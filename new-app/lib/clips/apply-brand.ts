@@ -6,7 +6,10 @@ import {
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 export type BrandTemplatePayload = {
+  id?: string
   logoKey?: string | null
+  introVideoKey?: string | null
+  outroVideoKey?: string | null
   settings: BrandTemplateSettings
 }
 
@@ -16,11 +19,16 @@ export function applyBrandTemplateToEdits(
 ): ClipEditsV2 {
   const settings = brandTemplateSettingsSchema.parse(template.settings)
   const brand: ClipBrandEdits = {
+    templateId: template.id,
     logoKey: template.logoKey ?? undefined,
     logoPosition: settings.logoPosition,
     logoSizePct: settings.logoSizePct,
     logoOpacity: settings.logoOpacity,
     primaryColor: settings.primaryColor,
+    introVideoKey: template.introVideoKey ?? undefined,
+    outroVideoKey: template.outroVideoKey ?? undefined,
+    useIntro: Boolean(template.introVideoKey),
+    useOutro: Boolean(template.outroVideoKey),
   }
   const captions = {
     ...edits.captions,

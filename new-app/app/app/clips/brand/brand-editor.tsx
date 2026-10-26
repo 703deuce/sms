@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { CAPTION_PRESETS, presetSlugToId } from '@/lib/clips/caption-presets'
 import { clipsFetch } from '@/lib/clips-api'
+import { BrandTemplatesManager } from '@/components/clips/brand-templates-manager'
 import type { BrandTemplateSettings } from '@/lib/clips/brand'
 
 export function BrandEditor() {
@@ -198,6 +199,7 @@ export function BrandEditor() {
           />
         )}
       </div>
+      <BrandTemplatesManager />
     </div>
   )
 }

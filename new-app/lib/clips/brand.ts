@@ -28,6 +28,10 @@ export type ClipBrandEdits = {
   logoSizePct?: number
   logoOpacity?: number
   primaryColor?: string
+  introVideoKey?: string
+  outroVideoKey?: string
+  useIntro?: boolean
+  useOutro?: boolean
 }
 
 export function defaultBrandSettings(): BrandTemplateSettings {
