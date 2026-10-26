@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
+import { StatusBadge } from '@/components/app/status'
 import { Button } from '@/components/ui/button'
 import type { ExportRenderRow } from '@/lib/clips-api'
 import { Download } from 'lucide-react'
@@ -137,7 +138,13 @@ export function ExportsList({
                 <td className="px-3 py-2 text-xs text-muted-foreground">
                   <ClientTime iso={r.expiresAt} />
                 </td>
-                <td className="px-3 py-2">{r.status}</td>
+                <td className="px-3 py-2">
+                  <StatusBadge
+                    tone={r.status === 'READY' ? 'success' : r.status === 'FAILED' ? 'danger' : 'info'}
+                  >
+                    {r.status}
+                  </StatusBadge>
+                </td>
                 <td className="px-3 py-2 tabular-nums">{formatSize(r.sizeBytes)}</td>
                 <td className="px-3 py-2">
                   {r.downloadUrl ? (

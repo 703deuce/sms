@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
@@ -117,9 +118,21 @@ export function ExportDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-xl border border-border bg-background p-4 shadow-lg">
-        <h2 className="text-lg font-semibold">Export</h2>
-        <p className="mt-1 text-sm text-muted-foreground">720p · captions burned in</p>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-dialog-title"
+        className="w-full max-w-md rounded-xl border border-border bg-background p-4 shadow-lg focus:outline-none"
+      >
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg tile-primary">
+            <Download className="size-5" aria-hidden />
+          </span>
+          <div>
+            <h2 id="export-dialog-title" className="text-lg font-semibold">Export clip</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">720p · captions burned in</p>
+          </div>
+        </div>
         <div className="mt-3">
           <p className="text-xs font-medium">Aspect ratio</p>
           <div className="mt-1 flex gap-2">
