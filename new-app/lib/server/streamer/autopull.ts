@@ -1,0 +1,80 @@
+import { defaultClipSettings, clipProjectSettingsSchema } from '@/lib/clips/settings'
+import { defaultStreamerSettings, streamerSettingsSchema } from '@/lib/streamer/settings'
+import { projectWordsKey } from '@/lib/storage'
+import { createId } from '@/lib/supabase/id'
+import { getPrisma } from '@/lib/server/db'
+import { getTwitchVodDelaySec } from '@/lib/server/streamer/twitch'
+import { getKickVodDelaySec } from '@/lib/server/streamer/kick'
+
+export async function enqueueStreamAutopull(
+  channelId: string,
+  streamedAt: Date,
+  opts?: { title?: string; platform?: string },
+) {
+  const prisma = getPrisma()
+  const channel = await prisma.streamChannel.findUnique({
+    where: { id: channelId },
+    include: { workspace: true },
+  })
+  if (!channel || channel.deletedAt) throw new Error('Channel not found')
+  const workspaceId = channel.workspaceId
+  const streamer = streamerSettingsSchema.parse({
+    ...defaultStreamerSettings(),
+    ...(typeof channel.settings === 'object' && channel.settings ? channel.settings : {}),
+  })
+  const baseSettings = clipProjectSettingsSchema.parse(defaultClipSettings())
+  const merged = clipProjectSettingsSchema.parse({
+    ...baseSettings,
+    aspectRatio: '9:16',
+    genre: 'gaming',
+    streamer,
+  })
+  const projectId = createId('proj')
+  const vodId = createId('svod')
+  const title = opts?.title || `Stream ${streamedAt.toISOString().slice(0, 10)}`
+  const delaySec = channel.platform === 'kick' ? getKickVodDelaySec() : getTwitchVodDelaySec()
+  const runAfter = new Date(Date.now() + delaySec * 1000)
+
+  await prisma.$transaction(async (tx) => {
+    await tx.clipProject.create({
+      data: {
+        id: projectId,
+        workspaceId,
+        title,
+        settings: JSON.parse(JSON.stringify(merged)),
+        status: 'QUEUED',
+        stage: 'queued',
+        progress: 0,
+        transcriptKey: projectWordsKey(workspaceId, projectId),
+      },
+    })
+    await tx.streamVod.create({
+      data: {
+        id: vodId,
+        workspaceId,
+        projectId,
+        channelId: channel.id,
+        platform: channel.platform,
+        sourceType: 'vod',
+        externalId: channel.externalId,
+        title,
+        triggeredBy: 'auto',
+        attestedAt: new Date(),
+        streamedAt,
+        priority: 15,
+      },
+    })
+    await tx.clipJob.create({
+      data: {
+        id: createId('job'),
+        projectId,
+        type: 'STREAM_AUTOPULL',
+        status: 'QUEUED',
+        priority: 15,
+        payload: { vodId, attempt: 1 },
+        runAfter,
+      },
+    })
+  })
+  return { projectId, vodId }
+}

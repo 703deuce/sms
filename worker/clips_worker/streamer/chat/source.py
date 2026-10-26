@@ -12,7 +12,7 @@ def _replay_disabled() -> bool:
     return not (os.environ.get("TWITCH_GQL_CLIENT_ID") and os.environ.get("TWITCH_GQL_COMMENTS_HASH"))
 
 
-def get_chat(vod: dict) -> tuple[list[dict] | None, str]:
+def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
     """
     Returns (messages, chatSource).
     chatSource: twitch_replay | none | captured (future S13)
@@ -20,6 +20,16 @@ def get_chat(vod: dict) -> tuple[list[dict] | None, str]:
     state = vod.get("state") or {}
     if isinstance(state, str):
         state = json.loads(state)
+    channel_id = vod.get("channelId")
+    start_ms = int(vod.get("rangeStartMs") or 0)
+    end_ms = int(vod.get("durationMs") or vod.get("rangeEndMs") or 0) + start_ms
+    if conn and channel_id and end_ms > start_ms:
+        from clips_worker.streamer.chat.live import fetch_live_chat_messages
+
+        live = fetch_live_chat_messages(conn, str(channel_id), start_ms, end_ms)
+        if live:
+            return live, "twitch_eventsub"
+
     chat_key = state.get("chatKey")
     if chat_key:
         from clips_worker.storage import download_object
