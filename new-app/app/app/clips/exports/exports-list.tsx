@@ -22,11 +22,17 @@ export function ExportsList() {
 
   useEffect(() => {
     setLoading(true)
+    setRows([])
     void listRenders(filter)
       .then((d) => setRows(d.exports))
       .catch(() => setRows([]))
       .finally(() => setLoading(false))
   }, [filter])
+
+  const formatWhen = (iso: string | null) => {
+    if (!iso) return '—'
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
+  }
 
   if (!loading && !rows.length) {
     return (
@@ -84,10 +90,8 @@ export function ExportsList() {
                 </td>
                 <td className="px-3 py-2 tabular-nums">{r.resolution}</td>
                 <td className="px-3 py-2">{r.watermark ? 'Yes' : 'No'}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : '—'}
-                </td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{formatWhen(r.createdAt)}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{formatWhen(r.expiresAt)}</td>
                 <td className="px-3 py-2">{r.status}</td>
                 <td className="px-3 py-2 tabular-nums">{formatSize(r.sizeBytes)}</td>
                 <td className="px-3 py-2">

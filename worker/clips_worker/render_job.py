@@ -19,7 +19,7 @@ def load_render_context(conn, render_id: str) -> dict:
             SELECT r.id AS render_id, r."clipId", r."workspaceId",
                    r.status, r."outputKey", r."editsVersionHash",
                    c."startMs", c."endMs", c."previewKey", c.edits, c."projectId",
-                   p.settings, u.key AS source_key
+                   p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key
             FROM clip_renders r
             JOIN clips c ON c.id = r."clipId"
             JOIN clip_projects p ON p.id = c."projectId"
@@ -70,6 +70,33 @@ def upload_text(object_key: str, body: str, content_type: str = "text/plain") ->
         tmp.unlink(missing_ok=True)
 
 
+def load_source_words(ctx: dict, work_dir: Path) -> list[dict]:
+    words: list[dict] = []
+    if ctx.get("transcriptKey"):
+        try:
+            p = work_dir / "transcript.json"
+            download_object(ctx["transcriptKey"], p)
+            words = json.loads(p.read_text())
+        except Exception:
+            words = []
+    if not words and ctx.get("transcriptWords"):
+        tw = ctx["transcriptWords"]
+        if isinstance(tw, str):
+            tw = json.loads(tw)
+        words = list(tw) if isinstance(tw, list) else []
+    if not words:
+        clip_id = ctx["clipId"]
+        workspace_id = ctx["workspaceId"]
+        project_id = ctx["projectId"]
+        words_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/words.json"
+        p = work_dir / "clip_words.json"
+        download_object(words_key, p)
+        clip_words = json.loads(p.read_text())
+        start = int(ctx["startMs"])
+        words = [{**w, "s": w["s"] + start / 1000.0, "e": w["e"] + start / 1000.0} for w in clip_words]
+    return [{**w, "idx": i} for i, w in enumerate(words)]
+
+
 def run_render_clip_job(conn, job: dict, post_progress) -> None:
     payload = job.get("payload") or {}
     if isinstance(payload, str):
@@ -82,19 +109,18 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
     mark_render(conn, render_id, "RENDERING")
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 10})
 
-    duration_ms = int(ctx["endMs"]) - int(ctx["startMs"])
-    edits = normalize_edits(ctx["edits"], duration_ms)
+    clip_start = int(ctx["startMs"])
+    clip_end = int(ctx["endMs"])
+    edits = normalize_edits(ctx["edits"], clip_start, clip_end)
     settings = ctx["settings"] or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
 
     preview_key = ctx["previewKey"]
-    if is_default_edits(edits, duration_ms) and preview_key:
-        from clips_worker.storage import download_object as dl
-
+    if is_default_edits(edits, clip_start, clip_end) and preview_key:
         tmp = Path(tempfile.mkdtemp()) / "probe.mp4"
         try:
-            dl(preview_key, tmp)
+            download_object(preview_key, tmp)
             size = tmp.stat().st_size
         finally:
             tmp.unlink(missing_ok=True)
@@ -115,14 +141,20 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         src = td_path / "source.mp4"
         download_object(source_key, src)
         clip_file = td_path / "clip.mp4"
-        ffmpeg_cut(src, clip_file, int(ctx["startMs"]), int(ctx["endMs"]))
-        words_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/words.json"
-        words_path = td_path / "words.json"
-        download_object(words_key, words_path)
-        words = json.loads(words_path.read_text())
+        ffmpeg_cut(src, clip_file, clip_start, clip_end)
+        source_words = load_source_words(ctx, td_path)
 
         out_mp4 = td_path / "render.mp4"
-        _, _edited_words, srt_body = render_edited_clip(clip_file, out_mp4, words, edits, settings, td_path)
+        _, _edited_words, srt_body = render_edited_clip(
+            clip_file,
+            out_mp4,
+            source_words,
+            edits,
+            clip_start,
+            clip_end,
+            settings,
+            td_path,
+        )
 
         out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.mp4"
         srt_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.srt"

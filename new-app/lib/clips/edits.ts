@@ -27,21 +27,48 @@ export type ClipEditsV2 = {
   brand?: unknown
 }
 
-export function defaultEdits(clipDurationMs: number): ClipEditsV2 {
+export type ClipBounds = { clipStartMs: number; clipEndMs: number }
+
+export function defaultEdits(bounds: ClipBounds): ClipEditsV2 {
   return {
     v: 2,
-    trim: { in: 0, out: clipDurationMs },
+    trim: { in: bounds.clipStartMs, out: bounds.clipEndMs },
     cutRanges: [],
     wordFixes: {},
-    captions: { enabled: true, presetId: 'bold_pop', animation: 'pop', size: 1, position: 'bottom', case: 'sentence', wordsPerLine: 2 },
+    captions: {
+      enabled: true,
+      presetId: 'bold_pop',
+      animation: 'pop',
+      size: 1,
+      position: 'bottom',
+      case: 'sentence',
+      wordsPerLine: 2,
+    },
     layout: { mode: 'speaker_follow', shotOverrides: [] },
   }
 }
 
-export function normalizeEdits(raw: unknown, clipDurationMs: number): ClipEditsV2 {
-  const base = defaultEdits(clipDurationMs)
+/** Migrate legacy clip-relative trim/cuts to absolute source ms. */
+function migrateLegacyEdits(raw: Record<string, unknown>, bounds: ClipBounds): Record<string, unknown> {
+  const clipLen = bounds.clipEndMs - bounds.clipStartMs
+  const trim = (raw.trim as { in?: number; out?: number }) || {}
+  const tin = Number(trim.in ?? 0)
+  const tout = Number(trim.out ?? clipLen)
+  const looksRelative = tout <= clipLen + 500 && tin < bounds.clipEndMs - bounds.clipStartMs
+  if (!looksRelative) return raw
+  const cutRanges = (raw.cutRanges as CutRange[]) || []
+  return {
+    ...raw,
+    trim: { in: bounds.clipStartMs + tin, out: bounds.clipStartMs + tout },
+    cutRanges: cutRanges.map(([a, b]) => [bounds.clipStartMs + a, bounds.clipStartMs + b] as CutRange),
+  }
+}
+
+export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
+  const base = defaultEdits(bounds)
   if (!raw || typeof raw !== 'object') return base
-  const o = raw as Record<string, unknown>
+  const migrated = migrateLegacyEdits(raw as Record<string, unknown>, bounds)
+  const o = migrated
   const trim = (o.trim as { in?: number; out?: number }) || {}
   return {
     ...base,
@@ -49,7 +76,7 @@ export function normalizeEdits(raw: unknown, clipDurationMs: number): ClipEditsV
     v: 2,
     trim: {
       in: Math.max(0, Number(trim.in ?? base.trim.in)),
-      out: Math.min(clipDurationMs, Number(trim.out ?? base.trim.out)),
+      out: Math.min(Number.MAX_SAFE_INTEGER, Number(trim.out ?? base.trim.out)),
     },
     cutRanges: Array.isArray(o.cutRanges) ? (o.cutRanges as CutRange[]) : [],
     wordFixes: (o.wordFixes as Record<string, string>) || {},
@@ -83,8 +110,8 @@ export function editsVersionHash(edits: ClipEditsV2): string {
   return createHash('sha256').update(canonicalEditsJson(edits)).digest('hex')
 }
 
-export function isDefaultEdits(edits: ClipEditsV2, clipDurationMs: number): boolean {
-  const d = defaultEdits(clipDurationMs)
+export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean {
+  const d = defaultEdits(bounds)
   return (
     edits.trim.in === d.trim.in &&
     edits.trim.out === d.trim.out &&
@@ -108,19 +135,63 @@ export function keepSegments(trimIn: number, trimOut: number, cutRanges: CutRang
   return segs.filter(([a, b]) => b - a >= 80)
 }
 
-export function remapTime(t: number, segs: [number, number][]): number | null {
+export function remapTime(tMs: number, segs: [number, number][]): number | null {
   let acc = 0
   for (const [a, b] of segs) {
-    if (a <= t && t < b) return acc + (t - a)
+    if (a <= tMs && tMs < b) return acc + (tMs - a)
     acc += b - a
   }
   return null
 }
 
-export type ClipWord = { w: string; s: number; e: number; p?: number; spk?: number }
+export function outputDurationMs(edits: ClipEditsV2): number {
+  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  return segs.reduce((sum, [a, b]) => sum + (b - a), 0)
+}
 
-export function applyWordFixes(words: ClipWord[], fixes: Record<string, string>): ClipWord[] {
-  return words.map((w, i) => (fixes[String(i)] !== undefined ? { ...w, w: fixes[String(i)] } : w))
+export type ClipWord = { w: string; s: number; e: number; p?: number; spk?: number; idx?: number }
+
+export function applyWordFixesByIndex<T extends ClipWord>(words: T[], fixes: Record<string, string>): T[] {
+  return words.map((w) => {
+    const key = String(w.idx ?? '')
+    if (w.idx !== undefined && fixes[key] !== undefined) return { ...w, w: fixes[key] }
+    return w
+  })
+}
+
+export function wordDisplayText(w: ClipWord, fixes: Record<string, string>): string {
+  if (w.idx !== undefined && fixes[String(w.idx)] !== undefined) return fixes[String(w.idx)]
+  return w.w
+}
+
+export function isWordCut(w: ClipWord, cutRanges: CutRange[]): boolean {
+  const mid = ((w.s + w.e) / 2) * 1000
+  return cutRanges.some(([s, e]) => mid >= s && mid < e)
+}
+
+export function subtractRangeFromCuts(cutRanges: CutRange[], restore: CutRange): CutRange[] {
+  const [rs, re] = restore
+  const out: CutRange[] = []
+  for (const [s, e] of cutRanges) {
+    if (re <= s || rs >= e) {
+      out.push([s, e])
+      continue
+    }
+    if (rs > s) out.push([s, rs])
+    if (re < e) out.push([re, e])
+  }
+  return out.filter(([a, b]) => b - a >= 40)
+}
+
+export function mergeCutRanges(cutRanges: CutRange[]): CutRange[] {
+  const sorted = [...cutRanges].sort((a, b) => a[0] - b[0])
+  const out: CutRange[] = []
+  for (const [s, e] of sorted) {
+    const prev = out[out.length - 1]
+    if (prev && s <= prev[1]) prev[1] = Math.max(prev[1], e)
+    else out.push([s, e])
+  }
+  return out
 }
 
 export function wordsAfterEdits(
@@ -128,24 +199,34 @@ export function wordsAfterEdits(
   edits: ClipEditsV2,
 ): { words: ClipWord[]; segs: [number, number][] } {
   const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
-  const msWords = words.map((w) => ({ ...w, s: w.s * 1000, e: w.e * 1000 }))
   const out: ClipWord[] = []
-  for (const w of msWords) {
-    const mid = (w.s + w.e) / 2
-    const mapped = remapTime(mid, segs)
-    if (mapped === null) continue
+  for (const w of words) {
+    const sMs = w.s * 1000
+    const eMs = w.e * 1000
+    const mid = (sMs + eMs) / 2
     const seg = segs.find(([a, b]) => a <= mid && mid < b)
     if (!seg) continue
-    const [a] = seg
+    const [a, b] = seg
+    const clampStart = Math.max(sMs, a)
+    const clampEnd = Math.min(eMs, b)
+    if (clampEnd - clampStart < 20) continue
+    const outS = remapTime(clampStart, segs)
+    const outE = remapTime(clampEnd, segs)
+    if (outS === null || outE === null || outE <= outS) continue
+    const text =
+      w.idx !== undefined && edits.wordFixes[String(w.idx)] !== undefined
+        ? edits.wordFixes[String(w.idx)]
+        : w.w
     out.push({
-      w: w.w,
-      s: (mapped - (mid - w.s - a)) / 1000,
-      e: (mapped + (w.e - mid)) / 1000,
+      w: text,
+      s: outS / 1000,
+      e: outE / 1000,
       p: w.p,
       spk: w.spk,
+      idx: w.idx,
     })
   }
-  return { words: applyWordFixes(out, edits.wordFixes), segs }
+  return { words: out, segs }
 }
 
 export function formatSrtTime(sec: number): string {
@@ -161,6 +242,7 @@ export function buildSrt(words: ClipWord[]): string {
   let i = 1
   for (const w of words) {
     if (!w.w.trim()) continue
+    if (w.e <= w.s) continue
     lines.push(String(i++))
     lines.push(`${formatSrtTime(w.s)} --> ${formatSrtTime(w.e)}`)
     lines.push(w.w)
@@ -170,3 +252,9 @@ export function buildSrt(words: ClipWord[]): string {
 }
 
 export const FILLER_RE = /^(um+|uh+|erm|ah+)$/i
+
+/** Clip-relative ms segments for ffmpeg on a clip-cut file. */
+export function clipRelativeSegments(edits: ClipEditsV2, clipStartMs: number): [number, number][] {
+  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  return segs.map(([a, b]) => [a - clipStartMs, b - clipStartMs])
+}

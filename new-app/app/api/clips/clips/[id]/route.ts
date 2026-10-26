@@ -31,13 +31,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const clip = await getClipForWorkspace(workspaceId, id)
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const body = patchSchema.parse(await request.json())
-    const durationMs = clip.endMs - clip.startMs
+    const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const data: Record<string, unknown> = {}
     if (body.title !== undefined) data.title = body.title
     if (body.favorite !== undefined) data.favorite = body.favorite
     if (body.edits !== undefined) {
       const { normalizeEdits } = await import('@/lib/clips/edits')
-      data.edits = mergeEditsPatch(normalizeEdits(clip.edits, durationMs), body.edits, durationMs)
+      data.edits = mergeEditsPatch(normalizeEdits(clip.edits, bounds), body.edits, bounds)
     }
     const prisma = getPrisma()
     const updated = await prisma.clip.update({ where: { id }, data })

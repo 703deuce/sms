@@ -26,15 +26,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const raw = await request.text()
     const body = bodySchema.parse(raw ? JSON.parse(raw) : {})
-    const durationMs = clip.endMs - clip.startMs
-    const edits = normalizeEdits(clip.edits, durationMs)
+    const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
+    const edits = normalizeEdits(clip.edits, bounds)
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
     const resolution = '720p'
     const filename = exportFilename(clip.title)
     const storage = getClipStorage()
     const prisma = getPrisma()
 
-    if (isDefaultEdits(edits, durationMs)) {
+    if (isDefaultEdits(edits, bounds)) {
       const renderId = createId('rnd')
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       const sizeBytes = await storage.getObjectSizeBytes(clip.previewKey)
@@ -75,7 +75,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       resolution,
       watermark,
       edits,
-      clipDurationMs: durationMs,
+      clipStartMs: clip.startMs,
+      clipEndMs: clip.endMs,
       previewKey: clip.previewKey,
       title: clip.title,
     })

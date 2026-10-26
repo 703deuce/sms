@@ -1,41 +1,60 @@
 'use client'
 
-import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { keepSegments, outputDurationMs } from '@/lib/clips/edits'
+import type { SourceWord } from '@/lib/clips/source-words'
+import { wordSourceMs } from '@/lib/clips/source-words'
+import { shotIndexAt } from '@/lib/clips/crop-shots'
+import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 export function Timeline({
-  durationMs,
   edits,
   words,
-  currentMs,
-  onSeek,
+  shots,
+  outputMs,
+  onSeekOutput,
   onTrimChange,
 }: {
-  durationMs: number
   edits: ClipEditsV2
-  words: ClipWord[]
-  currentMs: number
-  onSeek: (ms: number) => void
+  words: SourceWord[]
+  shots: CropShot[]
+  outputMs: number
+  onSeekOutput: (outputMs: number) => void
   onTrimChange: (trim: { in: number; out: number }) => void
 }) {
-  const maxMs = durationMs + 5000
-  const width = Math.max(durationMs, maxMs)
+  const span = Math.max(1, edits.trim.out - edits.trim.in)
+  const outDur = outputDurationMs(edits)
+  const widthPx = Math.max(640, Math.round(span / 20))
+
+  const outputToSource = (outMs: number) => {
+    const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+    let acc = 0
+    for (const [a, b] of segs) {
+      const len = b - a
+      if (acc + len >= outMs) return a + (outMs - acc)
+      acc += len
+    }
+    return edits.trim.out
+  }
 
   return (
-    <div className="w-full overflow-x-auto rounded-lg border border-border bg-muted/30 p-3">
-      <div className="relative h-24 min-w-[640px]" style={{ width: `${Math.max(640, width / 10)}px` }}>
+    <div className="min-w-0 overflow-x-auto">
+      <div className="relative h-24" style={{ width: widthPx }}>
         <div className="absolute inset-x-0 top-8 h-8 rounded bg-muted">
-          {words.map((w, i) => {
-            const left = (w.s * 1000 / width) * 100
-            const wPct = ((w.e - w.s) * 1000 / width) * 100
-            const spk = w.spk ?? 0
-            const bg = spk % 2 === 0 ? 'bg-sky-500/70' : 'bg-violet-500/70'
+          {words.map((w) => {
+            const { startMs, endMs } = wordSourceMs(w)
+            if (endMs < edits.trim.in || startMs > edits.trim.out) return null
+            const left = ((startMs - edits.trim.in) / span) * 100
+            const wPct = ((endMs - startMs) / span) * 100
+            const shotI = shotIndexAt(shots, (startMs + endMs) / 2)
+            const bg = shotI % 2 === 0 ? 'bg-sky-500/70' : 'bg-violet-500/70'
             return (
               <button
-                key={`${w.s}-${i}`}
+                key={w.idx}
                 type="button"
                 className={`absolute top-1 h-6 truncate rounded px-0.5 text-[9px] text-white ${bg}`}
-                style={{ left: `${left}%`, width: `${Math.max(wPct, 0.5)}%` }}
-                onClick={() => onSeek(w.s * 1000)}
+                style={{ left: `${left}%`, width: `${Math.max(wPct, 0.4)}%` }}
+                onClick={() => onSeekOutput(remapSourceToOutput(startMs, edits))}
                 title={w.w}
               >
                 {w.w}
@@ -45,18 +64,20 @@ export function Timeline({
         </div>
         <div
           className="absolute top-0 bottom-0 w-0.5 bg-red-500"
-          style={{ left: `${(currentMs / width) * 100}%` }}
+          style={{ left: `${(outputMs / Math.max(outDur, 1)) * 100}%` }}
         />
         <TrimHandle
           label="In"
           ms={edits.trim.in}
-          width={width}
+          span={span}
+          trimIn={edits.trim.in}
           onChange={(inMs) => onTrimChange({ in: inMs, out: edits.trim.out })}
         />
         <TrimHandle
           label="Out"
           ms={edits.trim.out}
-          width={width}
+          span={span}
+          trimIn={edits.trim.in}
           onChange={(outMs) => onTrimChange({ in: edits.trim.in, out: outMs })}
         />
       </div>
@@ -64,28 +85,42 @@ export function Timeline({
   )
 }
 
+function remapSourceToOutput(sourceMs: number, edits: ClipEditsV2) {
+  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  let acc = 0
+  for (const [a, b] of segs) {
+    if (sourceMs >= a && sourceMs < b) return acc + (sourceMs - a)
+    acc += b - a
+  }
+  return acc
+}
+
 function TrimHandle({
   label,
   ms,
-  width,
+  span,
+  trimIn,
   onChange,
 }: {
   label: string
   ms: number
-  width: number
+  span: number
+  trimIn: number
   onChange: (ms: number) => void
 }) {
   return (
     <button
       type="button"
       className="absolute top-16 -translate-x-1/2 rounded border border-border bg-background px-1 text-[10px] shadow"
-      style={{ left: `${(ms / width) * 100}%` }}
+      style={{ left: `${((ms - trimIn) / span) * 100}%` }}
       onMouseDown={(e) => {
         e.preventDefault()
         const startX = e.clientX
         const startMs = ms
         const onMove = (ev: MouseEvent) => {
-          const delta = ((ev.clientX - startX) / 640) * width
+          const parent = (e.target as HTMLElement).parentElement
+          const w = parent?.clientWidth ?? 640
+          const delta = ((ev.clientX - startX) / w) * span
           onChange(Math.round(startMs + delta))
         }
         const onUp = () => {

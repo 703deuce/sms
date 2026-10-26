@@ -1,124 +1,144 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
-import { wordsAfterEdits } from '@/lib/clips/edits'
+import { useEffect, useRef, useState } from 'react'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { keepSegments, wordsAfterEdits } from '@/lib/clips/edits'
+import type { SourceWord } from '@/lib/clips/source-words'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
-
-function interpolateCrop(shots: CropShot[], tMs: number) {
-  const shot = shots.find((s) => tMs >= s.startMs && tMs < s.endMs) || shots[shots.length - 1]
-  if (!shot) return { x: 50, y: 45, scale: 1.15 }
-  return { x: shot.cx, y: shot.cy, scale: shot.scale ?? 1.15 }
-}
+import {
+  applyPlaybackTime,
+  cropTransformForFrame,
+  interpolateShot,
+} from '@/lib/clips/editor-playback'
 
 export function PreviewStage({
   videoUrl,
   edits,
   words,
   cropShots,
-  clipStartMs = 0,
-  onTime,
+  videoRef,
+  onTick,
 }: {
   videoUrl: string | null
   edits: ClipEditsV2
-  words: ClipWord[]
+  words: SourceWord[]
   cropShots: CropShot[]
-  clipStartMs?: number
-  onTime?: (t: number) => void
+  videoRef: React.RefObject<HTMLVideoElement | null>
+  onTick: (tick: { sourceMs: number; outputMs: number; playing: boolean }) => void
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [timeSec, setTimeSec] = useState(0)
-  const { words: displayWords } = wordsAfterEdits(words, edits)
-
-  const clipOffset = clipStartMs / 1000
-
-  const skipCuts = useCallback(
-    (t: number) => {
-      const relMs = (t - clipOffset) * 1000
-      for (const [s, e] of edits.cutRanges) {
-        if (relMs >= s && relMs < e) return clipOffset + e / 1000
-      }
-      const trimIn = edits.trim.in / 1000
-      const trimOut = edits.trim.out / 1000
-      const rel = t - clipOffset
-      if (rel < trimIn) return clipOffset + trimIn
-      if (rel > trimOut) return clipOffset + trimOut
-      return t
-    },
-    [clipOffset, edits],
-  )
+  const innerRef = useRef<HTMLVideoElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const editsRef = useRef(edits)
+  editsRef.current = edits
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
+  const [videoSize, setVideoSize] = useState({ w: 1280, h: 720 })
+  const [sourceMs, setSourceMs] = useState(edits.trim.in)
+  const [playing, setPlaying] = useState(false)
+  const [transform, setTransform] = useState({ scale: 1, translateX: 0, translateY: 0 })
+  const [captionTimeSec, setCaptionTimeSec] = useState(0)
 
   useEffect(() => {
-    const v = videoRef.current
-    if (v && clipOffset > 0) v.currentTime = clipOffset
-  }, [clipOffset, videoUrl])
+    const el = innerRef.current
+    if (!el) return
+    ;(videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
+  }, [videoRef])
 
   useEffect(() => {
-    const v = videoRef.current
-    if (!v) return
+    const el = stageRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      setContainerSize({ w: el.clientWidth, h: el.clientHeight })
+    })
+    ro.observe(el)
+    setContainerSize({ w: el.clientWidth, h: el.clientHeight })
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const v = innerRef.current
+    if (!v || !videoUrl) return
+    v.currentTime = edits.trim.in / 1000
+    setSourceMs(edits.trim.in)
+  }, [videoUrl, edits.trim.in])
+
+  useEffect(() => {
     let raf = 0
     const tick = () => {
-      if (!v.paused) {
-        const fixed = skipCuts(v.currentTime)
-        if (Math.abs(fixed - v.currentTime) > 0.02) v.currentTime = fixed
-        setTimeSec(v.currentTime)
-        onTime?.(v.currentTime)
+      const v = innerRef.current
+      const e = editsRef.current
+      let src = editsRef.current.trim.in
+      if (v) {
+        src = v.currentTime * 1000
+        if (!v.paused) {
+          const stepped = applyPlaybackTime(src, e)
+          if (Math.abs(stepped.sourceMs - src) > 5) {
+            v.currentTime = stepped.sourceMs / 1000
+            src = stepped.sourceMs
+          }
+          if (stepped.atEnd) {
+            v.pause()
+            setPlaying(false)
+          }
+        }
+        setSourceMs(src)
       }
+      const out = applyPlaybackTime(src, e).outputMs
+      setCaptionTimeSec(out / 1000)
+      onTick({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [onTime, skipCuts])
+  }, [onTick])
 
-  const tMs = timeSec * 1000 - clipStartMs
-  const { x, y, scale } = interpolateCrop(cropShots, tMs)
+  useEffect(() => {
+    const shot = interpolateShot(cropShots, sourceMs, edits.layout.shotOverrides)
+    const t = cropTransformForFrame(shot, containerSize.w, containerSize.h, videoSize.w, videoSize.h)
+    setTransform(t)
+  }, [sourceMs, cropShots, edits.layout.shotOverrides, containerSize, videoSize])
+
+  const { words: captionWords } = wordsAfterEdits(words, edits)
 
   return (
-    <div className="relative mx-auto aspect-[9/16] w-full max-w-[320px] overflow-hidden rounded-xl bg-black">
+    <div ref={stageRef} className="relative aspect-[9/16] h-full max-h-[68dvh] w-full overflow-hidden rounded-xl bg-black">
       {videoUrl ? (
         <video
-          ref={videoRef}
+          ref={innerRef}
           src={videoUrl}
-          className="absolute inset-0 size-full object-cover"
+          className="absolute left-0 top-0 h-full w-auto max-w-none origin-top-left"
           style={{
-            transform: `translate(-${x}%, -${y}%) scale(${scale})`,
-            transformOrigin: 'top left',
+            transform: `translate(${transform.translateX}px, ${transform.translateY}px) scale(${transform.scale})`,
           }}
           playsInline
-          onTimeUpdate={(e) => {
+          onLoadedMetadata={(e) => {
             const v = e.currentTarget
-            const fixed = skipCuts(v.currentTime)
-            if (Math.abs(fixed - v.currentTime) > 0.02) v.currentTime = fixed
-            setTimeSec(v.currentTime)
-            onTime?.(v.currentTime)
+            setVideoSize({ w: v.videoWidth, h: v.videoHeight })
           }}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
         />
       ) : (
         <div className="flex size-full items-center justify-center text-sm text-muted-foreground">No video</div>
       )}
       {edits.captions?.enabled !== false && (
-        <CaptionOverlay
-          words={displayWords}
-          currentTimeSec={timeSec - clipOffset}
-          presetId={edits.captions?.presetId}
-        />
+        <CaptionOverlay words={captionWords} currentTimeSec={captionTimeSec} presetId={edits.captions?.presetId} />
       )}
     </div>
   )
 }
 
-export function usePreviewControls(videoRef: React.RefObject<HTMLVideoElement | null>) {
-  return {
-    togglePlay: () => {
-      const v = videoRef.current
-      if (!v) return
-      if (v.paused) void v.play()
-      else v.pause()
-    },
-    seek: (sec: number) => {
-      const v = videoRef.current
-      if (v) v.currentTime = sec
-    },
+export function seekToOutputMs(video: HTMLVideoElement, edits: ClipEditsV2, outputMs: number) {
+  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  let acc = 0
+  let target = edits.trim.in
+  for (const [a, b] of segs) {
+    const len = b - a
+    if (acc + len >= outputMs) {
+      target = a + (outputMs - acc)
+      break
+    }
+    acc += len
   }
+  video.currentTime = target / 1000
 }

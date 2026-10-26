@@ -50,7 +50,7 @@ export function LayoutPanel({
             <li key={i} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
               <div>
                 <p className="font-medium">
-                  {(shot.startMs / 1000).toFixed(1)}s – {(shot.endMs / 1000).toFixed(1)}s
+                  {(shot.startMs / 1000).toFixed(1)}s – {(shot.endMs / 1000).toFixed(1)}s (source)
                 </p>
                 <p className="text-xs text-muted-foreground">Auto speaker {shot.speaker}</p>
               </div>

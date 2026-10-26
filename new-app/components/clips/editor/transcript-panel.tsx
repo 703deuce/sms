@@ -1,32 +1,59 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
-import { FILLER_RE } from '@/lib/clips/edits'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { FILLER_RE, isWordCut, wordDisplayText } from '@/lib/clips/edits'
+import type { SourceWord } from '@/lib/clips/source-words'
+import { wordSourceMs } from '@/lib/clips/source-words'
+import { shotIndexAt, speakerLabelForWord } from '@/lib/clips/crop-shots'
+import type { CropShot } from '@/lib/server/clips/clip-detail'
 
-function isCut(word: ClipWord, cuts: ClipEditsV2['cutRanges']) {
-  const mid = ((word.s + word.e) / 2) * 1000
-  return cuts.some(([s, e]) => mid >= s && mid < e)
+export type TranscriptSelection = {
+  startMs: number
+  endMs: number
+  clear: () => void
 }
 
 export function TranscriptPanel({
   words,
+  shots,
   edits,
   onSeek,
   onAddCut,
   onWordFix,
-  onRestoreCut,
+  onRestoreWord,
+  selectionRef,
 }: {
-  words: ClipWord[]
+  words: SourceWord[]
+  shots: CropShot[]
   edits: ClipEditsV2
-  onSeek: (ms: number) => void
+  onSeek: (sourceMs: number) => void
   onAddCut: (range: [number, number]) => void
   onWordFix: (index: number, text: string) => void
-  onRestoreCut: (range: [number, number]) => void
+  onRestoreWord: (word: SourceWord) => void
+  selectionRef: React.MutableRefObject<TranscriptSelection | null>
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    selectionRef.current = {
+      startMs: selStart ?? 0,
+      endMs: selEnd ?? 0,
+      clear: () => {
+        setSelStart(null)
+        setSelEnd(null)
+      },
+    }
+  }, [selEnd, selStart, selectionRef])
+
+  useEffect(() => {
+    if (editingIdx !== null) inputRef.current?.focus()
+  }, [editingIdx])
 
   const deleteSelection = () => {
     if (selStart === null || selEnd === null) return
@@ -38,63 +65,88 @@ export function TranscriptPanel({
   }
 
   const removeFillers = () => {
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i]
-      const fixed = edits.wordFixes[String(i)]
-      const text = fixed ?? w.w
+    for (const w of words) {
+      const text = wordDisplayText(w, edits.wordFixes)
       if (FILLER_RE.test(text.trim())) {
-        onAddCut([Math.round(w.s * 1000), Math.round(w.e * 1000)])
+        const { startMs, endMs } = wordSourceMs(w)
+        onAddCut([Math.round(startMs), Math.round(endMs)])
       }
     }
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 p-3">
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>
         <Button size="sm" variant="outline" onClick={removeFillers}>Remove filler words</Button>
       </div>
-      <div className="max-h-[360px] overflow-y-auto rounded-lg border border-border p-3 text-sm leading-relaxed">
-        {words.map((w, i) => {
-          const cut = isCut(w, edits.cutRanges)
-          const display = edits.wordFixes[String(i)] ?? w.w
-          const spk = w.spk ?? 0
+      <div className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed">
+        {words.map((w) => {
+          const { startMs, endMs, midMs } = wordSourceMs(w)
+          const cut = isWordCut(w, edits.cutRanges)
+          const display = wordDisplayText(w, edits.wordFixes)
+          const shotI = shotIndexAt(shots, midMs)
+          const spk = speakerLabelForWord(shots, midMs)
+          const selected =
+            selStart !== null &&
+            selEnd !== null &&
+            startMs >= Math.min(selStart, selEnd) &&
+            endMs <= Math.max(selStart, selEnd)
+
+          if (editingIdx === w.idx) {
+            return (
+              <span key={w.idx} className="mr-1 inline-flex items-center gap-1">
+                <input
+                  ref={inputRef}
+                  className="w-24 rounded border border-border bg-background px-1 py-0.5 text-sm"
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (editDraft.trim()) onWordFix(w.idx, editDraft.trim())
+                      setEditingIdx(null)
+                    }
+                    if (e.key === 'Escape') setEditingIdx(null)
+                  }}
+                  onBlur={() => {
+                    if (editDraft.trim()) onWordFix(w.idx, editDraft.trim())
+                    setEditingIdx(null)
+                  }}
+                />
+              </span>
+            )
+          }
+
           return (
-            <span key={`${i}-${w.s}`} className="mr-1 inline">
-              <span className="text-[10px] text-muted-foreground">S{spk + 1} </span>
+            <span key={w.idx} className="mr-1 inline">
+              <span className="text-[10px] text-muted-foreground">
+                S{shotI + 1}
+                {spk} 
+              </span>
               <button
                 type="button"
                 className={`rounded px-0.5 hover:bg-muted ${cut ? 'line-through opacity-50' : ''} ${
-                  selStart !== null && selEnd !== null &&
-                  Math.min(w.s * 1000, w.e * 1000) >= Math.min(selStart, selEnd) &&
-                  Math.max(w.s * 1000, w.e * 1000) <= Math.max(selStart, selEnd)
-                    ? 'bg-primary/20'
-                    : ''
+                  selected ? 'bg-primary/20' : ''
                 }`}
                 onClick={(e) => {
                   if (e.shiftKey && selStart !== null) {
-                    setSelEnd(Math.round(w.e * 1000))
+                    setSelEnd(Math.round(endMs))
                   } else {
-                    setSelStart(Math.round(w.s * 1000))
-                    setSelEnd(Math.round(w.e * 1000))
-                    onSeek(Math.round(w.s * 1000))
+                    setSelStart(Math.round(startMs))
+                    setSelEnd(Math.round(endMs))
+                    onSeek(Math.round(startMs))
                   }
                 }}
-                onDoubleClick={() => {
-                  const next = window.prompt('Edit word', display)
-                  if (next != null && next.trim()) onWordFix(i, next.trim())
+                onDoubleClick={(e) => {
+                  e.preventDefault()
+                  setEditingIdx(w.idx)
+                  setEditDraft(display)
                 }}
               >
                 {display}
               </button>
               {cut ? (
-                <button
-                  type="button"
-                  className="ml-0.5 text-[10px] text-primary"
-                  onClick={() =>
-                    onRestoreCut([Math.round(w.s * 1000), Math.round(w.e * 1000)])
-                  }
-                >
+                <button type="button" className="ml-0.5 text-[10px] text-primary" onClick={() => onRestoreWord(w)}>
                   Restore
                 </button>
               ) : null}

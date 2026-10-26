@@ -1,4 +1,3 @@
-import { Page } from '@/components/app/page-primitives'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -19,18 +18,15 @@ export default async function ClipEditorPage({
   const videoUrl = data.mediaUrls.proxy || data.mediaUrls.source || data.mediaUrls.preview
 
   return (
-    <Page>
-      <EditorShell
-        projectId={projectId}
-        clipId={clipId}
-        initialTitle={data.clip.title}
-        durationMs={data.clip.durationMs}
-        clipStartMs={data.clip.startMs}
-        initialEdits={data.edits}
-        words={data.words}
-        cropShots={data.crop.shots}
-        videoUrl={videoUrl}
-      />
-    </Page>
+    <EditorShell
+      projectId={projectId}
+      clipId={clipId}
+      initialTitle={data.clip.title}
+      bounds={data.bounds}
+      initialEdits={data.edits}
+      words={data.words}
+      cropShots={data.crop.shots}
+      videoUrl={videoUrl}
+    />
   )
 }

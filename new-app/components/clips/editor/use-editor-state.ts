@@ -1,9 +1,18 @@
 'use client'
 
 import { useCallback, useEffect, useReducer, useRef } from 'react'
-import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
-import { defaultEdits } from '@/lib/clips/edits'
+import {
+  canonicalEditsJson,
+  defaultEdits,
+  mergeCutRanges,
+  subtractRangeFromCuts,
+  type ClipEditsV2,
+  type CutRange,
+} from '@/lib/clips/edits'
+import type { ClipBounds } from '@/lib/clips/edits'
 import { patchClip } from '@/lib/clips-api'
+import type { SourceWord } from '@/lib/clips/source-words'
+import { wordSourceMs } from '@/lib/clips/source-words'
 
 const MAX_UNDO = 100
 
@@ -21,9 +30,14 @@ type Action =
   | { type: 'saved' }
   | { type: 'saving' }
 
+function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
+  return canonicalEditsJson(a) === canonicalEditsJson(b)
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'set': {
+      if (editsEqual(state.edits, action.edits)) return state
       const push = action.pushHistory !== false
       const past = push ? [...state.past, state.edits].slice(-MAX_UNDO) : state.past
       return { ...state, edits: action.edits, past, future: push ? [] : state.future, saveState: 'dirty' }
@@ -57,7 +71,7 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-export function useEditorState(clipId: string, durationMs: number, initialEdits: ClipEditsV2) {
+export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits: ClipEditsV2) {
   const [state, dispatch] = useReducer(reducer, {
     edits: initialEdits,
     past: [],
@@ -77,7 +91,7 @@ export function useEditorState(clipId: string, durationMs: number, initialEdits:
 
   const addCutRange = useCallback(
     (range: CutRange) => {
-      const cuts = [...state.edits.cutRanges, range].sort((a, b) => a[0] - b[0])
+      const cuts = mergeCutRanges([...state.edits.cutRanges, range])
       setEdits({ ...state.edits, cutRanges: cuts })
     },
     [setEdits, state.edits],
@@ -89,6 +103,16 @@ export function useEditorState(clipId: string, durationMs: number, initialEdits:
         ...state.edits,
         wordFixes: { ...state.edits.wordFixes, [String(index)]: text },
       })
+    },
+    [setEdits, state.edits],
+  )
+
+  const restoreWord = useCallback(
+    (word: SourceWord) => {
+      const { startMs, endMs } = wordSourceMs(word)
+      const cuts = subtractRangeFromCuts(state.edits.cutRanges, [startMs, endMs])
+      if (editsEqual(state.edits, { ...state.edits, cutRanges: cuts })) return
+      setEdits({ ...state.edits, cutRanges: cuts })
     },
     [setEdits, state.edits],
   )
@@ -117,12 +141,12 @@ export function useEditorState(clipId: string, durationMs: number, initialEdits:
       setEdits({
         ...state.edits,
         trim: {
-          in: Math.max(-pad, Math.min(trim.in, durationMs)),
-          out: Math.max(0, Math.min(trim.out, durationMs + pad)),
+          in: Math.max(bounds.clipStartMs - pad, trim.in),
+          out: Math.min(bounds.clipEndMs + pad, trim.out),
         },
       })
     },
-    [durationMs, setEdits, state.edits],
+    [bounds.clipEndMs, bounds.clipStartMs, setEdits, state.edits],
   )
 
   useEffect(() => {
@@ -149,9 +173,10 @@ export function useEditorState(clipId: string, durationMs: number, initialEdits:
     saveState: state.saveState,
     addCutRange,
     setWordFix,
+    restoreWord,
     setLayoutMode,
     setShotOverride,
     setTrim,
-    resetEdits: () => setEdits(defaultEdits(durationMs), false),
+    resetEdits: () => setEdits(defaultEdits(bounds), false),
   }
 }

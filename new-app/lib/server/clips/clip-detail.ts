@@ -1,4 +1,6 @@
-import { defaultEdits, normalizeEdits, type ClipWord } from '@/lib/clips/edits'
+import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
+import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
+import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
@@ -16,6 +18,23 @@ export type CropShot = {
   scale?: number
 }
 
+async function loadProjectTranscript(
+  storage: ReturnType<typeof getClipStorage>,
+  project: { transcriptKey: string | null; transcriptWords: unknown },
+): Promise<ClipWord[]> {
+  if (project.transcriptKey) {
+    try {
+      return await storage.getJson<ClipWord[]>(project.transcriptKey)
+    } catch {
+      /* fall through */
+    }
+  }
+  if (Array.isArray(project.transcriptWords)) {
+    return project.transcriptWords as ClipWord[]
+  }
+  return []
+}
+
 export async function getClipEditorPayload(workspaceId: string, clipId: string) {
   const clip = await getClipForWorkspace(workspaceId, clipId)
   if (!clip) return null
@@ -26,40 +45,39 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   })
   if (!project) return null
   const storage = getClipStorage()
-  const durationMs = clip.endMs - clip.startMs
-  const edits = normalizeEdits(clip.edits, durationMs)
-  let words: ClipWord[] = []
-  if (clip.wordsKey) {
+  const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
+  const edits = normalizeEdits(clip.edits, bounds)
+
+  let transcript = await loadProjectTranscript(storage, project)
+  if (!transcript.length && clip.wordsKey) {
     try {
-      words = await storage.getJson<ClipWord[]>(clip.wordsKey)
+      const clipWords = await storage.getJson<ClipWord[]>(clip.wordsKey)
+      transcript = clipWords.map((w) => ({
+        ...w,
+        s: w.s + clip.startMs / 1000,
+        e: w.e + clip.startMs / 1000,
+      }))
     } catch {
-      words = []
+      transcript = []
     }
   }
-  let crop: { shots: CropShot[] } = { shots: [] }
+
+  const words: SourceWord[] = loadSourceWords(transcript)
+
+  let cropRaw: unknown = null
   if (clip.cropKey) {
     try {
-      crop = await storage.getJson<{ shots: CropShot[] }>(clip.cropKey)
+      cropRaw = await storage.getJson(clip.cropKey)
     } catch {
-      crop = { shots: [] }
+      cropRaw = null
     }
   }
-  if (!crop.shots?.length) {
-    crop = {
-      shots: [
-        {
-          startMs: 0,
-          endMs: durationMs,
-          speaker: 'A',
-          cx: 50,
-          cy: 45,
-          w: 100,
-          h: 100,
-          scale: 1.15,
-        },
-      ],
-    }
+  let shots = shotsFromCropJson(cropRaw as { shots?: CropShot[] }, clip.startMs, clip.endMs)
+  if (shots.length <= 1) {
+    const inferred = inferShotsFromWords(words, clip.startMs, clip.endMs)
+    if (inferred.length > 1) shots = inferred
   }
+
   const proxyKey = project.proxyKey
   const sourceKey = project.upload?.key
   return {
@@ -70,11 +88,12 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       startMs: clip.startMs,
       endMs: clip.endMs,
       score: clip.score,
-      durationMs,
+      durationMs: clip.endMs - clip.startMs,
     },
+    bounds,
     edits,
     words,
-    crop,
+    crop: { shots },
     mediaUrls: {
       preview: clip.previewKey ? await storage.createSignedDownloadUrl(clip.previewKey, SIGNED_TTL) : null,
       poster: clip.posterKey ? await storage.createSignedDownloadUrl(clip.posterKey, SIGNED_TTL) : null,
@@ -85,8 +104,12 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   }
 }
 
-export function mergeEditsPatch(current: ReturnType<typeof normalizeEdits>, patch: unknown, durationMs: number) {
-  const base = normalizeEdits(current, durationMs)
+export function mergeEditsPatch(
+  current: ReturnType<typeof normalizeEdits>,
+  patch: unknown,
+  bounds: { clipStartMs: number; clipEndMs: number },
+) {
+  const base = normalizeEdits(current, bounds)
   if (!patch || typeof patch !== 'object') return base
-  return normalizeEdits({ ...base, ...(patch as object) }, durationMs)
+  return normalizeEdits({ ...base, ...(patch as object) }, bounds)
 }

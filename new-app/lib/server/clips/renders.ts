@@ -9,9 +9,11 @@ const SIGNED_TTL = 3600
 
 export async function listClipRenders(workspaceId: string, statusFilter?: 'all' | 'ready' | 'failed') {
   const prisma = getPrisma()
-  const where: Record<string, unknown> = { workspaceId }
+  const where: { workspaceId: string; status?: 'READY' | 'FAILED' | 'QUEUED' | 'RENDERING' | 'EXPIRED' } = {
+    workspaceId,
+  }
   if (statusFilter === 'ready') where.status = 'READY'
-  if (statusFilter === 'failed') where.status = 'FAILED'
+  else if (statusFilter === 'failed') where.status = 'FAILED'
   const rows = await prisma.clipRender.findMany({
     where,
     orderBy: { createdAt: 'desc' },
@@ -63,7 +65,15 @@ export async function getRenderForWorkspace(workspaceId: string, renderId: strin
 export async function enqueueRenderClip(
   workspaceId: string,
   clipId: string,
-  opts: { resolution: string; watermark: boolean; edits: ClipEditsV2; clipDurationMs: number; previewKey: string; title: string },
+  opts: {
+    resolution: string
+    watermark: boolean
+    edits: ClipEditsV2
+    clipStartMs: number
+    clipEndMs: number
+    previewKey: string
+    title: string
+  },
 ) {
   const prisma = getPrisma()
   const hash = editsVersionHash(opts.edits)

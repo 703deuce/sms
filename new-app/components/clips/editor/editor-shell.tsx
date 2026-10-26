@@ -1,28 +1,37 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
+import type { ClipBounds } from '@/lib/clips/edits'
+import type { SourceWord } from '@/lib/clips/source-words'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 import { patchClip } from '@/lib/clips-api'
+import { outputDurationFromEdits } from '@/lib/clips/editor-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
-import { PreviewStage } from '@/components/clips/editor/preview-stage'
+import { PlayerControls } from '@/components/clips/editor/player-controls'
+import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { Timeline } from '@/components/clips/editor/timeline'
-import { TranscriptPanel } from '@/components/clips/editor/transcript-panel'
+import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 function ComingSoon() {
-  return <p className="text-sm text-muted-foreground">Coming in a later update</p>
+  return <p className="p-3 text-sm text-muted-foreground">Coming in a later update</p>
+}
+
+function isEditableTarget(t: EventTarget | null) {
+  if (!t || !(t instanceof HTMLElement)) return false
+  const tag = t.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable
 }
 
 export function EditorShell({
   projectId,
   clipId,
   initialTitle,
-  durationMs,
-  clipStartMs,
+  bounds,
   initialEdits,
   words,
   cropShots,
@@ -31,20 +40,20 @@ export function EditorShell({
   projectId: string
   clipId: string
   initialTitle: string
-  durationMs: number
-  clipStartMs: number
-  initialEdits: unknown
-  words: ClipWord[]
+  bounds: ClipBounds
+  initialEdits: ClipEditsV2
+  words: SourceWord[]
   cropShots: CropShot[]
   videoUrl: string | null
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [exportOpen, setExportOpen] = useState(false)
-  const [currentMs, setCurrentMs] = useState(0)
-  const edits0 = normalizeEdits(initialEdits, durationMs)
+  const [outputMs, setOutputMs] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const selectionRef = useRef<TranscriptSelection | null>(null)
   const {
     edits,
-    setEdits,
     undo,
     redo,
     canUndo,
@@ -52,33 +61,61 @@ export function EditorShell({
     saveState,
     addCutRange,
     setWordFix,
+    restoreWord,
     setLayoutMode,
     setShotOverride,
     setTrim,
-  } = useEditorState(clipId, durationMs, edits0)
+  } = useEditorState(clipId, bounds, initialEdits)
 
-  const seek = useCallback(
+  const outDur = outputDurationFromEdits(edits)
+
+  const onTick = useCallback((tick: { sourceMs: number; outputMs: number; playing: boolean }) => {
+    setOutputMs(tick.outputMs)
+    setPlaying(tick.playing)
+  }, [])
+
+  const seekSource = useCallback((sourceMs: number) => {
+    const v = videoRef.current
+    if (v) v.currentTime = sourceMs / 1000
+  }, [])
+
+  const seekOutput = useCallback(
     (ms: number) => {
-      const v = document.querySelector('video')
-      if (v) v.currentTime = clipStartMs / 1000 + ms / 1000
-      setCurrentMs(ms)
+      const v = videoRef.current
+      if (v) seekToOutputMs(v, edits, ms)
     },
-    [clipStartMs],
+    [edits],
   )
+
+  const togglePlay = () => {
+    const v = videoRef.current
+    if (!v) return
+    if (v.paused) void v.play()
+    else v.pause()
+  }
+
+  const deleteSelection = useCallback(() => {
+    const sel = selectionRef.current
+    if (!sel || sel.startMs === sel.endMs) return
+    const a = Math.min(sel.startMs, sel.endMs)
+    const b = Math.max(sel.startMs, sel.endMs)
+    addCutRange([a, b])
+    sel.clear()
+  }, [addCutRange])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      const v = document.querySelector('video')
+      if (isEditableTarget(e.target)) return
+      const v = videoRef.current
       if (e.code === 'Space' && v) {
         e.preventDefault()
-        if (v.paused) void v.play()
-        else v.pause()
+        togglePlay()
       }
-      if (e.code === 'ArrowLeft' && v) v.currentTime = Math.max(0, v.currentTime - 1)
-      if (e.code === 'ArrowRight' && v) v.currentTime = v.currentTime + 1
-      if ((e.code === 'Backspace' || e.code === 'Delete') && currentMs) {
-        /* selection handled in transcript */
+      if (e.code === 'ArrowLeft' && v) seekToOutputMs(v, edits, Math.max(0, outputMs - 1000))
+      if (e.code === 'ArrowRight' && v) seekToOutputMs(v, edits, Math.min(outDur, outputMs + 1000))
+      if (e.code === 'Backspace' || e.code === 'Delete') {
+        e.preventDefault()
+        deleteSelection()
       }
       if (e.metaKey && e.key === 'z') {
         e.preventDefault()
@@ -88,7 +125,7 @@ export function EditorShell({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [currentMs, redo, undo])
+  }, [deleteSelection, edits, outDur, outputMs, redo, undo])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -97,46 +134,54 @@ export function EditorShell({
     return () => clearTimeout(t)
   }, [clipId, initialTitle, title])
 
-  const removeCut = (range: [number, number]) => {
-    setEdits({
-      ...edits,
-      cutRanges: edits.cutRanges.filter((c) => c[0] !== range[0] || c[1] !== range[1]),
-    })
-  }
-
   return (
-    <div className="flex flex-col gap-4">
-      <EditorTopBar
-        backHref={`/app/clips/${projectId}`}
-        title={title}
-        onTitleChange={setTitle}
-        saveState={saveState}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onUndo={undo}
-        onRedo={redo}
-        onExport={() => setExportOpen(true)}
-      />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_1fr]">
-        <PreviewStage
-          videoUrl={videoUrl}
-          edits={edits}
-          words={words}
-          cropShots={cropShots}
-          clipStartMs={clipStartMs}
-          onTime={(t) => setCurrentMs((t - clipStartMs / 1000) * 1000)}
+    <div className="flex h-[calc(100dvh-4rem)] flex-col">
+      <div className="shrink-0 border-b border-border px-4 py-2">
+        <EditorTopBar
+          backHref={`/app/clips/${projectId}`}
+          title={title}
+          onTitleChange={setTitle}
+          saveState={saveState}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={undo}
+          onRedo={redo}
+          onExport={() => setExportOpen(true)}
         />
-        <div className="flex flex-col gap-3">
-          <Timeline
-            durationMs={durationMs}
-            edits={edits}
-            words={words}
-            currentMs={currentMs}
-            onSeek={seek}
-            onTrimChange={setTrim}
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="flex min-h-0 min-w-0 flex-col gap-3">
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <PreviewStage
+              videoUrl={videoUrl}
+              edits={edits}
+              words={words}
+              cropShots={cropShots}
+              videoRef={videoRef}
+              onTick={onTick}
+            />
+          </div>
+          <PlayerControls
+            playing={playing}
+            outputMs={outputMs}
+            outputDurationMs={outDur}
+            onToggle={togglePlay}
+            onScrub={seekOutput}
           />
+          <div className="min-w-0 overflow-x-auto">
+            <Timeline
+              edits={edits}
+              words={words}
+              shots={cropShots}
+              outputMs={outputMs}
+              onSeekOutput={seekOutput}
+              onTrimChange={setTrim}
+            />
+          </div>
+        </div>
+        <aside className="min-h-0 overflow-y-auto rounded-xl border border-border">
           <Tabs defaultValue="transcript">
-            <TabsList>
+            <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent px-2">
               <TabsTrigger value="transcript">Transcript</TabsTrigger>
               <TabsTrigger value="layout">Layout</TabsTrigger>
               <TabsTrigger value="captions">Captions</TabsTrigger>
@@ -146,23 +191,25 @@ export function EditorShell({
               <TabsTrigger value="dub">Dub</TabsTrigger>
               <TabsTrigger value="brand">Brand</TabsTrigger>
             </TabsList>
-            <TabsContent value="transcript">
+            <TabsContent value="transcript" className="mt-0">
               <TranscriptPanel
                 words={words}
+                shots={cropShots}
                 edits={edits}
-                onSeek={seek}
+                onSeek={seekSource}
                 onAddCut={addCutRange}
                 onWordFix={setWordFix}
-                onRestoreCut={removeCut}
+                onRestoreWord={restoreWord}
+                selectionRef={selectionRef}
               />
             </TabsContent>
-            <TabsContent value="layout">
+            <TabsContent value="layout" className="mt-0 p-3">
               <LayoutPanel
                 edits={edits}
                 shots={cropShots}
                 onMode={setLayoutMode}
                 onShotFocus={setShotOverride}
-                onRerunReframe={() => toastStub()}
+                onRerunReframe={() => {}}
               />
             </TabsContent>
             <TabsContent value="captions"><ComingSoon /></TabsContent>
@@ -172,13 +219,9 @@ export function EditorShell({
             <TabsContent value="dub"><ComingSoon /></TabsContent>
             <TabsContent value="brand"><ComingSoon /></TabsContent>
           </Tabs>
-        </div>
+        </aside>
       </div>
       <ExportDialog clipId={clipId} title={title} open={exportOpen} onClose={() => setExportOpen(false)} />
     </div>
   )
-}
-
-function toastStub() {
-  /* reframe queue — future milestone */
 }

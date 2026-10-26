@@ -1,4 +1,4 @@
-"""Apply clip edits (trim, cuts) then speakercrop + captions for RENDER_CLIP jobs."""
+"""Apply clip edits on source timeline (ms), then reframe, cut, and caption."""
 from __future__ import annotations
 
 import hashlib
@@ -6,9 +6,10 @@ import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-from clips_worker.render_clip import layout_env, poster_jpg, run_speakercrop, slice_words
+from clips_worker.render_clip import run_speakercrop
 
 V3 = Path(__import__("os").environ.get("SPEAKERCROP_DIR", "/app/v3"))
 
@@ -26,10 +27,10 @@ def edits_version_hash(edits: dict) -> str:
     return hashlib.sha256(body.encode()).hexdigest()
 
 
-def default_edits(duration_ms: int) -> dict:
+def default_edits(clip_start_ms: int, clip_end_ms: int) -> dict:
     return {
         "v": 2,
-        "trim": {"in": 0, "out": duration_ms},
+        "trim": {"in": clip_start_ms, "out": clip_end_ms},
         "cutRanges": [],
         "wordFixes": {},
         "captions": {"enabled": True, "presetId": "bold_pop"},
@@ -37,28 +38,47 @@ def default_edits(duration_ms: int) -> dict:
     }
 
 
-def normalize_edits(raw, duration_ms: int) -> dict:
-    base = default_edits(duration_ms)
+def migrate_edits(raw: dict, clip_start_ms: int, clip_end_ms: int) -> dict:
+    clip_len = clip_end_ms - clip_start_ms
+    trim = raw.get("trim") or {}
+    tin = int(trim.get("in", 0))
+    tout = int(trim.get("out", clip_len))
+    if tout <= clip_len + 500 and tin < clip_len:
+        cuts = raw.get("cutRanges") or []
+        return {
+            **raw,
+            "trim": {"in": clip_start_ms + tin, "out": clip_start_ms + tout},
+            "cutRanges": [[clip_start_ms + c[0], clip_start_ms + c[1]] for c in cuts],
+        }
+    return raw
+
+
+def normalize_edits(raw, clip_start_ms: int, clip_end_ms: int) -> dict:
+    base = default_edits(clip_start_ms, clip_end_ms)
     if not raw or not isinstance(raw, dict):
         return base
+    raw = migrate_edits(raw, clip_start_ms, clip_end_ms)
     trim = raw.get("trim") or {}
-    out = {**base, **raw, "v": 2}
-    out["trim"] = {
-        "in": max(0, int(trim.get("in", base["trim"]["in"]))),
-        "out": min(duration_ms, int(trim.get("out", base["trim"]["out"]))),
-    }
-    out["cutRanges"] = list(raw.get("cutRanges") or [])
-    out["wordFixes"] = dict(raw.get("wordFixes") or {})
     layout = raw.get("layout") or {}
-    out["layout"] = {
-        "mode": layout.get("mode") or base["layout"]["mode"],
-        "shotOverrides": list(layout.get("shotOverrides") or []),
+    return {
+        **base,
+        **raw,
+        "v": 2,
+        "trim": {
+            "in": max(0, int(trim.get("in", base["trim"]["in"]))),
+            "out": int(trim.get("out", base["trim"]["out"])),
+        },
+        "cutRanges": list(raw.get("cutRanges") or []),
+        "wordFixes": dict(raw.get("wordFixes") or {}),
+        "layout": {
+            "mode": layout.get("mode") or base["layout"]["mode"],
+            "shotOverrides": list(layout.get("shotOverrides") or []),
+        },
     }
-    return out
 
 
-def is_default_edits(edits: dict, duration_ms: int) -> bool:
-    d = default_edits(duration_ms)
+def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
+    d = default_edits(clip_start_ms, clip_end_ms)
     return (
         edits["trim"]["in"] == d["trim"]["in"]
         and edits["trim"]["out"] == d["trim"]["out"]
@@ -68,12 +88,11 @@ def is_default_edits(edits: dict, duration_ms: int) -> bool:
     )
 
 
-def keep_segments(trim_in: float, trim_out: float, cut_ranges: list) -> list[tuple[float, float]]:
-    """Times in seconds."""
-    segs: list[tuple[float, float]] = []
+def keep_segments(trim_in: int, trim_out: int, cut_ranges: list) -> list[tuple[int, int]]:
+    segs: list[tuple[int, int]] = []
     t = trim_in
     for s, e in sorted(cut_ranges, key=lambda x: x[0]):
-        s, e = max(s, trim_in), min(e, trim_out)
+        s, e = max(int(s), trim_in), min(int(e), trim_out)
         if e <= t:
             continue
         if s > t:
@@ -81,57 +100,134 @@ def keep_segments(trim_in: float, trim_out: float, cut_ranges: list) -> list[tup
         t = max(t, e)
     if t < trim_out:
         segs.append((t, trim_out))
-    return [(a, b) for a, b in segs if b - a >= 0.08]
+    return [(a, b) for a, b in segs if b - a >= 80]
 
 
-def remap(t: float, segs: list[tuple[float, float]]) -> float | None:
-    acc = 0.0
+def remap_time_ms(t_ms: int, segs: list[tuple[int, int]]) -> int | None:
+    acc = 0
     for a, b in segs:
-        if a <= t < b:
-            return acc + (t - a)
+        if a <= t_ms < b:
+            return acc + (t_ms - a)
         acc += b - a
     return None
 
 
-def ffmpeg_concat_segments(src: Path, dest: Path, segs: list[tuple[float, float]]) -> None:
-    if not segs:
-        raise RuntimeError("no segments to render")
-    if len(segs) == 1:
-        a, b = segs[0]
+def word_mid_ms(w: dict) -> float:
+    return (float(w["s"]) + float(w["e"])) * 500.0
+
+
+def apply_word_fixes(words: list[dict], fixes: dict) -> list[dict]:
+    out = []
+    for i, w in enumerate(words):
+        key = str(w.get("idx", i))
+        if key in fixes:
+            out.append({**w, "w": fixes[key]})
+        else:
+            out.append(w)
+    return out
+
+
+def words_after_edits(words: list[dict], edits: dict) -> tuple[list[dict], list[tuple[int, int]]]:
+    segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    fixes = edits.get("wordFixes") or {}
+    out_words: list[dict] = []
+    for i, w in enumerate(words):
+        s_ms = int(float(w["s"]) * 1000)
+        e_ms = int(float(w["e"]) * 1000)
+        mid = (s_ms + e_ms) // 2
+        seg = next((s for s in segs if s[0] <= mid < s[1]), None)
+        if not seg:
+            continue
+        a, b = seg
+        cs = max(s_ms, a)
+        ce = min(e_ms, b)
+        if ce - cs < 20:
+            continue
+        out_s = remap_time_ms(cs, segs)
+        out_e = remap_time_ms(ce, segs)
+        if out_s is None or out_e is None or out_e <= out_s:
+            continue
+        key = str(w.get("idx", i))
+        text = fixes.get(key, w["w"])
+        out_words.append(
+            {
+                "w": text,
+                "s": round(out_s / 1000.0, 3),
+                "e": round(out_e / 1000.0, 3),
+                "p": w.get("p", 1),
+                "spk": w.get("spk"),
+                "idx": w.get("idx", i),
+            }
+        )
+    return out_words, segs
+
+
+def words_for_reframe(words: list[dict], edits: dict, clip_start_ms: int, clip_end_ms: int) -> list[dict]:
+    fixes = edits.get("wordFixes") or {}
+    cuts = edits.get("cutRanges") or []
+    out: list[dict] = []
+    for i, w in enumerate(words):
+        mid = word_mid_ms(w)
+        if mid < clip_start_ms or mid >= clip_end_ms:
+            continue
+        if any(mid >= c[0] and mid < c[1] for c in cuts):
+            continue
+        key = str(w.get("idx", i))
+        out.append(
+            {
+                "w": fixes.get(key, w["w"]),
+                "s": round(float(w["s"]) - clip_start_ms / 1000.0, 3),
+                "e": round(float(w["e"]) - clip_start_ms / 1000.0, 3),
+                "p": w.get("p", 1),
+                "spk": w.get("spk"),
+            }
+        )
+    return out
+
+
+def build_srt(words: list[dict]) -> str:
+    lines: list[str] = []
+    idx = 1
+    for w in words:
+        if not str(w.get("w", "")).strip():
+            continue
+        if float(w["e"]) <= float(w["s"]):
+            continue
+        lines.append(str(idx))
+        lines.append(f"{_srt_time(w['s'])} --> {_srt_time(w['e'])}")
+        lines.append(str(w["w"]))
+        lines.append("")
+        idx += 1
+    return "\n".join(lines)
+
+
+def _srt_time(sec: float) -> str:
+    h = int(sec // 3600)
+    m = int((sec % 3600) // 60)
+    s = int(sec % 60)
+    ms = int((sec % 1) * 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def ffmpeg_concat_segments(src: Path, dest: Path, segs_sec: list[tuple[float, float]]) -> None:
+    if not segs_sec:
+        raise RuntimeError("no segments")
+    if len(segs_sec) == 1:
+        a, b = segs_sec[0]
         subprocess.check_call(
-            [
-                "ffmpeg",
-                "-y",
-                "-v",
-                "error",
-                "-ss",
-                f"{a:.3f}",
-                "-to",
-                f"{b:.3f}",
-                "-i",
-                str(src),
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "23",
-                "-c:a",
-                "aac",
-                str(dest),
-            ],
+            ["ffmpeg", "-y", "-v", "error", "-ss", f"{a:.3f}", "-to", f"{b:.3f}", "-i", str(src), "-c", "copy", str(dest)],
         )
         return
     parts: list[str] = []
-    for i, (a, b) in enumerate(segs):
+    for i, (a, b) in enumerate(segs_sec):
         dur = b - a
         parts.append(f"[0:v]trim=start={a}:end={b},setpts=PTS-STARTPTS[v{i}]")
         parts.append(
             f"[0:a]atrim=start={a}:end={b},asetpts=PTS-STARTPTS,"
             f"afade=t=in:d=0.01,afade=t=out:st={max(0, dur - 0.01):.3f}:d=0.01[a{i}]"
         )
-    concat_in = "".join(f"[v{i}][a{i}]" for i in range(len(segs)))
-    fc = ";".join(parts) + f";{concat_in}concat=n={len(segs)}:v=1:a=1[v][a]"
+    concat_in = "".join(f"[v{i}][a{i}]" for i in range(len(segs_sec)))
+    fc = ";".join(parts) + f";{concat_in}concat=n={len(segs_sec)}:v=1:a=1[v][a]"
     subprocess.check_call(
         [
             "ffmpeg",
@@ -159,96 +255,74 @@ def ffmpeg_concat_segments(src: Path, dest: Path, segs: list[tuple[float, float]
     )
 
 
-def apply_word_fixes(words: list[dict], fixes: dict) -> list[dict]:
-    out = []
-    for i, w in enumerate(words):
-        key = str(i)
-        if key in fixes:
-            out.append({**w, "w": fixes[key]})
-        else:
-            out.append(w)
-    return out
+def burn_captions(video: Path, words: list[dict], out: Path, work_dir: Path) -> None:
+    import numpy as np
 
+    raw = work_dir / "cap.pcm"
+    subprocess.check_call(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-ac", "1", "-ar", "16000", "-f", "s16le", str(raw)],
+    )
+    a = np.fromfile(raw, dtype=np.int16) if raw.exists() else np.zeros(16000, dtype=np.int16)
+    ass = work_dir / "cap.ass"
+    srt = work_dir / "cap.srt"
+    sys.path.insert(0, str(V3))
+    import captions
 
-def words_after_edits(words: list[dict], edits: dict) -> tuple[list[dict], list[tuple[float, float]]]:
-    trim_in = edits["trim"]["in"] / 1000.0
-    trim_out = edits["trim"]["out"] / 1000.0
-    cuts = [[c[0] / 1000.0, c[1] / 1000.0] for c in edits.get("cutRanges") or []]
-    segs = keep_segments(trim_in, trim_out, cuts)
-    out_words: list[dict] = []
-    for w in words:
-        mid = (w["s"] + w["e"]) / 2.0
-        mapped = remap(mid, segs)
-        if mapped is None:
-            continue
-        seg = next((s for s in segs if s[0] <= mid < s[1]), None)
-        if not seg:
-            continue
-        a = seg[0]
-        out_words.append(
-            {
-                "w": w["w"],
-                "s": round(mapped - (mid - w["s"] - a), 3),
-                "e": round(mapped + (w["e"] - mid), 3),
-                "p": w.get("p", 1),
-                "spk": w.get("spk"),
-            }
-        )
-    return apply_word_fixes(out_words, edits.get("wordFixes") or {}), segs
-
-
-def build_srt(words: list[dict]) -> str:
-    lines: list[str] = []
-    idx = 1
-    for w in words:
-        if not str(w.get("w", "")).strip():
-            continue
-        lines.append(str(idx))
-        lines.append(f"{_srt_time(w['s'])} --> {_srt_time(w['e'])}")
-        lines.append(str(w["w"]))
-        lines.append("")
-        idx += 1
-    return "\n".join(lines)
-
-
-def _srt_time(sec: float) -> str:
-    h = int(sec // 3600)
-    m = int((sec % 3600) // 60)
-    s = int(sec % 60)
-    ms = int((sec % 1) * 1000)
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+    captions.build(words, a, str(ass), str(srt), split_times=None)
+    fontsdir = V3 / "fonts"
+    vf = f"ass={ass}:fontsdir={fontsdir}".replace(",", r"\,")
+    subprocess.check_call(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-vf", vf, "-c:a", "copy", str(out)],
+    )
 
 
 def render_edited_clip(
     clip_src: Path,
     out_mp4: Path,
-    words: list[dict],
+    source_words: list[dict],
     edits: dict,
+    clip_start_ms: int,
+    clip_end_ms: int,
     settings: dict,
     work_dir: Path,
 ) -> tuple[Path, list[dict], str]:
-    duration_ms = int(edits["trim"]["out"] - edits["trim"]["in"]) + 1000
-    duration_ms = max(duration_ms, int((edits["trim"]["out"])))
-    clip_duration_ms = int(edits["trim"]["out"])
-    if is_default_edits(edits, clip_duration_ms):
-        edited_words, _ = words_after_edits(words, edits)
-        words_path = work_dir / "words.json"
-        words_path.write_text(json.dumps(edited_words))
-        run_speakercrop(clip_src, out_mp4, words_path, settings, work_dir)
-        return out_mp4, edited_words, build_srt(edited_words)
+    if is_default_edits(edits, clip_start_ms, clip_end_ms):
+        remapped, _ = words_after_edits(source_words, edits)
+        wpath = work_dir / "words.json"
+        wpath.write_text(json.dumps(remapped))
+        run_speakercrop(clip_src, out_mp4, wpath, settings, work_dir)
+        return out_mp4, remapped, build_srt(remapped)
 
-    trim_in = edits["trim"]["in"] / 1000.0
-    trim_out = edits["trim"]["out"] / 1000.0
-    cuts = [[c[0] / 1000.0, c[1] / 1000.0] for c in edits.get("cutRanges") or []]
-    segs = keep_segments(trim_in, trim_out, cuts)
-    edited_words, _ = words_after_edits(words, edits)
-    words_for_crop = apply_word_fixes(words, edits.get("wordFixes") or {})
-    words_path = work_dir / "words.json"
-    words_path.write_text(json.dumps(words_for_crop))
+    segs_ms = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    segs_sec = [
+        ((max(a, clip_start_ms) - clip_start_ms) / 1000.0, (min(b, clip_end_ms) - clip_start_ms) / 1000.0)
+        for a, b in segs_ms
+    ]
+    segs_sec = [(a, b) for a, b in segs_sec if b - a >= 0.08]
+
+    w_reframe = words_for_reframe(source_words, edits, clip_start_ms, clip_end_ms)
+    wpath = work_dir / "words_reframe.json"
+    wpath.write_text(json.dumps(w_reframe))
+
     full_render = work_dir / "full_render.mp4"
-    run_speakercrop(clip_src, full_render, words_path, settings, work_dir)
-    if len(segs) == 1 and segs[0][0] == trim_in and abs(segs[0][1] - trim_out) < 0.05:
-        shutil.copy(full_render, out_mp4)
+    settings_nc = json.loads(json.dumps(settings))
+    if not isinstance(settings_nc, dict):
+        settings_nc = {}
+    settings_nc["captions"] = {**(settings_nc.get("captions") or {}), "enabled": False}
+    run_speakercrop(clip_src, full_render, wpath, settings_nc, work_dir)
+
+    cut_mp4 = work_dir / "cut.mp4"
+    if len(segs_sec) == 1 and segs_sec[0][0] <= 0.01 and abs(segs_sec[0][1] - (clip_end_ms - clip_start_ms) / 1000) < 0.1:
+        shutil.copy(full_render, cut_mp4)
     else:
-        ffmpeg_concat_segments(full_render, out_mp4, segs)
-    return out_mp4, edited_words, build_srt(edited_words)
+        ffmpeg_concat_segments(full_render, cut_mp4, segs_sec)
+
+    remapped, _ = words_after_edits(source_words, edits)
+    final = work_dir / "final.mp4"
+    if int(edits.get("captions", {}).get("enabled", True)):
+        burn_captions(cut_mp4, remapped, final, work_dir)
+        shutil.copy(final, out_mp4)
+    else:
+        shutil.copy(cut_mp4, out_mp4)
+
+    return out_mp4, remapped, build_srt(remapped)
