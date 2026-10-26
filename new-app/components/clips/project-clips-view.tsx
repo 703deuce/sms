@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/app/page-primitives'
 import { ProjectStatusBadge } from '@/components/app/status'
@@ -16,6 +16,7 @@ import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { exportClip, listProjectClips, retryProject } from '@/lib/clips-api'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { MontageDialog } from '@/components/streamer/montage-dialog'
 import { Clapperboard, Film, Sparkles } from 'lucide-react'
 
 type ProjectStatusPayload = {
@@ -43,6 +44,7 @@ export function ProjectClipsView({
   fromLink,
   createdAt,
   sourceDurationMs = 0,
+  isStreamer = false,
 }: {
   projectId: string
   projectTitle: string
@@ -52,6 +54,7 @@ export function ProjectClipsView({
   fromLink?: boolean
   createdAt?: string
   sourceDurationMs?: number
+  isStreamer?: boolean
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
 
@@ -81,32 +84,41 @@ export function ProjectClipsView({
     }
   }, [initialStatus, readyHydrated, hydrateReady])
 
+  const terminalRef = useRef(readyFromServer || ['READY', 'FAILED', 'CANCELED'].includes(initialStatus))
+
   useEffect(() => {
     if (readyFromServer) return
     let stop = false
+    const pollMs = isStreamer ? 2500 : 4000
     const tick = async () => {
       try {
         const res = await fetch(`/api/clips/projects/${projectId}/status`)
         const json = (await res.json()) as { data?: ProjectStatusPayload }
-        if (stop || !json.data) return
-        if (json.data.status === 'READY') {
-          await hydrateReady(json.data)
-        } else {
-          setStatus(json.data.status)
-          setError(json.data.error ?? null)
+        if (stop || !json.data) {
+          if (!stop && !terminalRef.current) setTimeout(tick, pollMs)
+          return
         }
+        const next = json.data.status
+        if (next === 'READY') {
+          terminalRef.current = true
+          await hydrateReady(json.data)
+          return
+        }
+        if (next === 'FAILED' || next === 'CANCELED') {
+          terminalRef.current = true
+        }
+        setStatus(next)
+        setError(json.data.error ?? null)
       } catch {
         /* ignore */
       }
-      if (!stop && !['READY', 'FAILED', 'CANCELED'].includes(status)) {
-        setTimeout(tick, 4000)
-      }
+      if (!stop && !terminalRef.current) setTimeout(tick, pollMs)
     }
     tick()
     return () => {
       stop = true
     }
-  }, [projectId, hydrateReady, status, readyFromServer])
+  }, [projectId, hydrateReady, readyFromServer, isStreamer])
 
   const triggerDownload = (url: string, filename: string) => {
     const a = document.createElement('a')
@@ -185,7 +197,9 @@ export function ProjectClipsView({
         </Panel>
       ) : !showResults ? (
         <div className="flex flex-col gap-6">
-          <JobStatus projectId={projectId} initialStatus={status} fromLink={fromLink} />
+          {!isStreamer ? (
+            <JobStatus projectId={projectId} initialStatus={status} fromLink={fromLink} />
+          ) : null}
           {processing && <ClipGridSkeleton />}
         </div>
       ) : (
@@ -211,6 +225,7 @@ export function ProjectClipsView({
                     </SheetContent>
                   </Sheet>
                   <ExportAllDialog projectId={projectId} clips={clips} />
+                  {isStreamer ? <MontageDialog projectId={projectId} clips={clips} /> : null}
                 </div>
               ) : null
             }

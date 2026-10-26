@@ -11,7 +11,18 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
   const settings = (project.settings ?? {}) as Record<string, unknown>
   const sp = (settings.streamerProgress ?? {}) as Record<string, number>
   const workerEta = typeof sp.etaSeconds === 'number' ? sp.etaSeconds : 0
-  const etaSec = TERMINAL.includes(project.status) ? 0 : workerEta > 0 ? workerEta : sourceMin * 45
+  const etaUpdatedAt = typeof sp.updatedAt === 'string' ? sp.updatedAt : null
+  let etaSec = 0
+  if (!TERMINAL.includes(project.status)) {
+    if (workerEta > 0 && etaUpdatedAt) {
+      const ageSec = Math.max(0, Math.floor((Date.now() - new Date(etaUpdatedAt).getTime()) / 1000))
+      etaSec = Math.max(0, workerEta - ageSec)
+    } else if (workerEta > 0) {
+      etaSec = workerEta
+    } else {
+      etaSec = sourceMin * 45
+    }
+  }
   const clipCount =
     project.status === 'READY'
       ? await prisma.clip.count({ where: { projectId, deletedAt: null } })
@@ -26,6 +37,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
     clipCount,
     chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,
     chunkTotal: typeof sp.chunkTotal === 'number' ? sp.chunkTotal : undefined,
+    etaUpdatedAt,
   }
 }
 

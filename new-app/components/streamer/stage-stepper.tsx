@@ -11,7 +11,17 @@ function stageIndex(stage: string | null | undefined): number {
   return -1
 }
 
-export function StreamerStageStepper({ stage, progress }: { stage?: string | null; progress?: number }) {
+export function StreamerStageStepper({
+  stage,
+  progress,
+  chunkDone,
+  chunkTotal,
+}: {
+  stage?: string | null
+  progress?: number
+  chunkDone?: number
+  chunkTotal?: number
+}) {
   const active = stageIndex(stage)
   if (active < 0) return null
   return (
@@ -33,6 +43,7 @@ export function StreamerStageStepper({ stage, progress }: { stage?: string | nul
             {done ? '✓ ' : current ? '● ' : '○ '}
             {label}
             {current && progress != null ? ` (${progress}%)` : ''}
+            {current && chunkTotal != null && chunkTotal > 0 ? ` · ${chunkDone ?? 0}/${chunkTotal}` : ''}
           </li>
         )
       })}

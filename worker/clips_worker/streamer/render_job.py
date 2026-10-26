@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from clips_worker.storage import download_object, put_json, upload_file
 from clips_worker.streamer.align import align_segment_ms
 from clips_worker.streamer.config import SCRATCH, SEGMENT_PAD_S, SOURCE_RETENTION_HOURS
 from clips_worker.streamer.keys import clip_segment_key, stream_audio_key
+from clips_worker.streamer.progress import eta_seconds
 from clips_worker.streamer.segments import cut_local_segment, download_segment
 
 
@@ -116,6 +118,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     total = len(clips)
     local_upload: Path | None = None
+    render_started = time.time()
 
     with Heartbeat(job["id"], post_progress, every_s=45) as hb:
         with tempfile.TemporaryDirectory(dir=SCRATCH) as td:
@@ -263,14 +266,19 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     )
                 conn.commit()
 
-                pct = 65 + int(30 * (idx + 1) / total)
-                hb.update(stage=f"Rendering {idx + 1}/{total}", progress=pct)
+                done_n = idx + 1
+                pct = 65 + int(30 * done_n / total)
+                eta = eta_seconds(done_n, total, render_started)
+                hb.update(stage=f"Rendering {done_n}/{total}", progress=pct)
                 post_progress(
                     job["id"],
                     {
                         "projectStatus": "RENDERING",
-                        "stage": f"Rendering {idx + 1}/{total}",
+                        "stage": f"Rendering {done_n}/{total}",
                         "progress": pct,
+                        "chunkDone": done_n,
+                        "chunkTotal": total,
+                        "etaSeconds": eta,
                         "jobStatus": "RUNNING",
                     },
                 )
@@ -289,4 +297,12 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
     post_progress(
         job["id"],
         {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE"},
+    )
+    from clips_worker.streamer.notify import notify_event
+
+    notify_event(
+        workspace_id=workspace_id,
+        type="stream_ready",
+        vod_id=vod_id,
+        data={"projectId": project_id, "clipCount": len(clips)},
     )

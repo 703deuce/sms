@@ -14,6 +14,18 @@ export function Dropzone({ onFile, disabled }: { onFile: (file: File) => void; d
   return (
     <label
       data-drag={drag || undefined}
+      onClick={(e) => {
+        if (disabled) return
+        e.preventDefault()
+        inputRef.current?.click()
+      }}
+      onKeyDown={(e) => {
+        if (disabled) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          inputRef.current?.click()
+        }
+      }}
       onDragEnter={(e) => {
         e.preventDefault()
         setDrag(true)

@@ -50,6 +50,19 @@ def _combined_curve(
     return _smooth(combined, 5)
 
 
+def _peak_params(duration_s: int, min_clip_s: int, clip_count: int) -> tuple[int, float]:
+    """Looser peak picking on short VODs so fusion still returns several candidates."""
+    target = max(4, min(clip_count, duration_s // max(12, min_clip_s // 2)))
+    min_sep = max(6, min(min_clip_s, duration_s // max(target + 1, 3)))
+    if duration_s < 300:
+        prominence = 0.06
+    elif duration_s < 900:
+        prominence = 0.10
+    else:
+        prominence = 0.15
+    return min_sep, prominence
+
+
 def _local_maxima(curve: list[float], min_sep_s: int, prominence: float) -> list[int]:
     peaks: list[int] = []
     for i in range(1, len(curve) - 1):
@@ -103,7 +116,8 @@ def fuse_moments(
     if not curve:
         return [], {"v": 1, "hz": 1, "audio": signals.get("audio"), "transcript": signals.get("transcript"), "chat": None, "viewerClips": None, "chapters": chapters or []}
 
-    peaks = _local_maxima(curve, min_sep_s=min_clip_s, prominence=0.15)[:40]
+    min_sep, prominence = _peak_params(duration_s, min_clip_s, clip_count)
+    peaks = _local_maxima(curve, min_sep_s=min_sep, prominence=prominence)[: max(40, clip_count * 3)]
     candidates: list[dict] = []
     for pi, peak_s in enumerate(peaks):
         start_s = max(0, peak_s - lead_s)

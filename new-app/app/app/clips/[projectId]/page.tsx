@@ -50,6 +50,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
             projectId={project.id}
             stage={project.stage}
             progress={project.progress}
+            projectStatus={project.status}
             sourceDeletedAt={streamVod.sourceDeletedAt?.toISOString() ?? null}
             layout={vodLayout}
           />
@@ -64,6 +65,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         fromLink={Boolean(project.sourceUrl)}
         createdAt={project.createdAt.toISOString()}
         sourceDurationMs={Math.max(0, project.rangeEndMs - project.rangeStartMs)}
+        isStreamer={Boolean(streamVod)}
       />
     </Page>
   )

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { formatEtaSeconds } from '@/lib/clips/format-eta'
 import { CircleStop, Loader2 } from 'lucide-react'
 import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import {
@@ -55,6 +56,7 @@ export function JobStatus({
   const [error, setError] = useState<string | null>(null)
   const [wordCount, setWordCount] = useState(0)
   const [etaSec, setEtaSec] = useState(0)
+  const etaRef = useRef(0)
   const [chunkDone, setChunkDone] = useState<number | undefined>()
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
 
@@ -69,6 +71,7 @@ export function JobStatus({
         setStage(data.stage)
         setError(data.error)
         setWordCount(data.wordCount)
+        etaRef.current = data.etaSec
         setEtaSec(data.etaSec)
         setChunkDone(data.chunkDone)
         setChunkTotal(data.chunkTotal)
@@ -83,6 +86,15 @@ export function JobStatus({
       stop = true
     }
   }, [projectId])
+
+  useEffect(() => {
+    if (etaSec <= 0) return
+    const t = setInterval(() => {
+      etaRef.current = Math.max(0, etaRef.current - 1)
+      setEtaSec(etaRef.current)
+    }, 1000)
+    return () => clearInterval(t)
+  }, [etaSec > 0])
 
   const ui = CLIP_JOB_STATE[status as ClipProjectStatusUi] ?? CLIP_JOB_STATE.QUEUED
   const terminal = ['READY', 'FAILED', 'CANCELED'].includes(status)
@@ -105,7 +117,7 @@ export function JobStatus({
                 </span>
               )}
               {etaSec > 0 && (
-                <span className="text-sm text-muted-foreground tabular-nums">ETA ~{Math.ceil(etaSec / 60)} min</span>
+                <span className="text-sm text-muted-foreground tabular-nums">ETA {formatEtaSeconds(etaSec)}</span>
               )}
             </div>
             <ProcessingStepRail

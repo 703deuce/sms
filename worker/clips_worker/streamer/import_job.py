@@ -286,7 +286,26 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             key = upload_source_key(workspace_id, upload_id, "mp4")
             upload_file(key, path, "video/mp4")
 
-            proc_payload = {"singleClip": True} if kind == "clip" else {}
+            audio_out = Path(td) / "audio.opus"
+            subprocess.check_call(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-v",
+                    "error",
+                    "-i",
+                    str(path),
+                    "-vn",
+                    "-c:a",
+                    "libopus",
+                    str(audio_out),
+                ]
+            )
+            audio_key = stream_audio_key(workspace_id, vod_id)
+            upload_file(audio_key, audio_out, "audio/opus")
+            state = {"audioKey": audio_key, "localUploadKey": key}
+            pri = job_priority(conn, vod.get("triggeredBy") or "paste")
+            analyze_id = f"job_{uuid.uuid4().hex}"
 
             with conn.cursor() as cur:
                 cur.execute(
@@ -300,14 +319,14 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                     """
                     UPDATE clip_projects
                     SET "uploadId"=%s, title=COALESCE(%s, title), "rangeEndMs"=GREATEST("rangeEndMs", %s),
-                        stage='queued', progress=5, "updatedAt"=NOW()
+                        stage='Downloading audio', progress=20, "updatedAt"=NOW()
                     WHERE id=%s
                     """,
                     (upload_id, meta.get("title"), duration_ms, project_id),
                 )
                 cur.execute(
                     """
-                    UPDATE stream_vods SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, "updatedAt"=NOW()
+                    UPDATE stream_vods SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
                     WHERE id=%s
                     """,
                     (
@@ -315,16 +334,16 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                         meta.get("category"),
                         duration_ms,
                         json.dumps(meta.get("chapters")) if meta.get("chapters") else None,
+                        json.dumps(state),
                         vod_id,
                     ),
                 )
-                proc_id = f"job_{uuid.uuid4().hex}"
                 cur.execute(
                     """
                     INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
-                    VALUES (%s,%s,'PROCESS_PROJECT','QUEUED',%s::jsonb,10,NOW())
+                    VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
                     """,
-                    (proc_id, project_id, json.dumps(proc_payload)),
+                    (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
                 )
             conn.commit()
 
