@@ -18,12 +18,14 @@ export function supabaseObjectMaxBytes(): number {
 }
 
 export function clipUploadMaxBytes(): number {
-  const raw = process.env.CLIPS_UPLOAD_MAX_BYTES?.trim() || process.env.STREAMER_UPLOAD_MAX_BYTES?.trim()
+  const clipRaw = process.env.CLIPS_UPLOAD_MAX_BYTES?.trim()
+  const streamRaw = process.env.STREAMER_UPLOAD_MAX_BYTES?.trim()
+  const raw = clipRaw || streamRaw
   if (raw) {
     const n = Number(raw)
     if (Number.isFinite(n) && n > 0) return Math.floor(n)
   }
-  return storageDriverName() === 's3' ? CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT : CLIPS_UPLOAD_MAX_BYTES_STREAMER_DEFAULT
+  return CLIPS_UPLOAD_MAX_BYTES_STREAMER_DEFAULT
 }
 
 export function formatClipUploadMaxLabel(bytes: number): string {
@@ -52,6 +54,6 @@ export function clipUploadLimitsPublic() {
     driver: storageDriverName(),
     supabaseObjectMaxBytes: objectMax,
     supabaseObjectMaxLabel: formatClipUploadMaxLabel(objectMax),
-    usesStagingAboveObjectMax: storageDriverName() !== 's3' && maxBytes > objectMax,
+    usesStagingAboveObjectMax: false,
   }
 }

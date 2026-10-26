@@ -1,13 +1,14 @@
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, storageDriverName, uploadSourceKey, type CreateUploadResult } from '@/lib/storage'
-import { appendChunk, chunkBytesReceived, chunkFilePath, openChunkReadStream, removeChunkFile } from '@/lib/server/clips/app-chunk-store'
+import { appendChunk, chunkBytesReceived, removeChunkFile } from '@/lib/server/clips/app-chunk-store'
 import {
   CLIPS_APP_CHUNK_BYTES,
   clipUploadMaxBytes,
   shouldUseAppChunkedUpload,
 } from '@/lib/server/clips/upload-limits'
-import { finalizeStagingUpload, shouldStoreUploadOnStaging } from '@/lib/server/clips/upload-staging'
+import { isStagingObjectKey } from '@/lib/server/clips/upload-staging'
+import { finalizeAssembledUploadToStorageKey } from '@/lib/server/clips/upload-finalize'
 
 export function extFromFilename(name: string) {
   const m = name.toLowerCase().match(/\.([a-z0-9]+)$/)
@@ -63,25 +64,27 @@ export async function completeClipUpload(
   const prisma = getPrisma()
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row) throw new Error('Upload not found')
+  if (row.status === 'COMPLETE') {
+    return row
+  }
   const totalBytes = Number(row.bytes)
   const useAppChunk =
     storageDriverName() === 'supabase' && shouldUseAppChunkedUpload(totalBytes)
   if (useAppChunk) {
-    const received = await chunkBytesReceived(uploadId)
-    if (received !== totalBytes) {
-      throw new Error(`Incomplete upload (${received} of ${totalBytes} bytes received)`)
+    let objectKey = row.key
+    if (isStagingObjectKey(objectKey)) {
+      objectKey = uploadSourceKey(workspaceId, uploadId, extFromFilename(row.filename))
+      await prisma.clipUpload.update({ where: { id: uploadId }, data: { key: objectKey } })
     }
-    const ext = extFromFilename(row.filename)
-    if (shouldStoreUploadOnStaging(totalBytes)) {
-      const stagingKey = await finalizeStagingUpload(uploadId, ext, chunkFilePath(uploadId))
-      await prisma.clipUpload.update({ where: { id: uploadId }, data: { key: stagingKey } })
+    const existingSize = await storage.getObjectSizeBytes(objectKey)
+    if (existingSize !== null && existingSize === totalBytes) {
+      await removeChunkFile(uploadId).catch(() => {})
     } else {
-      const stream = await openChunkReadStream(uploadId)
-      try {
-        await storage.putStream(row.key, stream, row.mime)
-      } finally {
-        await removeChunkFile(uploadId)
+      const received = await chunkBytesReceived(uploadId)
+      if (received !== totalBytes) {
+        throw new Error(`Incomplete upload (${received} of ${totalBytes} bytes received)`)
       }
+      await finalizeAssembledUploadToStorageKey(storage, objectKey, uploadId, row.mime, totalBytes)
     }
   } else {
     await storage.completeUpload({
