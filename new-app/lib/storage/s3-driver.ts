@@ -96,8 +96,18 @@ export function createS3StorageDriver(): ClipStorageDriver {
       })
       return getSignedUrl(getS3Client(cfg), cmd, { expiresIn: expiresInSec })
     },
-    async getObjectSizeBytes(_objectKey: string): Promise<number | null> {
-      return null
+    async getObjectSizeBytes(objectKey: string): Promise<number | null> {
+      const cfg = getS3Config()
+      if (!cfg) return null
+      const { HeadObjectCommand } = await import('@aws-sdk/client-s3')
+      try {
+        const out = await getInternalS3Client(cfg).send(
+          new HeadObjectCommand({ Bucket: cfg.bucket, Key: objectKey }),
+        )
+        return typeof out.ContentLength === 'number' ? out.ContentLength : null
+      } catch {
+        return null
+      }
     },
   }
 }

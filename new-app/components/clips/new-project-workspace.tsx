@@ -43,10 +43,12 @@ export function NewProjectWorkspace() {
   const [submitting, setSubmitting] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
 
-  const onFile = (file: File) => {
+  const onFile = (file: File, resumeUploadId?: string) => {
     setPendingFile(file)
-    setUploadId(null)
-    void uploadClipFile(file, (p) => {
+    if (!resumeUploadId) setUploadId(null)
+    void uploadClipFile(
+      file,
+      (p) => {
       setUpload(p)
       if (p.state === 'complete' && p.uploadId) {
         setUploadId(p.uploadId)
@@ -57,7 +59,9 @@ export function NewProjectWorkspace() {
         })
       }
       if (p.state === 'error' && p.error) toast.error(p.error)
-    }).catch(() => {})
+    },
+      resumeUploadId ? { resumeUploadId } : undefined,
+    ).catch(() => {})
   }
 
   const submitUpload = async () => {
@@ -149,7 +153,11 @@ export function NewProjectWorkspace() {
                 <UploadProgressItem
                   progress={upload}
                   onCancel={() => upload.uploadId && void cancelClipUpload(upload.uploadId)}
-                  onRetry={upload.state === 'error' && pendingFile ? () => onFile(pendingFile) : undefined}
+                  onRetry={
+                    upload.state === 'error' && pendingFile
+                      ? () => onFile(pendingFile, upload.uploadId)
+                      : undefined
+                  }
                 />
               ) : null}
               {durationMs > 0 && (

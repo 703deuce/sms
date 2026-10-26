@@ -8831,14 +8831,29 @@ model ClipUpload {
   height      Int?
   status      String   @default("PENDING")
   s3UploadId  String?
+  uploadMode  String?
   kind        String   @default("source")
   createdAt   DateTime @default(now())
 
-  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   projects  ClipProject[]
+  parts     ClipUploadPart[]
 
   @@index([workspaceId, createdAt])
   @@map("clip_uploads")
+}
+
+model ClipUploadPart {
+  uploadId   String
+  partNumber Int
+  etag       String
+  sizeBytes  Int?
+  createdAt  DateTime @default(now())
+
+  upload ClipUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@id([uploadId, partNumber])
+  @@map("clip_upload_parts")
 }
 
 model ClipProject {

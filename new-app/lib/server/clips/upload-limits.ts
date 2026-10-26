@@ -37,11 +37,9 @@ export function formatClipUploadMaxLabel(bytes: number): string {
   return `${mb} MB`
 }
 
-/** Browser uploads above signed-PUT size should not use Supabase TUS (413 on many plans). */
-export function shouldUseAppChunkedUpload(bytes: number): boolean {
-  if (storageDriverName() === 's3') return false
-  if (bytes > supabaseObjectMaxBytes()) return true
-  return bytes > SIGNED_PUT_MAX_BYTES
+/** @deprecated Chunks must never touch the web container — browser uploads go direct to storage (TUS or S3 multipart). */
+export function shouldUseAppChunkedUpload(_bytes: number): boolean {
+  return false
 }
 
 export function clipUploadLimitsPublic() {

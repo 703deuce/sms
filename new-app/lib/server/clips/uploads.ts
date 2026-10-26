@@ -1,14 +1,15 @@
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, storageDriverName, uploadSourceKey, type CreateUploadResult } from '@/lib/storage'
-import { appendChunk, chunkBytesReceived, removeChunkFile } from '@/lib/server/clips/app-chunk-store'
+import { clipUploadMaxBytes } from '@/lib/server/clips/upload-limits'
+import { getSupabaseStorageConfig } from '@/lib/storage/supabase-driver'
+import { SIGNED_PUT_MAX_BYTES } from '@/lib/storage/supabase-driver'
 import {
-  CLIPS_APP_CHUNK_BYTES,
-  clipUploadMaxBytes,
-  shouldUseAppChunkedUpload,
-} from '@/lib/server/clips/upload-limits'
-import { isStagingObjectKey } from '@/lib/server/clips/upload-staging'
-import { finalizeAssembledUploadToStorageKey } from '@/lib/server/clips/upload-finalize'
+  bytesReceivedFromParts,
+  mergePartRecords,
+  type UploadPartRecord,
+} from '@/lib/server/clips/upload-part-bookkeeping'
+import { buildS3MultipartResumeSession, s3PartSizeBytes } from '@/lib/server/clips/upload-s3-resume'
 
 export function extFromFilename(name: string) {
   const m = name.toLowerCase().match(/\.([a-z0-9]+)$/)
@@ -45,6 +46,7 @@ export async function createClipUpload(workspaceId: string, input: { filename: s
       mime: input.mime,
       status: 'PENDING',
       s3UploadId,
+      uploadMode: session.mode,
     },
   })
   return {
@@ -52,6 +54,36 @@ export async function createClipUpload(workspaceId: string, input: { filename: s
     key,
     storage: session,
   }
+}
+
+async function listUploadParts(uploadId: string): Promise<UploadPartRecord[]> {
+  const prisma = getPrisma()
+  const rows = await prisma.clipUploadPart.findMany({
+    where: { uploadId },
+    orderBy: { partNumber: 'asc' },
+  })
+  return rows.map((r) => ({ partNumber: r.partNumber, etag: r.etag, sizeBytes: r.sizeBytes }))
+}
+
+export async function recordClipUploadPart(
+  workspaceId: string,
+  uploadId: string,
+  partNumber: number,
+  etag: string,
+  sizeBytes?: number,
+) {
+  const prisma = getPrisma()
+  const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId, status: 'PENDING' } })
+  if (!row) throw new Error('Upload not found')
+  if (!row.s3UploadId) throw new Error('Part recording only applies to S3 multipart uploads')
+  await prisma.clipUploadPart.upsert({
+    where: { uploadId_partNumber: { uploadId, partNumber } },
+    create: { uploadId, partNumber, etag, sizeBytes: sizeBytes ?? null },
+    update: { etag, sizeBytes: sizeBytes ?? null },
+  })
+  const parts = await listUploadParts(uploadId)
+  const received = bytesReceivedFromParts(parts, s3PartSizeBytes(), Number(row.bytes))
+  return { received, parts }
 }
 
 export async function completeClipUpload(
@@ -68,31 +100,42 @@ export async function completeClipUpload(
     return row
   }
   const totalBytes = Number(row.bytes)
-  const useAppChunk =
-    storageDriverName() === 'supabase' && shouldUseAppChunkedUpload(totalBytes)
-  if (useAppChunk) {
-    let objectKey = row.key
-    if (isStagingObjectKey(objectKey)) {
-      objectKey = uploadSourceKey(workspaceId, uploadId, extFromFilename(row.filename))
-      await prisma.clipUpload.update({ where: { id: uploadId }, data: { key: objectKey } })
+
+  const existingSize = await storage.getObjectSizeBytes(row.key)
+  if (existingSize !== null && existingSize === totalBytes) {
+    await prisma.clipUpload.update({
+      where: { id: uploadId },
+      data: {
+        status: 'COMPLETE',
+        durationMs: meta?.durationMs,
+        width: meta?.width,
+        height: meta?.height,
+      },
+    })
+    return row
+  }
+
+  if (row.uploadMode === 's3_multipart' || row.s3UploadId) {
+    const dbParts = await listUploadParts(uploadId)
+    const merged = parts?.length
+      ? parts.reduce((acc, p) => mergePartRecords(acc, p), dbParts)
+      : dbParts
+    if (!merged.length) {
+      throw new Error('No upload parts recorded — retry upload to resume')
     }
-    const existingSize = await storage.getObjectSizeBytes(objectKey)
-    if (existingSize !== null && existingSize === totalBytes) {
-      await removeChunkFile(uploadId).catch(() => {})
-    } else {
-      const received = await chunkBytesReceived(uploadId)
-      if (received !== totalBytes) {
-        throw new Error(`Incomplete upload (${received} of ${totalBytes} bytes received)`)
-      }
-      await finalizeAssembledUploadToStorageKey(storage, objectKey, uploadId, row.mime, totalBytes)
+    const received = bytesReceivedFromParts(merged, s3PartSizeBytes(), totalBytes)
+    if (received < totalBytes) {
+      throw new Error(`Incomplete upload (${received} of ${totalBytes} bytes in storage)`)
     }
-  } else {
     await storage.completeUpload({
       objectKey: row.key,
       s3UploadId: row.s3UploadId,
-      parts,
+      parts: merged.map((p) => ({ partNumber: p.partNumber, etag: p.etag })),
     })
+  } else {
+    await storage.completeUpload({ objectKey: row.key, s3UploadId: row.s3UploadId })
   }
+
   await prisma.clipUpload.update({
     where: { id: uploadId },
     data: {
@@ -111,24 +154,8 @@ export async function abortClipUpload(workspaceId: string, uploadId: string) {
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row) return
   await storage.abortUpload({ objectKey: row.key, s3UploadId: row.s3UploadId }).catch(() => {})
-  await removeChunkFile(uploadId).catch(() => {})
+  await prisma.clipUploadPart.deleteMany({ where: { uploadId } })
   await prisma.clipUpload.update({ where: { id: uploadId }, data: { status: 'ABORTED' } })
-}
-
-export async function writeClipUploadChunk(
-  workspaceId: string,
-  uploadId: string,
-  offset: number,
-  body: Buffer,
-): Promise<{ received: number }> {
-  const prisma = getPrisma()
-  const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId, status: 'PENDING' } })
-  if (!row) throw new Error('Upload not found')
-  const totalBytes = Number(row.bytes)
-  if (!shouldUseAppChunkedUpload(totalBytes)) throw new Error('Chunk upload not enabled for this session')
-  if (offset + body.length > totalBytes) throw new Error('Chunk exceeds declared file size')
-  const received = await appendChunk(uploadId, offset, body)
-  return { received }
 }
 
 export async function getClipUploadResume(workspaceId: string, uploadId: string) {
@@ -136,14 +163,52 @@ export async function getClipUploadResume(workspaceId: string, uploadId: string)
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId, status: 'PENDING' } })
   if (!row) throw new Error('Upload not found or already completed')
   const totalBytes = Number(row.bytes)
-  if (!shouldUseAppChunkedUpload(totalBytes)) throw new Error('Resume not supported for this upload type')
-  const received = await chunkBytesReceived(uploadId)
+  const storage = getClipStorage()
+
+  if (row.uploadMode === 's3_multipart' && row.s3UploadId) {
+    const parts = await listUploadParts(uploadId)
+    const received = bytesReceivedFromParts(parts, s3PartSizeBytes(), totalBytes)
+    const s3Multipart = await buildS3MultipartResumeSession(row.key, row.s3UploadId, totalBytes, parts)
+    return {
+      uploadId: row.id,
+      bytes: totalBytes,
+      received,
+      filename: row.filename,
+      storage: { mode: 's3_multipart' as const, s3Multipart },
+      completedParts: parts.map((p) => ({ partNumber: p.partNumber, etag: p.etag })),
+    }
+  }
+
+  const cfg = getSupabaseStorageConfig()
+  if (!cfg) throw new Error('Storage not configured')
+  const { createClient } = await import('@supabase/supabase-js')
+  const supabase = createClient(cfg.url, cfg.key, { auth: { persistSession: false } })
+  const { data, error } = await supabase.storage.from(cfg.bucket).createSignedUploadUrl(row.key, { upsert: false })
+  if (error || !data) throw new Error(error?.message || 'Could not refresh upload token')
+  const tusEndpoint = `${cfg.url}/storage/v1/upload/resumable`
+  const mode = totalBytes <= SIGNED_PUT_MAX_BYTES ? 'signed_put' : 'tus'
+  const storageSession: CreateUploadResult =
+    mode === 'signed_put'
+      ? {
+          mode: 'signed_put',
+          signedPut: { url: data.signedUrl, token: data.token },
+          tus: { endpoint: tusEndpoint, bucket: cfg.bucket, objectKey: row.key, token: data.token },
+        }
+      : {
+          mode: 'tus',
+          tus: { endpoint: tusEndpoint, bucket: cfg.bucket, objectKey: row.key, token: data.token },
+        }
+
+  const remoteSize = await storage.getObjectSizeBytes(row.key)
+  const received = remoteSize ?? 0
+
   return {
     uploadId: row.id,
     bytes: totalBytes,
     received,
-    chunkBytes: CLIPS_APP_CHUNK_BYTES,
-    chunkUrl: `/api/clips/uploads/${uploadId}/chunk`,
+    filename: row.filename,
+    storage: storageSession,
+    completedParts: [],
   }
 }
 
@@ -152,11 +217,15 @@ export async function getClipUploadProgress(workspaceId: string, uploadId: strin
   const row = await prisma.clipUpload.findFirst({ where: { id: uploadId, workspaceId } })
   if (!row) throw new Error('Upload not found')
   const totalBytes = Number(row.bytes)
+  const storage = getClipStorage()
   let received = 0
-  if (row.status === 'PENDING' && shouldUseAppChunkedUpload(totalBytes)) {
-    received = await chunkBytesReceived(uploadId)
-  } else if (row.status === 'COMPLETE') {
+  if (row.status === 'COMPLETE') {
     received = totalBytes
+  } else if (row.uploadMode === 's3_multipart' && row.s3UploadId) {
+    const parts = await listUploadParts(uploadId)
+    received = bytesReceivedFromParts(parts, s3PartSizeBytes(), totalBytes)
+  } else {
+    received = (await storage.getObjectSizeBytes(row.key)) ?? 0
   }
   return {
     uploadId: row.id,
@@ -164,6 +233,12 @@ export async function getClipUploadProgress(workspaceId: string, uploadId: strin
     bytes: totalBytes,
     received,
     filename: row.filename,
-    canResume: row.status === 'PENDING' && shouldUseAppChunkedUpload(totalBytes),
+    uploadMode: row.uploadMode ?? storageDriverName(),
+    canResume: row.status === 'PENDING',
   }
+}
+
+/** @deprecated App-chunk uploads are disabled — returns 410 from route. */
+export async function writeClipUploadChunk() {
+  throw new Error('Server chunk staging is disabled — upload directly to storage and use Resume')
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
-import { writeClipUploadChunk } from '@/lib/server/clips/uploads'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export const runtime = 'nodejs'
@@ -23,8 +22,13 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     const workspaceId = await resolveWorkspaceId()
     const body = Buffer.from(await request.arrayBuffer())
     if (!body.length) return NextResponse.json({ error: 'Empty chunk' }, { status: 400 })
-    const { received } = await writeClipUploadChunk(workspaceId, id, offset, body)
-    return NextResponse.json({ data: { received } })
+    return NextResponse.json(
+      {
+        error:
+          'Server chunk staging is disabled. Uploads go directly to object storage — use Retry to resume from saved parts.',
+      },
+      { status: 410 },
+    )
   } catch (err) {
     return jsonError(err, 400)
   }

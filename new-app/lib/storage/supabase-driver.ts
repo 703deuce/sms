@@ -2,10 +2,8 @@ import 'server-only'
 import { createClient } from '@supabase/supabase-js'
 import type { Readable } from 'node:stream'
 import type { ClipStorageDriver, CompleteUploadInput, CreateUploadInput, CreateUploadResult } from '@/lib/storage/types'
-import { CLIPS_APP_CHUNK_BYTES, shouldUseAppChunkedUpload } from '@/lib/server/clips/upload-limits'
-
 const TUS_CHUNK_BYTES = 6 * 1024 * 1024
-const SIGNED_PUT_MAX_BYTES = 50 * 1024 * 1024
+export const SIGNED_PUT_MAX_BYTES = 50 * 1024 * 1024
 
 function config() {
   const url = (process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '').replace(/\/$/, '')
@@ -29,17 +27,7 @@ export function createSupabaseStorageDriver(): ClipStorageDriver {
   return {
     name: 'supabase',
     async createUpload(input: CreateUploadInput): Promise<CreateUploadResult> {
-      const { url, bucket } = client()
-      if (shouldUseAppChunkedUpload(input.bytes)) {
-        return {
-          mode: 'app_chunked',
-          appChunked: {
-            chunkBytes: CLIPS_APP_CHUNK_BYTES,
-            chunkUrl: `/api/clips/uploads/${input.uploadId}/chunk`,
-          },
-        }
-      }
-      const { supabase } = client()
+      const { url, bucket, supabase } = client()
       const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(input.objectKey, {
         upsert: false,
       })
@@ -137,4 +125,4 @@ export function createSupabaseStorageDriver(): ClipStorageDriver {
   }
 }
 
-export { TUS_CHUNK_BYTES, SIGNED_PUT_MAX_BYTES }
+export { TUS_CHUNK_BYTES }
