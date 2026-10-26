@@ -28,6 +28,7 @@ type State = {
 
 type Action =
   | { type: 'set'; edits: ClipEditsV2; pushHistory?: boolean }
+  | { type: 'APPLY_PATCH'; edits: ClipEditsV2 }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'saved' }
@@ -37,13 +38,18 @@ function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
   return canonicalEditsJson(a) === canonicalEditsJson(b)
 }
 
-function reducer(state: State, action: Action): State {
+export function editorEditsReducer(state: State, action: Action): State {
   switch (action.type) {
     case 'set': {
       if (editsEqual(state.edits, action.edits)) return state
       const push = action.pushHistory !== false
       const past = push ? [...state.past, state.edits].slice(-MAX_UNDO) : state.past
       return { ...state, edits: action.edits, past, future: push ? [] : state.future, saveState: 'dirty' }
+    }
+    case 'APPLY_PATCH': {
+      if (editsEqual(state.edits, action.edits)) return state
+      const past = [...state.past, state.edits].slice(-MAX_UNDO)
+      return { ...state, edits: action.edits, past, future: [], saveState: 'dirty' }
     }
     case 'undo': {
       if (!state.past.length) return state
@@ -75,7 +81,7 @@ function reducer(state: State, action: Action): State {
 }
 
 export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits: ClipEditsV2) {
-  const [state, dispatch] = useReducer(reducer, {
+  const [state, dispatch] = useReducer(editorEditsReducer, {
     edits: initialEdits,
     past: [],
     future: [],
@@ -90,12 +96,9 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
   }, [])
 
   /** One undo step for a full producer patch (not per-field). */
-  const applyProducerPatch = useCallback(
-    (edits: ClipEditsV2) => {
-      dispatch({ type: 'set', edits, pushHistory: true })
-    },
-    [],
-  )
+  const applyProducerPatch = useCallback((edits: ClipEditsV2) => {
+    dispatch({ type: 'APPLY_PATCH', edits })
+  }, [])
 
   const undo = useCallback(() => dispatch({ type: 'undo' }), [])
   const redo = useCallback(() => dispatch({ type: 'redo' }), [])

@@ -56,7 +56,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const prisma = getPrisma()
     const rows = await prisma.clipThumbnail.findMany({
-      where: { clipId, workspaceId: clip.workspaceId },
+      where: { clipId, workspaceId },
       orderBy: { createdAt: 'desc' },
       take: 12,
     })

@@ -64,6 +64,19 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         )
 
         const tools = llm.tools || []
+        const PAID_TOOLS = new Set([
+          'generate_ai_broll',
+          'generate_music',
+          'generate_thumbnail',
+          'dub',
+        ])
+        // Emit paid-tool confirm cards before any other work (no music suggest / DB here).
+        for (const t of tools) {
+          if (PAID_TOOLS.has(t.name)) {
+            send('confirm', { tool: { ...t, requiresConfirm: true } })
+          }
+        }
+
         const prismaForBrand = getPrisma()
         const brandTpl = await prismaForBrand.clipBrandTemplate.findFirst({
           where: { workspaceId, isDefault: true },
@@ -80,10 +93,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           }
         })
         const applied = applyProducerTools(edits, bounds, enrichedTools)
-
-        for (const tool of applied.pendingPaid) {
-          send('confirm', { tool })
-        }
 
         send('message', { role: 'assistant', content: llm.reply })
         send('tools', { summaries: applied.summaries, pendingPaid: applied.pendingPaid })
