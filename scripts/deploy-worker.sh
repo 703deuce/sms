@@ -88,6 +88,14 @@ start_worker() {
   local name="\$1"
   local lane="\$2"
   local worker_id="\$3"
+  echo "[deploy-worker] stopping \${name} (no overlap with new container)"
+  docker stop "\$name" 2>/dev/null || true
+  for _wait in \$(seq 1 45); do
+    if ! docker ps -q -f name="^\${name}\$" | grep -q .; then
+      break
+    fi
+    sleep 1
+  done
   docker rm -f "\$name" 2>/dev/null || true
   docker run -d \\
     --name "\$name" \\

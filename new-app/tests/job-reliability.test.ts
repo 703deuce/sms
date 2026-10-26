@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  JOB_HEARTBEAT_STALE_MS,
   JOB_MAX_ATTEMPTS_BEFORE_FAIL,
   reaperBackoffSeconds,
   shouldFailJobAfterStale,
@@ -8,6 +9,10 @@ import {
 import { pickStreamerRetryJobType } from '@/lib/server/streamer/retry-project'
 
 describe('job reliability', () => {
+  it('uses 3 minute stale heartbeat (worker lock parity)', () => {
+    expect(JOB_HEARTBEAT_STALE_MS).toBe(3 * 60_000)
+  })
+
   it('backs off exponentially with cap', () => {
     expect(reaperBackoffSeconds(1)).toBe(30)
     expect(reaperBackoffSeconds(2)).toBe(60)

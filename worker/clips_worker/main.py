@@ -134,7 +134,9 @@ def post_progress_resilient(job_id: str, payload: dict) -> None:
 
 
 def claim_job(conn) -> dict | None:
-    worker_id = os.environ.get("WORKER_ID", "worker-1")
+    from clips_worker.worker_identity import worker_instance_id
+
+    worker_id = worker_instance_id()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             f"""
@@ -356,9 +358,11 @@ def main() -> None:
     validate_worker_env()
     dsn = env("DATABASE_URL")
     host = db_host_label(dsn)
+    from clips_worker.worker_identity import worker_instance_id
+
     log(
         f"clips-worker starting worker_id={os.environ.get('WORKER_ID', 'worker-1')} "
-        f"lane={worker_lane()} db={host}"
+        f"instance={worker_instance_id()} lane={worker_lane()} db={host}"
     )
     log_models()
     log_picker_config()
@@ -378,6 +382,9 @@ def main() -> None:
     while True:
         try:
             with psycopg2.connect(dsn) as conn:
+                from clips_worker.job_lock import requeue_stale_running_jobs, run_job_with_lock_heartbeat
+
+                requeue_stale_running_jobs(conn)
                 job = claim_job(conn)
                 if not job:
                     idle_polls += 1
@@ -402,7 +409,7 @@ def main() -> None:
                     handler = DISPATCH.get(job.get("type") or "")
                     if not handler:
                         raise RuntimeError(f"unknown job type {job.get('type')}")
-                    handler(conn, job)  # type: ignore[operator]
+                    run_job_with_lock_heartbeat(dsn, conn, job, handler)  # type: ignore[arg-type]
                 except Exception as exc:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")
