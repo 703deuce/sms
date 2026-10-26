@@ -30,8 +30,23 @@ export function streamerLiveRealtimeEnabled(): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes'
 }
 
+/**
+ * Near-live: poll in-progress Twitch archive VOD during stream.online (no live HLS playback).
+ * Distinct from STREAMER_LIVE_REALTIME_ENABLED.
+ */
+export function streamerNearLiveEnabled(): boolean {
+  const raw = process.env.STREAMER_NEAR_LIVE_ENABLED?.trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
+/** Live chat ingest for hype / !clip cues (near-live or legacy live realtime). */
+export function streamerLiveChatIngestEnabled(): boolean {
+  return streamerLiveRealtimeEnabled() || streamerNearLiveEnabled()
+}
+
 export function streamerPublicFlags() {
   const liveRealtime = streamerLiveRealtimeEnabled()
+  const nearLive = streamerNearLiveEnabled()
   return {
     twitchOAuth: streamerTwitchConfigured(),
     kickOAuth: streamerKickConfigured(),
@@ -39,6 +54,7 @@ export function streamerPublicFlags() {
     kickWebhook: kickWebhookUrl(),
     /** When false, UI shows live clipping as coming soon; webhooks skip live chat ingest. */
     liveRealtimeEnabled: liveRealtime,
+    nearLiveEnabled: nearLive,
     vodFirst: true,
   }
 }

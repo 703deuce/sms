@@ -324,6 +324,20 @@ def handle_stream_autopull(conn, job: dict) -> None:
     _mark_job_done(conn, job["id"])
 
 
+def handle_stream_near_live_poll(conn, job: dict) -> None:
+    from clips_worker.streamer.near_live_poll_job import run_near_live_poll_job
+
+    run_near_live_poll_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+def handle_stream_near_live_finalize(conn, job: dict) -> None:
+    from clips_worker.streamer.near_live_finalize_job import run_near_live_finalize_job
+
+    run_near_live_finalize_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
 def handle_import_url(conn, job: dict) -> None:
     from clips_worker.import_url import run_import_url_job
 
@@ -341,6 +355,8 @@ DISPATCH: dict[str, object] = {
     "STREAM_CLEANUP": handle_stream_cleanup,
     "STREAM_MONTAGE": handle_stream_montage,
     "STREAM_AUTOPULL": handle_stream_autopull,
+    "STREAM_NEAR_LIVE_POLL": handle_stream_near_live_poll,
+    "STREAM_NEAR_LIVE_FINALIZE": handle_stream_near_live_finalize,
     "PROCESS_PROJECT": process_job,
     "RENDER_CLIP": handle_render_clip,
     "REFRAME_CROP": handle_reframe_crop,

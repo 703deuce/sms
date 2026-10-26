@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
-import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
+import { streamerLiveChatIngestEnabled, streamerNearLiveEnabled } from '@/lib/server/streamer/env'
+import { finalizeNearLiveSession, startNearLiveSession } from '@/lib/server/streamer/near-live/session'
 import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
 import { verifyTwitchEventSubSignature } from '@/lib/server/streamer/twitch-webhook'
 import { handleStreamerNotify } from '@/lib/server/streamer/notify'
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
   const subType = body.subscription?.type
   const event = body.event || {}
 
-  if (subType === 'channel.chat.message' && streamerLiveRealtimeEnabled()) {
+  if (subType === 'channel.chat.message' && streamerLiveChatIngestEnabled()) {
     const broadcasterId = String(event.broadcaster_user_id || '')
     const ch = await prisma.streamChannel.findFirst({
       where: { platform: 'twitch', externalId: broadcasterId, deletedAt: null },
@@ -48,14 +49,23 @@ export async function POST(request: Request) {
 
   if (subType === 'stream.online') {
     const broadcasterId = String(event.broadcaster_user_id || '')
+    const startedAt = new Date()
+    const ch = await prisma.streamChannel.findFirst({
+      where: { platform: 'twitch', externalId: broadcasterId, deletedAt: null },
+    })
+    const prevPs = (ch?.platformState as Record<string, unknown>) || {}
     await prisma.streamChannel.updateMany({
       where: { platform: 'twitch', externalId: broadcasterId },
       data: {
         platformState: {
-          live: { startedAt: new Date().toISOString(), sessionId: String(event.id || messageId) },
+          ...prevPs,
+          live: { startedAt: startedAt.toISOString(), sessionId: String(event.id || messageId) },
         },
       },
     })
+    if (streamerNearLiveEnabled() && ch?.autoProcess) {
+      await startNearLiveSession(ch.id, startedAt)
+    }
   }
 
   if (subType === 'stream.offline') {
@@ -71,6 +81,9 @@ export async function POST(request: Request) {
         where: { id: ch.id },
         data: { platformState: { ...ps, live: null } },
       })
+      if (streamerNearLiveEnabled()) {
+        await finalizeNearLiveSession(ch.id)
+      }
       if (ch.autoProcess) {
         await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch' })
       } else {

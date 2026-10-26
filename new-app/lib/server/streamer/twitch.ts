@@ -5,6 +5,7 @@ export { twitchRedirectUri }
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
+/** Add `clips:edit` before enabling near-live !clip in production. */
 const SCOPES = ['user:read:chat', 'user:bot', 'channel:bot']
 
 export function twitchClientId(): string {
