@@ -238,7 +238,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             )
         insert_clips_batch(conn, clip_rows)
 
-        pri = job_priority(conn, vod.get("triggeredBy") or "paste")
+        pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
         render_id = f"job_{uuid.uuid4().hex}"
         with conn.cursor() as cur:
             cur.execute(

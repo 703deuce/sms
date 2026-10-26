@@ -77,7 +77,7 @@ export function VersionsPanel({
           <Button size="sm" variant="outline" onClick={() => void saveLabel()}>Save name</Button>
           <p className="text-[10px] font-medium">Preview</p>
           <p className="text-[10px] text-muted-foreground">
-            {scenesFromPmJson(selectedRow.pmJson ?? { type: 'doc', content: [] })).length} scenes (snapshot)
+            {scenesFromPmJson(selectedRow.pmJson ?? { type: 'doc', content: [] }).length} scenes (snapshot)
             {' · '}
             {scenesFromPmJson(currentDoc).length} scenes (current)
           </p>

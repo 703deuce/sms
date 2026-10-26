@@ -1,16 +1,12 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Page, PageHeader } from '@/components/app/page-primitives'
-import dynamic from 'next/dynamic'
-
-const ScreenplayWorkspace = dynamic(
-  () => import('@/components/screenwriting/screenplay-workspace').then((m) => m.ScreenplayWorkspace),
-  { ssr: false, loading: () => <div className="h-[60vh] animate-pulse rounded-lg bg-muted" /> },
-)
+import { ScreenplayEditorPageClient } from '@/components/screenwriting/screenplay-editor-page-client'
 import { getActor } from '@/lib/screenwriting/server/actor'
 import { getScriptForOwner } from '@/lib/screenwriting/server/scripts'
 import { resolveFormatSpec } from '@/lib/screenwriting/formats/resolve-spec'
 import { FileText } from 'lucide-react'
+import type { JSONContent } from '@tiptap/core'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +16,7 @@ export default async function ScreenplayEditorPage({ params }: { params: Promise
   const script = await getScriptForOwner(scriptId, actor.id)
   if (!script) notFound()
   const formatSpec = resolveFormatSpec(script.formatSpec, script.templateKey)
-  const pmJson = (script.pmJson ?? { type: 'doc', content: [] }) as import('@tiptap/core').JSONContent
+  const pmJson = (script.pmJson ?? { type: 'doc', content: [] }) as JSONContent
   const editorMeta = (script.editorMeta ?? {}) as Record<string, unknown>
 
   return (
@@ -35,11 +31,11 @@ export default async function ScreenplayEditorPage({ params }: { params: Promise
           </Link>
         }
       />
-      <ScreenplayWorkspace
+      <ScreenplayEditorPageClient
         scriptId={script.id}
         scriptTitle={script.title}
         formatSpec={formatSpec}
-        initialDoc={pmJson as import('@tiptap/core').JSONContent}
+        initialDoc={pmJson}
         initialMeta={editorMeta}
       />
     </Page>

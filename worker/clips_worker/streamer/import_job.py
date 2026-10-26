@@ -82,7 +82,7 @@ def _maybe_complete_import_from_state(conn, vod: dict, job: dict, project_id: st
             {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
         )
         return True
-    pri = job_priority(conn, vod.get("triggeredBy") or "paste")
+    pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
     analyze_id = f"job_{uuid.uuid4().hex}"
     with conn.cursor() as cur:
         cur.execute(
@@ -165,7 +165,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 upload_file(audio_key, audio_out, "audio/opus")
                 state = _state_for_upload(workspace_id, vod_id, urow["key"], src, td)
                 state["audioKey"] = audio_key
-                pri = job_priority(conn, vod.get("triggeredBy") or "upload")
+                pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "upload")
                 analyze_id = f"job_{uuid.uuid4().hex}"
                 with conn.cursor() as cur:
                     cur.execute(
@@ -249,7 +249,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 audio_key = stream_audio_key(workspace_id, vod_id)
                 upload_file(audio_key, audio_path, "audio/opus")
                 state = {"audioKey": audio_key}
-                pri = job_priority(conn, vod.get("triggeredBy") or "paste")
+                pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
                 analyze_id = f"job_{uuid.uuid4().hex}"
                 with conn.cursor() as cur:
                     cur.execute(
@@ -333,7 +333,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             audio_key = stream_audio_key(workspace_id, vod_id)
             upload_file(audio_key, audio_out, "audio/opus")
             state = {"audioKey": audio_key, "localUploadKey": key}
-            pri = job_priority(conn, vod.get("triggeredBy") or "paste")
+            pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
             analyze_id = f"job_{uuid.uuid4().hex}"
 
             with conn.cursor() as cur:
