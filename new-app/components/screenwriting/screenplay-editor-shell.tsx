@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { JSONContent } from '@tiptap/core'
 import type { FormatSpec } from '@/lib/screenwriting/formats/types'
 import { ScreenplayEditor } from '@/components/screenwriting/screenplay-editor'
+import { ScriptStatusBar } from '@/components/screenwriting/script-status-bar'
 
 export function ScreenplayEditorShell({
   scriptId,
@@ -30,6 +31,7 @@ export function ScreenplayEditorShell({
         initialDoc={initialDoc as JSONContent}
         onSaveState={setSaveState}
       />
+      <ScriptStatusBar pmJson={initialDoc as JSONContent} />
     </div>
   )
 }
