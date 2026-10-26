@@ -66,6 +66,46 @@ async function uploadAppChunkedFromOffset(
   await uploadAppChunked(file, uploadId, chunkUrl, chunkBytes, base, onProgress, startOffset)
 }
 
+async function sleep(ms: number) {
+  await new Promise((r) => setTimeout(r, ms))
+}
+
+async function fetchChunkWithRetry(
+  chunkUrl: string,
+  offset: number,
+  slice: Blob,
+  maxAttempts = 5,
+): Promise<Response> {
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(chunkUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Upload-Offset': String(offset),
+        },
+        body: slice,
+      })
+      if (res.ok) return res
+      if (res.status >= 500 || res.status === 429 || res.status === 408) {
+        lastErr = Object.assign(new Error(`Chunk upload failed (${res.status})`), { status: res.status })
+        await sleep(Math.min(30_000, 1000 * 2 ** (attempt - 1)))
+        continue
+      }
+      const json = (await res.json().catch(() => ({}))) as { error?: string }
+      throw Object.assign(new Error(json.error || `Chunk upload failed (${res.status})`), { status: res.status })
+    } catch (e) {
+      lastErr = e
+      if (attempt < maxAttempts) {
+        await sleep(Math.min(30_000, 1000 * 2 ** (attempt - 1)))
+        continue
+      }
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Chunk upload failed')
+}
+
 async function uploadAppChunked(
   file: File,
   uploadId: string,
@@ -78,18 +118,7 @@ async function uploadAppChunked(
   let offset = startOffset
   while (offset < file.size) {
     const slice = file.slice(offset, Math.min(file.size, offset + chunkBytes))
-    const res = await fetch(chunkUrl, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'X-Upload-Offset': String(offset),
-      },
-      body: slice,
-    })
-    if (!res.ok) {
-      const json = (await res.json().catch(() => ({}))) as { error?: string }
-      throw Object.assign(new Error(json.error || `Chunk upload failed (${res.status})`), { status: res.status })
-    }
+    const res = await fetchChunkWithRetry(chunkUrl, offset, slice)
     const json = (await res.json()) as { data?: { received?: number } }
     offset = json.data?.received ?? offset + slice.size
     onProgress({

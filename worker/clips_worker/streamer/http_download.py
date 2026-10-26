@@ -26,7 +26,22 @@ def _friendly_step_error(stderr: str, step: str) -> str:
 
 def _is_retryable(stderr: str) -> bool:
     s = (stderr or "").lower()
-    return any(x in s for x in ("502", "503", "429", "bad gateway", "service unavailable", "too many requests"))
+    return any(
+        x in s
+        for x in (
+            "502",
+            "503",
+            "429",
+            "408",
+            "bad gateway",
+            "service unavailable",
+            "too many requests",
+            "timed out",
+            "timeout",
+            "connection reset",
+            "temporary failure",
+        )
+    )
 
 
 def run_ytdlp(cmd: list[str], progress_cb: Callable[[float], None] | None = None, step: str = "Download") -> None:

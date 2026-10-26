@@ -59,6 +59,47 @@ def _section_from_range(start_ms: int, end_ms: int | None) -> str | None:
     return f"*{start_s}-{end_s}"
 
 
+def _maybe_complete_import_from_state(conn, vod: dict, job: dict, project_id: str, vod_id: str, post_progress) -> bool:
+    """Idempotent: skip re-download when audio is already in storage."""
+    state = vod.get("state") or {}
+    if isinstance(state, str):
+        state = json.loads(state)
+    if not state.get("audioKey"):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT status FROM clip_jobs
+            WHERE "projectId"=%s AND type='STREAM_ANALYZE'
+            ORDER BY "createdAt" DESC LIMIT 1
+            """,
+            (project_id,),
+        )
+        row = cur.fetchone()
+    if row and row[0] in ("QUEUED", "RUNNING", "DONE"):
+        post_progress(
+            job["id"],
+            {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
+        )
+        return True
+    pri = job_priority(conn, vod.get("triggeredBy") or "paste")
+    analyze_id = f"job_{uuid.uuid4().hex}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
+            VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
+            """,
+            (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
+        )
+    conn.commit()
+    post_progress(
+        job["id"],
+        {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
+    )
+    return True
+
+
 def _effective_duration_ms(vod: dict, meta_dur_s: float) -> int:
     start = int(vod.get("rangeStartMs") or 0)
     end = vod.get("rangeEndMs")
@@ -88,6 +129,9 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             (vod_id,),
         )
         vod = dict(cur.fetchone())
+
+    if _maybe_complete_import_from_state(conn, vod, job, vod["project_id"], vod_id, post_progress):
+        return
 
     url = vod.get("url")
     workspace_id = vod["workspaceId"]

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
+import { reapStaleJobs } from '@/lib/server/clips/jobs'
 import { decryptTwitchToken, twitchAppAccessToken } from '@/lib/server/streamer/twitch'
 
 export async function POST(request: Request) {
@@ -39,5 +40,7 @@ export async function POST(request: Request) {
     /* logged by caller */
   }
 
-  return NextResponse.json({ data: { validated, pruned: true } })
+  const reaped = await reapStaleJobs()
+
+  return NextResponse.json({ data: { validated, pruned: true, reaped } })
 }

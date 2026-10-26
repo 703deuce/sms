@@ -343,6 +343,9 @@ DISPATCH: dict[str, object] = {
 
 
 def main() -> None:
+    from clips_worker.startup_check import validate_worker_env
+
+    validate_worker_env()
     dsn = env("DATABASE_URL")
     host = db_host_label(dsn)
     log(
