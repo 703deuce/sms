@@ -13,7 +13,7 @@ export interface ScriptIssue {
   message: string
 }
 
-function nodeText(node: { content?: { type: string; text?: string }[] }): string {
+function nodeText(node: { content?: { type?: string; text?: string }[] }): string {
   if (!node.content) return ''
   return node.content.map((c) => (c.type === 'text' ? c.text ?? '' : '')).join('')
 }

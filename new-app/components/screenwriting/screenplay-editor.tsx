@@ -9,17 +9,25 @@ import { elementStyle } from '@/lib/screenwriting/editor/element-style'
 import { autoDetectElementType, nextElementType } from '@/lib/screenwriting/editor/element-keys'
 import { elementTypeForDigit } from '@/lib/screenwriting/editor/shortcuts'
 import { newElementId } from '@/lib/screenwriting/schema/empty-doc'
+import { usePageDecorations } from '@/components/screenwriting/use-page-decorations'
+import { useScreenplayCollab } from '@/components/screenwriting/use-screenplay-collab'
 
 export function ScreenplayEditor({
   scriptId,
   formatSpec,
   initialDoc,
   onSaveState,
+  onDocChange,
+  revisionColor,
+  layoutDoc,
 }: {
   scriptId: string
   formatSpec: FormatSpec
   initialDoc: JSONContent
-  onSaveState?: (state: 'saving' | 'saved' | 'error') => void
+  layoutDoc?: JSONContent | null
+  onSaveState?: (state: 'saving' | 'saved' | 'error' | 'offline') => void
+  onDocChange?: (doc: JSONContent) => void
+  revisionColor?: string
 }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const extensions = useMemo(() => screenplayExtensions, [])
@@ -78,6 +86,28 @@ export function ScreenplayEditor({
           dispatch(tr)
           return true
         }
+        if (mod && event.key === 'd') {
+          event.preventDefault()
+          const { state, dispatch } = view
+          const dual = state.schema.nodes.dualDialogue.create(null, [
+            state.schema.nodes.dialogueColumn.create(null, [
+              state.schema.nodes.screenplayElement.create({ id: newElementId(), elementType: 'character' }),
+              state.schema.nodes.screenplayElement.create({ id: newElementId(), elementType: 'dialogue' }),
+            ]),
+            state.schema.nodes.dialogueColumn.create(null, [
+              state.schema.nodes.screenplayElement.create({ id: newElementId(), elementType: 'character' }),
+              state.schema.nodes.screenplayElement.create({ id: newElementId(), elementType: 'dialogue' }),
+            ]),
+          ])
+          dispatch(state.tr.replaceSelectionWith(dual))
+          return true
+        }
+        if (mod && event.key === 'Enter') {
+          event.preventDefault()
+          const { state, dispatch } = view
+          dispatch(state.tr.replaceSelectionWith(state.schema.nodes.pageBreak.create()))
+          return true
+        }
         if (event.key === 'Backspace') {
           const { state, dispatch } = view
           const { $from } = state.selection
@@ -110,6 +140,7 @@ export function ScreenplayEditor({
           }
         }
       }
+      onDocChange?.(json as JSONContent)
       saveTimer.current = setTimeout(() => {
         void fetch(`/api/sw/scripts/${scriptId}`, {
           method: 'PUT',
@@ -147,6 +178,15 @@ export function ScreenplayEditor({
       editor.off('update', update)
     }
   }, [editor, formatSpec])
+
+  usePageDecorations(editor, layoutDoc ?? null)
+  useScreenplayCollab(editor, scriptId)
+
+  useEffect(() => {
+    const root = document.querySelector('.sw-editor')
+    if (!root || !revisionColor) return
+    root.setAttribute('data-revision', revisionColor)
+  }, [revisionColor])
 
   if (!editor) return <p className="text-sm text-muted-foreground">Loading editor…</p>
 

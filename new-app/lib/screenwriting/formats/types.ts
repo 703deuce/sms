@@ -23,7 +23,7 @@ export const elementIndentSchema = z.object({
   firstLineAdjust: z.number().optional(),
   spaceBefore: z.number().default(1),
   caps: z.boolean().default(false),
-  align: z.enum(['left', 'right', 'center']).default('left'),
+  align: z.enum(['left', 'right', 'center']).optional(),
 })
 
 export const formatSpecSchema = z.object({
@@ -48,6 +48,7 @@ export type FormatSpec = z.infer<typeof formatSpecSchema>
 
 export function cellWidthForElement(spec: FormatSpec, type: ScreenplayElementType): number {
   const el = spec.elements[type]
+  if (!el) return 60
   const widthIn = el.right - el.left + (el.firstLineAdjust ?? 0)
   return Math.round(widthIn * spec.page.charsPerInch)
 }

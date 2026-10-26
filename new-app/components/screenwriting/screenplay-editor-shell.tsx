@@ -15,7 +15,7 @@ export function ScreenplayEditorShell({
   formatSpec: FormatSpec
   initialDoc: object
 }) {
-  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved')
+  const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error' | 'offline'>('saved')
 
   return (
     <div className="rounded-lg border border-border bg-card">

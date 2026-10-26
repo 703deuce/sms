@@ -1,5 +1,8 @@
-import archiver from 'archiver'
 import { PassThrough } from 'node:stream'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const archiver = require('archiver') as (format: string, opts?: { zlib: { level: number } }) => import('archiver').Archiver
 import type { JSONContent } from '@tiptap/core'
 import { pmJsonToFountain } from '@/lib/screenwriting/fountain/convert'
 

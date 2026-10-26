@@ -53,11 +53,11 @@ export const ScreenplayElement = Node.create({
   renderHTML({ HTMLAttributes }) {
     return ['div', mergeAttributes(HTMLAttributes, { 'data-screenplay-element': '', class: 'sw-element' }), 0]
   },
-  addCommands() {
+  addCommands(): Record<string, unknown> {
     return {
       insertScreenplayElement:
         (elementType: string) =>
-        ({ commands }) =>
+        ({ commands }: { commands: { insertContent: (c: object) => boolean } }) =>
           commands.insertContent({
             type: 'screenplayElement',
             attrs: { id: newElementId(), elementType },

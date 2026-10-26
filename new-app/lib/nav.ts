@@ -9,6 +9,7 @@ import {
   Palette,
   Plug,
   Plus,
+  PenLine,
   Radio,
   Scissors,
   Settings,
@@ -50,6 +51,7 @@ export const CLIPS: NavContext = {
   items: [
     { title: 'New project', href: '/app/clips/new', icon: Plus, group: 'Create' },
     { title: 'Streamer', href: '/app/streamer', icon: Radio, group: 'Create' },
+    { title: 'Screenwriting', href: '/app/sw', icon: PenLine, group: 'Create' },
     {
       title: 'Record',
       href: '/app/record',
@@ -109,7 +111,8 @@ export function resolveContext(pathname: string): NavContext {
     pathname === '/app/clips' ||
     pathname.startsWith('/app/clips/') ||
     pathname === '/app/exports' ||
-    pathname.startsWith('/app/streamer')
+    pathname.startsWith('/app/streamer') ||
+    pathname.startsWith('/app/sw')
   ) {
     return CLIPS
   }

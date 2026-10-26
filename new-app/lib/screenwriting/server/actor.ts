@@ -8,3 +8,7 @@ export function getActor(): SwActor {
 export function assertRole(_actor: SwActor, _roles: SwActor['role'][]): void {
   /* stub */
 }
+
+export async function requireSwActor(): Promise<SwActor> {
+  return getActor()
+}

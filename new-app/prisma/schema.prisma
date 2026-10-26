@@ -9386,6 +9386,7 @@ model SwScript {
   sceneCount   Int        @default(0)
   wordCount    Int        @default(0)
   searchText   String?
+  editorMeta   Json?
   versions     SwVersion[]
   scenes       SwScene[]
   characters   SwCharacter[]

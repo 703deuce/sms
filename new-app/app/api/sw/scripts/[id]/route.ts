@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { getActor } from '@/lib/screenwriting/server/actor'
-import { getScriptForOwner, saveScriptPmJson } from '@/lib/screenwriting/server/scripts'
+import { getScriptForOwner, saveScriptEditorMeta, saveScriptPmJson } from '@/lib/screenwriting/server/scripts'
 
 const putSchema = z.object({
-  pmJson: z.unknown(),
+  pmJson: z.unknown().optional(),
+  editorMeta: z.record(z.unknown()).optional(),
   title: z.string().min(1).max(200).optional(),
 })
 
@@ -28,6 +29,9 @@ export async function PUT(request: Request, ctx: { params: Promise<{ id: string 
     const body = putSchema.parse(await request.json())
     if (body.pmJson !== undefined) {
       await saveScriptPmJson(id, actor.id, body.pmJson as object)
+    }
+    if (body.editorMeta !== undefined) {
+      await saveScriptEditorMeta(id, actor.id, body.editorMeta as import('@prisma/client').Prisma.InputJsonValue)
     }
     const script = await getScriptForOwner(id, actor.id)
     if (!script) return NextResponse.json({ error: 'Not found' }, { status: 404 })

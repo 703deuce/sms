@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Page, PageHeader } from '@/components/app/page-primitives'
-import { FountainIoButtons } from '@/components/screenwriting/fountain-io-buttons'
-import { ScreenplayEditorShell } from '@/components/screenwriting/screenplay-editor-shell'
+import { ScreenplayWorkspace } from '@/components/screenwriting/screenplay-workspace'
 import { getActor } from '@/lib/screenwriting/server/actor'
 import { getScriptForOwner } from '@/lib/screenwriting/server/scripts'
 import type { FormatSpec } from '@/lib/screenwriting/formats/types'
@@ -17,9 +16,10 @@ export default async function ScreenplayEditorPage({ params }: { params: Promise
   if (!script) notFound()
   const formatSpec = script.formatSpec as FormatSpec
   const pmJson = (script.pmJson ?? { type: 'doc', content: [] }) as object
+  const editorMeta = (script.editorMeta ?? {}) as Record<string, unknown>
 
   return (
-    <Page className="max-w-5xl">
+    <Page className="max-w-6xl">
       <PageHeader
         icon={FileText}
         title={script.title}
@@ -30,8 +30,13 @@ export default async function ScreenplayEditorPage({ params }: { params: Promise
           </Link>
         }
       />
-      <FountainIoButtons scriptId={script.id} />
-      <ScreenplayEditorShell scriptId={script.id} formatSpec={formatSpec} initialDoc={pmJson} />
+      <ScreenplayWorkspace
+        scriptId={script.id}
+        scriptTitle={script.title}
+        formatSpec={formatSpec}
+        initialDoc={pmJson as import('@tiptap/core').JSONContent}
+        initialMeta={editorMeta}
+      />
     </Page>
   )
 }

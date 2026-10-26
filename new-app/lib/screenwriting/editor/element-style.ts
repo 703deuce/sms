@@ -2,7 +2,8 @@ import type { CSSProperties } from 'react'
 import type { FormatSpec, ScreenplayElementType } from '@/lib/screenwriting/formats/types'
 
 export function elementStyle(spec: FormatSpec, elementType: ScreenplayElementType): CSSProperties {
-  const el = spec.elements[elementType]
+  const el = spec.elements[elementType] ?? spec.elements.action
+  if (!el) return { fontFamily: 'monospace' }
   const leftCh = (el.left - spec.page.marginLeft) * spec.page.charsPerInch
   const rightCh = (spec.page.widthIn - spec.page.marginRight - el.right) * spec.page.charsPerInch
   const textTransform = el.caps ? 'uppercase' : 'none'

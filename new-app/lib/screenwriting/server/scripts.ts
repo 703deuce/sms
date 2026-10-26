@@ -20,3 +20,13 @@ export async function saveScriptPmJson(scriptId: string, ownerId: string, pmJson
     data: { pmJson, wordCount, searchText: text.slice(0, 50_000) },
   })
 }
+
+export async function saveScriptEditorMeta(scriptId: string, ownerId: string, editorMeta: Prisma.InputJsonValue) {
+  const prisma = getPrisma()
+  const row = await getScriptForOwner(scriptId, ownerId)
+  if (!row) throw new Error('Not found')
+  return prisma.swScript.update({
+    where: { id: scriptId },
+    data: { editorMeta },
+  })
+}
