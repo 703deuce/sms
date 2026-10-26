@@ -269,6 +269,7 @@ export function EditorShell({
           onUndo={undo}
           onRedo={redo}
           onExport={() => setExportOpen(true)}
+          onOpenProducer={() => setPanel('producer')}
           producerStrip={
             producerStrip
               ? {

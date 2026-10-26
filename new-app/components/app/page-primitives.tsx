@@ -264,15 +264,14 @@ export function EmptyState({
   action?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-      <span className="relative flex size-14 items-center justify-center rounded-2xl tile-primary shadow-glow">
-        <Icon className="size-7 text-white" />
-      </span>
-      <div className="flex max-w-sm flex-col gap-1">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
+    <div className="relative overflow-hidden rounded-2xl border border-dashed border-border bg-card/40 px-6 py-14 text-center">
+      <div className="pointer-events-none absolute inset-0 bg-grid-fade" aria-hidden />
+      <div className="relative mx-auto grid size-14 place-items-center rounded-2xl tile-primary">
+        <Icon className="size-6" />
       </div>
-      {action}
+      <h3 className="relative mt-4 text-base font-semibold">{title}</h3>
+      <p className="relative mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+      {action ? <div className="relative mt-5 flex justify-center gap-2">{action}</div> : null}
     </div>
   )
 }

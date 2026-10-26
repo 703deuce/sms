@@ -49,9 +49,27 @@ export function Timeline({
   const audio = edits.audio
   const outSpan = Math.max(1, clipOutputDurationMs)
 
+  const lanes = [
+    { key: 'video', label: 'Video', top: 32, h: 32 },
+    { key: 'audio', label: 'Audio', top: 88, h: 20 },
+    { key: 'broll', label: 'B-roll', top: 112, h: 24 },
+  ] as const
+
   return (
-    <div className="min-w-0 overflow-x-auto">
-      <div className="relative h-32" style={{ width: widthPx }}>
+    <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-card/30 p-2">
+      <div className="flex" style={{ width: widthPx + 56 }}>
+        <div className="relative w-14 shrink-0 text-[10px] font-medium text-muted-foreground">
+          {lanes.map((lane) => (
+            <span
+              key={lane.key}
+              className="absolute left-0 flex items-center"
+              style={{ top: lane.top, height: lane.h }}
+            >
+              {lane.label}
+            </span>
+          ))}
+        </div>
+        <div className="relative h-36 shrink-0" style={{ width: widthPx }}>
         <div className="absolute inset-x-0 top-8 h-8 rounded bg-muted">
           {words.map((w) => {
             const { startMs, endMs } = wordSourceMs(w)
@@ -129,6 +147,7 @@ export function Timeline({
               />
             )
           })}
+        </div>
         </div>
       </div>
     </div>

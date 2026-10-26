@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { StepRail } from '@/components/app/step-rail'
+import { ProcessingStepRail } from '@/components/clips/processing-step-rail'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/app/page-primitives'
@@ -111,11 +111,11 @@ export function JobStatus({
                 <span className="text-sm text-muted-foreground tabular-nums">ETA ~{Math.ceil(etaSec / 60)} min</span>
               )}
             </div>
-            <StepRail
+            <ProcessingStepRail
               steps={fromLink ? STEPS_IMPORT : STEPS_UPLOAD}
               current={stepIndex(status, mode, stage, fromLink)}
             />
-            <Progress value={progress} className="h-2" aria-label="Processing progress" />
+            <Progress value={progress} className="h-2 [&_[data-slot=progress-indicator]]:bg-brand-gradient" aria-label="Processing progress" />
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin shrink-0" aria-hidden />
               {stage || 'Processing…'}
