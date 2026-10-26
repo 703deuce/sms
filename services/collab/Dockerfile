@@ -3,4 +3,5 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev
 COPY src ./src
-CMD ["node", "src/server.ts"]
+ENV PORT=1234
+CMD ["node", "--experimental-strip-types", "src/server.ts"]

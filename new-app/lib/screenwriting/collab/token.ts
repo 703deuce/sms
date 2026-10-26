@@ -10,7 +10,12 @@ export interface CollabTokenPayload {
 }
 
 function secret(): string {
-  return process.env.SW_COLLAB_HMAC_SECRET || process.env.INTERNAL_JOB_HMAC_SECRET || 'dev-sw-collab-secret'
+  return (
+    process.env.SW_COLLAB_SECRET ||
+    process.env.SW_COLLAB_HMAC_SECRET ||
+    process.env.INTERNAL_JOB_HMAC_SECRET ||
+    'dev-sw-collab-secret'
+  )
 }
 
 export function signCollabToken(payload: Omit<CollabTokenPayload, 'exp'>, ttlSec = DEFAULT_TTL_SEC): string {
