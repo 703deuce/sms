@@ -1,6 +1,6 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-26 — launch scope clarified (clipper → Streamer VOD → script editor); clipper E2E in progress
+**Last updated:** 2026-10-26 — streamer `render_job.py` syntax fix; RENDER_CLIP `download_object` guarded by worker tests; clipper E2E audit
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.
 
@@ -45,7 +45,8 @@ Single source of truth for build order and status. Update the **Last updated** l
 | Upload | S3 multipart + Supabase TUS; `clip_upload_parts`; `/chunk` → 410; resume after reload/deploy |
 | Web | `completeClipUpload` → `createClipProject` enqueues `PROCESS_PROJECT` |
 | Worker | `pipeline.py` + `render_job.py` (`test_render_job_storage.py` — no `download_object` shadow) |
-| **Open** | Prod `clips-worker` image may lag master (RENDER_CLIP `download_object` error ~13:52 UTC 2026-10-26) — **redeploy worker when owner approves** (not during VOD job) |
+| **Open** | Prod `clips-worker` image may lag master — **redeploy worker when owner approves** (not during VOD job). Repo: `render_job.py` has no inner `download_object` import; `test_render_job_storage.py` + `test_download_object_shadow.py` |
+| **Fixed (master)** | `streamer/render_job.py` invalid `elif` after `else` (SyntaxError broke worker import/AST checks) |
 
 **Specs:** `docs/clips/clipping_build_plan.md`, `docs/clips/PROGRESS.md`
 
@@ -73,6 +74,7 @@ Descript-style transcript editing; spec in `new-app/docs/clips/DESCRIPT_BUILD_SP
 
 | Date | Milestone |
 |------|-----------|
+| 2026-10-26 | Fix `streamer/render_job.py` upload branch syntax; worker shadow tests green |
 | 2026-10-26 | Launch scope: clipper → Streamer VOD → script editor; AI Studio TBD; billing = launch blocker |
 | 2026-10-26 | Screenwriting hidden (`FEATURE_SCREENWRITING`); `ddd3d010d` clipper `app_chunked` guard |
 | 2026-10-26 | Upload direct-to-storage `64d759c87` |

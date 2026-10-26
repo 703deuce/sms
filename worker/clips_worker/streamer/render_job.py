@@ -133,13 +133,6 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 if local_key:
                     download_object(str(local_key), up)
                     local_upload = up
-                proxy_key = state.get("analysisProxyKey")
-                if proxy_key:
-                    proxy_path = td_path / "analysis_proxy.mp4"
-                    download_object(str(proxy_key), proxy_path)
-                    layout_video = proxy_path
-                else:
-                    layout_video = local_upload
                 elif vod.get("uploadId"):
                     with conn.cursor() as cur:
                         cur.execute('SELECT key FROM clip_uploads WHERE id = %s', (vod["uploadId"],))
@@ -147,6 +140,13 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     if row:
                         download_object(row[0], up)
                         local_upload = up
+                proxy_key = state.get("analysisProxyKey")
+                if proxy_key:
+                    proxy_path = td_path / "analysis_proxy.mp4"
+                    download_object(str(proxy_key), proxy_path)
+                    layout_video = proxy_path
+                else:
+                    layout_video = local_upload
 
             layout_state = state.get("layout") or _load_channel_preset_layout(conn, vod.get("channelId"))
             if layout_state and not state.get("layout"):
