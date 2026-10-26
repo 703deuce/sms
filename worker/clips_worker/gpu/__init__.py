@@ -46,7 +46,9 @@ def transcribe_with_fallback(
         log.warning("gpu.fallback op=transcribe reason=budget")
         name = "local"
     if name == "local":
-        return LocalProvider().transcribe(req)
+        res = LocalProvider().transcribe(req)
+        res.transcription_engine = "local_whisper"
+        return res
     try:
         provider = get_provider("transcribe", conn)
         res = provider.transcribe(req)
@@ -59,4 +61,7 @@ def transcribe_with_fallback(
         if not fallback:
             raise
         log.warning("gpu.fallback op=transcribe reason=%s", exc)
-        return LocalProvider().transcribe(req)
+        res = LocalProvider().transcribe(req)
+        res.transcription_engine = "local_whisper"
+        res.fallback_reason = str(exc)
+        return res

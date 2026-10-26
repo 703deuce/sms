@@ -4,8 +4,8 @@ from __future__ import annotations
 import random
 import time
 
-from clips_worker.gpu import transcribe_with_fallback
 from clips_worker.gpu.base import TranscribeReq
+from clips_worker.transcribe_provider import transcribe_audio_request
 from clips_worker.streamer.errors import RetryableError
 
 MAX_CHUNK_ATTEMPTS = 5
@@ -24,7 +24,8 @@ def transcribe_chunk_with_retry(
     last_exc: Exception | None = None
     while attempt < MAX_CHUNK_ATTEMPTS:
         try:
-            return transcribe_with_fallback(conn, req, workspace_id, project_id)
+            res, _meta = transcribe_audio_request(conn, req, workspace_id, project_id)
+            return res
         except Exception as exc:
             last_exc = exc
             attempt += 1

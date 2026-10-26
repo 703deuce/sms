@@ -6,9 +6,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from clips_worker.gpu import transcribe_with_fallback
 from clips_worker.gpu.base import TranscribeReq
 from clips_worker.storage import sign_url, upload_file
+from clips_worker.transcribe_provider import TranscribeMeta, transcribe_audio_request
 
 
 def _extract_opus_16k(src: Path, dest: Path) -> None:
@@ -39,7 +39,7 @@ def transcribe_video_file(
     project: dict,
     src: Path,
     model: str | None = None,
-) -> list[dict]:
+) -> tuple[list[dict], TranscribeMeta]:
     workspace_id = project["workspaceId"]
     project_id = project["id"]
     provider_name = (os.environ.get("GPU_PROVIDER_TRANSCRIBE") or os.environ.get("GPU_PROVIDER") or "local").lower()
@@ -49,21 +49,14 @@ def transcribe_video_file(
         opus = td_path / "audio.opus"
         _extract_opus_16k(src, opus)
 
+        req: TranscribeReq
         if provider_name == "modal":
             audio_key = f"ws/{workspace_id}/projects/{project_id}/audio.opus"
             upload_file(audio_key, opus, "audio/opus")
             url = sign_url(audio_key)
-            res = transcribe_with_fallback(
-                conn,
-                TranscribeReq(audio_url=url, model=model, language=None),
-                workspace_id,
-                project_id,
-            )
+            req = TranscribeReq(audio_url=url, audio_path=str(opus), model=model, language=None)
         else:
-            res = transcribe_with_fallback(
-                conn,
-                TranscribeReq(audio_path=str(src), model=model, language=None),
-                workspace_id,
-                project_id,
-            )
-    return res.words
+            req = TranscribeReq(audio_path=str(opus), model=model, language=None)
+
+        res, meta = transcribe_audio_request(conn, req, workspace_id, project_id)
+    return res.words, meta

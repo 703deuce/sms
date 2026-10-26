@@ -21,6 +21,8 @@ class TranscribeRes:
     duration_s: float
     gpu_seconds: float
     provider: str
+    transcription_engine: str = "local_whisper"
+    fallback_reason: str | None = None
 
 
 @dataclass

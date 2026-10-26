@@ -238,7 +238,7 @@ def process_job(conn, job: dict) -> None:
             )
 
             model = os.environ.get("ASR_MODEL", "small.en")
-            words = transcribe_video_file(conn, project, src, model=model)
+            words, tx_meta = transcribe_video_file(conn, project, src, model=model)
 
             post_progress(
                 job["id"],
@@ -248,6 +248,7 @@ def process_job(conn, job: dict) -> None:
                     "progress": 45,
                     "transcriptWords": words,
                     "jobStatus": "RUNNING",
+                    **tx_meta.as_progress_fields(),
                 },
             )
 

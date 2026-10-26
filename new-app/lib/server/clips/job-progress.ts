@@ -16,6 +16,8 @@ export async function applyWorkerJobProgress(input: {
   etaSeconds?: number
   chunkDone?: number
   chunkTotal?: number
+  transcriptionEngine?: 'deepgram' | 'local_whisper'
+  transcriptionFallbackReason?: string
 }) {
   const prisma = getPrisma()
   const projectPatch: Record<string, unknown> = {}
@@ -25,11 +27,14 @@ export async function applyWorkerJobProgress(input: {
   if (input.error !== undefined) projectPatch.error = input.error
   if (input.transcriptWords !== undefined) projectPatch.transcriptWords = input.transcriptWords
 
-  if (
+  const needsSettingsRead =
     input.etaSeconds !== undefined ||
     input.chunkDone !== undefined ||
-    input.chunkTotal !== undefined
-  ) {
+    input.chunkTotal !== undefined ||
+    input.transcriptionEngine !== undefined ||
+    input.transcriptionFallbackReason !== undefined
+
+  if (needsSettingsRead) {
     const project = await prisma.clipProject.findUnique({
       where: { id: input.projectId },
       select: { settings: true },
@@ -37,6 +42,12 @@ export async function applyWorkerJobProgress(input: {
     const settings = (project?.settings ?? {}) as Record<string, unknown>
     projectPatch.settings = {
       ...settings,
+      ...(input.transcriptionEngine !== undefined
+        ? { transcriptionEngine: input.transcriptionEngine }
+        : {}),
+      ...(input.transcriptionFallbackReason !== undefined
+        ? { transcriptionFallbackReason: input.transcriptionFallbackReason }
+        : {}),
       streamerProgress: {
         ...((settings.streamerProgress as Record<string, unknown>) ?? {}),
         ...(input.etaSeconds !== undefined ? { etaSeconds: input.etaSeconds } : {}),
@@ -47,6 +58,14 @@ export async function applyWorkerJobProgress(input: {
     }
   }
 
+  const jobPayloadPatch: Record<string, unknown> = {}
+  if (input.transcriptionEngine !== undefined) {
+    jobPayloadPatch.transcriptionEngine = input.transcriptionEngine
+  }
+  if (input.transcriptionFallbackReason !== undefined) {
+    jobPayloadPatch.transcriptionFallbackReason = input.transcriptionFallbackReason
+  }
+
   const heartbeat = shouldTouchLockedAt(input.storedJobStatus, input.jobStatus)
   const terminalFromBody = input.jobStatus === 'DONE' || input.jobStatus === 'FAILED'
   const jobPatch: Record<string, unknown> = {}
@@ -55,6 +74,15 @@ export async function applyWorkerJobProgress(input: {
     if (terminalFromBody) jobPatch.finishedAt = new Date()
   }
   if (heartbeat) jobPatch.lockedAt = new Date()
+
+  if (Object.keys(jobPayloadPatch).length) {
+    const job = await prisma.clipJob.findUnique({
+      where: { id: input.jobId },
+      select: { payload: true },
+    })
+    const prev = (job?.payload ?? {}) as Record<string, unknown>
+    jobPatch.payload = { ...prev, ...jobPayloadPatch }
+  }
 
   await prisma.$transaction([
     ...(Object.keys(projectPatch).length

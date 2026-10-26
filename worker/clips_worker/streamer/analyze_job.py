@@ -147,6 +147,10 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 chunk_total=len(ranges),
                 started_at=float(state.get("analyzeStartedAt") or chunk_started),
             )
+            if getattr(res, "transcription_engine", None):
+                payload_prog["transcriptionEngine"] = res.transcription_engine
+            if getattr(res, "fallback_reason", None):
+                payload_prog["transcriptionFallbackReason"] = res.fallback_reason
             hb.update(stage=payload_prog["stage"], progress=payload_prog["progress"])
             post_progress(job["id"], payload_prog)
 
