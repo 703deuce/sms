@@ -1,4 +1,4 @@
-"""Metadata when speakercrop is replaced by ffmpeg fit export."""
+"""Speakercrop → ffmpeg fit fallback: WARN log + clip_jobs.payload only (clip_renders.format stays mp4)."""
 from __future__ import annotations
 
 import json

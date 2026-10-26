@@ -46,7 +46,6 @@ def mark_render(
     size_bytes: int | None = None,
     error: str | None = None,
     srt_key: str | None = None,
-    render_format: str | None = None,
 ) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -57,11 +56,10 @@ def mark_render(
                 "sizeBytes" = COALESCE(%s, "sizeBytes"),
                 error = %s,
                 "srtKey" = COALESCE(%s, "srtKey"),
-                format = COALESCE(%s, format),
                 "updatedAt" = NOW()
             WHERE id = %s
             """,
-            (status, output_key, size_bytes, error, srt_key, render_format, render_id),
+            (status, output_key, size_bytes, error, srt_key, render_id),
         )
     conn.commit()
 

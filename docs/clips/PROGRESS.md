@@ -27,9 +27,10 @@
 
 ## Storage
 
-- **Supabase** project `sms2`, private bucket `clips` (`STORAGE_DRIVER=supabase`).
-- Browser: TUS resumable (6 MB chunks) or signed PUT ≤50 MB.
-- Worker: `SUPABASE_URL` + service role, `DATABASE_URL`, `WORKER_SHARED_SECRET`, `APP_URL`.
+- **Production (live):** **Backblaze B2** via `STORAGE_DRIVER=s3` — bucket `transovo-clips`, SigV4 browser multipart (default 32 MB parts), `CLIPS_MAX_UPLOAD_BYTES=5368709120` (5 GB). CORS: `docs/clips/b2-cors.json`.
+- **Legacy reads:** existing objects on Supabase bucket `clips` remain reachable (`storageDriver` fallback + worker Supabase download when S3 misses).
+- **Supabase** project `sms2` still used for DB/auth; storage role is legacy + fallback only while objects migrate.
+- Worker: `DATABASE_URL`, `WORKER_SHARED_SECRET`, `APP_URL`, `S3_*`, and `SUPABASE_URL` + service role for fallback.
 
 ## Manager testing (not automated by agent)
 
@@ -44,7 +45,7 @@
 - **Effective UI limit** = `min(CLIPS_MAX_UPLOAD_BYTES | CLIPS_UPLOAD_MAX_BYTES, SUPABASE_OBJECT_MAX_BYTES)` when `STORAGE_DRIVER=supabase`. Set env on web after upgrade, e.g. `SUPABASE_OBJECT_MAX_BYTES=5368709120` and `CLIPS_MAX_UPLOAD_BYTES` to match product policy.
 - Client preflight + `/api/clips/uploads/limits` must show the **effective** cap so the “up to X” hint never over-promises (e.g. not 150 MB / 20 GB while plan is still 50 MB).
 
-**Backblaze B2:** `STORAGE_DRIVER=s3` with `S3_ENDPOINT` (e.g. `https://s3.us-east-005.backblazeb2.com`), `S3_REGION`, keys, `S3_BUCKET=transovo-clips`, `CLIPS_MAX_UPLOAD_BYTES=5368709120`. Apply via `scripts/apply-b2-env-coolify.sh` (Coolify API + `/opt/clips-worker/worker.env`). CORS: `docs/clips/b2-cors.json` (B2 native API).
+**B2 env apply (one-time / rotation):** `scripts/apply-b2-env-coolify.sh` — Coolify API + `/opt/clips-worker/worker.env`, length-verify before shred. **Prod is already on B2** (Oct 2026).
 
 **No shared-password gate** — `DEV_BYPASS_AUTH` unchanged; UI opens without clips login.
 
