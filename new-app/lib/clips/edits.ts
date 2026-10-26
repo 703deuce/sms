@@ -20,6 +20,16 @@ export type ClipEditsV2 = {
     colors?: { a?: string; b?: string }
     emphasis?: number[]
     keywordHighlight?: boolean
+    autoEmojis?: boolean
+    emojiByWord?: Record<string, string>
+    progressBar?: {
+      enabled?: boolean
+      color?: string
+      position?: 'top' | 'bottom'
+      thickness?: number
+    }
+    presetConfig?: Record<string, unknown>
+    customPresetId?: string
   }
   layout: {
     mode: 'speaker_follow' | 'fit_blur' | 'center_crop' | 'subject_follow'

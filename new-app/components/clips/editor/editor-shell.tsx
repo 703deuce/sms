@@ -338,7 +338,33 @@ export function EditorShell({
               />
             </TabsContent>
             <TabsContent value="captions" className="mt-0">
-              <CaptionsPanel edits={edits} onChange={setCaptions} onApplyBrand={() => void applyBrand()} />
+              <CaptionsPanel
+                clipId={clipId}
+                edits={edits}
+                onChange={setCaptions}
+                onApplyBrand={() => void applyBrand()}
+                onSavePreset={async () => {
+                  const name = window.prompt('Preset name')
+                  if (!name?.trim()) return
+                  const cap = edits.captions ?? {}
+                  await clipsFetch('/api/clips/caption-presets', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      name: name.trim(),
+                      config: {
+                        presetId: cap.presetId,
+                        animation: cap.animation,
+                        size: cap.size,
+                        position: cap.position,
+                        case: cap.case,
+                        wordsPerLine: cap.wordsPerLine,
+                        colors: cap.colors,
+                      },
+                    }),
+                  })
+                  toast.success('Preset saved')
+                }}
+              />
             </TabsContent>
             <TabsContent value="broll" className="mt-0">
               <BrollPanel

@@ -1,4 +1,4 @@
-from clips_worker.import_url import (
+from clips_worker.import_url_parse import (
     classify_url,
     drive_download_url,
     normalize_dropbox_url,

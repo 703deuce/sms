@@ -83,6 +83,12 @@ def build_ass(
     play_h: int = 1280,
 ) -> None:
     preset = resolve_preset(edits_captions.get("presetId") or edits_captions.get("preset"))
+    inline = edits_captions.get("presetConfig")
+    if isinstance(inline, dict) and inline:
+        for k, v in inline.items():
+            if v is not None:
+                preset[k] = v
+    emoji_by_word = edits_captions.get("emojiByWord") if isinstance(edits_captions.get("emojiByWord"), dict) else {}
     anim = (edits_captions.get("animation") or preset["animation"] or "none").lower()
     wpl = int(edits_captions.get("wordsPerLine") or preset["wordsPerLine"] or 2)
     case = (edits_captions.get("case") or preset["case"] or "upper").lower()
@@ -211,5 +217,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,{disp(w['w'], case)}"
                 )
             events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
+            emo = emoji_by_word.get(str(wi)) or emoji_by_word.get(wi)
+            if emo:
+                cx = play_w // 2
+                y_base = {"bottom": int(play_h * 0.88), "middle": play_h // 2, "top": int(play_h * 0.12)}.get(
+                    position, int(play_h * 0.88)
+                )
+                emo_y = y_base - int(fontsize * 1.6)
+                emo_end = min(chunk_end + 0.6, w_end + 0.6)
+                events.append(
+                    f"Dialogue: 1,{ts(w_start)},{ts(emo_end)},Cap,,0,0,0,,"
+                    f"{{\\pos({cx},{emo_y})\\fs{int(fontsize * 1.6)}}}{emo}"
+                )
 
     ass_path.write_text(header + "\n".join(events) + "\n")

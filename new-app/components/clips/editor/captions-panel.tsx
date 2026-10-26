@@ -1,20 +1,27 @@
 'use client'
 
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolvePreset } from '@/lib/clips/caption-presets'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { clipsFetch } from '@/lib/clips-api'
 import { cn } from '@/lib/utils'
 
 const ANIMATIONS = ['none', 'pop', 'bounce', 'slideup', 'typewriter', 'karaoke', 'glow'] as const
 
+type CustomPreset = { id: string; name: string; config: Record<string, unknown> }
+
 export function CaptionsPanel({
+  clipId,
   edits,
   onChange,
   onSavePreset,
   onApplyBrand,
 }: {
+  clipId?: string
   edits: ClipEditsV2
   onChange: (captions: ClipEditsV2['captions']) => void
   onSavePreset?: () => void
@@ -23,8 +30,38 @@ export function CaptionsPanel({
   const cap = edits.captions ?? {}
   const presetId = cap.presetId || 'bold_pop'
   const preset = resolvePreset(presetId)
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>([])
+
+  const loadCustom = useCallback(async () => {
+    try {
+      const data = await clipsFetch<{ items: CustomPreset[] }>('/api/clips/caption-presets')
+      setCustomPresets(data.items)
+    } catch {
+      setCustomPresets([])
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadCustom()
+  }, [loadCustom])
 
   const patch = (partial: Partial<ClipEditsV2['captions']>) => onChange({ ...cap, ...partial })
+
+  const suggestEmojis = async () => {
+    if (!clipId) return
+    try {
+      const data = await clipsFetch<{ picks: { wordIndex: number; emoji: string }[] }>(
+        `/api/clips/clips/${clipId}/captions/emojis`,
+        { method: 'POST', body: '{}' },
+      )
+      const map: Record<string, string> = { ...(cap.emojiByWord || {}) }
+      for (const p of data.picks) map[String(p.wordIndex)] = p.emoji
+      patch({ autoEmojis: true, emojiByWord: map })
+      toast.success(`Added ${data.picks.length} emoji(s)`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Emoji suggest failed')
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4 p-3">
@@ -34,6 +71,30 @@ export function CaptionsPanel({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
+        {customPresets.map((p) => {
+          const active = cap.customPresetId === p.id
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...cap,
+                  customPresetId: p.id,
+                  presetId: 'bold_pop',
+                  presetConfig: p.config,
+                })
+              }
+              className={cn(
+                'rounded-lg border p-2 text-left transition-colors',
+                active ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:bg-muted/40',
+              )}
+            >
+              <p className="mb-1 text-xs font-medium">{p.name}</p>
+              <span className="text-[10px] text-muted-foreground">Custom</span>
+            </button>
+          )
+        })}
         {CAPTION_PRESETS.map((p) => {
           const id = presetSlugToId(p.slug)
           const active = id === presetId
@@ -78,6 +139,59 @@ export function CaptionsPanel({
           </option>
         ))}
       </select>
+
+      <div className="flex items-center justify-between">
+        <span className="text-sm">Auto emojis</span>
+        <Switch checked={!!cap.autoEmojis} onCheckedChange={(v) => patch({ autoEmojis: v })} />
+      </div>
+      {cap.autoEmojis && clipId ? (
+        <Button size="sm" variant="outline" onClick={() => void suggestEmojis()}>Suggest emojis</Button>
+      ) : null}
+
+      <div className="flex items-center justify-between">
+        <span className="text-sm">Progress bar</span>
+        <Switch
+          checked={!!cap.progressBar?.enabled}
+          onCheckedChange={(v) =>
+            patch({
+              progressBar: {
+                enabled: v,
+                color: cap.progressBar?.color || '#FFFFFF',
+                position: cap.progressBar?.position || 'bottom',
+                thickness: cap.progressBar?.thickness || 8,
+              },
+            })
+          }
+        />
+      </div>
+      {cap.progressBar?.enabled ? (
+        <div className="flex flex-wrap gap-2 text-xs">
+          <input
+            type="color"
+            value={cap.progressBar?.color || '#FFFFFF'}
+            onChange={(e) => patch({ progressBar: { ...cap.progressBar, enabled: true, color: e.target.value } })}
+          />
+          {(['top', 'bottom'] as const).map((pos) => (
+            <Button
+              key={pos}
+              size="sm"
+              variant={cap.progressBar?.position === pos ? 'default' : 'outline'}
+              onClick={() => patch({ progressBar: { ...cap.progressBar, enabled: true, position: pos } })}
+            >
+              {pos}
+            </Button>
+          ))}
+          <input
+            type="range"
+            min={6}
+            max={12}
+            value={cap.progressBar?.thickness || 8}
+            onChange={(e) =>
+              patch({ progressBar: { ...cap.progressBar, enabled: true, thickness: Number(e.target.value) } })
+            }
+          />
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between">
         <span className="text-sm">Keyword highlight</span>

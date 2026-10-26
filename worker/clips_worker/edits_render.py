@@ -389,9 +389,16 @@ def render_edited_clip(
         )
         caption_src = mixed
 
+    from clips_worker.render_clip import aspect_size
+
+    aspect = settings.get("aspectRatio", "9:16")
+    resolution = settings.get("exportResolution", "720p")
+    play_w, play_h = aspect_size(aspect, resolution)
+
     final = work_dir / "final.mp4"
-    if int(edits.get("captions", {}).get("enabled", True)):
-        burn_captions(caption_src, caption_words, final, work_dir, edits.get("captions") or {})
+    cap_edits = edits.get("captions") or {}
+    if int(cap_edits.get("enabled", True)):
+        burn_captions(caption_src, caption_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
         caption_src = final
     branded = work_dir / "branded.mp4"
     brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else None
@@ -401,9 +408,25 @@ def render_edited_clip(
 
         apply_brand_logo(caption_src, branded, logo_key, brand, work_dir)
         shutil.copy(branded, out_mp4)
-    elif int(edits.get("captions", {}).get("enabled", True)):
+    elif int(cap_edits.get("enabled", True)):
         shutil.copy(final, out_mp4)
     else:
         shutil.copy(caption_src, out_mp4)
+
+    pb = cap_edits.get("progressBar") if isinstance(cap_edits.get("progressBar"), dict) else None
+    if pb and pb.get("enabled"):
+        from clips_worker.progress_bar import apply_progress_bar
+
+        pb_out = work_dir / "with_progress.mp4"
+        apply_progress_bar(
+            out_mp4,
+            pb_out,
+            str(pb.get("color") or "#FFFFFF"),
+            str(pb.get("position") or "bottom"),
+            int(pb.get("thickness") or 8),
+            play_w,
+            play_h,
+        )
+        shutil.copy(pb_out, out_mp4)
 
     return out_mp4, caption_words, build_srt(caption_words)
