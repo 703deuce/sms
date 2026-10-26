@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { ScoreBadge } from '@/components/clips/score-badge'
+import { ScoreRing } from '@/components/clips/ui/score-ring'
+import { DurationChip } from '@/components/clips/ui/duration-chip'
 import type { ClipCardData } from '@/components/clips/clip-grid'
 import { clipsFetch } from '@/lib/clips-api'
 import { formatDur, formatTimecode } from '@/lib/clips/format'
@@ -42,7 +43,10 @@ export function ClipCard({
   ] as const
 
   return (
-    <article className="flex flex-col gap-2 rounded-xl border border-border surface overflow-hidden">
+    <article
+      data-testid="clip-card"
+      className="group flex flex-col gap-2 overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+    >
       <div className="relative aspect-[9/16] bg-muted">
         {clip.posterUrl ? (
           <video
@@ -67,8 +71,9 @@ export function ClipCard({
           />
         ) : null}
         <div className="absolute left-2 top-2">
-          <ScoreBadge score={clip.score} scores={scores} />
+          <ScoreRing score={clip.score} />
         </div>
+        <DurationChip ms={clip.durationMs} />
       </div>
       <div className="flex flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">{clip.title}</h3>
