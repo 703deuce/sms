@@ -16,7 +16,10 @@ import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { Timeline } from '@/components/clips/editor/timeline'
+import { AudioPanel } from '@/components/clips/editor/audio-panel'
 import { BrollPanel } from '@/components/clips/editor/broll-panel'
+import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
+import { useGeneration } from '@/components/clips/editor/use-generation'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
@@ -81,9 +84,28 @@ export function EditorShell({
     mergeBroll,
     removeBroll,
     updateBrollItem,
+    attachMusicGeneration,
+    patchMusic,
+    setMusic,
+    addSfx,
+    updateSfx,
+    removeSfx,
   } = useEditorState(clipId, bounds, initialEdits)
 
+  const musicGenId = edits.audio?.music?.generationId ?? null
+  const musicGen = useGeneration(musicGenId)
+
   const outDur = outputDurationFromEdits(edits)
+
+  useAudioMix({
+    videoRef,
+    edits,
+    words,
+    musicUrl: musicGen.downloadUrl,
+    sfxCues: [],
+    outputMs,
+    playing,
+  })
 
   const onTick = useCallback((tick: { sourceMs: number; outputMs: number; playing: boolean }) => {
     setOutputMs(tick.outputMs)
@@ -259,7 +281,23 @@ export function EditorShell({
                 onRemoveBroll={removeBroll}
               />
             </TabsContent>
-            <TabsContent value="audio"><ComingSoon /></TabsContent>
+            <TabsContent value="audio" className="mt-0">
+              <AudioPanel
+                clipId={clipId}
+                edits={edits}
+                outputDurationMs={outDur}
+                playheadMs={outputMs}
+                onSuggestMusic={() => {}}
+                onAttachMusic={attachMusicGeneration}
+                onPatchMusic={patchMusic}
+                onRemoveMusic={() => setMusic(null)}
+                onAddSfx={(generationId, atMs) =>
+                  addSfx({ generationId, atMs, volume: 0.8 })
+                }
+                onUpdateSfx={updateSfx}
+                onRemoveSfx={removeSfx}
+              />
+            </TabsContent>
             <TabsContent value="thumbnail"><ComingSoon /></TabsContent>
             <TabsContent value="dub"><ComingSoon /></TabsContent>
             <TabsContent value="brand"><ComingSoon /></TabsContent>

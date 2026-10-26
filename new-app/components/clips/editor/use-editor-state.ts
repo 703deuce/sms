@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useReducer, useRef } from 'react'
+import type { ClipAudioMusic, ClipAudioSfx, ClipEditsAudio } from '@/lib/clips/audio'
+import { DEFAULT_DUCK_DEPTH, DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS, DEFAULT_MUSIC_VOLUME } from '@/lib/clips/audio'
 import type { BrollItem } from '@/lib/clips/broll'
 import {
   canonicalEditsJson,
@@ -183,6 +185,77 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     [setEdits, state.edits],
   )
 
+  const setAudio = useCallback(
+    (audio: ClipEditsAudio) => {
+      setEdits({ ...state.edits, audio })
+    },
+    [setEdits, state.edits],
+  )
+
+  const setMusic = useCallback(
+    (music: ClipAudioMusic | null) => {
+      const cur = state.edits.audio || { music: null, sfx: [] }
+      setEdits({ ...state.edits, audio: { ...cur, music } })
+    },
+    [setEdits, state.edits],
+  )
+
+  const patchMusic = useCallback(
+    (patch: Partial<ClipAudioMusic>) => {
+      const cur = state.edits.audio?.music
+      if (!cur) return
+      const audio = state.edits.audio || { music: null, sfx: [] }
+      setEdits({ ...state.edits, audio: { ...audio, music: { ...cur, ...patch } } })
+    },
+    [setEdits, state.edits],
+  )
+
+  const addSfx = useCallback(
+    (item: ClipAudioSfx) => {
+      const cur = state.edits.audio || { music: null, sfx: [] }
+      setEdits({ ...state.edits, audio: { ...cur, sfx: [...cur.sfx, item] } })
+    },
+    [setEdits, state.edits],
+  )
+
+  const updateSfx = useCallback(
+    (generationId: string, patch: Partial<ClipAudioSfx>) => {
+      const cur = state.edits.audio || { music: null, sfx: [] }
+      setEdits({
+        ...state.edits,
+        audio: {
+          ...cur,
+          sfx: cur.sfx.map((s) => (s.generationId === generationId ? { ...s, ...patch } : s)),
+        },
+      })
+    },
+    [setEdits, state.edits],
+  )
+
+  const removeSfx = useCallback(
+    (generationId: string) => {
+      const cur = state.edits.audio || { music: null, sfx: [] }
+      setEdits({
+        ...state.edits,
+        audio: { ...cur, sfx: cur.sfx.filter((s) => s.generationId !== generationId) },
+      })
+    },
+    [setEdits, state.edits],
+  )
+
+  const attachMusicGeneration = useCallback(
+    (generationId: string) => {
+      setMusic({
+        generationId,
+        volume: DEFAULT_MUSIC_VOLUME,
+        duckDepth: DEFAULT_DUCK_DEPTH,
+        fadeInMs: DEFAULT_MUSIC_FADE_IN_MS,
+        fadeOutMs: DEFAULT_MUSIC_FADE_OUT_MS,
+      })
+    },
+    [setMusic],
+  )
+
   const setTrim = useCallback(
     (trim: { in: number; out: number }) => {
       const pad = 5000
@@ -230,6 +303,13 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     mergeBroll,
     updateBrollItem,
     removeBroll,
+    setAudio,
+    setMusic,
+    patchMusic,
+    addSfx,
+    updateSfx,
+    removeSfx,
+    attachMusicGeneration,
     resetEdits: () => setEdits(defaultEdits(bounds), false),
   }
 }

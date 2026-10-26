@@ -79,6 +79,11 @@ export function ExportDialog({
         {(edits.broll || []).some((b) => b.source === 'ai') && (
           <p className="mt-2 text-xs text-muted-foreground">Includes AI-generated B-roll.</p>
         )}
+        {(edits.audio?.music || (edits.audio?.sfx?.length ?? 0) > 0) && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Music and sound effects generated with ElevenLabs
+          </p>
+        )}
         <MediaCredits clipId={clipId} edits={edits} />
         {status && status !== 'READY' && <p className="mt-3 text-sm">Status: {status}…</p>}
         <div className="mt-4 flex flex-wrap gap-2">

@@ -284,6 +284,7 @@ def render_edited_clip(
     settings: dict,
     work_dir: Path,
     broll_specs: list[dict] | None = None,
+    audio_assets: dict | None = None,
 ) -> tuple[Path, list[dict], str]:
     shot_overrides = (edits.get("layout") or {}).get("shotOverrides") or []
     src_words = ensure_word_i(source_words)
@@ -344,6 +345,28 @@ def render_edited_clip(
         broll_out = work_dir / "with_broll.mp4"
         apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h)
         caption_src = broll_out
+
+    if audio_assets and (
+        audio_assets.get("music_path") or audio_assets.get("sfx_paths")
+    ):
+        from clips_worker.audio_render import apply_audio_mix
+
+        segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+        length_s = sum((b - a) for a, b in segs) / 1000.0
+        meta = audio_assets.get("music_meta") or {}
+        mixed = work_dir / "mixed_audio.mp4"
+        apply_audio_mix(
+            caption_src,
+            mixed,
+            audio_assets.get("music_path"),
+            audio_assets.get("sfx_paths") or [],
+            length_s=length_s,
+            volume=float(meta.get("volume", 0.25)),
+            duck_depth=float(meta.get("duckDepth", 0.7)),
+            fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
+            fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
+        )
+        caption_src = mixed
 
     final = work_dir / "final.mp4"
     if int(edits.get("captions", {}).get("enabled", True)):

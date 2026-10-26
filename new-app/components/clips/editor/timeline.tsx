@@ -46,6 +46,7 @@ export function Timeline({
   }
 
   const broll = edits.broll || []
+  const audio = edits.audio
   const outSpan = Math.max(1, clipOutputDurationMs)
 
   return (
@@ -91,6 +92,26 @@ export function Timeline({
           trimIn={edits.trim.in}
           onChange={(outMs) => onTrimChange({ in: edits.trim.in, out: outMs })}
         />
+        <div className="absolute inset-x-0 bottom-8 h-5 rounded bg-emerald-950/40">
+          {audio?.music && (
+            <div
+              className="absolute top-0.5 h-4 rounded bg-emerald-500/70"
+              style={{ left: 0, width: '100%' }}
+              title="Music"
+            />
+          )}
+          {(audio?.sfx || []).map((s) => {
+            const left = (s.atMs / outSpan) * 100
+            return (
+              <div
+                key={s.generationId}
+                className="absolute top-0.5 h-4 w-1 rounded bg-amber-400"
+                style={{ left: `${left}%` }}
+                title={`SFX @ ${s.atMs}ms`}
+              />
+            )
+          })}
+        </div>
         <div className="absolute inset-x-0 bottom-0 h-6 rounded bg-muted/80">
           {broll.map((item) => {
             const left = (item.startMs / outSpan) * 100

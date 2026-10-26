@@ -9038,3 +9038,32 @@ model AiGeneration {
   @@index([clipId])
   @@map("ai_generations")
 }
+
+model AiUsage {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  projectId     String?
+  clipId        String?
+  generationId  String?
+  provider      String
+  model         String
+  units         Float
+  unitType      String
+  costUsdMicros Int
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@map("ai_usage")
+}
+
+model SfxCache {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  promptHash   String
+  generationId String
+  storageKey   String
+  createdAt    DateTime @default(now())
+
+  @@unique([workspaceId, promptHash])
+  @@map("sfx_cache")
+}

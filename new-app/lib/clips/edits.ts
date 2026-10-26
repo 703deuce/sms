@@ -1,4 +1,5 @@
 import { createHash } from 'crypto'
+import { normalizeAudioEdits, type ClipEditsAudio } from '@/lib/clips/audio'
 import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
 
 export type CutRange = [number, number]
@@ -25,8 +26,7 @@ export type ClipEditsV2 = {
     shotOverrides: { i: number; focus: 'auto' | 'A' | 'B' | 'both' }[]
   }
   broll?: BrollItem[]
-  music?: unknown
-  sfx?: unknown[]
+  audio?: ClipEditsAudio
   audioTrack?: string
   brand?: unknown
 }
@@ -93,6 +93,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
         : [],
     },
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
+    audio: normalizeAudioEdits(o.audio),
   }
 }
 
