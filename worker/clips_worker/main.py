@@ -116,7 +116,7 @@ def claim_job(conn) -> dict | None:
             WHERE id = (
               SELECT id FROM clip_jobs
               WHERE status = 'QUEUED'
-                AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP')
+                AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP')
                 AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
               ORDER BY priority DESC, "runAfter" ASC
               FOR UPDATE SKIP LOCKED

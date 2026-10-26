@@ -1,22 +1,15 @@
-import type { ClipRenderStatus } from '@prisma/client'
 import { editsVersionHash, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { exportFilename } from '@/lib/server/clips/clips'
+import { mapRenderRows, parseExportStatusFilter, renderStatusWhere } from '@/lib/server/clips/export-rows'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import { createId } from '@/lib/supabase/id'
 
-const SIGNED_TTL = 3600
-
 export async function listClipRenders(workspaceId: string, statusFilter?: 'all' | 'ready' | 'failed') {
   const prisma = getPrisma()
-  const map = { ready: 'READY', failed: 'FAILED' } as const
-  const q = statusFilter ?? 'all'
-  const where: { workspaceId: string; status?: ClipRenderStatus } = {
-    workspaceId,
-    ...(map[q as keyof typeof map] ? { status: map[q as keyof typeof map] } : {}),
-  }
+  const filter = parseExportStatusFilter(statusFilter)
   const rows = await prisma.clipRender.findMany({
-    where,
+    where: { workspaceId, ...renderStatusWhere(filter) },
     orderBy: { createdAt: 'desc' },
     take: 100,
     include: {
@@ -26,36 +19,11 @@ export async function listClipRenders(workspaceId: string, statusFilter?: 'all' 
           title: true,
           projectId: true,
           posterKey: true,
-          previewKey: true,
         },
       },
     },
   })
-  const storage = getClipStorage()
-  return Promise.all(
-    rows.map(async (r) => {
-      const fname = r.filename || exportFilename(r.clip.title)
-      return {
-        id: r.id,
-        clipId: r.clipId,
-        projectId: r.clip.projectId,
-        title: r.clip.title,
-        resolution: r.resolution,
-        watermark: r.watermark,
-        status: r.status,
-        createdAt: r.createdAt.toISOString(),
-        expiresAt: r.expiresAt?.toISOString() ?? null,
-        sizeBytes: r.sizeBytes ? Number(r.sizeBytes) : null,
-        filename: fname,
-        posterUrl: r.clip.posterKey ? await storage.createSignedDownloadUrl(r.clip.posterKey, SIGNED_TTL) : null,
-        editorUrl: `/app/clips/${r.clip.projectId}/edit/${r.clipId}`,
-        downloadUrl:
-          r.status === 'READY' && r.outputKey
-            ? await storage.createSignedDownloadUrl(r.outputKey, SIGNED_TTL, { downloadFilename: fname })
-            : null,
-      }
-    }),
-  )
+  return mapRenderRows(rows)
 }
 
 export async function getRenderForWorkspace(workspaceId: string, renderId: string) {

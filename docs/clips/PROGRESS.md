@@ -40,3 +40,25 @@
   ```
 - Confirm with the same GET that **exactly one** deployment remains queued or running for that app (the newest commit).
 - Do not stack pushes: one fix → one push → cancel duplicates → wait for that single deploy to finish (`GET /api/health` `commitSha` matches).
+
+## Worker deploy
+
+Persistent env file on the Coolify host: `/opt/clips-worker/worker.env` (root-owned, mode `600`). Recreate the worker with:
+
+```bash
+sudo docker rm -f clips-worker
+sudo docker run -d \
+  --name clips-worker \
+  --restart unless-stopped \
+  --network coolify \
+  --env-file /opt/clips-worker/worker.env \
+  clips-worker:latest
+```
+
+Image build (repo root, not `new-app/worker/clips_worker`):
+
+```bash
+cd /path/to/sms && sudo docker build -f worker/Dockerfile -t clips-worker:latest .
+```
+
+Required env names (values in `worker.env` only): `APP_URL`, `DATABASE_URL`, `WORKER_SHARED_SECRET`, `WORKER_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STORAGE_DRIVER`, `STORAGE_BUCKET`, `OPENAI_API_KEY`, `CLIP_LLM_MODEL`, `ASR_MODEL`, `SPEAKERCROP_DIR`, `TRANSCRIBE_SCRIPT`, `PYTHONUNBUFFERED`, `HF_HOME`.

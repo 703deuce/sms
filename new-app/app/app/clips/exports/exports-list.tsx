@@ -23,23 +23,39 @@ function ClientTime({ iso }: { iso: string | null }) {
       setText('—')
       return
     }
-    setText(
-      new Intl.DateTimeFormat(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZoneName: 'short',
-      }).format(new Date(iso)),
-    )
+    const d = new Date(iso)
+    if (!Number.isFinite(d.getTime())) {
+      setText('—')
+      return
+    }
+    try {
+      setText(
+        new Intl.DateTimeFormat(undefined, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+          timeZoneName: 'short',
+        }).format(d),
+      )
+    } catch {
+      setText('—')
+    }
   }, [iso])
   return <>{text}</>
+}
+
+function normalizeFilter(raw: string | null): Filter {
+  const q = (raw || 'all').toLowerCase()
+  if (q === 'ready' || q === 'failed') return q
+  return 'all'
 }
 
 export function ExportsList({ initialRows }: { initialRows: ExportRenderRow[] }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const filter = (searchParams.get('status') || 'all') as Filter
+  const filter = normalizeFilter(searchParams.get('status'))
   const [rows, setRows] = useState<ExportRenderRow[]>(initialRows)
   const [loading, setLoading] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
 
   const setFilter = useCallback(
     (f: Filter) => {
@@ -52,12 +68,27 @@ export function ExportsList({ initialRows }: { initialRows: ExportRenderRow[] })
   )
 
   useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
     setLoading(true)
     void listRenders(filter)
-      .then((d) => setRows(d.exports))
-      .catch(() => setRows([]))
+      .then((d) => setRows(d.exports ?? []))
+      .catch(() => {
+        /* keep SSR initialRows on client fetch failure */
+      })
       .finally(() => setLoading(false))
-  }, [filter])
+  }, [filter, hydrated])
+
+  if (!hydrated && !initialRows.length) {
+    return (
+      <Panel title="Exports" description="Rendered downloads for your workspace.">
+        <div className="h-32 animate-pulse rounded-lg bg-muted" />
+      </Panel>
+    )
+  }
 
   if (loading && !rows.length) {
     return (
