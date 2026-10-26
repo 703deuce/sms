@@ -234,6 +234,12 @@ export async function uploadClipFile(
     const durationMs = await probeDurationMs(file)
     if (!uploadId) throw new Error('Upload session missing')
 
+    if (storage.mode === 'app_chunked') {
+      throw new Error(
+        'This upload session used deprecated server staging. Start a new upload — files go directly to object storage and resume after deploys.',
+      )
+    }
+
     let multipartParts: { partNumber: number; etag: string }[] | undefined
 
     if (storage.mode === 's3_multipart' && storage.s3Multipart) {

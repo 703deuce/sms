@@ -7,7 +7,7 @@ import { PrimaryButton } from '@/components/app/primary-button'
 import { LogoMark } from '@/components/brand/logo-mark'
 import { useClipsWorkspace } from '@/components/providers/clips-workspace-provider'
 import { BUSINESS } from '@/lib/data'
-import { CLIPS, groupItems, isItemActive, sortGroups } from '@/lib/nav'
+import { clipsNavItems, groupItems, isItemActive, sortGroups } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import {
   Sidebar,
@@ -27,7 +27,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { testMode } = useClipsWorkspace()
-  const groups = sortGroups(groupItems(CLIPS.items))
+  const groups = sortGroups(groupItems(clipsNavItems()))
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border" data-testid="app-sidebar">

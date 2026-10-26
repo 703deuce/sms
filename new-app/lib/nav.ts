@@ -16,6 +16,7 @@ import {
   Video,
   type LucideIcon,
 } from 'lucide-react'
+import { isScreenwritingEnabled } from '@/lib/features/screenwriting'
 
 export type ProductKey = 'clips'
 export type ContextKey = 'clips' | 'workspace'
@@ -42,13 +43,7 @@ export type NavContext = {
 
 export const GROUP_ORDER = ['Create', 'Library', 'Brand', 'Exports'] as const
 
-export const CLIPS: NavContext = {
-  key: 'clips',
-  title: 'Clips',
-  shortTitle: 'Clips',
-  href: '/app/clips',
-  icon: Scissors,
-  items: [
+const CLIPS_ITEMS: NavItem[] = [
     { title: 'New project', href: '/app/clips/new', icon: Plus, group: 'Create' },
     { title: 'Streamer', href: '/app/streamer', icon: Radio, group: 'Create' },
     { title: 'Screenwriting', href: '/app/sw', icon: PenLine, group: 'Create' },
@@ -85,7 +80,20 @@ export const CLIPS: NavContext = {
       group: 'Brand',
     },
     { title: 'Exports', href: '/app/exports', icon: Download, group: 'Exports' },
-  ],
+]
+
+export function clipsNavItems(): NavItem[] {
+  if (isScreenwritingEnabled()) return CLIPS_ITEMS
+  return CLIPS_ITEMS.filter((i) => i.href !== '/app/sw')
+}
+
+export const CLIPS: NavContext = {
+  key: 'clips',
+  title: 'Clips',
+  shortTitle: 'Clips',
+  href: '/app/clips',
+  icon: Scissors,
+  items: clipsNavItems(),
 }
 
 export const PRODUCTS: NavContext[] = [CLIPS]
