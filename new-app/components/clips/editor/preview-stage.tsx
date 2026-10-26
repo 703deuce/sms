@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { ClipBrandEdits } from '@/lib/clips/brand'
+import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { keepSegments } from '@/lib/clips/edits'
 import { buildCaptionWords, captionWordsToClipWords } from '@/lib/clips/caption-words'
 import type { CropTrack } from '@/lib/clips/crop-track'
@@ -19,6 +20,8 @@ export function PreviewStage({
   videoUrl,
   edits,
   words,
+  previewWords,
+  brandLogoUrl,
   cropTrack,
   brollMedia = [],
   videoRef,
@@ -27,6 +30,8 @@ export function PreviewStage({
   videoUrl: string | null
   edits: ClipEditsV2
   words: SourceWord[]
+  previewWords?: ClipWord[]
+  brandLogoUrl?: string | null
   cropTrack: CropTrack | null
   brollMedia?: BrollMediaRow[]
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -153,7 +158,10 @@ export function PreviewStage({
     return () => cancelAnimationFrame(raf)
   }, [box.h, box.w, onTick, playing])
 
-  const captionWords = captionWordsToClipWords(buildCaptionWords(words, edits))
+  const captionWords =
+    previewWords ?? captionWordsToClipWords(buildCaptionWords(words, edits))
+  const brand = (edits.brand || {}) as ClipBrandEdits
+  const pos = brand.logoPosition ?? 'TR'
 
   return (
     <div ref={wrapRef} className="absolute inset-0 flex items-center justify-center">
@@ -210,6 +218,21 @@ export function PreviewStage({
             />
           )
         })}
+        {brandLogoUrl && brand.logoKey && (
+          <img
+            src={brandLogoUrl}
+            alt=""
+            className="pointer-events-none absolute z-[20]"
+            style={{
+              opacity: brand.logoOpacity ?? 0.9,
+              width: `${brand.logoSizePct ?? 12}%`,
+              top: pos.includes('T') ? 12 : undefined,
+              bottom: pos.includes('B') ? 12 : undefined,
+              left: pos.includes('L') ? 12 : undefined,
+              right: pos.includes('R') ? 12 : undefined,
+            }}
+          />
+        )}
         {edits.captions?.enabled !== false && (
           <CaptionOverlay
             words={captionWords}

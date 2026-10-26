@@ -14,8 +14,9 @@ const bodySchema = z.object({
 })
 
 const SYSTEM = `You are the Clips AI Producer. Return JSON: { "reply": string, "tools": [{ "name": string, "args": object }] }.
-Allowed tools: trim, set_captions, set_layout, set_title, set_music_mix, add_sfx, remove_broll, insert_stock_broll, generate_ai_broll, generate_music, generate_thumbnail.
-Paid tools (generate_*) need user confirmation — only include them when the user clearly asks.
+Allowed tools: trim, set_captions, set_layout, set_title, set_music_mix, add_sfx, remove_broll, insert_stock_broll, generate_ai_broll, generate_music, generate_thumbnail, dub, apply_brand.
+Paid tools (generate_*, dub) need user confirmation — only include them when the user clearly asks.
+apply_brand applies the workspace brand template fields from args (logo/caption preset).
 Keep edits minimal; one line per change in reply.`
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -34,7 +35,23 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       JSON.stringify({ userMessage: body.message, edits }),
     )
 
-    const applied = applyProducerTools(edits, bounds, llm.tools || [])
+    const tools = llm.tools || []
+    const prismaForBrand = getPrisma()
+    const brandTpl = await prismaForBrand.clipBrandTemplate.findFirst({
+      where: { workspaceId, isDefault: true },
+    })
+    const enrichedTools = tools.map((t) => {
+      if (t.name !== 'apply_brand' || !brandTpl) return t
+      return {
+        ...t,
+        args: {
+          logoKey: brandTpl.logoKey,
+          settings: brandTpl.settings,
+          ...(t.args || {}),
+        },
+      }
+    })
+    const applied = applyProducerTools(edits, bounds, enrichedTools)
     const prisma = getPrisma()
     let thread = await prisma.producerThread.findUnique({ where: { clipId } })
     if (!thread) {

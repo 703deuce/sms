@@ -17,6 +17,8 @@ import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { Timeline } from '@/components/clips/editor/timeline'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
+import { DubPanel } from '@/components/clips/editor/dub-panel'
+import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { BrollPanel } from '@/components/clips/editor/broll-panel'
 import { ThumbnailPanel } from '@/components/clips/editor/thumbnail-panel'
 import { ProducerPanel } from '@/components/clips/producer/producer-panel'
@@ -25,11 +27,11 @@ import { useGeneration } from '@/components/clips/editor/use-generation'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
+import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
+import type { BrandTemplateSettings } from '@/lib/clips/brand'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-
-function ComingSoon() {
-  return <p className="p-3 text-sm text-muted-foreground">Coming in a later update</p>
-}
+import { clipsFetch } from '@/lib/clips-api'
+import { toast } from 'sonner'
 
 function isEditableTarget(t: EventTarget | null) {
   if (!t || !(t instanceof HTMLElement)) return false
@@ -106,18 +108,60 @@ export function EditorShell({
 
   const musicGenId = edits.audio?.music?.generationId ?? null
   const musicGen = useGeneration(musicGenId)
+  const { dubs, refreshDubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
+    clipId,
+    edits,
+    words,
+  )
+  const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
 
   const outDur = outputDurationFromEdits(edits)
 
   useAudioMix({
     videoRef,
     edits,
-    words,
+    words: duckWords,
     musicUrl: musicGen.downloadUrl,
+    dubUrl: dubAudioUrl,
+    useDubAudio,
     sfxCues: [],
     outputMs,
     playing,
   })
+
+  useEffect(() => {
+    const key = (edits.brand as { logoKey?: string } | undefined)?.logoKey
+    if (!key) {
+      setBrandLogoUrl(null)
+      return
+    }
+    void clipsFetch<{ url: string }>(`/api/clips/brand/logo?key=${encodeURIComponent(key)}`)
+      .then((d) => setBrandLogoUrl(d.url))
+      .catch(() => setBrandLogoUrl(null))
+  }, [edits.brand])
+
+  const applyBrand = useCallback(async () => {
+    try {
+      const data = await clipsFetch<{
+        template: { logoKey: string | null; settings: BrandTemplateSettings } | null
+        logoUrl: string | null
+      }>('/api/clips/brand')
+      if (!data.template) {
+        toast.error('No brand template saved')
+        return
+      }
+      setEdits(
+        applyBrandTemplateToEdits(edits, {
+          logoKey: data.template.logoKey,
+          settings: data.template.settings,
+        }),
+      )
+      setBrandLogoUrl(data.logoUrl)
+      toast.success('Brand applied')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Apply brand failed')
+    }
+  }, [edits, setEdits])
 
   const onTick = useCallback((tick: { sourceMs: number; outputMs: number; playing: boolean }) => {
     setOutputMs(tick.outputMs)
@@ -214,6 +258,8 @@ export function EditorShell({
               videoUrl={videoUrl}
               edits={edits}
               words={words}
+              previewWords={previewWords}
+              brandLogoUrl={brandLogoUrl}
               cropTrack={cropTrack}
               brollMedia={brollMedia}
               videoRef={videoRef}
@@ -280,10 +326,11 @@ export function EditorShell({
                 onMode={setLayoutMode}
                 onShotFocus={setShotOverride}
                 onRerunReframe={() => void requestClipReframe(clipId)}
+                onApplyBrand={() => void applyBrand()}
               />
             </TabsContent>
             <TabsContent value="captions" className="mt-0">
-              <CaptionsPanel edits={edits} onChange={setCaptions} />
+              <CaptionsPanel edits={edits} onChange={setCaptions} onApplyBrand={() => void applyBrand()} />
             </TabsContent>
             <TabsContent value="broll" className="mt-0">
               <BrollPanel
@@ -318,8 +365,23 @@ export function EditorShell({
             <TabsContent value="thumbnail" className="mt-0">
               <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
             </TabsContent>
-            <TabsContent value="dub"><ComingSoon /></TabsContent>
-            <TabsContent value="brand"><ComingSoon /></TabsContent>
+            <TabsContent value="dub" className="mt-0">
+              <DubPanel
+                clipId={clipId}
+                durationMs={outDur}
+                edits={edits}
+                onEdits={setEdits}
+                onRefresh={refreshDubs}
+                dubs={dubs}
+              />
+            </TabsContent>
+            <TabsContent value="brand" className="mt-0 p-3">
+              <p className="text-xs text-muted-foreground">
+                Workspace brand template lives at{' '}
+                <a className="underline" href="/app/clips/brand">/app/clips/brand</a>. Use Apply brand in Captions or
+                Layout.
+              </p>
+            </TabsContent>
           </Tabs>
         </aside>
       </div>
@@ -327,6 +389,8 @@ export function EditorShell({
         clipId={clipId}
         title={title}
         edits={edits}
+        dubs={dubs}
+        onAudioTrack={(track) => setEdits({ ...edits, audioTrack: track })}
         open={exportOpen}
         onClose={() => setExportOpen(false)}
       />

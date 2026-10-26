@@ -8915,9 +8915,30 @@ model Clip {
   project ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   renders ClipRender[]
   events  ClipEvent[]
+  dubTracks DubTrack[]
 
   @@index([projectId])
   @@map("clips")
+}
+
+model DubTrack {
+  id              String   @id @default(cuid())
+  clipId          String
+  targetLang      String
+  provider        String   @default("elevenlabs")
+  providerDubId   String?
+  status          String   @default("QUEUED")
+  audioKey        String?
+  srtKey          String?
+  words           Json?
+  costUsdMicros   Int?
+  error           String?
+  createdAt       DateTime @default(now())
+
+  clip Clip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+
+  @@index([clipId, createdAt])
+  @@map("dub_tracks")
 }
 
 model ClipEvent {

@@ -3,18 +3,25 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
+
+type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
 export function ExportDialog({
   clipId,
   title,
   edits,
+  dubs = [],
+  onAudioTrack,
   open,
   onClose,
 }: {
   clipId: string
   title: string
   edits: ClipEditsV2
+  dubs?: DubRow[]
+  onAudioTrack?: (track: string) => void
   open: boolean
   onClose: () => void
 }) {
@@ -92,6 +99,23 @@ export function ExportDialog({
       <div className="w-full max-w-md rounded-xl border border-border bg-background p-4 shadow-lg">
         <h2 className="text-lg font-semibold">Export</h2>
         <p className="mt-1 text-sm text-muted-foreground">720p · captions burned in</p>
+        <div className="mt-3 space-y-1 text-sm">
+          <p className="text-xs font-medium">Audio track</p>
+          <select
+            className="w-full rounded border border-border px-2 py-1 text-xs"
+            value={edits.audioTrack || 'original'}
+            onChange={(e) => onAudioTrack?.(e.target.value)}
+          >
+            <option value="original">Original</option>
+            {dubs
+              .filter((d) => d.status === 'READY')
+              .map((d) => (
+                <option key={d.id} value={`dub:${d.id}`}>
+                  Dub — {DUB_LANGUAGES.find((l) => l.code === d.targetLang)?.label || d.targetLang}
+                </option>
+              ))}
+          </select>
+        </div>
         <label className="mt-4 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={alsoSrt} onChange={(e) => setAlsoSrt(e.target.checked)} />
           Also download .srt

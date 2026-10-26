@@ -30,7 +30,20 @@ export async function createClipProject(
     where: { id: input.uploadId, workspaceId, status: 'COMPLETE' },
   })
   if (!upload) throw new Error('Upload not complete')
-  const settings = clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings())
+  const brandRow = await prisma.clipBrandTemplate.findFirst({
+    where: { workspaceId, isDefault: true },
+  })
+  const baseSettings = clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings())
+  const settings = brandRow
+    ? clipProjectSettingsSchema.parse({
+        ...baseSettings,
+        brand: {
+          templateId: brandRow.id,
+          logoKey: brandRow.logoKey,
+          ...(typeof brandRow.settings === 'object' ? brandRow.settings : {}),
+        },
+      })
+    : baseSettings
   const rangeEnd = settings.rangeEndMs || upload.durationMs || 0
   const projectId = createId('proj')
   const title = input.title?.trim() || upload.filename.replace(/\.[^.]+$/, '')
@@ -40,7 +53,7 @@ export async function createClipProject(
       workspaceId,
       title,
       uploadId: upload.id,
-      settings,
+      settings: JSON.parse(JSON.stringify(settings)),
       rangeStartMs: settings.rangeStartMs,
       rangeEndMs: rangeEnd,
       status: 'QUEUED',

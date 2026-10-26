@@ -49,6 +49,10 @@ def pick_anything_clips(
     max_clips = int(settings.get("maxClips") or settings.get("max_clips") or 10)
 
     cands = build_candidate_windows(video, words, work, range_start_s, range_end_s)
+    print(
+        f"[clipanything] scan candidates={len(cands)} project={project_id} range_s={range_start_s:.1f}-{range_end_s:.1f}",
+        flush=True,
+    )
     if not cands:
         return [], "No highlight moments detected in this video."
 
@@ -65,6 +69,7 @@ def pick_anything_clips(
             },
         )
 
+    print(f"[clipanything] vision shortlist={len(prepared)} project={project_id}", flush=True)
     ranked = rank_clipanything_candidates(
         conn,
         workspace_id=workspace_id,
@@ -116,6 +121,7 @@ def pick_anything_clips(
         if len(picks) >= max_clips:
             break
 
+    print(f"[clipanything] picks={len(picks)} project={project_id}", flush=True)
     if not picks:
         return [], "Vision ranking did not return usable clips."
     return picks, None

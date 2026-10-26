@@ -337,6 +337,10 @@ def render_edited_clip(
         ffmpeg_concat_segments(full_render, cut_mp4, segs_sec)
 
     remapped, _ = words_after_edits(src_words, edits)
+    caption_words = remapped
+    dub_assets = (audio_assets or {}).get("dub_assets") if audio_assets else None
+    if dub_assets and dub_assets.get("dub_words"):
+        caption_words = dub_assets["dub_words"]
     caption_src = cut_mp4
     if broll_specs:
         from clips_worker.broll_render import apply_broll_overlays
@@ -346,20 +350,37 @@ def render_edited_clip(
         apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h)
         caption_src = broll_out
 
-    if audio_assets and (
-        audio_assets.get("music_path") or audio_assets.get("sfx_paths")
-    ):
+    segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    length_s = sum((b - a) for a, b in segs) / 1000.0
+    meta = (audio_assets or {}).get("music_meta") or {}
+    music_path = (audio_assets or {}).get("music_path") if audio_assets else None
+    sfx_paths = (audio_assets or {}).get("sfx_paths") or [] if audio_assets else []
+    if dub_assets and dub_assets.get("dub_audio_path"):
+        from clips_worker.audio_render import apply_dub_speech_mix
+
+        mixed = work_dir / "mixed_dub.mp4"
+        apply_dub_speech_mix(
+            caption_src,
+            dub_assets["dub_audio_path"],
+            mixed,
+            music_path,
+            sfx_paths,
+            length_s=length_s,
+            volume=float(meta.get("volume", 0.25)),
+            duck_depth=float(meta.get("duckDepth", 0.7)),
+            fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
+            fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
+        )
+        caption_src = mixed
+    elif audio_assets and (music_path or sfx_paths):
         from clips_worker.audio_render import apply_audio_mix
 
-        segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
-        length_s = sum((b - a) for a, b in segs) / 1000.0
-        meta = audio_assets.get("music_meta") or {}
         mixed = work_dir / "mixed_audio.mp4"
         apply_audio_mix(
             caption_src,
             mixed,
-            audio_assets.get("music_path"),
-            audio_assets.get("sfx_paths") or [],
+            music_path,
+            sfx_paths,
             length_s=length_s,
             volume=float(meta.get("volume", 0.25)),
             duck_depth=float(meta.get("duckDepth", 0.7)),
@@ -370,9 +391,19 @@ def render_edited_clip(
 
     final = work_dir / "final.mp4"
     if int(edits.get("captions", {}).get("enabled", True)):
-        burn_captions(caption_src, remapped, final, work_dir, edits.get("captions") or {})
+        burn_captions(caption_src, caption_words, final, work_dir, edits.get("captions") or {})
+        caption_src = final
+    branded = work_dir / "branded.mp4"
+    brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else None
+    logo_key = brand.get("logoKey") if brand else None
+    if logo_key:
+        from clips_worker.brand_render import apply_brand_logo
+
+        apply_brand_logo(caption_src, branded, logo_key, brand, work_dir)
+        shutil.copy(branded, out_mp4)
+    elif int(edits.get("captions", {}).get("enabled", True)):
         shutil.copy(final, out_mp4)
     else:
-        shutil.copy(cut_mp4, out_mp4)
+        shutil.copy(caption_src, out_mp4)
 
-    return out_mp4, remapped, build_srt(remapped)
+    return out_mp4, caption_words, build_srt(caption_words)

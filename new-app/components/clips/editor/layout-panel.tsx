@@ -17,15 +17,22 @@ export function LayoutPanel({
   onMode,
   onShotFocus,
   onRerunReframe,
+  onApplyBrand,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
   onMode: (mode: ClipEditsV2['layout']['mode']) => void
   onShotFocus: (i: number, focus: 'auto' | 'A' | 'B' | 'both') => void
   onRerunReframe: (shotIndex: number) => void
+  onApplyBrand?: () => void
 }) {
   return (
     <div className="flex flex-col gap-4">
+      {onApplyBrand && (
+        <Button type="button" size="sm" variant="outline" onClick={onApplyBrand}>
+          Apply brand
+        </Button>
+      )}
       <div className="grid gap-2 sm:grid-cols-2">
         {LAYOUTS.map((l) => (
           <button

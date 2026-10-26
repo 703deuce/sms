@@ -35,6 +35,21 @@
 2. **After `PUSH`:** push once; cancel every older queued or running deploy for app `ds8s3hjin60qs6g7s0iqkixs`; confirm **exactly one** deploy remains; **stay in the run** and watch it on `coolify-server` until done.
 3. **Server-only work** (worker image rebuild, `/opt/clips-worker/worker.env`, `docker run`) is **not** gated on `PUSH` — do it immediately and report exact commands run.
 
+### Coolify environment variables (never raw SQL)
+
+**Do not** `INSERT` or `UPDATE` `environment_variables` in the Coolify Postgres DB. Plaintext values break Laravel `decrypt()` and deployments fail with `DecryptException: The payload is invalid`.
+
+Use the Coolify API with `~/.coolify-api-token` on `coolify-server`:
+
+```bash
+TOKEN=$(cat ~/.coolify-api-token)
+# Single var (Coolify encrypts value):
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"key":"VISION_MODEL","value":"gemini-flash-lite-latest","is_preview":false}' \
+  "http://localhost:8000/api/v1/applications/ds8s3hjin60qs6g7s0iqkixs/envs"
+# Bulk: PATCH .../envs/bulk with an array of {key, value, is_preview}
+```
+
 ### Coolify watch (after manager `PUSH`)
 
 - List/cancel via API (`application_id` `1`):

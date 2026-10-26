@@ -109,6 +109,78 @@ def apply_audio_mix(
     subprocess.check_call(cmd)
 
 
+def apply_dub_speech_mix(
+    video: Path,
+    dub_audio: Path,
+    out_video: Path,
+    music_path: Path | None,
+    sfx_paths: list[tuple[Path, int, float]],
+    *,
+    length_s: float,
+    volume: float,
+    duck_depth: float,
+    fade_in_s: float,
+    fade_out_s: float,
+) -> None:
+    """Replace speech with dub audio; duck music against dub track."""
+    has_music = music_path is not None and music_path.is_file()
+    sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
+    L = max(0.1, float(length_s))
+    V = max(0.0, min(1.0, float(volume)))
+    D = max(0.0, min(1.0, float(duck_depth)))
+    FI = max(0.0, float(fade_in_s))
+    FO = max(0.0, float(fade_out_s))
+    ratio = 1.0 + 7.0 * D
+    parts = ["[1:a]asplit=2[sp][sc]"]
+    mix_inputs = ["[sp]"]
+    if has_music:
+        parts.append(
+            f"[2:a]volume={V:.4f},afade=t=in:d={FI:.3f},afade=t=out:st={max(0, L - FO):.3f}:d={FO:.3f},"
+            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS[mv]"
+        )
+        parts.append(
+            f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
+        )
+        mix_inputs.append("[md]")
+    else:
+        mix_inputs.append("[sc]")
+    sfx_base = 3 if has_music else 2
+    for i, spec in enumerate(sfx_specs):
+        inp = sfx_base + i
+        at_ms = int(spec.get("at_ms", 0))
+        vol = float(spec.get("volume", 0.8))
+        label = f"s{i}"
+        parts.append(f"[{inp}:a]adelay={at_ms}|{at_ms},volume={vol:.4f}[{label}]")
+        mix_inputs.append(f"[{label}]")
+    n = len(mix_inputs)
+    parts.append(f"{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0,alimiter=limit=0.95[aout]")
+    fc = ";".join(parts)
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-i", str(dub_audio)]
+    if has_music:
+        cmd.extend(["-i", str(music_path)])
+    for path, _, _ in sfx_paths:
+        cmd.extend(["-i", str(path)])
+    cmd.extend(
+        [
+            "-filter_complex",
+            fc,
+            "-map",
+            "0:v:0",
+            "-map",
+            "[aout]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-shortest",
+            str(out_video),
+        ]
+    )
+    subprocess.check_call(cmd)
+
+
 def export_ducked_music_stem(
     video: Path,
     music: Path,

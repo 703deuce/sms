@@ -25,3 +25,7 @@ export function clipPosterKey(workspaceId: string, projectId: string, clipId: st
 export function clipWordsKey(workspaceId: string, projectId: string, clipId: string) {
   return `ws/${workspaceId}/projects/${projectId}/clips/${clipId}/words.json`
 }
+
+export function brandLogoKey(workspaceId: string, ext: 'png' | 'svg') {
+  return `brand/${workspaceId}/logo.${ext}`
+}

@@ -155,6 +155,11 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         from clips_worker.audio_assets import load_audio_assets
 
         audio_assets = load_audio_assets(conn, edits, td_path)
+        from clips_worker.dub_assets import load_dub_assets
+
+        dub = load_dub_assets(conn, edits, td_path)
+        if dub:
+            audio_assets = {**(audio_assets or {}), "dub_assets": dub}
 
         out_mp4 = td_path / "render.mp4"
         _, _edited_words, srt_body = render_edited_clip(

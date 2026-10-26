@@ -13,6 +13,8 @@ export function useAudioMix({
   edits,
   words,
   musicUrl,
+  dubUrl,
+  useDubAudio,
   sfxCues,
   outputMs,
   playing,
@@ -21,11 +23,14 @@ export function useAudioMix({
   edits: ClipEditsV2
   words: SourceWord[]
   musicUrl: string | null
+  dubUrl?: string | null
+  useDubAudio?: boolean
   sfxCues: SfxCue[]
   outputMs: number
   playing: boolean
 }) {
   const ctxRef = useRef<AudioContext | null>(null)
+  const dubRef = useRef<HTMLAudioElement | null>(null)
   const musicRef = useRef<HTMLAudioElement | null>(null)
   const musicGainRef = useRef<GainNode | null>(null)
   const elementSourceRef = useRef<MediaElementAudioSourceNode | null>(null)
@@ -33,6 +38,37 @@ export function useAudioMix({
   const lastSfxKeyRef = useRef('')
 
   const audio = edits.audio
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    video.muted = Boolean(useDubAudio)
+  }, [useDubAudio, videoRef])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !useDubAudio || !dubUrl) return
+    if (!dubRef.current) {
+      dubRef.current = new Audio()
+      dubRef.current.crossOrigin = 'anonymous'
+    }
+    const el = dubRef.current
+    el.src = dubUrl
+    return () => {
+      el.pause()
+    }
+  }, [dubUrl, useDubAudio, videoRef])
+
+  useEffect(() => {
+    const dub = dubRef.current
+    if (!useDubAudio || !dub || !dubUrl) return
+    if (playing) {
+      dub.currentTime = outputMs / 1000
+      void dub.play().catch(() => {})
+    } else {
+      dub.pause()
+    }
+  }, [playing, outputMs, dubUrl, useDubAudio])
 
   useEffect(() => {
     const video = videoRef.current
@@ -122,6 +158,7 @@ export function useAudioMix({
       void ctxRef.current?.close()
       ctxRef.current = null
       musicRef.current = null
+      dubRef.current = null
       musicGainRef.current = null
       elementSourceRef.current = null
     }

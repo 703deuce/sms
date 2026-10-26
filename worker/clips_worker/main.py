@@ -98,7 +98,7 @@ def count_queued_jobs(conn) -> int:
         cur.execute(
             """
             SELECT count(*)::int FROM clip_jobs
-            WHERE status = 'QUEUED' AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC', 'THUMBNAIL')
+            WHERE status = 'QUEUED' AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC', 'THUMBNAIL', 'DUB')
               AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
             """,
         )
@@ -136,7 +136,7 @@ def claim_job(conn) -> dict | None:
             WHERE id = (
               SELECT id FROM clip_jobs
               WHERE status = 'QUEUED'
-                AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC', 'THUMBNAIL')
+                AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC', 'THUMBNAIL', 'DUB')
                 AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
               ORDER BY priority DESC, "runAfter" ASC
               FOR UPDATE SKIP LOCKED
@@ -263,6 +263,16 @@ def main() -> None:
                                 ("DONE", job["id"]),
                             )
                         conn.commit()
+                    elif job.get("type") == "DUB":
+                        from clips_worker.dub_job import run_dub_job
+
+                        run_dub_job(conn, job, post_progress)
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                'UPDATE clip_jobs SET status = %s, "finishedAt" = NOW(), error = NULL WHERE id = %s',
+                                ("DONE", job["id"]),
+                            )
+                        conn.commit()
                     elif job.get("type") == "MUSIC":
                         from clips_worker.music_job import run_music_job
 
@@ -284,7 +294,19 @@ def main() -> None:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")
                     traceback.print_exc()
-                    if job.get("type") in ("RENDER_CLIP", "MUSIC", "THUMBNAIL"):
+                    if job.get("type") in ("RENDER_CLIP", "MUSIC", "THUMBNAIL", "DUB"):
+                        if job.get("type") == "DUB":
+                            payload = job.get("payload") or {}
+                            if isinstance(payload, str):
+                                payload = json.loads(payload)
+                            dub_track_id = payload.get("dubTrackId")
+                            if dub_track_id:
+                                with conn.cursor() as cur:
+                                    cur.execute(
+                                        'UPDATE dub_tracks SET status=%s, error=%s WHERE id=%s',
+                                        ("FAILED", msg[:4000], dub_track_id),
+                                    )
+                                conn.commit()
                         if job.get("type") == "RENDER_CLIP":
                             payload = job.get("payload") or {}
                             if isinstance(payload, str):

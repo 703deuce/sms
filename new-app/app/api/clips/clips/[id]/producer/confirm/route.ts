@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { musicCostUsd } from '@/lib/clips/audio'
+import { dubCostUsd, DUB_LANGUAGES } from '@/lib/clips/dub'
 import { kieVideoCostUsd } from '@/lib/clips/kie-cost'
 import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
 import { jsonError } from '@/lib/server/api-error'
@@ -12,7 +13,7 @@ import { normalizeEdits, outputDurationMs } from '@/lib/clips/edits'
 
 const bodySchema = z.object({
   tool: z.object({
-    name: z.enum(['generate_ai_broll', 'generate_music', 'generate_thumbnail']),
+    name: z.enum(['generate_ai_broll', 'generate_music', 'generate_thumbnail', 'dub']),
     args: z.record(z.unknown()),
   }),
 })
@@ -78,6 +79,33 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           generationId: gen.id,
           estimatedCostUsd: kieVideoCostUsd(durationS, resolution),
         },
+      })
+    }
+
+    if (tool.name === 'dub') {
+      const targetLang = String(tool.args.targetLang || 'es')
+      const allowed = new Set(DUB_LANGUAGES.map((l) => l.code))
+      if (!allowed.has(targetLang)) {
+        return NextResponse.json({ error: 'Unsupported language' }, { status: 400 })
+      }
+      const durationMs = Math.max(1000, clip.endMs - clip.startMs)
+      const trackId = createId('dub')
+      await prisma.dubTrack.create({
+        data: { id: trackId, clipId, targetLang, status: 'QUEUED' },
+      })
+      const jobId = createId('job')
+      await prisma.clipJob.create({
+        data: {
+          id: jobId,
+          projectId: clip.projectId,
+          clipId,
+          type: 'DUB',
+          status: 'QUEUED',
+          payload: { dubTrackId: trackId, targetLang },
+        },
+      })
+      return NextResponse.json({
+        data: { dubTrackId: trackId, estimatedCostUsd: dubCostUsd(durationMs) },
       })
     }
 

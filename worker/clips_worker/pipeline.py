@@ -60,6 +60,25 @@ def insert_clips_batch(conn, rows: list[dict]) -> None:
     conn.commit()
 
 
+def initial_clip_edits(settings: dict) -> dict:
+    brand = settings.get("brand") or {}
+    cap = dict(settings.get("captions") or {})
+    cap_preset = brand.get("captionPreset") or {}
+    if isinstance(cap_preset, dict):
+        cap = {**cap, **cap_preset}
+    edits: dict = {"captions": cap}
+    if brand:
+        edits["brand"] = {
+            "templateId": brand.get("templateId"),
+            "logoKey": brand.get("logoKey"),
+            "logoPosition": brand.get("logoPosition"),
+            "logoSizePct": brand.get("logoSizePct"),
+            "logoOpacity": brand.get("logoOpacity"),
+            "primaryColor": brand.get("primaryColor"),
+        }
+    return edits
+
+
 def mark_project_ready(conn, project_id: str, error: str | None = None) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -243,7 +262,7 @@ def run_m4_pipeline(
                     "previewKey": keys["preview"],
                     "posterKey": keys["poster"],
                     "wordsKey": keys["words"],
-                    "edits": {"captions": settings.get("captions", {})},
+                    "edits": initial_clip_edits(settings),
                     "aiMeta": pick.get("aiMeta") or {"hook": pick.get("hook")},
                 }
             )

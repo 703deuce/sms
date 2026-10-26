@@ -13,10 +13,12 @@ export function CaptionsPanel({
   edits,
   onChange,
   onSavePreset,
+  onApplyBrand,
 }: {
   edits: ClipEditsV2
   onChange: (captions: ClipEditsV2['captions']) => void
   onSavePreset?: () => void
+  onApplyBrand?: () => void
 }) {
   const cap = edits.captions ?? {}
   const presetId = cap.presetId || 'bold_pop'
@@ -162,6 +164,9 @@ export function CaptionsPanel({
         </label>
       </div>
 
+      {onApplyBrand ? (
+        <Button size="sm" variant="outline" onClick={onApplyBrand}>Apply brand</Button>
+      ) : null}
       {onSavePreset ? (
         <Button size="sm" variant="outline" onClick={onSavePreset}>Save as preset</Button>
       ) : null}

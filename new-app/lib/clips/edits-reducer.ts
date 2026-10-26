@@ -5,6 +5,8 @@ import {
   DEFAULT_MUSIC_VOLUME,
   DEFAULT_SFX_VOLUME,
 } from '@/lib/clips/audio'
+import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
+import { brandTemplateSettingsSchema } from '@/lib/clips/brand'
 import type { BrollItem } from '@/lib/clips/broll'
 import { createId } from '@/lib/supabase/id'
 import { defaultEdits, type ClipBounds, type ClipEditsV2 } from '@/lib/clips/edits'
@@ -21,6 +23,8 @@ export type ProducerToolName =
   | 'generate_ai_broll'
   | 'generate_music'
   | 'generate_thumbnail'
+  | 'dub'
+  | 'apply_brand'
 
 export type ProducerToolCall = {
   name: ProducerToolName
@@ -122,6 +126,18 @@ export function applyProducerTool(
         summary: `Pending ${call.name}`,
         pendingPaid: { ...call, requiresConfirm: true },
       }
+    case 'dub':
+      return {
+        edits: base,
+        summary: `Pending dub (${String(call.args.targetLang || 'es')})`,
+        pendingPaid: { ...call, requiresConfirm: true },
+      }
+    case 'apply_brand': {
+      const settings = brandTemplateSettingsSchema.parse(call.args.settings ?? call.args)
+      const logoKey = call.args.logoKey as string | undefined
+      const next = applyBrandTemplateToEdits(base, { logoKey, settings })
+      return { edits: next, summary: 'Applied brand template' }
+    }
     default:
       return { edits: base, summary: 'Unknown tool' }
   }

@@ -55,6 +55,7 @@ export const clipProjectSettingsSchema = z.object({
     language: z.string().default('en'),
   }),
   brandTemplateId: z.string().nullable().optional(),
+  brand: z.record(z.unknown()).optional(),
   autoStockBroll: z.boolean().default(false),
   extras: z
     .object({
