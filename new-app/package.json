@@ -46,15 +46,15 @@
     "test:receptionist:runtime-verify": "NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/test-ai-receptionist-runtime-verification.ts",
     "test:voice-v3": "npx tsx scripts/test-receptionist-config-source.ts && node scripts/test-voice-v3-tools.mjs && node scripts/test-voice-v3-appointment-match.mjs && NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/test-get-intake-state-operation-intent.ts && NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/test-voice-v3-multi-intent-switching.ts",
     "sync:voice-v3-authority": "node ../packages/transovo-voice-v3-runtime/sync-to-new-app.mjs",
-    "test:voice-v3:golden-parity": "pnpm run sync:voice-v3-authority && NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/verify-golden-runtime-parity.ts",
-    "postinstall": "prisma generate --schema=../prisma/schema.prisma || true"
+    "test:voice-v3:golden-parity": "pnpm run sync:voice-v3-authority && NODE_OPTIONS='--import ../scripts/preload-server-only.mjs' npx tsx scripts/verify-golden-runtime-parity.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
     "@aws-sdk/s3-request-presigner": "^3.1156.0",
     "@base-ui/react": "^1.5.0",
     "@livekit/protocol": "^1.40.0",
-    "@prisma/client": "^6.16.0",
+    "@prisma/client": "6.19.3",
+    "prisma": "6.19.3",
     "@supabase/supabase-js": "^2.118.0",
     "@telnyx/webrtc": "^2.25.0",
     "@vercel/analytics": "1.6.1",
@@ -85,7 +85,6 @@
     "@types/react-dom": "^19",
     "playwright": "^1.52.0",
     "postcss": "^8.5",
-    "prisma": "^6.16.0",
     "tailwindcss": "^4.3.3",
     "typescript": "5.7.3",
     "vitest": "^3.2.4"

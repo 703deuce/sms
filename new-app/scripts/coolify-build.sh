@@ -19,9 +19,6 @@ elif [[ ! -f prisma/schema.prisma ]]; then
   exit 1
 fi
 
-echo "[new-app/coolify-build] prisma generate"
-$PNPM exec prisma generate
-
 echo "[new-app/coolify-build] caption parity (vitest)"
 $PNPM exec vitest run tests/caption-parity --config vitest.config.mts
 

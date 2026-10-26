@@ -10,8 +10,9 @@ PORT = "3000"
 nixPkgs = ["nodejs_22"]
 
 [phases.install]
+cacheDirectories = ["/root/.local/share/pnpm/store"]
 cmds = [
-  "cd new-app && npx --yes pnpm@12.3.4 install --frozen-lockfile",
+  "cd new-app && npx --yes pnpm@12.3.4 install --frozen-lockfile --store-dir /root/.local/share/pnpm/store",
 ]
 
 [phases.build]

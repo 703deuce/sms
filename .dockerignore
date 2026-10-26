@@ -1,0 +1,50 @@
+# Shrink Coolify/Docker build context (web app only; clips worker builds from worker/Dockerfile separately).
+
+.git
+.github
+.cursor
+.ui-agent
+.pytest_cache
+
+# Dependencies and build outputs (reinstalled in image)
+**/node_modules
+**/.next
+**/dist
+**/out
+**/tsconfig.tsbuildinfo
+
+# Legacy monolith and alternate UIs (not used by root nixpacks → new-app)
+src/
+newui/
+newui2/
+transovo-ui-blueprint/
+ui-rebuild/
+voice-runtime/
+voice-runtime-python/
+
+# Clips CPU worker (host build: worker/Dockerfile + /opt/clips-worker)
+worker/
+
+# Docs and local artifacts
+docs/
+exports/
+reports/
+fixtures/
+tests/
+infra/
+supabase/
+
+# Root npm lock (web install is new-app/pnpm-lock.yaml only)
+node_modules/
+package-lock.json
+
+# Env samples and dev-only
+.env.example
+*.example
+playwright.config.ts
+playwright.mass-texting-qa.config.ts
+docker-compose*.yml
+Dockerfile.sms-worker
+nixpacks.legacy-monolith.toml
+
+# Keep: new-app/, prisma/, packages/, scripts/deploy-db-migrations.sh, nixpacks.toml, Dockerfile.transovo-new-app

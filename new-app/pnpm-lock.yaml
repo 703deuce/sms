@@ -21,7 +21,7 @@ importers:
         specifier: ^1.40.0
         version: 1.51.0
       '@prisma/client':
-        specifier: ^6.16.0
+        specifier: 6.19.3
         version: 6.19.3(prisma@6.19.3(typescript@5.7.3))(typescript@5.7.3)
       '@supabase/supabase-js':
         specifier: ^2.118.0
@@ -59,6 +59,9 @@ importers:
       openai:
         specifier: ^4.0.0
         version: 4.104.0(zod@3.25.76)
+      prisma:
+        specifier: 6.19.3
+        version: 6.19.3(typescript@5.7.3)
       react:
         specifier: ^19
         version: 19.2.4
@@ -108,9 +111,6 @@ importers:
       postcss:
         specifier: ^8.5
         version: 8.5.6
-      prisma:
-        specifier: ^6.16.0
-        version: 6.19.3(typescript@5.7.3)
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3

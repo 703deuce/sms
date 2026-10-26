@@ -10,9 +10,10 @@ PORT = "3000"
 nixPkgs = ["nodejs_22"]
 
 [phases.install]
+cacheDirectories = ["/root/.local/share/pnpm/store"]
 # Nixpacks Node 22 ships an older Corepack that cannot verify current pnpm release signatures.
 cmds = [
-  "npx --yes pnpm@12.3.4 install --frozen-lockfile",
+  "npx --yes pnpm@12.3.4 install --frozen-lockfile --store-dir /root/.local/share/pnpm/store",
 ]
 
 [phases.build]
