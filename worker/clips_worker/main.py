@@ -125,6 +125,14 @@ def post_progress(job_id: str, payload: dict) -> None:
         resp.read()
 
 
+def post_progress_resilient(job_id: str, payload: dict) -> None:
+    """Progress posts must not abort long downloads on transient gateway timeouts."""
+    try:
+        post_progress(job_id, payload)
+    except Exception as exc:
+        log(f"progress post failed (continuing) job={job_id}: {exc}")
+
+
 def claim_job(conn) -> dict | None:
     worker_id = os.environ.get("WORKER_ID", "worker-1")
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -270,14 +278,14 @@ def handle_reframe_crop(conn, job: dict) -> None:
 def handle_stream_import(conn, job: dict) -> None:
     from clips_worker.streamer.import_job import run_stream_import_job
 
-    run_stream_import_job(conn, job, post_progress)
+    run_stream_import_job(conn, job, post_progress_resilient)
     _mark_job_done(conn, job["id"])
 
 
 def handle_stream_analyze(conn, job: dict) -> None:
     from clips_worker.streamer.analyze_job import run_stream_analyze_job
 
-    run_stream_analyze_job(conn, job, post_progress)
+    run_stream_analyze_job(conn, job, post_progress_resilient)
     _mark_job_done(conn, job["id"])
 
 
