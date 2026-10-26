@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "SwVersionKind" ADD VALUE IF NOT EXISTS 'PRE_IMPORT';
