@@ -302,6 +302,20 @@ def handle_stream_cleanup(conn, job: dict) -> None:
     _mark_job_done(conn, job["id"])
 
 
+def handle_stream_montage(conn, job: dict) -> None:
+    from clips_worker.streamer.montage_job import run_stream_montage_job
+
+    run_stream_montage_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+def handle_stream_autopull(conn, job: dict) -> None:
+    from clips_worker.streamer.autopull_job import run_stream_autopull_job
+
+    run_stream_autopull_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
 def handle_import_url(conn, job: dict) -> None:
     from clips_worker.import_url import run_import_url_job
 
@@ -317,6 +331,8 @@ DISPATCH: dict[str, object] = {
     "STREAM_RENDER": handle_stream_render,
     "STREAM_RELAYOUT": handle_stream_relayout,
     "STREAM_CLEANUP": handle_stream_cleanup,
+    "STREAM_MONTAGE": handle_stream_montage,
+    "STREAM_AUTOPULL": handle_stream_autopull,
     "PROCESS_PROJECT": process_job,
     "RENDER_CLIP": handle_render_clip,
     "REFRAME_CROP": handle_reframe_crop,
@@ -351,6 +367,13 @@ def main() -> None:
                 job = claim_job(conn)
                 if not job:
                     idle_polls += 1
+                    if worker_lane() == "stream" and idle_polls % 1800 == 1:
+                        try:
+                            from clips_worker.streamer.maintenance import maybe_run_streamer_maintenance
+
+                            maybe_run_streamer_maintenance(conn)
+                        except Exception as maint_exc:
+                            log(f"streamer maintenance failed: {maint_exc}")
                     if idle_polls % 30 == 1:
                         try:
                             n = count_queued_jobs(conn)

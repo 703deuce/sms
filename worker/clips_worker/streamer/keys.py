@@ -23,3 +23,15 @@ def stream_frame_key(workspace_id: str, vod_id: str, index: int) -> str:
 
 def clip_segment_key(workspace_id: str, project_id: str, clip_id: str) -> str:
     return f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/source_seg.mp4"
+
+
+def montage_output_key(workspace_id: str, project_id: str, montage_id: str) -> str:
+    return f"ws/{workspace_id}/projects/{project_id}/montages/{montage_id}.mp4"
+
+
+def montage_poster_key(workspace_id: str, project_id: str, montage_id: str) -> str:
+    return f"ws/{workspace_id}/projects/{project_id}/montages/{montage_id}.jpg"
+
+
+def clip_chat_key(workspace_id: str, project_id: str, clip_id: str) -> str:
+    return f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/chat.json"

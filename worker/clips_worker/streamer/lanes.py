@@ -12,6 +12,8 @@ _STREAM_TYPES = frozenset(
         "STREAM_RENDER",
         "STREAM_RELAYOUT",
         "STREAM_CLEANUP",
+        "STREAM_MONTAGE",
+        "STREAM_AUTOPULL",
     }
 )
 

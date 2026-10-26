@@ -1,10 +1,25 @@
 import { z } from 'zod'
 
+const chatOverlaySchema = z.object({
+  enabled: z.boolean().default(false),
+  position: z.enum(['gameplay_right', 'gameplay_left', 'bottom']).default('gameplay_right'),
+  opacity: z.number().min(0.2).max(1).default(0.6),
+})
+
+const notifySchema = z.object({
+  inApp: z.boolean().default(true),
+  email: z.boolean().default(true),
+})
+
 export const streamerSettingsSchema = z.object({
   clipCount: z.number().int().min(1).max(30).default(12),
   minClipS: z.number().min(10).max(120).default(15),
   maxClipS: z.number().min(15).max(180).default(60),
   language: z.string().nullable().default(null),
+  captionPosition: z.enum(['seam', 'gameplay_bottom', 'top']).default('seam'),
+  gameBadge: z.boolean().default(false),
+  chatOverlay: chatOverlaySchema.default({}),
+  notify: notifySchema.default({}),
 })
 
 export type StreamerSettings = z.infer<typeof streamerSettingsSchema>

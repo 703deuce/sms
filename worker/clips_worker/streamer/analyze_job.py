@@ -20,6 +20,7 @@ from clips_worker.streamer.config import CHUNK_MIN, CHUNK_OVERLAP_S, SCRATCH
 from clips_worker.streamer.keys import stream_audio_key, stream_chat_key, stream_chunk_key, stream_signals_key
 from clips_worker.streamer.viewer_clips.fetch import fetch_viewer_clips_for_vod
 from clips_worker.streamer.chat.source import get_chat
+from clips_worker.streamer.metadata import enrich_streamer_meta
 from clips_worker.streamer.rank import rank_moments
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
 
@@ -100,7 +101,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
 
         chunk_started = time.time()
         chat_executor = ThreadPoolExecutor(max_workers=1)
-        chat_future = chat_executor.submit(get_chat, vod)
+        chat_future = chat_executor.submit(get_chat, vod, conn)
         all_word_chunks: list[list[dict] | None] = [None] * len(ranges)
         for idx, (start_ms, end_ms) in enumerate(ranges):
             if idx in done:
@@ -209,6 +210,13 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         clip_rows = []
         for pick in picks:
             clip_id = f"clip_{uuid.uuid4().hex}"
+            ai_meta = enrich_streamer_meta(
+                pick.ai_meta,
+                vod=vod,
+                peak_ms=pick.peak_ms,
+                clip_start_ms=pick.start_ms,
+                chapters=chapters if isinstance(chapters, list) else None,
+            )
             clip_rows.append(
                 {
                     "id": clip_id,
@@ -225,7 +233,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                     "wordsKey": None,
                     "cropKey": None,
                     "edits": {},
-                    "aiMeta": pick.ai_meta,
+                    "aiMeta": ai_meta,
                 }
             )
         insert_clips_batch(conn, clip_rows)

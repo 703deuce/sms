@@ -510,6 +510,7 @@ model Workspace {
   streamVods                             StreamVod[]
   streamLayoutPresets                    StreamLayoutPreset[]
   streamUsage                            StreamUsage[]
+  clipMontages                           ClipMontage[]
   clipBrandTemplates                     ClipBrandTemplate[]
   captionPresets                         CaptionPreset[]
   clipRenders                            ClipRender[]
@@ -8870,6 +8871,7 @@ model ClipProject {
   clips     Clip[]
   jobs      ClipJob[]
   streamVod StreamVod?
+  clipMontages ClipMontage[]
 
   @@index([workspaceId, createdAt])
   @@map("clip_projects")
@@ -8896,6 +8898,8 @@ model StreamChannel {
   workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   vods            StreamVod[]
   layoutPresets   StreamLayoutPreset[]
+  chatBuckets     StreamChatBucket[]
+  chatLines       StreamChatLine[]
 
   @@unique([workspaceId, platform, login])
   @@index([platform, externalId])
@@ -8960,6 +8964,64 @@ model StreamVod {
   @@index([workspaceId, createdAt])
   @@index([channelId, streamedAt])
   @@map("stream_vods")
+}
+
+model StreamWebhookEvent {
+  id         String   @id
+  platform   String
+  type       String
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
+  @@map("stream_webhook_events")
+}
+
+model StreamChatBucket {
+  channelId   String
+  bucketStart DateTime
+  count       Int      @default(0)
+  chatters    Int      @default(0)
+  hype        Int      @default(0)
+  channel     StreamChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, bucketStart])
+  @@map("stream_chat_buckets")
+}
+
+model StreamChatLine {
+  id        String   @id @default(cuid())
+  channelId String
+  at        DateTime
+  user      String
+  color     String?
+  text      String
+  channel   StreamChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, at])
+  @@map("stream_chat_lines")
+}
+
+model ClipMontage {
+  id          String    @id @default(cuid())
+  workspaceId String
+  projectId   String
+  title       String
+  clipIds     Json
+  options     Json      @default("{}")
+  status      String    @default("QUEUED")
+  outputKey   String?
+  posterKey   String?
+  durationMs  Int?
+  sizeBytes   BigInt?
+  error       String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, projectId])
+  @@map("clip_montages")
 }
 
 model StreamUsage {

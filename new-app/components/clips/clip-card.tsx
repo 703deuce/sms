@@ -64,6 +64,22 @@ export function ClipCard({
         <p className="text-xs text-muted-foreground tabular-nums">
           Source {formatTimecode(clip.startMs)}–{formatTimecode(clip.endMs)} · {formatDur(clip.durationMs)} · score {clip.score}
         </p>
+        {(() => {
+          const meta = (clip.aiMeta as { streamer?: { meta?: { game?: string; vodUrlAt?: string } } })?.streamer?.meta
+          if (!meta?.game && !meta?.vodUrlAt) return null
+          return (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {meta.game ? (
+                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 font-medium text-primary">{meta.game}</span>
+              ) : null}
+              {meta.vodUrlAt ? (
+                <a href={meta.vodUrlAt} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                  VOD {formatTimecode(clip.startMs)} ↗
+                </a>
+              ) : null}
+            </div>
+          )
+        })()}
         <div className="flex flex-wrap gap-1.5">
           {dims.map(([label, grade]) => (
             <span key={label} className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
