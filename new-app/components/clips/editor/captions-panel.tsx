@@ -12,6 +12,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolvePreset } from '@/lib/clips/caption-presets'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -156,17 +158,21 @@ export function CaptionsPanel({
       </div>
 
       <label className="text-xs font-medium text-muted-foreground">Animation</label>
-      <select
-        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+      <Select
         value={cap.animation || preset.animation}
-        onChange={(e) => patch({ animation: e.target.value })}
+        onValueChange={(v) => patch({ animation: v })}
       >
-        {ANIMATIONS.map((a) => (
-          <option key={a} value={a}>
-            {a === 'slideup' ? 'Slide up' : a === 'karaoke' ? 'Karaoke fill' : a.charAt(0).toUpperCase() + a.slice(1)}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger className="h-9 w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {ANIMATIONS.map((a) => (
+            <SelectItem key={a} value={a}>
+              {a === 'slideup' ? 'Slide up' : a === 'karaoke' ? 'Karaoke fill' : a.charAt(0).toUpperCase() + a.slice(1)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <div className="flex items-center justify-between">
         <label htmlFor="cap-auto-emojis" className="text-sm">Auto emojis</label>
@@ -210,14 +216,16 @@ export function CaptionsPanel({
               {pos}
             </Button>
           ))}
-          <input
-            type="range"
+          <Slider
+            className="min-w-[120px] flex-1"
             min={6}
             max={12}
-            value={cap.progressBar?.thickness || 8}
-            onChange={(e) =>
-              patch({ progressBar: { ...cap.progressBar, enabled: true, thickness: Number(e.target.value) } })
-            }
+            step={1}
+            value={[cap.progressBar?.thickness || 8]}
+            onValueChange={(v) => {
+              const n = Array.isArray(v) ? v[0] : v
+              patch({ progressBar: { ...cap.progressBar, enabled: true, thickness: typeof n === 'number' ? n : 8 } })
+            }}
           />
         </div>
       ) : null}
@@ -233,14 +241,15 @@ export function CaptionsPanel({
       <label className="text-xs font-medium text-muted-foreground">
         Size ({cap.size ?? preset.sizePct}% of video height)
       </label>
-      <input
-        type="range"
+      <Slider
         min={3}
         max={10}
         step={0.5}
-        value={cap.size ?? preset.sizePct}
-        onChange={(e) => patch({ size: Number(e.target.value) })}
-        className="w-full"
+        value={[cap.size ?? preset.sizePct]}
+        onValueChange={(v) => {
+          const n = Array.isArray(v) ? v[0] : v
+          patch({ size: typeof n === 'number' ? n : preset.sizePct })
+        }}
       />
 
       <div className="flex gap-2">

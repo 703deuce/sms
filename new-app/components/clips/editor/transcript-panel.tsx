@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Scissors, Search, Undo2, User } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { FILLER_RE, isWordCut, wordDisplayText } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -53,6 +56,7 @@ export function TranscriptPanel({
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
   const [editingI, setEditingI] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
   const pad = 5000
   const viewMin = edits.trim.in - pad
   const viewMax = edits.trim.out + pad
@@ -116,6 +120,7 @@ export function TranscriptPanel({
     const { startMs, endMs, midMs } = wordSourceMs(w)
     const cut = isWordCut(w, edits.cutRanges)
     const display = wordDisplayText(w, edits.wordFixes)
+    const highlight = search.trim().length > 1 && display.toLowerCase().includes(search.trim().toLowerCase())
     const muted = !inTrim(w)
     const selected =
       selStart !== null && selEnd !== null && startMs >= Math.min(selStart, selEnd) && endMs <= Math.max(selStart, selEnd)
@@ -149,9 +154,11 @@ export function TranscriptPanel({
         <button
           type="button"
           disabled={muted}
-          className={`rounded px-0.5 hover:bg-muted ${cut ? 'line-through opacity-50' : ''} ${
-            selected ? 'bg-primary/20' : ''
-          } ${edits.captions?.emphasis?.includes(w.i) ? 'ring-1 ring-yellow-400' : ''}`}
+          className={`rounded px-0.5 transition hover:bg-accent cursor-text ${
+            cut ? 'text-muted-foreground/60 line-through decoration-destructive/70 decoration-2 bg-destructive/5' : ''
+          } ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
+            edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
+          }`}
           onClick={(e) => {
             if (muted) {
               if (window.confirm('Extend clip to here?')) onExtendTrim(Math.round(midMs))
@@ -174,7 +181,11 @@ export function TranscriptPanel({
             setEditingI(w.i)
           }}
         >
-          {display}
+          {highlight ? (
+            <mark className="rounded bg-lane-caption/30 text-foreground">{display}</mark>
+          ) : (
+            display
+          )}
         </button>
         {cut ? (
           <button type="button" className="ml-0.5 text-[10px] text-primary" onClick={() => onRestoreWord(w)}>
@@ -185,8 +196,42 @@ export function TranscriptPanel({
     )
   }
 
+  const cutCount = edits.cutRanges?.length ?? 0
+
   return (
     <div className="flex flex-col gap-3 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[140px] flex-1">
+          <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            className="h-8 pl-8"
+            placeholder="Search transcript…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Badge variant="secondary" className="h-7 tabular-nums">{cutCount} cuts</Badge>
+      </div>
+      {selStart !== null && selEnd !== null && (
+        <div className="flex w-fit gap-1 rounded-lg border border-border bg-popover p-1 shadow-md">
+          <Button size="sm" variant="ghost" className="h-8 gap-1" onClick={deleteSelection}>
+            <Scissors className="size-3.5" />
+            Cut
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1"
+            onClick={() => {
+              setSelStart(null)
+              setSelEnd(null)
+            }}
+          >
+            <Undo2 className="size-3.5" />
+            Clear
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>
         <Button size="sm" variant="outline" onClick={removeFillers}>Remove filler words</Button>
@@ -196,9 +241,12 @@ export function TranscriptPanel({
           const dot = SPEAKER_DOT[(block.speakerNum - 1) % SPEAKER_DOT.length]
           return (
             <div key={`${block.spk}-${bi}`}>
-              <div className="mt-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground first:mt-0">
-                <span className={`size-1.5 shrink-0 rounded-full ${dot}`} aria-hidden />
-                Speaker {block.speakerNum}
+              <div className="mt-3 flex items-center gap-1.5 first:mt-0">
+                <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-muted px-2 text-xs font-medium">
+                  <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
+                  <User className="size-3" aria-hidden />
+                  Speaker {block.speakerNum}
+                </span>
               </div>
               <div className="inline">{block.words.map((w) => renderWord(w))}</div>
             </div>
