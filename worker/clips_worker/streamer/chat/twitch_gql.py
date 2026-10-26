@@ -16,9 +16,26 @@ GQL_URL = "https://gql.twitch.tv/gql"
 MAX_MESSAGES = int(os.environ.get("STREAMER_CHAT_MAX_MESSAGES", "300000"))
 
 
+DEFAULT_GQL_CLIENT_ID = "kimne78kx3bnxbr9go8qwyt2"
+DEFAULT_COMMENTS_HASH = "b70c9057fa5a1e2647a856eb5ed7bb4960fcc43a"
+
+
+def gql_client_id() -> str:
+    return (
+        os.environ.get("TWITCH_GQL_CLIENT_ID")
+        or os.environ.get("TWITCH_CLIENT_ID")
+        or os.environ.get("TWITCH_HELIX_CLIENT_ID")
+        or DEFAULT_GQL_CLIENT_ID
+    ).strip()
+
+
+def comments_persisted_hash() -> str:
+    return (os.environ.get("TWITCH_GQL_COMMENTS_HASH") or DEFAULT_COMMENTS_HASH).strip()
+
+
 def _headers() -> dict[str, str]:
     return {
-        "Client-Id": os.environ["TWITCH_GQL_CLIENT_ID"],
+        "Client-Id": gql_client_id(),
         "Content-Type": "application/json",
     }
 
@@ -66,9 +83,7 @@ def _extract_page(data: Any) -> tuple[list[dict], str | None]:
 
 def fetch_vod_comments(video_id: str, cursor: str | None = None) -> tuple[list[dict], str | None]:
     """Fetch one page of VOD comments (caller loops for full replay)."""
-    if not os.environ.get("TWITCH_GQL_CLIENT_ID") or not os.environ.get("TWITCH_GQL_COMMENTS_HASH"):
-        return [], None
-    persisted = os.environ["TWITCH_GQL_COMMENTS_HASH"]
+    persisted = comments_persisted_hash()
     variables: dict[str, Any] = {"videoID": video_id}
     if cursor:
         variables["cursor"] = cursor

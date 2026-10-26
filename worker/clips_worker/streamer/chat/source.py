@@ -9,7 +9,9 @@ from typing import Iterable
 def _replay_disabled() -> bool:
     if os.environ.get("TWITCH_VOD_CHAT_REPLAY", "").lower() in ("off", "0", "false"):
         return True
-    return not (os.environ.get("TWITCH_GQL_CLIENT_ID") and os.environ.get("TWITCH_GQL_COMMENTS_HASH"))
+    from clips_worker.streamer.chat.twitch_gql import comments_persisted_hash, gql_client_id
+
+    return not (gql_client_id() and comments_persisted_hash())
 
 
 def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:

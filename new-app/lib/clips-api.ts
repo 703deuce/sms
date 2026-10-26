@@ -68,6 +68,10 @@ export function getProjectStatus(projectId: string) {
     wordCount: number
     chunkDone?: number
     chunkTotal?: number
+    waitingForWorker?: boolean
+    queueAhead?: number
+    queuedElapsedSec?: number
+    isStreamer?: boolean
   }>(`/api/clips/projects/${projectId}/status`)
 }
 

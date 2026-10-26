@@ -17,6 +17,7 @@ import { exportClip, listProjectClips, retryProject } from '@/lib/clips-api'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { MontageDialog } from '@/components/streamer/montage-dialog'
+import { MontageProgress } from '@/components/streamer/montage-progress'
 import { Clapperboard, Film, Sparkles } from 'lucide-react'
 
 type ProjectStatusPayload = {
@@ -61,6 +62,7 @@ export function ProjectClipsView({
   const readyFromServer = initialStatus === 'READY' && initialClips != null
   const [status, setStatus] = useState(initialStatus)
   const [clips, setClips] = useState<ClipCardData[]>(initialClips ?? [])
+  const [montagePollKey, setMontagePollKey] = useState(0)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [readyHydrated, setReadyHydrated] = useState(readyFromServer)
 
@@ -204,6 +206,7 @@ export function ProjectClipsView({
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {isStreamer ? <MontageProgress projectId={projectId} pollKey={montagePollKey} /> : null}
           <Panel
             title={clipCountLabel(clips.length)}
             description="Sorted by score. Hover a card to preview."
@@ -225,7 +228,13 @@ export function ProjectClipsView({
                     </SheetContent>
                   </Sheet>
                   <ExportAllDialog projectId={projectId} clips={clips} />
-                  {isStreamer ? <MontageDialog projectId={projectId} clips={clips} /> : null}
+                  {isStreamer ? (
+                    <MontageDialog
+                      projectId={projectId}
+                      clips={clips}
+                      onQueued={() => setMontagePollKey((k) => k + 1)}
+                    />
+                  ) : null}
                 </div>
               ) : null
             }
@@ -237,7 +246,12 @@ export function ProjectClipsView({
                 description={error || 'No complete, self-contained moments were found in this segment.'}
               />
             ) : (
-              <ClipGrid clips={clips} projectId={projectId} onDownload={(id) => void onDownload(id)} />
+              <ClipGrid
+                clips={clips}
+                projectId={projectId}
+                onDownload={(id) => void onDownload(id)}
+                isStreamer={isStreamer}
+              />
             )}
           </Panel>
         </div>

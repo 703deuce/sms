@@ -20,15 +20,17 @@ export function ClipGrid({
   clips,
   projectId,
   onDownload,
+  isStreamer = false,
 }: {
   clips: ClipCardData[]
   projectId: string
   onDownload: (clipId: string) => void
+  isStreamer?: boolean
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {clips.map((c) => (
-        <ClipCard key={c.id} clip={c} projectId={projectId} onDownload={onDownload} />
+        <ClipCard key={c.id} clip={c} projectId={projectId} onDownload={onDownload} isStreamer={isStreamer} />
       ))}
     </div>
   )

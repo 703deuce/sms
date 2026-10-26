@@ -16,10 +16,12 @@ export function ClipCard({
   clip,
   projectId,
   onDownload,
+  isStreamer = false,
 }: {
   clip: ClipCardData
   projectId: string
   onDownload: (clipId: string) => void
+  isStreamer?: boolean
 }) {
   const [thumbBusy, setThumbBusy] = useState(false)
   const makeThumbnail = async () => {
@@ -37,6 +39,11 @@ export function ClipCard({
     }
   }
   const scores = (clip.scores || {}) as Record<string, string>
+  const streamerReasons =
+    (clip.aiMeta as { streamer?: { reasons?: { kind: string; label: string; value?: string }[] } })?.streamer
+      ?.reasons ?? []
+  const showClipperDims =
+    !isStreamer && !streamerReasons.length && (scores.hook || scores.flow || scores.value || scores.trend)
   const dims = [
     ['Hook', scores.hook],
     ['Flow', scores.flow],
@@ -80,23 +87,25 @@ export function ClipCard({
             </div>
           )
         })()}
-        <div className="flex flex-wrap gap-1.5">
-          {dims.map(([label, grade]) => (
-            <span key={label} className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {label} {grade ?? '—'}
-            </span>
-          ))}
-        </div>
+        {showClipperDims ? (
+          <div className="flex flex-wrap gap-1.5">
+            {dims.map(([label, grade]) => (
+              <span key={label} className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {label} {grade ?? '—'}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {clip.reason ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{clip.reason}</p>
         ) : null}
         <ReasonChips
-          score={clip.score}
-          reasons={
-            ((clip.aiMeta as { streamer?: { reasons?: { kind: string; label: string; value?: string }[] } })?.streamer
-              ?.reasons) ?? []
-          }
+          score={isStreamer ? clip.score : undefined}
+          reasons={streamerReasons}
         />
+        {isStreamer && !streamerReasons.length ? (
+          <p className="text-[10px] text-muted-foreground">No signal chips (chat or replay may be unavailable).</p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="default" render={<Link href={`/app/clips/${projectId}/edit/${clip.id}`} />}>
             Edit

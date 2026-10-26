@@ -15,6 +15,9 @@ type StatusPayload = {
   etaSec?: number
   chunkDone?: number
   chunkTotal?: number
+  waitingForWorker?: boolean
+  queueAhead?: number
+  queuedElapsedSec?: number
 }
 
 export function StreamerProjectChrome({
@@ -40,6 +43,9 @@ export function StreamerProjectChrome({
   const [etaSec, setEtaSec] = useState(0)
   const [chunkDone, setChunkDone] = useState<number | undefined>()
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
+  const [waitingForWorker, setWaitingForWorker] = useState(false)
+  const [queueAhead, setQueueAhead] = useState<number | undefined>()
+  const [queuedElapsedSec, setQueuedElapsedSec] = useState(0)
   const terminalRef = useRef(['READY', 'FAILED', 'CANCELED'].includes(initialProjectStatus ?? ''))
 
   useEffect(() => {
@@ -52,6 +58,9 @@ export function StreamerProjectChrome({
       setEtaSec(data.etaSec ?? 0)
       setChunkDone(data.chunkDone)
       setChunkTotal(data.chunkTotal)
+      setWaitingForWorker(Boolean(data.waitingForWorker))
+      setQueueAhead(data.queueAhead)
+      setQueuedElapsedSec(data.queuedElapsedSec ?? 0)
       if (['READY', 'FAILED', 'CANCELED'].includes(data.status)) {
         terminalRef.current = true
       }
@@ -79,6 +88,8 @@ export function StreamerProjectChrome({
   }, [etaSec, projectStatus])
 
   const processing = !['READY', 'FAILED', 'CANCELED'].includes(projectStatus)
+  const showRunProgress =
+    processing && !waitingForWorker && (progress > 0 || (chunkTotal != null && chunkTotal > 0) || etaSec > 0)
 
   return (
     <div className="mb-4 space-y-3">
@@ -91,7 +102,17 @@ export function StreamerProjectChrome({
         />
         <StreamerLayoutPill projectId={projectId} layout={layout ?? null} />
       </div>
-      {processing ? (
+      {processing && waitingForWorker ? (
+        <div className="space-y-1 rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">Waiting for a worker</p>
+          <p className="tabular-nums">
+            In queue
+            {queueAhead != null ? ` · ${queueAhead + 1}${queueAhead === 0 ? ' (next)' : ' ahead'}` : ''}
+            · waiting {formatEtaSeconds(queuedElapsedSec)}
+          </p>
+        </div>
+      ) : null}
+      {showRunProgress ? (
         <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{stage || 'Processing…'}</span>

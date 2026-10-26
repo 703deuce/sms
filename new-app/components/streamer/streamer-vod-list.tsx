@@ -3,6 +3,7 @@ import { Panel } from '@/components/app/page-primitives'
 import { ProjectStatusBadge } from '@/components/app/status'
 import { StreamerStageStepper } from '@/components/streamer/stage-stepper'
 import type { StreamerVodRow } from '@/lib/server/streamer/vod-list'
+import { formatEtaSeconds } from '@/lib/clips/format-eta'
 import { ExternalLink } from 'lucide-react'
 
 function formatEta(sec: number) {
@@ -42,10 +43,25 @@ export function StreamerVodList({ rows }: { rows: StreamerVodRow[] }) {
                   <ProjectStatusBadge status={row.status} />
                   <span className="text-xs capitalize text-muted-foreground">{row.platform}</span>
                 </div>
-                <StreamerStageStepper stage={row.stage} progress={row.progress} />
-                {eta ? (
+                <StreamerStageStepper
+                  stage={row.stage}
+                  progress={row.waitingForWorker ? 0 : row.progress}
+                />
+                {row.waitingForWorker ? (
+                  <p className="text-xs text-muted-foreground">
+                    Waiting for a worker
+                    {row.queuedElapsedSec != null && row.queuedElapsedSec > 0
+                      ? ` · ${formatEtaSeconds(row.queuedElapsedSec)}`
+                      : ''}
+                  </p>
+                ) : eta ? (
                   <p className="text-xs text-muted-foreground">
                     ETA {eta}
+                    {chunk}
+                  </p>
+                ) : row.progress > 0 || (row.chunkTotal != null && row.chunkTotal > 0) ? (
+                  <p className="text-xs text-muted-foreground">
+                    Processing{row.progress > 0 ? ` · ${row.progress}%` : ''}
                     {chunk}
                   </p>
                 ) : null}

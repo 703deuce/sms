@@ -12,14 +12,50 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
   const sp = (settings.streamerProgress ?? {}) as Record<string, number>
   const workerEta = typeof sp.etaSeconds === 'number' ? sp.etaSeconds : 0
   const etaUpdatedAt = typeof sp.updatedAt === 'string' ? sp.updatedAt : null
+  const streamVod = await prisma.streamVod.findUnique({ where: { projectId }, select: { id: true } })
+  const isStreamer = Boolean(streamVod)
   let etaSec = 0
+  let queueAhead: number | undefined
+  let waitingForWorker = false
+  const queuedElapsedSec = Math.max(
+    0,
+    Math.floor((Date.now() - project.createdAt.getTime()) / 1000),
+  )
   if (!TERMINAL.includes(project.status)) {
-    if (workerEta > 0 && etaUpdatedAt) {
-      const ageSec = Math.max(0, Math.floor((Date.now() - new Date(etaUpdatedAt).getTime()) / 1000))
-      etaSec = Math.max(0, workerEta - ageSec)
-    } else if (workerEta > 0) {
-      etaSec = workerEta
-    } else {
+    const hasWorkerProgress =
+      workerEta > 0 ||
+      (typeof sp.chunkDone === 'number' && sp.chunkDone > 0) ||
+      project.progress > 0 ||
+      Boolean(project.stage && !['queued', 'Queued'].includes(project.stage))
+    if (isStreamer && project.status === 'QUEUED' && !hasWorkerProgress) {
+      waitingForWorker = true
+      etaSec = 0
+      const job = await prisma.clipJob.findFirst({
+        where: { projectId, status: 'QUEUED' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, priority: true, createdAt: true },
+      })
+      if (job) {
+        queueAhead = await prisma.clipJob.count({
+          where: {
+            status: 'QUEUED',
+            OR: [
+              { priority: { gt: job.priority } },
+              { priority: job.priority, createdAt: { lt: job.createdAt } },
+            ],
+          },
+        })
+      }
+    } else if (hasWorkerProgress) {
+      if (workerEta > 0 && etaUpdatedAt) {
+        const ageSec = Math.max(0, Math.floor((Date.now() - new Date(etaUpdatedAt).getTime()) / 1000))
+        etaSec = Math.max(0, workerEta - ageSec)
+      } else if (workerEta > 0) {
+        etaSec = workerEta
+      } else if (!isStreamer) {
+        etaSec = sourceMin * 45
+      }
+    } else if (!isStreamer) {
       etaSec = sourceMin * 45
     }
   }
@@ -38,6 +74,10 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
     chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,
     chunkTotal: typeof sp.chunkTotal === 'number' ? sp.chunkTotal : undefined,
     etaUpdatedAt,
+    waitingForWorker,
+    queueAhead,
+    queuedElapsedSec,
+    isStreamer,
   }
 }
 

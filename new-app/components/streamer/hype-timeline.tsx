@@ -38,7 +38,21 @@ export function HypeTimeline({ vodId }: { vodId: string }) {
           ? data?.series?.chat
           : data?.series?.viewerClips
 
-  if (!series?.length) return null
+  if (!data) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+        Loading hype timeline…
+      </div>
+    )
+  }
+  if (!series?.length) {
+    return (
+      <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+        Hype timeline will appear after analysis. If chat replay was unavailable, audio and transcript signals still
+        drive clip picks.
+      </div>
+    )
+  }
   const max = Math.max(...series, 0.01)
   const w = 800
   const h = 64

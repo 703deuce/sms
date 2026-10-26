@@ -21,6 +21,10 @@ export async function createMontage(workspaceId: string, input: z.infer<typeof m
     include: { streamVod: true },
   })
   if (!project?.streamVod) throw new Error('Streamer project required')
+  const clipIds = input.clipIds ?? []
+  if (clipIds.length < 2) {
+    throw new Error('Montage requires at least 2 clips')
+  }
   const montageId = createId('mont')
   const title = `${project.title} montage`
   await prisma.$transaction(async (tx) => {
