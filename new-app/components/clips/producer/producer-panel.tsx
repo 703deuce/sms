@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { ToolCallCard } from '@/components/clips/producer/tool-call-card'
 import type { ClipBounds, ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
@@ -115,10 +116,31 @@ export function ProducerPanel({
     <div className="flex h-full flex-col gap-2 p-3 text-sm">
       <div className="flex-1 space-y-2 overflow-y-auto">
         {messages.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'text-right' : ''}>
-            <p className="inline-block rounded-lg bg-muted px-2 py-1 text-xs">{m.content}</p>
+          <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+            <p
+              className={cn(
+                'max-w-[92%] rounded-2xl px-3 py-2 text-xs leading-relaxed',
+                m.role === 'user'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border border-border bg-card text-foreground',
+              )}
+            >
+              {m.content}
+            </p>
           </div>
         ))}
+        {busy && (
+          <div className="flex justify-start" aria-live="polite">
+            <p className="inline-flex items-center gap-1 rounded-2xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+              <span className="inline-flex gap-0.5">
+                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.2s]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.1s]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
+              </span>
+              Producer is thinking…
+            </p>
+          </div>
+        )}
         {summaries.map((s, i) => <ToolCallCard key={i} summary={s} />)}
         {pendingPaid.map((t) => (
           <div key={t.name} className="rounded border border-amber-500/40 p-2 text-xs">
