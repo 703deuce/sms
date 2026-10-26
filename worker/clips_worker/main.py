@@ -18,6 +18,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.pipeline import run_m4_pipeline
+from clips_worker.render_job import run_render_clip_job
 from clips_worker.probe import format_subprocess_error, probe_duration
 from clips_worker.storage import download_object
 
@@ -77,7 +78,7 @@ def count_queued_jobs(conn) -> int:
         cur.execute(
             """
             SELECT count(*)::int FROM clip_jobs
-            WHERE status = 'QUEUED' AND type = 'PROCESS_PROJECT'
+            WHERE status = 'QUEUED' AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP')
               AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
             """,
         )
@@ -115,7 +116,7 @@ def claim_job(conn) -> dict | None:
             WHERE id = (
               SELECT id FROM clip_jobs
               WHERE status = 'QUEUED'
-                AND type = 'PROCESS_PROJECT'
+                AND type IN ('PROCESS_PROJECT', 'RENDER_CLIP')
                 AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
               ORDER BY priority DESC, "runAfter" ASC
               FOR UPDATE SKIP LOCKED
@@ -227,21 +228,38 @@ def main() -> None:
                 idle_polls = 0
                 log(f"claimed job={job['id']}")
                 try:
-                    process_job(conn, job)
+                    if job.get("type") == "RENDER_CLIP":
+                        run_render_clip_job(conn, job, post_progress)
+                    else:
+                        process_job(conn, job)
                 except Exception as exc:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")
                     traceback.print_exc()
-                    post_progress(
-                        job["id"],
-                        {
-                            "projectStatus": "FAILED",
-                            "stage": "failed",
-                            "progress": 0,
-                            "error": msg[:500],
-                            "jobStatus": "FAILED",
-                        },
-                    )
+                    if job.get("type") == "RENDER_CLIP":
+                        payload = job.get("payload") or {}
+                        if isinstance(payload, str):
+                            payload = json.loads(payload)
+                        rid = payload.get("renderId")
+                        if rid:
+                            with conn.cursor() as cur:
+                                cur.execute(
+                                    'UPDATE clip_renders SET status = %s, error = %s, "updatedAt" = NOW() WHERE id = %s',
+                                    ("FAILED", msg[:500], rid),
+                                )
+                            conn.commit()
+                        post_progress(job["id"], {"jobStatus": "FAILED", "error": msg[:500]})
+                    else:
+                        post_progress(
+                            job["id"],
+                            {
+                                "projectStatus": "FAILED",
+                                "stage": "failed",
+                                "progress": 0,
+                                "error": msg[:500],
+                                "jobStatus": "FAILED",
+                            },
+                        )
         except Exception as exc:
             log(f"worker loop error: {exc}")
             traceback.print_exc()
