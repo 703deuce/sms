@@ -31,23 +31,26 @@
 
 ### Agent protocol (Rick)
 
-1. **Before any `git push`:** stop and end the run with a message that starts with **`READY TO PUSH`**. Include: local `HEAD` SHA, commits since `origin/master`, one-line summary per changed file, and `pnpm tsc --noEmit` output (plus `pytest` when worker code changed). **Do not push** until the manager replies **`PUSH`**.
-2. **After `PUSH`:** push once, cancel every older active deploy for app `ds8s3hjin60qs6g7s0iqkixs` via Coolify API, report the new deployment `uuid`, then end the run. Manager watches build/container logs over SSH (`grokbot` login) and sends failure log lines if needed.
+1. **Before any `git push`:** stop and end the run with a message that starts with **`READY TO PUSH`**. Include: local `HEAD` SHA, commits since `origin/master`, one-line summary per changed file, `cd new-app && pnpm prisma generate && pnpm tsc --noEmit 2>&1 | grep -E 'clips'` (must be empty; clips paths only), plus `pytest` when worker code changed. **Do not push** until the manager replies **`PUSH`**.
+2. **After `PUSH`:** push once; cancel every older queued or running deploy for app `ds8s3hjin60qs6g7s0iqkixs`; confirm **exactly one** deploy remains; **stay in the run** and watch it on `coolify-server` until done.
 3. **Server-only work** (worker image rebuild, `/opt/clips-worker/worker.env`, `docker run`) is **not** gated on `PUSH` — do it immediately and report exact commands run.
 
-### Coolify (after manager `PUSH`)
+### Coolify watch (after manager `PUSH`)
 
-- **Only the latest commit builds.** After `git push` to `master`, on the Coolify host:
+- List/cancel via API (`application_id` `1`):
   ```bash
   curl -s -H "Authorization: Bearer $(cat ~/.coolify-api-token)" http://localhost:8000/api/v1/deployments
-  ```
-- For web app `ds8s3hjin60qs6g7s0iqkixs` (`application_id` `1`), **cancel every queued or in-progress deployment whose `commit` is not the commit just pushed**:
-  ```bash
   curl -s -X POST -H "Authorization: Bearer $(cat ~/.coolify-api-token)" \
     "http://localhost:8000/api/v1/deployments/{deployment_uuid}/cancel"
   ```
-- Confirm **exactly one** deployment remains queued or running for that app (newest commit).
-- One fix → one push → cancel duplicates → manager verifies deploy (`GET /api/health` `commitSha`).
+- Poll every **60s** until finished:
+  ```bash
+  docker exec coolify-db psql -U coolify -d coolify -t -A -c \
+    "select status from application_deployment_queues where id=<N>;"
+  ```
+- When status is **`finished`:** `curl -s https://transovo.ai/api/health` (`commitSha` must match pushed SHA); scan app container logs for new errors; `curl -s -o /dev/null -w '%{http_code}' https://transovo.ai/app/clips/exports` must be **200**.
+- End the run with **`DEPLOYED:`** deploy id, SHA, health JSON, exports HTTP code, and any log errors — not before verification passes.
+- If status is **`failed`:** pull deployment log errors, fix, **`READY TO PUSH`** again, wait for **`PUSH`**.
 
 ## Worker deploy
 

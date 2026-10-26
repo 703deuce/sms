@@ -9,6 +9,15 @@ import { Download } from 'lucide-react'
 
 type Filter = 'all' | 'ready' | 'failed'
 
+const DATE_OPTS: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+}
+
 function formatSize(bytes: number | null) {
   if (!bytes) return '—'
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -16,12 +25,11 @@ function formatSize(bytes: number | null) {
 }
 
 export function formatUtcFallback(iso: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'UTC',
-    timeZoneName: 'short',
-  }).format(new Date(iso))
+  try {
+    return new Intl.DateTimeFormat('en-US', { ...DATE_OPTS, timeZone: 'UTC' }).format(new Date(iso))
+  } catch {
+    return '—'
+  }
 }
 
 function ClientTime({ iso }: { iso: string | null }) {
@@ -37,13 +45,7 @@ function ClientTime({ iso }: { iso: string | null }) {
       return
     }
     try {
-      setText(
-        new Intl.DateTimeFormat(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-          timeZoneName: 'short',
-        }).format(d),
-      )
+      setText(new Intl.DateTimeFormat(undefined, DATE_OPTS).format(d))
     } catch {
       setText('—')
     }

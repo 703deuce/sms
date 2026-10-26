@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ClipsExportsSidebarLink } from '@/components/clips/clips-exports-sidebar-link'
 import { useClipsWorkspace } from '@/components/providers/clips-workspace-provider'
 import { groupItems, isItemActive } from '@/lib/nav'
 import { useResolvedNavContext } from '@/components/shell/use-resolved-nav-context'
@@ -57,6 +58,16 @@ export function SidebarNav({ compact = false, onNavigate, onToggle }: SidebarNav
             )}
             {group.items.map((item) => {
               const active = isItemActive(item, pathname)
+              if (item.href === '/app/clips/exports') {
+                return (
+                  <ClipsExportsSidebarLink
+                    key={item.href}
+                    compact={compact}
+                    active={active}
+                    onNavigate={onNavigate}
+                  />
+                )
+              }
               const Icon = item.icon
               return (
                 <Link
