@@ -18,7 +18,9 @@ export function supabaseObjectMaxBytes(): number {
 }
 
 export function clipUploadMaxBytes(): number {
-  const clipRaw = process.env.CLIPS_UPLOAD_MAX_BYTES?.trim()
+  const clipRaw =
+    process.env.CLIPS_MAX_UPLOAD_BYTES?.trim() ||
+    process.env.CLIPS_UPLOAD_MAX_BYTES?.trim()
   const streamRaw = process.env.STREAMER_UPLOAD_MAX_BYTES?.trim()
   const raw = clipRaw || streamRaw
   if (raw) {
@@ -42,12 +44,25 @@ export function shouldUseAppChunkedUpload(_bytes: number): boolean {
   return false
 }
 
+/** Bytes the browser may actually upload (app cap ∩ storage per-object / plan limit). */
+export function clipUploadEffectiveMaxBytes(): number {
+  const appMax = clipUploadMaxBytes()
+  if (storageDriverName() === 's3') return appMax
+  return Math.min(appMax, supabaseObjectMaxBytes())
+}
+
 export function clipUploadLimitsPublic() {
-  const maxBytes = clipUploadMaxBytes()
-  const objectMax = storageDriverName() === 's3' ? maxBytes : supabaseObjectMaxBytes()
+  const policyMaxBytes = clipUploadMaxBytes()
+  const effectiveMaxBytes = clipUploadEffectiveMaxBytes()
+  const objectMax = storageDriverName() === 's3' ? policyMaxBytes : supabaseObjectMaxBytes()
   return {
-    maxBytes,
-    maxLabel: formatClipUploadMaxLabel(maxBytes),
+    /** Effective limit — use for UI hints and client-side rejection. */
+    maxBytes: effectiveMaxBytes,
+    maxLabel: formatClipUploadMaxLabel(effectiveMaxBytes),
+    effectiveMaxBytes,
+    effectiveMaxLabel: formatClipUploadMaxLabel(effectiveMaxBytes),
+    policyMaxBytes,
+    policyMaxLabel: formatClipUploadMaxLabel(policyMaxBytes),
     chunkBytes: CLIPS_APP_CHUNK_BYTES,
     driver: storageDriverName(),
     supabaseObjectMaxBytes: objectMax,

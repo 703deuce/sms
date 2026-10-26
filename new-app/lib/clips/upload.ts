@@ -1,6 +1,7 @@
 import * as tus from 'tus-js-client'
 import { abortUpload, completeUpload, startUpload } from '@/lib/clips-api'
-import { friendlyUploadError } from '@/lib/clips/upload-errors'
+import { friendlyUploadError, isUploadErrorRetryable } from '@/lib/clips/upload-errors'
+import { uploadLimitExceededMessage } from '@/lib/clips/upload-limit-message'
 
 export type UploadProgress = {
   filename: string
@@ -10,11 +11,17 @@ export type UploadProgress = {
   state: 'idle' | 'uploading' | 'complete' | 'error' | 'canceled'
   error?: string
   uploadId?: string
+  /** False for oversize / HTTP 413 — same file will always fail. */
+  retryable?: boolean
 }
 
 export type UploadLimits = {
   maxBytes: number
   maxLabel: string
+  effectiveMaxBytes: number
+  effectiveMaxLabel: string
+  policyMaxBytes?: number
+  policyMaxLabel?: string
   chunkBytes: number
   driver: string
   supabaseObjectMaxBytes?: number
@@ -166,8 +173,10 @@ export async function uploadClipFile(
   opts?: { resumeUploadId?: string },
 ): Promise<{ uploadId: string }> {
   const limits = await fetchUploadLimits()
-  if (file.size > limits.maxBytes) {
-    const err = `File is too large (max ${limits.maxLabel})`
+  const effectiveMax = limits.effectiveMaxBytes ?? limits.maxBytes
+  let maxLabel = limits.effectiveMaxLabel ?? limits.maxLabel
+  if (file.size > effectiveMax) {
+    const err = uploadLimitExceededMessage(maxLabel)
     onProgress({
       filename: file.name,
       bytes: file.size,
@@ -175,6 +184,7 @@ export async function uploadClipFile(
       percent: 0,
       state: 'error',
       error: err,
+      retryable: false,
     })
     throw new Error(err)
   }
@@ -268,7 +278,9 @@ export async function uploadClipFile(
     onProgress({ ...base, uploadId, loaded: file.size, percent: 100, state: 'complete' })
     return { uploadId }
   } catch (err) {
-    const message = friendlyUploadError(err, (err as { status?: number }).status)
+    const status = (err as { status?: number }).status
+    const message = friendlyUploadError(err, status, { maxLabel })
+    const retryable = isUploadErrorRetryable(err, status, message)
     const loaded = base.loaded
     onProgress({
       ...base,
@@ -277,6 +289,7 @@ export async function uploadClipFile(
       percent: base.bytes ? Math.min(99, Math.round((loaded / base.bytes) * 100)) : 0,
       state: 'error',
       error: message,
+      retryable,
     })
     throw err
   }
@@ -284,6 +297,15 @@ export async function uploadClipFile(
 
 export async function cancelClipUpload(uploadId: string) {
   await abortUpload(uploadId)
+}
+
+/** Client preflight before starting upload (dropzone / file picker). */
+export async function rejectFileIfOverUploadLimit(file: File): Promise<string | null> {
+  const limits = await fetchUploadLimits()
+  const effectiveMax = limits.effectiveMaxBytes ?? limits.maxBytes
+  const maxLabel = limits.effectiveMaxLabel ?? limits.maxLabel
+  if (file.size > effectiveMax) return uploadLimitExceededMessage(maxLabel)
+  return null
 }
 
 export const multipartUploadFile = uploadClipFile

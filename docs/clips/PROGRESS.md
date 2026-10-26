@@ -37,7 +37,12 @@
 - https://transovo.ai/app/clips/new  
 - Fixture: two-person `test_interview_60s.mp4` (not color-bar smoke clips).
 
-**Upload limit:** Supabase bucket created with plan default max (5 GB target failed at create — check bucket `file_size_limit` in Supabase dashboard if large uploads fail).
+**Upload limit (storage dependency):**
+
+- Browser uploads go **direct to object storage** (Supabase TUS resumable for large files, signed PUT ≤50 MB, or **S3 multipart** when `STORAGE_DRIVER=s3`). Chunks never pass through the Next.js container.
+- **Supabase Free** enforces a **global per-object upload cap (~50 MB)** on the project regardless of bucket `file_size_limit` (HTTP **413** from storage). **Supabase Pro** (or dedicated S3) is required for multi‑GB single-object uploads; Rick owns billing — do not change plan from code.
+- **Effective UI limit** = `min(CLIPS_MAX_UPLOAD_BYTES | CLIPS_UPLOAD_MAX_BYTES, SUPABASE_OBJECT_MAX_BYTES)` when `STORAGE_DRIVER=supabase`. Set env on web after upgrade, e.g. `SUPABASE_OBJECT_MAX_BYTES=5368709120` and `CLIPS_MAX_UPLOAD_BYTES` to match product policy.
+- Client preflight + `/api/clips/uploads/limits` must show the **effective** cap so the “up to X” hint never over-promises (e.g. not 150 MB / 20 GB while plan is still 50 MB).
 
 **No shared-password gate** — `DEV_BYPASS_AUTH` unchanged; UI opens without clips login.
 

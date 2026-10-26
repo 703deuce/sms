@@ -46,7 +46,7 @@ export function UploadProgressItem({
                 Choose file to resume
               </Button>
             ) : null}
-            {onRetry ? (
+            {onRetry && progress.retryable !== false ? (
               <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={onRetry}>
                 <RotateCcw className="size-3.5" aria-hidden />
                 Retry

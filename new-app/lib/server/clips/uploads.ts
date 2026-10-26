@@ -1,7 +1,7 @@
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, storageDriverName, uploadSourceKey, type CreateUploadResult } from '@/lib/storage'
-import { clipUploadMaxBytes } from '@/lib/server/clips/upload-limits'
+import { clipUploadEffectiveMaxBytes, formatClipUploadMaxLabel } from '@/lib/server/clips/upload-limits'
 import { getSupabaseStorageConfig } from '@/lib/storage/supabase-driver'
 import { SIGNED_PUT_MAX_BYTES } from '@/lib/storage/supabase-driver'
 import {
@@ -18,9 +18,9 @@ export function extFromFilename(name: string) {
 
 export async function createClipUpload(workspaceId: string, input: { filename: string; bytes: number; mime: string }) {
   if (!input.bytes || input.bytes < 1) throw new Error('Invalid file size')
-  const maxBytes = clipUploadMaxBytes()
+  const maxBytes = clipUploadEffectiveMaxBytes()
   if (input.bytes > maxBytes) {
-    throw new Error(`File exceeds maximum upload size (${Math.round(maxBytes / (1024 * 1024))} MB)`)
+    throw new Error(`File exceeds maximum upload size (${formatClipUploadMaxLabel(maxBytes)})`)
   }
   const storage = getClipStorage()
   const uploadId = createId('upl')
