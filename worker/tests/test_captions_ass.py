@@ -15,7 +15,7 @@ SAMPLE = [
 EXPECTED = {
     "bold_pop": "\\fscx85",
     "clean_white": "One",
-    "boxed": "Box",
+    "boxed": "Dialogue: 0",
     "karaoke": "\\kf",
     "minimal": "Style: Cap",
     "neon": "\\blur",

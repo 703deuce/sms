@@ -228,16 +228,39 @@ def ffmpeg_concat_segments(src: Path, dest: Path, segs_sec: list[tuple[float, fl
     )
 
 
+def probe_video_size(video: Path) -> tuple[int, int]:
+    out = subprocess.check_output(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0:s=x",
+            str(video),
+        ],
+        text=True,
+    ).strip()
+    w, h = out.split("x")
+    return int(w), int(h)
+
+
 def burn_captions(
     video: Path,
     words: list[dict],
     out: Path,
     work_dir: Path,
     edits_captions: dict | None = None,
-    play_w: int = 720,
-    play_h: int = 1280,
+    play_w: int | None = None,
+    play_h: int | None = None,
 ) -> None:
     from clips_worker.captions_ass import build_ass
+
+    if play_w is None or play_h is None:
+        play_w, play_h = probe_video_size(video)
 
     ass = work_dir / "cap.ass"
     cap = edits_captions if isinstance(edits_captions, dict) else {}

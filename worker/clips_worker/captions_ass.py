@@ -1,7 +1,6 @@
 """Preset-driven ASS caption generator (PlayRes matches output)."""
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from clips_worker.caption_presets import resolve_preset
@@ -35,8 +34,8 @@ def alignment_for(position: str) -> int:
     return {"bottom": 2, "middle": 5, "top": 8}.get(position, 2)
 
 
-def margin_v(play_h: int, margin_pct: float) -> int:
-    return max(20, int(play_h * margin_pct / 100))
+def margin_v_px(play_h: int, margin_pct: float) -> int:
+    return round(play_h * margin_pct / 100)
 
 
 def chunk_words(words: list[dict], wpl: int) -> list[list[dict]]:
@@ -60,6 +59,22 @@ def active_color(preset: dict, spk: int, colors: dict | None) -> str:
     return hex_to_ass(preset["active"] if spk == 0 else preset["activeB"])
 
 
+def cap_style_colors(preset: dict) -> tuple[str, str, int]:
+    """Primary, outline colour, outline width for inactive Cap style."""
+    if preset.get("slug") == "boxed":
+        return hex_to_ass("#FFFFFF"), hex_to_ass("#000000"), 4
+    return (
+        hex_to_ass(preset["primary"]),
+        hex_to_ass(preset["outline"]),
+        int(preset.get("outlineW", 4)),
+    )
+
+
+def inactive_inline(preset: dict) -> str:
+    pri, out, ow = cap_style_colors(preset)
+    return f"{{\\1c{pri}\\3c{out}\\bord{ow}\\shad0}}"
+
+
 def build_ass(
     words: list[dict],
     edits_captions: dict,
@@ -71,21 +86,20 @@ def build_ass(
     anim = (edits_captions.get("animation") or preset["animation"] or "none").lower()
     wpl = int(edits_captions.get("wordsPerLine") or preset["wordsPerLine"] or 2)
     case = (edits_captions.get("case") or preset["case"] or "upper").lower()
-    if case == "upper":
-        case = "upper"
-    else:
-        case = "sentence"
+    case = "upper" if case == "upper" else "sentence"
     size_pct = float(edits_captions.get("size") or edits_captions.get("sizePct") or preset["sizePct"])
-    fontsize = max(24, int(play_h * size_pct / 100))
+    fontsize = round(size_pct / 100 * play_h)
     position = edits_captions.get("position") or preset["position"]
-    margin_v_px = margin_v(play_h, float(edits_captions.get("marginVPct") or preset["marginVPct"]))
+    margin_v = margin_v_px(play_h, float(edits_captions.get("marginVPct") or preset["marginVPct"]))
     colors = edits_captions.get("colors") if isinstance(edits_captions.get("colors"), dict) else None
     emphasis = set(edits_captions.get("emphasis") or [])
     emph_scale = float(preset.get("emphasisScale") or 1.15)
+    box = preset.get("box")
 
-    primary = hex_to_ass(preset["primary"])
-    outline = hex_to_ass(preset["outline"])
-    secondary = primary
+    cap_pri, cap_out, cap_ow = cap_style_colors(preset)
+    box_pri = hex_to_ass("#000000")
+    box_outline = hex_to_ass(box["color"]) if box else cap_out
+    box_pad = int(box.get("padX", 8)) if box else cap_ow
 
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -96,8 +110,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,Poppins ExtraBold,{fontsize},{primary},{secondary},{outline},&H99000000,0,0,0,0,100,100,0,0,1,{preset.get('outlineW', 4)},{preset.get('shadow', 0)},{alignment_for(position)},40,40,{margin_v_px},1
-Style: Box,Poppins ExtraBold,{fontsize},{primary},{secondary},{outline},&H99000000,0,0,0,0,100,100,0,0,3,{preset.get('outlineW', 4)},0,{alignment_for(position)},40,40,{margin_v_px},1
+Style: Cap,Poppins ExtraBold,{fontsize},{cap_pri},{cap_pri},{cap_out},&H99000000,0,0,0,0,100,100,0,0,1,{cap_ow},0,{alignment_for(position)},40,40,{margin_v},1
+Style: Box,Poppins ExtraBold,{fontsize},{box_pri},{box_pri},{box_outline},&H99000000,0,0,0,0,100,100,0,0,3,{box_pad},0,{alignment_for(position)},40,40,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -105,40 +119,46 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     events: list[str] = []
     chunks = chunk_words(words, wpl)
-    box = preset.get("box")
 
-    for chunk in chunks:
+    for chunk_idx, chunk in enumerate(chunks):
         if not chunk:
             continue
-        ws = chunk[0]["s"]
-        we = chunk[-1]["e"] + 0.2
-        cx = play_w // 2
-        y = {"bottom": int(play_h * 0.88), "middle": play_h // 2, "top": int(play_h * 0.12)}.get(position, int(play_h * 0.88))
+        chunk_end = float(chunk[-1]["e"])
+        if chunk_idx + 1 < len(chunks):
+            chunk_end = min(chunk_end, float(chunks[chunk_idx + 1][0]["s"]))
 
         if anim == "slideup":
+            ws, we = float(chunk[0]["s"]), chunk_end
+            cx = play_w // 2
+            y = {"bottom": int(play_h * 0.88), "middle": play_h // 2, "top": int(play_h * 0.12)}.get(
+                position, int(play_h * 0.88)
+            )
             move = f"{{\\move({cx},{y + int(0.03 * play_h)},{cx},{y},0,150)\\fad(150,0)}}"
             line = " ".join(disp(w["w"], case) for w in chunk)
-            events.append(f"Dialogue: 0,{ts(ws)},{ts(we)},Cap,,0,0,0,,{move}{line}")
+            events.append(f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{move}{line}")
             continue
 
         if anim == "karaoke":
+            ws, we = float(chunk[0]["s"]), chunk_end
             parts = []
             for w in chunk:
-                dur_cs = max(1, int((w["e"] - w["s"]) * 100))
+                dur_cs = max(1, int((float(w["e"]) - float(w["s"])) * 100))
                 parts.append(f"{{\\kf{dur_cs}}}{disp(w['w'], case)}")
             sec = hex_to_ass(preset["primary"])
             pri = hex_to_ass(preset["active"])
             events.append(
-                f"Dialogue: 0,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
-                + f"{{\\1c{pri}\\3c{outline}\\2c{sec}}}"
+                f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
+                f"{{\\1c{pri}\\3c{cap_out}\\2c{sec}}}"
                 + " ".join(parts)
             )
             continue
 
         if anim == "typewriter":
             for wi, w in enumerate(chunk):
+                w_start = float(w["s"])
+                w_end = float(chunk[wi + 1]["s"]) if wi + 1 < len(chunk) else chunk_end
                 text = disp(w["w"], case)
-                dur_ms = max(1, int((w["e"] - w["s"]) * 1000))
+                dur_ms = max(1, int((float(w["e"]) - float(w["s"])) * 1000))
                 step = max(1, dur_ms // max(1, len(text)))
                 built = ""
                 for ci, ch in enumerate(text):
@@ -147,41 +167,49 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     built += f"{{\\alpha&HFF&\\t({off0},{off1},\\alpha&H00&)}}{ch}"
                 spk = int(w.get("spk", 0))
                 col = active_color(preset, spk, colors)
-                events.append(f"Dialogue: 0,{ts(w['s'])},{ts(w['e'])},Cap,,0,0,0,,{{\\c{col}}}{built}")
+                events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{{\\c{col}}}{built}")
             continue
 
         for ki, w in enumerate(chunk):
-            w_start = w["s"]
-            w_end = chunk[ki + 1]["s"] if ki + 1 < len(chunk) else we
+            w_start = float(w["s"])
+            w_end = float(chunk[ki + 1]["s"]) if ki + 1 < len(chunk) else chunk_end
+            if w_end <= w_start:
+                continue
+
             spk = int(w.get("spk", 0))
             col = active_color(preset, spk, colors)
             wi = int(w.get("i", ki))
             is_emph = wi in emphasis
-            parts = []
+            use_box_layer = bool(box) and (preset.get("slug") == "boxed" or (preset.get("slug") == "highlighter" and is_emph))
+
+            parts: list[str] = []
             for x in chunk:
+                word = disp(x["w"], case)
                 if x is w:
-                    tags = [f"\\c{col}"]
-                    if is_emph:
-                        sc = int(emph_scale * 100)
-                        tags.append(f"\\fscx{sc}\\fscy{sc}")
-                    a = anim if not (preset["slug"] == "highlighter" and not is_emph) else ("pop" if is_emph else "none")
+                    tags = []
+                    if use_box_layer:
+                        tags.append("\\1c&H000000&")
+                    else:
+                        tags.append(f"\\c{col}")
+                    a = anim if not (preset.get("slug") == "highlighter" and not is_emph) else ("pop" if is_emph else "none")
                     if a == "pop":
                         tags.append(POP_TAG)
                     elif a == "bounce":
                         tags.append(BOUNCE_TAG)
                     elif a == "glow":
                         tags.append(GLOW_TAG.replace("{", "").replace("}", ""))
-                    parts.append("{" + "".join(tags) + "}" + disp(x["w"], case) + "{\\r}")
+                    if is_emph and not use_box_layer:
+                        sc = int(emph_scale * 100)
+                        tags.append(f"\\fscx{sc}\\fscy{sc}")
+                    parts.append("{" + "".join(tags) + "}" + word)
                 else:
-                    parts.append(disp(x["w"], case))
+                    parts.append(inactive_inline(preset) + word)
+
             line = " ".join(parts)
-            if box and is_emph:
-                pad_x = int(box.get("padX", 6))
-                box_col = hex_to_ass(box["color"])
+            if use_box_layer:
                 events.append(
-                    f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,"
-                    f"{{\\bord{pad_x}\\3c{box_col}\\1c{box_col}}}{disp(w['w'], case)}"
+                    f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,{disp(w['w'], case)}"
                 )
-            events.append(f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
+            events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
 
     ass_path.write_text(header + "\n".join(events) + "\n")

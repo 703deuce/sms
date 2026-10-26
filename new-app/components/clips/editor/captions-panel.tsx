@@ -40,13 +40,16 @@ export function CaptionsPanel({
               key={p.slug}
               type="button"
               onClick={() =>
-                patch({
+                onChange({
+                  enabled: cap.enabled !== false,
                   presetId: id,
                   animation: p.animation,
                   size: p.sizePct,
                   position: p.position,
                   case: p.case,
                   wordsPerLine: p.wordsPerLine,
+                  keywordHighlight: cap.keywordHighlight,
+                  emphasis: cap.keywordHighlight ? cap.emphasis : undefined,
                 })
               }
               className={cn(

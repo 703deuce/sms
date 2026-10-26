@@ -73,9 +73,10 @@ export function CaptionOverlay({
         const isEmph = emphasis.has(w.idx ?? globalIdx)
         const text = displayCase(w.w, caseMode)
         const strokeW = preset.outlineW
+        const inactiveColor = preset.slug === 'boxed' ? '#FFFFFF' : preset.primary
         const style: React.CSSProperties = {
           fontSize,
-          color: active || isEmph ? activeColor : preset.primary,
+          color: active || isEmph ? (preset.slug === 'boxed' && active ? '#000000' : activeColor) : inactiveColor,
           WebkitTextStroke: strokeW ? `${strokeW}px ${preset.outline}` : undefined,
           paintOrder: 'stroke fill',
           textShadow: preset.shadow ? `0 2px ${preset.shadow * 4}px rgba(0,0,0,.45)` : undefined,
