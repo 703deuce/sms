@@ -1,7 +1,7 @@
 import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
 import { shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
 import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
-import { resolveEditorWords } from '@/lib/server/clips/editor-words'
+import { normalizeTranscriptJson, resolveEditorWords } from '@/lib/server/clips/editor-words'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -27,13 +27,16 @@ async function loadProjectTranscript(
 ): Promise<ClipWord[]> {
   if (project.transcriptKey) {
     try {
-      return await storage.getJson<ClipWord[]>(project.transcriptKey)
+      const raw = await storage.getJson<unknown>(project.transcriptKey)
+      const normalized = normalizeTranscriptJson(raw)
+      if (normalized.length) return normalized
     } catch {
       /* fall through */
     }
   }
   if (Array.isArray(project.transcriptWords)) {
-    return project.transcriptWords as ClipWord[]
+    const normalized = normalizeTranscriptJson(project.transcriptWords)
+    if (normalized.length) return normalized
   }
   return []
 }

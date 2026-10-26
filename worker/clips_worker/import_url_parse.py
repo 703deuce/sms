@@ -28,6 +28,10 @@ def classify_url(raw: str) -> str:
         return "drive"
     if bare == "dropbox.com" or bare.endswith(".dropbox.com"):
         return "dropbox"
+    if bare in ("twitch.tv", "clips.twitch.tv"):
+        return "twitch"
+    if bare == "kick.com":
+        return "kick"
     return "unsupported"
 
 

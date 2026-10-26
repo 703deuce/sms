@@ -1,4 +1,5 @@
 import { Page } from '@/components/app/page-primitives'
+import { StreamHeader } from '@/components/streamer/stream-header'
 import { ProjectClipsView } from '@/components/clips/project-clips-view'
 import { listProjectClips } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
@@ -16,9 +17,20 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
 
   const initialClips =
     project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null
+  const streamVod = await prisma.streamVod.findUnique({ where: { projectId: project.id } })
 
   return (
     <Page>
+      {streamVod ? (
+        <div className="mb-4">
+          <StreamHeader
+            platform={streamVod.platform}
+            title={streamVod.title}
+            category={streamVod.category}
+            url={streamVod.url}
+          />
+        </div>
+      ) : null}
       <ProjectClipsView
         projectId={project.id}
         projectTitle={project.title}

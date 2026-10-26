@@ -11,6 +11,19 @@
 | M3 | ✅ deployed (code) | Supabase storage, TUS uploads, worker queue + transcribe |
 | M4+ | ⏸️ | Waiting on manager browser test |
 
+### Streamer (spec: `docs/clips/STREAMER_BUILD_SPEC.md`)
+
+| ID | Status | Notes |
+|----|--------|--------|
+| **S0** | 🟡 READY TO PUSH | `GPU_PROVIDER` (default `local`), Modal `transovo-gpu`, job_types + heartbeat, signed URLs |
+| **S1** | 🟡 READY TO PUSH | Paste Twitch/Kick + Streamer tab, `STREAM_IMPORT`, Prisma `stream_channels` / `stream_vods` |
+| S2 | ⏳ | Long-VOD pipeline, worker lanes |
+| S3 | ⏳ | Usage cap, Modal budget UI |
+| S4–S12 | ⏳ | Signals, facecam, layout, montage, notifications, channels hub |
+| **S13** | ⏳ | **Needs Twitch dev app** (OAuth + EventSub) — register before S13 |
+| **S14** | ⏳ | **Needs Kick dev app** (OAuth 2.1 PKCE) — register before S14 |
+| S15 | ⏳ | Modal render + face tracking |
+
 ## Storage
 
 - **Supabase** project `sms2`, private bucket `clips` (`STORAGE_DRIVER=supabase`).

@@ -506,6 +506,8 @@ model Workspace {
   forwardingSetupDraft                   ForwardingSetupDraft?
   clipUploads                            ClipUpload[]
   clipProjects                           ClipProject[]
+  streamChannels                         StreamChannel[]
+  streamVods                             StreamVod[]
   clipBrandTemplates                     ClipBrandTemplate[]
   captionPresets                         CaptionPreset[]
   clipRenders                            ClipRender[]
@@ -8865,9 +8867,72 @@ model ClipProject {
   upload    ClipUpload? @relation(fields: [uploadId], references: [id], onDelete: SetNull)
   clips     Clip[]
   jobs      ClipJob[]
+  streamVod StreamVod?
 
   @@index([workspaceId, createdAt])
   @@map("clip_projects")
+}
+
+model StreamChannel {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  platform     String
+  login        String
+  externalId   String?
+  displayName  String?
+  avatarUrl    String?
+  connectionId String?
+  status       String    @default("PASTE_ONLY")
+  autoProcess  Boolean   @default(false)
+  settings     Json      @default("{}")
+  platformState Json     @default("{}")
+  lastVodAt    DateTime?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  vods         StreamVod[]
+
+  @@unique([workspaceId, platform, login])
+  @@index([platform, externalId])
+  @@map("stream_channels")
+}
+
+model StreamVod {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  projectId       String         @unique
+  channelId       String?
+  platform        String
+  sourceType      String
+  externalId      String?
+  url             String?
+  title           String?
+  category        String?
+  chapters        Json?
+  streamedAt      DateTime?
+  durationMs      Int?
+  rangeStartMs    Int            @default(0)
+  rangeEndMs      Int?
+  triggeredBy     String
+  attestedAt      DateTime?
+  priority        Int            @default(0)
+  state           Json           @default("{}")
+  signalsKey      String?
+  chatSource      String?
+  chatMessages    Int?
+  sourceDeletedAt DateTime?
+  notifiedAt      DateTime?
+  error           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project         ClipProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  channel         StreamChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([channelId, streamedAt])
+  @@map("stream_vods")
 }
 
 model ClipJob {

@@ -17,12 +17,13 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+from clips_worker.job_types import JOB_TYPES, job_types_sql_in
 from clips_worker.pipeline import run_m4_pipeline
 from clips_worker.render_job import run_render_clip_job
 from clips_worker.probe import format_subprocess_error, probe_duration
 from clips_worker.storage import download_object
+from clips_worker.transcribe_source import transcribe_video_file
 
-TRANSCRIBE = Path(os.environ.get("TRANSCRIBE_SCRIPT", "/app/transcribe.py"))
 V3 = Path(os.environ.get("SPEAKERCROP_DIR", "/app/v3"))
 
 
@@ -96,9 +97,9 @@ def mark_generation_failed(conn, job: dict, message: str) -> None:
 def count_queued_jobs(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT count(*)::int FROM clip_jobs
-            WHERE status = 'QUEUED' AND type IN ('IMPORT_URL', 'PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC', 'THUMBNAIL', 'DUB')
+            WHERE status = 'QUEUED' AND type IN ({job_types_sql_in()})
               AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
             """,
         )
@@ -127,7 +128,7 @@ def claim_job(conn) -> dict | None:
     worker_id = os.environ.get("WORKER_ID", "worker-1")
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
-            """
+            f"""
             UPDATE clip_jobs
             SET status = 'RUNNING',
                 "lockedBy" = %s,
@@ -136,7 +137,7 @@ def claim_job(conn) -> dict | None:
             WHERE id = (
               SELECT id FROM clip_jobs
               WHERE status = 'QUEUED'
-                AND type IN ('IMPORT_URL', 'PROCESS_PROJECT', 'RENDER_CLIP', 'REFRAME_CROP', 'MUSIC', 'THUMBNAIL', 'DUB')
+                AND type IN ({job_types_sql_in()})
                 AND "runAfter" <= (NOW() AT TIME ZONE 'UTC')
               ORDER BY priority DESC, "runAfter" ASC
               FOR UPDATE SKIP LOCKED
@@ -195,13 +196,8 @@ def process_job(conn, job: dict) -> None:
             {"projectStatus": "TRANSCRIBING", "stage": "transcribing", "progress": 12, "jobStatus": "RUNNING"},
         )
 
-        words_path = Path(td) / "words.json"
         model = os.environ.get("ASR_MODEL", "small.en")
-        subprocess.check_call([sys.executable, str(TRANSCRIBE), str(src), str(words_path), model])
-        words = json.loads(words_path.read_text())
-        for pos, w in enumerate(words):
-            if "i" not in w:
-                w["i"] = pos
+        words = transcribe_video_file(conn, project, src, model=model)
 
         post_progress(
             job["id"],
@@ -214,8 +210,76 @@ def process_job(conn, job: dict) -> None:
             },
         )
 
-    run_m4_pipeline(conn, job["id"], project, words, key, post_progress)
+    run_m4_pipeline(conn, job["id"], project, words, key, post_progress, job=job)
     log(f"finished job={job['id']}")
+
+
+def _mark_job_done(conn, job_id: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            'UPDATE clip_jobs SET status = %s, "finishedAt" = NOW(), error = NULL WHERE id = %s',
+            ("DONE", job_id),
+        )
+    conn.commit()
+
+
+def handle_render_clip(conn, job: dict) -> None:
+    run_render_clip_job(conn, job, post_progress)
+
+
+def handle_thumbnail(conn, job: dict) -> None:
+    from clips_worker.thumbnail_job import run_thumbnail_job
+
+    run_thumbnail_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+def handle_dub(conn, job: dict) -> None:
+    from clips_worker.dub_job import run_dub_job
+
+    run_dub_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+def handle_music(conn, job: dict) -> None:
+    from clips_worker.music_job import run_music_job
+
+    run_music_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+def handle_reframe_crop(conn, job: dict) -> None:
+    from clips_worker.reframe_crop import run_reframe_crop_job
+
+    run_reframe_crop_job(conn, job)
+    post_progress(job["id"], {"jobStatus": "DONE"})
+
+
+def handle_stream_import(conn, job: dict) -> None:
+    from clips_worker.streamer.import_job import run_stream_import_job
+
+    run_stream_import_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+def handle_import_url(conn, job: dict) -> None:
+    from clips_worker.import_url import run_import_url_job
+
+    project = load_project(conn, job["projectId"])
+    run_import_url_job(conn, job, project, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
+DISPATCH: dict[str, object] = {
+    "IMPORT_URL": handle_import_url,
+    "STREAM_IMPORT": handle_stream_import,
+    "PROCESS_PROJECT": process_job,
+    "RENDER_CLIP": handle_render_clip,
+    "REFRAME_CROP": handle_reframe_crop,
+    "MUSIC": handle_music,
+    "THUMBNAIL": handle_thumbnail,
+    "DUB": handle_dub,
+}
 
 
 def main() -> None:
@@ -251,56 +315,10 @@ def main() -> None:
                 idle_polls = 0
                 log(f"claimed job={job['id']}")
                 try:
-                    if job.get("type") == "RENDER_CLIP":
-                        run_render_clip_job(conn, job, post_progress)
-                    elif job.get("type") == "THUMBNAIL":
-                        from clips_worker.thumbnail_job import run_thumbnail_job
-
-                        run_thumbnail_job(conn, job, post_progress)
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                'UPDATE clip_jobs SET status = %s, "finishedAt" = NOW(), error = NULL WHERE id = %s',
-                                ("DONE", job["id"]),
-                            )
-                        conn.commit()
-                    elif job.get("type") == "DUB":
-                        from clips_worker.dub_job import run_dub_job
-
-                        run_dub_job(conn, job, post_progress)
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                'UPDATE clip_jobs SET status = %s, "finishedAt" = NOW(), error = NULL WHERE id = %s',
-                                ("DONE", job["id"]),
-                            )
-                        conn.commit()
-                    elif job.get("type") == "MUSIC":
-                        from clips_worker.music_job import run_music_job
-
-                        run_music_job(conn, job, post_progress)
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                'UPDATE clip_jobs SET status = %s, "finishedAt" = NOW(), error = NULL WHERE id = %s',
-                                ("DONE", job["id"]),
-                            )
-                        conn.commit()
-                    elif job.get("type") == "REFRAME_CROP":
-                        from clips_worker.reframe_crop import run_reframe_crop_job
-
-                        run_reframe_crop_job(conn, job)
-                        post_progress(job["id"], {"jobStatus": "DONE"})
-                    elif job.get("type") == "IMPORT_URL":
-                        from clips_worker.import_url import run_import_url_job
-
-                        project = load_project(conn, job["projectId"])
-                        run_import_url_job(conn, job, project, post_progress)
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                'UPDATE clip_jobs SET status = %s, "finishedAt" = NOW(), error = NULL WHERE id = %s',
-                                ("DONE", job["id"]),
-                            )
-                        conn.commit()
-                    else:
-                        process_job(conn, job)
+                    handler = DISPATCH.get(job.get("type") or "")
+                    if not handler:
+                        raise RuntimeError(f"unknown job type {job.get('type')}")
+                    handler(conn, job)  # type: ignore[operator]
                 except Exception as exc:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")

@@ -2,6 +2,33 @@ import type { ClipWord } from '@/lib/clips/edits'
 import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
 import type { getClipStorage } from '@/lib/storage'
 
+export function normalizeTranscriptWord(raw: unknown, pos: number): ClipWord | null {
+  if (!raw || typeof raw !== 'object') return null
+  const w = raw as Record<string, unknown>
+  const text = w.w ?? w.word
+  const s = w.s ?? w.start
+  const e = w.e ?? w.end
+  if (typeof text !== 'string' || s == null || e == null) return null
+  const p = w.p ?? w.prob ?? w.probability
+  return {
+    w: text,
+    s: Number(s),
+    e: Number(e),
+    p: p != null ? Number(p) : undefined,
+    i: typeof w.i === 'number' ? w.i : pos,
+  }
+}
+
+export function normalizeTranscriptJson(raw: unknown): ClipWord[] {
+  if (!Array.isArray(raw)) return []
+  const out: ClipWord[] = []
+  raw.forEach((item, pos) => {
+    const word = normalizeTranscriptWord(item, pos)
+    if (word) out.push(word)
+  })
+  return out
+}
+
 function clipWordsStorageKey(workspaceId: string, projectId: string, clipId: string) {
   return `ws/${workspaceId}/projects/${projectId}/clips/${clipId}/words.json`
 }
@@ -12,8 +39,8 @@ async function readClipWordJson(
 ): Promise<ClipWord[]> {
   if (!key) return []
   try {
-    const data = await storage.getJson<ClipWord[]>(key)
-    return Array.isArray(data) ? data : []
+    const data = await storage.getJson<unknown>(key)
+    return normalizeTranscriptJson(data)
   } catch {
     return []
   }
@@ -56,7 +83,15 @@ export async function resolveEditorWords(
   if (projectTranscript.length) {
     const projectWords = loadSourceWords(projectTranscript)
     const sliced = wordsInRange(projectWords, clip.startMs, clip.endMs)
-    return sliced.length ? sliced : projectWords
+    if (sliced.length) return sliced
+    const padMs = 1500
+    const loose = wordsInRange(
+      projectWords,
+      Math.max(0, clip.startMs - padMs),
+      clip.endMs + padMs,
+    )
+    if (loose.length) return loose
+    return projectWords
   }
 
   return []

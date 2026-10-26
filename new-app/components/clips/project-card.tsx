@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Clock, Film, Loader2, Plus, Sparkles } from 'lucide-react'
-import { ProjectStatusBadge } from '@/components/app/status'
+import { CLIP_JOB_STATE, type ClipProjectStatusUi, ProjectStatusBadge } from '@/components/app/status'
 import { DurationChip } from '@/components/clips/ui/duration-chip'
 import { relativeTime } from '@/lib/clips/format'
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
@@ -12,7 +12,9 @@ function isProcessing(status: string) {
 
 export function ProjectCard({ project }: { project: ClipProjectListItem }) {
   const processing = isProcessing(project.status)
-  const step = project.stage?.replace(/_/g, ' ') || 'Processing'
+  const statusUi = CLIP_JOB_STATE[project.status as ClipProjectStatusUi]
+  const stageLabel = project.stage?.replace(/_/g, ' ') || 'Processing'
+  const overlayLabel = statusUi?.label ?? stageLabel
   const { clipCount, thumbUrl, durationMs } = project
 
   return (
@@ -31,18 +33,22 @@ export function ProjectCard({ project }: { project: ClipProjectListItem }) {
             <Film className="size-8 text-muted-foreground" aria-hidden />
           </div>
         )}
-        <div className="absolute left-2 top-2">
-          <ProjectStatusBadge status={project.status} />
+        <div className="absolute left-2 top-2 z-10">
+          <ProjectStatusBadge status={project.status} showSpinner={false} />
         </div>
         {durationMs > 0 && !processing && (
           <DurationChip ms={durationMs} />
         )}
         {processing && (
-          <div className="absolute inset-0 grid place-items-center bg-black/50">
-            <div className="flex flex-col items-center gap-2 text-white">
-              <Loader2 className="size-8 animate-spin" aria-hidden />
-              <span className="text-xs font-medium capitalize">{step}</span>
-            </div>
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-end bg-gradient-to-t from-black/75 via-black/25 to-transparent px-3 pb-3 pt-10"
+            aria-live="polite"
+          >
+            <Loader2 className="size-7 animate-spin text-white" aria-hidden />
+            <span className="mt-2 text-center text-xs font-medium leading-snug text-white">{overlayLabel}</span>
+            {stageLabel.toLowerCase() !== overlayLabel.toLowerCase() ? (
+              <span className="mt-0.5 text-center text-[10px] text-white/80 capitalize">{stageLabel}</span>
+            ) : null}
           </div>
         )}
       </div>

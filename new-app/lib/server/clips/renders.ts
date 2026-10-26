@@ -100,6 +100,41 @@ export async function enqueueRenderClip(
   return { render, downloadUrl: null as string | null, filename, reused: false, jobId }
 }
 
+export async function retryFailedRender(workspaceId: string, renderId: string) {
+  const prisma = getPrisma()
+  const render = await prisma.clipRender.findFirst({ where: { id: renderId, workspaceId } })
+  if (!render) throw new Error('Not found')
+  if (render.status !== 'FAILED') throw new Error('Only failed exports can be retried')
+
+  const clip = await prisma.clip.findUnique({ where: { id: render.clipId } })
+  if (!clip?.previewKey) throw new Error('Clip preview is not available')
+
+  await prisma.clipRender.update({
+    where: { id: renderId },
+    data: {
+      status: 'QUEUED',
+      error: null,
+      outputKey: null,
+      sizeBytes: null,
+      updatedAt: new Date(),
+    },
+  })
+
+  const jobId = createId('job')
+  await prisma.clipJob.create({
+    data: {
+      id: jobId,
+      projectId: clip.projectId,
+      clipId: clip.id,
+      type: 'RENDER_CLIP',
+      status: 'QUEUED',
+      payload: { renderId, editsVersionHash: render.editsVersionHash ?? '' },
+    },
+  })
+
+  return { renderId, status: 'QUEUED' as const, jobId }
+}
+
 export async function markRenderReady(
   renderId: string,
   outputKey: string,

@@ -15,7 +15,9 @@ import { validateImportUrlForSubmit, YOUTUBE_UNSUPPORTED_MSG } from '@/lib/clips
 import { defaultClipSettings, TOOL_PRESET_MAP, type ClipProjectSettings } from '@/lib/clips/settings'
 import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
-import { Globe, Link2, Loader2, Plus, UploadCloud } from 'lucide-react'
+import { StreamerImportPanel } from '@/components/streamer/streamer-import-panel'
+import { classifyImportUrl } from '@/lib/clips/import-url'
+import { Globe, Link2, Loader2, Plus, Radio, UploadCloud } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function NewProjectWorkspace() {
@@ -28,7 +30,10 @@ export function NewProjectWorkspace() {
     return base
   }, [preset])
 
-  const [tab, setTab] = useState<'upload' | 'link'>('upload')
+  const tabParam = params.get('tab')
+  const [tab, setTab] = useState<'upload' | 'link' | 'streamer'>(
+    tabParam === 'streamer' ? 'streamer' : tabParam === 'link' ? 'link' : 'upload',
+  )
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
   const [upload, setUpload] = useState<UploadProgress | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
@@ -100,12 +105,13 @@ export function NewProjectWorkspace() {
       />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-4">
-          <fieldset className="grid grid-cols-2 gap-2 border-0 p-0">
+          <fieldset className="grid grid-cols-1 gap-2 border-0 p-0 sm:grid-cols-3">
             <legend className="sr-only">Import source</legend>
             {(
               [
                 { id: 'upload' as const, label: 'Upload file', hint: 'MP4, MOV, WebM', icon: UploadCloud },
                 { id: 'link' as const, label: 'Paste link', hint: 'Drive or Dropbox', icon: Link2 },
+                { id: 'streamer' as const, label: 'Streamer', hint: 'Twitch or Kick', icon: Radio },
               ] as const
             ).map((opt) => (
               <label
@@ -131,7 +137,9 @@ export function NewProjectWorkspace() {
               </label>
             ))}
           </fieldset>
-          {tab === 'upload' ? (
+          {tab === 'streamer' ? (
+            <StreamerImportPanel />
+          ) : tab === 'upload' ? (
             <div className="flex flex-col gap-4">
               {!upload && <Dropzone onFile={onFile} />}
               {upload && (
@@ -161,7 +169,12 @@ export function NewProjectWorkspace() {
                       className="h-10 pl-9"
                       placeholder="Paste a Google Drive, Dropbox, or direct video URL"
                       value={linkUrl}
-                      onChange={(e) => setLinkUrl(e.target.value)}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setLinkUrl(v)
+                        const kind = classifyImportUrl(v)
+                        if (kind === 'twitch' || kind === 'kick') setTab('streamer')
+                      }}
                       autoComplete="url"
                     />
                   </div>

@@ -26,10 +26,22 @@ export async function listClipProjectsForPage(
   const storage = getClipStorage()
   return Promise.all(
     projects.map(async (p) => {
+      let thumbKey = p.thumbKey
+      if (!thumbKey) {
+        const topClip = await prisma.clip.findFirst({
+          where: { projectId: p.id, deletedAt: null, posterKey: { not: null } },
+          orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
+          select: { posterKey: true },
+        })
+        if (topClip?.posterKey) {
+          thumbKey = topClip.posterKey
+          await prisma.clipProject.update({ where: { id: p.id }, data: { thumbKey } }).catch(() => {})
+        }
+      }
       let thumbUrl: string | null = null
-      if (p.thumbKey) {
+      if (thumbKey) {
         try {
-          thumbUrl = await storage.createSignedDownloadUrl(p.thumbKey, THUMB_TTL)
+          thumbUrl = await storage.createSignedDownloadUrl(thumbKey, THUMB_TTL)
         } catch {
           thumbUrl = null
         }

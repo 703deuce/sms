@@ -1,0 +1,144 @@
+import { defaultClipSettings, clipProjectSettingsSchema } from '@/lib/clips/settings'
+import { defaultStreamerSettings, streamerSettingsSchema } from '@/lib/streamer/settings'
+import { parseStreamUrl } from '@/lib/streamer/url'
+import { projectWordsKey } from '@/lib/storage'
+import { createId } from '@/lib/supabase/id'
+import { getPrisma } from '@/lib/server/db'
+
+export async function createStreamerImport(
+  workspaceId: string,
+  input: {
+    url?: string
+    uploadId?: string
+    rangeStartMs?: number
+    rangeEndMs?: number
+    settings?: unknown
+    attest: boolean
+  },
+) {
+  if (input.url && !input.attest) {
+    throw new Error('You must confirm permission to import this stream')
+  }
+
+  const prisma = getPrisma()
+  const streamer = streamerSettingsSchema.parse({
+    ...defaultStreamerSettings(),
+    ...(typeof input.settings === 'object' && input.settings ? input.settings : {}),
+  })
+
+  let platform = 'upload'
+  let sourceType = 'upload'
+  let externalId: string | null = null
+  let channelLogin: string | null = null
+  let url = input.url?.trim() || null
+  let title = 'Streamer upload'
+
+  if (url) {
+    const parsed = parseStreamUrl(url)
+    if ('error' in parsed) throw new Error(parsed.error)
+    platform = parsed.platform
+    sourceType = parsed.kind
+    externalId = parsed.id
+    channelLogin = parsed.channel ?? null
+    title = `${parsed.platform === 'twitch' ? 'Twitch' : 'Kick'} ${parsed.kind} ${parsed.id}`
+  }
+
+  const baseSettings = clipProjectSettingsSchema.parse(defaultClipSettings())
+  const merged = clipProjectSettingsSchema.parse({
+    ...baseSettings,
+    aspectRatio: '9:16',
+    genre: 'gaming',
+    streamer,
+    rangeStartMs: input.rangeStartMs ?? 0,
+    rangeEndMs: input.rangeEndMs ?? 0,
+  })
+
+  const projectId = createId('proj')
+  const vodId = createId('svod')
+
+  if (input.uploadId) {
+    const upload = await prisma.clipUpload.findFirst({
+      where: { id: input.uploadId, workspaceId, status: 'COMPLETE' },
+    })
+    if (!upload) throw new Error('Upload not complete')
+    title = upload.filename.replace(/\.[^.]+$/, '')
+    merged.rangeEndMs = upload.durationMs || merged.rangeEndMs
+  }
+
+  let channelId: string | null = null
+  if (channelLogin && platform !== 'upload') {
+    const ch = await prisma.streamChannel.upsert({
+      where: { workspaceId_platform_login: { workspaceId, platform, login: channelLogin.toLowerCase() } },
+      create: {
+        id: createId('sch'),
+        workspaceId,
+        platform,
+        login: channelLogin.toLowerCase(),
+        status: 'PASTE_ONLY',
+      },
+      update: { updatedAt: new Date() },
+    })
+    channelId = ch.id
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.clipProject.create({
+      data: {
+        id: projectId,
+        workspaceId,
+        title,
+        uploadId: input.uploadId ?? null,
+        sourceUrl: url,
+        settings: JSON.parse(JSON.stringify(merged)),
+        rangeStartMs: input.rangeStartMs ?? 0,
+        rangeEndMs: merged.rangeEndMs,
+        status: 'QUEUED',
+        stage: url ? 'importing' : 'queued',
+        progress: 0,
+        transcriptKey: projectWordsKey(workspaceId, projectId),
+      },
+    })
+    await tx.streamVod.create({
+      data: {
+        id: vodId,
+        workspaceId,
+        projectId,
+        channelId,
+        platform,
+        sourceType,
+        externalId,
+        url,
+        title,
+        rangeStartMs: input.rangeStartMs ?? 0,
+        rangeEndMs: input.rangeEndMs ?? null,
+        triggeredBy: input.uploadId ? 'upload' : 'paste',
+        attestedAt: input.attest ? new Date() : null,
+        priority: 10,
+      },
+    })
+    if (url) {
+      await tx.clipJob.create({
+        data: {
+          id: createId('job'),
+          projectId,
+          type: 'STREAM_IMPORT',
+          status: 'QUEUED',
+          priority: 10,
+          payload: { vodId },
+        },
+      })
+    } else if (input.uploadId) {
+      await tx.clipJob.create({
+        data: {
+          id: createId('job'),
+          projectId,
+          type: 'PROCESS_PROJECT',
+          status: 'QUEUED',
+          payload: {},
+        },
+      })
+    }
+  })
+
+  return { projectId, vodId }
+}

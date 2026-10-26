@@ -42,6 +42,13 @@ export async function cancelProject(workspaceId: string, projectId: string) {
   return prisma.clipProject.findUniqueOrThrow({ where: { id: projectId } })
 }
 
+export function shouldTouchLockedAt(storedJobStatus: string, bodyJobStatus?: 'RUNNING' | 'DONE' | 'FAILED') {
+  if (storedJobStatus === 'DONE' || storedJobStatus === 'FAILED') {
+    return bodyJobStatus === 'RUNNING'
+  }
+  return storedJobStatus === 'RUNNING' || bodyJobStatus === 'RUNNING'
+}
+
 export async function applyJobProgress(input: {
   jobId: string
   projectStatus?: ClipProjectStatus

@@ -47,7 +47,13 @@ export function StatusBadge({
   )
 }
 
-export function ProjectStatusBadge({ status }: { status: string }) {
+export function ProjectStatusBadge({
+  status,
+  showSpinner = true,
+}: {
+  status: string
+  showSpinner?: boolean
+}) {
   const ui = CLIP_JOB_STATE[status as ClipProjectStatusUi]
   if (!ui) {
     return <StatusBadge tone="neutral">{status}</StatusBadge>
@@ -55,7 +61,10 @@ export function ProjectStatusBadge({ status }: { status: string }) {
   const processing = !['READY', 'FAILED', 'CANCELED', 'DRAFT'].includes(status)
   if (processing) {
     return (
-      <StatusBadge tone="info" icon={<Loader2 className="size-3 animate-spin" aria-hidden />}>
+      <StatusBadge
+        tone="info"
+        icon={showSpinner ? <Loader2 className="size-3 animate-spin" aria-hidden /> : undefined}
+      >
         {ui.label}
       </StatusBadge>
     )

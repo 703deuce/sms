@@ -10,6 +10,7 @@ from pathlib import Path
 from clips_worker.anything_picker import pick_anything_clips
 from clips_worker.picker import pick_talking_clips
 from clips_worker.render_clip import ffmpeg_cut, poster_jpg, run_speakercrop, slice_words
+from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, put_json, upload_file
 
 
@@ -161,10 +162,18 @@ def run_m4_pipeline(
     words: list[dict],
     source_key: str,
     post_progress,
+    job: dict | None = None,
 ) -> None:
     settings = project.get("settings") or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
+    if settings.get("streamer"):
+        settings = {**settings, "genre": "gaming_stream"}
+    job_payload = {}
+    if job:
+        job_payload = job.get("payload") or {}
+        if isinstance(job_payload, str):
+            job_payload = json.loads(job_payload)
     workspace_id = project["workspaceId"]
     project_id = project["id"]
     range_start = int(project.get("rangeStartMs") or 0)
@@ -179,7 +188,22 @@ def run_m4_pipeline(
         subprocess.check_call(
             ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-ac", "1", "-ar", "16000", str(audio_wav)],
         )
-        if mode == "anything":
+        if job_payload.get("singleClip"):
+            dur_ms = int(round(probe_duration(src) * 1000))
+            start_ms = range_start
+            end_ms = range_end if range_end > range_start else dur_ms
+            picks = [
+                {
+                    "start_ms": start_ms,
+                    "end_ms": end_ms,
+                    "score": 100,
+                    "title": project.get("title") or "Clip",
+                    "reason": "Imported clip",
+                    "hook": "Imported clip",
+                }
+            ]
+            picker_message = None
+        elif mode == "anything":
             post_progress(
                 job_id,
                 {"projectStatus": "SCANNING", "stage": "scanning", "progress": 55, "jobStatus": "RUNNING"},
@@ -356,6 +380,15 @@ def run_m4_pipeline(
                     raise RuntimeError(f"pipeline invariant: missing cropKey for clip {row.get('id')}")
 
         insert_clips_batch(conn, clip_rows)
+        if clip_rows:
+            poster = clip_rows[0].get("posterKey")
+            if poster:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        'UPDATE clip_projects SET "thumbKey" = %s, "updatedAt" = NOW() WHERE id = %s',
+                        (poster, project_id),
+                    )
+                conn.commit()
         mark_project_ready(conn, project_id)
         post_progress(
             job_id,

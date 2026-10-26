@@ -1,4 +1,4 @@
-export type ImportLinkKind = 'drive' | 'dropbox' | 'youtube' | 'unsupported'
+export type ImportLinkKind = 'drive' | 'dropbox' | 'youtube' | 'twitch' | 'kick' | 'unsupported'
 
 const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be', 'www.youtu.be'])
 
@@ -19,6 +19,8 @@ export function classifyImportUrl(raw: string): ImportLinkKind {
   if (YOUTUBE_HOSTS.has(hostWithWww) || host === 'youtu.be' || host === 'youtube.com') return 'youtube'
   if (host === 'drive.google.com' || host === 'docs.google.com') return 'drive'
   if (host === 'dropbox.com' || host.endsWith('.dropbox.com')) return 'dropbox'
+  if (host === 'twitch.tv' || host === 'clips.twitch.tv' || hostWithWww === 'clips.twitch.tv') return 'twitch'
+  if (host === 'kick.com') return 'kick'
   return 'unsupported'
 }
 
@@ -61,5 +63,11 @@ export function validateImportUrlForSubmit(raw: string): { ok: true; kind: 'driv
     return { ok: true, kind: 'drive' }
   }
   if (kind === 'dropbox') return { ok: true, kind: 'dropbox' }
+  if (kind === 'twitch' || kind === 'kick') {
+    return {
+      ok: false,
+      message: 'Twitch and Kick links open in the Streamer tab — switch tabs to import.',
+    }
+  }
   return { ok: false, message: 'Only Google Drive and Dropbox share links are supported.' }
 }

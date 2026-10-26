@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { musicCostUsd, SFX_PRESETS } from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
@@ -102,10 +104,16 @@ export function AudioPanel({
         <h3 className="font-medium">Music</h3>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void suggest()}>Suggest</Button>
-          <label className="flex items-center gap-1 text-xs">
-            <input type="checkbox" checked={instrumental} onChange={(e) => setInstrumental(e.target.checked)} />
-            Instrumental
-          </label>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="music-instrumental"
+              checked={instrumental}
+              onCheckedChange={(v) => setInstrumental(v === true)}
+            />
+            <Label htmlFor="music-instrumental" className="text-xs font-normal">
+              Instrumental
+            </Label>
+          </div>
         </div>
         <textarea
           className="w-full min-h-[72px] rounded border border-border bg-background p-2 text-xs"

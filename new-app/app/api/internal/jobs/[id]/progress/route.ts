@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
-import { applyJobProgress } from '@/lib/server/clips/jobs'
+import { applyJobProgress, shouldTouchLockedAt } from '@/lib/server/clips/jobs'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
@@ -40,14 +40,22 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       transcriptWords: body.transcriptWords,
     })
 
+    const heartbeat = shouldTouchLockedAt(job.status, body.jobStatus)
+    const terminalFromBody = body.jobStatus === 'DONE' || body.jobStatus === 'FAILED'
+
     if (body.jobStatus) {
       await prisma.clipJob.update({
         where: { id: jobId },
         data: {
           status: body.jobStatus,
-          finishedAt: body.jobStatus === 'DONE' || body.jobStatus === 'FAILED' ? new Date() : undefined,
-          lockedAt: new Date(),
+          finishedAt: terminalFromBody ? new Date() : undefined,
+          ...(heartbeat ? { lockedAt: new Date() } : {}),
         },
+      })
+    } else if (heartbeat) {
+      await prisma.clipJob.update({
+        where: { id: jobId },
+        data: { lockedAt: new Date() },
       })
     }
 

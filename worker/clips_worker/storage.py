@@ -105,6 +105,54 @@ def _upload_s3(object_key: str, path: Path, content_type: str | None) -> None:
     client.upload_file(str(path), storage_bucket(), object_key, ExtraArgs=extra)
 
 
+def sign_url(object_key: str, expires_s: int = 3600) -> str:
+    base = env("SUPABASE_URL").rstrip("/")
+    token = env("SUPABASE_SERVICE_ROLE_KEY")
+    bucket = storage_bucket()
+    encoded = "/".join(urllib.parse.quote(part, safe="") for part in object_key.split("/"))
+    url = f"{base}/storage/v1/object/sign/{bucket}/{encoded}"
+    body = json.dumps({"expiresIn": expires_s}).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "apikey": token,
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read().decode())
+    signed = data.get("signedURL") or data.get("signedUrl")
+    if not signed:
+        raise RuntimeError("sign response missing signedURL")
+    if signed.startswith("http"):
+        return signed
+    return f"{base}/storage/v1{signed}"
+
+
+def sign_upload_url(object_key: str) -> dict:
+    base = env("SUPABASE_URL").rstrip("/")
+    token = env("SUPABASE_SERVICE_ROLE_KEY")
+    bucket = storage_bucket()
+    encoded = "/".join(urllib.parse.quote(part, safe="") for part in object_key.split("/"))
+    url = f"{base}/storage/v1/object/upload/sign/{bucket}/{encoded}"
+    req = urllib.request.Request(
+        url,
+        data=b"{}",
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "apikey": token,
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read().decode())
+    return {"url": data.get("url"), "token": data.get("token")}
+
+
 def put_json(object_key: str, data: unknown) -> None:
     import tempfile
 

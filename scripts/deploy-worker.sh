@@ -37,7 +37,7 @@ r = c.cursor()
 r.execute(\"\"\"
   SELECT count(*) FROM clip_jobs
   WHERE status = 'RUNNING'
-    AND type IN ('IMPORT_URL', 'RENDER_CLIP', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
+    AND type IN ('IMPORT_URL', 'STREAM_IMPORT', 'RENDER_CLIP', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
 \"\"\")
 print(r.fetchone()[0])
 " 2>/dev/null || echo 1)
@@ -72,6 +72,9 @@ print('claim_list_ok')
 "
 
 docker exec clips-worker python3 -m pytest -q \\
+  /app/tests/test_job_types.py \\
+  /app/tests/test_gpu_select.py \\
+  /app/tests/test_normalize_words.py \\
   /app/tests/test_broll_ffmpeg.py \\
   /app/tests/test_audio_mix.py \\
   /app/tests/test_captions_ass_render.py \\

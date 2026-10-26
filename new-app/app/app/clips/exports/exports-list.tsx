@@ -10,7 +10,8 @@ import { AspectGlyph } from '@/components/clips/ui/aspect-glyph'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import type { ExportRenderRow } from '@/lib/clips-api'
-import { retryExportRender } from '@/lib/clips-api'
+import { ExportErrorMessage } from '@/components/clips/export-error-message'
+import { retryFailedExportRender } from '@/lib/clips-api'
 import { Download, RotateCcw } from 'lucide-react'
 
 type Filter = 'all' | 'ready' | 'failed'
@@ -92,8 +93,13 @@ export function ExportsList({
   filter: Filter
 }) {
   const router = useRouter()
-  const rows = initialRows
+  const [rows, setRows] = useState(initialRows)
+  const [retryingId, setRetryingId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setRows(initialRows)
+  }, [initialRows])
   const readyIds = useMemo(() => rows.filter((r) => r.status === 'READY' && r.downloadUrl).map((r) => r.id), [rows])
 
   const toggleRow = (id: string) => {
@@ -131,18 +137,30 @@ export function ExportsList({
   }
 
   const onRetry = async (r: ExportRenderRow) => {
+    if (retryingId) return
+    setRetryingId(r.id)
+    toast.loading('Retrying…', { id: `retry-${r.id}` })
     try {
-      await retryExportRender(r.clipId, {
-        resolution: parseResolution(r.resolution),
-        aspect: parseAspect(r.aspectRatio),
-        watermark: r.watermark,
-      })
-      toast.success('Export re-queued', {
-        action: { label: 'View', onClick: () => router.push('/app/clips/exports') },
-      })
+      const data = await retryFailedExportRender(r.id)
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === r.id
+            ? {
+                ...row,
+                status: data.status,
+                error: null,
+                downloadUrl: null,
+                createdAt: new Date().toISOString(),
+              }
+            : row,
+        ),
+      )
+      toast.success('Export queued — rendering again', { id: `retry-${r.id}` })
       router.refresh()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Retry failed')
+      toast.error(e instanceof Error ? e.message : 'Retry failed', { id: `retry-${r.id}` })
+    } finally {
+      setRetryingId(null)
     }
   }
 
@@ -212,7 +230,7 @@ export function ExportsList({
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground tabular-nums">{formatSize(r.sizeBytes)}</p>
                 {r.status === 'FAILED' && r.error ? (
-                  <p className="mt-2 text-xs text-destructive">{r.error}</p>
+                  <ExportErrorMessage error={r.error} />
                 ) : null}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <StatusBadge tone={r.status === 'READY' ? 'success' : r.status === 'FAILED' ? 'danger' : 'info'}>
@@ -229,7 +247,12 @@ export function ExportsList({
                     </Button>
                   ) : null}
                   {r.status === 'FAILED' ? (
-                    <Button size="sm" variant="outline" onClick={() => void onRetry(r)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={retryingId === r.id}
+                      onClick={() => void onRetry(r)}
+                    >
                       <RotateCcw className="size-3.5" aria-hidden />
                       Retry
                     </Button>
@@ -287,9 +310,7 @@ export function ExportsList({
                       <Link href={r.editorUrl} className="line-clamp-2 max-w-[180px] font-medium hover:underline">
                         {r.title}
                       </Link>
-                      {r.status === 'FAILED' && r.error ? (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-destructive">{r.error}</p>
-                      ) : null}
+                      {r.status === 'FAILED' && r.error ? <ExportErrorMessage error={r.error} /> : null}
                     </div>
                   </div>
                 </td>
@@ -328,7 +349,12 @@ export function ExportsList({
                         Download
                       </Button>
                     ) : r.status === 'FAILED' ? (
-                      <Button size="sm" variant="outline" onClick={() => void onRetry(r)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={retryingId === r.id}
+                        onClick={() => void onRetry(r)}
+                      >
                         <RotateCcw className="size-3.5" aria-hidden />
                         Retry
                       </Button>
