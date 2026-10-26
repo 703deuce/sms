@@ -21,6 +21,7 @@ import { DubPanel } from '@/components/clips/editor/dub-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { BrollPanel } from '@/components/clips/editor/broll-panel'
 import { ThumbnailPanel } from '@/components/clips/editor/thumbnail-panel'
+import { BrandPanel } from '@/components/clips/editor/brand-panel'
 import { ProducerPanel } from '@/components/clips/producer/producer-panel'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useGeneration } from '@/components/clips/editor/use-generation'
@@ -157,7 +158,13 @@ export function EditorShell({
   const applyBrand = useCallback(async () => {
     try {
       const data = await clipsFetch<{
-        template: { logoKey: string | null; settings: BrandTemplateSettings } | null
+        template: {
+          id: string
+          logoKey: string | null
+          introVideoKey: string | null
+          outroVideoKey: string | null
+          settings: BrandTemplateSettings
+        } | null
         logoUrl: string | null
       }>('/api/clips/brand')
       if (!data.template) {
@@ -166,7 +173,10 @@ export function EditorShell({
       }
       setEdits(
         applyBrandTemplateToEdits(edits, {
+          id: data.template.id,
           logoKey: data.template.logoKey,
+          introVideoKey: data.template.introVideoKey,
+          outroVideoKey: data.template.outroVideoKey,
           settings: data.template.settings,
         }),
       )
@@ -366,6 +376,7 @@ export function EditorShell({
                 onShotFocus={setShotOverride}
                 onRerunReframe={() => void requestClipReframe(clipId)}
                 onApplyBrand={() => void applyBrand()}
+                onEdits={setEdits}
               />
             </TabsContent>
             <TabsContent value="captions" className="mt-0">
@@ -441,12 +452,8 @@ export function EditorShell({
                 dubs={dubs}
               />
             </TabsContent>
-            <TabsContent value="brand" className="mt-0 p-3">
-              <p className="text-xs text-muted-foreground">
-                Workspace brand template lives at{' '}
-                <a className="underline" href="/app/clips/brand">/app/clips/brand</a>. Use Apply brand in Captions or
-                Layout.
-              </p>
+            <TabsContent value="brand" className="mt-0">
+              <BrandPanel edits={edits} onEdits={setEdits} />
             </TabsContent>
           </Tabs>
         </aside>

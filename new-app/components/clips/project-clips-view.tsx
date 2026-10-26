@@ -9,7 +9,9 @@ import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
 import { JobStatus } from '@/components/clips/job-status'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { exportClip, listProjectClips } from '@/lib/clips-api'
-import { Clapperboard } from 'lucide-react'
+import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Clapperboard, Sparkles } from 'lucide-react'
 
 type ProjectStatusPayload = {
   status: string
@@ -134,7 +136,27 @@ export function ProjectClipsView({
           <Panel
             title={clipCountLabel(clips.length)}
             description="Sorted by score. Hover a card to preview."
-            actions={clips.length > 0 ? <ExportAllDialog projectId={projectId} clips={clips} /> : null}
+            actions={
+              clips.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  <Sheet>
+                    <SheetTrigger render={<Button size="sm" variant="outline" />}>
+                      <Sparkles className="mr-1 size-4 text-primary" />
+                      AI Producer
+                    </SheetTrigger>
+                    <SheetContent side="right" className="w-full sm:max-w-[440px] p-0">
+                      <SheetHeader className="border-b border-border p-4">
+                        <SheetTitle>Project Producer</SheetTitle>
+                      </SheetHeader>
+                      <div className="h-[calc(100dvh-5rem)]">
+                        <ProjectProducerPanel projectId={projectId} />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                  <ExportAllDialog projectId={projectId} clips={clips} />
+                </div>
+              ) : null
+            }
           >
             {clips.length === 0 ? (
               <EmptyState
