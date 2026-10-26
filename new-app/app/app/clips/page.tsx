@@ -9,7 +9,7 @@ import { listClipProjects } from '@/lib/server/clips/projects'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Projects · Clips' }
+export const metadata = { title: 'Projects' }
 
 function isProcessing(status: string) {
   return status !== 'READY' && status !== 'FAILED' && status !== 'CANCELED' && status !== 'DRAFT'
@@ -34,6 +34,8 @@ export default async function ClipsProjectsPage({
     <Page>
       <ProjectsAutoRefresh enabled={anyProcessing} />
       <PageHeader
+        icon={Clapperboard}
+        iconTone="brand"
         title="Projects"
         description="Your long videos and the clips we found in them."
         eyebrow={
