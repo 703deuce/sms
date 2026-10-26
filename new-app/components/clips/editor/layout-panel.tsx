@@ -18,6 +18,7 @@ export function LayoutPanel({
   onShotFocus,
   onRerunReframe,
   onApplyBrand,
+  onEdits,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -25,13 +26,71 @@ export function LayoutPanel({
   onShotFocus: (i: number, focus: 'auto' | 'A' | 'B' | 'both') => void
   onRerunReframe: (shotIndex: number) => void
   onApplyBrand?: () => void
+  onEdits?: (edits: ClipEditsV2) => void
 }) {
+  const zoom = edits.zoom || { enabled: false, intensity: 1.15 }
+  const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
   return (
     <div className="flex flex-col gap-4">
       {onApplyBrand && (
         <Button type="button" size="sm" variant="outline" onClick={onApplyBrand}>
           Apply brand
         </Button>
+      )}
+      {onEdits && (
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <label className="flex items-center gap-2 text-xs font-medium">
+            <input
+              type="checkbox"
+              checked={Boolean(zoom.enabled)}
+              onChange={(e) =>
+                onEdits({ ...edits, zoom: { ...zoom, enabled: e.target.checked } })
+              }
+            />
+            Auto zoom on emphasis
+          </label>
+          {zoom.enabled && (
+            <label className="flex items-center gap-2 text-xs">
+              Intensity
+              <input
+                type="range"
+                min={1.1}
+                max={1.3}
+                step={0.05}
+                value={zoom.intensity ?? 1.15}
+                onChange={(e) =>
+                  onEdits({ ...edits, zoom: { ...zoom, intensity: Number(e.target.value) } })
+                }
+              />
+            </label>
+          )}
+          <label className="flex items-center gap-2 text-xs font-medium">
+            <input
+              type="checkbox"
+              checked={Boolean(silence.enabled)}
+              onChange={(e) =>
+                onEdits({ ...edits, silenceTrim: { ...silence, enabled: e.target.checked } })
+              }
+            />
+            Silence trim on export
+          </label>
+          {silence.enabled && (
+            <label className="flex items-center gap-2 text-xs">
+              Min gap (ms)
+              <input
+                type="number"
+                className="w-20 rounded border px-1"
+                value={silence.minGapMs ?? 600}
+                onChange={(e) =>
+                  onEdits({
+                    ...edits,
+                    silenceTrim: { ...silence, minGapMs: Number(e.target.value) },
+                  })
+                }
+              />
+            </label>
+          )}
+        </div>
       )}
       <div className="grid gap-2 sm:grid-cols-2">
         {LAYOUTS.map((l) => (

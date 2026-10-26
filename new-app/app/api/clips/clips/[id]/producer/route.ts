@@ -1,9 +1,10 @@
 import { z } from 'zod'
-import { applyProducerTools, type ProducerToolCall } from '@/lib/clips/edits-reducer'
+import type { ProducerToolCall } from '@/lib/clips/edits-reducer'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
+import { loadClipWords, PRODUCER_SYSTEM_CLIP, runProducerOnClip } from '@/lib/server/clips/producer-run'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
@@ -15,13 +16,6 @@ export const maxDuration = 300
 const bodySchema = z.object({
   message: z.string().min(1).max(4000),
 })
-
-const SYSTEM = `You are the Clips AI Producer. Return JSON: { "reply": string, "tools": [{ "name": string, "args": object }] }.
-Allowed tools: trim, set_captions, set_layout, set_title, set_music_mix, add_sfx, remove_broll, insert_stock_broll, generate_ai_broll, generate_music, generate_thumbnail, dub, apply_brand.
-Paid tools (generate_*, dub) need user confirmation — only include them when the user clearly asks.
-apply_brand applies the workspace brand template fields from args (logo/caption preset).
-For caption changes, prefer ONE set_captions call with all fields (presetId, animation, size, etc.) instead of multiple calls.
-Keep edits minimal; one line per change in reply.`
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   let clipId = ''
@@ -59,7 +53,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         const edits = normalizeEdits(clip.edits, bounds)
 
         const llm = await openAiJsonResponse<{ reply: string; tools: ProducerToolCall[] }>(
-          SYSTEM,
+          PRODUCER_SYSTEM_CLIP,
           JSON.stringify({ userMessage, edits }),
         )
 
@@ -86,18 +80,23 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           return {
             ...t,
             args: {
+              templateId: brandTpl.id,
               logoKey: brandTpl.logoKey,
+              introVideoKey: brandTpl.introVideoKey,
+              outroVideoKey: brandTpl.outroVideoKey,
               settings: brandTpl.settings,
               ...(t.args || {}),
             },
           }
         })
-        const applied = applyProducerTools(edits, bounds, enrichedTools)
+        const prismaWords = getPrisma()
+        const project = await prismaWords.clipProject.findUnique({ where: { id: clip.projectId } })
+        const words = await loadClipWords(workspaceId, clip.projectId, clipId, project?.transcriptWords)
+        const applied = runProducerOnClip(edits, bounds, enrichedTools, words)
 
         send('message', { role: 'assistant', content: llm.reply })
         send('tools', { summaries: applied.summaries, pendingPaid: applied.pendingPaid })
-        const changeCount = applied.summaries.filter((s) => !/^Pending /.test(s)).length
-        send('edits', { edits: applied.edits, changeCount })
+        send('edits', { edits: applied.edits, changeCount: applied.changeCount })
 
         const prisma = getPrisma()
         let thread = await prisma.producerThread.findUnique({ where: { clipId } })

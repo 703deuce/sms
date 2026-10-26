@@ -40,6 +40,8 @@ export type ClipEditsV2 = {
   thumbnailId?: string | null
   audioTrack?: string
   brand?: unknown
+  zoom?: { enabled?: boolean; intensity?: number }
+  silenceTrim?: { enabled?: boolean; minGapMs?: number; keepMs?: number }
 }
 
 export type ClipBounds = { clipStartMs: number; clipEndMs: number }
@@ -105,6 +107,21 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     },
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
     audio: normalizeAudioEdits(o.audio),
+    zoom:
+      o.zoom && typeof o.zoom === 'object'
+        ? {
+            enabled: Boolean((o.zoom as { enabled?: boolean }).enabled),
+            intensity: Number((o.zoom as { intensity?: number }).intensity) || 1.15,
+          }
+        : undefined,
+    silenceTrim:
+      o.silenceTrim && typeof o.silenceTrim === 'object'
+        ? {
+            enabled: Boolean((o.silenceTrim as { enabled?: boolean }).enabled),
+            minGapMs: Number((o.silenceTrim as { minGapMs?: number }).minGapMs) || 600,
+            keepMs: Number((o.silenceTrim as { keepMs?: number }).keepMs) || 150,
+          }
+        : undefined,
   }
 }
 

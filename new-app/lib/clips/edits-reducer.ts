@@ -9,7 +9,8 @@ import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
 import { brandTemplateSettingsSchema } from '@/lib/clips/brand'
 import type { BrollItem } from '@/lib/clips/broll'
 import { createId } from '@/lib/supabase/id'
-import { defaultEdits, type ClipBounds, type ClipEditsV2 } from '@/lib/clips/edits'
+import { defaultEdits, type ClipBounds, type ClipEditsV2, type ClipWord } from '@/lib/clips/edits'
+import { applySilenceTrimToEdits } from '@/lib/clips/silence-trim'
 
 export type ProducerToolName =
   | 'trim'
@@ -25,6 +26,9 @@ export type ProducerToolName =
   | 'generate_thumbnail'
   | 'dub'
   | 'apply_brand'
+  | 'set_zoom'
+  | 'set_silence_trim'
+  | 'apply_silence_trim'
 
 export type ProducerToolCall = {
   name: ProducerToolName
@@ -135,12 +139,47 @@ export function applyProducerTool(
     case 'apply_brand': {
       const settings = brandTemplateSettingsSchema.parse(call.args.settings ?? call.args)
       const logoKey = call.args.logoKey as string | undefined
-      const next = applyBrandTemplateToEdits(base, { logoKey, settings })
+      const next = applyBrandTemplateToEdits(base, {
+        logoKey,
+        settings,
+        introVideoKey: call.args.introVideoKey as string | undefined,
+        outroVideoKey: call.args.outroVideoKey as string | undefined,
+        id: call.args.templateId as string | undefined,
+      })
       return { edits: next, summary: 'Applied brand template' }
     }
+    case 'set_zoom': {
+      const a = call.args as { enabled?: boolean; intensity?: number }
+      const zoom = { ...base.zoom, ...a }
+      return { edits: { ...base, zoom }, summary: 'Updated auto zoom' }
+    }
+    case 'set_silence_trim': {
+      const a = call.args as { enabled?: boolean; minGapMs?: number; keepMs?: number }
+      const silenceTrim = { ...base.silenceTrim, ...a }
+      return { edits: { ...base, silenceTrim }, summary: 'Updated silence trim' }
+    }
+    case 'apply_silence_trim':
+      return { edits: base, summary: 'apply_silence_trim requires words (server)' }
     default:
       return { edits: base, summary: 'Unknown tool' }
   }
+}
+
+export function applyProducerToolsWithWords(
+  initial: ClipEditsV2,
+  bounds: ClipBounds,
+  calls: ProducerToolCall[],
+  words: ClipWord[],
+): { edits: ClipEditsV2; summaries: string[]; pendingPaid: ProducerToolCall[] } {
+  const trimmed = calls.filter((c) => c.name !== 'apply_silence_trim')
+  const silenceCalls = calls.filter((c) => c.name === 'apply_silence_trim')
+  let { edits, summaries, pendingPaid } = applyProducerTools(initial, bounds, trimmed)
+  for (const call of silenceCalls) {
+    const a = call.args as { minGapMs?: number; keepMs?: number }
+    edits = applySilenceTrimToEdits(edits, words, { enabled: true, ...a })
+    summaries.push('Tightened silence gaps')
+  }
+  return { edits, summaries, pendingPaid }
 }
 
 /** Apply many producer tools as one logical patch (single undo step on the client). */

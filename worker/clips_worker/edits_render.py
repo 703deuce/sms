@@ -286,6 +286,9 @@ def render_edited_clip(
     broll_specs: list[dict] | None = None,
     audio_assets: dict | None = None,
 ) -> tuple[Path, list[dict], str]:
+    from clips_worker.silence_trim import effective_cut_ranges
+
+    edits = {**edits, "cutRanges": effective_cut_ranges(edits, source_words)}
     shot_overrides = (edits.get("layout") or {}).get("shotOverrides") or []
     src_words = ensure_word_i(source_words)
 
@@ -412,6 +415,17 @@ def render_edited_clip(
         shutil.copy(final, out_mp4)
     else:
         shutil.copy(caption_src, out_mp4)
+
+    zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
+    if zoom_cfg.get("enabled"):
+        from clips_worker.zoom_render import apply_zoom, build_zoom_keyframes
+
+        emphasis = cap_edits.get("emphasis") if isinstance(cap_edits, dict) else []
+        intensity = float(zoom_cfg.get("intensity") or 1.15)
+        kf = build_zoom_keyframes(caption_words, list(emphasis or []), length_s, intensity)
+        zoomed = work_dir / "zoomed.mp4"
+        apply_zoom(out_mp4, zoomed, kf, length_s, play_w, play_h)
+        shutil.copy(zoomed, out_mp4)
 
     pb = cap_edits.get("progressBar") if isinstance(cap_edits.get("progressBar"), dict) else None
     if pb and pb.get("enabled"):
