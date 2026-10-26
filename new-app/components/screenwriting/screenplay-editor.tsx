@@ -2,11 +2,10 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import { Fragment, Slice } from '@tiptap/pm/model'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { JSONContent } from '@tiptap/core'
-import { screenplayExtensions } from '@/lib/screenwriting/schema/extensions'
+import { createScreenplayExtensions } from '@/lib/screenwriting/schema/extensions'
 import type { FormatSpec, ScreenplayElementType } from '@/lib/screenwriting/formats/types'
-import { elementStyle } from '@/lib/screenwriting/editor/element-style'
 import { autoDetectElementType, nextElementType } from '@/lib/screenwriting/editor/element-keys'
 import { elementTypeForDigit } from '@/lib/screenwriting/editor/shortcuts'
 import { newElementId } from '@/lib/screenwriting/schema/empty-doc'
@@ -15,10 +14,12 @@ import { useScreenplayCollab } from '@/components/screenwriting/use-screenplay-c
 import { shouldDisablePmHistory, collabUndoStackLabel } from '@/lib/screenwriting/collab/undo-policy'
 import { attachYjsUndoHook } from '@/lib/screenwriting/collab/yjs-undo-hook'
 import { pastePlainTextToElements } from '@/lib/screenwriting/editor/clipboard'
-import { SCREENPLAY_FONT_STACK } from '@/lib/screenwriting/editor/font-fallback'
 import { elementDirection } from '@/lib/screenwriting/editor/rtl'
 import { macroForHotkey, type Macro } from '@/lib/screenwriting/editor/macros'
 import { hashPmJson, reconcileSave } from '@/lib/screenwriting/persistence/save-reconcile'
+import { DEFAULT_SMARTTYPE, learnToken, type SmartTypeLists } from '@/lib/screenwriting/smarttype/store'
+import { SmartTypeMenu, suggestionsForElement } from '@/components/screenwriting/smarttype-menu'
+import '@/components/screenwriting/screenplay-editor.css'
 
 export function ScreenplayEditor({
   scriptId,
@@ -35,6 +36,8 @@ export function ScreenplayEditor({
   insertElementType,
   macros,
   insertImageUrl,
+  smartTypeLists,
+  onSmartTypeChange,
 }: {
   scriptId: string
   formatSpec: FormatSpec
@@ -50,27 +53,34 @@ export function ScreenplayEditor({
   insertElementType?: string | null
   macros?: Macro[]
   insertImageUrl?: string | null
+  smartTypeLists?: SmartTypeLists
+  onSmartTypeChange?: (lists: SmartTypeLists) => void
 }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const serverUpdatedAt = useRef(0)
+  const lists = smartTypeLists ?? DEFAULT_SMARTTYPE
+  const [suggestItems, setSuggestItems] = useState<string[]>([])
+  const [suggestOpen, setSuggestOpen] = useState(false)
+
   const extensions = useMemo(() => {
-    const base = [...screenplayExtensions]
+    const base = createScreenplayExtensions(formatSpec)
     if (shouldDisablePmHistory(Boolean(collabActive))) {
       return base.filter((e) => e.name !== 'history')
     }
     return base
-  }, [collabActive])
+  }, [formatSpec, collabActive])
 
   const dir = elementDirection(Boolean(rtl))
 
   const editor = useEditor({
     extensions,
     content: initialDoc,
+    immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: 'sw-editor prose prose-sm max-w-none focus:outline-none min-h-[70vh] px-8 py-6 sw-print-preview',
+        class: 'sw-editor max-w-none focus:outline-none sw-print-preview',
         spellcheck: 'true',
-        style: `font-family: ${SCREENPLAY_FONT_STACK}; direction: ${dir.direction}; text-align: ${dir.textAlign}`,
+        style: `direction: ${dir.direction}; text-align: ${dir.textAlign}`,
         'data-undo-label': collabUndoStackLabel(Boolean(collabActive)),
       },
       handlePaste: (view, event) => {
@@ -108,33 +118,6 @@ export function ScreenplayEditor({
             }
             return true
           }
-        }
-        if (event.key === 'Enter' && !event.shiftKey) {
-          const { state, dispatch } = view
-          const { $from } = state.selection
-          const node = $from.parent
-          if (node.type.name !== 'screenplayElement') return false
-          const current = (node.attrs.elementType || 'action') as ScreenplayElementType
-          const next = nextElementType(current, 'enter')
-          event.preventDefault()
-          const tr = state.tr.split($from.pos, 1, [{ type: state.schema.nodes.screenplayElement, attrs: { id: newElementId(), elementType: next } }])
-          dispatch(tr.scrollIntoView())
-          return true
-        }
-        if (event.key === 'Tab') {
-          const { state, dispatch } = view
-          const { $from } = state.selection
-          const node = $from.parent
-          if (node.type.name !== 'screenplayElement') return false
-          const current = (node.attrs.elementType || 'action') as ScreenplayElementType
-          const action = event.shiftKey ? 'shiftTab' : 'tab'
-          const next = nextElementType(current, action)
-          if (next === 'stay') return false
-          event.preventDefault()
-          const pos = $from.before($from.depth)
-          const tr = state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, elementType: next })
-          dispatch(tr)
-          return true
         }
         if (mod && event.key === 'd') {
           event.preventDefault()
@@ -191,6 +174,18 @@ export function ScreenplayEditor({
         }
       }
       onDocChange?.(json as JSONContent)
+
+      const { $from } = ed.state.selection
+      if ($from.parent.type.name === 'screenplayElement') {
+        const t = ($from.parent.attrs.elementType || 'action') as ScreenplayElementType
+        const line = $from.parent.textContent
+        const items = suggestionsForElement(lists, t, line)
+        setSuggestItems(items)
+        setSuggestOpen(items.length > 0 && line.length > 0)
+      } else {
+        setSuggestOpen(false)
+      }
+
       const deviceUpdatedAt = Date.now()
       const deviceHash = hashPmJson(json)
       saveTimer.current = setTimeout(() => {
@@ -203,20 +198,37 @@ export function ScreenplayEditor({
             if (!r.ok) throw new Error('save failed')
             const j = await r.json()
             const serverAt = j.data?.updatedAt ? new Date(j.data.updatedAt).getTime() : Date.now()
-            const winner = reconcileSave({
+            reconcileSave({
               deviceUpdatedAt,
               serverUpdatedAt: serverUpdatedAt.current || serverAt,
               deviceHash,
               serverHash: deviceHash,
             })
             serverUpdatedAt.current = serverAt
-            if (winner === 'device') onSaveState?.('saved')
-            else onSaveState?.('saved')
+            onSaveState?.('saved')
           })
           .catch(() => onSaveState?.('error'))
       }, 600)
     },
   })
+
+  const applySmartPick = (value: string) => {
+    if (!editor) return
+    const { state, view } = editor
+    const { $from } = state.selection
+    if ($from.parent.type.name !== 'screenplayElement') return
+    const t = ($from.parent.attrs.elementType || 'action') as ScreenplayElementType
+    const from = $from.start()
+    const to = $from.end()
+    view.dispatch(state.tr.insertText(value, from, to))
+    setSuggestOpen(false)
+    if (onSmartTypeChange) {
+      let next = lists
+      if (t === 'character') next = { ...lists, characters: learnToken(lists.characters, value) }
+      if (t === 'sceneHeading') next = { ...lists, locations: learnToken(lists.locations, value) }
+      onSmartTypeChange(next)
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -248,33 +260,23 @@ export function ScreenplayEditor({
   }, [editor, insertImageUrl])
 
   useEffect(() => {
-    const root = document.querySelector('.sw-editor')
+    const root = editor?.view.dom
     if (!root || !editor) return
     const update = () => {
       root.querySelectorAll('[data-screenplay-element]').forEach((el) => {
-        const type = (el.getAttribute('data-element-type') || 'action') as ScreenplayElementType
-        const style = elementStyle(formatSpec, type)
-        Object.assign((el as HTMLElement).style, style)
         const id = el.getAttribute('data-id')
         el.id = id ? `el-${id}` : ''
-        const imgSrc = el.getAttribute('data-image-src')
-        let img = el.querySelector('img.sw-element-image') as HTMLImageElement | null
-        if (imgSrc) {
-          if (!img) {
-            img = document.createElement('img')
-            img.className = 'sw-element-image max-h-32 block'
-            el.insertBefore(img, el.firstChild)
-          }
-          img.src = imgSrc
-        } else if (img) {
-          img.remove()
-        }
         if (highlightCharacter) {
           const t = el.getAttribute('data-element-type')
           const isChar = t === 'character' && el.textContent?.trim().toUpperCase() === highlightCharacter.toUpperCase()
-          const isDial = t === 'dialogue' && el.previousElementSibling?.getAttribute('data-element-type') === 'character'
-          if (isChar || (isDial && el.previousElementSibling?.textContent?.trim().toUpperCase() === highlightCharacter.toUpperCase())) {
+          const isDial =
+            t === 'dialogue' &&
+            el.previousElementSibling?.getAttribute('data-element-type') === 'character' &&
+            el.previousElementSibling?.textContent?.trim().toUpperCase() === highlightCharacter.toUpperCase()
+          if (isChar || isDial) {
             ;(el as HTMLElement).style.backgroundColor = 'rgba(255, 230, 0, 0.25)'
+          } else {
+            ;(el as HTMLElement).style.backgroundColor = ''
           }
         }
       })
@@ -284,7 +286,7 @@ export function ScreenplayEditor({
     return () => {
       editor.off('update', update)
     }
-  }, [editor, formatSpec, highlightCharacter])
+  }, [editor, highlightCharacter])
 
   usePageDecorations(editor, layoutDoc ?? null)
   useScreenplayCollab(editor, scriptId)
@@ -297,12 +299,21 @@ export function ScreenplayEditor({
   }, [editor, collabActive, onCollabActive])
 
   useEffect(() => {
-    const root = document.querySelector('.sw-editor')
+    const root = editor?.view.dom
     if (!root || !revisionColor) return
     root.setAttribute('data-revision', revisionColor)
-  }, [revisionColor])
+  }, [editor, revisionColor])
 
   if (!editor) return <p className="text-sm text-muted-foreground">Loading editor…</p>
 
-  return <EditorContent editor={editor} />
+  return (
+    <div className="relative">
+      {suggestOpen ? (
+        <div className="absolute left-8 top-2 z-50">
+          <SmartTypeMenu items={suggestItems} onPick={applySmartPick} />
+        </div>
+      ) : null}
+      <EditorContent editor={editor} />
+    </div>
+  )
 }

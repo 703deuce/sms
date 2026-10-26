@@ -24,6 +24,10 @@ import type { Macro } from '@/lib/screenwriting/editor/macros'
 import { AddendumPanelBar, AddendumPanelBody, type AddendumPanel } from '@/components/screenwriting/screenplay-workspace-addendum'
 import { restorePolicyWithLiveCollaborators } from '@/lib/screenwriting/collab/restore-policy'
 import { ScreenplayToolbar } from '@/components/screenwriting/screenplay-toolbar'
+import { DEFAULT_AI_PRIVACY, redactNamesForAi, type AiPrivacySettings } from '@/lib/screenwriting/ai/privacy'
+import { normalizeScreenplayDoc } from '@/lib/screenwriting/schema/normalize-doc'
+import { DEFAULT_SMARTTYPE, type SmartTypeLists } from '@/lib/screenwriting/smarttype/store'
+import { segmentTableRead } from '@/lib/screenwriting/table-read/segment'
 
 type Panel =
   | 'navigator'
@@ -52,8 +56,9 @@ export function ScreenplayWorkspace({
   initialDoc: JSONContent
   initialMeta?: Record<string, unknown> | null
 }) {
-  const [doc, setDoc] = useState<JSONContent>(initialDoc)
-  const [editorDoc, setEditorDoc] = useState<JSONContent>(initialDoc)
+  const normalizedInitial = useMemo(() => normalizeScreenplayDoc(initialDoc), [initialDoc])
+  const [doc, setDoc] = useState<JSONContent>(normalizedInitial)
+  const [editorDoc, setEditorDoc] = useState<JSONContent>(normalizedInitial)
   const [meta, setMeta] = useState<Record<string, unknown>>(initialMeta ?? {})
   const [panel, setPanel] = useState<Panel>('navigator')
   const [theme, setTheme] = useState<SwTheme>((meta.theme as SwTheme) || 'light')
@@ -70,7 +75,7 @@ export function ScreenplayWorkspace({
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [templateKey, setTemplateKey] = useState((meta.templateKey as string) || formatSpec.key)
   const [revisionSet, setRevisionSet] = useState((meta.revisionSet as string) || 'white')
-  const [addendumPanel, setAddendumPanel] = useState<AddendumPanel | null>('stats')
+  const [addendumPanel, setAddendumPanel] = useState<AddendumPanel | null>(null)
   const [importWarnings, setImportWarnings] = useState<string[]>([])
   const [highlightCharacter, setHighlightCharacter] = useState('')
   const [liveEditors, setLiveEditors] = useState(1)
@@ -206,11 +211,19 @@ export function ScreenplayWorkspace({
     setEditorDoc(next)
   }
 
+  useEffect(() => {
+    if (collabActive) setLiveEditors((n) => Math.max(n, 2))
+  }, [collabActive])
+
   const runAi = async () => {
     setAiLoading(true)
     setAiResult('')
     try {
-      const excerpt = JSON.stringify(doc).slice(0, 50_000)
+      const privacy = (meta.aiPrivacy as AiPrivacySettings) || DEFAULT_AI_PRIVACY
+      let excerpt = JSON.stringify(doc).slice(0, 50_000)
+      if (privacy.redactNames) {
+        excerpt = redactNamesForAi(excerpt, characters.map((c) => c.name))
+      }
       const res = await fetch(`/api/sw/scripts/${scriptId}/ai/${aiKind}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -224,21 +237,30 @@ export function ScreenplayWorkspace({
   }
 
   const readAloud = async () => {
-    const utter = scenes.map((s) => s.heading).join('. ')
-    if (process.env.NEXT_PUBLIC_SW_ELEVENLABS !== '1') {
-      const u = new SpeechSynthesisUtterance(utter.slice(0, 2000))
+    const utterances = segmentTableRead(editorDoc, {})
+    const text = utterances.map((u) => u.text).join(' ').trim() || scenes.map((s) => s.heading).join('. ')
+    const speakBrowser = () => {
+      const u = new SpeechSynthesisUtterance(text.slice(0, 4000))
+      speechSynthesis.cancel()
       speechSynthesis.speak(u)
-      return
     }
-    const res = await fetch(`/api/sw/scripts/${scriptId}/read-aloud`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: utter.slice(0, 4000) }),
-    })
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/sw/scripts/${scriptId}/read-aloud`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.slice(0, 4000) }),
+      })
+      if (!res.ok) {
+        speakBrowser()
+        return
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      new Audio(url).play()
+      const audio = new Audio(url)
+      audio.onerror = () => speakBrowser()
+      void audio.play()
+    } catch {
+      speakBrowser()
     }
   }
 
@@ -252,11 +274,11 @@ export function ScreenplayWorkspace({
     if (j.data?.token) setShareUrl(`${window.location.origin}/s/${j.data.token}`)
   }
 
-  const snapshotVersion = async () => {
+  const snapshotVersion = async (kind: 'MANUAL' | 'LOCK' = 'MANUAL') => {
     await fetch(`/api/sw/scripts/${scriptId}/versions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: 'MANUAL', label: 'Manual snapshot' }),
+      body: JSON.stringify({ kind, label: kind === 'LOCK' ? 'Locked snapshot' : 'Manual snapshot' }),
     })
     const v = await fetch(`/api/sw/scripts/${scriptId}/versions`).then((r) => r.json())
     setVersions(v.data ?? [])
@@ -266,8 +288,9 @@ export function ScreenplayWorkspace({
   const viewClass = viewModeClass(viewMode)
 
   return (
-    <div className={`flex flex-col gap-2 ${themeClass} ${viewClass}`}>
+    <div className={`sw-fd-shell flex flex-col gap-2 ${themeClass} ${viewClass}`}>
       <AddendumPanelBar panel={addendumPanel} setPanel={setAddendumPanel} />
+      <div className="sw-fd-toolbar">
       <ScreenplayToolbar
         scriptId={scriptId}
         onElement={(t) => {
@@ -276,6 +299,7 @@ export function ScreenplayWorkspace({
         }}
         onImageUrl={(url) => setInsertImageUrl(url)}
       />
+      </div>
       <div className="flex flex-wrap items-center gap-2 border-b pb-2">
         <span className="text-sm font-medium">{scriptTitle}</span>
         <select
@@ -348,7 +372,7 @@ export function ScreenplayWorkspace({
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[240px_1fr]">
-        <aside className="max-h-[70vh] overflow-auto rounded border p-2 text-xs">
+        <aside className="sw-fd-navigator max-h-[70vh] overflow-auto rounded border p-2 text-xs">
           <AddendumPanelBody
             scriptId={scriptId}
             panel={addendumPanel}
@@ -462,6 +486,7 @@ export function ScreenplayWorkspace({
           {panel === 'versions' && (
             <div className="space-y-2">
               <Button size="sm" onClick={() => void snapshotVersion()}>Snapshot</Button>
+              <Button size="sm" variant="outline" onClick={() => void snapshotVersion('LOCK')}>Lock snapshot</Button>
               <ul>
                 {(versions as { id: string; label?: string; createdAt: string; kind?: string }[]).map((v) => (
                   <li key={v.id} className="space-y-1">
@@ -522,7 +547,7 @@ export function ScreenplayWorkspace({
           )}
         </aside>
 
-        <div className={`rounded-lg border bg-card ${meta.splitView ? 'lg:col-span-1' : ''}`}>
+        <div className={`sw-fd-page rounded-lg border bg-card shadow-sm ${meta.splitView ? 'lg:col-span-1' : ''}`}>
           <div className="flex justify-between border-b px-3 py-1 text-xs text-muted-foreground">
             <span>
               {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Error' : 'Saved'}
@@ -533,7 +558,7 @@ export function ScreenplayWorkspace({
           </div>
           <div className={meta.splitView ? 'grid grid-cols-2 gap-2' : ''}>
             <ScreenplayEditor
-              key={JSON.stringify(doc).length}
+              key={scriptId}
               scriptId={scriptId}
               formatSpec={activeSpec}
               initialDoc={doc}
@@ -548,11 +573,22 @@ export function ScreenplayWorkspace({
               insertElementType={insertElementType}
               insertImageUrl={insertImageUrl}
               macros={(meta.macros as Macro[]) ?? []}
+              smartTypeLists={(meta.smartType as SmartTypeLists) || DEFAULT_SMARTTYPE}
+              onSmartTypeChange={(lists) => void persistMeta({ ...meta, smartType: lists })}
             />
             {meta.splitView ? (
-              <div className="max-h-[70vh] overflow-auto border-l p-2 text-xs opacity-80">
-                <pre className="whitespace-pre-wrap">{JSON.stringify(editorDoc, null, 2).slice(0, 8000)}</pre>
-              </div>
+              <aside className="sw-fd-navigator max-h-[70vh] overflow-auto border-l p-2 text-xs">
+                <p className="mb-2 font-medium">Navigator (split)</p>
+                <ul className="space-y-1">
+                  {scenes.map((s, i) => (
+                    <li key={s.id}>
+                      <button type="button" className="text-left hover:underline" onClick={() => document.getElementById(`el-${s.id}`)?.scrollIntoView({ behavior: 'smooth' })}>
+                        {i + 1}. {s.heading || '(scene)'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
             ) : null}
           </div>
           <ScriptStatusBar pmJson={editorDoc} />

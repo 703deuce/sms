@@ -18,7 +18,7 @@ import { macroForHotkey, applyMacro } from '@/lib/screenwriting/editor/macros'
 import { dedupeNames, suggestNameFix } from '@/lib/screenwriting/names/database'
 import { thesaurusLookup } from '@/lib/screenwriting/writing/thesaurus'
 import { storyTimeAxis } from '@/lib/screenwriting/structure/story-time'
-import { pageStartAnchors, parityScorePercent } from '@/lib/screenwriting/parity/big-fish'
+import { pageStartAnchors, parityScorePercent, runBigFishParitySelfCheck, bigFishGoldenDoc } from '@/lib/screenwriting/parity/big-fish'
 import { branchMergeSuggestions } from '@/lib/screenwriting/branch/merge'
 import { linkBibleToCharacter } from '@/lib/screenwriting/bible/entries'
 import { attachYjsUndoHook, yjsUndoActiveFromDom } from '@/lib/screenwriting/collab/yjs-undo-hook'
@@ -241,6 +241,12 @@ describe('D29 Big Fish parity', () => {
   it('[U] parity score', () => {
     expect(parityScorePercent(['a', 'b'], ['a', 'c'])).toBe(50)
     expect(pageStartAnchors(doc).length).toBeGreaterThan(0)
+  })
+  it('[U] mini golden self-check passes on golden doc', () => {
+    const golden = bigFishGoldenDoc()
+    const check = runBigFishParitySelfCheck(golden)
+    expect(check.pass).toBe(true)
+    expect(check.score).toBe(100)
   })
 })
 

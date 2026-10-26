@@ -24,6 +24,34 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
 }
 
+const patchSchema = z.object({
+  entryId: z.string(),
+  linkedCharacter: z.string().optional(),
+  body: z.string().optional(),
+  name: z.string().optional(),
+})
+
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const actor = await requireSwActor()
+    const { id } = await ctx.params
+    await getScriptForOwner(id, actor.id)
+    const body = patchSchema.parse(await request.json())
+    const row = await getPrisma().swStoryBibleEntry.updateMany({
+      where: { id: body.entryId, scriptId: id },
+      data: {
+        ...(body.linkedCharacter !== undefined ? { linkedCharacter: body.linkedCharacter } : {}),
+        ...(body.body !== undefined ? { body: body.body } : {}),
+        ...(body.name !== undefined ? { name: body.name } : {}),
+      },
+    })
+    if (!row.count) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ data: { ok: true } })
+  } catch (e) {
+    return jsonError(e, 400)
+  }
+}
+
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const actor = await requireSwActor()

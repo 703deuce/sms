@@ -15,7 +15,7 @@ export default async function ScreenplayEditorPage({ params }: { params: Promise
   const script = await getScriptForOwner(scriptId, actor.id)
   if (!script) notFound()
   const formatSpec = script.formatSpec as FormatSpec
-  const pmJson = (script.pmJson ?? { type: 'doc', content: [] }) as object
+  const pmJson = (script.pmJson ?? { type: 'doc', content: [] }) as import('@tiptap/core').JSONContent
   const editorMeta = (script.editorMeta ?? {}) as Record<string, unknown>
 
   return (

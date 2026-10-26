@@ -3,6 +3,8 @@ import PDFDocument from 'pdfkit'
 import { FEATURE_FORMAT_SPEC } from '@/lib/screenwriting/formats/feature'
 import { layoutElementsFromPmJson, paginateFromElements } from '@/lib/screenwriting/layout'
 import { formatEpisodeHeaderPdfLine, type EpisodeHeader } from '@/lib/screenwriting/tv/episode-header'
+import { pdfLineBox } from '@/lib/screenwriting/pdf/line-position'
+import type { ScreenplayElementType } from '@/lib/screenwriting/formats/types'
 
 export interface PdfRenderOptions {
   title?: string
@@ -63,7 +65,9 @@ export async function renderScriptPdf(doc: JSONContent, options: PdfRenderOption
     for (const line of page.lines) {
       const y = marginTop + line.lineIndex * lineHeight
       if (line.virtual && !line.text) continue
-      pdf.text(line.text, marginLeft, y, { width: pageW - marginLeft * 2, lineBreak: false })
+      const box = pdfLineBox(FEATURE_FORMAT_SPEC, line.elementType as ScreenplayElementType)
+      const text = line.elementType === 'character' ? line.text.toUpperCase() : line.text
+      pdf.text(text, box.x, y, { width: box.width, align: box.align, lineBreak: false })
     }
   }
 

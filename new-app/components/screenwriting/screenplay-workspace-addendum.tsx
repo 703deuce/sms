@@ -14,6 +14,7 @@ import { scenesFromPmJson } from '@/lib/screenwriting/structure/navigator'
 import { linkBibleToCharacter } from '@/lib/screenwriting/bible/entries'
 import { dedupeNames, suggestNameFix, type NameEntry } from '@/lib/screenwriting/names/database'
 import { collabUndoStackLabel } from '@/lib/screenwriting/collab/undo-policy'
+import { runBigFishParitySelfCheck } from '@/lib/screenwriting/parity/big-fish'
 
 export type AddendumPanel =
   | 'bible'
@@ -27,6 +28,7 @@ export type AddendumPanel =
   | 'thesaurus'
   | 'timeline'
   | 'privacy'
+  | 'parity'
 
 export function AddendumPanelBar({
   panel,
@@ -35,7 +37,7 @@ export function AddendumPanelBar({
   panel: AddendumPanel | null
   setPanel: (p: AddendumPanel | null) => void
 }) {
-  const tabs: AddendumPanel[] = ['bible', 'sceneVersions', 'chat', 'branch', 'stats', 'macros', 'names', 'print', 'thesaurus', 'timeline', 'privacy']
+  const tabs: AddendumPanel[] = ['bible', 'sceneVersions', 'chat', 'branch', 'stats', 'macros', 'names', 'print', 'thesaurus', 'timeline', 'parity', 'privacy']
   return (
     <div className="flex flex-wrap gap-1">
       {tabs.map((t) => (
@@ -113,6 +115,21 @@ export function AddendumPanelBody({
     )
   }
 
+  if (panel === 'parity') {
+    const check = runBigFishParitySelfCheck(editorDoc)
+    return (
+      <div className="space-y-2 text-xs">
+        <p>Big Fish mini golden: page-start parity {check.score}%</p>
+        <p className={check.pass ? 'text-green-700' : 'text-amber-700'}>{check.pass ? 'Pass' : 'Mismatch — compare first lines to golden FADE IN / scene heading'}</p>
+        <ul className="text-[10px] text-muted-foreground">
+          {check.expected.map((e, i) => (
+            <li key={i}>p{i + 1} expected: {e || '—'} · got: {check.actual[i] || '—'}</li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
   if (panel === 'privacy') {
     return (
       <div className="space-y-2 text-xs">
@@ -180,7 +197,12 @@ export function AddendumPanelBody({
       <div className="space-y-2 text-xs">
         <label className="flex gap-2"><input type="checkbox" checked={printOpts.watermark} onChange={(e) => setPrintOpts({ ...printOpts, watermark: e.target.checked })} /> Watermark PDF</label>
         <input className="w-full rounded border px-2 py-1" placeholder="Character sides" value={printOpts.character} onChange={(e) => setPrintOpts({ ...printOpts, character: e.target.value })} />
-        <a className="underline" href={`/api/sw/scripts/${scriptId}/export?format=pdf&watermark=${printOpts.watermark ? '1' : '0'}`}>Export PDF</a>
+        <a
+          className="underline"
+          href={`/api/sw/scripts/${scriptId}/export?format=pdf&watermark=${printOpts.watermark ? '1' : '0'}&sceneNumbers=${printOpts.sceneNumbers ? '1' : '0'}`}
+        >
+          Export PDF
+        </a>
         {printOpts.character ? (
           <a className="underline block" href={`/api/sw/scripts/${scriptId}/export?format=character-sides&character=${encodeURIComponent(printOpts.character)}`}>Character sides</a>
         ) : null}
@@ -247,10 +269,10 @@ export function AddendumPanelBody({
             <button type="button" className="ml-1 underline" onClick={() => {
               const linked = linkBibleToCharacter({ id: b.id, kind: 'character', name: b.name, body: b.body, linkedCharacter: highlightCharacter || b.name }, highlightCharacter || b.name)
               void fetch(`/api/sw/scripts/${scriptId}/bible`, {
-                method: 'POST',
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ kind: linked.kind, name: linked.name, body: linked.body, linkedCharacter: linked.linkedCharacter }),
-              })
+                body: JSON.stringify({ entryId: b.id, linkedCharacter: linked.linkedCharacter }),
+              }).then(() => fetch(`/api/sw/scripts/${scriptId}/bible`).then((r) => r.json()).then((j) => setBible(j.data ?? [])))
             }}>Link char</button>
           </li>
         ))}</ul>
