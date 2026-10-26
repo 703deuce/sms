@@ -1,7 +1,29 @@
 """Line-for-line equivalent of new-app/lib/clips/caption-words.ts."""
 from __future__ import annotations
 
-from clips_worker.edits_render import keep_segments, remap_time_ms
+
+def keep_segments(trim_in: int, trim_out: int, cut_ranges: list) -> list[tuple[int, int]]:
+    segs: list[tuple[int, int]] = []
+    t = trim_in
+    for s, e in sorted(cut_ranges, key=lambda x: x[0]):
+        s, e = max(int(s), trim_in), min(int(e), trim_out)
+        if e <= t:
+            continue
+        if s > t:
+            segs.append((t, s))
+        t = max(t, e)
+    if t < trim_out:
+        segs.append((t, trim_out))
+    return [(a, b) for a, b in segs if b - a >= 80]
+
+
+def remap_time_ms(t_ms: int, segs: list[tuple[int, int]]) -> int | None:
+    acc = 0
+    for a, b in segs:
+        if a <= t_ms < b:
+            return acc + (t_ms - a)
+        acc += b - a
+    return None
 
 
 def remap_time_end_ms(t_ms: int, segs: list[tuple[int, int]]) -> int | None:
