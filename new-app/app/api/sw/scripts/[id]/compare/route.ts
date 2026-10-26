@@ -16,12 +16,18 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     if (!aId || !bId) return NextResponse.json({ error: 'a and b required' }, { status: 400 })
     await getScriptForOwner(id, actor.id)
     const prisma = getPrisma()
-    const [va, vb] = await Promise.all([
-      prisma.swVersion.findFirst({ where: { id: aId, scriptId: id } }),
-      prisma.swVersion.findFirst({ where: { id: bId, scriptId: id } }),
-    ])
-    if (!va?.pmJson || !vb?.pmJson) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const aligned = alignElements(va.pmJson as JSONContent, vb.pmJson as JSONContent)
+    const va = await prisma.swVersion.findFirst({ where: { id: aId, scriptId: id } })
+    if (!va?.pmJson) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    let vbPm: JSONContent
+    if (bId === 'current') {
+      const script = await getScriptForOwner(id, actor.id)
+      vbPm = (script?.pmJson ?? { type: 'doc', content: [] }) as JSONContent
+    } else {
+      const vb = await prisma.swVersion.findFirst({ where: { id: bId, scriptId: id } })
+      if (!vb?.pmJson) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      vbPm = vb.pmJson as JSONContent
+    }
+    const aligned = alignElements(va.pmJson as JSONContent, vbPm)
     const html = aligned.map((row) => ({
       id: row.id,
       type: row.type,

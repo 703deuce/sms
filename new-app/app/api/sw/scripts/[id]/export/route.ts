@@ -33,7 +33,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const meta = (row.editorMeta ?? {}) as Record<string, unknown>
     const episodeHeader = meta.episodeHeader as EpisodeHeader | undefined
     if (format === 'fdx') {
-      const xml = pmJsonToFdx(doc)
+      const titlePage = meta.titlePage as import('@/lib/screenwriting/meta/title-page').TitlePage | undefined
+      const xml = pmJsonToFdx(doc, { titlePage })
       return new NextResponse(xml, {
         headers: {
           'Content-Type': 'application/xml; charset=utf-8',

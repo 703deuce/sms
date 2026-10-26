@@ -1,6 +1,8 @@
 import { XMLBuilder } from 'fast-xml-parser'
 import type { JSONContent } from '@tiptap/core'
 import type { ScreenplayElementType } from '@/lib/screenwriting/formats/types'
+import type { TitlePage } from '@/lib/screenwriting/meta/title-page'
+import { titlePageToFdxXml } from '@/lib/screenwriting/fdx/title-page-xml'
 
 const TO_FDX: Record<ScreenplayElementType, string> = {
   sceneHeading: 'Scene Heading',
@@ -22,7 +24,10 @@ function nodeText(node: JSONContent): string {
   return node.content.map((c) => (c.type === 'text' ? c.text ?? '' : '')).join('')
 }
 
-export function pmJsonToFdx(doc: JSONContent, extras?: { unknownFdx?: Record<string, unknown> }): string {
+export function pmJsonToFdx(
+  doc: JSONContent,
+  extras?: { unknownFdx?: Record<string, unknown>; titlePage?: TitlePage },
+): string {
   const paragraphs = (doc.content ?? [])
     .filter((n) => n.type === 'screenplayElement')
     .map((n) => {
@@ -36,8 +41,10 @@ export function pmJsonToFdx(doc: JSONContent, extras?: { unknownFdx?: Record<str
       }
     })
 
+  const titlePageXml = extras?.titlePage ? titlePageToFdxXml(extras.titlePage) : undefined
   const finalDraft: Record<string, unknown> = {
     '@_Version': '5',
+    ...(titlePageXml ? { TitlePage: titlePageXml } : {}),
     Content: { Paragraph: paragraphs },
     ...(extras?.unknownFdx ?? {}),
   }
