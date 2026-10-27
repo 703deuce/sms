@@ -9,6 +9,7 @@ export const runtime = 'nodejs'
 const bodySchema = z.object({
   inviteToken: z.string().min(16),
   displayName: z.string().min(1).max(120),
+  role: z.enum(['guest', 'producer']).optional(),
 })
 
 export async function POST(request: Request) {
@@ -17,7 +18,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Recording is not enabled' }, { status: 503 })
     }
     const body = bodySchema.parse(await request.json())
-    const result = await joinRecordingWithInvite(body)
+    const result = await joinRecordingWithInvite({
+      inviteToken: body.inviteToken,
+      displayName: body.displayName,
+      role: body.role,
+    })
     if ('error' in result) {
       const status = result.error === 'invalid' ? 404 : 409
       return NextResponse.json({ error: result.error }, { status })

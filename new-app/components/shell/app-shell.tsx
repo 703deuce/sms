@@ -12,10 +12,12 @@ export function AppShell({
   children,
   initialShellContext = null,
   defaultSidebarOpen = true,
+  recordingNavEnabled = false,
 }: {
   children: React.ReactNode
   initialShellContext?: PersistedShellContext | null
   defaultSidebarOpen?: boolean
+  recordingNavEnabled?: boolean
 }) {
   return (
     <ShellContextProvider initial={initialShellContext}>
@@ -36,7 +38,7 @@ export function AppShell({
             >
               Skip to content
             </a>
-            <AppSidebar />
+            <AppSidebar recordingNavEnabled={recordingNavEnabled} />
             <SidebarInset className="min-w-0 bg-background">
               <AppTopBar />
               <main id="main" className="min-h-[calc(100dvh-3.5rem)]">{children}</main>

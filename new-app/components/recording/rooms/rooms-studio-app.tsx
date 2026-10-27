@@ -43,16 +43,17 @@ import {
 } from '@/lib/recording/ptt'
 import { startLocalTrackRecorder } from '@/lib/recording/local-track-recorder'
 import { TrackUploadManager, type TrackUploadProgress } from '@/lib/recording/track-upload-manager'
+import {
+  assertLiveKitWsUrl,
+  formatLiveKitConnectError,
+} from '@/lib/recording/livekit-connect'
+import { readJoinPayload, type RoomsJoinPayload } from '@/lib/recording/rooms-join-storage'
 import { createId } from '@/lib/supabase/id'
+import { RoomsInvitePopover } from './rooms-invite-popover'
 
-type JoinPayload = {
-  token: string
-  url: string
-  identity: string
-  displayName: string
-  role: string
-  headphones: string
-}
+type JoinPayload = RoomsJoinPayload
+
+const RECORD_COUNTDOWN_MS = 3000
 
 function roleIsHost(role: string) {
   return role.toUpperCase() === 'HOST'
@@ -93,8 +94,12 @@ export function RoomsStudioApp({
   const [pttTarget, setPttTarget] = useState<string | null>(null)
   const [pttActive, setPttActive] = useState(false)
   const [echoCancellation, setEchoCancellation] = useState(true)
-  const [micOn, setMicOn] = useState(true)
-  const [camOn, setCamOn] = useState(true)
+  const [micOn, setMicOn] = useState(false)
+  const [camOn, setCamOn] = useState(false)
+  const [devicesPrompt, setDevicesPrompt] = useState(false)
+  const [connected, setConnected] = useState(false)
+  const [recordedIdentities, setRecordedIdentities] = useState<Set<string>>(new Set())
+  const [noTracksRecorded, setNoTracksRecorded] = useState(false)
   const [networkBanner, setNetworkBanner] = useState<string | null>(null)
   const [peopleOpen, setPeopleOpen] = useState(true)
   const [screenShareIdentity, setScreenShareIdentity] = useState<string | null>(null)
@@ -113,14 +118,16 @@ export function RoomsStudioApp({
   const isProducer = payload?.role.toLowerCase() === 'producer'
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(`rooms:${sessionId}`)
-    if (!raw) {
+    const parsed = readJoinPayload(sessionId)
+    if (!parsed) {
       router.replace(`/app/rooms/${sessionId}`)
       return
     }
-    const parsed = JSON.parse(raw) as JoinPayload
     setPayload(parsed)
     setEchoCancellation(parsed.headphones === 'yes')
+    setMicOn(Boolean(parsed.micEnabled))
+    setCamOn(Boolean(parsed.camEnabled))
+    if (!parsed.micEnabled && !parsed.camEnabled) setDevicesPrompt(true)
     if (parsed.role.toLowerCase() === 'producer') setProducerMode(true)
     uploadMgr.current = new TrackUploadManager(sessionId, setUploadRows)
   }, [router, sessionId])
@@ -144,8 +151,19 @@ export function RoomsStudioApp({
 
   useEffect(() => {
     if (!payload) return
+    let wsUrl: string
+    try {
+      wsUrl = assertLiveKitWsUrl(payload.url)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[rooms] invalid LiveKit URL', { url: payload.url, msg })
+      setNetworkBanner(msg)
+      return
+    }
+
     const lkRoom = new Room({ adaptiveStream: true, dynacast: true })
     setRoom(lkRoom)
+    setConnected(false)
 
     lkRoom.on(RoomEvent.ParticipantConnected, () => {
       syncParticipants(lkRoom)
@@ -212,13 +230,26 @@ export function RoomsStudioApp({
     })
 
     lkRoom
-      .connect(payload.url, payload.token)
+      .connect(wsUrl, payload.token)
       .then(async () => {
+        setConnected(true)
         syncParticipants(lkRoom)
-        await lkRoom.localParticipant.setMicrophoneEnabled(true, {
-          echoCancellation: echoCancellation,
-        })
-        await lkRoom.localParticipant.setCameraEnabled(true)
+        try {
+          await lkRoom.localParticipant.setMicrophoneEnabled(micOn, {
+            echoCancellation: echoCancellation,
+          })
+        } catch (e) {
+          console.warn('[rooms] microphone enable failed', e)
+          setMicOn(false)
+          setDevicesPrompt(true)
+        }
+        try {
+          await lkRoom.localParticipant.setCameraEnabled(camOn)
+        } catch (e) {
+          console.warn('[rooms] camera enable failed', e)
+          setCamOn(false)
+          setDevicesPrompt(true)
+        }
         if (roleIsHost(payload.role)) {
           lkRoom.registerRpcMethod('clock.now', async () =>
             String(performance.timeOrigin + performance.now()),
@@ -230,12 +261,27 @@ export function RoomsStudioApp({
         )?.identity
         if (!roleIsHost(payload.role) && hostId) void runClockSync(lkRoom, hostId)
       })
-      .catch(() => setNetworkBanner('Could not connect to the room.'))
+      .catch((err) => {
+        const reason = formatLiveKitConnectError(err)
+        console.error('[rooms] LiveKit connect failed', { url: wsUrl, reason, err })
+        setNetworkBanner(`Could not connect to the room: ${reason}`)
+      })
 
     return () => {
       lkRoom.disconnect()
     }
-  }, [payload, echoCancellation, screenShareIdentity])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- connect once per join payload
+  }, [payload])
+
+  useEffect(() => {
+    if (!room || !connected) return
+    void room.localParticipant.setMicrophoneEnabled(micOn, { echoCancellation })
+  }, [room, connected, echoCancellation, micOn])
+
+  useEffect(() => {
+    if (!room || !connected) return
+    void room.localParticipant.setCameraEnabled(camOn)
+  }, [room, connected, camOn])
 
   useEffect(() => {
     if (!room || !payload) return
@@ -280,7 +326,7 @@ export function RoomsStudioApp({
     const kind = 't' in msg ? msg.t : msg.type
     if (kind === 'start' || kind === 'sync') {
       const startAt = 'startAtHostMs' in msg ? msg.startAtHostMs : 0
-      runCountdownThenRecord(r, msg.takeId, startAt)
+      runCountdownThenRecord(r, async () => msg.takeId, startAt)
     }
     if (kind === 'stop') {
       const stopAt = 'stopAtHostMs' in msg ? msg.stopAtHostMs : Date.now()
@@ -288,12 +334,12 @@ export function RoomsStudioApp({
     }
   }
 
-  function runCountdownThenRecord(r: Room, takeId: string, startAtHostMs: number) {
-    const cancel = scheduleAtHostMs(startAtHostMs, clockOffsetMs, () => {
-      setCountdown(null)
-      void startLocalRecording(r, takeId, startAtHostMs)
-    })
-    let left = Math.max(1, Math.round((startAtHostMs - (performance.timeOrigin + performance.now() + clockOffsetMs)) / 1000))
+  function runCountdownThenRecord(
+    r: Room,
+    resolveTakeId: () => Promise<string | null>,
+    startAtHostMs: number,
+  ) {
+    let left = Math.min(3, Math.max(1, Math.ceil((startAtHostMs - Date.now()) / 1000)))
     setCountdown(left)
     const tick = window.setInterval(() => {
       left -= 1
@@ -302,12 +348,24 @@ export function RoomsStudioApp({
         setCountdown(null)
       } else setCountdown(left)
     }, 1000)
+    const cancel = scheduleAtHostMs(startAtHostMs, clockOffsetMs, async () => {
+      setCountdown(null)
+      window.clearInterval(tick)
+      const takeId = await resolveTakeId()
+      if (!takeId) {
+        setNetworkBanner('Recording could not start — no take id from server.')
+        return
+      }
+      void startLocalRecording(r, takeId, startAtHostMs)
+    })
     return cancel
   }
 
   async function startLocalRecording(r: Room, takeId: string, startAtHostMs: number) {
     setRecording(true)
+    setNoTracksRecorded(false)
     setActiveTakeId(takeId)
+    setRecordedIdentities((prev) => new Set(prev).add(payload!.identity))
     setRecSeconds(0)
     if (!hideRecModal && !isHost) setShowRecStartedModal(true)
     recStartedAtRef.current = Date.now()
@@ -360,6 +418,15 @@ export function RoomsStudioApp({
         clockOffsetMs,
       })
     }
+    if (!streams.length) {
+      setNoTracksRecorded(true)
+      setShowUpload(true)
+      await uploadMgr.current?.registerNoTracks({
+        participantId: payload!.identity,
+        displayName,
+        takeId,
+      })
+    }
     if (hostIdentityRef.current && !isHost) {
       await r.localParticipant.performRpc({
         destinationIdentity: hostIdentityRef.current,
@@ -387,6 +454,7 @@ export function RoomsStudioApp({
         mine.length > 0
           ? Math.round(mine.reduce((a, u) => a + u.percent, 0) / mine.length)
           : undefined
+      const didRecord = recordedIdentities.has(p.identity)
       return {
         identity: p.identity,
         name: p.name || p.identity,
@@ -395,29 +463,42 @@ export function RoomsStudioApp({
         micOn: p.isMicrophoneEnabled,
         camOn: p.isCameraEnabled,
         quality: p.connectionQuality ?? ConnectionQuality.Unknown,
-        recording,
+        recording: didRecord || (recording && p.isLocal),
         uploadPct,
       }
     })
-  }, [participants, recording, uploadRows])
+  }, [participants, recording, uploadRows, recordedIdentities])
 
   const recorded = peopleRows.filter((r) => r.recording)
   const notRecorded = peopleRows.filter((r) => !r.recording)
 
   async function hostStartRecord() {
     if (!room || !isHost) return
-    const res = await fetch(`/api/recording/sessions/${sessionId}/takes`, {
+    const startAtHostMs = Date.now() + RECORD_COUNTDOWN_MS
+    let takeId: string | null = null
+    const takePromise = fetch(`/api/recording/sessions/${sessionId}/takes`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'start', startAtHostMs: Date.now() + 3500 }),
+      body: JSON.stringify({ action: 'start', startAtHostMs }),
     })
-    const json = await res.json()
-    const takeId = json.data?.takeId as string
-    const startAtHostMs = Number(json.data?.startAtHostMs ?? Date.now() + 3500)
-    setActiveTakeId(takeId)
-    const msg = { t: 'start', takeId, startAtHostMs }
-    await room.localParticipant.publishData(encodeDataPacketForLiveKit(msg), { reliable: true, topic: TOPIC_REC })
-    runCountdownThenRecord(room, takeId, startAtHostMs)
+      .then(async (res) => {
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? 'Could not start take')
+        takeId = json.data?.takeId as string
+        setActiveTakeId(takeId)
+        const msg = { t: 'start', takeId, startAtHostMs }
+        await room.localParticipant.publishData(encodeDataPacketForLiveKit(msg), {
+          reliable: true,
+          topic: TOPIC_REC,
+        })
+        return takeId
+      })
+      .catch((e) => {
+        setNetworkBanner(e instanceof Error ? e.message : 'Could not start recording')
+        return null
+      })
+
+    runCountdownThenRecord(room, () => takePromise, startAtHostMs)
   }
 
   async function hostStopRecord() {
@@ -462,7 +543,7 @@ export function RoomsStudioApp({
           ← Back to editor
         </Link>
         <span className="flex-1 truncate text-center text-sm font-semibold">{sessionTitle}</span>
-        <Button variant="outline" className="h-8 text-[13px]">Invite</Button>
+        {isHost ? <RoomsInvitePopover sessionId={sessionId} disabled={!connected} /> : null}
       </header>
       {producerMode && (
         <div className="flex h-10 items-center justify-between bg-[oklch(0.35_0.05_100)] px-4 text-[13px]">
@@ -503,6 +584,34 @@ export function RoomsStudioApp({
         <div className="flex h-10 items-center justify-between bg-muted/40 px-4 text-[13px]">
           <span>Videos in the Room may appear lower resolution — recordings are full quality.</span>
           <Button variant="ghost" size="sm" onClick={() => setDismissedQualityBanner(true)}>Dismiss</Button>
+        </div>
+      )}
+      {devicesPrompt && connected && (
+        <div className="flex h-10 items-center justify-between bg-muted/50 px-4 text-[13px]">
+          <span>Camera and microphone are off. Enable devices when you are ready to be seen or heard.</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                await room?.localParticipant.setMicrophoneEnabled(true, { echoCancellation })
+                setMicOn(true)
+              } catch {
+                /* no device */
+              }
+              try {
+                await room?.localParticipant.setCameraEnabled(true)
+                setCamOn(true)
+              } catch {
+                /* no device */
+              }
+              if (room?.localParticipant.isMicrophoneEnabled || room?.localParticipant.isCameraEnabled) {
+                setDevicesPrompt(false)
+              }
+            }}
+          >
+            Enable devices
+          </Button>
         </div>
       )}
       {networkBanner && (
@@ -566,6 +675,7 @@ export function RoomsStudioApp({
             <div className="absolute bottom-4 right-4 z-20">
               <RoomsUploadCard
                 rows={uploadRows}
+                noTracksRecorded={noTracksRecorded}
                 onCopyRecoveryLink={() =>
                   navigator.clipboard.writeText(`${window.location.origin}/app/rooms/${sessionId}/upload`)
                 }

@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
-import { RoomsPrejoinClient } from '@/components/recording/rooms/prejoin-client'
+import { RoomsPrejoinGate } from '@/components/recording/rooms/rooms-prejoin-gate'
 import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
-import { mintHostTokenForSession } from '@/lib/server/recording/sessions'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -17,16 +16,5 @@ export default async function RoomsPrejoinPage({ params }: Props) {
     select: { id: true, title: true },
   })
   if (!session) notFound()
-  const creds = await mintHostTokenForSession(sessionId, workspaceId)
-  if (!creds) notFound()
-  return (
-    <RoomsPrejoinClient
-      sessionId={session.id}
-      sessionTitle={session.title}
-      role="HOST"
-      token={creds.token}
-      livekitUrl={creds.url}
-      identity={creds.identity}
-    />
-  )
+  return <RoomsPrejoinGate sessionId={session.id} sessionTitle={session.title} />
 }

@@ -56,5 +56,7 @@ export function uploadProgressFromMeta(meta: {
 }): number {
   if (meta.finalized) return 100
   if (!meta.bytesTotalEstimate) return 0
-  return Math.min(99, Math.round((meta.bytesUploaded / meta.bytesTotalEstimate) * 100))
+  if (meta.bytesUploaded <= 0) return 0
+  const pct = Math.round((meta.bytesUploaded / meta.bytesTotalEstimate) * 100)
+  return meta.finalized ? 100 : Math.min(99, Math.max(1, pct))
 }

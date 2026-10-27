@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Input } from '@/components/ui/input'
+import { markSessionHost } from '@/lib/recording/rooms-join-storage'
 import { RoomsFullPage, RoomsTopBar } from './rooms-layout-shell'
 
 export function RoomsNewClient() {
@@ -27,6 +28,7 @@ export function RoomsNewClient() {
         setError(json.error ?? 'Failed to create session')
         return
       }
+      markSessionHost(json.data.sessionId)
       router.push(`/app/rooms/${json.data.sessionId}`)
     } catch {
       setError('Network error')

@@ -75,3 +75,47 @@ export async function mintHostTokenForSession(sessionId: string, workspaceId: st
   })
   return { token, url: getLiveKitPublicUrl(), identity: host.id }
 }
+
+export async function joinRecordingSessionAsGuest(
+  sessionId: string,
+  workspaceId: string,
+  displayName: string,
+) {
+  const prisma = getPrisma()
+  const session = await prisma.recordingSession.findFirst({
+    where: { id: sessionId, workspaceId },
+    include: { participants: true },
+  })
+  if (!session) return null
+  if (session.status === 'ENDED' || session.status === 'FAILED') {
+    throw new Error('Session is closed')
+  }
+  if (session.participants.length >= session.maxParticipants) {
+    throw new Error('Room is full')
+  }
+  const participantId = createId('recp')
+  const participant = await prisma.recordingParticipant.create({
+    data: {
+      id: participantId,
+      sessionId: session.id,
+      role: 'GUEST',
+      displayName: displayName.slice(0, 120),
+      status: 'JOINED',
+    },
+  })
+  if (session.status === 'DRAFT') {
+    await prisma.recordingSession.update({ where: { id: sessionId }, data: { status: 'LIVE' } })
+  }
+  const token = await mintJoinToken({
+    roomName: session.livekitRoom,
+    identity: participant.id,
+    displayName: participant.displayName,
+    role: 'guest',
+    sessionId: session.id,
+  })
+  return {
+    participantId: participant.id,
+    token,
+    url: getLiveKitPublicUrl(),
+  }
+}

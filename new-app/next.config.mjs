@@ -51,6 +51,18 @@ const nextConfig = {
             key: "Cache-Control",
             value: "private, no-store, must-revalidate",
           },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https:",
+              "media-src 'self' blob: https:",
+              "connect-src 'self' https: wss://*.livekit.cloud wss://*.livekit.io https://*.livekit.cloud https://*.turn.livekit.cloud https://*.b-cdn.net",
+              "worker-src 'self' blob:",
+            ].join("; "),
+          },
         ],
       },
       {

@@ -123,7 +123,8 @@ export function resolveContext(pathname: string): NavContext {
     pathname.startsWith('/app/clips/') ||
     pathname === '/app/exports' ||
     pathname.startsWith('/app/streamer') ||
-    pathname.startsWith('/app/sw')
+    pathname.startsWith('/app/sw') ||
+    pathname.startsWith('/app/rooms')
   ) {
     return CLIPS
   }

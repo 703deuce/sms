@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { AppShell } from '@/components/shell/app-shell'
+import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import type { PersistedShellContext } from '@/lib/nav-shell-context'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -9,7 +10,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const defaultSidebarOpen = cookieStore.get('sidebar_state')?.value !== 'false'
 
   return (
-    <AppShell initialShellContext={initialShellContext} defaultSidebarOpen={defaultSidebarOpen}>
+    <AppShell
+      initialShellContext={initialShellContext}
+      defaultSidebarOpen={defaultSidebarOpen}
+      recordingNavEnabled={isRecordingFeatureEnabled()}
+    >
       {children}
     </AppShell>
   )

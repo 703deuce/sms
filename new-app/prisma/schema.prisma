@@ -9103,12 +9103,13 @@ model RecordingSession {
 }
 
 model RecordingInvite {
-  id        String    @id
+  id        String                   @id
   sessionId String
-  tokenHash String    @unique
+  tokenHash String                   @unique
+  role      RecordingParticipantRole @default(GUEST)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime                 @default(now())
 
   session RecordingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 

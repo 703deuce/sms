@@ -4,13 +4,15 @@ import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Input } from '@/components/ui/input'
+import { setPendingGuestPrejoin } from '@/lib/recording/rooms-join-storage'
 import { RoomsFullPage, RoomsTopBar } from './rooms-layout-shell'
 
-/** Guest entry: exchange invite token → prejoin */
+/** Guest entry: exchange invite token → guest prejoin (§23) */
 export function GuestJoinClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tokenFromUrl = searchParams.get('token') ?? ''
+  const roleParam = (searchParams.get('role') ?? 'guest').toLowerCase()
   const [inviteToken, setInviteToken] = useState(tokenFromUrl)
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +25,11 @@ export function GuestJoinClient() {
       const res = await fetch('/api/recording/join', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ inviteToken, displayName }),
+        body: JSON.stringify({
+          inviteToken,
+          displayName,
+          role: roleParam === 'producer' ? 'producer' : 'guest',
+        }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -31,18 +37,15 @@ export function GuestJoinClient() {
         return
       }
       const { sessionId, participantId, token, url } = json.data
-      sessionStorage.setItem(
-        `rooms:${sessionId}`,
-        JSON.stringify({
-          token,
-          url,
-          identity: participantId,
-          displayName,
-          role: 'GUEST',
-          headphones: 'yes',
-        }),
-      )
-      router.push(`/app/rooms/${sessionId}/studio`)
+      const studioRole = roleParam === 'producer' ? 'producer' : 'GUEST'
+      setPendingGuestPrejoin(sessionId, {
+        token,
+        url,
+        identity: participantId,
+        displayName,
+        role: studioRole,
+      })
+      router.push(`/app/rooms/${sessionId}`)
     } catch {
       setError('Network error')
     } finally {

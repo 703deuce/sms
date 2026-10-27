@@ -24,11 +24,12 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar'
 
-export function AppSidebar() {
+export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnabled?: boolean }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { testMode } = useClipsWorkspace()
-  const recordingEnabled = useRecordingEnabled()
+  const recordingEnabledClient = useRecordingEnabled()
+  const recordingEnabled = recordingNavEnabled || recordingEnabledClient
   const groups = sortGroups(groupItems(clipsNavItems({ showRecording: recordingEnabled })))
 
   return (

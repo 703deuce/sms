@@ -15,7 +15,11 @@ export function mintInviteToken(): string {
   return randomBytes(32).toString('base64url')
 }
 
-export async function createRecordingInvite(sessionId: string, workspaceId: string) {
+export async function createRecordingInvite(
+  sessionId: string,
+  workspaceId: string,
+  role: 'GUEST' | 'PRODUCER' = 'GUEST',
+) {
   const prisma = getPrisma()
   const session = await prisma.recordingSession.findFirst({
     where: { id: sessionId, workspaceId },
@@ -32,6 +36,7 @@ export async function createRecordingInvite(sessionId: string, workspaceId: stri
       sessionId,
       tokenHash: hashInviteToken(token),
       expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+      role,
     },
   })
   return { inviteId: invite.id, inviteToken: token, expiresAt: invite.expiresAt }
@@ -40,6 +45,7 @@ export async function createRecordingInvite(sessionId: string, workspaceId: stri
 export async function joinRecordingWithInvite(input: {
   inviteToken: string
   displayName: string
+  role?: 'guest' | 'producer'
 }) {
   const prisma = getPrisma()
   const tokenHash = hashInviteToken(input.inviteToken)
@@ -59,13 +65,15 @@ export async function joinRecordingWithInvite(input: {
     return { error: 'full' as const }
   }
 
+  const inviteRole =
+    input.role === 'producer' || invite.role === 'PRODUCER' ? 'PRODUCER' : 'GUEST'
   const participantId = createId('recp')
   const participant = await prisma.$transaction(async (tx) => {
     const row = await tx.recordingParticipant.create({
       data: {
         id: participantId,
         sessionId: session.id,
-        role: 'GUEST',
+        role: inviteRole,
         displayName: input.displayName.slice(0, 120),
         status: 'INVITED',
       },
@@ -87,7 +95,7 @@ export async function joinRecordingWithInvite(input: {
     roomName: session.livekitRoom,
     identity: participant.id,
     displayName: participant.displayName,
-    role: 'guest',
+    role: inviteRole === 'PRODUCER' ? 'producer' : 'guest',
     sessionId: session.id,
   })
 

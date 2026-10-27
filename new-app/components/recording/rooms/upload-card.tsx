@@ -9,15 +9,29 @@ import type { TrackUploadProgress } from '@/lib/recording/track-upload-manager'
 /** §25.1 upload card — w360, real per-track progress */
 export function RoomsUploadCard({
   rows = [],
+  noTracksRecorded = false,
   onDone,
   onCopyRecoveryLink,
   onStartEditing,
 }: {
   rows?: TrackUploadProgress[]
+  noTracksRecorded?: boolean
   onDone?: () => void
   onCopyRecoveryLink?: () => void
   onStartEditing?: () => void
 }) {
+  if (noTracksRecorded || rows.some((r) => r.label.toLowerCase().includes('no tracks'))) {
+    return (
+      <div className="w-[360px] rounded-xl border border-border bg-popover p-4 shadow-lg">
+        <p className="text-sm font-semibold">No tracks recorded</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          No camera or microphone was enabled during this take, so there is nothing to upload.
+        </p>
+        <PrimaryButton className="mt-4 h-9 w-full" onClick={onDone}>Got it</PrimaryButton>
+      </div>
+    )
+  }
+
   const allDone = rows.length > 0 && rows.every((r) => r.done)
   const stalled = rows.some((r) => r.stalled)
 

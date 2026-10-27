@@ -7,6 +7,7 @@ import { PrimaryButton } from '@/components/app/primary-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { writeJoinPayload } from '@/lib/recording/rooms-join-storage'
 import { RoomsFullPage, RoomsTopBar } from './rooms-layout-shell'
 
 type Role = 'HOST' | 'GUEST'
@@ -16,22 +17,30 @@ export function RoomsPrejoinClient({
   sessionId,
   sessionTitle,
   role,
+  showHostBadge = role === 'HOST',
+  producerMode = false,
   token,
   livekitUrl,
   identity,
+  defaultDisplayName = '',
 }: {
   sessionId: string
   sessionTitle: string
   role: Role
+  showHostBadge?: boolean
+  producerMode?: boolean
   token: string
   livekitUrl: string
   identity: string
+  defaultDisplayName?: string
 }) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [displayName, setDisplayName] = useState('')
+  const [displayName, setDisplayName] = useState(defaultDisplayName)
   const [headphones, setHeadphones] = useState<'yes' | 'no' | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [micAvailable, setMicAvailable] = useState(false)
+  const [camAvailable, setCamAvailable] = useState(false)
   const [joining, setJoining] = useState(false)
 
   useEffect(() => {
@@ -39,15 +48,20 @@ export function RoomsPrejoinClient({
     async function startPreview() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        setMicAvailable(stream.getAudioTracks().length > 0)
+        setCamAvailable(stream.getVideoTracks().length > 0)
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
         }
+        setPreviewError(null)
       } catch {
-        setPreviewError('Camera or microphone access is blocked')
+        setPreviewError('No camera or microphone — you can still join muted.')
+        setMicAvailable(false)
+        setCamAvailable(false)
       }
     }
-    startPreview()
+    void startPreview()
     return () => {
       stream?.getTracks().forEach((t) => t.stop())
     }
@@ -56,12 +70,31 @@ export function RoomsPrejoinClient({
   const onJoin = useCallback(() => {
     if (!displayName.trim() || headphones === null) return
     setJoining(true)
-    sessionStorage.setItem(
-      `rooms:${sessionId}`,
-      JSON.stringify({ token, url: livekitUrl, identity, displayName, role, headphones }),
-    )
+    const studioRole = producerMode ? 'producer' : role === 'HOST' ? 'HOST' : 'GUEST'
+    writeJoinPayload(sessionId, {
+      token,
+      url: livekitUrl,
+      identity,
+      displayName,
+      role: studioRole,
+      headphones,
+      micEnabled: micAvailable,
+      camEnabled: camAvailable,
+    })
     router.push(`/app/rooms/${sessionId}/studio`)
-  }, [displayName, headphones, identity, livekitUrl, router, sessionId, token, role])
+  }, [
+    camAvailable,
+    displayName,
+    headphones,
+    identity,
+    livekitUrl,
+    micAvailable,
+    producerMode,
+    router,
+    role,
+    sessionId,
+    token,
+  ])
 
   return (
     <RoomsFullPage>
@@ -72,14 +105,14 @@ export function RoomsPrejoinClient({
             <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-[oklch(0.1_0_0)]">
               <video ref={videoRef} className="size-full object-cover -scale-x-100" muted playsInline />
               {previewError ? (
-                <p className="absolute inset-0 flex items-center justify-center p-4 text-center text-xs text-destructive">
+                <p className="absolute inset-0 flex items-center justify-center p-4 text-center text-xs text-muted-foreground">
                   {previewError}
                 </p>
               ) : null}
             </div>
             <div className="mt-3 space-y-2">
-              <DeviceRow icon={Video} label="FaceTime HD Camera" />
-              <DeviceRow icon={Mic} label="Microphone" />
+              <DeviceRow icon={Video} label={camAvailable ? 'Camera ready' : 'Camera off'} />
+              <DeviceRow icon={Mic} label={micAvailable ? 'Microphone ready' : 'Microphone off'} />
               <DeviceRow icon={Speaker} label="Speakers" />
             </div>
           </div>
@@ -101,10 +134,12 @@ export function RoomsPrejoinClient({
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Display name"
                 />
-                <Button variant="outline" className="h-9 w-24 shrink-0 gap-1 px-2 text-[13px]">
-                  {role === 'HOST' ? 'Host' : 'Guest'}
-                  <ChevronDown className="size-4 opacity-60" />
-                </Button>
+                {showHostBadge ? (
+                  <Button variant="outline" className="h-9 w-24 shrink-0 gap-1 px-2 text-[13px]">
+                    Host
+                    <ChevronDown className="size-4 opacity-60" />
+                  </Button>
+                ) : null}
               </div>
             </div>
             <PrimaryButton

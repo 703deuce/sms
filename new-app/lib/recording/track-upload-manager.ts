@@ -45,6 +45,31 @@ export class TrackUploadManager {
     private onProgress: (rows: TrackUploadProgress[]) => void,
   ) {}
 
+  async registerNoTracks(input: {
+    participantId: string
+    displayName: string
+    takeId: string
+  }) {
+    const trackId = `no-tracks:${input.participantId}:${input.takeId}`
+    await putTrackMeta({
+      trackId,
+      sessionId: this.sessionId,
+      takeId: input.takeId,
+      mimeType: 'text/plain',
+      kind: 'NONE',
+      participantId: input.participantId,
+      displayName: input.displayName,
+      actualStartHostMs: Date.now(),
+      clockOffsetMs: 0,
+      bytesUploaded: 0,
+      bytesTotalEstimate: 1,
+      multipartStarted: false,
+      finalized: true,
+      updatedAt: Date.now(),
+    })
+    await this.emitProgress()
+  }
+
   async registerTrack(
     meta: Omit<
       TrackUploadMeta,
@@ -121,14 +146,32 @@ export class TrackUploadManager {
       })
       await markChunksUploaded(trackId, part.chunkSeqFrom, part.chunkSeqTo, part.partNumber)
       meta.bytesUploaded += part.sizeBytes
-      await putTrackMeta({ ...meta, bytesUploaded: meta.bytesUploaded, updatedAt: Date.now() })
+      const est = Math.max(meta.bytesTotalEstimate, meta.bytesUploaded * 2)
+      await putTrackMeta({
+        ...meta,
+        bytesUploaded: meta.bytesUploaded,
+        bytesTotalEstimate: est,
+        updatedAt: Date.now(),
+      })
       this.nextPart.set(trackId, nextPartNumber)
       this.lastProgressAt.set(trackId, Date.now())
     }
 
     if (finalize) {
-      await fetch(`/api/recording/uploads/${trackId}/complete`, { method: 'POST' })
-      await putTrackMeta({ ...meta, finalized: true, updatedAt: Date.now() })
+      const pendingBytes = pending.reduce((a, c) => a + c.blob.size, 0)
+      const totalBytes = meta.bytesUploaded + pendingBytes
+      if (totalBytes > 0 && totalBytes < meta.bytesTotalEstimate) {
+        meta.bytesTotalEstimate = totalBytes
+      }
+      if (totalBytes > 0 || meta.multipartStarted) {
+        await fetch(`/api/recording/uploads/${trackId}/complete`, { method: 'POST' })
+      }
+      await putTrackMeta({
+        ...meta,
+        bytesTotalEstimate: totalBytes > 0 ? totalBytes : meta.bytesTotalEstimate,
+        finalized: true,
+        updatedAt: Date.now(),
+      })
     }
     await this.emitProgress()
   }
@@ -143,7 +186,13 @@ export class TrackUploadManager {
       const stalled =
         !meta.finalized && meta.multipartStarted && now - last > STALL_MS && meta.bytesUploaded > 0
       const kindLabel =
-        meta.kind === 'MICROPHONE' ? 'Microphone' : meta.kind === 'SCREEN' ? 'Screen' : 'Camera'
+        meta.kind === 'NONE'
+          ? 'No tracks'
+          : meta.kind === 'MICROPHONE'
+            ? 'Microphone'
+            : meta.kind === 'SCREEN'
+              ? 'Screen'
+              : 'Camera'
       const who = meta.displayName ?? meta.participantId.slice(0, 8)
       return {
         trackId: meta.trackId,
