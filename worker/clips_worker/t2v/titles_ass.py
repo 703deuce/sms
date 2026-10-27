@@ -1,12 +1,13 @@
-"""Titles, lower thirds and text cards for T2V as an ASS layer.
+"""Titles and lower thirds as ASS (burned via ffmpeg ass= filter).
 
-Burned with the same filter the caption pipeline already uses (`subtitles=`/`ass=` in
-captions_ass.py / render_edited_clip). Kept separate from captions so a user can toggle
-captions without losing titles. ASS reference: Aegisub ASS tags (\\fad, \\move, \\pos, \\an).
+Separate from captions so users can toggle captions without losing titles.
+Brand kit supplies font family and primary colour (hex #RRGGBB).
 """
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 HEADER = """[Script Info]
 ScriptType: v4.00+
@@ -17,9 +18,9 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Title,{font},{title_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,1,0,0,0,100,100,0,0,1,3,2,5,60,60,60,1
-Style: Lower,{font},{lower_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&HB4000000,1,0,0,0,100,100,0,0,3,12,0,1,60,60,{lower_mv},1
-Style: Sub,{font},{sub_size},&H00D0D0D0,&H00FFFFFF,&H00000000,&HB4000000,0,0,0,0,100,100,0,0,3,10,0,1,60,60,{sub_mv},1
+Style: Title,{font},{title_size},{primary},&H00FFFFFF,&H00000000,&H64000000,1,0,0,0,100,100,0,0,1,3,2,5,60,60,60,1
+Style: Lower,{font},{lower_size},{primary},&H00FFFFFF,&H00000000,&HB4000000,1,0,0,0,100,100,0,0,3,12,0,1,60,60,{lower_mv},1
+Style: Sub,{font},{sub_size},{muted},&H00FFFFFF,&H00000000,&HB4000000,0,0,0,0,100,100,0,0,3,10,0,1,60,60,{sub_mv},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -28,12 +29,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 @dataclass
 class TextItem:
-    kind: str  # "title" | "lower_third"
+    kind: str
     text: str
     start_ms: int
     end_ms: int
     subtitle: str = ""
-    animation: str = "fade"  # fade | slide_up | none
+    animation: str = "fade"
 
 
 def _ts(ms: int) -> str:
@@ -48,10 +49,38 @@ def _esc(t: str) -> str:
     return t.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
-def build_ass(items: list[TextItem], *, w: int, h: int, font: str = "DejaVu Sans") -> str:
+def hex_to_ass_color(hex_rgb: str, alpha: str = "00") -> str:
+    h = hex_rgb.strip().lstrip("#")
+    if len(h) != 6:
+        return "&H00FFFFFF"
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"&H{alpha}{b:02X}{g:02X}{r:02X}"
+
+
+def build_ass(
+    items: list[TextItem],
+    *,
+    w: int,
+    h: int,
+    font: str = "DejaVu Sans",
+    primary_color: str = "#FFFFFF",
+    muted_color: str = "#D0D0D0",
+) -> str:
     short = min(w, h)
-    out = [HEADER.format(w=w, h=h, font=font, title_size=round(short * 0.085), lower_size=round(short * 0.045),
-                         sub_size=round(short * 0.032), lower_mv=round(h * 0.16), sub_mv=round(h * 0.11))]
+    primary = hex_to_ass_color(primary_color)
+    muted = hex_to_ass_color(muted_color)
+    out = [
+        HEADER.format(
+            w=w, h=h, font=font,
+            title_size=round(short * 0.085),
+            lower_size=round(short * 0.045),
+            sub_size=round(short * 0.032),
+            lower_mv=round(h * 0.16),
+            sub_mv=round(h * 0.11),
+            primary=primary,
+            muted=muted,
+        )
+    ]
     for it in items:
         fade = r"{\fad(250,250)}" if it.animation != "none" else ""
         if it.kind == "title":
@@ -61,13 +90,31 @@ def build_ass(items: list[TextItem], *, w: int, h: int, font: str = "DejaVu Sans
                 tag = rf"{{\an5\pos({w // 2},{h // 2})}}" + fade
             out.append(f"Dialogue: 2,{_ts(it.start_ms)},{_ts(it.end_ms)},Title,,0,0,0,,{tag}{_esc(it.text)}")
         else:
-            # Explicit \pos: libass collision handling would otherwise stack simultaneous events
-            # in arrival order and push the subtitle ABOVE the name.
             x = round(w * 0.06)
             name_y = round(h * (0.80 if it.subtitle else 0.86))
-            out.append(f"Dialogue: 2,{_ts(it.start_ms)},{_ts(it.end_ms)},Lower,,0,0,0,,"
-                       f"{{\\an1\\pos({x},{name_y})}}{fade}{_esc(it.text)}")
+            out.append(
+                f"Dialogue: 2,{_ts(it.start_ms)},{_ts(it.end_ms)},Lower,,0,0,0,,"
+                f"{{\\an1\\pos({x},{name_y})}}{fade}{_esc(it.text)}"
+            )
             if it.subtitle:
-                out.append(f"Dialogue: 2,{_ts(it.start_ms)},{_ts(it.end_ms)},Sub,,0,0,0,,"
-                           f"{{\\an1\\pos({x},{round(h * 0.88)})}}{fade}{_esc(it.subtitle)}")
+                out.append(
+                    f"Dialogue: 2,{_ts(it.start_ms)},{_ts(it.end_ms)},Sub,,0,0,0,,"
+                    f"{{\\an1\\pos({x},{round(h * 0.88)})}}{fade}{_esc(it.subtitle)}"
+                )
     return "\n".join(out) + "\n"
+
+
+def burn_ass(video: Path, ass_path: Path, out: Path) -> Path:
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-i", str(video),
+            "-vf", f"ass={ass_path}",
+            "-c:a", "copy",
+            str(out),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return out

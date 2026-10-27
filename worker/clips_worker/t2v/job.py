@@ -1,102 +1,93 @@
-"""T2V_ASSEMBLE worker job."""
+"""T2V_ASSEMBLE worker job — voice, media, xfade assemble, titles, brand bookends."""
 from __future__ import annotations
 
 import json
 import tempfile
 from pathlib import Path
 
-from clips_worker.internal_callback import post_internal
+import requests
+
 from clips_worker.storage import download_object, put_json, upload_file
 from clips_worker.t2v.assemble import Scene, SceneMedia, assemble
-from clips_worker.t2v.elevenlabs_tts import tts_with_timestamps
-from clips_worker.t2v.tts_alignment import words_from_alignment
+from clips_worker.t2v.render_finalize import finalize_t2v_video
+from clips_worker.t2v.tts_alignment import duration_ms_from_alignment, words_from_alignment
+from clips_worker.t2v.voice_cache import get_or_synthesize_voice_clip
 
-ASPECT_DIMS = {"16:9": (1280, 720), "9:16": (720, 1280), "1:1": (1080, 1080), "4:5": (1080, 1350)}
+ASPECT_DIMS = {
+    "16:9": (1280, 720),
+    "9:16": (720, 1280),
+    "1:1": (1080, 1080),
+    "4:5": (1080, 1350),
+}
 
 
 def _payload(job: dict) -> dict:
-    p = job.get("payload") or {}
-    if isinstance(p, str):
-        p = json.loads(p)
-    return p
+    payload = job.get("payload") or {}
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    return payload
 
 
-def _voice_cache_get(conn, ws: str, hsh: str) -> dict | None:
-    with conn.cursor() as cur:
-        cur.execute(
-            'SELECT "storageKey", alignment FROM t2v_voice_clips WHERE "workspaceId"=%s AND hash=%s',
-            (ws, hsh),
-        )
-        row = cur.fetchone()
-    if not row:
-        return None
-    alignment = row[1]
-    if isinstance(alignment, str):
-        alignment = json.loads(alignment)
-    return {"storageKey": row[0], "alignment": alignment}
+def _media_color_hex(media: dict) -> str:
+    c = (media.get("color") or "#111111").strip()
+    if c.startswith("0x"):
+        return c
+    if c.startswith("#"):
+        return "0x" + c[1:]
+    return "0x111111"
 
 
-def _stock_storage_key(conn, asset_id: str | None) -> str | None:
-    if not asset_id:
-        return None
-    with conn.cursor() as cur:
-        cur.execute('SELECT "storageKey" FROM stock_assets WHERE id=%s', (asset_id,))
-        row = cur.fetchone()
-    return row[0] if row and row[0] else None
-
-
-def _fetch_media(conn, media: dict | None, work: Path, idx: int) -> Path | None:
+def _fetch_media(media: dict | None, work: Path, idx: int) -> Path | None:
     if not media or media.get("kind") == "color":
         return None
-    dest = work / f"media_{idx}{'.jpg' if media.get('kind') == 'image' else '.mp4'}"
-    key = media.get("storageKey") or _stock_storage_key(conn, media.get("assetId"))
-    if key:
-        download_object(str(key), dest)
+    ext = ".jpg" if media.get("kind") == "image" else ".mp4"
+    dest = work / f"media_{idx}{ext}"
+    if media.get("storageKey"):
+        download_object(str(media["storageKey"]), dest)
         return dest
-    src = media.get("previewUrl") or media.get("srcUrl")
-    if not src:
+    url = media.get("previewUrl") or media.get("srcUrl")
+    if not url:
         return None
-    import requests
-
-    r = requests.get(src, timeout=120)
-    r.raise_for_status()
-    dest.write_bytes(r.content)
+    with requests.get(url, stream=True, timeout=120) as r:
+        r.raise_for_status()
+        dest.write_bytes(r.content)
     return dest
-
-
-def _project_words_key(conn, project_id: str) -> str:
-    with conn.cursor() as cur:
-        cur.execute('SELECT "transcriptKey" FROM clip_projects WHERE id=%s', (project_id,))
-        row = cur.fetchone()
-    if not row or not row[0]:
-        raise RuntimeError("project_missing_transcript_key")
-    return row[0]
 
 
 def run_t2v_assemble_job(conn, job: dict, progress) -> None:
     p = _payload(job)
-    draft_id = p["draftId"]
-    workspace_id = p["workspaceId"]
-    project_id = p["projectId"]
+    draft_id = p.get("draftId")
+    workspace_id = p.get("workspaceId")
+    project_id = p.get("projectId")
+    if not draft_id or not workspace_id:
+        raise ValueError("T2V_ASSEMBLE payload requires draftId and workspaceId")
 
     with conn.cursor() as cur:
-        cur.execute('SELECT document, revision FROM t2v_drafts WHERE id=%s', (draft_id,))
+        cur.execute(
+            'SELECT document, revision, "projectId" FROM t2v_drafts WHERE id=%s AND "workspaceId"=%s',
+            (draft_id, workspace_id),
+        )
         row = cur.fetchone()
     if not row:
-        raise RuntimeError("draft_not_found")
-    doc, revision = row[0], row[1]
-    if isinstance(doc, str):
-        doc = json.loads(doc)
+        raise RuntimeError(f"T2vDraft not found: {draft_id}")
+    document, revision, db_project_id = row
+    if isinstance(document, str):
+        document = json.loads(document)
+    project_id = project_id or db_project_id
+    aspect = (document.get("settings") or {}).get("aspect", "16:9")
+    w, h = ASPECT_DIMS.get(aspect, ASPECT_DIMS["16:9"])
+    voice = document.get("voice") or {}
+    scenes_doc = document.get("scenes") or []
+    n = len(scenes_doc)
 
-    w, h = ASPECT_DIMS.get(doc["settings"]["aspect"], (1280, 720))
-    voice = doc.get("voice") or {}
-    scenes_out: list[Scene] = []
-    scene_meta: list[dict] = []
-    n = len(doc.get("scenes") or [])
+    progress(job["id"], {"jobStatus": "RUNNING", "stage": "voice", "progress": 5})
 
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory(prefix="t2v-asm-") as td:
         work = Path(td)
-        for idx, sc in enumerate(doc["scenes"]):
+        scenes: list[Scene] = []
+        alignments: list[dict | None] = []
+
+        for idx, sc in enumerate(scenes_doc):
             progress(
                 job["id"],
                 {"jobStatus": "RUNNING", "stage": "voice", "progress": 5 + int(40 * idx / max(1, n))},
@@ -104,98 +95,114 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
             vo_path = None
             vo_s = 0.0
             alignment = None
-            if sc.get("narration", "").strip() and not sc.get("muted"):
-                vo_info = sc.get("voice") or {}
-                hsh = vo_info.get("hash")
+            narration = (sc.get("narration") or "").strip()
+            if narration and not sc.get("muted") and voice.get("voiceId"):
+                vhash = (sc.get("voice") or {}).get("hash")
+                if not vhash:
+                    raise RuntimeError(f"scene {sc.get('id')} missing voice.hash (compute in TypeScript)")
+                prev_t = scenes_doc[idx - 1]["narration"] if idx else None
+                next_t = scenes_doc[idx + 1]["narration"] if idx + 1 < n else None
+                clip = get_or_synthesize_voice_clip(
+                    conn,
+                    workspace_id=workspace_id,
+                    text=narration,
+                    voice=voice,
+                    voice_hash=vhash,
+                    previous_text=prev_t,
+                    next_text=next_t,
+                )
+                conn.commit()
                 vo_path = work / f"vo_{idx}.mp3"
-                cached = _voice_cache_get(conn, workspace_id, hsh) if hsh else None
-                if cached:
-                    download_object(cached["storageKey"], vo_path)
-                    alignment = cached["alignment"]
-                else:
-                    prev_t = doc["scenes"][idx - 1]["narration"] if idx else None
-                    next_t = doc["scenes"][idx + 1]["narration"] if idx + 1 < n else None
-                    audio, alignment, _model = tts_with_timestamps(
-                        sc["narration"],
-                        voice,
-                        previous_text=prev_t,
-                        next_text=next_t,
-                    )
-                    vo_path.write_bytes(audio)
-                ends = (alignment or {}).get("character_end_times_seconds") or [0]
-                vo_s = float(ends[-1]) if ends else 0.0
-            dur_s = max((sc.get("minDurMs") or 2000) / 1000, vo_s + (sc.get("padMs") or 400) / 1000)
-            media_path = _fetch_media(conn, sc.get("media"), work, idx)
-            m = sc.get("media") or {}
-            scenes_out.append(
+                download_object(clip["storageKey"], vo_path)
+                alignment = clip["alignment"]
+                vo_s = max(clip.get("durationMs", 0) / 1000.0, duration_ms_from_alignment(alignment) / 1000.0)
+            alignments.append(alignment)
+
+            pad_ms = int(sc.get("padMs") or 400)
+            min_ms = int(sc.get("minDurMs") or 2000)
+            dur_s = max(min_ms / 1000.0, vo_s + pad_ms / 1000.0)
+
+            mdoc = sc.get("media") or {"kind": "color"}
+            media_path = _fetch_media(mdoc, work, idx)
+            scenes.append(
                 Scene(
-                    id=sc["id"],
+                    id=sc.get("id", str(idx)),
                     dur_s=dur_s,
                     media=SceneMedia(
-                        kind=m.get("kind", "color"),
+                        kind=mdoc.get("kind", "color"),
                         path=media_path,
-                        src_in_s=(m.get("srcInMs") or 0) / 1000,
-                        focal_x=m.get("focalX", 0.5),
-                        focal_y=m.get("focalY", 0.5),
-                        ken_burns=m.get("kenBurns", "zoom_in"),
-                        color=m.get("color", "0x111111"),
+                        src_in_s=float(mdoc.get("srcInMs") or 0) / 1000.0,
+                        focal_x=float(mdoc.get("focalX", 0.5)),
+                        focal_y=float(mdoc.get("focalY", 0.5)),
+                        ken_burns=mdoc.get("kenBurns", "zoom_in"),
+                        color=_media_color_hex(mdoc),
                     ),
                     transition=sc.get("transition", "fade"),
-                    transition_s=(sc.get("transitionMs") or 500) / 1000,
+                    transition_s=float(sc.get("transitionMs") or 500) / 1000.0,
                     vo_path=vo_path,
                 )
             )
-            scene_meta.append({"id": sc["id"], "slot": sc["slot"], "alignment": alignment, "dur_s": dur_s})
 
-        progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 65})
-        out = assemble(scenes_out, work / "asm", w=w, h=h, fps=30)
+        progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 60})
+        asm = assemble(scenes, work / "asm", w=w, h=h, fps=30)
+        progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 72})
+        final = work / "source.mp4"
+        finalize_t2v_video(
+            asm["source"],
+            final,
+            document=document,
+            scene_starts_ms=asm["sceneStartsMs"],
+            w=w,
+            h=h,
+            work_dir=work / "post",
+        )
 
         all_words: list[dict] = []
         t0 = 0.0
-        scene_starts: dict[str, int] = {}
-        for idx, meta in enumerate(scene_meta):
-            scene_starts[meta["id"]] = round(t0 * 1000)
-            if meta.get("alignment"):
-                all_words += words_from_alignment(
-                    meta["alignment"],
-                    offset_s=t0,
-                    scene_slot=int(meta["slot"]),
+        for idx, sc in enumerate(scenes_doc):
+            al = alignments[idx]
+            if al:
+                all_words.extend(
+                    words_from_alignment(al, offset_s=t0, scene_slot=int(sc.get("slot", idx)))
                 )
-            t0 += meta["dur_s"]
+            t0 += scenes[idx].dur_s
 
         progress(job["id"], {"jobStatus": "RUNNING", "stage": "upload", "progress": 85})
         src_key = f"ws/{workspace_id}/projects/{project_id}/t2v/source_r{revision}.mp4"
-        upload_file(src_key, out["source"], "video/mp4")
-        put_json(_project_words_key(conn, project_id), all_words)
+        upload_file(src_key, final, "video/mp4")
 
-        post_internal(
-            "/api/t2v/internal/assembled",
-            {
-                "draftId": draft_id,
-                "projectId": project_id,
-                "workspaceId": workspace_id,
-                "revision": revision,
-                "jobId": job["id"],
-                "sourceKey": src_key,
-                "durationMs": out["durationMs"],
-                "sceneStartsMs": scene_starts,
-                "words": all_words,
-            },
-        )
+        transcript_key = _project_transcript_key(conn, project_id)
+        if transcript_key:
+            put_json(transcript_key, {"words": all_words})
 
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE t2v_drafts
-                SET status=%s, stage=%s, progress=%s, "assembledRevision"=%s, error=NULL, "updatedAt"=NOW()
+                SET status=%s, stage=%s, progress=%s, error=%s, "assembledRevision"=%s, "updatedAt"=NOW()
                 WHERE id=%s
                 """,
-                ("READY", "done", 100, revision, draft_id),
-            )
-            cur.execute(
-                'UPDATE clip_jobs SET status=%s, "finishedAt"=NOW() WHERE id=%s',
-                ("DONE", job["id"]),
+                ("READY", "done", 100, None, revision, draft_id),
             )
         conn.commit()
 
-    progress(job["id"], {"jobStatus": "DONE", "stage": "done", "progress": 100})
+    progress(
+        job["id"],
+        {
+            "jobStatus": "DONE",
+            "stage": "done",
+            "progress": 100,
+            "result": {
+                "sourceKey": src_key,
+                "durationMs": asm["durationMs"],
+                "sceneStartsMs": asm["sceneStartsMs"],
+            },
+        },
+    )
+
+
+def _project_transcript_key(conn, project_id: str) -> str | None:
+    with conn.cursor() as cur:
+        cur.execute('SELECT "transcriptKey" FROM clip_projects WHERE id=%s', (project_id,))
+        row = cur.fetchone()
+    return row[0] if row and row[0] else None
