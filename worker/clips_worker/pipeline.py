@@ -201,6 +201,8 @@ def initial_clip_edits(settings: dict) -> dict:
     if isinstance(cap_preset, dict):
         cap = {**cap, **cap_preset}
     edits: dict = {"captions": cap}
+    if settings.get("autoZoom"):
+        edits["zoom"] = {"enabled": True, "intensity": 1.08}
     if brand:
         edits["brand"] = {
             "templateId": brand.get("templateId"),

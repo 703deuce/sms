@@ -32,7 +32,7 @@ export function LayoutPanel({
   onApplyBrand?: () => void
   onEdits?: (edits: ClipEditsV2) => void
 }) {
-  const zoom = edits.zoom || { enabled: false, intensity: 1.15 }
+  const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
   return (
     <div className="flex flex-col gap-4">
@@ -55,13 +55,13 @@ export function LayoutPanel({
           {zoom.enabled && (
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">
-                Intensity {(zoom.intensity ?? 1.15).toFixed(2)}
+                Intensity {(zoom.intensity ?? 1.08).toFixed(2)}
               </Label>
               <Slider
-                min={1.1}
-                max={1.3}
-                step={0.05}
-                value={[zoom.intensity ?? 1.15]}
+                min={1}
+                max={1.12}
+                step={0.02}
+                value={[zoom.intensity ?? 1.08]}
                 onValueChange={(v) => {
                   const n = Array.isArray(v) ? v[0] : v
                   if (typeof n === 'number') onEdits({ ...edits, zoom: { ...zoom, intensity: n } })
