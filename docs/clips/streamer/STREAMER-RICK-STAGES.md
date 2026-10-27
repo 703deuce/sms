@@ -66,7 +66,7 @@ Workspace tier flag: `workspace_limits.limits.streamer.retentionTier` = `monthly
 
 ## Stage 1 — Paste Twitch/Kick VOD
 
-Same user story as before: paste link, attestation, progress/errors, ~**10 h** analysed cap (align env from 12 → 10 when Rick confirms), source deleted after READY.
+Same user story as before: paste link, attestation, progress/errors, ~**10 h** analysed cap (**paste only** — marathon/connected rolling bypasses; see `STREAMER-MARATHON-DESIGN.md`), source deleted after READY.
 
 **Implementation order (storage-first)**
 

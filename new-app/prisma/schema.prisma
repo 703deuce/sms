@@ -9610,11 +9610,13 @@ model ClipMontage {
 }
 
 model StreamUsage {
-  id              String   @id @default(cuid())
-  workspaceId     String
-  periodStart     DateTime @db.Date
-  sourceSeconds   Int      @default(0)
-  vodCount        Int      @default(0)
+  id                  String   @id @default(cuid())
+  workspaceId         String
+  periodStart         DateTime @db.Date
+  sourceSeconds       Int      @default(0)
+  /// Marathon idle-skip (not counted toward monthly processed cap).
+  idleSkippedSeconds  Int      @default(0)
+  vodCount            Int      @default(0)
   modalGpuSeconds Float    @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

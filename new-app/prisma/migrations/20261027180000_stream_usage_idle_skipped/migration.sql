@@ -1,0 +1,2 @@
+ALTER TABLE "stream_usage"
+  ADD COLUMN IF NOT EXISTS "idleSkippedSeconds" INTEGER NOT NULL DEFAULT 0;

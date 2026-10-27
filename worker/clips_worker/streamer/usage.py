@@ -65,22 +65,51 @@ def check_cap(conn, workspace_id: str, incoming_seconds: int) -> str | None:
     return None
 
 
-def meter_vod_once(conn, workspace_id: str, vod_id: str, analysed_seconds: int, state: dict) -> dict:
-    if state.get("metered"):
-        return state
+def check_cap_code(conn, workspace_id: str, incoming_seconds: int) -> str | None:
+    """Returns 'stream_cap' when blocked (for job handlers / UI)."""
+    if check_cap(conn, workspace_id, incoming_seconds):
+        return "stream_cap"
+    return None
+
+
+def _add_usage_seconds(
+    conn,
+    workspace_id: str,
+    *,
+    source_seconds: int = 0,
+    idle_skipped_seconds: int = 0,
+    vod_delta: int = 0,
+) -> None:
     period = _month_start()
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO stream_usage (id, "workspaceId", "periodStart", "sourceSeconds", "vodCount", "updatedAt")
-            VALUES (%s, %s, %s, %s, 1, NOW())
+            INSERT INTO stream_usage (
+              id, "workspaceId", "periodStart", "sourceSeconds", "idleSkippedSeconds", "vodCount", "updatedAt"
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT ("workspaceId", "periodStart") DO UPDATE
               SET "sourceSeconds" = stream_usage."sourceSeconds" + EXCLUDED."sourceSeconds",
-                  "vodCount" = stream_usage."vodCount" + 1,
+                  "idleSkippedSeconds" = stream_usage."idleSkippedSeconds" + EXCLUDED."idleSkippedSeconds",
+                  "vodCount" = stream_usage."vodCount" + EXCLUDED."vodCount",
                   "updatedAt" = NOW()
             """,
-            (f"su_{uuid.uuid4().hex[:24]}", workspace_id, period, analysed_seconds),
+            (
+                f"su_{uuid.uuid4().hex[:24]}",
+                workspace_id,
+                period,
+                source_seconds,
+                idle_skipped_seconds,
+                vod_delta,
+            ),
         )
+
+
+def meter_vod_once(conn, workspace_id: str, vod_id: str, analysed_seconds: int, state: dict) -> dict:
+    if state.get("metered"):
+        return state
+    _add_usage_seconds(conn, workspace_id, source_seconds=analysed_seconds, vod_delta=1)
+    with conn.cursor() as cur:
         cur.execute(
             """
             UPDATE stream_vods SET state = jsonb_set(COALESCE(state, '{}'::jsonb), '{metered}', 'true'::jsonb)
@@ -90,6 +119,43 @@ def meter_vod_once(conn, workspace_id: str, vod_id: str, analysed_seconds: int, 
         )
     conn.commit()
     state = {**state, "metered": True}
+    return state
+
+
+def meter_chunk_once(
+    conn,
+    workspace_id: str,
+    vod_id: str,
+    chunk_index: int,
+    processed_seconds: int,
+    state: dict,
+    *,
+    idle_skipped_seconds: int = 0,
+) -> dict:
+    """Marathon rolling: meter each transcribed chunk; idle skipped does not add to sourceSeconds."""
+    metered = state.get("meteredChunks") or []
+    if isinstance(metered, list) and chunk_index in metered:
+        return state
+    if processed_seconds > 0 or idle_skipped_seconds > 0:
+        _add_usage_seconds(
+            conn,
+            workspace_id,
+            source_seconds=max(0, processed_seconds),
+            idle_skipped_seconds=max(0, idle_skipped_seconds),
+            vod_delta=0,
+        )
+    metered_list = list(metered) if isinstance(metered, list) else []
+    if chunk_index not in metered_list:
+        metered_list.append(chunk_index)
+    state = {**state, "meteredChunks": metered_list}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE stream_vods SET state = %s::jsonb, "updatedAt"=NOW() WHERE id = %s
+            """,
+            (json.dumps(state), vod_id),
+        )
+    conn.commit()
     return state
 
 

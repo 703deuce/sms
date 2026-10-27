@@ -12,7 +12,7 @@ from clips_worker.heartbeat import Heartbeat
 from clips_worker.import_url import probe_video, upload_source_key
 from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, upload_file
-from clips_worker.streamer.config import FULL_DOWNLOAD_MAX_MIN, MAX_VOD_HOURS, SCRATCH
+from clips_worker.streamer.config import FULL_DOWNLOAD_MAX_MIN, PASTE_MAX_VOD_HOURS, SCRATCH
 from clips_worker.streamer.keys import stream_audio_key
 from clips_worker.streamer.upload_proxy import (
     build_analysis_proxy,
@@ -22,6 +22,23 @@ from clips_worker.streamer.upload_proxy import (
 from clips_worker.streamer.usage import check_cap, job_priority
 from clips_worker.streamer.import_cache import cleanup_vod_import_dir, pick_completed_audio, sweep_stale_failed_import_dirs, vod_import_dir
 from clips_worker.streamer.ytdlp import download_audio, download_video, metadata, parse_metadata
+
+
+def _enforce_paste_vod_duration_cap(vod: dict, effective_ms: int) -> None:
+    """Rick: ~10 h cap for one-shot paste VOD links only; marathon/rolling uses monthly cap."""
+    triggered = str(vod.get("triggeredBy") or "paste").lower()
+    state = vod.get("state") or {}
+    if isinstance(state, str):
+        state = json.loads(state) if state else {}
+    mode = str((state or {}).get("processMode") or "").lower()
+    if triggered != "paste" or mode in ("marathon", "rolling"):
+        return
+    max_s = PASTE_MAX_VOD_HOURS * 3600
+    if effective_ms > max_s * 1000:
+        raise RuntimeError(
+            f"VOD is longer than {PASTE_MAX_VOD_HOURS} h for paste import. "
+            "Connect your channel for marathon mode, pick a shorter range, or wait for highlight batches."
+        )
 
 
 def _extract_upload_audio(src: Path, audio_out: Path, long_form: bool) -> None:
@@ -200,9 +217,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
         meta = parse_metadata(meta_raw)
         dur_s = meta["duration_s"] or 0
         effective_ms = _effective_duration_ms(vod, dur_s)
-        max_s = MAX_VOD_HOURS * 3600
-        if effective_ms > max_s * 1000:
-            raise RuntimeError(f"VOD is longer than {MAX_VOD_HOURS} h; pick a range.")
+        _enforce_paste_vod_duration_cap(vod, effective_ms)
         cap_err = check_cap(conn, workspace_id, effective_ms // 1000)
         if cap_err:
             raise RuntimeError(cap_err)

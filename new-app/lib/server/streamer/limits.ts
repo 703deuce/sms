@@ -2,7 +2,9 @@ import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
 export const STREAMER_DEFAULT_MONTHLY_HOURS = 40
-export const STREAMER_MAX_VOD_HOURS = 12
+/** One-shot paste VOD link cap (marathon/connected bypasses). */
+export const STREAMER_PASTE_MAX_VOD_HOURS = 10
+export const STREAMER_MAX_VOD_HOURS = STREAMER_PASTE_MAX_VOD_HOURS
 
 export type StreamerLimits = {
   monthlyHours: number | null

@@ -24,10 +24,16 @@ export async function getStreamUsage(workspaceId: string) {
     },
     _sum: { costUsdMicros: true },
   })
+  const idleSkippedHours = (row?.idleSkippedSeconds ?? 0) / 3600
+  const limitReached =
+    capHours != null && capHours > 0 && usedHours >= capHours - 1e-6
+
   return {
     periodStart: periodStart.toISOString().slice(0, 10),
     usedHours,
+    idleSkippedHours,
     capHours,
+    limitReached,
     vodCount: row?.vodCount ?? 0,
     gpuHours: (row?.modalGpuSeconds ?? 0) / 3600,
     modalUsdThisMonth: (modal._sum.costUsdMicros ?? 0) / 1_000_000,
