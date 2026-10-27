@@ -15,6 +15,7 @@ import {
   type CutRange,
 } from '@/lib/clips/edits'
 import type { ClipBounds } from '@/lib/clips/edits'
+import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { patchClip } from '@/lib/clips-api'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
@@ -305,13 +306,9 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
 
   const setTrim = useCallback(
     (trim: { in: number; out: number }) => {
-      const pad = 8000
       setEdits({
         ...state.edits,
-        trim: {
-          in: Math.max(bounds.clipStartMs - pad, trim.in),
-          out: Math.min(bounds.clipEndMs + pad, trim.out),
-        },
+        trim: clampTrimToExtendedBounds(bounds.clipStartMs, bounds.clipEndMs, trim),
       })
     },
     [bounds.clipEndMs, bounds.clipStartMs, setEdits, state.edits],

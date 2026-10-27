@@ -550,6 +550,8 @@ export function EditorShell({
               onSeekOutput={seekOutput}
               onTrimChange={setTrim}
               onBrollChange={updateBrollItem}
+              clipStartMs={bounds.clipStartMs}
+              clipEndMs={bounds.clipEndMs}
             />
           </div>
         </section>

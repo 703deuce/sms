@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { normalizeAudioEdits, type ClipEditsAudio } from '@/lib/clips/audio'
 import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
+import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
 
 export type CutRange = [number, number]
@@ -186,10 +187,10 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     ...base,
     ...o,
     v: 2,
-    trim: {
-      in: Math.max(0, Number(trim.in ?? base.trim.in)),
-      out: Math.min(Number.MAX_SAFE_INTEGER, Number(trim.out ?? base.trim.out)),
-    },
+    trim: clampTrimToExtendedBounds(bounds.clipStartMs, bounds.clipEndMs, {
+      in: Number(trim.in ?? base.trim.in),
+      out: Number(trim.out ?? base.trim.out),
+    }),
     cutRanges: Array.isArray(o.cutRanges)
       ? (o.cutRanges as CutRange[]).filter(
           (r) => Array.isArray(r) && r.length === 2 && Number.isFinite(r[0]) && Number.isFinite(r[1]),

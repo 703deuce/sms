@@ -26,7 +26,8 @@ import {
   isClipWaitingForWorker,
 } from '@/lib/clips/progress-eta-label'
 import { formatClipProgressStage } from '@/lib/clips/progress-stage'
-import { cancelProject, getProjectStatus } from '@/lib/clips-api'
+import { cancelProject, getProjectStatus, retryProject } from '@/lib/clips-api'
+import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 import type { ClipProjectStatusUi } from '@/components/app/status'
 
 const STEPS_UPLOAD = ['Upload', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
@@ -154,11 +155,31 @@ export function JobStatus({
         ? stageDetail
         : ui.label
 
+  const failureCopy = describeClipProjectFailure({ status, error, stage })
+
   return (
     <Panel title="Processing your video" description={stageLabel || 'Working on your video…'}>
       <div className="flex flex-col gap-4">
         {status === 'FAILED' && (
-          <ProjectFailedAlert errorMessage={error || 'Something went wrong. You can try again with a new upload.'} />
+          <ProjectFailedAlert
+            errorMessage={failureCopy?.message ?? error ?? 'Something went wrong. You can try again with a new upload.'}
+            retryAction={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void retryProject(projectId)
+                    .then(() => {
+                      setStatus('QUEUED')
+                      setError(null)
+                    })
+                    .catch(() => {})
+                }}
+              >
+                {failureCopy?.retryLabel ?? 'Retry processing'}
+              </Button>
+            }
+          />
         )}
         {processing && (
           <>

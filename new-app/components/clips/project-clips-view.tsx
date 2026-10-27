@@ -17,6 +17,7 @@ import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
+import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 import type { ClipProjectSettings } from '@/lib/clips/settings'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -64,9 +65,16 @@ function ClientCreatedDate({ iso }: { iso: string }) {
   )
 }
 
-function pageDescription(status: string, error: string | null) {
+function pageDescription(status: string, error: string | null, clipCount: number) {
+  if (status === 'READY' && clipCount === 0) {
+    const copy = describeClipProjectFailure({ status, error, clipCount })
+    return copy?.message ?? error ?? 'No clips were found for this project.'
+  }
   if (status === 'READY') return 'Your clips are ready.'
-  if (status === 'FAILED') return error || 'Processing failed.'
+  if (status === 'FAILED') {
+    const copy = describeClipProjectFailure({ status, error, clipCount })
+    return copy?.message ?? error ?? 'Processing failed.'
+  }
   return 'Processing your source video.'
 }
 
@@ -262,15 +270,22 @@ export function ProjectClipsView({
   }
 
 
-  const desc = pageDescription(status, error)
+  const failureCopy = describeClipProjectFailure({
+    status,
+    error,
+    clipCount: clips.length,
+    stage: progressStage,
+  })
+  const desc = pageDescription(status, error, clips.length)
   const showResults = status === 'READY' && readyHydrated
   const processing = !showResults && status !== 'FAILED' && status !== 'CANCELED'
   const showProgressiveClips =
     processing && !isStreamer && (clips.length > 0 || clipsTotal > 0 || clipsReady > 0)
   const failedMsg =
-    error?.includes('heavy traffic')
+    failureCopy?.message ??
+    (error?.includes('heavy traffic')
       ? `${error} The upstream model was overloaded (503). Use Retry to re-queue with backoff.`
-      : error || 'Something went wrong while processing this project.'
+      : error || 'Something went wrong while processing this project.')
 
   return (
     <>
@@ -329,7 +344,7 @@ export function ProjectClipsView({
                     .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))
                 }}
               >
-                Retry processing
+                {failureCopy?.retryLabel ?? 'Retry processing'}
               </Button>
             }
           />
@@ -404,8 +419,29 @@ export function ProjectClipsView({
             {clips.length === 0 ? (
               <EmptyState
                 icon={Clapperboard}
-                title="No clips found"
-                description={error || 'No complete, self-contained moments were found in this segment.'}
+                title={failureCopy?.title ?? 'No clips found'}
+                description={
+                  failureCopy?.message ??
+                  error ??
+                  'No complete, self-contained moments were found in this segment.'
+                }
+                action={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void retryProject(projectId)
+                        .then(() => {
+                          setStatus('QUEUED')
+                          setError(null)
+                          toast.success('Processing restarted')
+                        })
+                        .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))
+                    }}
+                  >
+                    {failureCopy?.retryLabel ?? 'Retry processing'}
+                  </Button>
+                }
               />
             ) : (
               <ClipGrid

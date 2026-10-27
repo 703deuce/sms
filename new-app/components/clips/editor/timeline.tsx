@@ -4,6 +4,7 @@ import type { BrollItem } from '@/lib/clips/broll'
 import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { keepSegments, outputDurationMs, wordDisplayText } from '@/lib/clips/edits'
+import { clampTrimToExtendedBounds, extendedTrimLimits } from '@/lib/clips/trim-bounds'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
@@ -21,6 +22,8 @@ export function Timeline({
   onSeekOutput,
   onTrimChange,
   onBrollChange,
+  clipStartMs,
+  clipEndMs,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -31,8 +34,15 @@ export function Timeline({
   onSeekOutput: (outputMs: number) => void
   onTrimChange: (trim: { in: number; out: number }) => void
   onBrollChange?: (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => void
+  clipStartMs: number
+  clipEndMs: number
 }) {
   const span = Math.max(1, edits.trim.out - edits.trim.in)
+  const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs)
+  const clampTrim = (next: { in: number; out: number }) =>
+    clampTrimToExtendedBounds(clipStartMs, clipEndMs, next)
+  const aiInPct = ((clipStartMs - edits.trim.in) / span) * 100
+  const aiOutPct = ((clipEndMs - edits.trim.in) / span) * 100
   const outDur = outputDurationMs(edits)
   const widthPx = Math.max(640, Math.round(span / 20))
   const captionByI = new Map(buildCaptionWords(words, edits).map((c) => [c.i, c]))
@@ -73,6 +83,15 @@ export function Timeline({
           ))}
         </div>
         <div className="relative h-36 shrink-0" style={{ width: widthPx }}>
+        <div
+          className="pointer-events-none absolute top-8 bottom-6 border-x border-dashed border-primary/40"
+          style={{
+            left: `${Math.max(0, Math.min(100, aiInPct))}%`,
+            width: `${Math.max(0.5, Math.min(100, aiOutPct - aiInPct))}%`,
+          }}
+          title="Original AI clip bounds"
+          aria-hidden
+        />
         <div className="absolute inset-x-0 top-8 h-8 rounded bg-muted">
           {words.map((w) => {
             const { startMs, endMs } = wordSourceMs(w)
@@ -104,14 +123,22 @@ export function Timeline({
           ms={edits.trim.in}
           span={span}
           trimIn={edits.trim.in}
-          onChange={(inMs) => onTrimChange({ in: inMs, out: edits.trim.out })}
+          minMs={minInMs}
+          maxMs={maxOutMs}
+          onChange={(inMs) =>
+            onTrimChange(clampTrim({ in: inMs, out: Math.max(inMs + 500, edits.trim.out) }))
+          }
         />
         <TrimHandle
           label="Out"
           ms={edits.trim.out}
           span={span}
           trimIn={edits.trim.in}
-          onChange={(outMs) => onTrimChange({ in: edits.trim.in, out: outMs })}
+          minMs={minInMs}
+          maxMs={maxOutMs}
+          onChange={(outMs) =>
+            onTrimChange(clampTrim({ in: Math.min(outMs - 500, edits.trim.in), out: outMs }))
+          }
         />
         <div className="absolute inset-x-0 top-[88px] h-5 overflow-hidden rounded bg-emerald-950/40">
           <AudioWaveformLane videoUrl={videoUrl} className="absolute inset-0 size-full text-emerald-400/90" />
@@ -154,6 +181,9 @@ export function Timeline({
         </div>
         </div>
       </div>
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        Drag In/Out up to 8s beyond the dashed AI bounds. Export uses the full trim window.
+      </p>
     </div>
   )
 }
@@ -230,12 +260,16 @@ function TrimHandle({
   ms,
   span,
   trimIn,
+  minMs,
+  maxMs,
   onChange,
 }: {
   label: string
   ms: number
   span: number
   trimIn: number
+  minMs: number
+  maxMs: number
   onChange: (ms: number) => void
 }) {
   return (
@@ -251,7 +285,8 @@ function TrimHandle({
           const parent = (e.target as HTMLElement).parentElement
           const w = parent?.clientWidth ?? 640
           const delta = ((ev.clientX - startX) / w) * span
-          onChange(Math.round(startMs + delta))
+          const next = Math.round(startMs + delta)
+          onChange(Math.max(minMs, Math.min(maxMs, next)))
         }
         const onUp = () => {
           window.removeEventListener('mousemove', onMove)

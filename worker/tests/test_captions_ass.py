@@ -37,6 +37,21 @@ def test_caption_horizontal_margins_scale_with_play_res():
         assert "WrapStyle: 2" in text
 
 
+def test_emoji_by_word_renders_overlay_line():
+    with tempfile.TemporaryDirectory() as td:
+        ass = Path(td) / "t.ass"
+        build_ass(
+            SAMPLE[:2],
+            {"presetId": "clean_white", "emojiByWord": {"0": "🔥"}},
+            ass,
+            play_w=720,
+            play_h=1280,
+        )
+        text = ass.read_text()
+        assert "🔥" in text
+        assert "\\pos(" in text
+
+
 def test_all_presets_ass_tags():
     out_lines = []
     for slug, needle in EXPECTED.items():

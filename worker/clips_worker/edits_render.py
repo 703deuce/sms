@@ -35,7 +35,7 @@ def emphasis_indexes_for_zoom(words: list[dict], cap_edits: dict) -> list[int]:
     if explicit:
         return [int(x) for x in explicit]
     if not cap_edits.get("keywordHighlight") and not cap_edits.get("autoEmojis"):
-        pass
+        return []
     out: list[int] = []
     for w in words:
         text = str(w.get("w", "")).strip()

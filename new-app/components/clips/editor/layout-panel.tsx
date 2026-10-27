@@ -10,7 +10,6 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipAspectRatios } from '@/lib/clips/settings'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
-import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
   { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
@@ -61,9 +60,6 @@ export function LayoutPanel({
           <span className="font-medium text-foreground">{appliedLayoutLabel}</span>
         </div>
       ) : null}
-      <p className="text-xs text-muted-foreground">
-        Trim handles can extend up to {MAX_TRIM_EXTEND_MS / 1000}s beyond the AI clip bounds on export.
-      </p>
       {onApplyBrand && (
         <Button type="button" size="sm" variant="outline" onClick={onApplyBrand}>
           Apply brand
