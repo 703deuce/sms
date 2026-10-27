@@ -275,6 +275,7 @@ def run_speakercrop(
         env.update(layout_env(layout))
     env["WORDS"] = str(words_path)
     env["WORDS_JSON"] = str(words_path)
+    env["TRANSCRIPT_SPK"] = "1"
     env["OUT_W"] = str(w)
     env["OUT_H"] = str(h)
     env["CAPTION_PRESET"] = settings.get("captions", {}).get("presetId", "bold_pop")

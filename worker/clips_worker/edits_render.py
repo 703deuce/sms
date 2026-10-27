@@ -29,6 +29,27 @@ def edits_version_hash(edits: dict) -> str:
     return hashlib.sha256(body.encode()).hexdigest()
 
 
+def emphasis_indexes_for_zoom(words: list[dict], cap_edits: dict) -> list[int]:
+    """Pick word indexes for auto-zoom when emphasis list is empty."""
+    explicit = cap_edits.get("emphasis") if isinstance(cap_edits.get("emphasis"), list) else []
+    if explicit:
+        return [int(x) for x in explicit]
+    if not cap_edits.get("keywordHighlight") and not cap_edits.get("autoEmojis"):
+        pass
+    out: list[int] = []
+    for w in words:
+        text = str(w.get("w", "")).strip()
+        if len(text) < 4:
+            continue
+        idx = w.get("i", w.get("idx"))
+        if idx is None:
+            continue
+        out.append(int(idx))
+        if len(out) >= 10:
+            break
+    return out
+
+
 def default_edits(clip_start_ms: int, clip_end_ms: int) -> dict:
     return {
         "v": 2,
@@ -475,7 +496,11 @@ def render_edited_clip(
             layout_switch_times_from_words,
         )
 
-        emphasis = cap_edits.get("emphasis") if isinstance(cap_edits, dict) else []
+        emphasis = (
+            emphasis_indexes_for_zoom(caption_words, cap_edits)
+            if isinstance(cap_edits, dict)
+            else []
+        )
         intensity = clamp_zoom_intensity(zoom_cfg.get("intensity"))
         layout_switches = layout_switch_times_from_words(caption_words)
         kf = build_zoom_keyframes(

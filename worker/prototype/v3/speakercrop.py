@@ -157,38 +157,48 @@ if int(E('CAPTIONS', 1)) and not os.path.exists(WORDS):     # local ASR (faster-
     subprocess.run([sys.executable, os.path.join(HERE, 'transcribe.py'), INP, WORDS, os.environ.get('ASR_MODEL', 'medium.en')], check=True)
 t_asr = time.time() - t_asr
 if USE_VOICE and cent is not None and os.path.exists(WORDS):
-    import torch
-    from resemblyzer import audio as raudio
     words = json.load(open(WORDS))
-    mel = raudio.wav_to_mel_spectrogram(a)                     # 10 ms frames
-    lab, mar = [], []
-    for wd in words:                                           # 0.8 s (min) window around each word
-        c = (wd['s'] + wd['e']) / 2; h = max(0.4, (wd['e'] - wd['s']) / 2)
-        f0_, f1_ = max(0, int((c - h) * 100)), min(len(mel), int((c + h) * 100))
-        with torch.no_grad():
-            emb = enc(torch.from_numpy(mel[f0_:f1_][None]).float()).numpy()[0]
-        sim = cent @ emb; lab.append(int(np.argmax(sim))); mar.append(float(abs(sim[0] - sim[1])))
-    lab = np.array(lab); mar = np.array(mar)
-    # smooth: margin-weighted vote over neighbours (±1 word)
-    sm_lab = lab.copy()
-    for q in range(len(lab)):
-        nb = range(max(0, q - 1), min(len(lab), q + 2))
-        v = sum((1 if lab[r] == 1 else -1) * mar[r] * (2 if r == q else 1) for r in nb)
-        sm_lab[q] = 1 if v > 0 else 0
-    # runs of same speaker; runs shorter than WORD_MIN s (or weak) are absorbed by the main speaker
-    WORD_MIN = E('WORD_MIN', 0.7); AUD_MIN = E('AUD_MIN', 0.3)   # short runs (<3 s) need >=2 words and agreement from the 1.6 s voice track
-    for _ in range(3):
-        runs = []; st = 0
-        for q in range(1, len(lab) + 1):
-            if q == len(lab) or sm_lab[q] != sm_lab[st]: runs.append((st, q)); st = q
-        for ri, (a0, a1) in enumerate(runs):
-            dur = words[a1 - 1]['e'] - words[a0]['s']
-            m_ = (T >= words[a0]['s']) & (T <= words[a1 - 1]['e'])
-            agree = (1 if sm_lab[a0] == 0 else -1) * (aud_s[m_].mean() if m_.any() else 0)  # 1.6 s-window voice view
-            weak = dur < 3.0 and (a1 - a0 < 2 or agree < AUD_MIN)
-            if len(runs) > 1 and (dur < WORD_MIN or weak):
-                nb = runs[ri - 1] if ri > 0 else runs[ri + 1]; sm_lab[a0:a1] = sm_lab[nb[0]]
-    word_spk = sm_lab
+    dg_ids = sorted({int(w.get("spk", 0)) for w in words})
+    if int(os.environ.get("TRANSCRIPT_SPK", "1")) and len(dg_ids) >= 2:
+        dg_map = {dg_ids[0]: 0}
+        for sid in dg_ids[1:]:
+            dg_map[sid] = 1
+        sm_lab = np.array([dg_map.get(int(w.get("spk", dg_ids[0])), 0) for w in words])
+        lab = sm_lab.copy()
+        mar = np.ones(len(words))
+        word_spk = sm_lab
+    else:
+        import torch
+        from resemblyzer import audio as raudio
+        mel = raudio.wav_to_mel_spectrogram(a)                     # 10 ms frames
+        lab, mar = [], []
+        for wd in words:                                           # 0.8 s (min) window around each word
+            c = (wd['s'] + wd['e']) / 2; h = max(0.4, (wd['e'] - wd['s']) / 2)
+            f0_, f1_ = max(0, int((c - h) * 100)), min(len(mel), int((c + h) * 100))
+            with torch.no_grad():
+                emb = enc(torch.from_numpy(mel[f0_:f1_][None]).float()).numpy()[0]
+            sim = cent @ emb; lab.append(int(np.argmax(sim))); mar.append(float(abs(sim[0] - sim[1])))
+        lab = np.array(lab); mar = np.array(mar)
+        # smooth: margin-weighted vote over neighbours (±1 word)
+        sm_lab = lab.copy()
+        for q in range(len(lab)):
+            nb = range(max(0, q - 1), min(len(lab), q + 2))
+            v = sum((1 if lab[r] == 1 else -1) * mar[r] * (2 if r == q else 1) for r in nb)
+            sm_lab[q] = 1 if v > 0 else 0
+        # runs of same speaker; runs shorter than WORD_MIN s (or weak) are absorbed by the main speaker
+        WORD_MIN = E('WORD_MIN', 0.7); AUD_MIN = E('AUD_MIN', 0.3)   # short runs (<3 s) need >=2 words and agreement from the 1.6 s voice track
+        for _ in range(3):
+            runs = []; st = 0
+            for q in range(1, len(lab) + 1):
+                if q == len(lab) or sm_lab[q] != sm_lab[st]: runs.append((st, q)); st = q
+            for ri, (a0, a1) in enumerate(runs):
+                dur = words[a1 - 1]['e'] - words[a0]['s']
+                m_ = (T >= words[a0]['s']) & (T <= words[a1 - 1]['e'])
+                agree = (1 if sm_lab[a0] == 0 else -1) * (aud_s[m_].mean() if m_.any() else 0)  # 1.6 s-window voice view
+                weak = dur < 3.0 and (a1 - a0 < 2 or agree < AUD_MIN)
+                if len(runs) > 1 and (dur < WORD_MIN or weak):
+                    nb = runs[ri - 1] if ri > 0 else runs[ri + 1]; sm_lab[a0:a1] = sm_lab[nb[0]]
+        word_spk = sm_lab
     if int(E('DEBUG', 0)):
         st = 0
         for q in range(1, len(lab) + 1):
