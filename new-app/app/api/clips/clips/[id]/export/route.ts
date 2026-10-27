@@ -12,7 +12,7 @@ import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const bodySchema = z.object({
   resolution: z.enum(['720p', '1080p']).default('720p'),
-  aspect: z.enum(['9:16', '1:1', '16:9']).default('9:16'),
+  aspect: z.enum(['9:16', '4:5', '1:1', '16:9']).default('9:16'),
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
 })

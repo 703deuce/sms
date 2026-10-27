@@ -10,7 +10,7 @@ import { ZipArchive } from 'archiver'
 
 const postSchema = z.object({
   clipIds: z.array(z.string().min(1)).max(10).optional(),
-  aspect: z.enum(['9:16', '1:1', '16:9']),
+  aspect: z.enum(['9:16', '4:5', '1:1', '16:9']),
   resolution: z.enum(['720p', '1080p']).default('720p'),
 })
 
