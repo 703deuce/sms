@@ -68,10 +68,12 @@ async def run_rooms_transcription(ctx: JobContext) -> None:
     logger.info('clips transcription agent ready room=%s session=%s', ctx.room.name, session_id)
 
 
+async def transcription_entrypoint(ctx: JobContext) -> None:
+    await run_rooms_transcription(ctx)
+
+
 def register_transcription_agent(server) -> None:
     if os.getenv('CLIPS_RECORDING_WORKER_ENABLED', '').strip() != '1':
         return
 
-    @server.rtc_session(agent_name=AGENT_NAME)
-    async def _entrypoint(ctx: JobContext) -> None:
-        await run_rooms_transcription(ctx)
+    server.rtc_session(agent_name=AGENT_NAME)(transcription_entrypoint)
