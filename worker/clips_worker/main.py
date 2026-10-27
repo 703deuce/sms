@@ -588,6 +588,39 @@ def main() -> None:
                                     )
                                 conn.commit()
                         mark_generation_failed(conn, job, msg)
+                    elif (job.get("type") or "").startswith("STREAM_"):
+                        payload = job.get("payload") or {}
+                        if isinstance(payload, str):
+                            payload = json.loads(payload)
+                        vod_id = payload.get("vodId")
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
+                                ("FAILED", msg[:4000], job["id"]),
+                            )
+                            if vod_id:
+                                cur.execute(
+                                    'UPDATE stream_vods SET error=%s, "updatedAt"=NOW() WHERE id=%s',
+                                    (msg[:4000], vod_id),
+                                )
+                                cur.execute(
+                                    """
+                                    UPDATE clip_projects SET status='FAILED', stage='failed', progress=0, "updatedAt"=NOW()
+                                    WHERE id = (SELECT "projectId" FROM stream_vods WHERE id=%s)
+                                    """,
+                                    (vod_id,),
+                                )
+                        conn.commit()
+                        post_progress(
+                            job["id"],
+                            {
+                                "projectStatus": "FAILED",
+                                "stage": "failed",
+                                "progress": 0,
+                                "error": msg[:500],
+                                "jobStatus": "FAILED",
+                            },
+                        )
                     else:
                         post_progress(
                             job["id"],

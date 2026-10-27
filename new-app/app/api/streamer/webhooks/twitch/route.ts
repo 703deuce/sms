@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
 import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
@@ -5,6 +6,7 @@ import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
 import { verifyTwitchEventSubSignature } from '@/lib/server/streamer/twitch-webhook'
 import { handleStreamerNotify } from '@/lib/server/streamer/notify'
 import { getPrisma } from '@/lib/server/db'
+import { mergePlatformState } from '@/lib/server/streamer/platform-state'
 
 export const runtime = 'nodejs'
 
@@ -48,14 +50,19 @@ export async function POST(request: Request) {
 
   if (subType === 'stream.online') {
     const broadcasterId = String(event.broadcaster_user_id || '')
-    await prisma.streamChannel.updateMany({
-      where: { platform: 'twitch', externalId: broadcasterId },
-      data: {
-        platformState: {
-          live: { startedAt: new Date().toISOString(), sessionId: String(event.id || messageId) },
-        },
-      },
+    const channels = await prisma.streamChannel.findMany({
+      where: { platform: 'twitch', externalId: broadcasterId, deletedAt: null },
     })
+    for (const ch of channels) {
+      await prisma.streamChannel.update({
+        where: { id: ch.id },
+        data: {
+          platformState: mergePlatformState(ch.platformState, {
+            live: { startedAt: new Date().toISOString(), sessionId: String(event.id || messageId) },
+          }) as Prisma.InputJsonValue,
+        },
+      })
+    }
   }
 
   if (subType === 'stream.offline') {
@@ -69,7 +76,7 @@ export async function POST(request: Request) {
       const startedAt = live.startedAt ? new Date(live.startedAt) : new Date()
       await prisma.streamChannel.update({
         where: { id: ch.id },
-        data: { platformState: { ...ps, live: null } },
+        data: { platformState: mergePlatformState(ch.platformState, { live: null }) as Prisma.InputJsonValue },
       })
       if (ch.autoProcess) {
         await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch' })

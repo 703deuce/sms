@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { encryptIntegrationSecret, decryptIntegrationSecret } from '@/lib/integrations/framework/secrets'
-import { kickRedirectUri } from '@/lib/server/streamer/env'
+import { kickRedirectUri, kickWebhookUrl } from '@/lib/server/streamer/env'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
@@ -140,4 +140,104 @@ export function decryptKickToken(enc: string | null | undefined): string | null 
 
 export function getKickVodDelaySec(): number {
   return Number(process.env.KICK_VOD_DELAY_S || 300)
+}
+
+const KICK_EVENT_NAMES = [
+  { name: 'livestream.status.updated', version: 1 },
+  { name: 'livestream.metadata.updated', version: 1 },
+  { name: 'chat.message.sent', version: 1 },
+] as const
+
+export async function createKickEventSubscriptions(broadcasterUserId: number): Promise<string[]> {
+  const token = await kickAppAccessToken()
+  const webhookUrl = kickWebhookUrl()
+  const res = await fetch('https://api.kick.com/public/v1/events/subscriptions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      broadcaster_user_id: broadcasterUserId,
+      method: 'webhook',
+      events: KICK_EVENT_NAMES.map((e) => ({ name: e.name, version: e.version })),
+      webhook_url: webhookUrl,
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Kick subscriptions failed: ${res.status} ${text.slice(0, 300)}`)
+  }
+  const json = (await res.json()) as { data?: { id: string }[] }
+  return (json.data ?? []).map((row) => row.id).filter(Boolean)
+}
+
+async function kickAppAccessToken(): Promise<string> {
+  const res = await fetch('https://id.kick.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: kickClientId(),
+      client_secret: kickClientSecret(),
+    }),
+  })
+  if (!res.ok) throw new Error(`Kick app token failed: ${res.status}`)
+  const json = (await res.json()) as { access_token: string }
+  return json.access_token
+}
+
+export async function deleteKickEventSubscriptions(ids: string[]): Promise<void> {
+  const token = await kickAppAccessToken()
+  for (const id of ids) {
+    await fetch(`https://api.kick.com/public/v1/events/subscriptions?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  }
+}
+
+export async function refreshKickUserToken(refreshToken: string) {
+  const res = await fetch('https://id.kick.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: kickClientId(),
+      client_secret: kickClientSecret(),
+      refresh_token: refreshToken,
+    }),
+  })
+  if (!res.ok) throw new Error(`Kick refresh failed: ${res.status}`)
+  return (await res.json()) as { access_token: string; refresh_token?: string; expires_in: number }
+}
+
+export async function revokeKickToken(token: string) {
+  await fetch('https://id.kick.com/oauth/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      token,
+      client_id: kickClientId(),
+      client_secret: kickClientSecret(),
+    }),
+  })
+}
+
+export async function ensureKickEventSubscriptions(
+  broadcasterUserId: number,
+  existingIds: string[],
+): Promise<string[]> {
+  const token = await kickAppAccessToken()
+  const res = await fetch('https://api.kick.com/public/v1/events/subscriptions', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return existingIds
+  const json = (await res.json()) as { data?: { id: string; broadcaster_user_id: number }[] }
+  const have = new Set(
+    (json.data ?? []).filter((s) => s.broadcaster_user_id === broadcasterUserId).map((s) => s.id),
+  )
+  if (have.size >= KICK_EVENT_NAMES.length) return [...have]
+  const created = await createKickEventSubscriptions(broadcasterUserId)
+  return [...new Set([...existingIds, ...created])]
 }

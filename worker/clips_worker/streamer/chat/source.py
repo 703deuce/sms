@@ -14,9 +14,9 @@ def _live_capture_enabled() -> bool:
 def _replay_disabled() -> bool:
     if os.environ.get("TWITCH_VOD_CHAT_REPLAY", "").lower() in ("off", "0", "false"):
         return True
-    from clips_worker.streamer.chat.twitch_gql import comments_persisted_hash, gql_client_id
+    from clips_worker.streamer.chat.twitch_gql import gql_client_id
 
-    return not (gql_client_id() and comments_persisted_hash())
+    return not gql_client_id()
 
 
 def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
@@ -58,12 +58,10 @@ def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
         return None, "kick_unavailable"
 
     if platform == "twitch" and external_id and not _replay_disabled():
-        from clips_worker.streamer.chat.twitch_gql import fetch_all_vod_comments
+        from clips_worker.streamer.chat.twitch_gql import TwitchChatReplayError, fetch_all_vod_comments
 
-        try:
-            messages, _cursor = fetch_all_vod_comments(str(external_id), state.get("chatCursor"))
-            if messages:
-                return messages, "twitch_gql"
-        except Exception:
-            return None, "none"
+        messages, _cursor = fetch_all_vod_comments(str(external_id), state.get("chatCursor"))
+        if messages:
+            return messages, "twitch_gql"
+        raise TwitchChatReplayError("twitch gql returned zero comments")
     return None, "none"
