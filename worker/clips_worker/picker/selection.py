@@ -59,7 +59,7 @@ def dedupe_r10(picks: list[dict]) -> list[dict]:
     return kept
 
 
-def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
+def select_clips(picks: list[dict], source_duration_ms: int, *, force_best: bool = False) -> list[dict]:
     cfg = selection_settings()
     min_final = cfg["min_final"]
     max_clips = cfg["max_clips"]
@@ -113,6 +113,10 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
             kept.append(p)
             if len(kept) >= cap:
                 break
+
+    if not kept and ranked and force_best:
+        kept = dedupe_r10(ranked[:cap])
+        picker_info("selection_force_best", count=len(kept), cap=cap)
 
     kept = dedupe_r10(kept)
     return kept[:cap]

@@ -344,6 +344,8 @@ export function ProjectClipsView({
                     .then(() => {
                       setStatus('QUEUED')
                       setError(null)
+                      setClips([])
+                      setReadyHydrated(false)
                       toast.success('Processing restarted')
                     })
                     .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))
@@ -445,6 +447,8 @@ export function ProjectClipsView({
                         .then(() => {
                           setStatus('QUEUED')
                           setError(null)
+                          setClips([])
+                          setReadyHydrated(false)
                           toast.success('Processing restarted')
                         })
                         .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))

@@ -7,6 +7,22 @@ from clips_worker.picker.selection import select_clips
 from clips_worker.picker.snap_bounds import snap_bounds
 
 
+def min_pick_duration_ms(range_start_ms: int, range_end_ms: int, *, relax: bool = False) -> int:
+    """Target minimum clip length; relax for short sources so at least one clip can land."""
+    span = max(0, int(range_end_ms) - int(range_start_ms))
+    if relax:
+        if span < 5_000:
+            return max(1_000, span)
+        return min(8_000, max(3_000, span // 8))
+    if span < 30_000:
+        if span < 5_000:
+            return max(1_000, span)
+        return min(15_000, max(5_000, span))
+    if span <= 120_000:
+        return min(15_000, max(8_000, span // 4))
+    return 15_000
+
+
 def finalize_picks(
     scored: list[dict],
     sentences,
@@ -15,13 +31,18 @@ def finalize_picks(
     range_start_ms: int,
     range_end_ms: int,
     genre: str = "podcast",
+    *,
+    relax_duration: bool = False,
 ) -> list[dict]:
     gkey = resolve_genre_key(genre)
     gmeta = genre_meta(genre)
     snap = snap_settings()
     laugh_tail = gmeta.get("preferences", {}).get("end_after_laugh_s") or snap.get("comedy_laugh_tail_s")
 
+    span_ms = max(1, range_end_ms - range_start_ms)
+    min_ms = min_pick_duration_ms(range_start_ms, range_end_ms, relax=relax_duration)
     picks = []
+    short_pool: list[dict] = []
     dropped_short = 0
     dropped_bounds = 0
     for row in scored:
@@ -36,18 +57,31 @@ def finalize_picks(
             end_ms += int(((lo + hi) / 2) * 1000)
         pick = {**row, "start_ms": start_ms, "end_ms": end_ms}
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
-        if pick["end_ms"] - pick["start_ms"] < 15000:
+        dur = pick["end_ms"] - pick["start_ms"]
+        if dur < min_ms:
             dropped_short += 1
+            if dur >= 2_500:
+                short_pool.append(pick)
             continue
         picks.append(pick)
 
     # select_clips runs after snap_bounds; includes R10 near-duplicate dedupe on final ms spans
-    selected = select_clips(picks, range_end_ms - range_start_ms)
+    selected = select_clips(picks, span_ms)
+    if not selected and short_pool:
+        selected = select_clips(short_pool, span_ms, force_best=True)
+        if selected:
+            picker_info("selection_short_pool_fallback", count=len(selected))
+    if not selected and picks:
+        selected = select_clips(picks, span_ms, force_best=True)
+        if selected:
+            picker_info("selection_force_best_fallback", count=len(selected))
     picker_info(
         "selection",
         candidates=len(picks),
         selected=len(selected),
         dropped_short=dropped_short,
         dropped_bounds=dropped_bounds,
+        relax_duration=relax_duration,
+        min_ms=min_ms,
     )
     return selected

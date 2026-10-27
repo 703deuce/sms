@@ -7,7 +7,7 @@ from typing import Any
 from clips_worker.picker.cleanup import finalize_picks
 from clips_worker.picker.config import length_bucket
 from clips_worker.picker.log_util import picker_info
-from clips_worker.picker.fallback import pass1_heuristic_candidates
+from clips_worker.picker.fallback import pass1_heuristic_candidates, soft_pass2_fallback
 from clips_worker.picker.pass1 import find_moments
 from clips_worker.picker.pass2 import score_moments
 from clips_worker.picker.sentences import build_sentences
@@ -109,12 +109,63 @@ def pick_talking_clips(
         except Exception as exc:
             picker_info("headstart_failed", error=str(exc)[:200])
 
-    scored, _pass2_audit = score_moments(
+    scored, pass2_audit = score_moments(
         moments, sentences, signals, genre, source_duration_s=source_duration_s
     )
+    if not scored:
+        scored = pass1_heuristic_candidates(
+            moments, sentences, sig_by, genre, source_duration_s=source_duration_s
+        )
+        if scored:
+            picker_info("pass2_empty_heuristic_fallback", count=len(scored))
+    if not scored and pass2_audit:
+        scored = soft_pass2_fallback(pass2_audit)
+        if scored:
+            picker_info("pass2_soft_audit_fallback", count=len(scored))
+
     picks = finalize_picks(
         scored, sentences, sig_by, range_words, range_start_ms, range_end_ms, genre
     )
+    if not picks and scored:
+        picks = finalize_picks(
+            scored,
+            sentences,
+            sig_by,
+            range_words,
+            range_start_ms,
+            range_end_ms,
+            genre,
+            relax_duration=True,
+        )
+        if picks:
+            picker_info("finalize_relaxed_duration", count=len(picks))
+    if not picks and sentences:
+        span_fallback = [
+            {
+                "start_sentence": 0,
+                "end_sentence": len(sentences) - 1,
+                "title": "Highlight",
+                "hook": "",
+                "reason": "Short-source span fallback",
+                "archetype": "story",
+                "final": 6.0,
+                "score": 60,
+                "low_confidence": True,
+            }
+        ]
+        picks = finalize_picks(
+            span_fallback,
+            sentences,
+            sig_by,
+            range_words,
+            range_start_ms,
+            range_end_ms,
+            genre,
+            relax_duration=True,
+        )
+        if picks:
+            picker_info("span_fallback_picks", count=len(picks))
+
     picker_info("after_finalize", count=len(picks))
 
     if not picks:
