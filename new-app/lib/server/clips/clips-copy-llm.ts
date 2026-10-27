@@ -6,6 +6,7 @@ import { gpt6ChatCompletionExtras, isGpt6FamilyModel } from '@/lib/server/ai/gpt
 import { recordAiUsage } from '@/lib/server/clips/ai-usage'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { EXPORT_PLATFORM_PRESETS } from '@/lib/clips/export-platform-presets'
+import { clampHashtagsForPlatform } from '@/lib/clips/post-copy-hashtags'
 
 export type PlatformPostCopy = {
   title: string
@@ -123,11 +124,18 @@ async function geminiClipsJson(system: string, user: string): Promise<{ data: Ll
   }
 }
 
-function normalizePlatformCopy(raw: PlatformPostCopy | undefined, fallbackTitle: string): PlatformPostCopy {
+function normalizePlatformCopy(
+  raw: PlatformPostCopy | undefined,
+  fallbackTitle: string,
+  platform: ExportPlatformId,
+): PlatformPostCopy {
   const title = (raw?.title || fallbackTitle || 'Clip').trim().slice(0, 100)
   const description = (raw?.description || '').trim().slice(0, 2200)
   const hashtags = Array.isArray(raw?.hashtags)
-    ? raw!.hashtags.map((h) => String(h).replace(/^#/, '').trim()).filter(Boolean).slice(0, 12)
+    ? clampHashtagsForPlatform(
+        platform,
+        raw!.hashtags.map((h) => String(h).replace(/^#/, '').trim()).filter(Boolean),
+      )
     : []
   return { title, description, hashtags }
 }
@@ -156,7 +164,7 @@ export async function generateClipPostCopy(input: {
   "youtube_shorts": { "title": "", "description": "", "hashtags": [] },
   "instagram_reels": { "title": "", "description": "", "hashtags": [] }
 }
-No markdown. Hashtags without # prefix. Match each platform tone. Clip is ${Math.round(input.durationSec)}s.`
+No markdown. Hashtags without # prefix. Limits: Instagram Reels max 5 tags; TikTok 3–5 tags; YouTube Shorts max 3 tags (shown above title). Match each platform tone. Clip is ${Math.round(input.durationSec)}s.`
   const user = `Clip title: ${input.title}
 Hook idea: ${input.hook || '(none)'}
 Why it works: ${input.why || '(none)'}
@@ -227,9 +235,9 @@ ${input.transcript.slice(0, 24_000)}`
   return {
     hookText: (data.hookText || input.hook || input.title).trim().slice(0, 120),
     platforms: {
-      tiktok: normalizePlatformCopy(data.tiktok, fallbackTitle),
-      youtube_shorts: normalizePlatformCopy(data.youtube_shorts, fallbackTitle),
-      instagram_reels: normalizePlatformCopy(data.instagram_reels, fallbackTitle),
+      tiktok: normalizePlatformCopy(data.tiktok, fallbackTitle, 'tiktok'),
+      youtube_shorts: normalizePlatformCopy(data.youtube_shorts, fallbackTitle, 'youtube_shorts'),
+      instagram_reels: normalizePlatformCopy(data.instagram_reels, fallbackTitle, 'instagram_reels'),
     },
     provider,
     model,

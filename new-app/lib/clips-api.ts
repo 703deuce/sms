@@ -218,6 +218,7 @@ export function exportClipWithOptions(
     watermark?: boolean
     alsoSrt?: boolean
     removeDeadAir?: boolean
+    exportSfx?: 'off' | 'subtle' | 'meme'
     edits?: unknown
   },
 ) {

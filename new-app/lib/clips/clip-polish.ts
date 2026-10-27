@@ -45,7 +45,7 @@ export function clipPolishFeatureEnabled(feature: ClipPolishFeature): boolean {
 }
 
 export const POLISHED_CAPTION_PRESET_CONFIG = {
-  font: 'Montserrat',
+  font: 'Montserrat Black',
   weight: 900,
   outlineW: 8,
   primary: '#FFFFFF',

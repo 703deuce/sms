@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { can } from '@/lib/billing/entitlements'
-import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
+import { clipsFetch, exportClipWithOptions, getRenderStatus, patchClip } from '@/lib/clips-api'
 import { exportRequestMatchesClipPreview } from '@/lib/clips/export-preview-reuse'
 import {
   EXPORT_PLATFORM_IDS,
@@ -24,6 +24,12 @@ import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings
 import { formatHeadlineForExport, type ClipExportTemplate } from '@/lib/clips/export-template'
 import { ExportTemplateSection } from '@/components/clips/editor/export-template-section'
 import { patchClip } from '@/lib/clips-api'
+import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
+import {
+  exportSfxBundledAssetsAvailable,
+  normalizeExportSfxMode,
+  type ExportSfxMode,
+} from '@/lib/clips/export-sfx'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -72,6 +78,8 @@ export function ExportDialog({
   const [durationMs, setDurationMs] = useState<number | null>(null)
   const [exportPlatform, setExportPlatform] = useState<ExportPlatformId | 'none'>('none')
   const [exportTemplate, setExportTemplate] = useState<ClipExportTemplate | undefined>(edits.exportTemplate)
+  const [exportSfx, setExportSfx] = useState<ExportSfxMode>('off')
+  const sfxBundled = exportSfxBundledAssetsAvailable()
 
   useEffect(() => {
     if (open) setExportTemplate(edits.exportTemplate)
@@ -174,6 +182,7 @@ export function ExportDialog({
         watermark: false,
         alsoSrt,
         removeDeadAir,
+        exportSfx,
         edits: exportEdits,
       })
       setRenderId(data.renderId)
@@ -200,6 +209,12 @@ export function ExportDialog({
   const editedDurationMs = outputDurationMs(edits)
   const platformWarn =
     exportPlatform !== 'none' ? exportPlatformDurationWarning(exportPlatform, editedDurationMs) : null
+  const polishLintWarnings = useMemo(() => {
+    const items = exportPolishLint(edits, {
+      exportPlatform: exportPlatform === 'none' ? null : exportPlatform,
+    })
+    return exportPolishLintWarnings(items)
+  }, [edits, exportPlatform])
 
   if (!open) return null
 
@@ -334,6 +349,37 @@ export function ExportDialog({
             Captions are disabled for this clip — export will not burn subtitles. Turn captions on in the Captions panel to include them.
           </p>
         ) : null}
+        {polishLintWarnings.length > 0 ? (
+          <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-2" role="note">
+            <p className="text-xs font-medium text-amber-900 dark:text-amber-200">Before you export</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-amber-800 dark:text-amber-300">
+              {polishLintWarnings.map((w) => (
+                <li key={w.id}>{w.message}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <div className="mt-3 space-y-1">
+          <p className="text-xs font-medium">Sound effects</p>
+          <Select
+            value={exportSfx}
+            onValueChange={(v) => typeof v === 'string' && setExportSfx(normalizeExportSfxMode(v))}
+          >
+            <SelectTrigger className="w-full" aria-describedby="export-sfx-hint">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="off">Off</SelectItem>
+              <SelectItem value="subtle" disabled={!sfxBundled}>Subtle</SelectItem>
+              <SelectItem value="meme" disabled={!sfxBundled}>Meme</SelectItem>
+            </SelectContent>
+          </Select>
+          <p id="export-sfx-hint" className="text-xs text-muted-foreground">
+            {sfxBundled
+              ? 'Royalty-free whoosh and pop on cuts (export only).'
+              : 'Coming soon — no bundled SFX in this build yet (setting is saved as Off).'}
+          </p>
+        </div>
         <div className="mt-4 flex items-center justify-between gap-2">
           <div>
             <Label className="text-sm">Tighten dead air</Label>

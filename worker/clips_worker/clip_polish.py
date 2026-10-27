@@ -31,7 +31,7 @@ def polish_feature_enabled(feature: str) -> bool:
 
 
 POLISHED_CAPTION_CONFIG = {
-    "font": "Montserrat",
+    "font": "Montserrat Black",
     "weight": 900,
     "outlineW": 8,
     "primary": "#FFFFFF",

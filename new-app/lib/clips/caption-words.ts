@@ -68,11 +68,14 @@ export function buildCaptionWords(words: CaptionSourceWord[], edits: ClipEditsV2
   return out
 }
 
-export function captionWordsToClipWords(caption: CaptionWord[]): { w: string; s: number; e: number; idx?: number }[] {
+export function captionWordsToClipWords(
+  caption: CaptionWord[],
+): { w: string; s: number; e: number; i?: number; idx?: number }[] {
   return caption.map((c) => ({
     w: typeof c.text === 'string' ? c.text : String(c.text ?? ''),
     s: c.s_ms / 1000,
     e: c.e_ms / 1000,
+    i: c.i,
     idx: c.i,
   }))
 }

@@ -4,6 +4,8 @@ ARG GIT_COMMIT=unknown
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libglib2.0-0 libegl1 libgl1 libgles2 curl build-essential \
+    fontconfig fonts-montserrat \
+    && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,6 +20,12 @@ ENV HF_HOME=/models/hf
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8', download_root='/models/whisper')"
 
 COPY worker/prototype/v3 /app/v3
+RUN set -eux; \
+    MONT=$(find /usr/share/fonts -iname 'Montserrat-Black.ttf' -o -iname 'Montserrat-Bold.ttf' 2>/dev/null | head -1); \
+    test -n "$MONT"; \
+    cp "$MONT" /app/v3/fonts/Montserrat-Black.ttf; \
+    fc-list | grep -i montserrat | head -3; \
+    test -s /app/v3/fonts/Montserrat-Black.ttf
 COPY worker/prototype /app/prototype
 COPY worker/scripts/download-models.sh /tmp/download-models.sh
 RUN chmod +x /tmp/download-models.sh && bash /tmp/download-models.sh /app/v3
@@ -40,7 +48,8 @@ RUN pip install --no-cache-dir pytest \
         /app/tests/test_render_ai_meta.py /app/tests/test_chat_source.py \
         /app/tests/test_reframe_model_names.py /app/tests/test_layout_router.py \
         /app/tests/test_reframe_integration.py /app/tests/test_person_count_probe.py \
-        /app/tests/test_reframe_person_det.py
+        /app/tests/test_reframe_person_det.py /app/tests/test_polish_render_sync.py \
+        /app/tests/test_zoom_filtergraph_valid.py /app/tests/test_worker_fonts.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en

@@ -31,6 +31,7 @@ const bodySchema = z.object({
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
   removeDeadAir: z.boolean().optional(),
+  exportSfx: z.enum(['off', 'subtle', 'meme']).optional(),
   exportPlatform: z.enum(['tiktok', 'youtube_shorts', 'instagram_reels']).optional(),
   /** Optional client snapshot — used when PATCH save is still in flight. */
   edits: z.record(z.unknown()).optional(),
@@ -84,6 +85,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const aspect = exportPlatform
       ? edits.aspectRatio ?? '9:16'
       : body.aspect ?? edits.aspectRatio ?? '9:16'
+    if (body.exportSfx && body.exportSfx !== 'off') {
+      console.info('[clipper:export] exportSfx requested but no bundled SFX yet', {
+        clipId,
+        mode: body.exportSfx,
+      })
+    }
     console.info('[clipper:export] request', {
       clipId,
       workspaceId,
