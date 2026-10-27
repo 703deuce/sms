@@ -29,6 +29,8 @@ export type ScriptEditorSettings = {
   aspect?: ScriptAspect
   reframeMode?: ScriptReframeMode
   captionsEnabled?: boolean
+  /** Show struck / cut words in script + source timeline ghosts (Descript-style). */
+  showDeletedWords?: boolean
   volumePct?: number
   captions?: {
     enabled?: boolean

@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
-import type { EdlSegment, ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
+import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import {
-  buildGapChips,
-  buildWordChips,
+  buildSourceWordChips,
   groupWordbarItems,
-  timelineClipsFromEdl,
+  sourceTimelineClips,
   wordIndicesInOutputRange,
   outputRangeForWordIndices,
 } from '@/lib/clips/script-editor/timeline-model'
+import type { SourceCutRegion } from '@/lib/clips/script-editor/cut-regions'
 import { TimelineRuler } from '@/components/script-editor/transport/timeline/timeline-ruler'
 import { TimelineCaptionsLane } from '@/components/script-editor/transport/timeline/timeline-captions-lane'
 import { TimelineScenesStrip } from '@/components/script-editor/transport/timeline/timeline-scenes-strip'
@@ -34,9 +34,11 @@ export function TimelinePanel({
   document,
   orderedWords,
   deletedSet,
-  edl,
-  durationMs,
-  outputMs,
+  rangeStartMs,
+  sourceDurationMs,
+  playheadSourceMs,
+  cutRegions,
+  showDeletedWords,
   videoUrl,
   selectedWordIds,
   selAnchor,
@@ -58,9 +60,11 @@ export function TimelinePanel({
   document: ScriptDocumentV1
   orderedWords: EditorWord[]
   deletedSet: Set<string>
-  edl: EdlSegment[]
-  durationMs: number
-  outputMs: number
+  rangeStartMs: number
+  sourceDurationMs: number
+  playheadSourceMs: number
+  cutRegions: SourceCutRegion[]
+  showDeletedWords: boolean
   videoUrl: string | null
   selectedWordIds: Set<string>
   selAnchor: number | null
@@ -78,23 +82,22 @@ export function TimelinePanel({
   onTrimClipEdge?: (clipKey: string, edge: 'start' | 'end', deltaOutMs: number) => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
-  const span = Math.max(1, durationMs)
+  const span = Math.max(1, sourceDurationMs)
   const widthPx = span * pxPerMs
 
   const chips = useMemo(
-    () => buildWordChips(document, orderedWords, edl, deletedSet),
-    [document, orderedWords, edl, deletedSet],
+    () => buildSourceWordChips(orderedWords, deletedSet, rangeStartMs),
+    [orderedWords, deletedSet, rangeStartMs],
   )
-  const wordbarItems = useMemo(() => groupWordbarItems(chips, pxPerMs), [chips, pxPerMs])
-  const gapChips = useMemo(() => {
-    return buildGapChips(edl).map((g) => ({
-      ...g,
-      label: `•${(g.durMs / 1000).toFixed(1)}s`,
-    }))
-  }, [edl])
+  const wordbarChips = useMemo(
+    () => (showDeletedWords ? chips : chips.filter((c) => !c.deleted)),
+    [chips, showDeletedWords],
+  )
+  const wordbarItems = useMemo(() => groupWordbarItems(wordbarChips, pxPerMs), [wordbarChips, pxPerMs])
+  const gapChips = useMemo(() => [] as { outStartMs: number; outEndMs: number; label: string }[], [])
   const clips = useMemo(
-    () => timelineClipsFromEdl(edl, document.splitAtOutMs ?? []),
-    [edl, document.splitAtOutMs],
+    () => sourceTimelineClips(orderedWords, deletedSet, rangeStartMs, sourceDurationMs),
+    [orderedWords, deletedSet, rangeStartMs, sourceDurationMs],
   )
   const sceneMarkers = useMemo(() => sceneMarkersForTimeline(document), [document])
   const overlayClips = useMemo(() => overlayClipsForTimeline(document), [document])
@@ -141,10 +144,10 @@ export function TimelinePanel({
         <Button type="button" size="icon-sm" variant="ghost" onClick={onToggleExpanded} title="Toggle timeline (Ctrl+Alt+T)">
           {expanded ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
         </Button>
-        <Button type="button" size="icon-sm" variant="ghost" onClick={() => onZoom(1.15, outputMs)} title="Zoom in">
+        <Button type="button" size="icon-sm" variant="ghost" onClick={() => onZoom(1.15, playheadSourceMs)} title="Zoom in">
           <ZoomIn className="size-4" />
         </Button>
-        <Button type="button" size="icon-sm" variant="ghost" onClick={() => onZoom(1 / 1.15, outputMs)} title="Zoom out">
+        <Button type="button" size="icon-sm" variant="ghost" onClick={() => onZoom(1 / 1.15, playheadSourceMs)} title="Zoom out">
           <ZoomOut className="size-4" />
         </Button>
         <Button type="button" size="icon-sm" variant="ghost" onClick={onFit} title="Fit composition">
@@ -176,6 +179,17 @@ export function TimelinePanel({
             </div>
             <div className="relative min-w-0 flex-1" style={{ width: widthPx }}>
               <TimelineRuler durationMs={span} pxPerMs={pxPerMs} widthPx={widthPx} onSeekOutput={onSeekOutput} />
+              {cutRegions.map((cut) => (
+                <div
+                  key={`cut-${cut.loMs}-${cut.wordIds[0]}`}
+                  className="pointer-events-none absolute top-6 bottom-0 z-[5] border-l-2 border-red-500/90 bg-red-500/10"
+                  style={{
+                    left: cut.loMs * pxPerMs,
+                    width: Math.max(2, (cut.hiMs - cut.loMs) * pxPerMs),
+                  }}
+                  title="Cut region"
+                />
+              ))}
               <TimelineScenesStrip
                 widthPx={widthPx}
                 pxPerMs={pxPerMs}
@@ -192,6 +206,7 @@ export function TimelinePanel({
                 pxPerMs={pxPerMs}
                 widthPx={widthPx}
                 selectedWordIds={selectedWordIds}
+                ghostWordIds={showDeletedWords ? deletedSet : undefined}
                 onSelectWord={(wordId) => {
                   const idx = orderedWords.findIndex((w) => w.id === wordId)
                   if (idx >= 0) onSelectIndices(idx, idx)
@@ -214,7 +229,7 @@ export function TimelinePanel({
               <TimelineMusicLane widthPx={widthPx} pxPerMs={pxPerMs} clips={musicClips} />
               <div
                 className="pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-sky-500"
-                style={{ left: outputMs * pxPerMs }}
+                style={{ left: playheadSourceMs * pxPerMs }}
               />
             </div>
           </div>

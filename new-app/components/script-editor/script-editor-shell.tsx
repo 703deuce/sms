@@ -52,6 +52,8 @@ import {
 } from '@/lib/clips/script-editor/reframe-keyframes'
 import type { ReframeCropRect, ScriptAspect, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
 import type { EditToolsTab } from '@/components/script-editor/side/script-edit-tools-panel'
+import { sourceCutRegions } from '@/lib/clips/script-editor/cut-regions'
+import { ScriptTranscriptContextMenu } from '@/components/script-editor/script-transcript-context-menu'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -82,11 +84,12 @@ function previewAspectClass(aspect: ScriptAspect): string {
 
 export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const initialDoc = data.document ?? defaultDocument(data.editorWords)
-  const { document, saveState, deleteWords, applyOp, undo, redo, canUndo, canRedo } = useScriptComposition({
-    compositionId: data.compositionId,
-    revision: data.compositionRevision,
-    document: initialDoc,
-  })
+  const { document, saveState, deleteWords, restoreWords, applyOp, undo, redo, canUndo, canRedo } =
+    useScriptComposition({
+      compositionId: data.compositionId,
+      revision: data.compositionRevision,
+      document: initialDoc,
+    })
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
@@ -125,9 +128,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [targetGapSec, setTargetGapSec] = useState(0.3)
   const [gapSelectionOnly, setGapSelectionOnly] = useState(false)
   const [draftCrop, setDraftCrop] = useState<ReframeCropRect | null>(null)
+  const [hoverRestoreWordId, setHoverRestoreWordId] = useState<string | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
   const settings = useMemo(() => resolveScriptSettings(document.settings), [document.settings])
+  const showDeletedWords = settings.showDeletedWords !== false
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
   const deletedSet = useMemo(() => new Set(document.deletedWordIds), [document.deletedWordIds])
   const ignoredSet = useMemo(() => new Set(document.ignoredWordIds ?? []), [document.ignoredWordIds])
@@ -150,7 +156,13 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const activeIndex = useMemo(() => findActiveWordIndex(orderedWords, playheadMs), [orderedWords, playheadMs])
 
   const outDur = outputDurationMs(edl) || data.durationMs
-  const outputMs = sourceMsToOutputTime(playheadMs, edl) ?? Math.max(0, playheadMs - data.rangeStartMs)
+  const sourceSpanMs = Math.max(data.durationMs, outDur)
+  const playheadSourceMs = Math.max(0, playheadMs - data.rangeStartMs)
+  const outputMs = sourceMsToOutputTime(playheadMs, edl) ?? playheadSourceMs
+  const cutRegions = useMemo(
+    () => sourceCutRegions(orderedWords, deletedSet, data.rangeStartMs),
+    [orderedWords, deletedSet, data.rangeStartMs],
+  )
 
   const persistLayout = useCallback(() => {
     saveScriptEditorLayout({
@@ -237,10 +249,58 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     const ids = new Set<string>()
     for (let i = lo; i <= hi; i++) {
       const w = orderedWords[i]
-      if (w && !deletedSet.has(w.id)) ids.add(w.id)
+      if (!w) continue
+      if (!showDeletedWords && deletedSet.has(w.id)) continue
+      ids.add(w.id)
     }
     return ids
-  }, [selAnchor, selEnd, orderedWords, deletedSet])
+  }, [selAnchor, selEnd, orderedWords, deletedSet, showDeletedWords])
+
+  const selectedDeletedIds = useMemo(() => {
+    const ids: string[] = []
+    for (const id of selectedIds) {
+      if (deletedSet.has(id)) ids.push(id)
+    }
+    return ids
+  }, [selectedIds, deletedSet])
+
+  const selectedKeptIds = useMemo(() => {
+    const ids: string[] = []
+    for (const id of selectedIds) {
+      if (!deletedSet.has(id)) ids.push(id)
+    }
+    return ids
+  }, [selectedIds, deletedSet])
+
+  const restoreCutForWord = useCallback(
+    (wordId: string) => {
+      const idx = orderedWords.findIndex((w) => w.id === wordId)
+      if (idx < 0 || !deletedSet.has(wordId)) return
+      const ids: string[] = []
+      for (let i = idx; i >= 0; i--) {
+        const w = orderedWords[i]
+        if (!w || !deletedSet.has(w.id)) break
+        ids.unshift(w.id)
+      }
+      for (let i = idx + 1; i < orderedWords.length; i++) {
+        const w = orderedWords[i]
+        if (!w || !deletedSet.has(w.id)) break
+        ids.push(w.id)
+      }
+      restoreWords(ids)
+      toast.success('Restored cut')
+    },
+    [orderedWords, deletedSet, restoreWords],
+  )
+
+  const onRestoreSelection = useCallback(() => {
+    if (selectedDeletedIds.length) {
+      restoreWords(selectedDeletedIds)
+      setSelAnchor(null)
+      setSelEnd(null)
+      toast.success('Restored selection')
+    }
+  }, [selectedDeletedIds, restoreWords])
 
   const fillerHits = useMemo(
     () =>
@@ -490,17 +550,38 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   }, [])
 
   const onDeleteSelection = useCallback(() => {
-    const ids = [...selectedIds]
+    if (selectedDeletedIds.length && !selectedKeptIds.length) {
+      onRestoreSelection()
+      return
+    }
+    const ids = selectedKeptIds.length ? [...selectedKeptIds] : []
     if (!ids.length && selAnchor != null) {
       const w = orderedWords[selAnchor]
-      if (w && !deletedSet.has(w.id)) ids.push(w.id)
+      if (w) {
+        if (deletedSet.has(w.id)) {
+          restoreCutForWord(w.id)
+          setSelAnchor(null)
+          setSelEnd(null)
+          return
+        }
+        ids.push(w.id)
+      }
     }
     if (ids.length) {
       deleteWords(ids)
       setSelAnchor(null)
       setSelEnd(null)
     }
-  }, [selectedIds, selAnchor, orderedWords, deletedSet, deleteWords])
+  }, [
+    selectedDeletedIds,
+    selectedKeptIds,
+    selAnchor,
+    orderedWords,
+    deletedSet,
+    deleteWords,
+    onRestoreSelection,
+    restoreCutForWord,
+  ])
 
   const onReplaceSelectionWithGap = useCallback(() => {
     if (selAnchor == null || selEnd == null) return
@@ -540,9 +621,16 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const onFit = useCallback(() => {
     const shell = globalThis.document.querySelector('[data-script-shell]') as HTMLElement | null
     const viewW = shell ? shell.clientWidth - 80 : 800
-    setPxPerMs(Math.max(0.005, viewW / Math.max(1, outDur)))
+    setPxPerMs(Math.max(0.005, viewW / Math.max(1, sourceSpanMs)))
     setScrollLeftPx(0)
-  }, [outDur])
+  }, [sourceSpanMs])
+
+  const seekToSourceRelativeMs = useCallback(
+    (srcRelMs: number) => {
+      seekToSourceMs(data.rangeStartMs + Math.max(0, Math.min(sourceSpanMs, srcRelMs)))
+    },
+    [data.rangeStartMs, seekToSourceMs, sourceSpanMs],
+  )
 
   const onTrimClipEdge = useCallback(
     (clipKey: string, edge: 'start' | 'end', deltaOutMs: number) => {
@@ -603,6 +691,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         return
       }
 
+      if (e.shiftKey && e.key === 'Enter') {
+        e.preventDefault()
+        onRestoreSelection()
+        return
+      }
+
       if ((e.key === 'Delete' || e.key === 'Backspace') && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         onDeleteSelection()
@@ -629,6 +723,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [
     onDeleteSelection,
+    onRestoreSelection,
     onReplaceSelectionWithGap,
     onSplitAtPlayhead,
     onZoom,
@@ -795,7 +890,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
             style={{ flex: `0 0 ${scriptWidthPct}%` }}
           >
             <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-              Select words · Delete cuts · Shift+Delete gap · S split
+              Delete cuts · Shift+Enter restore · Shift+Delete gap · S split · Right-click cut
             </div>
             <div
               ref={transcriptRef}
@@ -813,8 +908,9 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     <p>
                       {block.words.map((w) => {
                         const idx = wordIndex(w.id)
-                        const active = idx === activeIndex
                         const deleted = deletedSet.has(w.id)
+                        if (deleted && !showDeletedWords) return null
+                        const active = idx === activeIndex
                         const ignored = ignoredSet.has(w.id)
                         const hiddenTranscript = transcriptHiddenSet.has(w.id)
                         const selected = selectedIds.has(w.id)
@@ -829,6 +925,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                                 {formatGapChip(w.gapBeforeMs)}
                               </span>
                             )}
+                            <span className="relative inline">
                             <button
                               type="button"
                               data-word-idx={idx}
@@ -836,7 +933,24 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                                 e.preventDefault()
                                 onWordPointerDown(idx, w, e.shiftKey)
                               }}
-                              onMouseEnter={() => onWordPointerEnter(idx)}
+                              onMouseEnter={() => {
+                                onWordPointerEnter(idx)
+                                if (deleted) setHoverRestoreWordId(w.id)
+                              }}
+                              onMouseLeave={() => {
+                                if (hoverRestoreWordId === w.id) setHoverRestoreWordId(null)
+                              }}
+                              onDoubleClick={(e) => {
+                                if (!deleted) return
+                                e.preventDefault()
+                                restoreCutForWord(w.id)
+                              }}
+                              onContextMenu={(e) => {
+                                e.preventDefault()
+                                setSelAnchor(idx)
+                                setSelEnd(idx)
+                                setCtxMenu({ x: e.clientX, y: e.clientY })
+                              }}
                               className={cn(
                                 'mr-1 inline rounded-sm px-0.5 transition-colors',
                                 w.isFiller && !deleted && !ignored && 'text-muted-foreground underline decoration-dotted decoration-sky-500/70',
@@ -847,11 +961,23 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                                 activeFillerHit?.word.id === w.id && 'ring-1 ring-sky-500/60',
                                 activeGapHit?.word.id === w.id && 'ring-1 ring-amber-500/60',
                                 selected && 'bg-sky-500/25',
+                                deleted && 'cursor-pointer hover:bg-destructive/10',
                                 !active && !deleted && 'hover:bg-muted/60',
                               )}
                             >
                               {hiddenTranscript ? '·' : w.text}
                             </button>
+                            {deleted && hoverRestoreWordId === w.id && (
+                              <button
+                                type="button"
+                                className="absolute -top-6 left-0 z-10 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-primary shadow-sm hover:bg-muted"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => restoreCutForWord(w.id)}
+                              >
+                                Restore
+                              </button>
+                            )}
+                            </span>
                             {showSplit && (
                               <span className="mx-0.5 text-primary" title="Edit boundary">
                                 ¦
@@ -865,6 +991,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                 ))}
               </div>
             </div>
+            <ScriptTranscriptContextMenu
+              open={ctxMenu != null}
+              x={ctxMenu?.x ?? 0}
+              y={ctxMenu?.y ?? 0}
+              canRestore={selectedDeletedIds.length > 0}
+              onRestore={onRestoreSelection}
+              onClose={() => setCtxMenu(null)}
+            />
           </section>
 
           <div
@@ -993,9 +1127,11 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           document={document}
           orderedWords={orderedWords}
           deletedSet={deletedSet}
-          edl={edl}
-          durationMs={outDur}
-          outputMs={outputMs}
+          rangeStartMs={data.rangeStartMs}
+          sourceDurationMs={sourceSpanMs}
+          playheadSourceMs={playheadSourceMs}
+          cutRegions={cutRegions}
+          showDeletedWords={showDeletedWords}
           videoUrl={data.sourceVideoUrl}
           selectedWordIds={selectedIds}
           selAnchor={selAnchor}
@@ -1007,7 +1143,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onZoom={onZoom}
           onFit={onFit}
           onScrollLeft={setScrollLeftPx}
-          onSeekOutput={seekToOutputMs}
+          onSeekOutput={seekToSourceRelativeMs}
           onSelectIndices={(lo, hi) => {
             setSelAnchor(lo)
             setSelEnd(hi)

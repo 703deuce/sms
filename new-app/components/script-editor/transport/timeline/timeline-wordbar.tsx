@@ -9,6 +9,7 @@ export function TimelineWordbar({
   pxPerMs,
   widthPx,
   selectedWordIds,
+  ghostWordIds,
   onSelectWord,
   onPadDragEnd,
 }: {
@@ -17,6 +18,7 @@ export function TimelineWordbar({
   pxPerMs: number
   widthPx: number
   selectedWordIds: Set<string>
+  ghostWordIds?: Set<string>
   onSelectWord: (wordId: string) => void
   onPadDragEnd?: (wordId: string, padMs: number) => void
 }) {
@@ -44,13 +46,23 @@ export function TimelineWordbar({
             : item.kind === 'group'
               ? item.wordIds.some((id: string) => selectedWordIds.has(id))
               : false
+        const ghost =
+          item.kind === 'word'
+            ? ghostWordIds?.has(item.wordId)
+            : item.kind === 'group'
+              ? item.wordIds.every((id: string) => ghostWordIds?.has(id))
+              : false
         return (
           <button
             key={`${item.kind}-${item.outStartMs}`}
             type="button"
             className={cn(
               'absolute top-1 h-4 truncate rounded px-0.5 text-[9px]',
-              item.kind === 'group' ? 'bg-muted-foreground/25' : 'bg-sky-500/70 text-white',
+              item.kind === 'group'
+                ? 'bg-muted-foreground/25'
+                : ghost
+                  ? 'border border-dashed border-red-400/70 bg-red-500/20 text-red-900 dark:text-red-100'
+                  : 'bg-sky-500/70 text-white',
               selected && 'ring-2 ring-primary',
             )}
             style={{ left, width: w }}

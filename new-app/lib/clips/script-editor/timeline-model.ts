@@ -28,6 +28,27 @@ export type TimelineClip = {
 const MIN_CHIP_PX = 6
 const GROUP_PX = 28
 
+/** Word chips on the source timeline (full composition length, includes deleted as ghosts). */
+export function buildSourceWordChips(
+  orderedWords: EditorWord[],
+  deletedSet: Set<string>,
+  rangeStartMs: number,
+): TimelineWordChip[] {
+  const chips: TimelineWordChip[] = []
+  for (const w of orderedWords) {
+    const outStart = Math.max(0, w.t0Ms - rangeStartMs)
+    const outEnd = Math.max(outStart + 1, w.t1Ms - rangeStartMs)
+    chips.push({
+      wordId: w.id,
+      text: w.text,
+      outStartMs: outStart,
+      outEndMs: outEnd,
+      deleted: deletedSet.has(w.id),
+    })
+  }
+  return chips
+}
+
 export function buildWordChips(
   document: ScriptDocumentV1,
   orderedWords: EditorWord[],
@@ -58,6 +79,38 @@ export function buildWordChips(
     })
   }
   return chips.filter((c) => !c.deleted)
+}
+
+export function sourceTimelineClips(
+  orderedWords: EditorWord[],
+  deletedSet: Set<string>,
+  rangeStartMs: number,
+  durationMs: number,
+): TimelineClip[] {
+  if (!orderedWords.length) {
+    return [
+      {
+        key: 'src-0-full',
+        kind: 'source',
+        outStartMs: 0,
+        outEndMs: Math.max(1, durationMs),
+      },
+    ]
+  }
+  const spanEnd = Math.max(
+    durationMs,
+    ...orderedWords.map((w) => Math.max(0, w.t1Ms - rangeStartMs)),
+  )
+  return [
+    {
+      key: `src-0-${spanEnd}`,
+      kind: 'source',
+      outStartMs: 0,
+      outEndMs: spanEnd,
+      srcInMs: rangeStartMs,
+      srcOutMs: rangeStartMs + spanEnd,
+    },
+  ]
 }
 
 export function buildGapChips(edl: EdlSegment[]): TimelineGapChip[] {

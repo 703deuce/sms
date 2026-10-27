@@ -66,6 +66,13 @@ export function ScriptPropertiesPanel({
           onCheckedChange={(v) => onPatch({ captionsEnabled: v })}
         />
       </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm">Show deleted (cuts)</span>
+        <Switch
+          checked={settings.showDeletedWords !== false}
+          onCheckedChange={(v) => onPatch({ showDeletedWords: v })}
+        />
+      </div>
       <div>
         <div className="mb-2 flex items-center justify-between">
           <span className="font-medium">Volume</span>

@@ -5,6 +5,7 @@ export function defaultScriptEditorSettings(): ScriptEditorSettings {
     aspect: '9:16',
     reframeMode: 'speaker_follow',
     captionsEnabled: true,
+    showDeletedWords: true,
     volumePct: 100,
     captions: {
       enabled: true,

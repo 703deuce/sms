@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   applyCompositionOp,
   cloneDocument,
@@ -10,6 +10,10 @@ import {
 } from '@/lib/clips/script-edl/ops'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { clipsFetch } from '@/lib/clips-api'
+import {
+  loadPersistedUndo,
+  savePersistedUndo,
+} from '@/lib/clips/script-editor/composition-undo-persistence'
 
 function newOpId(): string {
   return `op_${crypto.randomUUID().replace(/-/g, '')}`
@@ -37,39 +41,64 @@ export function useScriptComposition(initial: {
   const pendingOpsRef = useRef(0)
   const saveErrorRef = useRef(false)
   const queueRef = useRef<Promise<void>>(Promise.resolve())
+  const localEpochRef = useRef(0)
 
   const bumpStacks = useCallback(() => {
     setUndoDepth(undoStackRef.current.length)
     setRedoDepth(redoStackRef.current.length)
-  }, [])
+    savePersistedUndo(
+      initial.compositionId,
+      revisionRef.current,
+      undoStackRef.current,
+      redoStackRef.current,
+    )
+  }, [initial.compositionId])
+
+  useEffect(() => {
+    const persisted = loadPersistedUndo(initial.compositionId)
+    if (!persisted) return
+    if (persisted.revision > revisionRef.current) {
+      revisionRef.current = persisted.revision
+      setRevision(persisted.revision)
+    }
+    if (persisted.undo.length) undoStackRef.current = persisted.undo.map(cloneDocument)
+    if (persisted.redo.length) redoStackRef.current = persisted.redo.map(cloneDocument)
+    bumpStacks()
+  }, [initial.compositionId, bumpStacks])
 
   const enqueueServerOps = useCallback(
     (ops: ScriptCompositionOp[], rollbackDoc: ScriptDocumentV1, onRollback?: () => void) => {
       if (!ops.length) return
+      const epochAtEnqueue = localEpochRef.current
       pendingOpsRef.current += 1
       setSaveState('saving')
       queueRef.current = queueRef.current
         .then(async () => {
-          for (const op of ops) {
-            const opId = newOpId()
-            const res = await clipsFetch<{
-              revision: number
-              document: ScriptDocumentV1
-              ackedOpIds: string[]
-            }>(`/api/clips/compositions/${initial.compositionId}/ops`, {
-              method: 'POST',
-              body: JSON.stringify({
-                baseRevision: revisionRef.current,
-                ops: [{ id: opId, op }],
-              }),
-            })
-            revisionRef.current = res.revision
-            setRevision(res.revision)
-            if (res.document) setDocument(res.document)
-          }
+          const payloadOps = ops.map((op) => ({ id: newOpId(), op }))
+          const res = await clipsFetch<{
+            revision: number
+            document: ScriptDocumentV1
+            ackedOpIds: string[]
+          }>(`/api/clips/compositions/${initial.compositionId}/ops`, {
+            method: 'POST',
+            body: JSON.stringify({
+              baseRevision: revisionRef.current,
+              ops: payloadOps,
+            }),
+          })
+          if (epochAtEnqueue !== localEpochRef.current) return
+          revisionRef.current = res.revision
+          setRevision(res.revision)
           saveErrorRef.current = false
+          savePersistedUndo(
+            initial.compositionId,
+            res.revision,
+            undoStackRef.current,
+            redoStackRef.current,
+          )
         })
         .catch(() => {
+          if (epochAtEnqueue !== localEpochRef.current) return
           saveErrorRef.current = true
           onRollback?.()
           setDocument(rollbackDoc)
@@ -89,13 +118,14 @@ export function useScriptComposition(initial: {
 
   const commitLocal = useCallback(
     (next: ScriptDocumentV1, serverOps: ScriptCompositionOp[], before: ScriptDocumentV1) => {
+      localEpochRef.current += 1
       undoStackRef.current.push(cloneDocument(before))
       redoStackRef.current = []
       setDocument(next)
       bumpStacks()
       enqueueServerOps(serverOps, before)
     },
-    [bumpStacks, enqueueServerOps],
+    [bumpStacks, enqueueServerOps, setDocument],
   )
 
   const applyOp = useCallback(
@@ -117,9 +147,19 @@ export function useScriptComposition(initial: {
     [applyOp],
   )
 
+  const restoreWords = useCallback(
+    (wordIds: string[]) => {
+      const unique = [...new Set(wordIds)].filter(Boolean)
+      if (!unique.length) return
+      applyOp({ type: 'restore_words', wordIds: unique })
+    },
+    [applyOp],
+  )
+
   const undo = useCallback(() => {
     const prev = undoStackRef.current.pop()
     if (!prev) return
+    localEpochRef.current += 1
     const current = documentRef.current
     redoStackRef.current.push(cloneDocument(current))
     const ops = opsBetweenDocuments(current, prev)
@@ -128,12 +168,14 @@ export function useScriptComposition(initial: {
     enqueueServerOps(ops, current, () => {
       undoStackRef.current.push(cloneDocument(prev))
       redoStackRef.current.pop()
+      bumpStacks()
     })
   }, [bumpStacks, enqueueServerOps, setDocument])
 
   const redo = useCallback(() => {
     const next = redoStackRef.current.pop()
     if (!next) return
+    localEpochRef.current += 1
     const current = documentRef.current
     undoStackRef.current.push(cloneDocument(current))
     const ops = opsBetweenDocuments(current, next)
@@ -142,6 +184,7 @@ export function useScriptComposition(initial: {
     enqueueServerOps(ops, current, () => {
       redoStackRef.current.push(cloneDocument(next))
       undoStackRef.current.pop()
+      bumpStacks()
     })
   }, [bumpStacks, enqueueServerOps, setDocument])
 
@@ -150,10 +193,49 @@ export function useScriptComposition(initial: {
     revision,
     saveState,
     deleteWords,
+    restoreWords,
     applyOp,
     undo,
     redo,
     canUndo: undoDepth > 0,
     canRedo: redoDepth > 0,
   }
+}
+
+/** Test harness for undo/redo without React (keyboard + button parity). */
+export function runCompositionUndoRedoScenario(
+  initialDoc: ScriptDocumentV1,
+  steps: Array<'undo' | 'redo' | { delete: string[] } | { restore: string[] }>,
+): ScriptDocumentV1 {
+  let doc = cloneDocument(initialDoc)
+  const undo: ScriptDocumentV1[] = []
+  const redo: ScriptDocumentV1[] = []
+
+  for (const step of steps) {
+    if (step === 'undo') {
+      const prev = undo.pop()
+      if (!prev) continue
+      redo.push(cloneDocument(doc))
+      doc = cloneDocument(prev)
+      continue
+    }
+    if (step === 'redo') {
+      const next = redo.pop()
+      if (!next) continue
+      undo.push(cloneDocument(doc))
+      doc = cloneDocument(next)
+      continue
+    }
+    const before = cloneDocument(doc)
+    const op =
+      'delete' in step
+        ? ({ type: 'delete_words', wordIds: step.delete } as ScriptCompositionOp)
+        : ({ type: 'restore_words', wordIds: step.restore } as ScriptCompositionOp)
+    const next = applyCompositionOp(doc, op)
+    if (documentsEqual(before, next)) continue
+    undo.push(before)
+    redo.length = 0
+    doc = next
+  }
+  return doc
 }

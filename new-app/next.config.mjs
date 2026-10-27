@@ -35,6 +35,11 @@ const nextConfig = {
         destination: "/app/streamer",
         permanent: false,
       },
+      {
+        source: "/favicon.ico",
+        destination: "/icon-light-32x32.png",
+        permanent: false,
+      },
     ];
   },
   async headers() {
