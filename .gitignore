@@ -76,3 +76,6 @@ public/voicemail/
 /playwright-report/
 .tmp-verify/
 dump.rdb
+
+.transovo-e2e*.env
+rooms-e2e*.log
