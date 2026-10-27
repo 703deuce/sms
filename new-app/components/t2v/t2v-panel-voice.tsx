@@ -12,9 +12,11 @@ export function T2vPanelVoice({
   doc: T2vDraftV1
   onChange: (next: T2vDraftV1) => void
 }) {
-  const [voices, setVoices] = useState<Array<{ voiceId: string; name: string }>>([])
+  const [voices, setVoices] = useState<Array<{ voiceId: string; name: string; previewUrl?: string | null }>>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    setLoading(true)
     void fetch('/api/t2v/voices')
       .then((r) => r.json())
       .then((b) => {
@@ -29,7 +31,10 @@ export function T2vPanelVoice({
         }
         setVoices(merged.slice(0, 48))
       })
-      .catch(() => {})
+      .catch((e) => {
+        console.error('[t2v:voices] load failed', { message: e instanceof Error ? e.message : String(e) })
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const apply = (v: { voiceId: string; name: string }) => {
@@ -59,16 +64,33 @@ export function T2vPanelVoice({
       <p className="text-sm text-muted-foreground">
         Current: <strong>{doc.voice?.voiceName ?? 'Default'}</strong>
       </p>
-      <ul className="max-h-64 space-y-1 overflow-y-auto">
-        {voices.map((v) => (
-          <li key={v.voiceId}>
-            <Button type="button" variant="outline" size="sm" className="w-full justify-start" onClick={() => apply(v)}>
-              {v.name}
-            </Button>
-          </li>
-        ))}
-      </ul>
-      {voices.length === 0 ? (
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Loading voices…</p>
+      ) : (
+        <ul className="max-h-64 space-y-1 overflow-y-auto">
+          {voices.map((v) => (
+            <li key={v.voiceId} className="flex gap-1">
+              <Button type="button" variant="outline" size="sm" className="min-w-0 flex-1 justify-start" onClick={() => apply(v)}>
+                {v.name}
+              </Button>
+              {v.previewUrl ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const a = new Audio(v.previewUrl!)
+                    void a.play().catch(() => toast.error('Preview failed'))
+                  }}
+                >
+                  ▶
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!loading && voices.length === 0 ? (
         <p className="text-xs text-muted-foreground">No voices loaded. Check ElevenLabs configuration.</p>
       ) : null}
     </div>
