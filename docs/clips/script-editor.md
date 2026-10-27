@@ -237,6 +237,8 @@ Descript reference: refs 03, 04; [D:timeline/timeline-overview], [D:timeline/tim
 
 Transovo already has clip **captions** (Bold Pop and other styles), **reframing** (9:16, speaker follow) and a **render** pipeline. This editor **reuses** them; it does not rebuild them.
 
+**Recording (launch, not built yet):** Descript-style **screen / webcam / mic / remote guest** capture is in launch scope. Milestones and UX are pending from product; the **composition + media model** must accept a **multi-track recorded take** as the project source (`take:{id}` word namespace, per-track storage, primary track for transcript/EDL). See `SCRIPT-EDITOR-BUILD.md` §2.7 and `lib/clips/script-editor/media-source.ts`.
+
 | Feature | Descript behavior (ref) | Transovo scope | Launch? |
 |---|---|---|---|
 | Aspect ratio + reframe | Scene layouts; canvas sizes ([D:templates-and-presets/layouts-apply]) | The canvas pill offers 9:16 / 1:1 / 4:5 / 16:9 and Reframe **Auto (speaker follow)** / **Center** / **Manual** (drag the crop box on the canvas, which creates a keyframe at the playhead). Reframe data comes from the Clipper and is mapped through the EDL. | **Launch-required** |

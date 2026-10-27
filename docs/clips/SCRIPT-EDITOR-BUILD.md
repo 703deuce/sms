@@ -1,6 +1,6 @@
 # Script editor — build plan
 
-**Status:** **M3** — timeline ships ruler, **scenes / overlay / music lane slots**, captions stub, wordbar, script track, zoom/split/trim/gaps; document reserves `scenes`, `overlays`, `musicTracks`, `markers`. **Export deferred to M5.** M4 next.  
+**Status:** **M3** — timeline (lane slots + core tools), **output-clock preview** for EDL gaps, recording-ready **take/track** types (§2.7, no capture UI). **Export deferred to M5.** M4 next.  
 **Product spec:** `docs/clips/script-editor.md` (v1.1 — full Descript-at-launch scope).  
 **Owner decisions (2026-10-26):** see §0 “Decisions locked” below. **Scope expansion (2026-10-27):** §0.1.
 
@@ -20,6 +20,7 @@
 | Filler / gaps | Lightweight **enrichment at transcript-ready** (additive JSON fields on stored transcript); **backfill on first editor open** if missing. |
 | Launch breadth | **Full Descript-class editor at launch** — everything in spec **§B5** that was “Later” is now **launch-required** (scenes, layouts, markers/chapters, media/B-roll, music, Studio Sound, LLM transcript tools, comments). See §0.1. |
 | Still post-launch | **Eye Contact**, **Overdub / Regenerate AI voice**, **Underlord AI chat** — remain with **AI Studio on hold**. |
+| Recording | **Descript-style capture** (screen, webcam, mic, remote guests) is **launch-required** but **not built yet** — owner will supply feature map + milestones. **Design now:** multi-track **takes** as composition source (§2.7). |
 
 ### 0.1 Launch scope expansion (owner, 2026-10-27)
 
@@ -91,7 +92,7 @@ Done = corresponding **§D1** browser tests pass on **transovo.ai** (fixture `te
 | 81 | Overlay trim | M9 | Drag overlay edges on timeline → duration changes, anchor word unchanged |
 | 82 | Overlay delete | M9 | Delete overlay → lane and preview clear; script unchanged |
 | 83 | Multi overlay lanes | M9 | Two overlays on different layers → both visible, selectable |
-| 84 | Overlay export | M9 | Export MP4 → overlays composited like preview |
+| 84 | Overlay export | M9 | Export MP4 → same `broll_render` compositing as clip editor; timing matches preview |
 | 85 | Music insert | M10 | Add track from library → music lane clip, audible on play |
 | 86 | Music fade | M10 | Fade in/out handles → smooth audibility at edges |
 | 87 | Ducking | M10 | Duck under speech on → music lowers during dialogue |
@@ -250,6 +251,52 @@ Implement spec §B1 rules (80 ms pad, gap segments, contiguous merge). **Unit-te
 4. **Timeline** — M3 overlay lane slots display the same clips as clipper’s B-roll lane (output ms).
 
 Uploads and “project clips” still resolve to `stock_assets` or generation rows the worker can load — same as adding B-roll on a clip today.
+
+### 2.7 Recording takes — forward-compatible source (owner, 2026-10-27; **milestones TBD**)
+
+**Do not implement capture UI yet.** Model must allow a **recorded take** (multi-track) to replace or supplement today’s single `sourceKey` upload without breaking M2/M3 **word ids**, **EDL**, or op log.
+
+| Concept | Design |
+|---------|--------|
+| **Take** | `ScriptRecordingTake` — one session (local or remote). Holds `tracks[]` and one **primary** track for transcript timing + default preview. |
+| **Track** | `ScriptMediaTrack` — `role`: `program` \| `screen` \| `camera` \| `mic` \| `mixed` \| `aux`; optional `participantId` for guests; `storageKey`, proxies, `syncOffsetMs`, `durationMs`. |
+| **Composition** | `ScriptCompositionSource` on composition JSON: `{ takeId, primaryTrackId, sourceMediaRef }`. Transcript words keep ids `take:{takeId}:{index}` or existing upload ids until take is bound. |
+| **Preview** | v1 upload: one `<video>`. With takes: composite screen + camera per scene layout (M7); **EDL clock** stays on primary track. |
+| **Worker** | Transcribe/enrich on primary audio (or mixed); render muxes tracks like today’s single stream + B-roll. |
+
+TypeScript reference: `new-app/lib/clips/script-editor/media-source.ts` (`SourceMediaRef`, `ScriptRecordingTake`, `resolveCompositionSourceMediaId`).
+
+**Planned Prisma (draft, apply with recording milestone):**
+
+```prisma
+model ScriptRecordingTake {
+  id          String   @id
+  projectId   String
+  workspaceId String
+  durationMs  Int
+  primaryTrackId String
+  transcriptKey  String?
+  enrichedAt     DateTime?
+  metadata    Json?    // participants, recording mode, etc.
+  createdAt   DateTime @default(now())
+  tracks      ScriptMediaTrack[]
+  project     ClipProject @relation(...)
+}
+
+model ScriptMediaTrack {
+  id          String   @id
+  takeId      String
+  role        String   // screen | camera | mic | ...
+  participantId String?
+  storageKey  String
+  proxyHlsKey String?
+  syncOffsetMs Int @default(0)
+  durationMs  Int
+  take        ScriptRecordingTake @relation(...)
+}
+```
+
+`ScriptMediaAsset` remains the **denormalized** per-project row for bootstrap (proxy/peaks/sprite); for takes, populate from primary track or link `takeId`.
 
 ---
 
@@ -531,6 +578,7 @@ components/script-editor/
 - `components/clips/editor/caption-overlay.tsx`, caption presets  
 - `lib/clips/edits.ts` (`keepSegments`, `remapTime`, caption word export patterns)  
 - `lib/clips/format.ts`, design tokens / `Panel`, `PageHeader`  
+- **B-roll (M9):** `lib/clips/broll.ts`, `broll-panel.tsx`, `stock-broll-picker.tsx`, `broll-preview-video.tsx`, `broll-media.ts`, `worker/clips_worker/broll_render.py`, `kie_image.py` — §2.6  
 - Do **not** reuse screenwriting Yjs workspace.
 
 ---

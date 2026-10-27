@@ -15,6 +15,11 @@ import {
 import { loadScriptEditorLayout, saveScriptEditorLayout } from '@/lib/clips/script-editor/panel-layout'
 import { deriveEdl, outputTimeToSourceMs, sourceMsToOutputTime } from '@/lib/clips/script-edl/derive-edl'
 import { isSourceMsInEdl, nextKeptSourceMs, outputDurationMs } from '@/lib/clips/script-edl/edl-playback'
+import {
+  clampOutputMs,
+  edlUsesOutputClock,
+  sourceMsAtOutput,
+} from '@/lib/clips/script-editor/output-playback'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { useScriptComposition } from '@/components/script-editor/use-script-composition'
 import { scrollWordIntoTranscriptPane } from '@/lib/clips/script-editor/scroll-word-into-view'
@@ -68,6 +73,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [pxPerMs, setPxPerMs] = useState(0.08)
   const [scrollLeftPx, setScrollLeftPx] = useState(0)
   const dragSelectRef = useRef(false)
+  const outputPlayAnchorRef = useRef<{ t: number; out0: number } | null>(null)
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
@@ -100,6 +106,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const syncFromVideo = useCallback(() => {
     const v = videoRef.current
     if (!v) return
+    if (playing && edlUsesOutputClock(edl)) return
     let srcMs = sourceTimeMsFromVideo(v.currentTime, data.rangeStartMs)
     if (!isSourceMsInEdl(srcMs, edl)) {
       const jump = nextKeptSourceMs(srcMs, edl)
@@ -110,7 +117,34 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     }
     setPlayheadMs(srcMs)
     setPlaying(!v.paused)
-  }, [data.rangeStartMs, edl])
+  }, [data.rangeStartMs, edl, playing])
+
+  useEffect(() => {
+    if (!playing || !edlUsesOutputClock(edl)) return
+    const v = videoRef.current
+    if (!v) return
+    const anchor = outputPlayAnchorRef.current ?? { t: performance.now(), out0: outputMs }
+    outputPlayAnchorRef.current = anchor
+    let raf = 0
+    const tick = () => {
+      const out = clampOutputMs(anchor.out0 + (performance.now() - anchor.t), edl)
+      if (out >= outDur - 8) {
+        v.pause()
+        setPlaying(false)
+        outputPlayAnchorRef.current = null
+        return
+      }
+      const src = sourceMsAtOutput(out, edl, playheadMs)
+      v.currentTime = videoTimeSecFromSourceMs(src, data.rangeStartMs)
+      setPlayheadMs(src)
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(raf)
+      outputPlayAnchorRef.current = null
+    }
+  }, [playing, edl, outDur, data.rangeStartMs, outputMs, playheadMs])
 
   const seekToSourceMs = useCallback(
     (ms: number) => {
@@ -331,8 +365,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const togglePlay = () => {
     const v = videoRef.current
     if (!v) return
-    if (v.paused) void v.play()
-    else v.pause()
+    if (v.paused) {
+      if (edlUsesOutputClock(edl)) {
+        outputPlayAnchorRef.current = { t: performance.now(), out0: outputMs }
+      }
+      void v.play()
+    } else {
+      outputPlayAnchorRef.current = null
+      v.pause()
+    }
   }
 
   const onResizeStart = (e: React.MouseEvent) => {
