@@ -47,6 +47,7 @@ export function streamerPublicFlags() {
     /** When false, UI shows live clipping as coming soon; webhooks skip live chat ingest. */
     liveRealtimeEnabled: liveRealtime,
     autopullUiEnabled: streamerAutopullUiEnabled(),
+    twitchRollingEnabled: streamerTwitchRollingEnabled(),
     vodFirst: true,
   }
 }

@@ -5,6 +5,7 @@ import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { matchTwitchArchiveVod } from '@/lib/server/streamer/twitch-growing'
 import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
+import { streamerTwitchRollingEnabled } from '@/lib/server/streamer/env'
 
 const DEFAULT_CHUNK_MIN = Number(process.env.STREAMER_ROLLING_CHUNK_MIN || 12)
 
@@ -14,7 +15,7 @@ export async function beginTwitchRollingSession(
   startedAt: Date,
   streamSessionId?: string,
 ) {
-  if (!streamerAutopullUiEnabled()) return null
+  if (!streamerAutopullUiEnabled() || !streamerTwitchRollingEnabled()) return null
   const prisma = getPrisma()
   const channel = await prisma.streamChannel.findUnique({ where: { id: channelId } })
   if (!channel || channel.deletedAt || channel.platform !== 'twitch' || !channel.autoProcess) {
@@ -113,6 +114,21 @@ export async function finalizeTwitchRollingSession(channelId: string) {
   if (!vod) return false
   const state = (vod.state as Record<string, unknown>) || {}
   const rolling = (state.rolling as Record<string, unknown>) || {}
+  const pendingImport = await prisma.clipJob.findFirst({
+    where: {
+      projectId: vod.projectId,
+      type: 'STREAM_IMPORT',
+      status: { in: ['QUEUED', 'RUNNING'] },
+    },
+    select: { id: true },
+  })
+  if (pendingImport) {
+    console.info(
+      `[clipper:autopull] live_finalize_deduped channelId=${channelId} vodId=${vod.id} jobId=${pendingImport.id}`,
+    )
+    return true
+  }
+
   await prisma.streamVod.update({
     where: { id: vod.id },
     data: {
