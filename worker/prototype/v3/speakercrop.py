@@ -9,6 +9,18 @@ from mediapipe.tasks.python import vision, BaseOptions
 HERE = os.path.dirname(os.path.abspath(__file__))
 INP, OUT = sys.argv[1], sys.argv[2]
 E = lambda k, d: float(os.environ.get(k, d))
+if int(os.environ.get("MULTIPERSON", "0")):
+    try:
+        from multiperson_pipeline import SinglePersonFallback, run as multiperson_run
+
+        multiperson_run(INP, OUT)
+        sys.exit(0)
+    except SinglePersonFallback:
+        pass
+    except Exception as exc:
+        if int(os.environ.get("MULTIPERSON_STRICT", "0")):
+            raise
+        print(f"WARN multiperson fallback: {exc}", file=sys.stderr)
 OUT_W, OUT_H = int(E('OUT_W', 720)), int(E('OUT_H', 1280))
 SAMPLE_FPS = 5.0
 MIN_SEG = E('MIN_SEG', 0.8)   # drop shots shorter than this (s)
@@ -275,8 +287,9 @@ def _x0_for_frame(fi):
     return x0s[min(fi, len(x0s) - 1)], 'auto'
 
 crop_track = dict(v=1, W=W, H=H, cw=cw, fps=fps, t0_ms=t0_ms, x0=x0s, x0_A=x0_A, x0_B=x0_B, shots=shots_track)
-crop_out = os.environ.get('CROP_TRACK_OUT', os.path.splitext(OUT)[0] + '.crop_track.json')
-json.dump(crop_track, open(crop_out, 'w'), separators=(',', ':'))
+if int(os.environ.get('WRITE_CROP_TRACK', '1')):
+    crop_out = os.environ.get('CROP_TRACK_OUT', os.path.splitext(OUT)[0] + '.crop_track.json')
+    json.dump(crop_track, open(crop_out, 'w'), separators=(',', ':'))
 
 if int(E('NORENDER', 0)): sys.exit(0)
 # ---------- 3b. captions (ASS for burn-in + SRT sidecar) ----------
@@ -310,6 +323,16 @@ def render_wide(fr):
     out[y0:y0 + nh, :] = fg
     return out
 
+def render_fill(fr):
+    scale = max(OUT_W / max(W, 1), OUT_H / max(H, 1))
+    nw, nh = int(W * scale), int(H * scale)
+    resized = cv2.resize(fr, (nw, nh), interpolation=cv2.INTER_CUBIC)
+    x0 = max(0, (nw - OUT_W) // 2)
+    y0 = max(0, (nh - OUT_H) // 2)
+    return resized[y0:y0 + OUT_H, x0:x0 + OUT_W]
+
+LAYOUT_MODE = (os.environ.get('LAYOUT_MODE') or '').strip().lower()
+
 ff = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{OUT_W}x{OUT_H}', '-r', str(fps),
                        '-i', '-', '-i', INP, '-map', '0:v', '-map', '1:a?', *vf, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
                        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', OUT], stdin=subprocess.PIPE)
@@ -319,7 +342,11 @@ while True:
     if not ok: break
     j = min(n - 1, int(round(fi / fps * SAMPLE_FPS)))
     x0, mode = _x0_for_frame(fi)
-    if mode == 'split' or x0 == -1:
+    if LAYOUT_MODE == 'fit':
+        out = render_wide(fr)
+    elif LAYOUT_MODE == 'fill':
+        out = render_fill(fr)
+    elif mode == 'split' or x0 == -1:
         out = np.vstack([tile(fr, j, 0), tile(fr, j, 1)])
     elif mode == 'wide' or x0 == -2:
         out = render_wide(fr)

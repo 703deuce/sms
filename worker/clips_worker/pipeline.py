@@ -10,7 +10,7 @@ from pathlib import Path
 from clips_worker.anything_picker import pick_anything_clips
 from clips_worker.picker import pick_talking_clips
 from clips_worker.bounded_pool import run_bounded_indexed_pool
-from clips_worker.render_clip import ffmpeg_cut, poster_jpg, run_speakercrop, slice_words
+from clips_worker.render_clip import ffmpeg_cut, poster_jpg, resolve_clip_layout, run_speakercrop, slice_words
 from clips_worker.render_concurrency import clips_render_concurrency
 from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, put_json, upload_file
@@ -156,6 +156,7 @@ def reframe_clip_preview(
         )
         return rendered, crop_method, reframe_settings
 
+    preserve_crop_track = False
     if motion_subject:
         wide = write_motion_crop_track(
             clip_file,
@@ -170,6 +171,7 @@ def reframe_clip_preview(
             write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
         else:
             crop_method = "subject_follow"
+            preserve_crop_track = True
     else:
         crop_method = "fit_blur"
         reframe_settings = {**reframe_settings, "layout": "fit"}
@@ -182,7 +184,8 @@ def reframe_clip_preview(
         reframe_settings,
         work_dir,
         clip_start_ms=clip_start_ms,
-        crop_track_out=crop_track_path,
+        crop_track_out=crop_track_path if not preserve_crop_track else None,
+        preserve_existing_crop_track=preserve_crop_track,
     )
     if not crop_track_path.exists():
         write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
@@ -383,11 +386,12 @@ def run_m4_pipeline(
             out_mp4 = td_path / f"out_{idx}.mp4"
             crop_track_path = td_path / f"crop_track_{idx}.json"
             ai_meta = pick.get("aiMeta") or {}
+            clip_settings = {**settings, "layout": resolve_clip_layout(settings, idx)}
             rendered, crop_method, _reframe_settings = reframe_clip_preview(
                 clip_file,
                 out_mp4,
                 words_path,
-                settings,
+                clip_settings,
                 td_path / f"reframe_work_{idx}",
                 pick["start_ms"],
                 crop_track_path,

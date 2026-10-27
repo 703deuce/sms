@@ -7,6 +7,7 @@ from pathlib import Path
 
 from psycopg2.extras import RealDictCursor
 
+from clips_worker.crop_format import is_v2_crop_track, v2_to_legacy_shots
 from clips_worker.render_clip import ffmpeg_cut, run_speakercrop, slice_words
 from clips_worker.storage import download_object, upload_file
 
@@ -76,6 +77,11 @@ def run_reframe_crop_job(conn, job: dict) -> None:
             crop_track_out=crop_out,
             no_render=True,
         )
+        if crop_out.exists():
+            data = json.loads(crop_out.read_text())
+            if is_v2_crop_track(data) and not data.get("shots"):
+                data["shots"] = v2_to_legacy_shots(data)
+                crop_out.write_text(json.dumps(data, separators=(",", ":")))
         key = crop_track_key(clip["workspaceId"], clip["projectId"], clip_id)
         upload_file(key, crop_out, "application/json")
 
