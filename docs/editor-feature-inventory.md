@@ -1,208 +1,306 @@
-# Editor product feature inventory (Descript-style)
+# Editor / Descript-side feature status inventory
 
-**Scope:** Whole editor product under sidebar **Editor** (`resolveActiveSidebarSection` → `editor`), not the clipper short-form editor (`/edit/[clipId]`).
+**Purpose:** Per-feature **STATUS** for Rick to decide what to hide behind a default-off flag later. **No KEEP/HIDE recommendations here.** **No UI hidden yet.**
 
-**Status legend:** **Working** = wired end-to-end in code with tests or clear happy path · **Partial** = UI/API exists, known gaps · **Broken** = missing route, dead API, or wrong UX · **N/A** = gated/off or out of lane.
+**Audited:** 2026-10-27 (code on `master` + read-only prod DB via `coolify-server` / `clips-worker`).
 
-*Last reviewed: 2026-10-27 (code audit; live QA pending Rick’s pass).*
+**Workers (deploy):** `clips-worker` and `clips-worker-stream` both **`CLIPS_WORKER_GIT_SHA=9be116032…`**, same image digest prefix `5d88a908e9a8` (includes clipper commits through `ae6d17dc3` / `0c8d9ab1a` in history).
 
----
+**Status legend:** **DONE** · **MOSTLY DONE** (gap noted) · **BROKEN** · **STUB**
 
-## 1. Navigation & hub
-
-| Feature | Route / entry | API / server | Status | Notes |
-|--------|----------------|--------------|--------|-------|
-| Editor hub (project list) | `/app/editor` | `getClipsDriveProjects` | **Working** | Shows processing + ready; auto-refresh while processing |
-| Sidebar: Editor hub | `app-sidebar` → Editor | — | **Working** | |
-| Sidebar: Media library | `/app/clips/media` | `listMediaLibraryUploads` | **Working** | Uploads list + create/open script projects |
-| Sidebar: Layout packs | `/app/clips?view=layouts` | brand templates | **Partial** | Drive view; not editor-specific |
-| Sidebar: Rooms (record) | `/app/rooms`, `/app/rooms/new` | LiveKit/recording APIs | **Partial** | Gated by `FEATURE_SCRIPT_RECORDING` + LiveKit |
-| Sidebar: Screenwriting | `/app/sw` | `/api/sw/*` | **Working** | Separate screenplay product; AI → gpt-6-luna (`7805e11e4`) |
-| Create menu → Editor | `/app/editor` | — | **Working** | |
-| Projects library (Clips nav) | `/app/clips` | `/api/clips/projects` | **Working** | Shared with clipper drive |
+**Evidence legend:** `prod-db` = `clip_jobs` / related tables on production Postgres; `tests` = unit tests in repo; `code` = static wiring only.
 
 ---
 
-## 2. Project creation & import
+## 1. Navigation, hub, and shell entry
 
-| Feature | Route / UI | API | Status | Notes |
-|--------|------------|-----|--------|-------|
-| New upload project | `/app/clips/new` | `POST /api/clips/projects`, uploads | **Working** | Shared create flow |
-| Editor empty state import | `ScriptEmptyImport` | `POST /api/clips/projects/[id]/media` | **Working** | Links to media library; transcribing poll via `ScriptEditorTranscribing` |
-| Link import | empty import | same media API | **Partial** | YouTube blocked by import-url rules (by design) |
-| Media library pick | `/app/clips/media` | `ClipUpload` list | **Working** | Attach via new project → script |
-| Record new | `/app/rooms/new` | rooms stack | **Partial** | Not embedded in editor shell |
-| Rooms take import | `/app/rooms` | upload → project | **Partial** | Manual path |
-| Script bootstrap | `ScriptEditorEntry` | `GET .../script/bootstrap` | **Working** | Composition + words + signed video URL |
-| Attach media to existing project | empty import | `projects/[id]/media` | **Working** | Same-origin auth via `assertDevApiAccess` |
-
----
-
-## 3. Transcription & speakers
-
-| Feature | UI | API / worker | Status | Notes |
-|--------|-----|--------------|--------|-------|
-| Transcription pipeline | `ScriptEditorTranscribing` | `getProjectStatus` + bootstrap | **Working** | Poll until words ready; `[editor:transcribe]` |
-| Speaker labels / blocks | `script-editor-shell`, `groupSpeakerBlocks` | `script-enrich`, bootstrap | **Partial** | Depends on diarization in transcript |
-| Speaker rename | `speaker-rename-popover` | composition ops | **Working** | Ops path |
-| Enriched transcript | bootstrap `enrichedAt` | `ensureProjectTranscriptEnriched` | **Partial** | Needs live verify |
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry (routes / nav) |
+|---------|--------|------------------------------|----------|------------|-------------------------|
+| Sidebar **Editor** section | DONE | — | `code` | `components/shell/app-sidebar.tsx`, `lib/app-sidebar-sections.ts` | Sidebar when section = Editor |
+| **Editor hub** (project list) | MOSTLY DONE | Shows processing + READY + DRAFT; FAILED/CANCELED omitted; no search/folders | `code`; shipped `9be116032` | `app/app/editor/page.tsx`, `lib/server/clips/drive-data.ts` | `/app/editor`; sidebar **Editor hub**; `lib/nav.ts` **Editor** (Library) |
+| **Projects library** (Clips drive) | DONE | Shared with clipper; not editor-only | `code` | `app/app/clips/(drive)/page.tsx`, `components/drive/drive-home.tsx` | `/app/clips`; primary **Clips** sidebar |
+| **Create → Editor** | DONE | Points at hub | `code` | `components/shell/create-menu` (if present), nav | Create menu → Editor hub |
+| **Script editor page** (container) | DONE | Full-height shell under app chrome | `code` | `app/app/clips/[projectId]/script/page.tsx`, `script-editor-entry.tsx` | `/app/clips/[projectId]/script`; `?clipId=` for clip composition |
+| **Edit transcript** from project | DONE | Link from clipper project view | `code` | `components/clips/project-clips-view.tsx` | `/app/clips/[projectId]` → **Edit transcript** |
+| **T2V stale storyboard banner** | MOSTLY DONE | Only when `sourceKind=t2v` (AI Video flag usually off) | `code` | `components/t2v/t2v-editor-stale-banner.tsx` | Banner on `/script` for t2v projects |
+| **Voice** nav item | STUB | Disabled “soon” | `code` | `lib/nav.ts`, `app-sidebar.tsx` | `/app/voice` (disabled) |
+| **Layout packs** (drive view) | MOSTLY DONE | Brand templates via `?view=layouts`; not editor-specific | `code` | `drive-home.tsx`, brand APIs | `/app/clips?view=layouts`; sidebar **Layout packs** |
+| **Workspaces** drive view | MOSTLY DONE | Workspace switcher pattern | `code` | drive | `/app/clips?view=workspaces` |
+| **Screenwriting** (SW) | DONE | Separate product; gated `isScreenwritingEnabled()` | `tests`: `screenwriting-p0-editor.test.ts` | `app/app/sw/**`, `/api/sw/**` | `/app/sw`; sidebar when enabled |
+| **Brand kit / templates** | DONE | Used by captions/layouts | `code` | `app/app/clips/(drive)/brand/**` | `/app/clips/brand`, `?tab=templates` |
 
 ---
 
-## 4. Main editor shell (`/app/clips/[projectId]/script`)
+## 2. Upload, import, media library
 
-| Feature | Component | API | Status | Notes |
-|--------|-----------|-----|--------|-------|
-| Editor page | `script/page.tsx` → `ScriptEditorEntry` | bootstrap | **Working** | T2V stale banner when `sourceKind=t2v` |
-| Shell / preview / transport | `script-editor-shell` | composition ops | **Working** | Large surface; needs live QA |
-| Composition switcher (full vs clip) | `script-composition-switcher` | bootstrap `clipId` | **Working** | |
-| Save / undo / redo | `use-script-composition` | `POST .../compositions/[id]/ops` | **Working** | Persisted undo in localStorage |
-| Saving indicator | shell header | ops | **Working** | `saved` / `saving` / `error` |
-| Settings modal | `script-editor-settings-modal` | `editor-preferences` | **Working** | |
-| Shortcuts | `script-shortcuts-sheet` | — | **Working** | |
-| Keyboard / descript shortcuts | `descript-shortcuts.ts` | — | **Partial** | Needs QA |
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **New project upload** (clipper create) | DONE | Shared ingest | `prod-db`: `PROCESS_PROJECT` 14d DONE 27 / FAILED 11 | `app/clips/(drive)/new`, `lib/clips/upload.ts` | `/app/clips/new` |
+| **Editor empty import** (no words yet) | DONE | Dropzone, link, rooms links | `code` | `import/script-empty-import.tsx` | `/script` when bootstrap has 0 words + DRAFT/empty |
+| **Attach media to project** | DONE | Same-origin API | `code` | `POST /api/clips/projects/[id]/media` | Empty import flows |
+| **Link import** (YouTube/Drive) | MOSTLY DONE | YouTube often blocked by `import-url` rules (by design) | `tests`: `import-url.test.ts` | `lib/clips/import-url.ts` | Empty import URL field |
+| **Media library** (workspace uploads) | MOSTLY DONE | Lists `COMPLETE` uploads; create project → script; no attach-to-existing from UI | `code`; shipped `9be116032` | `app/clips/(drive)/media/page.tsx`, `media-library-view.tsx`, `lib/server/clips/media-library.ts` | `/app/clips/media`; sidebar **Media library**; empty import button |
+| **Make clips from long video** CTA | DONE | Redirects to clipper create | `code` | `script-empty-import.tsx` | Empty import primary CTA |
 
 ---
 
-## 5. Side rail panels
+## 3. Recording (Rooms) and in-editor record
 
-| Tab | Panel | API | Status | Notes |
-|-----|-------|-----|--------|-------|
-| Project | `script-project-panel` | bootstrap metadata | **Working** | |
-| Edit tools | `script-edit-tools-panel` | — | **Working** | Filler / gaps / retakes tabs |
-| Properties | `script-properties-panel` | ops | **Working** | |
-| Elements | `script-elements-panel` | ops | **Partial** | |
-| Layouts | `script-layouts-panel` | `/api/clips/brand/templates` | **Partial** | |
-| Captions | `script-captions-panel` | document settings | **Working** | |
-| Media / B-roll | `script-media-panel` | `.../broll/stock` | **Partial** | Stock search; overlaps clipper broll API |
-
-**Also in shell (not rail):** Comments, Markers, Storyboard, Multicam, Clarity, Audio, AI tools, Version history, Export, Share.
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Rooms** (LiveKit record) | MOSTLY DONE | Gated `FEATURE_SCRIPT_RECORDING` + LiveKit env | `code` | `app/app/rooms/**`, `components/recording/rooms/**` | `/app/rooms/new`, `/app/rooms/[sessionId]/studio`; sidebar **Rooms** |
+| **Rooms index** | STUB | Redirects to `/app/rooms/new` only | `code` | `app/app/rooms/page.tsx` | `/app/rooms` |
+| **Upload recovery** | MOSTLY DONE | Resume IndexedDB chunks; **no** “import take → script” button on recovery page (studio has it) | `code` | `rooms/[sessionId]/upload/page.tsx`, `upload-recovery-client.tsx` | `/app/rooms/[sessionId]/upload` |
+| **Take → project → script** (API) | DONE | `finalizeRecordingTakeToProject` returns `scriptUrl` | `code` | `lib/server/recording/finalize-take.ts`, `POST .../takes/[takeId]/import` | Rooms studio **Done** → `/script` |
+| **In-editor recorder bar** | MOSTLY DONE | Embedded in shell; depends on recording flags | `code` | `components/recording/editor/editor-recorder-bar.tsx`, `use-editor-recorder.ts` | Script shell header area |
+| **Teleprompter** | MOSTLY DONE | Panel in shell | `code` | `components/recording/editor/teleprompter-panel.tsx` | Script shell |
+| **Rooms upload card in shell** | MOSTLY DONE | Overlay during room-related flows | `code` | `rooms/upload-card.tsx` wired in `script-editor-shell.tsx` | Script shell |
 
 ---
 
-## 6. Text-based editing
+## 4. Transcription, bootstrap, speakers
 
-| Feature | UI | Mechanism | Status | Notes |
-|--------|-----|-----------|--------|-------|
-| Word delete → cut video | transcript + toolbar | EDL ops `cut` | **Working** | Core Descript model |
-| Selection toolbar | `script-selection-toolbar` | ops | **Working** | |
-| Filler words | `script-filler-review-bar`, edit tools | `filler-hits` + ops | **Working** | |
-| Shorten gaps | `script-shorten-gaps-panel` | gap ops | **Working** | |
-| Retakes (AI detect) | `script-retakes-panel` | `POST .../retakes` | **Working** | gpt-6-luna (`7805e11e4`) |
-| Retake apply | shell | ops | **Partial** | QA apply path |
-| Context menu | `script-transcript-context-menu` | ops | **Working** | |
-| Clarity rewrite | `script-clarity-panel` | `.../clarity` | **Working** | Luna + `[editor:clarity]` |
-
----
-
-## 7. Timeline & scenes
-
-| Feature | Component | Status | Notes |
-|--------|-----------|--------|-------|
-| Timeline panel | `timeline-panel` | **Working** | Ruler, word bar, music, overlays, captions lane |
-| Scenes strip | `timeline-scenes-strip` | **Partial** | |
-| Markers | `timeline-markers-lane`, slash menu | **Working** | |
-| Playhead sync | `sync-playhead`, follow mode | **Working** | |
-| Multicam | `script-multicam-panel` | **Partial** | |
-| Storyboard | `script-storyboard-panel` | **Partial** | |
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Transcription pipeline** (worker) | MOSTLY DONE | Failures on some `PROCESS_PROJECT` (11 FAILED / 14d) | `prod-db` | worker `pipeline.py`, Deepgram path | Project status on `/app/clips/[projectId]` |
+| **Transcribing wait UI** | DONE | Polls status + bootstrap | `code`; `[editor:transcribe]` | `script-editor-transcribing.tsx`, `getProjectStatus` | `/script` while processing |
+| **Script bootstrap** | DONE | Words, video URL, composition | `code` | `GET /api/clips/projects/[id]/script/bootstrap`, `lib/server/clips/script-bootstrap.ts` | Entry load |
+| **Speaker blocks / labels** | MOSTLY DONE | Depends on diarization in transcript | `code` | `group-speaker-blocks.ts`, shell transcript | Transcript pane |
+| **Speaker rename** | DONE | Composition ops | `code` | `speaker-rename-popover.tsx` | Transcript speaker chip |
+| **Transcript enrich** | MOSTLY DONE | `enrichedAt` on media asset | `code` | `lib/server/clips/script-enrich.ts` | Server-side on bootstrap path |
+| **Failed / canceled project** | DONE | Panel + back link | `code` | `script-editor-entry.tsx` | `/script` |
 
 ---
 
-## 8. Captions & subtitles
+## 5. Main editor shell (layout, transport, preview)
 
-| Feature | UI | Export | Status | Notes |
-|--------|-----|--------|--------|-------|
-| Caption styles / burn | `script-captions-panel`, overlay | export settings `burnCaptions` | **Working** | |
-| Caption overlay preview | `script-caption-overlay` | — | **Working** | |
-| SRT/VTT export | `script-export-popover` | `exportKind` srt/vtt | **Partial** | Worker `RENDER_SCRIPT_COMPOSITION` |
-| Subtitle track | export settings | `includeSubtitleTrack` | **Partial** | |
-
----
-
-## 9. AI actions
-
-| Feature | Route | Model | Status | Notes |
-|--------|-------|-------|--------|-------|
-| Chapters | `.../chapters` | gpt-6-luna | **Working** | `7805e11e4` |
-| Music suggest | `.../music/suggest` | gpt-6-luna | **Working** | |
-| SW script AI kinds | `/api/sw/scripts/[id]/ai/[kind]` | gpt-6-luna | **Working** | assist, coverage, etc. |
-| AI tools panel | `script-ai-tools-panel` | chapters | **Working** | |
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Script editor shell** | DONE | Large surface; live QA incomplete | `tests`: `editor-undo.test.ts`, `editor-native-controls.test.ts` | `script-editor-shell.tsx` | `/script` with words |
+| **Preview + transport** | DONE | Play/pause, playhead, follow mode | `code` | `script-preview-canvas.tsx`, `sync-playhead.ts`, `preview-pill-bar.tsx` | Center column |
+| **Composition switcher** (full vs clip) | DONE | `clipId` query | `code` | `script-composition-switcher.tsx` | Shell header |
+| **Saving / undo / redo** | DONE | Ops + localStorage undo stack | `tests`: `editor-undo.test.ts` | `use-script-composition.ts`, `POST .../ops` | Header undo/redo; autosave |
+| **Save status indicator** | DONE | saving / saved / error | `code` | shell header | Header |
+| **Side rail** (7 tabs) | DONE | project, edit, properties, elements, layouts, captions, media | `code` | `script-editor-rail.tsx` | Right rail icons |
+| **Command palette / actions** | DONE | Searchable actions dialog | `code` | `script-action-bar.tsx` | Cmd palette in shell |
+| **Back to project** | DONE | Link | `code` | shell header | Header |
+| **Reframe crop overlay** (preview) | MOSTLY DONE | Keyframes / aspect | `code` | `script-reframe-layer.tsx` | Preview |
+| **VU meter** | MOSTLY DONE | Preview audio levels | `code` | `script-vu-meter.tsx` | Transport |
+| **Find in transcript** | MOSTLY DONE | Wired in shell | `code` | `transcript-find.ts` | Shell search |
+| **Theme** | DONE | Uses `next-themes` | `code` | shell | Settings / system |
 
 ---
 
-## 10. Audio
+## 6. Text-based editing (Descript core)
 
-| Feature | UI | API | Status | Notes |
-|--------|-----|-----|--------|-------|
-| Studio Sound | `studio-sound-preview`, audio panel | `.../studio-sound` | **Partial** | Enqueues generation job |
-| Music bed | `script-audio-panel` | `.../music`, MUSIC worker | **Partial** | |
-| SFX | audio panel | `.../sfx` | **Partial** | |
-| Levels / VU | `script-vu-meter` | preview audio | **Partial** | |
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Word delete → cut video** | DONE | EDL `cut` ops | `tests`: `edits-reducer.test.ts` (related) | `derive-edl.ts`, ops route | Transcript + toolbar |
+| **Selection toolbar** | DONE | Cut, clarity, etc. | `code` | `script-selection-toolbar.tsx` | Text selection |
+| **Transcript context menu** | DONE | Right-click ops | `code` | `script-transcript-context-menu.tsx` | Transcript |
+| **Filler word review** | DONE | Scan + apply | `code` | `script-filler-review-bar.tsx`, `filler-hits.ts` | Edit tools → Filler; review bar |
+| **Shorten gaps** | DONE | Gap ops | `code` | `script-shorten-gaps-panel.tsx`, `gap-hits.ts` | Edit tools; gap chips |
+| **Gap chip menu** | DONE | Per-gap actions | `code` | `script-gap-chip-menu.tsx` | Transcript between words |
+| **Retakes detect (AI)** | DONE | gpt-6-luna | `code`; `logEditor` on route | `script-retakes-panel.tsx`, `POST .../retakes` | Edit tools → Retakes |
+| **Retake apply to timeline** | MOSTLY DONE | Apply path needs live QA | `code` | shell + ops | Retakes panel |
+| **Clarity rewrite** | DONE | Luna | `code` | `script-clarity-panel.tsx`, `POST .../clarity` | Side panel + selection |
+| **Descript keyboard shortcuts** | MOSTLY DONE | `descript-shortcuts.ts`; QA incomplete | `code` | `lib/clips/script-editor/descript-shortcuts.ts` | Global in shell |
+| **Shortcuts sheet** | DONE | Help overlay | `code` | `script-shortcuts-sheet.tsx` | Header / shortcut |
 
----
-
-## 11. Comments, share, publish
-
-| Feature | UI | API | Status | Notes |
-|--------|-----|-----|--------|-------|
-| Comments threads | `script-comments-panel` | `.../comments` | **Working** | Mentions → `workspace-members` |
-| Timeline pins | `timeline-comment-pins` | comments | **Working** | |
-| Share / access | `script-project-access-modal` | `.../share` | **Working** | |
-| Public share viewer | `/share/clips/[linkId]` | public API | **Partial** | |
-| Publish | export popover | `.../publish` | **Partial** | |
-| Social publish | export popover | `.../social-publish` | **Partial** | Feature-flagged |
+**Related (clipper, not full script):** Short-form trim lives on `/app/clips/[projectId]/edit/[clipId]` — separate from this inventory’s `/script` shell but shares EDL concepts.
 
 ---
 
-## 12. Version history
+## 7. Timeline, scenes, storyboard, multicam
 
-| Feature | UI | API | Status | Notes |
-|--------|-----|-----|--------|-------|
-| Version list / restore | `script-version-history-panel` | `.../versions` | **Working** | |
-| Server revision | ops `baseRevision` | ops route | **Working** | 409 rebase |
-
----
-
-## 13. Export & download
-
-| Feature | UI | API / worker | Status | Notes |
-|--------|-----|--------------|--------|-------|
-| Video export | `script-export-popover` | `.../export/video` → `RENDER_SCRIPT_COMPOSITION` | **Partial** | `edlDurationMs` in settings; needs prod QA |
-| Export poll / cancel | export popover | `export/[renderId]` | **Working** | |
-| Audio / text exports | export popover | same render job | **Partial** | |
-| Download URL | export popover | signed URL | **Partial** | |
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Timeline panel** | DONE | Ruler, word bar, lanes | `code` | `transport/timeline/timeline-panel.tsx` | Bottom dock |
+| **Timeline view menu** | DONE | Lane visibility | `code` | `script-timeline-view-menu.tsx` | Timeline header |
+| **Word bar / script track** | DONE | — | `code` | `timeline-wordbar.tsx`, `timeline-script-track.tsx` | Timeline |
+| **Music lane** | MOSTLY DONE | Tied to composition music bed | `code` | `timeline-music-lane.tsx` | Timeline |
+| **Overlay / B-roll lane** | MOSTLY DONE | Overlays from elements/media | `code` | `timeline-overlay-lane.tsx` | Timeline |
+| **Captions lane** | DONE | — | `code` | `timeline-captions-lane.tsx` | Timeline |
+| **Scenes strip** | MOSTLY DONE | Scene boundaries; nav helpers | `code` | `timeline-scenes-strip.tsx`, `scene-nav.ts` | Timeline |
+| **Storyboard grid** | MOSTLY DONE | Reorder scenes; empty state via `/` | `code` | `storyboard/script-storyboard-panel.tsx` | Shell storyboard mode (layout toggle) |
+| **Multicam** | MOSTLY DONE | Auto scenes from speakers; panel | `code` | `script-multicam-panel.tsx`, `multicam-scenes.ts` | Shell multicam UI |
+| **Playhead follow / scroll** | DONE | — | `code` | `follow-playhead.ts`, `scroll-word-into-view.ts` | Transcript + timeline |
 
 ---
 
-## 14. Composition API index (editor backend)
+## 8. Side panels (project, properties, elements, layouts, media)
 
-| Path | Purpose |
-|------|---------|
-| `GET/PATCH /api/clips/compositions/[id]` | Load metadata |
-| `GET/POST /api/clips/compositions/[id]/ops` | Save / undo document |
-| `GET/POST /api/clips/compositions/[id]/versions` | History |
-| `POST .../export/video`, `GET/DELETE .../export/[renderId]` | Export |
-| `.../clarity`, `chapters`, `retakes`, `music`, `music/suggest`, `sfx`, `studio-sound` | AI / audio |
-| `.../comments`, `.../share`, `.../publish`, `.../social-publish` | Collab |
-| `.../broll/stock` | Stock media search |
-| `GET /api/clips/projects/[id]/script/bootstrap` | Editor boot |
-| `GET/PATCH /api/clips/editor-preferences` | User prefs |
-| `GET /api/clips/workspace-members` | Comment mentions |
-
----
-
-## 15. Fix priority (user journey)
-
-1. Export duration/errors — live test (Rick).
-2. Recording → editor handoff (rooms upload → script).
-3. Partial panels (elements, layouts, multicam, storyboard) — live QA.
-4. Audio (studio sound, music, SFX) — job + preview QA.
-5. Share/publish/social — feature flags + prod verify.
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Project panel** | DONE | Metadata | `code` | `script-project-panel.tsx` | Rail → Project |
+| **Properties panel** | DONE | Selection properties → ops | `code` | `script-properties-panel.tsx` | Rail → Properties |
+| **Edit tools panel** | DONE | Tabs: filler, gaps, retakes | `code` | `script-edit-tools-panel.tsx` | Rail → Edit tools |
+| **Elements (overlays)** | MOSTLY DONE | Text placeholder only; B-roll via Media | `code` | `script-elements-panel.tsx` | Rail → Elements |
+| **Layouts panel** | MOSTLY DONE | Brand templates | `code` | `script-layouts-panel.tsx`, brand templates API | Rail → Layouts |
+| **Media / stock panel** | MOSTLY DONE | Stock search; overlaps clipper broll | `code` | `script-media-panel.tsx`, `.../broll/stock` | Rail → Media |
+| **Captions panel** | DONE | Styles, document caption settings | `code` | `script-captions-panel.tsx` | Rail → Captions |
+| **Audio panel** | MOSTLY DONE | Music, SFX, studio sound entry | `code` | `script-audio-panel.tsx` | Opened from shell (not on rail icons — audio subflows) |
+| **AI tools panel** | MOSTLY DONE | Chapters entry | `code` | `script-ai-tools-panel.tsx` | Shell panel toggle |
+| **Studio sound preview** | MOSTLY DONE | Generation job + preview | `code` | `studio-sound-preview.tsx`, `POST .../studio-sound` | Audio / shell |
 
 ---
 
-## Out of lane (do not treat as editor bugs)
+## 9. Captions & subtitles
 
-- Clipper `/app/clips/[id]/edit/[clipId]` and clip `broll`/`thumbnail` APIs.
-- Streamer `/app/streamer`.
-- AI Video (`t2v`) — paused behind feature flag (`c9a9f4a4a`).
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Caption overlay (preview)** | DONE | — | `code` | `script-caption-overlay.tsx` | Preview |
+| **Caption presets / brand** | DONE | Shared with brand kit | `code` | caption presets API, brand | Captions panel + brand |
+| **Burn captions on export** | MOSTLY DONE | Export path **broken** on worker (see §16) | `prod-db` RENDER failures | export settings, worker render | Export popover |
+| **SRT/VTT export** | MOSTLY DONE | Same worker job type | `prod-db` | `script-export-popover.tsx`, `composition-export.ts` | Export → Subtitles |
+| **Subtitle sidecar track** | MOSTLY DONE | `includeSubtitleTrack` in export settings | `code` | export popover | Export advanced |
+
+---
+
+## 10. AI actions
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Chapters** | DONE | Luna | `logEditor` | `POST .../chapters`, AI tools | AI tools / export chapters text |
+| **Music suggest** | DONE | Luna | `code` | `POST .../music/suggest` | Audio panel |
+| **Retakes** | DONE | See §6 | `code` | `.../retakes` | Edit tools |
+| **Clarity** | DONE | See §6 | `code` | `.../clarity` | Clarity panel |
+| **SW script AI kinds** | DONE | `/api/sw/scripts/[id]/ai/[kind]` | `tests` partial | `app/api/sw/**` | Screenwriting UI |
+
+---
+
+## 11. Audio (music, SFX, studio)
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Music bed job** | MOSTLY DONE | Worker `MUSIC` job; preview QA | `code` | `POST .../music`, worker | Audio panel |
+| **SFX** | MOSTLY DONE | `POST .../sfx` | `code` | audio panel | Audio panel |
+| **Studio sound** | MOSTLY DONE | `STUDIO_SOUND` worker job | `code` | `.../studio-sound` | Studio sound preview |
+| **useGeneration polling** | DONE | Shared with clipper generation UX | `code` | `use-generation.ts` | Shell overlays |
+
+---
+
+## 12. Comments & collaboration
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Comment threads** | DONE | CRUD API | `code` | `script-comments-panel.tsx`, `.../comments` | Header comment icon |
+| **Timeline comment pins** | DONE | — | `code` | `timeline-comment-pins.tsx` | Timeline |
+| **Mentions** | MOSTLY DONE | `workspace-members` API | `code` | `comment-mention-textarea.tsx` | Composer |
+| **Comment composer pill** | DONE | — | `code` | `comment-composer-pill.tsx` | Transcript |
+
+---
+
+## 13. Share, publish, social
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Project access / share links** | MOSTLY DONE | Invite links; modal | `code` | `script-project-access-modal.tsx`, `POST .../share` | Header Share |
+| **Public share viewer** | MOSTLY DONE | `/share/clips/[linkId]` | `code` | `app/share/clips/[linkId]/page.tsx`, `share-clip-viewer.tsx` | Public URL |
+| **Publish to web** | MOSTLY DONE | Slug + embed settings; depends on export output | `code` | `POST .../publish`, export popover publish tab | Export popover |
+| **Social publish** | STUB / gated | `403` when feature off | `code` | `composition-social-publish.ts`, `isCompositionSocialPublishEnabled()` | Export popover (if flag on) |
+| **Published slug page** | MOSTLY DONE | `/share/p/[slug]` | `code` | `app/share/p/[slug]/page.tsx` | Public |
+
+---
+
+## 14. Markers
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Slash menu (markers/scenes)** | DONE | — | `code` | `script-slash-menu.tsx` | Type `/` in transcript |
+| **Marker headings in script** | DONE | — | `code` | `script-marker-heading.tsx` | Transcript |
+| **Markers lane** | DONE | — | `code` | `timeline-markers-lane.tsx` | Timeline |
+| **Marker list popover** | DONE | Navigate markers | `code` | `script-marker-list-popover.tsx` | Shell |
+| **Export include markers** | MOSTLY DONE | Toggle in export | `code` | export popover | Export advanced |
+
+---
+
+## 15. Version history & undo
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Undo / redo (session)** | DONE | localStorage + ops | `tests`: `editor-undo.test.ts` | `use-script-composition.ts` | Header |
+| **Server version list** | DONE | — | `code` | `script-version-history-panel.tsx`, `GET .../versions` | Shell version history |
+| **Restore version** | DONE | — | `code` | `POST .../versions/[id]/restore` | Version panel |
+| **Ops revision conflict** | DONE | 409 rebase | `code` | ops route `baseRevision` | Automatic on save |
+
+---
+
+## 16. Settings & preferences
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Editor settings modal** | DONE | Layout, preview, caption defaults | `code` | `script-editor-settings-modal.tsx` | Header Settings |
+| **User editor preferences API** | DONE | Persisted | `code` | `GET/PATCH /api/clips/editor-preferences` | Settings modal |
+| **Panel layout persistence** | DONE | localStorage | `code` | `panel-layout.ts` | Shell resize |
+
+---
+
+## 17. Export, download, publish output
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Video export (composition)** | **BROKEN** | Worker failures dominate recent jobs | `prod-db`: `RENDER_SCRIPT_COMPOSITION` all-time **FAILED 22**, **DONE 5**, CANCELED 2; 30d same ratio. Recent errors: `cannot access local variable 'download_object' where it is not associated with a value` (2026-10-27 13:50–14:04 UTC); older: `progress() takes 1 positional argument but 2 were given` | `script-export-popover.tsx`, `POST .../export/video`, worker `script_composition_render.py`, `main.py` `handle_script_composition_render` | Export popover → Video |
+| **Export progress poll / cancel** | DONE | UI wired | `code` | `GET/DELETE .../export/[renderId]` | Export popover |
+| **Audio export** | **BROKEN** | Same job type as video | `prod-db` | export popover | Export → Audio |
+| **SRT/VTT export** | **BROKEN** | Same job type | `prod-db` | export popover | Export → Subtitles |
+| **Client transcript export (txt/md)** | DONE | No worker | `code` | export popover transcript tab | Export → Transcript |
+| **YouTube chapters copy** | DONE | From document | `code` | `chapters-export.ts` | Export popover |
+| **Block export while processing** | DONE | `projectStatus` guard | `code` | export popover | Export button disabled |
+| **`edlDurationMs` in job settings** | DONE | Server sets from EDL | `code` | `lib/server/clips/composition-export.ts` | Server-side |
+
+---
+
+## 18. Download / exports hub (cross-product)
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Global exports page** | MOSTLY DONE | Clip + composition exports mix | `code` | `/app/exports`, `/app/clips/(drive)/exports` | Sidebar **Exports** |
+| **Clip export (clipper)** | MOSTLY DONE | B owns; separate from script render | `code` | clip export APIs | Clip editor / grid |
+
+---
+
+## 19. APIs index (composition backend)
+
+All routes under `new-app/app/api/clips/compositions/[compositionId]/`:
+
+| Route | Feature area | Status (code) |
+|-------|----------------|---------------|
+| `GET/PATCH` composition | Load/patch metadata | DONE |
+| `GET/POST ops` | Save document | DONE |
+| `GET/POST versions` + restore | History | DONE |
+| `export/video`, `export/[renderId]` | Export | BROKEN at worker |
+| `clarity`, `chapters`, `retakes` | AI | DONE |
+| `music`, `music/suggest`, `sfx`, `studio-sound` | Audio | MOSTLY DONE |
+| `comments` | Comments | DONE |
+| `share`, `publish`, `social-publish` | Distribution | MOSTLY DONE / STUB social |
+| `broll/stock` | Media | MOSTLY DONE |
+| `GET .../projects/[id]/script/bootstrap` | Boot | DONE |
+
+---
+
+## 20. Tests & tooling
+
+| Item | Status | Evidence |
+|------|--------|----------|
+| `editor-undo.test.ts` | DONE | CI |
+| `editor-native-controls.test.ts` | DONE | CI |
+| `to-editor-words.test.ts`, `editor-words.test.ts` | DONE | CI |
+| `test_script_composition_render_storage.py` | DONE | Worker — guards `download_object` shadowing |
+| E2E script editor | — | Not listed in inventory; live QA pending |
+
+---
+
+## 21. Flagging note (for later — not implemented)
+
+When hiding: record **UI entry** column routes/nav ids per row. Suggested mirror pattern: `SCRIPT_EDITOR_ENABLED` / `NEXT_PUBLIC_SCRIPT_EDITOR_ENABLED` (same approach as AI Video). **Screenwriting** already has its own gate. **Rooms** uses `FEATURE_SCRIPT_RECORDING`. **Social publish** has `isCompositionSocialPublishEnabled()`.
+
+---
+
+## 22. Out of scope (separate products)
+
+| Surface | Route | Note |
+|---------|-------|------|
+| Clipper short editor | `/app/clips/[projectId]/edit/[clipId]` | B / regular clipper |
+| Streamer | `/app/streamer` | Stream clipper agent |
+| AI Video (t2v) | gated off | Paused feature flag |
