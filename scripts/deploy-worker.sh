@@ -109,6 +109,15 @@ echo "[deploy-worker] docker build"
 cd "\${REMOTE_SRC}"
 docker build -f worker/Dockerfile -t clips-worker:latest .
 
+WEB_CONTAINER=\$(docker ps --format '{{.Names}}' | grep -E 'ds8s3hjin|transovo.*web' | head -1 || true)
+if [ -n "\${WEB_CONTAINER}" ]; then
+  WORKER_CALLBACK_URL="http://\${WEB_CONTAINER}:3000"
+  echo "[deploy-worker] WORKER_CALLBACK_URL=\${WORKER_CALLBACK_URL} (coolify internal, bypasses proxy 502)"
+else
+  WORKER_CALLBACK_URL=""
+  echo "[deploy-worker] WARN: no web container for WORKER_CALLBACK_URL"
+fi
+
 start_worker() {
   local name="\$1"
   local lane="\$2"
@@ -131,6 +140,7 @@ start_worker() {
     -v /opt/clips-worker/cache:/opt/clips-worker/cache \\
     -e "WORKER_LANE=\$lane" \\
     -e "WORKER_ID=\$worker_id" \\
+    \${WORKER_CALLBACK_URL:+-e "WORKER_CALLBACK_URL=\$WORKER_CALLBACK_URL"} \\
     clips-worker:latest
 }
 

@@ -92,7 +92,7 @@ def mark_generation_failed(conn, job: dict, message: str) -> None:
             ("FAILED", message[:4000], job["id"]),
         )
     conn.commit()
-    post_progress(job["id"], {"jobStatus": "FAILED", "error": message[:500]})
+    post_progress_terminal(job["id"], {"jobStatus": "FAILED", "error": message[:500]})
 
 
 def count_queued_jobs(conn) -> int:
@@ -111,26 +111,91 @@ def sign_body(secret: str, body: str) -> str:
     return hmac.new(secret.encode(), body.encode(), hashlib.sha256).hexdigest()
 
 
-def post_progress(job_id: str, payload: dict) -> None:
-    app_url = env("APP_URL").rstrip("/")
+def progress_base_urls() -> list[str]:
+    """Prefer direct Coolify/docker callback URL; fall back to public APP_URL (proxy 502 during deploy)."""
+    urls: list[str] = []
+    for key in ("WORKER_CALLBACK_URL", "TRANSOVO_BACKEND_URL"):
+        v = (os.environ.get(key) or "").strip().rstrip("/")
+        if v and v not in urls:
+            urls.append(v)
+    app = (os.environ.get("APP_URL") or "").strip().rstrip("/")
+    if app and app not in urls:
+        urls.append(app)
+    if not urls:
+        raise RuntimeError("Missing APP_URL / WORKER_CALLBACK_URL for progress callbacks")
+    return urls
+
+
+def _post_progress_once(job_id: str, payload: dict, base_url: str) -> None:
     secret = env("WORKER_SHARED_SECRET")
     body = json.dumps(payload)
     req = urllib.request.Request(
-        f"{app_url}/api/internal/jobs/{job_id}/progress",
+        f"{base_url}/api/internal/jobs/{job_id}/progress",
         data=body.encode(),
         headers={"Content-Type": "application/json", "x-worker-signature": sign_body(secret, body)},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=300) as resp:
+    timeout = int(os.environ.get("WORKER_PROGRESS_TIMEOUT_SEC", "120"))
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         resp.read()
 
 
+def _progress_retryable(exc: BaseException) -> bool:
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in (502, 503, 504, 429, 408)
+    return isinstance(exc, (urllib.error.URLError, TimeoutError, ConnectionError, OSError))
+
+
+def post_progress(job_id: str, payload: dict, *, must_succeed: bool = False) -> None:
+    terminal = payload.get("jobStatus") in ("DONE", "FAILED")
+    must = must_succeed or terminal
+    default_attempts = 60 if must else 4
+    max_attempts = int(os.environ.get("WORKER_PROGRESS_MAX_ATTEMPTS", str(default_attempts)))
+    urls = progress_base_urls()
+    delay = float(os.environ.get("WORKER_PROGRESS_BACKOFF_SEC", "2"))
+    last_err: BaseException | None = None
+
+    for attempt in range(max_attempts):
+        for base in urls:
+            try:
+                _post_progress_once(job_id, payload, base)
+                if attempt > 0:
+                    log(f"progress post ok job={job_id} after attempt={attempt + 1} base={base}")
+                return
+            except Exception as exc:
+                last_err = exc
+                if not _progress_retryable(exc):
+                    if must:
+                        raise
+                    log(f"progress post failed (continuing) job={job_id} base={base}: {exc}")
+                    return
+        if attempt < max_attempts - 1:
+            log(
+                f"progress post retry job={job_id} attempt={attempt + 1}/{max_attempts} "
+                f"last={last_err!r} sleep={delay:.1f}s"
+            )
+            time.sleep(delay)
+            delay = min(delay * 2, 45.0)
+
+    if must:
+        raise RuntimeError(f"progress post failed after {max_attempts} attempts: {last_err}")
+    log(f"progress post gave up (non-fatal) job={job_id}: {last_err}")
+
+
 def post_progress_resilient(job_id: str, payload: dict) -> None:
-    """Progress posts must not abort long downloads on transient gateway timeouts."""
+    """Never abort the worker job on progress ping failure."""
     try:
-        post_progress(job_id, payload)
+        post_progress(job_id, payload, must_succeed=False)
     except Exception as exc:
         log(f"progress post failed (continuing) job={job_id}: {exc}")
+
+
+def post_progress_terminal(job_id: str, payload: dict) -> None:
+    """Best-effort terminal callback; logs if exhausted but does not re-raise to callers that must not fail."""
+    try:
+        post_progress(job_id, payload, must_succeed=True)
+    except Exception as exc:
+        log(f"progress terminal post failed (job may already be DONE in DB) job={job_id}: {exc}")
 
 
 def claim_job(conn) -> dict | None:
@@ -375,7 +440,14 @@ from clips_worker.script_composition_render import run_script_composition_render
 
 
 def handle_script_composition_render(conn, job: dict) -> None:
-    run_script_composition_render_job(conn, job, post_progress)
+    def progress(payload: dict) -> None:
+        terminal = payload.get("jobStatus") in ("DONE", "FAILED")
+        if terminal:
+            post_progress_terminal(job["id"], payload)
+        else:
+            post_progress_resilient(job["id"], payload)
+
+    run_script_composition_render_job(conn, job, progress)
 
 
 DISPATCH["RENDER_SCRIPT_COMPOSITION"] = handle_script_composition_render
