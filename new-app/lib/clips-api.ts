@@ -115,7 +115,7 @@ export function exportClip(clipId: string) {
     jobId?: string
   }>(`/api/clips/clips/${clipId}/export`, {
     method: 'POST',
-    body: JSON.stringify({ resolution: 720, watermark: false }),
+    body: JSON.stringify({ resolution: '720p', watermark: false }),
   })
 }
 

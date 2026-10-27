@@ -3,7 +3,7 @@
 /** Deepgram ASR rate on source duration (measured on 25 min interview). */
 export const TRANSCRIBE_RATE_DEEPGRAM = 0.05
 /** Download + queue jitter on top of ASR budget (Deepgram stage ~1m15–1m50 total). */
-export const DEEPGRAM_DOWNLOAD_BUFFER_SEC = 35
+export const DEEPGRAM_DOWNLOAD_BUFFER_SEC = 12
 export const TRANSCRIBE_RATE_LOCAL_WHISPER = 0.25
 /** Picker ~3 min at 25 min source; scales with source duration / transcript length proxy. */
 export const PICKER_ETA_AT_REFERENCE_SEC = 180
@@ -84,7 +84,7 @@ function reframeRemainingSec(current: number, total: number): number {
 function tailAfterPickerSec(durationSec: number, stage: string | null | undefined): number {
   const clipStage = parseClipStage(stage)
   const clips = clipStage?.total ?? estimatedClipCount(durationSec)
-  return reframeTailEstimateSec(clips)
+  return reframeWallSec(clips)
 }
 
 function pickerRemainingSec(stage: string | null | undefined, progress: number, durationSec: number): number {
@@ -113,8 +113,9 @@ function transcribeRemainingSec(input: {
     const frac = Math.min(1, Math.max(0, done / input.chunkTotal))
     return Math.max(0, budget * (1 - frac))
   }
-  // Flat progress during transcribe: decay budget with elapsed time (avoid elapsed×progress formula).
-  return Math.max(30, budget - input.elapsedSec)
+  const remaining = budget - input.elapsedSec
+  if (remaining <= 0) return 0
+  return Math.min(remaining, budget * 0.85)
 }
 
 function progressBasedRemainingSec(elapsedSec: number, progress: number): number {
