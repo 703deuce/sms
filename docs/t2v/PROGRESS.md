@@ -13,8 +13,8 @@ Legend: **done** · **partial** · **not done** (excludes billing & formal M8 br
 | M2 | **partial** | P1/P2 create, script review, URL extract; **audio** upload → transcript path not wired in create UI |
 | M3 | **done** | `T2V_ASSEMBLE`, internal assembled → composition, editor handoff, stable word ids |
 | M4 | **partial** | Storyboard match, replace media dialog, Pexels photos; **not** full P4 panel (crop/focal, uploads tab, infinite scroll) |
-| M5 | **partial** | Worker: xfade, titles/LT, ducking, brand bookends (#786–#790); UI: preview shell, captions/voice tabs; **not** full Audio/Music/Text/Brand studio tabs |
-| M6 | **partial** | Chat producer + tools API, build progress overlay, cancel assemble, undo/redo, `fineEditedAt` confirm; **not** full tool-call confirm cards / paid tools |
+| M5 | **partial** | Worker stack landed; studio rail: voice, music, captions, text, brand, templates |
+| M6 | **partial** | Producer API, P12 overlay/cancel, undo/redo, stale banners; **not** tool-call confirm cards |
 | M7 | **done** | Drive list/filter, exports composition rows, settings voices, studio export popover |
 | M8 | **not done** | Formal browser QA matrix deferred until Rick |
 | M9 | **partial** | Templates gallery + `seed-t2v-templates.ts`, deck extract worker, clone+consent, scene AI jobs, Pexels photos; **not** full template preview video / AI video aspect matrix |
@@ -28,20 +28,20 @@ Legend: **done** · **partial** · **not done** (excludes billing & formal M8 br
 | P3 | Studio shell | **partial** — rail + storyboard; not full §3.0 frame/preview strip |
 | P3a | Script review | **partial** — edit scenes; missing rewrite chips / generating skeleton |
 | P3b | Storyboard | **partial** — grid, match, build, stale badges |
-| P4 | Replace media / Visuals | **partial** — dialog only |
+| P4 | Replace media / Visuals | **partial** — dialog w/ stock grid + AI tabs |
 | P5 | Voice picker | **partial** — settings + studio Voice tab |
-| P6 | Music | **not done** |
-| P7 | Captions | **partial** — preset picker in Styles tab |
-| P8 | Text titles/LT | **not done** (worker burns titles from draft; no list UI) |
-| P9 | Template in studio | **not done** (gallery + apply on create only) |
-| P10 | Brand tab | **not done** (brand in worker assemble; no studio tab) |
+| P6 | Music | **partial** — mood/volume/duck panel (no library browse) |
+| P7 | Captions | **partial** — preset picker tab |
+| P8 | Text titles/LT | **partial** — per-scene title/LT editor |
+| P9 | Template in studio | **partial** — apply from studio tab + gallery |
+| P10 | Brand tab | **partial** — brand template picker |
 | P11 | Chat | **partial** — Magic Box panel + producer API |
 | P12 | Build progress | **partial** — overlay + poll; stage checklist simplified |
 | P13 | Export | **done** — popover + stale banner |
 | P14 | Voice clone modal | **done** |
 | P15 | Templates gallery | **partial** — list/filter; preview modal basic |
 | P16–P17 | Drive list / new card | **done** |
-| P18 | Script editor handoff | **partial** — link + stale banner on script route (verify) |
+| P18 | Script editor handoff | **partial** — link + stale banner on `/script` |
 | P19 | Exports page | **done** |
 | P20 | Settings voices | **done** (no usage/billing) |
 
@@ -64,8 +64,7 @@ Legend: **done** · **partial** · **not done** (excludes billing & formal M8 br
 
 ## Remaining build (non-test, non-billing)
 
-1. P6 Music + P8 Text UI in studio  
-2. P4 Visuals tab (stock grid, crop/focal, uploads)  
-3. P9/P10 studio tabs; full §3.0 preview + scene strip  
+1. P6 music library / generate; P4 uploads + crop/focal modal  
+2. Full §3.0 preview stage + scene strip  
 4. M2 audio source; M8 when Rick approves  
 5. Template preview assets (optional thumb/video keys)

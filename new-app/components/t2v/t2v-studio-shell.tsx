@@ -2,19 +2,23 @@
 
 import type { ReactNode } from 'react'
 import { useCallback, useState } from 'react'
-import { MessageSquare, Mic, Type, Film, Undo2, Redo2 } from 'lucide-react'
+import { MessageSquare, Mic, Type, Film, Undo2, Redo2, Music, Palette, LayoutTemplate, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { T2vBuildProgress } from '@/components/t2v/t2v-build-progress'
 import { T2vProducerPanel } from '@/components/t2v/t2v-producer-panel'
 import { T2vPanelCaptions } from '@/components/t2v/t2v-panel-captions'
 import { T2vPanelVoice } from '@/components/t2v/t2v-panel-voice'
+import { T2vPanelMusic } from '@/components/t2v/t2v-panel-music'
+import { T2vPanelText } from '@/components/t2v/t2v-panel-text'
+import { T2vPanelBrand } from '@/components/t2v/t2v-panel-brand'
+import { T2vPanelTemplates } from '@/components/t2v/t2v-panel-templates'
 import { useT2vDraftPoll } from '@/lib/t2v/use-t2v-draft-poll'
 import { useT2vUndo } from '@/lib/t2v/use-t2v-undo'
 import { patchT2vDraft } from '@/lib/t2v/t2v-api'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { cn } from '@/lib/utils'
 
-type Tab = 'story' | 'voice' | 'captions' | 'chat'
+type Tab = 'story' | 'voice' | 'music' | 'captions' | 'text' | 'brand' | 'templates' | 'chat'
 
 export function T2vStudioShell({
   draftId,
@@ -81,13 +85,17 @@ export function T2vStudioShell({
   const tabs: { id: Tab; label: string; icon: typeof Film }[] = [
     { id: 'story', label: 'Story', icon: Film },
     { id: 'voice', label: 'Voice', icon: Mic },
-    { id: 'captions', label: 'Styles', icon: Type },
+    { id: 'music', label: 'Music', icon: Music },
+    { id: 'captions', label: 'Captions', icon: Type },
+    { id: 'text', label: 'Text', icon: FileText },
+    { id: 'brand', label: 'Brand', icon: Palette },
+    { id: 'templates', label: 'Template', icon: LayoutTemplate },
     { id: 'chat', label: 'Chat', icon: MessageSquare },
   ]
 
   return (
     <div className="flex min-h-0 flex-1">
-      <nav className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-border py-2">
+      <nav className="flex w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border py-2">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -123,8 +131,22 @@ export function T2vStudioShell({
             })
           ) : tab === 'voice' ? (
             <T2vPanelVoice doc={doc} onChange={(n) => void persist(n)} />
+          ) : tab === 'music' ? (
+            <T2vPanelMusic doc={doc} onChange={(n) => void persist(n)} />
           ) : tab === 'captions' ? (
             <T2vPanelCaptions doc={doc} onChange={(n) => void persist(n)} />
+          ) : tab === 'text' ? (
+            <T2vPanelText doc={doc} onChange={(n) => void persist(n)} />
+          ) : tab === 'brand' ? (
+            <T2vPanelBrand doc={doc} onChange={(n) => void persist(n)} />
+          ) : tab === 'templates' ? (
+            <T2vPanelTemplates
+              draftId={draftId}
+              onApplied={(d, rev) => {
+                replace(d)
+                setRevision(rev)
+              }}
+            />
           ) : (
             <div className="flex min-h-0 flex-1 p-3">
               <T2vProducerPanel

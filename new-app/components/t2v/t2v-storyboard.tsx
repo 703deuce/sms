@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Button } from '@/components/ui/button'
@@ -78,9 +79,12 @@ export function T2vStoryboard({ draftId, projectId, document: doc, revision, onD
             {building ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Build video
           </PrimaryButton>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <a href={`/app/clips/${projectId}/script`}>Open in editor</a>
-          </Button>
+          <Link
+            href={`/app/clips/${projectId}/script`}
+            className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 text-sm hover:bg-muted"
+          >
+            Open in editor
+          </Link>
         </div>
       </div>
       {doc.scenes.length === 0 ? (
