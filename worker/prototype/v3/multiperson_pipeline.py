@@ -15,16 +15,15 @@ from mediapipe.tasks.python import vision, BaseOptions
 
 from director import run_director, hungarian_map_speakers, combine_speaking_probs, style_config
 from smoothing import FollowState, follow
+from shot_cuts import sample_indices_at_cuts, scene_cut_times
 from tracking import (
     Det,
     Tracklet,
     associate_frame,
     cluster_tracklets,
     embed_tracklet,
-    histogram_shot_cuts,
     load_sface,
     person_id_label,
-    tracklets_at_frame,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -45,6 +44,7 @@ def detect_loop(
     fps: float,
     W: int,
     H: int,
+    video_path: str,
 ) -> tuple[list[float], dict[int, np.ndarray], list[Tracklet], list[np.ndarray]]:
     step = max(1, int(round(fps / SAMPLE_FPS)))
     scale = 640.0 / max(W, H)
@@ -85,13 +85,25 @@ def detect_loop(
         tracklets, _ = associate_frame(tracklets, dets)
         sample_i += 1
         fi += 1
-    cuts = histogram_shot_cuts(gray_samples)
-    if cuts != [0]:
-        # reset tracklets at cuts after first
-        merged: list[Tracklet] = []
+    cut_times = scene_cut_times(video_path, gray_samples, times_s=times)
+    cut_sample_idx = set(sample_indices_at_cuts(cut_times, times))
+    if cut_sample_idx - {0}:
+        # split tracklets at shot boundaries (ByteTrack-lite reset)
+        split: list[Tracklet] = []
+        next_id = 0
         for tr in tracklets:
-            merged.append(tr)
-        tracklets = merged
+            buckets: dict[int, list] = {0: []}
+            for d in tr.dets:
+                bi = 0
+                for ci in cut_sample_idx:
+                    if ci > 0 and d.frame >= ci:
+                        bi = ci
+                buckets.setdefault(bi, []).append(d)
+            for bi, dets in buckets.items():
+                if dets:
+                    split.append(Tracklet(tid=next_id, dets=dets))
+                    next_id += 1
+        tracklets = split
     return times, frame_by_index, tracklets, gray_samples
 
 
@@ -133,7 +145,7 @@ def run(inp: str, out: str) -> None:
             min_face_presence_confidence=0.2,
         )
     )
-    times_l, frame_by_index, tracklets, _ = detect_loop(cap, det, fps, W, H)
+    times_l, frame_by_index, tracklets, _ = detect_loop(cap, det, fps, W, H, inp)
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     if not times_l:
         raise RuntimeError("no frames sampled")
@@ -275,8 +287,9 @@ def run(inp: str, out: str) -> None:
             for seg in segment_tracks
         ],
     }
-    crop_out = os.environ.get("CROP_TRACK_OUT", os.path.splitext(out)[0] + ".crop_track.json")
-    json.dump(crop, open(crop_out, "w"), separators=(",", ":"))
+    if int(os.environ.get("WRITE_CROP_TRACK", "1")):
+        crop_out = os.environ.get("CROP_TRACK_OUT", os.path.splitext(out)[0] + ".crop_track.json")
+        json.dump(crop, open(crop_out, "w"), separators=(",", ":"))
     if int(os.environ.get("NORENDER", "0")):
         return
     import sys
