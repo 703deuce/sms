@@ -77,6 +77,8 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
     projectId: project.id,
     title: project.title,
     sourceMediaId,
+    rangeStartMs: project.rangeStartMs,
+    rangeEndMs: project.rangeEndMs,
     durationMs,
     wordCount: editorWords.length,
     enrichedAt: mediaAsset?.enrichedAt?.toISOString() ?? null,

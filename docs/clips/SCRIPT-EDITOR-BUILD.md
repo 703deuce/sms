@@ -1,6 +1,6 @@
 # Script editor — build plan
 
-**Status:** **M1 in progress** (2026-10-27) — data plane + bootstrap API; clip editor at `/app/clips/[projectId]/edit/[clipId]` remains the working cut-by-transcript surface until script shell ships.  
+**Status:** **M1b in progress** (2026-10-27) — Descript-style shell + read-only transcript↔video sync; M1a data plane shipped. Clip editor at `/app/clips/[projectId]/edit/[clipId]` remains cut-by-transcript until M2.  
 **Product spec:** `docs/clips/script-editor.md` (v1.0).  
 **Owner decisions (2026-10-26):** see §0 “Decisions locked” below.
 

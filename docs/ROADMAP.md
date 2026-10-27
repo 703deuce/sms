@@ -81,8 +81,9 @@ Quality and layout intelligence for the **regular clipper** (and shared reframe 
 | **(c) Top/bottom split** | Test and **auto-choose** top/bottom split layout when the scene fits (vs speaker-follow or fit-only). |
 | **(d) Variety across clips** | Vary layout treatment and caption/style choices across clips in one project instead of one template for every output. |
 | **(e) Wide two-shot crop** | Fix reframing that crops a wide two-shot and cuts one person in half. |
-| **(f) ETA calibration** | Tune stage-aware ETA against real Deepgram/Whisper timings (owner test data); no in-flight calibration work during feature builds. |
-| **(g) Parallel render** | Parallelize clip reframe/render where safe (throughput; not correctness). |
+| **(f) ETA calibration** | Further tune stage-aware ETA as more prod timings land (initial calibration shipped Oct 2026). |
+| **(g) Parallel render** | Further tune `CLIPS_RENDER_CONCURRENCY` / ffmpeg threads per host (initial pool shipped Oct 2026). |
+| **(h) Speaker-follow calmness** | **Owner feedback (proj_89c551443cb34a48a034a2260e9eeeca, 25 min interview):** 2/4 clips framed the wrong talker; one clip panned to the mic ~2 s during a pause before landing on the guest. **Goal:** stay on the current person; switch **slightly late** (not early), only when someone is clearly talking. **Planned (`v3/speakercrop_v2.py`):** `LEAD` 0.4 → 0 or small lag; `MIN_SEG` 0.8 → ~2–3 s; higher `HYST` + require sustained speech (≥~1 s) from new speaker before cut; **Deepgram word-level diarization (`spk`)** as primary who-is-talking signal (Resemblyzer clusters demoted); lips only to map speaker→face; **hold last crop** when face detection drops (pauses, head turns); ignore pauses and backchannels (“yeah”, “mm-hm”) as switch triggers; **regression test** on this interview fixture. |
 
 **Scope:** All items above are **post–1–3 polish** — same pass across **clipper, Streamer, script editor, and AI Studio**. Do not schedule until owner says GO on fine-tuning.
 

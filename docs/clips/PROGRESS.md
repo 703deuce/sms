@@ -13,7 +13,9 @@
 | **Upload ETA (stage-aware)** | `db41e7a6b` | Transcribe from duration×engine rate; picker/reframe tail; 50% poll clamp |
 | **1080p export** | `3083d08d3` | Export dialog + worker render path |
 | **Retry/resume** | `6b88d8255` | Skip ASR when `transcriptWords` persisted; soft-delete partial clips; B2 cache on re-download; picker pass1 not stored — re-runs on resume |
-| **Script editor M1a** | `e87d485cd` (local) | Prisma script models, `GET …/script/bootstrap`, `toEditorWords`, EDL helpers, read-only `/script` page |
+| **Script editor M1a** | `2ccadbfc7` (local) | Prisma script models, `GET …/script/bootstrap`, `toEditorWords`, EDL helpers |
+| **Script editor M1b** | *(local)* | Descript-style shell, transcript↔video seek sync, panel width persistence |
+| **ETA calibration + parallel reframe** | *(local)* | Deepgram 0.05×+buffer, picker/reframe rates; `CLIPS_RENDER_CONCURRENCY` pool |
 
 **Fine-tuning backlog** (after script editor + AI Studio — see `docs/ROADMAP.md`): face/speaker generalization, single-person + corner webcam, auto top/bottom split, clip style variety, wide two-shot crop, Streamer VOD resumable download.
 
