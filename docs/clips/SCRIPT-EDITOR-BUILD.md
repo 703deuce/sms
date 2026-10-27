@@ -30,7 +30,7 @@ Former §B5 “Later” items are **launch-required**. Implement in **M7+** afte
 | **Scenes** | `/` inserts `sceneBreak`; per-scene aspect, reframe, caption visibility; scene thumbnails in script | **M7** |
 | **Layouts** | Layout picker per scene (Descript-style templates) | **M7** |
 | **Markers / chapters** | `#` marker token; transport markers dropdown; chapter metadata on export | **M8** |
-| **B-roll / media** | Media panel (upload, project clips, **Pixabay** stock); overlays **anchored to words**; overlay lanes on timeline | **M9** |
+| **B-roll / media** | **Reuse clipper B-roll** (see §2.6): same `ClipEditsV2.broll` / `stock_assets`, worker `broll_render.py`, clip editor stock + AI UI; script **Media** panel calls same APIs; anchors on `wordId`, times mapped via EDL | **M9** |
 | **Music** | Music lane: library, fade in/out, auto-duck under speech | **M10** |
 | **Studio Sound** | Enhance voice toggle + intensity; CPU worker (**DeepFilterNet** or similar OSS); preview uses processed proxy | **M11** |
 | **LLM transcript ops** | Remove retakes, edit-for-clarity, filler/gap removal via **cheap LLM text ops** on transcript (not Underlord chat) | **M12** |
@@ -54,7 +54,7 @@ Done = corresponding **§D1** browser tests pass on **transovo.ai** (fixture `te
 | **M6** | Transovo integration | 61–66 | Entry from project + clip cards, Library ▸ Editor, shortcuts sheet, no dead controls audit |
 | **M7** | Scenes + layouts | 67–72 | `sceneBreak` token, per-scene aspect/reframe/captions, script thumbnails, layout picker |
 | **M8** | Markers + chapters | 73–77 | `#` marker, ruler flags, transport dropdown, export chapter tags |
-| **M9** | Media + B-roll overlays | 78–84 | Media panel, Pixabay, word-anchored overlays, timeline overlay lanes |
+| **M9** | Media + B-roll overlays | 78–84 | Media panel (reuse `BrollPanel` / stock search APIs), word anchors → `broll[]` via EDL; timeline overlay lanes; **no new render graph** |
 | **M10** | Music lane | 85–88 | Library, lane UI, fades, ducking under speech |
 | **M11** | Studio Sound | 89–91 | Worker enhance job, proxy preview, Properties intensity |
 | **M12** | LLM transcript tools | 92–95 | Remove retakes, edit-for-clarity, bulk filler/gap (LLM); review + undo |
@@ -166,14 +166,20 @@ Align with spec §B1 `Token` kinds. Persist as JSON array or run-length runs in 
 
 **Parallel JSON on `ScriptDocumentV1` (M3+ compatible; EDL ignores until milestone ships):**
 
+Editor may persist **word anchors** for UX; **export and worker always consume `ClipEditsV2.broll`** (`BrollItem[]` in `new-app/lib/clips/broll.ts`) after `brollItemsFromComposition()` maps anchor + offset → **output** `startMs` / `endMs` (§2.6). Do not invent a second overlay schema for render.
+
 ```ts
-type WordAnchoredOverlay = {
+// UI / document (optional; convertible to BrollItem)
+type WordAnchoredBroll = {
   id: string
-  anchorWordId: string        // moves with text edits via word id
-  mediaAssetId: string        // upload | project clip | pixabay ref
-  outOffsetMs: number         // relative to anchor word output start
+  anchorWordId: string
+  outOffsetMs: number         // relative to anchor word output start (EDL)
   durMs: number
-  layer: number
+  source: 'stock' | 'ai'
+  assetId?: string            // stock_assets.id (Pixabay ingest)
+  generationId?: string       // ai_generations.id (kie_image pipeline)
+  placement?: 'auto' | 'manual'
+  layer?: number              // timeline lane only
 }
 type MusicClip = {
   id: string
@@ -184,7 +190,7 @@ type MusicClip = {
   fadeOutMs?: number
   duckUnderSpeech?: boolean
 }
-// document.overlays?: WordAnchoredOverlay[]
+// document.brollAnchors?: WordAnchoredBroll[]  // or mirror edits.broll + anchor metadata
 // document.musicTracks?: MusicClip[]
 // document.scenes?: { id, startWordId, layoutId?, aspect?, reframe?, captionsVisible? }[]
 // document.markers?: { id, outMs, label, exportAsChapter? }[]
@@ -222,6 +228,28 @@ Implement spec §B1 rules (80 ms pad, gap segments, contiguous merge). **Unit-te
 | Ignored words | EDL skip + optional explicit cuts only when “ignore” implies skip in export (spec: skip playback — map to cuts or export-time filter; **default:** treat as EDL-excluded, not additional `cutRanges` unless export requires) |
 
 **Full composition** does not write `Clip.edits` until user exports a sub-range or “update clip” action; it persists only on `ScriptComposition`.
+
+### 2.6 B-roll / media — reuse clipper (owner, 2026-10-27; **M9**)
+
+**Do not rebuild B-roll.** The clipper already ships stock search, AI B-roll, preview, timeline lane, credits, and ffmpeg compositing. The script editor **Media** panel is a second entry point into the same stack.
+
+| Layer | Reuse (do not duplicate) |
+|-------|-------------------------|
+| **Types** | `BrollItem` — `new-app/lib/clips/broll.ts` (`source: 'stock' \| 'ai'`, `assetId` / `generationId`, `startMs`, `endMs`, `placement`) |
+| **Edits JSON** | `ClipEditsV2.broll` — same array shape clip export already passes to the worker |
+| **Stock DB** | `stock_assets` (Pixabay via `ensureStockAsset` / `new-app/lib/server/ai/pixabay.ts`) |
+| **HTTP** | `GET /api/clips/broll/search`; clip routes under `/api/clips/clips/[id]/broll/*` (attach, credits, auto, AI suggest) — script editor calls these or thin composition-scoped wrappers that still write `BrollItem` |
+| **UI** | `StockBrollPicker`, `BrollPanel`, `AiBrollCard`, `broll-preview-video`, clip `timeline.tsx` B-roll lane patterns |
+| **Worker** | `worker/clips_worker/broll_render.py` — `load_broll_specs(conn, edits, work_dir)` (reads `edits.broll` + `stock_assets` / `ai_generations`), `build_broll_filtergraph`, `apply_broll_overlays`; AI stills/video via `kie_image.py` where clipper does today |
+
+**Script-editor-specific work only:**
+
+1. **Anchor model** — user drops media on a **word** → store `anchorWordId` + `outOffsetMs` + `durMs` (and stock/AI ids). On document change, recompute `startMs`/`endMs` on the **output timeline** using `sourceMsToOutputTime` / word output bounds from `deriveEdl` (same times clipper uses for manual B-roll placement).
+2. **`clipEditsFromComposition()`** — emit `broll: BrollItem[]` (merged, clamped with `normalizeBrollItems`) so **one render path** serves clip editor and script editor (`RENDER_CLIP` / composition export).
+3. **Preview** — reuse `BrollPreviewVideo` + `brollMedia` resolution (`lib/server/clips/broll-media.ts`) keyed by overlay id.
+4. **Timeline** — M3 overlay lane slots display the same clips as clipper’s B-roll lane (output ms).
+
+Uploads and “project clips” still resolve to `stock_assets` or generation rows the worker can load — same as adding B-roll on a clip today.
 
 ---
 

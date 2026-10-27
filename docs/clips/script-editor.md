@@ -246,7 +246,7 @@ Transovo already has clip **captions** (Bold Pop and other styles), **reframing*
 | Audio volume / normalize | Audio % slider; Normalize at export ([D:export-and-share/video-gif]) | Properties ▸ Audio: volume slider (0–200%); export loudness normalize −14 LUFS default. | **Launch-required** (volume + export normalize) |
 | Scenes ("/" separator) | `/` inserts a scene boundary; scenes have their own layout and layers; thumbnails mark scene starts in the script ([D:getting-started/scenes], ref 05) | `/` inserts `sceneBreak` with per-scene aspect, reframe, caption visibility, and a thumbnail at the scene start in the script. | **Launch-required** (M7) |
 | Layouts | A layout picker per scene (ref 07) | Layout template per scene (linked to sceneBreak). | **Launch-required** (M7) |
-| B-roll / media insert | Add layer: image/video/stock; layers extend across scenes ([D:visuals/scenes-layers]) | **Media** panel: upload, project clips, **Pixabay** stock. Drop on a word → overlay anchored to `wordId`; overlay lanes on timeline. | **Launch-required** (M9) |
+| B-roll / media insert | Add layer: image/video/stock; layers extend across scenes ([D:visuals/scenes-layers]) | **Media** panel (reuse clipper **B-roll** stack): same Pixabay search (`/api/clips/broll/search`), `stock_assets`, AI via `kie_image`, preview components. Drop on a word → anchor `wordId`; **persist as `ClipEditsV2.broll` (`BrollItem`)** with `startMs`/`endMs` on the **output** timeline (mapped through EDL). Export uses existing worker **`broll_render.py`** (`load_broll_specs`, `build_broll_filtergraph`, `apply_broll_overlays`) — one render path for clip + script editors. | **Launch-required** (M9) |
 | Music | Audio layer, "Lower audio of other layers" (ducking) (ref 02/12) | Music lane: library, fade in/out, auto-duck under speech. | **Launch-required** (M10) |
 | Markers / chapters | `#` marker; Add chapters AI tool | `#` inserts marker; transport markers dropdown; chapter metadata on export (no Underlord required). | **Launch-required** (M8) |
 | Eye Contact | A video effect that redirects gaze; single face, needs a network connection ([D:effects-animations-transitions/eye-contact]) | — | **Later** (post-launch) |
@@ -510,9 +510,9 @@ Each test is run in Chrome on transovo.ai production with the fixture project **
 | 75 | Chapter export | M8 | Mark a marker "Chapter", export video → output file includes chapter metadata at that time. |
 | 76 | Marker rename | M8 | Rename a marker in the dropdown or Properties → label persists after reload. |
 | 77 | Marker delete | M8 | Delete marker → flag and dropdown entry removed; export no longer lists it. |
-| 78 | Media panel upload | M9 | Media panel ▸ Upload image → asset listed; drag onto a word → overlay clip on timeline + preview. |
-| 79 | Project clip media | M9 | Pick a project clip in Media panel, drop on word → overlay anchored; cut/paste words moves overlay. |
-| 80 | Pixabay stock | M9 | Search Pixabay in Media panel, insert a stock clip → overlay lane shows clip; preview plays it. |
+| 78 | Media panel upload | M9 | Media panel ▸ Upload image → asset listed (same storage path as clip B-roll); drag onto a word → `broll` entry + overlay lane + preview (clipper preview path). |
+| 79 | Project clip media | M9 | Pick a project clip in Media panel, drop on word → anchored overlay; after a word move, output `startMs`/`endMs` still track the anchor via EDL. |
+| 80 | Pixabay stock | M9 | Stock search (same UI/API as clip editor) → insert → `stock_assets` id on `BrollItem`; preview and export match clip editor B-roll. |
 | 81 | Overlay trim | M9 | Drag overlay clip edges on timeline → duration updates; anchor word unchanged. |
 | 82 | Overlay delete | M9 | Select overlay, Delete → removed from lane and preview; script text unchanged. |
 | 83 | Multi overlay lanes | M9 | Add overlays on two layers → both visible; selecting one opens overlay Properties. |
