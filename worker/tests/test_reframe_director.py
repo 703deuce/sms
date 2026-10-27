@@ -120,3 +120,45 @@ def test_layout_geometry():
     g = layout_slots("grid", 1080, 1920, 4); assert len(g) == 4 and g[3] == (540, 960, 540, 960)
     x, y, w, h = tile_rect(1200, 100, 120, 1280, 720, 9 / 8)
     assert 0 <= x and x + w <= 1280 and 0 <= y and y + h <= 720
+
+
+def test_frame_crops_three_side_pip():
+    from clips_worker.reframe_core import compose_frame, frame_crops
+
+    nfr = 30
+    track = {
+        "W": 1280,
+        "H": 720,
+        "cw": 400,
+        "fps": 30.0,
+        "out_w": 1080,
+        "out_h": 1920,
+        "x0": [-1] * nfr,
+        "people": [{"id": "P1", "screen_s": 10}, {"id": "P2", "screen_s": 8}, {"id": "P3", "screen_s": 6}],
+        "segments": [
+            {"layout": "three", "slots": [0, 1, 2], "start_s": 0.0, "end_s": 1.0},
+        ],
+        "_frames": {
+            "fx": np.full((3, nfr), 640.0),
+            "fy": np.full((3, nfr), 360.0),
+            "fh": np.full((3, nfr), 120.0),
+            "seg_of": np.zeros(nfr, int),
+        },
+    }
+    lay, crops = frame_crops(track, 5)
+    assert lay == "three" and len(crops) == 3
+    fr = np.zeros((720, 1280, 3), np.uint8)
+    out = compose_frame(fr, lay, crops, 1080, 1920)
+    assert out.shape == (1920, 1080, 3)
+
+    track["segments"][0] = {"layout": "side", "slots": [0, 1], "start_s": 0.0, "end_s": 1.0}
+    lay, crops = frame_crops(track, 5)
+    assert lay == "side" and len(crops) == 2
+    out = compose_frame(fr, lay, crops, 1080, 1920)
+    assert out.shape == (1920, 1080, 3)
+
+    track["segments"][0] = {"layout": "pip", "slots": [1], "start_s": 0.0, "end_s": 1.0}
+    lay, crops = frame_crops(track, 5)
+    assert lay == "pip" and len(crops) == 1
+    out = compose_frame(fr, lay, crops, 1080, 1920)
+    assert out.shape == (1920, 1080, 3)
