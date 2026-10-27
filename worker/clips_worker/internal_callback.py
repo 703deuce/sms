@@ -28,9 +28,11 @@ def _progress_base_urls() -> list[str]:
 def post_internal(path: str, payload: dict) -> None:
     secret = os.environ.get("WORKER_SHARED_SECRET", "")
     if not secret:
+        print(f"[clipper:worker] skip internal callback (no WORKER_SHARED_SECRET) path={path}", flush=True)
         return
     urls = _progress_base_urls()
     if not urls:
+        print(f"[clipper:worker] skip internal callback (no callback URL) path={path}", flush=True)
         return
     body = json.dumps(payload)
     headers = {
