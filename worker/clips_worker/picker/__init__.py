@@ -162,10 +162,12 @@ def pick_talking_clips(
                     visual_moments=visual_moments or None,
                     range_start_ms=range_start_ms,
                 )
-            if not visual_moments:
+            sparse_visual = len(visual_moments) < 3
+            if not visual_moments or sparse_visual:
                 from clips_worker.picker.signal_candidates import (
                     merge_pass1_moments,
                     propose_signal_action_moments,
+                    propose_silence_gap_moments,
                 )
 
                 signal_moments = propose_signal_action_moments(
@@ -173,9 +175,22 @@ def pick_talking_clips(
                     signals,
                     range_start_ms=range_start_ms,
                     range_end_ms=range_end_ms,
+                    genre=genre,
                 )
-                if signal_moments:
-                    moments = merge_pass1_moments(moments, signal_moments)
+                gap_moments = propose_silence_gap_moments(
+                    sentences,
+                    range_start_ms=range_start_ms,
+                    range_end_ms=range_end_ms,
+                )
+                extra = merge_pass1_moments(signal_moments, gap_moments)
+                if extra:
+                    picker_info(
+                        "pass1_signal_supplement",
+                        sparse_visual=sparse_visual,
+                        visual_moments=len(visual_moments),
+                        added=len(extra),
+                    )
+                    moments = merge_pass1_moments(moments, extra)
             if on_picker_checkpoint:
                 on_picker_checkpoint(moments, None)
             if drain_requested():

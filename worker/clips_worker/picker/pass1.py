@@ -101,8 +101,9 @@ def find_moments(
             )
             if slice_txt:
                 visual_block = (
-                    "\n\nVisual watch (Gemini, seconds from trim start). "
-                    "Propose visual-only moments even when the transcript is quiet:\n"
+                    "\n\nVisual watch (Gemini; t_s seconds from source range start). "
+                    "Propose visual-only and low-speech gameplay moments; do not skip fights "
+                    "just because the transcript is quiet in that window:\n"
                     f"{slice_txt}\n"
                 )
         user = (

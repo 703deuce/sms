@@ -54,10 +54,16 @@ def video_picker_timeout_s() -> float:
 
 
 def video_picker_fps() -> float:
+    """Gemini video_metadata.fps — higher samples fast gameplay beats (default 0.5, cap 1.0)."""
     try:
-        return min(1.0, max(0.1, float(os.environ.get("VIDEO_PICKER_FPS", "0.3"))))
+        return min(1.0, max(0.1, float(os.environ.get("VIDEO_PICKER_FPS", "0.5"))))
     except ValueError:
-        return 0.3
+        return 0.5
+
+
+def video_picker_keep_audio() -> bool:
+    raw = (os.environ.get("VIDEO_PICKER_KEEP_AUDIO") or "true").strip().lower()
+    return raw not in ("0", "false", "no", "off")
 
 
 def estimate_gemini_usd(prompt_tokens: int, output_tokens: int) -> float:
@@ -82,22 +88,44 @@ def make_watch_proxy(
     cmd.extend(["-i", str(src)])
     if end_s is not None and end_s > start_s:
         cmd.extend(["-t", f"{end_s - start_s:.3f}"])
-    cmd.extend(
-        [
-            "-vf",
-            "scale=480:-2:flags=fast_bilinear",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "ultrafast",
-            "-crf",
-            "32",
-            "-an",
-            "-movflags",
-            "+faststart",
-            str(dest),
-        ]
-    )
+    vf = "scale=480:-2:flags=fast_bilinear"
+    if video_picker_keep_audio():
+        cmd.extend(
+            [
+                "-vf",
+                vf,
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-crf",
+                "32",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "64k",
+                "-movflags",
+                "+faststart",
+                str(dest),
+            ]
+        )
+    else:
+        cmd.extend(
+            [
+                "-vf",
+                vf,
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-crf",
+                "32",
+                "-an",
+                "-movflags",
+                "+faststart",
+                str(dest),
+            ]
+        )
     subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -245,7 +273,8 @@ def watch_video_file(
                         {
                             "text": (
                                 f"Video length about {duration_s}s. "
-                                "List notable visual moments with t_s in seconds from 0."
+                                "List notable visual moments with t_s in seconds from the start of this clip. "
+                                "Include quiet gameplay (fights, clutches, wipes) even when speech is sparse."
                             ),
                         },
                     ],
