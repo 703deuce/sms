@@ -2,7 +2,13 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { publicRedirectUrl } from '@/lib/integrations/framework/app-url'
 import { verifyStreamerOAuthState } from '@/lib/server/streamer/oauth-state'
-import { exchangeKickCode, kickChannel, kickUser, upsertKickConnection } from '@/lib/server/streamer/kick'
+import {
+  createKickEventSubscriptions,
+  exchangeKickCode,
+  kickChannel,
+  kickUser,
+  upsertKickConnection,
+} from '@/lib/server/streamer/kick'
 import { getPrisma } from '@/lib/server/db'
 
 export async function GET(request: Request) {
@@ -18,10 +24,11 @@ export async function GET(request: Request) {
   const user = await kickUser(tokens.access_token)
   const channel = await kickChannel(tokens.access_token)
   const { channel: row } = await upsertKickConnection(parsed.workspaceId, tokens, user, channel)
+  const subIds = await createKickEventSubscriptions(channel.broadcaster_user_id)
   const prisma = getPrisma()
   await prisma.streamChannel.update({
     where: { id: row.id },
-    data: { platformState: { kickConnected: true } },
+    data: { platformState: { kickSubIds: subIds } },
   })
   const res = NextResponse.redirect(publicRedirectUrl(`/app/streamer/channels/${row.id}?connected=1`, request))
   res.cookies.delete('kick_pkce')

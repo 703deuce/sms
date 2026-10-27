@@ -171,10 +171,14 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         chapters = vod.get("chapters")
         if isinstance(chapters, str):
             chapters = json.loads(chapters)
+        from clips_worker.streamer.chat.twitch_gql import TwitchChatReplayError
+
         try:
             chat_messages, chat_source = chat_future.result()
-        except Exception:
-            chat_messages, chat_source = None, "none"
+        except TwitchChatReplayError as exc:
+            raise RuntimeError(f"Chat replay failed: {exc}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Chat fetch failed: {exc}") from exc
         finally:
             chat_executor.shutdown(wait=False)
         if chat_messages:

@@ -26,21 +26,55 @@ def _helix_app_token() -> str:
         return json.loads(resp.read())["access_token"]
 
 
-def _match_twitch_vod(user_id: str, streamed_at: datetime) -> dict | None:
+class HelixAutopullError(RuntimeError):
+    """Helix API failure during autopull (not 'VOD not found yet')."""
+
+
+def _match_twitch_vod(
+    user_id: str,
+    streamed_at: datetime,
+    *,
+    stream_id: str | None = None,
+) -> dict | None:
+    import urllib.error
     import urllib.request
+
+    from clips_worker.streamer.twitch_duration import parse_twitch_duration
 
     token = _helix_app_token()
     cid = os.environ["TWITCH_CLIENT_ID"]
     url = f"https://api.twitch.tv/helix/videos?user_id={user_id}&type=archive&first=5"
     req = urllib.request.Request(url, headers={"Client-Id": cid, "Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:500]
+        raise HelixAutopullError(f"Helix videos failed: {exc.code} {body}") from exc
+    except urllib.error.URLError as exc:
+        raise HelixAutopullError(f"Helix videos unreachable: {exc}") from exc
+
+    if stream_id:
+        for v in data.get("data") or []:
+            if str(v.get("stream_id") or "") == str(stream_id):
+                return _normalize_helix_video(v, parse_twitch_duration)
+
     target = streamed_at.timestamp()
     for v in data.get("data") or []:
         created = datetime.fromisoformat(v["created_at"].replace("Z", "+00:00")).timestamp()
         if abs(created - target) <= 15 * 60:
-            return v
+            return _normalize_helix_video(v, parse_twitch_duration)
     return None
+
+
+def _normalize_helix_video(v: dict, parse_duration) -> dict:
+    dur_raw = v.get("duration")
+    if dur_raw and not isinstance(v.get("duration"), (int, float)):
+        try:
+            v = {**v, "duration": parse_duration(dur_raw)}
+        except ValueError:
+            pass
+    return v
 
 
 def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
@@ -71,12 +105,21 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
     if not streamed_at:
         streamed_at = datetime.now(timezone.utc)
 
+    state = vod.get("state") or {}
+    if isinstance(state, str):
+        state = json.loads(state)
+    stream_id = state.get("streamSessionId") or state.get("streamId")
+
     matched = None
     if platform == "twitch" and vod.get("channel_external"):
         try:
-            matched = _match_twitch_vod(str(vod["channel_external"]), streamed_at)
-        except Exception:
-            matched = None
+            matched = _match_twitch_vod(
+                str(vod["channel_external"]),
+                streamed_at,
+                stream_id=str(stream_id) if stream_id else None,
+            )
+        except HelixAutopullError:
+            raise
     elif platform == "kick" and vod.get("login"):
         matched = _match_kick_vod(str(vod["login"]), streamed_at)
 

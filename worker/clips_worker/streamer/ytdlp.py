@@ -66,7 +66,14 @@ def parse_metadata(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def download_video(url: str, dest: str, section: str | None = None, progress_cb=None) -> None:
+def download_video(
+    url: str,
+    dest: str,
+    section: str | None = None,
+    progress_cb=None,
+    *,
+    workdir: str | None = None,
+) -> None:
     from clips_worker.streamer.http_download import run_ytdlp
 
     cmd = [
@@ -84,6 +91,8 @@ def download_video(url: str, dest: str, section: str | None = None, progress_cb=
         dest,
         "--newline",
     ]
+    if workdir:
+        cmd.extend(["-P", workdir])
     if section:
         cmd.extend(["--download-sections", section])
     cmd.append(url)
@@ -95,6 +104,8 @@ def download_audio(
     dest: str,
     section: str | None = None,
     progress_cb=None,
+    *,
+    workdir: str | None = None,
 ) -> None:
     from clips_worker.streamer.http_download import run_ytdlp
 
@@ -120,6 +131,8 @@ def download_audio(
         dest,
         "--newline",
     ]
+    if workdir:
+        cmd.extend(["-P", workdir])
     if section:
         cmd.extend(["--download-sections", section])
     cmd.append(url)

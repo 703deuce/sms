@@ -48,6 +48,9 @@ export async function enqueueStreamAutopull(
         transcriptKey: projectWordsKey(workspaceId, projectId),
       },
     })
+    const ps = (channel.platformState as Record<string, unknown>) || {}
+    const live = (ps.live as { sessionId?: string } | null) || null
+    const streamSessionId = live?.sessionId ? String(live.sessionId) : undefined
     await tx.streamVod.create({
       data: {
         id: vodId,
@@ -62,6 +65,7 @@ export async function enqueueStreamAutopull(
         attestedAt: new Date(),
         streamedAt,
         priority: 15,
+        state: streamSessionId ? { streamSessionId } : {},
       },
     })
     await tx.clipJob.create({

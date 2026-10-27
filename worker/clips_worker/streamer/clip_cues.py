@@ -23,20 +23,27 @@ def streamer_clip_cue_seconds(words: list[dict], duration_s: int) -> list[float]
     if duration_s <= 0:
         return []
     out = [0.0] * duration_s
+    tokens: list[tuple[int, str]] = []
     for w in words:
-        text = str(w.get("w") or "").lower()
+        text = str(w.get("w") or "").strip().lower()
         if not text:
             continue
-        # include neighboring words for phrase match
         sec = int(float(w.get("s", 0)))
         if sec < 0 or sec >= duration_s:
             continue
-        for pat in STREAMER_CLIP_PHRASES:
-            if re.search(pat, text):
-                for d in range(-1, 3):
-                    i = sec + d
-                    if 0 <= i < duration_s:
-                        out[i] = max(out[i], 1.0 if d == 0 else 0.85)
+        tokens.append((sec, text))
+    max_window = 6
+    for i in range(len(tokens)):
+        for win in range(1, min(max_window, len(tokens) - i) + 1):
+            sec = tokens[i][0]
+            phrase = " ".join(t[1] for t in tokens[i : i + win])
+            for pat in STREAMER_CLIP_PHRASES:
+                if re.search(pat, phrase):
+                    for d in range(-1, 3):
+                        j = sec + d
+                        if 0 <= j < duration_s:
+                            out[j] = max(out[j], 1.0 if d == 0 else 0.85)
+                    break
     return out
 
 

@@ -192,3 +192,119 @@ export function twitchAuthorizeUrl(state: string, redirectUri: string): string {
 export function getTwitchVodDelaySec(): number {
   return Number(process.env.TWITCH_VOD_DELAY_S || 120)
 }
+
+export async function refreshTwitchUserToken(refreshToken: string) {
+  const res = await fetch('https://id.twitch.tv/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: twitchClientId(),
+      client_secret: twitchClientSecret(),
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Twitch refresh failed: ${res.status} ${text.slice(0, 200)}`)
+  }
+  return (await res.json()) as {
+    access_token: string
+    refresh_token?: string
+    expires_in: number
+    scope?: string[]
+  }
+}
+
+export async function revokeTwitchToken(token: string) {
+  await fetch('https://id.twitch.tv/oauth2/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: twitchClientId(),
+      token,
+    }),
+  })
+}
+
+export async function listTwitchEventsubSubscriptions(): Promise<
+  { id: string; type: string; status: string; condition: Record<string, string> }[]
+> {
+  const appToken = await twitchAppAccessToken()
+  const res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions?first=100', {
+    headers: {
+      'Client-Id': twitchClientId(),
+      Authorization: `Bearer ${appToken}`,
+    },
+  })
+  if (!res.ok) throw new Error(`EventSub list failed: ${res.status}`)
+  const json = (await res.json()) as {
+    data: { id: string; type: string; status: string; condition: Record<string, string> }[]
+  }
+  return json.data ?? []
+}
+
+export async function deleteTwitchEventsubSubscription(id: string): Promise<void> {
+  const appToken = await twitchAppAccessToken()
+  const res = await fetch(`https://api.twitch.tv/helix/eventsub/subscriptions?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: {
+      'Client-Id': twitchClientId(),
+      Authorization: `Bearer ${appToken}`,
+    },
+  })
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text()
+    throw new Error(`EventSub delete ${id} failed: ${res.status} ${text.slice(0, 200)}`)
+  }
+}
+
+export async function deleteTwitchEventsubSubscriptions(ids: string[]): Promise<void> {
+  for (const id of ids) {
+    await deleteTwitchEventsubSubscription(id)
+  }
+}
+
+export async function ensureTwitchEventsubForBroadcaster(broadcasterId: string, existingIds: string[]): Promise<string[]> {
+  const subs = await listTwitchEventsubSubscriptions()
+  const enabled = new Set(
+    subs.filter((s) => s.status === 'enabled' && s.condition?.broadcaster_user_id === broadcasterId).map((s) => s.type),
+  )
+  const secret = process.env.TWITCH_EVENTSUB_SECRET?.trim()
+  if (!secret) throw new Error('TWITCH_EVENTSUB_SECRET not configured')
+  const callback = twitchWebhookUrl()
+  const required: { type: string; version: string; condition: Record<string, string> }[] = [
+    { type: 'stream.online', version: '1', condition: { broadcaster_user_id: broadcasterId } },
+    { type: 'stream.offline', version: '1', condition: { broadcaster_user_id: broadcasterId } },
+    { type: 'channel.update', version: '2', condition: { broadcaster_user_id: broadcasterId } },
+  ]
+  if (streamerLiveRealtimeEnabled()) {
+    required.push({
+      type: 'channel.chat.message',
+      version: '1',
+      condition: { broadcaster_user_id: broadcasterId, user_id: broadcasterId },
+    })
+  }
+  const ids = [...existingIds]
+  for (const sub of required) {
+    if (enabled.has(sub.type)) continue
+    const res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+      method: 'POST',
+      headers: {
+        'Client-Id': twitchClientId(),
+        Authorization: `Bearer ${await twitchAppAccessToken()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: sub.type,
+        version: sub.version,
+        condition: sub.condition,
+        transport: { method: 'webhook', callback, secret },
+      }),
+    })
+    if (!res.ok) continue
+    const json = (await res.json()) as { data: { id: string }[] }
+    if (json.data?.[0]?.id) ids.push(json.data[0].id)
+  }
+  return ids
+}

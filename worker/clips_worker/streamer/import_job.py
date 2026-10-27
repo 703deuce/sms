@@ -20,6 +20,7 @@ from clips_worker.streamer.upload_proxy import (
     stream_analysis_proxy_key,
 )
 from clips_worker.streamer.usage import check_cap, job_priority
+from clips_worker.streamer.import_cache import cleanup_vod_import_dir, vod_import_dir
 from clips_worker.streamer.ytdlp import download_audio, download_video, metadata, parse_metadata
 
 
@@ -241,10 +242,11 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                     },
                 )
 
-            with tempfile.TemporaryDirectory(dir=SCRATCH) as td:
-                audio_out = str(Path(td) / "audio.%(ext)s")
-                download_audio(url, audio_out, section=section, progress_cb=on_pct)
-                audio_path = next(Path(td).glob("audio.*"))
+            cache_dir = vod_import_dir(vod_id)
+            try:
+                audio_out = str(cache_dir / "audio.%(ext)s")
+                download_audio(url, audio_out, section=section, progress_cb=on_pct, workdir=str(cache_dir))
+                audio_path = next(cache_dir.glob("audio.*"))
                 duration_ms = effective_ms or int(dur_s * 1000)
                 audio_key = stream_audio_key(workspace_id, vod_id)
                 upload_file(audio_key, audio_path, "audio/opus")
@@ -283,6 +285,9 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                         (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
                     )
                 conn.commit()
+                cleanup_vod_import_dir(vod_id)
+            except Exception:
+                raise
             post_progress(
                 job["id"],
                 {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
@@ -302,10 +307,11 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 {"projectStatus": "PREPARING", "stage": "Downloading", "progress": prog, "jobStatus": "RUNNING"},
             )
 
-        with tempfile.TemporaryDirectory(dir=SCRATCH) as td:
-            dest = str(Path(td) / "source.mp4")
+        cache_dir = vod_import_dir(vod_id)
+        try:
+            dest = str(cache_dir / "source.mp4")
 
-            download_video(url, dest, section=section, progress_cb=on_pct)
+            download_video(url, dest, section=section, progress_cb=on_pct, workdir=str(cache_dir))
             path = Path(dest)
             dur_s, width, height = probe_video(path)
             duration_ms = int(round(dur_s * 1000))
@@ -375,6 +381,9 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                     (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
                 )
             conn.commit()
+            cleanup_vod_import_dir(vod_id)
+        except Exception:
+            raise
 
     post_progress(
         job["id"],
