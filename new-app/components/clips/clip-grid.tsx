@@ -24,6 +24,8 @@ export function ClipGrid({
   onHidden,
   isStreamer = false,
   cardAspect = '9:16' as ExportAspect,
+  selectedIds,
+  onToggleSelect,
 }: {
   clips: ClipCardData[]
   projectId: string
@@ -31,6 +33,8 @@ export function ClipGrid({
   onHidden?: (clipId: string) => void
   isStreamer?: boolean
   cardAspect?: ExportAspect
+  selectedIds?: Set<string>
+  onToggleSelect?: (clipId: string) => void
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -43,6 +47,8 @@ export function ClipGrid({
           onHidden={onHidden}
           isStreamer={isStreamer}
           cardAspect={cardAspect}
+          selected={selectedIds?.has(c.id) ?? false}
+          onToggleSelect={onToggleSelect ? () => onToggleSelect(c.id) : undefined}
         />
       ))}
     </div>

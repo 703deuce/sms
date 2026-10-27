@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { BrollItem } from '@/lib/clips/broll'
 import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -24,6 +25,9 @@ export function Timeline({
   onBrollChange,
   clipStartMs,
   clipEndMs,
+  onSplitLayout,
+  onCutSection,
+  onSetLayoutMode,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -36,6 +40,9 @@ export function Timeline({
   onBrollChange?: (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => void
   clipStartMs: number
   clipEndMs: number
+  onSplitLayout?: () => void
+  onCutSection?: () => void
+  onSetLayoutMode?: (mode: ClipEditsV2['layout']['mode']) => void
 }) {
   const span = Math.max(1, edits.trim.out - edits.trim.in)
   const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs)
@@ -62,10 +69,21 @@ export function Timeline({
   const audio = edits.audio
   const outSpan = Math.max(1, clipOutputDurationMs)
 
+  const layoutSegs = edits.layout.layoutSegments || []
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null)
+  const layoutModes: ClipEditsV2['layout']['mode'][] = [
+    'speaker_follow',
+    'split',
+    'fit_blur',
+    'center_crop',
+    'screen_pip',
+    'dynamic',
+  ]
   const lanes = [
     { key: 'video', label: 'Video', top: 32, h: 32 },
-    { key: 'audio', label: 'Audio', top: 88, h: 20 },
-    { key: 'broll', label: 'B-roll', top: 112, h: 24 },
+    { key: 'layout', label: 'Layout', top: 68, h: 14 },
+    { key: 'audio', label: 'Audio', top: 96, h: 20 },
+    { key: 'broll', label: 'B-roll', top: 120, h: 24 },
   ] as const
 
   return (
@@ -82,7 +100,15 @@ export function Timeline({
             </span>
           ))}
         </div>
-        <div className="relative h-36 shrink-0" style={{ width: widthPx }}>
+        <div
+          className="relative h-[9.5rem] shrink-0"
+          style={{ width: widthPx }}
+          onContextMenu={(e) => {
+            if (!onSplitLayout) return
+            e.preventDefault()
+            setCtx({ x: e.clientX, y: e.clientY })
+          }}
+        >
         <div
           className="pointer-events-none absolute top-8 bottom-6 border-x border-dashed border-primary/40"
           style={{
@@ -92,7 +118,7 @@ export function Timeline({
           title="Original AI clip bounds"
           aria-hidden
         />
-        <div className="absolute inset-x-0 top-8 h-8 rounded bg-muted">
+        <div className="absolute inset-x-0 top-8 h-8 rounded bg-muted" role="group" aria-label="Transcript timeline">
           {words.map((w) => {
             const { startMs, endMs } = wordSourceMs(w)
             if (endMs < edits.trim.in || startMs > edits.trim.out) return null
@@ -111,6 +137,28 @@ export function Timeline({
               >
                 {captionByI.get(w.i)?.text ?? wordDisplayText(w, edits.wordFixes)}
               </button>
+            )
+          })}
+        </div>
+        <div className="absolute inset-x-0 top-[68px] h-3.5 rounded bg-muted/90" aria-label="Layout segments">
+          {layoutSegs.map((seg, i) => {
+            const left = ((seg.startMs - edits.trim.in) / span) * 100
+            const wPct = ((seg.endMs - seg.startMs) / span) * 100
+            const tint =
+              seg.mode === 'split'
+                ? 'bg-violet-500/70'
+                : seg.mode === 'fit_blur'
+                  ? 'bg-amber-500/70'
+                  : 'bg-sky-500/70'
+            return (
+              <div
+                key={`${seg.startMs}-${i}`}
+                className={`absolute top-0.5 h-2.5 truncate rounded px-0.5 text-[8px] text-white ${tint}`}
+                style={{ left: `${left}%`, width: `${Math.max(wPct, 0.5)}%` }}
+                title={`${seg.mode} (${seg.startMs}–${seg.endMs} ms)`}
+              >
+                {seg.mode.replace(/_/g, ' ')}
+              </div>
             )
           })}
         </div>
@@ -140,7 +188,7 @@ export function Timeline({
             onTrimChange(clampTrim({ in: Math.min(outMs - 500, edits.trim.in), out: outMs }))
           }
         />
-        <div className="absolute inset-x-0 top-[88px] h-5 overflow-hidden rounded bg-emerald-950/40">
+        <div className="absolute inset-x-0 top-[96px] h-5 overflow-hidden rounded bg-emerald-950/40">
           <AudioWaveformLane videoUrl={videoUrl} className="absolute inset-0 size-full text-emerald-400/90" />
           {audio?.music && (
             <div
@@ -161,7 +209,7 @@ export function Timeline({
             )
           })}
         </div>
-        <div className="absolute inset-x-0 bottom-0 h-6 rounded bg-muted/80">
+        <div className="absolute inset-x-0 top-[120px] h-6 rounded bg-muted/80">
           {broll.map((item) => {
             const left = (item.startMs / outSpan) * 100
             const wPct = ((item.endMs - item.startMs) / outSpan) * 100
@@ -182,8 +230,46 @@ export function Timeline({
         </div>
       </div>
       <p className="mt-2 text-[10px] text-muted-foreground">
-        Drag In/Out up to 8s beyond the dashed AI bounds. Export uses the full trim window.
+        Right-click the timeline: split layout, delete a section (cut), or set layout for this segment. Drag In/Out up to 8s beyond the dashed AI bounds.
       </p>
+      {ctx && onSplitLayout ? (
+        <div
+          className="fixed z-50 min-w-[180px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg"
+          style={{ left: ctx.x, top: ctx.y }}
+          role="menu"
+        >
+          <button type="button" className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" role="menuitem" onClick={() => { onSplitLayout(); setCtx(null) }}>
+            Split layout at playhead
+          </button>
+          {onCutSection ? (
+            <button type="button" className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" role="menuitem" onClick={() => { onCutSection(); setCtx(null) }}>
+              Delete section (cut)
+            </button>
+          ) : null}
+          {onSetLayoutMode ? (
+            <>
+              <p className="px-2 py-1 text-[10px] text-muted-foreground">Layout for segment</p>
+              {layoutModes.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  onClick={() => {
+                    onSetLayoutMode(m)
+                    setCtx(null)
+                  }}
+                >
+                  {m.replace(/_/g, ' ')}
+                </button>
+              ))}
+            </>
+          ) : null}
+          <button type="button" className="mt-1 block w-full rounded px-2 py-1.5 text-left text-muted-foreground hover:bg-muted" onClick={() => setCtx(null)}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }

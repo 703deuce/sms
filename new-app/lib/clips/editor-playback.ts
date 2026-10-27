@@ -28,6 +28,18 @@ export function outputDurationFromEdits(edits: ClipEditsV2): number {
   return segs.reduce((a, [s, e]) => a + (e - s), 0)
 }
 
+/** Map output timeline ms → source ms (for playhead layout edits). */
+export function sourceMsAtOutput(edits: ClipEditsV2, outputMs: number): number {
+  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  let acc = 0
+  for (const [a, b] of segs) {
+    const len = b - a
+    if (acc + len >= outputMs) return a + (outputMs - acc)
+    acc += len
+  }
+  return edits.trim.out
+}
+
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
 }

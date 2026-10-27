@@ -25,7 +25,7 @@ Source docs: `clipper-streamer-bic.md` §1, `clipper-streamer-ui-layouts.md` §1
 | 1.2 Screen-share + speaker layout | No screen region detector | `screen_share_route.py` | **Done** (detect + `screen_pip` routing) |
 | 1.2 PiP layout | Not in STYLE_MAP | `director.py`, editor layout panel | **Done** (`screen_pip` v2 + editor) |
 | 1.2 1:1 / 4:5 export | Only 9:16, 1:1, 16:9 in settings | `settings.ts`, `aspect_size` | **Done** (4:5 export + grid uses project aspect) |
-| 1.2 Per-segment timeline override UX | Shot overrides API partial; editor lanes thin | `layout-panel.tsx`, `timeline.tsx` | Partial (shot focus + trim/B-roll lanes; no layout track — deferred) |
+| 1.2 Per-segment timeline override UX | Shot overrides API partial; editor lanes thin | `layout-panel.tsx`, `timeline.tsx` | Partial (layout lane + context menu: split/cut section/segment layout; export uses dominant segment mode) |
 | 1.3 Auto zoom / punch-in | Not implemented | — | **Done** (project `autoZoom` → edits + keyword highlight) |
 | 1.3 AI emojis on captions | Not implemented | `captions.py` | **Done** (project `autoEmojis` + post-pipeline + editor) |
 | 1.3 B-roll auto-place | `autoStockBroll` flag; M9 glue incomplete | `apply-project-auto-broll.ts` | **Done** (worker callback + `[clipper:broll]`) |
@@ -38,4 +38,4 @@ Source docs: `clipper-streamer-bic.md` §1, `clipper-streamer-ui-layouts.md` §1
 | UI §3 Brand templates depth | Single template id | `brand` settings | Deferred |
 | Ops | Failed upload / transcribe / 0 clips / worker timeout UX | `project-failure-copy.ts`, `project-clips-view.tsx` | **Done** (typed copy + retry) |
 
-**Still in progress / follow-up:** full timeline layout track + right-click menu per UI spec; brand template depth; XML/4K export (deferred).
+**Still in progress / follow-up:** per-segment layout in worker reframe (export uses dominant segment); XML/4K export (deferred). **Done this pass:** reusable clip templates (caption+layout+brand), project/batch apply, results grid multi-select export/download/template.

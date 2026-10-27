@@ -15,6 +15,8 @@ import { ProgressiveClipResults } from '@/components/clips/progressive-clip-resu
 import { JobStatus } from '@/components/clips/job-status'
 import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
+import { ClipResultsToolbar } from '@/components/clips/clip-results-toolbar'
+import { ClipTemplateProjectActions } from '@/components/clips/clip-template-project-actions'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
@@ -132,6 +134,7 @@ export function ProjectClipsView({
   const [progressStage, setProgressStage] = useState<string | null>(initialStage)
   const [clipsReady, setClipsReady] = useState(0)
   const [clipsTotal, setClipsTotal] = useState(0)
+  const [selectedClipIds, setSelectedClipIds] = useState<Set<string>>(() => new Set())
 
   const refreshClipsList = useCallback(async () => {
     const data = await listProjectClips(projectId, 'score')
@@ -405,6 +408,12 @@ export function ProjectClipsView({
                     </SheetContent>
                   </Sheet>
                   <ExportAllDialog projectId={projectId} clips={clips} />
+                  {!isStreamer ? (
+                    <ClipTemplateProjectActions
+                      projectId={projectId}
+                      onApplied={() => void refreshClipsList()}
+                    />
+                  ) : null}
                   {isStreamer ? (
                     <MontageDialog
                       projectId={projectId}
@@ -444,14 +453,38 @@ export function ProjectClipsView({
                 }
               />
             ) : (
-              <ClipGrid
-                clips={clips}
-                projectId={projectId}
-                onDownload={(id) => void onDownload(id)}
-                onHidden={onClipHidden}
-                isStreamer={isStreamer}
-                cardAspect={exportAspect}
-              />
+              <>
+                {!isStreamer ? (
+                  <ClipResultsToolbar
+                    projectId={projectId}
+                    selectedIds={[...selectedClipIds]}
+                    exportAspect={exportAspect}
+                    onClear={() => setSelectedClipIds(new Set())}
+                    onApplied={() => void refreshClipsList()}
+                  />
+                ) : null}
+                <ClipGrid
+                  clips={clips}
+                  projectId={projectId}
+                  onDownload={(id) => void onDownload(id)}
+                  onHidden={onClipHidden}
+                  isStreamer={isStreamer}
+                  cardAspect={exportAspect}
+                  selectedIds={isStreamer ? undefined : selectedClipIds}
+                  onToggleSelect={
+                    isStreamer
+                      ? undefined
+                      : (id) => {
+                          setSelectedClipIds((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(id)) next.delete(id)
+                            else next.add(id)
+                            return next
+                          })
+                        }
+                  }
+                />
+              </>
             )}
           </Panel>
         </div>

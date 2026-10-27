@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorRail, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
@@ -37,7 +37,9 @@ import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/ed
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
-import type { BrandTemplateSettings } from '@/lib/clips/brand'
+import { clipStyleSettingsFromEdits, type BrandTemplateSettings } from '@/lib/clips/brand'
+import { saveClipBrandTemplate } from '@/lib/clips-api'
+import { sourceMsAtOutput } from '@/lib/clips/editor-playback'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
@@ -136,6 +138,9 @@ export function EditorShell({
     producerStrip,
     clearProducerStrip,
     flushSave,
+    splitLayoutAtSource,
+    setLayoutModeAtSource,
+    cutSectionAtSource,
   } = useEditorState(clipId, bounds, initialEdits)
 
   const mergeBrollMedia = useCallback((rows: BrollMediaRow[]) => {
@@ -155,6 +160,7 @@ export function EditorShell({
   )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const outDur = outputDurationFromEdits(edits)
+  const playheadSourceMs = useMemo(() => sourceMsAtOutput(edits, outputMs), [edits, outputMs])
 
   useAudioMix({
     videoRef,
@@ -178,6 +184,22 @@ export function EditorShell({
       .then((d) => setBrandLogoUrl(d.url))
       .catch(() => setBrandLogoUrl(null))
   }, [edits.brand])
+
+  const saveClipTemplate = useCallback(async () => {
+    const name = window.prompt('Clip template name (captions + layout + brand kit)')
+    if (!name?.trim()) return
+    try {
+      const logoKey = (edits.brand as { logoKey?: string } | undefined)?.logoKey ?? null
+      await saveClipBrandTemplate({
+        name: name.trim(),
+        settings: clipStyleSettingsFromEdits(edits),
+        logoKey,
+      })
+      toast.success('Clip template saved — apply from project results or Brand')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    }
+  }, [edits])
 
   const applyBrand = useCallback(async () => {
     try {
@@ -379,6 +401,7 @@ export function EditorShell({
           edits={edits}
           onChange={setCaptions}
           onApplyBrand={() => void applyBrand()}
+          onSaveClipTemplate={() => void saveClipTemplate()}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -552,6 +575,9 @@ export function EditorShell({
               onBrollChange={updateBrollItem}
               clipStartMs={bounds.clipStartMs}
               clipEndMs={bounds.clipEndMs}
+              onSplitLayout={() => splitLayoutAtSource(playheadSourceMs)}
+              onCutSection={() => cutSectionAtSource(playheadSourceMs)}
+              onSetLayoutMode={(mode) => setLayoutModeAtSource(playheadSourceMs, mode)}
             />
           </div>
         </section>

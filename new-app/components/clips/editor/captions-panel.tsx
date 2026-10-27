@@ -29,11 +29,13 @@ export function CaptionsPanel({
   edits,
   onChange,
   onApplyBrand,
+  onSaveClipTemplate,
 }: {
   clipId?: string
   edits: ClipEditsV2
   onChange: (captions: ClipEditsV2['captions']) => void
   onApplyBrand?: () => void
+  onSaveClipTemplate?: () => void
 }) {
   const cap = edits.captions ?? {}
   const presetId = cap.presetId || 'bold_pop'
@@ -318,10 +320,15 @@ export function CaptionsPanel({
         </label>
       </div>
 
-      {onApplyBrand ? (
-        <Button size="sm" variant="outline" onClick={onApplyBrand}>Apply brand</Button>
-      ) : null}
-      <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)}>Save as preset</Button>
+      <div className="flex flex-wrap gap-2">
+        {onApplyBrand ? (
+          <Button size="sm" variant="outline" onClick={onApplyBrand}>Apply brand kit</Button>
+        ) : null}
+        {onSaveClipTemplate ? (
+          <Button size="sm" variant="outline" onClick={onSaveClipTemplate}>Save clip template</Button>
+        ) : null}
+        <Button size="sm" variant="outline" onClick={() => setSaveOpen(true)}>Save caption preset</Button>
+      </div>
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

@@ -16,6 +16,12 @@ import {
 } from '@/lib/clips/edits'
 import type { ClipBounds } from '@/lib/clips/edits'
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
+import {
+  cutRangeForLayoutSegmentAt,
+  deleteLayoutSegmentAt,
+  setLayoutModeForSegmentAt,
+  splitLayoutSegmentAt,
+} from '@/lib/clips/layout-segments'
 import { patchClip } from '@/lib/clips-api'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
@@ -314,6 +320,37 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     [bounds.clipEndMs, bounds.clipStartMs, setEdits, state.edits],
   )
 
+  const splitLayoutAtSource = useCallback(
+    (sourceMs: number) => {
+      setEdits(splitLayoutSegmentAt(state.edits, sourceMs))
+    },
+    [setEdits, state.edits],
+  )
+
+  const setLayoutModeAtSource = useCallback(
+    (sourceMs: number, mode: ClipEditsV2['layout']['mode']) => {
+      setEdits(setLayoutModeForSegmentAt(state.edits, sourceMs, mode))
+    },
+    [setEdits, state.edits],
+  )
+
+  const deleteLayoutSegmentAtSource = useCallback(
+    (sourceMs: number) => {
+      setEdits(deleteLayoutSegmentAt(state.edits, sourceMs))
+    },
+    [setEdits, state.edits],
+  )
+
+  const cutSectionAtSource = useCallback(
+    (sourceMs: number) => {
+      const range = cutRangeForLayoutSegmentAt(state.edits, sourceMs)
+      if (!range) return
+      const cuts = mergeCutRanges([...state.edits.cutRanges, range])
+      setEdits({ ...state.edits, cutRanges: cuts })
+    },
+    [setEdits, state.edits],
+  )
+
   useEffect(() => {
     if (state.saveState !== 'dirty') return
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -375,6 +412,10 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     updateSfx,
     removeSfx,
     attachMusicGeneration,
+    splitLayoutAtSource,
+    setLayoutModeAtSource,
+    deleteLayoutSegmentAtSource,
+    cutSectionAtSource,
     resetEdits: () => setEdits(defaultEdits(bounds), false),
     applyProducerPatch,
     flushSave: () => {

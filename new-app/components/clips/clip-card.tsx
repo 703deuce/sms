@@ -29,6 +29,8 @@ export function ClipCard({
   onHidden,
   isStreamer = false,
   cardAspect = '9:16' as ExportAspect,
+  selected = false,
+  onToggleSelect,
 }: {
   clip: ClipCardData
   projectId: string
@@ -36,6 +38,8 @@ export function ClipCard({
   onHidden?: (clipId: string) => void
   isStreamer?: boolean
   cardAspect?: ExportAspect
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const router = useRouter()
   const [thumbBusy, setThumbBusy] = useState(false)
@@ -93,9 +97,23 @@ export function ClipCard({
     <article
       id={`clip-card-${clip.id}`}
       data-testid="clip-card"
-      className="group flex flex-col gap-2 overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+      className={`group flex flex-col gap-2 overflow-hidden rounded-xl border bg-card shadow-xs transition hover:-translate-y-0.5 hover:shadow-md ${
+        selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/40'
+      }`}
     >
       <div className={`relative bg-muted ${clipCardAspectClass(cardAspect)}`}>
+        {onToggleSelect ? (
+          <label className="absolute left-2 bottom-2 z-10 flex cursor-pointer items-center gap-1 rounded-md bg-black/55 px-2 py-1 text-[10px] text-white">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              className="size-3.5 accent-primary"
+              aria-label={`Select ${clip.title}`}
+            />
+            Select
+          </label>
+        ) : null}
         {clip.previewUrl || clip.posterUrl ? (
           <ClipCardVideo clipId={clip.id} previewUrl={clip.previewUrl} posterUrl={clip.posterUrl} />
         ) : null}
