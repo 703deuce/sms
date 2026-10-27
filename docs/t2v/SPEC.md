@@ -27,6 +27,9 @@ Same as `descript-ui-layouts.md` §0.2–0.4: dark by default, `bg-background` /
 ### 0.3 State vocabulary used in every control table
 `empty` (no data yet) · `loading` (fetching, skeleton) · `generating` (server job running; shows stage + % from `T2vDraft.status/stage/progress`) · `ready` · `error` (inline message + Retry; never a dead end) · `disabled` (with tooltip saying why) · `stale` (scene changed since last assemble; amber dot).
 
+### 0.5 Build phase: billing deferred (Rick, 27 Oct 2026)
+Until the **end of the full T2V build**, do **not** ship credits, pricing, billing, entitlements enforcement, or usage metering for T2V. Generation stays **ungated** (`FEATURES_ALL_UNLOCKED` — same as the rest of the app during the build). **M7 in this phase** = P16/P17 projects list + entry, P19 exports integration, P20 **Voices only** (list, preview, default, clone UI), P13 export polish — **not** ledger rows, credit checks, studio credits pill, or Settings usage lines. The cost table in §5.8 and UI mocks that mention credits remain the **target design**; implement them in the dedicated billing pass (see §5.8 TODO).
+
 ### 0.4 Truth model (one sentence each)
 - `T2vDraft.document` (`T2vDraftV1`, `code/new-app/lib/t2v/types.ts`) is the authoring truth for **scenes, narration, scene media, voice, music, titles**.
 - `T2V_ASSEMBLE` bakes the draft into a normal **ClipProject source mp4** + `transcriptWords` (from TTS alignment) + a **full ScriptComposition** document.
@@ -73,7 +76,7 @@ Legend: **REUSE AS-IS** (no code change) · **EXTEND** (small additive change, l
 | 12 | `/app/integrations` | REUSE AS-IS | Social publish via `composition-social-publish.ts` (feature-flagged off today). |
 | 13 | `/app` `app/app/page.tsx` | REUSE AS-IS | |
 | 14–19 | `/app/rooms`, `/rooms/new`, `/rooms/join`, `/rooms/[sessionId]`, `/studio`, `/upload` | NOT NEEDED | Rooms/recording. |
-| 20 | `/app/settings` | EXTEND | "Voices" card (saved voices + clones, delete clone) and "Usage" line for `t2v_minute` / `tts_minute`. |
+| 20 | `/app/settings` | EXTEND | "Voices" card (saved voices + clones, delete clone, default voice). **Usage** lines for `t2v_minute` / `tts_minute` → billing pass (§5.8 TODO). |
 | 21–22 | `/app/streamer`, `/app/streamer/channels/[channelId]` | NOT NEEDED | |
 | 23–24 | `/app/sw`, `/app/sw/scripts/[scriptId]` | NOT NEEDED | (Its read-aloud route is the only existing TTS; T2V gets its own, §5.4.) |
 | 25 | `/` `app/page.tsx` (marketing) | NOT NEEDED | Marketing copy optional. |
@@ -91,7 +94,7 @@ New routes
 - **P1** `/app/clips/video/new`: Create (source tabs) → **P2** Settings step (same route, step 2).
 - **P3** `/app/clips/[projectId]/video`: T2V Studio, with in-page surfaces P3a Script review, P3b Storyboard, P4 Replace media drawer, P5 Voice picker, P6 Music, P7 Captions, P8 Text (titles/lower thirds), P9 Styles/Template, P10 Brand, P11 Chat, P12 Build progress, P13 Export, P14 Voice clone modal.
 - **P15** `/app/clips/video/templates`: Templates gallery.
-- Extended existing surfaces: P16 Projects list (route 4), P17 New-project entry (route 3), P18 Descript editor handoff (route 8), P19 Exports (route 9), P20 Settings → Voices/Usage (route 20).
+- Extended existing surfaces: P16 Projects list (route 4), P17 New-project entry (route 3), P18 Descript editor handoff (route 8), P19 Exports (route 9), P20 Settings → Voices (route 20; usage deferred §5.8).
 
 Files: pages at `app/app/clips/(drive)/video/new/page.tsx`, `app/app/clips/(drive)/video/templates/page.tsx` (inside the drive shell, so the left Drive sidebar stays), and `app/app/clips/[projectId]/video/page.tsx` (full-screen like the script editor). Components under `components/t2v/`.
 
@@ -101,7 +104,7 @@ Reference structure: Pictory editor (left features panel, preview, bottom scene 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────── 1440 ─┐
 │ TOP BAR h56: [← Projects] Title (inline edit) · Saved ✓ · [Script|Storyboard] seg · ⟲ ⟳ ·         │
-│              credits pill "≈ 2 cr" · [Open in editor] (outline) · [Build video ▸] / [Export ▾] (CTA)│
+│              (billing pass: credits pill "≈ 2 cr") · [Open in editor] · [Build video ▸] / [Export ▾]   │
 ├────┬────────────────────────────────┬─────────────────────────────────────────────────────────────┤
 │RAIL│ PANEL w400 (scroll)            │ PREVIEW STAGE (flex, 976 at 1440 / 816 at 1280)             │
 │w64 │  header h48: tab title + help  │   letterboxed player, aspect of project, max-h 520           │
@@ -351,7 +354,7 @@ Empty (no workspace templates): system templates only. Seed 12 system templates 
 - **P17 New-project entry** (route 3): fourth card 1:1 with existing cards (icon `Clapperboard`, label "Text to video", sub "Idea, script, link → video").
 - **P18 Descript editor handoff** (route 8): see §4.
 - **P19 Exports** (route 9): composition render rows (title, kind, resolution, status, download).
-- **P20 Settings** (route 20): Voices card (list of saved/cloned voices, delete clone → ElevenLabs `DELETE /v1/voices/{voice_id}`), usage lines.
+- **P20 Settings** (route 20): Voices card (list of saved/cloned voices, preview, workspace default, delete clone → ElevenLabs `DELETE /v1/voices/{voice_id}`). Usage / billing lines → §5.8 TODO.
 
 ---
 
@@ -445,7 +448,11 @@ Pixabay's API has image and video endpoints only (no music endpoint in its API d
 | POST `/extract` | url (Readability) / ppt / audio (Deepgram) → text | SKETCH |
 | POST `/internal/assembled` | worker callback → `draftToComposition` (internal auth like `/api/clips/internal/jobs/[id]/progress`) | to write (M3) |
 
-### 5.8 Credits (EXTEND `lib/billing/entitlements.ts`, file `code/new-app/lib/server/t2v/credits.ts`)
+### 5.8 Credits (billing pass — **not in core M0–M8 build**)
+**Status:** deferred to end of whole build (§0.5). No `credits.ts`, ledger writes, or `checkCreditBalance` gates in T2V routes during M7.
+
+**Target design** (implement when billing starts): EXTEND `lib/billing/entitlements.ts` with T2V `ClipAction` values; add `new-app/lib/server/t2v/credits.ts` (cost helpers) + `record-usage.ts` (or shared clips billing helper) writing `CreditLedgerEntry` + `AiUsage`. Enforcement = flip from `FEATURES_ALL_UNLOCKED` to real balance checks.
+
 | Action | Credits | Our cost basis (list prices 27 Oct 2026) |
 |---|---|---|
 | `t2v_minute` (script + stock + voice + assemble + exports), per started output minute | 2 | v4 TTS ≈ $0.08/min (≈1K chars/min at $0.08/1K), Flash $0.04; LLM < $0.01; stock $0; CPU ≈ 23 s/min |
@@ -453,7 +460,22 @@ Pixabay's API has image and video endpoints only (no music endpoint in its API d
 | `music` (generate per video) | 2 (existing) | $0.15/min ElevenLabs music |
 | `t2v_ai_image` per still | 1 | KIE image (price in kie-cost.ts) |
 | `ai_broll_shot` per AI video scene | 3 (existing) | Kie Wan 3.0 $0.08/s at 720p |
-Library music, stock, manual edits and exports cost 0 credits (InVideo also makes exports free). `checkCreditBalance()` stays permissive (`FEATURES_ALL_UNLOCKED`) but every action writes `CreditLedgerEntry` + `AiUsage` so enforcement is a switch.
+
+Library music, stock, manual edits and exports cost 0 credits (InVideo also makes exports free).
+
+**TODO — credit hook points (wire in billing pass only):**
+1. **Entitlements** — extend `ClipAction` / cost map in `lib/billing/entitlements.ts`; mirror table above in `lib/server/t2v/credits.ts`.
+2. **`POST /api/t2v/drafts/[id]/script`** — pre-check + record `t2v_minute` estimate from target duration (or defer charge to assemble).
+3. **`POST /api/t2v/drafts/[id]/scenes/[sceneId]/voice`** — `tts_minute` for re-voice beyond first pass per scene/project policy.
+4. **`POST /api/t2v/drafts/[id]/assemble`** — `t2v_minute` from output duration (started minute rounding).
+5. **Scene AI image** (`POST …/media` `ai_image`, worker `T2V_SCENE_AI_IMAGE`) — `t2v_ai_image` per still.
+6. **Scene AI video** (worker `T2V_SCENE_AI_VIDEO`) — `ai_broll_shot` per clip.
+7. **Per-video music generate** (existing music job from T2V UI) — `music` credits.
+8. **Studio top bar** — credits pill + pre-build estimate (`components/t2v/t2v-studio-toolbar.tsx` or successor).
+9. **Create / settings steps** — optional estimate copy (wireframes §3.0–3.2); no gates until billing pass.
+10. **`/app/settings`** — Usage card lines for `t2v_minute` / `tts_minute` (and related) from ledger or meter rollup.
+11. **Marketing / pricing page** — T2V minute and add-on pricing copy (snapshots in canvas §1; UNVERIFIED).
+12. **Shared helper** — single `recordT2vUsage(workspaceId, action, quantity, meta)` called from routes/worker callbacks after success; idempotent job id where async.
 
 ### 5.9 Tests run today on the box (ffmpeg 7.1.5; prod is 5.1.9, all filters used exist there)
 `cd code/worker && python3 tests/test_t2v_lavfi.py` (all lavfi inputs, ~3.6 s total):
@@ -497,7 +519,7 @@ Canvas: core text-to-video ≈ 46 effort-days left, ≈ 53 with 15 % QA. This pl
 | M4 | P3b Storyboard + P4 Replace media + stock coverage (Pixabay video+photo; Pexels when keyed), focal crop, motion, lock, shuffle | 100 % scenes covered on 5 test prompts; no repeated clip inside a video; vertical prompt picks portrait-friendly clips; crop focal visible in build | 9 |
 | M5 | **A:** P5–P10 UI, routes, client preview player. **B:** worker ducking, titles/LT burn, xfade, brand intro/outro in T2V render. **A:** composition export music `volume` in `script_composition_render.py` where not covered by assemble | Voice switch re-voices all; music ducks (export loudness check); titles render as designed; preview matches build within ~1 frame of scene boundaries | 8 |
 | M6 | P11 Chat tools, re-voice UX + fineEditedAt warnings, undo/redo, P12 progress + cancel | "Make scene 3 shorter and use a British female voice" executes 2 tool calls with confirm; stale/rebuild flow works | 6 |
-| M7 | Credits/ledger, P16/P17 list + entry, P19 exports, P20 voices/usage, P13 polish | Ledger rows per action; T2V projects visible/filterable; composition renders in `/app/exports` | 4 |
+| M7 | **Billing pass (later):** §5.8 ledger + gates. **Build now:** P16/P17 list + entry, P19 exports, P20 voices (no usage UI), P13 polish | T2V projects visible/filterable (`Video` badge, status); composition renders in `/app/exports`; Voices tab works; exports popover on studio; generation ungated | 4 |
 | M8 | QA: browser test script per page (states in §3), 10 test videos 1–3 min (idea, script, URL, audio; 16:9/9:16/1:1), perf check | All §3 states reachable; no console errors; 3-min 1080p build + export < 3 min wall on prod worker | 5 |
 | | **Core total** | | **50** |
 | M9 | Parity pack: P15 templates gallery + 12 seeds, P14 voice clone + consent, PPT/PDF source, AI image scenes, AI video scenes 16:9/1:1, Pexels photos | Template applies without touching script; clone usable after consent; 10-slide PPT → 10 scenes | 14 |
