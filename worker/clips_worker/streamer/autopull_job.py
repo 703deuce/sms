@@ -14,8 +14,25 @@ from clips_worker.streamer.errors import RetryableError
 BACKOFF_MIN_TWITCH = [2, 5, 10, 20, 40]
 # After initial KICK_VOD_DELAY_S (~5 min), spread polls across ~90 min (Rick: replay publish up to ~1 h).
 BACKOFF_MIN_KICK = [3, 5, 8, 12, 15, 20, 27]
-MAX_AUTOPULL_ATTEMPTS_TWITCH = 6
-MAX_AUTOPULL_ATTEMPTS_KICK = len(BACKOFF_MIN_KICK) + 1
+MAX_AUTOPULL_ATTEMPTS_TWITCH = int(os.environ.get("TWITCH_AUTOPULL_MAX_ATTEMPTS", "6"))
+MAX_AUTOPULL_ATTEMPTS_KICK = int(os.environ.get("KICK_AUTOPULL_MAX_ATTEMPTS", str(len(BACKOFF_MIN_KICK) + 1)))
+VOD_SEGMENT_MAX_MS = int(os.environ.get("STREAM_VOD_SEGMENT_MAX_MS", str(10 * 3600 * 1000)))
+
+
+def _log_autopull(msg: str) -> None:
+    print(f"[clipper:autopull] {msg}", flush=True)
+
+
+def plan_vod_segment_ranges(duration_ms: int, max_ms: int = VOD_SEGMENT_MAX_MS) -> list[tuple[int, int]]:
+    if duration_ms <= max_ms:
+        return [(0, duration_ms)]
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    while start < duration_ms:
+        end = min(duration_ms, start + max_ms)
+        ranges.append((start, end))
+        start = end
+    return ranges
 
 
 def _helix_app_token() -> str:
@@ -167,6 +184,9 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
             )
             return
         delay = backoff[min(attempt - 1, len(backoff) - 1)]
+        _log_autopull(
+            f"replay_pending vodId={vod_id} platform={platform} attempt={attempt}/{max_attempts} retry_min={delay}"
+        )
         new_id = f"job_{uuid.uuid4().hex}"
         with conn.cursor() as cur:
             cur.execute(
@@ -188,14 +208,27 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
     title = matched.get("title") or vod.get("title")
     duration_ms = int(float(matched.get("duration") or matched.get("duration_s") or 0) * 1000)
     external = matched.get("id") or matched.get("video_id")
+    segment_ranges = plan_vod_segment_ranges(duration_ms)
+    range_start_ms = 0
+    range_end_ms = duration_ms
+    if len(segment_ranges) > 1:
+        range_start_ms, range_end_ms = segment_ranges[0]
+        state["vodSegmentRanges"] = [{"startMs": s, "endMs": e} for s, e in segment_ranges[1:]]
+        _log_autopull(
+            f"vod_segmented vodId={vod_id} platform={platform} segments={len(segment_ranges)} "
+            f"first_ms={range_end_ms - range_start_ms}"
+        )
+    else:
+        state.pop("vodSegmentRanges", None)
 
     with conn.cursor() as cur:
         cur.execute(
             """
-            UPDATE stream_vods SET url=%s, title=%s, "externalId"=%s, "durationMs"=%s, "updatedAt"=NOW()
+            UPDATE stream_vods SET url=%s, title=%s, "externalId"=%s, "durationMs"=%s,
+              "rangeStartMs"=%s, "rangeEndMs"=%s, state=%s::jsonb, "updatedAt"=NOW()
             WHERE id=%s
             """,
-            (url, title, external, duration_ms, vod_id),
+            (url, title, external, duration_ms, range_start_ms, range_end_ms, json.dumps(state), vod_id),
         )
         import_id = f"job_{uuid.uuid4().hex}"
         cur.execute(
@@ -206,6 +239,9 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
             (import_id, vod["projectId"], json.dumps({"vodId": vod_id})),
         )
     conn.commit()
+    _log_autopull(
+        f"replay_resolved vodId={vod_id} platform={platform} duration_ms={duration_ms} import_queued=true"
+    )
 
 
 def _record_skip(conn, channel_id: str | None, code: str, message: str, vod: dict) -> None:

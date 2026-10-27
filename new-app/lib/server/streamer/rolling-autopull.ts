@@ -91,6 +91,9 @@ export async function beginTwitchRollingSession(
       },
     })
   })
+  console.info(
+    `[clipper:autopull] live_session_started channelId=${channelId} vodId=${vodId} rolling=true`,
+  )
   return { projectId, vodId, reused: false }
 }
 
@@ -127,5 +130,6 @@ export async function finalizeTwitchRollingSession(channelId: string) {
       payload: { vodId: vod.id, rollingFinalize: true },
     },
   })
+  console.info(`[clipper:autopull] live_finalize_queued channelId=${channelId} vodId=${vod.id}`)
   return true
 }

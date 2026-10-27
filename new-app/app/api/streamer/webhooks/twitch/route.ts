@@ -75,6 +75,7 @@ export async function POST(request: Request) {
       })
       if (streamerTwitchRollingEnabled() && ch.autoProcess) {
         await beginTwitchRollingSession(ch.id, startedAt, streamSessionId)
+        console.info(`[clipper:autopull] live_session_started channelId=${ch.id} platform=twitch`)
       }
     }
   }
@@ -89,10 +90,7 @@ export async function POST(request: Request) {
       const live = (ps.live as { startedAt?: string; sessionId?: string }) || {}
       const startedAt = live.startedAt ? new Date(live.startedAt) : new Date()
       const streamSessionId = live.sessionId ? String(live.sessionId) : undefined
-      await prisma.streamChannel.update({
-        where: { id: ch.id },
-        data: { platformState: mergePlatformState(ch.platformState, { live: null }) as Prisma.InputJsonValue },
-      })
+
       if (ch.autoProcess && ch.externalId) {
         const vodHealth = await checkTwitchChannelVodSaving(ch.externalId, ch.login)
         await persistChannelVodSaving(ch.id, vodHealth)
@@ -115,11 +113,46 @@ export async function POST(request: Request) {
             },
           })
         } else if (streamerTwitchRollingEnabled() && (await finalizeTwitchRollingSession(ch.id))) {
-          console.info(`[clipper:stream] rolling_finalize channelId=${ch.id}`)
+          const vod = await prisma.streamVod.findFirst({
+            where: { channelId: ch.id, triggeredBy: 'auto' },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, projectId: true },
+          })
+          console.info(`[clipper:autopull] live_finalize_queued channelId=${ch.id} vodId=${vod?.id ?? 'unknown'}`)
+          if (vod?.projectId) {
+            await handleStreamerNotify({
+              workspaceId: ch.workspaceId,
+              type: 'stream_ready',
+              vodId: vod.id,
+              data: {
+                title: 'Finishing your live stream',
+                projectId: vod.projectId,
+                action: 'live_finalize',
+                channelId: ch.id,
+              },
+            })
+          }
         } else {
-          await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch', streamSessionId })
+          const queued = await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch', streamSessionId })
+          await handleStreamerNotify({
+            workspaceId: ch.workspaceId,
+            type: 'stream_ready',
+            data: {
+              title: 'Stream ended — waiting for replay',
+              projectId: queued.projectId,
+              action: 'autopull',
+              channelId: ch.id,
+            },
+          })
         }
-      } else if (!ch.autoProcess) {
+      }
+
+      await prisma.streamChannel.update({
+        where: { id: ch.id },
+        data: { platformState: mergePlatformState(ch.platformState, { live: null }) as Prisma.InputJsonValue },
+      })
+
+      if (!ch.autoProcess) {
         await handleStreamerNotify({
           workspaceId: ch.workspaceId,
           type: 'stream_ready',

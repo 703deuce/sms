@@ -70,7 +70,7 @@ async function pendingAutopullProjectIds(projectIds: string[]): Promise<Set<stri
   const jobs = await prisma.clipJob.findMany({
     where: {
       projectId: { in: projectIds },
-      type: 'STREAM_AUTOPULL',
+      type: { in: ['STREAM_AUTOPULL', 'STREAM_IMPORT'] },
       status: { in: ['QUEUED', 'RUNNING'] },
     },
     select: { projectId: true },
@@ -104,6 +104,7 @@ function mapStreamerVodRow(
   },
   pendingAutopull: boolean,
   clipCount: number,
+  liveRolling = false,
 ): StreamerVodRow {
   const settings = (v.project.settings ?? {}) as Record<string, unknown>
   const sp = (settings.streamerProgress ?? {}) as Record<string, number>
@@ -114,6 +115,7 @@ function mapStreamerVodRow(
     triggeredBy: v.triggeredBy,
     waitingForWorker: eta.waitingForWorker,
     pendingAutopull,
+    liveRolling,
   })
   const err = v.project.error || v.error
   return {
@@ -150,7 +152,17 @@ export async function listStreamerVodsForWorkspace(workspaceId: string): Promise
     where: { workspaceId },
     orderBy: { createdAt: 'desc' },
     take: 50,
-    include: {
+    select: {
+      id: true,
+      projectId: true,
+      title: true,
+      platform: true,
+      url: true,
+      triggeredBy: true,
+      channelId: true,
+      error: true,
+      createdAt: true,
+      state: true,
       project: {
         select: {
           id: true,
@@ -174,9 +186,17 @@ export async function listStreamerVodsForWorkspace(workspaceId: string): Promise
     _count: { _all: true },
   })
   const countByProject = new Map(clipCounts.map((c) => [c.projectId, c._count._all]))
-  return rows.map((v) =>
-    mapStreamerVodRow(v, autopullPending.has(v.projectId), countByProject.get(v.projectId) ?? 0),
-  )
+  return rows.map((v) => {
+    const st = (v.state ?? {}) as Record<string, unknown>
+    const rolling = st.rolling as Record<string, unknown> | undefined
+    const liveRolling = st.liveRolling === true || rolling?.live === true
+    return mapStreamerVodRow(
+      v,
+      autopullPending.has(v.projectId),
+      countByProject.get(v.projectId) ?? 0,
+      liveRolling,
+    )
+  })
 }
 
 /** Auto-import / connected-channel pipeline rows (newest first). */

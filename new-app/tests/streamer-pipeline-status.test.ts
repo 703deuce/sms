@@ -18,6 +18,17 @@ describe('resolveStreamPipelinePhase', () => {
     )
   })
 
+  it('maps live rolling to live_clipping', () => {
+    expect(
+      resolveStreamPipelinePhase({
+        status: 'PREPARING',
+        stage: 'Live clipping',
+        triggeredBy: 'auto',
+        liveRolling: true,
+      }),
+    ).toBe('live_clipping')
+  })
+
   it('maps rendering to clipping', () => {
     expect(
       resolveStreamPipelinePhase({

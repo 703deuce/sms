@@ -2,6 +2,7 @@ import type { ClipProjectStatus } from '@prisma/client'
 
 export type StreamPipelinePhase =
   | 'waiting_replay'
+  | 'live_clipping'
   | 'pulling_audio'
   | 'finding_moments'
   | 'clipping'
@@ -10,6 +11,7 @@ export type StreamPipelinePhase =
 
 const LABELS: Record<StreamPipelinePhase, string> = {
   waiting_replay: 'Waiting for replay',
+  live_clipping: 'Live clipping',
   pulling_audio: 'Pulling audio',
   finding_moments: 'Finding moments',
   clipping: 'Clipping',
@@ -37,10 +39,12 @@ export function resolveStreamPipelinePhase(input: {
   triggeredBy: string
   waitingForWorker?: boolean
   pendingAutopull?: boolean
+  liveRolling?: boolean
 }): StreamPipelinePhase {
   if (input.status === 'FAILED' || input.status === 'CANCELED') return 'failed'
   if (input.status === 'READY') return 'ready'
   if (input.status === 'RENDERING') return 'clipping'
+  if (input.liveRolling) return 'live_clipping'
 
   const stage = (input.stage ?? '').toLowerCase()
   if (input.status === 'FINDING_CLIPS' || stage.includes('find') || stage.includes('picker')) {
