@@ -14,6 +14,16 @@ export function isRecordingFeatureEnabled(): boolean {
   return isRecordingLiveKitConfigured()
 }
 
+/**
+ * Solo camera/mic capture in the browser (EDITOR_SOLO) — chunked IDB + multipart upload.
+ * Does not require LiveKit. Off when FEATURE_SCRIPT_RECORDING=0 or FEATURE_SOLO_RECORDING=0.
+ */
+export function isSoloEditorRecordingEnabled(): boolean {
+  if (process.env.FEATURE_SCRIPT_RECORDING === '0') return false
+  if (process.env.FEATURE_SOLO_RECORDING === '0') return false
+  return true
+}
+
 /** Social publish (TikTok / Shorts / Reels) — off until worker job + OAuth ship. */
 export function isCompositionSocialPublishEnabled(): boolean {
   return process.env.FEATURE_COMPOSITION_SOCIAL_PUBLISH === '1'

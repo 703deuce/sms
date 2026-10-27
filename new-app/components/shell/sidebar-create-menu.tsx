@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Clapperboard, Plus, Scissors, Sparkles } from 'lucide-react'
+import { Clapperboard, Plus, Scissors, Sparkles, Video } from 'lucide-react'
 import { PrimaryButton } from '@/components/app/primary-button'
 import {
   DropdownMenu,
@@ -11,10 +11,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { isScriptEditorEnabled } from '@/lib/features/script-editor'
+import { useSoloRecordingEnabled } from '@/lib/recording/use-recording-enabled'
 
 export function SidebarCreateMenu() {
   const t2vEnabled = isT2vFeatureEnabled()
   const scriptEditorEnabled = isScriptEditorEnabled()
+  const soloRecordEnabled = useSoloRecordingEnabled()
 
   const onPick = (product: 'clips' | 'editor' | 'ai-video') => {
     console.info('[nav:create]', { product })
@@ -41,6 +43,12 @@ export function SidebarCreateMenu() {
           <Clapperboard className="size-4" />
           Clips
         </DropdownMenuItem>
+        {soloRecordEnabled ? (
+          <DropdownMenuItem render={<Link href="/app/record" onClick={() => onPick('clips')} />}>
+            <Video className="size-4" />
+            Record
+          </DropdownMenuItem>
+        ) : null}
         {scriptEditorEnabled ? (
           <DropdownMenuItem render={<Link href="/app/editor" onClick={() => onPick('editor')} />}>
             <Scissors className="size-4" />

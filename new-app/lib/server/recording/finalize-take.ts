@@ -114,5 +114,9 @@ export async function finalizeRecordingTakeToProject(
     },
   })
 
-  return { projectId, scriptUrl: `/app/clips/${projectId}/script` }
+  return {
+    projectId,
+    clipsUrl: `/app/clips/${projectId}`,
+    scriptUrl: `/app/clips/${projectId}/script`,
+  }
 }

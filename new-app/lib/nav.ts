@@ -33,6 +33,8 @@ export type NavItem = {
   disabled?: boolean
   /** Hidden from nav unless recording (LiveKit) is enabled — not shown disabled */
   recordingOnly?: boolean
+  /** Hidden unless solo browser recorder is enabled */
+  soloRecordingOnly?: boolean
   isActive?: (pathname: string) => boolean
 }
 
@@ -50,6 +52,13 @@ export const GROUP_ORDER = ['Create', 'Library', 'Brand', 'Tools', 'Exports'] as
 const CLIPS_ITEMS: NavItem[] = [
     { title: 'Streamer', href: '/app/streamer', icon: Radio, group: 'Create' },
     { title: 'Screenwriting', href: '/app/sw', icon: PenLine, group: 'Create' },
+    {
+      title: 'Record',
+      href: '/app/record',
+      icon: Video,
+      group: 'Create',
+      soloRecordingOnly: true,
+    },
     {
       title: 'Rooms',
       href: '/app/rooms/new',
@@ -111,7 +120,7 @@ const SCRIPT_EDITOR_ONLY_HREFS = new Set([
   '/app/rooms',
 ])
 
-export function clipsNavItems(options?: { showRecording?: boolean }): NavItem[] {
+export function clipsNavItems(options?: { showRecording?: boolean; showSoloRecording?: boolean }): NavItem[] {
   const scriptEditorOn = isScriptEditorEnabled()
   let items = CLIPS_ITEMS
   if (!scriptEditorOn) {
@@ -119,6 +128,7 @@ export function clipsNavItems(options?: { showRecording?: boolean }): NavItem[] 
   }
   if (!isScreenwritingEnabled() || !scriptEditorOn) items = items.filter((i) => i.href !== '/app/sw')
   if (!options?.showRecording || !scriptEditorOn) items = items.filter((i) => !i.recordingOnly)
+  if (!options?.showSoloRecording) items = items.filter((i) => !i.soloRecordingOnly)
   return items
 }
 

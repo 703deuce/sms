@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
-import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
+import { isTrackUploadApiEnabled } from '@/lib/server/recording/solo-recording-gate'
 import { startRecordingTake, stopRecordingTake } from '@/lib/server/recording/takes'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -22,7 +22,7 @@ const stopSchema = z.object({
 
 export async function POST(request: Request, { params }: Params) {
   try {
-    if (!isRecordingFeatureEnabled()) {
+    if (!isTrackUploadApiEnabled()) {
       return NextResponse.json({ error: 'Recording is not enabled' }, { status: 503 })
     }
     const { id: sessionId } = await params

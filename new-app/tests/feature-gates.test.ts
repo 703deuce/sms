@@ -6,6 +6,7 @@ describe('feature-gates', () => {
     delete process.env.LIVEKIT_API_KEY
     delete process.env.LIVEKIT_API_SECRET
     delete process.env.FEATURE_SCRIPT_RECORDING
+    delete process.env.FEATURE_SOLO_RECORDING
     vi.resetModules()
   })
 
@@ -15,6 +16,17 @@ describe('feature-gates', () => {
     expect(isRecordingFeatureEnabled()).toBe(false)
   })
 
+  it('isSoloEditorRecordingEnabled is true by default', async () => {
+    const { isSoloEditorRecordingEnabled } = await import('@/lib/server/clips/feature-gates')
+    expect(isSoloEditorRecordingEnabled()).toBe(true)
+  })
+
+  it('isSoloEditorRecordingEnabled respects FEATURE_SOLO_RECORDING=0', async () => {
+    process.env.FEATURE_SOLO_RECORDING = '0'
+    const { isSoloEditorRecordingEnabled } = await import('@/lib/server/clips/feature-gates')
+    expect(isSoloEditorRecordingEnabled()).toBe(false)
+  })
+
   it('isRecordingFeatureEnabled respects FEATURE_SCRIPT_RECORDING=0', async () => {
     process.env.LIVEKIT_URL = 'wss://x.livekit.cloud'
     process.env.LIVEKIT_API_KEY = 'k'
@@ -22,5 +34,7 @@ describe('feature-gates', () => {
     process.env.FEATURE_SCRIPT_RECORDING = '0'
     const { isRecordingFeatureEnabled } = await import('@/lib/server/clips/feature-gates')
     expect(isRecordingFeatureEnabled()).toBe(false)
+    const { isSoloEditorRecordingEnabled } = await import('@/lib/server/clips/feature-gates')
+    expect(isSoloEditorRecordingEnabled()).toBe(false)
   })
 })

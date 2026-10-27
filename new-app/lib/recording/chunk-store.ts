@@ -118,6 +118,23 @@ export async function getTrackMeta(trackId: string): Promise<TrackUploadMeta | n
   return row ?? null
 }
 
+export async function listAllTrackMeta(): Promise<TrackUploadMeta[]> {
+  const db = await openDb()
+  const rows = await new Promise<TrackUploadMeta[]>((resolve, reject) => {
+    const tx = db.transaction('trackMeta', 'readonly')
+    const req = tx.objectStore('trackMeta').getAll()
+    req.onsuccess = () => resolve(req.result as TrackUploadMeta[])
+    req.onerror = () => reject(req.error)
+  })
+  db.close()
+  return rows
+}
+
+export async function listUnfinishedTrackMetas(): Promise<TrackUploadMeta[]> {
+  const all = await listAllTrackMeta()
+  return all.filter((m) => !m.finalized)
+}
+
 export async function listTrackMetaForSession(sessionId: string): Promise<TrackUploadMeta[]> {
   const db = await openDb()
   const rows = await new Promise<TrackUploadMeta[]>((resolve, reject) => {

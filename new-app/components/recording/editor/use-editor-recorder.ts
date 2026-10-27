@@ -6,7 +6,18 @@ import { TrackUploadManager, type TrackUploadProgress } from '@/lib/recording/tr
 import { createId } from '@/lib/supabase/id'
 import { listMediaDeviceOptions } from '@/lib/recording/livekit-devices'
 
-export function useEditorRecorder(projectId: string) {
+export type RecordingImportResult = {
+  projectId: string
+  clipsUrl: string
+  scriptUrl: string
+}
+
+export function useEditorRecorder(
+  projectId: string,
+  opts?: { onImportComplete?: (result: RecordingImportResult) => void },
+) {
+  const onImportRef = useRef(opts?.onImportComplete)
+  onImportRef.current = opts?.onImportComplete
   const [armed, setArmed] = useState(false)
   const [recording, setRecording] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -159,8 +170,18 @@ export function useEditorRecorder(projectId: string) {
       for (const meta of metas.filter((m) => m.takeId === takeId)) {
         await uploadMgr.current?.pump(meta.trackId, true)
       }
-      await fetch(`/api/recording/sessions/${sessionId}/takes/${takeId}/import`, { method: 'POST' })
+      const importRes = await fetch(`/api/recording/sessions/${sessionId}/takes/${takeId}/import`, {
+        method: 'POST',
+      })
+      const importJson = (await importRes.json()) as {
+        data?: RecordingImportResult
+        error?: string
+      }
+      if (!importRes.ok) throw new Error(importJson.error ?? 'Import failed')
+      if (importJson.data) onImportRef.current?.(importJson.data)
+      return importJson.data
     }
+    return undefined
   }, [])
 
   const disarm = useCallback(() => {
