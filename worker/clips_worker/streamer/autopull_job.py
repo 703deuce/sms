@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 
 from psycopg2.extras import RealDictCursor
 
+from clips_worker.streamer.errors import RetryableError
+
 BACKOFF_MIN = [2, 5, 10, 20, 40]
 
 
@@ -50,9 +52,12 @@ def _match_twitch_vod(
             data = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:500]
-        raise HelixAutopullError(f"Helix videos failed: {exc.code} {body}") from exc
+        msg = f"Helix videos failed: {exc.code} {body}"
+        if exc.code == 429 or (exc.code and int(exc.code) >= 500):
+            raise RetryableError(msg) from exc
+        raise HelixAutopullError(msg) from exc
     except urllib.error.URLError as exc:
-        raise HelixAutopullError(f"Helix videos unreachable: {exc}") from exc
+        raise RetryableError(f"Helix videos unreachable: {exc}") from exc
 
     if stream_id:
         for v in data.get("data") or []:
