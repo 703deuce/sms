@@ -1,5 +1,6 @@
 import 'server-only'
 import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
+import { normalizeVisualQuery } from '@/lib/server/t2v/visual-query'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 
 export type LlmScene = {
@@ -11,14 +12,21 @@ export type LlmScene = {
 }
 export type LlmScript = { title: string; scenes: LlmScene[]; musicMood: string; hashtags?: string[] }
 
+const VISUAL_STOCK_RULES = `
+- visualQuery: ONE literal stock-video search line (max ~12 words) describing what the CAMERA shows.
+  Format: subject + action + setting (e.g. "technician installing solar panels on suburban roof").
+  Include 1-3 concrete nouns from the video topic/title so clips stay on-subject.
+  NO abstract words (concept, innovation, success, journey, digital transformation, etc.).
+  NO metaphors, moods, or feelings — only visible people, objects, places, and actions.
+- keywords: 3-6 lowercase concrete nouns/verbs from the visual (things Pixabay tags might use).`
+
 const SYSTEM = `You are a senior video scriptwriter for short-form and explainer videos.
 Return ONLY JSON: {"title": string, "musicMood": string, "hashtags": string[],
  "scenes": [{"narration": string, "onScreenText": string, "visualQuery": string, "keywords": string[], "mood": string}]}
 Rules:
 - narration: spoken words for this scene, 1-2 sentences, 8-30 words, no stage directions, no emojis.
 - onScreenText: <= 6 words headline or "" (never repeat the whole narration).
-- visualQuery: 2-5 concrete, filmable English nouns/verbs for a STOCK VIDEO search.
-- keywords: 3-6 single lowercase English words that should appear in the stock clip tags.
+${VISUAL_STOCK_RULES}
 - First scene is a hook. Last scene is a clear call to action.
 - Total narration words must be within +-10% of the requested word budget.`
 
@@ -54,12 +62,14 @@ export async function writeScript(input: {
     .join('\n')
   const out = await openAiJsonResponse<LlmScript>(SYSTEM, user)
   if (!Array.isArray(out.scenes) || out.scenes.length === 0) throw new Error('t2v_script_empty')
+  const title = String(out.title ?? '').trim()
   return {
     ...out,
+    title,
     scenes: out.scenes.map((sc) => ({
       narration: String(sc.narration ?? '').trim(),
       onScreenText: String(sc.onScreenText ?? '').trim(),
-      visualQuery: String(sc.visualQuery ?? '').trim().slice(0, 100),
+      visualQuery: normalizeVisualQuery(String(sc.visualQuery ?? ''), title),
       keywords: (Array.isArray(sc.keywords) ? sc.keywords : []).map((k) => String(k).toLowerCase()).slice(0, 6),
       mood: sc.mood,
     })),
@@ -70,7 +80,9 @@ const REWRITE_SYSTEM = `You rewrite an existing multi-scene video script. Return
 {"title": string, "musicMood": string, "scenes": [{"narration": string, "onScreenText": string, "visualQuery": string, "keywords": string[], "mood": string}]}
 Keep the same number of scenes unless the instruction requires merging or splitting.
 Apply the user instruction to every scene's narration (tone, length, hook, CTA, etc.) unless the instruction names a single scene (e.g. "scene 2" or "Rewrite only scene 3") — then change only that scene and return all scenes with others unchanged.
-Preserve factual content unless asked to change it.`
+Preserve factual content unless asked to change it.
+When narration changes, update visualQuery/keywords to match the new spoken beat.
+${VISUAL_STOCK_RULES}`
 
 /** Quick-rewrite chips (Shorter, Longer, …) — uses current scene text, not the original idea only. */
 export async function rewriteScriptFromDraft(input: {
@@ -97,13 +109,14 @@ export async function rewriteScriptFromDraft(input: {
   ].join('\n')
   const out = await openAiJsonResponse<LlmScript>(REWRITE_SYSTEM, user)
   if (!Array.isArray(out.scenes) || out.scenes.length === 0) throw new Error('t2v_script_empty')
+  const title = String(out.title || input.title).trim()
   return {
     ...out,
-    title: out.title || input.title,
+    title,
     scenes: out.scenes.map((sc) => ({
       narration: String(sc.narration ?? '').trim(),
       onScreenText: String(sc.onScreenText ?? '').trim(),
-      visualQuery: String(sc.visualQuery ?? '').trim().slice(0, 100),
+      visualQuery: normalizeVisualQuery(String(sc.visualQuery ?? ''), title),
       keywords: (Array.isArray(sc.keywords) ? sc.keywords : []).map((k) => String(k).toLowerCase()).slice(0, 6),
       mood: sc.mood,
     })),

@@ -13,6 +13,7 @@ import type { T2vStockMediaType } from '@/lib/t2v/m9-contracts'
 import type { T2vAspect, T2vSceneMedia } from '@/lib/t2v/types'
 import { logT2v } from '@/lib/server/t2v/log'
 import { llmPickStockIndex } from '@/lib/server/t2v/stock-match-llm'
+import { narrationVisualFallback, normalizeVisualQuery } from '@/lib/server/t2v/visual-query'
 
 export type StockCandidate = {
   provider: 'pixabay' | 'pexels' | 'pexels_photo'
@@ -33,9 +34,9 @@ export type StockCandidate = {
 
 const TTL_MS = 24 * 60 * 60 * 1000
 /** Bump when query/scoring logic changes so broll_search_cache does not serve stale pools. */
-const STOCK_CACHE_VERSION = 'v3-topic-relevance'
+const STOCK_CACHE_VERSION = 'v4-literal-visual-topic'
 
-const MIN_RELEVANCE = 0.2
+const MIN_RELEVANCE = 0.22
 
 const STOPWORDS = new Set([
   'the',
@@ -122,6 +123,40 @@ export function mergeScoreKeywords(videoTopic: string, visualQuery: string, keyw
   const topic = extractSceneKeywords(videoTopic, [])
   const scene = extractSceneKeywords(visualQuery, keywords)
   return [...new Set([...topic, ...scene])]
+}
+
+/** How many topic title tokens appear as whole words in clip tags. */
+export function topicAnchorRelevance(videoTopic: string, tags: string[]): number {
+  const topicTokens = tokenize(videoTopic)
+  if (!topicTokens.length) return 1
+  let hits = 0
+  for (const t of topicTokens) {
+    if (keywordTagRelevance([t], tags) > 0) hits++
+  }
+  return hits / topicTokens.length
+}
+
+/** Every fallback query includes the video topic — never generic keyword-only searches. */
+export function buildTopicAnchoredQueries(input: {
+  videoTopic: string
+  visualQuery: string
+  keywords: string[]
+  narration?: string
+}): string[] {
+  const topic = input.videoTopic.trim()
+  const vq = normalizeVisualQuery(input.visualQuery, topic)
+  const kw = extractSceneKeywords(vq, input.keywords)
+  const topicTok = tokenize(topic).slice(0, 4)
+  const queries = [
+    buildSceneStockQuery(vq, input.keywords, topic),
+    withVideoTopic(vq, topic),
+    withVideoTopic(`${topicTok.join(' ')} ${kw.slice(0, 4).join(' ')}`, topic),
+    withVideoTopic(kw.slice(0, 4).join(' '), topic),
+  ]
+  if (input.narration?.trim()) {
+    queries.push(narrationVisualFallback(input.narration, topic))
+  }
+  return queries.filter((q, i, a) => q.length > 3 && a.indexOf(q) === i)
 }
 
 function targetDims(aspect: T2vAspect) {
@@ -249,9 +284,11 @@ async function pexels(query: string, aspect: T2vAspect, page: number): Promise<S
 
 export function scoreCandidate(
   c: StockCandidate,
-  o: { keywords: string[]; aspect: T2vAspect; needS: number },
+  o: { keywords: string[]; aspect: T2vAspect; needS: number; videoTopic?: string },
 ): number {
-  const relevance = keywordTagRelevance(o.keywords, c.tags)
+  const kwRel = keywordTagRelevance(o.keywords, c.tags)
+  const topicRel = o.videoTopic ? topicAnchorRelevance(o.videoTopic, c.tags) : 1
+  const relevance = kwRel * (0.3 + 0.7 * topicRel)
   const portrait = c.height > c.width
   const square = Math.abs(c.width - c.height) / Math.max(c.width, c.height) < 0.1
   const orient =
@@ -272,7 +309,7 @@ export function scoreCandidate(
   const prior = c.provider === 'pexels' ? 1 : 0.85
   const tooLong = c.durationS > 60 ? 0.05 : 0
   c.relevance = relevance
-  return 0.58 * relevance + 0.14 * orient + 0.12 * dur + 0.08 * res + 0.08 * prior - tooLong
+  return 0.62 * relevance + 0.12 * orient + 0.1 * dur + 0.08 * res + 0.08 * prior - tooLong
 }
 
 function rankPool(
@@ -280,6 +317,7 @@ function rankPool(
   scoreKeywords: string[],
   aspect: T2vAspect,
   needS: number,
+  videoTopic: string,
 ): StockCandidate[] {
   const seen = new Set<string>()
   return pool
@@ -291,7 +329,7 @@ function rankPool(
     })
     .map((c) => ({
       ...c,
-      score: scoreCandidate(c, { keywords: scoreKeywords, aspect, needS }),
+      score: scoreCandidate(c, { keywords: scoreKeywords, aspect, needS, videoTopic }),
     }))
     .sort((a, b) => b.score - a.score)
 }
@@ -341,15 +379,13 @@ export async function matchScenes(input: {
   const out: Record<string, { pick: StockCandidate | null; alternates: StockCandidate[] }> = {}
 
   for (const s of input.scenes) {
-    const kw = extractSceneKeywords(s.visualQuery, s.keywords)
     const scoreKeywords = mergeScoreKeywords(topic, s.visualQuery, s.keywords)
-    const queries = [
-      buildSceneStockQuery(s.visualQuery, s.keywords, topic),
-      withVideoTopic(kw.join(' '), topic),
-      withVideoTopic(s.visualQuery, topic),
-      withVideoTopic(kw.slice(0, 5).join(' '), topic),
-      topic,
-    ].filter((q, i, a) => q && a.indexOf(q) === i)
+    const queries = buildTopicAnchoredQueries({
+      videoTopic: topic,
+      visualQuery: s.visualQuery,
+      keywords: s.keywords,
+      narration: s.narration,
+    })
 
     let ranked: StockCandidate[] = []
     let usedQuery = queries[0] ?? topic
@@ -362,7 +398,7 @@ export async function matchScenes(input: {
         input.sources.includes('pixabay') ? pixabay(q, input.aspect, 1) : Promise.resolve([]),
       ])
       for (const b of batches) if (b.status === 'fulfilled') pool.push(...b.value)
-      ranked = rankPool(pool, scoreKeywords, input.aspect, s.needMs / 1000)
+      ranked = rankPool(pool, scoreKeywords, input.aspect, s.needMs / 1000, topic)
       usedQuery = q
       const candidate =
         ranked.find((c) => !used.has(`${c.provider}:${c.providerId}`) && (c.relevance ?? 0) >= MIN_RELEVANCE) ??
@@ -423,7 +459,7 @@ export async function searchT2vStock(input: {
   if (input.mediaType === 'photo') {
     if (!input.sources.includes('pexels')) return []
     const pool = await pexelsPhotos(q, input.aspect, input.page)
-    return rankPool(pool, scoreKeywords, input.aspect, needS)
+    return rankPool(pool, scoreKeywords, input.aspect, needS, topic)
   }
   const batches = await Promise.allSettled([
     input.sources.includes('pexels') ? pexels(q, input.aspect, input.page) : Promise.resolve([]),
@@ -431,7 +467,7 @@ export async function searchT2vStock(input: {
   ])
   const pool: StockCandidate[] = []
   for (const b of batches) if (b.status === 'fulfilled') pool.push(...b.value)
-  return rankPool(pool, scoreKeywords, input.aspect, needS)
+  return rankPool(pool, scoreKeywords, input.aspect, needS, topic)
 }
 
 export function toSceneMedia(

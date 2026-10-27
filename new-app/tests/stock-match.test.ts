@@ -1,11 +1,14 @@
 import { describe, expect, it, afterEach } from 'vitest'
 import {
+  buildTopicAnchoredQueries,
   extractSceneKeywords,
   keywordTagRelevance,
   scoreCandidate,
   trimWindow,
+  topicAnchorRelevance,
   type StockCandidate,
 } from '@/lib/server/t2v/stock-match'
+import { normalizeVisualQuery } from '@/lib/server/t2v/visual-query'
 import { pexelsConfigured } from '@/lib/server/ai/pexels'
 
 describe('extractSceneKeywords', () => {
@@ -17,6 +20,36 @@ describe('extractSceneKeywords', () => {
     const kw = extractSceneKeywords('Solar panels on rooftop', [])
     expect(kw).toContain('solar')
     expect(kw).toContain('panels')
+  })
+})
+
+describe('buildTopicAnchoredQueries', () => {
+  it('always includes video topic in fallback queries', () => {
+    const qs = buildTopicAnchoredQueries({
+      videoTopic: 'home solar energy',
+      visualQuery: 'panels on roof',
+      keywords: ['solar', 'roof'],
+      narration: 'Lower your electric bill with rooftop solar.',
+    })
+    expect(qs.length).toBeGreaterThan(0)
+    for (const q of qs) {
+      expect(q.toLowerCase()).toMatch(/solar/)
+    }
+  })
+})
+
+describe('normalizeVisualQuery', () => {
+  it('drops abstract filler and anchors topic', () => {
+    const q = normalizeVisualQuery('innovation and success in the future', 'solar panel install')
+    expect(q.toLowerCase()).not.toContain('innovation')
+    expect(q.toLowerCase()).toMatch(/solar/)
+  })
+})
+
+describe('topicAnchorRelevance', () => {
+  it('requires topic tokens in tags', () => {
+    expect(topicAnchorRelevance('solar energy', ['beach', 'waves'])).toBe(0)
+    expect(topicAnchorRelevance('solar energy', ['solar', 'panel'])).toBeGreaterThan(0)
   })
 })
 
