@@ -4,6 +4,14 @@ Scope: **VOD/upload clipper only** (`worker/clips_worker`, `new-app` clips). **D
 
 Source docs: `clipper-streamer-bic.md` §1, `clipper-streamer-ui-layouts.md` §1–3 (clipper surfaces only).
 
+## Prototype v3 vs live reframe v2
+
+| Path | Role |
+|------|------|
+| `clips_worker/reframe_core.py` + `speakercrop_v2.py` | **Live v2** when `REFRAME_V=2` / `REFRAME_V2_ENABLED` |
+| `prototype/v3/director.py`, `multiperson_pipeline.py` | **v1/prototype only** — not on the v2 hot path |
+| Worker Docker `pytest` | v2 contract tests (`test_multiperson_clipper.py`, `test_reframe_*`); prototype stack in `test_prototype_v3_clipper.py` (run locally, not CI) |
+
 | BIC / UI area | Gap | Primary file / function |
 |---|---|---|
 | 1.1 Multimodal ClipAnything | Gemini vision shortlist not wired to picker | `anything_picker.py`, `pipeline.py` |
@@ -11,7 +19,7 @@ Source docs: `clipper-streamer-bic.md` §1, `clipper-streamer-ui-layouts.md` §1
 | 1.1 Thumbs down / hide clip | No dislike → hide + replace | `new-app` results grid |
 | 1.1 Live ETA + progressive clip cards | No stage ETA in UI | `pipeline.post_progress`, project page |
 | 1.2 3–5 person re-ID on **default** path | `REFRAME_V=2` opt-in; routing added in follow-up PR | `render_clip.run_speakercrop`, `layout_router.py` |
-| 1.2 Per-scene layout inside clip (auto) | Director exists under v3; not default prod | `director.run_director`, `multiperson_pipeline.py` |
+| 1.2 Per-scene layout inside clip (auto) | v2 director in `reframe_core`; prototype v3 director separate | `reframe_core.viterbi_layout`, prototype `director.run_director` |
 | 1.2 Screen-share + speaker layout | No screen region detector | — (NEW) |
 | 1.2 PiP layout | Not in STYLE_MAP | `director.py` |
 | 1.2 1:1 / 4:5 export | Only 9:16, 1:1, 16:9 in settings | `settings.ts`, `aspect_size` |

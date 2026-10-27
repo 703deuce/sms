@@ -1,4 +1,7 @@
-"""Multiperson clipper pipeline (tracking + director + crop v2)."""
+"""v1 / prototype-only multiperson render path (legacy tracking + prototype director).
+
+Production multiperson reframing: `speakercrop_v2` + `clips_worker.reframe_core` when
+`REFRAME_V=2`. This module is not imported on the v2 hot path."""
 from __future__ import annotations
 
 import json
