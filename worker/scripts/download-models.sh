@@ -14,4 +14,11 @@ if [[ ! -f "$DEST/face_recognition_sface_2021dec.onnx" ]]; then
   curl -fsSL -o "$DEST/face_recognition_sface_2021dec.onnx" \
     "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
 fi
+EFFICIENTDET_URL="https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/latest/efficientdet_lite0.tflite"
+EFFICIENTDET_SHA256="0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb"
+EFFICIENTDET_PATH="$DEST/efficientdet_lite0.tflite"
+if [[ ! -f "$EFFICIENTDET_PATH" ]]; then
+  curl -fsSL -o "$EFFICIENTDET_PATH" "$EFFICIENTDET_URL"
+fi
+echo "${EFFICIENTDET_SHA256}  ${EFFICIENTDET_PATH}" | sha256sum -c -
 echo "models ready in $DEST"
