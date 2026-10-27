@@ -47,6 +47,9 @@ export async function postSceneVoice(
     voice,
     previousText: prev,
     nextText: next,
+    projectId: row.projectId,
+    draftId,
+    sceneId,
   })
 
   const hash = ttsHash(scene.narration, voice)

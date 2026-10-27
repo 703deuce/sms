@@ -491,6 +491,15 @@ export async function batchStockVisionPick(input: {
         costUsdMicros,
       },
     })
+    logT2v('cost', 'stock-vision', {
+      projectId: input.projectId,
+      backend: backendUsed,
+      model: modelUsed,
+      sceneCount: input.scenes.length,
+      promptTokens,
+      completionTokens,
+      costUsdMicros,
+    })
   }
 
   const metrics: StockVisionBatchMetrics = {

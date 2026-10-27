@@ -4,7 +4,9 @@ import { durationMsFromAlignment } from '@/lib/server/t2v/tts-alignment'
 import type { T2vVoiceSettings } from '@/lib/t2v/types'
 import { getClipStorage } from '@/lib/storage'
 import { createId } from '@/lib/supabase/id'
+import { recordAiUsage } from '@/lib/server/clips/ai-usage'
 import { getPrisma } from '@/lib/server/db'
+import { logT2v } from '@/lib/server/t2v/log'
 
 export type CachedVoiceClip = {
   clipId: string
@@ -22,6 +24,9 @@ export async function getOrSynthesizeVoiceClip(input: {
   voice: T2vVoiceSettings
   previousText?: string
   nextText?: string
+  projectId?: string | null
+  draftId?: string | null
+  sceneId?: string | null
 }): Promise<CachedVoiceClip> {
   const hash = ttsHash(input.text, input.voice)
   const prisma = getPrisma()
@@ -67,6 +72,28 @@ export async function getOrSynthesizeVoiceClip(input: {
       costUsdMicros: usage.costUsdMicros,
     },
   })
+
+  if (usage.costUsdMicros > 0) {
+    await recordAiUsage({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId ?? null,
+      usage: {
+        provider: usage.provider,
+        model: usage.model,
+        units: usage.units,
+        unitType: usage.unitType,
+        costUsdMicros: usage.costUsdMicros,
+      },
+    })
+    logT2v('cost', 'voice', {
+      projectId: input.projectId,
+      draftId: input.draftId,
+      sceneId: input.sceneId,
+      model: usage.model,
+      chars: usage.units,
+      costUsdMicros: usage.costUsdMicros,
+    })
+  }
 
   return {
     clipId,

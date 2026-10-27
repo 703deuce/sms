@@ -165,6 +165,9 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
                     voice_hash=vhash,
                     previous_text=prev_t,
                     next_text=next_t,
+                    project_id=str(project_id) if project_id else None,
+                    job_id=job.get("id"),
+                    scene_id=sc.get("id"),
                 )
                 conn.commit()
                 vo_path = work / f"vo_{idx}.mp3"

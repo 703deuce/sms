@@ -14,6 +14,7 @@ from typing import Any
 from clips_worker.t2v.elevenlabs_tts import tts_with_timestamps
 from clips_worker.t2v.keys import voice_storage_key
 from clips_worker.t2v.tts_alignment import duration_ms_from_alignment
+from clips_worker.t2v.usage import elevenlabs_tts_cost_usd_micros, record_t2v_voice_usage
 
 
 def get_or_synthesize_voice_clip(
@@ -25,6 +26,9 @@ def get_or_synthesize_voice_clip(
     voice_hash: str,
     previous_text: str | None = None,
     next_text: str | None = None,
+    project_id: str | None = None,
+    job_id: str | None = None,
+    scene_id: str | None = None,
 ) -> dict[str, Any]:
     """Returns {clipId, storageKey, durationMs, alignment, hash, cached, modelId}."""
     if not voice_hash:
@@ -73,6 +77,7 @@ def get_or_synthesize_voice_clip(
 
     clip_id = f"t2v_{secrets.token_hex(12)}"
     chars = len(text.strip())
+    cost_micros = elevenlabs_tts_cost_usd_micros(chars, model_id)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -94,7 +99,7 @@ def get_or_synthesize_voice_clip(
                 duration_ms,
                 json.dumps(alignment),
                 chars,
-                0,
+                cost_micros,
             ),
         )
         cur.execute(
@@ -104,6 +109,16 @@ def get_or_synthesize_voice_clip(
             (workspace_id, voice_hash),
         )
         clip_id = cur.fetchone()[0]
+    record_t2v_voice_usage(
+        conn,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        job_id=job_id,
+        scene_id=scene_id,
+        model_id=model_id,
+        char_count=chars,
+        cached=False,
+    )
     conn.commit()
 
     return {

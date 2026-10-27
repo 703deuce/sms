@@ -9,6 +9,7 @@ from pathlib import Path
 
 from clips_worker.elevenlabs import generate_music_for_length
 from clips_worker.storage import upload_file
+from clips_worker.t2v.usage import insert_ai_usage, record_t2v_music_usage
 
 
 def run_music_job(conn, job: dict, post_progress) -> None:
@@ -71,23 +72,29 @@ def run_music_job(conn, job: dict, post_progress) -> None:
             """,
             ("READY", storage_key, cost_usd, generation_id),
         )
-        cur.execute(
-            """
-            INSERT INTO ai_usage (id, "workspaceId", "clipId", "generationId", provider, model, units, "unitType", "costUsdMicros", "createdAt")
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            """,
-            (
-                f"aiu_{uuid.uuid4().hex}",
-                workspace_id,
-                clip_id,
-                generation_id,
-                usage["provider"],
-                usage["model"],
-                usage["units"],
-                usage["unitType"],
-                usage["costUsdMicros"],
-            ),
-        )
+        if t2v_project_id:
+            record_t2v_music_usage(
+                conn,
+                workspace_id=str(workspace_id),
+                project_id=str(t2v_project_id),
+                job_id=job.get("id"),
+                generation_id=str(generation_id),
+                usage=usage,
+                clip_id=clip_id,
+            )
+        else:
+            insert_ai_usage(
+                conn,
+                workspace_id=str(workspace_id),
+                project_id=None,
+                clip_id=clip_id,
+                generation_id=str(generation_id),
+                provider=str(usage["provider"]),
+                model=str(usage["model"]),
+                units=float(usage["units"]),
+                unit_type=str(usage["unitType"]),
+                cost_usd_micros=int(usage["costUsdMicros"]),
+            )
     if clip_id:
         with conn.cursor() as cur:
             cur.execute('SELECT edits FROM clips WHERE id=%s', (clip_id,))
