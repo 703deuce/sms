@@ -5,8 +5,18 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from clips_worker.audio_assets import load_audio_assets
 from clips_worker.job_types import JOB_TYPES
+
+
+@pytest.fixture(autouse=True)
+def _dummy_storage_env(monkeypatch):
+    """Docker build and local pytest run without real Supabase/S3 credentials."""
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+    monkeypatch.setenv("STORAGE_DRIVER", "supabase")
 
 
 def test_studio_sound_job_type_listed():
