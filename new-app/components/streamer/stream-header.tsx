@@ -29,6 +29,7 @@ export function StreamHeader({
   url,
   chatSource,
   chatMessages,
+  chatError,
   sourceType,
 }: {
   platform: string
@@ -37,6 +38,7 @@ export function StreamHeader({
   url?: string | null
   chatSource?: string | null
   chatMessages?: number | null
+  chatError?: string | null
   sourceType?: string | null
 }) {
   return (
@@ -45,6 +47,11 @@ export function StreamHeader({
       {title ? <p className="text-muted-foreground">{title}</p> : null}
       {category ? <p className="text-xs text-muted-foreground">{category}</p> : null}
       <p className="mt-1 text-xs text-muted-foreground">{chatLabel(chatSource, chatMessages, sourceType)}</p>
+      {chatError ? (
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400" role="status">
+          Chat replay failed: {chatError}
+        </p>
+      ) : null}
       {url ? (
         <a href={url} className="text-xs text-primary hover:underline" target="_blank" rel="noopener noreferrer">
           Open source

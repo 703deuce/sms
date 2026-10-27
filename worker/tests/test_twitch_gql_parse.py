@@ -1,5 +1,3 @@
-import os
-
 from clips_worker.streamer.chat.twitch_gql import (
     DEFAULT_GQL_CLIENT_ID,
     _extract_page,
@@ -9,16 +7,15 @@ from clips_worker.streamer.chat.twitch_gql import (
 )
 
 
-def test_gql_client_id_only_env_override():
-    os.environ.pop("TWITCH_CLIENT_ID", None)
-    os.environ.pop("TWITCH_HELIX_CLIENT_ID", None)
-    os.environ.pop("TWITCH_GQL_CLIENT_ID", None)
+def test_gql_client_id_only_env_override(monkeypatch):
+    monkeypatch.delenv("TWITCH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("TWITCH_HELIX_CLIENT_ID", raising=False)
+    monkeypatch.delenv("TWITCH_GQL_CLIENT_ID", raising=False)
     assert gql_client_id() == DEFAULT_GQL_CLIENT_ID
-    os.environ["TWITCH_GQL_CLIENT_ID"] = "custom"
+    monkeypatch.setenv("TWITCH_GQL_CLIENT_ID", "custom")
     assert gql_client_id() == "custom"
-    os.environ["TWITCH_CLIENT_ID"] = "helix-should-not-use"
+    monkeypatch.setenv("TWITCH_CLIENT_ID", "helix-should-not-use")
     assert gql_client_id() == "custom"
-    os.environ.pop("TWITCH_GQL_CLIENT_ID", None)
 
 
 def test_parse_comment_user_color_on_message():

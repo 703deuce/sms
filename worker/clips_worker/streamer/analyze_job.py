@@ -19,6 +19,7 @@ from clips_worker.streamer.chunking import ffmpeg_slice_opus, merge_words, plan_
 from clips_worker.streamer.config import CHUNK_MIN, CHUNK_OVERLAP_S, SCRATCH
 from clips_worker.streamer.keys import stream_audio_key, stream_chat_key, stream_chunk_key, stream_signals_key
 from clips_worker.streamer.viewer_clips.fetch import fetch_viewer_clips_for_vod
+from clips_worker.streamer.chat.resolve import resolve_chat_after_transcribe
 from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.metadata import enrich_streamer_meta
 from clips_worker.streamer.rank import rank_moments
@@ -171,24 +172,12 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         chapters = vod.get("chapters")
         if isinstance(chapters, str):
             chapters = json.loads(chapters)
-        from clips_worker.streamer.chat.twitch_gql import TwitchChatReplayError
-
-        chat_messages: list[dict] | None = None
-        chat_source = "none"
         try:
-            chat_messages, chat_source = chat_future.result()
-        except TwitchChatReplayError as exc:
-            print(f"stream analyze chat replay failed (continuing): {exc}", flush=True)
-            state["chatError"] = str(exc)[:500]
-            _save_state(conn, vod_id, state)
-            chat_messages, chat_source = [], "none"
-        except Exception as exc:
-            print(f"stream analyze chat fetch failed (continuing): {exc}", flush=True)
-            state["chatError"] = str(exc)[:500]
-            _save_state(conn, vod_id, state)
-            chat_messages, chat_source = [], "none"
+            chat_messages, chat_source, state = resolve_chat_after_transcribe(chat_future, state)
         finally:
             chat_executor.shutdown(wait=False)
+        if state.get("chatError"):
+            _save_state(conn, vod_id, state)
         if chat_messages:
             from clips_worker.streamer.chat.twitch_gql import save_jsonl_gz
 
@@ -197,6 +186,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             ck = stream_chat_key(workspace_id, vod_id)
             upload_file(ck, chat_path, "application/gzip")
             state["chatKey"] = ck
+            state.pop("chatError", None)
             _save_state(conn, vod_id, state)
         with conn.cursor() as cur:
             cur.execute(
