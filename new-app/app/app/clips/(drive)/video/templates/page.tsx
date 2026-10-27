@@ -2,7 +2,7 @@ import { T2vTemplatesGallery } from '@/components/t2v/t2v-templates-gallery'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { notFound } from 'next/navigation'
 
-export const metadata = { title: 'Video templates' }
+export const metadata = { title: 'AI Video templates' }
 
 export default async function T2vTemplatesPage({
   searchParams,

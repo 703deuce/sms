@@ -1,18 +1,19 @@
 import {
   AudioLines,
-  Clapperboard,
   Download,
+  GraduationCap,
   HelpCircle,
   Home,
+  Images,
   LayoutTemplate,
   LifeBuoy,
   Palette,
   Plug,
-  Plus,
   PenLine,
   Radio,
   Scissors,
   Settings,
+  Users,
   Video,
   type LucideIcon,
 } from 'lucide-react'
@@ -43,10 +44,9 @@ export type NavContext = {
   items: NavItem[]
 }
 
-export const GROUP_ORDER = ['Create', 'Library', 'Brand', 'Exports'] as const
+export const GROUP_ORDER = ['Create', 'Library', 'Brand', 'Tools', 'Exports'] as const
 
 const CLIPS_ITEMS: NavItem[] = [
-    { title: 'New project', href: '/app/clips/new', icon: Plus, group: 'Create' },
     { title: 'Streamer', href: '/app/streamer', icon: Radio, group: 'Create' },
     { title: 'Screenwriting', href: '/app/sw', icon: PenLine, group: 'Create' },
     {
@@ -56,7 +56,6 @@ const CLIPS_ITEMS: NavItem[] = [
       group: 'Create',
       recordingOnly: true,
     },
-    { title: 'Projects', href: '/app/clips', icon: Clapperboard, group: 'Library', exact: true },
     {
       title: 'Editor',
       href: '/app/editor',
@@ -80,6 +79,27 @@ const CLIPS_ITEMS: NavItem[] = [
       group: 'Brand',
     },
     { title: 'Exports', href: '/app/exports', icon: Download, group: 'Exports' },
+    { title: 'Media library', href: '/app/clips/media', icon: Images, group: 'Tools' },
+    {
+      title: 'Rooms recordings',
+      href: '/app/rooms',
+      icon: Video,
+      group: 'Tools',
+      recordingOnly: true,
+    },
+    {
+      title: 'Workspaces',
+      href: '/app/clips?view=workspaces',
+      icon: Users,
+      group: 'Tools',
+    },
+    {
+      title: 'Layout packs',
+      href: '/app/clips?view=layouts',
+      icon: LayoutTemplate,
+      group: 'Tools',
+    },
+    { title: 'Learn', href: '/app/help', icon: GraduationCap, group: 'Tools' },
 ]
 
 export function clipsNavItems(options?: { showRecording?: boolean }): NavItem[] {
@@ -156,6 +176,12 @@ export function isItemActive(item: NavItem, pathname: string, searchParams?: URL
     if (pathname !== base) return false
     if (item.href.includes('tab=templates')) {
       return searchParams?.get('tab') === 'templates'
+    }
+    if (item.href.includes('view=workspaces')) {
+      return searchParams?.get('view') === 'workspaces'
+    }
+    if (item.href.includes('view=layouts')) {
+      return searchParams?.get('view') === 'layouts'
     }
     return pathname === base
   }

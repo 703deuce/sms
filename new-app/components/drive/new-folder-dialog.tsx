@@ -38,6 +38,7 @@ export function NewFolderDialog({ variant = 'sidebar' }: { variant?: 'sidebar' |
       setName('')
       setOpen(false)
       router.refresh()
+      window.dispatchEvent(new CustomEvent('clips-folders-changed'))
       toast.success('Folder created')
     } catch {
       toast.error('Could not create folder')

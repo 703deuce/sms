@@ -44,6 +44,13 @@ export function AppBreadcrumbs() {
     crumbs.push({ label: tab === 'templates' ? 'Templates' : 'Brand kit' })
   } else if (pathname === '/app/exports' || pathname.startsWith('/app/clips/exports')) {
     crumbs.push({ label: 'Exports' })
+  } else if (pathname === '/app/clips/video/new') {
+    crumbs.push({ label: 'AI Video', href: '/app/clips?kind=video' }, { label: 'Create' })
+  } else if (pathname.startsWith('/app/clips/video/templates')) {
+    crumbs.push({ label: 'AI Video', href: '/app/clips?kind=video' }, { label: 'Templates' })
+  } else if (pathname.match(/^\/app\/clips\/[^/]+\/video/)) {
+    crumbs.push({ label: 'AI Video projects', href: '/app/clips?kind=video' })
+    crumbs.push({ label: titles.project || '…' })
   } else if (pathname.startsWith('/app/streamer')) {
     crumbs.push({ label: 'Streamer' })
   } else if (pathname.startsWith('/app/settings')) {

@@ -231,7 +231,7 @@ export function T2vCreateWorkspace() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Text to video</h1>
+            <h1 className="text-xl font-semibold">AI Video</h1>
             <p className="text-sm text-muted-foreground">Idea, script, link, or deck → finished video</p>
           </div>
           <Link href="/app/clips/video/templates" className="text-sm text-primary">Browse templates</Link>

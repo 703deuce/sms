@@ -119,7 +119,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           <h1 className="text-xl font-semibold">New project</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a file, import from Google Drive or Dropbox, or start a text-to-video project.
+          Upload a file, import from Google Drive or Dropbox, or start an AI Video project.
         </p>
       </header>
       {isT2vFeatureEnabled() && (
@@ -129,7 +129,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
               { href: '/app/clips/new?tab=upload', label: 'Upload file', hint: 'MP4, MOV, WebM', icon: UploadCloud, active: tab === 'upload' },
               { href: '/app/clips/new?tab=link', label: 'Paste link', hint: 'Drive or Dropbox', icon: Link2, active: tab === 'link' },
               { href: '/app/clips/new?tab=streamer', label: 'Streamer', hint: 'Twitch or Kick', icon: Radio, active: tab === 'streamer' },
-              { href: '/app/clips/video/new', label: 'Text to video', hint: 'Idea, script, link → video', icon: Clapperboard, active: false },
+              { href: '/app/clips/video/new', label: 'AI Video', hint: 'Idea, script, or link → video', icon: Clapperboard, active: false },
             ] as const
           ).map((card) => (
             <Link
@@ -139,7 +139,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                 'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/40',
                 card.active && 'border-primary bg-primary/8 ring-1 ring-primary/40',
               )}
-              data-testid={card.label === 'Text to video' ? 'new-project-t2v-card' : undefined}
+              data-testid={card.label === 'AI Video' ? 'new-project-t2v-card' : undefined}
             >
               <span className="grid size-10 place-items-center rounded-lg bg-muted">
                 <card.icon className="size-5 text-primary" aria-hidden />

@@ -3,7 +3,6 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect } from 'react'
 import { DriveActivityCard } from '@/components/drive/drive-activity-card'
-import { DriveSidebar } from '@/components/drive/drive-sidebar'
 import { DriveTopBar } from '@/components/drive/drive-top-bar'
 import { DriveTranscribingDialog } from '@/components/drive/drive-transcribing-dialog'
 import { ClipsDriveProvider, useClipsDrive } from '@/components/drive/clips-drive-context'
@@ -18,13 +17,7 @@ function isDriveChromeRoute(pathname: string) {
   )
 }
 
-function ClipsDriveShellInner({
-  children,
-  folders,
-}: {
-  children: React.ReactNode
-  folders: { id: string; name: string }[]
-}) {
+function ClipsDriveShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const params = useSearchParams()
@@ -57,8 +50,7 @@ function ClipsDriveShellInner({
   }
 
   return (
-    <div className="flex min-h-0 flex-1" data-testid="clips-drive-shell">
-      <DriveSidebar folders={folders} />
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="clips-drive-shell">
       <div className="flex min-w-0 flex-1 flex-col">
         <DriveTopBar
           searchValue={search}
@@ -78,16 +70,10 @@ function ClipsDriveShellInner({
   )
 }
 
-export function ClipsDriveShell({
-  children,
-  folders,
-}: {
-  children: React.ReactNode
-  folders: { id: string; name: string }[]
-}) {
+export function ClipsDriveShell({ children }: { children: React.ReactNode }) {
   return (
     <ClipsDriveProvider>
-      <ClipsDriveShellInner folders={folders}>{children}</ClipsDriveShellInner>
+      <ClipsDriveShellInner>{children}</ClipsDriveShellInner>
     </ClipsDriveProvider>
   )
 }

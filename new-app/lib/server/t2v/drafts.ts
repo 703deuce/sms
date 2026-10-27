@@ -14,10 +14,10 @@ export class RevisionConflict extends Error {
 export async function createT2vDraft(workspaceId: string, doc: T2vDraftV1) {
   const prisma = getPrisma()
   const seed =
-    (doc.source.prompt ?? doc.source.script ?? doc.source.url ?? doc.title).slice(0, 2000) || 'Text to video'
+    (doc.source.prompt ?? doc.source.script ?? doc.source.url ?? doc.title).slice(0, 2000) || 'AI Video'
   const project = await createClipProjectFromPrompt(workspaceId, {
     prompt: seed,
-    title: doc.title || 'Text to video',
+    title: doc.title || 'AI Video',
   })
   await prisma.clipProject.update({ where: { id: project.id }, data: { sourceKind: 't2v' } })
   return prisma.t2vDraft.create({
