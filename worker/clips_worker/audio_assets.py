@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from clips_worker.storage import download_object
+
 
 def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
     audio = edits.get("audio") or {}
@@ -16,8 +18,6 @@ def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
             cur.execute('SELECT "storageKey" FROM ai_generations WHERE id=%s', (music["generationId"],))
             row = cur.fetchone()
         if row and row[0]:
-            from clips_worker.storage import download_object
-
             music_path = work_dir / "music.mp3"
             download_object(row[0], music_path)
             music_meta = {
@@ -37,8 +37,6 @@ def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
             row = cur.fetchone()
         if not row or not row[0]:
             continue
-        from clips_worker.storage import download_object
-
         local = work_dir / f"sfx_{i}.mp3"
         download_object(row[0], local)
         sfx_paths.append((local, int(item.get("atMs", 0)), float(item.get("volume", 0.8))))
@@ -52,8 +50,6 @@ def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
             cur.execute('SELECT "storageKey", status FROM ai_generations WHERE id=%s', (gid,))
             row = cur.fetchone()
         if row and row[0] and row[1] == "READY":
-            from clips_worker.storage import download_object
-
             studio_path = work_dir / "studio_isolated.mp3"
             download_object(row[0], studio_path)
             studio_mix = float(studio.get("mix", 0.8))
