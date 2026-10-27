@@ -373,7 +373,12 @@ DISPATCH: dict[str, object] = {
 
 from clips_worker.script_composition_render import run_script_composition_render_job  # noqa: E402
 
-DISPATCH["RENDER_SCRIPT_COMPOSITION"] = run_script_composition_render_job
+
+def handle_script_composition_render(conn, job: dict) -> None:
+    run_script_composition_render_job(conn, job, post_progress)
+
+
+DISPATCH["RENDER_SCRIPT_COMPOSITION"] = handle_script_composition_render
 
 
 def main() -> None:
