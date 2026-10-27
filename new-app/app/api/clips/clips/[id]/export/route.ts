@@ -31,7 +31,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const { id: clipId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const clip = await getClipForWorkspace(workspaceId, clipId)
-    if (!clip?.previewKey) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!clip?.previewKey) {
+      console.warn('[clipper:export] blocked missing preview', { clipId, workspaceId })
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
 
     const raw = await request.text()
     const body = bodySchema.parse(raw ? JSON.parse(raw) : {})
@@ -45,6 +48,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       resolution = '720p'
     }
     const aspect = body.aspect ?? edits.aspectRatio ?? '9:16'
+    console.info('[clipper:export] request', {
+      clipId,
+      workspaceId,
+      resolution,
+      aspect,
+      watermark,
+      durationMs: clip.endMs - clip.startMs,
+    })
+
     if (
       canReuseClipPreviewForExport({
         aspect,
@@ -53,6 +65,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         bounds,
       })
     ) {
+      console.info('[clipper:export] preview_reuse', { clipId, renderId: 'pending' })
       const ready = await createReadyRenderFromPreview({
         workspaceId,
         clipId: clip.id,
@@ -64,6 +77,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         edits,
       })
       await logClipEvent(workspaceId, clip.id, 'download')
+      console.info('[clipper:export] ready_reuse', {
+        clipId,
+        renderId: ready.renderId,
+        filename: ready.filename,
+        durationMs: clip.endMs - clip.startMs,
+      })
       return NextResponse.json({
         data: {
           renderId: ready.renderId,
@@ -105,6 +124,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
 
     await logClipEvent(workspaceId, clip.id, 'download')
+    console.info('[clipper:export] enqueued', {
+      clipId,
+      renderId: result.render.id,
+      jobId: result.jobId,
+      filename: result.filename,
+      reused: false,
+    })
     return NextResponse.json({
       data: {
         renderId: result.render.id,
@@ -115,9 +141,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         projectId: clip.projectId,
         status: 'QUEUED',
         jobId: result.jobId,
+        durationMs: clip.endMs - clip.startMs,
       },
     })
   } catch (err) {
+    console.error('[clipper:export] failed', {
+      message: err instanceof Error ? err.message : String(err),
+    })
     return jsonError(err, 400)
   }
 }
