@@ -31,6 +31,8 @@ def rank_moments(
     chat_messages: list[dict] | None = None,
     viewer_clips: list[dict] | None = None,
     vod_signal_curves: dict[str, list[float]] | None = None,
+    video_signal: list[float] | None = None,
+    video_moments: list[dict] | None = None,
 ) -> tuple[list[FusionPick], dict]:
     duration_s = max(1, int(duration_ms / 1000))
     chat_sig: list[float] | None = None
@@ -88,6 +90,12 @@ def rank_moments(
         chat_messages=chat_messages,
         viewer_clips=viewer_clips,
     )
+    video_sig = None
+    if video_signal and len(video_signal) >= duration_s:
+        video_sig = video_signal[:duration_s]
+    elif video_signal:
+        video_sig = list(video_signal) + [0.0] * (duration_s - len(video_signal))
+
     signals = {
         "audio": audio_sig,
         "transcript": transcript_sig,
@@ -96,12 +104,20 @@ def rank_moments(
         "clipCues": clip_cues,
         "markers": marker_sig,
         "speakerChange": speaker_sig,
+        "video": video_sig,
     }
     ranker = llm_ranker
     if ranker is None and use_llm:
         from clips_worker.streamer.llm_rank import make_llm_ranker
+        from clips_worker.video_picker import format_moments_for_llm
 
-        ranker = make_llm_ranker(words, meta={"duration_s": duration_s})
+        vm = video_moments or []
+        meta = {"duration_s": duration_s}
+        if vm:
+            meta["video_moments"] = format_moments_for_llm(
+                [{"t_s": (m.get("t_ms") or 0) / 1000.0, "reason": m.get("reason"), "score": m.get("score")} for m in vm]
+            )
+        ranker = make_llm_ranker(words, meta=meta)
     picks, payload = fuse_moments(
         duration_s=duration_s,
         signals=signals,

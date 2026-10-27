@@ -657,11 +657,12 @@ def run_m4_pipeline(
                         scored=scored,
                     )
 
+                picker_settings = {**settings, "sourceVideoPath": str(src)}
                 with stage_span("picker", heartbeat=True):
                     picks, picker_message = pick_talking_clips(
                         words,
                         str(audio_wav),
-                        settings,
+                        picker_settings,
                         range_start,
                         range_end,
                         on_headstart_picks=on_headstart,

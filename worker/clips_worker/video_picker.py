@@ -1,0 +1,266 @@
+"""Gemini Flash video-watch signal for clip finding (stream + regular)."""
+from __future__ import annotations
+
+import base64
+import json
+import os
+import subprocess
+import time
+from pathlib import Path
+from typing import Any
+
+import requests
+
+from clips_worker.gemini_vision import GEMINI_BASE, _key
+from clips_worker.stage_log import stage_begin, stage_end
+
+MOMENTS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "moments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "t_s": {"type": "number"},
+                    "reason": {"type": "string"},
+                    "score": {"type": "number"},
+                },
+                "required": ["t_s", "reason", "score"],
+            },
+        }
+    },
+    "required": ["moments"],
+}
+
+_SYSTEM = (
+    "You watch short-form video for stream/game highlights. "
+    "Find visually or emotionally notable moments (gameplay plays, reactions, jump scares, "
+    "alerts, face reactions, chat on screen) even when nobody is talking. "
+    "Return JSON only. score is 0.0-1.0. t_s is seconds from the start of this clip."
+)
+
+
+def video_picker_enabled() -> bool:
+    raw = (os.environ.get("VIDEO_PICKER_ENABLED") or "true").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def video_picker_timeout_s() -> float:
+    try:
+        return max(15.0, float(os.environ.get("VIDEO_PICKER_TIMEOUT_S", "90")))
+    except ValueError:
+        return 90.0
+
+
+def video_picker_fps() -> float:
+    try:
+        return min(1.0, max(0.1, float(os.environ.get("VIDEO_PICKER_FPS", "0.3"))))
+    except ValueError:
+        return 0.3
+
+
+def discover_video_picker_model() -> str:
+    configured = (os.environ.get("VIDEO_PICKER_MODEL") or "").strip()
+    if configured:
+        return configured
+    res = requests.get(f"{GEMINI_BASE}/models", params={"key": _key()}, timeout=30)
+    res.raise_for_status()
+    models = res.json().get("models") or []
+    candidates: list[str] = []
+    for m in models:
+        name = str(m.get("name", "")).replace("models/", "")
+        methods = m.get("supportedGenerationMethods") or []
+        low = name.lower()
+        if "generateContent" not in methods:
+            continue
+        if "flash" not in low or "lite" in low or "image" in low:
+            continue
+        candidates.append(name)
+    if not candidates:
+        raise RuntimeError("no gemini flash video model found")
+    return sorted(candidates)[-1]
+
+
+def estimate_gemini_usd(prompt_tokens: int, output_tokens: int) -> float:
+    try:
+        in_per_m = float(os.environ.get("VIDEO_PICKER_USD_PER_1M_INPUT", "0.10"))
+        out_per_m = float(os.environ.get("VIDEO_PICKER_USD_PER_1M_OUTPUT", "0.40"))
+    except ValueError:
+        in_per_m, out_per_m = 0.10, 0.40
+    return (prompt_tokens / 1_000_000) * in_per_m + (output_tokens / 1_000_000) * out_per_m
+
+
+def make_watch_proxy(
+    src: Path,
+    dest: Path,
+    start_s: float = 0.0,
+    end_s: float | None = None,
+) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    cmd = ["ffmpeg", "-y", "-v", "error"]
+    if start_s > 0.01:
+        cmd.extend(["-ss", f"{start_s:.3f}"])
+    cmd.extend(["-i", str(src)])
+    if end_s is not None and end_s > start_s:
+        cmd.extend(["-t", f"{end_s - start_s:.3f}"])
+    cmd.extend(
+        [
+            "-vf",
+            "scale=480:-2:flags=fast_bilinear",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "32",
+            "-an",
+            "-movflags",
+            "+faststart",
+            str(dest),
+        ]
+    )
+    subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def moments_to_per_second(moments: list[dict], duration_s: int) -> list[float]:
+    n = max(1, duration_s)
+    curve = [0.0] * n
+    for m in moments:
+        try:
+            t = int(float(m.get("t_s") or 0))
+            sc = float(m.get("score") or 0)
+        except (TypeError, ValueError):
+            continue
+        sc = max(0.0, min(1.0, sc))
+        for dt in range(-2, 3):
+            ti = t + dt
+            if 0 <= ti < n:
+                decay = 1.0 - abs(dt) * 0.2
+                curve[ti] = max(curve[ti], sc * decay)
+    return curve
+
+
+def format_moments_for_llm(moments: list[dict], limit: int = 40) -> str:
+    lines: list[str] = []
+    for m in moments[:limit]:
+        try:
+            t = float(m.get("t_s") or 0)
+            sc = float(m.get("score") or 0)
+        except (TypeError, ValueError):
+            continue
+        reason = str(m.get("reason") or "").strip()[:160]
+        if reason:
+            lines.append(f"- {t:.1f}s score={sc:.2f}: {reason}")
+    return "\n".join(lines)
+
+
+def watch_video_file(
+    video_path: Path,
+    *,
+    duration_s: int,
+    chunk_label: str = "upload",
+) -> tuple[list[dict], dict[str, Any]]:
+    """Call Gemini Flash on a local mp4; never raises (returns empty on failure)."""
+    meta: dict[str, Any] = {
+        "chunk": chunk_label,
+        "frames_est": 0,
+        "prompt_tokens": 0,
+        "output_tokens": 0,
+        "est_usd": 0.0,
+        "model": "",
+        "ok": False,
+    }
+    if not video_picker_enabled():
+        return [], meta
+    if not video_path.is_file() or video_path.stat().st_size < 1024:
+        return [], meta
+    t0 = stage_begin("video_picker", chunk=chunk_label)
+    try:
+        model = discover_video_picker_model()
+        meta["model"] = model
+        raw = video_path.read_bytes()
+        if len(raw) > 18 * 1024 * 1024:
+            slim = video_path.parent / f"{video_path.stem}_slim.mp4"
+            make_watch_proxy(video_path, slim, 0.0, float(duration_s))
+            raw = slim.read_bytes()
+        b64 = base64.b64encode(raw).decode("ascii")
+        fps = video_picker_fps()
+        meta["frames_est"] = max(1, int(duration_s * fps))
+        part: dict[str, Any] = {
+            "inline_data": {"mime_type": "video/mp4", "data": b64},
+            "video_metadata": {"fps": fps},
+        }
+        generation_config: dict[str, Any] = {
+            "responseMimeType": "application/json",
+            "responseSchema": MOMENTS_SCHEMA,
+            "temperature": 0.35,
+            "mediaResolution": "MEDIA_RESOLUTION_LOW",
+        }
+        res = requests.post(
+            f"{GEMINI_BASE}/models/{model}:generateContent",
+            params={"key": _key()},
+            json={
+                "systemInstruction": {"parts": [{"text": _SYSTEM}]},
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            part,
+                            {
+                                "text": (
+                                    f"Video length about {duration_s}s. "
+                                    "List notable visual moments with t_s in seconds from 0."
+                                ),
+                            },
+                        ],
+                    }
+                ],
+                "generationConfig": generation_config,
+            },
+            timeout=video_picker_timeout_s(),
+        )
+        if not res.ok:
+            raise RuntimeError(res.text[:300])
+        data = res.json()
+        usage = data.get("usageMetadata") or {}
+        pt = int(usage.get("promptTokenCount") or 0)
+        ot = int(usage.get("candidatesTokenCount") or 0)
+        meta["prompt_tokens"] = pt
+        meta["output_tokens"] = ot
+        meta["est_usd"] = round(estimate_gemini_usd(pt, ot), 6)
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        parsed = json.loads(text)
+        moments = list(parsed.get("moments") or [])
+        meta["ok"] = True
+        stage_end(
+            "video_picker",
+            t0,
+            chunk=chunk_label,
+            frames=meta["frames_est"],
+            prompt_tokens=pt,
+            output_tokens=ot,
+            est_usd=meta["est_usd"],
+            moments=len(moments),
+        )
+        return moments, meta
+    except Exception as exc:
+        stage_end("video_picker", t0, chunk=chunk_label, error=str(exc)[:180])
+        return [], meta
+
+
+def watch_upload_range(
+    src_video: Path,
+    *,
+    range_start_ms: int,
+    range_end_ms: int,
+    scratch: Path,
+) -> tuple[list[dict], list[float], dict[str, Any]]:
+    start_s = max(0.0, range_start_ms / 1000.0)
+    end_s = range_end_ms / 1000.0 if range_end_ms > range_start_ms else start_s + 60.0
+    duration_s = max(1, int(end_s - start_s))
+    proxy = scratch / "video_picker_upload.mp4"
+    make_watch_proxy(src_video, proxy, start_s, end_s)
+    moments, meta = watch_video_file(proxy, duration_s=duration_s, chunk_label="regular")
+    curve = moments_to_per_second(moments, duration_s)
+    return moments, curve, meta

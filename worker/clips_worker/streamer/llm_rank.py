@@ -85,6 +85,9 @@ def _rank_batch_gemini(batch: list[dict], words: list[dict], meta: dict | None =
     user = "Rank these stream moments:\n\n" + "\n---\n".join(lines)
     if meta:
         user += f"\nContext: {meta}"
+        vm = meta.get("video_moments") if isinstance(meta, dict) else None
+        if vm:
+            user += f"\n\nVisual watch pass (Gemini):\n{vm}"
     model = discover_model()
     res = requests.post(
         f"{GEMINI_BASE}/models/{model}:generateContent",
@@ -123,6 +126,9 @@ def rank_candidates_batch(
     user = "Rank these stream moments:\n\n" + "\n---\n".join(lines)
     if meta:
         user += f"\nContext: {meta}"
+        vm = meta.get("video_moments") if isinstance(meta, dict) else None
+        if vm:
+            user += f"\n\nVisual watch pass (Gemini):\n{vm}"
     try:
         data = chat_json(system, user, SCHEMA, "stream_moments")
         return list(data.get("candidates") or [])

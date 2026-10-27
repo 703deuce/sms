@@ -102,13 +102,14 @@ def fuse_moments(
     """Return ranked clip candidates and signals.json payload."""
     weights = (settings.get("signalWeights") or {}) if isinstance(settings, dict) else {}
     default_w = {
-        "audio": 0.20,
-        "chat": 0.18,
-        "viewerClips": 0.28,
-        "transcript": 0.06,
-        "clipCues": 0.22,
+        "audio": 0.16,
+        "video": 0.20,
+        "chat": 0.14,
+        "viewerClips": 0.22,
+        "transcript": 0.05,
+        "clipCues": 0.18,
         "markers": 0.03,
-        "speakerChange": 0.03,
+        "speakerChange": 0.02,
     }
     default_w.update(weights)
     streamer = (settings.get("streamer") or {}) if isinstance(settings, dict) else {}
@@ -179,6 +180,7 @@ def fuse_moments(
                     "transcript": _peak_in_window(signals.get("transcript"), cand["start_ms"], cand["end_ms"]),
                     "chat": _peak_in_window(signals.get("chat"), cand["start_ms"], cand["end_ms"]),
                     "viewerClips": _peak_in_window(signals.get("viewerClips"), cand["start_ms"], cand["end_ms"]),
+                    "video": _peak_in_window(signals.get("video"), cand["start_ms"], cand["end_ms"]),
                     "llm": llm_score,
                 },
                 ai_meta={
@@ -247,6 +249,7 @@ def fuse_moments(
         "viewerClips": signals.get("viewerClips"),
         "markers": signals.get("markers"),
         "speakerChange": signals.get("speakerChange"),
+        "video": signals.get("video"),
         "chapters": chapters or [],
         "combined": curve,
         "clipCues": signals.get("clipCues"),
@@ -352,6 +355,11 @@ def _reasons_for(cand: dict, signals: dict, llm: dict) -> list[dict]:
         hi = min(len(viewer), cand["end_ms"] // 1000 + 1)
         if hi > lo and max(viewer[lo:hi]) >= 0.5:
             reasons.append({"kind": "viewer_clip", "label": "Viewer clips", "value": "overlap"})
+    video = signals.get("video")
+    if video:
+        sec = cand["peak_ms"] // 1000
+        if 0 <= sec < len(video) and video[sec] >= 0.5:
+            reasons.append({"kind": "video", "label": "Visual moment", "value": "high"})
     if llm.get("category"):
         reasons.append({"kind": "llm", "label": str(llm["category"]).replace("_", " ").title(), "value": ""})
     cues = signals.get("clipCues")

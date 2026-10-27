@@ -218,6 +218,7 @@ def _score_moments_batched(
     genre: str,
     source_duration_s: float | None,
     ctx_s: float,
+    video_context: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
     blocks: list[dict] = []
     for mi, m in enumerate(moments):
@@ -234,9 +235,12 @@ def _score_moments_batched(
             }
         )
     timeout_s = float(os.environ.get("CLIP_PASS2_BATCH_TIMEOUT_S", "45"))
+    user_body = json.dumps(blocks, indent=0)
+    if video_context:
+        user_body = f"Visual moments from Gemini video watch:\n{video_context}\n\n{user_body}"
     data = chat_json(
         _pass2_system(genre, batched=True),
-        json.dumps(blocks, indent=0),
+        user_body,
         _pass2_batch_schema(),
         "moments_pass2_batch",
         timeout_s=timeout_s,
@@ -293,6 +297,7 @@ def score_moments(
     genre: str = "podcast",
     source_duration_s: float | None = None,
     project_id: str | None = None,
+    video_context: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
     if not moments:
         return [], []
@@ -312,7 +317,14 @@ def score_moments(
         )
         try:
             batched, audit = _score_moments_batched(
-                batch_moments, sentences, signals, sig_by, genre, source_duration_s, ctx_s
+                batch_moments,
+                sentences,
+                signals,
+                sig_by,
+                genre,
+                source_duration_s,
+                ctx_s,
+                video_context=video_context,
             )
             if tail_moments:
                 tail_scored = pass1_heuristic_candidates(
