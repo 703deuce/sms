@@ -34,14 +34,25 @@ Pin exact versions with no `^`. `livekit-client` 2.x ships experimental "extensi
    - Revoking a CLI authorization also revokes the keys it minted, so production keys should be created in the dashboard, not by `lk cloud auth`.
 4. **Webhooks:** go to Cloud dashboard → Settings → Webhooks. Add `https://<app>/api/recording/livekit/webhook` and choose the API key that signs the requests. The page has a "Send a test event" button (https://docs.livekit.io/intro/basics/rooms-participants-tracks/webhooks-events.md).
 
-### Env contract (Coolify secrets; server only)
+### Env contract (Coolify — **already provisioned** on Transovo `new-app`)
+
+**Clips recording** uses existing voice-agent LiveKit vars (do **not** add parallel `NEXT_PUBLIC_*` keys). Target switch: **`RECORDING_LIVEKIT_TARGET=cloud|self_hosted`** (default **`cloud`**), implemented in `new-app/lib/server/livekit/recording-room-service.ts`.
 
 ```dotenv
-LIVEKIT_URL=wss://transovo-xxxx.livekit.cloud   # also exposed to the browser as NEXT_PUBLIC_LIVEKIT_URL (not a secret)
-LIVEKIT_API_KEY=API...                          # server only
-LIVEKIT_API_SECRET=...                          # server only, never NEXT_PUBLIC_
-NEXT_PUBLIC_LIVEKIT_URL=wss://transovo-xxxx.livekit.cloud
+# Cloud (default) — production project sms-6w01zoya.livekit.cloud
+LIVEKIT_URL=wss://sms-6w01zoya.livekit.cloud
+LIVEKIT_API_KEY=...
+LIVEKIT_API_SECRET=...
+
+# Self-hosted (cost migration later)
+LIVEKIT_SELF_HOSTED_URL=wss://voice.transovo.ai   # or https://voice.transovo.ai (normalized to wss)
+LIVEKIT_SELF_HOSTED_API_KEY=...
+LIVEKIT_SELF_HOSTED_API_SECRET=...
+
+RECORDING_LIVEKIT_TARGET=cloud   # or self_hosted
 ```
+
+Browser clients receive **`url`** from a server token route (`getLiveKitPublicUrl()`), not from a public env var.
 
 - `LiveKitAPI` and `RoomServiceClient` read `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` from env when no arguments are passed. `LIVEKIT_TOKEN` is an alternative. Server clients rewrite a `wss://` host to `https://` themselves (`TwirpRPC.ts`: `host.replace('ws','http')`).
   - Sources: https://github.com/livekit/node-sdks/blob/main/packages/livekit-server-sdk/src/LiveKitAPI.ts and https://github.com/livekit/node-sdks/tree/main/packages/livekit-server-sdk

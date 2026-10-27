@@ -1,61 +1,37 @@
 import 'server-only'
-import { z } from 'zod'
+import {
+  getRecordingLiveKitTarget,
+  resolveRecordingLiveKitEnv,
+  type RecordingLiveKitEnv,
+} from '@/lib/server/livekit/recording-room-service'
 
-const livekitEnvSchema = z.object({
-  LIVEKIT_URL: z
-    .string()
-    .min(1, 'LIVEKIT_URL is required (wss://<project>.livekit.cloud)')
-    .refine((v) => v.startsWith('wss://') || v.startsWith('ws://'), {
-      message: 'LIVEKIT_URL must be a WebSocket URL (wss://…)',
-    }),
-  LIVEKIT_API_KEY: z.string().min(1, 'LIVEKIT_API_KEY is required'),
-  LIVEKIT_API_SECRET: z.string().min(1, 'LIVEKIT_API_SECRET is required'),
-})
-
-export type LiveKitServerEnv = z.infer<typeof livekitEnvSchema>
+export type LiveKitServerEnv = RecordingLiveKitEnv
 
 let cached: LiveKitServerEnv | null = null
+let cachedTarget: ReturnType<typeof getRecordingLiveKitTarget> | null = null
 
 /** @internal tests only */
 export function resetLiveKitEnvCache(): void {
   cached = null
+  cachedTarget = null
 }
 
-import { isLiveKitConfigured } from '@/lib/server/clips/feature-gates'
-
 /**
- * Validated LiveKit Cloud credentials (server-only).
- * Call from recording route handlers at **M14+** — not at app boot, so the editor can run before keys exist.
+ * LiveKit credentials for **clips recording** (M14–M16), honoring `RECORDING_LIVEKIT_TARGET`.
+ * Uses existing Coolify vars — Cloud: `LIVEKIT_*`; self-hosted: `LIVEKIT_SELF_HOSTED_*`.
  *
- * @see docs/clips/descript/livekit-api-brief.md §1
- * @see docs/clips/BLOCKED.md BLK-001
+ * @see docs/clips/descript/livekit-api-brief.md
+ * @see lib/server/livekit/recording-room-service.ts
  */
 export function getLiveKitServerEnv(): LiveKitServerEnv {
-  if (cached) return cached
-  const parsed = livekitEnvSchema.safeParse({
-    LIVEKIT_URL: process.env.LIVEKIT_URL?.trim(),
-    LIVEKIT_API_KEY: process.env.LIVEKIT_API_KEY?.trim(),
-    LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET?.trim(),
-  })
-  if (!parsed.success) {
-    const detail = parsed.error.issues.map((i) => i.message).join('; ')
-    throw new Error(
-      `LiveKit is not configured (see docs/clips/BLOCKED.md BLK-001). Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET in Coolify. ${detail}`,
-    )
-  }
-  cached = Object.freeze(parsed.data)
+  const target = getRecordingLiveKitTarget()
+  if (cached && cachedTarget === target) return cached
+  cached = resolveRecordingLiveKitEnv()
+  cachedTarget = target
   return cached
 }
 
-/** Browser-safe project URL (not a secret). */
+/** Browser connects to the same WSS host as the active recording target (minted via server routes). */
 export function getLiveKitPublicUrl(): string {
-  const fromPublic = process.env.NEXT_PUBLIC_LIVEKIT_URL?.trim()
-  if (fromPublic) return fromPublic
-  try {
-    return getLiveKitServerEnv().LIVEKIT_URL
-  } catch {
-    throw new Error(
-      'LiveKit is not configured. Set NEXT_PUBLIC_LIVEKIT_URL (or LIVEKIT_URL on the server) before opening the recorder.',
-    )
-  }
+  return getLiveKitServerEnv().LIVEKIT_URL
 }

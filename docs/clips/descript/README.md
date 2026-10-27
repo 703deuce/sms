@@ -12,4 +12,4 @@ Copied from the Transovo server (`/tmp/transovo-specs/`, 2026-10-27+) for versio
 
 **Normative merge:** `docs/clips/SCRIPT-EDITOR-BUILD.md` adopts gap-matrix §3 (B5 rows), §4 (B6–B13), §5–§6 (recording + D1b tests). Product spec `script-editor.md` §D1 rows **1–66** are unchanged; extended tests are **§D1b** (#67–#167) in the gap matrix.
 
-**Owner decisions (2026-10-27):** Recording SFU = **LiveKit Cloud** ([`livekit-api-brief.md`](./livekit-api-brief.md)). Keys = **BLK-001** in [`../BLOCKED.md`](../BLOCKED.md). M5+ layouts = **BLK-002** ([`ui-layouts.md`](./ui-layouts.md)). Agents never wait — see [`../BLOCKED.md`](../BLOCKED.md) + `DECISIONS.md`. Desktop recorder = **M18**. Shortcuts = gap-matrix §4 C1.
+**Owner decisions (2026-10-27):** Recording SFU = **LiveKit** — Cloud default (`LIVEKIT_*` in Coolify), optional **`RECORDING_LIVEKIT_TARGET=self_hosted`** (`LIVEKIT_SELF_HOSTED_*`). See [`livekit-api-brief.md`](./livekit-api-brief.md) + `DECISIONS.md`. M5+ layouts = **BLK-002**. Desktop recorder = **M18**. Shortcuts = gap-matrix §4 C1.
