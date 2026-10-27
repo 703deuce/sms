@@ -545,6 +545,8 @@ def render_edited_clip(
 
     preview_fast = preview_export_matches(edits, clip_start_ms, clip_end_ms)
     stage("path", path="preview_fast" if preview_fast else "full_cut_pipeline")
+    if preview_fast and preview_crop_track is not None and preview_crop_track.is_file():
+        stage("preview_crop_track", bytes=preview_crop_track.stat().st_size)
     if preview_fast:
         remapped, _ = words_after_edits(src_words, edits)
         export_settings = dict(sc_settings)

@@ -224,16 +224,27 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
                 preview_crop_track = None
 
         if preview_key and export_edits_allow_preview_reuse(aspect, edits, clip_start, clip_end):
+            post_progress(
+                job["id"],
+                {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 45},
+            )
+            from clips_worker.preview_reuse import CLIP_PREVIEW_RESOLUTION
+
+            scaled = resolution not in (CLIP_PREVIEW_RESOLUTION, 720, "720")
             materialize_export_from_preview(preview_key, resolution, out_mp4, td_path)
             from clips_worker.edits_render import build_srt, ensure_word_i, words_after_edits
 
             remapped, _ = words_after_edits(ensure_word_i(source_words), edits)
             srt_body = build_srt(remapped)
+            post_progress(
+                job["id"],
+                {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 72, "etaSeconds": 20},
+            )
             _export_stage_log(
                 render_id,
                 "preview_materialize",
                 t_job,
-                {"resolution": resolution, "scaled": resolution != "720p"},
+                {"resolution": resolution, "scaled": scaled},
             )
         else:
             post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 90})

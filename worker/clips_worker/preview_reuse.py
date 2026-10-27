@@ -47,7 +47,7 @@ def materialize_export_from_preview(
 
     preview_mp4 = work_dir / "_preview_src.mp4"
     download_object(preview_key, preview_mp4)
-    if resolution in (CLIP_PREVIEW_RESOLUTION, 720, "720"):
+    if resolution in (CLIP_PREVIEW_RESOLUTION, 720, "720", "720p"):
         shutil.copy(preview_mp4, dest_mp4)
         return
     if resolution in (1080, "1080"):
