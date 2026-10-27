@@ -7,7 +7,13 @@ export function applyTemplateStyleToDraft(doc: T2vDraftV1, patch: T2vTemplateSty
   const settings = { ...doc.settings, ...(patch.settings as object), templateId }
   const next: T2vDraftV1 = { ...doc, settings: settings as T2vDraftV1['settings'] }
   if (patch.music) {
-    next.music = { ...doc.music, ...patch.music }
+    const base = doc.music ?? { volume: 0.25, duck: true }
+    next.music = {
+      ...base,
+      ...patch.music,
+      volume: patch.music.volume ?? base.volume,
+      duck: patch.music.duck ?? base.duck,
+    }
   }
   if (patch.defaultTransitions) {
     next.scenes = doc.scenes.map((s) => ({
