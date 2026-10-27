@@ -1,4 +1,6 @@
-import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
+import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
+import { sourceMsToOutputTime } from '@/lib/clips/script-edl/derive-edl'
+import type { EdlSegment, ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 
 /** Output-time clip for overlay lanes (M9). Positions derived from anchor word + EDL at render time. */
 export type TimelineOverlayClip = {
@@ -44,11 +46,20 @@ export function musicClipsForTimeline(document: ScriptDocumentV1): TimelineMusic
   }))
 }
 
-export function sceneMarkersForTimeline(document: ScriptDocumentV1): TimelineSceneMarker[] {
+export function sceneMarkersForTimeline(
+  document: ScriptDocumentV1,
+  orderedWords: EditorWord[],
+  edl: EdlSegment[],
+): TimelineSceneMarker[] {
   const scenes = document.scenes ?? []
-  return scenes.map((s, i) => ({
-    sceneId: s.id,
-    label: s.label ?? `Scene ${i + 1}`,
-    outStartMs: s.outStartMs ?? 0,
-  }))
+  const wordById = new Map(orderedWords.map((w) => [w.id, w]))
+  return scenes.map((s, i) => {
+    const w = s.startWordId ? wordById.get(s.startWordId) : orderedWords[0]
+    const out = w ? (sourceMsToOutputTime(w.t0Ms, edl) ?? s.outStartMs ?? 0) : (s.outStartMs ?? 0)
+    return {
+      sceneId: s.id,
+      label: s.label ?? `Scene ${i + 1}`,
+      outStartMs: out,
+    }
+  })
 }

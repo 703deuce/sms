@@ -3,22 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
-
-type Row = { action: string; mac: string; win: string; note?: string }
-
-const ROWS: Row[] = [
-  { action: 'Play / pause', mac: 'Space', win: 'Space' },
-  { action: 'Delete (cut)', mac: 'Delete', win: 'Backspace / Delete' },
-  { action: 'Restore removed', mac: '⇧Enter', win: 'Shift+Enter' },
-  { action: 'Replace with gap', mac: '⇧Delete', win: 'Shift+Backspace' },
-  { action: 'Undo / Redo', mac: '⌘Z / ⇧⌘Z', win: 'Ctrl+Z / Ctrl+Shift+Z' },
-  { action: 'Split at playhead', mac: 'S', win: 'S' },
-  { action: 'Timeline zoom in / out', mac: '⌘= / ⌘−', win: 'Ctrl+= / Ctrl+−' },
-  { action: 'Toggle timeline', mac: '⌃⌥T or ⇧⌘S', win: 'Ctrl+Alt+T or Ctrl+Shift+S' },
-  { action: 'Resume follow-playhead', mac: 'Esc', win: 'Esc', note: 'When follow is off' },
-  { action: 'Frame step (timeline focused)', mac: '← / →', win: '← / →' },
-  { action: 'Shortcuts sheet', mac: '⌘/', win: 'Ctrl+/' },
-]
+import { DESCRIPT_SHORTCUT_ROWS } from '@/lib/clips/script-editor/descript-shortcuts'
 
 export function ScriptShortcutsSheet({
   open,
@@ -30,8 +15,8 @@ export function ScriptShortcutsSheet({
   const [q, setQ] = useState('')
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    if (!needle) return ROWS
-    return ROWS.filter(
+    if (!needle) return DESCRIPT_SHORTCUT_ROWS
+    return DESCRIPT_SHORTCUT_ROWS.filter(
       (r) =>
         r.action.toLowerCase().includes(needle) ||
         r.mac.toLowerCase().includes(needle) ||

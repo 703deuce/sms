@@ -68,6 +68,7 @@ import { RoomsUploadCard } from '@/components/recording/rooms/upload-card'
 import { ScriptExportPopover } from '@/components/script-editor/script-export-popover'
 import { ScriptVersionHistoryPanel } from '@/components/script-editor/script-version-history-panel'
 import { ScriptShortcutsSheet } from '@/components/script-editor/script-shortcuts-sheet'
+import { ScriptStoryboardPanel } from '@/components/script-editor/storyboard/script-storyboard-panel'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { HelpCircle } from 'lucide-react'
@@ -159,6 +160,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const layoutRef = useRef(loadScriptEditorLayout())
   const [scriptWidthPct, setScriptWidthPct] = useState(layoutRef.current.scriptWidthPct)
   const [timelineExpanded, setTimelineExpanded] = useState(layoutRef.current.timelineExpanded)
+  const [timelineView, setTimelineView] = useState<'timeline' | 'storyboard'>('timeline')
   const [timelineHeightPx, setTimelineHeightPx] = useState(layoutRef.current.timelineHeightPx)
   const [playheadMs, setPlayheadMs] = useState(data.rangeStartMs)
   const [playing, setPlaying] = useState(false)
@@ -866,6 +868,23 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         return
       }
 
+      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const tag = (e.target as HTMLElement | null)?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+          e.preventDefault()
+          const idx = selAnchor ?? activeIndex
+          const w = idx >= 0 ? orderedWords[idx] : undefined
+          if (w) {
+            safeApplyOp({
+              type: 'add_scene_at_word',
+              wordId: w.id,
+              sceneId: `scn_${crypto.randomUUID().replace(/-/g, '')}`,
+            })
+            toast.success('Scene added at playhead')
+          }
+        }
+      }
+
       if (e.key === 's' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
         onSplitAtPlayhead()
@@ -926,6 +945,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     seekToOutputMs,
     followPlayhead,
     setShortcutsOpen,
+    selAnchor,
+    activeIndex,
+    orderedWords,
+    safeApplyOp,
   ])
 
   const saveProjectScroll = useCallback(() => {
@@ -1240,8 +1263,18 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                           prevWord && !deleted && !deletedSet.has(prevWord.id)
                             ? gapMsBetween(prevWord, w, document)
                             : 0
+                        const sceneHere = (document.scenes ?? []).find((s) => s.startWordId === w.id)
                         return (
                           <span key={w.id} className="inline">
+                            {sceneHere && !deleted && (
+                              <span
+                                data-testid="script-scene-break"
+                                className="mr-1 inline-block rounded bg-violet-500/20 px-1 text-[10px] font-semibold uppercase tracking-wide text-violet-300"
+                                title={sceneHere.label ?? 'Scene'}
+                              >
+                                {sceneHere.label ?? 'Scene'}
+                              </span>
+                            )}
                             {gapMs >= 400 && !deleted && prevWord && (
                               <ScriptGapChipMenu
                                 gapMs={gapMs}
@@ -1599,9 +1632,47 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           </span>
         </div>
 
+        {timelineExpanded && timelineView === 'storyboard' ? (
+          <div className="flex min-h-0 flex-col border-t border-border" style={{ height: timelineHeightPx }} data-testid="script-storyboard-panel">
+            <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 px-2">
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="secondary"
+                data-testid="timeline-view-storyboard"
+                title="Storyboard view"
+                onClick={() => setTimelineView('storyboard')}
+              >
+                <LayoutGrid className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                data-testid="timeline-view-timeline"
+                title="Timeline view"
+                onClick={() => setTimelineView('timeline')}
+              >
+                <Rows3 className="size-4" />
+              </Button>
+            </div>
+            <ScriptStoryboardPanel
+              document={document}
+              orderedWords={orderedWords}
+              onSelectScene={(sceneId) => {
+                const s = document.scenes?.find((x) => x.id === sceneId)
+                const w = s?.startWordId ? wordsById.get(s.startWordId) : undefined
+                if (w) seekToSourceMs(w.t0Ms)
+              }}
+              onReorder={(sceneIds) => safeApplyOp({ type: 'reorder_scenes', sceneIds })}
+            />
+          </div>
+        ) : (
         <TimelinePanel
           expanded={timelineExpanded}
           heightPx={timelineHeightPx}
+          timelineView={timelineView}
+          onTimelineViewChange={setTimelineView}
           document={document}
           edl={edl}
           orderedWords={orderedWords}
@@ -1630,6 +1701,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onPadDragEnd={(wordId, padMs) => safeApplyOp({ type: 'set_pad_before', wordId, padMs })}
           onTrimClipEdge={onTrimClipEdge}
         />
+        )}
       </div>
       <ScriptShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>

@@ -148,6 +148,19 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     await expect(page.getByTestId('script-gap-chip-menu')).toBeVisible()
   })
 
+  test('M8 §B7: add scene with / and storyboard', async ({ page }) => {
+    test.setTimeout(300_000)
+    if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
+      test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
+    }
+    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.locator('button[data-word-idx]').first().click()
+    await page.keyboard.press('/')
+    await expect(page.getByTestId('script-scene-break').first()).toBeVisible({ timeout: 30_000 })
+    await page.getByTestId('timeline-view-storyboard').click()
+    await expect(page.getByTestId('script-storyboard-grid')).toBeVisible()
+  })
+
   test('M4.1 #7: cut regions span meaningful width on timeline', async ({ page }) => {
     test.setTimeout(300_000)
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {

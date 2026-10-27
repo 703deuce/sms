@@ -41,6 +41,14 @@ export type PatchReframeKeyframesOp = {
   reframeKeyframes?: ScriptDocumentV1['reframeKeyframes']
 }
 export type IncludeContextWordsOp = { type: 'include_context_words'; wordIds: string[] }
+export type AddSceneAtWordOp = {
+  type: 'add_scene_at_word'
+  wordId: string
+  sceneId?: string
+  label?: string
+}
+export type RemoveSceneOp = { type: 'remove_scene'; sceneId: string }
+export type ReorderScenesOp = { type: 'reorder_scenes'; sceneIds: string[] }
 
 export type ScriptCompositionOp =
   | DeleteWordsOp
@@ -62,6 +70,9 @@ export type ScriptCompositionOp =
   | PatchWordSourceAdjustOp
   | PatchReframeKeyframesOp
   | IncludeContextWordsOp
+  | AddSceneAtWordOp
+  | RemoveSceneOp
+  | ReorderScenesOp
 
 export function emptyDocument(allWordIds: string[]): ScriptDocumentV1 {
   return { v: 1, keptWordIds: [...allWordIds], deletedWordIds: [], wordOrder: [...allWordIds] }
@@ -92,7 +103,7 @@ function finalizeDoc(
     gapInserts: partial.gapInserts ?? document.gapInserts,
     splitAtOutMs: partial.splitAtOutMs ?? document.splitAtOutMs,
     padBeforeMs: partial.padBeforeMs ?? document.padBeforeMs,
-    scenes: document.scenes,
+    scenes: partial.scenes !== undefined ? partial.scenes : document.scenes,
     markers: document.markers,
     overlays: document.overlays,
     musicTracks: document.musicTracks,
@@ -126,6 +137,7 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
   let wordSourceAdjust = document.wordSourceAdjust ? { ...document.wordSourceAdjust } : undefined
   let reframeKeyframes = document.reframeKeyframes ? [...document.reframeKeyframes] : undefined
   let settings = document.settings
+  let scenes = document.scenes ? [...document.scenes] : undefined
 
   if (op.type === 'delete_words') {
     for (const id of op.wordIds) {
@@ -271,6 +283,29 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     transcriptHiddenWordIds = [...hid]
   }
 
+  if (op.type === 'add_scene_at_word') {
+    scenes = scenes ?? []
+    if (!scenes.some((s) => s.startWordId === op.wordId)) {
+      scenes.push({
+        id: op.sceneId ?? `scn_${op.wordId.replace(/:/g, '_')}`,
+        startWordId: op.wordId,
+        label: op.label,
+      })
+    }
+    scenes.sort((a, b) => {
+      const ia = order.indexOf(a.startWordId ?? '')
+      const ib = order.indexOf(b.startWordId ?? '')
+      return ia - ib
+    })
+  } else if (op.type === 'remove_scene') {
+    scenes = (scenes ?? []).filter((s) => s.id !== op.sceneId)
+    if (!scenes.length) scenes = undefined
+  } else if (op.type === 'reorder_scenes') {
+    const byId = new Map((scenes ?? []).map((s) => [s.id, s]))
+    const next = op.sceneIds.map((id) => byId.get(id)).filter((s): s is NonNullable<typeof s> => Boolean(s))
+    scenes = next.length ? next : undefined
+  }
+
   return finalizeDoc(document, order, kept, deleted, {
     gapInserts,
     splitAtOutMs,
@@ -280,6 +315,7 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     transcriptHiddenWordIds,
     wordSourceAdjust,
     reframeKeyframes,
+    scenes,
   })
 }
 
@@ -353,6 +389,29 @@ export function opsBetweenDocuments(from: ScriptDocumentV1, to: ScriptDocumentV1
 
   if (JSON.stringify(from.settings ?? {}) !== JSON.stringify(to.settings ?? {})) {
     ops.push({ type: 'patch_settings', patch: to.settings ?? {} })
+  }
+
+  const fromScenes = from.scenes ?? []
+  const toScenes = to.scenes ?? []
+  if (JSON.stringify(fromScenes) !== JSON.stringify(toScenes)) {
+    const fromIds = new Set(fromScenes.map((s) => s.id))
+    for (const s of toScenes) {
+      if (!fromScenes.some((f) => f.startWordId === s.startWordId)) {
+        if (s.startWordId) {
+          ops.push({ type: 'add_scene_at_word', wordId: s.startWordId, sceneId: s.id, label: s.label })
+        }
+      }
+    }
+    for (const s of fromScenes) {
+      if (!toScenes.some((t) => t.id === s.id)) {
+        ops.push({ type: 'remove_scene', sceneId: s.id })
+      }
+    }
+    const toOrder = toScenes.map((s) => s.id).join(',')
+    const fromOrder = fromScenes.map((s) => s.id).join(',')
+    if (toOrder !== fromOrder && toScenes.length === fromScenes.length) {
+      ops.push({ type: 'reorder_scenes', sceneIds: toScenes.map((s) => s.id) })
+    }
   }
 
   return ops

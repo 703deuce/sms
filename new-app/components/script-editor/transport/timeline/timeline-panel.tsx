@@ -26,7 +26,7 @@ import {
   overlayClipsForTimeline,
   sceneMarkersForTimeline,
 } from '@/lib/clips/script-editor/timeline-lanes'
-import { ChevronDown, ChevronUp, Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronDown, ChevronUp, LayoutGrid, Maximize2, Rows3, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const LANE_LABEL_W = 56
@@ -58,6 +58,8 @@ export function TimelinePanel({
   onSelectIndices,
   onPadDragEnd,
   onTrimClipEdge,
+  timelineView,
+  onTimelineViewChange,
 }: {
   expanded: boolean
   heightPx: number
@@ -85,6 +87,8 @@ export function TimelinePanel({
   onSelectIndices: (lo: number, hi: number) => void
   onPadDragEnd?: (wordId: string, padMs: number) => void
   onTrimClipEdge?: (clipKey: string, edge: 'start' | 'end', deltaOutMs: number) => void
+  timelineView?: 'timeline' | 'storyboard'
+  onTimelineViewChange?: (v: 'timeline' | 'storyboard') => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const span = Math.max(
@@ -120,7 +124,10 @@ export function TimelinePanel({
     () => sourceTimelineClips(orderedWords, deletedSet, rangeStartMs, span),
     [orderedWords, deletedSet, rangeStartMs, span],
   )
-  const sceneMarkers = useMemo(() => sceneMarkersForTimeline(document), [document])
+  const sceneMarkers = useMemo(
+    () => sceneMarkersForTimeline(document, orderedWords, edl),
+    [document, orderedWords, edl],
+  )
   const overlayClips = useMemo(() => overlayClipsForTimeline(document), [document])
   const musicClips = useMemo(() => musicClipsForTimeline(document), [document])
   const overlayLayerCount = Math.max(1, ...overlayClips.map((c) => c.layer + 1), 1)
@@ -174,6 +181,32 @@ export function TimelinePanel({
         <Button type="button" size="icon-sm" variant="ghost" onClick={onFit} title="Fit composition">
           <Maximize2 className="size-4" />
         </Button>
+        {onTimelineViewChange && (
+          <div className="flex h-7 overflow-hidden rounded-lg border border-border">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant={timelineView === 'timeline' ? 'secondary' : 'ghost'}
+              className="h-7 w-8 rounded-none"
+              title="Timeline view"
+              data-testid="timeline-view-timeline"
+              onClick={() => onTimelineViewChange('timeline')}
+            >
+              <Rows3 className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant={timelineView === 'storyboard' ? 'secondary' : 'ghost'}
+              className="h-7 w-8 rounded-none"
+              title="Storyboard view"
+              data-testid="timeline-view-storyboard"
+              onClick={() => onTimelineViewChange('storyboard')}
+            >
+              <LayoutGrid className="size-4" />
+            </Button>
+          </div>
+        )}
         <div
           role="separator"
           aria-orientation="horizontal"

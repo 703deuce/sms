@@ -11,6 +11,7 @@ import {
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import {
   fetchCompositionSync,
+  rebaseAfterStaleRevision,
   rebaseOpsForTarget,
 } from '@/lib/clips/script-editor/composition-sync'
 import {
@@ -34,6 +35,7 @@ async function postOpBatch(
   let revision = baseRevision
   let pending = ops
   let target = targetDoc
+  let batchBase = baseRevision
 
   for (let attempt = 0; attempt < 8; attempt++) {
     const res = await fetch(`/api/clips/compositions/${compositionId}/ops`, {
@@ -52,19 +54,20 @@ async function postOpBatch(
     }
 
     if (res.status === 409) {
-      const sync = await fetchCompositionSync(compositionId)
-      revision = sync.revision
-      const rebased = rebaseOpsForTarget(sync.document, target)
-      if (!rebased.length) {
-        if (documentsEqual(sync.document, target)) {
-          return { revision: sync.revision, document: sync.document, ackedOpIds: [] }
+      const rebased = await rebaseAfterStaleRevision(compositionId, batchBase, target)
+      revision = rebased.revision
+      batchBase = rebased.revision
+      const nextOps = rebased.ops
+      if (!nextOps.length) {
+        if (documentsEqual(rebased.document, target)) {
+          return { revision: rebased.revision, document: rebased.document, ackedOpIds: [] }
         }
-        pending = opsBetweenDocuments(sync.document, target).map((op) => ({
+        pending = opsBetweenDocuments(rebased.document, target).map((op) => ({
           id: newOpId(),
           op,
         }))
       } else {
-        pending = rebased.map((op) => ({ id: newOpId(), op }))
+        pending = nextOps.map((op) => ({ id: newOpId(), op }))
       }
       continue
     }
@@ -98,6 +101,9 @@ export function useScriptComposition(initial: {
   const queueRef = useRef<Promise<void>>(Promise.resolve())
   const localEpochRef = useRef(0)
   const inFlightRef = useRef(false)
+  const queuedBatchRef = useRef<{ ops: ScriptCompositionOp[]; targetDoc: ScriptDocumentV1; onHardFail?: () => void } | null>(
+    null,
+  )
 
   const bumpStacks = useCallback(() => {
     setUndoDepth(undoStackRef.current.length)
@@ -130,29 +136,36 @@ export function useScriptComposition(initial: {
   const enqueueServerOps = useCallback(
     (ops: ScriptCompositionOp[], targetDoc: ScriptDocumentV1, onHardFail?: () => void) => {
       if (!ops.length) return
+      if (inFlightRef.current && queuedBatchRef.current) {
+        queuedBatchRef.current = {
+          ops: [...queuedBatchRef.current.ops, ...ops],
+          targetDoc,
+          onHardFail: onHardFail ?? queuedBatchRef.current.onHardFail,
+        }
+        return
+      }
+      if (inFlightRef.current) {
+        queuedBatchRef.current = { ops: [...ops], targetDoc, onHardFail }
+        return
+      }
       const epochAtEnqueue = localEpochRef.current
       pendingOpsRef.current += 1
       setSaveState('saving')
       queueRef.current = queueRef.current
         .then(async () => {
-          if (inFlightRef.current) {
-            await new Promise<void>((r) => {
-              const tick = () => {
-                if (!inFlightRef.current) r()
-                else setTimeout(tick, 16)
-              }
-              tick()
-            })
-          }
           inFlightRef.current = true
+          let batchOps = ops
+          let batchTarget = targetDoc
+          let batchFail = onHardFail
           try {
-            const payloadOps = ops.map((op) => ({ id: newOpId(), op }))
-            const res = await postOpBatch(
-              initial.compositionId,
-              revisionRef.current,
-              payloadOps,
-              targetDoc,
-            )
+            for (;;) {
+              const payloadOps = batchOps.map((op) => ({ id: newOpId(), op }))
+              const res = await postOpBatch(
+                initial.compositionId,
+                revisionRef.current,
+                payloadOps,
+                batchTarget,
+              )
             if (epochAtEnqueue !== localEpochRef.current) return
             revisionRef.current = res.revision
             setRevision(res.revision)
@@ -167,13 +180,28 @@ export function useScriptComposition(initial: {
               redoStackRef.current,
               documentRef.current,
             )
+              const queued = queuedBatchRef.current
+              if (queued) {
+                queuedBatchRef.current = null
+                batchOps = queued.ops
+                batchTarget = queued.targetDoc
+                batchFail = queued.onHardFail
+                continue
+              }
+              break
+            }
           } catch {
             if (epochAtEnqueue !== localEpochRef.current) return
             saveErrorRef.current = true
-            onHardFail?.()
+            batchFail?.()
             setSaveState('error')
           } finally {
             inFlightRef.current = false
+            const queued = queuedBatchRef.current
+            if (queued) {
+              queuedBatchRef.current = null
+              enqueueServerOps(queued.ops, queued.targetDoc, queued.onHardFail)
+            }
           }
         })
         .finally(() => {

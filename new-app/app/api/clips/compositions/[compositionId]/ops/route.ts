@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
-import { applyCompositionOpBatch } from '@/lib/server/clips/script-composition'
+import { applyCompositionOpBatch, listCompositionOpsSince } from '@/lib/server/clips/script-composition'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const opSchema = z.discriminatedUnion('type', [
@@ -94,6 +94,17 @@ const opSchema = z.discriminatedUnion('type', [
       )
       .optional(),
   }),
+  z.object({
+    type: z.literal('add_scene_at_word'),
+    wordId: z.string().min(1),
+    sceneId: z.string().min(8).optional(),
+    label: z.string().max(120).optional(),
+  }),
+  z.object({ type: z.literal('remove_scene'), sceneId: z.string().min(8) }),
+  z.object({
+    type: z.literal('reorder_scenes'),
+    sceneIds: z.array(z.string().min(8)).min(1),
+  }),
 ])
 
 const bodySchema = z.object({
@@ -108,6 +119,23 @@ const bodySchema = z.object({
     .min(1)
     .max(50),
 })
+
+export async function GET(request: Request, ctx: { params: Promise<{ compositionId: string }> }) {
+  try {
+    const { compositionId } = await ctx.params
+    const workspaceId = await resolveWorkspaceId()
+    const url = new URL(request.url)
+    const sinceRevision = Number(url.searchParams.get('sinceRevision') ?? '0')
+    if (!Number.isFinite(sinceRevision) || sinceRevision < 0) {
+      return NextResponse.json({ error: 'Invalid sinceRevision' }, { status: 400 })
+    }
+    const rows = await listCompositionOpsSince(workspaceId, compositionId, sinceRevision)
+    if (rows === null) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ data: rows })
+  } catch (err) {
+    return jsonError(err, 500)
+  }
+}
 
 export async function POST(request: Request, ctx: { params: Promise<{ compositionId: string }> }) {
   try {

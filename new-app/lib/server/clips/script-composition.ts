@@ -161,3 +161,38 @@ export async function applyCompositionOpBatch(
 
   return { ok: true, revision, document, ackedOpIds: acked }
 }
+
+export type CompositionOpRow = {
+  id: string
+  revision: number
+  baseRevision: number
+  op: ScriptCompositionOp
+  createdAt: string
+}
+
+/** Ops with revision > sinceRevision (exclusive of snapshot revision before first op). */
+export async function listCompositionOpsSince(
+  workspaceId: string,
+  compositionId: string,
+  sinceRevision: number,
+): Promise<{ revision: number; document: ScriptDocumentV1; ops: CompositionOpRow[] } | null> {
+  const row = await getCompositionForWorkspace(workspaceId, compositionId)
+  if (!row) return null
+  const prisma = getPrisma()
+  const ops = await prisma.scriptCompositionOp.findMany({
+    where: { compositionId, revision: { gt: sinceRevision } },
+    orderBy: { revision: 'asc' },
+    take: 500,
+  })
+  return {
+    revision: row.revision,
+    document: parseScriptCompositionDocument(row.document),
+    ops: ops.map((o) => ({
+      id: o.id,
+      revision: o.revision,
+      baseRevision: o.baseRevision,
+      op: o.op as ScriptCompositionOp,
+      createdAt: o.createdAt.toISOString(),
+    })),
+  }
+}
