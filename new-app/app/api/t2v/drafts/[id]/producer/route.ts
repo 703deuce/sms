@@ -22,6 +22,7 @@ const DESTRUCTIVE_TOOLS = new Set(['delete_scene', 'shorten_to'])
 
 type ProducerProposal = {
   id: string
+  baseRevision: number
   message: string
   reply: string
   tools: T2vProducerToolCall[]
@@ -41,7 +42,14 @@ function parseProposal(raw: unknown): ProducerProposal | null {
   const p = raw as Record<string, unknown>
   if (typeof p.id !== 'string' || typeof p.message !== 'string' || typeof p.reply !== 'string') return null
   if (!Array.isArray(p.tools)) return null
-  return { id: p.id, message: p.message, reply: p.reply, tools: p.tools as T2vProducerToolCall[] }
+  if (typeof p.baseRevision !== 'number') return null
+  return {
+    id: p.id,
+    baseRevision: p.baseRevision,
+    message: p.message,
+    reply: p.reply,
+    tools: p.tools as T2vProducerToolCall[],
+  }
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -60,6 +68,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!proposal) return NextResponse.json({ error: 'no_pending_proposal' }, { status: 400 })
       if (body.proposalId && body.proposalId !== proposal.id) {
         return NextResponse.json({ error: 'proposal_mismatch' }, { status: 409 })
+      }
+      if (row.revision !== proposal.baseRevision) {
+        await prisma.t2vDraft.update({
+          where: { id },
+          data: { producerProposal: Prisma.JsonNull },
+        })
+        return NextResponse.json(
+          {
+            error: 'proposal_stale',
+            data: {
+              needsRepropose: true,
+              message: 'The draft changed since this suggestion. Send your request again to get an updated plan.',
+            },
+          },
+          { status: 409 },
+        )
       }
       const applied = await applyT2vProducerTools(row.document as T2vDraftV1, proposal.tools, { workspaceId })
       const saved = await saveT2vDraft(workspaceId, id, row.revision, applied.document)
@@ -107,6 +131,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const proposalId = createId('t2vprop')
       const proposal: ProducerProposal = {
         id: proposalId,
+        baseRevision: row.revision,
         message: body.message,
         reply: turn.reply,
         tools: turn.tools,

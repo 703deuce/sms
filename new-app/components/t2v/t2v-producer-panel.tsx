@@ -46,6 +46,11 @@ export function T2vProducerPanel({
         }),
       })
       const body = await res.json()
+      if (res.status === 409 && body.data?.needsRepropose) {
+        setPendingConfirm(null)
+        setMessages((m) => [...m, { role: 'assistant', content: body.data.message ?? 'Draft changed — please try again.' }])
+        return
+      }
       if (!res.ok) throw new Error(body.error ?? 'producer_failed')
       if (body.data?.needsConfirm) {
         setPendingConfirm({
