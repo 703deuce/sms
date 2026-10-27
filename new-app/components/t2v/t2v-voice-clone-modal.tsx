@@ -42,11 +42,6 @@ export function T2vVoiceCloneModal({
         onClose()
         return
       }
-      if (res.status === 503) {
-        toast.message('Voice clone worker is not live yet — your request contract is queued for Agent B')
-        onClose()
-        return
-      }
       throw new Error(body.error ?? 'clone_failed')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not start clone')

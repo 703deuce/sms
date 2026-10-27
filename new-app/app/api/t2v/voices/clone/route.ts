@@ -37,15 +37,12 @@ export async function POST(request: Request) {
       consentById: userId,
     }
     const project = await prisma.clipProject.findFirst({
-      where: { workspaceId, sourceKind: 't2v', deletedAt: null },
+      where: { workspaceId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       select: { id: true },
     })
     if (!project) {
-      return NextResponse.json(
-        { error: 'worker_not_ready', message: 'T2V_VOICE_CLONE worker handler pending (Agent B)' },
-        { status: 503 },
-      )
+      return NextResponse.json({ error: 'no_project_for_job' }, { status: 400 })
     }
     const jobId = createId('job')
     await prisma.clipJob.create({

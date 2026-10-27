@@ -139,6 +139,18 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
           needMs: estimateSceneMs(scene),
         })
         pick = hits.find((h) => h.providerId === body.media.providerId) ?? null
+        if (!pick) {
+          const photos = await searchT2vStock({
+            query: scene.visualQuery,
+            aspect: doc.settings.aspect,
+            sources: [body.media.provider],
+            page: 1,
+            keywords: scene.keywords,
+            needMs: estimateSceneMs(scene),
+            mediaType: 'photo',
+          })
+          pick = photos.find((h) => h.providerId === body.media.providerId) ?? null
+        }
       }
     }
 

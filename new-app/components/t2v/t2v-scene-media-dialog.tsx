@@ -42,10 +42,22 @@ export function T2vSceneMediaDialog({
         if (!res.ok) throw new Error(body.error ?? 'search_failed')
         const hits = body.data?.candidates ?? []
         if (!hits.length) {
-          toast.message('No photos yet — Pexels photos path lands with Agent B')
+          toast.message('No photos found — add PEXELS_API_KEY or try another prompt')
           return
         }
-        toast.success(`Found ${hits.length} photo candidates`)
+        const pick = hits[0]
+        const apply = await fetch(`/api/t2v/drafts/${draftId}/scenes/${sceneId}/media`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'replace',
+            media: { provider: pick.provider, providerId: pick.providerId },
+          }),
+        })
+        const applied = await apply.json()
+        if (!apply.ok) throw new Error(applied.error ?? 'apply_failed')
+        toast.success('Stock photo applied')
+        onQueued?.()
         onClose()
         return
       }

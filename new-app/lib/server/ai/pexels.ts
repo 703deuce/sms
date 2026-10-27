@@ -57,6 +57,36 @@ export async function pexelsSearchVideos(input: {
 }
 
 /** Pick the smallest mp4 rendition that still covers the output (avoid 4K downloads). */
+export type PexelsPhoto = {
+  id: number
+  width: number
+  height: number
+  url: string
+  photographer: string
+  photographer_url: string
+  src: { original: string; large2x: string; large: string; medium: string; small: string; portrait: string; landscape: string; tiny: string }
+}
+
+export async function pexelsSearchPhotos(input: {
+  query: string
+  orientation?: 'landscape' | 'portrait' | 'square'
+  page?: number
+  perPage?: number
+}): Promise<{ photos: PexelsPhoto[] }> {
+  const key = process.env.PEXELS_API_KEY?.trim()
+  if (!key) return { photos: [] }
+  const u = new URL(`${BASE}/search`)
+  u.searchParams.set('query', input.query.slice(0, 100))
+  if (input.orientation) u.searchParams.set('orientation', input.orientation)
+  u.searchParams.set('page', String(input.page ?? 1))
+  u.searchParams.set('per_page', String(Math.min(80, input.perPage ?? 30)))
+  const res = await fetch(u, { headers: { Authorization: key }, signal: AbortSignal.timeout(15_000) })
+  if (res.status === 429) throw new Error('pexels_rate_limited')
+  if (!res.ok) throw new Error(`pexels_http_${res.status}`)
+  const body = (await res.json()) as { photos?: PexelsPhoto[] }
+  return { photos: body.photos ?? [] }
+}
+
 export function pickPexelsFile(v: PexelsVideo, outW: number, outH: number): PexelsVideoFile | null {
   const mp4 = v.video_files.filter((f) => f.file_type === 'video/mp4' && f.width && f.height)
   const covering = mp4
