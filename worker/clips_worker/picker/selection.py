@@ -71,6 +71,8 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
 
     minutes = max(1, source_duration_ms / 60_000)
     cap = min(max_clips, max(1, int(round(minutes * per_min))))
+    if source_duration_ms <= 5 * 60_000:
+        cap = max(cap, min(3, max_clips))
 
     ranked = sorted(picks, key=lambda x: -_clip_score(x))
     kept: list[dict] = []
