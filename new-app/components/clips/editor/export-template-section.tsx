@@ -1,0 +1,168 @@
+'use client'
+
+import { useState } from 'react'
+import { Sparkles } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import {
+  EXPORT_HEADLINE_MAX_REGENERATIONS,
+  effectiveHeadlineText,
+  formatHeadlineForExport,
+  headlineBarAllowedForLayout,
+  normalizeChannelUrl,
+  type ClipExportTemplate,
+} from '@/lib/clips/export-template'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
+import { clipsFetch } from '@/lib/clips-api'
+import { ExportHeadlinePreview } from '@/components/clips/editor/export-headline-preview'
+import { toast } from 'sonner'
+
+export function ExportTemplateSection({
+  clipId,
+  edits,
+  layoutMode,
+  platform,
+  defaultChannelUrl,
+  exportPlatformId,
+  onChange,
+}: {
+  clipId: string
+  edits: ClipEditsV2
+  layoutMode: ClipEditsV2['layout']['mode']
+  platform?: 'twitch' | 'kick'
+  defaultChannelUrl?: string
+  exportPlatformId?: ExportPlatformId
+  onChange: (tpl: ClipExportTemplate) => void
+}) {
+  const tpl = edits.exportTemplate || {}
+  const headlineAllowed = headlineBarAllowedForLayout(layoutMode)
+  const gens = tpl.headlineGenerations ?? 0
+  const [genBusy, setGenBusy] = useState(false)
+
+  const setTpl = (patch: Partial<ClipExportTemplate>) => {
+    onChange({ ...tpl, platform: platform ?? tpl.platform, ...patch })
+  }
+
+  const headlineEnabled = Boolean(tpl.headlineBar?.enabled)
+  const headlineText =
+    tpl.headlineBar?.text?.trim() ||
+    tpl.suggestedHeadline?.trim() ||
+    ''
+
+  const generate = async () => {
+    if (gens >= EXPORT_HEADLINE_MAX_REGENERATIONS) {
+      toast.error(`Max ${EXPORT_HEADLINE_MAX_REGENERATIONS} AI headlines per clip`)
+      return
+    }
+    setGenBusy(true)
+    try {
+      const res = await clipsFetch<{
+        headline: string
+        generations: number
+        exportTemplate: ClipExportTemplate
+      }>(`/api/clips/clips/${clipId}/export-headline/generate`, { method: 'POST', body: '{}' })
+      onChange(res.exportTemplate)
+      toast.success('New headline ready')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not generate headline')
+    } finally {
+      setGenBusy(false)
+    }
+  }
+
+  const channelUrl = tpl.channelLink?.url || defaultChannelUrl || ''
+
+  return (
+    <div className="mt-4 space-y-3 rounded-lg border border-border p-3">
+      <p className="text-xs font-medium">Headline &amp; channel (export only)</p>
+      <p className="text-xs text-muted-foreground">Preview clips stay clean; overlays apply when you export.</p>
+
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-sm">Headline bar</Label>
+        <Switch
+          checked={headlineEnabled && headlineAllowed}
+          disabled={!headlineAllowed}
+          onCheckedChange={(on) =>
+            setTpl({ headlineBar: { enabled: on, text: headlineText || tpl.suggestedHeadline || '' } })
+          }
+        />
+      </div>
+      {!headlineAllowed ? (
+        <p className="text-xs text-muted-foreground">Not available with split layouts.</p>
+      ) : headlineEnabled ? (
+        <>
+          <Input
+            value={tpl.headlineBar?.text ?? tpl.suggestedHeadline ?? ''}
+            maxLength={48}
+            onChange={(e) => setTpl({ headlineBar: { enabled: true, text: e.target.value } })}
+            onBlur={(e) =>
+              setTpl({ headlineBar: { enabled: true, text: formatHeadlineForExport(e.target.value) } })
+            }
+            placeholder="ALL CAPS HEADLINE 🔥"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="outline" disabled={genBusy} onClick={() => void generate()}>
+              <Sparkles className="mr-1 size-3.5" />
+              {genBusy ? 'Generating…' : 'Generate headline'}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {gens}/{EXPORT_HEADLINE_MAX_REGENERATIONS} AI generations
+            </span>
+          </div>
+        </>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-sm">Platform badge</Label>
+        <Switch
+          checked={Boolean(tpl.platformBadge?.enabled)}
+          onCheckedChange={(on) => setTpl({ platformBadge: { enabled: on } })}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-sm">Channel link</Label>
+        <Switch
+          checked={Boolean(tpl.channelLink?.enabled)}
+          onCheckedChange={(on) =>
+            setTpl({
+              channelLink: { enabled: on, url: normalizeChannelUrl(channelUrl) || channelUrl },
+            })
+          }
+        />
+      </div>
+      {tpl.channelLink?.enabled ? (
+        <Input
+          value={channelUrl}
+          onChange={(e) => {
+            const norm = normalizeChannelUrl(e.target.value)
+            setTpl({ channelLink: { enabled: true, url: norm || e.target.value } })
+          }}
+          placeholder="https://twitch.tv/yourchannel"
+        />
+      ) : null}
+
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-sm">Profanity censor</Label>
+        <Switch
+          checked={Boolean(tpl.profanityCensor)}
+          onCheckedChange={(on) => setTpl({ profanityCensor: on })}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Mutes curse words in audio and masks them in captions (off by default).
+      </p>
+
+      <ExportHeadlinePreview
+        headline={headlineEnabled && headlineAllowed ? effectiveHeadlineText({ ...tpl, headlineBar: { enabled: true, text: headlineText } }) : ''}
+        showBadge={Boolean(tpl.platformBadge?.enabled)}
+        platform={platform ?? tpl.platform}
+        channelUrl={tpl.channelLink?.enabled ? normalizeChannelUrl(channelUrl) || undefined : undefined}
+        exportPlatformId={exportPlatformId ?? tpl.exportPlatformId ?? 'tiktok'}
+      />
+    </div>
+  )
+}

@@ -1,6 +1,8 @@
 import { can } from '@/lib/billing/entitlements'
 import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
+import { normalizeExportTemplate } from '@/lib/clips/export-template'
 import { editsVersionHash, normalizeEdits } from '@/lib/clips/edits'
+import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
 import type { ExportAspect, ExportResolution } from '@/lib/clips/export-aspect'
 import { renderVersionHash } from '@/lib/clips/export-aspect'
 import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
@@ -11,7 +13,12 @@ import { createId } from '@/lib/supabase/id'
 export async function enqueueProjectExportAll(
   workspaceId: string,
   projectId: string,
-  opts: { clipIds?: string[]; aspect: ExportAspect; resolution: ExportResolution },
+  opts: {
+    clipIds?: string[]
+    aspect: ExportAspect
+    resolution: ExportResolution
+    clipExportTemplates?: Record<string, Record<string, unknown>>
+  },
 ) {
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId, deletedAt: null } })
@@ -30,7 +37,15 @@ export async function enqueueProjectExportAll(
 
   for (const clip of batch) {
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
-    const edits = normalizeEdits(clip.edits, bounds)
+    let edits = normalizeEdits(clip.edits, bounds)
+    const tplPatch = opts.clipExportTemplates?.[clip.id]
+    if (tplPatch) {
+      const tpl = normalizeExportTemplate(tplPatch)
+      if (tpl) {
+        edits = normalizeEdits(mergeEditsPatch(edits, { exportTemplate: tpl }, bounds), bounds)
+        await prisma.clip.update({ where: { id: clip.id }, data: { edits } })
+      }
+    }
     const editsHash = editsVersionHash(edits)
     const hash = renderVersionHash(editsHash, opts.aspect, opts.resolution)
     const existing = await prisma.clipRender.findFirst({

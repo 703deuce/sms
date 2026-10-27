@@ -5,6 +5,7 @@ import type { ExportAspect } from '@/lib/clips/export-aspect'
 const LAYOUT_MODE_IDS = [
   'speaker_follow',
   'fit_blur',
+  'full_frame',
   'center_crop',
   'subject_follow',
   'split',

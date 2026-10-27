@@ -620,6 +620,12 @@ def render_edited_clip(
     resolution = settings.get("exportResolution", "720p")
     play_w, play_h = aspect_size(aspect, resolution)
 
+    tpl_censor = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
+    if tpl_censor and tpl_censor.get("profanityCensor"):
+        from clips_worker.profanity_censor import censor_clip_words_and_audio
+
+        caption_words, caption_src = censor_clip_words_and_audio(caption_src, caption_words, work_dir)
+
     final = work_dir / "final.mp4"
     cap_edits = edits.get("captions") or {}
     if int(cap_edits.get("enabled", True)):
@@ -680,6 +686,22 @@ def render_edited_clip(
             facecam_only=bool(zoom_cfg.get("facecamOnly")),
         )
         shutil.copy(zoomed, out_mp4)
+
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
+    if tpl:
+        from clips_worker.clip_export_template import apply_export_template
+
+        layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+        templated = work_dir / "export_template.mp4"
+        apply_export_template(
+            out_mp4,
+            templated,
+            edits,
+            play_w=play_w,
+            play_h=play_h,
+            layout_mode=layout_mode,
+        )
+        shutil.copy(templated, out_mp4)
 
     pb = cap_edits.get("progressBar") if isinstance(cap_edits.get("progressBar"), dict) else None
     if pb and pb.get("enabled"):

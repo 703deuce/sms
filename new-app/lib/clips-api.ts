@@ -252,7 +252,12 @@ export function exportProjectAll(projectId: string) {
 
 export function exportProjectAllBatch(
   projectId: string,
-  body: { clipIds: string[]; aspect: '9:16' | '4:5' | '1:1' | '16:9'; resolution: '720p' | '1080p' },
+  body: {
+    clipIds: string[]
+    aspect: '9:16' | '4:5' | '1:1' | '16:9'
+    resolution: '720p' | '1080p'
+    clipExportTemplates?: Record<string, unknown>
+  },
 ) {
   return clipsFetch<{
     batchId: string

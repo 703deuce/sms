@@ -6,6 +6,7 @@ import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
 import type { SilenceTrimSettings } from '@/lib/clips/silence-trim'
 import { normalizeLayoutSegments, type LayoutSegment } from '@/lib/clips/layout-segments'
+import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/export-template'
 
 export type CutRange = [number, number]
 
@@ -48,6 +49,7 @@ export type ClipEditsV2 = {
     mode:
       | 'speaker_follow'
       | 'fit_blur'
+      | 'full_frame'
       | 'center_crop'
       | 'subject_follow'
       | 'split'
@@ -74,6 +76,8 @@ export type ClipEditsV2 = {
   roomTone?: boolean
   /** Editor / export preview aspect (defaults to 9:16). */
   aspectRatio?: ExportAspect
+  /** Export-only overlays (headline bar, badge, channel link) — not burned into preview.mp4. */
+  exportTemplate?: ClipExportTemplate
 }
 
 export type ClipBounds = { clipStartMs: number; clipEndMs: number }
@@ -117,6 +121,7 @@ function migrateLegacyEdits(raw: Record<string, unknown>, bounds: ClipBounds): R
 const LAYOUT_MODES: ClipEditsV2['layout']['mode'][] = [
   'speaker_follow',
   'fit_blur',
+  'full_frame',
   'center_crop',
   'subject_follow',
   'split',
@@ -257,6 +262,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
           }
         : undefined,
     hookOverlay: normalizeHookOverlay(o.hookOverlay),
+    exportTemplate: normalizeExportTemplate(o.exportTemplate),
   }
 }
 

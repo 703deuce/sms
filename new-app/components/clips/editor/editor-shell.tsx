@@ -650,6 +650,14 @@ export function EditorShell({
         title={title}
         edits={edits}
         dubs={dubs}
+        layoutMode={edits.layout.mode}
+        platform={
+          (aiMeta as { streamer?: { platform?: string } } | null)?.streamer?.platform === 'kick'
+            ? 'kick'
+            : (aiMeta as { streamer?: { platform?: string } } | null)?.streamer?.platform === 'twitch'
+              ? 'twitch'
+              : undefined
+        }
         onAudioTrack={(track) => setEdits({ ...edits, audioTrack: track })}
         open={exportOpen}
         onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}

@@ -63,7 +63,7 @@ def route_multiperson_layout(
 def editor_layout_to_worker(mode: str) -> str:
     """Map clip editor layout.mode → worker speakercrop layout id (parity with new-app layout-mode-map.ts)."""
     m = (mode or "speaker_follow").strip()
-    if m == "fit_blur":
+    if m in ("fit_blur", "full_frame"):
         return "fit"
     if m == "center_crop":
         return "fill"
@@ -129,6 +129,7 @@ _VALID_EDITOR_LAYOUT_MODES = frozenset(
     {
         "speaker_follow",
         "fit_blur",
+        "full_frame",
         "center_crop",
         "subject_follow",
         "split",

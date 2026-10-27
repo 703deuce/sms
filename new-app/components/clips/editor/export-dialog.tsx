@@ -21,6 +21,9 @@ import {
 } from '@/lib/clips/export-platform-presets'
 import { outputDurationMs } from '@/lib/clips/edits'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
+import { formatHeadlineForExport, type ClipExportTemplate } from '@/lib/clips/export-template'
+import { ExportTemplateSection } from '@/components/clips/editor/export-template-section'
+import { patchClip } from '@/lib/clips-api'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -34,6 +37,9 @@ export function ExportDialog({
   onClose,
   onAspectChange,
   onBeforeExport,
+  layoutMode = 'speaker_follow',
+  platform,
+  defaultChannelUrl,
 }: {
   clipId: string
   title: string
@@ -42,6 +48,9 @@ export function ExportDialog({
   onAudioTrack?: (track: string) => void
   onAspectChange?: (aspect: ClipProjectSettings['aspectRatio']) => void
   onBeforeExport?: () => Promise<void>
+  layoutMode?: ClipEditsV2['layout']['mode']
+  platform?: 'twitch' | 'kick'
+  defaultChannelUrl?: string
   open: boolean
   onClose: () => void
 }) {
@@ -62,6 +71,11 @@ export function ExportDialog({
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [durationMs, setDurationMs] = useState<number | null>(null)
   const [exportPlatform, setExportPlatform] = useState<ExportPlatformId | 'none'>('none')
+  const [exportTemplate, setExportTemplate] = useState<ClipExportTemplate | undefined>(edits.exportTemplate)
+
+  useEffect(() => {
+    if (open) setExportTemplate(edits.exportTemplate)
+  }, [open, edits.exportTemplate])
 
   useEffect(() => {
     if (open) setAspect(edits.aspectRatio ?? '9:16')
@@ -132,6 +146,27 @@ export function ExportDialog({
     const toastId = toast.loading('Starting export…')
     try {
       await onBeforeExport?.()
+      const tpl = exportTemplate ?? edits.exportTemplate
+      const formattedTpl = tpl?.headlineBar?.enabled && tpl.headlineBar.text
+        ? {
+            ...tpl,
+            headlineBar: {
+              ...tpl.headlineBar,
+              text: formatHeadlineForExport(tpl.headlineBar.text),
+            },
+          }
+        : tpl
+      const exportEdits = {
+        ...edits,
+        exportTemplate: formattedTpl
+          ? {
+              ...formattedTpl,
+              exportPlatformId:
+                exportPlatform !== 'none' ? exportPlatform : formattedTpl.exportPlatformId,
+            }
+          : formattedTpl,
+      }
+      await patchClip(clipId, { edits: { exportTemplate: exportEdits.exportTemplate } })
       const data = await exportClipWithOptions(clipId, {
         resolution: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].resolution : resolution,
         aspect: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].aspect : aspect,
@@ -139,7 +174,7 @@ export function ExportDialog({
         watermark: false,
         alsoSrt,
         removeDeadAir,
-        edits,
+        edits: exportEdits,
       })
       setRenderId(data.renderId)
       setStatus(data.status)
@@ -223,7 +258,8 @@ export function ExportDialog({
           {exportPlatform !== 'none' ? (
             <p className="mt-1 text-xs text-muted-foreground">
               Max {EXPORT_PLATFORM_PRESETS[exportPlatform].maxDurationSec}s · caption margin{' '}
-              {EXPORT_PLATFORM_PRESETS[exportPlatform].captionSafeMarginVPct}% from bottom
+              {EXPORT_PLATFORM_PRESETS[exportPlatform].captionSafeMarginVPct}% from bottom · headline
+              text below y≈{EXPORT_PLATFORM_PRESETS[exportPlatform].headlineTextMinYPx}px
             </p>
           ) : null}
           {platformWarn ? (
@@ -324,6 +360,15 @@ export function ExportDialog({
             Music and sound effects generated with ElevenLabs
           </p>
         )}
+        <ExportTemplateSection
+          clipId={clipId}
+          edits={{ ...edits, exportTemplate }}
+          layoutMode={layoutMode}
+          platform={platform}
+          defaultChannelUrl={defaultChannelUrl}
+          exportPlatformId={exportPlatform !== 'none' ? exportPlatform : undefined}
+          onChange={(tpl) => setExportTemplate(tpl)}
+        />
         <MediaCredits clipId={clipId} edits={edits} />
         {status && status !== 'READY' && status !== 'FAILED' && (
           <p className="mt-3 text-sm" role="status" aria-live="polite">

@@ -14,6 +14,9 @@ import { can } from '@/lib/billing/entitlements'
 import { exportProjectAllBatch } from '@/lib/clips-api'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
 import type { ClipCardData } from '@/components/clips/clip-grid'
+import { Input } from '@/components/ui/input'
+import { cheapSuggestedHeadline } from '@/lib/clips/export-template'
+import type { ClipExportTemplate } from '@/lib/clips/export-template'
 
 export function ExportAllDialog({
   projectId,
@@ -29,6 +32,14 @@ export function ExportAllDialog({
   )
   const [selected, setSelected] = useState<Set<string>>(() => new Set(clips.map((c) => c.id)))
   const [busy, setBusy] = useState(false)
+  const [headlines, setHeadlines] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {}
+    for (const c of clips.slice(0, 10)) {
+      const tpl = (c.edits as { exportTemplate?: ClipExportTemplate } | undefined)?.exportTemplate
+      m[c.id] = tpl?.headlineBar?.text || tpl?.suggestedHeadline || cheapSuggestedHeadline({ title: c.title, aiMeta: c.aiMeta })
+    }
+    return m
+  })
 
   const toggle = (id: string) => {
     setSelected((s) => {
@@ -49,7 +60,22 @@ export function ExportAllDialog({
     }
     setBusy(true)
     try {
-      const data = await exportProjectAllBatch(projectId, { clipIds: ids, aspect, resolution })
+      const clipExportTemplates: Record<string, ClipExportTemplate> = {}
+      for (const id of ids) {
+        const c = clips.find((x) => x.id === id)
+        const prev = (c?.edits as { exportTemplate?: ClipExportTemplate } | undefined)?.exportTemplate || {}
+        clipExportTemplates[id] = {
+          ...prev,
+          headlineBar: { enabled: true, text: headlines[id] || '' },
+          suggestedHeadline: headlines[id] || prev.suggestedHeadline,
+        }
+      }
+      const data = await exportProjectAllBatch(projectId, {
+        clipIds: ids,
+        aspect,
+        resolution,
+        clipExportTemplates,
+      })
       toast.success(`Queued ${data.items.length} export(s)`)
       if (data.items.every((i) => i.status === 'READY')) {
         window.location.href = `/api/clips/projects/${projectId}/export-all?batchId=${encodeURIComponent(data.batchId)}`
@@ -108,13 +134,22 @@ export function ExportAllDialog({
             <span className="text-xs font-medium">Clips</span>
             <Button size="sm" variant="ghost" onClick={selectAll}>Select all</Button>
           </div>
-          <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto text-xs">
+          <ul className="mt-1 max-h-48 space-y-2 overflow-y-auto text-xs">
             {clips.slice(0, 10).map((c) => (
               <li key={c.id}>
                 <label className="flex cursor-pointer items-center gap-2">
                   <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
-                  <span className="truncate">{c.title}</span>
+                  <span className="truncate flex-1">{c.title}</span>
                 </label>
+                {selected.has(c.id) ? (
+                  <Input
+                    className="mt-1 h-8 text-xs"
+                    value={headlines[c.id] || ''}
+                    onChange={(e) => setHeadlines((h) => ({ ...h, [c.id]: e.target.value }))}
+                    placeholder="Export headline (ALL CAPS)"
+                    maxLength={48}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>

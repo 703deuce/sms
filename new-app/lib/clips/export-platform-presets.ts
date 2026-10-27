@@ -21,6 +21,8 @@ export type ExportPlatformPreset = {
   /** ASS marginV % from bottom — lifts captions above in-app chrome */
   captionSafeMarginVPct: number
   captionPosition: 'bottom' | 'middle'
+  /** Min Y for headline drawtext at 1080×1920 (platform top chrome). */
+  headlineTextMinYPx: number
 }
 
 export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPreset> = {
@@ -34,6 +36,7 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     recommendedMaxSec: 35,
     captionSafeMarginVPct: 18,
     captionPosition: 'bottom',
+    headlineTextMinYPx: 260,
   },
   youtube_shorts: {
     id: 'youtube_shorts',
@@ -45,6 +48,7 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     recommendedMaxSec: 30,
     captionSafeMarginVPct: 14,
     captionPosition: 'bottom',
+    headlineTextMinYPx: 380,
   },
   instagram_reels: {
     id: 'instagram_reels',
@@ -56,6 +60,7 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     recommendedMaxSec: 30,
     captionSafeMarginVPct: 16,
     captionPosition: 'bottom',
+    headlineTextMinYPx: 250,
   },
 }
 
@@ -93,6 +98,7 @@ export function applyExportPlatformToEdits(
     { ...merged.captions, marginVPct: bottomMarginPct },
     preset.resolution === '1080p' ? 1920 : 1280,
   )
+  const tpl = merged.exportTemplate || {}
   return {
     ...merged,
     captions: {
@@ -100,6 +106,10 @@ export function applyExportPlatformToEdits(
       marginVPct: safe.marginVPct,
       size: safe.sizePct,
       position: safe.position as ClipEditsV2['captions']['position'],
+    },
+    exportTemplate: {
+      ...tpl,
+      exportPlatformId: platform,
     },
   }
 }

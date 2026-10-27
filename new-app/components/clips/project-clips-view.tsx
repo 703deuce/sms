@@ -18,7 +18,7 @@ import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { ClipResultsToolbar } from '@/components/clips/clip-results-toolbar'
 import { ClipTemplateProjectActions } from '@/components/clips/clip-template-project-actions'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
-import { getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
+import { clipsFetch, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 import type { ClipProjectSettings } from '@/lib/clips/settings'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
@@ -140,7 +140,15 @@ export function ProjectClipsView({
 
   const refreshClipsList = useCallback(async () => {
     const data = await listProjectClips(projectId, 'score')
-    setClips(data.clips as ClipCardData[])
+    const rows = data.clips as ClipCardData[]
+    setClips(rows)
+    for (const c of rows) {
+      if (!c.previewUrl) continue
+      void clipsFetch(`/api/clips/clips/${c.id}/export-headline/prefetch`, {
+        method: 'POST',
+        body: '{}',
+      }).catch(() => {})
+    }
   }, [projectId])
 
   const replacePollRef = useRef<ReturnType<typeof setInterval> | null>(null)

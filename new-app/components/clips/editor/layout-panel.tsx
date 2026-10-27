@@ -19,6 +19,11 @@ const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string;
   { id: 'grid3', title: 'Grid 3-up', desc: 'Three speakers visible.' },
   { id: 'grid4', title: 'Grid 4-up', desc: 'Four speakers visible.' },
   { id: 'fit_blur', title: 'Fit with blur', desc: 'Letterbox with blurred fill.' },
+  {
+    id: 'full_frame',
+    title: 'Full frame (stream)',
+    desc: '16:9 at full width, blur fill, headline + source bar on export.',
+  },
   { id: 'center_crop', title: 'Fill', desc: 'Full-frame crop fill.' },
   {
     id: 'screen_pip',
