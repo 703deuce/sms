@@ -90,16 +90,23 @@ export function useScriptComposition(initial: {
     [bumpStacks, enqueueServerOps],
   )
 
+  const applyOp = useCallback(
+    (op: ScriptCompositionOp) => {
+      const before = document
+      const next = applyCompositionOp(before, op)
+      if (documentsEqual(before, next)) return
+      commitLocal(next, [op], before)
+    },
+    [commitLocal, document],
+  )
+
   const deleteWords = useCallback(
     (wordIds: string[]) => {
       const unique = [...new Set(wordIds)].filter(Boolean)
       if (!unique.length) return
-      const before = document
-      const next = applyCompositionOp(before, { type: 'delete_words', wordIds: unique })
-      if (documentsEqual(before, next)) return
-      commitLocal(next, [{ type: 'delete_words', wordIds: unique }], before)
+      applyOp({ type: 'delete_words', wordIds: unique })
     },
-    [commitLocal, document],
+    [applyOp],
   )
 
   const undo = useCallback(() => {
@@ -129,6 +136,7 @@ export function useScriptComposition(initial: {
     revision,
     saveState,
     deleteWords,
+    applyOp,
     undo,
     redo,
     canUndo: undoDepth > 0,

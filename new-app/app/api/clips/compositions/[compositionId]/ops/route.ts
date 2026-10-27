@@ -7,6 +7,16 @@ import { resolveWorkspaceId } from '@/lib/server/workspace'
 const opSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('delete_words'), wordIds: z.array(z.string().min(1)).min(1) }),
   z.object({ type: z.literal('restore_words'), wordIds: z.array(z.string().min(1)).min(1) }),
+  z.object({ type: z.literal('add_split'), outMs: z.number().min(0) }),
+  z.object({ type: z.literal('insert_gap'), atOutMs: z.number().min(0), durMs: z.number().min(1) }),
+  z.object({ type: z.literal('remove_gap_at'), atOutMs: z.number().min(0) }),
+  z.object({
+    type: z.literal('replace_with_gap'),
+    wordIds: z.array(z.string().min(1)).min(1),
+    atOutMs: z.number().min(0),
+    durMs: z.number().min(1),
+  }),
+  z.object({ type: z.literal('set_pad_before'), wordId: z.string().min(1), padMs: z.number().min(0) }),
 ])
 
 const bodySchema = z.object({

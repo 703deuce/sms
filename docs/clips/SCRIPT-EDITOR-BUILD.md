@@ -1,6 +1,6 @@
 # Script editor — build plan
 
-**Status:** **M2 in progress** (2026-10-27) — op log + delete-to-cut on full composition; M1b shell/sync shipped. Clip editor at `/app/clips/[projectId]/edit/[clipId]` still used for per-clip export until M5.  
+**Status:** **M3** (2026-10-27) — collapsible timeline (ruler, captions stub lane, wordbar, script track + waveform), zoom/fit, split (`S`), trim handles, ripple delete, Shift+Delete gap, timeline↔script selection, layout persistence. **Export deferred to M5** (no export UI/API in this milestone). M4 next: fillers, captions, reframe, properties (B5 launch items).  
 **Product spec:** `docs/clips/script-editor.md` (v1.0).  
 **Owner decisions (2026-10-26):** see §0 “Decisions locked” below.
 

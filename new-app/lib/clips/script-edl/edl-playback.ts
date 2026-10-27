@@ -5,6 +5,7 @@ export function outputDurationMs(edl: EdlSegment[]): number {
   let max = 0
   for (const seg of edl) {
     if (seg.kind === 'source') max = Math.max(max, seg.outOutMs)
+    else max = Math.max(max, seg.outInMs + seg.durMs)
   }
   return max
 }

@@ -10,6 +10,7 @@ export type EdlGapSegment = {
   kind: 'gap'
   durMs: number
   freezeSrcMs: number
+  outInMs: number
 }
 
 export type EdlSegment = EdlSourceSegment | EdlGapSegment
@@ -21,5 +22,9 @@ export type ScriptDocumentV1 = {
   deletedWordIds: string[]
   /** Immutable transcript order for restore / display. */
   wordOrder?: string[]
-  gapInserts?: { afterWordId: string; durMs: number }[]
+  gapInserts?: { afterWordId?: string; atOutMs?: number; durMs: number }[]
+  /** Edit boundaries at output ms (split tool); duration unchanged. */
+  splitAtOutMs?: number[]
+  /** Per-word pad before token in output (wordbar boundary fix). */
+  padBeforeMs?: Record<string, number>
 }

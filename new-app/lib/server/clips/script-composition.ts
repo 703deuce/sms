@@ -20,6 +20,8 @@ function parseDocument(raw: unknown): ScriptDocumentV1 {
     deletedWordIds: Array.isArray(d.deletedWordIds) ? d.deletedWordIds.map(String) : [],
     wordOrder: Array.isArray(d.wordOrder) ? d.wordOrder.map(String) : undefined,
     gapInserts: d.gapInserts,
+    splitAtOutMs: Array.isArray(d.splitAtOutMs) ? d.splitAtOutMs.map((n) => Number(n)) : undefined,
+    padBeforeMs: d.padBeforeMs && typeof d.padBeforeMs === 'object' ? (d.padBeforeMs as Record<string, number>) : undefined,
   }
 }
 

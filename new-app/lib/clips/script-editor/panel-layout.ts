@@ -2,9 +2,11 @@ const STORAGE_KEY = 'transovo.scriptEditor.layout.v1'
 
 export type ScriptEditorLayout = {
   scriptWidthPct: number
+  timelineExpanded: boolean
+  timelineHeightPx: number
 }
 
-const DEFAULT: ScriptEditorLayout = { scriptWidthPct: 46 }
+const DEFAULT: ScriptEditorLayout = { scriptWidthPct: 46, timelineExpanded: true, timelineHeightPx: 280 }
 
 export function loadScriptEditorLayout(): ScriptEditorLayout {
   if (typeof window === 'undefined') return DEFAULT
@@ -13,8 +15,15 @@ export function loadScriptEditorLayout(): ScriptEditorLayout {
     if (!raw) return DEFAULT
     const parsed = JSON.parse(raw) as Partial<ScriptEditorLayout>
     const pct = parsed.scriptWidthPct
-    if (typeof pct !== 'number' || pct < 28 || pct > 72) return DEFAULT
-    return { scriptWidthPct: pct }
+    const timelineExpanded = parsed.timelineExpanded !== false
+    const timelineHeightPx =
+      typeof parsed.timelineHeightPx === 'number'
+        ? Math.min(480, Math.max(160, parsed.timelineHeightPx))
+        : DEFAULT.timelineHeightPx
+    if (typeof pct !== 'number' || pct < 28 || pct > 72) {
+      return { ...DEFAULT, timelineExpanded, timelineHeightPx }
+    }
+    return { scriptWidthPct: pct, timelineExpanded, timelineHeightPx }
   } catch {
     return DEFAULT
   }
