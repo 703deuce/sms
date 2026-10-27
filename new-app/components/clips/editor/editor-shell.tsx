@@ -18,6 +18,7 @@ import { outputDurationFromEdits } from '@/lib/clips/editor-playback'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
+import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { clipLayoutChip, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
@@ -403,6 +404,14 @@ export function EditorShell({
           onApplyBrand={() => void applyBrand()}
           onSaveClipTemplate={() => void saveClipTemplate()}
         />
+        <div className="border-t border-border p-3">
+          <HookOverlayPanel
+            clipId={clipId}
+            edits={edits}
+            defaultHook={(aiMeta as { hook?: string } | null)?.hook}
+            onChange={(patch) => setEdits({ ...edits, ...patch })}
+          />
+        </div>
         </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'broll' ? undefined : 'hidden'} aria-hidden={panel !== 'broll'}>
