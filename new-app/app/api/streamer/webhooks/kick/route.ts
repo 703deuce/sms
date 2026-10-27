@@ -6,6 +6,8 @@ import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
 import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 import { kickLiveCaptureEnabled } from '@/lib/server/streamer/kick-live-capture'
 import { getPrisma } from '@/lib/server/db'
+import { mergePlatformState } from '@/lib/server/streamer/platform-state'
+import type { Prisma } from '@prisma/client'
 
 export const runtime = 'nodejs'
 
@@ -76,7 +78,11 @@ export async function POST(request: Request) {
       const startedAt = String(data.started_at || new Date().toISOString())
       await prisma.streamChannel.update({
         where: { id: ch.id },
-        data: { platformState: { live: { startedAt } } },
+        data: {
+          platformState: mergePlatformState(ch.platformState, {
+            live: { startedAt, sessionId: startedAt },
+          }) as Prisma.InputJsonValue,
+        },
       })
       // KICK-LIVE-CAPTURE-DESIGN: enqueue STREAM_KICK_LIVE_CAPTURE when KICK_LIVE_CAPTURE_ENABLED=1
       if (kickLiveCaptureEnabled() && ch.autoProcess) {
@@ -86,14 +92,17 @@ export async function POST(request: Request) {
       }
     } else {
       const ps = (ch.platformState as Record<string, unknown>) || {}
-      const live = (ps.live as { startedAt?: string }) || {}
+      const live = (ps.live as { startedAt?: string; sessionId?: string }) || {}
       const startedAt = live.startedAt ? new Date(live.startedAt) : new Date()
+      const streamSessionId = live.sessionId ? String(live.sessionId) : undefined
       await prisma.streamChannel.update({
         where: { id: ch.id },
-        data: { platformState: { ...ps, live: null } },
+        data: {
+          platformState: mergePlatformState(ch.platformState, { live: null }) as Prisma.InputJsonValue,
+        },
       })
       if (streamerAutopullUiEnabled() && ch.autoProcess) {
-        await enqueueStreamAutopull(ch.id, startedAt, { platform: 'kick' })
+        await enqueueStreamAutopull(ch.id, startedAt, { platform: 'kick', streamSessionId })
       }
     }
   }
