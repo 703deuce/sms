@@ -8900,6 +8900,10 @@ model ClipProject {
   folder             ClipProjectFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   t2vDraft           T2vDraft?
 
+  /// Partial unique index `clip_projects_workspace_t2v_hub_title` on ("workspaceId", title)
+  /// WHERE title = '__t2v_workspace_jobs__' AND "deletedAt" IS NULL — see migration
+  /// `20261027120000_t2v_draft_meta.sql`. Prisma migrate dev will not emit this; do not drop manually.
+
   @@index([workspaceId, createdAt])
   @@index([workspaceId, folderId])
   @@index([workspaceId, sourceKind, createdAt])

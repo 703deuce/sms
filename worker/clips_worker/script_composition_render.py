@@ -1,6 +1,7 @@
 """RENDER_SCRIPT_COMPOSITION — export script editor composition via EDL + clip render stack."""
 from __future__ import annotations
 
+import inspect
 import json
 import subprocess
 import tempfile
@@ -156,10 +157,15 @@ def _export_audio(src: Path, dest: Path, fmt: str) -> None:
 def _coerce_progress_cb(post_progress):
     """Accept progress(job_id, payload) or legacy progress(payload) callbacks."""
 
+    try:
+        arity = len(inspect.signature(post_progress).parameters)
+    except (TypeError, ValueError):
+        arity = 2
+
     def progress(job_id: str, payload: dict) -> None:
-        try:
+        if arity >= 2:
             post_progress(job_id, payload)
-        except TypeError:
+        else:
             post_progress(payload)
 
     return progress

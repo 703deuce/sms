@@ -204,7 +204,7 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
         if _job_aborted(conn, job["id"]):
             raise RuntimeError("job_canceled")
         progress(job["id"], {"jobStatus": "RUNNING", "stage": "upload", "progress": 85})
-        src_key = f"ws/{workspace_id}/projects/{project_id}/t2v/source_r{revision}.mp4"
+        src_key = f"ws/{workspace_id}/projects/{project_id}/t2v/source_r{revision}_{job['id']}.mp4"
         upload_file(src_key, final, "video/mp4")
 
         post_internal(

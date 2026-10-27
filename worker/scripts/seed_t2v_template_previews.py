@@ -24,8 +24,18 @@ from clips_worker.storage import upload_file
 from clips_worker.t2v.assemble import Scene, SceneMedia, assemble
 from clips_worker.t2v.render_finalize import finalize_t2v_video
 
+CATEGORY_STYLE: dict[str, dict[str, str]] = {
+    "explainer": {"bg1": "0x0f172a", "bg2": "0x1e3a8a", "primary": "#F8FAFC", "muted": "#93C5FD", "font": "DejaVu Sans"},
+    "listicle": {"bg1": "0x1a0533", "bg2": "0x7c3aed", "primary": "#FDE047", "muted": "#E9D5FF", "font": "DejaVu Sans"},
+    "promo": {"bg1": "0x450a0a", "bg2": "0xdc2626", "primary": "#FFFFFF", "muted": "#FECACA", "font": "DejaVu Sans"},
+    "news": {"bg1": "0x111827", "bg2": "0x374151", "primary": "#F9FAFB", "muted": "#9CA3AF", "font": "DejaVu Sans"},
+    "tutorial": {"bg1": "0x064e3b", "bg2": "0x059669", "primary": "#ECFDF5", "muted": "#6EE7B7", "font": "DejaVu Sans"},
+    "quote": {"bg1": "0x18181b", "bg2": "0x3f3f46", "primary": "#FAFAFA", "muted": "#A1A1AA", "font": "DejaVu Serif"},
+    "story": {"bg1": "0x312e81", "bg2": "0x6366f1", "primary": "#EEF2FF", "muted": "#C7D2FE", "font": "DejaVu Sans"},
+}
 
-def _vo_clip(path: Path, seconds: float = 2.0) -> None:
+
+def _vo_clip(path: Path, seconds: float = 2.2) -> None:
     subprocess.run(
         [
             "ffmpeg",
@@ -35,7 +45,7 @@ def _vo_clip(path: Path, seconds: float = 2.0) -> None:
             "-f",
             "lavfi",
             "-i",
-            f"sine=f=440:d={seconds}",
+            f"sine=f=523:d={seconds}",
             "-ar",
             "48000",
             "-ac",
@@ -59,19 +69,35 @@ def _sample_document(template: dict) -> dict:
         settings = json.loads(settings)
     inner = settings.get("settings") or settings
     aspect = template.get("aspect") or inner.get("aspect") or "16:9"
-    script = (template.get("sampleScript") or "A quick template preview.").strip()
-    hook, rest = (script.split(".", 1) + [""])[:2]
+    category = str(template.get("category") or "explainer")
+    style = CATEGORY_STYLE.get(category, CATEGORY_STYLE["explainer"])
+    tone = str(inner.get("tone") or category)
+    captions = inner.get("captionsEnabled", True)
+    script = (template.get("sampleScript") or "Hook fast. Deliver value. End with a clear next step.").strip()
+    parts = [p.strip() for p in script.replace("!", ".").split(".") if p.strip()]
+    hook = parts[0] if parts else template.get("name", "Preview")
+    body = ". ".join(parts[1:3]) if len(parts) > 1 else script
     return {
-        "settings": {"aspect": aspect, "brand": {"primaryColor": "#FACC15", "secondaryColor": "#D0D0D0"}},
+        "settings": {
+            "aspect": aspect,
+            "tone": tone,
+            "captions": {"enabled": captions, "presetId": "bold_pop", "burnIn": True},
+            "brand": {
+                "primaryColor": style["primary"],
+                "secondaryColor": style["muted"],
+                "fontFamily": style["font"],
+                "titleFont": style["font"],
+            },
+        },
         "scenes": [
             {
                 "slot": 0,
                 "texts": [
                     {
                         "kind": "title",
-                        "text": hook.strip() or "Preview",
+                        "text": hook[:80],
                         "startMs": 0,
-                        "endMs": 1800,
+                        "endMs": 2000,
                         "animation": "fade",
                     }
                 ],
@@ -80,11 +106,25 @@ def _sample_document(template: dict) -> dict:
                 "slot": 1,
                 "texts": [
                     {
-                        "kind": "subtitle",
-                        "text": (rest or script).strip()[:120],
+                        "kind": "lower_third",
+                        "text": str(template.get("name") or "Template"),
+                        "subtitle": body[:100],
                         "startMs": 0,
-                        "endMs": 2000,
+                        "endMs": 2400,
                         "animation": "fade",
+                    }
+                ],
+            },
+            {
+                "slot": 2,
+                "texts": [
+                    {
+                        "kind": "title",
+                        "text": tone.capitalize(),
+                        "subtitle": aspect,
+                        "startMs": 0,
+                        "endMs": 1600,
+                        "animation": "slide_up",
                     }
                 ],
             },
@@ -96,13 +136,21 @@ def render_template_preview(template: dict, out_mp4: Path) -> None:
     aspect = template["aspect"]
     w, h = aspect_size(aspect, "720p")
     document = _sample_document(template)
+    category = str(template.get("category") or "explainer")
+    style = CATEGORY_STYLE.get(category, CATEGORY_STYLE["explainer"])
+    patch = template.get("settings") or {}
+    if isinstance(patch, str):
+        patch = json.loads(patch)
+    trans_ms = int((patch.get("defaultTransitions") or {}).get("transitionMs") or 500)
+    trans_s = trans_ms / 1000.0
     with tempfile.TemporaryDirectory(prefix="t2v-tmpl-") as td:
         work = Path(td)
         vo = work / "vo.wav"
-        _vo_clip(vo, 2.0)
+        _vo_clip(vo, 2.2)
         scenes = [
-            Scene("a", 2.0, SceneMedia("color", color="0x1a1a2e"), "fade", 0.5, vo),
-            Scene("b", 2.0, SceneMedia("color", color="0x16213e"), "fade", 0.5, None),
+            Scene("a", 2.2, SceneMedia("color", color=style["bg1"]), "fade", trans_s, vo),
+            Scene("b", 2.4, SceneMedia("color", color=style["bg2"]), "fade", trans_s, None),
+            Scene("c", 1.8, SceneMedia("color", color=style["bg1"]), "fade", trans_s, None),
         ]
         asm = assemble(scenes, work / "asm", w=w, h=h, fps=24)
         finalize_t2v_video(
@@ -132,7 +180,7 @@ def main() -> int:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT id, aspect, "previewKey", "thumbKey", settings, "sampleScript"
+                SELECT id, name, category, aspect, "previewKey", "thumbKey", settings, "sampleScript"
                 FROM t2v_templates
                 WHERE "workspaceId" IS NULL AND "isPublished" = true
                 ORDER BY "sortOrder" ASC
