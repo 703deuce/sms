@@ -6,18 +6,12 @@ import { useMemo } from 'react'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { wordKey } from '@/lib/clips/edits'
 import { resolvePreset, type CaptionPreset } from '@/lib/clips/caption-presets'
+import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 
 function positionClass(position: string) {
   if (position === 'top') return 'top-[8%]'
   if (position === 'middle') return 'top-1/2 -translate-y-1/2'
   return 'bottom-[12%]'
-}
-
-function displayCase(text: string, caseMode: string) {
-  const safe = typeof text === 'string' ? text : ''
-  if (!safe) return ''
-  if (caseMode === 'upper') return safe.toUpperCase()
-  return safe.charAt(0).toUpperCase() + safe.slice(1)
 }
 
 function animClass(animation: string) {
@@ -99,7 +93,9 @@ export function CaptionOverlay({
         const emoji = showEmojis
           ? cap.emojiByWord?.[String(idx)] ?? cap.emojiByWord?.[String(globalIdx)]
           : undefined
-        const text = displayCase(w.w, caseMode) + (emoji ? ` ${emoji}` : '')
+        const prevWord = i > 0 ? lineWords[i - 1]?.w : words[lineStart - 1]?.w
+        const sentenceStart = caseMode === 'sentence' && isSentenceBoundary(prevWord)
+        const text = formatCaptionWord(w.w, caseMode, sentenceStart) + (emoji ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
         const inactiveColor = preset.slug === 'boxed' ? '#FFFFFF' : preset.primary
         const style: React.CSSProperties = {
@@ -146,7 +142,7 @@ export function CaptionOverlay({
   )
 }
 
-export function CaptionMiniPreview({ preset, label = 'CLIP THIS' }: { preset: CaptionPreset; label?: string }) {
+export function CaptionMiniPreview({ preset, label = 'CLIP' }: { preset: CaptionPreset; label?: string }) {
   const words = label.split(' ').map((w, i) => ({ w, s: i * 0.4, e: (i + 1) * 0.4, idx: i }))
   const edits: ClipEditsV2 = {
     v: 2,

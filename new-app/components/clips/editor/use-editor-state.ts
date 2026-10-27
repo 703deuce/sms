@@ -319,13 +319,15 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
   useEffect(() => {
     if (state.saveState !== 'dirty') return
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    const savingUi = setTimeout(() => dispatch({ type: 'saving' }), 250)
     debounceRef.current = setTimeout(() => {
       dispatch({ type: 'saving' })
       void patchClip(clipId, { edits: editsRef.current })
         .then(() => dispatch({ type: 'saved' }))
         .catch(() => dispatch({ type: 'saved' }))
-    }, 1000)
+    }, 450)
     return () => {
+      clearTimeout(savingUi)
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [clipId, state.edits, state.saveState])

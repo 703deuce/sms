@@ -57,6 +57,10 @@ export function CaptionsPanel({
 
   const patch = (partial: Partial<ClipEditsV2['captions']>) => onChange({ ...cap, ...partial })
 
+  const activeWordsPerLine = Number(cap.wordsPerLine ?? preset.wordsPerLine)
+  const activeCase = cap.case ?? preset.case
+  const activePosition = cap.position ?? preset.position
+
   const suggestEmojis = async () => {
     if (!clipId) return
     try {
@@ -134,15 +138,11 @@ export function CaptionsPanel({
               type="button"
               onClick={() =>
                 onChange({
+                  ...cap,
                   enabled: cap.enabled !== false,
                   presetId: id,
                   animation: p.animation,
-                  size: p.sizePct,
-                  position: p.position,
-                  case: p.case,
-                  wordsPerLine: p.wordsPerLine,
-                  keywordHighlight: cap.keywordHighlight,
-                  emphasis: cap.keywordHighlight ? cap.emphasis : undefined,
+                  size: cap.size ?? p.sizePct,
                 })
               }
               className={cn(
@@ -259,7 +259,7 @@ export function CaptionsPanel({
           <Button
             key={pos}
             size="sm"
-            variant={(cap.position || preset.position) === pos ? 'default' : 'outline'}
+            variant={activePosition === pos ? 'default' : 'outline'}
             onClick={() => patch({ position: pos })}
           >
             {pos}
@@ -270,14 +270,14 @@ export function CaptionsPanel({
       <div className="flex gap-2">
         <Button
           size="sm"
-          variant={(cap.case || preset.case) === 'upper' ? 'default' : 'outline'}
+          variant={activeCase === 'upper' ? 'default' : 'outline'}
           onClick={() => patch({ case: 'upper' })}
         >
           UPPER
         </Button>
         <Button
           size="sm"
-          variant={(cap.case || preset.case) === 'sentence' ? 'default' : 'outline'}
+          variant={activeCase === 'sentence' ? 'default' : 'outline'}
           onClick={() => patch({ case: 'sentence' })}
         >
           Sentence
@@ -289,7 +289,7 @@ export function CaptionsPanel({
           <Button
             key={n}
             size="sm"
-            variant={(cap.wordsPerLine ?? preset.wordsPerLine) === n ? 'default' : 'outline'}
+            variant={activeWordsPerLine === n ? 'default' : 'outline'}
             onClick={() => patch({ wordsPerLine: n })}
           >
             {n} / line
