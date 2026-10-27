@@ -14,7 +14,7 @@ import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { CAPTION_PRESETS, presetSlugToId } from '@/lib/clips/caption-presets'
 import { clipsFetch } from '@/lib/clips-api'
 import { BrandTemplatesManager } from '@/components/clips/brand-templates-manager'
-import type { BrandTemplateSettings } from '@/lib/clips/brand'
+import { defaultBrandSettings, type BrandTemplateSettings } from '@/lib/clips/brand'
 
 export function BrandEditor() {
   const [name, setName] = useState('Default brand')
@@ -36,14 +36,7 @@ export function BrandEditor() {
         setLogoKey(d.template.logoKey)
         setUseDefault(d.template.isDefault)
       } else {
-        setSettings({
-          logoPosition: 'TR',
-          logoSizePct: 12,
-          logoOpacity: 0.9,
-          primaryColor: '#FACC15',
-          defaultMusicMood: 'upbeat lo-fi instrumental',
-          captionPreset: { presetId: 'bold_pop', animation: 'pop', size: 1, position: 'bottom' },
-        })
+        setSettings(defaultBrandSettings())
       }
       setLogoUrl(d.logoUrl)
     })

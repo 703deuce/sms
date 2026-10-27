@@ -65,7 +65,11 @@ export function exportPolishLint(
         : `Custom loudness ${lufs} LUFS — −14 LUFS is recommended for shorts`,
   })
 
-  const overlayCount = countPolishOverlays(edits)
+  const overlayCount = countPolishOverlays({
+    captions: edits.captions,
+    hookOverlay: edits.hookOverlay,
+    brand: edits.brand as { logoKey?: string } | undefined,
+  })
   items.push({
     id: 'overlays',
     ok: overlayCount <= 3,

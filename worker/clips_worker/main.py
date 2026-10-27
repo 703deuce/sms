@@ -61,6 +61,13 @@ def log_models() -> None:
     )
 
 
+def log_export_sfx_assets() -> None:
+    from clips_worker.export_sfx import bundled_sfx_available, sfx_assets_dir
+
+    d = sfx_assets_dir()
+    log(f"[clipper:worker] export_sfx_dir={d} bundled={bundled_sfx_available()}")
+
+
 def log_picker_config() -> None:
     try:
         from clips_worker.picker.config import genres_config, load_core_rubric
@@ -608,6 +615,7 @@ def main() -> None:
         f"instance={worker_instance_id()} lane={worker_lane()} db={host}"
     )
     log_models()
+    log_export_sfx_assets()
     log_picker_config()
     try:
         with psycopg2.connect(dsn) as conn:

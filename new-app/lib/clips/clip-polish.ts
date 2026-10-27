@@ -9,6 +9,7 @@ import {
 } from '@/lib/clips/silence-trim'
 import { clampBrandLogoPosition } from '@/lib/clips/overlay-safe-zone'
 import type { ClipWord } from '@/lib/clips/edits'
+import { loadSourceWords } from '@/lib/clips/source-words'
 import { DEFAULT_DUCK_DEPTH } from '@/lib/clips/audio'
 
 export type ClipPolishFeature =
@@ -96,7 +97,7 @@ export function applyClipPolishToEdits(
       captions: { ...next.captions, ...polishedCaptionPatch(stream) },
     }
     if (opts.words?.length && clipPolishFeatureEnabled('CAPTIONS')) {
-      const auto = autoCaptionEmphasisIndexes(opts.words, next)
+      const auto = autoCaptionEmphasisIndexes(loadSourceWords(opts.words), next)
       const merged = [...new Set([...(next.captions?.emphasis ?? []), ...auto])]
       next = {
         ...next,

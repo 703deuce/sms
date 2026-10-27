@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 ENV HF_HOME=/models/hf
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8', download_root='/models/whisper')"
 
+# Kenney CC0 export SFX live under assets/sfx/ (see clips_worker/export_sfx.py).
 COPY worker/assets /app/assets
 COPY worker/prototype/v3 /app/v3
 # Bookworm has no fonts-montserrat apt package — fetch static Black for ASS + fontconfig.
