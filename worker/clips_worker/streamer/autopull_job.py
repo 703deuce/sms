@@ -220,10 +220,7 @@ def _record_skip(conn, channel_id: str | None, code: str, message: str, vod: dic
             SET "platformState" = jsonb_set(
               COALESCE("platformState", '{}'::jsonb),
               '{skippedStreams}',
-              (
-                jsonb_build_array(%s::jsonb)
-                || COALESCE("platformState"->'skippedStreams', '[]'::jsonb)
-              )
+              (%s::jsonb) || COALESCE("platformState"->'skippedStreams', '[]'::jsonb)
             ),
             "updatedAt" = NOW()
             WHERE id = %s

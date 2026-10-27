@@ -23,7 +23,10 @@ def classify_ytdlp_import_error_code(stderr: str, platform: str = "") -> tuple[s
             "(Settings → Stream), or upload a recording from OBS.",
         )
     if plat == "kick" and ("live" in s or "is_live" in s):
-        return "Kick streams are clipped after the stream ends. Paste the replay VOD link when it appears."
+        return (
+            "kick_live_not_ready",
+            "Kick streams are clipped after the stream ends. Paste the replay VOD link when it appears.",
+        )
     if "private" in s and "vod" in s:
         return ("vod_private", "This VOD is private or unpublished on Twitch.")
     if "does not exist" in s or "404" in s or "not found" in s:

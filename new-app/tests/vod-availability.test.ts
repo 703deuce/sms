@@ -8,7 +8,7 @@ import {
 describe('vod-availability', () => {
   it('builds Twitch dashboard link for store past broadcasts', () => {
     expect(twitchCreatorStreamSettingsUrl('Ninja')).toBe(
-      'https://dashboard.twitch.tv/u/Ninja/settings/stream',
+      'https://dashboard.twitch.tv/u/ninja/settings/stream',
     )
   })
 
