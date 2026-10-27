@@ -7,6 +7,11 @@ from clips_worker.picker.llm import chat_json
 
 BAD_TITLE_RE = re.compile(r"^[a-z_]+$")
 INTERNAL_TITLES = {"coverage_span", "fallback_full_span", "clip", "story"}
+SENTENCE_REF_RE = re.compile(r"\(\s*s\d+(?:\s*-\s*s\d+)?\s*\)", re.IGNORECASE)
+
+
+def strip_internal_sentence_refs(text: str) -> str:
+    return " ".join(SENTENCE_REF_RE.sub("", text or "").split())
 
 TITLE_SCHEMA = {
     "type": "object",
@@ -17,7 +22,7 @@ TITLE_SCHEMA = {
 
 
 def trim_title(title: str, max_len: int = 60) -> str:
-    s = " ".join((title or "").split())
+    s = strip_internal_sentence_refs(title)
     if len(s) <= max_len:
         return s
     cut = s[:max_len].rsplit(" ", 1)[0].strip()

@@ -11,7 +11,7 @@ from clips_worker.picker.llm import chat_json
 from clips_worker.picker.log_util import json_snippet, picker_info
 from clips_worker.picker.rejects import is_hard_llm_reject
 from clips_worker.picker.scoring import _sent_dict, score_clip
-from clips_worker.picker.titles import trim_title
+from clips_worker.picker.titles import strip_internal_sentence_refs, trim_title
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
 
@@ -137,10 +137,10 @@ def _clip_row_from_llm(
         "end_sentence": es,
         "payoff_id": payoff_id,
         "title": trim_title(str(row.get("title") or moment.get("locator") or "")),
-        "hook": str(row.get("why_care", ""))[:300],
-        "reason": str(row.get("why_care", ""))[:500],
+        "hook": strip_internal_sentence_refs(str(row.get("why_care", "")))[:300],
+        "reason": strip_internal_sentence_refs(str(row.get("why_care", "")))[:500],
         "archetype": row.get("archetype") or moment.get("archetype"),
-        "pass1_why": moment.get("why", ""),
+        "pass1_why": strip_internal_sentence_refs(str(moment.get("why", ""))),
         "llm_reject": False,
         "hard_reject": False,
         "reject_reason": scored.get("reject_reason") if scored.get("reject") else "",

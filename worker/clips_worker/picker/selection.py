@@ -114,4 +114,20 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
             kept.append(p)
 
     kept = dedupe_r10(kept)
+
+    short_floor = 3 if source_duration_ms <= 3 * 60_000 else 0
+    if short_floor and len(kept) < min(short_floor, cap):
+        for p in ranked:
+            if p in kept:
+                continue
+            span = (p["start_ms"], p["end_ms"])
+            dur = span[1] - span[0]
+            if dur < 15_000 or dur > 60_000:
+                continue
+            if any(_overlap(span, (k["start_ms"], k["end_ms"])) > overlap_drop for k in kept):
+                continue
+            kept.append(p)
+            if len(kept) >= min(short_floor, cap):
+                break
+
     return kept[:cap]

@@ -99,6 +99,9 @@ def build_ass(
     case = (edits_captions.get("case") or preset["case"] or "upper").lower()
     case = "upper" if case == "upper" else "sentence"
     size_pct = float(edits_captions.get("size") or edits_captions.get("sizePct") or preset["sizePct"])
+    if size_pct < 3:
+        size_pct = float(preset["sizePct"])
+    size_pct = max(3.0, min(12.0, size_pct))
     fontsize = round(size_pct / 100 * play_h)
     position = edits_captions.get("position") or preset["position"]
     margin_v = margin_v_px(play_h, float(edits_captions.get("marginVPct") or preset["marginVPct"]))

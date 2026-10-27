@@ -296,7 +296,9 @@ def render_edited_clip(
     src_words = ensure_word_i(source_words)
     sc_settings = speakercrop_settings_from_edits(settings, edits)
 
-    if is_default_edits(edits, clip_start_ms, clip_end_ms):
+    from clips_worker.preview_edits_match import preview_export_matches
+
+    if preview_export_matches(edits, clip_start_ms, clip_end_ms):
         remapped, _ = words_after_edits(src_words, edits)
         wpath = work_dir / "words.json"
         wpath.write_text(json.dumps(remapped))
