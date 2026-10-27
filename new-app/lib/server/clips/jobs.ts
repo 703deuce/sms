@@ -15,6 +15,7 @@ import { computeNonStreamerClipEtaSec } from '@/lib/server/clips/project-eta'
 import { fairQueueAheadForJob } from '@/lib/server/clips/job-queue-fairness'
 import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
 import { reapClipperProgressStalls } from '@/lib/server/clips/clipper-watchdog-reaper'
+import { resolveClipsReadyForStatus } from '@/lib/server/clips/project-clip-progress'
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
 
@@ -136,9 +137,22 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
     }
   }
   const clipCount = await prisma.clip.count({ where: { projectId, deletedAt: null } })
-  const clipsReady =
-    typeof sp.clipsReady === 'number' ? sp.clipsReady : clipCount > 0 ? clipCount : undefined
-  const clipsTotal = typeof sp.clipsTotal === 'number' ? sp.clipsTotal : undefined
+  let clipsWithPreview = 0
+  if (
+    clipCount > 0 &&
+    (project.status === 'REFRAMING' || project.status === 'RENDERING') &&
+    typeof sp.clipsReady !== 'number'
+  ) {
+    clipsWithPreview = await prisma.clip.count({
+      where: { projectId, deletedAt: null, previewKey: { not: null } },
+    })
+  }
+  const { clipsReady, clipsTotal } = resolveClipsReadyForStatus({
+    status: project.status,
+    clipCount,
+    clipsWithPreview,
+    streamerProgress: sp,
+  })
   return {
     status: project.status,
     stage: project.stage,
