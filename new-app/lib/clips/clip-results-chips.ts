@@ -26,11 +26,25 @@ const LAYOUT_LABELS: Record<string, string> = {
   four_up: '4-up',
 }
 
+function isHedgeOrDebugSummary(text: string): boolean {
+  const t = text.toLowerCase()
+  return (
+    t.includes('may contain') ||
+    t.includes('context or payoff') ||
+    t.includes('make it coherent') ||
+    t.includes('needed to make it coherent')
+  )
+}
+
 export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | null {
   if (!meta) return null
-  const why = meta.pass1_why || meta.score_detail
-  if (typeof why === 'string' && why.trim()) return why.trim()
-  if (typeof meta.hook === 'string' && meta.hook.trim()) return meta.hook.trim()
+  const candidates = [meta.hook, meta.pass1_why, meta.score_detail]
+  for (const c of candidates) {
+    if (typeof c !== 'string') continue
+    const trimmed = c.trim()
+    if (!trimmed || isHedgeOrDebugSummary(trimmed)) continue
+    return trimmed
+  }
   return null
 }
 
