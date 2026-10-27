@@ -23,7 +23,7 @@ export function PreviewPillBar({
 
   return (
     <div
-      className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-full border border-border/80 bg-background/90 px-2 py-1 shadow-md backdrop-blur-sm"
+      className="pointer-events-auto absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-full border border-border/80 bg-background/90 px-2 py-1 shadow-md backdrop-blur-sm"
       data-testid="preview-pill-bar"
     >
       {ASPECTS.map((a) => (

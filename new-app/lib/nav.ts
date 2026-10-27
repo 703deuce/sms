@@ -62,8 +62,7 @@ const CLIPS_ITEMS: NavItem[] = [
       href: '/app/editor',
       icon: Scissors,
       group: 'Library',
-      badge: 'soon',
-      disabled: true,
+      isActive: (pathname) => pathname.includes('/script'),
     },
     {
       title: 'Voice',

@@ -11,7 +11,7 @@ export function defaultScriptEditorSettings(): ScriptEditorSettings {
       enabled: true,
       presetId: 'bold_pop',
       animation: 'pop',
-      size: 1,
+      size: 6.5,
       position: 'bottom',
       case: 'sentence',
       wordsPerLine: 2,
