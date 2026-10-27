@@ -1,8 +1,8 @@
 # Script editor — build plan
 
-**Status:** **M3** (2026-10-27) — collapsible timeline (ruler, captions stub lane, wordbar, script track + waveform), zoom/fit, split (`S`), trim handles, ripple delete, Shift+Delete gap, timeline↔script selection, layout persistence. **Export deferred to M5** (no export UI/API in this milestone). M4 next: fillers, captions, reframe, properties (B5 launch items).  
-**Product spec:** `docs/clips/script-editor.md` (v1.0).  
-**Owner decisions (2026-10-26):** see §0 “Decisions locked” below.
+**Status:** **M3** (in progress) — timeline includes **reserved lanes** for scenes strip, overlays, and music (wired in M7–M10). Core M3: ruler, captions stub, wordbar, script track, zoom/split/trim/gaps. **Export deferred to M5.**  
+**Product spec:** `docs/clips/script-editor.md` (v1.1 — full Descript-at-launch scope).  
+**Owner decisions (2026-10-26):** see §0 “Decisions locked” below. **Scope expansion (2026-10-27):** §0.1.
 
 ---
 
@@ -18,6 +18,25 @@
 | Reference images | **URLs only** (`script-editor-SOURCES.txt`); do not vendor PNGs. |
 | AI rail | **Hidden in v1** (no dead controls). |
 | Filler / gaps | Lightweight **enrichment at transcript-ready** (additive JSON fields on stored transcript); **backfill on first editor open** if missing. |
+| Launch breadth | **Full Descript-class editor at launch** — everything in spec **§B5** that was “Later” is now **launch-required** (scenes, layouts, markers/chapters, media/B-roll, music, Studio Sound, LLM transcript tools, comments). See §0.1. |
+| Still post-launch | **Eye Contact**, **Overdub / Regenerate AI voice**, **Underlord AI chat** — remain with **AI Studio on hold**. |
+
+### 0.1 Launch scope expansion (owner, 2026-10-27)
+
+Former §B5 “Later” items are **launch-required**. Implement in **M7+** after M1–M6; **M2/M3 document + EDL** must stay forward-compatible (reserve tokens and JSON fields; do not break existing `keptWordIds` / gap / split ops).
+
+| Area | Launch deliverable | Milestone |
+|------|-------------------|-----------|
+| **Scenes** | `/` inserts `sceneBreak`; per-scene aspect, reframe, caption visibility; scene thumbnails in script | **M7** |
+| **Layouts** | Layout picker per scene (Descript-style templates) | **M7** |
+| **Markers / chapters** | `#` marker token; transport markers dropdown; chapter metadata on export | **M8** |
+| **B-roll / media** | Media panel (upload, project clips, **Pixabay** stock); overlays **anchored to words**; overlay lanes on timeline | **M9** |
+| **Music** | Music lane: library, fade in/out, auto-duck under speech | **M10** |
+| **Studio Sound** | Enhance voice toggle + intensity; CPU worker (**DeepFilterNet** or similar OSS); preview uses processed proxy | **M11** |
+| **LLM transcript ops** | Remove retakes, edit-for-clarity, filler/gap removal via **cheap LLM text ops** on transcript (not Underlord chat) | **M12** |
+| **Comments** | Comments panel on words/ranges; single editor + lease (no live multi-user) | **M13** |
+
+**Timeline (M3):** ship lane **slots** for scenes strip, **overlay** stack, and **music** now (empty or placeholder until M7–M10), so later work does not reshuffle layout.
 
 ---
 
@@ -29,10 +48,17 @@ Done = corresponding **§D1** browser tests pass on **transovo.ai** (fixture `te
 |-----------|------|-----------|---------------------------|
 | **M1** | Shell, layout, synced read-only transcript + preview seek | 1–11 | Prisma + APIs (read), `toEditorWords`, enrichment backfill, editor route shell, layout A1–A2, virtualized script (read-only), proxy player seek, panel persistence |
 | **M2** | Core text editing + undo | 12–28 | Document model + op log + IndexedDB queue, EDL derive v1, delete/ignore/restore/correct/cut-paste, undo stack, speaker rename |
-| **M3** | Timeline | 29–36 | Lanes B4, wordbar, script track, transport, zoom, split/trim/ripple |
-| **M4** | Fillers, gaps, captions, reframe, properties | 37–48 | Enrichment UI, filler/gap tools B3, caption panel, reframe track, properties panel B5 |
-| **M5** | Save, versions, export, reliability, performance | 49–60 | §C2 save status, versions, export popover §C3, render jobs §C5, 3 h perf §C4, lease/retry parity with clipper |
+| **M3** | Timeline | 29–36 | Lanes §B4 incl. **scenes / overlay / music slots**, wordbar, script track, transport, zoom, split/trim/ripple |
+| **M4** | Fillers, gaps, captions, reframe, properties | 37–48 | Enrichment UI, filler/gap tools B3, caption panel, reframe, properties §B5 (aspect, captions toggle, volume) |
+| **M5** | Save, versions, export, reliability, performance | 49–60 | §C2 save status, versions, export popover §C3 (+ **chapter metadata** when M8 done), render jobs §C5, 3 h perf §C4 |
 | **M6** | Transovo integration | 61–66 | Entry from project + clip cards, Library ▸ Editor, shortcuts sheet, no dead controls audit |
+| **M7** | Scenes + layouts | 67–72 | `sceneBreak` token, per-scene aspect/reframe/captions, script thumbnails, layout picker |
+| **M8** | Markers + chapters | 73–77 | `#` marker, ruler flags, transport dropdown, export chapter tags |
+| **M9** | Media + B-roll overlays | 78–84 | Media panel, Pixabay, word-anchored overlays, timeline overlay lanes |
+| **M10** | Music lane | 85–88 | Library, lane UI, fades, ducking under speech |
+| **M11** | Studio Sound | 89–91 | Worker enhance job, proxy preview, Properties intensity |
+| **M12** | LLM transcript tools | 92–95 | Remove retakes, edit-for-clarity, bulk filler/gap (LLM); review + undo |
+| **M13** | Comments | 96–98 | Comments panel, anchors to words/ranges, export omit internal notes |
 
 **Visual gate (every milestone):** spot-check **§D2** (20 items) against SOURCES URLs before marking milestone done.
 
@@ -41,7 +67,45 @@ Done = corresponding **§D1** browser tests pass on **transovo.ai** (fixture `te
 1. **M1a (data plane):** migration + read APIs + `toEditorWords` + enrichment worker hook + backfill on open.  
 2. **M1b (UI shell):** layout regions, loading/empty/error states, read-only sync.  
 3. **M2:** op log write path + EDL + editing gestures.  
-4. **M3–M6:** as table above; M5 render integration can start once EDL + `clipEditsFromComposition()` exist (mid M2).
+4. **M3–M6:** core editor + export integration (`clipEditsFromComposition()` mid M2).  
+5. **M7–M13:** full Descript-at-launch scope (§0.1); timeline lane slots from M3 avoid rework.
+
+### §D1 tests for M7–M13 (browser; full steps in `script-editor.md`)
+
+| # | Feature | M | One-line acceptance |
+|---|---------|---|---------------------|
+| 67 | Scene insert | M7 | `/` at cursor → scene boundary + thumbnail in script; duration unchanged |
+| 68 | Per-scene aspect | M7 | Scene 2 set to 9:16 → preview crop changes only in that scene |
+| 69 | Per-scene captions | M7 | Turn captions off for scene 1 → hidden in preview, on in scene 2 |
+| 70 | Scene reframe | M7 | Manual keyframe in scene 2 survives a cut in scene 1 |
+| 71 | Layout picker | M7 | Apply layout template to current scene → canvas matches preset |
+| 72 | Scene strip | M7 | Timeline scenes strip shows numbered thumbs aligned to scene starts |
+| 73 | Marker insert | M8 | `#` at word → marker flag on ruler + entry in markers dropdown |
+| 74 | Marker seek | M8 | Pick marker in transport dropdown → playhead jumps |
+| 75 | Chapter export | M8 | Export video with chapters → file has chapter markers at flagged markers |
+| 76 | Marker rename | M8 | Edit marker label → persists after reload |
+| 77 | Marker delete | M8 | Delete marker → removed from ruler and export metadata |
+| 78 | Media panel upload | M9 | Upload image → appears in Media panel; drag to word creates overlay |
+| 79 | Project clip media | M9 | Insert project clip as overlay anchored to word → moves when words move |
+| 80 | Pixabay stock | M9 | Search Pixabay, insert stock video → overlay lane clip + preview |
+| 81 | Overlay trim | M9 | Drag overlay edges on timeline → duration changes, anchor word unchanged |
+| 82 | Overlay delete | M9 | Delete overlay → lane and preview clear; script unchanged |
+| 83 | Multi overlay lanes | M9 | Two overlays on different layers → both visible, selectable |
+| 84 | Overlay export | M9 | Export MP4 → overlays composited like preview |
+| 85 | Music insert | M10 | Add track from library → music lane clip, audible on play |
+| 86 | Music fade | M10 | Fade in/out handles → smooth audibility at edges |
+| 87 | Ducking | M10 | Duck under speech on → music lowers during dialogue |
+| 88 | Music export | M10 | Export MP3/MP4 includes music mix with ducking |
+| 89 | Studio Sound job | M11 | Enable enhance → job runs; status in Properties |
+| 90 | Studio Sound preview | M11 | When proxy ready, preview plays enhanced speech at set intensity |
+| 91 | Studio Sound export | M11 | Export uses enhanced audio when toggle on |
+| 92 | Remove retakes | M12 | LLM tool finds retake block → review → delete applies as cut ops |
+| 93 | Edit for clarity | M12 | Suggest shorter phrasing → accept updates text + keeps media mapping |
+| 94 | LLM filler pass | M12 | Bulk filler suggestion → Remove all uses one undo step |
+| 95 | LLM undo | M12 | One undo after LLM bulk → full revert |
+| 96 | Comment on word | M13 | Add comment on word → pin visible in panel |
+| 97 | Comment on range | M13 | Select range → comment → shows span in panel |
+| 98 | Comments not in export | M13 | Export video/SRT → comment text absent |
 
 ---
 
@@ -96,7 +160,35 @@ Align with spec §B1 `Token` kinds. Persist as JSON array or run-length runs in 
 - `word` → `wordId`, `ignored`, `textOverride?`, `speakerOverride?`  
 - `gap` → `gapMs`  
 - `paraBreak` / `speakerChange` (speakerChange may reference `speakerOverride`)  
+- **`sceneBreak`** (M7) → optional `sceneId`, thumbnail time in source ms  
+- **`marker`** (M8) → `markerId`, label, chapter export flag  
 - Removed source ranges stored in **boundary map** (for restore): keyed by boundary id between kept tokens.
+
+**Parallel JSON on `ScriptDocumentV1` (M3+ compatible; EDL ignores until milestone ships):**
+
+```ts
+type WordAnchoredOverlay = {
+  id: string
+  anchorWordId: string        // moves with text edits via word id
+  mediaAssetId: string        // upload | project clip | pixabay ref
+  outOffsetMs: number         // relative to anchor word output start
+  durMs: number
+  layer: number
+}
+type MusicClip = {
+  id: string
+  assetId: string
+  outStartMs: number
+  durMs: number
+  fadeInMs?: number
+  fadeOutMs?: number
+  duckUnderSpeech?: boolean
+}
+// document.overlays?: WordAnchoredOverlay[]
+// document.musicTracks?: MusicClip[]
+// document.scenes?: { id, startWordId, layoutId?, aspect?, reframe?, captionsVisible? }[]
+// document.markers?: { id, outMs, label, exportAsChapter? }[]
+```
 
 **Piece table / B-tree:** client-only structure for perf (§C4); server stores snapshot + ops, not the tree.
 

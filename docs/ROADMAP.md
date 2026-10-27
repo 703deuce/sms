@@ -1,6 +1,6 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-27 — Rick: clipper → **script editor milestones** → **STOP** → [polish / fine-tuning pass](#clipper-fine-tuning-pass-after-script-editor); **AI Studio ON HOLD** (not in build queue); screenwriting on hold behind `FEATURE_SCREENWRITING`  
+**Last updated:** 2026-10-27 — Rick: clipper → **script editor M1–M13** (full Descript-at-launch scope per `SCRIPT-EDITOR-BUILD.md` §0.1) → **STOP** → [polish / fine-tuning pass](#clipper-fine-tuning-pass-after-script-editor); **AI Studio ON HOLD** (Underlord / Overdub / Eye Contact not in launch queue); screenwriting on hold behind `FEATURE_SCREENWRITING`  
 **Prod clipper (2026-10-27):** Deepgram+Whisper fallback, B2 worker source cache, stage-aware ETA, 1080p export; script editor shipping on `305f73fae`+ train.
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.

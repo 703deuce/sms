@@ -194,15 +194,18 @@ Descript reference: ref 08; [D:script-editing/filler-words], [D:script-editing/s
 Descript reference: refs 03, 04; [D:timeline/timeline-overview], [D:timeline/timeline-tools], [D:script-editing/the-wordbar], [D:timeline/split-button].
 
 **Lanes at launch**, top to bottom:
-1. **Ruler**: output timecode, with tick density adapting to zoom, and marker flags.
-2. **Captions lane**: one bar per caption layer. Clicking it selects the layer, which opens its style in Properties.
-3. **Wordbar**: word chips at their output positions and gap chips (`•1.0s`). Words merge into "…" groups when zoomed out until they fit, as in Descript.
-4. **Script track**: the main media clip(s). Each EDL segment is one clip, with:
+1. **Ruler**: output timecode, tick density adapts to zoom, **marker flags** (M8).
+2. **Scenes strip** (M7): numbered scene thumbnails at scene starts (ref 04).
+3. **Captions lane**: one bar per caption layer. Clicking it selects the layer, which opens its style in Properties.
+4. **Overlay / B-roll lanes** (M9): one or more lanes for word-anchored image/video overlays; clips move when anchor words move.
+5. **Wordbar**: word chips at their output positions and gap chips (`•1.0s`). Words merge into "…" groups when zoomed out until they fit, as in Descript.
+6. **Script track**: the main media clip(s). Each EDL segment is one clip, with:
    - a filmstrip of **thumbnails** along the top half (from the sprite sheet, one per ~2 s at 100% zoom)
    - the audio **waveform** along the bottom half (multi-resolution peaks)
    - a 2 px vertical line with a **cut marker** at each edit boundary
+7. **Music lane** (M10): library clips with fade handles and duck-under-speech.
 
-**Later lanes:** B-roll/overlay lanes, music lane, and a scenes strip (numbered thumbnails as in ref 04).
+**M3 ships empty lane slots** for scenes, overlays, and music so M7–M10 wire in without layout churn.
 
 **Behaviors:**
 - **Playhead**: a blue vertical line across all lanes, the same color as the script highlight. Click the ruler to seek. Drag the playhead to scrub with audio (scrub audio plays at 1x in 40 ms grains).
@@ -239,17 +242,18 @@ Transovo already has clip **captions** (Bold Pop and other styles), **reframing*
 | Aspect ratio + reframe | Scene layouts; canvas sizes ([D:templates-and-presets/layouts-apply]) | The canvas pill offers 9:16 / 1:1 / 4:5 / 16:9 and Reframe **Auto (speaker follow)** / **Center** / **Manual** (drag the crop box on the canvas, which creates a keyframe at the playhead). Reframe data comes from the Clipper and is mapped through the EDL. | **Launch-required** |
 | Captions | Captions panel with presets (search, filter Default/Basic/Bold/Fun/Trend, sort), apply to Current/All scenes; styling of active word / future words; per-speaker caption layers ([D:visuals/captions], ref 11) | **Captions** side panel: a grid of Transovo's existing caption style cards (Bold Pop, …) rendered as live mini-previews with the composition's real words. The selected style has an accent ring. Properties: font, size, case, colors, **active-word highlight** color/scale, stroke/shadow, words per line / max 2 lines, **position** (drag on canvas, plus Top / Middle / Bottom snap and safe-area guides for 9:16). Captions come from kept, corrected words and update within 300 ms of any edit. | **Launch-required** |
 | Captions on/off, burn-in | Captions are layers, subtitles are separate files ([D:export-and-share/subtitles]) | A toggle on the canvas pill; export always uses the current toggle. | **Launch-required** |
-| Studio Sound (voice enhance) | A toggle in Audio effects with an intensity setting ([D:effects-animations-transitions/studio-sound], ref 12) | Properties ▸ Audio: **Enhance voice** toggle plus a 0–100% intensity. Server-side job; preview uses the processed proxy audio when it's ready ("Enhancing… 40%"). Only ship it if an enhancement model is already available; otherwise leave it out entirely (rule 0.2). | Later (v1.1, high priority) |
+| Studio Sound (voice enhance) | A toggle in Audio effects with an intensity setting ([D:effects-animations-transitions/studio-sound], ref 12) | Properties ▸ Audio: **Enhance voice** toggle plus 0–100% intensity. CPU worker job (**DeepFilterNet** or similar OSS). Preview uses processed proxy when ready ("Enhancing… 40%"). | **Launch-required** (M11) |
 | Audio volume / normalize | Audio % slider; Normalize at export ([D:export-and-share/video-gif]) | Properties ▸ Audio: volume slider (0–200%); export loudness normalize −14 LUFS default. | **Launch-required** (volume + export normalize) |
-| Scenes ("/" separator) | `/` inserts a scene boundary; scenes have their own layout and layers; thumbnails mark scene starts in the script ([D:getting-started/scenes], ref 05) | The data model reserves the `sceneBreak` token. v1.1: `/` inserts a scene, which gets its own aspect/reframe/caption visibility and a thumbnail at its start in the script. At launch, `/` types a normal character only in Correct mode and does nothing otherwise. | Later (v1.1) |
-| Layouts | A layout picker per scene (ref 07) | Comes with Scenes. | Later (v1.1) |
-| B-roll / media insert | Add layer: image/video/stock; layers extend across scenes ([D:visuals/scenes-layers]) | v1.2: Media panel (upload / project clips / stock). Drop on a word to create an overlay anchored to that word (it moves with the text). Overlay lanes go on the timeline. | Later (v1.2) |
-| Music | Audio layer, "Lower audio of other layers" (ducking) (ref 02/12) | v1.2: a music lane with a library, fade in/out, auto-duck under speech. | Later (v1.2) |
-| Markers / chapters | `#` marker; Add chapters AI tool | v1.1: `#` inserts a marker; the transport markers dropdown; export chapters metadata. | Later (v1.1) |
-| Eye Contact | A video effect that redirects gaze; single face, needs a network connection ([D:effects-animations-transitions/eye-contact]) | — | Later (v2) |
-| Remove retakes / Edit for clarity / AI chat (Underlord) | AI Tools panel and chat co-editor ([D:descript-tour/ai-tools-overview], ref 13/14; [D:getting-started/underlord-beta-your-ai-co-editor-in-descript]) | Out of scope while AI Studio is on hold. | Later (v2) |
-| Regenerate / Overdub (AI voice) | Regenerate to heal cuts ([D:script-editing/edit-boundaries]) | Not offered (B2.13). | Later (v2) |
-| Comments / multi-user collaboration | Comments panel, version conflicts ([D:working-in-projects/version-history]) | A single editor per composition with a lock (§C5). | Later |
+| Scenes ("/" separator) | `/` inserts a scene boundary; scenes have their own layout and layers; thumbnails mark scene starts in the script ([D:getting-started/scenes], ref 05) | `/` inserts `sceneBreak` with per-scene aspect, reframe, caption visibility, and a thumbnail at the scene start in the script. | **Launch-required** (M7) |
+| Layouts | A layout picker per scene (ref 07) | Layout template per scene (linked to sceneBreak). | **Launch-required** (M7) |
+| B-roll / media insert | Add layer: image/video/stock; layers extend across scenes ([D:visuals/scenes-layers]) | **Media** panel: upload, project clips, **Pixabay** stock. Drop on a word → overlay anchored to `wordId`; overlay lanes on timeline. | **Launch-required** (M9) |
+| Music | Audio layer, "Lower audio of other layers" (ducking) (ref 02/12) | Music lane: library, fade in/out, auto-duck under speech. | **Launch-required** (M10) |
+| Markers / chapters | `#` marker; Add chapters AI tool | `#` inserts marker; transport markers dropdown; chapter metadata on export (no Underlord required). | **Launch-required** (M8) |
+| Eye Contact | A video effect that redirects gaze; single face, needs a network connection ([D:effects-animations-transitions/eye-contact]) | — | **Later** (post-launch) |
+| Remove retakes / Edit for clarity | AI-assisted transcript edits ([D:descript-tour/ai-tools-overview]) | **LLM text ops** on transcript (cheap model): remove retakes, edit-for-clarity, bulk filler/gap suggestions — review bar + undo. Not the full Underlord chat UI. | **Launch-required** (M12) |
+| Underlord AI chat | Full co-editor chat ([D:getting-started/underlord-beta-your-ai-co-editor-in-descript]) | Hidden while **AI Studio on hold**. | **Later** |
+| Regenerate / Overdub (AI voice) | Regenerate to heal cuts ([D:script-editing/edit-boundaries]) | Not offered at launch. | **Later** (with AI Studio) |
+| Comments | Comments on words/ranges ([D:working-in-projects/version-history]) | Comments panel; **single editor + lease** (no live multi-user). | **Launch-required** (M13) |
 
 ---
 
@@ -413,10 +417,17 @@ Existing app nav (seen on transovo.ai 2026-10-26): Create (New project, Streamer
 Milestones:
 - **M1** Shell, layout and synced read-only transcript
 - **M2** Core text editing
-- **M3** Timeline
+- **M3** Timeline (incl. scenes / overlay / music lane slots)
 - **M4** Filler/gaps, captions, reframe, properties
 - **M5** Save, versions, export, reliability, performance
 - **M6** Transovo integration
+- **M7** Scenes + layouts
+- **M8** Markers + chapters
+- **M9** Media + B-roll overlays
+- **M10** Music lane
+- **M11** Studio Sound
+- **M12** LLM transcript tools (not Underlord chat)
+- **M13** Comments
 
 Each test is run in Chrome on transovo.ai production with the fixture project **"test_interview_60s"** and a **3 h fixture** (two speakers, fillers present). "✓" means the expected result is observed on screen.
 
@@ -450,7 +461,7 @@ Each test is run in Chrome on transovo.ai production with the fixture project **
 | 26 | Re-label selection | M2 | Select a sentence, press @, choose Guest → the sentence becomes its own paragraph labeled Guest. |
 | 27 | Find | M2 | Cmd/Ctrl+F, type "clip" → hits highlighted with "1/N". Enter moves to the next, Shift+Enter to the previous. The browser's find bar never appears. |
 | 28 | Edit word gap | M2 | Right-click between two words → Edit word gap → 0.25 s → the gap shortens and the section auto-plays. |
-| 29 | Timeline lanes | M3 | Expand the timeline → ruler, captions lane, wordbar with word chips, and a script track with thumbnails and waveform, all aligned to the playhead. |
+| 29 | Timeline lanes | M3 | Expand the timeline → ruler, **scenes strip (slot)**, captions lane, **overlay lane(s) (slot)**, wordbar with word chips, script track (thumbnails + waveform), **music lane (slot)** — all aligned to the playhead. |
 | 30 | Timeline↔script selection | M3 | Drag-select a range on the script track → the same words are selected in the script. Selecting words in the script → the range is highlighted on the timeline. |
 | 31 | Zoom | M3 | Cmd/Ctrl+= ×5 → the word chips ungroup. Fit → the whole composition is visible. Zoom keeps the point under the cursor fixed. |
 | 32 | Split | M3 | Put the playhead mid-sentence, press S → a boundary appears on the timeline and `¦` in the script. The duration is unchanged. |
@@ -488,6 +499,38 @@ Each test is run in Chrome on transovo.ai production with the fixture project **
 | 64 | Isolation | M6 | Delete words in a clip composition → the full video composition and other clips are unchanged. |
 | 65 | Shortcuts sheet | M6 | Press Cmd/Ctrl+/ → the sheet lists every shortcut from §C1, and each listed one works when tried. |
 | 66 | No dead controls | M6 | Click every button and menu item in the editor → each does something visible or shows a reason-tooltip. None is a no-op. |
+| 67 | Scene insert | M7 | Type `/` at the cursor (not in Correct mode) → a scene boundary appears in the script with a thumbnail chip; total duration unchanged. |
+| 68 | Per-scene aspect | M7 | Set scene 2 to 9:16 in Properties → preview letterbox/crop changes only while playhead is in scene 2. |
+| 69 | Per-scene captions | M7 | Disable captions for scene 1 → preview hides captions in that scene; scene 2 still shows them. |
+| 70 | Scene reframe | M7 | Add a manual reframe keyframe in scene 2, make a cut in scene 1 → scene 2 crop unchanged after reload. |
+| 71 | Layout picker | M7 | Open layout picker for current scene, choose a template → preview matches the layout preset. |
+| 72 | Scene strip | M7 | Timeline scenes strip shows numbered thumbnails at each scene start, aligned with the ruler. |
+| 73 | Marker insert | M8 | Press `#` at a word → a flag appears on the ruler and the marker is listed in the transport markers menu. |
+| 74 | Marker seek | M8 | Transport ▸ Markers → pick one → playhead seeks to that output time. |
+| 75 | Chapter export | M8 | Mark a marker "Chapter", export video → output file includes chapter metadata at that time. |
+| 76 | Marker rename | M8 | Rename a marker in the dropdown or Properties → label persists after reload. |
+| 77 | Marker delete | M8 | Delete marker → flag and dropdown entry removed; export no longer lists it. |
+| 78 | Media panel upload | M9 | Media panel ▸ Upload image → asset listed; drag onto a word → overlay clip on timeline + preview. |
+| 79 | Project clip media | M9 | Pick a project clip in Media panel, drop on word → overlay anchored; cut/paste words moves overlay. |
+| 80 | Pixabay stock | M9 | Search Pixabay in Media panel, insert a stock clip → overlay lane shows clip; preview plays it. |
+| 81 | Overlay trim | M9 | Drag overlay clip edges on timeline → duration updates; anchor word unchanged. |
+| 82 | Overlay delete | M9 | Select overlay, Delete → removed from lane and preview; script text unchanged. |
+| 83 | Multi overlay lanes | M9 | Add overlays on two layers → both visible; selecting one opens overlay Properties. |
+| 84 | Overlay export | M9 | Export 1080p video → overlays match preview placement and timing. |
+| 85 | Music insert | M10 | Music panel ▸ add track → clip on music lane; audible during playback. |
+| 86 | Music fade | M10 | Adjust fade in/out on music clip → smooth entry/exit at clip edges. |
+| 87 | Ducking | M10 | Enable duck under speech → music level drops during dialogue, restores in gaps. |
+| 88 | Music export | M10 | Export audio or video → music mix includes ducking and fades. |
+| 89 | Studio Sound job | M11 | Toggle Enhance voice → job queued; Properties shows progress. |
+| 90 | Studio Sound preview | M11 | When enhanced proxy is ready, preview plays enhanced audio at the chosen intensity. |
+| 91 | Studio Sound export | M11 | Export with enhance on → rendered audio uses enhanced speech. |
+| 92 | Remove retakes | M12 | Edit tools ▸ Remove retakes → LLM highlights a retake block → Accept deletes via normal cut ops. |
+| 93 | Edit for clarity | M12 | Edit for clarity on a paragraph → suggestion shown → Accept updates text overrides; media unchanged unless user cuts. |
+| 94 | LLM filler pass | M12 | LLM suggests fillers → Remove all in one action → one undo step restores all. |
+| 95 | LLM undo | M12 | After test 94, one Cmd/Ctrl+Z → transcript and timeline match pre-LLM state. |
+| 96 | Comment on word | M13 | Right-click word ▸ Add comment → thread appears in Comments panel with timecode link. |
+| 97 | Comment on range | M13 | Select a phrase, add comment → panel shows range anchor; click seeks to start. |
+| 98 | Comments not in export | M13 | Export video and SRT → comment bodies are not present in output files. |
 
 ## D2. "Looks right" visual checklist (compare with `descript-refs/contact_sheet.png`)
 
