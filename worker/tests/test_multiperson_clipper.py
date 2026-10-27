@@ -88,9 +88,16 @@ def test_filtergraph_strings_exact():
 
 
 def test_shot_cuts_histogram_fallback():
-    import numpy as np
+    import sys
+    from pathlib import Path
 
-    from prototype.v3.shot_cuts import scene_cut_times
+    v3 = Path(__file__).resolve().parents[1] / "prototype" / "v3"
+    if not (v3 / "shot_cuts.py").is_file():
+        v3 = Path("/app/v3")
+    v3_str = str(v3.resolve())
+    if v3_str not in sys.path:
+        sys.path.insert(0, v3_str)
+    from shot_cuts import scene_cut_times
 
     g0 = np.zeros((64, 64), dtype=np.uint8)
     g1 = np.ones((64, 64), dtype=np.uint8) * 255
