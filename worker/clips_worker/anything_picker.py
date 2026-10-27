@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from clips_worker.gemini import rank_clipanything_candidates
+from clips_worker.clip_anything_vision import rank_clipanything_candidates_resilient
 from clips_worker.picker.titles import ensure_clip_title
 from clips_worker.render_clip import slice_words
 from clips_worker.scan import (
@@ -105,7 +105,8 @@ def pick_anything_clips(
         max_clips=max_clips,
     )
     print(
-        f"[clipanything] scan candidates={len(cands)} project={project_id} range_s={range_start_s:.1f}-{range_end_s:.1f}",
+        f"[clipper:anything] scan candidates={len(cands)} project={project_id} "
+        f"range_s={range_start_s:.1f}-{range_end_s:.1f}",
         flush=True,
     )
     if not cands:
@@ -125,8 +126,8 @@ def pick_anything_clips(
             },
         )
 
-    print(f"[clipanything] vision shortlist={len(prepared)} project={project_id}", flush=True)
-    ranked = rank_clipanything_candidates(
+    print(f"[clipper:anything] vision shortlist={len(prepared)} project={project_id}", flush=True)
+    ranked = rank_clipanything_candidates_resilient(
         conn,
         workspace_id=workspace_id,
         project_id=project_id,
@@ -176,7 +177,7 @@ def pick_anything_clips(
             }
             _add(_pick_from_row(row, cands, cuts, words, settings, fallback=True))
 
-    print(f"[clipanything] picks={len(picks)} project={project_id}", flush=True)
+    print(f"[clipper:anything] picks={len(picks)} project={project_id}", flush=True)
     if not picks:
         return [], "Vision ranking did not return usable clips."
     return picks, None

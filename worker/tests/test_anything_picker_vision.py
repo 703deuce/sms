@@ -50,7 +50,7 @@ def test_pick_anything_clips_calls_gemini_rank_with_frames(tmp_path, monkeypatch
             }
         ]
 
-    monkeypatch.setattr("clips_worker.anything_picker.rank_clipanything_candidates", fake_rank)
+    monkeypatch.setattr("clips_worker.anything_picker.rank_clipanything_candidates_resilient", fake_rank)
 
     picks, err = pick_anything_clips(
         MagicMock(),
@@ -69,9 +69,10 @@ def test_pick_anything_clips_calls_gemini_rank_with_frames(tmp_path, monkeypatch
     assert captured["candidates"][0].get("frames")
 
 
-def test_anything_picker_module_wires_gemini():
+def test_anything_picker_module_wires_vision_resilient():
     src = (Path(__file__).resolve().parents[1] / "clips_worker" / "anything_picker.py").read_text(
         encoding="utf-8",
     )
-    assert "rank_clipanything_candidates" in src
+    assert "rank_clipanything_candidates_resilient" in src
     assert "sample_candidate_frames" in src
+    assert "[clipper:anything]" in src

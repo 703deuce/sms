@@ -1,7 +1,6 @@
 """Gemini REST for ClipAnything vision ranking."""
 from __future__ import annotations
 
-import base64
 import json
 import os
 import uuid
@@ -9,12 +8,8 @@ from typing import Any
 
 import requests
 
+from clips_worker.clip_anything_vision import PLAYBOOK, build_rank_user_parts, rank_response_schema
 from clips_worker.gemini_vision import GEMINI_BASE, discover_model, _key
-
-PLAYBOOK = """You are a ClipAnything editor. A good clip has a clear hook in the first 2 seconds
-(action starting, reaction, surprise), a visible payoff, and a self-contained arc.
-Skip long setup or dead air. Ideal length: 20–45s for action/vlog, up to 60s for tutorials.
-Use the user's prompt when provided. Never name real people."""
 
 
 def _log_usage(conn, workspace_id: str, project_id: str | None, model: str, prompt_tokens: int, output_tokens: int) -> None:
@@ -51,70 +46,33 @@ def rank_clipanything_candidates(
 ) -> list[dict[str, Any]]:
     """candidates: {id, start_s, end_s, transcript, frames:[{jpeg,index}]}"""
     model = discover_model()
-    schema = {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "properties": {
-                "candidateId": {"type": "string"},
-                "start": {"type": "number"},
-                "end": {"type": "number"},
-                "title": {"type": "string"},
-                "reason": {"type": "string"},
-                "hook": {"type": "string"},
-                "action": {"type": "string"},
-                "payoff": {"type": "string"},
-                "score": {"type": "integer"},
-                "subjectBox": {
-                    "type": "object",
-                    "properties": {
-                        "x": {"type": "number"},
-                        "y": {"type": "number"},
-                        "w": {"type": "number"},
-                        "h": {"type": "number"},
+    schema = rank_response_schema()
+    openai_parts = build_rank_user_parts(
+        candidates,
+        user_prompt=user_prompt,
+        max_clips=max_clips,
+        min_score=min_score,
+    )
+    parts: list[dict] = []
+    for p in openai_parts:
+        if p.get("type") == "text":
+            parts.append({"text": p["text"]})
+        elif p.get("type") == "image_url":
+            url = str(p.get("image_url", {}).get("url", ""))
+            prefix = "data:image/jpeg;base64,"
+            if url.startswith(prefix):
+                parts.append(
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": url[len(prefix) :],
+                        },
                     },
-                },
-            },
-            "required": ["candidateId", "start", "end", "title", "reason", "hook", "action", "payoff", "score"],
-        },
-    }
-
-    want = min(max_clips, len(candidates))
-    batch = candidates[: min(len(candidates), 24)]
-    frame_budget = 300
-    parts: list[dict] = [
-        {
-            "text": (
-                f"{PLAYBOOK}\nReturn exactly {want} ranked clips when possible (never more than {want}). "
-                f"Each clip score must be >= {min_score}. Sort best-first."
-            ),
-        },
-    ]
-    if user_prompt.strip():
-        parts.append({"text": f"User prompt: {user_prompt.strip()}"})
-    used_frames = 0
-    for cand in batch:
-        parts.append(
-            {
-                "text": (
-                    f"Candidate {cand['id']}: {cand['start_s']:.1f}-{cand['end_s']:.1f}s, "
-                    f"transcript: {cand.get('transcript', '')[:800]}"
-                ),
-            },
-        )
-        for fr in cand.get("frames") or []:
-            if used_frames >= frame_budget:
-                break
-            parts.append(
-                {
-                    "inline_data": {
-                        "mime_type": "image/jpeg",
-                        "data": base64.b64encode(fr["jpeg"]).decode(),
-                    },
-                },
-            )
-            parts.append({"text": f"frame {fr['index']}"})
-            used_frames += 1
+                )
+            else:
+                continue
+        else:
+            continue
 
     res = requests.post(
         f"{GEMINI_BASE}/models/{model}:generateContent",
