@@ -43,7 +43,7 @@ export function T2vStudioShell({
   initialError: string | null
   builtVideoUrl?: string | null
 }) {
-  const { doc, push, replace, undo, redo, canUndo, canRedo } = useT2vUndo(initialDocument)
+  const { doc, push, replace, undo, redo, canUndo, canRedo } = useT2vUndo(draftId, initialDocument)
   const [revision, setRevision] = useState(initialRevision)
   const [tab, setTab] = useState<T2vRailTab>('story')
   const [selectedId, setSelectedId] = useState<string | null>(initialDocument.scenes[0]?.id ?? null)
@@ -139,7 +139,7 @@ export function T2vStudioShell({
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'match_failed')
       const next = (body.data?.document ?? body.data) as T2vDraftV1
-      replace(next)
+      push(next)
       if (body.data?.revision) setRevision(body.data.revision)
       toast.success('Storyboard media matched')
     } catch (e) {
@@ -170,13 +170,24 @@ export function T2vStudioShell({
     const stale = doc.scenes.filter(staleVoice)
     if (!stale.length) return
     setMatching(true)
+    const failed: string[] = []
     try {
       for (const s of stale) {
         const res = await fetch(`/api/t2v/drafts/${draftId}/scenes/${s.id}/voice`, { method: 'POST' })
-        if (!res.ok) throw new Error('re_voice_failed')
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          failed.push(body.error ? String(body.error) : s.id)
+        }
       }
       await refreshDraft()
-      toast.success(`Re-voiced ${stale.length} scene(s)`)
+      const ok = stale.length - failed.length
+      if (ok && failed.length) {
+        toast.warning(`Re-voiced ${ok} scene(s); ${failed.length} failed`)
+      } else if (failed.length) {
+        toast.error(`Re-voice failed for ${failed.length} scene(s)`)
+      } else {
+        toast.success(`Re-voiced ${stale.length} scene(s)`)
+      }
     } catch {
       toast.error('Re-voice failed')
     } finally {
@@ -306,7 +317,7 @@ export function T2vStudioShell({
                     doc={doc}
                     onChange={(n) => void persist(n)}
                     onTemplateApplied={(d, rev) => {
-                      replace(d)
+                      push(d)
                       setRevision(rev)
                     }}
                   />
@@ -317,7 +328,7 @@ export function T2vStudioShell({
                     <T2vProducerPanel
                       draftId={draftId}
                       onDocument={(d, rev) => {
-                        replace(d)
+                        push(d)
                         setRevision(rev)
                         revisionRef.current = rev
                       }}

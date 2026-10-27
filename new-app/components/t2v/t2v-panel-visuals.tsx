@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 import { Dropzone } from '@/components/clips/dropzone'
 import { uploadClipFile } from '@/lib/clips/upload'
 import { Button } from '@/components/ui/button'
@@ -27,21 +28,37 @@ export function T2vPanelVisuals({
 }) {
   const scene = doc.scenes.find((s) => s.id === sceneId)
   const [q, setQ] = useState(scene?.visualQuery ?? '')
+  const [debouncedQ, setDebouncedQ] = useState(q)
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [focalOpen, setFocalOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+  const [finding, setFinding] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (scene) setQ(scene.visualQuery)
   }, [scene?.id, scene?.visualQuery])
 
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 350)
+    return () => clearTimeout(t)
+  }, [q])
+
+  useEffect(() => {
     if (!sceneId) return
-    void fetch(`/api/t2v/drafts/${draftId}/scenes/${sceneId}/media?q=${encodeURIComponent(q)}&type=video`)
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+    void fetch(`/api/t2v/drafts/${draftId}/scenes/${sceneId}/media?q=${encodeURIComponent(debouncedQ)}&type=video`, {
+      signal: ac.signal,
+    })
       .then((r) => r.json())
       .then((b) => setCandidates(b.data?.candidates ?? []))
-      .catch(() => setCandidates([]))
-  }, [draftId, sceneId, q])
+      .catch((e) => {
+        if (e?.name !== 'AbortError') setCandidates([])
+      })
+    return () => ac.abort()
+  }, [draftId, sceneId, debouncedQ])
 
   if (!scene) {
     return <p className="p-4 text-sm text-muted-foreground">Select a scene to edit visuals.</p>
@@ -59,6 +76,26 @@ export function T2vPanelVisuals({
     }
     toast.success('Visual updated')
     onRefresh()
+  }
+
+  const findVisuals = async () => {
+    if (!sceneId) return
+    setFinding(true)
+    try {
+      const res = await fetch(`/api/t2v/drafts/${draftId}/storyboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sceneId }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'match_failed')
+      toast.success('Visual matched for this scene')
+      onRefresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not find visuals')
+    } finally {
+      setFinding(false)
+    }
   }
 
   const saveFocal = async (focalX: number, focalY: number) => {
@@ -81,6 +118,10 @@ export function T2vPanelVisuals({
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="secondary" onClick={() => setFocalOpen(true)}>Crop &amp; focus</Button>
         <Button type="button" size="sm" variant="outline" onClick={() => setAiOpen(true)}>AI / more</Button>
+        <Button type="button" size="sm" variant="outline" disabled={finding || scene.media.locked} onClick={() => void findVisuals()}>
+          {finding ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+          Find visuals
+        </Button>
       </div>
       <Label>Stock search</Label>
       <Input value={q} onChange={(e) => setQ(e.target.value)} />

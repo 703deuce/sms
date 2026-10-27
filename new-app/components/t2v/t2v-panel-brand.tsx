@@ -36,7 +36,7 @@ export function T2vPanelBrand({
 
   return (
     <div className="space-y-3 p-4">
-      <p className="text-sm text-muted-foreground">Brand intro/outro and colors apply at assemble and export.</p>
+      <p className="text-sm text-muted-foreground">Brand intro/outro apply on export; titles and captions use scene timing from the build.</p>
       <Label>Brand template</Label>
       <Select
         value={value || '__none'}

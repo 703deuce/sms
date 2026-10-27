@@ -1,12 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createId } from '@/lib/supabase/id'
 import type { T2vDraftV1, T2vTextItem } from '@/lib/t2v/types'
+import { estimateSceneMs } from '@/lib/t2v/estimate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Slider } from '@/components/ui/slider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
+function clampItem(item: T2vTextItem, sceneDurMs: number): T2vTextItem {
+  const max = Math.max(500, sceneDurMs)
+  let startMs = Math.max(0, Math.min(item.startMs, max - 200))
+  let endMs = Math.max(startMs + 200, Math.min(item.endMs, max))
+  if (endMs > max) endMs = max
+  if (startMs >= endMs) startMs = Math.max(0, endMs - 200)
+  return { ...item, startMs, endMs }
+}
 
 export function T2vPanelText({
   doc,
@@ -18,24 +29,31 @@ export function T2vPanelText({
   const [sceneId, setSceneId] = useState(doc.scenes[0]?.id ?? '')
   const sceneIdx = doc.scenes.findIndex((s) => s.id === sceneId)
   const scene = sceneIdx >= 0 ? doc.scenes[sceneIdx] : null
+  const sceneDurMs = useMemo(() => (scene ? estimateSceneMs(scene) : 5000), [scene])
 
   const updateTexts = (texts: T2vTextItem[]) => {
     if (sceneIdx < 0) return
     const scenes = [...doc.scenes]
-    scenes[sceneIdx] = { ...scenes[sceneIdx], texts }
+    scenes[sceneIdx] = {
+      ...scenes[sceneIdx],
+      texts: texts.map((t) => clampItem(t, sceneDurMs)),
+    }
     onChange({ ...doc, scenes })
   }
 
   const addItem = (kind: T2vTextItem['kind']) => {
-    const item: T2vTextItem = {
-      id: createId('tx'),
-      kind,
-      text: kind === 'title' ? 'Title' : 'Name',
-      subtitle: kind === 'lower_third' ? 'Subtitle' : undefined,
-      startMs: 0,
-      endMs: 2500,
-      animation: 'fade',
-    }
+    const item: T2vTextItem = clampItem(
+      {
+        id: createId('tx'),
+        kind,
+        text: kind === 'title' ? 'Title' : 'Name',
+        subtitle: kind === 'lower_third' ? 'Subtitle' : undefined,
+        startMs: 0,
+        endMs: Math.min(2500, sceneDurMs),
+        animation: 'fade',
+      },
+      sceneDurMs,
+    )
     updateTexts([...(scene?.texts ?? []), item])
   }
 
@@ -57,6 +75,7 @@ export function T2vPanelText({
             ))}
           </SelectContent>
         </Select>
+        <p className="mt-1 text-xs text-muted-foreground">Scene length ~{(sceneDurMs / 1000).toFixed(1)}s</p>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant="secondary" onClick={() => addItem('title')}>+ Title</Button>
@@ -81,6 +100,43 @@ export function T2vPanelText({
                 }
               />
             ) : null}
+            <div className="space-y-2 pt-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Start {(t.startMs / 1000).toFixed(2)}s</span>
+                <span>End {(t.endMs / 1000).toFixed(2)}s</span>
+              </div>
+              <Label className="text-xs">Start (ms)</Label>
+              <Slider
+                min={0}
+                max={Math.max(200, sceneDurMs - 200)}
+                step={50}
+                value={[t.startMs]}
+                onValueChange={([v]) => {
+                  const startMs = v ?? 0
+                  const endMs = Math.max(startMs + 200, t.endMs)
+                  updateTexts(
+                    scene.texts.map((x) =>
+                      x.id === t.id ? clampItem({ ...x, startMs, endMs }, sceneDurMs) : x,
+                    ),
+                  )
+                }}
+              />
+              <Label className="text-xs">End (ms)</Label>
+              <Slider
+                min={200}
+                max={sceneDurMs}
+                step={50}
+                value={[t.endMs]}
+                onValueChange={([v]) => {
+                  const endMs = v ?? t.endMs
+                  updateTexts(
+                    scene.texts.map((x) =>
+                      x.id === t.id ? clampItem({ ...x, endMs }, sceneDurMs) : x,
+                    ),
+                  )
+                }}
+              />
+            </div>
             <Button
               type="button"
               size="sm"

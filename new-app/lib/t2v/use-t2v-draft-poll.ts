@@ -9,20 +9,30 @@ export function useT2vDraftPoll(
 ) {
   const onUpdateRef = useRef(onUpdate)
   onUpdateRef.current = onUpdate
-  const intervalMs = useRef(2000)
-  const started = useRef<number | null>(null)
+  const intervalMsRef = useRef(2000)
+  const startedRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!draftId || !enabled) return
-    started.current = Date.now()
-    intervalMs.current = 2000
-    let timer: ReturnType<typeof setInterval> | null = null
+    startedRef.current = Date.now()
+    intervalMsRef.current = 2000
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const schedule = (ms: number) => {
+      if (cancelled) return
+      timer = setTimeout(() => void tick(), ms)
+    }
 
     const tick = async () => {
+      if (cancelled) return
       try {
         const res = await fetch(`/api/t2v/drafts/${draftId}`)
         const body = await res.json()
-        if (!res.ok) return
+        if (!res.ok) {
+          schedule(intervalMsRef.current)
+          return
+        }
         const d = body.data
         onUpdateRef.current({
           status: d.status,
@@ -30,15 +40,10 @@ export function useT2vDraftPoll(
           progress: d.progress ?? 0,
           error: d.error,
         })
-        if (d.status === 'DRAFT' && d.stage === 'failed') {
-          if (timer) clearInterval(timer)
-          return
-        }
-        if (d.status === 'READY') {
-          if (timer) clearInterval(timer)
-          return
-        }
-        const elapsed = Date.now() - (started.current ?? Date.now())
+        if (d.status === 'DRAFT' && d.stage === 'failed') return
+        if (d.status === 'READY') return
+
+        const elapsed = Date.now() - (startedRef.current ?? Date.now())
         if (elapsed > 45 * 60 * 1000) {
           onUpdateRef.current({
             status: d.status,
@@ -46,19 +51,20 @@ export function useT2vDraftPoll(
             progress: d.progress ?? 0,
             error: 'Build is taking longer than expected. You can leave and return later.',
           })
-          intervalMs.current = Math.min(30_000, intervalMs.current + 2000)
+          intervalMsRef.current = Math.min(30_000, intervalMsRef.current + 2000)
         } else if (elapsed > 120_000) {
-          intervalMs.current = 5000
+          intervalMsRef.current = 5000
         }
       } catch {
         /* ignore */
       }
+      schedule(intervalMsRef.current)
     }
 
     void tick()
-    timer = setInterval(() => void tick(), intervalMs.current)
     return () => {
-      if (timer) clearInterval(timer)
+      cancelled = true
+      if (timer) clearTimeout(timer)
     }
   }, [draftId, enabled])
 }

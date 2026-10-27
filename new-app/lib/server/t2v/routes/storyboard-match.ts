@@ -6,11 +6,11 @@ import { estimateSceneMs } from '@/lib/t2v/estimate'
 import { matchScenes, toSceneMedia } from '@/lib/server/t2v/stock-match'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 
-export async function runStoryboardMatch(workspaceId: string, draftId: string) {
+export async function runStoryboardMatch(workspaceId: string, draftId: string, sceneId?: string) {
   const d = await getPrisma().t2vDraft.findFirstOrThrow({ where: { id: draftId, workspaceId } })
   const doc = d.document as T2vDraftV1
   const sources = doc.settings.mediaSources.filter((p): p is 'pexels' | 'pixabay' => p !== 'ai_image')
-  const todo = doc.scenes.filter((s) => !s.media?.locked)
+  const todo = doc.scenes.filter((s) => !s.media?.locked && (!sceneId || s.id === sceneId))
   const matched = await matchScenes({
     scenes: todo.map((s) => ({
       id: s.id,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 import { Loader2, Sparkles, Video, ImageIcon } from 'lucide-react'
@@ -33,6 +33,8 @@ export function T2vSceneMediaDialog({
   const [busy, setBusy] = useState(false)
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [searching, setSearching] = useState(false)
+  const [debouncedPrompt, setDebouncedPrompt] = useState(prompt)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -40,17 +42,31 @@ export function T2vSceneMediaDialog({
   }, [open, defaultPrompt])
 
   useEffect(() => {
+    const t = setTimeout(() => setDebouncedPrompt(prompt), 350)
+    return () => clearTimeout(t)
+  }, [prompt])
+
+  useEffect(() => {
     if (!open || (tab !== 'stock_video' && tab !== 'stock_photo')) return
     const type = tab === 'stock_photo' ? 'photo' : 'video'
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
     setSearching(true)
     void fetch(
-      `/api/t2v/drafts/${draftId}/scenes/${sceneId}/media?q=${encodeURIComponent(prompt)}&type=${type}`,
+      `/api/t2v/drafts/${draftId}/scenes/${sceneId}/media?q=${encodeURIComponent(debouncedPrompt)}&type=${type}`,
+      { signal: ac.signal },
     )
       .then((r) => r.json())
       .then((b) => setCandidates(b.data?.candidates ?? []))
-      .catch(() => setCandidates([]))
-      .finally(() => setSearching(false))
-  }, [open, tab, draftId, sceneId, prompt])
+      .catch((e) => {
+        if (e?.name !== 'AbortError') setCandidates([])
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setSearching(false)
+      })
+    return () => ac.abort()
+  }, [open, tab, draftId, sceneId, debouncedPrompt])
 
   if (!open) return null
 
