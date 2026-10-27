@@ -4,7 +4,12 @@
 
 **Last updated:** 2026-10-27 (rebased on `master`; vision/layout inventory below)
 
-**Owner rule:** Extend or upgrade existing face/layout/diarization code — do **not** replace `speakercrop.py`, YuNet, or streamer layout detectors without an implementation guide.
+### Owner rule (binding)
+
+1. **Do not rebuild** anything that already exists for face detection, tracking, multi-person follow, split layouts, facecam detection, layout presets, smoothing, or diarization.
+2. **All clipper changes** must **extend or upgrade** the components listed in the inventory below — not replace them.
+3. **Wait for the owner implementation guide** before changing any **tracking or layout** code (`speakercrop.py`, YuNet/MediaPipe crop loop, `subject_reframe.py`, streamer `detect_facecam` / `render_stack`, or equivalent).
+4. This document is the inventory source of truth; update it when wiring changes, not when rewriting stacks.
 
 ---
 
@@ -122,43 +127,90 @@ Streamer-only types (`STREAM_IMPORT`, `STREAM_ANALYZE`, `STREAM_RENDER`, …) sh
 
 ## Existing vision, layout, and diarization (inventory — do not rebuild)
 
-Production clipper reframing is centered on **`worker/prototype/v3/speakercrop.py`** (container path `/app/v3`, env `SPEAKERCROP_DIR`). The worker invokes it through `render_clip.run_speakercrop` — **used in prod** for every clip preview (`pipeline.reframe_clip_preview`) and final export (`render_job.py`, `reframe_crop.py`).
+Production clipper reframing is centered on **`worker/prototype/v3/speakercrop.py`** (runtime `/app/v3` via `SPEAKERCROP_DIR`). Entry point: **`render_clip.run_speakercrop`** → subprocess **`speakercrop.py`**. Called from **`pipeline.reframe_clip_preview`** (M4 previews), **`render_job.run_render_clip_job`** (export), **`reframe_crop.run_reframe_crop_job`** (crop-track rebuild).
 
-| Capability | Where | Prod? | Notes |
-|------------|-------|-------|-------|
-| **Face detection (YuNet)** | `speakercrop.py` (`yunet.onnx`), `main.log_models()` | **Yes** | OpenCV `FaceDetectorYN`; up to 2 faces; profile-friendly boxes |
-| **Face landmarks / lip motion** | `speakercrop.py` (`face_landmarker.task`, MediaPipe) | **Yes** | Blendshapes + jawOpen for active-speaker scoring |
-| **Multi-person follow + split** | `speakercrop.py` (`SPLIT`, `LAYOUT_MODE`, `FORCE_SPLIT` via `render_clip.layout_env`) | **Yes** | Stacked split when both talk; `speaker_follow` default |
-| **Voice tie-break (Resemblyzer)** | `speakercrop.py` (`VOICE=1`, embeddings on 16 kHz audio) | **Yes** | Combined with visual score (`VIS_W`) |
-| **Smoothing / shot logic** | `speakercrop.py` (`MIN_SEG`, `HYST`, `LEAD`, `EASE`) | **Yes** | Min shot length, hysteresis, look-ahead, eased crop center |
-| **Layout presets** | `render_clip.layout_env` → env vars for speakercrop | **Yes** | `speaker_follow`, `split`, `fill`, `fit`; clip `edits.layout` / script `reframeMode` |
-| **Fit-blur fallback** | `render_clip.ffmpeg_fit_export`, `pipeline.write_fit_blur_crop_track` | **Yes** | When speakercrop fails or no sustained face (`fit_fallback` on render meta) |
-| **Subject / motion follow** | `subject_reframe.py` (`write_motion_crop_track`, `has_face_and_speech`) | **Yes** | ClipAnything path when face+speech weak; motion centroids @ 2 fps |
-| **Crop track artifact** | `crop_track.json` on clip keys; `REFRAME_CROP` job | **Yes** | Editor reframe pills read/write keyframes; worker rebuilds via `reframe_crop.py` |
-| **Script composition reframe** | `script_composition_render.py` (layout mode from doc settings) | **Yes** | Same speakercrop stack as clip export |
-| **Zoom / pan on script timeline** | `zoom_render.py` (composition render) | **Yes** | Composited in script export path |
-| **Speaker labels (picker)** | `picker/sentences.py` `_assign_speakers` | **Yes** | Heuristic from word gaps — **not** full diarization ASR |
-| **Diarization overlap signals** | `picker/signals.py` | **Yes** | Scoring feature for clip ranking, not a separate diarization service |
-| **Facecam + gameplay (streamer)** | `streamer/layout/detect_facecam.py`, `render_stack.py` | Streamer lane | YuNet on sample frames; **not** clipper `PROCESS_PROJECT` |
-| **Modal GPU transcribe** | `transcribe_source.py`, `clips_worker/gpu/modal_provider.py`, `worker/modal_app/` | **Optional** | When `GPU_PROVIDER=modal`; uploads `audio.opus`, signed URL transcribe |
-| **Modal face GPU** | `worker/modal_app/face.py` | Deployed app | Used by streamer/GPU experiments — **not** on hot speakercrop path |
+### Face, tracking, layouts, smoothing (clipper hot path)
 
-**App-side reframe (no replacement for speakercrop):** manual keyframes in script doc (`reframeKeyframes`, ops `set_reframe_keyframe` / `patch_reframe_keyframes`) → persisted on composition → worker applies on export. UI: `ScriptReframeCropOverlay`, API `clips/[id]/reframe`.
+| Capability | File | Function / entry | Prod? |
+|------------|------|------------------|-------|
+| Face detection (YuNet) | `worker/prototype/v3/speakercrop.py` | `FaceDetectorYN.create` + per-frame `det.detect` loop | **Yes** — all clip/script reframes via `run_speakercrop` |
+| Face landmarks / lip activity | `speakercrop.py` | `FaceLandmarker.detect` on face crops; `jawOpen` blendshape | **Yes** |
+| Multi-person tracking (2-up) | `speakercrop.py` | Left/right slot assignment (`pos[0]`, `pos[1]`); tracks `xpos`, `ypos`, `mouth` per speaker | **Yes** |
+| Active speaker selection | `speakercrop.py` | Visual score + optional Resemblyzer (`VOICE`); `HYST` to switch | **Yes** |
+| Split layout (stacked) | `speakercrop.py` | `SPLIT=1` / dual-speaker render branch | **Yes** when `layout_env` sets split / `speaker_follow` |
+| Layout presets | `worker/clips_worker/render_clip.py` | `layout_env(layout)` → `LAYOUT_MODE`, `SPLIT`, `FORCE_SPLIT` env | **Yes** — `speaker_follow`, `split`, `fill`, `fit` |
+| Smoothing / shots | `speakercrop.py` | `MIN_SEG`, `HYST`, `LEAD`, `EASE` (env from `render_clip.run_speakercrop`) | **Yes** |
+| Speakercrop failure fallback | `render_clip.py` | `ffmpeg_fit_export` | **Yes** — sets `fit_fallback` on render meta |
+| Face+speech gate | `subject_reframe.py` | `has_face_and_speech` | **Yes** — chooses speakercrop vs motion/fit in `reframe_clip_preview` |
+| Motion / subject follow | `subject_reframe.py` | `write_motion_crop_track`, `motion_centroids_x` | **Yes** — ClipAnything when faces weak |
+| Static fit-blur track | `pipeline.py` | `write_fit_blur_crop_track` | **Yes** |
+| Manual reframe keyframes | `new-app` composition doc + `reframe_crop.py` | ops `set_reframe_keyframe` / `patch_reframe_keyframes`; worker `run_reframe_crop_job` | **Yes** — augments, does not replace speakercrop |
+| Script export layout | `script_composition_render.py` | reads `reframeMode` → same `run_speakercrop` settings | **Yes** |
+| Zoom / pan segments | `zoom_render.py` | used from script composition render | **Yes** |
+| Model presence check | `main.py` | `log_models()` (yunet, face_landmarker, fonts) | **Yes** — worker boot log |
+
+### Facecam detection & split (streamer — separate lane, same YuNet family)
+
+| Capability | File | Function | Prod? |
+|------------|------|----------|-------|
+| Facecam box detect | `streamer/layout/detect_facecam.py` | `detect_facecam_layout` | **Streamer** `STREAM_RENDER` / layout state — **not** clipper `PROCESS_PROJECT` |
+| Facecam + gameplay stack | `streamer/layout/render_stack.py` | `build_stack_filtergraph`, `stack_layout_from_state` | **Streamer** export layout |
+| Caption anchor | `streamer/layout/caption_anchor.py` | seam between facecam/gameplay panels | **Streamer** |
+
+Do not merge streamer facecam auto-detect into clipper speakercrop without the owner guide; clipper long-form uses speakercrop + `subject_reframe`, not `detect_facecam_layout`.
+
+### Diarization & speaker identity
+
+| Capability | File | Function | Prod? |
+|------------|------|----------|-------|
+| ASR speaker diarization (primary) | `deepgram_transcribe.py` | `transcribe_deepgram` (`diarize=true`, `speaker` on words → `spk`) | **Yes** when `TRANSCRIBE_PROVIDER=deepgram` (default if `DEEPGRAM_API_KEY` set) via `transcribe_provider.transcribe_audio_request` |
+| Transcribe routing | `transcribe_provider.py` | `transcribe_audio_request` | **Yes** — Deepgram first, else `gpu.transcribe_with_fallback` |
+| Project transcribe | `transcribe_source.py` | `transcribe_video_file` | **Yes** — every `PROCESS_PROJECT` without cached words |
+| Picker speaker labels | `picker/sentences.py` | `_assign_speakers`, `segment_sentences` | **Yes** — gap-based labels for scoring (uses transcript, not a second diarizer) |
+| Overlap / multi-speaker scoring | `picker/signals.py` | overlap detection between sentences | **Yes** — ranking only |
+| Local Whisper (no diarize) | `gpu/local.py` | `LocalProvider.transcribe` | **Yes** — fallback when Deepgram/modal unavailable |
+
+Words carry `speakerId` / `spk` into the editor (`to-editor-words`); speakercrop does **not** consume Deepgram diarization directly — it uses vision+audio in `speakercrop.py`.
+
+### Modal GPU path
+
+| Op | File | Function | Prod? |
+|----|------|----------|-------|
+| Provider select | `gpu/__init__.py` | `get_provider`, `transcribe_with_fallback` | **Yes** — env `GPU_PROVIDER`, `GPU_PROVIDER_TRANSCRIBE` |
+| Modal transcribe client | `gpu/modal_provider.py` | `ModalProvider.transcribe`, `transcribe_many` | **Optional** — when provider name is `modal` |
+| Modal remote class | `modal_app/transcribe.py` | `Transcriber.transcribe` | **Deployed** — faster-whisper on GPU; used only if worker configured for modal |
+| Upload + signed URL | `transcribe_source.py` | `transcribe_video_file` (modal branch) | **Optional** — uploads `ws/.../audio.opus` then modal |
+| Inflight limit | `gpu/modal_inflight.py` | `ModalInflight` | **Yes** when modal used |
+| Usage metering | `gpu/usage.py` | `record_modal_transcribe` | **Yes** when modal transcribe succeeds |
+| Modal face track (stub track) | `modal_app/face.py` | `FaceTracker.face_track` | **Not clipper prod** — `ModalProvider.face_track` exists; **no** `get_provider("face")` call sites in clipper pipeline; local `face_track` raises `NotImplementedError` |
+| Modal render batch | `modal_provider.py` | `render_batch` | **Not** on clipper M4/export hot path today |
+
+**Prod default today:** Deepgram diarized transcript when key present; GPU path is local Whisper fallback unless ops set `GPU_PROVIDER=modal`. Clip reframing stays **on-worker speakercrop**, not Modal `FaceTracker`.
+
+**App-side reframe (no replacement for speakercrop):** `ScriptReframeCropOverlay`, API `clips/[id]/reframe`, composition ops — persist keyframes for export only.
 
 ### Git activity since 2026-10-24 (clipper + script editor + worker)
 
-High-signal commits on this branch stack (newest first after rebase onto `master`):
+Regenerate when auditing:
 
-- `b7ab03cbc` — PR #751 security, publish views migration, drive route split, pipeline doc
-- `5c7c94e88` / `0ac28212d` — Descript surfaces: drive chrome, publish playback, share footer
-- `faf97d505` / `d31d7b147` — Script editor drive, markers, comments, share APIs
-- `415fdd883` / `d62de3607` — M8 storyboard/scenes ops + timeline view toggle
-- `b682037fd` — M4.1 script sync, timeline fit, fillers, gaps, reframe, cuts (on `master`)
-- `8c5be6114` / `b18ed9409` — `RENDER_SCRIPT_COMPOSITION` worker dispatch + handler fixes
-- `3a152a37d` / `a5055e5d3` — M4.1 filler/gap/reframe/timeline cuts (worker + editor)
-- `bcfbe3dd9` — Parallel reframe pool + upload ETA (worker `pipeline.py` concurrency)
+```bash
+git log --since=2026-10-24 --oneline -- worker/clips_worker worker/prototype/v3 new-app/lib/clips new-app/components/script-editor
+```
 
-No commit since Oct 24 replaces `speakercrop.py`; changes are orchestration, script EDL, UI, and export/share.
+Snapshot (2026-10-27, PR #751 branch rebased on `master`):
+
+| Commit | Area | Touches tracking/layout? |
+|--------|------|-------------------------|
+| `242b82457` / `b7ab03cbc` | Docs, share auth, drive IA | **No** |
+| `5c7c94e88`, `0ac28212d` | Descript surfaces, publish | **No** |
+| `faf97d505`, `d31d7b147` | Markers, comments, share APIs | **No** |
+| `415fdd883`, `d62de3607` | Storyboard/scenes ops | **No** (document model only) |
+| `b682037fd` | M4.1 editor sync, reframe **UI** keyframes | **No** speakercrop changes |
+| `8c5be6114`, `b18ed9409` | Script composition render dispatch | **No** |
+| `3a152a37d`, `a5055e5d3`, `8dccb96ab` | Fillers, gaps, timeline, reframe pills | **No** |
+| `bcfbe3dd9` | Parallel **reframe pool** in `pipeline.py` | **Orchestration only** — still calls `run_speakercrop` |
+
+**Conclusion:** No commit since 2026-10-24 replaces `speakercrop.py`, YuNet, or `detect_facecam_layout`. Safe extension surface: app EDL, export/share, picker scoring, pool concurrency — not new face engines.
 
 ---
 
