@@ -60,6 +60,8 @@ export type RemoveSceneOp = { type: 'remove_scene'; sceneId: string }
 export type ReorderScenesOp = { type: 'reorder_scenes'; sceneIds: string[] }
 export type PatchBrollOp = { type: 'patch_broll'; broll: BrollItem[] }
 export type PatchAudioOp = { type: 'patch_audio'; audio: ClipEditsAudio | null }
+export type PatchOverlaysOp = { type: 'patch_overlays'; overlays: NonNullable<ScriptDocumentV1['overlays']> }
+export type PatchAudioFxOp = { type: 'patch_audio_fx'; audioFx: ScriptDocumentV1['audioFx'] | null }
 
 export type { AddMarkerOp, UpdateMarkerOp, DeleteMarkerOp }
 
@@ -88,6 +90,8 @@ export type ScriptCompositionOp =
   | ReorderScenesOp
   | PatchBrollOp
   | PatchAudioOp
+  | PatchOverlaysOp
+  | PatchAudioFxOp
   | AddMarkerOp
   | UpdateMarkerOp
   | DeleteMarkerOp
@@ -123,8 +127,9 @@ function finalizeDoc(
     padBeforeMs: partial.padBeforeMs ?? document.padBeforeMs,
     scenes: partial.scenes !== undefined ? partial.scenes : document.scenes,
     markers: partial.markers !== undefined ? partial.markers : document.markers,
-    overlays: document.overlays,
+    overlays: partial.overlays !== undefined ? partial.overlays : document.overlays,
     musicTracks: document.musicTracks,
+    audioFx: partial.audioFx !== undefined ? partial.audioFx ?? undefined : document.audioFx,
     broll: partial.broll !== undefined ? partial.broll : document.broll,
     audio: partial.audio !== undefined ? partial.audio : document.audio,
     settings: partial.settings ?? document.settings,
@@ -165,6 +170,8 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
   let markers = document.markers ? [...document.markers] : undefined
   let broll = document.broll ? [...document.broll] : undefined
   let audio = document.audio
+  let overlays = document.overlays ? [...document.overlays] : undefined
+  let audioFx = document.audioFx ? { ...document.audioFx } : undefined
 
   if (op.type === 'delete_words') {
     for (const id of op.wordIds) {
@@ -335,6 +342,10 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     broll = [...op.broll]
   } else if (op.type === 'patch_audio') {
     audio = op.audio ?? undefined
+  } else if (op.type === 'patch_overlays') {
+    overlays = [...op.overlays]
+  } else if (op.type === 'patch_audio_fx') {
+    audioFx = op.audioFx ?? undefined
   }
 
   return finalizeDoc(document, order, kept, deleted, {
@@ -350,6 +361,8 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     markers,
     broll,
     audio,
+    overlays,
+    audioFx,
   })
 }
 

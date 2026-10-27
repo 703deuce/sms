@@ -151,6 +151,38 @@ const opSchema = z.discriminatedUnion('type', [
     }),
   }),
   z.object({ type: z.literal('delete_marker'), id: z.string().min(1) }),
+  z.object({
+    type: z.literal('patch_overlays'),
+    overlays: z.array(
+      z.object({
+        id: z.string().min(1),
+        anchorWordId: z.string().min(1),
+        mediaAssetId: z.string().min(1),
+        durMs: z.number().min(1),
+        layer: z.number().int().optional(),
+        label: z.string().max(120).optional(),
+        outStartMs: z.number().min(0).optional(),
+      }),
+    ),
+  }),
+  z.object({
+    type: z.literal('patch_audio_fx'),
+    audioFx: z
+      .object({
+        studioSound: z
+          .object({
+            enabled: z.boolean(),
+            mix: z.number().min(0).max(1),
+            assetId: z.string().nullable().optional(),
+          })
+          .optional(),
+        loudnessLufs: z
+          .union([z.literal(-14), z.literal(-16), z.literal(-18), z.literal(-23), z.literal(-24)])
+          .nullable()
+          .optional(),
+      })
+      .nullable(),
+  }),
 ])
 
 const bodySchema = z.object({

@@ -99,6 +99,12 @@ import { ScriptTimelineViewMenu } from '@/components/script-editor/transport/tim
 import { clipsFetch } from '@/lib/clips-api'
 import type { ScriptEditorUserPreferences } from '@/lib/server/clips/editor-preferences'
 import { useTheme } from 'next-themes'
+import { ScriptCompositionSwitcher } from '@/components/script-editor/script-composition-switcher'
+import { ScriptProjectPanel } from '@/components/script-editor/side/script-project-panel'
+import { ScriptElementsPanel } from '@/components/script-editor/side/script-elements-panel'
+import { ScriptLayoutsPanel } from '@/components/script-editor/side/script-layouts-panel'
+import { ScriptAudioPanel } from '@/components/script-editor/side/script-audio-panel'
+import type { ClipEditsAudio } from '@/lib/clips/audio'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -118,7 +124,8 @@ export type ScriptBootstrapView = {
   clipEndMs?: number | null
   surroundingContextIds?: string[]
   document: ScriptDocumentV1 | null
-  clips: { id: string; title: string; startMs: number; endMs: number }[]
+  compositions?: { id: string; kind: 'FULL' | 'CLIP'; clipId: string | null; title: string }[]
+  clips: { id: string; title: string; startMs?: number; endMs?: number }[]
   status: string
 }
 
@@ -253,6 +260,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const isClipComposition = data.compositionKind === 'CLIP'
+  const compositions = data.compositions ?? []
+  const compositionTitle = useMemo(() => {
+    const row = compositions.find((c) => c.id === data.compositionId)
+    if (row?.title) return row.title
+    return isClipComposition ? 'Clip composition' : 'Full video'
+  }, [compositions, data.compositionId, isClipComposition])
   const [showSurrounding, setShowSurrounding] = useState(false)
   const [hoverIncludeWordId, setHoverIncludeWordId] = useState<string | null>(null)
   const [editorPrefs, setEditorPrefs] = useState<ScriptEditorUserPreferences | null>(null)
@@ -1156,6 +1169,22 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         e.preventDefault()
         setShortcutsOpen(true)
       }
+
+      if (e.altKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault()
+        setSideTab('project')
+        setSideOpen(true)
+      }
+      if (e.altKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        setSideTab('media')
+        setSideOpen(true)
+      }
+      if (e.altKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        setSideTab('layouts')
+        setSideOpen(true)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -1282,7 +1311,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
 
   return (
     <div data-script-shell className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-background">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
+      <header className="relative flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
         <Button
           size="sm"
           variant="ghost"
@@ -1305,9 +1334,20 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           <Scissors className="size-4" aria-hidden />
           Split
         </Button>
-        <div className="min-w-0 flex-1 truncate text-sm font-medium">
+        <div className="pointer-events-none absolute left-1/2 top-3 z-10 hidden -translate-x-1/2 md:block">
+          <div className="pointer-events-auto flex max-w-[min(100vw-24rem,360px)] flex-col items-center gap-0.5">
+            <span className="truncate text-[11px] text-muted-foreground">{data.title}</span>
+            <ScriptCompositionSwitcher
+              projectId={data.projectId}
+              compositions={compositions}
+              activeCompositionId={data.compositionId}
+              activeTitle={compositionTitle}
+              isClip={isClipComposition}
+            />
+          </div>
+        </div>
+        <div className="min-w-0 flex-1 truncate text-sm font-medium md:invisible">
           {data.title}
-          {isClipComposition ? <span className="ml-2 text-xs text-muted-foreground">(clip)</span> : null}
         </div>
         {isClipComposition && (
           <div className="flex items-center gap-2" data-testid="show-surrounding-transcript">
@@ -1754,13 +1794,19 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
               <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
                 {commentsOpen
                   ? 'Comments'
-                  : sideTab === 'properties'
-                    ? 'Properties'
-                    : sideTab === 'captions'
-                      ? 'Captions'
-                      : sideTab === 'media'
-                        ? 'Media'
-                        : 'Edit tools'}
+                  : sideTab === 'project'
+                    ? 'Project'
+                    : sideTab === 'properties'
+                      ? 'Properties'
+                      : sideTab === 'layouts'
+                        ? 'Layouts'
+                        : sideTab === 'elements'
+                          ? 'Elements'
+                          : sideTab === 'captions'
+                            ? 'Captions'
+                            : sideTab === 'media'
+                              ? 'Media'
+                              : 'Edit tools'}
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {commentsOpen && (
@@ -1822,19 +1868,48 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     }
                   />
                 )}
+                {!commentsOpen && sideTab === 'project' && (
+                  <ScriptProjectPanel
+                    projectId={data.projectId}
+                    projectTitle={data.title}
+                    compositions={compositions}
+                    activeCompositionId={data.compositionId}
+                    clips={data.clips}
+                  />
+                )}
                 {!commentsOpen && sideTab === 'properties' && (
-                  <ScriptPropertiesPanel
-                    settings={settings}
-                    rangeStartMs={data.rangeStartMs}
-                    playheadMs={playheadMs}
-                    reframeKeyframes={document.reframeKeyframes ?? []}
-                    onPatch={patchSettings}
-                    onAddReframeKeyframe={commitReframeKeyframe}
-                    onDeleteReframeKeyframe={(srcMs) => {
-                      const next = (document.reframeKeyframes ?? []).filter((k) => k.srcMs !== srcMs)
-                      safeApplyOp({ type: 'patch_reframe_keyframes', reframeKeyframes: next })
-                    }}
-                    onSeekReframeKeyframe={(srcMs) => seekToSourceMs(srcMs)}
+                  <>
+                    <ScriptPropertiesPanel
+                      settings={settings}
+                      rangeStartMs={data.rangeStartMs}
+                      playheadMs={playheadMs}
+                      reframeKeyframes={document.reframeKeyframes ?? []}
+                      onPatch={patchSettings}
+                      onAddReframeKeyframe={commitReframeKeyframe}
+                      onDeleteReframeKeyframe={(srcMs) => {
+                        const next = (document.reframeKeyframes ?? []).filter((k) => k.srcMs !== srcMs)
+                        safeApplyOp({ type: 'patch_reframe_keyframes', reframeKeyframes: next })
+                      }}
+                      onSeekReframeKeyframe={(srcMs) => seekToSourceMs(srcMs)}
+                    />
+                    <ScriptAudioPanel
+                      compositionId={data.compositionId}
+                      document={document}
+                      outputDurationMs={outDur}
+                      playheadOutMs={outputMs}
+                      onPatchAudio={(audio: ClipEditsAudio | null) => safeApplyOp({ type: 'patch_audio', audio })}
+                      onPatchAudioFx={(audioFx) => safeApplyOp({ type: 'patch_audio_fx', audioFx })}
+                    />
+                  </>
+                )}
+                {!commentsOpen && sideTab === 'layouts' && (
+                  <ScriptLayoutsPanel settings={settings} onPatch={patchSettings} />
+                )}
+                {!commentsOpen && sideTab === 'elements' && (
+                  <ScriptElementsPanel
+                    document={document}
+                    activeWordId={selAnchor != null ? orderedWords[selAnchor]?.id ?? null : null}
+                    onPatchOverlays={(overlays) => safeApplyOp({ type: 'patch_overlays', overlays })}
                   />
                 )}
                 {!commentsOpen && sideTab === 'captions' && <ScriptCaptionsPanel settings={settings} onPatch={patchSettings} />}
@@ -1873,6 +1948,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     onOpenGapReview={openGapTools}
                     onShortenOne={onRemoveOneFiller}
                     onShortenAll={onRemoveAllFillers}
+                    compositionId={data.compositionId}
+                    onDeleteRetakeWords={(wordIds) => safeDeleteWords(wordIds)}
                   />
                 )}
               </div>

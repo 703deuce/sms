@@ -7,8 +7,9 @@ import { formatScriptTimecode } from '@/lib/clips/script-editor/sync-playhead'
 import { ScriptShortenGapsPanel } from '@/components/script-editor/side/script-shorten-gaps-panel'
 import { cn } from '@/lib/utils'
 import type { GapFilterMode } from '@/lib/clips/script-editor/gap-hits'
+import { ScriptRetakesPanel } from '@/components/script-editor/side/script-retakes-panel'
 
-export type EditToolsTab = 'filler' | 'gaps'
+export type EditToolsTab = 'filler' | 'gaps' | 'retakes'
 
 export function ScriptEditToolsPanel({
   tab,
@@ -32,6 +33,8 @@ export function ScriptEditToolsPanel({
   onOpenGapReview,
   onShortenOne,
   onShortenAll,
+  compositionId,
+  onDeleteRetakeWords,
 }: {
   tab: EditToolsTab
   onTabChange: (t: EditToolsTab) => void
@@ -54,11 +57,13 @@ export function ScriptEditToolsPanel({
   onOpenGapReview: () => void
   onShortenOne: () => void
   onShortenAll: () => void
+  compositionId: string
+  onDeleteRetakeWords: (wordIds: string[]) => void
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="script-edit-tools-panel">
       <div className="flex border-b border-border">
-        {(['filler', 'gaps'] as EditToolsTab[]).map((t) => (
+        {(['filler', 'gaps', 'retakes'] as EditToolsTab[]).map((t) => (
           <button
             key={t}
             type="button"
@@ -68,11 +73,17 @@ export function ScriptEditToolsPanel({
               tab === t ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground',
             )}
           >
-            {t === 'filler' ? 'Filler words' : 'Shorten gaps'}
+            {t === 'filler' ? 'Filler words' : t === 'gaps' ? 'Shorten gaps' : 'Retakes'}
           </button>
         ))}
       </div>
-      {tab === 'filler' ? (
+      {tab === 'retakes' ? (
+        <ScriptRetakesPanel
+          compositionId={compositionId}
+          rangeStartMs={rangeStartMs}
+          onApplyDelete={onDeleteRetakeWords}
+        />
+      ) : tab === 'filler' ? (
         <div className="flex flex-col gap-3 p-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium">Filler words</p>

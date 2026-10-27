@@ -5,6 +5,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 BRANCH="${1:-master}"
 
+git fetch origin "$BRANCH"
+if git rev-parse "@{u}" >/dev/null 2>&1; then
+  git rebase "origin/$BRANCH" || {
+    echo "[git-push-ff] rebase failed — resolve then: git rebase --continue" >&2
+    exit 1
+  }
+fi
+
 if git push origin "$BRANCH" 2>/dev/null; then
   echo "[git-push-ff] ok via git push"
   exit 0

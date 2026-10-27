@@ -7,6 +7,8 @@
 
 **Agent cadence:** progress note every **10–15 min** on long work; end with **READY TO PUSH**. **Do not block** on the owner — log externals in **`docs/clips/BLOCKED.md`** and keep building (env gates / flags).
 
+**Parallel agent (bc-fb465dc1):** owns §1–§2 Home/Drive+import, §14 markers/chapters, §16 comments, §17 share/publish, §20 settings — **not** this train. **This train** owns M4.1, export e2e, §3 shell, §8–§13, §15, §26, §27 project panel, 85 shortcuts. Before push: `git fetch && git rebase origin/master` (FF-only via `scripts/git-push-ff.sh`).
+
 **UI layouts (owner 2026-10-27):** **M4 / M4.1** → `script-editor.md` **§A**. **M5+** net-new panels/dialogs → **`docs/clips/descript/ui-layouts.md`** when ready (**BLK-002**); until then **backend + ops + tests** only (no improvised layout).
 
 **Current phase:** **M8** → **M17** train after export e2e green (≤2 min fixture; |output−EDL| &lt; 1500 ms). Push via `scripts/git-push-ff.sh` (API fallback).

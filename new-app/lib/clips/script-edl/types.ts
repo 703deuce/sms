@@ -35,6 +35,7 @@ export type ScriptEditorSettings = {
   /** Show struck / cut words in script + source timeline ghosts (Descript-style). */
   showDeletedWords?: boolean
   volumePct?: number
+  layoutPackId?: string
   captions?: {
     enabled?: boolean
     presetId?: string
@@ -91,4 +92,9 @@ export type ScriptDocumentV1 = {
   wordSourceAdjust?: Record<string, { headTrimMs?: number; tailTrimMs?: number }>
   /** M4 — manual reframe keyframes in source time. */
   reframeKeyframes?: ReframeKeyframe[]
+  /** M11 — Studio Sound / loudness (render when worker supports isolation mix). */
+  audioFx?: {
+    studioSound?: { enabled: boolean; mix: number; assetId?: string | null }
+    loudnessLufs?: -14 | -16 | -18 | -23 | -24 | null
+  }
 }
