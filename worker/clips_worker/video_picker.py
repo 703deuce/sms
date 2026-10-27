@@ -199,7 +199,7 @@ def watch_video_file(
     duration_s: int,
     chunk_label: str = "upload",
 ) -> tuple[list[dict], dict[str, Any]]:
-    """Gemini Flash video watch. When VIDEO_PICKER_ENABLED, failures raise after retries."""
+    """Gemini Flash video watch. Fail-open after retries: log error, return empty moments."""
     meta: dict[str, Any] = {
         "chunk": chunk_label,
         "frames_est": 0,
@@ -216,9 +216,25 @@ def watch_video_file(
 
         msg = f"video_picker input missing or too small path={video_path.name}"
         log_picker_error("gemini", msg, None)
-        raise RuntimeError(msg)
+        meta["error"] = msg
+        return [], meta
     t0 = stage_begin("video_picker", chunk=chunk_label)
-    from clips_worker.picker.picker_errors import log_picker_error
+    from clips_worker.picker.picker_errors import gemini_error_log_fields, log_picker_error
+
+    logged = False
+
+    def _fail_open(err_msg: str, status: int | None = None, quota: dict[str, str] | None = None) -> tuple[list[dict], dict[str, Any]]:
+        nonlocal logged
+        if not logged:
+            log_picker_error("gemini", err_msg, status, quota=quota)
+            logged = True
+        meta["error"] = err_msg[:200]
+        if status is not None:
+            meta["status"] = status
+        if quota:
+            meta["quota"] = quota
+        stage_end("video_picker", t0, chunk=chunk_label, error=err_msg[:180], fail_open=True)
+        return [], meta
 
     try:
         model = discover_video_picker_model()
@@ -275,12 +291,10 @@ def watch_video_file(
                     continue
                 if not res.ok:
                     raw = res.text or res.reason or "error"
-                    from clips_worker.picker.picker_errors import gemini_error_log_fields, log_picker_error
-
                     summary, quota = gemini_error_log_fields(raw)
                     last_err = summary or raw[:300]
-                    log_picker_error("gemini", last_err, res.status_code, quota=quota or None)
-                    raise RuntimeError(f"Gemini video_picker HTTP {res.status_code}")
+                    last_status = res.status_code
+                    return _fail_open(last_err, res.status_code, quota or None)
                 data = res.json()
                 usage = data.get("usageMetadata") or {}
                 pt = int(usage.get("promptTokenCount") or 0)
@@ -303,20 +317,15 @@ def watch_video_file(
                     moments=len(moments),
                 )
                 return moments, meta
-            except RuntimeError:
-                raise
             except Exception as exc:
                 last_err = str(exc)[:300]
                 if _gemini_transient_exc(exc) and attempt < 2:
                     time.sleep(2**attempt)
                     continue
-                log_picker_error("gemini", last_err, last_status)
-                raise RuntimeError(f"Gemini video_picker failed: {last_err}") from exc
-        log_picker_error("gemini", last_err, last_status)
-        raise RuntimeError(f"Gemini video_picker failed after retries: {last_err}")
+                return _fail_open(last_err, last_status, None)
+        return _fail_open(last_err, last_status, None)
     except Exception as exc:
-        stage_end("video_picker", t0, chunk=chunk_label, error=str(exc)[:180])
-        raise
+        return _fail_open(str(exc)[:300], last_status, None)
 
 
 def watch_upload_range(

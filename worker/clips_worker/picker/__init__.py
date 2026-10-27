@@ -99,41 +99,45 @@ def pick_talking_clips(
             from clips_worker.picker.picker_errors import log_picker_error
 
             log_picker_error("gemini", "sourceVideoPath missing or not a file", None)
-            raise RuntimeError("VIDEO_PICKER_ENABLED but source video is not available")
-        import tempfile
+            picker_info("video_picker_regular_fail_open", reason="missing_source_video")
+        else:
+            import tempfile
 
-        from clips_worker.picker.work_scratch import video_picker_scratch_dir
+            from clips_worker.picker.work_scratch import video_picker_scratch_dir
 
-        scratch_vp = Path(tempfile.mkdtemp(dir=video_picker_scratch_dir(), prefix="vp_reg_"))
-        vm, _curve, vp_meta = watch_upload_range(
-            Path(str(vpath)),
-            range_start_ms=range_start_ms,
-            range_end_ms=range_end_ms,
-            scratch=scratch_vp,
-        )
-        if not vp_meta.get("ok"):
-            from clips_worker.picker.picker_errors import log_picker_error
-
-            log_picker_error("gemini", str(vp_meta.get("error") or "video_picker failed"), vp_meta.get("status"))
-            raise RuntimeError("VIDEO_PICKER_ENABLED but Gemini video watch failed")
-        visual_moments = vm
-        video_context = format_moments_for_llm(
-            [
-                {
-                    **m,
-                    "t_s": (int(m.get("t_ms") or range_start_ms) - range_start_ms) / 1000.0,
-                }
-                for m in vm
-            ]
-        )
-        picker_info(
-            "video_picker_regular",
-            moments=len(vm),
-            ok=True,
-            est_usd=vp_meta.get("est_usd"),
-            prompt_tokens=vp_meta.get("prompt_tokens"),
-            output_tokens=vp_meta.get("output_tokens"),
-        )
+            scratch_vp = Path(tempfile.mkdtemp(dir=video_picker_scratch_dir(), prefix="vp_reg_"))
+            vm, _curve, vp_meta = watch_upload_range(
+                Path(str(vpath)),
+                range_start_ms=range_start_ms,
+                range_end_ms=range_end_ms,
+                scratch=scratch_vp,
+            )
+            if vp_meta.get("ok") and vm:
+                visual_moments = vm
+                video_context = format_moments_for_llm(
+                    [
+                        {
+                            **m,
+                            "t_s": (int(m.get("t_ms") or range_start_ms) - range_start_ms) / 1000.0,
+                        }
+                        for m in vm
+                    ]
+                )
+                picker_info(
+                    "video_picker_regular",
+                    moments=len(vm),
+                    ok=True,
+                    est_usd=vp_meta.get("est_usd"),
+                    prompt_tokens=vp_meta.get("prompt_tokens"),
+                    output_tokens=vp_meta.get("output_tokens"),
+                )
+            else:
+                quota = vp_meta.get("quota") if isinstance(vp_meta.get("quota"), dict) else None
+                picker_info(
+                    "video_picker_regular_fail_open",
+                    error=str(vp_meta.get("error") or "video_picker failed")[:200],
+                    status=vp_meta.get("status"),
+                )
 
     cache = picker_cache or {}
     scored_from_cache = cache.get("pass2Scored")
