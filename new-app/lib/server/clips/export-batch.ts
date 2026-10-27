@@ -8,6 +8,7 @@ import { renderVersionHash } from '@/lib/clips/export-aspect'
 import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { getPrisma } from '@/lib/server/db'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { createId } from '@/lib/supabase/id'
 
 export async function enqueueProjectExportAll(
@@ -43,7 +44,7 @@ export async function enqueueProjectExportAll(
       const tpl = normalizeExportTemplate(tplPatch)
       if (tpl) {
         edits = normalizeEdits(mergeEditsPatch(edits, { exportTemplate: tpl }, bounds), bounds)
-        await prisma.clip.update({ where: { id: clip.id }, data: { edits } })
+        await prisma.clip.update({ where: { id: clip.id }, data: { edits: toPrismaJson(edits) } })
       }
     }
     const editsHash = editsVersionHash(edits)

@@ -12,6 +12,7 @@ import { getPrisma } from '@/lib/server/db'
 import { loadClipSourceWords } from '@/lib/server/clips/transcript'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 
 const LUNA_INPUT_MICROS_PER_TOKEN = 100_000
 const LUNA_OUTPUT_MICROS_PER_TOKEN = 500_000
@@ -164,6 +165,6 @@ export async function persistExportTemplate(
     bounds,
   )
   const edits = normalizeEdits(merged, bounds)
-  await prisma.clip.update({ where: { id: clipId }, data: { edits } })
+  await prisma.clip.update({ where: { id: clipId }, data: { edits: toPrismaJson(edits) } })
   return edits
 }

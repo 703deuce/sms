@@ -1,6 +1,6 @@
 import type { ClipWord } from '@/lib/clips/edits'
 import { mergeClipWordsWithProjectTranscript } from '@/lib/clips/editor-words-merge'
-import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
+import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
 import type { getClipStorage } from '@/lib/storage'
 
 export function normalizeTranscriptWord(raw: unknown, pos: number): ClipWord | null {
