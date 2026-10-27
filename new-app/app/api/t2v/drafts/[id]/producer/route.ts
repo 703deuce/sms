@@ -10,7 +10,7 @@ import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 import { listVoices } from '@/lib/server/ai/elevenlabs-tts'
 import { createId } from '@/lib/supabase/id'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 const bodySchema = z.object({
   message: z.string().min(1).max(4000),
