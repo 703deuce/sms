@@ -1,7 +1,40 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { brandTemplateSettingsSchema } from '@/lib/clips/brand'
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
+
+const patchSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  settings: brandTemplateSettingsSchema.partial().optional(),
+  logoKey: z.string().nullable().optional(),
+})
+
+export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params
+    const workspaceId = await resolveWorkspaceId()
+    const body = patchSchema.parse(await request.json())
+    const prisma = getPrisma()
+    const row = await prisma.clipBrandTemplate.findFirst({ where: { id, workspaceId } })
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const settings = body.settings
+      ? brandTemplateSettingsSchema.parse({ ...(row.settings as object), ...body.settings })
+      : row.settings
+    const updated = await prisma.clipBrandTemplate.update({
+      where: { id },
+      data: {
+        name: body.name ?? row.name,
+        settings,
+        logoKey: body.logoKey === undefined ? row.logoKey : body.logoKey,
+      },
+    })
+    return NextResponse.json({ data: { template: updated } })
+  } catch (err) {
+    return jsonError(err, 400)
+  }
+}
 
 export async function DELETE(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {

@@ -1,4 +1,21 @@
 import { z } from 'zod'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { ExportAspect } from '@/lib/clips/export-aspect'
+
+const LAYOUT_MODE_IDS = [
+  'speaker_follow',
+  'fit_blur',
+  'center_crop',
+  'subject_follow',
+  'split',
+  'fill',
+  'fit',
+  'grid3',
+  'grid4',
+  'dynamic',
+  'auto',
+  'screen_pip',
+] as const
 
 export const brandTemplateSettingsSchema = z.object({
   logoPosition: z.enum(['TL', 'TR', 'BL', 'BR']).default('TR'),
@@ -17,6 +34,8 @@ export const brandTemplateSettingsSchema = z.object({
       colors: z.object({ a: z.string().optional(), b: z.string().optional() }).optional(),
     })
     .default({}),
+  defaultLayoutMode: z.enum(LAYOUT_MODE_IDS).default('speaker_follow'),
+  defaultAspectRatio: z.enum(['9:16', '4:5', '1:1', '16:9']).optional(),
 })
 
 export type BrandTemplateSettings = z.infer<typeof brandTemplateSettingsSchema>
@@ -36,6 +55,25 @@ export type ClipBrandEdits = {
 
 export function defaultBrandSettings(): BrandTemplateSettings {
   return brandTemplateSettingsSchema.parse({})
+}
+
+/** Build reusable template settings from current clip editor state (captions + layout + aspect). */
+export function clipStyleSettingsFromEdits(edits: ClipEditsV2): BrandTemplateSettings {
+  const cap = edits.captions || {}
+  return brandTemplateSettingsSchema.parse({
+    captionPreset: {
+      presetId: cap.presetId,
+      animation: cap.animation,
+      size: cap.size,
+      position: cap.position,
+      case: cap.case,
+      wordsPerLine: cap.wordsPerLine,
+      colors: cap.colors,
+    },
+    primaryColor: cap.colors?.a ?? '#FACC15',
+    defaultLayoutMode: edits.layout?.mode ?? 'speaker_follow',
+    defaultAspectRatio: edits.aspectRatio,
+  })
 }
 
 /** Map project `settings.brand` blob into clip `edits.brand` for export/render. */

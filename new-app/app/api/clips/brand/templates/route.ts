@@ -9,6 +9,8 @@ import { createId } from '@/lib/supabase/id'
 const postSchema = z.object({
   name: z.string().min(1).max(120),
   duplicateFromId: z.string().optional(),
+  settings: brandTemplateSettingsSchema.partial().optional(),
+  logoKey: z.string().nullable().optional(),
 })
 
 export async function GET() {
@@ -39,10 +41,13 @@ export async function POST(request: Request) {
         where: { id: body.duplicateFromId, workspaceId },
       })
       if (!src) throw new Error('Source template not found')
-      settings = brandTemplateSettingsSchema.parse(src.settings)
-      logoKey = src.logoKey
+      settings = brandTemplateSettingsSchema.parse({ ...src.settings, ...(body.settings || {}) })
+      logoKey = body.logoKey === undefined ? src.logoKey : body.logoKey
       introVideoKey = src.introVideoKey
       outroVideoKey = src.outroVideoKey
+    } else if (body.settings) {
+      settings = brandTemplateSettingsSchema.parse({ ...defaultBrandSettings(), ...body.settings })
+      if (body.logoKey !== undefined) logoKey = body.logoKey
     }
     const row = await prisma.clipBrandTemplate.create({
       data: {

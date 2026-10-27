@@ -4,6 +4,7 @@ import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
+import { normalizeLayoutSegments, type LayoutSegment } from '@/lib/clips/layout-segments'
 
 export type CutRange = [number, number]
 
@@ -49,6 +50,7 @@ export type ClipEditsV2 = {
       | 'auto'
       | 'screen_pip'
     shotOverrides: { i: number; focus: 'auto' | 'A' | 'B' | 'both' }[]
+    layoutSegments?: LayoutSegment[]
   }
   broll?: BrollItem[]
   audio?: ClipEditsAudio
@@ -162,7 +164,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
   const migrated = migrateLegacyEdits(raw as Record<string, unknown>, bounds)
   const o = migrated
   const trim = (o.trim as { in?: number; out?: number }) || {}
-  const layoutRaw = (o.layout as { mode?: string; shotOverrides?: unknown }) || {}
+  const layoutRaw = (o.layout as { mode?: string; shotOverrides?: unknown; layoutSegments?: unknown }) || {}
   const mode = LAYOUT_MODES.includes(layoutRaw.mode as ClipEditsV2['layout']['mode'])
     ? (layoutRaw.mode as ClipEditsV2['layout']['mode'])
     : base.layout.mode
@@ -202,6 +204,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       ...base.layout,
       mode,
       shotOverrides,
+      layoutSegments: normalizeLayoutSegments(layoutRaw.layoutSegments, Number(trim.in ?? base.trim.in), Number(trim.out ?? base.trim.out), mode),
     },
     aspectRatio,
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),

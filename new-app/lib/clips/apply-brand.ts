@@ -40,5 +40,10 @@ export function applyBrandTemplateToEdits(
       ...settings.captionPreset.colors,
     },
   }
-  return { ...edits, captions, brand }
+  const layout = {
+    ...edits.layout,
+    mode: settings.defaultLayoutMode ?? edits.layout.mode,
+  }
+  const aspectRatio = settings.defaultAspectRatio ?? edits.aspectRatio
+  return { ...edits, captions, brand, layout, aspectRatio }
 }

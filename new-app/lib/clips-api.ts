@@ -258,3 +258,36 @@ export function exportProjectAllBatch(
 export function listExports(status: 'all' | 'ready' | 'failed' = 'all') {
   return listRenders(status)
 }
+
+export function applyProjectTemplate(projectId: string, templateId: string) {
+  return clipsFetch<{ updated: number }>(`/api/clips/projects/${projectId}/apply-template`, {
+    method: 'POST',
+    body: JSON.stringify({ templateId }),
+  })
+}
+
+export function batchClips(body: {
+  clipIds: string[]
+  action: 'apply-template' | 'export'
+  templateId?: string
+  projectId?: string
+  aspect?: '9:16' | '4:5' | '1:1' | '16:9'
+  resolution?: '720p' | '1080p'
+}) {
+  return clipsFetch<{ updated?: number; batchId?: string; items?: unknown[] }>('/api/clips/clips/batch', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function saveClipBrandTemplate(body: {
+  name: string
+  settings: unknown
+  logoKey?: string | null
+  duplicateFromId?: string
+}) {
+  return clipsFetch<{ template: { id: string; name: string } }>('/api/clips/brand/templates', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
