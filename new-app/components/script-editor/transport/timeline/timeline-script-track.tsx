@@ -60,6 +60,7 @@ export function TimelineScriptTrack({
             width: Math.max(3, (cut.hiMs - cut.loMs) * pxPerMs),
           }}
           title="Cut region"
+          data-testid="timeline-cut-region"
         />
       ))}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 overflow-hidden opacity-80">

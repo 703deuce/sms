@@ -10,6 +10,8 @@ import urllib.request
 from pathlib import Path
 
 import boto3
+from boto3.s3.transfer import TransferConfig
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from clips_worker.source_cache import get_source_cache
@@ -59,13 +61,53 @@ def _download_staging(upload_id: str, dest: Path) -> None:
     shutil.copy2(src, dest)
 
 
+_S3_CLIENT = None
+
+_MULTIPART_THRESHOLD = int(os.environ.get("S3_MULTIPART_THRESHOLD_BYTES", str(64 * 1024 * 1024)))
+_MULTIPART_CHUNKSIZE = int(os.environ.get("S3_MULTIPART_CHUNKSIZE_BYTES", str(64 * 1024 * 1024)))
+_UPLOAD_CONCURRENCY = int(os.environ.get("S3_UPLOAD_CONCURRENCY", "4"))
+
+
+def _s3_region() -> str:
+    explicit = (os.environ.get("S3_REGION") or "").strip()
+    if explicit:
+        return explicit
+    endpoint = (os.environ.get("S3_ENDPOINT") or "").strip()
+    # Backblaze: https://s3.us-east-005.backblazeb2.com → us-east-005
+    if "backblazeb2.com" in endpoint:
+        host = endpoint.split("://", 1)[-1].split("/", 1)[0]
+        parts = host.split(".")
+        if len(parts) >= 2 and parts[0] == "s3":
+            return parts[1]
+    return "us-east-1"
+
+
 def _s3_client():
-    return boto3.client(
+    global _S3_CLIENT
+    if _S3_CLIENT is not None:
+        return _S3_CLIENT
+    botocore_cfg = Config(
+        retries={"max_attempts": 10, "mode": "adaptive"},
+        connect_timeout=60,
+        read_timeout=600,
+    )
+    _S3_CLIENT = boto3.client(
         "s3",
         endpoint_url=os.environ.get("S3_ENDPOINT"),
         aws_access_key_id=env("S3_ACCESS_KEY_ID"),
         aws_secret_access_key=env("S3_SECRET_ACCESS_KEY"),
-        region_name=os.environ.get("S3_REGION", "us-east-1"),
+        region_name=_s3_region(),
+        config=botocore_cfg,
+    )
+    return _S3_CLIENT
+
+
+def _s3_upload_transfer_config() -> TransferConfig:
+    return TransferConfig(
+        multipart_threshold=_MULTIPART_THRESHOLD,
+        multipart_chunksize=max(_MULTIPART_CHUNKSIZE, 5 * 1024 * 1024),
+        max_concurrency=max(1, _UPLOAD_CONCURRENCY),
+        use_threads=True,
     )
 
 
@@ -175,7 +217,13 @@ def _upload_s3(object_key: str, path: Path, content_type: str | None) -> None:
     client = _s3_client()
     mime = content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     extra = {"ContentType": mime, "CacheControl": _OBJECT_CACHE_CONTROL}
-    client.upload_file(str(path), storage_bucket(), object_key, ExtraArgs=extra)
+    client.upload_file(
+        str(path),
+        storage_bucket(),
+        object_key,
+        ExtraArgs=extra,
+        Config=_s3_upload_transfer_config(),
+    )
 
 
 def sign_url(object_key: str, expires_s: int = 3600) -> str:

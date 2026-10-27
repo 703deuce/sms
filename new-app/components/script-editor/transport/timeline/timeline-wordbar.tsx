@@ -36,6 +36,7 @@ export function TimelineWordbar({
             width: Math.max(2, (cut.hiMs - cut.loMs) * pxPerMs),
           }}
           title="Cut"
+          data-testid="timeline-cut-region"
         />
       ))}
       {gapChips.map((g) => (

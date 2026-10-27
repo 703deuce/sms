@@ -8,8 +8,10 @@ export function ScriptTranscriptContextMenu({
   y,
   canRestore,
   canIgnore,
+  canSymmetricTrimGap,
   onRestore,
   onIgnore,
+  onSymmetricTrimGap,
   onClose,
 }: {
   open: boolean
@@ -17,8 +19,10 @@ export function ScriptTranscriptContextMenu({
   y: number
   canRestore: boolean
   canIgnore: boolean
+  canSymmetricTrimGap: boolean
   onRestore: () => void
   onIgnore: () => void
+  onSymmetricTrimGap: () => void
   onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -45,10 +49,25 @@ export function ScriptTranscriptContextMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-50 min-w-[160px] rounded-md border border-border bg-popover py-1 text-sm shadow-md"
+      className="fixed z-50 min-w-[200px] rounded-md border border-border bg-popover py-1 text-sm shadow-md"
       style={{ left: x, top: y }}
       role="menu"
+      data-testid="script-transcript-context-menu"
     >
+      {canSymmetricTrimGap && (
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full px-3 py-1.5 text-left hover:bg-muted"
+          data-testid="symmetric-trim-gap"
+          onClick={() => {
+            onSymmetricTrimGap()
+            onClose()
+          }}
+        >
+          Symmetric trim gap (to 0.3s)
+        </button>
+      )}
       {canIgnore && (
         <button
           type="button"

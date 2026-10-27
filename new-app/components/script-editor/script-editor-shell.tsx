@@ -35,6 +35,8 @@ import { toast } from 'sonner'
 import { ArrowLeft, Pause, Play, Redo2, Scissors, Undo2 } from 'lucide-react'
 import {
   ScriptFillerReviewBar,
+  type FillerSearchMode,
+  type FillerSearchOptions,
   type FillerReviewAction,
 } from '@/components/script-editor/script-filler-review-bar'
 import { ScriptReframeCropOverlay } from '@/components/script-editor/preview/script-reframe-layer'
@@ -143,7 +145,16 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [fillerSelectionOnly, setFillerSelectionOnly] = useState(false)
   const [fillerAvoidHarsh, setFillerAvoidHarsh] = useState(true)
   const [fillerAction, setFillerAction] = useState<FillerReviewAction>('delete')
-  const [fillerAutoAdvance, setFillerAutoAdvance] = useState(true)
+  const [fillerSearchMode, setFillerSearchMode] = useState<FillerSearchMode>('filler')
+  const [fillerSearchQuery, setFillerSearchQuery] = useState('')
+  const [fillerSearchOptions, setFillerSearchOptions] = useState<FillerSearchOptions>({
+    autoAdvance: true,
+    previewResults: false,
+    matchWholeWords: true,
+    matchCase: false,
+    wrapAround: true,
+    onlyCurrentComposition: true,
+  })
   const [reviewMode, setReviewMode] = useState<'filler' | 'gap'>('filler')
   const [editToolsTab, setEditToolsTab] = useState<EditToolsTab>('filler')
   const [gapCursor, setGapCursor] = useState(0)
@@ -461,6 +472,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     setSideTab('edit')
     setEditToolsTab('filler')
     setReviewMode('filler')
+    setFillerSearchMode('filler')
     setFillerReviewOpen(true)
   }, [])
 
@@ -469,6 +481,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     setSideTab('edit')
     setEditToolsTab('gaps')
     setReviewMode('gap')
+    setFillerSearchMode('gaps')
     setFillerReviewOpen(true)
   }, [])
 
@@ -517,20 +530,20 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       })
       const saved = Math.max(0, hit.gapMs - targetMs)
       toast.success(`Shortened gap (−${(saved / 1000).toFixed(1)} s). Undo`)
-      if (fillerAutoAdvance) setGapCursor((c) => Math.min(c, Math.max(0, gapHits.length - 2)))
+      if (fillerSearchOptions.autoAdvance) setGapCursor((c) => Math.min(c, Math.max(0, gapHits.length - 2)))
       return
     }
     const hit = fillerHits[fillerCursor]
     if (!hit) return
     applyFillerActionToHits(fillerAction, [hit])
-    if (fillerAutoAdvance) setFillerCursor((c) => Math.min(c, Math.max(0, fillerHits.length - 2)))
+    if (fillerSearchOptions.autoAdvance) setFillerCursor((c) => Math.min(c, Math.max(0, fillerHits.length - 2)))
   }, [
     reviewMode,
     gapHits,
     gapCursor,
     targetGapSec,
     applyOp,
-    fillerAutoAdvance,
+    fillerSearchOptions.autoAdvance,
     fillerHits,
     fillerCursor,
     fillerAction,
@@ -967,6 +980,21 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       {fillerReviewOpen && (
         <ScriptFillerReviewBar
           mode={reviewMode}
+          searchMode={fillerSearchMode}
+          onSearchModeChange={(m) => {
+            setFillerSearchMode(m)
+            if (m === 'gaps') {
+              setReviewMode('gap')
+              setEditToolsTab('gaps')
+            } else {
+              setReviewMode('filler')
+              setEditToolsTab('filler')
+            }
+          }}
+          searchQuery={fillerSearchQuery}
+          onSearchQueryChange={setFillerSearchQuery}
+          searchOptions={fillerSearchOptions}
+          onSearchOptionsChange={(patch) => setFillerSearchOptions((o) => ({ ...o, ...patch }))}
           total={reviewTotal}
           cursor={reviewCursor}
           filter={fillerFilter}
@@ -983,8 +1011,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           }}
           avoidHarshCuts={fillerAvoidHarsh}
           onAvoidHarshCutsChange={setFillerAvoidHarsh}
-          autoAdvance={fillerAutoAdvance}
-          onAutoAdvanceChange={setFillerAutoAdvance}
+          targetGapSec={targetGapSec}
+          onTargetGapSecChange={setTargetGapSec}
           onPrev={() => {
             if (reviewMode === 'gap') {
               setGapCursor((c) => (gapHits.length ? (c - 1 + gapHits.length) % gapHits.length : 0))
@@ -1160,8 +1188,32 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
               y={ctxMenu?.y ?? 0}
               canRestore={selectedDeletedIds.length > 0 || selectedIgnoredIds.length > 0}
               canIgnore={selectedKeptIds.some((id) => !ignoredSet.has(id) && !deletedSet.has(id))}
+              canSymmetricTrimGap={(() => {
+                if (selAnchor == null) return false
+                const w = orderedWords[selAnchor]
+                const prev = selAnchor > 0 ? orderedWords[selAnchor - 1] : null
+                if (!w || !prev || deletedSet.has(w.id) || deletedSet.has(prev.id)) return false
+                const gapMs = w.t0Ms - prev.t1Ms
+                return gapMs >= 400
+              })()}
               onRestore={onRestoreSelection}
               onIgnore={onIgnoreSelection}
+              onSymmetricTrimGap={() => {
+                if (selAnchor == null || selAnchor < 1) return
+                const w = orderedWords[selAnchor]
+                const prev = orderedWords[selAnchor - 1]
+                if (!w || !prev) return
+                const gapMs = w.t0Ms - prev.t1Ms
+                const targetMs = Math.round(targetGapSec * 1000)
+                applyOp({
+                  type: 'shorten_gap_before',
+                  wordId: w.id,
+                  prevWordId: prev.id,
+                  gapMs,
+                  targetGapMs: targetMs,
+                })
+                toast.success(`Symmetric trim gap → ${targetGapSec}s. Undo`)
+              }}
               onClose={() => setCtxMenu(null)}
             />
           </section>

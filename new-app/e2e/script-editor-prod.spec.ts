@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 
 const BASE = process.env.PLAYWRIGHT_BASE_URL || 'https://transovo.ai'
 const PROJECT_ID =
@@ -56,8 +59,41 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     expect(timelineW).toBeGreaterThanOrEqual(shellW * 0.7)
   })
 
+  test('M4.1 §5/§7/§10: filler bar, reframe, timeline cuts', async ({ page }) => {
+    test.setTimeout(300_000)
+    if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
+      test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
+    }
+
+    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await expect(page.locator('[data-script-shell]')).toBeVisible({ timeout: 120_000 })
+
+    const fillersChip = page.getByRole('button', { name: /Fillers \d+/ })
+    if (await fillersChip.isVisible().catch(() => false)) {
+      await fillersChip.click()
+    } else {
+      await page.getByRole('button', { name: 'Edit tools' }).click().catch(() => {})
+      await page.getByRole('button', { name: 'Review bar' }).first().click()
+    }
+    await expect(page.getByTestId('script-filler-review-bar')).toBeVisible({ timeout: 30_000 })
+
+    await page.getByTestId('filler-search-mode').click()
+    await page.getByRole('option', { name: 'Shorten word gaps' }).click()
+    await expect(page.getByTestId('filler-gap-target-sec')).toBeVisible()
+
+    await page.getByTestId('filler-search-options').click()
+    await expect(page.getByTestId('filler-search-options-panel')).toBeVisible()
+    await page.getByText('Match case').click()
+
+    await page.getByRole('button', { name: /Properties/i }).click().catch(() => {})
+    await page.getByRole('button', { name: 'Manual' }).click()
+    await expect(page.getByTestId('script-reframe-crop-box')).toBeVisible({ timeout: 15_000 })
+
+    await expect(page.locator('[data-testid="timeline-cut-region"]').first()).toBeVisible({ timeout: 30_000 })
+  })
+
   test('export output duration matches EDL (M5)', async ({ request }) => {
-    test.setTimeout(900_000)
+    test.setTimeout(2_400_000)
     if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
       test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
     }
@@ -72,8 +108,8 @@ test.describe('Script editor prod (M4.1 + export)', () => {
       data: {
         exportKind: 'video',
         resolution: '720p',
-        quality: 'medium',
-        burnCaptions: false,
+        quality: 'low',
+        burnCaptions: true,
         includeSubtitleTrack: false,
       },
     })
@@ -84,7 +120,7 @@ test.describe('Script editor prod (M4.1 + export)', () => {
 
     let edlMs: number | null = null
     let outMs: number | null = null
-    for (let i = 0; i < 360; i++) {
+    for (let i = 0; i < 540; i++) {
       const poll = await request.get(`/api/clips/compositions/${compositionId}/export/${renderId}`)
       if (poll.status() === 404) {
         throw new Error(`export poll 404 renderId=${renderId}`)
@@ -112,5 +148,21 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     expect(edlMs).toBeGreaterThan(0)
     expect(outMs).toBeGreaterThan(0)
     expect(Math.abs(outMs! - edlMs!)).toBeLessThan(1500)
+
+    const poll = await request.get(`/api/clips/compositions/${compositionId}/export/${renderId}`)
+    const finalBody = await poll.json()
+    const downloadUrl = finalBody.downloadUrl as string | null
+    expect(downloadUrl).toBeTruthy()
+
+    const tmpDir = fs.mkdtempSync(path.join('/tmp', 'transovo-export-'))
+    const mp4 = path.join(tmpDir, 'export.mp4')
+    const dl = await request.get(downloadUrl!)
+    expect(dl.ok()).toBeTruthy()
+    fs.writeFileSync(mp4, Buffer.from(await dl.body()))
+
+    const durSec = outMs! / 1000
+    const cuts = [durSec * 0.12, durSec * 0.45, durSec * 0.78]
+    const verifyScript = path.join(process.cwd(), 'scripts', 'e2e-verify-export-media.mjs')
+    execFileSync(process.execPath, [verifyScript, mp4, ...cuts.map(String)], { stdio: 'inherit' })
   })
 })

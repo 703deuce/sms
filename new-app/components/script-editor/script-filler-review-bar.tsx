@@ -1,12 +1,25 @@
 'use client'
 
-import { ChevronDown, ChevronUp, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Search, SlidersHorizontal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import type { FillerFilter } from '@/lib/clips/script-editor/filler-hits'
 
 export type FillerReviewAction = 'delete' | 'replace_with_gap' | 'ignore' | 'hide_transcript'
+
+export type FillerSearchMode = 'find' | 'filler' | 'gaps'
+
+export type FillerSearchOptions = {
+  autoAdvance: boolean
+  previewResults: boolean
+  matchWholeWords: boolean
+  matchCase: boolean
+  wrapAround: boolean
+  onlyCurrentComposition: boolean
+}
 
 const ACTION_LABEL: Record<FillerReviewAction, string> = {
   delete: 'Delete',
@@ -15,8 +28,20 @@ const ACTION_LABEL: Record<FillerReviewAction, string> = {
   hide_transcript: 'Remove from transcript only',
 }
 
+const SEARCH_MODE_LABEL: Record<FillerSearchMode, string> = {
+  find: 'Find',
+  filler: 'Remove filler words',
+  gaps: 'Shorten word gaps',
+}
+
 export function ScriptFillerReviewBar({
   mode,
+  searchMode,
+  onSearchModeChange,
+  searchQuery,
+  onSearchQueryChange,
+  searchOptions,
+  onSearchOptionsChange,
   total,
   cursor,
   filter,
@@ -27,8 +52,8 @@ export function ScriptFillerReviewBar({
   onSelectionOnlyChange,
   avoidHarshCuts,
   onAvoidHarshCutsChange,
-  autoAdvance,
-  onAutoAdvanceChange,
+  targetGapSec,
+  onTargetGapSecChange,
   onPrev,
   onNext,
   onRemoveOne,
@@ -38,6 +63,12 @@ export function ScriptFillerReviewBar({
   onClose,
 }: {
   mode: 'filler' | 'gap'
+  searchMode: FillerSearchMode
+  onSearchModeChange: (m: FillerSearchMode) => void
+  searchQuery: string
+  onSearchQueryChange: (q: string) => void
+  searchOptions: FillerSearchOptions
+  onSearchOptionsChange: (patch: Partial<FillerSearchOptions>) => void
   total: number
   cursor: number
   filter: FillerFilter
@@ -48,8 +79,8 @@ export function ScriptFillerReviewBar({
   onSelectionOnlyChange: (v: boolean) => void
   avoidHarshCuts: boolean
   onAvoidHarshCutsChange: (v: boolean) => void
-  autoAdvance: boolean
-  onAutoAdvanceChange: (v: boolean) => void
+  targetGapSec: number
+  onTargetGapSecChange: (n: number) => void
   onPrev: () => void
   onNext: () => void
   onRemoveOne: () => void
@@ -61,80 +92,159 @@ export function ScriptFillerReviewBar({
   const pos = total > 0 ? cursor + 1 : 0
   const filterLabel =
     filter === 'all' ? 'All filler words' : filter === 'lexicon' ? 'Lexicon fillers' : 'Repeated words'
+  const queryPlaceholder =
+    mode === 'gap' ? 'Gaps more than 3s' : searchMode === 'find' ? 'Search transcript…' : filterLabel
 
   return (
     <div
-      className="flex shrink-0 flex-wrap items-center gap-2 border-b border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs"
+      className="flex shrink-0 flex-col gap-0 border-b border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs shadow-sm"
       data-testid="script-filler-review-bar"
     >
-      {mode === 'filler' ? (
-        <Select value={filter} onValueChange={(v) => typeof v === 'string' && onFilterChange(v as FillerFilter)}>
-          <SelectTrigger className="h-8 w-[11rem] text-xs">
-            <SelectValue>{filterLabel}</SelectValue>
+      <div className="flex flex-wrap items-center gap-2 py-1">
+        <Select
+          value={searchMode}
+          onValueChange={(v) => typeof v === 'string' && onSearchModeChange(v as FillerSearchMode)}
+        >
+          <SelectTrigger className="h-8 w-[10.5rem] text-xs" data-testid="filler-search-mode">
+            <Search className="mr-1 size-3.5 shrink-0 opacity-70" aria-hidden />
+            <SelectValue>{SEARCH_MODE_LABEL[searchMode]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All filler words</SelectItem>
-            <SelectItem value="lexicon">Lexicon (um, uh, like…)</SelectItem>
-            <SelectItem value="repeat">Repeated words</SelectItem>
+            <SelectItem value="find">Find (⌘F)</SelectItem>
+            <SelectItem value="filler">Remove filler words</SelectItem>
+            <SelectItem value="gaps">Shorten word gaps</SelectItem>
           </SelectContent>
         </Select>
-      ) : (
-        <span className="font-medium text-amber-900 dark:text-amber-100">Shorten gaps</span>
-      )}
-      {mode === 'filler' && (
-        <Select value={action} onValueChange={(v) => typeof v === 'string' && onActionChange(v as FillerReviewAction)}>
-          <SelectTrigger className="h-8 w-[12rem] text-xs">
-            <SelectValue>{ACTION_LABEL[action]}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(ACTION_LABEL) as FillerReviewAction[]).map((k) => (
-              <SelectItem key={k} value={k}>{ACTION_LABEL[k]}</SelectItem>
+        {mode === 'filler' && searchMode === 'filler' ? (
+          <Select value={filter} onValueChange={(v) => typeof v === 'string' && onFilterChange(v as FillerFilter)}>
+            <SelectTrigger className="h-8 min-w-[11rem] flex-1 text-xs">
+              <SelectValue>{filterLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All filler words</SelectItem>
+              <SelectItem value="lexicon">Lexicon (um, uh, like…)</SelectItem>
+              <SelectItem value="repeat">Repeated words</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            className="h-8 min-w-[8rem] flex-1 text-xs"
+            value={searchQuery}
+            placeholder={queryPlaceholder}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            data-testid="filler-search-query"
+          />
+        )}
+        <span className="w-12 tabular-nums text-right text-muted-foreground" data-testid="filler-match-count">
+          {pos}/{total}
+        </span>
+        <Button type="button" size="icon-sm" variant="ghost" disabled={total === 0} onClick={onPrev} aria-label="Previous">
+          <ChevronUp className="size-4" />
+        </Button>
+        <Button type="button" size="icon-sm" variant="ghost" disabled={total === 0} onClick={onNext} aria-label="Next">
+          <ChevronDown className="size-4" />
+        </Button>
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Search options"
+                data-testid="filler-search-options"
+              >
+                <SlidersHorizontal className="size-4" />
+              </Button>
+            }
+          />
+          <PopoverContent className="w-60 p-2" align="start" data-testid="filler-search-options-panel">
+            <p className="mb-2 px-1 text-[11px] font-medium text-muted-foreground">Search options</p>
+            {(
+              [
+                ['autoAdvance', 'Auto-advance'],
+                ['previewResults', 'Preview results'],
+                ['matchWholeWords', 'Match whole words'],
+                ['matchCase', 'Match case'],
+                ['wrapAround', 'Wrap around'],
+                ['onlyCurrentComposition', 'Only current composition'],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex h-8 cursor-pointer items-center justify-between gap-2 rounded px-1 hover:bg-muted/50">
+                <span>{label}</span>
+                <Switch
+                  checked={searchOptions[key]}
+                  onCheckedChange={(v) => onSearchOptionsChange({ [key]: v })}
+                />
+              </label>
             ))}
-          </SelectContent>
-        </Select>
-      )}
-      <span className="tabular-nums text-muted-foreground">{pos}/{total}</span>
-      <Button type="button" size="icon-sm" variant="ghost" disabled={total === 0} onClick={onPrev} aria-label="Previous">
-        <ChevronUp className="size-4" />
-      </Button>
-      <Button type="button" size="icon-sm" variant="ghost" disabled={total === 0} onClick={onNext} aria-label="Next">
-        <ChevronDown className="size-4" />
-      </Button>
-      <label className="flex items-center gap-1.5">
-        <Switch checked={selectionOnly} onCheckedChange={onSelectionOnlyChange} />
-        Selection only
-      </label>
-      {mode === 'filler' && (
-        <label className="flex items-center gap-1.5">
-          <Switch checked={avoidHarshCuts} onCheckedChange={onAvoidHarshCutsChange} />
-          Avoid harsh cuts
-        </label>
-      )}
-      <label className="flex items-center gap-1.5">
-        <Switch checked={autoAdvance} onCheckedChange={onAutoAdvanceChange} />
-        Auto-advance
-      </label>
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-        {mode === 'filler' && onRemoveAllLexicon && (
-          <Button type="button" size="sm" variant="outline" disabled={total === 0} onClick={onRemoveAllLexicon}>
-            All lexicon
-          </Button>
-        )}
-        {mode === 'filler' && onRemoveAllRepeat && (
-          <Button type="button" size="sm" variant="outline" disabled={total === 0} onClick={onRemoveAllRepeat}>
-            All repeats
-          </Button>
-        )}
-        <Button type="button" size="sm" variant="secondary" disabled={total === 0} onClick={onRemoveOne}>
-          {mode === 'gap' ? 'Shorten' : 'Remove'}
-        </Button>
-        <Button type="button" size="sm" disabled={total === 0} onClick={onRemoveAll}>
-          {mode === 'gap' ? 'Shorten all' : 'Remove all'}
-        </Button>
+          </PopoverContent>
+        </Popover>
         <Button type="button" size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close review">
           <X className="size-4" />
         </Button>
       </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-sky-500/20 py-1.5">
+        {mode === 'filler' ? (
+          <Select value={action} onValueChange={(v) => typeof v === 'string' && onActionChange(v as FillerReviewAction)}>
+            <SelectTrigger className="h-8 w-[12rem] text-xs">
+              <SelectValue>{ACTION_LABEL[action]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(ACTION_LABEL) as FillerReviewAction[]).map((k) => (
+                <SelectItem key={k} value={k}>{ACTION_LABEL[k]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <label className="flex items-center gap-2 text-xs">
+            Shorten to
+            <Input
+              type="number"
+              step={0.1}
+              min={0.1}
+              className="h-8 w-16"
+              value={targetGapSec}
+              onChange={(e) => onTargetGapSecChange(Number(e.target.value) || 0.3)}
+              data-testid="filler-gap-target-sec"
+            />
+            s
+          </label>
+        )}
+        <label className="flex items-center gap-1.5">
+          <Switch checked={selectionOnly} onCheckedChange={onSelectionOnlyChange} />
+          Selection only
+        </label>
+        {mode === 'filler' && (
+          <label className="flex items-center gap-1.5" title="Keeps filler words if cutting them would sound unnatural">
+            <Switch checked={avoidHarshCuts} onCheckedChange={onAvoidHarshCutsChange} />
+            Avoid harsh cuts
+          </label>
+        )}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {mode === 'filler' && onRemoveAllLexicon && (
+            <Button type="button" size="sm" variant="outline" disabled={total === 0} onClick={onRemoveAllLexicon}>
+              All lexicon
+            </Button>
+          )}
+          {mode === 'filler' && onRemoveAllRepeat && (
+            <Button type="button" size="sm" variant="outline" disabled={total === 0} onClick={onRemoveAllRepeat}>
+              All repeats
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="secondary" disabled={total === 0} onClick={onRemoveOne}>
+            {mode === 'gap' ? 'Shorten' : 'Remove'}
+          </Button>
+          <Button type="button" size="sm" disabled={total === 0} onClick={onRemoveAll}>
+            {mode === 'gap' ? 'Shorten all' : 'Remove all'}
+          </Button>
+        </div>
+      </div>
+      {total === 0 && (
+        <p className="pb-1 text-[11px] text-muted-foreground" data-testid="filler-zero-hits">
+          {mode === 'gap' ? 'No gaps match' : 'No filler words found'}
+        </p>
+      )}
     </div>
   )
 }
