@@ -5,6 +5,8 @@ from clips_worker.streamer.import_cache import pick_completed_audio, sweep_stale
 
 def test_pick_completed_audio_skips_part(tmp_path: Path):
     (tmp_path / "audio.webm.part").write_bytes(b"x")
+    (tmp_path / "audio.webm.ytdl").write_bytes(b"x")
+    (tmp_path / "audio.webm.part-Frag1").write_bytes(b"x")
     done = tmp_path / "audio.webm"
     done.write_bytes(b"ok")
     picked = pick_completed_audio(tmp_path)
@@ -25,6 +27,6 @@ def test_sweep_stale_failed_import_dirs(tmp_path, monkeypatch):
 
     os.utime(old, (old_time, old_time))
     monkeypatch.setattr(import_cache, "SCRATCH", tmp_path)
-    n = sweep_stale_failed_import_dirs(max_age_s=7 * 86400)
+    n = sweep_stale_failed_import_dirs(max_age_s=48 * 3600)
     assert n == 1
     assert not old.exists()

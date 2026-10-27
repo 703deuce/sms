@@ -287,6 +287,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 )
             conn.commit()
             cleanup_vod_import_dir(vod_id)
+            sweep_stale_failed_import_dirs(conn=conn)
             post_progress(
                 job["id"],
                 {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
@@ -319,7 +320,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
         key = upload_source_key(workspace_id, upload_id, "mp4")
         upload_file(key, path, "video/mp4")
 
-        audio_out = Path(td) / "audio.opus"
+        audio_out = cache_dir / "audio.opus"
         subprocess.check_call(
             [
                 "ffmpeg",
@@ -381,7 +382,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
         conn.commit()
         cleanup_vod_import_dir(vod_id)
 
-    sweep_stale_failed_import_dirs()
+    sweep_stale_failed_import_dirs(conn=conn)
 
     post_progress(
         job["id"],
