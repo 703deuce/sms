@@ -10,8 +10,14 @@ import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
+const resolutionSchema = z.preprocess((v) => {
+  if (v === 720 || v === '720') return '720p'
+  if (v === 1080 || v === '1080') return '1080p'
+  return v
+}, z.enum(['720p', '1080p']))
+
 const bodySchema = z.object({
-  resolution: z.enum(['720p', '1080p']).default('720p'),
+  resolution: resolutionSchema.default('720p'),
   aspect: z.enum(['9:16', '4:5', '1:1', '16:9']).default('9:16'),
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
@@ -33,7 +39,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (resolution === '1080p' && !can(workspaceId, 'export_1080p')) {
       resolution = '720p'
     }
-    const aspect = body.aspect
+    const aspect = body.aspect ?? edits.aspectRatio ?? '9:16'
     if (
       canReuseClipPreviewForExport({
         aspect,
