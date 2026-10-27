@@ -1,7 +1,7 @@
 # Descript-derived UI layouts (owner spec)
 
 **Status:** **DRAFT — owner in progress** (screenshot measurements from Descript reference).  
-**Rule (owner 2026-10-27):** For **M5 onward**, any **new page, panel, or dialog** must match this file **exactly** (region sizes, component order, design tokens, empty/loading/error states). **Do not improvise layouts.**
+**Rule (owner 2026-10-27):** For **M5 onward**, any **new page, panel, or dialog** must match this file **exactly** (region sizes, component order, design tokens, empty/loading/error states). **Do not improvise layouts.** Until a section exists, agents ship **logic/API/tests only** — tracked as **BLK-002** in [`../BLOCKED.md`](../BLOCKED.md); **do not pause** waiting for this file.
 
 ## Covered when complete
 

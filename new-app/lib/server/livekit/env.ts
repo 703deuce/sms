@@ -21,11 +21,14 @@ export function resetLiveKitEnvCache(): void {
   cached = null
 }
 
+import { isLiveKitConfigured } from '@/lib/server/clips/feature-gates'
+
 /**
  * Validated LiveKit Cloud credentials (server-only).
  * Call from recording route handlers at **M14+** — not at app boot, so the editor can run before keys exist.
  *
  * @see docs/clips/descript/livekit-api-brief.md §1
+ * @see docs/clips/BLOCKED.md BLK-001
  */
 export function getLiveKitServerEnv(): LiveKitServerEnv {
   if (cached) return cached
@@ -37,7 +40,7 @@ export function getLiveKitServerEnv(): LiveKitServerEnv {
   if (!parsed.success) {
     const detail = parsed.error.issues.map((i) => i.message).join('; ')
     throw new Error(
-      `LiveKit is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET in Coolify before enabling recording (M14). ${detail}`,
+      `LiveKit is not configured (see docs/clips/BLOCKED.md BLK-001). Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET in Coolify. ${detail}`,
     )
   }
   cached = Object.freeze(parsed.data)
