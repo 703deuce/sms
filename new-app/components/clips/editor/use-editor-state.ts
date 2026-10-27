@@ -302,7 +302,7 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
 
   const setTrim = useCallback(
     (trim: { in: number; out: number }) => {
-      const pad = 5000
+      const pad = 8000
       setEdits({
         ...state.edits,
         trim: {
