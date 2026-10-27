@@ -1,7 +1,7 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-27 — Rick: clipper → script editor → AI Studio → **STOP**; then clipper fine-tuning; screenwriting on hold behind `FEATURE_SCREENWRITING`  
-**Prod clipper (2026-10-27):** Deepgram+Whisper fallback, B2 worker source cache, stage-aware ETA, 1080p export — web `db41e7a6b`, workers redeployed same train.
+**Last updated:** 2026-10-27 — Rick: clipper → **script editor milestones** → **STOP** → [polish / fine-tuning pass](#clipper-fine-tuning-pass-after-script-editor); **AI Studio ON HOLD** (not in build queue); screenwriting on hold behind `FEATURE_SCREENWRITING`  
+**Prod clipper (2026-10-27):** Deepgram+Whisper fallback, B2 worker source cache, stage-aware ETA, 1080p export; script editor shipping on `305f73fae`+ train.
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.
 
@@ -12,12 +12,12 @@ Single source of truth for build order and status. Update the **Last updated** l
 | # | Product | Status (2026-10-27) |
 |---|---------|---------------------|
 | **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS** — core pipeline live on prod (see below) |
-| **2** | **Script editor** — Descript-style transcript editor | **IN PROGRESS** — M1a data plane (`toEditorWords`, EDL, bootstrap API); see `docs/clips/SCRIPT-EDITOR-BUILD.md` |
-| **3** | **AI Studio** (Higgsfield-like) | **NOT STARTED** |
-| — | **STOP** after **1–3** ship | No screenwriting until re-enabled |
+| **2** | **Script editor** — Descript-style transcript editor | **IN PROGRESS** — M1–M2 shipped on prod; M3+ per `docs/clips/SCRIPT-EDITOR-BUILD.md` |
+| — | **STOP** after script editor milestones ship | No new product work until polish pass (below) |
+| — | **AI Studio** (Higgsfield-like) | **ON HOLD** — not being added yet; no schedule; spec TBD when owner re-enables |
 | — | **Screenwriting** (Final Draft parity) | **ON HOLD** — `FEATURE_SCREENWRITING=0`; code/migrations/data kept (`screenwriting-wip`) |
 
-**Then (after 1–3):** [Clipper fine-tuning pass](#clipper-fine-tuning-pass-after-13) (reframe/layout quality across many videos — not a new product).
+**Then (after script editor milestones):** [Clipper fine-tuning / polish pass](#clipper-fine-tuning-pass-after-script-editor) across clipper, Streamer, and script editor — not a new product.
 
 ### Before charging (launch blocker)
 
@@ -64,13 +64,13 @@ Descript-style transcript editing.
 
 ---
 
-## 3. AI Studio
+## 3. AI Studio (on hold)
 
-Higgsfield-like product; spec and schedule after clipper + script editor ship.
+Higgsfield-like product. **Owner (2026-10-27): not in the build queue** — do not start implementation or scheduling. When re-enabled, spec and order will be decided separately (after polish pass unless owner changes plan).
 
 ---
 
-## Clipper fine-tuning pass (after 1–3)
+## Clipper fine-tuning pass (after script editor)
 
 Quality and layout intelligence for the **regular clipper** (and shared reframe stack), informed by many real uploads — not tuned to a single test video.
 
@@ -86,7 +86,7 @@ Quality and layout intelligence for the **regular clipper** (and shared reframe 
 | **(h) Speaker-follow calmness** | **Owner feedback (proj_89c551443cb34a48a034a2260e9eeeca, 25 min interview):** 2/4 clips framed the wrong talker; one clip panned to the mic ~2 s during a pause before landing on the guest. **Goal:** stay on the current person; switch **slightly late** (not early), only when someone is clearly talking. **Planned (`v3/speakercrop_v2.py`):** `LEAD` 0.4 → 0 or small lag; `MIN_SEG` 0.8 → ~2–3 s; higher `HYST` + require sustained speech (≥~1 s) from new speaker before cut; **Deepgram word-level diarization (`spk`)** as primary who-is-talking signal (Resemblyzer clusters demoted); lips only to map speaker→face; **hold last crop** when face detection drops (pauses, head turns); ignore pauses and backchannels (“yeah”, “mm-hm”) as switch triggers; **regression test** on this interview fixture. |
 | **(i) Multi-person speaker follow (3–5 people)** | **`v3/speakercrop_v2.py` today:** hardcoded 2 slots (`pos=[0.3W,0.7W]`, top-2 faces, `k in 0..1`). **Plan:** track **N** faces with stable IDs (position/IoU tracker plus face embedding re-ID across cuts and head turns); take speaker count and per-word speaker labels from **Deepgram diarization**; map each Deepgram speaker to a face ID by correlating lip motion with that speaker's word times across the clip; crop follows the active speaker under the same calmness rules as **(h)**; when 2+ talk at once, or the speaker is unknown, use a wide or fit-blur group shot (or a 2-up split for two active talkers); off-screen speakers hold the last on-screen subject; add **tests** with a synthetic 3–4 face track. |
 
-**Scope:** All items above are **post–1–3 polish** — same pass across **clipper, Streamer, script editor, and AI Studio**. Do not schedule until owner says GO on fine-tuning.
+**Scope:** **Post–script-editor polish** — same pass across **clipper, Streamer, and script editor** (and shared reframe stack). Do not schedule until script editor milestones are done and owner says GO on fine-tuning.
 
 ---
 
@@ -119,7 +119,8 @@ Further S2–S15 milestones: `docs/clips/PROGRESS.md`.
 | Date | Milestone |
 |------|-----------|
 | 2026-10-27 | Prod: Deepgram+Whisper, B2 source cache, ETA fix, 1080p export live (`db41e7a6b`); retry/resume transcript-aware (pending push) |
-| 2026-10-27 | Roadmap: clipper → script editor (SCRIPT-EDITOR-BUILD.md) → AI Studio → STOP; fine-tuning pass (a–e); Streamer VOD resumable-download stays in backlog |
+| 2026-10-27 | Owner: AI Studio **ON HOLD**; after script editor milestones → STOP → polish pass (not AI Studio) |
+| 2026-10-27 | Roadmap: clipper → script editor (SCRIPT-EDITOR-BUILD.md) → STOP → fine-tuning; Streamer VOD resumable-download stays in backlog |
 | 2026-10-26 | Roadmap: clipper → script editor → Streamer VOD → AI Studio → screenwriting on hold |
 | 2026-10-26 | `FEATURE_SCREENWRITING` off; middleware 404; nav hidden (`a8f126228`) |
 | 2026-10-26 | Clipper: direct upload `64d759c87`, `app_chunked` guard `ddd3d010d`, worker render fixes `e3264ed9a` |

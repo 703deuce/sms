@@ -2,7 +2,8 @@
 
 **Production:** https://transovo.ai  
 **Branch:** `master` · **Rollback tag:** `pre-clips-cleanup`  
-**Web live SHA (2026-10-27):** `db41e7a6b` (includes `2f9e01faf` B2 source cache)
+**Web live SHA (2026-10-27):** `305f73fae`+ (script editor); see deploy notes in roadmap milestone log  
+**Build order:** script editor milestones → **STOP** → polish pass — **AI Studio on hold** (`docs/ROADMAP.md`)
 
 ## Recently shipped (regular clipper)
 
@@ -13,11 +14,12 @@
 | **Upload ETA (stage-aware)** | `db41e7a6b` | Transcribe from duration×engine rate; picker/reframe tail; 50% poll clamp |
 | **1080p export** | `3083d08d3` | Export dialog + worker render path |
 | **Retry/resume** | `6b88d8255` | Skip ASR when `transcriptWords` persisted; soft-delete partial clips; B2 cache on re-download; picker pass1 not stored — re-runs on resume |
-| **Script editor M1a** | `2ccadbfc7` (local) | Prisma script models, `GET …/script/bootstrap`, `toEditorWords`, EDL helpers |
-| **Script editor M1b** | *(local)* | Descript-style shell, transcript↔video seek sync, panel width persistence |
-| **ETA calibration + parallel reframe** | *(local)* | Deepgram 0.05×+buffer, picker/reframe rates; `CLIPS_RENDER_CONCURRENCY` pool |
+| **Script editor M1a–M1b** | `305f73fae` | Data plane, bootstrap API, Descript-style shell, seek sync |
+| **Script editor M2** | `305f73fae`+ | Op log, delete-to-cut, export path in flight |
+| **Script editor UX hotfix** | `5879ab151` (pending push) | Layout, undo/redo persistence, drag-select |
+| **ETA calibration + parallel reframe** | `bcfbe3dd9` | Deepgram 0.05×+buffer; `CLIPS_RENDER_CONCURRENCY` pool |
 
-**Fine-tuning backlog** (after script editor + AI Studio — see `docs/ROADMAP.md`): face/speaker generalization, single-person + corner webcam, auto top/bottom split, clip style variety, wide two-shot crop, Streamer VOD resumable download.
+**Fine-tuning / polish backlog** (after **script editor milestones** ship — **not** AI Studio; see `docs/ROADMAP.md` §fine-tuning): speaker-follow calmness, multi-person follow, face/speaker generalization, layout variety, ETA/render tuning, Streamer VOD resumable download.
 
 ## Milestones
 
