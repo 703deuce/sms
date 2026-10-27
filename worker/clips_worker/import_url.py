@@ -163,7 +163,7 @@ def run_import_url_job(conn, job: dict, project: dict, post_progress) -> None:
             raise RuntimeError("Video exceeds 3 hour limit")
         size = dest.stat().st_size
         if size > MAX_BYTES:
-            raise RuntimeError("File exceeds 4GB limit")
+            raise RuntimeError("File exceeds 3GB limit")
 
         upload_id = f"upl_{uuid.uuid4().hex}"
         ext = "mp4"
