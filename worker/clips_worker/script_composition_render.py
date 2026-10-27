@@ -93,9 +93,11 @@ def _load_transcript_words(ctx: dict, work_dir: Path) -> list[dict]:
 
 
 def _editor_words_from_transcript(words: list[dict], source_media_id: str, range_start_ms: int) -> dict[str, dict]:
+    """Match new-app `toEditorWords` ids: `{sourceMediaId}:{w.i ?? w.idx ?? pos}`."""
     by_id: dict[str, dict] = {}
-    for i, w in enumerate(words):
-        wid = f"{source_media_id}:{i}"
+    for pos, w in enumerate(words):
+        index = int(w.get("i", w.get("idx", pos)))
+        wid = f"{source_media_id}:{index}"
         s_ms = int(float(w["s"]) * 1000)
         e_ms = int(float(w["e"]) * 1000)
         by_id[wid] = {
@@ -103,7 +105,7 @@ def _editor_words_from_transcript(words: list[dict], source_media_id: str, range
             "t0Ms": s_ms,
             "t1Ms": e_ms,
             "text": str(w.get("w", "")),
-            "i": int(w.get("i", i)),
+            "i": index,
         }
     return by_id
 
