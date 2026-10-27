@@ -243,15 +243,34 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                     },
                 )
 
-            cache_dir = vod_import_dir(vod_id)
-            audio_out = str(cache_dir / "audio.%(ext)s")
-            download_audio(url, audio_out, section=section, progress_cb=on_pct, workdir=str(cache_dir))
-            audio_path = pick_completed_audio(cache_dir)
+            from clips_worker.streamer.audio_first_ingest import (
+                delete_local_ingest_file,
+                ingest_vod_audio,
+                stream_audio_first_ingest_enabled,
+            )
+
+            staged_audio: Path | None = None
+            if stream_audio_first_ingest_enabled():
+                staged_audio, _ingest_metrics = ingest_vod_audio(
+                    url,
+                    job_id=str(job["id"]),
+                    vod_id=vod_id,
+                    section=section,
+                    progress_cb=on_pct,
+                )
+                audio_path = staged_audio
+            else:
+                cache_dir = vod_import_dir(vod_id)
+                audio_out = str(cache_dir / "audio.%(ext)s")
+                download_audio(url, audio_out, section=section, progress_cb=on_pct, workdir=str(cache_dir))
+                audio_path = pick_completed_audio(cache_dir)
             if audio_path is None:
                 raise RuntimeError("audio download incomplete (no finished audio file)")
             duration_ms = effective_ms or int(dur_s * 1000)
             audio_key = stream_audio_key(workspace_id, vod_id)
             upload_file(audio_key, audio_path, "audio/opus")
+            if staged_audio is not None:
+                delete_local_ingest_file(staged_audio)
             state = {
                 "audioKey": audio_key,
                 "importMeta": {"tags": meta.get("tags") or []},

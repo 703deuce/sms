@@ -10,7 +10,27 @@ def download_segment(
     dest: Path,
     start_s: float,
     end_s: float,
+    *,
+    job_id: str = "",
+    vod_id: str = "",
+    clip_id: str = "",
 ) -> None:
+    from clips_worker.streamer.audio_first_ingest import (
+        ingest_clip_section_video,
+        stream_audio_first_ingest_enabled,
+    )
+
+    if stream_audio_first_ingest_enabled() and job_id and vod_id and clip_id:
+        ingest_clip_section_video(
+            url,
+            dest,
+            job_id=job_id,
+            vod_id=vod_id,
+            clip_id=clip_id,
+            start_s=start_s,
+            end_s=end_s,
+        )
+        return
     section = f"*{max(0.0, start_s):.3f}-{max(start_s + 0.1, end_s):.3f}"
     cmd = [
         "yt-dlp",

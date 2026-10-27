@@ -53,7 +53,8 @@ RUN pip install --no-cache-dir pytest \
         /app/tests/test_reframe_integration.py /app/tests/test_person_count_probe.py \
         /app/tests/test_reframe_person_det.py /app/tests/test_polish_render_sync.py \
         /app/tests/test_zoom_filtergraph_valid.py /app/tests/test_worker_fonts.py \
-        /app/tests/test_export_sfx.py /app/tests/test_loop_friendly_trim.py
+        /app/tests/test_export_sfx.py /app/tests/test_loop_friendly_trim.py \
+        /app/tests/test_audio_first_ingest.py /app/tests/test_stream_render_segment_checkpoint.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en

@@ -27,6 +27,48 @@ from clips_worker.streamer.progress import eta_seconds
 from clips_worker.streamer.segments import cut_local_segment, download_segment
 
 
+def _checkpoint_segment_key(conn, vod_id: str, state: dict, clip_id: str, seg_key: str) -> dict:
+    merged = dict(state)
+    keys = dict(merged.get("segmentKeys") or {})
+    keys[str(clip_id)] = seg_key
+    merged["segmentKeys"] = keys
+    _save_state(conn, vod_id, merged)
+    return merged
+
+
+def _fetch_segment_mp4(
+    clip: dict,
+    state: dict,
+    *,
+    seg_path: Path,
+    local_upload: Path | None,
+    url: str | None,
+    seg_start_s: float,
+    seg_end_s: float,
+    workspace_id: str,
+    project_id: str,
+    job_id: str = "",
+    vod_id: str = "",
+) -> None:
+    if clip.get("sourceSegKey"):
+        download_object(str(clip["sourceSegKey"]), seg_path)
+        return
+    if local_upload and local_upload.is_file():
+        cut_local_segment(local_upload, seg_path, seg_start_s, seg_end_s)
+        return
+    if not url:
+        raise RuntimeError("no url or upload for segment fetch")
+    download_segment(
+        url,
+        seg_path,
+        seg_start_s,
+        seg_end_s,
+        job_id=job_id,
+        vod_id=vod_id,
+        clip_id=str(clip.get("id") or ""),
+    )
+
+
 def _load_vod(conn, vod_id: str) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -191,12 +233,19 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 seg_end_s = end_ms / 1000.0 + pad
                 seg_path = td_path / f"seg_{clip_id}.mp4"
 
-                if local_upload:
-                    cut_local_segment(local_upload, seg_path, seg_start_s, seg_end_s)
-                elif url:
-                    download_segment(url, seg_path, seg_start_s, seg_end_s)
-                else:
-                    raise RuntimeError("no url or upload for segment fetch")
+                _fetch_segment_mp4(
+                    clip,
+                    state,
+                    seg_path=seg_path,
+                    local_upload=local_upload,
+                    url=url,
+                    seg_start_s=seg_start_s,
+                    seg_end_s=seg_end_s,
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    job_id=str(job.get("id") or ""),
+                    vod_id=vod_id,
+                )
 
                 true_start_ms, corr = align_segment_ms(
                     seg_path,
@@ -209,6 +258,11 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
 
                 seg_key = clip_segment_key(workspace_id, project_id, clip_id)
                 upload_file(seg_key, seg_path, "video/mp4")
+                state = _checkpoint_segment_key(conn, vod_id, state, clip_id, seg_key)
+                try:
+                    seg_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
                 offset_ms = true_start_ms
                 rel_start = max(0, start_ms - offset_ms)
