@@ -8,6 +8,7 @@ from pathlib import Path
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.edits_render import normalize_edits, render_edited_clip
+from clips_worker.trim_bounds import expanded_source_cut_ms
 from clips_worker.preview_reuse import can_reuse_clip_preview_for_render
 from clips_worker.render_fit_fallback import merge_job_fit_fallback_payload
 from clips_worker.render_clip import ffmpeg_cut
@@ -163,8 +164,9 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         src = td_path / "source.mp4"
         download_object(source_key, src)
         clip_file = td_path / "clip.mp4"
-        rel_start = clip_start - source_offset_ms
-        rel_end = clip_end - source_offset_ms
+        cut_start, cut_end = expanded_source_cut_ms(clip_start, clip_end, edits)
+        rel_start = cut_start - source_offset_ms
+        rel_end = cut_end - source_offset_ms
         ffmpeg_cut(src, clip_file, rel_start, rel_end)
         source_words = load_source_words(ctx, td_path)
 
@@ -188,8 +190,8 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             out_mp4,
             source_words,
             edits,
-            clip_start,
-            clip_end,
+            cut_start,
+            cut_end,
             settings,
             td_path,
             broll_specs=broll_specs or None,
