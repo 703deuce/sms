@@ -1,7 +1,6 @@
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
-
-const SIGNED_TTL = 3600
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 
 export async function listProjectClips(workspaceId: string, projectId: string, sort: 'score' | 'timeline' = 'score') {
   const prisma = getPrisma()
@@ -24,10 +23,8 @@ export async function listProjectClips(workspaceId: string, projectId: string, s
       scores: c.scores,
       favorite: c.favorite,
       durationMs: c.endMs - c.startMs,
-      previewUrl: c.previewKey
-        ? await storage.createSignedDownloadUrl(c.previewKey, SIGNED_TTL)
-        : null,
-      posterUrl: c.posterKey ? await storage.createSignedDownloadUrl(c.posterKey, SIGNED_TTL) : null,
+      previewUrl: c.previewKey ? await createCachedSignedDownloadUrl(storage, c.previewKey) : null,
+      posterUrl: c.posterKey ? await createCachedSignedDownloadUrl(storage, c.posterKey) : null,
       aiMeta: c.aiMeta,
     })),
   )

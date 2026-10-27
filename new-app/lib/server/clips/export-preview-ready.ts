@@ -3,6 +3,7 @@ import type { ExportAspect, ExportResolution } from '@/lib/clips/export-aspect'
 import { exportFilename } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { createId } from '@/lib/supabase/id'
 
 export async function createReadyRenderFromPreview(opts: {
@@ -42,7 +43,7 @@ export async function createReadyRenderFromPreview(opts: {
     },
   })
 
-  const downloadUrl = await storage.createSignedDownloadUrl(opts.previewKey, 3600, {
+  const downloadUrl = await createCachedSignedDownloadUrl(storage, opts.previewKey, {
     downloadFilename: filename,
   })
 

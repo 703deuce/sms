@@ -59,4 +59,6 @@ export interface ClipStorageDriver {
     options?: { downloadFilename?: string },
   ): Promise<string>
   getObjectSizeBytes(objectKey: string): Promise<number | null>
+  /** ETag or size token for stable presigned URL caching. */
+  getObjectVersionToken?(objectKey: string): Promise<string>
 }

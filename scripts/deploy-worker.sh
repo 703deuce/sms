@@ -122,11 +122,13 @@ start_worker() {
     sleep 1
   done
   docker rm -f "\$name" 2>/dev/null || true
+  mkdir -p /opt/clips-worker/cache
   docker run -d \\
     --name "\$name" \\
     --restart unless-stopped \\
     --network coolify \\
     --env-file "\${REMOTE_ENV}" \\
+    -v /opt/clips-worker/cache:/opt/clips-worker/cache \\
     -e "WORKER_LANE=\$lane" \\
     -e "WORKER_ID=\$worker_id" \\
     clips-worker:latest

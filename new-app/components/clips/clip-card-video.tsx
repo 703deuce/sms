@@ -116,6 +116,7 @@ export function ClipCardVideo({
         className="size-full cursor-pointer object-cover"
         poster={posterUrl ?? undefined}
         src={previewUrl}
+        preload="metadata"
         muted
         playsInline
         loop

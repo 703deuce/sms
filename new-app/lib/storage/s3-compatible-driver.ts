@@ -11,6 +11,7 @@ import {
   presignUploadPartUrl,
   putObjectJson,
 } from '@/lib/storage/s3'
+import { CACHE_CONTROL_IMMUTABLE } from '@/lib/storage/signed-download-cache'
 
 const MAX_PARTS = 10_000
 
@@ -60,7 +61,13 @@ export function createS3CompatibleStorageDriver(
       if (!cfg) throw new Error('S3 not configured')
       const { PutObjectCommand } = await import('@aws-sdk/client-s3')
       await getInternalS3Client(cfg).send(
-        new PutObjectCommand({ Bucket: cfg.bucket, Key: objectKey, Body: body, ContentType: contentType }),
+        new PutObjectCommand({
+          Bucket: cfg.bucket,
+          Key: objectKey,
+          Body: body,
+          ContentType: contentType,
+          CacheControl: CACHE_CONTROL_IMMUTABLE,
+        }),
       )
     },
     async putBytes(objectKey: string, body: Buffer, contentType: string): Promise<void> {
@@ -68,7 +75,13 @@ export function createS3CompatibleStorageDriver(
       if (!cfg) throw new Error('S3 not configured')
       const { PutObjectCommand } = await import('@aws-sdk/client-s3')
       await getInternalS3Client(cfg).send(
-        new PutObjectCommand({ Bucket: cfg.bucket, Key: objectKey, Body: body, ContentType: contentType }),
+        new PutObjectCommand({
+          Bucket: cfg.bucket,
+          Key: objectKey,
+          Body: body,
+          ContentType: contentType,
+          CacheControl: CACHE_CONTROL_IMMUTABLE,
+        }),
       )
     },
     async putJson(objectKey: string, data: unknown): Promise<void> {
@@ -110,6 +123,21 @@ export function createS3CompatibleStorageDriver(
         return typeof out.ContentLength === 'number' ? out.ContentLength : null
       } catch {
         return null
+      }
+    },
+    async getObjectVersionToken(objectKey: string): Promise<string> {
+      const cfg = getConfig()
+      if (!cfg) return objectKey
+      const { HeadObjectCommand } = await import('@aws-sdk/client-s3')
+      try {
+        const out = await getInternalS3Client(cfg).send(
+          new HeadObjectCommand({ Bucket: cfg.bucket, Key: objectKey }),
+        )
+        const etag = out.ETag?.replace(/"/g, '') ?? ''
+        const size = out.ContentLength ?? 0
+        return etag ? `etag:${etag}` : `size:${size}`
+      } catch {
+        return objectKey
       }
     },
   }

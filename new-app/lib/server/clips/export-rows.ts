@@ -1,8 +1,8 @@
 import type { ClipRenderStatus } from '@prisma/client'
 import { exportFilename } from '@/lib/server/clips/clips'
 import { getClipStorage } from '@/lib/storage'
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 
-const SIGNED_TTL = 3600
 
 export type ClipExportRowDto = {
   id: string
@@ -70,9 +70,9 @@ export async function mapRenderRows(
     let downloadUrl: string | null = null
     let sizeBytes: number | null = r.sizeBytes != null ? Number(r.sizeBytes) : null
     try {
-      if (r.clip.posterKey) posterUrl = await storage.createSignedDownloadUrl(r.clip.posterKey, SIGNED_TTL)
+      if (r.clip.posterKey) posterUrl = await createCachedSignedDownloadUrl(storage, r.clip.posterKey)
       if (r.status === 'READY' && r.outputKey) {
-        downloadUrl = await storage.createSignedDownloadUrl(r.outputKey, SIGNED_TTL, { downloadFilename: fname })
+        downloadUrl = await createCachedSignedDownloadUrl(storage, r.outputKey, { downloadFilename: fname })
         if (sizeBytes == null) {
           sizeBytes = await storage.getObjectSizeBytes(r.outputKey)
         }

@@ -7,8 +7,7 @@ import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
-
-const SIGNED_TTL = 3600
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 
 export type CropShot = {
   startMs: number
@@ -104,11 +103,11 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     words,
     crop: { shots, track: cropTrack },
     mediaUrls: {
-      preview: clip.previewKey ? await storage.createSignedDownloadUrl(clip.previewKey, SIGNED_TTL) : null,
-      poster: clip.posterKey ? await storage.createSignedDownloadUrl(clip.posterKey, SIGNED_TTL) : null,
-      proxy: proxyKey ? await storage.createSignedDownloadUrl(proxyKey, SIGNED_TTL) : null,
-      source: sourceKey ? await storage.createSignedDownloadUrl(sourceKey, SIGNED_TTL) : null,
-      cropTrack: cropTrack ? await storage.createSignedDownloadUrl(cropTrackKey, SIGNED_TTL) : null,
+      preview: clip.previewKey ? await createCachedSignedDownloadUrl(storage, clip.previewKey) : null,
+      poster: clip.posterKey ? await createCachedSignedDownloadUrl(storage, clip.posterKey) : null,
+      proxy: proxyKey ? await createCachedSignedDownloadUrl(storage, proxyKey) : null,
+      source: sourceKey ? await createCachedSignedDownloadUrl(storage, sourceKey) : null,
+      cropTrack: cropTrack ? await createCachedSignedDownloadUrl(storage, cropTrackKey) : null,
     },
     project: { id: project.id, title: project.title, settings: project.settings },
     aiMeta,

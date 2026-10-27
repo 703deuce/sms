@@ -4,6 +4,7 @@ import { exportFilename } from '@/lib/server/clips/clips'
 import { mapRenderRows, parseExportStatusFilter, renderStatusWhere } from '@/lib/server/clips/export-rows'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { createId } from '@/lib/supabase/id'
 
 export async function listClipRenders(workspaceId: string, statusFilter?: 'all' | 'ready' | 'failed') {
@@ -59,7 +60,7 @@ export async function enqueueRenderClip(
     const filename = existing.filename || exportFilename(opts.title)
     return {
       render: existing,
-      downloadUrl: await storage.createSignedDownloadUrl(existing.outputKey, 3600, { downloadFilename: filename }),
+      downloadUrl: await createCachedSignedDownloadUrl(storage, existing.outputKey, { downloadFilename: filename }),
       filename,
       reused: true,
     }

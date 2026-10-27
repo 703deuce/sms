@@ -4,12 +4,18 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import shutil
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
+
+from clips_worker.source_cache import get_source_cache
+
+# Browser/CDN-friendly; objects are immutable at a given key+version.
+_OBJECT_CACHE_CONTROL = "private, max-age=31536000, immutable"
 
 
 def env(name: str, default: str | None = None) -> str:
@@ -50,8 +56,6 @@ def _download_staging(upload_id: str, dest: Path) -> None:
         raise RuntimeError(f"Staged upload file missing for {upload_id}")
     src = matches[0]
     dest.parent.mkdir(parents=True, exist_ok=True)
-    import shutil
-
     shutil.copy2(src, dest)
 
 
@@ -65,6 +69,14 @@ def _s3_client():
     )
 
 
+def _s3_object_meta(object_key: str) -> tuple[str, int]:
+    client = _s3_client()
+    out = client.head_object(Bucket=storage_bucket(), Key=object_key)
+    etag = str(out.get("ETag") or "").strip('"')
+    size = int(out.get("ContentLength") or 0)
+    return etag, size
+
+
 def download_object(object_key: str, dest: Path) -> None:
     if object_key.startswith(STAGING_KEY_PREFIX):
         upload_id = object_key[len(STAGING_KEY_PREFIX) :]
@@ -72,7 +84,7 @@ def download_object(object_key: str, dest: Path) -> None:
         return
     if _uses_s3_api():
         try:
-            _download_s3(object_key, dest)
+            _download_s3_cached(object_key, dest)
             return
         except ClientError:
             _download_supabase(object_key, dest)
@@ -80,9 +92,25 @@ def download_object(object_key: str, dest: Path) -> None:
     _download_supabase(object_key, dest)
 
 
+def _download_s3_cached(object_key: str, dest: Path) -> None:
+    etag, size = _s3_object_meta(object_key)
+    cache = get_source_cache()
+
+    def _pull(tmp: Path) -> None:
+        client = _s3_client()
+        client.download_file(storage_bucket(), object_key, str(tmp))
+
+    cache.fetch(object_key, etag, size, dest, _pull)
+
+
 def upload_file(object_key: str, path: Path, content_type: str | None = None) -> None:
     if _uses_s3_api():
         _upload_s3(object_key, path, content_type)
+        try:
+            etag, size = _s3_object_meta(object_key)
+            get_source_cache().seed(object_key, etag, size, path)
+        except Exception:
+            get_source_cache().seed(object_key, "local", path.stat().st_size, path)
     else:
         _upload_supabase(object_key, path, content_type)
 
@@ -143,14 +171,10 @@ def _upload_supabase(object_key: str, path: Path, content_type: str | None) -> N
         resp.read()
 
 
-def _download_s3(object_key: str, dest: Path) -> None:
-    client = _s3_client()
-    client.download_file(storage_bucket(), object_key, str(dest))
-
-
 def _upload_s3(object_key: str, path: Path, content_type: str | None) -> None:
     client = _s3_client()
-    extra = {"ContentType": content_type} if content_type else {}
+    mime = content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    extra = {"ContentType": mime, "CacheControl": _OBJECT_CACHE_CONTROL}
     client.upload_file(str(path), storage_bucket(), object_key, ExtraArgs=extra)
 
 

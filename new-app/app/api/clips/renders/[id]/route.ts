@@ -3,6 +3,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { exportFilename } from '@/lib/server/clips/clips'
 import { getRenderForWorkspace } from '@/lib/server/clips/renders'
 import { getClipStorage } from '@/lib/storage'
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -18,7 +19,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const filename = render.filename || exportFilename(clip?.title || 'clip')
     let downloadUrl: string | null = null
     if (render.status === 'READY' && render.outputKey) {
-      downloadUrl = await storage.createSignedDownloadUrl(render.outputKey, 3600, { downloadFilename: filename })
+      downloadUrl = await createCachedSignedDownloadUrl(storage, render.outputKey, { downloadFilename: filename })
     }
     return NextResponse.json({
       data: {
