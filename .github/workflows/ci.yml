@@ -42,4 +42,9 @@ jobs:
             worker/tests/test_reframe_v2_gate.py \
             worker/tests/test_director_cfg_live.py \
             worker/tests/test_render_ai_meta.py \
-            worker/tests/test_reframe_model_names.py
+            worker/tests/test_reframe_model_names.py \
+            worker/tests/test_layout_router.py \
+            worker/tests/test_reframe_integration.py \
+            worker/tests/test_director_calm.py \
+            worker/tests/test_smoothing_calm.py \
+            worker/tests/test_person_count_probe.py

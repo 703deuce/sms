@@ -8,11 +8,8 @@ from pathlib import Path
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.edits_render import normalize_edits, render_edited_clip
-<<<<<<< HEAD
 from clips_worker.trim_bounds import expanded_source_cut_ms
-=======
 from clips_worker.render_settings import settings_with_clip_ai_meta
->>>>>>> 1ee3de94e (fix(clipper): #762 review — models, routing, export aiMeta, probe, CI)
 from clips_worker.preview_reuse import can_reuse_clip_preview_for_render
 from clips_worker.render_fit_fallback import merge_job_fit_fallback_payload
 from clips_worker.render_clip import ffmpeg_cut

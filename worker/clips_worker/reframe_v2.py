@@ -13,3 +13,19 @@ V2_ONLY_LAYOUTS = frozenset(
 
 def reframe_v2_ops_enabled() -> bool:
     return os.environ.get("REFRAME_V2_ENABLED", "").strip() == "1"
+<<<<<<< HEAD
+=======
+
+
+def layout_shadow_enabled() -> bool:
+    """Optional layout-routing probe for aiMeta when v2 ops gate is off (default off)."""
+    return os.environ.get("CLIPPER_LAYOUT_SHADOW", "").strip() == "1"
+
+
+def layout_for_legacy_reframe(requested: str) -> str:
+    """When v2 is off, multiperson layout ids run as v1 speaker_follow."""
+    layout = (requested or "speaker_follow").strip()
+    if layout in V2_ONLY_LAYOUTS:
+        return "speaker_follow"
+    return layout
+>>>>>>> 493490e22 (fix(clipper): #762 watchdog — shadow probe gate, director layouts, probe memory, CI)

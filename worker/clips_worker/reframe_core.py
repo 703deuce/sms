@@ -740,17 +740,33 @@ def director_cfg_from_env(env: dict, sample_fps: float = 5.0) -> DirectorCfg:
     """Maps render_clip.layout_env() output (+ existing speakercrop knobs) onto DirectorCfg.
     FIX: speakercrop v1 never read LAYOUT_MODE / FORCE_SPLIT."""
     g = lambda k, d: float(env.get(k, d))
-    mode = env.get("LAYOUT_MODE", "speaker_follow")
+    mode = str(env.get("LAYOUT_MODE") or env.get("LAYOUT_STYLE") or "speaker_follow").strip()
     min_close = g("MIN_SHOT_CLOSE", g("MIN_SEG", 2.25))
     cfg = DirectorCfg(sample_fps=sample_fps, min_hold_s=max(2.25, min_close), lead_s=g("LEAD", 0.4),
                       switch_cost=4 * g("HYST", 0.6), allow_split=bool(int(g("SPLIT", 1))),
                       allow_grid=bool(int(g("GRID", 1))))
-    if int(g("FORCE_SPLIT", 0)):
+    if int(g("FORCE_SPLIT", 0)) or mode == "split":
         cfg.force = "split"
+    elif mode == "locked_off":
+        cfg.force = "fill"
+        cfg.allow_split = cfg.allow_grid = False
     elif mode == "fit":
         cfg.force = "fit"
-    elif mode == "fill":                         # fill = always a full-bleed single crop, never split/grid/wide
-        cfg.force = "fill"; cfg.allow_split = cfg.allow_grid = False
+    elif mode == "fill":
+        cfg.force = "fill"
+        cfg.allow_split = cfg.allow_grid = False
+    elif mode == "split_debate":
+        cfg.allow_grid = False
+        cfg.split_bias *= 0.85
+    elif mode in ("grid", "grid3", "grid4"):
+        cfg.allow_split = False
+        cfg.allow_grid = True
+        if mode == "grid3":
+            cfg.grid_bias *= 0.7
+        elif mode == "grid4":
+            cfg.grid_bias *= 0.6
+    elif mode == "dynamic":
+        pass
     return cfg
 
 

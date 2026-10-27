@@ -10,6 +10,8 @@ def test_reframe_opens_models_listed_in_download_script():
     downloaded = set(re.findall(r'\$DEST/([^\s"\']+\.onnx)', script))
     assert YUNET_ONNX in downloaded
     assert SFACE_ONNX in downloaded
+    models_src = (worker / "clips_worker" / "reframe_models.py").read_text(encoding="utf-8")
+    assert SFACE_ONNX in models_src
+    assert YUNET_ONNX in models_src
     core_src = (worker / "clips_worker" / "reframe_core.py").read_text(encoding="utf-8")
-    assert SFACE_ONNX in core_src
-    assert YUNET_ONNX in core_src
+    assert "reframe_models" in core_src
