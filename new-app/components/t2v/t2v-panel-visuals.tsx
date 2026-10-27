@@ -13,7 +13,20 @@ import { T2vFocalCropModal } from '@/components/t2v/t2v-focal-crop-modal'
 import { T2vSceneMediaDialog } from '@/components/t2v/t2v-scene-media-dialog'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 
-type Candidate = { provider: string; providerId: string; thumbUrl?: string }
+type Candidate = {
+  provider: string
+  providerId: string
+  thumbUrl?: string
+  previewUrl?: string
+  width?: number
+  height?: number
+  durationS?: number
+  srcUrl?: string
+  pageUrl?: string
+  author?: string
+  tags?: string[]
+  stockKind?: 'video' | 'photo'
+}
 
 export function T2vPanelVisuals({
   draftId,
@@ -33,6 +46,7 @@ export function T2vPanelVisuals({
   const [focalOpen, setFocalOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
   const [finding, setFinding] = useState(false)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -60,35 +74,66 @@ export function T2vPanelVisuals({
     return () => ac.abort()
   }, [draftId, sceneId, debouncedQ])
 
-  if (!scene) {
+  if (!scene || !sceneId) {
     return <p className="p-4 text-sm text-muted-foreground">Select a scene to edit visuals.</p>
   }
 
   const applyStock = async (pick: Candidate) => {
-    const res = await fetch(`/api/t2v/drafts/${draftId}/scenes/${sceneId}/media`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'replace',
-        query: debouncedQ,
-        page: 1,
-        media: {
-          provider: pick.provider === 'pexels_photo' ? 'pexels_photo' : pick.provider,
-          providerId: pick.providerId,
-          stockKind: pick.provider === 'pexels_photo' ? 'photo' : 'video',
-        },
-      }),
-    })
-    if (!res.ok) {
-      toast.error('Could not replace media')
-      return
+    const key = `${pick.provider}-${pick.providerId}`
+    setApplyingId(key)
+    const provider =
+      pick.provider === 'pexels_photo' ? 'pexels_photo' : pick.provider === 'pexels' ? 'pexels' : 'pixabay'
+    const stockKind = pick.stockKind ?? (pick.provider === 'pexels_photo' ? 'photo' : 'video')
+    const body: Record<string, unknown> = {
+      action: 'replace',
+      query: debouncedQ,
+      page: 1,
+      media: {
+        provider,
+        providerId: String(pick.providerId),
+        stockKind,
+      },
     }
-    toast.success('Visual updated')
-    onRefresh()
+    if (pick.srcUrl) {
+      body.candidate = {
+        provider: pick.provider === 'pexels' && stockKind === 'photo' ? 'pexels_photo' : pick.provider,
+        providerId: String(pick.providerId),
+        thumbUrl: pick.thumbUrl,
+        previewUrl: pick.previewUrl,
+        width: pick.width,
+        height: pick.height,
+        durationS: pick.durationS,
+        srcUrl: pick.srcUrl,
+        pageUrl: pick.pageUrl,
+        author: pick.author,
+        tags: pick.tags,
+        stockKind,
+      }
+    }
+    try {
+      const res = await fetch(`/api/t2v/drafts/${draftId}/scenes/${sceneId}/media`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        console.error('[t2v:scene-media] apply failed', { draftId, sceneId, status: res.status, error: json.error })
+        toast.error(json.error === 'no_match' ? 'Could not find that clip — try another' : 'Could not replace media')
+        return
+      }
+      console.info('[t2v:scene-media] visual applied', { draftId, sceneId, provider: pick.provider })
+      toast.success('Visual updated')
+      onRefresh()
+    } catch (e) {
+      console.error('[t2v:scene-media] apply error', { draftId, sceneId, message: e instanceof Error ? e.message : String(e) })
+      toast.error('Could not replace media')
+    } finally {
+      setApplyingId(null)
+    }
   }
 
   const findVisuals = async () => {
-    if (!sceneId) return
     setFinding(true)
     try {
       const res = await fetch(`/api/t2v/drafts/${draftId}/storyboard`, {
@@ -135,16 +180,32 @@ export function T2vPanelVisuals({
       <Label>Stock search</Label>
       <Input value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="grid grid-cols-2 gap-2">
-        {candidates.slice(0, 8).map((c) => (
-          <button
-            key={`${c.provider}-${c.providerId}`}
-            type="button"
-            className="relative aspect-video overflow-hidden rounded border border-border"
-            onClick={() => void applyStock(c)}
-          >
-            {c.thumbUrl ? <Image src={c.thumbUrl} alt="" fill className="object-cover" unoptimized /> : null}
-          </button>
-        ))}
+        {candidates.slice(0, 8).map((c) => {
+          const key = `${c.provider}-${c.providerId}`
+          const busy = applyingId === key
+          return (
+            <div key={key} className="relative aspect-video overflow-hidden rounded border border-border">
+              <button
+                type="button"
+                className="absolute inset-0 z-0"
+                onClick={() => void applyStock(c)}
+                disabled={Boolean(applyingId)}
+                aria-label="Use this stock clip"
+              >
+                {c.thumbUrl ? <Image src={c.thumbUrl} alt="" fill className="object-cover" unoptimized /> : null}
+              </button>
+              <Button
+                type="button"
+                size="sm"
+                className="absolute bottom-1 right-1 z-10 h-7 px-2 text-xs"
+                disabled={Boolean(applyingId)}
+                onClick={() => void applyStock(c)}
+              >
+                {busy ? <Loader2 className="size-3 animate-spin" /> : 'Use'}
+              </Button>
+            </div>
+          )
+        })}
       </div>
       <div>
         <Label className="mb-2 block">Upload</Label>
@@ -173,7 +234,7 @@ export function T2vPanelVisuals({
         onClose={() => setFocalOpen(false)}
         onSave={(x, y) => void saveFocal(x, y)}
       />
-      {aiOpen && sceneId ? (
+      {aiOpen ? (
         <T2vSceneMediaDialog
           open
           draftId={draftId}
