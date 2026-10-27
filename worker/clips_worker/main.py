@@ -479,6 +479,50 @@ def handle_t2v_assemble(conn, job: dict) -> None:
 DISPATCH["T2V_ASSEMBLE"] = handle_t2v_assemble
 
 
+def _t2v_m9_progress_wrapper(run_fn):
+    def handler(conn, job: dict) -> None:
+        def progress(job_id: str, payload: dict) -> None:
+            terminal = payload.get("jobStatus") in ("DONE", "FAILED")
+            if terminal:
+                post_progress_terminal(job_id, payload)
+            else:
+                post_progress_resilient(job_id, payload)
+
+        run_fn(conn, job, progress)
+
+    return handler
+
+
+def handle_t2v_extract_deck(conn, job: dict) -> None:
+    from clips_worker.t2v.m9_jobs import run_t2v_extract_deck_job
+
+    _t2v_m9_progress_wrapper(run_t2v_extract_deck_job)(conn, job)
+
+
+def handle_t2v_voice_clone(conn, job: dict) -> None:
+    from clips_worker.t2v.m9_jobs import run_t2v_voice_clone_job
+
+    _t2v_m9_progress_wrapper(run_t2v_voice_clone_job)(conn, job)
+
+
+def handle_t2v_scene_ai_image(conn, job: dict) -> None:
+    from clips_worker.t2v.m9_jobs import run_t2v_scene_ai_image_job
+
+    _t2v_m9_progress_wrapper(run_t2v_scene_ai_image_job)(conn, job)
+
+
+def handle_t2v_scene_ai_video(conn, job: dict) -> None:
+    from clips_worker.t2v.m9_jobs import run_t2v_scene_ai_video_job
+
+    _t2v_m9_progress_wrapper(run_t2v_scene_ai_video_job)(conn, job)
+
+
+DISPATCH["T2V_EXTRACT_DECK"] = handle_t2v_extract_deck
+DISPATCH["T2V_VOICE_CLONE"] = handle_t2v_voice_clone
+DISPATCH["T2V_SCENE_AI_IMAGE"] = handle_t2v_scene_ai_image
+DISPATCH["T2V_SCENE_AI_VIDEO"] = handle_t2v_scene_ai_video
+
+
 def main() -> None:
     from clips_worker.startup_check import validate_worker_env
 
@@ -570,6 +614,10 @@ def main() -> None:
                         "RENDER_CLIP",
                         "RENDER_SCRIPT_COMPOSITION",
                         "T2V_ASSEMBLE",
+                        "T2V_EXTRACT_DECK",
+                        "T2V_VOICE_CLONE",
+                        "T2V_SCENE_AI_IMAGE",
+                        "T2V_SCENE_AI_VIDEO",
                         "MUSIC",
                         "THUMBNAIL",
                         "DUB",
