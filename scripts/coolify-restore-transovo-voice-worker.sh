@@ -113,14 +113,15 @@ ensure_sms_application() {
 configure_voice_application() {
   ensure_sms_application
 
-  local voice_branch="${VOICE_GIT_BRANCH:-cursor/voice-v3-livekit-implementation-2304}"
+  local voice_branch="${VOICE_GIT_BRANCH:-master}"
   echo "[coolify-voice-restore] configuring voice app id=${VOICE_APP_ID} branch=${voice_branch}"
 
   psql_exec "
     UPDATE applications SET
       name = 'transovo-voice',
       build_pack = 'dockerfile',
-      dockerfile_location = '/voice-runtime-python/Dockerfile',
+      base_directory = '/',
+      dockerfile_location = 'voice-runtime-python/Dockerfile',
       dockerfile = NULL,
       start_command = NULL,
       ports_exposes = '8081',

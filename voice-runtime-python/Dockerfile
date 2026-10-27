@@ -1,12 +1,11 @@
 # Transovo Python LiveKit voice worker — independent from transovo-web.
-# MCTB SIP (Asterisk) is a separate Coolify app: mctb-sip-adapter/Dockerfile
-# Build: docker build -f voice-runtime-python/Dockerfile .
+# Coolify: Base Directory = / (repo root), Dockerfile = voice-runtime-python/Dockerfile.
+# Local: docker build -f voice-runtime-python/Dockerfile .
 
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# Build deps for livekit-agents / audio stack wheels when needed.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends gcc ffmpeg curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
@@ -28,13 +27,11 @@ RUN pip install --no-cache-dir --upgrade pip \
   && pip install --no-cache-dir -e .
 
 ENV PYTHONUNBUFFERED=1
-ENV LIVEKIT_AGENT_NAME=[REDACTED]
+ENV PORT=8081
 
-# LiveKit agent health server (internal — no public domain required).
-HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/', timeout=3)"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${PORT}/" || exit 1
 
-# 8081 = Voice V3 worker health (Coolify probe).
 EXPOSE 8081
 
 CMD ["./scripts/start-transovo-voice-worker.sh"]

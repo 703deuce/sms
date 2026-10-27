@@ -78,4 +78,6 @@ public/voicemail/
 dump.rdb
 
 .transovo-e2e*.env
+storageState*.json
 rooms-e2e*.log
+new-app/rooms-e2e*.log

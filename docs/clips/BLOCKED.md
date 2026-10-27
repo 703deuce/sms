@@ -7,6 +7,7 @@
 | **BLK-003** | **M14 local MediaRecorder E2E on prod** | Needs stable long-run browser + fixture projects | Unit/integration tests + dev manual; prod §D1b **141+** when fixtures deployed | Confirm prod test projects + runbook |
 | **BLK-005** | **Coolify deploy lag / health `commitSha`** | Container swap → transient **502/503** on status/notifications | Treat as deploy overlap unless errors persist >15 min post-deploy; check container uptime | None if self-heals after deploy |
 | **BLK-006** | **Clipper + Streamer phase 2 (BIC matrix)** | Owner queued until **Descript M4.1–M17** ship | Specs in `docs/clips/clipper/*.md`; screenshots on server `:/opt/transovo-refs/clipper/` | Complete Descript milestones; then implement per BIC + UI layouts |
+| **BLK-SEC-001** | **Supabase service role key in git history** | Private-repo commit `8a100dbc2` briefly committed `.transovo-e2e-supabase.env` (service role). Removed in `ab99aec8f`; history may retain the blob. | E2E uses rotated `e2e-rooms@` password only; never commit `.transovo-e2e*.env`. **Do not** rotate service role or JWT from agent runs. | Owner: rotate Supabase service role + audit JWT if desired; optional history purge (BFG/filter-repo). |
 
 ## How to update
 
