@@ -190,7 +190,7 @@ export function exportClipWithOptions(
   clipId: string,
   body: {
     resolution?: 720 | '720p' | '1080p'
-    aspect?: '9:16' | '1:1' | '16:9'
+    aspect?: '9:16' | '4:5' | '1:1' | '16:9'
     watermark?: boolean
     alsoSrt?: boolean
   },
@@ -219,7 +219,7 @@ export function exportProjectAll(projectId: string) {
 
 export function exportProjectAllBatch(
   projectId: string,
-  body: { clipIds: string[]; aspect: '9:16' | '1:1' | '16:9'; resolution: '720p' | '1080p' },
+  body: { clipIds: string[]; aspect: '9:16' | '4:5' | '1:1' | '16:9'; resolution: '720p' | '1080p' },
 ) {
   return clipsFetch<{
     batchId: string

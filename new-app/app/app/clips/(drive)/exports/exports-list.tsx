@@ -35,8 +35,8 @@ function parseResolution(res: string): '720p' | '1080p' {
   return res.includes('1080') ? '1080p' : '720p'
 }
 
-function parseAspect(aspect: string): '9:16' | '1:1' | '16:9' {
-  if (aspect === '1:1' || aspect === '16:9') return aspect
+function parseAspect(aspect: string): '9:16' | '4:5' | '1:1' | '16:9' {
+  if (aspect === '4:5' || aspect === '1:1' || aspect === '16:9') return aspect
   return '9:16'
 }
 

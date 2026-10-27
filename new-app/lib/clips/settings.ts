@@ -16,7 +16,7 @@ export const clipLayoutModes = [
 ] as const
 export const clipModes = ['talking', 'anything', 'captions'] as const
 export const clipLengthBuckets = ['auto', 'lt30', '30_60', '60_90'] as const
-export const clipAspectRatios = ['9:16', '1:1', '16:9'] as const
+export const clipAspectRatios = ['9:16', '4:5', '1:1', '16:9'] as const
 export const clipGenres = [
   'podcast',
   'interview',

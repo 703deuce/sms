@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { can } from '@/lib/billing/entitlements'
 import { exportProjectAllBatch } from '@/lib/clips-api'
+import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
 import type { ClipCardData } from '@/components/clips/clip-grid'
 
 export function ExportAllDialog({
@@ -15,7 +16,7 @@ export function ExportAllDialog({
   clips: ClipCardData[]
 }) {
   const [open, setOpen] = useState(false)
-  const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16')
+  const [aspect, setAspect] = useState<ClipProjectSettings['aspectRatio']>('9:16')
   const [resolution, setResolution] = useState<'720p' | '1080p'>(() =>
     can('', 'export_1080p') ? '1080p' : '720p',
   )
@@ -69,7 +70,7 @@ export function ExportAllDialog({
             <h3 className="text-sm font-semibold">Export all</h3>
             <p className="mt-1 text-xs text-muted-foreground">Up to 10 clips per batch.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {(['9:16', '1:1', '16:9'] as const).map((a) => (
+              {clipAspectRatios.map((a) => (
                 <Button key={a} size="sm" variant={aspect === a ? 'default' : 'outline'} onClick={() => setAspect(a)}>{a}</Button>
               ))}
             </div>

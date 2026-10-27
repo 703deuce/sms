@@ -11,6 +11,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { can } from '@/lib/billing/entitlements'
 import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
+import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -32,7 +33,7 @@ export function ExportDialog({
   onClose: () => void
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
-  const [aspect, setAspect] = useState<'9:16' | '1:1' | '16:9'>('9:16')
+  const [aspect, setAspect] = useState<ClipProjectSettings['aspectRatio']>('9:16')
   const [resolution, setResolution] = useState<'720p' | '1080p'>(() =>
     can('', 'export_1080p') ? '1080p' : '720p',
   )
@@ -164,7 +165,7 @@ export function ExportDialog({
         <div className="mt-3">
           <p className="text-xs font-medium">Aspect ratio</p>
           <div className="mt-1 flex gap-2">
-            {(['9:16', '1:1', '16:9'] as const).map((a) => (
+            {clipAspectRatios.map((a) => (
               <Button
                 key={a}
                 size="sm"

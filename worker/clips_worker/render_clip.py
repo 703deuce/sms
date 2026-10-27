@@ -20,11 +20,15 @@ def aspect_size(aspect: str, resolution: str = "720p") -> tuple[int, int]:
             return 1080, 1080
         if aspect == "16:9":
             return 1920, 1080
+        if aspect == "4:5":
+            return 1080, 1350
         return 1080, 1920
     if aspect == "1:1":
         return 720, 720
     if aspect == "16:9":
         return 1280, 720
+    if aspect == "4:5":
+        return 720, 900
     return 720, 1280
 
 
