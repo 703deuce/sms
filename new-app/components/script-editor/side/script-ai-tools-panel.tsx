@@ -6,6 +6,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
 
 export type AiToolAction =
+  | 'edit_for_clarity'
   | 'studio_sound'
   | 'remove_fillers'
   | 'shorten_gaps'
@@ -18,6 +19,7 @@ const TOOLS: {
   icon: typeof Wand2
   description: string
 }[] = [
+  { id: 'edit_for_clarity', label: 'Edit for clarity', icon: Wand2, description: 'LLM word-level rewrites' },
   { id: 'studio_sound', label: 'Studio Sound', icon: Mic2, description: 'Voice isolation + mix' },
   { id: 'remove_fillers', label: 'Remove filler words', icon: Scissors, description: 'Open filler review bar' },
   { id: 'shorten_gaps', label: 'Shorten word gaps', icon: Volume2, description: 'Gap targets in edit tools' },

@@ -62,6 +62,15 @@ export type PatchBrollOp = { type: 'patch_broll'; broll: BrollItem[] }
 export type PatchAudioOp = { type: 'patch_audio'; audio: ClipEditsAudio | null }
 export type PatchOverlaysOp = { type: 'patch_overlays'; overlays: NonNullable<ScriptDocumentV1['overlays']> }
 export type PatchAudioFxOp = { type: 'patch_audio_fx'; audioFx: ScriptDocumentV1['audioFx'] | null }
+export type PatchWordTextOverridesOp = {
+  type: 'patch_word_text_overrides'
+  overrides: Record<string, string>
+  mode?: 'merge' | 'replace'
+}
+export type ReplaceScenesOp = {
+  type: 'replace_scenes'
+  scenes: NonNullable<ScriptDocumentV1['scenes']>
+}
 
 export type { AddMarkerOp, UpdateMarkerOp, DeleteMarkerOp }
 
@@ -92,6 +101,8 @@ export type ScriptCompositionOp =
   | PatchAudioOp
   | PatchOverlaysOp
   | PatchAudioFxOp
+  | PatchWordTextOverridesOp
+  | ReplaceScenesOp
   | AddMarkerOp
   | UpdateMarkerOp
   | DeleteMarkerOp
@@ -130,6 +141,7 @@ function finalizeDoc(
     overlays: partial.overlays !== undefined ? partial.overlays : document.overlays,
     musicTracks: document.musicTracks,
     audioFx: partial.audioFx !== undefined ? partial.audioFx ?? undefined : document.audioFx,
+    wordTextOverrides: partial.wordTextOverrides !== undefined ? partial.wordTextOverrides : document.wordTextOverrides,
     broll: partial.broll !== undefined ? partial.broll : document.broll,
     audio: partial.audio !== undefined ? partial.audio : document.audio,
     settings: partial.settings ?? document.settings,
@@ -172,6 +184,7 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
   let audio = document.audio
   let overlays = document.overlays ? [...document.overlays] : undefined
   let audioFx = document.audioFx ? { ...document.audioFx } : undefined
+  let wordTextOverrides = document.wordTextOverrides ? { ...document.wordTextOverrides } : undefined
 
   if (op.type === 'delete_words') {
     for (const id of op.wordIds) {
@@ -346,6 +359,15 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     overlays = [...op.overlays]
   } else if (op.type === 'patch_audio_fx') {
     audioFx = op.audioFx ?? undefined
+  } else if (op.type === 'patch_word_text_overrides') {
+    if (op.mode === 'replace') {
+      wordTextOverrides = { ...op.overrides }
+    } else {
+      wordTextOverrides = { ...(wordTextOverrides ?? {}), ...op.overrides }
+    }
+    if (wordTextOverrides && !Object.keys(wordTextOverrides).length) wordTextOverrides = undefined
+  } else if (op.type === 'replace_scenes') {
+    scenes = op.scenes.length ? [...op.scenes] : undefined
   }
 
   return finalizeDoc(document, order, kept, deleted, {
@@ -363,6 +385,7 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     audio,
     overlays,
     audioFx,
+    wordTextOverrides,
   })
 }
 
