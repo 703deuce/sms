@@ -31,7 +31,11 @@ import {
 } from '@/lib/clips/script-editor/timeline-model'
 import { toast } from 'sonner'
 import { ArrowLeft, Pause, Play, Redo2, Scissors, Undo2 } from 'lucide-react'
-import { ScriptFillerReviewBar } from '@/components/script-editor/script-filler-review-bar'
+import {
+  ScriptFillerReviewBar,
+  type FillerReviewAction,
+} from '@/components/script-editor/script-filler-review-bar'
+import { ScriptReframeCropOverlay } from '@/components/script-editor/preview/script-reframe-layer'
 import { ScriptEditorRail, type ScriptSideTab } from '@/components/script-editor/script-editor-rail'
 import { ScriptCaptionsPanel } from '@/components/script-editor/side/script-captions-panel'
 import { ScriptPropertiesPanel } from '@/components/script-editor/side/script-properties-panel'
@@ -40,7 +44,14 @@ import { PreviewPillBar } from '@/components/script-editor/preview/preview-pill-
 import { ScriptCaptionOverlay } from '@/components/script-editor/preview/script-caption-overlay'
 import { resolveScriptSettings } from '@/lib/clips/script-editor/default-settings'
 import { formatGapChip, listFillerHits, type FillerFilter } from '@/lib/clips/script-editor/filler-hits'
-import type { ScriptAspect, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
+import { listGapHits, type GapFilterMode, type GapHit } from '@/lib/clips/script-editor/gap-hits'
+import {
+  cropAtSourceMs,
+  cropToVideoStyle,
+  defaultCropForAspect,
+} from '@/lib/clips/script-editor/reframe-keyframes'
+import type { ReframeCropRect, ScriptAspect, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
+import type { EditToolsTab } from '@/components/script-editor/side/script-edit-tools-panel'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -103,11 +114,27 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [fillerFilter, setFillerFilter] = useState<FillerFilter>('all')
   const [fillerSelectionOnly, setFillerSelectionOnly] = useState(false)
   const [fillerAvoidHarsh, setFillerAvoidHarsh] = useState(true)
+  const [fillerAction, setFillerAction] = useState<FillerReviewAction>('delete')
+  const [fillerAutoAdvance, setFillerAutoAdvance] = useState(true)
+  const [reviewMode, setReviewMode] = useState<'filler' | 'gap'>('filler')
+  const [editToolsTab, setEditToolsTab] = useState<EditToolsTab>('filler')
+  const [gapCursor, setGapCursor] = useState(0)
+  const [gapMode, setGapMode] = useState<GapFilterMode>('more_than')
+  const [minGapSec, setMinGapSec] = useState(1)
+  const [maxGapSec, setMaxGapSec] = useState(3)
+  const [targetGapSec, setTargetGapSec] = useState(0.3)
+  const [gapSelectionOnly, setGapSelectionOnly] = useState(false)
+  const [draftCrop, setDraftCrop] = useState<ReframeCropRect | null>(null)
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
   const settings = useMemo(() => resolveScriptSettings(document.settings), [document.settings])
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
   const deletedSet = useMemo(() => new Set(document.deletedWordIds), [document.deletedWordIds])
+  const ignoredSet = useMemo(() => new Set(document.ignoredWordIds ?? []), [document.ignoredWordIds])
+  const transcriptHiddenSet = useMemo(
+    () => new Set(document.transcriptHiddenWordIds ?? []),
+    [document.transcriptHiddenWordIds],
+  )
   const fillerCount = useMemo(
     () => data.editorWords.filter((w) => w.isFiller && !deletedSet.has(w.id)).length,
     [data.editorWords, deletedSet],
@@ -228,10 +255,54 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
 
   const activeFillerHit = fillerHits[fillerCursor] ?? null
 
-  const keptWords = useMemo(
-    () => orderedWords.filter((w) => !deletedSet.has(w.id)),
-    [orderedWords, deletedSet],
+  const gapHits = useMemo(
+    () =>
+      listGapHits(orderedWords, deletedSet, {
+        mode: gapMode,
+        minGapMs: Math.round(minGapSec * 1000),
+        maxGapMs: Math.round(maxGapSec * 1000),
+        selectionOnly: gapSelectionOnly || (reviewMode === 'gap' && fillerSelectionOnly),
+        selectedIds: selectedIds,
+      }),
+    [
+      orderedWords,
+      deletedSet,
+      gapMode,
+      minGapSec,
+      maxGapSec,
+      gapSelectionOnly,
+      fillerSelectionOnly,
+      reviewMode,
+      selectedIds,
+    ],
   )
+
+  const activeGapHit = gapHits[gapCursor] ?? null
+  const reviewTotal = reviewMode === 'gap' ? gapHits.length : fillerHits.length
+  const reviewCursor = reviewMode === 'gap' ? gapCursor : fillerCursor
+
+  const keptWords = useMemo(
+    () => orderedWords.filter((w) => !deletedSet.has(w.id) && !ignoredSet.has(w.id)),
+    [orderedWords, deletedSet, ignoredSet],
+  )
+
+  const captionWords = useMemo(
+    () => keptWords.filter((w) => !transcriptHiddenSet.has(w.id)),
+    [keptWords, transcriptHiddenSet],
+  )
+
+  const baseCrop = useMemo(
+    () => defaultCropForAspect(settings.aspect ?? '9:16'),
+    [settings.aspect],
+  )
+
+  const liveCrop = useMemo(() => {
+    if (draftCrop) return draftCrop
+    if (settings.reframeMode === 'center_crop') return { ...baseCrop, cx: 50, cy: 50 }
+    return cropAtSourceMs(document.reframeKeyframes, playheadMs, baseCrop)
+  }, [draftCrop, settings.reframeMode, document.reframeKeyframes, playheadMs, baseCrop])
+
+  const videoCropStyle = useMemo(() => cropToVideoStyle(liveCrop), [liveCrop])
 
   const patchSettings = useCallback(
     (patch: Partial<ScriptEditorSettings>) => {
@@ -243,6 +314,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   useEffect(() => {
     if (fillerCursor >= fillerHits.length) setFillerCursor(Math.max(0, fillerHits.length - 1))
   }, [fillerCursor, fillerHits.length])
+
+  useEffect(() => {
+    if (gapCursor >= gapHits.length) setGapCursor(Math.max(0, gapHits.length - 1))
+  }, [gapCursor, gapHits.length])
 
   useEffect(() => {
     const v = videoRef.current
@@ -263,34 +338,119 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const openFillerTools = useCallback(() => {
     setSideOpen(true)
     setSideTab('edit')
+    setEditToolsTab('filler')
+    setReviewMode('filler')
     setFillerReviewOpen(true)
   }, [])
 
-  const removeFillerIds = useCallback(
-    (ids: string[]) => {
-      if (!ids.length) return
-      const ms = ids.reduce((sum, id) => {
-        const w = wordsById.get(id)
-        return w ? sum + (w.t1Ms - w.t0Ms) : sum
-      }, 0)
-      deleteWords(ids)
-      toast.success(`Removed ${ids.length} filler word(s) (−${(ms / 1000).toFixed(1)} s). Undo`)
+  const openGapTools = useCallback(() => {
+    setSideOpen(true)
+    setSideTab('edit')
+    setEditToolsTab('gaps')
+    setReviewMode('gap')
+    setFillerReviewOpen(true)
+  }, [])
+
+  const applyFillerActionToHits = useCallback(
+    (action: FillerReviewAction, hits: { word: EditorWord }[]) => {
+      if (!hits.length) return
+      const wordIds = hits.map((h) => h.word.id)
+      let savedMs = 0
+      if (action === 'delete' || action === 'replace_with_gap') {
+        savedMs = hits.reduce((s, h) => s + (h.word.t1Ms - h.word.t0Ms), 0)
+      }
+      if (action === 'replace_with_gap') {
+        const gapAtOutMs: Record<string, number> = {}
+        let maxDur = 1
+        for (const h of hits) {
+          const out = sourceMsToOutputTime(h.word.t0Ms, edl)
+          if (out != null) gapAtOutMs[h.word.id] = out
+          maxDur = Math.max(maxDur, h.word.t1Ms - h.word.t0Ms)
+        }
+        applyOp({
+          type: 'word_batch_action',
+          action: 'replace_with_gap',
+          wordIds,
+          gapAtOutMs,
+          gapDurMs: Math.max(1, Math.round(maxDur)),
+        })
+      } else {
+        applyOp({ type: 'word_batch_action', action, wordIds })
+      }
+      toast.success(`Applied to ${wordIds.length} word(s)${savedMs ? ` (−${(savedMs / 1000).toFixed(1)} s)` : ''}. Undo`)
     },
-    [deleteWords, wordsById],
+    [applyOp, edl],
   )
 
   const onRemoveOneFiller = useCallback(() => {
+    if (reviewMode === 'gap') {
+      const hit = gapHits[gapCursor]
+      if (!hit) return
+      const targetMs = Math.round(targetGapSec * 1000)
+      applyOp({
+        type: 'shorten_gap_before',
+        wordId: hit.word.id,
+        prevWordId: hit.prevWord.id,
+        gapMs: hit.gapMs,
+        targetGapMs: targetMs,
+      })
+      const saved = Math.max(0, hit.gapMs - targetMs)
+      toast.success(`Shortened gap (−${(saved / 1000).toFixed(1)} s). Undo`)
+      if (fillerAutoAdvance) setGapCursor((c) => Math.min(c, Math.max(0, gapHits.length - 2)))
+      return
+    }
     const hit = fillerHits[fillerCursor]
     if (!hit) return
-    removeFillerIds([hit.word.id])
-    setFillerCursor((c) => Math.min(c, Math.max(0, fillerHits.length - 2)))
-  }, [fillerCursor, fillerHits, removeFillerIds])
+    applyFillerActionToHits(fillerAction, [hit])
+    if (fillerAutoAdvance) setFillerCursor((c) => Math.min(c, Math.max(0, fillerHits.length - 2)))
+  }, [
+    reviewMode,
+    gapHits,
+    gapCursor,
+    targetGapSec,
+    applyOp,
+    fillerAutoAdvance,
+    fillerHits,
+    fillerCursor,
+    fillerAction,
+    applyFillerActionToHits,
+  ])
 
   const onRemoveAllFillers = useCallback(() => {
-    const ids = fillerHits.map((h) => h.word.id)
-    removeFillerIds(ids)
+    if (reviewMode === 'gap') {
+      const targetMs = Math.round(targetGapSec * 1000)
+      const items = gapHits.map((h) => ({
+        wordId: h.word.id,
+        prevWordId: h.prevWord.id,
+        gapMs: h.gapMs,
+        targetGapMs: targetMs,
+      }))
+      const saved = gapHits.reduce((s, h) => s + Math.max(0, h.gapMs - targetMs), 0)
+      applyOp({ type: 'shorten_gaps_batch', items })
+      toast.success(`Shortened ${items.length} gap(s) (−${(saved / 1000).toFixed(1)} s). Undo`)
+      setFillerReviewOpen(false)
+      return
+    }
+    applyFillerActionToHits(fillerAction, fillerHits)
     setFillerReviewOpen(false)
-  }, [fillerHits, removeFillerIds])
+  }, [reviewMode, gapHits, targetGapSec, applyOp, fillerAction, fillerHits, applyFillerActionToHits])
+
+  const onSelectGapHit = useCallback(
+    (hit: GapHit) => {
+      setGapCursor(gapHits.findIndex((h) => h.word.id === hit.word.id))
+      setSelAnchor(hit.index)
+      setSelEnd(hit.index)
+      seekToSourceMs(Math.max(data.rangeStartMs, hit.word.t0Ms - 1000))
+    },
+    [data.rangeStartMs, gapHits, seekToSourceMs],
+  )
+
+  const commitReframeKeyframe = useCallback(() => {
+    const crop = draftCrop ?? liveCrop
+    applyOp({ type: 'set_reframe_keyframe', srcMs: Math.round(playheadMs), crop })
+    setDraftCrop(null)
+    patchSettings({ reframeMode: 'manual' })
+  }, [applyOp, draftCrop, liveCrop, patchSettings, playheadMs])
 
   const onSelectFillerHit = useCallback(
     (hit: { index: number; word: EditorWord }) => {
@@ -589,19 +749,39 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
 
       {fillerReviewOpen && (
         <ScriptFillerReviewBar
-          total={fillerHits.length}
-          cursor={fillerCursor}
+          mode={reviewMode}
+          total={reviewTotal}
+          cursor={reviewCursor}
           filter={fillerFilter}
+          action={fillerAction}
+          onActionChange={setFillerAction}
           onFilterChange={(f) => {
             setFillerFilter(f)
             setFillerCursor(0)
           }}
-          selectionOnly={fillerSelectionOnly}
-          onSelectionOnlyChange={setFillerSelectionOnly}
+          selectionOnly={reviewMode === 'gap' ? gapSelectionOnly : fillerSelectionOnly}
+          onSelectionOnlyChange={(v) => {
+            if (reviewMode === 'gap') setGapSelectionOnly(v)
+            else setFillerSelectionOnly(v)
+          }}
           avoidHarshCuts={fillerAvoidHarsh}
           onAvoidHarshCutsChange={setFillerAvoidHarsh}
-          onPrev={() => setFillerCursor((c) => (fillerHits.length ? (c - 1 + fillerHits.length) % fillerHits.length : 0))}
-          onNext={() => setFillerCursor((c) => (fillerHits.length ? (c + 1) % fillerHits.length : 0))}
+          autoAdvance={fillerAutoAdvance}
+          onAutoAdvanceChange={setFillerAutoAdvance}
+          onPrev={() => {
+            if (reviewMode === 'gap') {
+              setGapCursor((c) => (gapHits.length ? (c - 1 + gapHits.length) % gapHits.length : 0))
+            } else {
+              setFillerCursor((c) => (fillerHits.length ? (c - 1 + fillerHits.length) % fillerHits.length : 0))
+            }
+          }}
+          onNext={() => {
+            if (reviewMode === 'gap') {
+              setGapCursor((c) => (gapHits.length ? (c + 1) % gapHits.length : 0))
+            } else {
+              setFillerCursor((c) => (fillerHits.length ? (c + 1) % fillerHits.length : 0))
+            }
+          }}
           onRemoveOne={onRemoveOneFiller}
           onRemoveAll={onRemoveAllFillers}
           onClose={() => setFillerReviewOpen(false)}
@@ -635,6 +815,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                         const idx = wordIndex(w.id)
                         const active = idx === activeIndex
                         const deleted = deletedSet.has(w.id)
+                        const ignored = ignoredSet.has(w.id)
+                        const hiddenTranscript = transcriptHiddenSet.has(w.id)
                         const selected = selectedIds.has(w.id)
                         const showSplit = splitAfterIdx.has(idx)
                         return (
@@ -657,15 +839,18 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                               onMouseEnter={() => onWordPointerEnter(idx)}
                               className={cn(
                                 'mr-1 inline rounded-sm px-0.5 transition-colors',
-                                w.isFiller && !deleted && 'text-muted-foreground underline decoration-dotted decoration-sky-500/70',
+                                w.isFiller && !deleted && !ignored && 'text-muted-foreground underline decoration-dotted decoration-sky-500/70',
                                 deleted && 'text-muted-foreground/60 line-through decoration-destructive/50',
+                                ignored && !deleted && 'text-muted-foreground/70 line-through decoration-dotted',
+                                hiddenTranscript && !deleted && 'text-muted-foreground/50 italic',
                                 active && !deleted && 'bg-primary/20',
                                 activeFillerHit?.word.id === w.id && 'ring-1 ring-sky-500/60',
+                                activeGapHit?.word.id === w.id && 'ring-1 ring-amber-500/60',
                                 selected && 'bg-sky-500/25',
                                 !active && !deleted && 'hover:bg-muted/60',
                               )}
                             >
-                              {w.text}
+                              {hiddenTranscript ? '·' : w.text}
                             </button>
                             {showSplit && (
                               <span className="mx-0.5 text-primary" title="Edit boundary">
@@ -702,6 +887,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                   <video
                     ref={videoRef}
                     className="h-full w-full object-cover"
+                    style={videoCropStyle}
                     src={data.sourceVideoUrl}
                     controls={false}
                     preload="metadata"
@@ -711,8 +897,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     onPause={() => setPlaying(false)}
                     onClick={togglePlay}
                   />
+                  <ScriptReframeCropOverlay
+                    crop={liveCrop}
+                    enabled={settings.reframeMode === 'manual'}
+                    onCropChange={(c) => setDraftCrop(c)}
+                    onCommit={commitReframeKeyframe}
+                  />
                   <ScriptCaptionOverlay
-                    keptWords={keptWords}
+                    keptWords={captionWords}
                     rangeStartMs={data.rangeStartMs}
                     currentTimeSec={playheadMs / 1000}
                     settings={settings}
@@ -739,11 +931,30 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                 {sideTab === 'captions' && <ScriptCaptionsPanel settings={settings} onPatch={patchSettings} />}
                 {sideTab === 'edit' && (
                   <ScriptEditToolsPanel
+                    tab={editToolsTab}
+                    onTabChange={setEditToolsTab}
                     fillerHits={fillerHits}
-                    activeHitId={activeFillerHit?.word.id ?? null}
+                    activeFillerHitId={activeFillerHit?.word.id ?? null}
+                    gapHits={gapHits}
+                    activeGapHitId={activeGapHit?.word.id ?? null}
+                    gapMode={gapMode}
+                    onGapModeChange={setGapMode}
+                    minGapSec={minGapSec}
+                    maxGapSec={maxGapSec}
+                    onMinGapSecChange={setMinGapSec}
+                    onMaxGapSecChange={setMaxGapSec}
+                    targetGapSec={targetGapSec}
+                    onTargetGapSecChange={setTargetGapSec}
                     rangeStartMs={data.rangeStartMs}
-                    onSelectHit={onSelectFillerHit}
-                    onOpenReview={() => setFillerReviewOpen(true)}
+                    onSelectFillerHit={onSelectFillerHit}
+                    onSelectGapHit={onSelectGapHit}
+                    onOpenFillerReview={() => {
+                      setReviewMode('filler')
+                      setFillerReviewOpen(true)
+                    }}
+                    onOpenGapReview={openGapTools}
+                    onShortenOne={onRemoveOneFiller}
+                    onShortenAll={onRemoveAllFillers}
                   />
                 )}
               </div>

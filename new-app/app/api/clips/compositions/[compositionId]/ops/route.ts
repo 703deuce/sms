@@ -21,6 +21,47 @@ const opSchema = z.discriminatedUnion('type', [
     type: z.literal('patch_settings'),
     patch: z.record(z.string(), z.unknown()),
   }),
+  z.object({ type: z.literal('ignore_words'), wordIds: z.array(z.string().min(1)).min(1) }),
+  z.object({ type: z.literal('restore_ignored'), wordIds: z.array(z.string().min(1)).min(1) }),
+  z.object({ type: z.literal('hide_transcript_words'), wordIds: z.array(z.string().min(1)).min(1) }),
+  z.object({ type: z.literal('show_transcript_words'), wordIds: z.array(z.string().min(1)).min(1) }),
+  z.object({
+    type: z.literal('shorten_gap_before'),
+    wordId: z.string().min(1),
+    prevWordId: z.string().min(1),
+    gapMs: z.number().min(0),
+    targetGapMs: z.number().min(0),
+  }),
+  z.object({
+    type: z.literal('shorten_gaps_batch'),
+    items: z
+      .array(
+        z.object({
+          wordId: z.string().min(1),
+          prevWordId: z.string().min(1),
+          gapMs: z.number().min(0),
+          targetGapMs: z.number().min(0),
+        }),
+      )
+      .min(1),
+  }),
+  z.object({
+    type: z.literal('set_reframe_keyframe'),
+    srcMs: z.number().min(0),
+    crop: z.object({
+      cx: z.number(),
+      cy: z.number(),
+      w: z.number().min(1),
+      h: z.number().min(1),
+    }),
+  }),
+  z.object({
+    type: z.literal('word_batch_action'),
+    action: z.enum(['delete', 'ignore', 'replace_with_gap', 'hide_transcript']),
+    wordIds: z.array(z.string().min(1)).min(1),
+    gapAtOutMs: z.record(z.string(), z.number()).optional(),
+    gapDurMs: z.number().min(1).optional(),
+  }),
 ])
 
 const bodySchema = z.object({

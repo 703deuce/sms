@@ -19,6 +19,11 @@ export type ScriptAspect = '9:16' | '1:1' | '4:5' | '16:9'
 
 export type ScriptReframeMode = 'speaker_follow' | 'center_crop' | 'manual'
 
+/** Manual reframe crop in source-normalized percent (0–100). */
+export type ReframeCropRect = { cx: number; cy: number; w: number; h: number }
+
+export type ReframeKeyframe = { srcMs: number; crop: ReframeCropRect }
+
 /** Composition preview / export prefs (M4 — maps to clip edits at export). */
 export type ScriptEditorSettings = {
   aspect?: ScriptAspect
@@ -69,4 +74,12 @@ export type ScriptDocumentV1 = {
   musicTracks?: { id: string; assetId: string; outStartMs: number; durMs: number; label?: string; duckUnderSpeech?: boolean }[]
   /** M4 — canvas pills + side panels (aspect, captions, volume). */
   settings?: ScriptEditorSettings
+  /** M4 — playback skipped, struck-through in script (spec §B2 ignore). */
+  ignoredWordIds?: string[]
+  /** M4 — audio kept, hidden in script + captions (filler “transcript only”). */
+  transcriptHiddenWordIds?: string[]
+  /** M4 — symmetric silence trim around gaps (head/tail per word, source ms). */
+  wordSourceAdjust?: Record<string, { headTrimMs?: number; tailTrimMs?: number }>
+  /** M4 — manual reframe keyframes in source time. */
+  reframeKeyframes?: ReframeKeyframe[]
 }

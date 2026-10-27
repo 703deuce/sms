@@ -1,4 +1,5 @@
-import type { ScriptDocumentV1, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
+import { applySymmetricGapTrim, symmetricGapTrimMs } from '@/lib/clips/script-edl/word-adjust'
+import type { ReframeCropRect, ScriptDocumentV1, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
 
 export type DeleteWordsOp = { type: 'delete_words'; wordIds: string[] }
 export type RestoreWordsOp = { type: 'restore_words'; wordIds: string[] }
@@ -8,6 +9,29 @@ export type RemoveGapOp = { type: 'remove_gap_at'; atOutMs: number }
 export type ReplaceWithGapOp = { type: 'replace_with_gap'; wordIds: string[]; atOutMs: number; durMs: number }
 export type SetPadBeforeOp = { type: 'set_pad_before'; wordId: string; padMs: number }
 export type PatchSettingsOp = { type: 'patch_settings'; patch: Partial<ScriptEditorSettings> }
+export type IgnoreWordsOp = { type: 'ignore_words'; wordIds: string[] }
+export type RestoreIgnoredOp = { type: 'restore_ignored'; wordIds: string[] }
+export type HideTranscriptWordsOp = { type: 'hide_transcript_words'; wordIds: string[] }
+export type ShowTranscriptWordsOp = { type: 'show_transcript_words'; wordIds: string[] }
+export type ShortenGapBeforeOp = {
+  type: 'shorten_gap_before'
+  wordId: string
+  prevWordId: string
+  gapMs: number
+  targetGapMs: number
+}
+export type ShortenGapsBatchOp = {
+  type: 'shorten_gaps_batch'
+  items: { wordId: string; prevWordId: string; gapMs: number; targetGapMs: number }[]
+}
+export type SetReframeKeyframeOp = { type: 'set_reframe_keyframe'; srcMs: number; crop: ReframeCropRect }
+export type WordBatchActionOp = {
+  type: 'word_batch_action'
+  action: 'delete' | 'ignore' | 'replace_with_gap' | 'hide_transcript'
+  wordIds: string[]
+  gapAtOutMs?: Record<string, number>
+  gapDurMs?: number
+}
 
 export type ScriptCompositionOp =
   | DeleteWordsOp
@@ -18,6 +42,14 @@ export type ScriptCompositionOp =
   | ReplaceWithGapOp
   | SetPadBeforeOp
   | PatchSettingsOp
+  | IgnoreWordsOp
+  | RestoreIgnoredOp
+  | HideTranscriptWordsOp
+  | ShowTranscriptWordsOp
+  | ShortenGapBeforeOp
+  | ShortenGapsBatchOp
+  | SetReframeKeyframeOp
+  | WordBatchActionOp
 
 export function emptyDocument(allWordIds: string[]): ScriptDocumentV1 {
   return { v: 1, keptWordIds: [...allWordIds], deletedWordIds: [], wordOrder: [...allWordIds] }
@@ -32,6 +64,34 @@ function wordOrderOf(document: ScriptDocumentV1): string[] {
   return [...document.keptWordIds, ...document.deletedWordIds]
 }
 
+function finalizeDoc(
+  document: ScriptDocumentV1,
+  order: string[],
+  kept: Set<string>,
+  deleted: Set<string>,
+  partial: Partial<ScriptDocumentV1>,
+): ScriptDocumentV1 {
+  const keptWordIds = order.filter((id) => kept.has(id))
+  return {
+    v: 1,
+    keptWordIds,
+    deletedWordIds: [...deleted],
+    wordOrder: order,
+    gapInserts: partial.gapInserts ?? document.gapInserts,
+    splitAtOutMs: partial.splitAtOutMs ?? document.splitAtOutMs,
+    padBeforeMs: partial.padBeforeMs ?? document.padBeforeMs,
+    scenes: document.scenes,
+    markers: document.markers,
+    overlays: document.overlays,
+    musicTracks: document.musicTracks,
+    settings: partial.settings ?? document.settings,
+    ignoredWordIds: partial.ignoredWordIds ?? document.ignoredWordIds,
+    transcriptHiddenWordIds: partial.transcriptHiddenWordIds ?? document.transcriptHiddenWordIds,
+    wordSourceAdjust: partial.wordSourceAdjust ?? document.wordSourceAdjust,
+    reframeKeyframes: partial.reframeKeyframes ?? document.reframeKeyframes,
+  }
+}
+
 export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptCompositionOp): ScriptDocumentV1 {
   const order = wordOrderOf(document)
   const deleted = new Set(document.deletedWordIds)
@@ -39,6 +99,11 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
   let gapInserts = document.gapInserts ? [...document.gapInserts] : undefined
   let splitAtOutMs = document.splitAtOutMs ? [...document.splitAtOutMs] : undefined
   let padBeforeMs = document.padBeforeMs ? { ...document.padBeforeMs } : undefined
+  let ignoredWordIds = [...(document.ignoredWordIds ?? [])]
+  let transcriptHiddenWordIds = [...(document.transcriptHiddenWordIds ?? [])]
+  let wordSourceAdjust = document.wordSourceAdjust ? { ...document.wordSourceAdjust } : undefined
+  let reframeKeyframes = document.reframeKeyframes ? [...document.reframeKeyframes] : undefined
+  let settings = document.settings
 
   if (op.type === 'delete_words') {
     for (const id of op.wordIds) {
@@ -78,7 +143,6 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     padBeforeMs[op.wordId] = Math.max(0, Math.round(op.padMs))
   }
 
-  let settings = document.settings
   if (op.type === 'patch_settings') {
     settings = {
       ...(settings ?? {}),
@@ -87,23 +151,98 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
         ? { ...(settings?.captions ?? {}), ...op.patch.captions }
         : settings?.captions,
     }
+  } else if (op.type === 'ignore_words') {
+    const ign = new Set(ignoredWordIds)
+    for (const id of op.wordIds) {
+      ign.add(id)
+      deleted.delete(id)
+      kept.add(id)
+    }
+    ignoredWordIds = [...ign]
+  } else if (op.type === 'restore_ignored') {
+    const ign = new Set(ignoredWordIds)
+    for (const id of op.wordIds) ign.delete(id)
+    ignoredWordIds = [...ign]
+  } else if (op.type === 'hide_transcript_words') {
+    const hid = new Set(transcriptHiddenWordIds)
+    for (const id of op.wordIds) hid.add(id)
+    transcriptHiddenWordIds = [...hid]
+  } else if (op.type === 'show_transcript_words') {
+    const hid = new Set(transcriptHiddenWordIds)
+    for (const id of op.wordIds) hid.delete(id)
+    transcriptHiddenWordIds = [...hid]
+  } else if (op.type === 'set_reframe_keyframe') {
+    const ms = Math.max(0, Math.round(op.srcMs))
+    const list = [...(reframeKeyframes ?? [])].filter((k) => Math.abs(k.srcMs - ms) > 2)
+    list.push({ srcMs: ms, crop: op.crop })
+    list.sort((a, b) => a.srcMs - b.srcMs)
+    reframeKeyframes = list
+  } else if (op.type === 'word_batch_action') {
+    if (op.action === 'delete') {
+      for (const id of op.wordIds) {
+        kept.delete(id)
+        deleted.add(id)
+      }
+    } else if (op.action === 'ignore') {
+      const ign = new Set(ignoredWordIds)
+      for (const id of op.wordIds) {
+        ign.add(id)
+        deleted.delete(id)
+        kept.add(id)
+      }
+      ignoredWordIds = [...ign]
+    } else if (op.action === 'hide_transcript') {
+      const hid = new Set(transcriptHiddenWordIds)
+      for (const id of op.wordIds) hid.add(id)
+      transcriptHiddenWordIds = [...hid]
+    } else if (op.action === 'replace_with_gap') {
+      const durDefault = Math.max(1, op.gapDurMs ?? 400)
+      for (const id of op.wordIds) {
+        kept.delete(id)
+        deleted.add(id)
+      }
+      gapInserts = gapInserts ?? []
+      for (const id of op.wordIds) {
+        const at = op.gapAtOutMs?.[id]
+        if (typeof at === 'number') {
+          gapInserts.push({ atOutMs: Math.max(0, Math.round(at)), durMs: durDefault })
+        }
+      }
+    }
   }
 
-  const keptWordIds = order.filter((id) => kept.has(id))
-  return {
-    v: 1,
-    keptWordIds,
-    deletedWordIds: [...deleted],
-    wordOrder: order,
+  if (op.type === 'shorten_gap_before') {
+    const removeMs = symmetricGapTrimMs(op.gapMs, op.targetGapMs)
+    if (removeMs > 0) {
+      const trimmed = applySymmetricGapTrim(
+        { ...document, wordSourceAdjust },
+        op.prevWordId,
+        op.wordId,
+        removeMs,
+      )
+      wordSourceAdjust = trimmed.wordSourceAdjust
+    }
+  }
+
+  if (op.type === 'shorten_gaps_batch') {
+    let doc: ScriptDocumentV1 = { ...document, wordSourceAdjust }
+    for (const item of op.items) {
+      const removeMs = symmetricGapTrimMs(item.gapMs, item.targetGapMs)
+      if (removeMs > 0) doc = applySymmetricGapTrim(doc, item.prevWordId, item.wordId, removeMs)
+    }
+    wordSourceAdjust = doc.wordSourceAdjust
+  }
+
+  return finalizeDoc(document, order, kept, deleted, {
     gapInserts,
     splitAtOutMs,
     padBeforeMs,
-    scenes: document.scenes,
-    markers: document.markers,
-    overlays: document.overlays,
-    musicTracks: document.musicTracks,
     settings,
-  }
+    ignoredWordIds,
+    transcriptHiddenWordIds,
+    wordSourceAdjust,
+    reframeKeyframes,
+  })
 }
 
 export function applyCompositionOps(document: ScriptDocumentV1, ops: ScriptCompositionOp[]): ScriptDocumentV1 {
