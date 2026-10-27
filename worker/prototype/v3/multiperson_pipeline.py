@@ -222,7 +222,17 @@ def run(inp: str, out: str) -> None:
     speak = combine_speaking_probs(diar_prob, speak_vis)
 
     style = os.environ.get("LAYOUT_STYLE") or os.environ.get("LAYOUT_MODE", "dynamic")
-    segments = run_director(times, speak, speak_vis, SAMPLE_FPS, style, words)
+    if os.environ.get("SCREEN_PIP") == "1" and n_persons >= 1:
+        segments = [
+            {
+                "t0": float(times[0]),
+                "t1": float(times[-1]),
+                "layout": "screen_pip",
+                "slots": [person_id_label(0)],
+            }
+        ]
+    else:
+        segments = run_director(times, speak, speak_vis, SAMPLE_FPS, style, words)
 
     cw = int(round(H * 9 / 16)) // 2 * 2
     dt = 1.0 / SAMPLE_FPS

@@ -26,7 +26,7 @@ BACKCHANNEL_RE = re.compile(
     re.I,
 )
 
-LAYOUTS = ("close", "two_up", "grid3", "grid4", "wide")
+LAYOUTS = ("close", "two_up", "grid3", "grid4", "wide", "side", "screen_pip")
 
 
 @dataclass
@@ -49,6 +49,15 @@ STYLE_MAP: dict[str, StyleConfig] = {
     "split": StyleConfig("split", allow_close=False, allow_grid3=False, allow_grid4=False),
     "fit": StyleConfig("fit", allow_close=False, allow_two_up=False, allow_grid3=False, allow_grid4=False, allow_wide=True),
     "fill": StyleConfig("fill", allow_close=True, allow_two_up=False, allow_grid3=False, allow_grid4=False),
+    "screen_pip": StyleConfig(
+        "screen_pip",
+        allow_close=False,
+        allow_two_up=False,
+        allow_grid3=False,
+        allow_grid4=False,
+        allow_wide=False,
+    ),
+    "side": StyleConfig("side", allow_close=False, allow_grid3=False, allow_grid4=False),
 }
 
 

@@ -1,6 +1,8 @@
 """ffmpeg filtergraph builders for multiperson crop v2 (unit-tested strings)."""
 from __future__ import annotations
 
+from clips_worker.compose_layout import layout_slots
+
 OUT_W = 1080
 OUT_H = 1920
 DIVIDER_PX = 4
@@ -66,6 +68,20 @@ def slot_crop_filter(
     return f"{cropped};[{out_label}_raw]scale={slot_w}:{slot_h}:flags=lanczos[{out_label}]"
 
 
+def side_by_side_filter() -> str:
+    return "[s0][s1]hstack=inputs=2"
+
+
+def screen_pip_overlay_filter(bg_label: str, cam_label: str, out_label: str, out_w: int, out_h: int) -> str:
+    """Blur-fit main + webcam inset (IMPLEMENTATION-GUIDE §10.2 pip geometry)."""
+    slots = layout_slots("screen_pip", out_w, out_h, 2)
+    ox, oy, ow, oh = slots[1]
+    return (
+        f"[{cam_label}]scale={ow}:{oh}:flags=lanczos[cam];"
+        f"[{bg_label}][cam]overlay={ox}:{oy}:format=auto[{out_label}]"
+    )
+
+
 def segment_layout_stack(layout: str) -> str:
     if layout == "two_up":
         return two_up_vstack_filter()
@@ -73,6 +89,8 @@ def segment_layout_stack(layout: str) -> str:
         return grid4_xstack_filter()
     if layout == "grid3":
         return grid3_layout_filter()
+    if layout == "side":
+        return side_by_side_filter()
     return ""
 
 
