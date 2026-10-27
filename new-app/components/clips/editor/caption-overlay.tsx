@@ -143,18 +143,31 @@ export function CaptionOverlay({
 }
 
 export function CaptionMiniPreview({ preset, label = 'CLIP' }: { preset: CaptionPreset; label?: string }) {
-  const words = label.split(' ').map((w, i) => ({ w, s: i * 0.4, e: (i + 1) * 0.4, idx: i }))
+  const words = label.split(' ').map((w, i) => ({ w, s: i * 0.35, e: (i + 1) * 0.35 + 0.15, idx: i }))
   const edits: ClipEditsV2 = {
     v: 2,
     trim: { in: 0, out: 99999 },
     cutRanges: [],
     wordFixes: {},
-    captions: { enabled: true, presetId: preset.slug.replace(/-/g, '_'), animation: preset.animation },
+    captions: {
+      enabled: true,
+      presetId: preset.slug.replace(/-/g, '_'),
+      animation: preset.animation,
+      case: preset.case,
+      wordsPerLine: preset.wordsPerLine,
+    },
     layout: { mode: 'speaker_follow', shotOverrides: [] },
   }
+  const previewTimeSec = 0.25
   return (
-    <div className="relative h-16 overflow-hidden rounded-md bg-black/90">
-      <CaptionOverlay words={words as ClipWord[]} currentTimeSec={0.5} edits={edits} boxHeightPx={64} />
+    <div className="relative h-16 overflow-hidden rounded-md bg-gradient-to-b from-zinc-800 to-zinc-950">
+      <CaptionOverlay
+        words={words as ClipWord[]}
+        currentTimeSec={previewTimeSec}
+        edits={edits}
+        boxHeightPx={64}
+        outputDurationSec={2}
+      />
     </div>
   )
 }
