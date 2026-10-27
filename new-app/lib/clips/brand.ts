@@ -38,6 +38,25 @@ export function defaultBrandSettings(): BrandTemplateSettings {
   return brandTemplateSettingsSchema.parse({})
 }
 
+/** Map project `settings.brand` blob into clip `edits.brand` for export/render. */
+export function brandEditsFromProjectBrand(brand: Record<string, unknown> | null | undefined): ClipBrandEdits | undefined {
+  if (!brand || typeof brand !== 'object') return undefined
+  const out: ClipBrandEdits = {
+    templateId: brand.templateId as string | undefined,
+    logoKey: brand.logoKey as string | undefined,
+    logoPosition: brand.logoPosition as ClipBrandEdits['logoPosition'],
+    logoSizePct: typeof brand.logoSizePct === 'number' ? brand.logoSizePct : undefined,
+    logoOpacity: typeof brand.logoOpacity === 'number' ? brand.logoOpacity : undefined,
+    primaryColor: typeof brand.primaryColor === 'string' ? brand.primaryColor : undefined,
+    introVideoKey: brand.introVideoKey as string | undefined,
+    outroVideoKey: brand.outroVideoKey as string | undefined,
+    useIntro: brand.useIntro !== false && Boolean(brand.introVideoKey),
+    useOutro: brand.useOutro !== false && Boolean(brand.outroVideoKey),
+  }
+  if (!out.logoKey && !out.introVideoKey && !out.outroVideoKey && !out.templateId) return undefined
+  return out
+}
+
 export function brandOverlayExpr(
   brand: ClipBrandEdits,
   videoW: number,

@@ -3,6 +3,28 @@ import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
 import { projectWordsKey } from '@/lib/storage'
+import type { ClipBrandTemplate } from '@prisma/client'
+
+function mergeDefaultBrandSettings(
+  baseSettings: ClipProjectSettings,
+  brandRow: ClipBrandTemplate,
+): ClipProjectSettings {
+  return clipProjectSettingsSchema.parse({
+    ...baseSettings,
+    brandTemplateId: brandRow.id,
+    brand: {
+      templateId: brandRow.id,
+      logoKey: brandRow.logoKey,
+      introVideoKey: brandRow.introVideoKey,
+      outroVideoKey: brandRow.outroVideoKey,
+      useIntro: Boolean(brandRow.introVideoKey),
+      useOutro: Boolean(brandRow.outroVideoKey),
+      ...(typeof brandRow.settings === 'object' && brandRow.settings !== null
+        ? (brandRow.settings as Record<string, unknown>)
+        : {}),
+    },
+  })
+}
 
 export async function listClipProjects(
   workspaceId: string,
@@ -52,16 +74,7 @@ export async function createClipProject(
     where: { workspaceId, isDefault: true },
   })
   const baseSettings = clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings())
-  const settings = brandRow
-    ? clipProjectSettingsSchema.parse({
-        ...baseSettings,
-        brand: {
-          templateId: brandRow.id,
-          logoKey: brandRow.logoKey,
-          ...(typeof brandRow.settings === 'object' ? brandRow.settings : {}),
-        },
-      })
-    : baseSettings
+  const settings = brandRow ? mergeDefaultBrandSettings(baseSettings, brandRow) : baseSettings
   const rangeEnd = settings.rangeEndMs || upload.durationMs || 0
   const projectId = createId('proj')
   const title = input.title?.trim() || upload.filename.replace(/\.[^.]+$/, '')
@@ -106,16 +119,7 @@ export async function createClipProjectFromImportUrl(
     where: { workspaceId, isDefault: true },
   })
   const baseSettings = clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings())
-  const settings = brandRow
-    ? clipProjectSettingsSchema.parse({
-        ...baseSettings,
-        brand: {
-          templateId: brandRow.id,
-          logoKey: brandRow.logoKey,
-          ...(typeof brandRow.settings === 'object' ? brandRow.settings : {}),
-        },
-      })
-    : baseSettings
+  const settings = brandRow ? mergeDefaultBrandSettings(baseSettings, brandRow) : baseSettings
 
   const projectId = createId('proj')
   const title =
