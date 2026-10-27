@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
 import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
 import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
+import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 import { kickLiveCaptureEnabled } from '@/lib/server/streamer/kick-live-capture'
 import { getPrisma } from '@/lib/server/db'
 
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
         where: { id: ch.id },
         data: { platformState: { ...ps, live: null } },
       })
-      if (ch.autoProcess) {
+      if (streamerAutopullUiEnabled() && ch.autoProcess) {
         await enqueueStreamAutopull(ch.id, startedAt, { platform: 'kick' })
       }
     }

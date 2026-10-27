@@ -230,6 +230,14 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
             """,
             (url, title, external, duration_ms, range_start_ms, range_end_ms, json.dumps(state), vod_id),
         )
+        cur.execute(
+            """
+            UPDATE clip_projects
+            SET "rangeStartMs"=%s, "rangeEndMs"=%s, title=COALESCE(%s, title), "updatedAt"=NOW()
+            WHERE id=%s
+            """,
+            (range_start_ms, range_end_ms, title, vod["projectId"]),
+        )
         import_id = f"job_{uuid.uuid4().hex}"
         cur.execute(
             """

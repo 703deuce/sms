@@ -4,6 +4,7 @@ import { projectWordsKey } from '@/lib/storage'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { matchTwitchArchiveVod } from '@/lib/server/streamer/twitch-growing'
+import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 
 const DEFAULT_CHUNK_MIN = Number(process.env.STREAMER_ROLLING_CHUNK_MIN || 12)
 
@@ -13,6 +14,7 @@ export async function beginTwitchRollingSession(
   startedAt: Date,
   streamSessionId?: string,
 ) {
+  if (!streamerAutopullUiEnabled()) return null
   const prisma = getPrisma()
   const channel = await prisma.streamChannel.findUnique({ where: { id: channelId } })
   if (!channel || channel.deletedAt || channel.platform !== 'twitch' || !channel.autoProcess) {

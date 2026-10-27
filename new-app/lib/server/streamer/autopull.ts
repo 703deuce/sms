@@ -5,12 +5,16 @@ import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getTwitchVodDelaySec } from '@/lib/server/streamer/twitch'
 import { getKickVodDelaySec } from '@/lib/server/streamer/kick'
+import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 
 export async function enqueueStreamAutopull(
   channelId: string,
   streamedAt: Date,
   opts?: { title?: string; platform?: string; streamSessionId?: string },
 ) {
+  if (!streamerAutopullUiEnabled()) {
+    throw new Error('Auto-pull is disabled (set STREAMER_AUTOPULL_ENABLED=1 after reliability sign-off)')
+  }
   const prisma = getPrisma()
   const channel = await prisma.streamChannel.findUnique({
     where: { id: channelId },

@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
 import { streamerLiveRealtimeEnabled, streamerTwitchRollingEnabled } from '@/lib/server/streamer/env'
+import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
 import {
   beginTwitchRollingSession,
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
           }) as Prisma.InputJsonValue,
         },
       })
-      if (streamerTwitchRollingEnabled() && ch.autoProcess) {
+      if (streamerAutopullUiEnabled() && streamerTwitchRollingEnabled() && ch.autoProcess) {
         await beginTwitchRollingSession(ch.id, startedAt, streamSessionId)
         console.info(`[clipper:autopull] live_session_started channelId=${ch.id} platform=twitch`)
       }
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
       const startedAt = live.startedAt ? new Date(live.startedAt) : new Date()
       const streamSessionId = live.sessionId ? String(live.sessionId) : undefined
 
-      if (ch.autoProcess && ch.externalId) {
+      if (streamerAutopullUiEnabled() && ch.autoProcess && ch.externalId) {
         const vodHealth = await checkTwitchChannelVodSaving(ch.externalId, ch.login)
         await persistChannelVodSaving(ch.id, vodHealth)
         if (vodHealth.status === 'blocked') {
