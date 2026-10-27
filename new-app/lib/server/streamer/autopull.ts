@@ -9,7 +9,7 @@ import { getKickVodDelaySec } from '@/lib/server/streamer/kick'
 export async function enqueueStreamAutopull(
   channelId: string,
   streamedAt: Date,
-  opts?: { title?: string; platform?: string },
+  opts?: { title?: string; platform?: string; streamSessionId?: string },
 ) {
   const prisma = getPrisma()
   const channel = await prisma.streamChannel.findUnique({
@@ -48,9 +48,7 @@ export async function enqueueStreamAutopull(
         transcriptKey: projectWordsKey(workspaceId, projectId),
       },
     })
-    const ps = (channel.platformState as Record<string, unknown>) || {}
-    const live = (ps.live as { sessionId?: string } | null) || null
-    const streamSessionId = live?.sessionId ? String(live.sessionId) : undefined
+    const streamSessionId = opts?.streamSessionId?.trim() || undefined
     await tx.streamVod.create({
       data: {
         id: vodId,

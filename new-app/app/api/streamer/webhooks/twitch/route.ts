@@ -72,14 +72,15 @@ export async function POST(request: Request) {
     })
     if (ch) {
       const ps = (ch.platformState as Record<string, unknown>) || {}
-      const live = (ps.live as { startedAt?: string }) || {}
+      const live = (ps.live as { startedAt?: string; sessionId?: string }) || {}
       const startedAt = live.startedAt ? new Date(live.startedAt) : new Date()
+      const streamSessionId = live.sessionId ? String(live.sessionId) : undefined
       await prisma.streamChannel.update({
         where: { id: ch.id },
         data: { platformState: mergePlatformState(ch.platformState, { live: null }) as Prisma.InputJsonValue },
       })
       if (ch.autoProcess) {
-        await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch' })
+        await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch', streamSessionId })
       } else {
         await handleStreamerNotify({
           workspaceId: ch.workspaceId,
