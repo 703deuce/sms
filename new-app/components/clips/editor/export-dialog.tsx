@@ -84,6 +84,9 @@ export function ExportDialog({
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [durationMs, setDurationMs] = useState<number | null>(null)
+  const [renderProgress, setRenderProgress] = useState<number | null>(null)
+  const [renderPhase, setRenderPhase] = useState<string | null>(null)
+  const [renderEtaSec, setRenderEtaSec] = useState<number | null>(null)
   const [exportPlatform, setExportPlatform] = useState<ExportPlatformId | 'none'>('none')
   const [exportTemplate, setExportTemplate] = useState<ClipExportTemplate | undefined>(edits.exportTemplate)
   const [exportSfx, setExportSfx] = useState<ExportSfxMode>('off')
@@ -128,6 +131,9 @@ export function ExportDialog({
       setErrorDetail(null)
       setThumbnailUrl(null)
       setDurationMs(null)
+      setRenderProgress(null)
+      setRenderPhase(null)
+      setRenderEtaSec(null)
     }
   }, [open])
 
@@ -153,6 +159,9 @@ export function ExportDialog({
         .then((r) => {
           setStatus(r.status)
           if (typeof r.durationMs === 'number') setDurationMs(r.durationMs)
+          if (typeof r.progress === 'number') setRenderProgress(r.progress)
+          if (r.phase) setRenderPhase(r.phase)
+          if (typeof r.etaSec === 'number') setRenderEtaSec(r.etaSec)
           if (r.status === 'FAILED') {
             const msg = r.error || 'Export failed'
             setErrorDetail(msg)
@@ -470,7 +479,11 @@ export function ExportDialog({
         <MediaCredits clipId={clipId} edits={edits} />
         {status && status !== 'READY' && status !== 'FAILED' && (
           <p className="mt-3 text-sm" role="status" aria-live="polite">
-            {status === 'QUEUED' ? 'Queued for rendering…' : 'Rendering export…'}
+            {status === 'QUEUED'
+              ? 'Queued for rendering…'
+              : `Rendering export…${renderProgress != null ? ` ${renderProgress}%` : ''}${
+                  renderPhase ? ` (${renderPhase.replace(/_/g, ' ')})` : ''
+                }${renderEtaSec != null && renderEtaSec > 0 ? ` · ~${renderEtaSec}s left` : ''}`}
           </p>
         )}
         {durationMs != null && durationMs > 0 && (

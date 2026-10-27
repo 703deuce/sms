@@ -22,9 +22,18 @@ import {
   setLayoutModeForSegmentAt,
   splitLayoutSegmentAt,
 } from '@/lib/clips/layout-segments'
+import { FetchJsonError } from '@/lib/client/fetch-json'
 import { patchClip } from '@/lib/clips-api'
+import {
+  clearEditorAutosaveDraft,
+  draftDiffersFromServer,
+  readEditorAutosaveDraft,
+  writeEditorAutosaveDraft,
+} from '@/lib/clips/editor-autosave-draft'
+import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
+import { toast } from 'sonner'
 
 const MAX_UNDO = 100
 
@@ -108,19 +117,37 @@ export function editorEditsReducer(state: State, action: Action): State {
   }
 }
 
-export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits: ClipEditsV2) {
+export function useEditorState(
+  clipId: string,
+  bounds: ClipBounds,
+  initialEdits: ClipEditsV2,
+  opts?: { serverUpdatedAt?: string; words?: SourceWord[] },
+) {
   const safeInitial = normalizeEdits(initialEdits, bounds)
+  const draft = readEditorAutosaveDraft(clipId)
+  const restored =
+    draft && draftDiffersFromServer(draft, safeInitial) ? normalizeEdits(draft.edits, bounds) : safeInitial
   const [state, dispatch] = useReducer(editorEditsReducer, {
-    edits: safeInitial,
+    edits: restored,
     past: [],
     future: [],
-    saveState: 'saved',
+    saveState: draft && draftDiffersFromServer(draft, safeInitial) ? 'dirty' : 'saved',
     producerStrip: null,
   })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveGenRef = useRef(0)
+  const serverUpdatedAtRef = useRef(opts?.serverUpdatedAt)
+  const wordsRef = useRef(opts?.words ?? [])
+  wordsRef.current = opts?.words ?? wordsRef.current
   const editsRef = useRef(state.edits)
   editsRef.current = state.edits
+
+  useEffect(() => {
+    if (draft && draftDiffersFromServer(draft, safeInitial)) {
+      toast.message('Restored unsaved edits from this device')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
+  }, [])
 
   const setEdits = useCallback((edits: ClipEditsV2, pushHistory = true) => {
     dispatch({ type: 'set', edits, pushHistory })
@@ -138,12 +165,22 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
   const redo = useCallback(() => dispatch({ type: 'redo' }), [])
   const clearProducerStrip = useCallback(() => dispatch({ type: 'clearProducerStrip' }), [])
 
+  const wordSpans = useCallback(() => {
+    return wordsRef.current.map((w) => {
+      const { startMs, endMs } = wordSourceMs(w)
+      return { s: startMs / 1000, e: endMs / 1000, w: w.w }
+    })
+  }, [])
+
   const addCutRange = useCallback(
     (range: CutRange) => {
-      const cuts = mergeCutRanges([...state.edits.cutRanges, range])
+      const spans = wordSpans()
+      const snapped = spans.length ? snapCutRangeToWordGaps(range, spans) ?? range : range
+      const nextRange = spans.length ? sanitizeCutRangesForWords([snapped], spans)[0] ?? snapped : snapped
+      const cuts = mergeCutRanges([...state.edits.cutRanges, nextRange])
       setEdits({ ...state.edits, cutRanges: cuts })
     },
-    [setEdits, state.edits],
+    [setEdits, state.edits, wordSpans],
   )
 
   const setWordFix = useCallback(
@@ -345,11 +382,39 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     (sourceMs: number) => {
       const range = cutRangeForLayoutSegmentAt(state.edits, sourceMs)
       if (!range) return
-      const cuts = mergeCutRanges([...state.edits.cutRanges, range])
+      const spans = wordSpans()
+      const safe = spans.length ? snapCutRangeToWordGaps(range, spans) : range
+      if (!safe) return
+      const cuts = mergeCutRanges([...state.edits.cutRanges, safe])
       setEdits({ ...state.edits, cutRanges: cuts })
     },
-    [setEdits, state.edits],
+    [setEdits, state.edits, wordSpans],
   )
+
+  const persistEdits = useCallback(async () => {
+    const gen = saveGenRef.current
+    try {
+      const res = await patchClip(clipId, {
+        edits: editsRef.current,
+        expectedUpdatedAt: serverUpdatedAtRef.current,
+      })
+      if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
+      clearEditorAutosaveDraft(clipId)
+      if (gen === saveGenRef.current) dispatch({ type: 'saved' })
+      return res
+    } catch (err) {
+      if (err instanceof FetchJsonError && err.status === 409 && err.conflictData) {
+        const data = err.conflictData as { edits?: ClipEditsV2; updatedAt?: string }
+        if (data.edits) {
+          dispatch({ type: 'set', edits: normalizeEdits(data.edits, bounds), pushHistory: false })
+          if (data.updatedAt) serverUpdatedAtRef.current = data.updatedAt
+          toast.error('Edits were updated elsewhere — loaded the latest saved version')
+        }
+      }
+      if (gen === saveGenRef.current) dispatch({ type: 'saved' })
+      throw err
+    }
+  }, [bounds, clipId])
 
   useEffect(() => {
     if (state.saveState !== 'dirty') return
@@ -358,19 +423,18 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     debounceRef.current = setTimeout(() => {
       const gen = ++saveGenRef.current
       dispatch({ type: 'saving' })
-      void patchClip(clipId, { edits: editsRef.current })
-        .then(() => {
-          if (gen === saveGenRef.current) dispatch({ type: 'saved' })
-        })
-        .catch(() => {
-          if (gen === saveGenRef.current) dispatch({ type: 'saved' })
-        })
+      writeEditorAutosaveDraft(clipId, {
+        edits: editsRef.current,
+        savedAt: new Date().toISOString(),
+        serverUpdatedAt: serverUpdatedAtRef.current,
+      })
+      void persistEdits().catch(() => {})
     }, 450)
     return () => {
       clearTimeout(savingUi)
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [clipId, state.edits, state.saveState])
+  }, [clipId, persistEdits, state.edits, state.saveState])
 
   useEffect(() => {
     if (!state.producerStrip) return
@@ -422,12 +486,9 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
       if (state.saveState === 'dirty' || state.saveState === 'saving') {
         const gen = ++saveGenRef.current
         dispatch({ type: 'saving' })
-        return patchClip(clipId, { edits: editsRef.current })
-          .then(() => {
-            if (gen === saveGenRef.current) dispatch({ type: 'saved' })
-          })
+        return persistEdits()
+          .then(() => undefined)
           .catch(() => {
-            if (gen === saveGenRef.current) dispatch({ type: 'saved' })
             throw new Error('Could not save edits')
           })
       }

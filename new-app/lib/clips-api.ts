@@ -188,11 +188,17 @@ export function getClipEditor(clipId: string) {
   }>(`/api/clips/clips/${clipId}`)
 }
 
-export function patchClip(clipId: string, body: { title?: string; edits?: unknown }) {
-  return clipsFetch<{ id: string; title: string; edits: unknown }>(`/api/clips/clips/${clipId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(body),
-  })
+export function patchClip(
+  clipId: string,
+  body: { title?: string; edits?: unknown; expectedUpdatedAt?: string },
+) {
+  return clipsFetch<{ id: string; title: string; edits: unknown; updatedAt?: string }>(
+    `/api/clips/clips/${clipId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+  )
 }
 
 export function retryFailedExportRender(renderId: string) {
@@ -242,6 +248,9 @@ export function getRenderStatus(renderId: string) {
     error: string | null
     durationMs?: number | null
     sizeBytes?: number | null
+    progress?: number | null
+    phase?: string | null
+    etaSec?: number | null
   }>(`/api/clips/renders/${renderId}`)
 }
 

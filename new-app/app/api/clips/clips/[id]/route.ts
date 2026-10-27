@@ -14,6 +14,8 @@ const patchSchema = z.object({
   edits: z.record(z.unknown()).optional(),
   hidden: z.boolean().optional(),
   disliked: z.boolean().optional(),
+  /** ISO timestamp from last load — optimistic concurrency for autosave. */
+  expectedUpdatedAt: z.string().min(8).optional(),
 })
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -40,6 +42,25 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (body.title !== undefined) data.title = body.title
     if (body.favorite !== undefined) data.favorite = body.favorite
     if (body.edits !== undefined) {
+      if (
+        body.expectedUpdatedAt &&
+        clip.updatedAt.toISOString() !== body.expectedUpdatedAt
+      ) {
+        const { normalizeEdits } = await import('@/lib/clips/edits')
+        return NextResponse.json(
+          {
+            error: 'Edits conflict — reload to get the latest version.',
+            code: 'EDITS_CONFLICT',
+            data: {
+              id: clip.id,
+              title: clip.title,
+              edits: normalizeEdits(clip.edits, bounds),
+              updatedAt: clip.updatedAt.toISOString(),
+            },
+          },
+          { status: 409 },
+        )
+      }
       const { normalizeEdits } = await import('@/lib/clips/edits')
       data.edits = mergeEditsPatch(normalizeEdits(clip.edits, bounds), body.edits, bounds)
     }
@@ -79,7 +100,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       }
     }
 
-    return NextResponse.json({ data: { id: updated.id, title: updated.title, edits: updated.edits } })
+    return NextResponse.json({
+      data: {
+        id: updated.id,
+        title: updated.title,
+        edits: updated.edits,
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    })
   } catch (err) {
     return jsonError(err, 400)
   }

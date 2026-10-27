@@ -1,4 +1,5 @@
 import { mergeCutRanges, type ClipEditsV2, type ClipWord } from '@/lib/clips/edits'
+import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
 
 /** Gap cuts between words for silence trimming (ms on source timeline). */
 export type SilenceTrimSettings = {
@@ -61,7 +62,9 @@ export function silenceTrimCutRanges(
     const remove = gap - keep
     if (remove <= 50) continue
     const mid = gapStart + gap / 2
-    cuts.push([Math.round(mid - remove / 2), Math.round(mid + remove / 2)])
+    const raw: [number, number] = [Math.round(mid - remove / 2), Math.round(mid + remove / 2)]
+    const snapped = snapCutRangeToWordGaps(raw, words, 60)
+    if (snapped) cuts.push(snapped)
   }
   return cuts
 }
@@ -73,10 +76,13 @@ export function applySilenceTrimToEdits(
 ): ClipEditsV2 {
   const settings = { ...edits.silenceTrim, ...opts, enabled: true }
   const wordMs = words.map((w) => ({ s: w.s, e: w.e, w: w.w }))
-  const extra = [
-    ...silenceTrimCutRanges(wordMs, settings),
-    ...(settings.fillerTrim ? fillerWordCutRanges(wordMs) : []),
-  ]
+  const extra = sanitizeCutRangesForWords(
+    [
+      ...silenceTrimCutRanges(wordMs, settings),
+      ...(settings.fillerTrim ? fillerWordCutRanges(wordMs) : []),
+    ],
+    wordMs,
+  )
   if (!extra.length) return { ...edits, silenceTrim: settings }
   return {
     ...edits,

@@ -13,9 +13,22 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     const render = await getRenderForWorkspace(workspaceId, id)
     if (!render) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const storage = getClipStorage()
-    const clip = await import('@/lib/server/db').then((m) =>
-      m.getPrisma().clip.findUnique({ where: { id: render.clipId } }),
-    )
+    const prisma = (await import('@/lib/server/db')).getPrisma()
+    const clip = await prisma.clip.findUnique({ where: { id: render.clipId } })
+    const activeJob = await prisma.clipJob.findFirst({
+      where: {
+        clipId: render.clipId,
+        type: 'RENDER_CLIP',
+        status: { in: ['QUEUED', 'RUNNING'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { payload: true },
+    })
+    const jobPayload = activeJob?.payload as {
+      clipperWatchdog?: { phase?: string; progress?: number }
+      renderEtaSeconds?: number
+    } | null
+    const wd = jobPayload?.clipperWatchdog
     const filename = render.filename || exportFilename(clip?.title || 'clip')
     const durationMs = clip ? clip.endMs - clip.startMs : null
     let downloadUrl: string | null = null
@@ -39,6 +52,9 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
         error: render.error,
         durationMs,
         sizeBytes: render.sizeBytes != null ? Number(render.sizeBytes) : null,
+        progress: typeof wd?.progress === 'number' ? wd.progress : render.status === 'RENDERING' ? 5 : null,
+        phase: wd?.phase ?? (render.status === 'RENDERING' ? 'render_clip' : null),
+        etaSec: typeof jobPayload?.renderEtaSeconds === 'number' ? jobPayload.renderEtaSeconds : null,
       },
     })
   } catch (err) {

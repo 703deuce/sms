@@ -1,3 +1,4 @@
+import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -19,21 +20,24 @@ export default async function ClipEditorPage({
   const posterUrl = data.mediaUrls.poster || data.mediaUrls.preview
 
   return (
-    <EditorShell
-      projectId={projectId}
-      projectTitle={data.project.title}
-      clipId={clipId}
-      initialTitle={data.clip.title}
-      bounds={data.bounds}
-      initialEdits={data.edits}
-      words={data.words}
-      cropShots={data.crop.shots}
-      cropTrack={data.crop.track}
-      videoUrl={videoUrl}
-      posterUrl={posterUrl}
-      aiMeta={data.aiMeta}
-      brollMedia={data.brollMedia}
-      reframeV2Enabled={data.capabilities.reframeV2Enabled}
-    />
+    <ClipperSurfaceErrorBoundary surface="Clip editor">
+      <EditorShell
+        projectId={projectId}
+        projectTitle={data.project.title}
+        clipId={clipId}
+        initialTitle={data.clip.title}
+        serverUpdatedAt={data.clip.updatedAt}
+        bounds={data.bounds}
+        initialEdits={data.edits}
+        words={data.words}
+        cropShots={data.crop.shots}
+        cropTrack={data.crop.track}
+        videoUrl={videoUrl}
+        posterUrl={posterUrl}
+        aiMeta={data.aiMeta}
+        brollMedia={data.brollMedia}
+        reframeV2Enabled={data.capabilities.reframeV2Enabled}
+      />
+    </ClipperSurfaceErrorBoundary>
   )
 }

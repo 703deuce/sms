@@ -5,12 +5,14 @@ const RETRY_BASE_MS = 600
 export class FetchJsonError extends Error {
   readonly status?: number
   readonly retryable: boolean
+  readonly conflictData?: unknown
 
-  constructor(message: string, opts?: { status?: number; retryable?: boolean }) {
+  constructor(message: string, opts?: { status?: number; retryable?: boolean; conflictData?: unknown }) {
     super(message)
     this.name = 'FetchJsonError'
     this.status = opts?.status
     this.retryable = opts?.retryable ?? false
+    this.conflictData = opts?.conflictData
   }
 }
 
@@ -104,7 +106,11 @@ export async function fetchJson<T = unknown>(url: string, options: FetchJsonOpti
         throw new FetchJsonError(gatewayUserMessage(res.status), { status: res.status })
       }
       const msg = body?.error || res.statusText || `Request failed (${res.status})`
-      throw new FetchJsonError(msg, { status: res.status })
+      const conflictBody = body as { code?: string; data?: unknown } | null
+      throw new FetchJsonError(msg, {
+        status: res.status,
+        conflictData: conflictBody?.code === 'EDITS_CONFLICT' ? conflictBody.data : undefined,
+      })
     }
 
     return json as T

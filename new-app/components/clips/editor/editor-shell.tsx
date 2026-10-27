@@ -20,6 +20,7 @@ import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
+import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { clipLayoutChip, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
@@ -59,6 +60,7 @@ export function EditorShell({
   projectTitle,
   clipId,
   initialTitle,
+  serverUpdatedAt,
   bounds,
   initialEdits,
   words,
@@ -74,6 +76,7 @@ export function EditorShell({
   projectTitle?: string
   clipId: string
   initialTitle: string
+  serverUpdatedAt?: string
   bounds: ClipBounds
   initialEdits: ClipEditsV2
   words: SourceWord[]
@@ -143,7 +146,7 @@ export function EditorShell({
     splitLayoutAtSource,
     setLayoutModeAtSource,
     cutSectionAtSource,
-  } = useEditorState(clipId, bounds, initialEdits)
+  } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, words })
 
   const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
 
@@ -645,7 +648,8 @@ export function EditorShell({
       >
         <PanelRightOpen className="size-5" />
       </Button>
-      <ExportDialog
+      <ClipperSurfaceErrorBoundary surface="Export">
+        <ExportDialog
         clipId={clipId}
         title={title}
         edits={edits}
@@ -674,6 +678,7 @@ export function EditorShell({
         onBeforeExport={() => flushSave()}
         onClose={() => setExportOpen(false)}
       />
+      </ClipperSurfaceErrorBoundary>
     </div>
   )
 }

@@ -117,7 +117,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
 
     ctx = load_render_context(conn, render_id)
     mark_render(conn, render_id, "RENDERING")
-    post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 10})
+    post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 10, "etaSeconds": 180})
 
     clip_start = int(ctx["startMs"])
     clip_end = int(ctx["endMs"])
@@ -169,6 +169,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         td_path = Path(td)
         src = td_path / "source.mp4"
         download_object(source_key, src)
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 28, "etaSeconds": 120})
         clip_file = td_path / "clip.mp4"
         cut_start, cut_end = expanded_source_cut_ms(clip_start, clip_end, edits)
         rel_start = cut_start - source_offset_ms
@@ -190,6 +191,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             audio_assets = {**(audio_assets or {}), "dub_assets": dub}
 
         out_mp4 = td_path / "render.mp4"
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 90})
         render_meta: dict = {}
         _, _edited_words, srt_body = render_edited_clip(
             clip_file,
@@ -226,6 +228,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             concat_brand_bookends(out_mp4, bookended, intro_p, outro_p, w, h, td_path)
             out_mp4 = bookended
 
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 82, "etaSeconds": 30})
         out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.mp4"
         srt_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.srt"
         upload_file(out_key, out_mp4, "video/mp4")

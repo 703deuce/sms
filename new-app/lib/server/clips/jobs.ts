@@ -14,6 +14,7 @@ import { clampEtaBetweenPolls, etaStageKey } from '@/lib/clips/eta-poll'
 import { computeNonStreamerClipEtaSec } from '@/lib/server/clips/project-eta'
 import { fairQueueAheadForJob } from '@/lib/server/clips/job-queue-fairness'
 import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
+import { reapClipperProgressStalls } from '@/lib/server/clips/clipper-watchdog-reaper'
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
 
@@ -376,5 +377,6 @@ export async function reapStaleJobs() {
     failed += 1
   }
 
-  return requeued + failed
+  const watchdogActs = await reapClipperProgressStalls()
+  return requeued + failed + watchdogActs
 }

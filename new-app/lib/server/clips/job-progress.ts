@@ -1,4 +1,5 @@
 import type { ClipProjectStatus } from '@prisma/client'
+import { mergeWatchdogSnap, type ClipperWatchdogSnap } from '@/lib/clips/clipper-watchdog'
 import { getPrisma } from '@/lib/server/db'
 import { shouldTouchLockedAt } from '@/lib/server/clips/jobs'
 
@@ -117,6 +118,23 @@ export async function applyWorkerJobProgress(input: {
   }
   if (input.transcriptionFallbackReason !== undefined) {
     jobPayloadPatch.transcriptionFallbackReason = input.transcriptionFallbackReason
+  }
+  if (
+    input.stage !== undefined ||
+    input.progress !== undefined ||
+    input.jobStatus === 'RUNNING' ||
+    (input.etaSeconds !== undefined && input.jobType === 'RENDER_CLIP')
+  ) {
+    const existingJob = await prisma.clipJob.findUnique({
+      where: { id: input.jobId },
+      select: { payload: true },
+    })
+    const prevPayload = (existingJob?.payload ?? {}) as Record<string, unknown>
+    const prevWd = prevPayload.clipperWatchdog as ClipperWatchdogSnap | undefined
+    jobPayloadPatch.clipperWatchdog = mergeWatchdogSnap(prevWd, input.stage, input.progress)
+    if (input.etaSeconds !== undefined && input.jobType === 'RENDER_CLIP') {
+      jobPayloadPatch.renderEtaSeconds = input.etaSeconds
+    }
   }
 
   const heartbeat = shouldTouchLockedAt(input.storedJobStatus, input.jobStatus)

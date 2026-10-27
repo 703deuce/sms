@@ -36,7 +36,12 @@ def silence_trim_cuts(words: list[dict], opts: dict) -> list[list[int]]:
         if remove <= 50:
             continue
         mid = gap_start + gap / 2
-        cuts.append([int(mid - remove / 2), int(mid + remove / 2)])
+        raw = [int(mid - remove / 2), int(mid + remove / 2)]
+        from clips_worker.word_cut import snap_cut_range_to_word_gaps
+
+        snapped = snap_cut_range_to_word_gaps(raw, words)
+        if snapped:
+            cuts.append(snapped)
     return cuts
 
 
@@ -59,5 +64,10 @@ def effective_cut_ranges(edits: dict, source_words: list[dict]) -> list:
         extra = silence_trim_cuts(source_words, st)
         if st.get("fillerTrim", True):
             extra = extra + filler_word_cuts(source_words)
-        return merge_cut_ranges(base + extra)
-    return base
+        from clips_worker.word_cut import sanitize_cut_ranges
+
+        merged = merge_cut_ranges(base + extra)
+        return sanitize_cut_ranges(merged, source_words)
+    from clips_worker.word_cut import sanitize_cut_ranges
+
+    return sanitize_cut_ranges(base, source_words)

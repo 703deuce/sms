@@ -117,6 +117,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       endMs: clip.endMs,
       score: clip.score,
       durationMs: clip.endMs - clip.startMs,
+      updatedAt: clip.updatedAt.toISOString(),
     },
     bounds,
     edits,

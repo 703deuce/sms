@@ -27,6 +27,7 @@ import { MontageDialog } from '@/components/streamer/montage-dialog'
 import { MontageProgress } from '@/components/streamer/montage-progress'
 import { Clapperboard, Film, FileText, Sparkles } from 'lucide-react'
 import Link from 'next/link'
+import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 
 type ProjectStatusPayload = {
   status: string
@@ -302,6 +303,7 @@ export function ProjectClipsView({
       : error || 'Something went wrong while processing this project.')
 
   return (
+    <ClipperSurfaceErrorBoundary surface="Project clips">
     <>
       <PageHeader
         icon={Film}
@@ -505,5 +507,6 @@ export function ProjectClipsView({
         </div>
       )}
     </>
+    </ClipperSurfaceErrorBoundary>
   )
 }
