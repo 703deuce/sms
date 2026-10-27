@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from psycopg2.extras import RealDictCursor
 
+from clips_worker.streamer.config import streamer_autopull_enabled
 from clips_worker.streamer.errors import RetryableError
 
 BACKOFF_MIN_TWITCH = [2, 5, 10, 20, 40]
@@ -111,6 +112,11 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
     attempt = int(payload.get("attempt") or 1)
     if not vod_id:
         raise RuntimeError("missing vodId")
+
+    if not streamer_autopull_enabled():
+        _log_autopull(f"skipped vodId={vod_id} reason=STREAMER_AUTOPULL_ENABLED_off")
+        post_progress(job["id"], {"jobStatus": "DONE"})
+        return
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(

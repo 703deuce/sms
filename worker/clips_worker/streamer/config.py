@@ -33,6 +33,21 @@ LLM_CANDIDATES = _int("STREAMER_LLM_CANDIDATES", 40)
 SCRATCH = Path(os.environ.get("STREAMER_SCRATCH_DIR", "/tmp/streamer"))
 
 
+def _env_truthy(name: str) -> bool:
+    raw = (os.environ.get(name) or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def streamer_autopull_enabled() -> bool:
+    """Matches web STREAMER_AUTOPULL_ENABLED — default off until ops enables."""
+    return _env_truthy("STREAMER_AUTOPULL_ENABLED")
+
+
+def streamer_twitch_rolling_enabled() -> bool:
+    """Matches web STREAMER_TWITCH_ROLLING_ENABLED — default off."""
+    return _env_truthy("STREAMER_TWITCH_ROLLING_ENABLED")
+
+
 def stream_chat_signal_enabled() -> bool:
     """VOD chat replay + ranker chat signal (default on). Set STREAM_CHAT_SIGNAL=0 to disable."""
     raw = (os.environ.get("STREAM_CHAT_SIGNAL") or "1").strip().lower()

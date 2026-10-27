@@ -75,9 +75,27 @@ def _vod_state_dict(vod: dict) -> dict:
 
 
 def _rolling_import_mode(vod: dict) -> bool:
+    from clips_worker.streamer.config import streamer_twitch_rolling_enabled
+
+    if not streamer_twitch_rolling_enabled():
+        return False
     state = _vod_state_dict(vod)
     mode = str(state.get("processMode") or "").lower()
     return mode == "rolling" and str(vod.get("platform") or "").lower() == "twitch"
+
+
+def _has_pending_stream_import(conn, project_id: str, vod_id: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1 FROM clip_jobs
+            WHERE "projectId"=%s AND type='STREAM_IMPORT' AND status IN ('QUEUED','RUNNING')
+              AND payload->>'vodId'=%s
+            LIMIT 1
+            """,
+            (project_id, vod_id),
+        )
+        return cur.fetchone() is not None
 
 
 def _schedule_rolling_import_tick(
@@ -87,6 +105,12 @@ def _schedule_rolling_import_tick(
     vod_id: str,
     chunk_min: int,
 ) -> None:
+    if _has_pending_stream_import(conn, project_id, vod_id):
+        print(
+            f"[clipper:stream] rolling_import_deduped vodId={vod_id} projectId={project_id}",
+            flush=True,
+        )
+        return
     new_id = f"job_{uuid.uuid4().hex}"
     with conn.cursor() as cur:
         cur.execute(
