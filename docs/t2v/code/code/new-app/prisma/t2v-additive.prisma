@@ -1,0 +1,89 @@
+// ===== T2V additive schema (append to new-app/prisma/schema.prisma; no existing column changes) =====
+
+// 1) ClipProject gets ONE optional column + back-relation (additive, default keeps existing rows valid):
+//    model ClipProject {
+//      ...
+//      sourceKind  String    @default("upload")   // "upload" | "import" | "stream" | "t2v"
+//      t2vDraft    T2vDraft?
+//    }
+//    @@index([workspaceId, sourceKind, createdAt])
+//
+// 2) enum GenerationKind { ... TTS_VOICE  AI_IMAGE }   // additive enum values (Postgres ALTER TYPE ADD VALUE)
+
+model T2vDraft {
+  id           String      @id // createId("t2v") from lib/supabase/id, like every clip model
+  workspaceId  String
+  projectId    String      @unique
+  project      ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document     Json        // T2vDraftV1 (lib/t2v/types.ts)
+  revision     Int         @default(0)
+  status       String      @default("DRAFT") // DRAFT | SCRIPTING | MATCHING | VOICING | ASSEMBLING | READY | FAILED
+  stage        String?
+  progress     Int         @default(0)
+  error        String?
+  assembledRevision Int?   // draft revision baked into the current ClipProject source
+  createdById  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([workspaceId, updatedAt])
+  @@map("t2v_drafts")
+}
+
+/// Content-addressed TTS cache. Same text+voice+settings never billed twice.
+model T2vVoiceClip {
+  id           String   @id // createId("t2v") from lib/supabase/id, like every clip model
+  workspaceId  String
+  hash         String
+  provider     String   @default("elevenlabs")
+  voiceId      String
+  modelId      String
+  text         String
+  storageKey   String
+  durationMs   Int
+  alignment    Json     // ElevenLabs alignment {characters, character_start_times_seconds, character_end_times_seconds}
+  chars        Int
+  costUsdMicros Int     @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([workspaceId, hash])
+  @@map("t2v_voice_clips")
+}
+
+/// System (workspaceId null) and workspace templates for the Templates gallery.
+model T2vTemplate {
+  id           String   @id // createId("t2v") from lib/supabase/id, like every clip model
+  workspaceId  String?
+  name         String
+  category     String   // explainer | listicle | promo | news | tutorial | quote | story
+  aspect       String   @default("16:9")
+  previewKey   String?
+  thumbKey     String?
+  settings     Json     // partial T2vDraftV1.settings + voice + music + text styles + transitions
+  sampleScript String?
+  sortOrder    Int      @default(0)
+  isPublished  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId, category, sortOrder])
+  @@map("t2v_templates")
+}
+
+/// Saved voices per workspace (favourites + instant clones). Clones need consentAt.
+model T2vSavedVoice {
+  id           String   @id // createId("t2v") from lib/supabase/id, like every clip model
+  workspaceId  String
+  provider     String   @default("elevenlabs")
+  voiceId      String
+  name         String
+  labels       Json?
+  previewUrl   String?
+  isClone      Boolean  @default(false)
+  consentAt    DateTime?
+  consentById  String?
+  createdAt    DateTime @default(now())
+
+  @@unique([workspaceId, provider, voiceId])
+  @@map("t2v_saved_voices")
+}

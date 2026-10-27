@@ -1,0 +1,23 @@
+--- a/new-app/lib/server/ai/pixabay.ts
++++ b/new-app/lib/server/ai/pixabay.ts
+@@ ensureStockAsset
+   if (!row.storageKey) {
+     const buf = await downloadRenditionToBuffer(hit.srcUrl, hit.fallbackSrcUrl)
+-    const { supabase, bucket } = await import('@/lib/storage/supabase-driver').then((m) => {
+-      const c = m.getSupabaseStorageConfig()
+-      if (!c) throw new Error('storage not configured')
+-      const { createClient } = require('@supabase/supabase-js') as typeof import('@supabase/supabase-js')
+-      return {
+-        supabase: createClient(c.url, c.key, { auth: { persistSession: false } }),
+-        bucket: c.bucket,
+-      }
+-    })
+-    const { error } = await supabase.storage.from(bucket).upload(objectKey, buf, {
+-      contentType: 'video/mp4',
+-      upsert: true,
+-    })
+-    if (error) throw new Error(error.message)
++    // Write through the active driver so signing (storage.createSignedDownloadUrl) and the
++    // worker (STORAGE_DRIVER=s3/B2) read the same bucket.
++    await storage.putBytes(objectKey, buf, 'video/mp4')
+     const updated = await prisma.stockAsset.update({
