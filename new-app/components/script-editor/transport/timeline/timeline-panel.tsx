@@ -29,6 +29,8 @@ import {
 import { ChevronDown, ChevronUp, LayoutGrid, Maximize2, Rows3, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TimelineMarkersLane } from '@/components/script-editor/markers/timeline-markers-lane'
+import { TimelineCommentPins } from '@/components/script-editor/comments/timeline-comment-pins'
+import type { CommentThreadDto } from '@/lib/server/clips/composition-comments'
 import type { ReactNode } from 'react'
 
 const LANE_LABEL_W = 56
@@ -66,6 +68,10 @@ export function TimelinePanel({
   outputDurationMs,
   markerToolbarExtra,
   onMoveMarker,
+  commentThreads,
+  showRulerMarkers = true,
+  showRulerComments = true,
+  clipSpans,
 }: {
   expanded: boolean
   heightPx: number
@@ -99,6 +105,10 @@ export function TimelinePanel({
   outputDurationMs?: number
   markerToolbarExtra?: ReactNode
   onMoveMarker?: (id: string, outMs: number) => void
+  commentThreads?: CommentThreadDto[]
+  showRulerMarkers?: boolean
+  showRulerComments?: boolean
+  clipSpans?: { id: string; label: string; outStartMs: number; outEndMs: number }[]
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const span = Math.max(
@@ -249,14 +259,30 @@ export function TimelinePanel({
               <div className="flex h-6 items-center px-1 pb-1">Music</div>
             </div>
             <div className="relative min-w-0 flex-1" style={{ width: widthPx }}>
-              <TimelineRuler durationMs={span} pxPerMs={pxPerMs} widthPx={widthPx} onSeekOutput={onSeekOutput} />
-              <TimelineMarkersLane
-                document={document}
-                widthPx={widthPx}
-                pxPerMs={pxPerMs}
-                onSeek={onSeekOutput}
-                onMoveMarker={onMoveMarker}
-              />
+              <div className="relative h-6 border-b border-border/40" style={{ width: widthPx }}>
+                <TimelineRuler durationMs={span} pxPerMs={pxPerMs} widthPx={widthPx} onSeekOutput={onSeekOutput} />
+                {showRulerComments && commentThreads && commentThreads.length > 0 && (
+                  <TimelineCommentPins
+                    threads={commentThreads}
+                    widthPx={widthPx}
+                    pxPerMs={pxPerMs}
+                    durationMs={span}
+                    onSeek={onSeekOutput}
+                  />
+                )}
+              </div>
+              {showRulerMarkers ? (
+                <TimelineMarkersLane
+                  document={document}
+                  widthPx={widthPx}
+                  pxPerMs={pxPerMs}
+                  onSeek={onSeekOutput}
+                  onMoveMarker={onMoveMarker}
+                  clipSpans={clipSpans}
+                />
+              ) : (
+                <div className="h-7 border-b border-border/40" style={{ width: widthPx }} />
+              )}
               {cutRegions.map((cut) => (
                 <div
                   key={`cut-${cut.loMs}-${cut.wordIds[0]}`}

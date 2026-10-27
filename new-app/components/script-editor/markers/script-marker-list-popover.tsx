@@ -13,11 +13,13 @@ export function ScriptMarkerListPopover({
   playheadOutMs,
   durationMs,
   onSeek,
+  clips,
 }: {
   document: ScriptDocumentV1
   playheadOutMs: number
   durationMs: number
   onSeek: (outMs: number) => void
+  clips?: { id: string; title: string; outStartMs: number; outEndMs: number }[]
 }) {
   const markers = useMemo(() => [...(document.markers ?? [])].sort((a, b) => a.outMs - b.outMs), [document.markers])
 
@@ -41,6 +43,25 @@ export function ScriptMarkerListPopover({
         </button>
         {markers.length === 0 && (
           <p className="px-2 py-2 text-xs text-muted-foreground">Add markers with / in the script</p>
+        )}
+        {clips && clips.length > 0 && (
+          <>
+            <p className="px-2 pt-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Clips</p>
+            {clips.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="flex h-8 w-full items-center justify-between gap-2 rounded-md px-2 text-[13px] hover:bg-accent"
+                onClick={() => onSeek(c.outStartMs)}
+              >
+                <span className="truncate text-lane-ai">{c.title}</span>
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                  {formatScriptTimecode(c.outStartMs)}
+                </span>
+              </button>
+            ))}
+            <p className="px-2 pt-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Markers</p>
+          </>
         )}
         {markers.map((m) => {
           const active = playheadOutMs >= m.outMs && playheadOutMs < (markers.find((x) => x.outMs > m.outMs)?.outMs ?? durationMs)

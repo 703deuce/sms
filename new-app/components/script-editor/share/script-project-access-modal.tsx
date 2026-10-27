@@ -80,6 +80,33 @@ export function ScriptProjectAccessModal({
     toast.success('Link copied')
   }
 
+  const revokeLink = async () => {
+    try {
+      const res = await clipsFetch<AccessData>(`/api/clips/compositions/${compositionId}/share`, {
+        method: 'PATCH',
+        body: JSON.stringify({ revokeLinks: true }),
+      })
+      setData(res)
+      setLinkAccess('INVITE_ONLY')
+      toast.success('Share link revoked')
+    } catch {
+      toast.error('Could not revoke link')
+    }
+  }
+
+  const removeMember = async (userId: string) => {
+    try {
+      const res = await clipsFetch<AccessData>(`/api/clips/compositions/${compositionId}/share`, {
+        method: 'PATCH',
+        body: JSON.stringify({ removeUserId: userId }),
+      })
+      setData(res)
+      toast.success('Removed collaborator')
+    } catch {
+      toast.error('Could not remove collaborator')
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal data-testid="project-access-modal">
       <div className="w-full max-w-[448px] rounded-xl border border-border bg-popover p-5 shadow-lg">
@@ -112,12 +139,17 @@ export function ScriptProjectAccessModal({
         </div>
         <div className="mt-4 space-y-2 border-t border-border pt-4">
           {data?.collaborators.map((c) => (
-            <div key={c.userId} className="flex h-12 items-center justify-between text-sm">
+            <div key={c.userId} className="flex h-12 items-center justify-between gap-2 text-sm">
               <div>
                 <p className="font-medium">{c.name}</p>
                 <p className="text-xs text-muted-foreground">{c.email}</p>
               </div>
-              <span className="text-xs text-muted-foreground">{c.role.replace('_', ' ')}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{c.role.replace('_', ' ')}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => void removeMember(c.userId)}>
+                  Remove
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -137,6 +169,9 @@ export function ScriptProjectAccessModal({
           <Button type="button" variant="ghost" size="sm" disabled={!data?.shareUrl} onClick={copyLink}>
             <Copy className="mr-1 size-4" />
             Copy link
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => void revokeLink()} data-testid="revoke-share-link">
+            Revoke link
           </Button>
         </div>
       </div>

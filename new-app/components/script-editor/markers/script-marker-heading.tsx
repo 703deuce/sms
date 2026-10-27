@@ -17,12 +17,14 @@ export function ScriptMarkerHeading({
   onRename,
   onRemove,
   onGoTo,
+  onDragReposition,
 }: {
   markerId: string
   label: string
   onRename: (label: string) => void
   onRemove: () => void
   onGoTo: () => void
+  onDragReposition?: (deltaWords: number) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(label)
@@ -58,7 +60,35 @@ export function ScriptMarkerHeading({
       className="group/marker mb-1 mt-4 flex items-center justify-between gap-2 text-sm font-semibold text-foreground"
       data-marker-id={markerId}
     >
-      <button type="button" className="text-left hover:text-primary" onClick={() => setEditing(true)}>
+      {onDragReposition && (
+        <button
+          type="button"
+          className="cursor-grab px-1 text-muted-foreground opacity-0 group-hover/marker:opacity-100 active:cursor-grabbing"
+          aria-label="Drag marker"
+          onPointerDown={(e) => {
+            e.preventDefault()
+            let acc = 0
+            const startX = e.clientX
+            const onMove = (ev: PointerEvent) => {
+              const deltaPx = ev.clientX - startX
+              const steps = Math.trunc(deltaPx / 48)
+              if (steps !== acc) {
+                onDragReposition(steps - acc)
+                acc = steps
+              }
+            }
+            const onUp = () => {
+              window.removeEventListener('pointermove', onMove)
+              window.removeEventListener('pointerup', onUp)
+            }
+            window.addEventListener('pointermove', onMove)
+            window.addEventListener('pointerup', onUp)
+          }}
+        >
+          ⋮⋮
+        </button>
+      )}
+      <button type="button" className="flex-1 text-left hover:text-primary" onClick={() => setEditing(true)}>
         {label}
       </button>
       <DropdownMenu>

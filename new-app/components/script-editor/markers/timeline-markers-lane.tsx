@@ -9,12 +9,14 @@ export function TimelineMarkersLane({
   pxPerMs,
   onSeek,
   onMoveMarker,
+  clipSpans,
 }: {
   document: ScriptDocumentV1
   widthPx: number
   pxPerMs: number
   onSeek: (outMs: number) => void
   onMoveMarker?: (id: string, outMs: number) => void
+  clipSpans?: { id: string; label: string; outStartMs: number; outEndMs: number }[]
 }) {
   const markers = document.markers ?? []
   const dragRef = useRef<{ id: string; startX: number; startMs: number } | null>(null)
@@ -43,6 +45,17 @@ export function TimelineMarkersLane({
 
   return (
     <div className="relative h-7 border-b border-border/40" style={{ width: widthPx }} data-testid="timeline-markers-lane">
+      {clipSpans?.map((c) => (
+        <div
+          key={c.id}
+          className="pointer-events-none absolute top-1 h-5 rounded-sm bg-lane-ai/25 border border-lane-ai/50"
+          style={{
+            left: c.outStartMs * pxPerMs,
+            width: Math.max(4, (c.outEndMs - c.outStartMs) * pxPerMs),
+          }}
+          title={c.label}
+        />
+      ))}
       {markers.map((m) => (
         <button
           key={m.id}

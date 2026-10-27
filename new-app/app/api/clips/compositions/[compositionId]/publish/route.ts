@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { getCompositionForWorkspace } from '@/lib/server/clips/script-composition'
-import { unpublish, upsertPublish } from '@/lib/server/clips/composition-share'
+import { syncPublishOutputFromRender, unpublish, upsertPublish } from '@/lib/server/clips/composition-share'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const publishSchema = z.object({
@@ -42,11 +42,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
     const settings = publishSchema.parse(await request.json())
     const pub = await upsertPublish(workspaceId, compositionId, settings)
     if (!pub) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const synced = (await syncPublishOutputFromRender(compositionId)) ?? pub
     return NextResponse.json({
       data: {
-        publicSlug: pub.publicSlug,
-        publishedAt: pub.publishedAt.toISOString(),
-        settings: pub.settings,
+        publicSlug: synced.publicSlug,
+        publishedAt: synced.publishedAt.toISOString(),
+        settings: synced.settings,
+        outputKey: synced.outputKey,
+        playbackStatus: synced.outputKey ? 'ready' : 'processing',
       },
     })
   } catch (err) {

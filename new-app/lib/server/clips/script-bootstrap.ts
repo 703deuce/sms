@@ -98,12 +98,14 @@ export async function getScriptBootstrap(
   let clipStartMs: number | null = null
   let clipEndMs: number | null = null
 
-  let composition = await ensureFullComposition(
+  const fullComposition = await ensureFullComposition(
     workspaceId,
     project.id,
     project.title,
     editorWords.map((w) => w.id),
   )
+  let composition = fullComposition
+  const fullCompositionId = fullComposition.id
 
   if (opts?.clipId) {
     const clip = await prisma.clip.findFirst({
@@ -143,6 +145,7 @@ export async function getScriptBootstrap(
     sourceVideoUrl,
     editorWords,
     compositionId: composition.id,
+    fullCompositionId,
     compositionRevision: composition.revision,
     compositionKind,
     clipId,

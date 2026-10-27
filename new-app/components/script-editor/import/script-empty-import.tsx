@@ -9,7 +9,8 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Dropzone } from '@/components/clips/dropzone'
 import { Input } from '@/components/ui/input'
 import { validateImportUrlForSubmit } from '@/lib/clips/import-url'
-import { createProjectFromLink } from '@/lib/clips-api'
+import { attachMediaToProject } from '@/lib/clips-api'
+import { uploadClipFile } from '@/lib/clips/upload'
 import { toast } from 'sonner'
 
 export function ScriptEmptyImport({ projectId, projectTitle }: { projectId: string; projectTitle: string }) {
@@ -25,13 +26,36 @@ export function ScriptEmptyImport({ projectId, projectTitle }: { projectId: stri
     }
     setBusy(true)
     try {
-      await createProjectFromLink({ sourceUrl: url.trim(), settings: { rangeStartMs: 0, rangeEndMs: 0 } })
+      await attachMediaToProject(projectId, { sourceUrl: url.trim() })
+      router.push(`/app/clips/${projectId}`)
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Import failed')
     } finally {
       setBusy(false)
     }
+  }
+
+  const onFile = (file: File) => {
+    setBusy(true)
+    void uploadClipFile(file, async (p) => {
+      if (p.state === 'error') {
+        setBusy(false)
+        toast.error(p.error ?? 'Upload failed')
+        return
+      }
+      if (p.state === 'complete' && p.uploadId) {
+        try {
+          await attachMediaToProject(projectId, { uploadId: p.uploadId })
+          router.push(`/app/clips/${projectId}`)
+          router.refresh()
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Could not attach media')
+        } finally {
+          setBusy(false)
+        }
+      }
+    }).catch(() => setBusy(false))
   }
 
   return (
@@ -46,7 +70,7 @@ export function ScriptEmptyImport({ projectId, projectTitle }: { projectId: stri
         </PrimaryButton>
 
         <div className="mt-4 [&_[role=button]]:min-h-[304px] [&_[role=button]]:rounded-xl">
-          <Dropzone onFile={() => router.push(`/app/clips/${projectId}`)} />
+          <Dropzone onFile={onFile} disabled={busy} />
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">

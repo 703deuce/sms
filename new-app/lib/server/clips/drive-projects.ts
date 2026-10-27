@@ -103,6 +103,37 @@ export async function softDeleteProjects(workspaceId: string, projectIds: string
   })
 }
 
+export async function duplicateClipProjects(workspaceId: string, projectIds: string[]) {
+  const prisma = getPrisma()
+  for (const id of projectIds) {
+    const p = await prisma.clipProject.findFirst({
+      where: { id, workspaceId, deletedAt: null },
+    })
+    if (!p) continue
+    await prisma.clipProject.create({
+      data: {
+        id: createId('proj'),
+        workspaceId,
+        createdById: p.createdById,
+        title: `${p.title} (copy)`,
+        uploadId: p.uploadId,
+        sourceUrl: p.sourceUrl,
+        settings: p.settings,
+        rangeStartMs: p.rangeStartMs,
+        rangeEndMs: p.rangeEndMs,
+        status: p.status,
+        stage: p.stage,
+        progress: p.progress,
+        transcriptKey: p.transcriptKey,
+        transcriptWords: p.transcriptWords ?? undefined,
+        proxyKey: p.proxyKey,
+        thumbKey: p.thumbKey,
+        folderId: p.folderId,
+      },
+    })
+  }
+}
+
 export async function restoreProjects(workspaceId: string, projectIds: string[]) {
   const prisma = getPrisma()
   await prisma.clipProject.updateMany({

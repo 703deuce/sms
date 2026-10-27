@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { DriveWorkspaceSwitcher } from '@/components/drive/drive-workspace-switcher'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
   Clock,

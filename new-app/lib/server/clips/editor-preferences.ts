@@ -12,6 +12,8 @@ export type ScriptEditorUserPreferences = {
   limitPreview1080?: boolean
   theme?: 'dark' | 'light' | 'system'
   showWordlessMediaInScript?: boolean
+  showRulerMarkers?: boolean
+  showRulerComments?: boolean
 }
 
 const DEFAULTS: ScriptEditorUserPreferences = {
@@ -24,6 +26,8 @@ const DEFAULTS: ScriptEditorUserPreferences = {
   limitPreview1080: true,
   theme: 'dark',
   showWordlessMediaInScript: false,
+  showRulerMarkers: true,
+  showRulerComments: true,
 }
 
 export function mergeEditorPrefs(raw: unknown): ScriptEditorUserPreferences {
@@ -44,9 +48,12 @@ export function mergeEditorPrefs(raw: unknown): ScriptEditorUserPreferences {
         ? o.defaultClipAspect
         : base.defaultClipAspect,
     limitPreview1080: typeof o.limitPreview1080 === 'boolean' ? o.limitPreview1080 : base.limitPreview1080,
-    theme: o.theme === 'light' || o.theme === 'system' ? o.theme : base.theme,
+    theme:
+      o.theme === 'dark' || o.theme === 'light' || o.theme === 'system' ? o.theme : base.theme,
     showWordlessMediaInScript:
       typeof o.showWordlessMediaInScript === 'boolean' ? o.showWordlessMediaInScript : base.showWordlessMediaInScript,
+    showRulerMarkers: typeof o.showRulerMarkers === 'boolean' ? o.showRulerMarkers : base.showRulerMarkers,
+    showRulerComments: typeof o.showRulerComments === 'boolean' ? o.showRulerComments : base.showRulerComments,
   }
 }
 

@@ -93,9 +93,12 @@ import { ScriptCommentsPanel } from '@/components/script-editor/comments/script-
 import { ScriptMarkerListPopover } from '@/components/script-editor/markers/script-marker-list-popover'
 import { ScriptProjectAccessModal } from '@/components/script-editor/share/script-project-access-modal'
 import { ScriptEditorSettingsModal } from '@/components/script-editor/settings/script-editor-settings-modal'
-import { markersByAfterWordIndex } from '@/lib/clips/script-editor/marker-word-index'
-import { ScriptMarkerHeading } from '@/components/script-editor/markers/script-marker-heading'
-import { CommentMentionTextarea } from '@/components/script-editor/comments/comment-mention-textarea'
+import { CommentComposerPill } from '@/components/script-editor/comments/comment-composer-pill'
+import { ScriptSlashMenu } from '@/components/script-editor/markers/script-slash-menu'
+import { ScriptTimelineViewMenu } from '@/components/script-editor/transport/timeline/script-timeline-view-menu'
+import { clipsFetch } from '@/lib/clips-api'
+import type { ScriptEditorUserPreferences } from '@/lib/server/clips/editor-preferences'
+import { useTheme } from 'next-themes'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -107,6 +110,7 @@ export type ScriptBootstrapView = {
   sourceVideoUrl: string | null
   editorWords: EditorWord[]
   compositionId: string
+  fullCompositionId?: string | null
   compositionRevision: number
   compositionKind?: 'FULL' | 'CLIP'
   clipId?: string | null
@@ -114,7 +118,7 @@ export type ScriptBootstrapView = {
   clipEndMs?: number | null
   surroundingContextIds?: string[]
   document: ScriptDocumentV1 | null
-  clips: { id: string; title: string }[]
+  clips: { id: string; title: string; startMs: number; endMs: number }[]
   status: string
 }
 
@@ -159,7 +163,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [commentScope, setCommentScope] = useState<'clip' | 'full'>('clip')
   const [commentDraft, setCommentDraft] = useState('')
   const [commentMentionIds, setCommentMentionIds] = useState<string[]>([])
-  const commentsApi = useCompositionComments(data.compositionId)
+  const [composerMinimized, setComposerMinimized] = useState(false)
+  const [slashMenu, setSlashMenu] = useState<{ x: number; y: number } | null>(null)
+  const [showRulerMarkers, setShowRulerMarkers] = useState(true)
+  const [showRulerComments, setShowRulerComments] = useState(true)
+  const commentsApi = useCompositionComments(data.compositionId, {
+    scope: commentScope,
+    fullCompositionId: data.fullCompositionId ?? null,
+  })
   const document = previewDoc ?? serverDocument
   const readOnlyPreview = previewDoc != null
   const tabLock = useCompositionTabLock(data.compositionId)
@@ -244,6 +255,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const isClipComposition = data.compositionKind === 'CLIP'
   const [showSurrounding, setShowSurrounding] = useState(false)
   const [hoverIncludeWordId, setHoverIncludeWordId] = useState<string | null>(null)
+  const [editorPrefs, setEditorPrefs] = useState<ScriptEditorUserPreferences | null>(null)
+  const { setTheme } = useTheme()
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
   const keptSet = useMemo(() => new Set(document.keptWordIds), [document.keptWordIds])
@@ -251,7 +264,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     () => new Set(data.surroundingContextIds ?? []),
     [data.surroundingContextIds],
   )
-  const settings = useMemo(() => resolveScriptSettings(document.settings), [document.settings])
+  const settings = useMemo(
+    () => resolveScriptSettings(document.settings, editorPrefs),
+    [document.settings, editorPrefs],
+  )
   const showDeletedWords = settings.showDeletedWords !== false
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
   const deletedSet = useMemo(() => new Set(document.deletedWordIds), [document.deletedWordIds])
@@ -311,6 +327,77 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     () => markersByAfterWordIndex(document, chips, orderedWords, edl),
     [document, chips, orderedWords, edl],
   )
+
+  const markerAfterWordIndex = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const [idx, list] of markersAfterIdx.entries()) {
+      for (const m of list) map.set(m.id, idx)
+    }
+    return map
+  }, [markersAfterIdx])
+
+  const outMsAfterWordIndex = useCallback(
+    (wordIdx: number) => {
+      if (wordIdx < 0) return 0
+      const chip = chips.find((c) => c.wordId === orderedWords[wordIdx]?.id)
+      return chip?.outEndMs ?? outputMs
+    },
+    [chips, orderedWords, outputMs],
+  )
+
+  const moveMarkerAfterWord = useCallback(
+    (markerId: string, deltaWords: number) => {
+      const cur = markerAfterWordIndex.get(markerId) ?? 0
+      const next = Math.max(-1, Math.min(orderedWords.length - 1, cur + deltaWords))
+      applyOp({ type: 'update_marker', id: markerId, patch: { outMs: outMsAfterWordIndex(next) } })
+    },
+    [applyOp, markerAfterWordIndex, orderedWords.length, outMsAfterWordIndex],
+  )
+
+  const snapMarkerOutMs = useCallback(
+    (raw: number) => {
+      let best = Math.max(0, raw)
+      let bestDist = Infinity
+      for (const c of chips) {
+        const d = Math.abs(c.outEndMs - raw)
+        if (d < bestDist) {
+          bestDist = d
+          best = c.outEndMs
+        }
+      }
+      return best
+    },
+    [chips],
+  )
+
+  const timelineClipSpans = useMemo(() => {
+    if (data.compositionKind !== 'FULL' || !data.clips.length) return undefined
+    return data.clips.map((c) => ({
+      id: c.id,
+      label: c.title,
+      outStartMs: sourceMsToOutputTime(c.startMs ?? data.rangeStartMs, edl) ?? 0,
+      outEndMs: sourceMsToOutputTime(c.endMs ?? data.rangeStartMs, edl) ?? outDur,
+    }))
+  }, [data.clips, data.compositionKind, data.rangeStartMs, edl, outDur])
+
+  const markerListClips = useMemo(() => timelineClipSpans, [timelineClipSpans])
+
+  useEffect(() => {
+    void clipsFetch<ScriptEditorUserPreferences>('/api/clips/editor-preferences')
+      .then((p) => {
+        setEditorPrefs(p)
+        if (p.showRulerMarkers != null) setShowRulerMarkers(p.showRulerMarkers)
+        if (p.showRulerComments != null) setShowRulerComments(p.showRulerComments)
+        if (p.theme) setTheme(p.theme)
+      })
+      .catch(() => {})
+  }, [setTheme])
+
+  const patchTimelineViewPrefs = useCallback((patch: { showRulerMarkers?: boolean; showRulerComments?: boolean }) => {
+    if (patch.showRulerMarkers != null) setShowRulerMarkers(patch.showRulerMarkers)
+    if (patch.showRulerComments != null) setShowRulerComments(patch.showRulerComments)
+    void clipsFetch('/api/clips/editor-preferences', { method: 'PATCH', body: JSON.stringify(patch) }).catch(() => {})
+  }, [])
 
   const submitCommentFromSelection = useCallback(async () => {
     if (selAnchor == null || selEnd == null) {
@@ -950,10 +1037,30 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         onZoom(1 / 1.15, outputMs)
       }
 
-      if (e.key === 'Escape' && !followPlayhead) {
-        e.preventDefault()
-        setFollowPlayhead(true)
-        return
+      if (e.key === 'Escape') {
+        if (commentsOpen && (commentDraft.trim() || selAnchor != null) && !composerMinimized) {
+          e.preventDefault()
+          setComposerMinimized(true)
+          return
+        }
+        if (composerMinimized) {
+          e.preventDefault()
+          setComposerMinimized(false)
+          return
+        }
+        if (!followPlayhead) {
+          e.preventDefault()
+          setFollowPlayhead(true)
+          return
+        }
+      }
+
+      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const t = e.target as HTMLElement | null
+        if (t?.tagName !== 'INPUT' && t?.tagName !== 'TEXTAREA' && !t?.isContentEditable) {
+          e.preventDefault()
+          setSlashMenu({ x: window.innerWidth / 2 - 110, y: window.innerHeight / 2 - 40 })
+        }
       }
 
       if (e.key === '#' && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -997,7 +1104,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         addMarkerAtPlayhead()
       }
 
-      if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 'm') {
+      if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyM') {
         e.preventDefault()
         setCommentsOpen(true)
         void submitCommentFromSelection()
@@ -1065,6 +1172,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     document.markers,
     outputMs,
     addMarkerAtPlayhead,
+    commentsOpen,
+    commentDraft,
+    selAnchor,
+    composerMinimized,
     submitCommentFromSelection,
   ])
 
@@ -1516,6 +1627,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                                   onRename={(label) => applyOp({ type: 'update_marker', id: m.id, patch: { label } })}
                                   onRemove={() => applyOp({ type: 'delete_marker', id: m.id })}
                                   onGoTo={() => seekToOutputMs(m.outMs)}
+                                  onDragReposition={(delta) => moveMarkerAfterWord(m.id, delta)}
                                 />
                               </span>
                             ))}
@@ -1623,7 +1735,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           </section>
 
           {sideOpen && (
-            <aside className="hidden h-full min-h-0 w-[min(100%,320px)] shrink-0 flex-col overflow-hidden border-l border-border bg-background lg:flex">
+            <aside
+              className={cn(
+                'h-full min-h-0 w-[min(100%,320px)] shrink-0 flex-col overflow-hidden border-l border-border bg-background',
+                commentsOpen
+                  ? 'fixed inset-y-0 right-0 z-40 flex w-full max-w-sm shadow-xl lg:static lg:max-w-none lg:shadow-none'
+                  : 'hidden lg:flex',
+              )}
+            >
               <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
                 {commentsOpen
                   ? 'Comments'
@@ -1646,31 +1765,52 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     onSeek={seekToOutputMs}
                     onReply={(threadId, body) => commentsApi.reply(threadId, body)}
                     onResolve={(threadId, resolved) => commentsApi.setResolved(threadId, resolved)}
-                    clipScope={data.clips.length > 0}
+                    onDeleteThread={(threadId) => commentsApi.deleteThread(threadId)}
+                    onEditComment={(threadId, commentId, body) => commentsApi.editComment(threadId, commentId, body)}
+                    projectId={data.projectId}
+                    clipScope={data.compositionKind === 'CLIP'}
                     commentScope={commentScope}
                     onCommentScopeChange={setCommentScope}
                     draftComposer={
-                      commentDraft || selAnchor != null
+                      composerMinimized && (commentDraft || selAnchor != null)
                         ? (
-                            <div className="mb-2 rounded-lg border border-border bg-muted/40 p-2">
-                              <CommentMentionTextarea
-                                className="min-h-[64px] w-full resize-none bg-transparent text-[13px] outline-none"
-                                placeholder="Add a comment… @ for mentions"
-                                value={commentDraft}
-                                onChange={setCommentDraft}
-                                onMentionIds={setCommentMentionIds}
-                              />
-                              <div className="mt-2 flex justify-end gap-2">
-                                <Button type="button" size="sm" variant="ghost" onClick={() => setCommentDraft('')}>
-                                  Cancel
-                                </Button>
-                                <Button type="button" size="sm" onClick={() => void submitCommentFromSelection()}>
-                                  Comment
-                                </Button>
-                              </div>
-                            </div>
+                            <CommentComposerPill
+                              preview={commentDraft}
+                              onExpand={() => setComposerMinimized(false)}
+                            />
                           )
-                        : undefined
+                        : commentDraft || selAnchor != null
+                          ? (
+                              <div className="mb-2 rounded-lg border border-border bg-muted/40 p-2">
+                                <CommentMentionTextarea
+                                  className="min-h-[64px] w-full resize-none bg-transparent text-[13px] outline-none"
+                                  placeholder="Add a comment… @ for mentions"
+                                  value={commentDraft}
+                                  onChange={(v) => {
+                                    setCommentDraft(v)
+                                    setComposerMinimized(false)
+                                  }}
+                                  onMentionIds={setCommentMentionIds}
+                                />
+                                <div className="mt-2 flex justify-end gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setCommentDraft('')
+                                      setComposerMinimized(false)
+                                    }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button type="button" size="sm" onClick={() => void submitCommentFromSelection()}>
+                                    Comment
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          : undefined
                     }
                   />
                 )}
@@ -1905,17 +2045,41 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onTrimClipEdge={onTrimClipEdge}
           playheadOutMs={outputMs}
           outputDurationMs={outDur}
-          onMoveMarker={(id, outMs) => applyOp({ type: 'update_marker', id, patch: { outMs } })}
+          onMoveMarker={(id, outMs) =>
+            applyOp({ type: 'update_marker', id, patch: { outMs: snapMarkerOutMs(outMs) } })
+          }
+          commentThreads={commentsApi.threads}
+          showRulerMarkers={showRulerMarkers}
+          showRulerComments={showRulerComments}
+          clipSpans={timelineClipSpans}
           markerToolbarExtra={
-            <ScriptMarkerListPopover
-              document={document}
-              playheadOutMs={outputMs}
-              durationMs={outDur}
-              onSeek={seekToOutputMs}
-            />
+            <>
+              <ScriptTimelineViewMenu
+                showRulerMarkers={showRulerMarkers}
+                showRulerComments={showRulerComments}
+                onChange={patchTimelineViewPrefs}
+              />
+              <ScriptMarkerListPopover
+                document={document}
+                playheadOutMs={outputMs}
+                durationMs={outDur}
+                onSeek={seekToOutputMs}
+                clips={markerListClips}
+              />
+            </>
           }
         />
         )}
+      <ScriptSlashMenu
+        open={slashMenu != null}
+        x={slashMenu?.x ?? 0}
+        y={slashMenu?.y ?? 0}
+        onClose={() => setSlashMenu(null)}
+        onAddMarker={() => {
+          addMarkerAtPlayhead()
+          setSlashMenu(null)
+        }}
+      />
       </div>
       <ScriptShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>

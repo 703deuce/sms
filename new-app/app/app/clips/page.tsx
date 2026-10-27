@@ -17,14 +17,14 @@ export default async function ClipsProjectsPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; view?: string; folder?: string }>
 }) {
-  const { q, status, folder } = await searchParams
+  const { q, status, folder, view } = await searchParams
   const workspaceId = await resolveWorkspaceId()
   const folderId = folder ? folder : undefined
   const [projects, folders] = await Promise.all([
     listClipProjectsForPage(workspaceId, {
       q,
       status,
-      limit: 50,
+      limit: view === 'all' ? 200 : 50,
       folderId: folder ?? undefined,
     }),
     listFolders(workspaceId),
@@ -40,6 +40,7 @@ export default async function ClipsProjectsPage({
           initialProjects={projects}
           q={q}
           status={status}
+          showAll={view === 'all'}
           folders={folders.map((f) => ({ id: f.id, name: f.name }))}
         />
       </div>

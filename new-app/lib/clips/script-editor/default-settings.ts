@@ -19,12 +19,28 @@ export function defaultScriptEditorSettings(): ScriptEditorSettings {
   }
 }
 
-export function resolveScriptSettings(raw?: ScriptEditorSettings | null): ScriptEditorSettings {
+export function resolveScriptSettings(
+  raw?: ScriptEditorSettings | null,
+  prefs?: {
+    defaultClipAspect?: '9:16' | '1:1' | '4:5' | '16:9'
+    defaultCaptionStyleId?: string
+  } | null,
+): ScriptEditorSettings {
   const base = defaultScriptEditorSettings()
-  if (!raw) return base
+  const withPrefs = prefs
+    ? {
+        ...base,
+        aspect: prefs.defaultClipAspect ?? base.aspect,
+        captions: {
+          ...base.captions,
+          presetId: prefs.defaultCaptionStyleId ?? base.captions.presetId,
+        },
+      }
+    : base
+  if (!raw) return withPrefs
   return {
-    ...base,
+    ...withPrefs,
     ...raw,
-    captions: { ...base.captions, ...raw.captions },
+    captions: { ...withPrefs.captions, ...raw.captions },
   }
 }

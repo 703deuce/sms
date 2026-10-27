@@ -10,8 +10,10 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { clipsFetch } from '@/lib/clips-api'
 import type { ScriptEditorUserPreferences } from '@/lib/server/clips/editor-preferences'
+import { useTheme } from 'next-themes'
 
 export function ScriptEditorSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { setTheme } = useTheme()
   const [prefs, setPrefs] = useState<ScriptEditorUserPreferences | null>(null)
   const [page, setPage] = useState<'general' | 'account' | 'workspace'>('general')
 
@@ -28,6 +30,7 @@ export function ScriptEditorSettingsModal({ open, onClose }: { open: boolean; on
     setPrefs(next)
     try {
       await clipsFetch('/api/clips/editor-preferences', { method: 'PATCH', body: JSON.stringify(patch) })
+      if (patch.theme) setTheme(patch.theme)
     } catch {
       toast.error('Could not save setting')
       setPrefs(prefs)
@@ -122,6 +125,7 @@ export function ScriptEditorSettingsModal({ open, onClose }: { open: boolean; on
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="9:16">9:16</SelectItem>
+                      <SelectItem value="4:5">4:5</SelectItem>
                       <SelectItem value="16:9">16:9</SelectItem>
                       <SelectItem value="1:1">1:1</SelectItem>
                     </SelectContent>

@@ -145,3 +145,120 @@ export async function createClipProjectFromImportUrl(
 export function parseSettings(raw: unknown): ClipProjectSettings {
   return clipProjectSettingsSchema.parse(raw)
 }
+
+export async function createClipProjectFromPrompt(
+  workspaceId: string,
+  input: { prompt: string; title?: string; settings?: unknown },
+) {
+  const prompt = input.prompt.trim()
+  if (!prompt) throw new Error('Describe what you want to make')
+
+  const prisma = getPrisma()
+  const baseSettings = clipProjectSettingsSchema.parse({
+    ...(input.settings ?? defaultClipSettings()),
+    prompt,
+  })
+  const projectId = createId('proj')
+  const title = input.title?.trim() || prompt.slice(0, 80) || 'Untitled project'
+
+  return prisma.clipProject.create({
+    data: {
+      id: projectId,
+      workspaceId,
+      title,
+      settings: JSON.parse(JSON.stringify(baseSettings)),
+      rangeStartMs: 0,
+      rangeEndMs: 0,
+      status: 'DRAFT',
+      stage: 'draft',
+      progress: 0,
+      transcriptKey: projectWordsKey(workspaceId, projectId),
+    },
+  })
+}
+
+export async function attachUploadToClipProject(
+  workspaceId: string,
+  projectId: string,
+  uploadId: string,
+) {
+  const prisma = getPrisma()
+  const project = await prisma.clipProject.findFirst({
+    where: { id: projectId, workspaceId, deletedAt: null },
+  })
+  if (!project) throw new Error('Project not found')
+
+  const upload = await prisma.clipUpload.findFirst({
+    where: { id: uploadId, workspaceId, status: 'COMPLETE' },
+  })
+  if (!upload) throw new Error('Upload not complete')
+
+  const settings = parseSettings(project.settings)
+  const rangeEnd = settings.rangeEndMs || upload.durationMs || 0
+  const nextSettings = { ...settings, rangeEndMs: rangeEnd }
+
+  await prisma.clipProject.update({
+    where: { id: projectId },
+    data: {
+      uploadId: upload.id,
+      settings: JSON.parse(JSON.stringify(nextSettings)),
+      rangeEndMs: rangeEnd,
+      status: 'QUEUED',
+      stage: 'queued',
+      progress: 0,
+    },
+  })
+
+  const jobId = createId('job')
+  await prisma.clipJob.create({
+    data: {
+      id: jobId,
+      projectId,
+      type: 'PROCESS_PROJECT',
+      status: 'QUEUED',
+      payload: {},
+    },
+  })
+
+  return prisma.clipProject.findUnique({ where: { id: projectId } })
+}
+
+export async function attachImportUrlToClipProject(
+  workspaceId: string,
+  projectId: string,
+  sourceUrl: string,
+) {
+  const { validateImportUrlForSubmit } = await import('@/lib/clips/import-url')
+  const check = validateImportUrlForSubmit(sourceUrl)
+  if (!check.ok) throw new Error(check.message)
+
+  const prisma = getPrisma()
+  const project = await prisma.clipProject.findFirst({
+    where: { id: projectId, workspaceId, deletedAt: null },
+  })
+  if (!project) throw new Error('Project not found')
+
+  const normalizedUrl = sourceUrl.trim()
+  await prisma.clipProject.update({
+    where: { id: projectId },
+    data: {
+      sourceUrl: normalizedUrl,
+      status: 'QUEUED',
+      stage: 'importing',
+      progress: 0,
+    },
+  })
+
+  const jobId = createId('job')
+  await prisma.clipJob.create({
+    data: {
+      id: jobId,
+      projectId,
+      type: 'IMPORT_URL',
+      status: 'QUEUED',
+      payload: { sourceUrl: normalizedUrl, kind: check.kind },
+    },
+  })
+
+  return prisma.clipProject.findUnique({ where: { id: projectId } })
+}

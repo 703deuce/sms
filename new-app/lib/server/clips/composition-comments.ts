@@ -27,13 +27,22 @@ export type CommentDto = {
   createdAt: string
 }
 
-export async function listCompositionCommentThreads(workspaceId: string, compositionId: string) {
+export async function listCompositionCommentThreads(
+  workspaceId: string,
+  compositionId: string,
+  opts?: { scope?: 'clip' | 'full'; fullCompositionId?: string | null },
+) {
   const row = await getCompositionForWorkspace(workspaceId, compositionId)
   if (!row) return null
 
   const prisma = getPrisma()
+  const compositionIds =
+    opts?.scope === 'full' && opts.fullCompositionId && opts.fullCompositionId !== compositionId
+      ? [compositionId, opts.fullCompositionId]
+      : [compositionId]
+
   const threads = await prisma.scriptCompositionCommentThread.findMany({
-    where: { compositionId },
+    where: { compositionId: { in: compositionIds } },
     orderBy: { startOutMs: 'asc' },
     include: {
       comments: {
@@ -49,12 +58,48 @@ export async function listCompositionCommentThreads(workspaceId: string, composi
   const users = userIds.size
     ? await prisma.user.findMany({
         where: { id: { in: [...userIds] } },
-        select: { id: true, name: true },
+        select: { id: true, name: true, email: true },
       })
     : []
-  const nameById = new Map(users.map((u) => [u.id, u.name]))
+  const nameById = new Map(users.map((u) => [u.id, u.name ?? u.email ?? 'User']))
 
   return threads.map((t) => toThreadDto(t, nameById))
+}
+
+export async function deleteCommentThread(workspaceId: string, compositionId: string, threadId: string) {
+  const row = await getCompositionForWorkspace(workspaceId, compositionId)
+  if (!row) return { ok: false as const, code: 'NOT_FOUND' as const }
+  const prisma = getPrisma()
+  await prisma.scriptCompositionComment.deleteMany({ where: { threadId } })
+  await prisma.scriptCompositionCommentThread.deleteMany({ where: { id: threadId, compositionId } })
+  return { ok: true as const }
+}
+
+export async function updateCommentBody(input: {
+  workspaceId: string
+  compositionId: string
+  commentId: string
+  userId: string
+  body: string
+}) {
+  const row = await getCompositionForWorkspace(input.workspaceId, input.compositionId)
+  if (!row) return { ok: false as const, code: 'NOT_FOUND' as const }
+  const prisma = getPrisma()
+  const comment = await prisma.scriptCompositionComment.findFirst({
+    where: { id: input.commentId },
+    include: { thread: true },
+  })
+  if (!comment || comment.thread.compositionId !== input.compositionId) {
+    return { ok: false as const, code: 'NOT_FOUND' as const }
+  }
+  if (comment.authorUserId !== input.userId) return { ok: false as const, code: 'FORBIDDEN' as const }
+  await prisma.scriptCompositionComment.update({
+    where: { id: input.commentId },
+    data: { body: input.body.trim() },
+  })
+  const threads = await listCompositionCommentThreads(input.workspaceId, input.compositionId)
+  const thread = threads?.find((t) => t.id === comment.threadId)
+  return { ok: true as const, thread }
 }
 
 function toThreadDto(

@@ -1,42 +1,103 @@
 import { getScriptBootstrap } from '@/lib/server/clips/script-bootstrap'
-import { resolveShareLinkById } from '@/lib/server/clips/composition-share'
+import {
+  ensurePublishRenderPipeline,
+  incrementPublishViewCount,
+  signedPublishPlaybackUrl,
+  syncPublishOutputFromRender,
+} from '@/lib/server/clips/composition-share'
 import { getPrisma } from '@/lib/server/db'
+import { getPublicAppOrigin } from '@/lib/server/public-url'
 
-export async function getPublicShareClipPayload(linkId: string) {
-  const link = await resolveShareLinkById(linkId)
-  if (!link || link.linkAccess === 'INVITE_ONLY' || link.revokedAt) return null
+export type PublicClipPlayback = {
+  title: string
+  playbackUrl: string | null
+  playbackStatus: 'ready' | 'processing' | 'unavailable'
+  compositionId: string
+  projectId: string
+  mode: 'view' | 'comment'
+  viewCount: number
+  showTranscript: boolean
+  allowComments: boolean
+  allowDownload: boolean
+  transcriptText: string
+  publicSlug?: string
+}
 
-  const workspaceId = link.workspaceId
-  const projectId = link.composition.projectId
-  const bootstrap = await getScriptBootstrap(workspaceId, projectId)
-  if (!bootstrap?.sourceVideoUrl) return null
+async function resolvePublishPlayback(
+  workspaceId: string,
+  compositionId: string,
+  projectId: string,
+): Promise<{ playbackUrl: string | null; playbackStatus: 'ready' | 'processing' | 'unavailable' }> {
+  await ensurePublishRenderPipeline(workspaceId, compositionId)
+  const pub = await syncPublishOutputFromRender(compositionId)
+  if (!pub) {
+    return { playbackUrl: null, playbackStatus: 'unavailable' }
+  }
+  if (pub.outputKey) {
+    const url = await signedPublishPlaybackUrl(pub.outputKey)
+    return { playbackUrl: url, playbackStatus: url ? 'ready' : 'unavailable' }
+  }
+  const settings = (pub.settings ?? {}) as Record<string, unknown>
+  const renderId = typeof settings.publishRenderId === 'string' ? settings.publishRenderId : null
+  if (renderId) {
+    const prisma = getPrisma()
+    const render = await prisma.scriptCompositionRender.findFirst({
+      where: { id: renderId, compositionId },
+    })
+    if (render && (render.status === 'QUEUED' || render.status === 'PROCESSING')) {
+      return { playbackUrl: null, playbackStatus: 'processing' }
+    }
+    if (render?.status === 'READY' && render.outputKey) {
+      const url = await signedPublishPlaybackUrl(render.outputKey)
+      return { playbackUrl: url, playbackStatus: url ? 'ready' : 'processing' }
+    }
+  }
+  return { playbackUrl: null, playbackStatus: 'processing' }
+}
 
-  const prisma = getPrisma()
-  const publish = await prisma.scriptCompositionPublish.findUnique({
-    where: { compositionId: link.compositionId },
-  })
-  const settings = (publish?.settings ?? {}) as Record<string, unknown>
-
-  const words = bootstrap.editorWords
+function transcriptFromBootstrap(bootstrap: Awaited<ReturnType<typeof getScriptBootstrap>>) {
+  if (!bootstrap) return ''
+  return bootstrap.editorWords
     .filter((w) => !bootstrap.document?.deletedWordIds?.includes(w.id))
     .map((w) => w.text)
     .join(' ')
+    .slice(0, 120_000)
+}
+
+export async function getPublicShareClipPayload(linkId: string): Promise<PublicClipPlayback | null> {
+  const prisma = getPrisma()
+  const link = await prisma.scriptCompositionShareLink.findFirst({
+    where: { id: linkId, revokedAt: null },
+    include: { composition: { include: { project: true } } },
+  })
+  if (!link || link.linkAccess === 'INVITE_ONLY') return null
+
+  const workspaceId = link.workspaceId
+  const projectId = link.composition.projectId
+  const compositionId = link.compositionId
+  const bootstrap = await getScriptBootstrap(workspaceId, projectId)
+  if (!bootstrap) return null
+
+  const publish = await prisma.scriptCompositionPublish.findUnique({ where: { compositionId } })
+  const settings = (publish?.settings ?? {}) as Record<string, unknown>
+  const playback = await resolvePublishPlayback(workspaceId, compositionId, projectId)
+  const viewCount = await incrementPublishViewCount(compositionId)
 
   return {
     title: link.composition.title || bootstrap.title,
-    sourceVideoUrl: bootstrap.sourceVideoUrl,
-    compositionId: link.compositionId,
+    ...playback,
+    compositionId,
     projectId,
     mode: link.linkAccess === 'LINK_COMMENT' ? 'comment' : 'view',
-    viewCount: publish?.viewCount ?? 0,
+    viewCount,
     showTranscript: settings.showTranscript !== false,
     allowComments: settings.allowComments === true || link.linkAccess === 'LINK_COMMENT',
-    allowDownload: settings.allowDownload === true,
-    transcriptText: words.slice(0, 120_000),
+    allowDownload: settings.allowDownload === true && playback.playbackStatus === 'ready',
+    transcriptText: transcriptFromBootstrap(bootstrap),
   }
 }
 
-export async function getPublicPublishPayload(publicSlug: string) {
+export async function getPublicPublishPayload(publicSlug: string): Promise<PublicClipPlayback | null> {
   const prisma = getPrisma()
   const pub = await prisma.scriptCompositionPublish.findUnique({
     where: { publicSlug },
@@ -45,23 +106,29 @@ export async function getPublicPublishPayload(publicSlug: string) {
   if (!pub) return null
 
   const bootstrap = await getScriptBootstrap(pub.workspaceId, pub.composition.projectId)
-  if (!bootstrap?.sourceVideoUrl) return null
+  if (!bootstrap) return null
 
   const settings = (pub.settings ?? {}) as Record<string, unknown>
-  const words = bootstrap.editorWords
-    .filter((w) => !bootstrap.document?.deletedWordIds?.includes(w.id))
-    .map((w) => w.text)
-    .join(' ')
+  const playback = await resolvePublishPlayback(pub.workspaceId, pub.compositionId, pub.composition.projectId)
+  const viewCount = await incrementPublishViewCount(pub.compositionId)
 
   return {
     title: pub.composition.title || bootstrap.title,
-    sourceVideoUrl: bootstrap.sourceVideoUrl,
+    ...playback,
     compositionId: pub.compositionId,
     projectId: pub.composition.projectId,
     publicSlug,
+    mode: 'view',
+    viewCount,
     showTranscript: settings.showTranscript !== false,
     allowComments: settings.allowComments === true,
-    allowDownload: settings.allowDownload === true,
-    transcriptText: words.slice(0, 120_000),
+    allowDownload: settings.allowDownload === true && playback.playbackStatus === 'ready',
+    transcriptText: transcriptFromBootstrap(bootstrap),
   }
+}
+
+export function publishedPageUrl(publicSlug: string) {
+  const origin = getPublicAppOrigin()
+  const path = `/share/p/${publicSlug}`
+  return origin ? `${origin}${path}` : path
 }

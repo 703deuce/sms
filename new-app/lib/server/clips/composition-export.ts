@@ -14,6 +14,7 @@ export type ScriptExportSettings = {
   quality: 'recommended' | 'high' | 'medium' | 'low'
   burnCaptions: boolean
   includeSubtitleTrack: boolean
+  includeMarkersAsChapters?: boolean
   audioFormat?: 'wav' | 'mp3'
 }
 

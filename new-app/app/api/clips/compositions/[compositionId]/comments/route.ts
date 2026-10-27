@@ -21,11 +21,17 @@ const createSchema = z.object({
   mentionedUserIds: z.array(z.string()).optional(),
 })
 
-export async function GET(_req: Request, ctx: { params: Promise<{ compositionId: string }> }) {
+export async function GET(request: Request, ctx: { params: Promise<{ compositionId: string }> }) {
   try {
     const { compositionId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
-    const threads = await listCompositionCommentThreads(workspaceId, compositionId)
+    const url = new URL(request.url)
+    const scope = url.searchParams.get('scope') === 'full' ? 'full' : 'clip'
+    const fullCompositionId = url.searchParams.get('fullCompositionId')
+    const threads = await listCompositionCommentThreads(workspaceId, compositionId, {
+      scope,
+      fullCompositionId,
+    })
     if (!threads) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ data: { threads } })
   } catch (err) {

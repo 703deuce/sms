@@ -23,6 +23,18 @@ export async function listClipProjectsForPage(
   })
   const countByProject = new Map(counts.map((c) => [c.projectId, c._count._all]))
 
+  const ownerIds = [...new Set(projects.map((p) => p.createdById).filter(Boolean))]
+  const owners = ownerIds.length
+    ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } })
+    : []
+  const ownerNameById = new Map(owners.map((u) => [u.id, u.name]))
+
+  const publishes = await prisma.scriptCompositionPublish.findMany({
+    where: { workspaceId, composition: { projectId: { in: ids } } },
+    select: { composition: { select: { projectId: true } } },
+  })
+  const publishedProjectIds = new Set(publishes.map((pub) => pub.composition.projectId))
+
   const storage = getClipStorage()
   return Promise.all(
     projects.map(async (p) => {
@@ -51,6 +63,8 @@ export async function listClipProjectsForPage(
         clipCount: countByProject.get(p.id) ?? 0,
         durationMs: Math.max(0, p.rangeEndMs - p.rangeStartMs),
         thumbUrl,
+        ownerName: ownerNameById.get(p.createdById) ?? null,
+        isPublished: publishedProjectIds.has(p.id),
       }
     }),
   )

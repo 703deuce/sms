@@ -1,8 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
-import { Code, Copy, Download, Eye, Link2, Settings } from 'lucide-react'
+import { Code, Copy, Download, Eye, Link2, Loader2, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,7 +16,8 @@ import { Label } from '@/components/ui/label'
 
 type PublicPayload = {
   title: string
-  sourceVideoUrl: string
+  playbackUrl: string | null
+  playbackStatus: 'ready' | 'processing' | 'unavailable'
   showTranscript: boolean
   allowComments: boolean
   allowDownload: boolean
@@ -29,12 +29,10 @@ type PublicPayload = {
 export function ShareClipViewer({
   title,
   publicPath,
-  editHref,
   initialViewCount,
 }: {
   title: string
   publicPath: string
-  editHref?: string
   initialViewCount?: number
 }) {
   const [data, setData] = useState<PublicPayload | null>(null)
@@ -49,7 +47,11 @@ export function ShareClipViewer({
 
   useEffect(() => {
     void load()
-  }, [load])
+    const t = setInterval(() => {
+      if (data?.playbackStatus === 'processing') void load()
+    }, 4000)
+    return () => clearInterval(t)
+  }, [load, data?.playbackStatus])
 
   const pageUrl = typeof window !== 'undefined' ? window.location.href : ''
   const embedCode = `<iframe src="${pageUrl}" width="640" height="360" frameborder="0" allowfullscreen></iframe>`
@@ -58,6 +60,8 @@ export function ShareClipViewer({
     void navigator.clipboard.writeText(text)
     toast.success(msg)
   }
+
+  const processing = data?.playbackStatus === 'processing' || (!data?.playbackUrl && data?.playbackStatus !== 'unavailable')
 
   return (
     <div className="min-h-dvh bg-background" data-testid="share-clip-viewer">
@@ -68,13 +72,13 @@ export function ShareClipViewer({
         </div>
         <div className="flex items-center gap-2">
           {(data?.viewCount ?? initialViewCount) != null && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="share-view-count">
               <Eye className="size-4" />
               {(data?.viewCount ?? initialViewCount ?? 0).toLocaleString()} views
             </span>
           )}
-          {data?.allowDownload && data.sourceVideoUrl && (
-            <Button type="button" size="icon-sm" variant="ghost" render={<a href={data.sourceVideoUrl} download />} title="Download">
+          {data?.allowDownload && data.playbackUrl && (
+            <Button type="button" size="icon-sm" variant="ghost" render={<a href={data.playbackUrl} download />} title="Download">
               <Download className="size-4" />
             </Button>
           )}
@@ -87,7 +91,7 @@ export function ShareClipViewer({
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button type="button" size="icon-sm" variant="ghost" title="Settings">
+                <Button type="button" size="icon-sm" variant="ghost" title="View options">
                   <Settings className="size-4" />
                 </Button>
               }
@@ -105,11 +109,6 @@ export function ShareClipViewer({
               <DropdownMenuItem disabled>Change access in the editor</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {editHref && (
-            <Button type="button" size="sm" variant="outline" render={<Link href={editHref} />}>
-              Edit
-            </Button>
-          )}
         </div>
       </header>
 
@@ -131,9 +130,15 @@ export function ShareClipViewer({
       )}
 
       <main className="mx-auto grid max-w-6xl gap-6 p-4 max-[1100px]:grid-cols-1 md:grid-cols-[1fr_360px] md:p-8">
-        <div className="aspect-video overflow-hidden rounded-xl bg-black">
-          {data?.sourceVideoUrl ? (
-            <video src={data.sourceVideoUrl} controls className="h-full w-full" playsInline />
+        <div className="aspect-video overflow-hidden rounded-xl bg-black" data-testid="share-playback">
+          {data?.playbackUrl ? (
+            <video src={data.playbackUrl} controls className="h-full w-full" playsInline />
+          ) : processing ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-8 animate-spin text-white/80" />
+              <span className="text-white/90">Preparing your video…</span>
+              <span className="text-xs text-white/60">Rendered export in progress</span>
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading player…</div>
           )}

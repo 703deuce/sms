@@ -19,7 +19,7 @@ export default async function ClipsTrashPage({ searchParams }: { searchParams: P
     <div className="flex min-h-0 flex-1">
       <DriveSidebar folders={folders.map((f) => ({ id: f.id, name: f.name }))} />
       <div className="min-w-0 flex-1 p-4 md:p-6">
-        <DriveHome initialProjects={projects} q={q} view="trash" folders={folders.map((f) => ({ id: f.id, name: f.name }))} />
+        <DriveHome initialProjects={projects} q={q} pageView="trash" folders={folders.map((f) => ({ id: f.id, name: f.name }))} />
       </div>
     </div>
   )

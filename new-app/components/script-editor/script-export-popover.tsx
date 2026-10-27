@@ -106,6 +106,7 @@ export function ScriptExportPopover({
           quality,
           burnCaptions,
           includeSubtitleTrack: includeSubs,
+          includeMarkersAsChapters: includeMarkers,
         }),
       })
       const data = await res.json()
@@ -121,16 +122,20 @@ export function ScriptExportPopover({
   const onPublishWeb = async () => {
     setBusy(true)
     try {
-      const pub = await clipsFetch<{ publicSlug: string }>(`/api/clips/compositions/${compositionId}/publish`, {
-        method: 'POST',
-        body: JSON.stringify({
-          showTranscript: true,
-          allowComments: true,
-          allowDownload: true,
-          showAuthor: true,
-        }),
-      })
-      toast.success(`Published — /share/p/${pub.publicSlug}`)
+      const pub = await clipsFetch<{ publicSlug: string; playbackStatus?: string }>(
+        `/api/clips/compositions/${compositionId}/publish`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            showTranscript: true,
+            allowComments: true,
+            allowDownload: true,
+            showAuthor: true,
+          }),
+        },
+      )
+      const path = `/share/p/${pub.publicSlug}`
+      toast.success(pub.playbackStatus === 'ready' ? `Published — ${path}` : `Published — render processing (${path})`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Publish failed')
     } finally {
@@ -139,9 +144,11 @@ export function ScriptExportPopover({
   }
 
   const onExportTranscript = () => {
-    const body = compositionDoc
-      ? descriptionWithChapters(compositionDoc, '_Transcript export — open in editor for full formatting._')
-      : '_Transcript export — open in editor for full formatting._'
+    const base = '_Transcript export — open in editor for full formatting._'
+    const body =
+      compositionDoc && includeMarkers
+        ? descriptionWithChapters(compositionDoc, base)
+        : base
     const lines = [`# ${title}`, '', body]
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
@@ -336,7 +343,8 @@ export function ScriptExportPopover({
                 if (tab === 'video' && destination === 'web') void onPublishWeb()
                 else if (tab === 'video') void onExportVideo()
                 else if (tab === 'transcript') onExportTranscript()
-                else toast.message('Use Video export for this format in M5')
+                else if (tab === 'audio' || tab === 'subtitles') void onExportVideo()
+                else toast.error('Choose a format above')
               }}
             >
               {tab === 'video' && destination === 'web' ? 'Publish' : 'Export'}

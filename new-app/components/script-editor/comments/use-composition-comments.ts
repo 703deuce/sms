@@ -4,17 +4,25 @@ import { useCallback, useEffect, useState } from 'react'
 import { clipsFetch } from '@/lib/clips-api'
 import type { CommentThreadDto } from '@/lib/server/clips/composition-comments'
 
-export function useCompositionComments(compositionId: string) {
+export function useCompositionComments(
+  compositionId: string,
+  opts?: { scope?: 'clip' | 'full'; fullCompositionId?: string | null },
+) {
   const [threads, setThreads] = useState<CommentThreadDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const scope = opts?.scope ?? 'clip'
+  const fullCompositionId = opts?.fullCompositionId ?? null
 
   const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
+      const qs = new URLSearchParams({ scope })
+      if (fullCompositionId) qs.set('fullCompositionId', fullCompositionId)
       const res = await clipsFetch<{ threads: CommentThreadDto[] }>(
-        `/api/clips/compositions/${compositionId}/comments`,
+        `/api/clips/compositions/${compositionId}/comments?${qs.toString()}`,
       )
       setThreads(res.threads)
     } catch (e) {
@@ -22,7 +30,7 @@ export function useCompositionComments(compositionId: string) {
     } finally {
       setLoading(false)
     }
-  }, [compositionId])
+  }, [compositionId, scope, fullCompositionId])
 
   useEffect(() => {
     void refresh()
@@ -74,5 +82,36 @@ export function useCompositionComments(compositionId: string) {
     [compositionId],
   )
 
-  return { threads, loading, error, refresh, createThread, reply, setResolved }
+  const deleteThread = useCallback(
+    async (threadId: string) => {
+      await clipsFetch(`/api/clips/compositions/${compositionId}/comments/${threadId}`, { method: 'DELETE' })
+      setThreads((prev) => prev.filter((t) => t.id !== threadId))
+    },
+    [compositionId],
+  )
+
+  const editComment = useCallback(
+    async (threadId: string, commentId: string, body: string) => {
+      const res = await clipsFetch<{ thread: CommentThreadDto }>(
+        `/api/clips/compositions/${compositionId}/comments/${threadId}`,
+        { method: 'PATCH', body: JSON.stringify({ commentId, body }) },
+      )
+      if (res.thread) {
+        setThreads((prev) => prev.map((t) => (t.id === threadId ? res.thread! : t)))
+      }
+    },
+    [compositionId],
+  )
+
+  return {
+    threads,
+    loading,
+    error,
+    refresh,
+    createThread,
+    reply,
+    setResolved,
+    deleteThread,
+    editComment,
+  }
 }

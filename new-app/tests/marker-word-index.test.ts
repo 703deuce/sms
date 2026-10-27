@@ -6,8 +6,8 @@ import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 describe('markerAfterWordIndex', () => {
   it('places marker after first word when outMs is within second word', () => {
     const words: EditorWord[] = [
-      { id: 'a', text: 'hi', t0Ms: 0, t1Ms: 500, speakerId: 's1' },
-      { id: 'b', text: 'there', t0Ms: 500, t1Ms: 1000, speakerId: 's1' },
+      { id: 'a', index: 0, text: 'hi', t0Ms: 0, t1Ms: 500, speakerId: 's1' },
+      { id: 'b', index: 1, text: 'there', t0Ms: 500, t1Ms: 1000, speakerId: 's1' },
     ]
     const chips: TimelineWordChip[] = [
       { wordId: 'a', text: 'hi', outStartMs: 0, outEndMs: 500, deleted: false },

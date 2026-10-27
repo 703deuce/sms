@@ -13,7 +13,6 @@ export default async function PublishedClipPage({ params }: { params: Promise<{ 
     <ShareClipViewer
       title={pub.composition.title}
       publicPath={`/api/public/share/p/${slug}`}
-      editHref={`/app/clips/${pub.composition.projectId}/script`}
       initialViewCount={pub.viewCount}
     />
   )
