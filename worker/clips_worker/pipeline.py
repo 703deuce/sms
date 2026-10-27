@@ -21,6 +21,7 @@ from clips_worker.bounded_pool import run_bounded_indexed_pool
 from clips_worker.render_clip import ffmpeg_cut, poster_jpg, resolve_clip_layout, run_speakercrop, slice_words
 from clips_worker.render_concurrency import clips_render_concurrency
 from clips_worker.clip_ai_meta import finalize_clip_ai_meta
+from clips_worker.clip_polish import apply_clip_polish_initial
 from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, put_json, upload_file
 
@@ -516,7 +517,12 @@ def run_m4_pipeline(
                         "posterKey": keys["poster"],
                         "wordsKey": keys["words"],
                         "cropKey": crop_key,
-                        "edits": initial_clip_edits(settings),
+                        "edits": apply_clip_polish_initial(
+                            initial_clip_edits(settings),
+                            pick,
+                            clip_words,
+                            settings,
+                        ),
                         "aiMeta": ai_meta_out,
                     }
 
@@ -753,7 +759,12 @@ def run_m4_pipeline(
                         "posterKey": keys["poster"],
                         "wordsKey": keys["words"],
                         "cropKey": crop_key,
-                        "edits": initial_clip_edits(settings),
+                        "edits": apply_clip_polish_initial(
+                            initial_clip_edits(settings),
+                            pick,
+                            clip_words,
+                            settings,
+                        ),
                         "aiMeta": ai_meta_out,
                     }
 

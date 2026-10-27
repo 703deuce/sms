@@ -217,6 +217,7 @@ export function exportClipWithOptions(
     exportPlatform?: 'tiktok' | 'youtube_shorts' | 'instagram_reels'
     watermark?: boolean
     alsoSrt?: boolean
+    removeDeadAir?: boolean
     edits?: unknown
   },
 ) {

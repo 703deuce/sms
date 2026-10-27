@@ -4,10 +4,13 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-ZOOM_PUNCH_DURATION_S = 0.4
-ZOOM_MIN_GAP_S = 6.0
-ZOOM_MAX_INTENSITY = 1.12
-ZOOM_DEFAULT_INTENSITY = 1.08
+ZOOM_PUNCH_RISE_S = 0.25
+ZOOM_PUNCH_HOLD_S = 1.0
+ZOOM_PUNCH_RELEASE_S = 0.4
+ZOOM_MIN_GAP_S = 4.0
+ZOOM_MAX_INTENSITY = 1.15
+ZOOM_DEFAULT_INTENSITY = 1.12
+ZOOM_PUNCH_DURATION_S = ZOOM_PUNCH_RISE_S
 ZOOM_LAYOUT_SWITCH_GUARD_S = 0.35
 
 
@@ -69,14 +72,15 @@ def build_zoom_keyframes(
                 candidates.append(float(w["s"]))
                 break
     peaks = pick_zoom_peak_times(candidates, duration_s, switches)
-    half = ZOOM_PUNCH_DURATION_S / 2.0
     out: list[tuple[float, float]] = [(0.0, 1.0)]
     for t in peaks:
-        t0 = max(0.0, t - half)
-        t1 = min(duration_s, t + half)
-        out.append((t0, 1.0))
-        out.append(((t0 + t1) / 2.0, peak_z))
-        out.append((t1, 1.0))
+        t_rise = min(duration_s, t + ZOOM_PUNCH_RISE_S)
+        t_hold = min(duration_s, t_rise + ZOOM_PUNCH_HOLD_S)
+        t_end = min(duration_s, t_hold + ZOOM_PUNCH_RELEASE_S)
+        out.append((max(0.0, t), 1.0))
+        out.append((t_rise, peak_z))
+        out.append((t_hold, peak_z))
+        out.append((t_end, 1.0))
     out.append((duration_s, 1.0))
     out.sort(key=lambda x: x[0])
     deduped: list[tuple[float, float]] = []
@@ -109,7 +113,16 @@ def _scale_factor_expr(keyframes: list[tuple[float, float]]) -> str:
     return expr
 
 
-def apply_zoom(video: Path, out: Path, keyframes: list[tuple[float, float]], duration_s: float, w: int, h: int) -> None:
+def apply_zoom(
+    video: Path,
+    out: Path,
+    keyframes: list[tuple[float, float]],
+    duration_s: float,
+    w: int,
+    h: int,
+    *,
+    facecam_only: bool = False,
+) -> None:
     if not keyframes or all(z == 1.0 for _, z in keyframes):
         subprocess.check_call(["cp", str(video), str(out)])
         return
@@ -117,10 +130,22 @@ def apply_zoom(video: Path, out: Path, keyframes: list[tuple[float, float]], dur
     if z_expr == "1":
         subprocess.check_call(["cp", str(video), str(out)])
         return
-    vf = (
-        f"scale=w='trunc(iw*({z_expr}))':h='trunc(ih*({z_expr}))':eval=frame,"
-        f"crop={w}:{h}:(iw-{w})/2:(ih-{h})/2"
-    )
+    if facecam_only:
+        band_h = max(1, int(h * 0.42))
+        rest_h = max(1, h - band_h)
+        vf = (
+            f"split[full][full2];"
+            f"[full]crop={w}:{band_h}:0:0,"
+            f"scale=w='trunc(iw*({z_expr}))':h='trunc(ih*({z_expr}))':eval=frame,"
+            f"crop={w}:{band_h}:(iw-{w})/2:(ih-{band_h})/2[topz];"
+            f"[full2]crop={w}:{rest_h}:0:{band_h}[bot];"
+            f"[topz][bot]vstack=inputs=2"
+        )
+    else:
+        vf = (
+            f"scale=w='trunc(iw*({z_expr}))':h='trunc(ih*({z_expr}))':eval=frame,"
+            f"crop={w}:{h}:(iw-{w})/2:(ih-{h})/2"
+        )
     subprocess.check_call(
         [
             "ffmpeg",

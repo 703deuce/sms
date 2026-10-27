@@ -1,4 +1,5 @@
 import { clampCaptionExportStyle } from '@/lib/clips/caption-safe-area'
+import { PLATFORM_SAFE_ZONE_1080x1920 } from '@/lib/clips/overlay-safe-zone'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { outputDurationMs } from '@/lib/clips/edits'
@@ -14,6 +15,9 @@ export type ExportPlatformPreset = {
   /** Recommended export height tier */
   resolution: '720p' | '1080p'
   maxDurationSec: number
+  /** Suggested target band (user can still export 15–90s). */
+  recommendedMinSec: number
+  recommendedMaxSec: number
   /** ASS marginV % from bottom — lifts captions above in-app chrome */
   captionSafeMarginVPct: number
   captionPosition: 'bottom' | 'middle'
@@ -25,7 +29,9 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     label: 'TikTok',
     aspect: '9:16',
     resolution: '1080p',
-    maxDurationSec: 60,
+    maxDurationSec: 90,
+    recommendedMinSec: 15,
+    recommendedMaxSec: 35,
     captionSafeMarginVPct: 18,
     captionPosition: 'bottom',
   },
@@ -34,7 +40,9 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     label: 'YouTube Shorts',
     aspect: '9:16',
     resolution: '1080p',
-    maxDurationSec: 60,
+    maxDurationSec: 90,
+    recommendedMinSec: 15,
+    recommendedMaxSec: 30,
     captionSafeMarginVPct: 14,
     captionPosition: 'bottom',
   },
@@ -44,6 +52,8 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     aspect: '9:16',
     resolution: '1080p',
     maxDurationSec: 90,
+    recommendedMinSec: 15,
+    recommendedMaxSec: 30,
     captionSafeMarginVPct: 16,
     captionPosition: 'bottom',
   },
@@ -73,7 +83,16 @@ export function applyExportPlatformToEdits(
       },
     },
   }
-  const safe = clampCaptionExportStyle(merged.captions, preset.resolution === '1080p' ? 1920 : 1280)
+  const zone = PLATFORM_SAFE_ZONE_1080x1920[platform]
+  const bottomMarginPct = Math.max(
+    merged.captions.marginVPct ?? 0,
+    preset.captionSafeMarginVPct,
+    (zone.bottom / 1920) * 100,
+  )
+  const safe = clampCaptionExportStyle(
+    { ...merged.captions, marginVPct: bottomMarginPct },
+    preset.resolution === '1080p' ? 1920 : 1280,
+  )
   return {
     ...merged,
     captions: {
@@ -93,8 +112,18 @@ export function exportPlatformDurationWarning(
   platform: ExportPlatformId,
   durationMs: number,
 ): string | null {
-  const maxMs = EXPORT_PLATFORM_PRESETS[platform].maxDurationSec * 1000
-  if (durationMs <= maxMs) return null
-  const over = Math.round((durationMs - maxMs) / 1000)
-  return `This clip is ~${over}s longer than ${exportPlatformLabel(platform)}’s ${EXPORT_PLATFORM_PRESETS[platform].maxDurationSec}s limit. Trim in the editor or export anyway for other uses.`
+  const p = EXPORT_PLATFORM_PRESETS[platform]
+  const maxMs = p.maxDurationSec * 1000
+  if (durationMs > maxMs) {
+    const over = Math.round((durationMs - maxMs) / 1000)
+    return `This clip is ~${over}s longer than ${exportPlatformLabel(platform)}’s ${p.maxDurationSec}s limit. Trim in the editor or export anyway for other uses.`
+  }
+  const sec = durationMs / 1000
+  if (sec > p.recommendedMaxSec + 15) {
+    return `Polished clips for ${exportPlatformLabel(platform)} usually land ${p.recommendedMinSec}–${p.recommendedMaxSec}s. Yours is ~${Math.round(sec)}s — trim if you want a tighter hook.`
+  }
+  if (sec < p.recommendedMinSec - 2) {
+    return `Under ${p.recommendedMinSec}s can feel abrupt on ${exportPlatformLabel(platform)}. Add context or export anyway.`
+  }
+  return null
 }

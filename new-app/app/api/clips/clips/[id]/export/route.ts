@@ -15,6 +15,8 @@ import { logClipEvent } from '@/lib/server/clips/events'
 import { recordStreamClipFeedback } from '@/lib/server/clips/stream-feedback'
 import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
+import { applyExportPolishEdits } from '@/lib/server/clips/apply-export-polish'
+import { getClipEditorWords } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const resolutionSchema = z.preprocess((v) => {
@@ -28,6 +30,7 @@ const bodySchema = z.object({
   aspect: z.enum(['9:16', '4:5', '1:1', '16:9']).default('9:16'),
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
+  removeDeadAir: z.boolean().optional(),
   exportPlatform: z.enum(['tiktok', 'youtube_shorts', 'instagram_reels']).optional(),
   /** Optional client snapshot — used when PATCH save is still in flight. */
   edits: z.record(z.unknown()).optional(),
@@ -53,6 +56,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (exportPlatform) {
       edits = applyExportPlatformToEdits(edits, exportPlatform)
     }
+    const wordsPayload = await getClipEditorWords(workspaceId, clipId)
+    const hookText =
+      typeof clip.aiMeta === 'object' && clip.aiMeta && 'hook' in clip.aiMeta
+        ? String((clip.aiMeta as { hook?: string }).hook ?? '')
+        : edits.hookOverlay?.text ?? null
+    edits = applyExportPolishEdits(edits, {
+      exportPlatform: exportPlatform ?? null,
+      streamClip: false,
+      words: wordsPayload?.words,
+      removeDeadAir: body.removeDeadAir ?? true,
+      hookText,
+    })
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
     let resolution = body.resolution
     if (exportPlatform) {

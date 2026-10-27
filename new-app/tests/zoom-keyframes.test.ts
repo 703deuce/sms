@@ -13,18 +13,18 @@ describe('buildZoomKeyframes', () => {
       [{ s: 2, e: 2.5, w: 'hook', i: 0 }],
       [0],
       10,
-      1.12,
+      1.15,
     )
-    expect(kf.some((k) => k.z === 1.12)).toBe(true)
+    expect(kf.some((k) => k.z === 1.15)).toBe(true)
   })
 
-  it('caps intensity at 1.12', () => {
+  it('caps intensity at 1.15', () => {
     expect(clampZoomIntensity(1.3)).toBe(ZOOM_MAX_INTENSITY)
   })
 
-  it('allows at most one punch per 6s', () => {
-    const peaks = pickZoomPeakTimes([1, 3, 7, 8], 20, [])
-    expect(peaks).toEqual([1, 7])
+  it('allows at most one punch per 4s', () => {
+    const peaks = pickZoomPeakTimes([1, 3, 5, 8], 20, [])
+    expect(peaks).toEqual([1, 5])
     expect(peaks[1] - peaks[0]).toBeGreaterThanOrEqual(ZOOM_MIN_GAP_S)
   })
 

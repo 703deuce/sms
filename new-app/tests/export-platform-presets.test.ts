@@ -12,11 +12,18 @@ describe('export platform presets', () => {
   it('applies TikTok safe caption margin', () => {
     const edits = applyExportPlatformToEdits(defaultEdits(bounds), 'tiktok')
     expect(edits.aspectRatio).toBe('9:16')
-    expect(edits.captions?.marginVPct).toBe(EXPORT_PLATFORM_PRESETS.tiktok.captionSafeMarginVPct)
+    expect(edits.captions?.marginVPct).toBeGreaterThanOrEqual(
+      EXPORT_PLATFORM_PRESETS.tiktok.captionSafeMarginVPct,
+    )
   })
 
   it('warns when clip exceeds platform max', () => {
-    const warn = exportPlatformDurationWarning('youtube_shorts', 75_000)
+    const warn = exportPlatformDurationWarning('youtube_shorts', 120_000)
     expect(warn).toMatch(/longer than/)
+  })
+
+  it('nudges when clip is long but under hard max', () => {
+    const warn = exportPlatformDurationWarning('youtube_shorts', 75_000)
+    expect(warn).toMatch(/15–30s/)
   })
 })

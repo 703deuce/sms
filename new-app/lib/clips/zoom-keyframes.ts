@@ -3,11 +3,15 @@ export type ZoomSettings = {
   intensity?: number
 }
 
-/** Submagic-style punch: 1.0 → peak over 0.4s ease; max one punch per 6s; cap 1.12. */
-export const ZOOM_PUNCH_DURATION_S = 0.4
-export const ZOOM_MIN_GAP_S = 6
-export const ZOOM_MAX_INTENSITY = 1.12
-export const ZOOM_DEFAULT_INTENSITY = 1.08
+/** Punch: rise ~0.25s, hold 0.8–1.5s, release ~0.4s; max one per 4s; cap 1.15×. */
+export const ZOOM_PUNCH_RISE_S = 0.25
+export const ZOOM_PUNCH_HOLD_S = 1.0
+export const ZOOM_PUNCH_RELEASE_S = 0.4
+export const ZOOM_MIN_GAP_S = 4
+export const ZOOM_MAX_INTENSITY = 1.15
+export const ZOOM_DEFAULT_INTENSITY = 1.12
+/** @deprecated use ZOOM_PUNCH_RISE_S + hold + release */
+export const ZOOM_PUNCH_DURATION_S = ZOOM_PUNCH_RISE_S
 export const ZOOM_LAYOUT_SWITCH_GUARD_S = 0.35
 
 export function clampZoomIntensity(intensity: number | undefined): number {
@@ -68,14 +72,15 @@ export function buildZoomKeyframes(
     if (w) candidates.push(w.s)
   }
   const peaks = pickZoomPeakTimes(candidates, durationS, switches)
-  const half = ZOOM_PUNCH_DURATION_S / 2
   const out: { t: number; z: number }[] = [{ t: 0, z: 1 }]
   for (const t of peaks) {
-    const t0 = Math.max(0, t - half)
-    const t1 = Math.min(durationS, t + half)
-    out.push({ t: t0, z: 1 })
-    out.push({ t: (t0 + t1) / 2, z: peakZ })
-    out.push({ t: t1, z: 1 })
+    const tRise = Math.min(durationS, t + ZOOM_PUNCH_RISE_S)
+    const tHold = Math.min(durationS, tRise + ZOOM_PUNCH_HOLD_S)
+    const tEnd = Math.min(durationS, tHold + ZOOM_PUNCH_RELEASE_S)
+    out.push({ t: Math.max(0, t), z: 1 })
+    out.push({ t: tRise, z: peakZ })
+    out.push({ t: tHold, z: peakZ })
+    out.push({ t: tEnd, z: 1 })
   }
   out.push({ t: durationS, z: 1 })
   out.sort((a, b) => a.t - b.t)

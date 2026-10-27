@@ -141,6 +141,8 @@ def build_ass(
     box_outline = hex_to_ass(box["color"]) if box else cap_out
     box_pad = int(box.get("padX", 8)) if box else cap_ow
 
+    font_base = str(preset.get("font") or "Poppins")
+    font_name = f"{font_base} ExtraBold" if " " not in font_base else font_base
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {play_w}
@@ -150,8 +152,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,Poppins ExtraBold,{fontsize},{cap_pri},{cap_pri},{cap_out},&H99000000,0,0,0,0,100,100,0,0,1,{cap_ow},0,{alignment_for(position)},{margin_lr},{margin_lr},{margin_v},1
-Style: Box,Poppins ExtraBold,{fontsize},{box_pri},{box_pri},{box_outline},&H99000000,0,0,0,0,100,100,0,0,3,{box_pad},0,{alignment_for(position)},{margin_lr},{margin_lr},{margin_v},1
+Style: Cap,{font_name},{fontsize},{cap_pri},{cap_pri},{cap_out},&H99000000,0,0,0,0,100,100,0,0,1,{cap_ow},0,{alignment_for(position)},{margin_lr},{margin_lr},{margin_v},1
+Style: Box,{font_name},{fontsize},{box_pri},{box_pri},{box_outline},&H99000000,0,0,0,0,100,100,0,0,3,{box_pad},0,{alignment_for(position)},{margin_lr},{margin_lr},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

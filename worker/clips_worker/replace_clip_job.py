@@ -10,6 +10,7 @@ from psycopg2.extras import RealDictCursor
 
 from clips_worker.clip_ai_meta import finalize_clip_ai_meta
 from clips_worker.main import load_project
+from clips_worker.clip_polish import apply_clip_polish_initial
 from clips_worker.pipeline import (
     clip_keys,
     extract_wav_for_picker,
@@ -175,7 +176,12 @@ def run_replace_clip_job(conn, job: dict, post_progress) -> None:
             "posterKey": keys["poster"],
             "wordsKey": keys["words"],
             "cropKey": crop_key,
-            "edits": initial_clip_edits(settings),
+            "edits": apply_clip_polish_initial(
+                initial_clip_edits(settings),
+                pick,
+                clip_words,
+                settings,
+            ),
             "aiMeta": ai_meta_out,
         }
         insert_clips_batch(conn, [row])

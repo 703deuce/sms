@@ -34,22 +34,24 @@ def edits_version_hash(edits: dict) -> str:
 
 
 def emphasis_indexes_for_zoom(words: list[dict], cap_edits: dict) -> list[int]:
-    """Pick word indexes for auto-zoom when emphasis list is empty."""
+    """Pick word indexes for auto-zoom (keywords + hook window)."""
+    from clips_worker.caption_keyword_emphasis import auto_caption_emphasis_indexes
+
     explicit = cap_edits.get("emphasis") if isinstance(cap_edits.get("emphasis"), list) else []
     if explicit:
         return [int(x) for x in explicit]
     if not cap_edits.get("keywordHighlight") and not cap_edits.get("autoEmojis"):
         return []
+    auto = auto_caption_emphasis_indexes(words, {"captions": cap_edits})
+    if auto:
+        return auto
     out: list[int] = []
     for w in words:
-        text = str(w.get("w", "")).strip()
-        if len(text) < 4:
-            continue
+        if float(w.get("s", 0)) > 1.5:
+            break
         idx = w.get("i", w.get("idx"))
-        if idx is None:
-            continue
-        out.append(int(idx))
-        if len(out) >= 10:
+        if idx is not None:
+            out.append(int(idx))
             break
     return out
 
@@ -668,7 +670,15 @@ def render_edited_clip(
             layout_switches=layout_switches,
         )
         zoomed = work_dir / "zoomed.mp4"
-        apply_zoom(out_mp4, zoomed, kf, length_s, play_w, play_h)
+        apply_zoom(
+            out_mp4,
+            zoomed,
+            kf,
+            length_s,
+            play_w,
+            play_h,
+            facecam_only=bool(zoom_cfg.get("facecamOnly")),
+        )
         shutil.copy(zoomed, out_mp4)
 
     pb = cap_edits.get("progressBar") if isinstance(cap_edits.get("progressBar"), dict) else None

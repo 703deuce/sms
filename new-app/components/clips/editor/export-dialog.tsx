@@ -46,6 +46,7 @@ export function ExportDialog({
   onClose: () => void
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
+  const [removeDeadAir, setRemoveDeadAir] = useState(true)
   const [aspect, setAspect] = useState<ClipProjectSettings['aspectRatio']>(
     edits.aspectRatio ?? '9:16',
   )
@@ -137,6 +138,7 @@ export function ExportDialog({
         exportPlatform: exportPlatform !== 'none' ? exportPlatform : undefined,
         watermark: false,
         alsoSrt,
+        removeDeadAir,
         edits,
       })
       setRenderId(data.renderId)
@@ -296,6 +298,13 @@ export function ExportDialog({
             Captions are disabled for this clip — export will not burn subtitles. Turn captions on in the Captions panel to include them.
           </p>
         ) : null}
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <div>
+            <Label className="text-sm">Tighten dead air</Label>
+            <p className="text-xs text-muted-foreground">Shorten long pauses and cut um/uh (keeps captions in sync).</p>
+          </div>
+          <Switch checked={removeDeadAir} onCheckedChange={(c) => setRemoveDeadAir(Boolean(c))} />
+        </div>
         <div className="mt-4 flex items-center justify-between gap-2">
           <Label className="text-sm">Also download .srt</Label>
           <Switch

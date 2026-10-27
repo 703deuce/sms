@@ -4,6 +4,7 @@ import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
 import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
+import type { SilenceTrimSettings } from '@/lib/clips/silence-trim'
 import { normalizeLayoutSegments, type LayoutSegment } from '@/lib/clips/layout-segments'
 
 export type CutRange = [number, number]
@@ -65,8 +66,8 @@ export type ClipEditsV2 = {
   thumbnailId?: string | null
   audioTrack?: string
   brand?: unknown
-  zoom?: { enabled?: boolean; intensity?: number }
-  silenceTrim?: { enabled?: boolean; minGapMs?: number; keepMs?: number }
+  zoom?: { enabled?: boolean; intensity?: number; facecamOnly?: boolean }
+  silenceTrim?: SilenceTrimSettings
   /** Integrated loudness target (LUFS) for export loudnorm. */
   loudnessLufs?: -14 | -16 | -18 | -23 | -24
   /** Loop quiet room tone under EDL gap segments on export. */
@@ -93,7 +94,7 @@ export function defaultEdits(bounds: ClipBounds): ClipEditsV2 {
       wordsPerLine: 2,
     },
     layout: { mode: 'speaker_follow', shotOverrides: [] },
-    silenceTrim: { enabled: false, minGapMs: 600, keepMs: 150 },
+    silenceTrim: { enabled: false, minGapMs: 350, keepMs: 120, fillerTrim: true },
   }
 }
 
@@ -240,14 +241,19 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
         ? {
             enabled: Boolean((o.zoom as { enabled?: boolean }).enabled),
             intensity: clampZoomIntensity(Number((o.zoom as { intensity?: number }).intensity)),
+            facecamOnly: Boolean((o.zoom as { facecamOnly?: boolean }).facecamOnly),
           }
         : undefined,
     silenceTrim:
       o.silenceTrim && typeof o.silenceTrim === 'object'
         ? {
             enabled: Boolean((o.silenceTrim as { enabled?: boolean }).enabled),
-            minGapMs: Number((o.silenceTrim as { minGapMs?: number }).minGapMs) || 600,
-            keepMs: Number((o.silenceTrim as { keepMs?: number }).keepMs) || 150,
+            minGapMs: Number((o.silenceTrim as { minGapMs?: number }).minGapMs) || 350,
+            keepMs: Number((o.silenceTrim as { keepMs?: number }).keepMs) || 120,
+            fillerTrim: (o.silenceTrim as { fillerTrim?: boolean }).fillerTrim !== false,
+            protectReactionGaps: Boolean(
+              (o.silenceTrim as { protectReactionGaps?: boolean }).protectReactionGaps,
+            ),
           }
         : undefined,
     hookOverlay: normalizeHookOverlay(o.hookOverlay),
