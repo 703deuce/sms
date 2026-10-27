@@ -1,8 +1,14 @@
+import { isClipUserHidden } from '@/lib/clips/clip-results-chips'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 
-export async function listProjectClips(workspaceId: string, projectId: string, sort: 'score' | 'timeline' = 'score') {
+export async function listProjectClips(
+  workspaceId: string,
+  projectId: string,
+  sort: 'score' | 'timeline' = 'score',
+  opts?: { includeHidden?: boolean },
+) {
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId, deletedAt: null } })
   if (!project) return null
@@ -11,8 +17,12 @@ export async function listProjectClips(workspaceId: string, projectId: string, s
     orderBy: sort === 'timeline' ? { startMs: 'asc' } : { score: 'desc' },
   })
   const storage = getClipStorage()
+  const visible = opts?.includeHidden
+    ? clips
+    : clips.filter((c) => !isClipUserHidden(c.aiMeta))
+
   return Promise.all(
-    clips.map(async (c) => ({
+    visible.map(async (c) => ({
       id: c.id,
       projectId: c.projectId,
       title: c.title,

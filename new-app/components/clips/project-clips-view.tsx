@@ -303,6 +303,7 @@ export function ProjectClipsView({
                 clips={clips}
                 projectId={projectId}
                 onDownload={(id) => void onDownload(id)}
+                onHidden={(id) => setClips((prev) => prev.filter((c) => c.id !== id))}
                 isStreamer={isStreamer}
               />
             )}
