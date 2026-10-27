@@ -71,8 +71,6 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
 
     minutes = max(1, source_duration_ms / 60_000)
     cap = min(max_clips, max(1, int(round(minutes * per_min))))
-    if source_duration_ms <= 5 * 60_000:
-        cap = max(cap, min(3, max_clips))
 
     ranked = sorted(picks, key=lambda x: -_clip_score(x))
     kept: list[dict] = []
@@ -80,7 +78,7 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
 
     for p in ranked:
         final = _clip_score(p)
-        if final < min_final and kept:
+        if final < min_final:
             continue
         span = (p["start_ms"], p["end_ms"])
         if any(_overlap(span, (k["start_ms"], k["end_ms"])) > overlap_drop for k in kept):
@@ -109,9 +107,12 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
                 break
 
     if not kept and ranked:
-        for p in ranked[: min(3, cap)]:
-            p["low_confidence"] = True
+        for p in ranked:
+            if _clip_score(p) < min_final:
+                continue
             kept.append(p)
+            if len(kept) >= cap:
+                break
 
     kept = dedupe_r10(kept)
     return kept[:cap]
