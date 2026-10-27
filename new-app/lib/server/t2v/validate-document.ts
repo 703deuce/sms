@@ -11,14 +11,51 @@ const ALLOWED_THUMB_HOSTS = new Set([
   'images.unsplash.com',
 ])
 
+function hostnamesFromEnvUrls(): Set<string> {
+  const hosts = new Set<string>()
+  const candidates = [
+    process.env.SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.S3_PUBLIC_ENDPOINT,
+    process.env.S3_ENDPOINT,
+    process.env.APP_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : undefined,
+  ]
+  for (const raw of candidates) {
+    const s = raw?.trim()
+    if (!s) continue
+    try {
+      const href = s.includes('://') ? s : `https://${s}`
+      hosts.add(new URL(href).hostname.toLowerCase())
+    } catch {
+      /* ignore */
+    }
+  }
+  return hosts
+}
+
+const OWNED_STORAGE_HOSTS = hostnamesFromEnvUrls()
+
 export function storageKeyAllowedForWorkspace(workspaceId: string, key: string): boolean {
   return key.startsWith(`ws/${workspaceId}/`) || key.startsWith('stock/')
 }
 
+function hostMatchesAllowlist(host: string): boolean {
+  const h = host.toLowerCase()
+  if ([...ALLOWED_THUMB_HOSTS].some((allowed) => h === allowed || h.endsWith(`.${allowed}`))) return true
+  if (h === 'backblazeb2.com' || h.endsWith('.backblazeb2.com')) return true
+  if ([...OWNED_STORAGE_HOSTS].some((owned) => h === owned || h.endsWith(`.${owned}`))) return true
+  if (h.endsWith('.supabase.co')) return true
+  return false
+}
+
 function thumbUrlAllowed(url: string): boolean {
   try {
-    const host = new URL(url).hostname.toLowerCase()
-    return [...ALLOWED_THUMB_HOSTS].some((h) => host === h || host.endsWith(`.${h}`))
+    const parsed = new URL(url)
+    if (!hostMatchesAllowlist(parsed.hostname)) return false
+    if (parsed.pathname.includes('/storage/v1/object/')) return true
+    return true
   } catch {
     return false
   }
