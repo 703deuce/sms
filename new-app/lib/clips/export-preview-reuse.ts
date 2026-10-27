@@ -1,5 +1,5 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { isDefaultEdits } from '@/lib/clips/edits'
+import { previewExportMatchesDefault } from '@/lib/clips/export-edits-match'
 import type { ExportAspect, ExportResolution } from '@/lib/clips/export-aspect'
 
 /** M4 clipper preview.mp4 is always 9:16 @ 720p (see worker pipeline / speakercrop). */
@@ -22,6 +22,6 @@ export function canReuseClipPreviewForExport(opts: {
 }): boolean {
   return (
     exportRequestMatchesClipPreview(opts.aspect, opts.resolution) &&
-    isDefaultEdits(opts.edits, opts.bounds)
+    previewExportMatchesDefault(opts.edits, opts.bounds)
   )
 }

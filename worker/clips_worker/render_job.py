@@ -136,8 +136,12 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
     if isinstance(settings, str):
         settings = json.loads(settings)
     settings = settings_with_clip_ai_meta(settings, ctx.get("aiMeta"))
-    aspect = ctx.get("aspectRatio") or settings.get("aspectRatio") or "9:16"
+    aspect = ctx.get("aspectRatio") or edits.get("aspectRatio") or settings.get("aspectRatio") or "9:16"
     resolution = ctx.get("resolution") or "720p"
+    if resolution in (720, "720"):
+        resolution = "720p"
+    if resolution in (1080, "1080"):
+        resolution = "1080p"
     settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}
     if aspect == "16:9":
         settings = {**settings, "layout": "fit"}
