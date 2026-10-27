@@ -13,6 +13,7 @@ ENV HF_HOME=/models/hf
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8', download_root='/models/whisper')"
 
 COPY worker/prototype/v3 /app/v3
+COPY worker/prototype /app/prototype
 COPY worker/scripts/download-models.sh /tmp/download-models.sh
 RUN chmod +x /tmp/download-models.sh && bash /tmp/download-models.sh /app/v3
 
