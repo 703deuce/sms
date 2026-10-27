@@ -11,6 +11,7 @@ import {
 import {
   lunaTokenCostMicros,
   openAiStockVisionModelId,
+  openAiStockVisionReasoningEffort,
   resolveStockVisionBackend,
   type StockVisionBackend,
 } from '@/lib/server/t2v/stock-vision-config'
@@ -230,6 +231,7 @@ async function callOpenAiLunaVisionBatch(
     body: JSON.stringify({
       model,
       max_completion_tokens: 900,
+      reasoning_effort: openAiStockVisionReasoningEffort(),
       response_format: { type: 'json_object' },
       messages: [{ role: 'user', content }],
     }),
@@ -501,14 +503,22 @@ export async function batchStockVisionPick(input: {
     backend: backendUsed,
   }
 
+  const costUsd =
+    metrics.costUsdMicros > 0 ? Math.round((metrics.costUsdMicros / 1_000_000) * 1_000_000) / 1_000_000 : 0
   logT2v('stock-vision', 'batch complete', {
     sceneCount: metrics.sceneCount,
     latencyMs: metrics.latencyMs,
     costUsdMicros: metrics.costUsdMicros,
+    costUsd,
+    costUsdPerScene:
+      metrics.sceneCount > 0 && metrics.costUsdMicros > 0
+        ? Math.round((metrics.costUsdMicros / metrics.sceneCount) * 100) / 100
+        : 0,
     promptTokens: metrics.promptTokens,
     completionTokens: metrics.completionTokens,
     model: metrics.model,
     backend: metrics.backend,
+    reasoningEffort: metrics.backend === 'openai-luna' ? openAiStockVisionReasoningEffort() : undefined,
     stockVisionModel: process.env.STOCK_VISION_MODEL ?? '(default)',
   })
 

@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   lunaTokenCostMicros,
   openAiStockVisionModelId,
+  openAiStockVisionReasoningEffort,
   resolveStockVisionBackend,
+  typicalLunaStockVisionCostUsdMicros,
 } from '@/lib/server/t2v/stock-vision-config'
 
 describe('resolveStockVisionBackend', () => {
@@ -39,5 +41,20 @@ describe('lunaTokenCostMicros', () => {
     expect(lunaTokenCostMicros(1_000_000, 0)).toBe(100_000)
     expect(lunaTokenCostMicros(0, 1_000_000)).toBe(500_000)
     expect(lunaTokenCostMicros(107, 25)).toBe(Math.round(107 * 0.1 + 25 * 0.5))
+  })
+})
+
+describe('openAiStockVisionReasoningEffort', () => {
+  it('defaults to none', () => {
+    vi.stubEnv('STOCK_VISION_REASONING_EFFORT', '')
+    expect(openAiStockVisionReasoningEffort()).toBe('none')
+  })
+})
+
+describe('typicalLunaStockVisionCostUsdMicros', () => {
+  it('12-scene cold pass is sub-cent at Luna list price', () => {
+    const micros = typicalLunaStockVisionCostUsdMicros(12)
+    expect(micros).toBe(lunaTokenCostMicros(12 * 5 * 85 + 2 * 1200 + 800, 12 * 28))
+    expect(micros).toBeLessThan(2_000)
   })
 })
