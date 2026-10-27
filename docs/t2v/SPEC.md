@@ -478,18 +478,14 @@ Bench `tests/bench_t2v_60s.py`: 12 scenes × 5 s, 1280×720@30, mixed transition
 
 ---
 
-## 5.10 Parallel build ownership (web vs worker backend)
-Agree on **function signatures** in this spec and `docs/t2v/code/`; do not fork alternate APIs.
-
-| Owner | Milestones / scope | Live paths (when landed) |
-|---|---|---|
-| **Agent A (web + deploys)** | M0; **M2–M3**; **M4 storyboard UI** + routes that call B’s stock libs; **M5–M8 UI/routes** (not worker render); all **deploys** | `app/api/t2v/*`, `components/t2v/*`, `drafts.ts`, `draftToComposition`, `script_composition_render` **music volume** (web export path only where applicable) |
-| **Agent B (worker/backend)** | **M1** worker TTS deduped with web `#783` / `elevenlabs-tts.ts` + `T2vVoiceClip` cache (one hash/alignment format — **no third TTS path**); **M4** stock (`#784`); **M5 worker render** — music ducking, titles/LT, xfade, brand intro/outro in **T2V assemble** (Agent A does **not** duplicate in `job.py` once B lands) | `worker/clips_worker/t2v/*`, `assemble.py`, `job.py` |
+## 5.10 Build ownership (single T2V agent on `transovo-build`)
+One agent owns **web + worker** for T2V. Reuse Agent B’s landed stack (PR chain #786–#790 → `worker/clips_worker/t2v/*`) — do not fork a second assemble/TTS path.
 
 **Contracts (do not fork):**
-- **TTS:** Web preview only via `lib/server/ai/elevenlabs-tts.ts` + `lib/server/t2v/voice-cache.ts` (`ttsHash` computed in TS; worker reads cache / calls `elevenlabs_tts.py` with same models + fallback). Scene route: `POST …/scenes/[sceneId]/voice`.
-- **Stock:** `matchScenes`, `searchT2vStock`, `ensureT2vStockAsset`, `toSceneMedia` in `lib/server/t2v/stock-match.ts` + `stock-asset.ts`. Routes: `POST …/storyboard`, `GET|POST …/scenes/[sceneId]/media` (Agent A wires; Agent B owns ranking/storage impl).
-- **M5 render (B):** ducking, burned titles, transitions, brand bookends in worker assemble — Agent A ships P5–P10 UI + composition document fields only.
+- **TTS:** `lib/server/ai/elevenlabs-tts.ts` + `lib/server/t2v/voice-cache.ts` (`ttsHash` in TS only); worker `elevenlabs_tts.py` + `voice_cache.py` on assemble.
+- **Stock:** `lib/server/t2v/stock-match.ts` + `stock-asset.ts` (+ Pexels photos when keyed).
+- **M5 assemble:** xfade, ducking, titles/LT, brand bookends in worker `assemble.py` / `render_finalize.py` / `job.py`.
+- **M9 jobs:** `T2V_EXTRACT_DECK`, `T2V_VOICE_CLONE`, `T2V_SCENE_AI_*` — types in `lib/t2v/m9-contracts.ts`, handlers in `worker/clips_worker/t2v/m9_jobs.py`.
 
 **Git & CI (Rick, 27 Oct 2026):** **No feature branches or PRs.** Commit on **`transovo-build`** only; **Rick merges** — agents do not merge PRs or branches. Loop: `git pull --rebase origin transovo-build` → edit → **`npm run typecheck`** (if TS) + **fast unit tests for touched files only** → commit → push `transovo-build`. **No** `next build`, full CI, or deploy of `transovo-build`. Agent A still owns **production deploy fixes** when `master` ships and Coolify needs attention.
 

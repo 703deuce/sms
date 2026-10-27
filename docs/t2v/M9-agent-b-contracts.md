@@ -1,6 +1,6 @@
-# M9 — Agent B backend contracts (Agent A web consumes these)
+# M9 — backend contracts (web routes ↔ worker jobs)
 
-Agent A owns UI + thin Next routes below. Agent B implements worker jobs and server libs referenced here.
+Single T2V agent implements both sides on `transovo-build`. Web enqueues; worker handlers live in `worker/clips_worker/t2v/m9_jobs.py`.
 
 ## Job types (register in `worker/clips_worker/job_types.py` + `main.py` DISPATCH)
 
