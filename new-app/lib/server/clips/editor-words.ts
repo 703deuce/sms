@@ -1,4 +1,5 @@
 import type { ClipWord } from '@/lib/clips/edits'
+import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
 import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
 import type { getClipStorage } from '@/lib/storage'
 
@@ -62,6 +63,27 @@ export function clipWordsToAbsolute(
 }
 
 /**
+ * Merge clip words with project transcript for extend-trim (±8s). Clip words win on index overlap.
+ */
+export function mergeClipWordsWithProjectTranscript(
+  clipWords: SourceWord[],
+  projectWords: SourceWord[],
+  clipStartMs: number,
+  clipEndMs: number,
+  extendMs = MAX_TRIM_EXTEND_MS,
+): SourceWord[] {
+  if (!projectWords.length) return clipWords
+  const lo = Math.max(0, clipStartMs - extendMs)
+  const hi = clipEndMs + extendMs
+  const fromProject = wordsInRange(projectWords, lo, hi)
+  if (!clipWords.length) return fromProject
+  const byIndex = new Map<number, SourceWord>()
+  for (const w of fromProject) byIndex.set(w.i, w)
+  for (const w of clipWords) byIndex.set(w.i, w)
+  return [...byIndex.values()].sort((a, b) => a.s - b.s || a.i - b.i)
+}
+
+/**
  * Clip-specific words first; otherwise project transcript sliced to the clip range.
  */
 export async function resolveEditorWords(
@@ -77,7 +99,17 @@ export async function resolveEditorWords(
 
   if (clipRaw.length) {
     const absolute = clipWordsToAbsolute(clipRaw, clip.startMs, clip.endMs)
-    return loadSourceWords(absolute)
+    const clipLoaded = loadSourceWords(absolute)
+    if (projectTranscript.length) {
+      const projectLoaded = loadSourceWords(projectTranscript)
+      return mergeClipWordsWithProjectTranscript(
+        clipLoaded,
+        projectLoaded,
+        clip.startMs,
+        clip.endMs,
+      )
+    }
+    return clipLoaded
   }
 
   if (projectTranscript.length) {

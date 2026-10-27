@@ -63,7 +63,9 @@ export function ExportAllDialog({
 
   return (
     <>
-      <Button size="sm" data-testid="export-all-button" onClick={() => setOpen(true)}>Export all</Button>
+      <Button size="sm" data-testid="export-all-button" disabled={busy} onClick={() => setOpen(true)}>
+        {busy ? 'Exporting…' : 'Export all'}
+      </Button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg border border-border bg-background p-4 shadow-lg">
@@ -95,7 +97,9 @@ export function ExportAllDialog({
             </ul>
             <div className="mt-4 flex justify-end gap-2">
               <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button size="sm" disabled={busy} onClick={() => void run()}>Start export</Button>
+              <Button size="sm" disabled={busy || selected.size === 0} onClick={() => void run()}>
+                {busy ? 'Starting…' : 'Start export'}
+              </Button>
             </div>
           </div>
         </div>

@@ -269,6 +269,7 @@ export function ProjectClipsView({
     try {
       const { downloadUrl, filename } = await exportClipDownload(clipId, { aspect: exportAspect })
       triggerDownload(downloadUrl, filename)
+      toast.success('Download started')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed')
     }

@@ -13,6 +13,11 @@ from clips_worker.picker.log_util import json_snippet, picker_info
 from clips_worker.picker.rejects import is_hard_llm_reject
 from clips_worker.picker.scoring import _sent_dict, score_clip
 from clips_worker.picker.fallback import pass1_heuristic_candidates
+from clips_worker.picker_stats import (
+    record_pass2_batch_ok,
+    record_pass2_heuristic_fallback,
+    record_pass2_moments_capped,
+)
 from clips_worker.picker.titles import SHORT_SOURCE_MAX_MS, strip_internal_sentence_refs, trim_title
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
@@ -183,6 +188,28 @@ def _clip_row_from_llm(
     return base
 
 
+def _pass1_moment_rank(moment: dict) -> float:
+    why = str(moment.get("why") or "").lower()
+    ss = int(moment.get("start_sentence", 0))
+    es = int(moment.get("end_sentence", ss))
+    span = max(1, es - ss + 1)
+    rank = float(span)
+    if "coverage_span" in why or "fallback" in why:
+        rank -= 100.0
+    if moment.get("archetype") == "teaser":
+        rank += 3.0
+    return rank
+
+
+def _cap_moments_for_batch(moments: list[dict], max_n: int) -> tuple[list[dict], list[dict]]:
+    if len(moments) <= max_n:
+        return moments, []
+    order = sorted(range(len(moments)), key=lambda i: _pass1_moment_rank(moments[i]), reverse=True)
+    keep = sorted(order[:max_n])
+    tail = [moments[i] for i in order[max_n:]]
+    return [moments[i] for i in keep], tail
+
+
 def _score_moments_batched(
     moments: list[dict],
     sentences: list[Sentence],
@@ -265,24 +292,42 @@ def score_moments(
     signals: list[SentenceSignals],
     genre: str = "podcast",
     source_duration_s: float | None = None,
+    project_id: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
     if not moments:
         return [], []
     ctx_s = float(genres_config().get("pass2_context_seconds", 120))
     sig_by = {s.sentence_idx: s for s in signals}
     if source_duration_s is not None and source_duration_s <= SHORT_SOURCE_MAX_MS / 1000.0:
-        picker_info("pass2_batch_start", source_duration_s=source_duration_s, moments_in=len(moments))
+        max_n = int(os.environ.get("CLIP_PASS2_BATCH_MAX_MOMENTS", "20"))
+        batch_moments, tail_moments = _cap_moments_for_batch(moments, max_n)
+        if tail_moments:
+            record_pass2_moments_capped(project_id, len(tail_moments))
+            picker_info("pass2_batch_capped", kept=len(batch_moments), dropped=len(tail_moments))
+        picker_info(
+            "pass2_batch_start",
+            source_duration_s=source_duration_s,
+            moments_in=len(moments),
+            batch_moments=len(batch_moments),
+        )
         try:
             batched, audit = _score_moments_batched(
-                moments, sentences, signals, sig_by, genre, source_duration_s, ctx_s
+                batch_moments, sentences, signals, sig_by, genre, source_duration_s, ctx_s
             )
+            if tail_moments:
+                tail_scored = pass1_heuristic_candidates(
+                    tail_moments, sentences, sig_by, genre, source_duration_s=source_duration_s
+                )
+                batched = batched + tail_scored
             if batched:
+                record_pass2_batch_ok(project_id, len(batched))
                 return batched, audit
         except Exception as exc:
             picker_info("pass2_batch_failed", error=str(exc)[:240])
         heuristic = pass1_heuristic_candidates(
             moments, sentences, sig_by, genre, source_duration_s=source_duration_s
         )
+        record_pass2_heuristic_fallback(project_id)
         picker_info(
             "pass2_batch_heuristic_fallback",
             source_duration_s=source_duration_s,

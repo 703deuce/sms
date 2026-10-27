@@ -110,7 +110,12 @@ def pick_talking_clips(
             picker_info("headstart_failed", error=str(exc)[:200])
 
     scored, pass2_audit = score_moments(
-        moments, sentences, signals, genre, source_duration_s=source_duration_s
+        moments,
+        sentences,
+        signals,
+        genre,
+        source_duration_s=source_duration_s,
+        project_id=str(settings.get("projectId") or settings.get("project_id") or "").strip() or None,
     )
     if not scored:
         scored = pass1_heuristic_candidates(

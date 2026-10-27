@@ -48,6 +48,7 @@ export function ClipCard({
   const [thumbBusy, setThumbBusy] = useState(false)
   const [hideBusy, setHideBusy] = useState(false)
   const [editPending, setEditPending] = useState(false)
+  const [downloadBusy, setDownloadBusy] = useState(false)
   const aiMeta = (clip.aiMeta || {}) as ClipAiMeta
   const why = clipWhySummary(aiMeta)
   const layoutChip = clipLayoutChip(aiMeta)
@@ -226,7 +227,18 @@ export function ClipCard({
               Script editor
             </Button>
           ) : null}
-          <Button size="sm" variant="outline" onClick={() => onDownload(clip.id)}>Download</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={downloadBusy || (!clip.previewUrl && !clip.posterUrl)}
+            title={!clip.previewUrl && !clip.posterUrl ? 'Preview still processing' : undefined}
+            onClick={() => {
+              setDownloadBusy(true)
+              Promise.resolve(onDownload(clip.id)).finally(() => setDownloadBusy(false))
+            }}
+          >
+            {downloadBusy ? 'Exporting…' : 'Download'}
+          </Button>
           <Button size="sm" variant="outline" disabled={thumbBusy} onClick={() => void makeThumbnail()}>
             Make thumbnail
           </Button>

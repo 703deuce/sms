@@ -296,6 +296,7 @@ def run_m4_pipeline(
 
     mode = settings.get("mode") or "talking"
     source_duration_ms = max(1, range_end - range_start) if range_end > range_start else 0
+    settings = {**settings, "projectId": project_id}
     if source_duration_ms > 0:
         settings = {**settings, "sourceDurationMs": source_duration_ms}
     pipeline_t0 = time.monotonic()
@@ -814,3 +815,6 @@ def run_m4_pipeline(
             flush=True,
         )
         log_project_vision_stats(project_id)
+        from clips_worker.picker_stats import log_project_pass2_stats
+
+        log_project_pass2_stats(project_id)
