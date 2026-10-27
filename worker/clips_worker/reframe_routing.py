@@ -74,6 +74,7 @@ def apply_production_reframe_routing(
     clip_src: Path,
     settings: dict,
     clip_index: int,
+    words_path: Path | None = None,
 ) -> tuple[str, dict[str, str], dict[str, Any]]:
     """Returns (applied layout, speakercrop extra env, layoutRouteShadow for aiMeta)."""
     raw_layout = (settings.get("layout") or "speaker_follow").strip()
@@ -90,19 +91,59 @@ def apply_production_reframe_routing(
     routed_layout = user_layout
     want_v2 = False
 
+    summary: PersonCountSummary | None = None
     if should_run_person_count_probe(settings, user_layout):
         try:
             summary = _v3_probe(clip_src)
             shadow["probed"] = True
             shadow["nPersons"] = summary.n_persons
             shadow["confidence"] = round(summary.confidence, 4)
-            if should_apply_probe_routing():
+            corner_hint = False
+            screen_hint = False
+            try:
+                from clips_worker.screen_share_detect import probe_screen_share_video
+
+                ss = probe_screen_share_video(str(clip_src), sample_count=4, models_dir=str(V3))
+                corner_hint = bool(ss.face_corner)
+                screen_hint = bool(ss.is_screen_share or ss.confidence >= 0.45)
+            except Exception:
+                pass
+            vision_used = False
+            if summary is not None:
+                from clips_worker.vision_layout import (
+                    layout_from_vision_advice,
+                    maybe_vision_layout_advice,
+                )
+
+                project_id = str(settings.get("projectId") or settings.get("project_id") or "").strip() or None
+                advice = maybe_vision_layout_advice(
+                    clip_src,
+                    summary,
+                    words_path=words_path,
+                    project_id=project_id,
+                    corner_webcam_hint=corner_hint,
+                    screen_share_hint=screen_hint,
+                )
+                if advice is not None and should_apply_probe_routing():
+                    routed_layout, want_v2 = layout_from_vision_advice(advice, user_layout, summary)
+                    vision_used = True
+                    shadow["visionLayout"] = {
+                        "personCount": advice.person_count,
+                        "recommendedLayout": advice.recommended_layout,
+                        "confidence": advice.confidence,
+                        "estCostUsd": advice.est_cost_usd,
+                        "trigger": advice.trigger_reason,
+                    }
+            if should_apply_probe_routing() and summary is not None and not vision_used:
                 routed_layout, want_v2 = route_multiperson_layout(summary, user_layout)
                 shadow["routedLayout"] = routed_layout
                 shadow["useReframeV2"] = want_v2
-            else:
+            elif summary is not None and not vision_used:
                 shadow["routedLayout"] = route_multiperson_layout(summary, user_layout)[0]
                 shadow["useReframeV2"] = False
+            elif vision_used:
+                shadow["routedLayout"] = routed_layout
+                shadow["useReframeV2"] = want_v2
         except Exception as exc:
             shadow["probeError"] = type(exc).__name__
 

@@ -35,16 +35,23 @@ def route_multiperson_layout(
     layout = (user_layout or "speaker_follow").strip()
     if layout in _FORCED_LEGACY and layout != "auto":
         return layout, False
-    if summary.n_persons < 2 or summary.confidence < CONFIDENCE_GATE:
+    n_raw = summary.n_persons
+    if n_raw == 2 and summary.confidence < CONFIDENCE_GATE + 0.05 and summary.mean_embed_coverage < 0.4:
+        n_raw = 1
+    if n_raw < 2 or summary.confidence < CONFIDENCE_GATE:
         if layout == "auto":
             return "speaker_follow", False
         return layout, False
     if layout not in ("auto", "dynamic", "grid", "grid3", "grid4", "split", "split_debate"):
         return layout, False
-    n = min(summary.n_persons, 5)
+    n = min(n_raw, 5)
     if n == 2:
         if layout in ("split", "split_debate"):
             return layout, True
+        if summary.confidence >= 0.72 and summary.mean_embed_coverage >= 0.45:
+            return "dynamic", True
+        if layout == "auto":
+            return "speaker_follow", False
         return "dynamic", True
     if n == 3:
         return "grid3", True

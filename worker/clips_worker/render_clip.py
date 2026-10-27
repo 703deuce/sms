@@ -170,6 +170,9 @@ def layout_env(layout: str) -> dict[str, str]:
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = "speaker_follow"
         env["LAYOUT_STYLE"] = "speaker_follow"
+        env["HYST"] = os.environ.get("SPEAKER_FOLLOW_HYST", "0.92")
+        env["MIN_SEG"] = os.environ.get("SPEAKER_FOLLOW_MIN_SEG", "2.4")
+        env["LEAD"] = os.environ.get("SPEAKER_FOLLOW_LEAD", "0.35")
     else:
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = "speaker_follow"
@@ -264,6 +267,7 @@ def run_speakercrop(
         clip_src,
         settings,
         clip_index,
+        words_path=words_path,
     )
     layout = applied_layout
     env.update(layout_env(layout))
