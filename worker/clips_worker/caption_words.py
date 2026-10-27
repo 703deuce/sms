@@ -76,10 +76,19 @@ def build_caption_words(words: list[dict], edits: dict) -> list[dict]:
             continue
         wi = int(w["i"])
         text = fixes.get(str(wi), w["w"])
+        if not str(text or "").strip():
+            continue
         row = {"i": wi, "text": text, "s_ms": out_s, "e_ms": out_e}
         if w.get("spk") is not None:
             row["spk"] = w["spk"]
         out.append(row)
+    out.sort(key=lambda r: (r["s_ms"], r["i"]))
+    for i in range(1, len(out)):
+        prev = out[i - 1]
+        if out[i]["s_ms"] < prev["s_ms"]:
+            out[i]["s_ms"] = prev["e_ms"]
+        if out[i]["e_ms"] <= out[i]["s_ms"]:
+            out[i]["e_ms"] = out[i]["s_ms"] + 1
     return out
 
 
