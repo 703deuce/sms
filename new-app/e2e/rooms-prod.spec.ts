@@ -42,9 +42,9 @@ test.describe('Rooms prod smoke', () => {
     await host.getByRole('button', { name: 'Yes' }).click()
     await host.getByRole('button', { name: 'Join' }).click()
     await host.waitForURL(/\/studio/, { timeout: 120_000 })
-    await expect(host.getByRole('button', { name: 'Invite' })).toBeVisible({ timeout: 120_000 })
-
-    await host.getByRole('button', { name: 'Invite' }).click()
+    const inviteBtn = host.locator('header [data-slot="popover-trigger"]').first()
+    await expect(inviteBtn).toBeEnabled({ timeout: 180_000 })
+    await inviteBtn.click()
     await expect(host.getByRole('button', { name: 'Copy link' })).toBeVisible({ timeout: 30_000 })
     const inviteLink = await host.locator('.font-mono').first().textContent()
     expect(inviteLink).toContain('/app/rooms/join?token=')

@@ -80,7 +80,7 @@ export function RoomsStudioClient({ sessionId, sessionTitle }: { sessionId: stri
           ← Back to editor
         </Link>
         <span className="flex-1 truncate text-center text-sm font-semibold">{sessionTitle}</span>
-        <Button variant="outline" className="h-8 text-[13px]">Invite</Button>
+        null
       </header>
       <div className="relative flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col bg-[oklch(0.1_0_0)] p-4">
