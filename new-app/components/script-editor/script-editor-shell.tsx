@@ -93,6 +93,9 @@ import { ScriptClarityPanel } from '@/components/script-editor/side/script-clari
 import { ScriptMulticamPanel } from '@/components/script-editor/side/script-multicam-panel'
 import { StudioSoundPreview } from '@/components/script-editor/studio-sound-preview'
 import { useGeneration } from '@/components/clips/editor/use-generation'
+import { ScriptPreviewCanvas } from '@/components/script-editor/preview/script-preview-canvas'
+import { SpeakerRenamePopover } from '@/components/script-editor/speaker-rename-popover'
+import { transcriptFindHits } from '@/lib/clips/script-editor/transcript-find'
 import { ScriptStoryboardPanel } from '@/components/script-editor/storyboard/script-storyboard-panel'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -248,12 +251,16 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [fillerAction, setFillerAction] = useState<FillerReviewAction>('delete')
   const [fillerSearchMode, setFillerSearchMode] = useState<FillerSearchMode>('filler')
   const [fillerSearchQuery, setFillerSearchQuery] = useState('')
+  const [findReplaceText, setFindReplaceText] = useState('')
+  const [speakerRename, setSpeakerRename] = useState<{ speakerId: string; rect: DOMRect; initialName: string } | null>(
+    null,
+  )
   const [clarityOpen, setClarityOpen] = useState(false)
   const fillerFindIndexRef = useRef(0)
   const [fillerSearchOptions, setFillerSearchOptions] = useState<FillerSearchOptions>({
     autoAdvance: true,
     previewResults: false,
-    matchWholeWords: true,
+    matchWholeWords: false,
     matchCase: false,
     wrapAround: true,
     onlyCurrentComposition: true,
@@ -311,7 +318,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   }, [document, wordsById])
 
   const chips = useMemo(() => buildWordChips(document, orderedWords, edl, deletedSet), [document, orderedWords, edl, deletedSet])
-  const blocks = useMemo(() => groupSpeakerBlocks(orderedWords), [orderedWords])
+  const blocks = useMemo(
+    () => groupSpeakerBlocks(orderedWords, 1200, document.speakerLabels),
+    [orderedWords, document.speakerLabels],
+  )
   const activeIndex = useMemo(() => findActiveWordIndex(orderedWords, playheadMs), [orderedWords, playheadMs])
 
   const outDur = outputDurationMs(edl) || data.durationMs
@@ -654,7 +664,24 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     [orderedWords, deletedSet, fillerFilter, fillerSelectionOnly, selectedIds, fillerAvoidHarsh, ignoredSet],
   )
 
+  const findHits = useMemo(
+    () =>
+      transcriptFindHits(orderedWords, deletedSet, fillerSearchQuery, document.wordTextOverrides, {
+        matchCase: fillerSearchOptions.matchCase,
+        matchWholeWords: fillerSearchOptions.matchWholeWords,
+      }),
+    [
+      orderedWords,
+      deletedSet,
+      fillerSearchQuery,
+      document.wordTextOverrides,
+      fillerSearchOptions.matchCase,
+      fillerSearchOptions.matchWholeWords,
+    ],
+  )
+
   const activeFillerHit = fillerHits[fillerCursor] ?? null
+  const activeFindHit = findHits[fillerCursor] ?? null
 
   const gapHits = useMemo(
     () =>
@@ -681,7 +708,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   )
 
   const activeGapHit = gapHits[gapCursor] ?? null
-  const reviewTotal = reviewMode === 'gap' ? gapHits.length : fillerHits.length
+  const inFindMode = fillerReviewOpen && fillerSearchMode === 'find' && reviewMode === 'filler'
+  const reviewTotal = reviewMode === 'gap' ? gapHits.length : inFindMode ? findHits.length : fillerHits.length
   const reviewCursor = reviewMode === 'gap' ? gapCursor : fillerCursor
 
   const keptWords = useMemo(
@@ -720,8 +748,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   )
 
   useEffect(() => {
-    if (fillerCursor >= fillerHits.length) setFillerCursor(Math.max(0, fillerHits.length - 1))
-  }, [fillerCursor, fillerHits.length])
+    if (inFindMode) {
+      if (fillerCursor >= findHits.length) setFillerCursor(Math.max(0, findHits.length - 1))
+    } else if (fillerCursor >= fillerHits.length) setFillerCursor(Math.max(0, fillerHits.length - 1))
+  }, [fillerCursor, fillerHits.length, findHits.length, inFindMode])
+
+  useEffect(() => {
+    setFillerCursor(0)
+    fillerFindIndexRef.current = 0
+  }, [fillerSearchQuery, fillerSearchMode])
 
   useEffect(() => {
     if (gapCursor >= gapHits.length) setGapCursor(Math.max(0, gapHits.length - 1))
@@ -844,6 +879,77 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     applyFillerActionToHits(fillerAction, fillerHits)
     setFillerReviewOpen(false)
   }, [reviewMode, gapHits, targetGapSec, applyOp, fillerAction, fillerHits, applyFillerActionToHits])
+
+  const replaceInToken = useCallback(
+    (text: string, query: string, replacement: string) => {
+      const q = query.trim()
+      if (!q) return text
+      if (fillerSearchOptions.matchWholeWords) {
+        const re = new RegExp(
+          `\\b${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+          fillerSearchOptions.matchCase ? '' : 'i',
+        )
+        return text.replace(re, replacement)
+      }
+      const idx = fillerSearchOptions.matchCase
+        ? text.indexOf(q)
+        : text.toLowerCase().indexOf(q.toLowerCase())
+      if (idx < 0) return text
+      return text.slice(0, idx) + replacement + text.slice(idx + q.length)
+    },
+    [fillerSearchOptions.matchCase, fillerSearchOptions.matchWholeWords],
+  )
+
+  const goToFindHit = useCallback(
+    (hit: { word: EditorWord; index: number }) => {
+      setSelAnchor(hit.index)
+      setSelEnd(hit.index)
+      const out = sourceMsToOutputTime(hit.word.t0Ms, edl)
+      if (out != null) seekToOutputMs(out)
+    },
+    [edl, seekToOutputMs],
+  )
+
+  const onReplaceOneFind = useCallback(() => {
+    const hit = findHits[fillerCursor]
+    const q = fillerSearchQuery.trim()
+    if (!hit || !q) return
+    const current = document.wordTextOverrides?.[hit.word.id] ?? hit.word.text
+    const next = replaceInToken(current, q, findReplaceText)
+    safeApplyOp({
+      type: 'patch_word_text_overrides',
+      overrides: { [hit.word.id]: next },
+      mode: 'merge',
+    })
+    toast.success('Replaced · Undo')
+    if (fillerSearchOptions.autoAdvance && findHits.length > 1) {
+      const nextIdx = (fillerCursor + 1) % findHits.length
+      setFillerCursor(nextIdx)
+      goToFindHit(findHits[nextIdx]!)
+    }
+  }, [
+    findHits,
+    fillerCursor,
+    fillerSearchQuery,
+    document.wordTextOverrides,
+    replaceInToken,
+    findReplaceText,
+    safeApplyOp,
+    fillerSearchOptions.autoAdvance,
+    goToFindHit,
+  ])
+
+  const onReplaceAllFind = useCallback(() => {
+    const q = fillerSearchQuery.trim()
+    if (!q || !findHits.length) return
+    const overrides: Record<string, string> = {}
+    for (const h of findHits) {
+      const current = document.wordTextOverrides?.[h.word.id] ?? h.word.text
+      overrides[h.word.id] = replaceInToken(current, q, findReplaceText)
+    }
+    safeApplyOp({ type: 'patch_word_text_overrides', overrides, mode: 'merge' })
+    toast.success(`Replaced in ${findHits.length} word(s) · Undo`)
+  }, [findHits, fillerSearchQuery, document.wordTextOverrides, replaceInToken, findReplaceText, safeApplyOp])
 
   const onSelectGapHit = useCallback(
     (hit: GapHit) => {
@@ -1145,32 +1251,19 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g' && !e.shiftKey) {
         e.preventDefault()
-        const q = fillerSearchQuery.trim().toLowerCase()
-        if (!q) return
-        const hits = orderedWords
-          .map((w, i) => ({ w, i }))
-          .filter(({ w }) => (document.wordTextOverrides?.[w.id] ?? w.text).toLowerCase().includes(q))
-        if (!hits.length) return
-        fillerFindIndexRef.current = (fillerFindIndexRef.current + 1) % hits.length
-        const hit = hits[fillerFindIndexRef.current]
-        setSelAnchor(hit.i)
-        seekToOutputMs(sourceMsToOutputTime(hit.w.t0Ms, edl) ?? outputMs)
+        if (!findHits.length) return
+        const next = (fillerCursor + 1) % findHits.length
+        setFillerCursor(next)
+        goToFindHit(findHits[next]!)
         return
       }
 
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
         e.preventDefault()
-        const q = fillerSearchQuery.trim().toLowerCase()
-        if (!q) return
-        const hits = orderedWords
-          .map((w, i) => ({ w, i }))
-          .filter(({ w }) => (document.wordTextOverrides?.[w.id] ?? w.text).toLowerCase().includes(q))
-        if (!hits.length) return
-        fillerFindIndexRef.current =
-          (fillerFindIndexRef.current - 1 + hits.length) % hits.length
-        const hit = hits[fillerFindIndexRef.current]
-        setSelAnchor(hit.i)
-        seekToOutputMs(sourceMsToOutputTime(hit.w.t0Ms, edl) ?? outputMs)
+        if (!findHits.length) return
+        const prev = (fillerCursor - 1 + findHits.length) % findHits.length
+        setFillerCursor(prev)
+        goToFindHit(findHits[prev]!)
         return
       }
 
@@ -1701,6 +1794,13 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onPrev={() => {
             if (reviewMode === 'gap') {
               setGapCursor((c) => (gapHits.length ? (c - 1 + gapHits.length) % gapHits.length : 0))
+            } else if (inFindMode) {
+              setFillerCursor((c) => {
+                const next = findHits.length ? (c - 1 + findHits.length) % findHits.length : 0
+                const hit = findHits[next]
+                if (hit) goToFindHit(hit)
+                return next
+              })
             } else {
               setFillerCursor((c) => (fillerHits.length ? (c - 1 + fillerHits.length) % fillerHits.length : 0))
             }
@@ -1708,9 +1808,36 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onNext={() => {
             if (reviewMode === 'gap') {
               setGapCursor((c) => (gapHits.length ? (c + 1) % gapHits.length : 0))
+            } else if (inFindMode) {
+              setFillerCursor((c) => {
+                const next = findHits.length ? (c + 1) % findHits.length : 0
+                const hit = findHits[next]
+                if (hit) goToFindHit(hit)
+                return next
+              })
             } else {
               setFillerCursor((c) => (fillerHits.length ? (c + 1) % fillerHits.length : 0))
             }
+          }}
+          replaceText={findReplaceText}
+          onReplaceTextChange={setFindReplaceText}
+          onReplaceOne={onReplaceOneFind}
+          onReplaceAll={onReplaceAllFind}
+          onFindNext={() => {
+            if (!findHits.length) return
+            setFillerCursor((c) => {
+              const next = (c + 1) % findHits.length
+              goToFindHit(findHits[next]!)
+              return next
+            })
+          }}
+          onFindPrev={() => {
+            if (!findHits.length) return
+            setFillerCursor((c) => {
+              const next = (c - 1 + findHits.length) % findHits.length
+              goToFindHit(findHits[next]!)
+              return next
+            })
           }}
           onRemoveOne={onRemoveOneFiller}
           onRemoveAll={onRemoveAllFillers}
@@ -1775,7 +1902,20 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                   <div key={`${block.speakerId}-${block.startMs}`}>
                     <div className="mb-1 flex items-center gap-2 text-sm">
                       <span className="size-2 rounded-full" style={{ backgroundColor: block.color }} aria-hidden />
-                      <span className="font-medium">{block.speakerLabel}</span>
+                      <button
+                        type="button"
+                        className="font-medium hover:underline"
+                        onClick={(e) => {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          setSpeakerRename({
+                            speakerId: block.speakerId,
+                            rect,
+                            initialName: block.speakerLabel,
+                          })
+                        }}
+                      >
+                        {block.speakerLabel}
+                      </button>
                       <span className="text-muted-foreground">{formatScriptTimecode(block.startMs - data.rangeStartMs)}</span>
                     </div>
                     <p>
@@ -1874,6 +2014,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                                   'cursor-default border-b border-dashed border-primary/40 text-muted-foreground/50',
                                 active && !deleted && !contextOnly && 'bg-primary/20',
                                 activeFillerHit?.word.id === w.id && 'ring-1 ring-sky-500/60',
+                                activeFindHit?.word.id === w.id && inFindMode && 'ring-1 ring-orange-500/70',
+                                inFindMode &&
+                                  findHits.some((h) => h.word.id === w.id) &&
+                                  'bg-yellow-200/30 dark:bg-yellow-500/20',
                                 activeGapHit?.word.id === w.id && 'ring-1 ring-amber-500/60',
                                 selected && 'bg-sky-500/25',
                                 commentedWordIds.has(w.id) && 'bg-primary/15 underline decoration-primary/60',
@@ -1977,24 +2121,19 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           />
 
           <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/30 p-4">
+            <div className="flex min-h-0 flex-1 overflow-hidden bg-muted/30 p-4">
               {data.sourceVideoUrl ? (
-                <div
-                  ref={previewBoxRef}
-                  className={cn(
-                    'relative max-h-full w-auto max-w-full overflow-hidden rounded-xl bg-black shadow-md ring-1 ring-white/10',
-                    previewAspectClass(settings.aspect ?? '9:16'),
-                  )}
-                >
-                  <div className="absolute inset-0 overflow-hidden">
+                <ScriptPreviewCanvas aspect={settings.aspect ?? '9:16'} boxRef={previewBoxRef}>
+                  <div className="pointer-events-none absolute inset-0 overflow-hidden">
                     <video
                       ref={videoRef}
-                      className="absolute max-w-none object-cover"
+                      className="pointer-events-auto absolute max-w-none object-cover"
                       style={videoCropStyle}
                       src={data.sourceVideoUrl}
                       controls={false}
                       preload="metadata"
                       playsInline
+                      crossOrigin="anonymous"
                       onTimeUpdate={syncFromVideo}
                       onPlay={() => setPlaying(true)}
                       onPause={() => setPlaying(false)}
@@ -2023,9 +2162,9 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     enabled={Boolean(studioFx?.enabled && studioPreviewGen.status === 'READY')}
                   />
                   <ScriptVuMeter videoRef={videoRef} />
-                </div>
+                </ScriptPreviewCanvas>
               ) : (
-                <p className="text-sm text-muted-foreground">Source video unavailable.</p>
+                <p className="m-auto text-sm text-muted-foreground">Source video unavailable.</p>
               )}
             </div>
           </section>
@@ -2328,6 +2467,20 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
 
         <ScriptProjectAccessModal open={shareOpen} onClose={() => setShareOpen(false)} compositionId={data.compositionId} />
         <ScriptEditorSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        {speakerRename && (
+          <SpeakerRenamePopover
+            anchor={speakerRename.rect}
+            initialName={speakerRename.initialName}
+            onSave={(name) => {
+              safeApplyOp({
+                type: 'patch_speaker_labels',
+                labels: { [speakerRename.speakerId]: name },
+              })
+              toast.success('Speaker renamed')
+            }}
+            onClose={() => setSpeakerRename(null)}
+          />
+        )}
 
         <EditorRecorderBar
           armed={editorRec.armed}

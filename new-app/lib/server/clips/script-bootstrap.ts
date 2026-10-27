@@ -51,6 +51,8 @@ export async function getScriptBootstrap(
   if (!project) return null
 
   const sourceKey = project.upload?.key ?? null
+  const proxyKey =
+    project.proxyKey && !/^https?:\/\//i.test(project.proxyKey.trim()) ? project.proxyKey : null
   const driverHint = project.upload?.storageDriver ?? null
   const storage = project.transcriptKey
     ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
@@ -123,10 +125,14 @@ export async function getScriptBootstrap(
   const document = (composition.document ?? null) as ScriptDocumentV1 | null
 
   let sourceVideoUrl: string | null = null
-  if (sourceKey) {
+  const playbackKey = proxyKey ?? sourceKey
+  if (playbackKey && !/^https?:\/\//i.test(playbackKey.trim())) {
     try {
-      const mediaStorage = await getClipStorageForObjectKey(sourceKey, driverHint)
-      sourceVideoUrl = await createCachedSignedDownloadUrl(mediaStorage, sourceKey)
+      const mediaStorage = await getClipStorageForObjectKey(playbackKey, driverHint)
+      sourceVideoUrl = await createCachedSignedDownloadUrl(mediaStorage, playbackKey)
+      if (/backblaze\.com\/user_signin/i.test(sourceVideoUrl)) {
+        sourceVideoUrl = null
+      }
     } catch {
       sourceVideoUrl = null
     }
