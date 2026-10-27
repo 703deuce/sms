@@ -7,6 +7,8 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { clipAspectRatios } from '@/lib/clips/settings'
+import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
@@ -50,11 +52,31 @@ export function LayoutPanel({
         </Button>
       )}
       {onEdits && (
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <Label className="text-xs font-medium">Aspect ratio</Label>
+          <div className="flex flex-wrap gap-2">
+            {clipAspectRatios.map((a) => (
+              <Button
+                key={a}
+                type="button"
+                size="sm"
+                variant={(edits.aspectRatio ?? '9:16') === a ? 'default' : 'outline'}
+                onClick={() => onEdits({ ...edits, aspectRatio: a as ExportAspect })}
+              >
+                {a}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Updates the preview and export framing.</p>
+        </div>
+      )}
+      {onEdits && (
         <div className="space-y-3 rounded-lg border border-border p-3">
           <div className="flex items-center justify-between gap-2">
             <Label className="text-xs font-medium">Auto zoom on emphasis</Label>
             <Switch
               checked={Boolean(zoom.enabled)}
+              aria-checked={Boolean(zoom.enabled)}
               onCheckedChange={(checked) =>
                 onEdits({ ...edits, zoom: { ...zoom, enabled: Boolean(checked) } })
               }
@@ -81,6 +103,7 @@ export function LayoutPanel({
             <Label className="text-xs font-medium">Silence trim on export</Label>
             <Switch
               checked={Boolean(silence.enabled)}
+              aria-checked={Boolean(silence.enabled)}
               onCheckedChange={(checked) =>
                 onEdits({ ...edits, silenceTrim: { ...silence, enabled: Boolean(checked) } })
               }
