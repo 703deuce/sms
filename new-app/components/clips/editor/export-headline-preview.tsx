@@ -1,6 +1,6 @@
 'use client'
 
-import { headlineBarLayout } from '@/lib/clips/export-template'
+import { streamHeadlineFrameLayout } from '@/lib/clips/export-template'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 
 export function ExportHeadlinePreview({
@@ -19,12 +19,13 @@ export function ExportHeadlinePreview({
   const badgeColor = platform === 'kick' ? '#53FC18' : '#9146FF'
   const h = 280
   const scale = h / 1920
-  const { barHeightPx, textTopPx } = headlineBarLayout(exportPlatformId, 1920)
+  const { barHeightPx, videoHeightPx, videoTopPx, footerHeightPx } = streamHeadlineFrameLayout(1920)
   const barH = barHeightPx * scale
-  const textY = textTopPx * scale
-  const videoTop = h * 0.22
-  const videoH = h * 0.46
-  const sourceY = videoTop + videoH + 4
+  const videoTop = videoTopPx * scale
+  const videoH = videoHeightPx * scale
+  const footerH = footerHeightPx * scale
+  const textY = barH * 0.45
+  const badgeBottom = videoTop + videoH - 14
 
   return (
     <div className="mt-2 overflow-hidden rounded-md border border-border bg-zinc-800 text-white">
@@ -44,10 +45,15 @@ export function ExportHeadlinePreview({
         >
           16:9 + blur fill
         </div>
+        <div
+          className="absolute inset-x-0 bg-black"
+          style={{ top: videoTop + videoH, height: footerH }}
+          aria-hidden
+        />
         {showBadge || channelUrl ? (
           <div
-            className="absolute inset-x-0 flex items-center gap-1 bg-black/85 px-1"
-            style={{ top: sourceY, height: 18 }}
+            className="absolute inset-x-1 flex items-center gap-1"
+            style={{ top: badgeBottom, height: 14 }}
           >
             {showBadge ? (
               <span
@@ -58,7 +64,7 @@ export function ExportHeadlinePreview({
               </span>
             ) : null}
             {channelUrl ? (
-              <span className="truncate text-[7px] text-white/90">
+              <span className="truncate text-[7px] font-bold uppercase text-white/95">
                 {channelUrl.replace(/^https?:\/\//, '')}
               </span>
             ) : null}

@@ -21,7 +21,11 @@ import {
 } from '@/lib/clips/export-platform-presets'
 import { outputDurationMs } from '@/lib/clips/edits'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
-import { formatHeadlineForExport, type ClipExportTemplate } from '@/lib/clips/export-template'
+import {
+  defaultStreamHeadlineExportTemplate,
+  formatHeadlineForExport,
+  type ClipExportTemplate,
+} from '@/lib/clips/export-template'
 import { ExportTemplateSection } from '@/components/clips/editor/export-template-section'
 import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
 import {
@@ -81,8 +85,23 @@ export function ExportDialog({
   const sfxBundled = exportSfxBundledAssetsAvailable()
 
   useEffect(() => {
-    if (open) setExportTemplate(edits.exportTemplate)
-  }, [open, edits.exportTemplate])
+    if (!open) return
+    if (edits.exportTemplate) {
+      setExportTemplate(edits.exportTemplate)
+      return
+    }
+    if (platform && (platform === 'kick' || platform === 'twitch')) {
+      setExportTemplate(
+        defaultStreamHeadlineExportTemplate({
+          platform,
+          channelUrl: defaultChannelUrl,
+          suggestedHeadline: undefined,
+        }),
+      )
+      return
+    }
+    setExportTemplate(edits.exportTemplate)
+  }, [open, edits.exportTemplate, platform, defaultChannelUrl])
 
   useEffect(() => {
     if (open) setAspect(edits.aspectRatio ?? '9:16')

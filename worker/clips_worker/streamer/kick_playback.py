@@ -18,16 +18,16 @@ def _channel_v2(slug: str, timeout_s: int = 30) -> dict[str, Any]:
 
 
 def _pick_hls_from_channel(data: dict[str, Any]) -> str | None:
+    for key in ("playback_url", "hls_source"):
+        raw = data.get(key)
+        if isinstance(raw, str) and "m3u8" in raw:
+            return raw
     live = data.get("livestream")
     if isinstance(live, dict):
         for key in ("source", "playback_url", "hls_source"):
             raw = live.get(key)
             if isinstance(raw, str) and "m3u8" in raw:
                 return raw
-    for key in ("playback_url", "hls_source"):
-        raw = data.get(key)
-        if isinstance(raw, str) and "m3u8" in raw:
-            return raw
     return None
 
 

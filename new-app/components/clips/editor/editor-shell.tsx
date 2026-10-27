@@ -658,6 +658,16 @@ export function EditorShell({
               ? 'twitch'
               : undefined
         }
+        defaultChannelUrl={
+          (() => {
+            const s = (aiMeta as { streamer?: { platform?: string; login?: string; meta?: { channel?: string; platform?: string } } } | null)
+              ?.streamer
+            const login = s?.login || s?.meta?.channel
+            const platform = s?.platform || s?.meta?.platform
+            if (!login || !platform) return undefined
+            return platform === 'kick' ? `https://kick.com/${login}` : `https://twitch.tv/${login}`
+          })()
+        }
         onAudioTrack={(track) => setEdits({ ...edits, audioTrack: track })}
         open={exportOpen}
         onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}

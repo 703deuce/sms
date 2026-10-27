@@ -28,7 +28,7 @@ export async function resolveKickLiveHlsUrl(slug: string): Promise<string | null
     const data = (await res.json()) as Record<string, unknown>
     const live = data.livestream as Record<string, unknown> | undefined
     if (live?.is_live === false) return null
-    const fromLive = [live?.source, live?.playback_url, data.playback_url].find(
+    const fromLive = [data.playback_url, live?.playback_url, live?.source].find(
       (u) => typeof u === 'string' && u.includes('m3u8'),
     )
     return (fromLive as string) || null

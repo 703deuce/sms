@@ -7,6 +7,33 @@ import {
 
 export const EXPORT_HEADLINE_MAX_REGENERATIONS = 5
 
+/** Selectable in regular clipper + default for stream clips. */
+export const STREAM_HEADLINE_TEMPLATE_ID = 'stream_headline'
+
+export const STREAM_HEADLINE_BAR_FRAC = 0.2
+export const STREAM_HEADLINE_FOOTER_FRAC = 0.28
+
+export function defaultStreamHeadlineExportTemplate(opts: {
+  platform: 'twitch' | 'kick'
+  channelUrl?: string | null
+  suggestedHeadline?: string
+  exportPlatformId?: ExportPlatformId
+}): ClipExportTemplate {
+  const url = opts.channelUrl ? normalizeChannelUrl(opts.channelUrl) || opts.channelUrl : undefined
+  return {
+    headlineBar: {
+      enabled: true,
+      text: formatHeadlineForExport(opts.suggestedHeadline || ''),
+    },
+    platformBadge: { enabled: true },
+    channelLink: { enabled: Boolean(url), url: url || undefined },
+    suggestedHeadline: opts.suggestedHeadline,
+    platform: opts.platform,
+    exportPlatformId: opts.exportPlatformId ?? 'tiktok',
+    profanityCensor: false,
+  }
+}
+
 export const exportTemplateSchema = z.object({
   headlineBar: z
     .object({
@@ -125,9 +152,9 @@ export function effectiveHeadlineText(tpl: ClipExportTemplate | undefined): stri
   return (tpl.suggestedHeadline || '').trim()
 }
 
-const HEADLINE_CHAR_LIMIT = 40
+const HEADLINE_CHAR_LIMIT = 72
 
-/** Stream export headline: ALL CAPS, ~40 chars, 1–2 trailing emoji preserved. */
+/** Stream export headline: ALL CAPS, 2–3 short lines worth, 1–2 trailing emoji preserved. */
 export function formatHeadlineForExport(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed) return ''
@@ -148,12 +175,25 @@ export function headlineTextMinY(
   return Math.round(ref * (playH / 1920))
 }
 
+export function streamHeadlineFrameLayout(playH = 1920): {
+  barHeightPx: number
+  videoHeightPx: number
+  footerHeightPx: number
+  videoTopPx: number
+} {
+  const barHeightPx = Math.round(playH * STREAM_HEADLINE_BAR_FRAC)
+  const footerHeightPx = Math.round(playH * STREAM_HEADLINE_FOOTER_FRAC)
+  const videoHeightPx = Math.max(1, playH - barHeightPx - footerHeightPx)
+  return { barHeightPx, videoHeightPx, footerHeightPx, videoTopPx: barHeightPx }
+}
+
 export function headlineBarLayout(
   platformId: ExportPlatformId | undefined,
   playH = 1920,
 ): { barHeightPx: number; textTopPx: number } {
+  const { barHeightPx } = streamHeadlineFrameLayout(playH)
   const textMin = headlineTextMinY(platformId, playH)
-  const barHeightPx = Math.max(Math.round(420 * (playH / 1920)), textMin + Math.round(56 * (playH / 1920)))
-  const textTopPx = Math.max(textMin, Math.round(barHeightPx * 0.58) - Math.round(8 * (playH / 1920)))
-  return { barHeightPx, textTopPx }
+  const bar = Math.max(barHeightPx, textMin + Math.round(48 * (playH / 1920)))
+  const textTopPx = Math.round(bar * 0.55)
+  return { barHeightPx: bar, textTopPx }
 }

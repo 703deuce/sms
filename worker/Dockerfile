@@ -4,7 +4,7 @@ ARG GIT_COMMIT=unknown
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libglib2.0-0 libegl1 libgl1 libgles2 curl build-essential \
-    fontconfig ca-certificates \
+    fontconfig ca-certificates fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

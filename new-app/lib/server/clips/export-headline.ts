@@ -70,6 +70,7 @@ export async function generateExportHeadline(opts: {
   startMs: number
   endMs: number
   edits: ClipEditsV2
+  aiMeta?: Record<string, unknown> | null
 }): Promise<{ headline: string; generations: number; exportTemplate: ClipExportTemplate }> {
   const tpl = (opts.edits.exportTemplate || {}) as ClipExportTemplate
   const used = tpl.headlineGenerations ?? 0
@@ -97,10 +98,13 @@ export async function generateExportHeadline(opts: {
   const apiKey = process.env.OPENAI_API_KEY?.trim()
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
   const model = getClipsLlmModelId()
+  const streamer = (opts.aiMeta as { streamer?: { displayName?: string; login?: string } } | null)?.streamer
+  const streamerName = streamer?.displayName || streamer?.login || 'the streamer'
   const system =
-    'Write one short stream clip headline (max 8 words, ALL CAPS style, max 40 characters before emoji). ' +
-    'Punchy, specific, end with 1-2 emoji. JSON only: {"headline":"..."}'
-  const user = `Title: ${opts.title}\nTranscript:\n${transcript}\n${chat ? `Chat highlights:\n${chat}` : ''}`
+    'Write a viral stream-clip headline: plain English, ALL CAPS, 2-3 short lines when read aloud (max ~70 chars before emoji). ' +
+    'State what happened — punchy and factual using ONLY transcript/chat facts. No invented claims or drama. ' +
+    `Use the streamer's name (${streamerName}) when natural. End with 1-2 relevant emoji. JSON only: {"headline":"..."}`
+  const user = `Streamer: ${streamerName}\nClip title: ${opts.title}\nTranscript:\n${transcript}\n${chat ? `Chat highlights:\n${chat}` : ''}`
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',

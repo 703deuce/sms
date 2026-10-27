@@ -22,6 +22,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       startMs: clip.startMs,
       endMs: clip.endMs,
       edits,
+      aiMeta: clip.aiMeta as Record<string, unknown> | null,
     })
     const saved = await persistExportTemplate(clipId, bounds, result.exportTemplate, clip.edits)
     return NextResponse.json({

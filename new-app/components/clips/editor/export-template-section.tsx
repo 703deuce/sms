@@ -77,7 +77,7 @@ export function ExportTemplateSection({
 
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-border p-3">
-      <p className="text-xs font-medium">Headline &amp; channel (export only)</p>
+      <p className="text-xs font-medium">Stream headline template (export only)</p>
       <p className="text-xs text-muted-foreground">Preview clips stay clean; overlays apply when you export.</p>
 
       <div className="flex items-center justify-between gap-2">

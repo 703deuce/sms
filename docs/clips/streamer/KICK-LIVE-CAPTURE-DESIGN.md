@@ -107,17 +107,13 @@ Claim job only if under caps; else requeue with delay.
 | Source | Official? | Notes |
 |--------|-----------|-------|
 | **`livestream.status.updated` webhook** | ✅ Kick DevDocs | **`is_live`, `started_at`, `channel_slug` only** — **no playback URL**. |
-| **`GET https://kick.com/api/v2/channels/{slug}`** | ❌ Undocumented (site API) | When live: `livestream` object + often **`playback_url`** (IVS `.m3u8`) and/or stream **`source`** path to `stream.kick.com/.../master.m3u8`. Used today indirectly by the Kick web player. |
-| **`GET https://api.kick.com/public/v1/channels`** (OAuth) | ✅ Documented | Channel metadata; **playback URL not guaranteed** in public v1 docs — fall back to v2. |
-| **yt-dlp** `-g` on `https://kick.com/{slug}` | ❌ Unofficial | Same extractor stack as VOD; **curl-cffi** impersonation; breaks if CF bot rules tighten. |
+| **`GET api.kick.com/public/v2/livestreams`** (OAuth) | ✅ Documented | **No playback URL** (metadata only). |
+| **`GET https://kick.com/api/v2/channels/{slug}`** | ❌ Site API (**Cloudflare**) | Top-level **`playback_url`** (IVS JWT). Practical source. Probe: **`KICK-LIVE-CAPTURE-SCALE-PROBE.md`**. |
+| **yt-dlp** `-g` | ❌ Unofficial | Fallback only. |
 
-**Resolver order (worker `kick_playback.resolve_kick_live_hls_url(slug)`):**
+**Resolver order:** v2 **`playback_url`** + `livestream.is_live` → yt-dlp → fail closed. IVS needs **`Referer: https://kick.com`**.
 
-1. v2 channel JSON → `livestream.is_live` + `playback_url` or nested HLS `source`.
-2. yt-dlp `-g --format best` fallback.
-3. Fail → notify streamer to paste replay later; no silent spin.
-
-**Refresh:** IVS URLs can **expire** or rotate — re-resolve every **30–60 min** or on playlist 403.
+**Refresh:** Re-resolve v2 every **30–60 min** or on IVS **403**.
 
 ### Cloudflare / ToS risk
 

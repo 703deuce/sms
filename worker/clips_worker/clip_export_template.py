@@ -1,19 +1,24 @@
-"""Burn export-only headline bar, platform source bar, and channel link (not preview.mp4)."""
+"""Burn export-only Stream headline template (banner, in-video source bar, channel URL)."""
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
-# Parity with new-app/lib/clips/export-platform-presets.ts (headlineTextMinYPx @ 1080×1920).
+from clips_worker.stream_headline_ass import burn_stream_headline
+
+# Parity with new-app/lib/clips/export-template.ts
 _HEADLINE_TEXT_MIN_Y = {
     "tiktok": 260,
     "youtube_shorts": 380,
     "instagram_reels": 250,
 }
-_HEADLINE_BAR_H_REF = 420
-_SOURCE_BAR_H = 52
-_FONT_HEADLINE = 46
-_FONT_LINK = 24
+_BAR_FRAC = 0.20
+_FOOTER_FRAC = 0.28
+_SOURCE_INSET_Y = 12
+_FONT_LINK = 22
+_BADGE_W = 108
+_BADGE_H = 36
 
 
 def _esc_drawtext(s: str) -> str:
@@ -24,17 +29,48 @@ def _scale_y(px: int, play_h: int) -> int:
     return max(1, int(round(px * play_h / 1920)))
 
 
+def _probe_duration_ms(video: Path) -> int:
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                str(video),
+            ],
+            text=True,
+            timeout=30,
+        )
+        data = json.loads(out)
+        dur = float((data.get("format") or {}).get("duration") or 60)
+        return max(1000, int(dur * 1000))
+    except Exception:
+        return 60_000
+
+
+def stream_headline_frame_layout(play_w: int, play_h: int) -> dict[str, int]:
+    """White banner ~20%, video middle, black caption footer ~28%."""
+    bar_h = int(round(play_h * _BAR_FRAC))
+    footer_h = int(round(play_h * _FOOTER_FRAC))
+    video_h = max(1, play_h - bar_h - footer_h)
+    return {"bar_h": bar_h, "video_h": video_h, "footer_h": footer_h, "video_y": bar_h}
+
+
 def headline_layout(platform_id: str | None, play_w: int, play_h: int) -> tuple[int, int]:
-    """White bar height and drawtext y (top of text box) in output pixels."""
+    """Legacy: bar height + text anchor (export safe zones)."""
+    lay = stream_headline_frame_layout(play_w, play_h)
     pid = (platform_id or "tiktok").strip()
     text_min = _scale_y(_HEADLINE_TEXT_MIN_Y.get(pid, 260), play_h)
-    bar_h = max(_scale_y(_HEADLINE_BAR_H_REF, play_h), text_min + _scale_y(56, play_h))
-    text_y = max(text_min, int(bar_h * 0.58) - _scale_y(8, play_h))
+    bar_h = max(lay["bar_h"], text_min + _scale_y(48, play_h))
+    text_y = int(bar_h * 0.55)
     return bar_h, text_y
 
 
 def fit_16x9_rect(play_w: int, play_h: int) -> tuple[int, int, int, int]:
-    """Centered 16:9 video rect when letterboxed to play_w×play_h (full width)."""
     fg_w = play_w
     fg_h = int(round(fg_w * 9 / 16))
     if fg_h > play_h:
@@ -73,92 +109,135 @@ def apply_export_template(
 
     headline_on = allow_headline and bool((tpl.get("headlineBar") or {}).get("enabled"))
     hb = tpl.get("headlineBar") or {}
-    headline = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip().upper()
+    headline = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip()
 
     badge_on = bool((tpl.get("platformBadge") or {}).get("enabled"))
     link_on = bool((tpl.get("channelLink") or {}).get("enabled"))
     link_url = str((tpl.get("channelLink") or {}).get("url") or "").strip()
     platform = str(tpl.get("platform") or "twitch")
-    platform_id = str(tpl.get("exportPlatformId") or "tiktok")
 
-    source_bar_on = badge_on or (link_on and link_url)
-    if not headline_on and not source_bar_on:
+    source_on = badge_on or (link_on and link_url)
+    if not headline_on and not source_on:
         return video
 
-    _fg_x, fg_y, _fg_w, fg_h = fit_16x9_rect(play_w, play_h)
-    source_y = min(play_h - _scale_y(_SOURCE_BAR_H, play_h) - 8, fg_y + fg_h + _scale_y(6, play_h))
+    frame = stream_headline_frame_layout(play_w, play_h)
+    bar_h = frame["bar_h"]
+    video_h = frame["video_h"]
+    video_y = frame["video_y"]
+    duration_ms = _probe_duration_ms(video)
 
-    filters: list[str] = []
-    vlabel = "0:v"
-    step = 0
+    work = video.parent / "export_tpl_stage.mp4"
+    stage = video.parent / "export_tpl_composed.mp4"
 
+    # 1) Stack: black 9:16, video band, optional white headline bar on top
+    fc = (
+        f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
+        f"[0:v]scale={play_w}:{video_h}:force_original_aspect_ratio=increase,"
+        f"crop={play_w}:{video_h}:(iw-{play_w})/2:(ih-{video_h})/2[vid];"
+        f"[bg][vid]overlay=0:{video_y}[v1];"
+    )
     if headline_on and headline:
-        bar_h, text_y = headline_layout(platform_id, play_w, play_h)
-        headline_show = headline[:80]
-        bar = (
-            f"[{vlabel}]drawbox=x=0:y=0:w={play_w}:h={bar_h}:color=white@0.97:t=fill,"
-            f"drawtext=text='{_esc_drawtext(headline_show)}':fontsize={_scale_y(_FONT_HEADLINE, play_h)}:"
-            f"fontcolor=black:x=(w-text_w)/2:y={text_y}:borderw=0[v{step}]"
-        )
-        filters.append(bar)
-        vlabel = f"v{step}"
-        step += 1
+        fc += f"[v1]drawbox=x=0:y=0:w={play_w}:h={bar_h}:color=white@1:t=fill[vout]"
+        vmap = "[vout]"
+    else:
+        vmap = "[v1]"
 
-    if source_bar_on:
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video),
+            "-filter_complex",
+            fc,
+            "-map",
+            vmap,
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-c:a",
+            "copy",
+            str(stage),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    current = stage
+    if headline_on and headline:
+        hl_out = video.parent / "export_tpl_headline.mp4"
+        burn_stream_headline(
+            current,
+            hl_out,
+            headline,
+            play_w=play_w,
+            play_h=play_h,
+            bar_h=bar_h,
+            duration_ms=duration_ms,
+        )
+        current = hl_out
+
+    if source_on:
         label, color = _platform_label(platform)
-        bar_h = _scale_y(_SOURCE_BAR_H, play_h)
-        display = link_url.replace("https://", "").replace("http://", "") if link_on and link_url else ""
-        parts = [
-            f"[{vlabel}]drawbox=x=0:y={source_y}:w={play_w}:h={bar_h}:color=black@0.82:t=fill",
-        ]
+        display = link_url.replace("https://", "").replace("http://", "").upper() if link_on and link_url else ""
+        badge_y = video_y + video_h - _scale_y(_BADGE_H + _SOURCE_INSET_Y, play_h)
+        badge_x = _scale_y(16, play_w)
+        bw = _scale_y(_BADGE_W, play_w)
+        bh = _scale_y(_BADGE_H, play_h)
+        fs_badge = _scale_y(18, play_h)
+        fs_link = _scale_y(_FONT_LINK, play_h)
+        link_x = badge_x + bw + _scale_y(12, play_w) if badge_on else badge_x
+        parts = [f"[0:v]"]
         if badge_on:
             parts.append(
-                f"drawbox=x={_scale_y(16, play_w)}:y={source_y + _scale_y(10, play_h)}:"
-                f"w={_scale_y(100, play_w)}:h={bar_h - _scale_y(20, play_h)}:color={color}@0.95:t=fill"
-            )
-            parts.append(
-                f"drawtext=text='{_esc_drawtext(label)}':fontsize={_scale_y(20, play_h)}:fontcolor=white:"
-                f"x={_scale_y(28, play_w)}:y={source_y + _scale_y(14, play_h)}"
+                f"drawbox=x={badge_x}:y={badge_y}:w={bw}:h={bh}:color={color}@0.98:t=fill,"
+                f"drawtext=text='{_esc_drawtext(label)}':fontsize={fs_badge}:fontcolor=white:"
+                f"x={badge_x + _scale_y(10, play_w)}:y={badge_y + _scale_y(8, play_h)}"
             )
         if display:
-            tx = _scale_y(130, play_w) if badge_on else _scale_y(20, play_w)
+            sep = "," if badge_on else ""
             parts.append(
-                f"drawtext=text='{_esc_drawtext(display[:56])}':fontsize={_scale_y(_FONT_LINK, play_h)}:"
-                f"fontcolor=white@0.92:x={tx}:y={source_y + _scale_y(14, play_h)}"
+                f"{sep}drawtext=text='{_esc_drawtext(display[:48])}':fontsize={fs_link}:"
+                f"fontcolor=white@0.95:x={link_x}:y={badge_y + _scale_y(10, play_h)}"
             )
-        parts.append(f"[v{step}]")
-        filters.append(",".join(parts))
-        vlabel = f"v{step}"
-        step += 1
+        parts.append("[vout]")
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(current),
+                "-filter_complex",
+                "".join(parts),
+                "-map",
+                "[vout]",
+                "-map",
+                "0:a?",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-c:a",
+                "copy",
+                str(work),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        current = work
 
-    if not filters:
-        return video
+    import shutil
 
-    fc = ";".join(filters)
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-v",
-        "error",
-        "-i",
-        str(video),
-        "-filter_complex",
-        fc,
-        "-map",
-        f"[{vlabel}]",
-        "-map",
-        "0:a?",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-c:a",
-        "copy",
-        "-movflags",
-        "+faststart",
-        str(out),
-    ]
-    subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    shutil.copy(current, out)
     return out
