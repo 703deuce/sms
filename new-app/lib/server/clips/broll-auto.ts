@@ -78,8 +78,11 @@ export async function buildAutoBrollItems(
       })
       occupied.push({ startMs, endMs })
       queriesUsed.push(query)
-    } catch {
-      /* skip failed placement */
+    } catch (err) {
+      console.warn('[clipper:broll] auto placement skipped', {
+        query,
+        message: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 

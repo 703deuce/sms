@@ -1,7 +1,7 @@
 import 'server-only'
 
 import type { BrollItem } from '@/lib/clips/broll'
-import { findCachedHit } from '@/lib/server/ai/pixabay'
+import { ensureStockAsset, findCachedHit } from '@/lib/server/ai/pixabay'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 
@@ -27,9 +27,15 @@ export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaR
     if (item.source === 'stock') {
       const asset = await prisma.stockAsset.findUnique({ where: { id: item.assetId } })
       if (!asset) continue
-      let url = asset.storageKey ? await storage.createSignedDownloadUrl(asset.storageKey, 3600) : null
+      let url: string | null = null
+      const hit = asset.provider === 'pixabay' ? await findCachedHit(asset.providerId) : null
+      if (hit) {
+        const ensured = await ensureStockAsset(hit)
+        url = ensured.url
+      } else if (asset.storageKey) {
+        url = await storage.createSignedDownloadUrl(asset.storageKey, 3600)
+      }
       if (!url) {
-        const hit = await findCachedHit(asset.providerId)
         url = hit?.preview || hit?.srcUrl || null
       }
       const thumbUrl = asset.thumbUrl || (await findCachedHit(asset.providerId))?.thumbUrl

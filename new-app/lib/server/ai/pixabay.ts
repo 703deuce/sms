@@ -164,6 +164,30 @@ export async function findCachedHit(providerId: string): Promise<PixabayHitInter
   return null
 }
 
+async function stockObjectExists(storageKey: string): Promise<boolean> {
+  const storage = getClipStorage()
+  try {
+    const size = await storage.getObjectSizeBytes(storageKey)
+    return size != null && size > 0
+  } catch {
+    return false
+  }
+}
+
+async function ingestPixabayBytes(objectKey: string, hit: PixabayHitInternal, rowId: string) {
+  const prisma = getPrisma()
+  const storage = getClipStorage()
+  console.info('[clipper:broll] pixabay ingest', { providerId: hit.providerId, storageKey: objectKey })
+  const buf = await downloadRenditionToBuffer(hit.srcUrl, hit.fallbackSrcUrl)
+  await storage.putBytes(objectKey, buf, 'video/mp4')
+  const updated = await prisma.stockAsset.update({
+    where: { id: rowId },
+    data: { storageKey: objectKey },
+  })
+  const url = await storage.createSignedDownloadUrl(objectKey, 3600)
+  return { asset: updated, url }
+}
+
 export async function ensureStockAsset(hit: PixabayHitInternal) {
   const prisma = getPrisma()
   const storage = getClipStorage()
@@ -172,9 +196,29 @@ export async function ensureStockAsset(hit: PixabayHitInternal) {
   const existing = await prisma.stockAsset.findUnique({
     where: { provider_providerId: { provider: 'pixabay', providerId: hit.providerId } },
   })
+
   if (existing?.storageKey) {
-    const url = await storage.createSignedDownloadUrl(existing.storageKey, 3600)
-    return { asset: existing, url }
+    const ok = await stockObjectExists(existing.storageKey)
+    if (ok) {
+      const url = await storage.createSignedDownloadUrl(existing.storageKey, 3600)
+      return { asset: existing, url }
+    }
+    console.info('[clipper:broll] pixabay storage missing, re-ingest', {
+      providerId: hit.providerId,
+      storageKey: existing.storageKey,
+    })
+    try {
+      return await ingestPixabayBytes(existing.storageKey, hit, existing.id)
+    } catch (err) {
+      console.error('[clipper:broll] pixabay re-ingest failed', {
+        providerId: hit.providerId,
+        message: err instanceof Error ? err.message : String(err),
+      })
+      await prisma.stockAsset.update({
+        where: { id: existing.id },
+        data: { storageKey: null },
+      })
+    }
   }
 
   const row =
@@ -195,14 +239,7 @@ export async function ensureStockAsset(hit: PixabayHitInternal) {
     }))
 
   if (!row.storageKey) {
-    const buf = await downloadRenditionToBuffer(hit.srcUrl, hit.fallbackSrcUrl)
-    await storage.putBytes(objectKey, buf, 'video/mp4')
-    const updated = await prisma.stockAsset.update({
-      where: { id: row.id },
-      data: { storageKey: objectKey },
-    })
-    const url = await storage.createSignedDownloadUrl(objectKey, 3600)
-    return { asset: updated, url }
+    return ingestPixabayBytes(objectKey, hit, row.id)
   }
 
   const url = await storage.createSignedDownloadUrl(row.storageKey, 3600)
