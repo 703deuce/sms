@@ -339,7 +339,14 @@ export function T2vStudioShell({
                 ) : tab === 'visuals' ? (
                   <T2vPanelVisuals draftId={draftId} doc={doc} sceneId={selectedId} onRefresh={() => void refreshDraft()} />
                 ) : tab === 'audio' ? (
-                  <T2vPanelAudio draftId={draftId} doc={doc} onChange={(n) => void persist(n)} />
+                  <T2vPanelAudio
+                    draftId={draftId}
+                    doc={doc}
+                    revisionRef={revisionRef}
+                    setRevision={setRevision}
+                    replace={replace}
+                    onChange={(n) => void persist(n)}
+                  />
                 ) : tab === 'text' ? (
                   <T2vPanelText doc={doc} onChange={(n) => void persist(n)} />
                 ) : tab === 'styles' ? (

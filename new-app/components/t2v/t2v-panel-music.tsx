@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Sparkles, Upload } from 'lucide-react'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
@@ -20,10 +20,16 @@ const MOODS = ['Upbeat', 'Calm', 'Corporate', 'Cinematic', 'Inspiring', 'Playful
 export function T2vPanelMusic({
   draftId,
   doc,
+  revisionRef,
+  setRevision,
+  replace,
   onChange,
 }: {
   draftId: string
   doc: T2vDraftV1
+  revisionRef: MutableRefObject<number>
+  setRevision: (n: number) => void
+  replace: (next: T2vDraftV1) => void
   onChange: (next: T2vDraftV1) => void
 }) {
   const music = doc.music?.disabled ? null : (doc.music ?? { volume: DEFAULT_MUSIC_VOLUME, duck: true })
@@ -33,26 +39,42 @@ export function T2vPanelMusic({
   const [uploadBusy, setUploadBusy] = useState(false)
   const activeGen = music?.generationId ?? null
   const musicGen = useGeneration(activeGen)
-  const attachRef = useRef<string | null>(null)
-  const refreshMetaRef = useRef<() => Promise<void>>(async () => {})
+  const pendingAttachGen = useRef<string | null>(null)
+
+  const applySaved = useCallback(
+    (saved: { document: T2vDraftV1; revision: number }) => {
+      replace(saved.document)
+      revisionRef.current = saved.revision
+      setRevision(saved.revision)
+    },
+    [replace, revisionRef, setRevision],
+  )
 
   const attachGeneration = useCallback(
     async (generationId: string, label?: string) => {
       const res = await fetch(`/api/t2v/drafts/${draftId}/music`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'use', generationId, label }),
+        body: JSON.stringify({
+          action: 'use',
+          generationId,
+          label,
+          baseRevision: revisionRef.current,
+        }),
       })
       const body = await res.json()
+      if (res.status === 409) {
+        toast.error('Draft changed elsewhere — refresh and try again')
+        return
+      }
       if (!res.ok) {
         toast.error(body.error ?? 'use_failed')
         return
       }
-      onChange(body.data.document as T2vDraftV1)
+      applySaved(body.data as { document: T2vDraftV1; revision: number })
       toast.success('Music attached')
-      void refreshMetaRef.current()
     },
-    [draftId, onChange],
+    [draftId, doc.music?.generationId, revisionRef, applySaved],
   )
 
   const refreshMeta = useCallback(async () => {
@@ -61,25 +83,19 @@ export function T2vPanelMusic({
     if (!res.ok) return
     setTracks(body.data?.tracks ?? [])
     if (!prompt && body.data?.suggestedPrompt) setPrompt(body.data.suggestedPrompt)
-    const readyId = body.data?.musicReadyGenerationId as string | null | undefined
-    if (readyId && readyId !== attachRef.current) {
-      attachRef.current = readyId
-      void attachGeneration(readyId)
-    }
-  }, [draftId, prompt, attachGeneration])
-
-  refreshMetaRef.current = refreshMeta
+  }, [draftId, prompt])
 
   useEffect(() => {
     void refreshMeta()
   }, [refreshMeta])
 
   useEffect(() => {
-    if (!activeGen || musicGen.status !== 'READY') return
-    if (attachRef.current === activeGen) return
-    attachRef.current = activeGen
-    void attachGeneration(activeGen)
-  }, [activeGen, musicGen.status, attachGeneration])
+    if (!pendingAttachGen.current || musicGen.status !== 'READY') return
+    if (doc.music?.generationId !== pendingAttachGen.current) return
+    const id = pendingAttachGen.current
+    pendingAttachGen.current = null
+    void attachGeneration(id)
+  }, [musicGen.status, doc.music?.generationId, attachGeneration])
 
   const generate = async (mood?: string) => {
     setGenBusy(true)
@@ -87,11 +103,20 @@ export function T2vPanelMusic({
       const res = await fetch(`/api/t2v/drafts/${draftId}/music`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', prompt: prompt || undefined, mood }),
+        body: JSON.stringify({
+          action: 'generate',
+          prompt: prompt || undefined,
+          mood,
+          baseRevision: revisionRef.current,
+        }),
       })
       const body = await res.json()
+      if (res.status === 409) throw new Error('revision_conflict')
       if (!res.ok) throw new Error(body.error ?? 'generate_failed')
-      if (body.data?.document) onChange(body.data.document as T2vDraftV1)
+      if (body.data?.document && body.data?.revision != null) {
+        applySaved({ document: body.data.document as T2vDraftV1, revision: body.data.revision as number })
+        pendingAttachGen.current = body.data.generationId as string
+      }
       toast.success('Generating music…')
       void refreshMeta()
     } catch (e) {
@@ -105,14 +130,15 @@ export function T2vPanelMusic({
     const res = await fetch(`/api/t2v/drafts/${draftId}/music`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'clear' }),
+      body: JSON.stringify({ action: 'clear', baseRevision: revisionRef.current }),
     })
     const body = await res.json()
     if (!res.ok) {
       toast.error(body.error ?? 'clear_failed')
       return
     }
-    onChange(body.data.document as T2vDraftV1)
+    pendingAttachGen.current = null
+    applySaved(body.data as { document: T2vDraftV1; revision: number })
     toast.message('No background music')
   }
 
@@ -135,11 +161,16 @@ export function T2vPanelMusic({
           const res = await fetch(`/api/t2v/drafts/${draftId}/music`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'upload', uploadId }),
+            body: JSON.stringify({
+              action: 'upload',
+              uploadId,
+              baseRevision: revisionRef.current,
+            }),
           })
           const body = await res.json()
           if (!res.ok) throw new Error(body.error ?? 'upload_failed')
-          onChange(body.data.document as T2vDraftV1)
+          pendingAttachGen.current = null
+          applySaved(body.data as { document: T2vDraftV1; revision: number })
           toast.success('Uploaded music attached')
           void refreshMeta()
         })
@@ -213,7 +244,10 @@ export function T2vPanelMusic({
                   size="sm"
                   variant="outline"
                   disabled={t.status !== 'READY'}
-                  onClick={() => void attachGeneration(t.id, t.prompt.slice(0, 48))}
+                  onClick={() => {
+                    pendingAttachGen.current = null
+                    void attachGeneration(t.id, t.prompt.slice(0, 48))
+                  }}
                 >
                   Use
                 </Button>

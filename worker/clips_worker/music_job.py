@@ -113,8 +113,13 @@ def run_music_job(conn, job: dict, post_progress) -> None:
     if draft_id and t2v_project_id:
         with conn.cursor() as cur:
             cur.execute(
-                'UPDATE t2v_drafts SET "musicReadyGenerationId"=%s, "updatedAt"=NOW() WHERE id=%s',
-                (str(generation_id), draft_id),
+                """
+                UPDATE t2v_drafts
+                SET "musicReadyGenerationId"=%s, "updatedAt"=NOW()
+                WHERE id=%s
+                  AND COALESCE(document->'music'->>'generationId', '') = %s
+                """,
+                (str(generation_id), draft_id, str(generation_id)),
             )
     conn.commit()
     post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})

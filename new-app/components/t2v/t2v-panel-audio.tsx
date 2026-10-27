@@ -1,18 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type MutableRefObject } from 'react'
+import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { T2vPanelVoice } from '@/components/t2v/t2v-panel-voice'
 import { T2vPanelMusic } from '@/components/t2v/t2v-panel-music'
-import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { cn } from '@/lib/utils'
 
 export function T2vPanelAudio({
   draftId,
   doc,
+  revisionRef,
+  setRevision,
+  replace,
   onChange,
 }: {
   draftId: string
   doc: T2vDraftV1
+  revisionRef: MutableRefObject<number>
+  setRevision: (n: number) => void
+  replace: (next: T2vDraftV1) => void
   onChange: (next: T2vDraftV1) => void
 }) {
   const [seg, setSeg] = useState<'voice' | 'music'>('voice')
@@ -30,7 +36,18 @@ export function T2vPanelAudio({
           </button>
         ))}
       </div>
-      {seg === 'voice' ? <T2vPanelVoice doc={doc} onChange={onChange} /> : <T2vPanelMusic draftId={draftId} doc={doc} onChange={onChange} />}
+      {seg === 'voice' ? (
+        <T2vPanelVoice doc={doc} onChange={onChange} />
+      ) : (
+        <T2vPanelMusic
+          draftId={draftId}
+          doc={doc}
+          revisionRef={revisionRef}
+          setRevision={setRevision}
+          replace={replace}
+          onChange={onChange}
+        />
+      )}
     </div>
   )
 }

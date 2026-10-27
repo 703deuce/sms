@@ -9,7 +9,7 @@ import {
   enqueueT2vMusicGenerate,
   listT2vProjectMusic,
 } from '@/lib/server/t2v/music'
-import { saveT2vDraft } from '@/lib/server/t2v/drafts'
+import { RevisionConflict, saveT2vDraft } from '@/lib/server/t2v/drafts'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 
@@ -18,14 +18,16 @@ const bodySchema = z.discriminatedUnion('action', [
     action: z.literal('generate'),
     prompt: z.string().min(8).max(2000).optional(),
     mood: z.string().max(80).optional(),
+    baseRevision: z.number().int(),
   }),
   z.object({
     action: z.literal('use'),
     generationId: z.string().min(1),
     label: z.string().optional(),
+    baseRevision: z.number().int(),
   }),
-  z.object({ action: z.literal('clear') }),
-  z.object({ action: z.literal('upload'), uploadId: z.string().min(1) }),
+  z.object({ action: z.literal('clear'), baseRevision: z.number().int() }),
+  z.object({ action: z.literal('upload'), uploadId: z.string().min(1), baseRevision: z.number().int() }),
 ])
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -76,14 +78,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           prompt,
         },
       }
-      const saved = await saveT2vDraft(workspaceId, id, row.revision, next)
-      return NextResponse.json({ data: { ...data, status: 'PENDING', document: saved.document, revision: saved.revision } })
+      const saved = await saveT2vDraft(workspaceId, id, body.baseRevision, next)
+      return NextResponse.json({
+        data: { ...data, status: 'PENDING', document: saved.document, revision: saved.revision },
+      })
     }
 
     if (body.action === 'clear') {
       const next: T2vDraftV1 = { ...doc, music: { volume: 0.25, duck: true, disabled: true } }
-      const saved = await saveT2vDraft(workspaceId, id, row.revision, next)
-      return NextResponse.json({ data: saved })
+      const saved = await saveT2vDraft(workspaceId, id, body.baseRevision, next)
+      return NextResponse.json({ data: { document: saved.document, revision: saved.revision } })
     }
 
     if (body.action === 'upload') {
@@ -99,8 +103,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           label: 'Uploaded track',
         },
       }
-      const saved = await saveT2vDraft(workspaceId, id, row.revision, next)
-      return NextResponse.json({ data: saved })
+      const saved = await saveT2vDraft(workspaceId, id, body.baseRevision, next)
+      return NextResponse.json({ data: { document: saved.document, revision: saved.revision } })
     }
 
     const gen = await getPrisma().aiGeneration.findFirst({
@@ -118,13 +122,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         label: body.label ?? gen.prompt?.slice(0, 48) ?? 'Music',
       },
     }
-    const saved = await saveT2vDraft(workspaceId, id, row.revision, next)
-    await getPrisma().t2vDraft.update({
-      where: { id },
-      data: { musicReadyGenerationId: null },
-    })
-    return NextResponse.json({ data: saved })
+    const saved = await saveT2vDraft(workspaceId, id, body.baseRevision, next)
+    return NextResponse.json({ data: { document: saved.document, revision: saved.revision } })
   } catch (err) {
+    if (err instanceof RevisionConflict) {
+      return NextResponse.json({ error: 'revision_conflict' }, { status: 409 })
+    }
     return jsonError(err, 400)
   }
 }
