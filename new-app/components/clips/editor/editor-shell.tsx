@@ -41,6 +41,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { toast } from 'sonner'
+import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 
 function isEditableTarget(t: EventTarget | null) {
   if (!t || !(t instanceof HTMLElement)) return false
@@ -300,6 +301,15 @@ export function EditorShell({
 
   const TabIcon = editorRailIcon(panel)
   const meta = TAB_META[panel]
+  const previewAspect = edits.aspectRatio ?? '9:16'
+  const aspectStyle =
+    previewAspect === '16:9'
+      ? '16 / 9'
+      : previewAspect === '1:1'
+        ? '1 / 1'
+        : previewAspect === '4:5'
+          ? '4 / 5'
+          : '9 / 16'
 
   const panelBody = (
     <>
@@ -310,6 +320,7 @@ export function EditorShell({
         className={panel === 'producer' ? 'min-h-[min(60vh,520px)] outline-none' : 'hidden'}
         aria-hidden={panel !== 'producer'}
       >
+        <EditorPanelErrorBoundary label="AI Producer">
         <ProducerPanel
           clipId={clipId}
           bounds={bounds}
@@ -322,8 +333,10 @@ export function EditorShell({
             applyProducerPatch(next, before, n)
           }}
         />
+        </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
+        <EditorPanelErrorBoundary label="Script">
         <TranscriptPanel
           words={words}
           clipStartMs={bounds.clipStartMs}
@@ -341,8 +354,10 @@ export function EditorShell({
           onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
           selectionRef={selectionRef}
         />
+        </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'layout' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layout'}>
+        <EditorPanelErrorBoundary label="Layout">
         <LayoutPanel
           edits={edits}
           shots={cropShots}
@@ -353,16 +368,20 @@ export function EditorShell({
           onEdits={setEdits}
           reframeV2Enabled={reframeV2Enabled}
         />
+        </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'captions' ? undefined : 'hidden'} aria-hidden={panel !== 'captions'}>
+        <EditorPanelErrorBoundary label="Captions">
         <CaptionsPanel
           clipId={clipId}
           edits={edits}
           onChange={setCaptions}
           onApplyBrand={() => void applyBrand()}
         />
+        </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'broll' ? undefined : 'hidden'} aria-hidden={panel !== 'broll'}>
+        <EditorPanelErrorBoundary label="B-roll">
         <BrollPanel
           clipId={clipId}
           edits={edits}
@@ -376,8 +395,10 @@ export function EditorShell({
           onBrollMedia={mergeBrollMedia}
           onFlushEdits={flushSave}
         />
+        </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'audio' ? undefined : 'hidden'} aria-hidden={panel !== 'audio'}>
+        <EditorPanelErrorBoundary label="Audio">
         <AudioPanel
           clipId={clipId}
           edits={edits}
@@ -391,11 +412,15 @@ export function EditorShell({
           onUpdateSfx={updateSfx}
           onRemoveSfx={removeSfx}
         />
+        </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'thumbnail' ? undefined : 'hidden'} aria-hidden={panel !== 'thumbnail'}>
+        <EditorPanelErrorBoundary label="Cover">
         <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
+        </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'dub' ? undefined : 'hidden'} aria-hidden={panel !== 'dub'}>
+        <EditorPanelErrorBoundary label="Dub">
         <DubPanel
           clipId={clipId}
           durationMs={outDur}
@@ -404,9 +429,12 @@ export function EditorShell({
           onRefresh={refreshDubs}
           dubs={dubs}
         />
+        </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'brand' ? undefined : 'hidden'} aria-hidden={panel !== 'brand'}>
+        <EditorPanelErrorBoundary label="Brand">
         <BrandPanel edits={edits} onEdits={setEdits} />
+        </EditorPanelErrorBoundary>
       </div>
     </>
   )
@@ -441,7 +469,11 @@ export function EditorShell({
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_56px_380px] xl:grid-cols-[minmax(0,1fr)_56px_420px]">
         <section className="flex min-h-0 min-w-0 flex-col gap-3 p-3 md:p-4">
           <div className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4">
-            <div className="aspect-[9/16] h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
+            <div
+              className="h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
+              style={{ aspectRatio: aspectStyle }}
+            >
+            <EditorPanelErrorBoundary label="Preview">
             <PreviewStage
               videoUrl={videoUrl}
               posterUrl={posterUrl}
@@ -454,8 +486,10 @@ export function EditorShell({
               videoRef={videoRef}
               onTick={onTick}
             />
+            </EditorPanelErrorBoundary>
             </div>
           </div>
+          <div className="min-w-0 w-full">
           <PlayerControls
             playing={playing}
             outputMs={outputMs}
@@ -487,6 +521,7 @@ export function EditorShell({
               }
             }}
           />
+          </div>
           <div className="min-w-0 overflow-x-auto">
             <Timeline
               edits={edits}
@@ -545,6 +580,7 @@ export function EditorShell({
         dubs={dubs}
         onAudioTrack={(track) => setEdits({ ...edits, audioTrack: track })}
         open={exportOpen}
+        onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
         onClose={() => setExportOpen(false)}
       />
     </div>

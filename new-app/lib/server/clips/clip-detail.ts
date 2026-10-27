@@ -1,5 +1,5 @@
 import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
-import { shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
+import { normalizeCropTrack, shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
 import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
 import { normalizeTranscriptJson, resolveEditorWords } from '@/lib/server/clips/editor-words'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -63,7 +63,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const cropTrackKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clip.id}/crop_track.json`
   let cropTrack: CropTrack | null = null
   try {
-    cropTrack = await storage.getJson<CropTrack>(cropTrackKey)
+    const rawTrack = await storage.getJson<unknown>(cropTrackKey)
+    cropTrack = normalizeCropTrack(rawTrack)
   } catch {
     cropTrack = null
   }
