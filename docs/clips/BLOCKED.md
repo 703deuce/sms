@@ -17,6 +17,6 @@ When you add a row, include **date**, **milestone**, and link to code (`lib/serv
 
 | ID | Resolved | Notes |
 |----|----------|-------|
-| **BLK-001** | 2026-10-27 | LiveKit credentials **already in Coolify** (`LIVEKIT_*` cloud + `LIVEKIT_SELF_HOSTED_*`). Recording uses `recording-room-service.ts` + `RECORDING_LIVEKIT_TARGET` (default cloud). |
+| **BLK-001** | 2026-10-27 | LiveKit Cloud credentials **already in Coolify** (`LIVEKIT_*` @ `sms-6w01zoya.livekit.cloud`). Recording is **Cloud-only** via `recording-room-service.ts`. |
 
 **Resolved:** move new rows here with date and commit SHA.

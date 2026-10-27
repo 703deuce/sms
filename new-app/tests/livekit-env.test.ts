@@ -12,7 +12,7 @@ describe('getLiveKitServerEnv', () => {
 
   it('fails with a clear message when LIVEKIT_* are missing', async () => {
     const { getLiveKitServerEnv } = await import('@/lib/server/livekit/env')
-    expect(() => getLiveKitServerEnv()).toThrow(/Recording LiveKit/)
+    expect(() => getLiveKitServerEnv()).toThrow(/Recording LiveKit Cloud/)
     expect(() => getLiveKitServerEnv()).toThrow(/LIVEKIT_URL/)
   })
 

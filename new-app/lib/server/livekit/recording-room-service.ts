@@ -1,7 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 
-export type RecordingLiveKitTarget = 'cloud' | 'self_hosted'
+const CLOUD_ENV_KEYS = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'] as const
 
 const livekitTripleSchema = z.object({
   LIVEKIT_URL: z
@@ -16,13 +16,9 @@ const livekitTripleSchema = z.object({
 
 export type RecordingLiveKitEnv = z.infer<typeof livekitTripleSchema>
 
-const SELF_HOSTED_WSS_DEFAULT = 'wss://voice.transovo.ai'
-
-/** `RECORDING_LIVEKIT_TARGET=cloud|self_hosted` (default **cloud**). Clips recording only — does not change voice worker `MEDIA_BACKEND_MODE`. */
-export function getRecordingLiveKitTarget(): RecordingLiveKitTarget {
-  const raw = (process.env.RECORDING_LIVEKIT_TARGET ?? 'cloud').trim().toLowerCase().replace(/-/g, '_')
-  if (raw === 'self_hosted' || raw === 'selfhosted') return 'self_hosted'
-  return 'cloud'
+/** Env var names used for clips recording — **LiveKit Cloud only** (never self-hosted). */
+export function recordingLiveKitCloudEnvKeys(): readonly string[] {
+  return CLOUD_ENV_KEYS
 }
 
 export function normalizeLiveKitWsUrl(raw: string): string {
@@ -33,46 +29,21 @@ export function normalizeLiveKitWsUrl(raw: string): string {
   return t
 }
 
-function readTriple(
-  urlKey: string,
-  keyKey: string,
-  secretKey: string,
-  urlFallback?: string,
-): { url?: string; key?: string; secret?: string } {
-  const url = (process.env[urlKey]?.trim() || urlFallback || '').trim()
-  return {
-    url: url ? normalizeLiveKitWsUrl(url) : undefined,
-    key: process.env[keyKey]?.trim(),
-    secret: process.env[secretKey]?.trim(),
-  }
-}
-
-/** Resolve Coolify LiveKit credentials for script recording / Rooms (M14–M16). */
+/**
+ * LiveKit **Cloud** credentials for script recording / Rooms (M14–M16).
+ * Reads only `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
+ */
 export function resolveRecordingLiveKitEnv(): RecordingLiveKitEnv {
-  const target = getRecordingLiveKitTarget()
-  const triple =
-    target === 'self_hosted'
-      ? readTriple(
-          'LIVEKIT_SELF_HOSTED_URL',
-          'LIVEKIT_SELF_HOSTED_API_KEY',
-          'LIVEKIT_SELF_HOSTED_API_SECRET',
-          SELF_HOSTED_WSS_DEFAULT,
-        )
-      : readTriple('LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET')
-
+  const url = process.env.LIVEKIT_URL?.trim()
   const parsed = livekitTripleSchema.safeParse({
-    LIVEKIT_URL: triple.url,
-    LIVEKIT_API_KEY: triple.key,
-    LIVEKIT_API_SECRET: triple.secret,
+    LIVEKIT_URL: url ? normalizeLiveKitWsUrl(url) : undefined,
+    LIVEKIT_API_KEY: process.env.LIVEKIT_API_KEY?.trim(),
+    LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET?.trim(),
   })
   if (!parsed.success) {
     const detail = parsed.error.issues.map((i) => i.message).join('; ')
-    const which =
-      target === 'self_hosted'
-        ? 'LIVEKIT_SELF_HOSTED_URL, LIVEKIT_SELF_HOSTED_API_KEY, LIVEKIT_SELF_HOSTED_API_SECRET'
-        : 'LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET'
     throw new Error(
-      `Recording LiveKit (${target}) is not configured. Set ${which} in Coolify. ${detail}`,
+      `Recording LiveKit Cloud is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET in Coolify. ${detail}`,
     )
   }
   return Object.freeze(parsed.data)

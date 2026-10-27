@@ -36,20 +36,12 @@ Pin exact versions with no `^`. `livekit-client` 2.x ships experimental "extensi
 
 ### Env contract (Coolify — **already provisioned** on Transovo `new-app`)
 
-**Clips recording** uses existing voice-agent LiveKit vars (do **not** add parallel `NEXT_PUBLIC_*` keys). Target switch: **`RECORDING_LIVEKIT_TARGET=cloud|self_hosted`** (default **`cloud`**), implemented in `new-app/lib/server/livekit/recording-room-service.ts`.
+**Clips recording** uses **LiveKit Cloud only** — existing Coolify `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (project **`sms-6w01zoya.livekit.cloud`**). Do **not** add `NEXT_PUBLIC_*` LiveKit vars. Do **not** use `LIVEKIT_SELF_HOSTED_*` or `voice.transovo.ai` for recording rooms, tokens, webhooks, or egress. Implemented in `new-app/lib/server/livekit/recording-room-service.ts`.
 
 ```dotenv
-# Cloud (default) — production project sms-6w01zoya.livekit.cloud
 LIVEKIT_URL=wss://sms-6w01zoya.livekit.cloud
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
-
-# Self-hosted (cost migration later)
-LIVEKIT_SELF_HOSTED_URL=wss://voice.transovo.ai   # or https://voice.transovo.ai (normalized to wss)
-LIVEKIT_SELF_HOSTED_API_KEY=...
-LIVEKIT_SELF_HOSTED_API_SECRET=...
-
-RECORDING_LIVEKIT_TARGET=cloud   # or self_hosted
 ```
 
 Browser clients receive **`url`** from a server token route (`getLiveKitPublicUrl()`), not from a public env var.
