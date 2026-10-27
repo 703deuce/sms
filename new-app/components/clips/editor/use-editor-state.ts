@@ -9,6 +9,7 @@ import {
   canonicalEditsJson,
   defaultEdits,
   mergeCutRanges,
+  normalizeEdits,
   subtractRangeFromCuts,
   type ClipEditsV2,
   type CutRange,
@@ -101,8 +102,9 @@ export function editorEditsReducer(state: State, action: Action): State {
 }
 
 export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits: ClipEditsV2) {
+  const safeInitial = normalizeEdits(initialEdits, bounds)
   const [state, dispatch] = useReducer(editorEditsReducer, {
-    edits: initialEdits,
+    edits: safeInitial,
     past: [],
     future: [],
     saveState: 'saved',

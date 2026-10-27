@@ -5,7 +5,8 @@ import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { keepSegments } from '@/lib/clips/edits'
 import { buildCaptionWords, captionWordsToClipWords } from '@/lib/clips/caption-words'
-import { cropPanX, type CropTrack } from '@/lib/clips/crop-track'
+import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
+import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { shotAt } from '@/lib/clips/crop-track'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
@@ -15,6 +16,19 @@ import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
+}
+
+function aspectRatioParts(aspect: ExportAspect | undefined): { aw: number; ah: number } {
+  switch (aspect) {
+    case '16:9':
+      return { aw: 16, ah: 9 }
+    case '1:1':
+      return { aw: 1, ah: 1 }
+    case '4:5':
+      return { aw: 4, ah: 5 }
+    default:
+      return { aw: 9, ah: 16 }
+  }
 }
 
 export function PreviewStage({
@@ -45,8 +59,9 @@ export function PreviewStage({
   const blurRef = useRef<HTMLVideoElement>(null)
   const editsRef = useRef(edits)
   const trackRef = useRef(cropTrack)
+  const aspect = edits.aspectRatio ?? '9:16'
   editsRef.current = edits
-  trackRef.current = cropTrack
+  trackRef.current = cropTrack ? normalizeCropTrack(cropTrack) : null
   const [box, setBox] = useState({ w: 0, h: 0 })
   const [playing, setPlaying] = useState(false)
   const [canPlay, setCanPlay] = useState(false)
@@ -64,12 +79,13 @@ export function PreviewStage({
     if (!el) return
     const ro = new ResizeObserver(([e]) => {
       const { width: W, height: H } = e.contentRect
-      const h = Math.floor(Math.min(H, (W * 16) / 9))
-      if (h > 0) setBox({ w: Math.floor((h * 9) / 16), h })
+      const { aw, ah } = aspectRatioParts(aspect)
+      const h = Math.floor(Math.min(H, (W * ah) / aw))
+      if (h > 0) setBox({ w: Math.floor((h * aw) / ah), h })
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [aspect])
 
   useEffect(() => {
     const v = videoRefInner.current
@@ -128,11 +144,12 @@ export function PreviewStage({
       }
       onTick({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
 
-      if (v && track && box.h > 0) {
+      if (v && track && box.h > 0 && Array.isArray(track.shots) && track.shots.length > 0) {
         const s = box.h / track.H
         const fi = Math.round(((src - track.t0_ms) / 1000) * track.fps)
         const { i: shotI } = shotAt(track, src)
-        const ov = e.layout.shotOverrides.find((o) => o.i === shotI)?.focus
+        const overrides = Array.isArray(e.layout?.shotOverrides) ? e.layout.shotOverrides : []
+        const ov = overrides.find((o) => o.i === shotI)?.focus
         const wide = ov === 'both'
         const arr = ov === 'A' ? track.x0_A : ov === 'B' ? track.x0_B : track.x0
         const raw = arr?.length ? arr[clamp(fi, 0, arr.length - 1)] : cropPanX(track, fi)

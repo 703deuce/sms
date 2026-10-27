@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { normalizeAudioEdits, type ClipEditsAudio } from '@/lib/clips/audio'
 import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
+import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
 
 export type CutRange = [number, number]
@@ -58,6 +59,8 @@ export type ClipEditsV2 = {
   loudnessLufs?: -14 | -16 | -18 | -23 | -24
   /** Loop quiet room tone under EDL gap segments on export. */
   roomTone?: boolean
+  /** Editor / export preview aspect (defaults to 9:16). */
+  aspectRatio?: ExportAspect
 }
 
 export type ClipBounds = { clipStartMs: number; clipEndMs: number }
@@ -97,12 +100,80 @@ function migrateLegacyEdits(raw: Record<string, unknown>, bounds: ClipBounds): R
   }
 }
 
+const LAYOUT_MODES: ClipEditsV2['layout']['mode'][] = [
+  'speaker_follow',
+  'fit_blur',
+  'center_crop',
+  'subject_follow',
+  'split',
+  'fill',
+  'fit',
+  'grid3',
+  'grid4',
+  'dynamic',
+  'auto',
+]
+
+const EXPORT_ASPECTS: ExportAspect[] = ['9:16', '4:5', '1:1', '16:9']
+
+function normalizeCaptions(
+  raw: unknown,
+  base: ClipEditsV2['captions'],
+): ClipEditsV2['captions'] {
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const wpl = Number(o.wordsPerLine)
+  const size = Number(o.size)
+  return {
+    ...base,
+    enabled: o.enabled === undefined ? base.enabled : Boolean(o.enabled),
+    wordsPerLine: Number.isFinite(wpl) && wpl > 0 ? Math.min(8, Math.round(wpl)) : base.wordsPerLine,
+    size: Number.isFinite(size) && size > 0 ? size : base.size,
+    position: typeof o.position === 'string' ? o.position : base.position,
+    case: typeof o.case === 'string' ? o.case : base.case,
+    presetId: typeof o.presetId === 'string' ? o.presetId : base.presetId,
+    animation: typeof o.animation === 'string' ? o.animation : base.animation,
+    colors: o.colors && typeof o.colors === 'object' ? (o.colors as ClipEditsV2['captions']['colors']) : base.colors,
+    emphasis: Array.isArray(o.emphasis) ? (o.emphasis as number[]) : base.emphasis,
+    keywordHighlight: o.keywordHighlight === undefined ? base.keywordHighlight : Boolean(o.keywordHighlight),
+    autoEmojis: o.autoEmojis === undefined ? base.autoEmojis : Boolean(o.autoEmojis),
+    emojiByWord:
+      o.emojiByWord && typeof o.emojiByWord === 'object'
+        ? (o.emojiByWord as Record<string, string>)
+        : base.emojiByWord,
+    progressBar:
+      o.progressBar && typeof o.progressBar === 'object'
+        ? (o.progressBar as ClipEditsV2['captions']['progressBar'])
+        : base.progressBar,
+  }
+}
+
 export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
   const base = defaultEdits(bounds)
   if (!raw || typeof raw !== 'object') return base
   const migrated = migrateLegacyEdits(raw as Record<string, unknown>, bounds)
   const o = migrated
   const trim = (o.trim as { in?: number; out?: number }) || {}
+  const layoutRaw = (o.layout as { mode?: string; shotOverrides?: unknown }) || {}
+  const mode = LAYOUT_MODES.includes(layoutRaw.mode as ClipEditsV2['layout']['mode'])
+    ? (layoutRaw.mode as ClipEditsV2['layout']['mode'])
+    : base.layout.mode
+  const aspectRaw = o.aspectRatio
+  const aspectRatio = EXPORT_ASPECTS.includes(aspectRaw as ExportAspect)
+    ? (aspectRaw as ExportAspect)
+    : undefined
+  const shotOverrides = Array.isArray(layoutRaw.shotOverrides)
+    ? layoutRaw.shotOverrides
+        .map((row) => {
+          if (!row || typeof row !== 'object') return null
+          const r = row as { i?: unknown; focus?: unknown }
+          const i = Number(r.i)
+          const focus = r.focus
+          if (!Number.isFinite(i)) return null
+          if (focus !== 'auto' && focus !== 'A' && focus !== 'B' && focus !== 'both') return null
+          return { i: Math.round(i), focus }
+        })
+        .filter(Boolean) as ClipEditsV2['layout']['shotOverrides']
+    : []
   return {
     ...base,
     ...o,
@@ -111,16 +182,19 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       in: Math.max(0, Number(trim.in ?? base.trim.in)),
       out: Math.min(Number.MAX_SAFE_INTEGER, Number(trim.out ?? base.trim.out)),
     },
-    cutRanges: Array.isArray(o.cutRanges) ? (o.cutRanges as CutRange[]) : [],
+    cutRanges: Array.isArray(o.cutRanges)
+      ? (o.cutRanges as CutRange[]).filter(
+          (r) => Array.isArray(r) && r.length === 2 && Number.isFinite(r[0]) && Number.isFinite(r[1]),
+        )
+      : [],
     wordFixes: (o.wordFixes as Record<string, string>) || {},
-    captions: { ...base.captions, ...(o.captions as object) },
+    captions: normalizeCaptions(o.captions, base.captions),
     layout: {
       ...base.layout,
-      ...((o.layout as object) || {}),
-      shotOverrides: Array.isArray((o.layout as { shotOverrides?: unknown })?.shotOverrides)
-        ? ((o.layout as { shotOverrides: ClipEditsV2['layout']['shotOverrides'] }).shotOverrides)
-        : [],
+      mode,
+      shotOverrides,
     },
+    aspectRatio,
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
     audio: normalizeAudioEdits(o.audio),
     zoom:
