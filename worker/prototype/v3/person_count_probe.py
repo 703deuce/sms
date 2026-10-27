@@ -22,7 +22,46 @@ PROBE_MAX_SAMPLES = int(os.environ.get("PROBE_MAX_SAMPLES", "120"))
 FACE_SCORE_MIN = float(os.environ.get("PROBE_FACE_SCORE_MIN", "0.40"))
 
 
+def _probe_via_reframe_core(video_path: str) -> dict:
+    """ByteTrack + SFace person count via clips_worker.reframe_core (v2 ops path)."""
+    WORKER_ROOT = HERE.parents[1]
+    if str(WORKER_ROOT) not in sys.path:
+        sys.path.insert(0, str(WORKER_ROOT))
+    from clips_worker.reframe_core import detect_shots, track_faces
+
+    models = str(HERE)
+    shots = detect_shots(video_path)
+    tf = track_faces(
+        video_path,
+        {
+            "models_dir": models,
+            "shots": shots,
+            "sample_fps": PROBE_SAMPLE_FPS,
+            "max_people": 5,
+            "mouth_model": os.path.join(models, "face_landmarker.task"),
+        },
+    )
+    people = tf.get("people") or []
+    n = len(people)
+    if n == 0:
+        return {"n_persons": 0, "confidence": 0.0, "mean_embed_coverage": 0.0, "probe": "reframe_core"}
+    timings = tf.get("_timings") or {}
+    coverage = float(timings.get("n_emb", 0)) / max(1.0, float(timings.get("n", 1)))
+    confidence = float(min(1.0, 0.4 + 0.15 * n + 0.35 * coverage))
+    return {
+        "n_persons": n,
+        "confidence": confidence,
+        "mean_embed_coverage": coverage,
+        "probe": "reframe_core",
+    }
+
+
 def probe_person_count(video_path: str) -> dict:
+    if os.environ.get("REFRAME_V2_ENABLED", "").strip() == "1":
+        try:
+            return _probe_via_reframe_core(video_path)
+        except Exception:
+            pass
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return {"n_persons": 0, "confidence": 0.0, "mean_embed_coverage": 0.0}
