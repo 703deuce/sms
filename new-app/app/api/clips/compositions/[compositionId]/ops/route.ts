@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
-import { applyCompositionOpBatch, listCompositionOpsSince } from '@/lib/server/clips/script-composition'
+import {
+  applyCompositionOpBatch,
+  listCompositionOpsSince,
+  type OpBatchInput,
+} from '@/lib/server/clips/script-composition'
+import type { ScriptCompositionOp } from '@/lib/clips/script-edl/ops'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const opSchema = z.discriminatedUnion('type', [
@@ -184,7 +189,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
     const workspaceId = await resolveWorkspaceId()
     const json = await request.json()
     const body = bodySchema.parse(json)
-    const result = await applyCompositionOpBatch(workspaceId, compositionId, body)
+    const batch: OpBatchInput = {
+      baseRevision: body.baseRevision,
+      ops: body.ops.map((item) => ({
+        id: item.id,
+        op: item.op as ScriptCompositionOp,
+      })),
+    }
+    const result = await applyCompositionOpBatch(workspaceId, compositionId, batch)
     if (!result.ok) {
       if (result.code === 'NOT_FOUND') return NextResponse.json({ error: 'Not found' }, { status: 404 })
       if (result.code === 'STALE_REVISION') {

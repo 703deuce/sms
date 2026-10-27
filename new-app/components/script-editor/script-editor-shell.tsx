@@ -671,9 +671,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   )
 
   const sourceMsAtPlayhead = useMemo(() => {
-    const rel = sourceMsAtOutput(outputMs, edl)
-    if (rel != null) return data.rangeStartMs + rel
-    return playheadMs
+    const rel = sourceMsAtOutput(outputMs, edl, playheadMs - data.rangeStartMs)
+    return data.rangeStartMs + rel
   }, [data.rangeStartMs, edl, outputMs, playheadMs])
 
   const liveCrop = useMemo(() => {

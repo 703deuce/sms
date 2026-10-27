@@ -384,13 +384,13 @@ export function DriveHome({
                     </td>
                     <td className="px-2 text-xs text-muted-foreground">{p.ownerName ?? '—'}</td>
                     <td className="px-2 text-xs text-muted-foreground" title={new Date(p.createdAt).toLocaleString()}>
-                      {formatRelativeTime(p.createdAt.toISOString())}
+                      {formatRelativeTime(
+                        typeof p.createdAt === 'string' ? p.createdAt : new Date(p.createdAt).toISOString(),
+                      )}
                     </td>
                     <td className="px-2 text-xs text-muted-foreground">
                       {p.publishedAt
-                        ? formatRelativeTime(
-                            typeof p.publishedAt === 'string' ? p.publishedAt : p.publishedAt.toISOString(),
-                          )
+                        ? formatRelativeTime(p.publishedAt)
                         : p.isPublished
                           ? 'Yes'
                           : '—'}
