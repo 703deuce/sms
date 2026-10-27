@@ -2,6 +2,7 @@ import { applyBrandTemplateToEdits, type BrandTemplatePayload } from '@/lib/clip
 import { brandTemplateSettingsSchema } from '@/lib/clips/brand'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { getPrisma } from '@/lib/server/db'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 
 export async function loadBrandTemplatePayload(workspaceId: string, templateId: string): Promise<BrandTemplatePayload> {
   const prisma = getPrisma()
@@ -31,7 +32,7 @@ export async function applyBrandTemplateToClipIds(
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const edits = normalizeEdits(clip.edits, bounds)
     const next = applyBrandTemplateToEdits(edits, payload)
-    await prisma.clip.update({ where: { id: clip.id }, data: { edits: next } })
+    await prisma.clip.update({ where: { id: clip.id }, data: { edits: toPrismaJson(next) } })
     updated += 1
   }
   console.info('[clipper:template] applied', { workspaceId, templateId, clipCount: updated })

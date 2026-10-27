@@ -5,6 +5,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 
 const postSchema = z.object({
   name: z.string().min(1).max(120),
@@ -41,7 +42,8 @@ export async function POST(request: Request) {
         where: { id: body.duplicateFromId, workspaceId },
       })
       if (!src) throw new Error('Source template not found')
-      settings = brandTemplateSettingsSchema.parse({ ...src.settings, ...(body.settings || {}) })
+      const base = brandTemplateSettingsSchema.parse(src.settings)
+      settings = brandTemplateSettingsSchema.parse({ ...base, ...(body.settings || {}) })
       logoKey = body.logoKey === undefined ? src.logoKey : body.logoKey
       introVideoKey = src.introVideoKey
       outroVideoKey = src.outroVideoKey
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
         id: createId('brand'),
         workspaceId,
         name: body.name,
-        settings,
+        settings: toPrismaJson(settings),
         logoKey,
         introVideoKey,
         outroVideoKey,

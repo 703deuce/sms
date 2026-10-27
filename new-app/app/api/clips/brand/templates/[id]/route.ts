@@ -4,6 +4,7 @@ import { brandTemplateSettingsSchema } from '@/lib/clips/brand'
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 
 const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -19,14 +20,17 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const prisma = getPrisma()
     const row = await prisma.clipBrandTemplate.findFirst({ where: { id, workspaceId } })
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const settings = body.settings
-      ? brandTemplateSettingsSchema.parse({ ...(row.settings as object), ...body.settings })
-      : row.settings
+    const nextSettings = body.settings
+      ? brandTemplateSettingsSchema.parse({
+          ...brandTemplateSettingsSchema.parse(row.settings),
+          ...body.settings,
+        })
+      : brandTemplateSettingsSchema.parse(row.settings)
     const updated = await prisma.clipBrandTemplate.update({
       where: { id },
       data: {
         name: body.name ?? row.name,
-        settings,
+        settings: toPrismaJson(nextSettings),
         logoKey: body.logoKey === undefined ? row.logoKey : body.logoKey,
       },
     })
