@@ -1,6 +1,6 @@
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
-import { createSignedDownloadUrlForObjectKey } from '@/lib/storage'
+import { getClipStorage } from '@/lib/storage'
 import { listClipProjects } from '@/lib/server/clips/projects'
 import { getPrisma } from '@/lib/server/db'
 
@@ -72,6 +72,7 @@ export async function listClipProjectsForPage(
     if (!prev || pub.publishedAt > prev) publishedAtByProject.set(pid, pub.publishedAt)
   }
 
+  const storage = getClipStorage()
   return Promise.all(
     projects.map(async (p) => {
       let thumbKey = p.thumbKey
@@ -89,7 +90,7 @@ export async function listClipProjectsForPage(
       let thumbUrl: string | null = null
       if (thumbKey) {
         try {
-          thumbUrl = await createSignedDownloadUrlForObjectKey(thumbKey, undefined, THUMB_TTL)
+          thumbUrl = await storage.createSignedDownloadUrl(thumbKey, THUMB_TTL)
         } catch {
           thumbUrl = null
         }

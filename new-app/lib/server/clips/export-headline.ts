@@ -84,8 +84,9 @@ async function loadChatSnippet(
   const chatKey = state.chatKey as string | undefined
   if (!chatKey) return ''
   try {
-    const { createSignedDownloadUrlForObjectKey } = await import('@/lib/storage')
-    const url = await createSignedDownloadUrlForObjectKey(chatKey, undefined, 300)
+    const { getClipStorage } = await import('@/lib/storage')
+    const storage = getClipStorage()
+    const url = await storage.createSignedDownloadUrl(chatKey, 300)
     const res = await fetch(url)
     if (!res.ok) return ''
     const buf = Buffer.from(await res.arrayBuffer())

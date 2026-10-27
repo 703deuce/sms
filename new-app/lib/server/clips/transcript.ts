@@ -1,16 +1,16 @@
 import type { ClipWord } from '@/lib/clips/edits'
 import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
+import { getClipStorage } from '@/lib/storage'
 
 export async function loadProjectSourceWords(projectId: string): Promise<SourceWord[]> {
   const prisma = getPrisma()
   const project = await prisma.clipProject.findUnique({ where: { id: projectId } })
   if (!project) return []
+  const storage = getClipStorage()
   let raw: ClipWord[] = []
   if (project.transcriptKey) {
     try {
-      const storage = await getClipStorageForObjectKey(project.transcriptKey)
       raw = await storage.getJson<ClipWord[]>(project.transcriptKey)
     } catch {
       raw = []
@@ -30,8 +30,8 @@ export async function loadClipSourceWords(clip: {
   const all = await loadProjectSourceWords(clip.projectId)
   if (all.length) return all
   if (!clip.wordsKey) return []
+  const storage = getClipStorage()
   try {
-    const storage = await getClipStorageForObjectKey(clip.wordsKey)
     const clipWords = await storage.getJson<ClipWord[]>(clip.wordsKey)
     const shifted = clipWords.map((w) => ({
       ...w,

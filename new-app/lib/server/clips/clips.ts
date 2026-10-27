@@ -1,6 +1,7 @@
 import { isClipUserHidden } from '@/lib/clips/clip-results-chips'
 import { getPrisma } from '@/lib/server/db'
-import { createSignedDownloadUrlForObjectKey } from '@/lib/storage'
+import { getClipStorage } from '@/lib/storage'
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 
 export async function listProjectClips(
   workspaceId: string,
@@ -15,6 +16,7 @@ export async function listProjectClips(
     where: { projectId, deletedAt: null },
     orderBy: sort === 'timeline' ? { startMs: 'asc' } : { score: 'desc' },
   })
+  const storage = getClipStorage()
   const visible = opts?.includeHidden
     ? clips
     : clips.filter((c) => !isClipUserHidden(c.aiMeta))
@@ -31,8 +33,8 @@ export async function listProjectClips(
       scores: c.scores,
       favorite: c.favorite,
       durationMs: c.endMs - c.startMs,
-      previewUrl: c.previewKey ? await createSignedDownloadUrlForObjectKey(c.previewKey) : null,
-      posterUrl: c.posterKey ? await createSignedDownloadUrlForObjectKey(c.posterKey) : null,
+      previewUrl: c.previewKey ? await createCachedSignedDownloadUrl(storage, c.previewKey) : null,
+      posterUrl: c.posterKey ? await createCachedSignedDownloadUrl(storage, c.posterKey) : null,
       aiMeta: c.aiMeta,
     })),
   )

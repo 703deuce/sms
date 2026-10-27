@@ -9,7 +9,8 @@ import {
   renderStatusWhere,
 } from '@/lib/server/clips/export-rows'
 import { getPrisma } from '@/lib/server/db'
-import { createSignedDownloadUrlForObjectKey } from '@/lib/storage'
+import { getClipStorage } from '@/lib/storage'
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { createId } from '@/lib/supabase/id'
 
 const DEFAULT_EXPORTS_PAGE_SIZE = 40
@@ -112,10 +113,11 @@ export async function enqueueRenderClip(
     orderBy: { createdAt: 'desc' },
   })
   if (existing?.outputKey) {
+    const storage = getClipStorage()
     const filename = existing.filename || exportFilename(opts.title)
     return {
       render: existing,
-      downloadUrl: await createSignedDownloadUrlForObjectKey(existing.outputKey, { downloadFilename: filename }),
+      downloadUrl: await createCachedSignedDownloadUrl(storage, existing.outputKey, { downloadFilename: filename }),
       filename,
       reused: true,
     }

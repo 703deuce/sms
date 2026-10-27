@@ -11,6 +11,8 @@ services:
     networks:
       - coolify
     environment:
+      STORAGE_DRIVER: supabase
+      STORAGE_BUCKET: clips
       ASR_MODEL: small.en
       WORKER_ID: clips-worker-1
       WORKER_LANE: default
@@ -24,6 +26,8 @@ services:
     networks:
       - coolify
     environment:
+      STORAGE_DRIVER: supabase
+      STORAGE_BUCKET: clips
       ASR_MODEL: small.en
       WORKER_ID: clips-worker-stream-1
       WORKER_LANE: stream

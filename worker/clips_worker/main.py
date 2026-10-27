@@ -298,11 +298,7 @@ def load_project(conn, project_id: str) -> dict:
     return dict(row)
 
 
-from clips_worker.process_helpers import (
-    job_payload,
-    resolve_transcript_for_job,
-    transcript_progress_extras,
-)
+from clips_worker.process_helpers import job_payload, resolve_transcript_for_job
 
 
 def process_job(conn, job: dict) -> None:
@@ -349,8 +345,8 @@ def process_job(conn, job: dict) -> None:
                     "projectStatus": "FINDING_CLIPS",
                     "stage": "finding_clips",
                     "progress": 45,
+                    "transcriptWords": words,
                     "jobStatus": "RUNNING",
-                    **transcript_progress_extras(project, words),
                 },
             )
         else:
@@ -374,9 +370,9 @@ def process_job(conn, job: dict) -> None:
                     "projectStatus": "TRANSCRIBING",
                     "stage": "transcribing",
                     "progress": 45,
+                    "transcriptWords": words,
                     "jobStatus": "RUNNING",
                     **tx_meta.as_progress_fields(),
-                    **transcript_progress_extras(project, words),
                 },
             )
 

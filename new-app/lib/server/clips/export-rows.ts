@@ -1,7 +1,8 @@
 import type { ClipRenderStatus } from '@prisma/client'
 import { exportFilename } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
-import { createSignedDownloadUrlForObjectKey, getClipStorageForObjectKey } from '@/lib/storage'
+import { getClipStorage } from '@/lib/storage'
+import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { runWithConcurrency } from '@/lib/utils/run-with-concurrency'
 
 const EXPORT_ROW_SIGN_CONCURRENCY = 8
@@ -81,7 +82,10 @@ type ClipRenderRowInput = {
   clip: { id: string; title: string; projectId: string; posterKey: string | null } | null
 }
 
-async function enrichClipRenderRow(r: ClipRenderRowInput): Promise<ClipExportRowDto | null> {
+async function enrichClipRenderRow(
+  r: ClipRenderRowInput,
+  storage: ReturnType<typeof getClipStorage>,
+): Promise<ClipExportRowDto | null> {
   if (!r.clip) return null
   const fname = r.filename || exportFilename(r.clip.title)
   let posterUrl: string | null = null
@@ -90,17 +94,16 @@ async function enrichClipRenderRow(r: ClipRenderRowInput): Promise<ClipExportRow
   const versionHint = renderVersionHint(r.id, r.updatedAt, r.sizeBytes)
   try {
     if (r.clip.posterKey) {
-      posterUrl = await createSignedDownloadUrlForObjectKey(r.clip.posterKey, {
+      posterUrl = await createCachedSignedDownloadUrl(storage, r.clip.posterKey, {
         versionHint: posterVersionHint(r.clip.posterKey),
       })
     }
     if (r.status === 'READY' && r.outputKey) {
-      downloadUrl = await createSignedDownloadUrlForObjectKey(r.outputKey, {
+      downloadUrl = await createCachedSignedDownloadUrl(storage, r.outputKey, {
         downloadFilename: fname,
         versionHint,
       })
       if (sizeBytes == null) {
-        const storage = await getClipStorageForObjectKey(r.outputKey)
         const probed = await storage.getObjectSizeBytes(r.outputKey)
         if (probed != null) {
           sizeBytes = probed
@@ -133,8 +136,9 @@ async function enrichClipRenderRow(r: ClipRenderRowInput): Promise<ClipExportRow
 }
 
 export async function mapRenderRows(rows: ClipRenderRowInput[]): Promise<ClipExportRowDto[]> {
+  const storage = getClipStorage()
   const enriched = await runWithConcurrency(rows, EXPORT_ROW_SIGN_CONCURRENCY, (r) =>
-    enrichClipRenderRow(r),
+    enrichClipRenderRow(r, storage),
   )
   return enriched.filter((row): row is ClipExportRowDto => row != null)
 }
@@ -151,7 +155,10 @@ type CompositionRenderRowInput = {
   composition: { id: string; title: string; projectId: string; kind: string } | null
 }
 
-async function enrichCompositionExportRow(r: CompositionRenderRowInput): Promise<ClipExportRowDto | null> {
+async function enrichCompositionExportRow(
+  r: CompositionRenderRowInput,
+  storage: ReturnType<typeof getClipStorage>,
+): Promise<ClipExportRowDto | null> {
   const comp = r.composition
   if (!comp) return null
   const fname = exportFilename(comp.title || 'Composition export')
@@ -159,7 +166,7 @@ async function enrichCompositionExportRow(r: CompositionRenderRowInput): Promise
   const versionHint = `composition-render:${r.id}:${r.updatedAt.getTime()}`
   if (r.status === 'READY' && r.outputKey) {
     try {
-      downloadUrl = await createSignedDownloadUrlForObjectKey(r.outputKey, {
+      downloadUrl = await createCachedSignedDownloadUrl(storage, r.outputKey, {
         downloadFilename: fname,
         versionHint,
       })
@@ -191,8 +198,9 @@ async function enrichCompositionExportRow(r: CompositionRenderRowInput): Promise
 export async function mapCompositionExportRows(
   rows: CompositionRenderRowInput[],
 ): Promise<ClipExportRowDto[]> {
+  const storage = getClipStorage()
   const enriched = await runWithConcurrency(rows, EXPORT_ROW_SIGN_CONCURRENCY, (r) =>
-    enrichCompositionExportRow(r),
+    enrichCompositionExportRow(r, storage),
   )
   return enriched.filter((row): row is ClipExportRowDto => row != null)
 }

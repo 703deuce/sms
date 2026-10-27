@@ -1,6 +1,6 @@
 import 'server-only'
 import { getPrisma } from '@/lib/server/db'
-import { createSignedDownloadUrlForObjectKey } from '@/lib/storage'
+import { getClipStorage } from '@/lib/storage'
 
 export type WorkspaceBrandShare = {
   brandName: string
@@ -29,7 +29,7 @@ export async function getWorkspaceBrandForShare(workspaceId: string): Promise<Wo
   let logoUrl: string | null = null
   if (brand?.logoKey) {
     try {
-      logoUrl = await createSignedDownloadUrlForObjectKey(brand.logoKey, undefined, 3600)
+      logoUrl = await getClipStorage().createSignedDownloadUrl(brand.logoKey, 3600)
     } catch {
       logoUrl = null
     }
