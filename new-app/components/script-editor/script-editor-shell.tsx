@@ -2323,6 +2323,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           durationMs={outDur}
           aspect={settings.aspect ?? '9:16'}
           compositionDoc={document}
+          projectStatus={data.status}
         />
 
         <ScriptProjectAccessModal open={shareOpen} onClose={() => setShareOpen(false)} compositionId={data.compositionId} />
@@ -2461,6 +2462,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           showRulerMarkers={showRulerMarkers}
           showRulerComments={showRulerComments}
           clipSpans={timelineClipSpans}
+          previewVideoRef={videoRef}
           markerToolbarExtra={
             <>
               <ScriptTimelineViewMenu

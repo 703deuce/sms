@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-/** Peak VU meter driven from preview video audio (Web Audio API). */
-export function ScriptVuMeter({ videoRef }: { videoRef: React.RefObject<HTMLVideoElement | null> }) {
+function useVuLevel(videoRef: React.RefObject<HTMLVideoElement | null>) {
   const [level, setLevel] = useState(0)
   const ctxRef = useRef<AudioContext | null>(null)
   const rafRef = useRef<number | null>(null)
@@ -53,10 +52,18 @@ export function ScriptVuMeter({ videoRef }: { videoRef: React.RefObject<HTMLVide
   }, [videoRef])
 
   const pct = Math.round(Math.min(1, level) * 100)
+  const db = level > 0.001 ? (20 * Math.log10(level)).toFixed(1) : '−∞'
+  return { pct, db }
+}
+
+/** Peak VU on preview canvas (§13). */
+export function ScriptVuMeter({ videoRef }: { videoRef: React.RefObject<HTMLVideoElement | null> }) {
+  const { pct, db } = useVuLevel(videoRef)
   return (
     <div
       className="pointer-events-none absolute bottom-3 left-3 flex items-end gap-0.5 rounded-md bg-black/50 px-2 py-1.5 backdrop-blur-sm"
       data-testid="script-vu-meter"
+      title={`${db} dB`}
       aria-hidden
     >
       {[0.35, 0.55, 0.75, 0.95].map((thresh, i) => (
@@ -70,6 +77,30 @@ export function ScriptVuMeter({ videoRef }: { videoRef: React.RefObject<HTMLVide
         />
       ))}
       <span className="ml-1 text-[9px] tabular-nums text-white/80">{pct}</span>
+    </div>
+  )
+}
+
+/** Transport cluster VU (§13.3). */
+export function ScriptTransportVuMeter({ videoRef }: { videoRef: React.RefObject<HTMLVideoElement | null> }) {
+  const { pct, db } = useVuLevel(videoRef)
+  return (
+    <div
+      className="flex items-center gap-1 pr-1"
+      data-testid="script-transport-vu-meter"
+      title={`VU ${db} dB`}
+    >
+      <span className="text-[10px] font-semibold text-muted-foreground">VU</span>
+      <div className="flex flex-col gap-0.5">
+        {[0, 1].map((ch) => (
+          <div key={ch} className="h-[3px] w-24 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-[width] duration-75"
+              style={{ width: `${Math.max(4, pct * (ch === 0 ? 1 : 0.92))}%` }}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

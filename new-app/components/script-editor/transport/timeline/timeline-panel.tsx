@@ -31,7 +31,8 @@ import { Button } from '@/components/ui/button'
 import { TimelineMarkersLane } from '@/components/script-editor/markers/timeline-markers-lane'
 import { TimelineCommentPins } from '@/components/script-editor/comments/timeline-comment-pins'
 import type { CommentThreadDto } from '@/lib/server/clips/composition-comments'
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
+import { ScriptTransportVuMeter } from '@/components/script-editor/transport/script-vu-meter'
 
 const LANE_LABEL_W = 56
 
@@ -72,6 +73,7 @@ export function TimelinePanel({
   showRulerMarkers = true,
   showRulerComments = true,
   clipSpans,
+  previewVideoRef,
 }: {
   expanded: boolean
   heightPx: number
@@ -109,6 +111,7 @@ export function TimelinePanel({
   showRulerMarkers?: boolean
   showRulerComments?: boolean
   clipSpans?: { id: string; label: string; outStartMs: number; outEndMs: number }[]
+  previewVideoRef?: RefObject<HTMLVideoElement | null>
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const span = Math.max(
@@ -189,6 +192,7 @@ export function TimelinePanel({
   return (
     <div className="flex shrink-0 flex-col border-t border-border bg-background" style={{ height: expanded ? heightPx : 44 }}>
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 px-2">
+        {previewVideoRef ? <ScriptTransportVuMeter videoRef={previewVideoRef} /> : null}
         <Button type="button" size="icon-sm" variant="ghost" onClick={onToggleExpanded} title="Toggle timeline (Ctrl+Alt+T)">
           {expanded ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
         </Button>
