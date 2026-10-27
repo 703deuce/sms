@@ -13,6 +13,7 @@ export async function applyT2vAssembled(input: {
   projectId: string
   draftId: string
   revision: number
+  jobId?: string
   sourceKey: string
   durationMs: number
   sceneStartsMs: Record<string, number>
@@ -23,6 +24,37 @@ export async function applyT2vAssembled(input: {
     where: { id: input.draftId, workspaceId: input.workspaceId, projectId: input.projectId },
   })
   if (!draftRow) throw new Error('draft_not_found')
+
+  if (input.jobId) {
+    const job = await prisma.clipJob.findUnique({
+      where: { id: input.jobId },
+      select: { id: true, status: true, error: true, createdAt: true, type: true },
+    })
+    if (!job || job.type !== 'T2V_ASSEMBLE' || job.status === 'FAILED') {
+      return { skipped: true as const, reason: 'job_failed' }
+    }
+    if (job.error?.includes('Canceled')) {
+      return { skipped: true as const, reason: 'job_canceled' }
+    }
+    const newer = await prisma.clipJob.findFirst({
+      where: {
+        projectId: input.projectId,
+        type: 'T2V_ASSEMBLE',
+        createdAt: { gt: job.createdAt },
+        NOT: { id: input.jobId },
+      },
+      select: { id: true },
+    })
+    if (newer) return { skipped: true as const, reason: 'superseded' }
+  }
+
+  if (draftRow.assembledRevision != null && input.revision <= draftRow.assembledRevision) {
+    return { skipped: true as const, reason: 'already_applied' }
+  }
+  if (draftRow.revision !== input.revision) {
+    return { skipped: true as const, reason: 'revision_mismatch' }
+  }
+
   const doc = draftRow.document as T2vDraftV1
 
   const uploadId = createId('upl')

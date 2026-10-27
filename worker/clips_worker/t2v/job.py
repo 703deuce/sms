@@ -5,8 +5,6 @@ import json
 import tempfile
 from pathlib import Path
 
-import requests
-
 from clips_worker.internal_callback import post_internal
 from clips_worker.storage import download_object, put_json, upload_file
 from clips_worker.t2v.assemble import Scene, SceneMedia, assemble
@@ -47,21 +45,33 @@ def _stock_storage_key(conn, asset_id: str | None) -> str | None:
     return row[0] if row and row[0] else None
 
 
-def _fetch_media(conn, media: dict | None, work: Path, idx: int) -> Path | None:
+def _storage_key_ok(workspace_id: str, key: str) -> bool:
+    return key.startswith(f"ws/{workspace_id}/") or key.startswith("stock/")
+
+
+def _job_aborted(conn, job_id: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute('SELECT status, error FROM clip_jobs WHERE id=%s', (job_id,))
+        row = cur.fetchone()
+    if not row:
+        return True
+    status, err = row
+    if status == "FAILED":
+        return True
+    return bool(err and "Canceled" in str(err))
+
+
+def _fetch_media(conn, media: dict | None, work: Path, idx: int, workspace_id: str) -> Path | None:
     if not media or media.get("kind") == "color":
         return None
     ext = ".jpg" if media.get("kind") == "image" else ".mp4"
     dest = work / f"media_{idx}{ext}"
     key = media.get("storageKey") or _stock_storage_key(conn, media.get("assetId"))
-    if key:
-        download_object(str(key), dest)
-        return dest
-    url = media.get("previewUrl") or media.get("srcUrl")
-    if not url:
-        return None
-    with requests.get(url, stream=True, timeout=120) as r:
-        r.raise_for_status()
-        dest.write_bytes(r.content)
+    if not key:
+        raise RuntimeError(f"scene_media_{idx}_missing_storage_key")
+    if not _storage_key_ok(workspace_id, str(key)):
+        raise RuntimeError("invalid_storage_key")
+    download_object(str(key), dest)
     return dest
 
 
@@ -99,6 +109,11 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
     voice = document.get("voice") or {}
     scenes_doc = document.get("scenes") or []
     n = len(scenes_doc)
+    needs_voice = any(
+        (sc.get("narration") or "").strip() and not sc.get("muted") for sc in scenes_doc
+    )
+    if needs_voice and not voice.get("voiceId"):
+        raise RuntimeError("draft_missing_voice_settings")
 
     with tempfile.TemporaryDirectory(prefix="t2v-asm-") as td:
         work = Path(td)
@@ -107,6 +122,8 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
         scene_starts: dict[str, int] = {}
 
         for idx, sc in enumerate(scenes_doc):
+            if _job_aborted(conn, job["id"]):
+                raise RuntimeError("job_canceled")
             progress(
                 job["id"],
                 {"jobStatus": "RUNNING", "stage": "voice", "progress": 5 + int(40 * idx / max(1, n))},
@@ -142,7 +159,7 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
             dur_s = max(min_ms / 1000.0, vo_s + pad_ms / 1000.0)
 
             mdoc = sc.get("media") or {"kind": "color"}
-            media_path = _fetch_media(conn, mdoc, work, idx)
+            media_path = _fetch_media(conn, mdoc, work, idx, str(workspace_id))
             scenes.append(
                 Scene(
                     id=sc.get("id", str(idx)),
@@ -162,6 +179,8 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
                 )
             )
 
+        if _job_aborted(conn, job["id"]):
+            raise RuntimeError("job_canceled")
         progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 60})
         asm = assemble(scenes, work / "asm", w=w, h=h, fps=30)
         progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 72})
@@ -206,20 +225,5 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
                 "words": all_words,
             },
         )
-
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE t2v_drafts
-                SET status=%s, stage=%s, progress=%s, "assembledRevision"=%s, error=NULL, "updatedAt"=NOW()
-                WHERE id=%s
-                """,
-                ("READY", "done", 100, revision, draft_id),
-            )
-            cur.execute(
-                'UPDATE clip_jobs SET status=%s, "finishedAt"=NOW() WHERE id=%s',
-                ("DONE", job["id"]),
-            )
-        conn.commit()
 
     progress(job["id"], {"jobStatus": "DONE", "stage": "done", "progress": 100})

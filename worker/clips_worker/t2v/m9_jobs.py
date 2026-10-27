@@ -152,8 +152,6 @@ def _apply_ai_media(
         "provider": provider,
         "kind": kind,
         "storageKey": storage_key,
-        "previewUrl": asset_url,
-        "thumbUrl": asset_url if kind == "image" else None,
         "query": prompt,
         "locked": True,
     }

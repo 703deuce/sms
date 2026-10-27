@@ -32,7 +32,14 @@ export function T2vPanelVoice({
       style: doc.voice?.style ?? 0,
       speed: doc.voice?.speed ?? 1,
     }
-    onChange({ ...doc, voice })
+    onChange({
+      ...doc,
+      voice,
+      scenes: doc.scenes.map((s) => ({
+        ...s,
+        voice: { ...(s.voice ?? { hash: '' }), status: 'stale' as const },
+      })),
+    })
     toast.success(`Voice: ${v.name} — re-voice scenes from Storyboard`)
   }
 

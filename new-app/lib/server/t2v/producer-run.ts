@@ -14,6 +14,7 @@ Keep reply to 1-3 short sentences.`
 export async function runT2vProducerTurn(input: {
   document: T2vDraftV1
   userMessage: string
+  voiceCatalog?: string
 }): Promise<{ reply: string; tools: T2vProducerToolCall[] }> {
   const sceneList = input.document.scenes
     .map((s, i) => `${i + 1}. id=${s.id} narration=${s.narration.slice(0, 80)}… visual=${s.visualQuery}`)
@@ -21,6 +22,7 @@ export async function runT2vProducerTurn(input: {
   const user = [
     `Title: ${input.document.title}`,
     `Aspect: ${input.document.settings.aspect} · Voice: ${input.document.voice?.voiceName ?? 'default'}`,
+    input.voiceCatalog ? `Available voices (name=voiceId): ${input.voiceCatalog}` : '',
     `Scenes:\n${sceneList}`,
     `User: ${input.userMessage}`,
   ].join('\n\n')

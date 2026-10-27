@@ -93,6 +93,10 @@ def mark_generation_failed(conn, job: dict, message: str) -> None:
             'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
             ("FAILED", message[:4000], job["id"]),
         )
+    if job.get("type") == "T2V_ASSEMBLE":
+        from clips_worker.t2v.draft_status import mark_t2v_assemble_failed
+
+        mark_t2v_assemble_failed(conn, job, message)
     conn.commit()
     post_progress_terminal(job["id"], {"jobStatus": "FAILED", "error": message[:500]})
 

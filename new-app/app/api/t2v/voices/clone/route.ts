@@ -36,11 +36,17 @@ export async function POST(request: Request) {
       consentAt: new Date().toISOString(),
       consentById: userId,
     }
-    const project = await prisma.clipProject.findFirst({
-      where: { workspaceId, deletedAt: null },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    })
+    const project =
+      (await prisma.clipProject.findFirst({
+        where: { workspaceId, deletedAt: null, sourceKind: 't2v' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })) ??
+      (await prisma.clipProject.findFirst({
+        where: { workspaceId, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      }))
     if (!project) {
       return NextResponse.json({ error: 'no_project_for_job' }, { status: 400 })
     }

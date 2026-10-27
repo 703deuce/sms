@@ -61,7 +61,13 @@ export async function getSceneMedia(
 const postSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('replace'),
-    media: z.object({ provider: z.enum(['pexels', 'pixabay']), providerId: z.string() }).passthrough(),
+    media: z.object({
+      provider: z.enum(['pexels', 'pixabay']),
+      providerId: z.string(),
+      stockKind: z.enum(['video', 'photo']).optional(),
+    }),
+    query: z.string().max(500).optional(),
+    page: z.number().int().min(1).optional(),
   }),
   z.object({ action: z.literal('shuffle') }),
   z.object({ action: z.literal('upload'), uploadId: z.string() }),
@@ -144,31 +150,31 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
       const alt = matched[scene.id]?.alternates?.[0] ?? matched[scene.id]?.pick
       pick = alt ?? null
     } else {
-      const m = body.media as StockCandidate & T2vSceneMedia
-      if (m.srcUrl && m.provider && m.providerId) {
-        pick = m as StockCandidate
-      } else {
-        const hits = await searchT2vStock({
-          query: scene.visualQuery,
+      const q = (body.query ?? scene.media.query ?? scene.visualQuery).trim()
+      const page = body.page ?? 1
+      const mediaType = body.media.stockKind === 'photo' ? 'photo' : 'video'
+      const hits = await searchT2vStock({
+        query: q,
+        aspect: doc.settings.aspect,
+        sources: [body.media.provider],
+        page,
+        keywords: scene.keywords,
+        needMs: estimateSceneMs(scene),
+        mediaType,
+      })
+      pick = hits.find((h) => h.providerId === body.media.providerId) ?? null
+      if (!pick) {
+        const alt = mediaType === 'photo' ? 'video' : 'photo'
+        const hits2 = await searchT2vStock({
+          query: q,
           aspect: doc.settings.aspect,
           sources: [body.media.provider],
-          page: 1,
+          page,
           keywords: scene.keywords,
           needMs: estimateSceneMs(scene),
+          mediaType: alt,
         })
-        pick = hits.find((h) => h.providerId === body.media.providerId) ?? null
-        if (!pick) {
-          const photos = await searchT2vStock({
-            query: scene.visualQuery,
-            aspect: doc.settings.aspect,
-            sources: [body.media.provider],
-            page: 1,
-            keywords: scene.keywords,
-            needMs: estimateSceneMs(scene),
-            mediaType: 'photo',
-          })
-          pick = photos.find((h) => h.providerId === body.media.providerId) ?? null
-        }
+        pick = hits2.find((h) => h.providerId === body.media.providerId) ?? null
       }
     }
 

@@ -12,9 +12,11 @@ type Msg = { role: 'user' | 'assistant'; content: string }
 export function T2vProducerPanel({
   draftId,
   onDocument,
+  onAssembling,
 }: {
   draftId: string
   onDocument: (doc: T2vDraftV1, revision: number) => void
+  onAssembling?: () => void
 }) {
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -41,6 +43,10 @@ export function T2vProducerPanel({
       }
       if (body.data?.document) {
         onDocument(body.data.document as T2vDraftV1, body.data.revision as number)
+      }
+      if (body.data?.requestRebuild) {
+        toast.success('Rebuilding video…')
+        onAssembling?.()
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Chat failed')

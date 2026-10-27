@@ -1,7 +1,18 @@
 import 'server-only'
 import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
 import { createId } from '@/lib/supabase/id'
+import { estimateDraftMs } from '@/lib/server/t2v/music'
+import { getPrisma } from '@/lib/server/db'
 import type { T2vAspect, T2vDraftV1, T2vScene } from '@/lib/t2v/types'
+
+const ASPECTS: T2vAspect[] = ['16:9', '9:16', '1:1', '4:5']
+
+function sceneIndex(scenes: T2vScene[], ref: unknown): number {
+  const raw = ref != null ? String(ref) : ''
+  const n = Number(raw)
+  if (raw && Number.isInteger(n) && n >= 1 && n <= scenes.length) return n - 1
+  return scenes.findIndex((s) => s.id === raw)
+}
 
 export type T2vProducerToolCall = { name: string; args: Record<string, unknown> }
 
@@ -20,7 +31,7 @@ export const T2V_PRODUCER_TOOL_NAMES = [
 async function rewriteSceneNarration(scene: T2vScene, instruction: string, doc: T2vDraftV1): Promise<string> {
   const out = await openAiJsonResponse<{ narration: string }>(
     'Rewrite only the spoken narration for one scene. Return JSON {"narration": string}. Keep similar length unless asked to shorten or lengthen.',
-    `Scene ${scene.slot + 1} current narration:\n${scene.narration}\n\nInstruction: ${instruction}\nTone: ${doc.settings.tone}`,
+    `Scene narration:\n${scene.narration}\n\nInstruction: ${instruction}\nTone: ${doc.settings.tone}`,
   )
   return (out.narration || scene.narration).trim()
 }
@@ -44,6 +55,7 @@ function newScene(slot: number, narration: string): T2vScene {
 export async function applyT2vProducerTools(
   doc: T2vDraftV1,
   tools: T2vProducerToolCall[],
+  ctx?: { workspaceId: string },
 ): Promise<{ document: T2vDraftV1; summaries: string[]; requestRebuild: boolean }> {
   let next = { ...doc, scenes: [...doc.scenes] }
   const summaries: string[] = []
@@ -52,8 +64,7 @@ export async function applyT2vProducerTools(
   for (const t of tools) {
     switch (t.name) {
       case 'rewrite_scene': {
-        const sceneId = String(t.args.sceneId ?? t.args.scene ?? '')
-        const idx = next.scenes.findIndex((s) => s.id === sceneId || String(s.slot + 1) === sceneId)
+        const idx = sceneIndex(next.scenes, t.args.sceneId ?? t.args.scene ?? t.args.position)
         if (idx < 0) {
           summaries.push(`Scene not found (${sceneId})`)
           break
@@ -90,16 +101,29 @@ export async function applyT2vProducerTools(
         if (order?.length) {
           const byId = new Map(next.scenes.map((s) => [s.id, s]))
           const reordered = order.map((id) => byId.get(id)).filter(Boolean) as T2vScene[]
+          const missing = next.scenes.filter((s) => !order.includes(s.id))
           if (reordered.length) {
-            next.scenes = reordered
+            next.scenes = [...reordered, ...missing]
             summaries.push('Reordered scenes')
           }
         }
         break
       }
       case 'set_voice': {
-        const voiceId = String(t.args.voiceId ?? '')
-        const voiceName = String(t.args.voiceName ?? t.args.description ?? 'Custom voice')
+        let voiceId = String(t.args.voiceId ?? '')
+        let voiceName = String(t.args.voiceName ?? t.args.description ?? 'Custom voice')
+        if (!voiceId && ctx?.workspaceId && voiceName) {
+          const hit = await getPrisma().t2vSavedVoice.findFirst({
+            where: {
+              workspaceId: ctx.workspaceId,
+              name: { contains: voiceName, mode: 'insensitive' },
+            },
+          })
+          if (hit) {
+            voiceId = hit.voiceId
+            voiceName = hit.name
+          }
+        }
         if (voiceId) {
           next.voice = {
             provider: 'elevenlabs',
@@ -111,21 +135,24 @@ export async function applyT2vProducerTools(
             style: next.voice?.style ?? 0,
             speed: next.voice?.speed ?? 1,
           }
+          next.scenes = next.scenes.map((s) => ({
+            ...s,
+            voice: { ...(s.voice ?? { hash: '' }), status: 'stale' as const },
+          }))
           summaries.push(`Voice set to ${voiceName}`)
         }
         break
       }
       case 'set_aspect': {
         const aspect = t.args.aspect as T2vAspect
-        if (aspect) {
+        if (aspect && ASPECTS.includes(aspect)) {
           next.settings = { ...next.settings, aspect }
           summaries.push(`Aspect ${aspect}`)
         }
         break
       }
       case 'swap_visual': {
-        const sceneId = String(t.args.sceneId ?? '')
-        const idx = next.scenes.findIndex((s) => s.id === sceneId || String(s.slot + 1) === sceneId)
+        const idx = sceneIndex(next.scenes, t.args.sceneId ?? t.args.position)
         if (idx >= 0 && t.args.query) {
           next.scenes[idx] = { ...next.scenes[idx], visualQuery: String(t.args.query) }
           summaries.push(`Updated visual query for scene ${idx + 1}`)
@@ -135,9 +162,11 @@ export async function applyT2vProducerTools(
       case 'shorten_to': {
         const sec = Number(t.args.seconds ?? t.args.durationS ?? 60)
         if (sec > 0) {
-          next.settings = {
-            ...next.settings,
-            targetDurationS: sec <= 30 ? 30 : sec <= 60 ? 60 : sec <= 90 ? 90 : sec <= 120 ? 120 : 180,
+          const bucket = sec <= 30 ? 30 : sec <= 60 ? 60 : sec <= 90 ? 90 : sec <= 120 ? 120 : 180
+          next.settings = { ...next.settings, targetDurationS: bucket as typeof next.settings.targetDurationS }
+          const targetMs = sec * 1000
+          while (next.scenes.length > 1 && estimateDraftMs(next) > targetMs) {
+            next.scenes = next.scenes.slice(0, -1)
           }
           summaries.push(`Target length ~${sec}s`)
         }

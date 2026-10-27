@@ -38,6 +38,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         id: true,
         projectId: true,
         status: true,
+        type: true,
+        payload: true,
         project: { select: { transcriptKey: true } },
       },
     })
@@ -47,8 +49,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       await getClipStorage().putJson(job.project.transcriptKey, body.transcriptWords)
     }
 
+    const payload = (job.payload ?? {}) as { draftId?: string }
     await applyWorkerJobProgress({
       jobId,
+      jobType: job.type,
+      draftId: payload.draftId ?? null,
       projectId: job.projectId,
       storedJobStatus: job.status,
       projectStatus: body.projectStatus as import('@prisma/client').ClipProjectStatus | undefined,

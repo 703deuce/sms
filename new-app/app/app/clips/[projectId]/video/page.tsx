@@ -7,7 +7,7 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { notFound } from 'next/navigation'
-import { T2vStudioBuildingBanner, T2vStudioToolbar } from '@/components/t2v/t2v-studio-toolbar'
+import { T2vStudioToolbar } from '@/components/t2v/t2v-studio-toolbar'
 
 export const metadata = { title: 'Video studio · Clips' }
 
@@ -66,7 +66,6 @@ export default async function T2vStudioPage({
         projectStatus={project.status}
         storyboardStale={storyboardStale}
       />
-      {draft.status === 'ASSEMBLING' ? <T2vStudioBuildingBanner progress={draft.progress} /> : null}
     </>
   )
 

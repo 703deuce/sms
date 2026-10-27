@@ -5,6 +5,8 @@ import { shouldTouchLockedAt } from '@/lib/server/clips/jobs'
 /** Single round-trip progress apply for worker heartbeats (no transcript blob). */
 export async function applyWorkerJobProgress(input: {
   jobId: string
+  jobType?: string
+  draftId?: string | null
   storedJobStatus: string
   projectId: string
   projectStatus?: ClipProjectStatus
@@ -84,6 +86,25 @@ export async function applyWorkerJobProgress(input: {
     jobPatch.payload = { ...prev, ...jobPayloadPatch }
   }
 
+  const t2vDraftPatch: Record<string, unknown> = {}
+  if (input.jobType === 'T2V_ASSEMBLE' && input.draftId) {
+    if (input.jobStatus === 'FAILED') {
+      t2vDraftPatch.status = 'DRAFT'
+      t2vDraftPatch.stage = 'failed'
+      t2vDraftPatch.progress = 0
+      t2vDraftPatch.error = input.error ?? 'Build failed'
+    } else if (input.jobStatus === 'DONE') {
+      t2vDraftPatch.status = 'READY'
+      t2vDraftPatch.stage = input.stage ?? 'done'
+      t2vDraftPatch.progress = input.progress ?? 100
+      t2vDraftPatch.error = null
+    } else if (input.jobStatus === 'RUNNING' || input.stage !== undefined || input.progress !== undefined) {
+      t2vDraftPatch.status = 'ASSEMBLING'
+      if (input.stage !== undefined) t2vDraftPatch.stage = input.stage
+      if (input.progress !== undefined) t2vDraftPatch.progress = input.progress
+    }
+  }
+
   await prisma.$transaction([
     ...(Object.keys(projectPatch).length
       ? [
@@ -95,6 +116,14 @@ export async function applyWorkerJobProgress(input: {
       : []),
     ...(Object.keys(jobPatch).length
       ? [prisma.clipJob.update({ where: { id: input.jobId }, data: jobPatch })]
+      : []),
+    ...(Object.keys(t2vDraftPatch).length
+      ? [
+          prisma.t2vDraft.update({
+            where: { id: input.draftId! },
+            data: t2vDraftPatch,
+          }),
+        ]
       : []),
   ])
 }

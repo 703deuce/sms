@@ -13,7 +13,7 @@ import type { T2vStockMediaType } from '@/lib/t2v/m9-contracts'
 import type { T2vAspect, T2vSceneMedia } from '@/lib/t2v/types'
 
 export type StockCandidate = {
-  provider: 'pixabay' | 'pexels'
+  provider: 'pixabay' | 'pexels' | 'pexels_photo'
   providerId: string
   width: number
   height: number
@@ -116,7 +116,7 @@ async function pexelsPhotos(query: string, aspect: T2vAspect, page: number): Pro
       const src = p.src.large2x || p.src.large || p.src.medium
       if (!src) return []
       return [{
-        provider: 'pexels' as const,
+        provider: 'pexels_photo' as const,
         providerId: String(p.id),
         width: p.width,
         height: p.height,

@@ -21,9 +21,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const row = await getPrisma().t2vDraft.findFirst({ where: { id, workspaceId } })
     if (!row) return NextResponse.json({ error: 'not_found' }, { status: 404 })
     const doc = row.document as T2vDraftV1
-    const turn = await runT2vProducerTurn({ document: doc, userMessage: body.message })
-    const applied = await applyT2vProducerTools(doc, turn.tools)
-    const saved = await saveT2vDraft(workspaceId, id, row.revision, applied.document)
+    const voiceRows = await getPrisma().t2vSavedVoice.findMany({
+      where: { workspaceId },
+      take: 24,
+      select: { name: true, voiceId: true },
+    })
+    const voiceCatalog = voiceRows.map((v) => `${v.name}=${v.voiceId}`).join(', ')
+    const turn = await runT2vProducerTurn({ document: doc, userMessage: body.message, voiceCatalog })
+    const fresh = await getPrisma().t2vDraft.findFirst({ where: { id, workspaceId } })
+    if (!fresh) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+    const applied = await applyT2vProducerTools(fresh.document as T2vDraftV1, turn.tools, { workspaceId })
+    const saved = await saveT2vDraft(workspaceId, id, fresh.revision, applied.document)
     let jobId: string | null = null
     if (applied.requestRebuild) {
       const enq = await enqueueT2vAssemble(workspaceId, id)

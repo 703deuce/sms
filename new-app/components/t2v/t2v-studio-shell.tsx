@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Undo2, Redo2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,12 @@ export function T2vStudioShell({
   const [error, setError] = useState(initialError)
   const [matching, setMatching] = useState(false)
   const [building, setBuilding] = useState(false)
+  const revisionRef = useRef(initialRevision)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    revisionRef.current = revision
+  }, [revision])
 
   useEffect(() => {
     if (selectedId && doc.scenes.some((s) => s.id === selectedId)) return
@@ -77,27 +83,49 @@ export function T2vStudioShell({
     [draftId, replace, status],
   )
 
-  useT2vDraftPoll(draftId, status === 'ASSEMBLING', onPoll)
+  useT2vDraftPoll(draftId, status === 'ASSEMBLING' || stage === 'failed', onPoll)
 
-  const persist = async (next: T2vDraftV1) => {
-    push(next)
-    try {
-      const r = await patchT2vDraft(draftId, revision, next)
-      setRevision(r.revision)
-    } catch {
-      toast.error('Could not save — reload if another tab edited this draft')
-    }
-  }
-
-  const refreshDraft = async () => {
+  const refreshDraft = useCallback(async () => {
     const b = await fetch(`/api/t2v/drafts/${draftId}`).then((r) => r.json())
     if (b.data?.document) replace(b.data.document as T2vDraftV1)
-    if (b.data?.revision) setRevision(b.data.revision)
-  }
+    if (b.data?.revision) {
+      setRevision(b.data.revision)
+      revisionRef.current = b.data.revision
+    }
+  }, [draftId, replace])
+
+  const persist = useCallback(
+    (next: T2vDraftV1) => {
+      push(next)
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      saveTimer.current = setTimeout(() => {
+        void (async () => {
+          try {
+            const r = await patchT2vDraft(draftId, revisionRef.current, next)
+            revisionRef.current = r.revision
+            setRevision(r.revision)
+          } catch (e) {
+            if (e instanceof Error && e.message === 'revision_conflict') {
+              toast.error('Draft changed elsewhere — reloaded latest version')
+              await refreshDraft()
+            } else {
+              toast.error('Could not save')
+            }
+          }
+        })()
+      }, 400)
+    },
+    [draftId, push, refreshDraft],
+  )
 
   const cancelBuild = async () => {
-    await fetch(`/api/t2v/drafts/${draftId}/assemble/cancel`, { method: 'POST' })
+    const res = await fetch(`/api/t2v/drafts/${draftId}/assemble/cancel`, { method: 'POST' })
+    if (!res.ok) {
+      toast.error('Could not cancel build')
+      return
+    }
     setStatus('DRAFT')
+    setStage('canceled')
     setProgress(0)
     setError(null)
   }
@@ -246,7 +274,7 @@ export function T2vStudioShell({
             aspect={doc.settings.aspect}
             onSelectScene={setSelectedId}
           />
-          {status === 'ASSEMBLING' ? (
+          {status === 'ASSEMBLING' || (status === 'DRAFT' && stage === 'failed') ? (
             <T2vBuildProgress
               progress={progress}
               stage={stage}
@@ -291,6 +319,12 @@ export function T2vStudioShell({
                       onDocument={(d, rev) => {
                         replace(d)
                         setRevision(rev)
+                        revisionRef.current = rev
+                      }}
+                      onAssembling={() => {
+                        setStatus('ASSEMBLING')
+                        setProgress(0)
+                        setError(null)
                       }}
                     />
                   </div>

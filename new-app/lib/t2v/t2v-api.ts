@@ -31,7 +31,10 @@ export async function patchT2vDraft(id: string, baseRevision: number, document: 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ baseRevision, document }),
   })
-  return parseJson<{ revision: number; document: T2vDraftV1 }>(res)
+  const body = await res.json().catch(() => ({}))
+  if (res.status === 409) throw new Error('revision_conflict')
+  if (!res.ok) throw new Error((body as { error?: string }).error ?? res.statusText)
+  return (body as { data: { revision: number; document: T2vDraftV1 } }).data
 }
 
 export async function runT2vScript(draftId: string, instruction?: string) {
