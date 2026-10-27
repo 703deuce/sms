@@ -45,8 +45,9 @@ describe('computeNonStreamerClipEtaSec', () => {
     })
     const transcribeBudget = durationSec * TRANSCRIBE_RATE_LOCAL_WHISPER
     const tailPicker = pickerEtaSec(durationSec)
-    const tailReframe = reframeTailEstimateSec(estimatedClipCount(durationSec))
-    const transcribeRem = Math.max(30, transcribeBudget - 600)
+    const clips = estimatedClipCount(durationSec)
+    const tailReframe = reframeWallSec(clips)
+    const transcribeRem = Math.max(0, transcribeBudget - 600)
     const expected = Math.round(transcribeRem + tailPicker + tailReframe)
     expect(eta).toBe(expected)
     expect(eta).toBeLessThan(20 * 60)
@@ -67,11 +68,13 @@ describe('computeNonStreamerClipEtaSec', () => {
     })
     const transcribe = durationSec * TRANSCRIBE_RATE_DEEPGRAM + DEEPGRAM_DOWNLOAD_BUFFER_SEC
     const picker = PICKER_ETA_AT_REFERENCE_SEC
-    const reframe = reframeTailEstimateSec(estimatedClipCount(durationSec))
-    expect(eta).toBeGreaterThanOrEqual(Math.round(transcribe + picker + reframe) - 2)
-    expect(eta).toBeLessThanOrEqual(Math.round(transcribe + picker + reframe) + 2)
-    expect(eta).toBeGreaterThanOrEqual(9 * 60)
-    expect(eta).toBeLessThanOrEqual(10 * 60 + 30)
+    const clips = estimatedClipCount(durationSec)
+    const reframe = reframeWallSec(clips)
+    const transcribeRem = Math.min(transcribe, transcribe * 0.85)
+    expect(eta).toBeGreaterThanOrEqual(Math.round(transcribeRem + picker + reframe) - 3)
+    expect(eta).toBeLessThanOrEqual(Math.round(transcribeRem + picker + reframe) + 3)
+    expect(eta).toBeGreaterThanOrEqual(6 * 60)
+    expect(eta).toBeLessThanOrEqual(7 * 60 + 30)
   })
 
   it('drops picker tail during FINDING_CLIPS without re-inflating to ~15 min', () => {
@@ -109,9 +112,10 @@ describe('computeNonStreamerClipEtaSec', () => {
 })
 
 describe('clampEtaBetweenPolls', () => {
-  it('caps ETA growth at 50% between polls', () => {
-    expect(clampEtaBetweenPolls(900, 400)).toBe(600)
-    expect(clampEtaBetweenPolls(500, 400)).toBe(500)
+  it('never increases ETA within the same stage', () => {
+    expect(clampEtaBetweenPolls(900, 400, 'FINDING_CLIPS:', 'FINDING_CLIPS:')).toBe(400)
+    expect(clampEtaBetweenPolls(500, 400, 'TRANSCRIBING:', 'TRANSCRIBING:')).toBe(400)
     expect(clampEtaBetweenPolls(100, undefined)).toBe(100)
+    expect(clampEtaBetweenPolls(200, 400, 'FINDING_CLIPS:', 'TRANSCRIBING:')).toBe(200)
   })
 })

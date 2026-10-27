@@ -66,6 +66,7 @@ export function JobStatus({
   const [etaSec, setEtaSec] = useState(initialEtaSec)
   const etaRef = useRef(initialEtaSec)
   const lastPollEtaRef = useRef(initialEtaSec)
+  const lastStageRef = useRef<string | null>(initialStage)
   const [chunkDone, setChunkDone] = useState<number | undefined>()
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
 
@@ -80,8 +81,15 @@ export function JobStatus({
         setStage(data.stage)
         setError(data.error)
         setWordCount(data.wordCount)
-        const polled = clampEtaBetweenPolls(data.etaSec, lastPollEtaRef.current || undefined)
+        const stageKey = `${data.status}:${data.stage ?? ''}`
+        const polled = clampEtaBetweenPolls(
+          data.etaSec,
+          lastPollEtaRef.current,
+          stageKey,
+          lastStageRef.current,
+        )
         lastPollEtaRef.current = polled
+        lastStageRef.current = stageKey
         etaRef.current = polled
         setEtaSec(polled)
         setChunkDone(data.chunkDone)

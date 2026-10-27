@@ -44,7 +44,6 @@ export function BrollPreviewVideo({
       ref={(el) => {
         elRef.current = el
         videoRef(el)
-        if (el) onMeta(el)
       }}
       src={src}
       className={className}

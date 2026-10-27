@@ -75,12 +75,13 @@ export function defaultEdits(bounds: ClipBounds): ClipEditsV2 {
       enabled: true,
       presetId: 'bold_pop',
       animation: 'pop',
-      size: 1,
+      size: 6.5,
       position: 'bottom',
       case: 'sentence',
       wordsPerLine: 2,
     },
     layout: { mode: 'speaker_follow', shotOverrides: [] },
+    silenceTrim: { enabled: false, minGapMs: 600, keepMs: 150 },
   }
 }
 
@@ -127,7 +128,12 @@ function normalizeCaptions(
     ...base,
     enabled: o.enabled === undefined ? base.enabled : Boolean(o.enabled),
     wordsPerLine: Number.isFinite(wpl) && wpl > 0 ? Math.min(8, Math.round(wpl)) : base.wordsPerLine,
-    size: Number.isFinite(size) && size > 0 ? size : base.size,
+    size:
+      Number.isFinite(size) && size >= 3
+        ? Math.min(12, size)
+        : size > 0 && size < 3
+          ? base.size
+          : base.size,
     position: typeof o.position === 'string' ? o.position : base.position,
     case: typeof o.case === 'string' ? o.case : base.case,
     presetId: typeof o.presetId === 'string' ? o.presetId : base.presetId,

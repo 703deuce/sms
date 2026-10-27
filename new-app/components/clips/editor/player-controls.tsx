@@ -57,9 +57,9 @@ export function PlayerControls({
           aria-label="Volume"
         />
       ) : null}
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-[120px] flex-1 basis-0 items-center gap-2">
         <Slider
-          className="min-w-0 flex-1"
+          className="min-w-[120px] flex-1"
           min={0}
           max={max}
           step={50}

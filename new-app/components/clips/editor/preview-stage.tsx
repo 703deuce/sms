@@ -76,12 +76,17 @@ export function PreviewStage({
   const [canPlay, setCanPlay] = useState(false)
   const [captionTimeSec, setCaptionTimeSec] = useState(0)
   const brollRefs = useRef<Record<string, HTMLVideoElement | null>>({})
+  const onTickRef = useRef(onTick)
+  const boxSizeRef = useRef({ w: 0, h: 0 })
+  const captionTimeRef = useRef(0)
+  onTickRef.current = onTick
+  boxSizeRef.current = box
 
   useEffect(() => {
     const el = videoRefInner.current
     if (!el) return
     ;(videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
-  }, [videoRef])
+  }, [videoRef, cropPreview, aspect, videoUrl])
 
   useLayoutEffect(() => {
     const el = wrapRef.current
@@ -90,7 +95,12 @@ export function PreviewStage({
       const { width: W, height: H } = e.contentRect
       const { aw, ah } = aspectRatioParts(aspect)
       const h = Math.floor(Math.min(H, (W * ah) / aw))
-      if (h > 0) setBox({ w: Math.floor((h * aw) / ah), h })
+      if (h <= 0) return
+      const w = Math.floor((h * aw) / ah)
+      const prev = boxSizeRef.current
+      if (prev.w === w && prev.h === h) return
+      boxSizeRef.current = { w, h }
+      setBox({ w, h })
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -107,7 +117,7 @@ export function PreviewStage({
     v.src = videoUrl
     if (b) b.src = videoUrl
     v.currentTime = edits.trim.in / 1000
-  }, [videoUrl, edits.trim.in])
+  }, [videoUrl, edits.trim.in, cropPreview])
 
   useEffect(() => {
     let raf = 0
@@ -136,7 +146,11 @@ export function PreviewStage({
         }
       }
       const out = applyPlaybackTime(src, e).outputMs
-      setCaptionTimeSec(out / 1000)
+      const outSec = out / 1000
+      if (Math.abs(captionTimeRef.current - outSec) >= 0.02) {
+        captionTimeRef.current = outSec
+        setCaptionTimeSec(outSec)
+      }
       const outMs = out
       for (const item of editsRef.current.broll || []) {
         const media = brollMedia.find((m) => m.id === item.id)
@@ -151,10 +165,11 @@ export function PreviewStage({
           if (v && v.paused && !el.paused) el.pause()
         } else if (!el.paused) el.pause()
       }
-      onTick({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
+      onTickRef.current({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
 
-      if (v && track && usesSpeakerCropPreview(e, track) && box.h > 0 && Array.isArray(track.shots) && track.shots.length > 0) {
-        const s = box.h / track.H
+      const { w: boxW, h: boxH } = boxSizeRef.current
+      if (v && track && usesSpeakerCropPreview(e, track) && boxH > 0 && Array.isArray(track.shots) && track.shots.length > 0) {
+        const s = boxH / track.H
         const fi = Math.round(((src - track.t0_ms) / 1000) * track.fps)
         const { i: shotI } = shotAt(track, src)
         const overrides = Array.isArray(e.layout?.shotOverrides) ? e.layout.shotOverrides : []
@@ -165,8 +180,8 @@ export function PreviewStage({
         const x0 = raw ?? cropPanX(track, fi)
         const fit = wide || x0 <= -2
         if (fit) {
-          v.style.height = `${box.h}px`
-          v.style.width = `${box.w}px`
+          v.style.height = `${boxH}px`
+          v.style.width = `${boxW}px`
           v.style.left = '0'
           v.style.top = '0'
           v.style.transform = 'translate3d(0,0,0)'
@@ -179,7 +194,7 @@ export function PreviewStage({
           }
         } else {
           if (blur) blur.style.display = 'none'
-          v.style.height = `${box.h}px`
+          v.style.height = `${boxH}px`
           v.style.width = `${track.W * s}px`
           v.style.left = '0'
           v.style.top = '0'
@@ -191,7 +206,7 @@ export function PreviewStage({
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [box.h, box.w, onTick, playing])
+  }, [])
 
   const captionWords = useMemo(() => {
     const raw = previewWords ?? captionWordsToClipWords(buildCaptionWords(words, edits))

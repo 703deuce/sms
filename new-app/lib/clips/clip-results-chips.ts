@@ -26,6 +26,12 @@ const LAYOUT_LABELS: Record<string, string> = {
   four_up: '4-up',
 }
 
+const SENTENCE_REF_RE = /\(\s*s\d+(?:\s*-\s*s\d+)?\s*\)/gi
+
+function stripInternalSentenceRefs(text: string): string {
+  return text.replace(SENTENCE_REF_RE, '').replace(/\s{2,}/g, ' ').trim()
+}
+
 function isHedgeOrDebugSummary(text: string): boolean {
   const t = text.toLowerCase()
   return (
@@ -41,7 +47,7 @@ export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | nu
   const candidates = [meta.hook, meta.pass1_why, meta.score_detail]
   for (const c of candidates) {
     if (typeof c !== 'string') continue
-    const trimmed = c.trim()
+    const trimmed = stripInternalSentenceRefs(c.trim())
     if (!trimmed || isHedgeOrDebugSummary(trimmed)) continue
     return trimmed
   }

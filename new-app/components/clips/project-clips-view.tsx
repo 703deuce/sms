@@ -112,17 +112,18 @@ export function ProjectClipsView({
   const [readyHydrated, setReadyHydrated] = useState(readyFromServer)
 
   const hydrateReady = useCallback(async (payload: ProjectStatusPayload) => {
-    const data = await listProjectClips(projectId, 'score')
-    const list = data.clips as ClipCardData[]
+    const expected = payload.clipCount ?? 0
+    let list: ClipCardData[] = []
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const data = await listProjectClips(projectId, 'score')
+      list = data.clips as ClipCardData[]
+      if (list.length > 0 || expected === 0 || attempt >= 7) break
+      await new Promise((r) => setTimeout(r, 500 + attempt * 400))
+    }
     setClips(list)
     setError(payload.error ?? null)
     setStatus('READY')
     setReadyHydrated(true)
-    if (payload.clipCount !== undefined && payload.clipCount > 0 && list.length === 0) {
-      await new Promise((r) => setTimeout(r, 800))
-      const retry = await listProjectClips(projectId, 'score')
-      setClips(retry.clips as ClipCardData[])
-    }
   }, [projectId])
 
   useEffect(() => {

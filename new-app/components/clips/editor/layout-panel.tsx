@@ -77,6 +77,7 @@ export function LayoutPanel({
             <Switch
               checked={Boolean(zoom.enabled)}
               aria-checked={Boolean(zoom.enabled)}
+              aria-label="Auto zoom on emphasis"
               onCheckedChange={(checked) =>
                 onEdits({ ...edits, zoom: { ...zoom, enabled: Boolean(checked) } })
               }
@@ -104,6 +105,7 @@ export function LayoutPanel({
             <Switch
               checked={Boolean(silence.enabled)}
               aria-checked={Boolean(silence.enabled)}
+              aria-label="Silence trim on export"
               onCheckedChange={(checked) =>
                 onEdits({ ...edits, silenceTrim: { ...silence, enabled: Boolean(checked) } })
               }

@@ -38,7 +38,8 @@ export function resolveRenderConcurrency(): number {
 export function pickerEtaSec(durationSec: number): number {
   if (durationSec <= 0) return PICKER_ETA_AT_REFERENCE_SEC
   const scaled = PICKER_ETA_AT_REFERENCE_SEC * (durationSec / PICKER_REFERENCE_DURATION_SEC)
-  return Math.max(60, Math.round(scaled))
+  if (durationSec <= 3 * 60) return Math.max(20, Math.round(scaled))
+  return Math.max(45, Math.round(scaled))
 }
 
 export function estimatedClipCount(durationSec: number): number {
@@ -162,12 +163,11 @@ function stageAwareRemainingSec(input: {
   }
 
   if (status === 'PREPARING' || status === 'UPLOADING' || status === 'QUEUED' || status === 'DRAFT') {
-    if (progress <= 0) return 0
     const transcribe = transcribeStageBudgetSec(durationSec, engine)
-    return Math.max(
-      60,
-      transcribe + pickerEtaSec(durationSec) + tailAfterPickerSec(durationSec, stage),
-    )
+    const total = transcribe + pickerEtaSec(durationSec) + tailAfterPickerSec(durationSec, stage)
+    if (durationSec <= 3 * 60) return Math.max(75, Math.round(total))
+    if (progress <= 0) return Math.round(total)
+    return Math.max(60, Math.round(total))
   }
 
   if (progress > 0) {
