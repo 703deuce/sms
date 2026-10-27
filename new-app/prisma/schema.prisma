@@ -9081,22 +9081,112 @@ model RecordingSession {
   project      ClipProject?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
   participants RecordingParticipant[]
   webhookEvents RecordingWebhookEvent[]
+  invites      RecordingInvite[]
+  takes        RecordingTake[]
 
   @@index([workspaceId, status])
   @@map("recording_sessions")
 }
 
-model RecordingParticipant {
-  id          String                   @id
-  sessionId   String
-  role        RecordingParticipantRole
-  displayName String
-  createdAt   DateTime                 @default(now())
+model RecordingInvite {
+  id        String    @id
+  sessionId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   session RecordingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
+  @@map("recording_invites")
+}
+
+model RecordingParticipant {
+  id            String                   @id
+  sessionId     String
+  role          RecordingParticipantRole
+  displayName   String
+  livekitSid    String?
+  status        String                   @default("INVITED")
+  clockOffsetMs Float?
+  createdAt     DateTime                 @default(now())
+
+  session RecordingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tracks  RecordingTrack[]
+
+  @@index([sessionId])
   @@map("recording_participants")
+}
+
+enum RecordingTrackKind {
+  CAMERA
+  MICROPHONE
+  SCREEN
+  SCREEN_AUDIO
+}
+
+enum RecordingTrackStatus {
+  RECORDING
+  FINALIZED
+  UPLOADING
+  UPLOADED
+  FAILED
+}
+
+model RecordingTake {
+  id            String   @id
+  sessionId     String
+  index         Int
+  startAtHostMs BigInt
+  stopAtHostMs  BigInt?
+  createdAt     DateTime @default(now())
+
+  session RecordingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tracks  RecordingTrack[]
+
+  @@unique([sessionId, index])
+  @@map("recording_takes")
+}
+
+model RecordingTrack {
+  id                String               @id
+  takeId            String
+  participantId     String
+  kind              RecordingTrackKind
+  segmentIndex      Int                  @default(0)
+  mimeType          String
+  sampleRate        Int?
+  actualStartHostMs BigInt?
+  status            RecordingTrackStatus @default(RECORDING)
+  storageKey        String?
+  s3UploadId        String?
+  bytesExpected     BigInt?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  take        RecordingTake              @relation(fields: [takeId], references: [id], onDelete: Cascade)
+  participant RecordingParticipant       @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  uploadParts RecordingTrackUploadPart[]
+
+  @@index([takeId])
+  @@index([participantId])
+  @@map("recording_tracks")
+}
+
+model RecordingTrackUploadPart {
+  id         String @id @default(cuid())
+  trackId    String
+  partNumber Int
+  etag       String
+  sizeBytes  Int?
+  chunkSeqFrom Int?
+  chunkSeqTo   Int?
+
+  track RecordingTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([trackId, partNumber])
+  @@map("recording_track_upload_parts")
 }
 
 model RecordingWebhookEvent {
