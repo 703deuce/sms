@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       hostDisplayName: body.hostDisplayName,
       maxParticipants: body.maxParticipants,
     })
-    return NextResponse.json({
+    const res = NextResponse.json({
       data: {
         sessionId: result.session.id,
         livekitRoom: result.session.livekitRoom,
@@ -38,6 +38,14 @@ export async function POST(request: Request) {
         hostParticipantId: result.session.participants[0]?.id,
       },
     })
+    res.cookies.set(`rooms_host_${result.session.id}`, '1', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    })
+    return res
   } catch (err) {
     return jsonError(err, 500)
   }
