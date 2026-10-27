@@ -3,7 +3,7 @@ import { cheapSuggestedHeadline } from '@/lib/clips/export-template'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
-import { persistExportTemplate } from '@/lib/server/clips/export-headline'
+import { persistExportTemplatePatch } from '@/lib/server/clips/export-headline'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 /** Rule-based headline hint when clip preview is ready (no LLM). */
@@ -20,7 +20,13 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ data: { exportTemplate: edits.exportTemplate, skipped: true } })
     }
     const suggested = cheapSuggestedHeadline({ title: clip.title, aiMeta: clip.aiMeta })
-    const saved = await persistExportTemplate(clipId, bounds, { suggestedHeadline: suggested }, clip.edits)
+    const saved = await persistExportTemplatePatch(
+      clipId,
+      bounds,
+      { suggestedHeadline: suggested },
+      clip.edits,
+      clip.projectId,
+    )
     return NextResponse.json({ data: { exportTemplate: saved.exportTemplate } })
   } catch (e) {
     return jsonError(e, 400)

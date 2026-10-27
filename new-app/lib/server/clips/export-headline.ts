@@ -2,7 +2,9 @@ import 'server-only'
 
 import {
   EXPORT_HEADLINE_MAX_REGENERATIONS,
+  channelUrlFromVodUrl,
   formatHeadlineForExport,
+  normalizeChannelUrl,
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
 import { getClipsLlmModelId } from '@/lib/server/ai/clips-llm'
@@ -19,6 +21,53 @@ const LUNA_OUTPUT_MICROS_PER_TOKEN = 500_000
 
 function lunaCost(prompt: number, completion: number) {
   return Math.round(prompt * LUNA_INPUT_MICROS_PER_TOKEN + completion * LUNA_OUTPUT_MICROS_PER_TOKEN)
+}
+
+export type StreamExportTemplateContext = {
+  platform?: 'twitch' | 'kick'
+  channelUrl?: string | null
+}
+
+export async function loadStreamExportTemplateContext(projectId: string): Promise<StreamExportTemplateContext> {
+  const vod = await getPrisma().streamVod.findFirst({
+    where: { projectId },
+    select: {
+      platform: true,
+      url: true,
+      channel: { select: { login: true, platform: true } },
+    },
+  })
+  if (!vod) return {}
+  const platformRaw = (vod.platform || vod.channel?.platform || '').toLowerCase()
+  const platform = platformRaw === 'kick' || platformRaw === 'twitch' ? platformRaw : undefined
+  const fromVod = vod.url ? channelUrlFromVodUrl(vod.url) : null
+  const slug = vod.channel?.login
+  const fromSlug =
+    platform && slug
+      ? normalizeChannelUrl(platform === 'kick' ? `https://kick.com/${slug}` : `https://twitch.tv/${slug}`)
+      : null
+  return { platform, channelUrl: fromVod || fromSlug }
+}
+
+/** Fill platform / badge / channel defaults for stream export template (export-only overlays). */
+export function mergeStreamExportTemplate(
+  tpl: ClipExportTemplate,
+  ctx: StreamExportTemplateContext,
+  opts?: { defaultChannelUrl?: string | null },
+): ClipExportTemplate {
+  const platform = tpl.platform ?? ctx.platform
+  const rawUrl = tpl.channelLink?.url || opts?.defaultChannelUrl || ctx.channelUrl || ''
+  const channelUrl = normalizeChannelUrl(rawUrl) || rawUrl.trim() || undefined
+  const channelEnabled = tpl.channelLink?.enabled ?? Boolean(channelUrl)
+  return {
+    ...tpl,
+    platform,
+    platformBadge: tpl.platformBadge ?? { enabled: true },
+    channelLink: {
+      enabled: channelEnabled,
+      url: channelEnabled ? channelUrl : tpl.channelLink?.url,
+    },
+  }
 }
 
 async function loadChatSnippet(
@@ -72,7 +121,8 @@ export async function generateExportHeadline(opts: {
   edits: ClipEditsV2
   aiMeta?: Record<string, unknown> | null
 }): Promise<{ headline: string; generations: number; exportTemplate: ClipExportTemplate }> {
-  const tpl = (opts.edits.exportTemplate || {}) as ClipExportTemplate
+  const streamCtx = await loadStreamExportTemplateContext(opts.projectId)
+  const tpl = mergeStreamExportTemplate((opts.edits.exportTemplate || {}) as ClipExportTemplate, streamCtx)
   const used = tpl.headlineGenerations ?? 0
   if (used >= EXPORT_HEADLINE_MAX_REGENERATIONS) {
     throw new Error(`Headline limit reached (${EXPORT_HEADLINE_MAX_REGENERATIONS} per clip)`)
@@ -145,17 +195,34 @@ export async function generateExportHeadline(opts: {
   })
 
   const nextGen = used + 1
-  const exportTemplate: ClipExportTemplate = {
-    ...tpl,
-    headlineBar: { enabled: true, text: headline },
-    suggestedHeadline: headline,
-    headlineGenerations: nextGen,
-    platformBadge: tpl.platformBadge ?? { enabled: true },
-    channelLink: tpl.channelLink,
-    platform: tpl.platform,
-  }
+  const exportTemplate: ClipExportTemplate = mergeStreamExportTemplate(
+    {
+      ...tpl,
+      headlineBar: { enabled: true, text: headline },
+      suggestedHeadline: headline,
+      headlineGenerations: nextGen,
+    },
+    streamCtx,
+  )
 
   return { headline, generations: nextGen, exportTemplate }
+}
+
+/** Persist export template patch and return normalized edits (generate / toggles / prefetch). */
+export async function persistExportTemplatePatch(
+  clipId: string,
+  bounds: { clipStartMs: number; clipEndMs: number },
+  patch: Partial<ClipExportTemplate>,
+  currentEdits: unknown,
+  projectId?: string,
+) {
+  const ctx = projectId ? await loadStreamExportTemplateContext(projectId) : {}
+  const base = normalizeEdits(currentEdits, bounds)
+  const mergedTpl = mergeStreamExportTemplate(
+    { ...(base.exportTemplate || {}), ...patch } as ClipExportTemplate,
+    ctx,
+  )
+  return persistExportTemplate(clipId, bounds, mergedTpl, currentEdits)
 }
 
 export async function persistExportTemplate(

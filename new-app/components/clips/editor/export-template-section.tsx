@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,7 @@ import {
 } from '@/lib/clips/export-template'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
-import { clipsFetch } from '@/lib/clips-api'
+import { clipsFetch, patchClip } from '@/lib/clips-api'
 import { ExportHeadlinePreview } from '@/components/clips/editor/export-headline-preview'
 import { ExportSavedChannelsField } from '@/components/clips/editor/export-saved-channels-field'
 import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
@@ -48,6 +48,36 @@ export function ExportTemplateSection({
   const gens = tpl.headlineGenerations ?? 0
   const [genBusy, setGenBusy] = useState(false)
   const prefetchedFor = useRef<string | null>(null)
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const withPlatform = useCallback(
+    (next: ClipExportTemplate): ClipExportTemplate => ({
+      ...next,
+      platform: platform ?? next.platform ?? tpl.platform,
+    }),
+    [platform, tpl.platform],
+  )
+
+  const commitTemplate = useCallback(
+    (next: ClipExportTemplate, opts?: { persist?: boolean }) => {
+      const merged = withPlatform(next)
+      onChange(merged)
+      if (!opts?.persist) return
+      if (persistTimer.current) clearTimeout(persistTimer.current)
+      persistTimer.current = setTimeout(() => {
+        void patchClip(clipId, { edits: { exportTemplate: merged } }).catch(() => {
+          toast.error('Could not save export template')
+        })
+      }, 350)
+    },
+    [clipId, onChange, withPlatform],
+  )
+
+  useEffect(() => {
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!headlineAllowed) return
@@ -64,20 +94,16 @@ export function ExportTemplateSection({
     )
       .then((res) => {
         if (res.exportTemplate) {
-          onChange({
-            ...base,
-            platform: platform ?? base.platform,
-            ...res.exportTemplate,
-          })
+          commitTemplate({ ...base, ...res.exportTemplate }, { persist: true })
         }
       })
       .catch(() => {
         prefetchedFor.current = null
       })
-  }, [clipId, headlineAllowed, edits.exportTemplate, onChange, platform])
+  }, [clipId, headlineAllowed, edits.exportTemplate, commitTemplate])
 
-  const setTpl = (patch: Partial<ClipExportTemplate>) => {
-    onChange({ ...tpl, platform: platform ?? tpl.platform, ...patch })
+  const setTpl = (patch: Partial<ClipExportTemplate>, persist = true) => {
+    commitTemplate({ ...tpl, ...patch }, { persist })
   }
 
   const headlineEnabled = Boolean(tpl.headlineBar?.enabled)
@@ -87,6 +113,7 @@ export function ExportTemplateSection({
     ''
 
   const generate = async () => {
+    if (!headlineAllowed) return
     if (gens >= EXPORT_HEADLINE_MAX_REGENERATIONS) {
       toast.error(`Max ${EXPORT_HEADLINE_MAX_REGENERATIONS} AI headlines per clip`)
       return
@@ -98,15 +125,16 @@ export function ExportTemplateSection({
         generations: number
         exportTemplate: ClipExportTemplate
       }>(`/api/clips/clips/${clipId}/export-headline/generate`, { method: 'POST', body: '{}' })
-      onChange({
+      const next = withPlatform({
         ...res.exportTemplate,
         headlineBar: {
           enabled: true,
           text: res.exportTemplate.headlineBar?.text || res.headline,
         },
-        platform: platform ?? res.exportTemplate.platform ?? tpl.platform,
       })
-      toast.success('New headline ready')
+      onChange(next)
+      await patchClip(clipId, { edits: { exportTemplate: next } })
+      toast.success('Headline saved for export')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not generate headline')
     } finally {
@@ -115,11 +143,13 @@ export function ExportTemplateSection({
   }
 
   const channelUrl = tpl.channelLink?.url || defaultChannelUrl || ''
+  const badgeOn = Boolean(tpl.platformBadge?.enabled)
+  const linkOn = Boolean(tpl.channelLink?.enabled)
 
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-border p-3">
       <p className="text-xs font-medium">Stream headline template (export only)</p>
-      <p className="text-xs text-muted-foreground">Preview clips stay clean; overlays apply when you export.</p>
+      <p className="text-xs text-muted-foreground">Preview stays clean; headline, badge, and link burn in on export.</p>
 
       <div className="flex items-center justify-between gap-2">
         <Label className="text-sm">Headline bar</Label>
@@ -141,7 +171,7 @@ export function ExportTemplateSection({
             <Input
               value={tpl.headlineBar?.text ?? tpl.suggestedHeadline ?? ''}
               maxLength={120}
-              onChange={(e) => setTpl({ headlineBar: { enabled: true, text: e.target.value } })}
+              onChange={(e) => setTpl({ headlineBar: { enabled: true, text: e.target.value } }, false)}
               onBlur={(e) =>
                 setTpl({ headlineBar: { enabled: true, text: formatHeadlineForExport(e.target.value) } })
               }
@@ -149,11 +179,17 @@ export function ExportTemplateSection({
             />
           ) : (
             <p className="text-xs text-muted-foreground">
-              Turn on the headline bar or use Generate to add a viral headline for export.
+              Turn on the headline bar or generate a viral headline below.
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="outline" disabled={genBusy} onClick={() => void generate()}>
+            <Button
+              type="button"
+              size="sm"
+              variant={headlineText ? 'outline' : 'default'}
+              disabled={genBusy || gens >= EXPORT_HEADLINE_MAX_REGENERATIONS}
+              onClick={() => void generate()}
+            >
               <Sparkles className="mr-1 size-3.5" />
               {genBusy ? 'Generating…' : 'Generate headline'}
             </Button>
@@ -165,29 +201,40 @@ export function ExportTemplateSection({
       )}
 
       <div className="flex items-center justify-between gap-2">
-        <Label className="text-sm">Platform badge</Label>
+        <div>
+          <Label className="text-sm">Platform badge</Label>
+          <p className="text-xs text-muted-foreground">Kick / Twitch pill on the video (export only).</p>
+        </div>
         <Switch
-          checked={Boolean(tpl.platformBadge?.enabled)}
+          checked={badgeOn}
           onCheckedChange={(on) => setTpl({ platformBadge: { enabled: on } })}
         />
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <Label className="text-sm">Channel link</Label>
+        <div>
+          <Label className="text-sm">Channel link</Label>
+          <p className="text-xs text-muted-foreground">Channel URL beside the badge on export.</p>
+        </div>
         <Switch
-          checked={Boolean(tpl.channelLink?.enabled)}
-          onCheckedChange={(on) =>
+          checked={linkOn}
+          onCheckedChange={(on) => {
+            const url = normalizeChannelUrl(channelUrl) || channelUrl
             setTpl({
-              channelLink: { enabled: on, url: normalizeChannelUrl(channelUrl) || channelUrl },
+              channelLink: { enabled: on, url: on ? url || defaultChannelUrl || '' : url },
             })
-          }
+          }}
         />
       </div>
-      {tpl.channelLink?.enabled ? (
+      {linkOn ? (
         <>
           <Input
             value={channelUrl}
             onChange={(e) => {
+              const norm = normalizeChannelUrl(e.target.value)
+              setTpl({ channelLink: { enabled: true, url: norm || e.target.value } }, false)
+            }}
+            onBlur={(e) => {
               const norm = normalizeChannelUrl(e.target.value)
               setTpl({ channelLink: { enabled: true, url: norm || e.target.value } })
             }}
@@ -216,9 +263,9 @@ export function ExportTemplateSection({
 
       <ExportHeadlinePreview
         headline={headlineEnabled && headlineAllowed ? effectiveHeadlineText({ ...tpl, headlineBar: { enabled: true, text: headlineText } }) : ''}
-        showBadge={Boolean(tpl.platformBadge?.enabled)}
+        showBadge={badgeOn}
         platform={platform ?? tpl.platform}
-        channelUrl={tpl.channelLink?.enabled ? normalizeChannelUrl(channelUrl) || undefined : undefined}
+        channelUrl={linkOn ? normalizeChannelUrl(channelUrl) || undefined : undefined}
         exportPlatformId={exportPlatformId ?? tpl.exportPlatformId ?? 'tiktok'}
       />
     </div>
