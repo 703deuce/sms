@@ -59,8 +59,16 @@ export function T2vStudioShell({
       setStage(d.stage)
       setProgress(d.progress)
       setError(d.error)
+      if (d.status === 'READY' && status === 'ASSEMBLING') {
+        void fetch(`/api/t2v/drafts/${draftId}`)
+          .then((r) => r.json())
+          .then((b) => {
+            if (b.data?.document) replace(b.data.document as T2vDraftV1)
+            if (b.data?.revision) setRevision(b.data.revision)
+          })
+      }
     },
-    [],
+    [draftId, replace, status],
   )
 
   useT2vDraftPoll(draftId, status === 'ASSEMBLING', onPoll)

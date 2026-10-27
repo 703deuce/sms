@@ -65,12 +65,45 @@ export function T2vStoryboard({ draftId, projectId, document: doc, revision, onD
   }
 
   const staleVoice = (scene: T2vScene) => scene.voice?.status === 'stale'
+  const staleCount = doc.scenes.filter(staleVoice).length
+
+  const reVoiceStale = async () => {
+    const stale = doc.scenes.filter(staleVoice)
+    if (!stale.length) return
+    const fine = stale.filter((s) => s.fineEditedAt)
+    if (fine.length) {
+      const ok = window.confirm(
+        `${fine.length} stale scene(s) were fine-edited in the script editor. Re-voicing replaces word edits for those scenes. Continue?`,
+      )
+      if (!ok) return
+    }
+    setMatching(true)
+    try {
+      for (const s of stale) {
+        const res = await fetch(`/api/t2v/drafts/${draftId}/scenes/${s.id}/voice`, { method: 'POST' })
+        if (!res.ok) throw new Error('re_voice_failed')
+      }
+      const fresh = await fetch(`/api/t2v/drafts/${draftId}`).then((r) => r.json())
+      const next = fresh.data.document as T2vDraftV1
+      onDocumentChange?.(next, fresh.data.revision)
+      toast.success(`Re-voiced ${stale.length} scene(s)`)
+    } catch {
+      toast.error('Re-voice failed')
+    } finally {
+      setMatching(false)
+    }
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Storyboard</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {staleCount > 0 ? (
+            <Button type="button" variant="outline" disabled={matching} onClick={() => void reVoiceStale()}>
+              Re-voice {staleCount} scene{staleCount === 1 ? '' : 's'}
+            </Button>
+          ) : null}
           <Button type="button" variant="secondary" disabled={matching} onClick={() => void runMatch()}>
             {matching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Match stock
