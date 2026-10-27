@@ -443,11 +443,23 @@ def render_edited_clip(
 
     zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
     if zoom_cfg.get("enabled"):
-        from clips_worker.zoom_render import apply_zoom, build_zoom_keyframes
+        from clips_worker.zoom_render import (
+            apply_zoom,
+            build_zoom_keyframes,
+            clamp_zoom_intensity,
+            layout_switch_times_from_words,
+        )
 
         emphasis = cap_edits.get("emphasis") if isinstance(cap_edits, dict) else []
-        intensity = float(zoom_cfg.get("intensity") or 1.15)
-        kf = build_zoom_keyframes(caption_words, list(emphasis or []), length_s, intensity)
+        intensity = clamp_zoom_intensity(zoom_cfg.get("intensity"))
+        layout_switches = layout_switch_times_from_words(caption_words)
+        kf = build_zoom_keyframes(
+            caption_words,
+            list(emphasis or []),
+            length_s,
+            intensity,
+            layout_switches=layout_switches,
+        )
         zoomed = work_dir / "zoomed.mp4"
         apply_zoom(out_mp4, zoomed, kf, length_s, play_w, play_h)
         shutil.copy(zoomed, out_mp4)

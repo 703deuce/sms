@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { normalizeAudioEdits, type ClipEditsAudio } from '@/lib/clips/audio'
 import { normalizeBrollItems, type BrollItem } from '@/lib/clips/broll'
+import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
 
 export type CutRange = [number, number]
 
@@ -115,7 +116,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       o.zoom && typeof o.zoom === 'object'
         ? {
             enabled: Boolean((o.zoom as { enabled?: boolean }).enabled),
-            intensity: Number((o.zoom as { intensity?: number }).intensity) || 1.15,
+            intensity: clampZoomIntensity(Number((o.zoom as { intensity?: number }).intensity)),
           }
         : undefined,
     silenceTrim:

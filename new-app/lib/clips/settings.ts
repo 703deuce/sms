@@ -67,6 +67,7 @@ export const clipProjectSettingsSchema = z.object({
   brandTemplateId: z.string().nullable().optional(),
   brand: z.record(z.unknown()).optional(),
   autoStockBroll: z.boolean().default(false),
+  autoZoom: z.boolean().default(false),
   extras: z
     .object({
       music: z.boolean().default(false),
@@ -90,6 +91,7 @@ export function defaultClipSettings(overrides?: Partial<ClipProjectSettings>): C
     aspectRatio: '9:16',
     captions: { enabled: true, presetId: 'bold_pop', language: 'en' },
     autoStockBroll: false,
+    autoZoom: false,
     extras: { music: false, thumbnails: false, dubLang: null },
     ...overrides,
   })

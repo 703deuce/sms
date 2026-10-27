@@ -209,6 +209,20 @@ export function ProjectSettingsForm({
         </div>
       </Panel>
 
+      <Panel title="Motion">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <Label htmlFor="auto-zoom">Auto zoom on emphasis</Label>
+            <p className="text-xs text-muted-foreground">Subtle punch-in on highlighted words (new clips).</p>
+          </div>
+          <Switch
+            id="auto-zoom"
+            checked={Boolean(settings.autoZoom)}
+            onCheckedChange={(v) => onChange({ ...settings, autoZoom: v })}
+          />
+        </div>
+      </Panel>
+
       <Panel title="Prompt">
         <Textarea
           placeholder={
