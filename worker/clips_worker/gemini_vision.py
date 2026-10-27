@@ -9,6 +9,11 @@ import requests
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
+# Stable default for clipper text/vision/rank/video-watch (free-tier friendly).
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+_GEMINI_MODEL_BLOCKLIST = ("preview", "omni", "tts", "image", "imagen", "experimental", "-exp")
+
 
 def _key() -> str:
     k = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_GEMINI_API_KEY") or "").strip()
@@ -17,22 +22,55 @@ def _key() -> str:
     return k
 
 
+def _gemini_model_blocked(name: str) -> bool:
+    low = (name or "").lower()
+    return any(token in low for token in _GEMINI_MODEL_BLOCKLIST)
+
+
+def resolve_gemini_model(
+    *,
+    env_var: str | None = None,
+    fallback_env_vars: tuple[str, ...] = (),
+    default: str = DEFAULT_GEMINI_MODEL,
+) -> str:
+    """Pinned Gemini model for clipper paths; no ListModels auto-pick."""
+    candidates: list[str] = []
+    if env_var:
+        v = (os.environ.get(env_var) or "").strip()
+        if v:
+            candidates.append(v)
+    for key in fallback_env_vars:
+        v = (os.environ.get(key) or "").strip()
+        if v:
+            candidates.append(v)
+            break
+    for raw in candidates:
+        if _gemini_model_blocked(raw):
+            print(
+                f"[clipper:gemini_model] blocked env model={raw!r} "
+                f"reason=preview/omni/tts/image using={default}",
+                flush=True,
+            )
+            continue
+        return raw
+    return default
+
+
 def discover_model() -> str:
-    configured = (os.environ.get("VISION_MODEL") or "").strip()
-    if configured:
-        return configured
-    res = requests.get(f"{GEMINI_BASE}/models", params={"key": _key()}, timeout=30)
-    res.raise_for_status()
-    models = res.json().get("models") or []
-    candidates = []
-    for m in models:
-        name = str(m.get("name", "")).replace("models/", "")
-        methods = m.get("supportedGenerationMethods") or []
-        if "flash-lite" in name.lower() and "generateContent" in methods:
-            candidates.append(name)
-    if not candidates:
-        raise RuntimeError("no gemini flash-lite model found")
-    return sorted(candidates)[-1]
+    """Text/vision rank, thumbnails, stream llm_rank Gemini fallback."""
+    return resolve_gemini_model(
+        env_var="GEMINI_MODEL",
+        fallback_env_vars=("VISION_MODEL",),
+        default=DEFAULT_GEMINI_MODEL,
+    )
+
+
+def discover_video_picker_model() -> str:
+    """Gemini video-watch for regular/stream picker."""
+    return resolve_gemini_model(
+        env_var="VIDEO_PICKER_MODEL",
+        default=DEFAULT_GEMINI_MODEL,
+    )
 
 
 def plan_thumbnail(

@@ -11,7 +11,7 @@ from typing import Any
 
 import requests
 
-from clips_worker.gemini_vision import GEMINI_BASE, _key
+from clips_worker.gemini_vision import GEMINI_BASE, _key, discover_video_picker_model
 from clips_worker.stage_log import stage_begin, stage_end
 
 MOMENTS_SCHEMA: dict[str, Any] = {
@@ -58,28 +58,6 @@ def video_picker_fps() -> float:
         return min(1.0, max(0.1, float(os.environ.get("VIDEO_PICKER_FPS", "0.3"))))
     except ValueError:
         return 0.3
-
-
-def discover_video_picker_model() -> str:
-    configured = (os.environ.get("VIDEO_PICKER_MODEL") or "").strip()
-    if configured:
-        return configured
-    res = requests.get(f"{GEMINI_BASE}/models", params={"key": _key()}, timeout=30)
-    res.raise_for_status()
-    models = res.json().get("models") or []
-    candidates: list[str] = []
-    for m in models:
-        name = str(m.get("name", "")).replace("models/", "")
-        methods = m.get("supportedGenerationMethods") or []
-        low = name.lower()
-        if "generateContent" not in methods:
-            continue
-        if "flash" not in low or "lite" in low or "image" in low:
-            continue
-        candidates.append(name)
-    if not candidates:
-        raise RuntimeError("no gemini flash video model found")
-    return sorted(candidates)[-1]
 
 
 def estimate_gemini_usd(prompt_tokens: int, output_tokens: int) -> float:
@@ -236,7 +214,6 @@ def watch_video_file(
         stage_end("video_picker", t0, chunk=chunk_label, error=err_msg[:180], fail_open=True)
         return [], meta
 
-    last_status: int | None = None
     try:
         model = discover_video_picker_model()
         meta["model"] = model
