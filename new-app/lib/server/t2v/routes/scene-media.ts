@@ -11,6 +11,8 @@ import { matchScenes, searchT2vStock, toSceneMedia, type StockCandidate } from '
 import type { T2vDraftV1, T2vSceneMedia } from '@/lib/t2v/types'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 import { createId } from '@/lib/supabase/id'
+import { mediaFromClipUpload } from '@/lib/server/t2v/upload-scene-media'
+import { assertValidT2vSceneId } from '@/lib/server/t2v/scene-id'
 import type { T2vSceneAiImagePayload, T2vSceneAiVideoPayload } from '@/lib/t2v/m9-contracts'
 
 function parseDraft(document: unknown): T2vDraftV1 {
@@ -27,6 +29,7 @@ export async function getSceneMedia(
   const disabled = t2vFeatureDisabledResponse()
   if (disabled) return disabled
   const workspaceId = await resolveWorkspaceId()
+  assertValidT2vSceneId(sceneId)
   const row = await getPrisma().t2vDraft.findFirst({ where: { id: draftId, workspaceId } })
   if (!row) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   const doc = parseDraft(row.document)
@@ -60,10 +63,21 @@ export async function getSceneMedia(
 const postSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('replace'),
-    media: z.object({ provider: z.enum(['pexels', 'pixabay']), providerId: z.string() }).passthrough(),
+    media: z.object({
+      provider: z.enum(['pexels', 'pixabay', 'pexels_photo']),
+      providerId: z.string(),
+      stockKind: z.enum(['video', 'photo']).optional(),
+    }),
+    query: z.string().max(500).optional(),
+    page: z.number().int().min(1).optional(),
   }),
   z.object({ action: z.literal('shuffle') }),
   z.object({ action: z.literal('upload'), uploadId: z.string() }),
+  z.object({
+    action: z.literal('focal'),
+    focalX: z.number().min(0).max(1),
+    focalY: z.number().min(0).max(1),
+  }),
   z.object({ action: z.literal('ai_image'), prompt: z.string().min(3) }),
   z.object({ action: z.literal('ai_video'), prompt: z.string().min(3) }),
 ])
@@ -82,7 +96,19 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
     const body = postSchema.parse(await request.json())
 
     if (body.action === 'upload') {
-      return NextResponse.json({ error: 'not_implemented', action: body.action }, { status: 501 })
+      const media = await mediaFromClipUpload(workspaceId, body.uploadId, sceneId)
+      doc.scenes[idx] = { ...scene, media }
+      const saved = await saveT2vDraft(workspaceId, draftId, row.revision, doc)
+      return NextResponse.json({ data: { ...saved, scene: doc.scenes[idx] } })
+    }
+
+    if (body.action === 'focal') {
+      doc.scenes[idx] = {
+        ...scene,
+        media: { ...scene.media, focalX: body.focalX, focalY: body.focalY },
+      }
+      const saved = await saveT2vDraft(workspaceId, draftId, row.revision, doc)
+      return NextResponse.json({ data: { ...saved, scene: doc.scenes[idx] } })
     }
 
     if (body.action === 'ai_image' || body.action === 'ai_video') {
@@ -109,6 +135,7 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
     }
 
     let pick: StockCandidate | null = null
+    let appliedQuery = scene.visualQuery
     if (body.action === 'shuffle') {
       const sources = doc.settings.mediaSources.filter((p): p is 'pexels' | 'pixabay' => p !== 'ai_image')
       const matched = await matchScenes({
@@ -126,27 +153,44 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
       const alt = matched[scene.id]?.alternates?.[0] ?? matched[scene.id]?.pick
       pick = alt ?? null
     } else {
-      const m = body.media as StockCandidate & T2vSceneMedia
-      if (m.srcUrl && m.provider && m.providerId) {
-        pick = m as StockCandidate
-      } else {
-        const hits = await searchT2vStock({
-          query: scene.visualQuery,
+      const q = (body.query ?? scene.media.query ?? scene.visualQuery).trim()
+      appliedQuery = q
+      const page = body.page ?? 1
+      const provider =
+        body.media.provider === 'pexels_photo' ? 'pexels' : body.media.provider
+      const mediaType =
+        body.media.stockKind === 'photo' || body.media.provider === 'pexels_photo' ? 'photo' : 'video'
+      const hits = await searchT2vStock({
+        query: q,
+        aspect: doc.settings.aspect,
+        sources: [provider],
+        page,
+        keywords: scene.keywords,
+        needMs: estimateSceneMs(scene),
+        mediaType,
+      })
+      pick = hits.find((h) => h.providerId === body.media.providerId) ?? null
+      if (!pick) {
+        const alt = mediaType === 'photo' ? 'video' : 'photo'
+        const hits2 = await searchT2vStock({
+          query: q,
           aspect: doc.settings.aspect,
-          sources: [body.media.provider],
-          page: 1,
+          sources: [provider],
+          page,
           keywords: scene.keywords,
           needMs: estimateSceneMs(scene),
+          mediaType: alt,
         })
-        pick = hits.find((h) => h.providerId === body.media.providerId) ?? null
+        pick = hits2.find((h) => h.providerId === body.media.providerId) ?? null
       }
     }
 
     if (!pick) return NextResponse.json({ error: 'no_match' }, { status: 404 })
     const asset = await ensureT2vStockAsset(workspaceId, pick)
     const media: T2vSceneMedia = {
-      ...toSceneMedia(pick, asset.id, estimateSceneMs(scene), scene.visualQuery),
+      ...toSceneMedia(pick, asset.id, estimateSceneMs(scene), appliedQuery),
       locked: true,
+      query: appliedQuery,
     }
     doc.scenes[idx] = { ...scene, media }
     const saved = await saveT2vDraft(workspaceId, draftId, row.revision, doc)

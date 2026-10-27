@@ -1,12 +1,13 @@
 import { Page } from '@/components/app/page-primitives'
 import { T2vScriptReview } from '@/components/t2v/t2v-script-review'
-import { T2vStoryboard } from '@/components/t2v/t2v-storyboard'
+import { T2vStudioStoryboard } from '@/components/t2v/t2v-studio-storyboard'
+import { getClipStorage } from '@/lib/storage'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { notFound } from 'next/navigation'
-import { T2vStudioBuildingBanner, T2vStudioToolbar } from '@/components/t2v/t2v-studio-toolbar'
+import { T2vStudioToolbar } from '@/components/t2v/t2v-studio-toolbar'
 
 export const metadata = { title: 'Video studio · Clips' }
 
@@ -27,7 +28,7 @@ export default async function T2vStudioPage({
   })
   const project = await prisma.clipProject.findFirst({
     where: { id: projectId, workspaceId, sourceKind: 't2v' },
-    select: { id: true, title: true, status: true, rangeEndMs: true },
+    select: { id: true, title: true, status: true, rangeEndMs: true, uploadId: true },
   })
   if (!project || !draft) notFound()
   const doc = draft.document as T2vDraftV1
@@ -38,6 +39,21 @@ export default async function T2vStudioPage({
   const studioMode = mode === 'storyboard' ? 'storyboard' : 'script'
   const storyboardStale =
     composition != null && draft.assembledRevision != null && draft.assembledRevision < draft.revision
+
+  let builtVideoUrl: string | null = null
+  if (project.uploadId) {
+    const upl = await prisma.clipUpload.findFirst({
+      where: { id: project.uploadId, workspaceId },
+      select: { key: true },
+    })
+    if (upl?.key) {
+      try {
+        builtVideoUrl = await getClipStorage().createSignedDownloadUrl(upl.key, 3600)
+      } catch {
+        builtVideoUrl = null
+      }
+    }
+  }
   const toolbar = (
     <>
       <T2vStudioToolbar
@@ -50,7 +66,6 @@ export default async function T2vStudioPage({
         projectStatus={project.status}
         storyboardStale={storyboardStale}
       />
-      {draft.status === 'ASSEMBLING' ? <T2vStudioBuildingBanner progress={draft.progress} /> : null}
     </>
   )
 
@@ -58,7 +73,17 @@ export default async function T2vStudioPage({
     return (
       <Page className="flex min-h-0 flex-col p-0">
         {toolbar}
-        <T2vStoryboard draftId={draft.id} projectId={project.id} document={doc} />
+        <T2vStudioStoryboard
+          draftId={draft.id}
+          projectId={project.id}
+          initialDocument={doc}
+          initialRevision={draft.revision}
+          initialStatus={draft.status}
+          initialStage={draft.stage}
+          initialProgress={draft.progress}
+          initialError={draft.error}
+          builtVideoUrl={builtVideoUrl}
+        />
       </Page>
     )
   }
@@ -71,6 +96,7 @@ export default async function T2vStudioPage({
         projectId={project.id}
         initialRevision={draft.revision}
         initialDocument={doc}
+        draftStatus={draft.status}
       />
     </Page>
   )

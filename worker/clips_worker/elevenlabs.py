@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import os
 import random
+import subprocess
+import tempfile
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -86,3 +89,73 @@ def generate_music(prompt: str, length_ms: int, instrumental: bool) -> tuple[byt
         "costUsdMicros": int(round(seconds * MUSIC_COST_MICROS_PER_SEC)),
     }
     return res.content, usage
+
+
+def _merge_usage(parts: list[dict[str, Any]]) -> dict[str, Any]:
+    seconds = sum(float(u.get("units") or 0) for u in parts)
+    micros = sum(int(u.get("costUsdMicros") or 0) for u in parts)
+    return {
+        "provider": "elevenlabs",
+        "model": "music_v1",
+        "units": seconds,
+        "unitType": "seconds",
+        "costUsdMicros": micros,
+    }
+
+
+def _crossfade_two(a: bytes, b: bytes, crossfade_s: float, work: Path) -> bytes:
+    p0 = work / "a.mp3"
+    p1 = work / "b.mp3"
+    out = work / "merged.mp3"
+    p0.write_bytes(a)
+    p1.write_bytes(b)
+    fc = f"[0:a][1:a]acrossfade=d={crossfade_s}:c1=tri:c2=tri[a]"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-y",
+            "-i",
+            str(p0),
+            "-i",
+            str(p1),
+            "-filter_complex",
+            fc,
+            "-map",
+            "[a]",
+            str(out),
+        ],
+        check=True,
+    )
+    return out.read_bytes()
+
+
+def _crossfade_mp3_segments(segments: list[bytes], crossfade_s: float = 3.0) -> bytes:
+    if len(segments) == 1:
+        return segments[0]
+    with tempfile.TemporaryDirectory(prefix="t2v-music-") as td:
+        work = Path(td)
+        merged = segments[0]
+        for seg in segments[1:]:
+            merged = _crossfade_two(merged, seg, crossfade_s, work)
+        return merged
+
+
+def generate_music_for_length(prompt: str, length_ms: int, instrumental: bool) -> tuple[bytes, dict[str, Any]]:
+    """ElevenLabs music_v1 (3s–300s per request); longer beds are segmented + crossfaded."""
+    total_ms = int(_clamp(float(length_ms), 3000, 600_000))
+    max_seg = 300_000
+    if total_ms <= max_seg:
+        return generate_music(prompt, total_ms, instrumental)
+    segments: list[bytes] = []
+    usages: list[dict[str, Any]] = []
+    remaining = total_ms
+    while remaining > 0:
+        seg_ms = int(min(remaining, max_seg))
+        audio, usage = generate_music(prompt, seg_ms, instrumental)
+        segments.append(audio)
+        usages.append(usage)
+        remaining -= seg_ms
+    merged = _crossfade_mp3_segments(segments)
+    return merged, _merge_usage(usages)

@@ -38,19 +38,32 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         id: true,
         projectId: true,
         status: true,
-        project: { select: { transcriptKey: true } },
+        type: true,
+        payload: true,
+        error: true,
+        project: { select: { transcriptKey: true, sourceKind: true } },
       },
     })
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (body.transcriptWords?.length && job.project.transcriptKey) {
+    const payload = (job.payload ?? {}) as { draftId?: string }
+    const isT2vAssemble = job.type === 'T2V_ASSEMBLE'
+    if (
+      body.transcriptWords?.length &&
+      job.project.transcriptKey &&
+      !isT2vAssemble
+    ) {
       await getClipStorage().putJson(job.project.transcriptKey, body.transcriptWords)
     }
 
     await applyWorkerJobProgress({
       jobId,
+      jobType: job.type,
+      draftId: payload.draftId ?? null,
       projectId: job.projectId,
       storedJobStatus: job.status,
+      storedJobError: job.error,
+      projectSourceKind: job.project.sourceKind,
       projectStatus: body.projectStatus as import('@prisma/client').ClipProjectStatus | undefined,
       stage: body.stage,
       progress: body.progress,

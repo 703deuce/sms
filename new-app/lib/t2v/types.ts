@@ -96,11 +96,32 @@ export type T2vDraftV1 = {
     mediaMix: 'video_first' | 'images_ok'
     templateId?: string
     brandTemplateId?: string
+    brand?: {
+      templateId?: string
+      brandTemplateId?: string
+      logoKey?: string
+      introVideoKey?: string
+      outroVideoKey?: string
+      useIntro?: boolean
+      useOutro?: boolean
+      primaryColor?: string
+      fontFamily?: string
+      titleFont?: string
+      secondaryColor?: string
+    }
     captionPresetId?: string
     captionsEnabled: boolean
   }
   voice: T2vVoiceSettings | null
-  music: { assetId?: string; generationId?: string; volume: number; duck: boolean; label?: string } | null
+  music: {
+    assetId?: string
+    generationId?: string
+    volume: number
+    duck: boolean
+    label?: string
+    prompt?: string
+    disabled?: boolean
+  } | null
   scenes: T2vScene[]
   nextSlot: number
 }

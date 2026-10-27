@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { extractArticleFromUrl } from '@/lib/server/t2v/extract-url'
+import { transcribeClipUpload } from '@/lib/server/t2v/extract-audio'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 
 const bodySchema = z.discriminatedUnion('kind', [
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   const disabled = t2vFeatureDisabledResponse()
   if (disabled) return disabled
   try {
-    await resolveWorkspaceId()
+    const workspaceId = await resolveWorkspaceId()
     const body = bodySchema.parse(await request.json())
     if (body.kind === 'url') {
       const data = await extractArticleFromUrl(body.url)
@@ -24,6 +25,17 @@ export async function POST(request: Request) {
           title: data.title,
           text: data.text,
           excerpt: data.excerpt,
+          wordCount: data.text.split(/\s+/).filter(Boolean).length,
+        },
+      })
+    }
+    if (body.kind === 'audio') {
+      const data = await transcribeClipUpload(workspaceId, body.uploadId)
+      return NextResponse.json({
+        data: {
+          title: data.title,
+          text: data.text,
+          excerpt: data.text.slice(0, 600),
           wordCount: data.text.split(/\s+/).filter(Boolean).length,
         },
       })

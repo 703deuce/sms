@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Mic, Play, Star } from 'lucide-react'
+import { Loader2, Mic, Play, Star, Trash2 } from 'lucide-react'
 import { T2vVoiceCloneModal } from '@/components/t2v/t2v-voice-clone-modal'
 import { uploadClipFile } from '@/lib/clips/upload'
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,18 @@ export function T2vVoicesSettings() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const deleteClone = async (voiceId: string) => {
+    try {
+      const res = await fetch(`/api/t2v/voices/${encodeURIComponent(voiceId)}`, { method: 'DELETE' })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'delete_failed')
+      toast.success('Clone removed')
+      void load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete clone')
+    }
+  }
 
   const setDefault = async (voiceId: string, name: string) => {
     try {
@@ -164,6 +176,17 @@ export function T2vVoicesSettings() {
                   <Star className="mr-1 size-3.5" aria-hidden />
                   {defaultVoiceId === row.voiceId ? 'Default' : 'Set default'}
                 </Button>
+                {row.clone ? (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={`Delete clone ${row.name}`}
+                    onClick={() => void deleteClone(row.voiceId)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                ) : null}
               </div>
             </li>
           ))}

@@ -123,8 +123,12 @@ export function T2vTemplatesGallery({ draftId }: { draftId?: string }) {
           {filtered.map((t) => (
             <article key={t.id} className="overflow-hidden rounded-xl border border-border">
               <button type="button" className="block w-full text-left" onClick={() => setPreview(t)}>
-                <div className="aspect-video bg-muted">
-                  {t.thumbUrl ? <img src={t.thumbUrl} alt="" className="size-full object-cover" /> : null}
+                <div className="flex aspect-video items-center justify-center bg-muted text-xs text-muted-foreground">
+                  {t.thumbUrl ? (
+                    <img src={t.thumbUrl} alt="" className="size-full object-cover" />
+                  ) : (
+                    <span>Preview coming soon</span>
+                  )}
                 </div>
                 <div className="p-3">
                   <p className="text-sm font-medium">{t.name}</p>
@@ -140,6 +144,18 @@ export function T2vTemplatesGallery({ draftId }: { draftId?: string }) {
           <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl bg-card p-4 shadow-lg">
             <h2 className="text-lg font-semibold">{preview.name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{preview.description}</p>
+            {preview.previewUrl ? (
+              <video
+                className="mt-3 w-full rounded-lg border border-border"
+                src={preview.previewUrl}
+                controls
+                playsInline
+                preload="metadata"
+                poster={preview.thumbUrl ?? undefined}
+              />
+            ) : preview.thumbUrl ? (
+              <img src={preview.thumbUrl} alt="" className="mt-3 w-full rounded-lg border border-border object-cover" />
+            ) : null}
             {preview.sampleScript ? (
               <p className="mt-3 rounded-lg bg-muted p-3 text-sm">{preview.sampleScript}</p>
             ) : null}

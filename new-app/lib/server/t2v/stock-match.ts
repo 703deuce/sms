@@ -1,12 +1,19 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
-import { pexelsConfigured, pexelsSearchVideos, pickPexelsFile, type PexelsVideo } from '@/lib/server/ai/pexels'
+import {
+  pexelsConfigured,
+  pexelsSearchPhotos,
+  pexelsSearchVideos,
+  pickPexelsFile,
+  type PexelsPhoto,
+  type PexelsVideo,
+} from '@/lib/server/ai/pexels'
 import type { T2vStockMediaType } from '@/lib/t2v/m9-contracts'
 import type { T2vAspect, T2vSceneMedia } from '@/lib/t2v/types'
 
 export type StockCandidate = {
-  provider: 'pixabay' | 'pexels'
+  provider: 'pixabay' | 'pexels' | 'pexels_photo'
   providerId: string
   width: number
   height: number
@@ -18,6 +25,8 @@ export type StockCandidate = {
   author: string
   tags: string[]
   score: number
+  /** video (default) or still photo (Pexels photos API) */
+  stockKind?: 'video' | 'photo'
 }
 
 const TTL_MS = 24 * 60 * 60 * 1000
@@ -93,6 +102,33 @@ async function pixabay(query: string, aspect: T2vAspect, page: number): Promise<
           .map((t) => t.trim().toLowerCase())
           .filter(Boolean),
         score: 0,
+      }]
+    })
+  })
+}
+
+async function pexelsPhotos(query: string, aspect: T2vAspect, page: number): Promise<StockCandidate[]> {
+  if (!pexelsConfigured()) return []
+  const orientation = aspect === '9:16' ? 'portrait' : aspect === '16:9' ? 'landscape' : 'square'
+  return cached(`pexels-photo|${query}|${aspect}|${page}`, async () => {
+    const { photos } = await pexelsSearchPhotos({ query, orientation, page, perPage: 40 })
+    return photos.flatMap((p: PexelsPhoto) => {
+      const src = p.src.large2x || p.src.large || p.src.medium
+      if (!src) return []
+      return [{
+        provider: 'pexels_photo' as const,
+        providerId: String(p.id),
+        width: p.width,
+        height: p.height,
+        durationS: 0,
+        thumbUrl: p.src.medium || src,
+        previewUrl: src,
+        srcUrl: src,
+        pageUrl: p.url,
+        author: p.photographer,
+        tags: query.toLowerCase().split(/\s+/).filter(Boolean),
+        score: 0,
+        stockKind: 'photo' as const,
       }]
     })
   })
@@ -211,10 +247,18 @@ export async function searchT2vStock(input: {
   /** Agent B: `photo` uses Pexels photos API when keyed; until then returns [] */
   mediaType?: T2vStockMediaType
 }): Promise<StockCandidate[]> {
-  if (input.mediaType === 'photo') {
-    return []
-  }
   const kw = extractSceneKeywords(input.query, input.keywords ?? [])
+  if (input.mediaType === 'photo') {
+    if (!input.sources.includes('pexels')) return []
+    const pool = await pexelsPhotos(input.query, input.aspect, input.page)
+    const needS = (input.needMs ?? 5000) / 1000
+    return pool
+      .map((c) => ({
+        ...c,
+        score: scoreCandidate(c, { keywords: kw, aspect: input.aspect, needS }),
+      }))
+      .sort((a, b) => b.score - a.score)
+  }
   const batches = await Promise.allSettled([
     input.sources.includes('pexels') ? pexels(input.query, input.aspect, input.page) : Promise.resolve([]),
     input.sources.includes('pixabay') ? pixabay(input.query, input.aspect, input.page) : Promise.resolve([]),
@@ -231,10 +275,13 @@ export async function searchT2vStock(input: {
 }
 
 export function toSceneMedia(c: StockCandidate, assetId: string, needMs: number, query: string): T2vSceneMedia {
-  const { srcInMs } = trimWindow(c.durationS, needMs / 1000)
+  const isPhoto = c.stockKind === 'photo'
+  const { srcInMs } = isPhoto ? { srcInMs: 0 } : trimWindow(c.durationS, needMs / 1000)
+  const mediaProvider: 'pexels' | 'pixabay' =
+    c.provider === 'pexels_photo' || c.provider === 'pexels' ? 'pexels' : 'pixabay'
   return {
-    provider: c.provider,
-    kind: 'video',
+    provider: mediaProvider,
+    kind: isPhoto ? 'image' : 'video',
     assetId,
     providerId: c.providerId,
     thumbUrl: c.thumbUrl,
@@ -245,7 +292,7 @@ export function toSceneMedia(c: StockCandidate, assetId: string, needMs: number,
     srcInMs,
     focalX: 0.5,
     focalY: 0.5,
-    attribution: { author: c.author, pageUrl: c.pageUrl, provider: c.provider },
+    attribution: { author: c.author, pageUrl: c.pageUrl, provider: mediaProvider },
     query,
   }
 }

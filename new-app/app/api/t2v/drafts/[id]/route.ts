@@ -4,6 +4,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { getPrisma } from '@/lib/server/db'
 import { RevisionConflict, saveT2vDraft } from '@/lib/server/t2v/drafts'
+import { parseAndSanitizeT2vDraft } from '@/lib/server/t2v/validate-document'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -24,9 +25,10 @@ export async function PATCH(request: Request, { params }: Ctx) {
   const { id } = await params
   try {
     const workspaceId = await resolveWorkspaceId()
-    const body = z.object({ baseRevision: z.number().int(), document: z.any() }).parse(await request.json())
+    const body = z.object({ baseRevision: z.number().int(), document: z.unknown() }).parse(await request.json())
+    const document = await parseAndSanitizeT2vDraft(workspaceId, body.document)
     return NextResponse.json({
-      data: await saveT2vDraft(workspaceId, id, body.baseRevision, body.document),
+      data: await saveT2vDraft(workspaceId, id, body.baseRevision, document),
     })
   } catch (err) {
     if (err instanceof RevisionConflict) {

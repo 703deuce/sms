@@ -37,6 +37,8 @@ export type ScriptEditorSettings = {
   volumePct?: number
   layoutPackId?: string
   multicam?: { enabled?: boolean; minHoldMs?: number; wideEveryMs?: number }
+  /** T2V / clip brand kit — intro/outro applied at composition export. */
+  brand?: Record<string, unknown>
   captions?: {
     enabled?: boolean
     presetId?: string

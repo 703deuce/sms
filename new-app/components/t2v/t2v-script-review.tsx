@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { patchT2vDraft } from '@/lib/t2v/t2v-api'
+import { patchT2vDraft, runT2vScript } from '@/lib/t2v/t2v-api'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { useRouter } from 'next/navigation'
 import type { T2vDraftV1, T2vScene } from '@/lib/t2v/types'
@@ -15,12 +15,16 @@ type Props = {
   projectId: string
   initialRevision: number
   initialDocument: T2vDraftV1
+  draftStatus?: string
 }
 
-export function T2vScriptReview({ draftId, projectId, initialRevision, initialDocument }: Props) {
+const REWRITES = ['Shorter', 'Longer', 'More casual', 'More professional', 'Add hook', 'Add CTA'] as const
+
+export function T2vScriptReview({ draftId, projectId, initialRevision, initialDocument, draftStatus }: Props) {
   const router = useRouter()
   const [doc, setDoc] = useState(initialDocument)
   const [revision, setRevision] = useState(initialRevision)
+  const [rewriting, setRewriting] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const scheduleSave = useCallback(
@@ -55,6 +59,30 @@ export function T2vScriptReview({ draftId, projectId, initialRevision, initialDo
 
   const totalWords = doc.scenes.reduce((n, s) => n + s.narration.trim().split(/\s+/).filter(Boolean).length, 0)
 
+  if (draftStatus === 'GENERATING' || rewriting) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 py-12">
+        <p className="text-center text-sm text-muted-foreground">Writing script…</p>
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (doc.scenes.length === 0) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 py-12 text-center">
+        <p className="text-sm text-muted-foreground">No script yet — generate from the create flow or paste narration in Script mode.</p>
+        <PrimaryButton type="button" onClick={() => router.push(`/app/clips/${projectId}/video?mode=storyboard`)}>
+          Go to storyboard
+        </PrimaryButton>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 py-6">
       <div className="flex justify-end">
@@ -75,6 +103,28 @@ export function T2vScriptReview({ draftId, projectId, initialRevision, initialDo
       <p className="text-sm text-muted-foreground">
         {doc.scenes.length} scenes · {totalWords} words · voice {doc.voice?.voiceName ?? '—'}
       </p>
+      <div className="flex flex-wrap gap-2">
+        {REWRITES.map((label) => (
+          <button
+            key={label}
+            type="button"
+            className="rounded-full border border-border px-3 py-1 text-xs hover:bg-muted"
+            onClick={() => {
+              setRewriting(true)
+              void runT2vScript(draftId, label)
+                .then(async () => {
+                  const d = await fetch(`/api/t2v/drafts/${draftId}`).then((r) => r.json())
+                  setDoc(d.data.document as T2vDraftV1)
+                  setRevision(d.data.revision)
+                })
+                .catch(() => toast.error('Rewrite failed'))
+                .finally(() => setRewriting(false))
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="space-y-4">
         {doc.scenes.map((scene, idx) => (
           <div key={scene.id} className="rounded-xl border border-border p-4">
