@@ -112,7 +112,7 @@ def sign_body(secret: str, body: str) -> str:
 
 
 def progress_base_urls() -> list[str]:
-    """Prefer direct Coolify/docker callback URL; fall back to public APP_URL (proxy 502 during deploy)."""
+    """Progress callback bases. Use stable WORKER_CALLBACK_URL (e.g. https://transovo.ai), then APP_URL."""
     urls: list[str] = []
     for key in ("WORKER_CALLBACK_URL", "TRANSOVO_BACKEND_URL"):
         v = (os.environ.get(key) or "").strip().rstrip("/")

@@ -38,3 +38,7 @@ def validate_worker_env() -> None:
     if missing:
         print(f"FATAL clips-worker missing required env: {', '.join(missing)}", flush=True)
         sys.exit(1)
+
+    from clips_worker.callback_health import wait_for_callback_health
+
+    wait_for_callback_health()

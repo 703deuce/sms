@@ -165,6 +165,9 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
     if not composition_id or not render_id:
         raise RuntimeError("missing compositionId/renderId")
 
+    # DB status first — UI must not stay QUEUED during long download/render if callbacks fail.
+    mark_composition_render(conn, render_id, "RENDERING", progress=1)
+
     ctx = load_composition_render_context(conn, composition_id, render_id)
     mark_composition_render(conn, render_id, "RENDERING", progress=5)
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "script_export", "progress": 5})

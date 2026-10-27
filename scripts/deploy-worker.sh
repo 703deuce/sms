@@ -109,14 +109,9 @@ echo "[deploy-worker] docker build"
 cd "\${REMOTE_SRC}"
 docker build -f worker/Dockerfile -t clips-worker:latest .
 
-WEB_CONTAINER=\$(docker ps --format '{{.Names}}' | grep -E 'ds8s3hjin|transovo.*web' | head -1 || true)
-if [ -n "\${WEB_CONTAINER}" ]; then
-  WORKER_CALLBACK_URL="http://\${WEB_CONTAINER}:3000"
-  echo "[deploy-worker] WORKER_CALLBACK_URL=\${WORKER_CALLBACK_URL} (coolify internal, bypasses proxy 502)"
-else
-  WORKER_CALLBACK_URL=""
-  echo "[deploy-worker] WARN: no web container for WORKER_CALLBACK_URL"
-fi
+# Stable public URL — Coolify renames web containers on every deploy; container-name callbacks go stale.
+WORKER_CALLBACK_URL="\${WORKER_CALLBACK_URL:-https://transovo.ai}"
+echo "[deploy-worker] WORKER_CALLBACK_URL=\${WORKER_CALLBACK_URL} (progress callbacks; post_progress retries 502 during deploy)"
 
 start_worker() {
   local name="\$1"
