@@ -17,6 +17,7 @@ import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { ClipResultsToolbar } from '@/components/clips/clip-results-toolbar'
 import { ClipTemplateProjectActions } from '@/components/clips/clip-template-project-actions'
+import { mergeMonotonicProjectPoll } from '@/lib/clips/eta-poll'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { clipsFetch, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
@@ -207,11 +208,17 @@ export function ProjectClipsView({
   }, [initialStatus, readyHydrated, hydrateReady])
 
   const terminalRef = useRef(readyFromServer || ['READY', 'FAILED', 'CANCELED'].includes(initialStatus))
+  const pollSnapshotRef = useRef({
+    status: initialStatus,
+    stage: initialStage,
+    progress: initialProgress,
+    etaSec: initialEtaSec,
+  })
 
   useEffect(() => {
     if (readyFromServer) return
     let stop = false
-    let attemptsSinceOk = 0
+    let failStreak = 0
     const pollMs = isStreamer ? 2500 : 4000
     const tick = async () => {
       try {
@@ -220,18 +227,26 @@ export function ProjectClipsView({
           data = await getProjectStatus(projectId)
         } catch (pollErr) {
           if (!stop && !terminalRef.current) {
-            if (attemptsSinceOk === 0) {
+            if (failStreak === 0) {
               console.warn('[clipper:poll] project status failed', pollErr)
             }
-            attemptsSinceOk += 1
-            setTimeout(tick, pollMs)
+            failStreak += 1
+            const backoff = Math.min(pollMs * 2 ** Math.min(failStreak, 4), 30_000)
+            setTimeout(tick, backoff)
           }
           return
         }
-        attemptsSinceOk = 0
+        failStreak = 0
         if (stop) return
-        if (typeof data.etaSec === 'number') setProgressEtaSec(data.etaSec)
-        if (data.stage !== undefined) setProgressStage(data.stage ?? null)
+        const merged = mergeMonotonicProjectPoll(pollSnapshotRef.current, {
+          status: data.status,
+          stage: data.stage ?? null,
+          progress: data.progress ?? pollSnapshotRef.current.progress,
+          etaSec: typeof data.etaSec === 'number' ? data.etaSec : pollSnapshotRef.current.etaSec,
+        })
+        pollSnapshotRef.current = merged
+        setProgressEtaSec(merged.etaSec)
+        setProgressStage(merged.stage)
         if (typeof data.clipsTotal === 'number') setClipsTotal(data.clipsTotal)
         if (typeof data.clipsReady === 'number') setClipsReady(data.clipsReady)
         const liveClipCount = data.clipCount ?? 0
@@ -242,7 +257,7 @@ export function ProjectClipsView({
             /* ignore transient list errors during reframe */
           }
         }
-        const next = data.status
+        const next = merged.status
         if (next === 'READY') {
           terminalRef.current = true
           await hydrateReady(data)

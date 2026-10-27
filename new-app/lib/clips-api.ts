@@ -95,7 +95,11 @@ export function getProjectStatus(projectId: string) {
     queueAhead?: number
     queuedElapsedSec?: number
     isStreamer?: boolean
-  }>(`/api/clips/projects/${projectId}/status`)
+  }>(`/api/clips/projects/${projectId}/status`, {
+    tag: 'clipper-status-poll',
+    retryGateway: true,
+    maxGatewayRetries: 5,
+  })
 }
 
 export function cancelProject(projectId: string) {

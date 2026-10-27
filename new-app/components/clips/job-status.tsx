@@ -19,7 +19,7 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/app/page-primitives'
 import { CLIP_JOB_STATE, StatusBadge } from '@/components/app/status'
-import { clampEtaBetweenPolls, etaStageKey } from '@/lib/clips/eta-poll'
+import { clampEtaBetweenPolls, etaStageKey, mergeMonotonicProjectPoll } from '@/lib/clips/eta-poll'
 import {
   clipQueueAttention,
   formatClipProgressEtaLine,
@@ -73,6 +73,12 @@ export function JobStatus({
   const etaRef = useRef(initialEtaSec)
   const lastPollEtaRef = useRef(initialEtaSec)
   const lastStageKeyRef = useRef(etaStageKey(initialStatus, initialStage))
+  const pollSnapshotRef = useRef({
+    status: initialStatus || 'QUEUED',
+    stage: initialStage,
+    progress: initialProgress,
+    etaSec: initialEtaSec,
+  })
   const [chunkDone, setChunkDone] = useState<number | undefined>()
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
   const [waitingForWorker, setWaitingForWorker] = useState(false)
@@ -81,18 +87,26 @@ export function JobStatus({
 
   useEffect(() => {
     let stop = false
+    let failStreak = 0
     const tick = async () => {
       try {
         const data = await getProjectStatus(projectId)
         if (stop) return
-        setStatus(data.status)
-        setProgress(data.progress)
-        setStage(data.stage)
+        const merged = mergeMonotonicProjectPoll(pollSnapshotRef.current, {
+          status: data.status,
+          stage: data.stage ?? null,
+          progress: data.progress ?? pollSnapshotRef.current.progress,
+          etaSec: typeof data.etaSec === 'number' ? data.etaSec : pollSnapshotRef.current.etaSec,
+        })
+        pollSnapshotRef.current = merged
+        setStatus(merged.status)
+        setProgress(merged.progress)
+        setStage(merged.stage)
         setError(data.error)
         setWordCount(data.wordCount)
-        const stageKey = etaStageKey(data.status, data.stage)
+        const stageKey = etaStageKey(merged.status, merged.stage)
         const polled = clampEtaBetweenPolls(
-          data.etaSec,
+          merged.etaSec,
           lastPollEtaRef.current,
           stageKey,
           lastStageKeyRef.current,
@@ -106,11 +120,15 @@ export function JobStatus({
         setWaitingForWorker(Boolean(data.waitingForWorker))
         setQueueAhead(data.queueAhead)
         setQueuedElapsedSec(data.queuedElapsedSec ?? 0)
-        if (['READY', 'FAILED', 'CANCELED'].includes(data.status)) return
+        if (['READY', 'FAILED', 'CANCELED'].includes(merged.status)) return
+        failStreak = 0
       } catch {
-        /* ignore transient */
+        failStreak += 1
       }
-      if (!stop) setTimeout(tick, 4000)
+      if (!stop) {
+        const delay = failStreak > 0 ? Math.min(4000 * 2 ** Math.min(failStreak, 4), 30_000) : 4000
+        setTimeout(tick, delay)
+      }
     }
     tick()
     return () => {
