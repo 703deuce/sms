@@ -56,6 +56,7 @@ export function DriveSidebar({
       data-testid="drive-sidebar"
       aria-label="Create and library"
     >
+      <DriveWorkspaceSwitcher />
       <p className="mb-1 px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Create</p>
       {item('/app/clips', 'Home', <House className="size-4" />, onClips && view === 'home' && !pathname.includes('/trash'))}
       {item('/app/clips/new', 'New project', <Sparkles className="size-4" />, pathname === '/app/clips/new')}

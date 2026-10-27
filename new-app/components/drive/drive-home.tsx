@@ -2,18 +2,18 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Clapperboard,
   Copy,
   FolderOpen,
   LayoutGrid,
   List,
-  Plus,
   Radio,
-  Search,
   Upload,
 } from 'lucide-react'
+import { useClipsDriveOptional } from '@/components/drive/clips-drive-context'
+import { formatRelativeTime } from '@/lib/format-relative-time'
 import { toast } from 'sonner'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -51,16 +51,23 @@ export function DriveHome({
   showAll?: boolean
 }) {
   const router = useRouter()
+  const drive = useClipsDriveOptional()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [layout, setLayout] = useState<'grid' | 'list'>('grid')
-  const [search, setSearch] = useState(q ?? '')
+  const [localSearch, setLocalSearch] = useState(q ?? '')
   const [status, setStatus] = useState(statusFilter ?? 'all')
+  const search = drive?.search ?? localSearch
+  const setSearch = drive?.setSearch ?? setLocalSearch
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dragOver, setDragOver] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [heroBusy, setHeroBusy] = useState(false)
 
   const projects = initialProjects
+
+  useEffect(() => {
+    if (q != null && drive) drive.setSearch(q)
+  }, [q, drive])
 
   const toggleSelect = (id: string) => {
     setSelected((s) => {
@@ -113,6 +120,9 @@ export function DriveHome({
 
   const startFromFile = async (file: File) => {
     setHeroBusy(true)
+    drive?.setTranscribingTitle(file.name)
+    drive?.setTranscribingOpen(true)
+    drive?.setSyncing(true)
     try {
       const uploadId = await new Promise<string>((resolve, reject) => {
         void uploadClipFile(file, (p) => {
@@ -127,8 +137,10 @@ export function DriveHome({
       router.push(`/app/clips/${project.id}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not start project')
+      drive?.setTranscribingOpen(false)
     } finally {
       setHeroBusy(false)
+      drive?.setSyncing(false)
     }
   }
 
@@ -258,16 +270,15 @@ export function DriveHome({
 
       <div className="mt-10">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] max-w-md flex-1">
-            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          {!drive && (
             <Input
-              className="h-8 pl-9"
+              className="h-8 min-w-[200px] max-w-md flex-1"
               placeholder="Search projects…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onSearch()}
             />
-          </div>
+          )}
           <Select value={status} onValueChange={(v) => v && setStatus(v)}>
             <SelectTrigger className="h-8 w-[140px]" data-testid="drive-status-filter">
               <SelectValue placeholder="Status" />
@@ -346,14 +357,14 @@ export function DriveHome({
           </div>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[640px] text-left text-[13px]">
+            <table className="w-full min-w-[720px] text-left text-[13px]">
               <thead>
                 <tr className="h-8 border-b border-border text-xs text-muted-foreground">
                   <th className="w-8 px-2" scope="col" />
                   <th scope="col">Name</th>
-                  <th className="w-24 px-2" scope="col">Duration</th>
-                  <th className="w-20 px-2" scope="col">Clips</th>
-                  <th className="w-28 px-2" scope="col">Last viewed</th>
+                  <th className="w-28 px-2" scope="col">Owner</th>
+                  <th className="w-28 px-2" scope="col">Created</th>
+                  <th className="w-28 px-2" scope="col">Published</th>
                   <th className="w-10 px-2" scope="col" />
                 </tr>
               </thead>
@@ -373,12 +384,12 @@ export function DriveHome({
                         {p.title}
                       </Link>
                     </td>
-                    <td className="px-2 font-mono text-xs tabular-nums">
-                      {Math.round(p.durationMs / 1000)}s
+                    <td className="px-2 text-xs text-muted-foreground">{p.ownerName ?? '—'}</td>
+                    <td className="px-2 text-xs text-muted-foreground" title={new Date(p.createdAt).toLocaleString()}>
+                      {formatRelativeTime(p.createdAt)}
                     </td>
-                    <td className="px-2">{p.clipCount}</td>
                     <td className="px-2 text-xs text-muted-foreground">
-                      {p.lastViewedAt ? new Date(p.lastViewedAt).toLocaleDateString() : '—'}
+                      {p.publishedAt ? formatRelativeTime(p.publishedAt) : p.isPublished ? 'Yes' : '—'}
                     </td>
                     <td className="px-2">
                       <ProjectRowMenu projectId={p.id} title={p.title} />

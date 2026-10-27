@@ -125,6 +125,9 @@ export type PublishSettings = {
   allowComments?: boolean
   allowDownload?: boolean
   showAuthor?: boolean
+  requireSignInToView?: boolean
+  requireSignInToEmbed?: boolean
+  viewEvents?: { at: string; label?: string }[]
 }
 
 const PUBLISH_RENDER_SETTINGS = {
@@ -276,13 +279,24 @@ export async function removeCollaborator(workspaceId: string, compositionId: str
   return true
 }
 
-export async function incrementPublishViewCount(compositionId: string) {
+export async function incrementPublishViewCount(compositionId: string, viewerLabel?: string) {
   const prisma = getPrisma()
-  const updated = await prisma.scriptCompositionPublish.updateMany({
-    where: { compositionId },
-    data: { viewCount: { increment: 1 } },
-  })
-  if (updated.count === 0) return 0
   const pub = await prisma.scriptCompositionPublish.findUnique({ where: { compositionId } })
-  return pub?.viewCount ?? 0
+  if (!pub) return 0
+  const settings = (pub.settings ?? {}) as Record<string, unknown>
+  const events = Array.isArray(settings.viewEvents) ? [...settings.viewEvents] : []
+  events.unshift({
+    at: new Date().toISOString(),
+    label: viewerLabel?.trim() || 'Viewer',
+  })
+  const viewEvents = events.slice(0, 50)
+  await prisma.scriptCompositionPublish.update({
+    where: { id: pub.id },
+    data: {
+      viewCount: { increment: 1 },
+      settings: { ...settings, viewEvents } as Prisma.InputJsonValue,
+    },
+  })
+  const next = await prisma.scriptCompositionPublish.findUnique({ where: { compositionId } })
+  return next?.viewCount ?? 0
 }

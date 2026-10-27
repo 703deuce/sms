@@ -10,6 +10,9 @@ const publishSchema = z.object({
   allowComments: z.boolean().optional(),
   allowDownload: z.boolean().optional(),
   showAuthor: z.boolean().optional(),
+  requireSignInToView: z.boolean().optional(),
+  requireSignInToEmbed: z.boolean().optional(),
+  authorDisplayName: z.string().max(120).optional(),
 })
 
 export async function GET(_req: Request, ctx: { params: Promise<{ compositionId: string }> }) {
@@ -54,6 +57,25 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
     })
   } catch (err) {
     return jsonError(err, 500)
+  }
+}
+
+export async function PATCH(request: Request, ctx: { params: Promise<{ compositionId: string }> }) {
+  try {
+    const { compositionId } = await ctx.params
+    const workspaceId = await resolveWorkspaceId()
+    const settings = publishSchema.parse(await request.json())
+    const pub = await upsertPublish(workspaceId, compositionId, settings)
+    if (!pub) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({
+      data: {
+        publicSlug: pub.publicSlug,
+        viewCount: pub.viewCount,
+        settings: pub.settings,
+      },
+    })
+  } catch (err) {
+    return jsonError(err, 400)
   }
 }
 

@@ -31,9 +31,15 @@ export async function listClipProjectsForPage(
 
   const publishes = await prisma.scriptCompositionPublish.findMany({
     where: { workspaceId, composition: { projectId: { in: ids } } },
-    select: { composition: { select: { projectId: true } } },
+    select: { publishedAt: true, composition: { select: { projectId: true } } },
   })
   const publishedProjectIds = new Set(publishes.map((pub) => pub.composition.projectId))
+  const publishedAtByProject = new Map<string, Date>()
+  for (const pub of publishes) {
+    const pid = pub.composition.projectId
+    const prev = publishedAtByProject.get(pid)
+    if (!prev || pub.publishedAt > prev) publishedAtByProject.set(pid, pub.publishedAt)
+  }
 
   const storage = getClipStorage()
   return Promise.all(
@@ -65,6 +71,7 @@ export async function listClipProjectsForPage(
         thumbUrl,
         ownerName: ownerNameById.get(p.createdById) ?? null,
         isPublished: publishedProjectIds.has(p.id),
+        publishedAt: publishedAtByProject.get(p.id)?.toISOString() ?? null,
       }
     }),
   )

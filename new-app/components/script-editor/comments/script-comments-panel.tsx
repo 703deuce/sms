@@ -173,7 +173,7 @@ export function ScriptCommentsPanel({
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        className="opacity-0 group-hover/thread:opacity-100"
+                        className="opacity-100 md:opacity-0 md:group-hover/thread:opacity-100 md:group-focus-within/thread:opacity-100"
                         aria-label="Thread actions"
                       >
                         <MoreHorizontal className="size-4" />
@@ -218,11 +218,23 @@ export function ScriptCommentsPanel({
                 </p>
               )}
               {first && <p className="mb-1 leading-relaxed">{first.body}</p>}
-              {thread.comments.slice(1).map((c) => (
-                <p key={c.id} className="mt-1 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{c.authorName}:</span> {c.body}
-                </p>
-              ))}
+              {thread.comments.slice(1).map((c) => {
+                const replyAvatar = (c.authorName ?? '?').slice(0, 1).toUpperCase()
+                return (
+                  <div key={c.id} className="mt-2 flex gap-2">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
+                      {replyAvatar}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold leading-tight">
+                        {c.authorName}
+                        <span className="ml-2 font-normal text-muted-foreground">{formatRelativeTime(c.createdAt)}</span>
+                      </p>
+                      <p className="text-xs leading-relaxed text-foreground">{c.body}</p>
+                    </div>
+                  </div>
+                )
+              })}
               {!thread.resolvedAt && (
                 <div className="mt-2 flex gap-2">
                   <input

@@ -6,4 +6,5 @@ export type ClipProjectListItem = ClipProject & {
   durationMs: number
   ownerName?: string | null
   isPublished?: boolean
+  publishedAt?: string | null
 }

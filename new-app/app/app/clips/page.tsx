@@ -1,7 +1,5 @@
 import { DriveHome } from '@/components/drive/drive-home'
-import { DriveSidebar } from '@/components/drive/drive-sidebar'
 import { ProjectsAutoRefresh } from '@/components/clips/projects-auto-refresh'
-import { listFolders } from '@/lib/server/clips/drive-projects'
 import { listClipProjectsForPage } from '@/lib/server/clips/project-list'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -19,31 +17,18 @@ export default async function ClipsProjectsPage({
 }) {
   const { q, status, folder, view } = await searchParams
   const workspaceId = await resolveWorkspaceId()
-  const folderId = folder ? folder : undefined
-  const [projects, folders] = await Promise.all([
-    listClipProjectsForPage(workspaceId, {
-      q,
-      status,
-      limit: view === 'all' ? 200 : 50,
-      folderId: folder ?? undefined,
-    }),
-    listFolders(workspaceId),
-  ])
+  const projects = await listClipProjectsForPage(workspaceId, {
+    q,
+    status,
+    limit: view === 'all' ? 200 : 50,
+    folderId: folder ?? undefined,
+  })
   const anyProcessing = projects.some((p) => isProcessing(p.status))
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <DriveSidebar folders={folders.map((f) => ({ id: f.id, name: f.name }))} />
-      <div className="min-w-0 flex-1 p-4 md:p-6">
-        <ProjectsAutoRefresh enabled={anyProcessing} />
-        <DriveHome
-          initialProjects={projects}
-          q={q}
-          status={status}
-          showAll={view === 'all'}
-          folders={folders.map((f) => ({ id: f.id, name: f.name }))}
-        />
-      </div>
+    <div className="p-4 md:p-6">
+      <ProjectsAutoRefresh enabled={anyProcessing} />
+      <DriveHome initialProjects={projects} q={q} status={status} showAll={view === 'all'} />
     </div>
   )
 }
