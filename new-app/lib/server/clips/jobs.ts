@@ -140,10 +140,10 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
       }
     }
   }
-  const clipCount =
-    project.status === 'READY'
-      ? await prisma.clip.count({ where: { projectId, deletedAt: null } })
-      : undefined
+  const clipCount = await prisma.clip.count({ where: { projectId, deletedAt: null } })
+  const clipsReady =
+    typeof sp.clipsReady === 'number' ? sp.clipsReady : clipCount > 0 ? clipCount : undefined
+  const clipsTotal = typeof sp.clipsTotal === 'number' ? sp.clipsTotal : undefined
   return {
     status: project.status,
     stage: project.stage,
@@ -152,6 +152,8 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
     etaSec,
     wordCount: Array.isArray(project.transcriptWords) ? (project.transcriptWords as unknown[]).length : 0,
     clipCount,
+    clipsReady,
+    clipsTotal,
     chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,
     chunkTotal: typeof sp.chunkTotal === 'number' ? sp.chunkTotal : undefined,
     etaUpdatedAt,

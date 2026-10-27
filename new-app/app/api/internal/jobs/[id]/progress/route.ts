@@ -19,6 +19,8 @@ const schema = z.object({
   etaSeconds: z.number().int().min(0).optional(),
   chunkDone: z.number().int().min(0).optional(),
   chunkTotal: z.number().int().min(0).optional(),
+  clipsReady: z.number().int().min(0).optional(),
+  clipsTotal: z.number().int().min(0).optional(),
   transcriptionEngine: z.enum(['deepgram', 'local_whisper']).optional(),
   transcriptionFallbackReason: z.string().max(500).optional(),
 })
@@ -73,6 +75,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       etaSeconds: body.etaSeconds,
       chunkDone: body.chunkDone,
       chunkTotal: body.chunkTotal,
+      clipsReady: body.clipsReady,
+      clipsTotal: body.clipsTotal,
       transcriptionEngine: body.transcriptionEngine,
       transcriptionFallbackReason: body.transcriptionFallbackReason,
     })

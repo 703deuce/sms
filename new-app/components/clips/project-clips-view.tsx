@@ -11,10 +11,11 @@ import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
 import { ProjectPeopleStrip } from '@/components/clips/project-people-strip'
 import { ClipGridSkeleton } from '@/components/clips/clip-grid-skeleton'
+import { ProgressiveClipResults } from '@/components/clips/progressive-clip-results'
 import { JobStatus } from '@/components/clips/job-status'
 import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
-import { exportClip, listProjectClips, retryProject } from '@/lib/clips-api'
+import { exportClip, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { MontageDialog } from '@/components/streamer/montage-dialog'
@@ -26,6 +27,11 @@ type ProjectStatusPayload = {
   status: string
   error?: string | null
   clipCount?: number
+  clipsReady?: number
+  clipsTotal?: number
+  etaSec?: number
+  stage?: string | null
+  progress?: number
 }
 
 function clipCountLabel(n: number) {
@@ -110,6 +116,15 @@ export function ProjectClipsView({
   const [montagePollKey, setMontagePollKey] = useState(0)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [readyHydrated, setReadyHydrated] = useState(readyFromServer)
+  const [progressEtaSec, setProgressEtaSec] = useState(initialEtaSec)
+  const [progressStage, setProgressStage] = useState<string | null>(initialStage)
+  const [clipsReady, setClipsReady] = useState(0)
+  const [clipsTotal, setClipsTotal] = useState(0)
+
+  const refreshClipsList = useCallback(async () => {
+    const data = await listProjectClips(projectId, 'score')
+    setClips(data.clips as ClipCardData[])
+  }, [projectId])
 
   const hydrateReady = useCallback(async (payload: ProjectStatusPayload) => {
     const expected = payload.clipCount ?? 0
@@ -140,23 +155,37 @@ export function ProjectClipsView({
     const pollMs = isStreamer ? 2500 : 4000
     const tick = async () => {
       try {
-        const res = await fetch(`/api/clips/projects/${projectId}/status`)
-        const json = (await res.json()) as { data?: ProjectStatusPayload }
-        if (stop || !json.data) {
+        let data: ProjectStatusPayload
+        try {
+          data = await getProjectStatus(projectId)
+        } catch {
           if (!stop && !terminalRef.current) setTimeout(tick, pollMs)
           return
         }
-        const next = json.data.status
+        if (stop) return
+        if (typeof data.etaSec === 'number') setProgressEtaSec(data.etaSec)
+        if (data.stage !== undefined) setProgressStage(data.stage ?? null)
+        if (typeof data.clipsTotal === 'number') setClipsTotal(data.clipsTotal)
+        if (typeof data.clipsReady === 'number') setClipsReady(data.clipsReady)
+        const liveClipCount = data.clipCount ?? 0
+        if (liveClipCount > 0 || (data.clipsReady ?? 0) > 0) {
+          try {
+            await refreshClipsList()
+          } catch {
+            /* ignore transient list errors during reframe */
+          }
+        }
+        const next = data.status
         if (next === 'READY') {
           terminalRef.current = true
-          await hydrateReady(json.data)
+          await hydrateReady(data)
           return
         }
         if (next === 'FAILED' || next === 'CANCELED') {
           terminalRef.current = true
         }
         setStatus(next)
-        setError(json.data.error ?? null)
+        setError(data.error ?? null)
       } catch {
         /* ignore */
       }
@@ -166,7 +195,7 @@ export function ProjectClipsView({
     return () => {
       stop = true
     }
-  }, [projectId, hydrateReady, readyFromServer, isStreamer])
+  }, [projectId, hydrateReady, readyFromServer, isStreamer, refreshClipsList])
 
   const triggerDownload = (url: string, filename: string) => {
     const a = document.createElement('a')
@@ -191,6 +220,8 @@ export function ProjectClipsView({
   const desc = pageDescription(status, error)
   const showResults = status === 'READY' && readyHydrated
   const processing = !showResults && status !== 'FAILED' && status !== 'CANCELED'
+  const showProgressiveClips =
+    processing && !isStreamer && (clips.length > 0 || clipsTotal > 0 || clipsReady > 0)
   const failedMsg =
     error?.includes('heavy traffic')
       ? `${error} The upstream model was overloaded (503). Use Retry to re-queue with backoff.`
@@ -270,7 +301,19 @@ export function ProjectClipsView({
               fromLink={fromLink}
             />
           ) : null}
-          {processing && <ClipGridSkeleton />}
+          {showProgressiveClips ? (
+            <ProgressiveClipResults
+              projectId={projectId}
+              clips={clips}
+              clipsTotal={clipsTotal}
+              clipsReady={clipsReady}
+              etaSec={progressEtaSec}
+              stage={progressStage}
+              onDownload={(id) => void onDownload(id)}
+            />
+          ) : processing ? (
+            <ClipGridSkeleton />
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-4">

@@ -36,6 +36,8 @@ export async function applyWorkerJobProgress(input: {
   etaSeconds?: number
   chunkDone?: number
   chunkTotal?: number
+  clipsReady?: number
+  clipsTotal?: number
   transcriptionEngine?: 'deepgram' | 'local_whisper'
   transcriptionFallbackReason?: string
 }) {
@@ -78,6 +80,8 @@ export async function applyWorkerJobProgress(input: {
     (input.etaSeconds !== undefined ||
       input.chunkDone !== undefined ||
       input.chunkTotal !== undefined ||
+      input.clipsReady !== undefined ||
+      input.clipsTotal !== undefined ||
       input.transcriptionEngine !== undefined ||
       input.transcriptionFallbackReason !== undefined)
 
@@ -100,6 +104,8 @@ export async function applyWorkerJobProgress(input: {
         ...(input.etaSeconds !== undefined ? { etaSeconds: input.etaSeconds } : {}),
         ...(input.chunkDone !== undefined ? { chunkDone: input.chunkDone } : {}),
         ...(input.chunkTotal !== undefined ? { chunkTotal: input.chunkTotal } : {}),
+        ...(input.clipsReady !== undefined ? { clipsReady: input.clipsReady } : {}),
+        ...(input.clipsTotal !== undefined ? { clipsTotal: input.clipsTotal } : {}),
         updatedAt: new Date().toISOString(),
       },
     }
@@ -163,6 +169,23 @@ export async function applyWorkerJobProgress(input: {
         if (input.progress !== undefined) t2vDraftPatch.progress = input.progress
       }
     }
+  }
+
+  if (
+    input.clipsReady !== undefined ||
+    input.clipsTotal !== undefined ||
+    input.progress !== undefined ||
+    input.stage !== undefined
+  ) {
+    console.info('[clipper:progress]', {
+      projectId: input.projectId,
+      jobId: input.jobId,
+      stage: input.stage,
+      progress: input.progress,
+      clipsReady: input.clipsReady,
+      clipsTotal: input.clipsTotal,
+      etaSeconds: input.etaSeconds,
+    })
   }
 
   await prisma.$transaction([
