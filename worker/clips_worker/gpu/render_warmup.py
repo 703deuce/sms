@@ -19,13 +19,14 @@ def modal_keep_warm_sec() -> float:
 def warm_modal_renderer_if_needed(conn) -> None:
     from clips_worker.gpu_encode import render_provider_enabled
 
+    global _warm_until_mono
+
     if not render_provider_enabled():
         return
     now = time.monotonic()
     with _warm_lock:
         if now < _warm_until_mono:
             return
-        _warm_until_mono = now + modal_keep_warm_sec()
     t0 = time.perf_counter()
     try:
         import modal
@@ -41,6 +42,8 @@ def warm_modal_renderer_if_needed(conn) -> None:
             "coldStart": bool(raw.get("cold_start")),
         }
         print(f"[clipper:gpu_render] {json.dumps(payload)}", flush=True)
+        with _warm_lock:
+            _warm_until_mono = time.monotonic() + modal_keep_warm_sec()
     except Exception as exc:
         print(
             f"[clipper:gpu_render] {json.dumps({'event': 'warmup_failed', 'provider': 'modal', 'error': str(exc)[:200]})}",
