@@ -9,12 +9,14 @@ from mediapipe.tasks.python import vision, BaseOptions
 HERE = os.path.dirname(os.path.abspath(__file__))
 INP, OUT = sys.argv[1], sys.argv[2]
 E = lambda k, d: float(os.environ.get(k, d))
-if int(os.environ.get("MULTIPERSON", "0")):
+if os.environ.get("REFRAME_V", "").strip() == "2":
     try:
         from multiperson_pipeline import SinglePersonFallback, run as multiperson_run
 
         multiperson_run(INP, OUT)
         sys.exit(0)
+    except ImportError as exc:
+        print(f"WARN multiperson unavailable (ImportError): {exc}", file=sys.stderr)
     except SinglePersonFallback:
         pass
     except Exception as exc:

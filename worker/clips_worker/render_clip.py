@@ -128,6 +128,11 @@ def ffmpeg_cut_or_copy(src: Path, dest: Path, start_ms: int, end_ms: int) -> Non
 AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "locked_off")
 
 
+def multiperson_reframe_enabled() -> bool:
+    """v3 multiperson pipeline is opt-in only (REFRAME_V=2). Default: legacy speakercrop."""
+    return os.environ.get("REFRAME_V", "").strip() == "2"
+
+
 def layout_env(layout: str) -> dict[str, str]:
     layout = (layout or "speaker_follow").strip()
     env = {
@@ -142,7 +147,6 @@ def layout_env(layout: str) -> dict[str, str]:
         env["FORCE_SPLIT"] = "1"
         env["LAYOUT_MODE"] = "split"
         env["LAYOUT_STYLE"] = "split"
-        env["MULTIPERSON"] = "1"
     elif layout == "fill":
         env["SPLIT"] = "0"
         env["LAYOUT_MODE"] = "fill"
@@ -155,12 +159,10 @@ def layout_env(layout: str) -> dict[str, str]:
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = layout
         env["LAYOUT_STYLE"] = layout
-        env["MULTIPERSON"] = "1"
     elif layout == "speaker_follow":
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = "speaker_follow"
         env["LAYOUT_STYLE"] = "speaker_follow"
-        env["MULTIPERSON"] = "1"
     else:
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = "speaker_follow"
