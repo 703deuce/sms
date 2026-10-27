@@ -45,6 +45,7 @@ import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
+import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 
 function isEditableTarget(t: EventTarget | null) {
   if (!t || !(t instanceof HTMLElement)) return false
@@ -153,10 +154,12 @@ export function EditorShell({
   const studioGen = useGeneration(studioGenId)
   const musicGenId = edits.audio?.music?.generationId ?? null
   const musicGen = useGeneration(musicGenId)
+  const aiExtras = clipEditorAiExtrasEnabled()
   const { dubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
     clipId,
     edits,
     editorWords,
+    { enabled: aiExtras },
   )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const outDur = outputDurationFromEdits(edits)

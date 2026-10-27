@@ -16,19 +16,30 @@ type DubRow = {
   words: DubWordRow[] | null
 }
 
-export function useDubPreview(clipId: string, edits: ClipEditsV2, sourceWords: SourceWord[]) {
+export function useDubPreview(
+  clipId: string,
+  edits: ClipEditsV2,
+  sourceWords: SourceWord[],
+  opts?: { enabled?: boolean },
+) {
+  const enabled = opts?.enabled ?? true
   const [dubs, setDubs] = useState<DubRow[]>([])
 
   const refresh = useCallback(async () => {
+    if (!enabled) return
     const data = await clipsFetch<{ items: DubRow[] }>(`/api/clips/clips/${clipId}/dubs`)
     setDubs(data.items)
-  }, [clipId])
+  }, [clipId, enabled])
 
   useEffect(() => {
+    if (!enabled) {
+      setDubs([])
+      return
+    }
     void refresh().catch(() => {})
     const t = setInterval(() => void refresh().catch(() => {}), 10_000)
     return () => clearInterval(t)
-  }, [refresh])
+  }, [refresh, enabled])
 
   const track = parseAudioTrack(edits.audioTrack)
   const activeDub =

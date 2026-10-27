@@ -84,6 +84,9 @@ def log_picker_config() -> None:
 
 
 def mark_generation_failed(conn, job: dict, message: str) -> None:
+    from clips_worker.user_errors import user_facing_job_error
+
+    user_msg = user_facing_job_error(message)
     payload = job.get("payload") or {}
     if isinstance(payload, str):
         payload = json.loads(payload)
@@ -92,12 +95,12 @@ def mark_generation_failed(conn, job: dict, message: str) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 'UPDATE ai_generations SET status=%s, error=%s, "updatedAt"=NOW() WHERE id=%s',
-                ("FAILED", message[:4000], generation_id),
+                ("FAILED", user_msg[:4000], generation_id),
             )
     with conn.cursor() as cur:
         cur.execute(
             'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
-            ("FAILED", message[:4000], job["id"]),
+            ("FAILED", user_msg[:4000], job["id"]),
         )
     if job.get("type") == "T2V_ASSEMBLE":
         if "Canceled" not in message and message.strip() != "job_canceled":
@@ -105,7 +108,7 @@ def mark_generation_failed(conn, job: dict, message: str) -> None:
 
             mark_t2v_assemble_failed(conn, job, message)
     conn.commit()
-    post_progress_terminal(job["id"], {"jobStatus": "FAILED", "error": message[:500]})
+    post_progress_terminal(job["id"], {"jobStatus": "FAILED", "error": user_msg})
 
 
 def count_queued_jobs(conn) -> int:

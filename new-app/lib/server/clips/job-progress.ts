@@ -2,6 +2,7 @@ import type { ClipProjectStatus } from '@prisma/client'
 import { mergeWatchdogSnap, type ClipperWatchdogSnap } from '@/lib/clips/clipper-watchdog'
 import { getPrisma } from '@/lib/server/db'
 import { shouldTouchLockedAt } from '@/lib/server/clips/jobs'
+import { sanitizeClipProjectErrorForUser } from '@/lib/clips/user-facing-job-error'
 
 function isCanceledTerminal(storedJobStatus: string, jobError?: string | null): boolean {
   if (storedJobStatus === 'CANCELED') return true
@@ -72,7 +73,9 @@ export async function applyWorkerJobProgress(input: {
     if (input.jobStatus === 'DONE' && projectStage === 'done') projectStage = 'ready'
     if (projectStage !== undefined) projectPatch.stage = projectStage
     if (input.progress !== undefined) projectPatch.progress = input.progress
-    if (input.error !== undefined) projectPatch.error = input.error
+    if (input.error !== undefined) {
+      projectPatch.error = sanitizeClipProjectErrorForUser(input.error)
+    }
     if (input.transcriptWords !== undefined) projectPatch.transcriptWords = input.transcriptWords
   }
 

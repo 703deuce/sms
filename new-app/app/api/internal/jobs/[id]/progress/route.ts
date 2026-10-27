@@ -58,6 +58,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       await getClipStorage().putJson(job.project.transcriptKey, body.transcriptWords)
     }
 
+    if (body.error?.trim()) {
+      console.error('[clipper:job] worker_reported_error', {
+        jobId,
+        projectId: job.projectId,
+        error: body.error.slice(0, 2000),
+      })
+    }
+
     await applyWorkerJobProgress({
       jobId,
       jobType: job.type,

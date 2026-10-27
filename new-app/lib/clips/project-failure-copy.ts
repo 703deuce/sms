@@ -1,3 +1,8 @@
+import {
+  CLIP_PROCESSING_FAILED_USER_MESSAGE,
+  isInternalProcessingError,
+} from '@/lib/clips/user-facing-job-error'
+
 /** User-facing copy for clip project failures and soft-empty outcomes. */
 
 export type ClipProjectFailureKind =
@@ -19,14 +24,21 @@ function norm(s: string | null | undefined) {
   return (s ?? '').toLowerCase()
 }
 
+function userSafeError(error: string | null | undefined): string | null {
+  if (!error?.trim()) return null
+  if (isInternalProcessingError(error)) return CLIP_PROCESSING_FAILED_USER_MESSAGE
+  return error.trim()
+}
+
 export function describeClipProjectFailure(input: {
   status: string
   error?: string | null
   stage?: string | null
   clipCount?: number
 }): ClipProjectFailureCopy | null {
-  const { status, error, stage, clipCount = 0 } = input
-  const err = norm(error)
+  const { status, stage, clipCount = 0 } = input
+  const safeError = userSafeError(input.error)
+  const err = norm(safeError)
   const stg = norm(stage)
 
   if (status === 'READY' && clipCount === 0) {
@@ -35,16 +47,16 @@ export function describeClipProjectFailure(input: {
         kind: 'no_clips',
         title: 'No clips found',
         message:
-          error?.trim() ||
+          safeError ||
           'We could not find complete, self-contained moments in this segment. Try a longer clip, different range, or Talking mode.',
         retryLabel: 'Adjust and retry',
       }
     }
-    if (error?.trim()) {
+    if (safeError) {
       return {
         kind: 'ready_empty',
         title: 'No clips to show',
-        message: error.trim(),
+        message: safeError,
         retryLabel: 'Retry processing',
       }
     }
@@ -62,7 +74,7 @@ export function describeClipProjectFailure(input: {
       return {
         kind: 'timeout',
         title: 'Processing timed out',
-        message: error?.trim() || 'Processing stopped before finishing. Retry to resume from the last completed step.',
+        message: safeError || 'Processing stopped before finishing. Retry to resume from the last completed step.',
         retryLabel: 'Retry processing',
       }
     }
@@ -74,7 +86,7 @@ export function describeClipProjectFailure(input: {
       kind: 'upload',
       title: 'Upload failed',
       message:
-        error?.trim() ||
+        safeError ||
         'Your video could not be uploaded completely. Check your connection and try uploading again.',
       retryLabel: 'Upload again',
     }
@@ -91,7 +103,7 @@ export function describeClipProjectFailure(input: {
       kind: 'transcribe',
       title: 'Transcription failed',
       message:
-        error?.trim() ||
+        safeError ||
         'We could not transcribe this video. Retry processing or upload a file with clearer speech.',
       retryLabel: 'Retry processing',
     }
@@ -102,7 +114,7 @@ export function describeClipProjectFailure(input: {
       kind: 'timeout',
       title: 'Processing timed out',
       message:
-        error?.trim() ||
+        safeError ||
         'The worker stopped responding before your project finished. Retry processing to continue.',
       retryLabel: 'Retry processing',
     }
@@ -112,7 +124,7 @@ export function describeClipProjectFailure(input: {
     return {
       kind: 'no_clips',
       title: 'No clips found',
-      message: error?.trim() || 'No suitable moments were found in this video.',
+      message: safeError || 'No suitable moments were found in this video.',
       retryLabel: 'Retry processing',
     }
   }
@@ -120,7 +132,7 @@ export function describeClipProjectFailure(input: {
   return {
     kind: 'processing',
     title: 'Processing failed',
-    message: error?.trim() || 'Something went wrong while processing this project.',
+    message: safeError || CLIP_PROCESSING_FAILED_USER_MESSAGE,
     retryLabel: 'Retry processing',
   }
 }

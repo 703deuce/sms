@@ -55,8 +55,25 @@ def insert_clips_batch(conn, rows: list[dict]) -> int:
         with conn.cursor() as cur:
             for row in rows:
                 seg_key = row.get("segmentKey") or row_segment_key(row)
-                cur.execute(
-                    """
+                params = (
+                    row["id"],
+                    row["projectId"],
+                    row["workspaceId"],
+                    row["title"],
+                    row.get("reason"),
+                    row["startMs"],
+                    row["endMs"],
+                    seg_key,
+                    row["score"],
+                    json.dumps(row.get("scores") or {}),
+                    row.get("previewKey"),
+                    row.get("posterKey"),
+                    row.get("wordsKey"),
+                    row.get("cropKey"),
+                    json.dumps(row.get("edits") or {}),
+                    json.dumps(row.get("aiMeta") or {}),
+                )
+                insert_sql = """
                     INSERT INTO clips (
                       id, "projectId", "workspaceId", title, reason,
                       "startMs", "endMs", "segmentKey", score, scores,
@@ -65,27 +82,19 @@ def insert_clips_batch(conn, rows: list[dict]) -> int:
                     ) VALUES (
                       %s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
                     )
-                    ON CONFLICT ("projectId", "segmentKey") WHERE "deletedAt" IS NULL DO NOTHING
+                """
+                if seg_key is None:
+                    cur.execute(insert_sql, params)
+                else:
+                    cur.execute(
+                        insert_sql
+                        + """
+                    ON CONFLICT ("projectId", "segmentKey")
+                    WHERE "deletedAt" IS NULL AND "segmentKey" IS NOT NULL
+                    DO NOTHING
                     """,
-                    (
-                        row["id"],
-                        row["projectId"],
-                        row["workspaceId"],
-                        row["title"],
-                        row.get("reason"),
-                        row["startMs"],
-                        row["endMs"],
-                        seg_key,
-                        row["score"],
-                        json.dumps(row.get("scores") or {}),
-                        row.get("previewKey"),
-                        row.get("posterKey"),
-                        row.get("wordsKey"),
-                        row.get("cropKey"),
-                        json.dumps(row.get("edits") or {}),
-                        json.dumps(row.get("aiMeta") or {}),
-                    ),
-                )
+                        params,
+                    )
                 if cur.rowcount:
                     inserted += 1
         conn.commit()
