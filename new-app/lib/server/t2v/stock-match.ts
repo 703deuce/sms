@@ -199,6 +199,31 @@ export function trimWindow(clipS: number, needS: number): { srcInMs: number; loo
   return { srcInMs: Math.round(start * 1000), loops: false }
 }
 
+/** Single-scene search for Replace-media drawer (GET …/scenes/[id]/media). */
+export async function searchT2vStock(input: {
+  query: string
+  aspect: T2vAspect
+  sources: Array<'pexels' | 'pixabay'>
+  page: number
+  keywords?: string[]
+  needMs?: number
+}): Promise<StockCandidate[]> {
+  const kw = extractSceneKeywords(input.query, input.keywords ?? [])
+  const batches = await Promise.allSettled([
+    input.sources.includes('pexels') ? pexels(input.query, input.aspect, input.page) : Promise.resolve([]),
+    input.sources.includes('pixabay') ? pixabay(input.query, input.aspect, input.page) : Promise.resolve([]),
+  ])
+  const pool: StockCandidate[] = []
+  for (const b of batches) if (b.status === 'fulfilled') pool.push(...b.value)
+  const needS = (input.needMs ?? 5000) / 1000
+  return pool
+    .map((c) => ({
+      ...c,
+      score: scoreCandidate(c, { keywords: kw, aspect: input.aspect, needS }),
+    }))
+    .sort((a, b) => b.score - a.score)
+}
+
 export function toSceneMedia(c: StockCandidate, assetId: string, needMs: number, query: string): T2vSceneMedia {
   const { srcInMs } = trimWindow(c.durationS, needMs / 1000)
   return {

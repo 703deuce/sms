@@ -473,12 +473,13 @@ Agree on **function signatures** in this spec and `docs/t2v/code/`; do not fork 
 
 | Owner | Milestones / scope | Live paths (when landed) |
 |---|---|---|
-| **Agent A (web + deploys)** | M0 schema/plumbing; **M2–M3, M4 storyboard UI**, M5–M8; all Coolify/web + worker **deploys** | `new-app/app/api/t2v/*`, `components/t2v/*`, `lib/server/t2v/drafts.ts`, `draftToComposition`, composition export fixes |
-| **Agent B (worker/backend only)** | **M1** worker TTS (`worker/clips_worker/t2v/elevenlabs_tts.py`, `tts_alignment.py`, cache DB, ElevenLabs smoke); **M4** stock backend (`stock-match.ts`, `stock-asset.ts`, `pexels.ts`, ranking/dedupe/trim) | Worker assemble TTS; stock search **server** modules only |
+| **Agent A (web + deploys)** | M0; **M2–M3**; **M4 storyboard UI** + routes that call B’s stock libs; **M5–M8 UI/routes** (not worker render); all **deploys** | `app/api/t2v/*`, `components/t2v/*`, `drafts.ts`, `draftToComposition`, `script_composition_render` **music volume** (web export path only where applicable) |
+| **Agent B (worker/backend)** | **M1** worker TTS deduped with web `#783` / `elevenlabs-tts.ts` + `T2vVoiceClip` cache (one hash/alignment format — **no third TTS path**); **M4** stock (`#784` `stock-match.ts`, `stock-asset.ts`, `pexels.ts`); **M5 worker render** — music ducking, titles/LT (`titles_ass.py`), xfade transitions, brand intro/outro in **T2V assemble** | `worker/clips_worker/t2v/*`, `assemble.py`, `job.py` |
 
-**Contracts (call these names; stub in tests only until B lands):**
-- **TTS (preview + cache):** `ttsWithTimestamps()`, `ttsHash()`, `getOrSynthesizeVoiceClip()` — `docs/t2v/code/new-app/lib/server/ai/elevenlabs-tts.ts` + `voice-cache.ts`; worker mirror `tts_with_timestamps()` in `elevenlabs_tts.py`.
-- **Stock search (M4):** `searchT2vStock({ query, aspect, providers, type, page })` → ranked hits; `materializeT2vStockHit(hit)` → `{ storageKey, … }` — `docs/t2v/code/new-app/lib/server/t2v/stock-match.ts` + `stock-asset.ts`. UI calls `GET …/scenes/[id]/media` only.
+**Contracts (do not fork):**
+- **TTS:** Web preview only via `lib/server/ai/elevenlabs-tts.ts` + `lib/server/t2v/voice-cache.ts` (`ttsHash` computed in TS; worker reads cache / calls `elevenlabs_tts.py` with same models + fallback). Scene route: `POST …/scenes/[sceneId]/voice`.
+- **Stock:** `matchScenes`, `searchT2vStock`, `ensureT2vStockAsset`, `toSceneMedia` in `lib/server/t2v/stock-match.ts` + `stock-asset.ts`. Routes: `POST …/storyboard`, `GET|POST …/scenes/[sceneId]/media` (Agent A wires; Agent B owns ranking/storage impl).
+- **M5 render (B):** ducking, burned titles, transitions, brand bookends in worker assemble — Agent A ships P5–P10 UI + composition document fields only.
 
 **Process:** `git pull` before every push (clipper + T2V PRs merge via webhook). Agent A does **not** re-trigger deploy if a merge just fired; one deploy per pushed SHA.
 
@@ -494,7 +495,7 @@ Canvas: core text-to-video ≈ 46 effort-days left, ≈ 53 with 15 % QA. This pl
 | M2 | P1 Create, P2 Settings, P3a Script review, `/script`, `/extract` url + audio | Idea → script in < 20 s; script mode keeps narration verbatim; URL to a blog post produces a 60 s script; autosave + 409 handling | 6 |
 | M3 | T2V_ASSEMBLE end-to-end + composition write + editor handoff (§4) + id-stability test | 1-min prompt video builds; opens in `/script` with words and scenes; delete a word in scene 2 → re-voice scene 1 → rebuild → deletion survives; export 1080p works | 6 |
 | M4 | P3b Storyboard + P4 Replace media + stock coverage (Pixabay video+photo; Pexels when keyed), focal crop, motion, lock, shuffle | 100 % scenes covered on 5 test prompts; no repeated clip inside a video; vertical prompt picks portrait-friendly clips; crop focal visible in build | 9 |
-| M5 | P5 Voice, P6 Music (library seed + generate), P7 Captions, P8 Titles/LT, P9 Styles, P10 Brand (+ brand_concat in composition render, music volume read) , transitions popover, client preview player | Voice switch re-voices all; music ducks (export loudness check); titles render as designed; preview matches build within ~1 frame of scene boundaries | 8 |
+| M5 | **A:** P5–P10 UI, routes, client preview player. **B:** worker ducking, titles/LT burn, xfade, brand intro/outro in T2V render. **A:** composition export music `volume` in `script_composition_render.py` where not covered by assemble | Voice switch re-voices all; music ducks (export loudness check); titles render as designed; preview matches build within ~1 frame of scene boundaries | 8 |
 | M6 | P11 Chat tools, re-voice UX + fineEditedAt warnings, undo/redo, P12 progress + cancel | "Make scene 3 shorter and use a British female voice" executes 2 tool calls with confirm; stale/rebuild flow works | 6 |
 | M7 | Credits/ledger, P16/P17 list + entry, P19 exports, P20 voices/usage, P13 polish | Ledger rows per action; T2V projects visible/filterable; composition renders in `/app/exports` | 4 |
 | M8 | QA: browser test script per page (states in §3), 10 test videos 1–3 min (idea, script, URL, audio; 16:9/9:16/1:1), perf check | All §3 states reachable; no console errors; 3-min 1080p build + export < 3 min wall on prod worker | 5 |
