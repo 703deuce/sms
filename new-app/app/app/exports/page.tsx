@@ -1,5 +1,5 @@
 import { Page, PageHeader } from '@/components/app/page-primitives'
-import { ExportsList } from '@/app/app/clips/exports/exports-list'
+import { ExportsList } from '@/app/app/clips/(drive)/exports/exports-list'
 import { parseExportStatusFilter } from '@/lib/server/clips/export-rows'
 import { listClipRenders } from '@/lib/server/clips/renders'
 import { resolveWorkspaceId } from '@/lib/server/workspace'

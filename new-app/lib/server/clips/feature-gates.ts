@@ -11,3 +11,8 @@ export function isRecordingFeatureEnabled(): boolean {
   if (process.env.FEATURE_SCRIPT_RECORDING === '0') return false
   return isRecordingLiveKitConfigured()
 }
+
+/** Social publish (TikTok / Shorts / Reels) — off until worker job + OAuth ship. */
+export function isCompositionSocialPublishEnabled(): boolean {
+  return process.env.FEATURE_COMPOSITION_SOCIAL_PUBLISH === '1'
+}

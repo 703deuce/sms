@@ -15,6 +15,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
       quality: body.quality ?? 'recommended',
       burnCaptions: body.burnCaptions ?? true,
       includeSubtitleTrack: body.includeSubtitleTrack ?? false,
+      includeMarkersAsChapters: body.includeMarkersAsChapters ?? true,
       audioFormat: body.audioFormat === 'mp3' ? 'mp3' : 'wav',
     }
     const result = await enqueueCompositionExport(workspaceId, compositionId, settings)

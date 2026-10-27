@@ -9,7 +9,7 @@ const THUMB_TTL = 3600
 
 export async function listClipProjectsForPage(
   workspaceId: string,
-  opts: { q?: string; status?: string; limit?: number },
+  opts: { q?: string; status?: string; limit?: number; trash?: boolean; folderId?: string | null },
 ): Promise<ClipProjectListItem[]> {
   const projects = await listClipProjects(workspaceId, opts)
   if (projects.length === 0) return []
@@ -22,6 +22,24 @@ export async function listClipProjectsForPage(
     _count: { _all: true },
   })
   const countByProject = new Map(counts.map((c) => [c.projectId, c._count._all]))
+
+  const ownerIds = [...new Set(projects.map((p) => p.createdById).filter(Boolean))]
+  const owners = ownerIds.length
+    ? await prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } })
+    : []
+  const ownerNameById = new Map(owners.map((u) => [u.id, u.name]))
+
+  const publishes = await prisma.scriptCompositionPublish.findMany({
+    where: { workspaceId, composition: { projectId: { in: ids } } },
+    select: { publishedAt: true, composition: { select: { projectId: true } } },
+  })
+  const publishedProjectIds = new Set(publishes.map((pub) => pub.composition.projectId))
+  const publishedAtByProject = new Map<string, Date>()
+  for (const pub of publishes) {
+    const pid = pub.composition.projectId
+    const prev = publishedAtByProject.get(pid)
+    if (!prev || pub.publishedAt > prev) publishedAtByProject.set(pid, pub.publishedAt)
+  }
 
   const storage = getClipStorage()
   return Promise.all(
@@ -51,6 +69,9 @@ export async function listClipProjectsForPage(
         clipCount: countByProject.get(p.id) ?? 0,
         durationMs: Math.max(0, p.rangeEndMs - p.rangeStartMs),
         thumbUrl,
+        ownerName: ownerNameById.get(p.createdById) ?? null,
+        isPublished: publishedProjectIds.has(p.id),
+        publishedAt: publishedAtByProject.get(p.id)?.toISOString() ?? null,
       }
     }),
   )

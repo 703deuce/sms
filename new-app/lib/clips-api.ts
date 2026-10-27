@@ -50,6 +50,20 @@ export function createProjectFromLink(body: { sourceUrl: string; title?: string;
   })
 }
 
+export function createProjectFromPrompt(body: { prompt: string; title?: string; settings?: unknown }) {
+  return clipsFetch<{ id: string; title: string; status: string }>('/api/clips/projects', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function attachMediaToProject(projectId: string, body: { uploadId: string } | { sourceUrl: string }) {
+  return clipsFetch<{ id: string; title: string; status: string }>(`/api/clips/projects/${projectId}/media`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export function listProjects(params?: { q?: string; status?: string }) {
   const qs = new URLSearchParams()
   if (params?.q) qs.set('q', params.q)

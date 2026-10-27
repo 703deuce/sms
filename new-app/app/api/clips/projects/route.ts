@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
-import { createClipProject, createClipProjectFromImportUrl, listClipProjects } from '@/lib/server/clips/projects'
+import {
+  createClipProject,
+  createClipProjectFromImportUrl,
+  createClipProjectFromPrompt,
+  listClipProjects,
+} from '@/lib/server/clips/projects'
 import { serializeProject } from '@/lib/server/clips/serialize'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -32,6 +37,11 @@ const createSchema = z.union([
     title: z.string().optional(),
     settings: z.unknown().optional(),
   }),
+  z.object({
+    prompt: z.string().min(1).max(2000),
+    title: z.string().optional(),
+    settings: z.unknown().optional(),
+  }),
 ])
 
 export async function POST(request: Request) {
@@ -41,9 +51,11 @@ export async function POST(request: Request) {
     const workspaceId = await resolveWorkspaceId()
     const body = createSchema.parse(await request.json())
     const project =
-      'sourceUrl' in body
-        ? await createClipProjectFromImportUrl(workspaceId, body)
-        : await createClipProject(workspaceId, body)
+      'prompt' in body
+        ? await createClipProjectFromPrompt(workspaceId, body)
+        : 'sourceUrl' in body
+          ? await createClipProjectFromImportUrl(workspaceId, body)
+          : await createClipProject(workspaceId, body)
     return NextResponse.json({ data: serializeProject(project) })
   } catch (err) {
     return jsonError(err, 400)

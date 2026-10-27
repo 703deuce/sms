@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
-import { applyCompositionOpBatch, listCompositionOpsSince } from '@/lib/server/clips/script-composition'
+import {
+  applyCompositionOpBatch,
+  listCompositionOpsSince,
+  type OpBatchInput,
+} from '@/lib/server/clips/script-composition'
+import type { ScriptCompositionOp } from '@/lib/clips/script-edl/ops'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const opSchema = z.discriminatedUnion('type', [
@@ -128,14 +133,24 @@ const opSchema = z.discriminatedUnion('type', [
       ]),
     ),
   }),
+  z.object({ type: z.literal('patch_audio'), audio: z.record(z.string(), z.unknown()).nullable() }),
   z.object({
     type: z.literal('add_marker'),
+    id: z.string().min(1).optional(),
     outMs: z.number().min(0),
-    markerId: z.string().min(8).optional(),
-    label: z.string().max(120).optional(),
+    label: z.string().max(200).optional(),
+    exportAsChapter: z.boolean().optional(),
   }),
-  z.object({ type: z.literal('remove_marker'), markerId: z.string().min(8) }),
-  z.object({ type: z.literal('patch_audio'), audio: z.record(z.string(), z.unknown()).nullable() }),
+  z.object({
+    type: z.literal('update_marker'),
+    id: z.string().min(1),
+    patch: z.object({
+      label: z.string().max(200).optional(),
+      outMs: z.number().min(0).optional(),
+      exportAsChapter: z.boolean().optional(),
+    }),
+  }),
+  z.object({ type: z.literal('delete_marker'), id: z.string().min(1) }),
 ])
 
 const bodySchema = z.object({
@@ -174,7 +189,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
     const workspaceId = await resolveWorkspaceId()
     const json = await request.json()
     const body = bodySchema.parse(json)
-    const result = await applyCompositionOpBatch(workspaceId, compositionId, body)
+    const batch: OpBatchInput = {
+      baseRevision: body.baseRevision,
+      ops: body.ops.map((item) => ({
+        id: item.id,
+        op: item.op as ScriptCompositionOp,
+      })),
+    }
+    const result = await applyCompositionOpBatch(workspaceId, compositionId, batch)
     if (!result.ok) {
       if (result.code === 'NOT_FOUND') return NextResponse.json({ error: 'Not found' }, { status: 404 })
       if (result.code === 'STALE_REVISION') {

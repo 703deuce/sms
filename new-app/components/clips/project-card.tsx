@@ -10,7 +10,17 @@ function isProcessing(status: string) {
   return status !== 'READY' && status !== 'FAILED' && status !== 'CANCELED' && status !== 'DRAFT'
 }
 
-export function ProjectCard({ project }: { project: ClipProjectListItem }) {
+export function ProjectCard({
+  project,
+  selected,
+  onToggleSelect,
+  selectionMode,
+}: {
+  project: ClipProjectListItem
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
+  selectionMode?: boolean
+}) {
   const processing = isProcessing(project.status)
   const statusUi = CLIP_JOB_STATE[project.status as ClipProjectStatusUi]
   const stageLabel = project.stage?.replace(/_/g, ' ') || 'Processing'
@@ -18,13 +28,28 @@ export function ProjectCard({ project }: { project: ClipProjectListItem }) {
   const { clipCount, thumbUrl, durationMs } = project
 
   return (
-    <Link
-      href={`/app/clips/${project.id}`}
-      data-testid="project-card"
+    <div
       className={cn(
-        'group block overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group relative overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md',
+        selected && 'ring-2 ring-primary',
       )}
     >
+      {(selectionMode || onToggleSelect) && (
+        <div className="absolute left-2 top-2 z-20">
+          <input
+            type="checkbox"
+            checked={Boolean(selected)}
+            onChange={() => onToggleSelect?.(project.id)}
+            aria-label={`Select ${project.title}`}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+      <Link
+        href={`/app/clips/${project.id}`}
+        data-testid="project-card"
+        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
       <div className="relative aspect-video bg-muted">
         {thumbUrl ? (
           <img src={thumbUrl} alt="" className="size-full object-cover" />
@@ -66,6 +91,7 @@ export function ProjectCard({ project }: { project: ClipProjectListItem }) {
         </div>
       </div>
     </Link>
+    </div>
   )
 }
 
@@ -86,12 +112,28 @@ export function NewProjectTile() {
   )
 }
 
-export function ProjectGrid({ projects }: { projects: ClipProjectListItem[] }) {
+export function ProjectGrid({
+  projects,
+  selectedIds,
+  onToggleSelect,
+  selectionMode,
+}: {
+  projects: ClipProjectListItem[]
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
+  selectionMode?: boolean
+}) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="project-grid">
       <NewProjectTile />
       {projects.map((p) => (
-        <ProjectCard key={p.id} project={p} />
+        <ProjectCard
+          key={p.id}
+          project={p}
+          selected={selectedIds?.has(p.id)}
+          onToggleSelect={onToggleSelect}
+          selectionMode={selectionMode}
+        />
       ))}
     </div>
   )
