@@ -80,6 +80,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
   const deletedSet = useMemo(() => new Set(document.deletedWordIds), [document.deletedWordIds])
+  const fillerCount = useMemo(
+    () => data.editorWords.filter((w) => w.isFiller && !deletedSet.has(w.id)).length,
+    [data.editorWords, deletedSet],
+  )
 
   const orderedWords = useMemo(() => {
     const order = document.wordOrder ?? [...document.keptWordIds, ...document.deletedWordIds]
