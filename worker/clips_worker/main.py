@@ -53,11 +53,10 @@ def db_host_label(dsn: str) -> str:
 def log_models() -> None:
     yunet = V3 / "yunet.onnx"
     land = V3 / "face_landmarker.task"
-    sface = V3 / "face_recognition_sface_2021dec.onnx"
     fonts = V3 / "fonts" / "Poppins-ExtraBold.ttf"
     log(
         f"models yunet={yunet.exists()} face_landmarker={land.exists()} "
-        f"sface={sface.exists()} poppins={fonts.exists()} v3_dir={V3.is_dir()}"
+        f"poppins={fonts.exists()} v3_dir={V3.is_dir()}"
     )
 
 
@@ -597,7 +596,12 @@ def main() -> None:
                                     )
                                 conn.commit()
                         mark_generation_failed(conn, job, msg)
-                    elif (job.get("type") or "").startswith("STREAM_"):
+                    elif (job.get("type") or "") in (
+                        "STREAM_IMPORT",
+                        "STREAM_ANALYZE",
+                        "STREAM_RENDER",
+                        "STREAM_AUTOPULL",
+                    ):
                         payload = job.get("payload") or {}
                         if isinstance(payload, str):
                             payload = json.loads(payload)
