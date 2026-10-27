@@ -41,6 +41,24 @@ async function loadProjectTranscript(
   return []
 }
 
+export async function getClipEditorWords(workspaceId: string, clipId: string) {
+  const clip = await getClipForWorkspace(workspaceId, clipId)
+  if (!clip) return null
+  const prisma = getPrisma()
+  const project = await prisma.clipProject.findUnique({
+    where: { id: clip.projectId },
+    include: { upload: true },
+  })
+  if (!project) return null
+  const driverHint = clip.storageDriver ?? project.upload?.storageDriver ?? null
+  const storage = project.transcriptKey
+    ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
+    : getClipStorage(driverHint)
+  const projectTranscript = await loadProjectTranscript(storage, project)
+  const words = await resolveEditorWords(storage, workspaceId, clip, projectTranscript)
+  return { words, bounds: { clipStartMs: clip.startMs, clipEndMs: clip.endMs } }
+}
+
 export async function getClipEditorPayload(workspaceId: string, clipId: string) {
   const clip = await getClipForWorkspace(workspaceId, clipId)
   if (!clip) return null

@@ -162,6 +162,13 @@ export type ExportRenderRow = {
   downloadUrl: string | null
 }
 
+export function fetchClipEditorWords(clipId: string) {
+  return clipsFetch<{
+    words: import('@/lib/clips/source-words').SourceWord[]
+    bounds: { clipStartMs: number; clipEndMs: number }
+  }>(`/api/clips/clips/${clipId}/editor-words`)
+}
+
 export function getClipEditor(clipId: string) {
   return clipsFetch<{
     clip: {

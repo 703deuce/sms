@@ -32,6 +32,7 @@ function speakerOrder(visible: SourceWord[], shots: CropShot[]) {
 
 export function TranscriptPanel({
   words,
+  wordsLoading = false,
   shots,
   edits,
   onSeek,
@@ -45,6 +46,7 @@ export function TranscriptPanel({
   clipEndMs,
 }: {
   words: SourceWord[]
+  wordsLoading?: boolean
   clipStartMs?: number
   clipEndMs?: number
   shots: CropShot[]
@@ -217,7 +219,10 @@ export function TranscriptPanel({
   const cutCount = edits.cutRanges?.length ?? 0
 
   return (
-    <div className="flex flex-col gap-3 p-3">
+    <div className="flex flex-col gap-3 p-3" aria-busy={wordsLoading}>
+      {wordsLoading ? (
+        <p className="text-xs text-muted-foreground" role="status">Updating transcript for extended trim…</p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[140px] flex-1">
           <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />

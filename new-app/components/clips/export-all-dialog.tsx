@@ -3,6 +3,13 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { can } from '@/lib/billing/entitlements'
 import { exportProjectAllBatch } from '@/lib/clips-api'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
@@ -63,47 +70,64 @@ export function ExportAllDialog({
 
   return (
     <>
-      <Button size="sm" data-testid="export-all-button" disabled={busy} onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        data-testid="export-all-button"
+        disabled={busy}
+        onClick={() => setOpen(true)}
+      >
         {busy ? 'Exporting…' : 'Export all'}
       </Button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg border border-border bg-background p-4 shadow-lg">
-            <h3 className="text-sm font-semibold">Export all</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Up to 10 clips per batch.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {clipAspectRatios.map((a) => (
-                <Button key={a} size="sm" variant={aspect === a ? 'default' : 'outline'} onClick={() => setAspect(a)}>{a}</Button>
-              ))}
-            </div>
-            <div className="mt-2 flex gap-2">
-              {(['720p', '1080p'] as const).map((r) => (
-                <Button key={r} size="sm" variant={resolution === r ? 'default' : 'outline'} onClick={() => setResolution(r)}>{r}</Button>
-              ))}
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-xs font-medium">Clips</span>
-              <Button size="sm" variant="ghost" onClick={selectAll}>Select all</Button>
-            </div>
-            <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto text-xs">
-              {clips.slice(0, 10).map((c) => (
-                <li key={c.id}>
-                  <label className="flex cursor-pointer items-center gap-2">
-                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
-                    <span className="truncate">{c.title}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button size="sm" disabled={busy || selected.size === 0} onClick={() => void run()}>
-                {busy ? 'Starting…' : 'Start export'}
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (busy && !next) return
+          setOpen(next)
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Export all</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">Up to 10 clips per batch.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {clipAspectRatios.map((a) => (
+              <Button key={a} size="sm" variant={aspect === a ? 'default' : 'outline'} onClick={() => setAspect(a)}>
+                {a}
               </Button>
-            </div>
+            ))}
           </div>
-        </div>
-      )}
+          <div className="mt-2 flex gap-2">
+            {(['720p', '1080p'] as const).map((r) => (
+              <Button key={r} size="sm" variant={resolution === r ? 'default' : 'outline'} onClick={() => setResolution(r)}>
+                {r}
+              </Button>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs font-medium">Clips</span>
+            <Button size="sm" variant="ghost" onClick={selectAll}>Select all</Button>
+          </div>
+          <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto text-xs">
+            {clips.slice(0, 10).map((c) => (
+              <li key={c.id}>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
+                  <span className="truncate">{c.title}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <DialogFooter className="mt-4">
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={busy || selected.size === 0} onClick={() => void run()}>
+              {busy ? 'Starting…' : 'Start export'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

@@ -46,6 +46,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
+import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 
 function isEditableTarget(t: EventTarget | null) {
   if (!t || !(t instanceof HTMLElement)) return false
@@ -144,6 +145,8 @@ export function EditorShell({
     cutSectionAtSource,
   } = useEditorState(clipId, bounds, initialEdits)
 
+  const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
+
   const mergeBrollMedia = useCallback((rows: BrollMediaRow[]) => {
     setBrollMedia((prev) => {
       const map = new Map(prev.map((r) => [r.id, r]))
@@ -157,7 +160,7 @@ export function EditorShell({
   const { dubs, refreshDubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
     clipId,
     edits,
-    words,
+    editorWords,
   )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const outDur = outputDurationFromEdits(edits)
@@ -280,7 +283,7 @@ export function EditorShell({
     if (!sel || sel.startMs === sel.endMs) return
     const a = Math.min(sel.startMs, sel.endMs)
     const b = Math.max(sel.startMs, sel.endMs)
-    const selected = words.filter((w) => {
+    const selected = editorWords.filter((w) => {
       const s = w.s * 1000
       const e = w.e * 1000
       return e > a && s < b
@@ -290,7 +293,7 @@ export function EditorShell({
     const wb = selected[selected.length - 1]
     addCutRange([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
     sel.clear()
-  }, [addCutRange, words])
+  }, [addCutRange, editorWords])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -364,7 +367,8 @@ export function EditorShell({
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
         <EditorPanelErrorBoundary label="Script">
         <TranscriptPanel
-          words={words}
+          words={editorWords}
+          wordsLoading={wordsLoading}
           clipStartMs={bounds.clipStartMs}
           clipEndMs={bounds.clipEndMs}
           shots={cropShots}
@@ -529,7 +533,7 @@ export function EditorShell({
               videoUrl={videoUrl}
               posterUrl={posterUrl}
               edits={edits}
-              words={words}
+              words={editorWords}
               previewWords={previewWords}
               brandLogoUrl={brandLogoUrl}
               cropTrack={cropTrack}
@@ -588,7 +592,7 @@ export function EditorShell({
           <div className="min-w-0 overflow-x-auto">
             <Timeline
               edits={edits}
-              words={words}
+              words={editorWords}
               shots={cropShots}
               outputMs={outputMs}
               clipOutputDurationMs={outDur}

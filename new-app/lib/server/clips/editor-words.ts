@@ -1,6 +1,6 @@
 import type { ClipWord } from '@/lib/clips/edits'
-import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
-import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
+import { mergeClipWordsWithProjectTranscript } from '@/lib/clips/editor-words-merge'
+import { loadSourceWords, type SourceWord } from '@/lib/clips/source-words'
 import type { getClipStorage } from '@/lib/storage'
 
 export function normalizeTranscriptWord(raw: unknown, pos: number): ClipWord | null {
@@ -60,27 +60,6 @@ export function clipWordsToAbsolute(
   if (!looksRelative) return words
   const offsetSec = clipStartMs / 1000
   return words.map((w) => ({ ...w, s: w.s + offsetSec, e: w.e + offsetSec }))
-}
-
-/**
- * Merge clip words with project transcript for extend-trim (±8s). Clip words win on index overlap.
- */
-export function mergeClipWordsWithProjectTranscript(
-  clipWords: SourceWord[],
-  projectWords: SourceWord[],
-  clipStartMs: number,
-  clipEndMs: number,
-  extendMs = MAX_TRIM_EXTEND_MS,
-): SourceWord[] {
-  if (!projectWords.length) return clipWords
-  const lo = Math.max(0, clipStartMs - extendMs)
-  const hi = clipEndMs + extendMs
-  const fromProject = wordsInRange(projectWords, lo, hi)
-  if (!clipWords.length) return fromProject
-  const byIndex = new Map<number, SourceWord>()
-  for (const w of fromProject) byIndex.set(w.i, w)
-  for (const w of clipWords) byIndex.set(w.i, w)
-  return [...byIndex.values()].sort((a, b) => a.s - b.s || a.i - b.i)
 }
 
 /**

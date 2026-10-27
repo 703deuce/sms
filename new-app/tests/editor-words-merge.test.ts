@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  clipWordsToAbsolute,
-  mergeClipWordsWithProjectTranscript,
-} from '@/lib/server/clips/editor-words'
+import { mergeClipWordsWithProjectTranscript } from '@/lib/clips/editor-words-merge'
+import { clipWordsToAbsolute } from '@/lib/server/clips/editor-words'
 import { loadSourceWords } from '@/lib/clips/source-words'
 
 describe('mergeClipWordsWithProjectTranscript', () => {
