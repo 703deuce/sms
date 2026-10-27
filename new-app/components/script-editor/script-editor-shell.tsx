@@ -1082,12 +1082,21 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         }
       }
 
-      if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const t = e.target as HTMLElement | null
-        if (t?.tagName !== 'INPUT' && t?.tagName !== 'TEXTAREA' && !t?.isContentEditable) {
-          e.preventDefault()
-          setSlashMenu({ x: window.innerWidth / 2 - 110, y: window.innerHeight / 2 - 40 })
+      if (e.key === ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        const v = videoRef.current
+        if (v) {
+          if (v.paused) {
+            if (edlUsesOutputClock(edl)) {
+              outputPlayAnchorRef.current = { t: performance.now(), out0: outputMs }
+            }
+            void v.play()
+          } else {
+            outputPlayAnchorRef.current = null
+            v.pause()
+          }
         }
+        return
       }
 
       if (e.key === '#' && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -1220,6 +1229,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     selAnchor,
     composerMinimized,
     submitCommentFromSelection,
+    edl,
+    outputMs,
   ])
 
   const saveProjectScroll = useCallback(() => {
@@ -1962,6 +1973,51 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     onShortenAll={onRemoveAllFillers}
                     compositionId={data.compositionId}
                     onDeleteRetakeWords={(wordIds) => safeDeleteWords(wordIds)}
+                    onAiTool={(action) => {
+                      if (action === 'studio_sound') {
+                        setSideTab('properties')
+                        setSideOpen(true)
+                        safeApplyOp({
+                          type: 'patch_audio_fx',
+                          audioFx: {
+                            ...document.audioFx,
+                            studioSound: {
+                              enabled: true,
+                              mix: document.audioFx?.studioSound?.mix ?? 0.8,
+                              assetId: document.audioFx?.studioSound?.assetId ?? null,
+                            },
+                          },
+                        })
+                        return
+                      }
+                      if (action === 'remove_fillers') {
+                        setSideTab('edit')
+                        setEditToolsTab('filler')
+                        setReviewMode('filler')
+                        setFillerReviewOpen(true)
+                        return
+                      }
+                      if (action === 'shorten_gaps') {
+                        setSideTab('edit')
+                        setEditToolsTab('gaps')
+                        openGapTools()
+                        return
+                      }
+                      if (action === 'find_retakes') {
+                        setSideTab('edit')
+                        setEditToolsTab('retakes')
+                      }
+                    }}
+                    onAiChapters={(chapters) => {
+                      for (const ch of chapters) {
+                        safeApplyOp({
+                          type: 'add_marker',
+                          outMs: ch.outMs,
+                          id: `mrk_${crypto.randomUUID().replace(/-/g, '')}`,
+                          label: ch.label,
+                        })
+                      }
+                    }}
                   />
                 )}
               </div>

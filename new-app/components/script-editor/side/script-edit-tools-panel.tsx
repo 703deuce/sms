@@ -8,6 +8,7 @@ import { ScriptShortenGapsPanel } from '@/components/script-editor/side/script-s
 import { cn } from '@/lib/utils'
 import type { GapFilterMode } from '@/lib/clips/script-editor/gap-hits'
 import { ScriptRetakesPanel } from '@/components/script-editor/side/script-retakes-panel'
+import { ScriptAiToolsPanel, type AiToolAction } from '@/components/script-editor/side/script-ai-tools-panel'
 
 export type EditToolsTab = 'filler' | 'gaps' | 'retakes'
 
@@ -35,6 +36,8 @@ export function ScriptEditToolsPanel({
   onShortenAll,
   compositionId,
   onDeleteRetakeWords,
+  onAiTool,
+  onAiChapters,
 }: {
   tab: EditToolsTab
   onTabChange: (t: EditToolsTab) => void
@@ -59,9 +62,12 @@ export function ScriptEditToolsPanel({
   onShortenAll: () => void
   compositionId: string
   onDeleteRetakeWords: (wordIds: string[]) => void
+  onAiTool: (action: AiToolAction) => void
+  onAiChapters: (chapters: { outMs: number; label: string }[]) => void
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="script-edit-tools-panel">
+      <ScriptAiToolsPanel compositionId={compositionId} onAction={onAiTool} onChapters={onAiChapters} />
       <div className="flex border-b border-border">
         {(['filler', 'gaps', 'retakes'] as EditToolsTab[]).map((t) => (
           <button

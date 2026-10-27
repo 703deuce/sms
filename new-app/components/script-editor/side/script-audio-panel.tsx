@@ -209,6 +209,39 @@ export function ScriptAudioPanel({
         )}
       </div>
 
+      <div className="rounded-[10px] border border-border bg-muted/20 p-3">
+        <p className="text-[13px] font-semibold">Auto-level</p>
+        <p className="mt-1 text-xs text-muted-foreground">Target loudness on export (−16 LUFS default).</p>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {([-16, -14, -18] as const).map((lufs) => (
+            <Button
+              key={lufs}
+              type="button"
+              size="sm"
+              variant={document.audioFx?.loudnessLufs === lufs ? 'default' : 'outline'}
+              className="h-7 text-[10px]"
+              onClick={() =>
+                onPatchAudioFx({
+                  ...document.audioFx,
+                  loudnessLufs: lufs,
+                })
+              }
+            >
+              {lufs} LUFS
+            </Button>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant={document.audioFx?.loudnessLufs == null ? 'default' : 'outline'}
+            className="h-7 text-[10px]"
+            onClick={() => onPatchAudioFx({ ...document.audioFx, loudnessLufs: null })}
+          >
+            Off
+          </Button>
+        </div>
+      </div>
+
       <div>
         <p className="mb-2 text-[13px] font-semibold">Music</p>
         <textarea
