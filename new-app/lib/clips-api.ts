@@ -207,6 +207,7 @@ export function exportClipWithOptions(
   body: {
     resolution?: 720 | '720p' | '1080p'
     aspect?: '9:16' | '4:5' | '1:1' | '16:9'
+    exportPlatform?: 'tiktok' | 'youtube_shorts' | 'instagram_reels'
     watermark?: boolean
     alsoSrt?: boolean
     edits?: unknown

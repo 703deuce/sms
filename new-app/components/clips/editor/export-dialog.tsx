@@ -12,6 +12,14 @@ import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { can } from '@/lib/billing/entitlements'
 import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
 import { exportRequestMatchesClipPreview } from '@/lib/clips/export-preview-reuse'
+import {
+  EXPORT_PLATFORM_IDS,
+  EXPORT_PLATFORM_PRESETS,
+  exportPlatformDurationWarning,
+  exportPlatformLabel,
+  type ExportPlatformId,
+} from '@/lib/clips/export-platform-presets'
+import { outputDurationMs } from '@/lib/clips/edits'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
@@ -52,6 +60,7 @@ export function ExportDialog({
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [durationMs, setDurationMs] = useState<number | null>(null)
+  const [exportPlatform, setExportPlatform] = useState<ExportPlatformId | 'none'>('none')
 
   useEffect(() => {
     if (open) setAspect(edits.aspectRatio ?? '9:16')
@@ -123,8 +132,9 @@ export function ExportDialog({
     try {
       await onBeforeExport?.()
       const data = await exportClipWithOptions(clipId, {
-        resolution,
-        aspect,
+        resolution: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].resolution : resolution,
+        aspect: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].aspect : aspect,
+        exportPlatform: exportPlatform !== 'none' ? exportPlatform : undefined,
         watermark: false,
         alsoSrt,
         edits,
@@ -150,6 +160,10 @@ export function ExportDialog({
     }
   }
 
+  const editedDurationMs = outputDurationMs(edits)
+  const platformWarn =
+    exportPlatform !== 'none' ? exportPlatformDurationWarning(exportPlatform, editedDurationMs) : null
+
   if (!open) return null
 
   return (
@@ -171,6 +185,48 @@ export function ExportDialog({
               {edits.captions?.enabled === false ? ' · captions off' : ' · captions burned in'}
             </p>
           </div>
+        </div>
+        <div className="mt-3">
+          <p className="text-xs font-medium">Platform preset</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Sets 9:16, max length guidance, and caption safe margins for in-app UI.
+          </p>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={exportPlatform === 'none' ? 'default' : 'outline'}
+              onClick={() => setExportPlatform('none')}
+            >
+              Generic
+            </Button>
+            {EXPORT_PLATFORM_IDS.map((id) => (
+              <Button
+                key={id}
+                size="sm"
+                variant={exportPlatform === id ? 'default' : 'outline'}
+                onClick={() => {
+                  setExportPlatform(id)
+                  const preset = EXPORT_PLATFORM_PRESETS[id]
+                  setAspect(preset.aspect)
+                  if (can('', 'export_1080p') || preset.resolution === '720p') {
+                    setResolution(preset.resolution)
+                  }
+                  onAspectChange?.(preset.aspect)
+                }}
+              >
+                {exportPlatformLabel(id)}
+              </Button>
+            ))}
+          </div>
+          {exportPlatform !== 'none' ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Max {EXPORT_PLATFORM_PRESETS[exportPlatform].maxDurationSec}s · caption margin{' '}
+              {EXPORT_PLATFORM_PRESETS[exportPlatform].captionSafeMarginVPct}% from bottom
+            </p>
+          ) : null}
+          {platformWarn ? (
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-400" role="note">{platformWarn}</p>
+          ) : null}
         </div>
         <div className="mt-3">
           <p className="text-xs font-medium">Resolution</p>
