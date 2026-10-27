@@ -2,9 +2,9 @@
 
 **Purpose:** Per-feature **STATUS** for Rick to decide what to hide behind a default-off flag later. **No KEEP/HIDE recommendations here.** **No UI hidden yet.**
 
-**Audited:** 2026-10-27 (code on `master` + read-only prod DB via `coolify-server` / `clips-worker`).
+**Code revision:** `393af7b7d` (`origin/master` at time of write). Inventory is **code + optional prod-db only** — not gated on web deploy **4373** or any in-flight worker deploy.
 
-**Workers (deploy):** `clips-worker` and `clips-worker-stream` both **`CLIPS_WORKER_GIT_SHA=9be116032…`**, same image digest prefix `5d88a908e9a8` (includes clipper commits through `ae6d17dc3` / `0c8d9ab1a` in history).
+**Prod-db snapshot (optional):** 2026-10-27 read-only queries via `clips-worker` container (may lag live workers).
 
 **Status legend:** **DONE** · **MOSTLY DONE** (gap noted) · **BROKEN** · **STUB**
 
@@ -19,7 +19,7 @@
 | Sidebar **Editor** section | DONE | — | `code` | `components/shell/app-sidebar.tsx`, `lib/app-sidebar-sections.ts` | Sidebar when section = Editor |
 | **Editor hub** (project list) | MOSTLY DONE | Shows processing + READY + DRAFT; FAILED/CANCELED omitted; no search/folders | `code`; shipped `9be116032` | `app/app/editor/page.tsx`, `lib/server/clips/drive-data.ts` | `/app/editor`; sidebar **Editor hub**; `lib/nav.ts` **Editor** (Library) |
 | **Projects library** (Clips drive) | DONE | Shared with clipper; not editor-only | `code` | `app/app/clips/(drive)/page.tsx`, `components/drive/drive-home.tsx` | `/app/clips`; primary **Clips** sidebar |
-| **Create → Editor** | DONE | Points at hub | `code` | `components/shell/create-menu` (if present), nav | Create menu → Editor hub |
+| **Create → Editor** | DONE | Points at hub | `code` | `components/shell/sidebar-create-menu.tsx` | Sidebar **Create** → **Editor** → `/app/editor` |
 | **Script editor page** (container) | DONE | Full-height shell under app chrome | `code` | `app/app/clips/[projectId]/script/page.tsx`, `script-editor-entry.tsx` | `/app/clips/[projectId]/script`; `?clipId=` for clip composition |
 | **Edit transcript** from project | DONE | Link from clipper project view | `code` | `components/clips/project-clips-view.tsx` | `/app/clips/[projectId]` → **Edit transcript** |
 | **T2V stale storyboard banner** | MOSTLY DONE | Only when `sourceKind=t2v` (AI Video flag usually off) | `code` | `components/t2v/t2v-editor-stale-banner.tsx` | Banner on `/script` for t2v projects |
@@ -88,6 +88,20 @@
 | **VU meter** | MOSTLY DONE | Preview audio levels | `code` | `script-vu-meter.tsx` | Transport |
 | **Find in transcript** | MOSTLY DONE | Wired in shell | `code` | `transcript-find.ts` | Shell search |
 | **Theme** | DONE | Uses `next-themes` | `code` | shell | Settings / system |
+
+### 5b. Shell header / layout modes (flagging entry points)
+
+| Feature | Status | What's missing / known issues | Evidence | Main files | UI entry |
+|---------|--------|------------------------------|----------|------------|----------|
+| **Export popover** | BROKEN (worker) | See §17 | `prod-db` | `script-export-popover.tsx`, header Export | Header **Export** |
+| **Share / access modal** | MOSTLY DONE | — | `code` | `script-project-access-modal.tsx`, Share icon | Header **Share** (`Share2`) |
+| **Comments drawer** | DONE | Toggle + panel | `code` | `setCommentsOpen`, `ScriptCommentsPanel` | Header **Comments** (⌘⌥M) |
+| **Settings modal** | DONE | — | `code` | `script-editor-settings-modal.tsx` | Header **Settings** |
+| **Version history drawer** | DONE | — | `code` | `ScriptVersionHistoryPanel` | Header / actions → Version history |
+| **Storyboard layout mode** | MOSTLY DONE | Grid vs script layout | `code` | `ScriptStoryboardPanel`, layout toggle | Header **Storyboard view** |
+| **Multicam panel** | MOSTLY DONE | Auto-multicam action | `code` | `ScriptMulticamPanel` | Shell side stack (when multicam open) |
+| **AI tools / clarity side stack** | MOSTLY DONE | Panel toggles from shell | `code` | `ScriptClarityPanel`, `ScriptAiToolsPanel` | Actions / side overlays |
+| **Recorder + teleprompter** | MOSTLY DONE | Recording flags | `code` | `EditorRecorderBar`, `TeleprompterPanel` | Header / shell |
 
 ---
 
