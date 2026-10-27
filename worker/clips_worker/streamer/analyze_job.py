@@ -27,7 +27,7 @@ from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.metadata import enrich_streamer_meta
 from clips_worker.streamer.chunk_signals import merge_chunk_signal_curves
 from clips_worker.streamer.long_vod_analyze import (
-    STREAM_VOD_MAX_EST_COST_USD,
+    effective_vod_cost_cap_usd,
     enforce_vod_cost_cap,
     log_stream_analyze_summary,
     resolve_analyze_chunk_plan,
@@ -162,9 +162,10 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             analysed_s / 60.0,
             len(ranges),
         )
+        cap_usd = effective_vod_cost_cap_usd(analysed_s / 60.0, vod_transcribe_provider)
         print(
             f"[clipper:stream] analyze_cost_preflight vodId={vod_id} est_cost_usd={preflight_est:.4f} "
-            f"cap_usd={STREAM_VOD_MAX_EST_COST_USD}",
+            f"cap_usd={cap_usd:.4f}",
             flush=True,
         )
 

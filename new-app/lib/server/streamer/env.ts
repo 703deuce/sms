@@ -1,4 +1,5 @@
 import { getIntegrationAppUrl } from '@/lib/integrations/framework/app-url'
+import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 
 export function streamerTwitchConfigured(): boolean {
   return Boolean(process.env.TWITCH_CLIENT_ID?.trim() && process.env.TWITCH_CLIENT_SECRET?.trim())
@@ -39,6 +40,7 @@ export function streamerPublicFlags() {
     kickWebhook: kickWebhookUrl(),
     /** When false, UI shows live clipping as coming soon; webhooks skip live chat ingest. */
     liveRealtimeEnabled: liveRealtime,
+    autopullUiEnabled: streamerAutopullUiEnabled(),
     vodFirst: true,
   }
 }

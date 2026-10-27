@@ -45,3 +45,10 @@ def test_cost_cap_allows_small_vod(monkeypatch):
     monkeypatch.setenv("STREAM_VOD_MAX_EST_COST_USD", "50")
     est = enforce_vod_cost_cap("deepgram", analysed_minutes=5.0, chunk_count=1)
     assert est >= 0
+
+
+def test_six_hour_effective_cap_under_two_dollars():
+    from clips_worker.streamer.long_vod_analyze import effective_vod_cost_cap_usd
+
+    cap = effective_vod_cost_cap_usd(360.0, "modal")
+    assert cap < 2.0

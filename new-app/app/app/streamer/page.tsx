@@ -10,7 +10,7 @@ import { getStreamUsage } from '@/lib/server/streamer/usage'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { StreamerUsageMeter } from '@/components/streamer/usage-meter'
 import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-coming-soon'
-import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
+import { streamerLiveRealtimeEnabled, streamerPublicFlags } from '@/lib/server/streamer/env'
 import { Radio } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -18,6 +18,7 @@ export const metadata = { title: 'Streamer · Clips' }
 
 export default async function StreamerHubPage() {
   const workspaceId = await resolveWorkspaceId()
+  const flags = streamerPublicFlags()
   const [vods, usage, channels] = await Promise.all([
     listStreamerVodsForWorkspace(workspaceId),
     getStreamUsage(workspaceId),
@@ -35,6 +36,17 @@ export default async function StreamerHubPage() {
         <StreamerUsageMeter initial={usage} />
         {!streamerLiveRealtimeEnabled() ? <StreamerLiveComingSoon /> : null}
         <StreamerImportPanel usageInitial={usage} />
+        {flags.autopullUiEnabled ? (
+          <section className="rounded-lg border border-border p-4">
+            <Link href="/app/streamer/autopull" className="text-sm font-semibold text-primary hover:underline">
+              Auto-pull settings & incoming streams →
+            </Link>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Connect Twitch/Kick, toggle auto-import, and track replay → clips status. Notifications appear in the bell
+              when clips are ready.
+            </p>
+          </section>
+        ) : null}
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="text-sm font-semibold">Channels</h2>
           <StreamerOAuthButtons />

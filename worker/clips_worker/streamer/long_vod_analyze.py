@@ -36,8 +36,32 @@ def _float_env(name: str, default: float) -> float:
 
 
 STREAM_ANALYZE_CHUNK_CONCURRENCY = max(1, _int_env("STREAM_ANALYZE_CHUNK_CONCURRENCY", 2))
-STREAM_VOD_MAX_EST_COST_USD = _float_env("STREAM_VOD_MAX_EST_COST_USD", 25.0)
+# Modal L4 ~$0.000542/GPU-s × ~0.35 GPU-s per audio min ≈ $0.00019/min (~$0.07 for 6h).
 STREAM_EST_GPU_S_PER_AUDIO_MIN = _float_env("STREAM_EST_GPU_S_PER_AUDIO_MIN", 0.35)
+STREAM_VOD_COST_BUFFER = _float_env("STREAM_VOD_COST_BUFFER", 2.5)
+STREAM_VOD_MAX_EST_COST_USD = _float_env("STREAM_VOD_MAX_EST_COST_USD", 1.5)
+
+
+def usd_per_audio_minute_estimate(provider: str) -> float:
+    if provider.startswith("modal"):
+        from clips_worker.streamer.modal_transcribe import stream_modal_usd_per_gpu_second
+
+        gpu_per_min = _float_env("STREAM_EST_GPU_S_PER_AUDIO_MIN", STREAM_EST_GPU_S_PER_AUDIO_MIN)
+        return gpu_per_min * stream_modal_usd_per_gpu_second()
+    try:
+        return float(os.environ.get("DEEPGRAM_USD_PER_MIN", "0.006"))
+    except ValueError:
+        return 0.006
+
+
+def effective_vod_cost_cap_usd(analysed_minutes: float, provider: str) -> float:
+    """Per-VOD ceiling from real $/min estimate (6h target well under $2)."""
+    per_min = usd_per_audio_minute_estimate(provider)
+    buffer = _float_env("STREAM_VOD_COST_BUFFER", STREAM_VOD_COST_BUFFER)
+    scaled = analysed_minutes * per_min * buffer
+    ceiling = _float_env("STREAM_VOD_MAX_EST_COST_USD", STREAM_VOD_MAX_EST_COST_USD)
+    floor = _float_env("STREAM_VOD_MIN_EST_COST_USD", 0.10)
+    return max(floor, min(ceiling, scaled))
 
 
 def pick_chunk_duration_min(duration_ms: int) -> int:
@@ -68,13 +92,18 @@ def estimate_vod_transcribe_cost_usd(provider: str, analysed_minutes: float, chu
 
 def enforce_vod_cost_cap(provider: str, analysed_minutes: float, chunk_count: int) -> float:
     est = estimate_vod_transcribe_cost_usd(provider, analysed_minutes, chunk_count)
-    cap = _float_env("STREAM_VOD_MAX_EST_COST_USD", STREAM_VOD_MAX_EST_COST_USD)
+    cap = effective_vod_cost_cap_usd(analysed_minutes, provider)
     if cap > 0 and est > cap:
         raise PermanentError(
-            f"Estimated transcribe cost ${est:.2f} exceeds cap ${cap:.2f} for this VOD "
+            f"Estimated transcribe cost ${est:.4f} exceeds cap ${cap:.4f} for this VOD "
             f"({analysed_minutes:.0f} min, {chunk_count} chunks). "
             "Shorten the range or raise STREAM_VOD_MAX_EST_COST_USD."
         )
+    print(
+        f"[clipper:stream] analyze_cost_estimate provider={provider} "
+        f"audio_min={analysed_minutes:.1f} chunks={chunk_count} est_usd={est:.4f} cap_usd={cap:.4f}",
+        flush=True,
+    )
     return est
 
 

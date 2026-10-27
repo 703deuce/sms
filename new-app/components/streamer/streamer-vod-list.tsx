@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Panel } from '@/components/app/page-primitives'
 import { ProjectStatusBadge } from '@/components/app/status'
 import { StreamerStageStepper } from '@/components/streamer/stage-stepper'
+import { StreamerVodRetryButton } from '@/components/streamer/streamer-vod-retry-button'
 import type { StreamerVodRow } from '@/lib/server/streamer/vod-list'
 import { formatEtaSeconds } from '@/lib/clips/format-eta'
 import { ExternalLink } from 'lucide-react'
@@ -13,7 +14,13 @@ function formatEta(sec: number) {
   return min < 90 ? `~${min} min` : `~${Math.round(min / 60)}h`
 }
 
-export function StreamerVodList({ rows }: { rows: StreamerVodRow[] }) {
+export function StreamerVodList({
+  rows,
+  showPipelineLabel = false,
+}: {
+  rows: StreamerVodRow[]
+  showPipelineLabel?: boolean
+}) {
   if (!rows.length) {
     return (
       <Panel className="p-6 text-sm text-muted-foreground">
@@ -41,8 +48,16 @@ export function StreamerVodList({ rows }: { rows: StreamerVodRow[] }) {
                     {row.title}
                   </Link>
                   <ProjectStatusBadge status={row.status} />
+                  {showPipelineLabel ? (
+                    <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-foreground">
+                      {row.pipelineLabel}
+                    </span>
+                  ) : null}
                   <span className="text-xs capitalize text-muted-foreground">{row.platform}</span>
                 </div>
+                {row.error && row.pipelinePhase === 'failed' ? (
+                  <p className="text-xs text-destructive line-clamp-2">{row.error}</p>
+                ) : null}
                 <StreamerStageStepper
                   stage={row.stage}
                   progress={row.waitingForWorker ? 0 : row.progress}
@@ -66,16 +81,19 @@ export function StreamerVodList({ rows }: { rows: StreamerVodRow[] }) {
                   </p>
                 ) : null}
               </div>
-              {row.url ? (
-                <a
-                  href={row.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Source <ExternalLink className="size-3" />
-                </a>
-              ) : null}
+              <div className="flex flex-col items-end gap-2">
+                {row.canRetry ? <StreamerVodRetryButton projectId={row.projectId} /> : null}
+                {row.url ? (
+                  <a
+                    href={row.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Source <ExternalLink className="size-3" />
+                  </a>
+                ) : null}
+              </div>
             </div>
           </Panel>
         )
