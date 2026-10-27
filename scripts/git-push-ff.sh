@@ -5,11 +5,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 BRANCH="${1:-master}"
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "git-push-ff: commit or stash changes first" >&2
-  exit 1
-fi
-
 if git push origin "$BRANCH" 2>/dev/null; then
   echo "[git-push-ff] ok via git push"
   exit 0
