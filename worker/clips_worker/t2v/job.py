@@ -1,27 +1,208 @@
-"""T2V_ASSEMBLE worker job — M0 registers the type; M3 implements assembly."""
+"""T2V_ASSEMBLE worker job — voice, media, xfade assemble, titles, brand bookends."""
 from __future__ import annotations
+
+import json
+import tempfile
+from pathlib import Path
+
+import requests
+
+from clips_worker.storage import download_object, put_json, upload_file
+from clips_worker.t2v.assemble import Scene, SceneMedia, assemble
+from clips_worker.t2v.render_finalize import finalize_t2v_video
+from clips_worker.t2v.tts_alignment import duration_ms_from_alignment, words_from_alignment
+from clips_worker.t2v.voice_cache import get_or_synthesize_voice_clip
+
+ASPECT_DIMS = {
+    "16:9": (1280, 720),
+    "9:16": (720, 1280),
+    "1:1": (1080, 1080),
+    "4:5": (1080, 1350),
+}
+
+
+def _payload(job: dict) -> dict:
+    payload = job.get("payload") or {}
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    return payload
+
+
+def _media_color_hex(media: dict) -> str:
+    c = (media.get("color") or "#111111").strip()
+    if c.startswith("0x"):
+        return c
+    if c.startswith("#"):
+        return "0x" + c[1:]
+    return "0x111111"
+
+
+def _fetch_media(media: dict | None, work: Path, idx: int) -> Path | None:
+    if not media or media.get("kind") == "color":
+        return None
+    ext = ".jpg" if media.get("kind") == "image" else ".mp4"
+    dest = work / f"media_{idx}{ext}"
+    if media.get("storageKey"):
+        download_object(str(media["storageKey"]), dest)
+        return dest
+    url = media.get("previewUrl") or media.get("srcUrl")
+    if not url:
+        return None
+    with requests.get(url, stream=True, timeout=120) as r:
+        r.raise_for_status()
+        dest.write_bytes(r.content)
+    return dest
 
 
 def run_t2v_assemble_job(conn, job: dict, progress) -> None:
-    progress(
-        job["id"],
-        {"jobStatus": "RUNNING", "stage": "assemble", "progress": 0},
-    )
-    payload = job.get("payload") or {}
-    if isinstance(payload, str):
-        import json
+    p = _payload(job)
+    draft_id = p.get("draftId")
+    workspace_id = p.get("workspaceId")
+    project_id = p.get("projectId")
+    if not draft_id or not workspace_id:
+        raise ValueError("T2V_ASSEMBLE payload requires draftId and workspaceId")
 
-        payload = json.loads(payload)
-    draft_id = payload.get("draftId")
-    if draft_id:
+    with conn.cursor() as cur:
+        cur.execute(
+            'SELECT document, revision, "projectId" FROM t2v_drafts WHERE id=%s AND "workspaceId"=%s',
+            (draft_id, workspace_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        raise RuntimeError(f"T2vDraft not found: {draft_id}")
+    document, revision, db_project_id = row
+    if isinstance(document, str):
+        document = json.loads(document)
+    project_id = project_id or db_project_id
+    aspect = (document.get("settings") or {}).get("aspect", "16:9")
+    w, h = ASPECT_DIMS.get(aspect, ASPECT_DIMS["16:9"])
+    voice = document.get("voice") or {}
+    scenes_doc = document.get("scenes") or []
+    n = len(scenes_doc)
+
+    progress(job["id"], {"jobStatus": "RUNNING", "stage": "voice", "progress": 5})
+
+    with tempfile.TemporaryDirectory(prefix="t2v-asm-") as td:
+        work = Path(td)
+        scenes: list[Scene] = []
+        alignments: list[dict | None] = []
+
+        for idx, sc in enumerate(scenes_doc):
+            progress(
+                job["id"],
+                {"jobStatus": "RUNNING", "stage": "voice", "progress": 5 + int(40 * idx / max(1, n))},
+            )
+            vo_path = None
+            vo_s = 0.0
+            alignment = None
+            narration = (sc.get("narration") or "").strip()
+            if narration and not sc.get("muted") and voice.get("voiceId"):
+                vhash = (sc.get("voice") or {}).get("hash")
+                if not vhash:
+                    raise RuntimeError(f"scene {sc.get('id')} missing voice.hash (compute in TypeScript)")
+                prev_t = scenes_doc[idx - 1]["narration"] if idx else None
+                next_t = scenes_doc[idx + 1]["narration"] if idx + 1 < n else None
+                clip = get_or_synthesize_voice_clip(
+                    conn,
+                    workspace_id=workspace_id,
+                    text=narration,
+                    voice=voice,
+                    voice_hash=vhash,
+                    previous_text=prev_t,
+                    next_text=next_t,
+                )
+                conn.commit()
+                vo_path = work / f"vo_{idx}.mp3"
+                download_object(clip["storageKey"], vo_path)
+                alignment = clip["alignment"]
+                vo_s = max(clip.get("durationMs", 0) / 1000.0, duration_ms_from_alignment(alignment) / 1000.0)
+            alignments.append(alignment)
+
+            pad_ms = int(sc.get("padMs") or 400)
+            min_ms = int(sc.get("minDurMs") or 2000)
+            dur_s = max(min_ms / 1000.0, vo_s + pad_ms / 1000.0)
+
+            mdoc = sc.get("media") or {"kind": "color"}
+            media_path = _fetch_media(mdoc, work, idx)
+            scenes.append(
+                Scene(
+                    id=sc.get("id", str(idx)),
+                    dur_s=dur_s,
+                    media=SceneMedia(
+                        kind=mdoc.get("kind", "color"),
+                        path=media_path,
+                        src_in_s=float(mdoc.get("srcInMs") or 0) / 1000.0,
+                        focal_x=float(mdoc.get("focalX", 0.5)),
+                        focal_y=float(mdoc.get("focalY", 0.5)),
+                        ken_burns=mdoc.get("kenBurns", "zoom_in"),
+                        color=_media_color_hex(mdoc),
+                    ),
+                    transition=sc.get("transition", "fade"),
+                    transition_s=float(sc.get("transitionMs") or 500) / 1000.0,
+                    vo_path=vo_path,
+                )
+            )
+
+        progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 60})
+        asm = assemble(scenes, work / "asm", w=w, h=h, fps=30)
+        progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 72})
+        final = work / "source.mp4"
+        finalize_t2v_video(
+            asm["source"],
+            final,
+            document=document,
+            scene_starts_ms=asm["sceneStartsMs"],
+            w=w,
+            h=h,
+            work_dir=work / "post",
+        )
+
+        all_words: list[dict] = []
+        t0 = 0.0
+        for idx, sc in enumerate(scenes_doc):
+            al = alignments[idx]
+            if al:
+                all_words.extend(
+                    words_from_alignment(al, offset_s=t0, scene_slot=int(sc.get("slot", idx)))
+                )
+            t0 += scenes[idx].dur_s
+
+        progress(job["id"], {"jobStatus": "RUNNING", "stage": "upload", "progress": 85})
+        src_key = f"ws/{workspace_id}/projects/{project_id}/t2v/source_r{revision}.mp4"
+        upload_file(src_key, final, "video/mp4")
+
+        transcript_key = _project_transcript_key(conn, project_id)
+        if transcript_key:
+            put_json(transcript_key, {"words": all_words})
+
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE t2v_drafts
-                SET status = %s, stage = %s, error = %s, "updatedAt" = NOW()
-                WHERE id = %s
+                SET status=%s, stage=%s, progress=%s, error=%s, "assembledRevision"=%s, "updatedAt"=NOW()
+                WHERE id=%s
                 """,
-                ("FAILED", "failed", "T2V assemble not implemented (M3)", draft_id),
+                ("READY", "done", 100, None, revision, draft_id),
             )
         conn.commit()
-    raise RuntimeError("T2V_ASSEMBLE ships in milestone M3")
+
+    progress(
+        job["id"],
+        {
+            "jobStatus": "DONE",
+            "stage": "done",
+            "progress": 100,
+            "result": {
+                "sourceKey": src_key,
+                "durationMs": asm["durationMs"],
+                "sceneStartsMs": asm["sceneStartsMs"],
+            },
+        },
+    )
+
+
+def _project_transcript_key(conn, project_id: str) -> str | None:
+    with conn.cursor() as cur:
+        cur.execute('SELECT "transcriptKey" FROM clip_projects WHERE id=%s', (project_id,))
+        row = cur.fetchone()
+    return row[0] if row and row[0] else None
