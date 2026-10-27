@@ -242,10 +242,16 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             transcript_key = vod["transcriptKey"]
             put_json(transcript_key, words)
             with conn.cursor() as cur:
-                cur.execute(
-                    'UPDATE clip_projects SET "transcriptWords" = %s::jsonb, "updatedAt" = NOW() WHERE id = %s',
-                    (json.dumps(words), project_id),
-                )
+                if transcript_key:
+                    cur.execute(
+                        'UPDATE clip_projects SET "updatedAt" = NOW() WHERE id = %s',
+                        (project_id,),
+                    )
+                else:
+                    cur.execute(
+                        'UPDATE clip_projects SET "transcriptWords" = %s::jsonb, "updatedAt" = NOW() WHERE id = %s',
+                        (json.dumps(words), project_id),
+                    )
             conn.commit()
 
             post_progress(

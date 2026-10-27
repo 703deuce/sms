@@ -5,7 +5,7 @@ import { loadSourceWords } from '@/lib/clips/source-words'
 import { mergeAutoBrollItems } from '@/lib/clips/broll-auto-utils'
 import { buildAutoBrollItems } from '@/lib/server/clips/broll-auto'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
+import { getClipStorageForObjectKey } from '@/lib/storage'
 
 export type ApplyProjectAutoBrollResult = {
   clipsProcessed: number
@@ -34,7 +34,8 @@ export async function applyProjectAutoStockBroll(
   let transcript: { w: string; s: number; e: number; i?: number }[] = []
   if (project.transcriptKey) {
     try {
-      transcript = await getClipStorage().getJson(project.transcriptKey)
+      const storage = await getClipStorageForObjectKey(project.transcriptKey)
+      transcript = await storage.getJson(project.transcriptKey)
     } catch {
       transcript = []
     }

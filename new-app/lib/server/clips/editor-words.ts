@@ -1,7 +1,7 @@
 import type { ClipWord } from '@/lib/clips/edits'
 import { mergeClipWordsWithProjectTranscript } from '@/lib/clips/editor-words-merge'
 import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
-import type { getClipStorage } from '@/lib/storage'
+import { getClipStorageForObjectKey, type getClipStorage } from '@/lib/storage'
 
 export function normalizeTranscriptWord(raw: unknown, pos: number): ClipWord | null {
   if (!raw || typeof raw !== 'object') return null
@@ -34,12 +34,10 @@ function clipWordsStorageKey(workspaceId: string, projectId: string, clipId: str
   return `ws/${workspaceId}/projects/${projectId}/clips/${clipId}/words.json`
 }
 
-async function readClipWordJson(
-  storage: ReturnType<typeof getClipStorage>,
-  key: string | null,
-): Promise<ClipWord[]> {
+async function readClipWordJson(key: string | null): Promise<ClipWord[]> {
   if (!key) return []
   try {
+    const storage = await getClipStorageForObjectKey(key)
     const data = await storage.getJson<unknown>(key)
     return normalizeTranscriptJson(data)
   } catch {
@@ -71,9 +69,9 @@ export async function resolveEditorWords(
   clip: { id: string; projectId: string; startMs: number; endMs: number; wordsKey: string | null },
   projectTranscript: ClipWord[],
 ): Promise<SourceWord[]> {
-  let clipRaw = await readClipWordJson(storage, clip.wordsKey)
+  let clipRaw = await readClipWordJson(clip.wordsKey)
   if (!clipRaw.length) {
-    clipRaw = await readClipWordJson(storage, clipWordsStorageKey(workspaceId, clip.projectId, clip.id))
+    clipRaw = await readClipWordJson(clipWordsStorageKey(workspaceId, clip.projectId, clip.id))
   }
 
   if (clipRaw.length) {

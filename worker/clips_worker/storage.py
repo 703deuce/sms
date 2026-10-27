@@ -32,7 +32,7 @@ def env(name: str, default: str | None = None) -> str:
 
 
 def storage_driver() -> str:
-    return (os.environ.get("STORAGE_DRIVER") or "supabase").strip().lower()
+    return (os.environ.get("STORAGE_DRIVER") or "s3").strip().lower()
 
 
 def _uses_s3_api() -> bool:

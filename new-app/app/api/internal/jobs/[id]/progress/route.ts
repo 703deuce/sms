@@ -4,7 +4,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { applyWorkerJobProgress } from '@/lib/server/clips/job-progress'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
+import { getClipStorageForObjectKey } from '@/lib/storage'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -50,12 +50,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const payload = (job.payload ?? {}) as { draftId?: string }
     const isT2vAssemble = job.type === 'T2V_ASSEMBLE'
+    let transcriptWordsForDb = body.transcriptWords
     if (
       body.transcriptWords?.length &&
       job.project.transcriptKey &&
       !isT2vAssemble
     ) {
-      await getClipStorage().putJson(job.project.transcriptKey, body.transcriptWords)
+      const storage = await getClipStorageForObjectKey(job.project.transcriptKey)
+      await storage.putJson(job.project.transcriptKey, body.transcriptWords)
+      transcriptWordsForDb = undefined
     }
 
     if (body.error?.trim()) {
@@ -79,7 +82,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       progress: body.progress,
       error: body.error,
       jobStatus: body.jobStatus,
-      transcriptWords: body.transcriptWords,
+      transcriptWords: transcriptWordsForDb,
       etaSeconds: body.etaSeconds,
       chunkDone: body.chunkDone,
       chunkTotal: body.chunkTotal,

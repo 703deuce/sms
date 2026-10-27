@@ -3,7 +3,7 @@ import 'server-only'
 import type { BrollItem } from '@/lib/clips/broll'
 import { ensureStockAsset, findCachedHit } from '@/lib/server/ai/pixabay'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
+import { createSignedDownloadUrlForObjectKey } from '@/lib/storage'
 
 export type BrollMediaRow = {
   id: string
@@ -20,7 +20,6 @@ export type BrollMediaRow = {
 
 export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaRow[]> {
   const prisma = getPrisma()
-  const storage = getClipStorage()
   const out: BrollMediaRow[] = []
 
   for (const item of items) {
@@ -33,7 +32,7 @@ export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaR
         const ensured = await ensureStockAsset(hit)
         url = ensured.url
       } else if (asset.storageKey) {
-        url = await storage.createSignedDownloadUrl(asset.storageKey, 3600)
+        url = await createSignedDownloadUrlForObjectKey(asset.storageKey, undefined, 3600)
       }
       if (!url) {
         url = hit?.preview || hit?.srcUrl || null
@@ -57,9 +56,9 @@ export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaR
       let url: string | null = null
       let thumbUrl: string | undefined
       if (gen.storageKey) {
-        url = await storage.createSignedDownloadUrl(gen.storageKey, 3600)
+        url = await createSignedDownloadUrlForObjectKey(gen.storageKey, undefined, 3600)
         thumbUrl = params.posterKey
-          ? await storage.createSignedDownloadUrl(params.posterKey, 3600)
+          ? await createSignedDownloadUrlForObjectKey(params.posterKey, undefined, 3600)
           : url
       }
       out.push({

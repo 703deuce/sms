@@ -4,7 +4,7 @@ import { EMOJI_WHITELIST_SET } from '@/lib/clips/emoji-whitelist'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
+import { getClipStorageForObjectKey } from '@/lib/storage'
 import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
 
 const SYSTEM = `Pick caption emojis for a short video. Return JSON {"picks":[{"wordIndex":number,"emoji":string}]}.
@@ -22,10 +22,10 @@ export async function suggestCaptionEmojisForClip(
   const clip = await prisma.clip.findFirst({ where: { id: clipId, workspaceId, deletedAt: null } })
   if (!clip) throw new Error('Clip not found')
   const project = await prisma.clipProject.findUnique({ where: { id: clip.projectId } })
-  const storage = getClipStorage()
   let words = loadSourceWords([])
   if (project?.transcriptKey) {
     try {
+      const storage = await getClipStorageForObjectKey(project.transcriptKey)
       words = loadSourceWords(await storage.getJson(project.transcriptKey))
     } catch {
       words = []
@@ -33,7 +33,8 @@ export async function suggestCaptionEmojisForClip(
   }
   const clipWordsKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clipId}/words.json`
   try {
-    const clipWords = await storage.getJson<{ w: string; s: number; e: number; i?: number }[]>(clipWordsKey)
+    const clipStorage = await getClipStorageForObjectKey(clipWordsKey)
+    const clipWords = await clipStorage.getJson<{ w: string; s: number; e: number; i?: number }[]>(clipWordsKey)
     words = loadSourceWords(clipWords)
   } catch {
     /* project transcript */
