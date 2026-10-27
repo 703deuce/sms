@@ -123,7 +123,11 @@ def _rank_batch_gemini(
         timeout=120,
     )
     if not res.ok:
-        raise RuntimeError(res.text[:400])
+        from clips_worker.picker.picker_errors import gemini_error_log_fields, log_picker_error
+
+        summary, quota = gemini_error_log_fields(res.text or "")
+        log_picker_error("gemini", summary or "gemini rank failed", res.status_code, quota=quota or None)
+        raise RuntimeError(summary or res.text[:400])
     data = res.json()
     text = data["candidates"][0]["content"]["parts"][0]["text"]
     import json

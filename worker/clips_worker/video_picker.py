@@ -274,8 +274,12 @@ def watch_video_file(
                     time.sleep(2**attempt)
                     continue
                 if not res.ok:
-                    last_err = (res.text or res.reason or "error")[:300]
-                    log_picker_error("gemini", last_err, res.status_code)
+                    raw = res.text or res.reason or "error"
+                    from clips_worker.picker.picker_errors import gemini_error_log_fields, log_picker_error
+
+                    summary, quota = gemini_error_log_fields(raw)
+                    last_err = summary or raw[:300]
+                    log_picker_error("gemini", last_err, res.status_code, quota=quota or None)
                     raise RuntimeError(f"Gemini video_picker HTTP {res.status_code}")
                 data = res.json()
                 usage = data.get("usageMetadata") or {}
