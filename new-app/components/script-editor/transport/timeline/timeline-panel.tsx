@@ -28,6 +28,8 @@ import {
 } from '@/lib/clips/script-editor/timeline-lanes'
 import { ChevronDown, ChevronUp, LayoutGrid, Maximize2, Rows3, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { TimelineMarkersLane } from '@/components/script-editor/markers/timeline-markers-lane'
+import type { ReactNode } from 'react'
 
 const LANE_LABEL_W = 56
 
@@ -60,6 +62,9 @@ export function TimelinePanel({
   onTrimClipEdge,
   timelineView,
   onTimelineViewChange,
+  playheadOutMs,
+  outputDurationMs,
+  markerToolbarExtra,
 }: {
   expanded: boolean
   heightPx: number
@@ -89,6 +94,9 @@ export function TimelinePanel({
   onTrimClipEdge?: (clipKey: string, edge: 'start' | 'end', deltaOutMs: number) => void
   timelineView?: 'timeline' | 'storyboard'
   onTimelineViewChange?: (v: 'timeline' | 'storyboard') => void
+  playheadOutMs?: number
+  outputDurationMs?: number
+  markerToolbarExtra?: ReactNode
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const span = Math.max(
@@ -207,6 +215,7 @@ export function TimelinePanel({
             </Button>
           </div>
         )}
+        {markerToolbarExtra}
         <div
           role="separator"
           aria-orientation="horizontal"
@@ -225,6 +234,7 @@ export function TimelinePanel({
           <div className="relative flex min-h-full" style={{ width: widthPx + LANE_LABEL_W }}>
             <div className="sticky left-0 z-20 w-14 shrink-0 border-r border-border/60 bg-background text-[10px] text-muted-foreground">
               <div className="flex h-6 items-center px-1">Ruler</div>
+              <div className="flex h-7 items-center px-1">Markers</div>
               <div className="flex h-7 items-center px-1">Scenes</div>
               <div className="flex h-6 items-center px-1">Captions</div>
               {Array.from({ length: overlayLayerCount }, (_, i) => (
@@ -238,6 +248,7 @@ export function TimelinePanel({
             </div>
             <div className="relative min-w-0 flex-1" style={{ width: widthPx }}>
               <TimelineRuler durationMs={span} pxPerMs={pxPerMs} widthPx={widthPx} onSeekOutput={onSeekOutput} />
+              <TimelineMarkersLane document={document} widthPx={widthPx} pxPerMs={pxPerMs} onSeek={onSeekOutput} />
               {cutRegions.map((cut) => (
                 <div
                   key={`cut-${cut.loMs}-${cut.wordIds[0]}`}

@@ -1,0 +1,66 @@
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { jsonError } from '@/lib/server/api-error'
+import { getCompositionForWorkspace } from '@/lib/server/clips/script-composition'
+import { unpublish, upsertPublish } from '@/lib/server/clips/composition-share'
+import { resolveWorkspaceId } from '@/lib/server/workspace'
+
+const publishSchema = z.object({
+  showTranscript: z.boolean().optional(),
+  allowComments: z.boolean().optional(),
+  allowDownload: z.boolean().optional(),
+  showAuthor: z.boolean().optional(),
+})
+
+export async function GET(_req: Request, ctx: { params: Promise<{ compositionId: string }> }) {
+  try {
+    const { compositionId } = await ctx.params
+    const workspaceId = await resolveWorkspaceId()
+    const comp = await getCompositionForWorkspace(workspaceId, compositionId)
+    if (!comp) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const prisma = (await import('@/lib/server/db')).getPrisma()
+    const pub = await prisma.scriptCompositionPublish.findUnique({ where: { compositionId } })
+    return NextResponse.json({
+      data: pub
+        ? {
+            publicSlug: pub.publicSlug,
+            publishedAt: pub.publishedAt.toISOString(),
+            viewCount: pub.viewCount,
+            settings: pub.settings,
+          }
+        : null,
+    })
+  } catch (err) {
+    return jsonError(err, 500)
+  }
+}
+
+export async function POST(request: Request, ctx: { params: Promise<{ compositionId: string }> }) {
+  try {
+    const { compositionId } = await ctx.params
+    const workspaceId = await resolveWorkspaceId()
+    const settings = publishSchema.parse(await request.json())
+    const pub = await upsertPublish(workspaceId, compositionId, settings)
+    if (!pub) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({
+      data: {
+        publicSlug: pub.publicSlug,
+        publishedAt: pub.publishedAt.toISOString(),
+        settings: pub.settings,
+      },
+    })
+  } catch (err) {
+    return jsonError(err, 500)
+  }
+}
+
+export async function DELETE(_req: Request, ctx: { params: Promise<{ compositionId: string }> }) {
+  try {
+    const { compositionId } = await ctx.params
+    const workspaceId = await resolveWorkspaceId()
+    await unpublish(workspaceId, compositionId)
+    return NextResponse.json({ data: { ok: true } })
+  } catch (err) {
+    return jsonError(err, 500)
+  }
+}

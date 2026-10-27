@@ -506,6 +506,7 @@ model Workspace {
   forwardingSetupDraft                   ForwardingSetupDraft?
   clipUploads                            ClipUpload[]
   clipProjects                           ClipProject[]
+  clipProjectFolders                     ClipProjectFolder[]
   recordingSessions                      RecordingSession[]
   streamChannels                         StreamChannel[]
   streamVods                             StreamVod[]
@@ -8893,9 +8894,31 @@ model ClipProject {
   scriptSpeakers   ScriptSpeaker[]
   scriptCompositions ScriptComposition[]
   recordingSessions  RecordingSession[]
+  folderId           String?
+  lastViewedAt       DateTime?
+  folder             ClipProjectFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, folderId])
   @@map("clip_projects")
+}
+
+model ClipProjectFolder {
+  id          String    @id
+  workspaceId String
+  parentId    String?
+  name        String
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent    ClipProjectFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  ClipProjectFolder[] @relation("FolderTree")
+  projects  ClipProject[]
+
+  @@index([workspaceId, parentId])
+  @@map("clip_project_folders")
 }
 
 enum ScriptCompositionKind {
@@ -8963,7 +8986,11 @@ model ScriptComposition {
   snapshots ScriptCompositionSnapshot[]
   versions  ScriptCompositionVersion[]
   leases    ScriptCompositionLease[]
-  renders   ScriptCompositionRender[]
+  renders         ScriptCompositionRender[]
+  commentThreads  ScriptCompositionCommentThread[]
+  shareLinks      ScriptCompositionShareLink[]
+  publish         ScriptCompositionPublish?
+  collaborators   ScriptCompositionCollaborator[]
 
   @@unique([projectId, kind, clipId])
   @@index([workspaceId, updatedAt])
@@ -9047,6 +9074,115 @@ model ScriptCompositionRender {
   @@unique([compositionId, idempotencyKey])
   @@index([workspaceId, status])
   @@map("script_composition_renders")
+}
+
+enum ScriptShareRole {
+  VIEW
+  COMMENT
+  EDIT
+}
+
+enum ScriptLinkAccess {
+  INVITE_ONLY
+  LINK_VIEW
+  LINK_COMMENT
+}
+
+model ScriptCompositionCommentThread {
+  id              String    @id
+  compositionId   String
+  workspaceId     String
+  startOutMs      Int       @default(0)
+  endOutMs        Int       @default(0)
+  anchorWordStart String?
+  anchorWordEnd   String?
+  quoteText       String?
+  resolvedAt      DateTime?
+  resolvedById    String?
+  createdAt       DateTime  @default(now())
+  createdById     String?
+
+  composition ScriptComposition            @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  comments    ScriptCompositionComment[]
+
+  @@index([compositionId, createdAt])
+  @@map("script_composition_comment_threads")
+}
+
+model ScriptCompositionComment {
+  id               String   @id
+  threadId         String
+  parentCommentId  String?
+  authorUserId     String
+  body             String
+  mentionedUserIds String[] @default([])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  thread   ScriptCompositionCommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  parent   ScriptCompositionComment?      @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
+  replies  ScriptCompositionComment[]     @relation("CommentReplies")
+
+  @@index([threadId, createdAt])
+  @@map("script_composition_comments")
+}
+
+model ScriptCompositionShareLink {
+  id            String           @id
+  compositionId String
+  workspaceId   String
+  tokenHash     String           @unique
+  role          ScriptShareRole  @default(VIEW)
+  linkAccess    ScriptLinkAccess @default(INVITE_ONLY)
+  revokedAt     DateTime?
+  createdAt     DateTime         @default(now())
+  createdById   String?
+
+  composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+
+  @@index([compositionId])
+  @@map("script_composition_share_links")
+}
+
+model ScriptCompositionPublish {
+  id            String   @id
+  compositionId String   @unique
+  workspaceId   String
+  publicSlug    String   @unique
+  settings      Json     @default("{}")
+  outputKey     String?
+  viewCount     Int      @default(0)
+  publishedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("script_composition_publish")
+}
+
+model ScriptCompositionCollaborator {
+  id            String          @id
+  compositionId String
+  userId        String
+  role          ScriptShareRole @default(VIEW)
+  createdAt     DateTime        @default(now())
+
+  composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+
+  @@unique([compositionId, userId])
+  @@map("script_composition_collaborators")
+}
+
+model ScriptEditorUserPrefs {
+  id          String   @id
+  workspaceId String
+  userId      String
+  prefs       Json     @default("{}")
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@map("script_editor_user_prefs")
 }
 
 enum RecordingSessionStatus {

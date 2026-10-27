@@ -33,7 +33,19 @@ import {
   splitMarkerAfterWordIndex,
 } from '@/lib/clips/script-editor/timeline-model'
 import { toast } from 'sonner'
-import { ArrowLeft, LayoutGrid, Pause, Play, Redo2, Rows3, Scissors, Undo2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  LayoutGrid,
+  MessageSquare,
+  Pause,
+  Play,
+  Redo2,
+  Rows3,
+  Scissors,
+  Settings,
+  Share2,
+  Undo2,
+} from 'lucide-react'
 import {
   ScriptFillerReviewBar,
   type FillerSearchMode,
@@ -73,6 +85,14 @@ import { ScriptStoryboardPanel } from '@/components/script-editor/storyboard/scr
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { HelpCircle } from 'lucide-react'
+import { useCompositionComments } from '@/components/script-editor/comments/use-composition-comments'
+import { ScriptCommentsPanel } from '@/components/script-editor/comments/script-comments-panel'
+import { ScriptMarkerListPopover } from '@/components/script-editor/markers/script-marker-list-popover'
+import { ScriptProjectAccessModal } from '@/components/script-editor/share/script-project-access-modal'
+import { ScriptEditorSettingsModal } from '@/components/script-editor/settings/script-editor-settings-modal'
+import { markersByAfterWordIndex } from '@/lib/clips/script-editor/marker-word-index'
+import { ScriptMarkerHeading } from '@/components/script-editor/markers/script-marker-heading'
+import { CommentMentionTextarea } from '@/components/script-editor/comments/comment-mention-textarea'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -129,6 +149,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [versionOpen, setVersionOpen] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [showResolvedComments, setShowResolvedComments] = useState(false)
+  const [commentDraft, setCommentDraft] = useState('')
+  const commentsApi = useCompositionComments(data.compositionId)
   const document = previewDoc ?? serverDocument
   const readOnlyPreview = previewDoc != null
   const tabLock = useCompositionTabLock(data.compositionId)
@@ -260,6 +286,51 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     () => outputCutRegions(orderedWords, deletedSet, edl, data.rangeStartMs),
     [orderedWords, deletedSet, edl, data.rangeStartMs],
   )
+
+  const commentedWordIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const t of commentsApi.threads) {
+      if (t.resolvedAt) continue
+      if (t.anchorWordStart) ids.add(t.anchorWordStart)
+      if (t.anchorWordEnd) ids.add(t.anchorWordEnd)
+    }
+    return ids
+  }, [commentsApi.threads])
+
+  const submitCommentFromSelection = useCallback(async () => {
+    if (selAnchor == null || selEnd == null) {
+      setCommentsOpen(true)
+      return
+    }
+    const lo = Math.min(selAnchor, selEnd)
+    const hi = Math.max(selAnchor, selEnd)
+    const range = outputRangeForWordIndices(chips, orderedWords, lo, hi)
+    const quote = orderedWords
+      .slice(lo, hi + 1)
+      .map((w) => w.text)
+      .join(' ')
+      .slice(0, 500)
+    const body = commentDraft.trim() || 'Comment'
+    await commentsApi.createThread({
+      body,
+      startOutMs: range?.outLo ?? outputMs,
+      endOutMs: range?.outHi ?? outputMs,
+      anchorWordStart: orderedWords[lo]?.id,
+      anchorWordEnd: orderedWords[hi]?.id,
+      quoteText: quote,
+    })
+    setCommentDraft('')
+    setCommentsOpen(true)
+  }, [selAnchor, selEnd, chips, orderedWords, commentDraft, commentsApi, outputMs])
+
+  const addMarkerAtPlayhead = useCallback(() => {
+    applyOp({
+      type: 'add_marker',
+      outMs: outputMs,
+      label: `Marker ${(document.markers?.length ?? 0) + 1}`,
+      exportAsChapter: true,
+    })
+  }, [applyOp, document.markers?.length, outputMs])
 
   const persistLayout = useCallback(() => {
     saveScriptEditorLayout({
@@ -876,7 +947,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           safeApplyOp({
             type: 'add_marker',
             outMs: Math.round(outputMs),
-            markerId: `mrk_${crypto.randomUUID().replace(/-/g, '')}`,
+            id: `mrk_${crypto.randomUUID().replace(/-/g, '')}`,
             label: `Marker ${(document.markers?.length ?? 0) + 1}`,
           })
           toast.success('Marker at playhead')
@@ -903,6 +974,17 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       if (e.key === 's' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
         onSplitAtPlayhead()
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        addMarkerAtPlayhead()
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        setCommentsOpen(true)
+        void submitCommentFromSelection()
       }
 
       if (e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace')) {
@@ -966,6 +1048,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     safeApplyOp,
     document.markers,
     outputMs,
+    addMarkerAtPlayhead,
+    submitCommentFromSelection,
   ])
 
   const saveProjectScroll = useCallback(() => {
@@ -1122,6 +1206,21 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         <span className="text-xs text-muted-foreground">
           {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Saved'}
         </span>
+        <Button
+          type="button"
+          size="sm"
+          variant={commentsOpen ? 'secondary' : 'ghost'}
+          onClick={() => setCommentsOpen((o) => !o)}
+          title="Comments (⌘⌥M)"
+        >
+          <MessageSquare className="size-4" aria-hidden />
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setShareOpen(true)} title="Share">
+          <Share2 className="size-4" aria-hidden />
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setSettingsOpen(true)} title="Settings">
+          <Settings className="size-4" aria-hidden />
+        </Button>
         <Button type="button" size="sm" variant="outline" onClick={() => setVersionOpen((o) => !o)}>
           Versions
         </Button>
@@ -1361,6 +1460,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                                 activeFillerHit?.word.id === w.id && 'ring-1 ring-sky-500/60',
                                 activeGapHit?.word.id === w.id && 'ring-1 ring-amber-500/60',
                                 selected && 'bg-sky-500/25',
+                                commentedWordIds.has(w.id) && 'bg-primary/15 underline decoration-primary/60',
                                 deleted && 'cursor-pointer hover:bg-destructive/10',
                                 !active && !deleted && 'hover:bg-muted/60',
                               )}
@@ -1498,16 +1598,52 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           {sideOpen && (
             <aside className="hidden h-full min-h-0 w-[min(100%,320px)] shrink-0 flex-col overflow-hidden border-l border-border bg-background lg:flex">
               <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
-                {sideTab === 'properties'
-                  ? 'Properties'
-                  : sideTab === 'captions'
-                    ? 'Captions'
-                    : sideTab === 'media'
-                      ? 'Media'
-                      : 'Edit tools'}
+                {commentsOpen
+                  ? 'Comments'
+                  : sideTab === 'properties'
+                    ? 'Properties'
+                    : sideTab === 'captions'
+                      ? 'Captions'
+                      : sideTab === 'media'
+                        ? 'Media'
+                        : 'Edit tools'}
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto">
-                {sideTab === 'properties' && (
+                {commentsOpen && (
+                  <ScriptCommentsPanel
+                    threads={commentsApi.threads}
+                    loading={commentsApi.loading}
+                    playheadOutMs={outputMs}
+                    showResolved={showResolvedComments}
+                    onToggleShowResolved={() => setShowResolvedComments((v) => !v)}
+                    onSeek={seekToOutputMs}
+                    onReply={(threadId, body) => commentsApi.reply(threadId, body)}
+                    onResolve={(threadId, resolved) => commentsApi.setResolved(threadId, resolved)}
+                    draftComposer={
+                      commentDraft || selAnchor != null
+                        ? (
+                            <div className="mb-2 rounded-lg border border-border bg-muted/40 p-2">
+                              <textarea
+                                className="min-h-[64px] w-full resize-none bg-transparent text-[13px] outline-none"
+                                placeholder="Add a comment…"
+                                value={commentDraft}
+                                onChange={(e) => setCommentDraft(e.target.value)}
+                              />
+                              <div className="mt-2 flex justify-end gap-2">
+                                <Button type="button" size="sm" variant="ghost" onClick={() => setCommentDraft('')}>
+                                  Cancel
+                                </Button>
+                                <Button type="button" size="sm" onClick={() => void submitCommentFromSelection()}>
+                                  Comment
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        : undefined
+                    }
+                  />
+                )}
+                {!commentsOpen && sideTab === 'properties' && (
                   <ScriptPropertiesPanel
                     settings={settings}
                     rangeStartMs={data.rangeStartMs}
@@ -1522,8 +1658,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     onSeekReframeKeyframe={(srcMs) => seekToSourceMs(srcMs)}
                   />
                 )}
-                {sideTab === 'captions' && <ScriptCaptionsPanel settings={settings} onPatch={patchSettings} />}
-                {sideTab === 'media' && (
+                {!commentsOpen && sideTab === 'captions' && <ScriptCaptionsPanel settings={settings} onPatch={patchSettings} />}
+                {!commentsOpen && sideTab === 'media' && (
                   <ScriptMediaPanel
                     compositionId={data.compositionId}
                     document={document}
@@ -1532,7 +1668,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     onPatchBroll={(next) => safeApplyOp({ type: 'patch_broll', broll: next })}
                   />
                 )}
-                {sideTab === 'edit' && (
+                {!commentsOpen && sideTab === 'edit' && (
                   <ScriptEditToolsPanel
                     tab={editToolsTab}
                     onTabChange={setEditToolsTab}
@@ -1606,7 +1742,11 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           title={data.title}
           durationMs={outDur}
           aspect={settings.aspect ?? '9:16'}
+          compositionDoc={document}
         />
+
+        <ScriptProjectAccessModal open={shareOpen} onClose={() => setShareOpen(false)} compositionId={data.compositionId} />
+        <ScriptEditorSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
         <EditorRecorderBar
           armed={editorRec.armed}
@@ -1732,6 +1872,16 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           }}
           onPadDragEnd={(wordId, padMs) => safeApplyOp({ type: 'set_pad_before', wordId, padMs })}
           onTrimClipEdge={onTrimClipEdge}
+          playheadOutMs={outputMs}
+          outputDurationMs={outDur}
+          markerToolbarExtra={
+            <ScriptMarkerListPopover
+              document={document}
+              playheadOutMs={outputMs}
+              durationMs={outDur}
+              onSeek={seekToOutputMs}
+            />
+          }
         />
         )}
       </div>

@@ -8,6 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
+import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
+import { descriptionWithChapters, youtubeChaptersText } from '@/lib/clips/script-editor/chapters-export'
+import { clipsFetch } from '@/lib/clips-api'
 
 type ExportTab = 'video' | 'audio' | 'transcript' | 'subtitles'
 
@@ -18,6 +21,7 @@ export function ScriptExportPopover({
   title,
   durationMs,
   aspect,
+  compositionDoc,
 }: {
   open: boolean
   onClose: () => void
@@ -25,6 +29,7 @@ export function ScriptExportPopover({
   title: string
   durationMs: number
   aspect: string
+  compositionDoc?: ScriptDocumentV1
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState<ExportTab>('video')
@@ -33,6 +38,8 @@ export function ScriptExportPopover({
   const [quality, setQuality] = useState('recommended')
   const [burnCaptions, setBurnCaptions] = useState(true)
   const [includeSubs, setIncludeSubs] = useState(false)
+  const [includeMarkers, setIncludeMarkers] = useState(true)
+  const [destination, setDestination] = useState<'local' | 'web'>('local')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [renderId, setRenderId] = useState<string | null>(null)
@@ -111,16 +118,52 @@ export function ScriptExportPopover({
     }
   }
 
+  const onPublishWeb = async () => {
+    setBusy(true)
+    try {
+      const pub = await clipsFetch<{ publicSlug: string }>(`/api/clips/compositions/${compositionId}/publish`, {
+        method: 'POST',
+        body: JSON.stringify({
+          showTranscript: true,
+          allowComments: true,
+          allowDownload: true,
+          showAuthor: true,
+        }),
+      })
+      toast.success(`Published — /share/p/${pub.publicSlug}`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Publish failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const onExportTranscript = () => {
-    const lines = [`# ${title}`, '', '_Transcript export — open in editor for full formatting._']
+    const body = compositionDoc
+      ? descriptionWithChapters(compositionDoc, '_Transcript export — open in editor for full formatting._')
+      : '_Transcript export — open in editor for full formatting._'
+    const lines = [`# ${title}`, '', body]
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
+    const a = window.document.createElement('a')
     a.href = url
     a.download = `${title.replace(/\s+/g, '_')}.md`
     a.click()
     URL.revokeObjectURL(url)
     toast.success('Transcript downloaded')
+  }
+
+  const onExportChapters = () => {
+    if (!compositionDoc) return
+    const text = youtubeChaptersText(compositionDoc, title)
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = window.document.createElement('a')
+    a.href = url
+    a.download = `${title.replace(/\s+/g, '_')}_chapters.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('YouTube chapters copied to file')
   }
 
   if (!open) return null
@@ -175,13 +218,13 @@ export function ScriptExportPopover({
                 </div>
               </div>
               <ExportRow label="Destination">
-                <Select defaultValue="local">
+                <Select value={destination} onValueChange={(v) => setDestination(v as 'local' | 'web')}>
                   <SelectTrigger className="h-8 w-[180px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="local">Local export</SelectItem>
-                    <SelectItem value="web">Web link</SelectItem>
+                    <SelectItem value="web">Transovo link</SelectItem>
                   </SelectContent>
                 </Select>
               </ExportRow>
@@ -228,15 +271,26 @@ export function ScriptExportPopover({
                     <Label className="text-sm">Include subtitle track</Label>
                     <Switch checked={includeSubs} onCheckedChange={setIncludeSubs} />
                   </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Include markers as chapters</Label>
+                    <Switch checked={includeMarkers} onCheckedChange={setIncludeMarkers} />
+                  </div>
                 </div>
               )}
             </>
           )}
           {tab === 'transcript' && (
-            <p className="text-sm text-muted-foreground">
-              Export the current composition transcript as Markdown. Word-level timing and speaker labels follow your
-              caption settings.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Export the current composition transcript as Markdown. Word-level timing and speaker labels follow your
+                caption settings.
+              </p>
+              {compositionDoc && (compositionDoc.markers?.length ?? 0) > 0 && (
+                <Button type="button" variant="outline" size="sm" onClick={onExportChapters}>
+                  Download YouTube chapters
+                </Button>
+              )}
+            </div>
           )}
           {tab === 'subtitles' && (
             <ExportRow label="Format">
@@ -279,12 +333,13 @@ export function ScriptExportPopover({
               type="button"
               className="h-10 w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:opacity-90"
               onClick={() => {
-                if (tab === 'video') void onExportVideo()
+                if (tab === 'video' && destination === 'web') void onPublishWeb()
+                else if (tab === 'video') void onExportVideo()
                 else if (tab === 'transcript') onExportTranscript()
                 else toast.message('Use Video export for this format in M5')
               }}
             >
-              Export
+              {tab === 'video' && destination === 'web' ? 'Publish' : 'Export'}
             </Button>
           )}
         </footer>

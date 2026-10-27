@@ -128,14 +128,24 @@ const opSchema = z.discriminatedUnion('type', [
       ]),
     ),
   }),
+  z.object({ type: z.literal('patch_audio'), audio: z.record(z.string(), z.unknown()).nullable() }),
   z.object({
     type: z.literal('add_marker'),
+    id: z.string().min(1).optional(),
     outMs: z.number().min(0),
-    markerId: z.string().min(8).optional(),
-    label: z.string().max(120).optional(),
+    label: z.string().max(200).optional(),
+    exportAsChapter: z.boolean().optional(),
   }),
-  z.object({ type: z.literal('remove_marker'), markerId: z.string().min(8) }),
-  z.object({ type: z.literal('patch_audio'), audio: z.record(z.string(), z.unknown()).nullable() }),
+  z.object({
+    type: z.literal('update_marker'),
+    id: z.string().min(1),
+    patch: z.object({
+      label: z.string().max(200).optional(),
+      outMs: z.number().min(0).optional(),
+      exportAsChapter: z.boolean().optional(),
+    }),
+  }),
+  z.object({ type: z.literal('delete_marker'), id: z.string().min(1) }),
 ])
 
 const bodySchema = z.object({

@@ -4,11 +4,13 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Panel } from '@/components/app/page-primitives'
 import { Button } from '@/components/ui/button'
+import { ScriptEmptyImport } from '@/components/script-editor/import/script-empty-import'
 import { ScriptEditorShell, type ScriptBootstrapView } from '@/components/script-editor/script-editor-shell'
 import { clipsFetch } from '@/lib/clips-api'
 
 export function ScriptEditorEntry({
   projectId,
+  projectTitle,
   clipId,
 }: {
   projectId: string
@@ -45,13 +47,7 @@ export function ScriptEditorEntry({
   }
 
   if (!data.editorWords.length) {
-    return (
-      <Panel title="No transcript yet" description="Process this project to generate words before editing the script.">
-        <Button size="sm" render={<Link href={`/app/clips/${projectId}`} />}>
-          Back to project
-        </Button>
-      </Panel>
-    )
+    return <ScriptEmptyImport projectId={projectId} projectTitle={projectTitle} />
   }
 
   return (

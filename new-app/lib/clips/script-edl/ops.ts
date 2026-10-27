@@ -1,4 +1,11 @@
 import type { BrollItem } from '@/lib/clips/broll'
+import {
+  applyMarkerCompositionOp,
+  isMarkerCompositionOp,
+  type AddMarkerOp,
+  type DeleteMarkerOp,
+  type UpdateMarkerOp,
+} from '@/lib/clips/script-edl/marker-ops'
 import { applySymmetricGapTrim, symmetricGapTrimMs } from '@/lib/clips/script-edl/word-adjust'
 import type { ClipEditsAudio } from '@/lib/clips/audio'
 import type { ReframeCropRect, ScriptDocumentV1, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
@@ -52,9 +59,9 @@ export type AddSceneAtWordOp = {
 export type RemoveSceneOp = { type: 'remove_scene'; sceneId: string }
 export type ReorderScenesOp = { type: 'reorder_scenes'; sceneIds: string[] }
 export type PatchBrollOp = { type: 'patch_broll'; broll: BrollItem[] }
-export type AddMarkerOp = { type: 'add_marker'; outMs: number; markerId?: string; label?: string }
-export type RemoveMarkerOp = { type: 'remove_marker'; markerId: string }
 export type PatchAudioOp = { type: 'patch_audio'; audio: ClipEditsAudio | null }
+
+export type { AddMarkerOp, UpdateMarkerOp, DeleteMarkerOp }
 
 export type ScriptCompositionOp =
   | DeleteWordsOp
@@ -80,9 +87,10 @@ export type ScriptCompositionOp =
   | RemoveSceneOp
   | ReorderScenesOp
   | PatchBrollOp
-  | AddMarkerOp
-  | RemoveMarkerOp
   | PatchAudioOp
+  | AddMarkerOp
+  | UpdateMarkerOp
+  | DeleteMarkerOp
 
 export function emptyDocument(allWordIds: string[]): ScriptDocumentV1 {
   return { v: 1, keptWordIds: [...allWordIds], deletedWordIds: [], wordOrder: [...allWordIds] }
@@ -138,6 +146,10 @@ function finalizeDoc(
 }
 
 export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptCompositionOp): ScriptDocumentV1 {
+  if (isMarkerCompositionOp(op)) {
+    return applyMarkerCompositionOp(document, op)
+  }
+
   const order = wordOrderOf(document)
   const deleted = new Set(document.deletedWordIds)
   const kept = new Set(document.keptWordIds)
@@ -323,19 +335,6 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     broll = [...op.broll]
   } else if (op.type === 'patch_audio') {
     audio = op.audio ?? undefined
-  } else if (op.type === 'add_marker') {
-    markers = markers ?? []
-    const id = op.markerId ?? `mrk_${Math.round(op.outMs)}`
-    markers.push({
-      id,
-      outMs: Math.max(0, Math.round(op.outMs)),
-      label: op.label,
-      exportAsChapter: true,
-    })
-    markers.sort((a, b) => a.outMs - b.outMs)
-  } else if (op.type === 'remove_marker') {
-    markers = (markers ?? []).filter((m) => m.id !== op.markerId)
-    if (!markers.length) markers = undefined
   }
 
   return finalizeDoc(document, order, kept, deleted, {
