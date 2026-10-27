@@ -30,10 +30,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
   let etaSec = 0
   let queueAhead: number | undefined
   let waitingForWorker = false
-  const queuedElapsedSec = Math.max(
-    0,
-    Math.floor((Date.now() - project.createdAt.getTime()) / 1000),
-  )
+  let queuedElapsedSec = Math.max(0, Math.floor((Date.now() - project.createdAt.getTime()) / 1000))
   if (!TERMINAL.includes(project.status)) {
     const hasWorkerProgress =
       workerEta > 0 ||
@@ -50,6 +47,10 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
       })
       if (job) {
         queueAhead = await fairQueueAheadForJob(job.id)
+        queuedElapsedSec = Math.max(
+          0,
+          Math.floor((Date.now() - job.createdAt.getTime()) / 1000),
+        )
       }
     } else if (hasWorkerProgress) {
       const stageKey = etaStageKey(project.status, project.stage)

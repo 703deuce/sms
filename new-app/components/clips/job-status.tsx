@@ -21,6 +21,7 @@ import { Panel } from '@/components/app/page-primitives'
 import { CLIP_JOB_STATE, StatusBadge } from '@/components/app/status'
 import { clampEtaBetweenPolls, etaStageKey } from '@/lib/clips/eta-poll'
 import {
+  clipQueueAttention,
   formatClipProgressEtaLine,
   formatClipProgressStageLabel,
   isClipWaitingForWorker,
@@ -76,6 +77,7 @@ export function JobStatus({
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
   const [waitingForWorker, setWaitingForWorker] = useState(false)
   const [queueAhead, setQueueAhead] = useState<number | undefined>()
+  const [queuedElapsedSec, setQueuedElapsedSec] = useState(0)
 
   useEffect(() => {
     let stop = false
@@ -103,6 +105,7 @@ export function JobStatus({
         setChunkTotal(data.chunkTotal)
         setWaitingForWorker(Boolean(data.waitingForWorker))
         setQueueAhead(data.queueAhead)
+        setQueuedElapsedSec(data.queuedElapsedSec ?? 0)
         if (['READY', 'FAILED', 'CANCELED'].includes(data.status)) return
       } catch {
         /* ignore transient */
@@ -114,6 +117,12 @@ export function JobStatus({
       stop = true
     }
   }, [projectId])
+
+  useEffect(() => {
+    if (!waitingForWorker) return
+    const t = setInterval(() => setQueuedElapsedSec((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [waitingForWorker])
 
   useEffect(() => {
     if (etaSec <= 0) return
@@ -139,6 +148,7 @@ export function JobStatus({
     stageDetail,
     waitingForWorker,
     queueAhead,
+    queuedElapsedSec,
   })
   const etaLine = formatClipProgressEtaLine({
     etaSec,
@@ -147,6 +157,14 @@ export function JobStatus({
     stage,
     waitingForWorker,
     queueAhead,
+    queuedElapsedSec,
+  })
+  const queueAttention = clipQueueAttention({
+    waitingForWorker,
+    status,
+    stage,
+    progress,
+    queuedElapsedSec,
   })
   const statusBadgeLabel =
     processing && isClipWaitingForWorker(status, stage, progress, waitingForWorker)
@@ -189,6 +207,22 @@ export function JobStatus({
             {error}
           </div>
         ) : null}
+        {processing && queueAttention === 'slow' ? (
+          <div
+            className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-foreground"
+            role="status"
+          >
+            {stageLabel}
+          </div>
+        ) : null}
+        {processing && queueAttention === 'stalled' ? (
+          <div
+            className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-foreground"
+            role="alert"
+          >
+            {stageLabel}
+          </div>
+        ) : null}
         {processing && (
           <>
             <div className="flex flex-wrap items-center gap-2">
@@ -207,7 +241,11 @@ export function JobStatus({
               steps={fromLink ? STEPS_IMPORT : STEPS_UPLOAD}
               current={stepIndex(status, mode, stage, fromLink)}
             />
-            <Progress value={progress} className="h-2 [&_[data-slot=progress-indicator]]:bg-brand-gradient" aria-label="Processing progress" />
+            <Progress
+              value={isClipWaitingForWorker(status, stage, progress, waitingForWorker) ? 0 : progress}
+              className="h-2 [&_[data-slot=progress-indicator]]:bg-brand-gradient"
+              aria-label="Processing progress"
+            />
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin shrink-0" aria-hidden />
               {stageLabel || 'Processing…'}
