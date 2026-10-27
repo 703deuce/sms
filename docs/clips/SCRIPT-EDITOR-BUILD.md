@@ -1,6 +1,6 @@
 # Script editor — build plan
 
-**Status:** **M4** shipped (enrichment, filler tools, captions/reframe pills); **M5** next (save, versions, export).  
+**Status:** **M4.1** closing (§5 wireframe parity, symmetric trim, prod e2e); **M5** export e2e gate; **M6** integration in flight.  
 **Product spec:** `docs/clips/script-editor.md` (§D1 tests **1–66**; extended **§D1b #67–#167** in gap matrix).  
 **Descript inventory:** `docs/clips/descript/feature-map.md` (596 features), `docs/clips/descript/gap-matrix.md` (B6–B13, M7–M18, recording §R).  
 **Owner decisions (2026-10-26):** see §0 “Decisions locked” below. **Gap matrix merge (2026-10-27):** §0.1–§0.3, §1 (M7–M17), §12–§14. **Product order:** `docs/ROADMAP.md` — script editor is **phase 1**; no MVP bar.
@@ -9,7 +9,7 @@
 
 **UI layouts (owner 2026-10-27):** **M4 / M4.1** → `script-editor.md` **§A**. **M5+** net-new panels/dialogs → **`docs/clips/descript/ui-layouts.md`** when ready (**BLK-002**); until then **backend + ops + tests** only (no improvised layout).
 
-**Current phase:** **M4.1** → **M5** (save, versions, export logic first; version/export **UI** when `ui-layouts.md` has §).
+**Current phase:** **M6** → **M7** after export e2e green on prod (`proj_89c551…`, |output−EDL| &lt; 1500 ms).
 
 ---
 

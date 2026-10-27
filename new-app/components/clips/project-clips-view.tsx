@@ -18,7 +18,8 @@ import { ProjectProducerPanel } from '@/components/clips/producer/project-produc
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { MontageDialog } from '@/components/streamer/montage-dialog'
 import { MontageProgress } from '@/components/streamer/montage-progress'
-import { Clapperboard, Film, Sparkles } from 'lucide-react'
+import { Clapperboard, Film, FileText, Sparkles } from 'lucide-react'
+import Link from 'next/link'
 
 type ProjectStatusPayload = {
   status: string
@@ -82,6 +83,19 @@ export function ProjectClipsView({
   isStreamer?: boolean
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(`clips-proj-scroll-${projectId}`)
+      if (raw != null) {
+        const y = Number(raw)
+        sessionStorage.removeItem(`clips-proj-scroll-${projectId}`)
+        if (Number.isFinite(y)) requestAnimationFrame(() => window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior }))
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [projectId])
 
   const readyFromServer = initialStatus === 'READY' && initialClips != null
   const [status, setStatus] = useState(initialStatus)
@@ -180,6 +194,25 @@ export function ProjectClipsView({
         icon={Film}
         title={projectTitle}
         description={desc}
+        actions={
+          showResults ? (
+            <Button
+              size="sm"
+              data-testid="edit-transcript-project"
+              onClick={() => {
+                try {
+                  sessionStorage.setItem(`clips-proj-scroll-${projectId}`, String(window.scrollY))
+                } catch {
+                  /* ignore */
+                }
+              }}
+              render={<Link href={`/app/clips/${projectId}/script`} />}
+            >
+              <FileText className="mr-1 size-4" />
+              Edit transcript
+            </Button>
+          ) : null
+        }
         meta={
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <ProjectStatusBadge status={status} />

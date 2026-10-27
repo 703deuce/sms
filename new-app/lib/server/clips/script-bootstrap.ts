@@ -5,6 +5,11 @@ import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { createId } from '@/lib/supabase/id'
 import { ensureFullComposition } from '@/lib/server/clips/script-composition'
+import {
+  ensureClipComposition,
+  surroundingContextWordIds,
+  wordIdsInClipRange,
+} from '@/lib/server/clips/clip-script-composition'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import type { ClipWord } from '@/lib/clips/edits'
 import { ensureProjectTranscriptEnriched } from '@/lib/server/clips/script-enrich'
@@ -28,7 +33,11 @@ async function loadProjectTranscript(
   return []
 }
 
-export async function getScriptBootstrap(workspaceId: string, projectId: string) {
+export async function getScriptBootstrap(
+  workspaceId: string,
+  projectId: string,
+  opts?: { clipId?: string | null },
+) {
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({
     where: { id: projectId, workspaceId },
@@ -84,12 +93,31 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
   const lastWordEndMs = editorWords.reduce((m, w) => Math.max(m, w.t1Ms), project.rangeStartMs)
   const assetDurationMs = mediaAsset?.durationMs ?? 0
   const durationMs = Math.max(rangeSpanMs, assetDurationMs, lastWordEndMs - project.rangeStartMs)
-  const composition = await ensureFullComposition(
+  let compositionKind: 'FULL' | 'CLIP' = 'FULL'
+  let clipId: string | null = null
+  let clipStartMs: number | null = null
+  let clipEndMs: number | null = null
+
+  let composition = await ensureFullComposition(
     workspaceId,
     project.id,
     project.title,
     editorWords.map((w) => w.id),
   )
+
+  if (opts?.clipId) {
+    const clip = await prisma.clip.findFirst({
+      where: { id: opts.clipId, projectId: project.id, deletedAt: null },
+    })
+    if (clip) {
+      compositionKind = 'CLIP'
+      clipId = clip.id
+      clipStartMs = clip.startMs
+      clipEndMs = clip.endMs
+      composition = await ensureClipComposition(workspaceId, project.id, clip, editorWords)
+    }
+  }
+
   const document = (composition.document ?? null) as ScriptDocumentV1 | null
 
   let sourceVideoUrl: string | null = null
@@ -116,6 +144,19 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
     editorWords,
     compositionId: composition.id,
     compositionRevision: composition.revision,
+    compositionKind,
+    clipId,
+    clipStartMs,
+    clipEndMs,
+    surroundingContextIds:
+      compositionKind === 'CLIP' && clipStartMs != null && clipEndMs != null
+        ? surroundingContextWordIds(
+            editorWords,
+            new Set(wordIdsInClipRange(editorWords, clipStartMs, clipEndMs)),
+            clipStartMs,
+            clipEndMs,
+          )
+        : [],
     document,
     compositions: project.scriptCompositions,
     clips: project.clips,

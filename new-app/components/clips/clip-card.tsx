@@ -110,6 +110,14 @@ export function ClipCard({
           <Button size="sm" variant="default" render={<Link href={`/app/clips/${projectId}/edit/${clip.id}`} />}>
             Edit
           </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            data-testid="edit-in-script-editor"
+            render={<Link href={`/app/clips/${projectId}/script?clipId=${clip.id}`} />}
+          >
+            Script editor
+          </Button>
           <Button size="sm" variant="outline" onClick={() => onDownload(clip.id)}>Download</Button>
           <Button size="sm" variant="outline" disabled={thumbBusy} onClick={() => void makeThumbnail()}>
             Make thumbnail

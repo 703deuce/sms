@@ -75,6 +75,10 @@ const opSchema = z.discriminatedUnion('type', [
       .optional(),
   }),
   z.object({
+    type: z.literal('include_context_words'),
+    wordIds: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({
     type: z.literal('patch_reframe_keyframes'),
     reframeKeyframes: z
       .array(

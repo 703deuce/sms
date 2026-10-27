@@ -7,15 +7,23 @@ import { Button } from '@/components/ui/button'
 import { ScriptEditorShell, type ScriptBootstrapView } from '@/components/script-editor/script-editor-shell'
 import { clipsFetch } from '@/lib/clips-api'
 
-export function ScriptEditorEntry({ projectId }: { projectId: string; projectTitle: string }) {
+export function ScriptEditorEntry({
+  projectId,
+  clipId,
+}: {
+  projectId: string
+  projectTitle: string
+  clipId?: string | null
+}) {
   const [data, setData] = useState<ScriptBootstrapView | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    void clipsFetch<ScriptBootstrapView>(`/api/clips/projects/${projectId}/script/bootstrap`)
+    const qs = clipId ? `?clipId=${encodeURIComponent(clipId)}` : ''
+    void clipsFetch<ScriptBootstrapView>(`/api/clips/projects/${projectId}/script/bootstrap${qs}`)
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load'))
-  }, [projectId])
+  }, [projectId, clipId])
 
   if (error) {
     return (

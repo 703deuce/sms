@@ -156,5 +156,8 @@ export async function applyCompositionOpBatch(
     acked.push(item.id)
   }
 
+  const { syncClipBoundsFromComposition } = await import('@/lib/server/clips/clip-script-composition')
+  await syncClipBoundsFromComposition(compositionId, document)
+
   return { ok: true, revision, document, ackedOpIds: acked }
 }

@@ -40,6 +40,7 @@ export type PatchReframeKeyframesOp = {
   type: 'patch_reframe_keyframes'
   reframeKeyframes?: ScriptDocumentV1['reframeKeyframes']
 }
+export type IncludeContextWordsOp = { type: 'include_context_words'; wordIds: string[] }
 
 export type ScriptCompositionOp =
   | DeleteWordsOp
@@ -60,6 +61,7 @@ export type ScriptCompositionOp =
   | WordBatchActionOp
   | PatchWordSourceAdjustOp
   | PatchReframeKeyframesOp
+  | IncludeContextWordsOp
 
 export function emptyDocument(allWordIds: string[]): ScriptDocumentV1 {
   return { v: 1, keptWordIds: [...allWordIds], deletedWordIds: [], wordOrder: [...allWordIds] }
@@ -257,6 +259,16 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
       if (removeMs > 0) doc = applySymmetricGapTrim(doc, item.prevWordId, item.wordId, removeMs)
     }
     wordSourceAdjust = doc.wordSourceAdjust
+  }
+
+  if (op.type === 'include_context_words') {
+    const hid = new Set(transcriptHiddenWordIds)
+    for (const id of op.wordIds) {
+      kept.add(id)
+      deleted.delete(id)
+      hid.delete(id)
+    }
+    transcriptHiddenWordIds = [...hid]
   }
 
   return finalizeDoc(document, order, kept, deleted, {

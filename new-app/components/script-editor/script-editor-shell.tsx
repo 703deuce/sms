@@ -64,6 +64,10 @@ import { TeleprompterPanel } from '@/components/recording/editor/teleprompter-pa
 import { RoomsUploadCard } from '@/components/recording/rooms/upload-card'
 import { ScriptExportPopover } from '@/components/script-editor/script-export-popover'
 import { ScriptVersionHistoryPanel } from '@/components/script-editor/script-version-history-panel'
+import { ScriptShortcutsSheet } from '@/components/script-editor/script-shortcuts-sheet'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { HelpCircle } from 'lucide-react'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -76,6 +80,11 @@ export type ScriptBootstrapView = {
   editorWords: EditorWord[]
   compositionId: string
   compositionRevision: number
+  compositionKind?: 'FULL' | 'CLIP'
+  clipId?: string | null
+  clipStartMs?: number | null
+  clipEndMs?: number | null
+  surroundingContextIds?: string[]
   document: ScriptDocumentV1 | null
   clips: { id: string; title: string }[]
   status: string
@@ -171,8 +180,17 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const [followPlayhead, setFollowPlayhead] = useState(true)
   const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const isClipComposition = data.compositionKind === 'CLIP'
+  const [showSurrounding, setShowSurrounding] = useState(false)
+  const [hoverIncludeWordId, setHoverIncludeWordId] = useState<string | null>(null)
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
+  const keptSet = useMemo(() => new Set(document.keptWordIds), [document.keptWordIds])
+  const contextWordSet = useMemo(
+    () => new Set(data.surroundingContextIds ?? []),
+    [data.surroundingContextIds],
+  )
   const settings = useMemo(() => resolveScriptSettings(document.settings), [document.settings])
   const showDeletedWords = settings.showDeletedWords !== false
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
@@ -840,6 +858,11 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         const step = e.key === 'ArrowLeft' ? -33 : 33
         seekToOutputMs(Math.max(0, Math.min(outDur, outputMs + step)))
       }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault()
+        setShortcutsOpen(true)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -856,7 +879,28 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     timelineFocused,
     seekToOutputMs,
     followPlayhead,
+    setShortcutsOpen,
   ])
+
+  const saveProjectScroll = useCallback(() => {
+    try {
+      sessionStorage.setItem(`clips-proj-scroll-${data.projectId}`, String(window.scrollY))
+    } catch {
+      /* ignore */
+    }
+  }, [data.projectId])
+
+  const isContextWord = useCallback(
+    (wordId: string) => isClipComposition && contextWordSet.has(wordId) && !keptSet.has(wordId),
+    [isClipComposition, contextWordSet, keptSet],
+  )
+
+  const includeContextWord = useCallback(
+    (wordId: string) => {
+      applyOp({ type: 'include_context_words', wordIds: [wordId] })
+    },
+    [applyOp],
+  )
 
   useEffect(() => {
     const el = transcriptRef.current?.querySelector(`[data-word-idx="${activeIndex}"]`) ?? null
@@ -934,9 +978,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   return (
     <div data-script-shell className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-background">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
-        <Button size="sm" variant="ghost" render={<Link href={`/app/clips/${data.projectId}`} />}>
+        <Button
+          size="sm"
+          variant="ghost"
+          data-testid="script-back-to-project"
+          onClick={saveProjectScroll}
+          render={<Link href={`/app/clips/${data.projectId}`} />}
+        >
           <ArrowLeft className="size-4" aria-hidden />
-          Back
+          Back to project
         </Button>
         <Button size="sm" variant="ghost" disabled={!canUndo} onClick={() => undo()}>
           <Undo2 className="size-4" aria-hidden />
@@ -950,7 +1000,28 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           <Scissors className="size-4" aria-hidden />
           Split
         </Button>
-        <div className="min-w-0 flex-1 truncate text-sm font-medium">{data.title}</div>
+        <div className="min-w-0 flex-1 truncate text-sm font-medium">
+          {data.title}
+          {isClipComposition ? <span className="ml-2 text-xs text-muted-foreground">(clip)</span> : null}
+        </div>
+        {isClipComposition && (
+          <div className="flex items-center gap-2" data-testid="show-surrounding-transcript">
+            <Switch id="surrounding-transcript" checked={showSurrounding} onCheckedChange={setShowSurrounding} />
+            <Label htmlFor="surrounding-transcript" className="text-xs text-muted-foreground">
+              Show surrounding transcript
+            </Label>
+          </div>
+        )}
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          title="Shortcuts (⌘/)"
+          data-testid="script-shortcuts-help"
+          onClick={() => setShortcutsOpen(true)}
+        >
+          <HelpCircle className="size-4" />
+        </Button>
         {fillerCount > 0 && (
           <button
             type="button"
@@ -1097,6 +1168,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                       {block.words.map((w) => {
                         const idx = wordIndex(w.id)
                         const deleted = deletedSet.has(w.id)
+                        const contextOnly = isContextWord(w.id)
+                        if (contextOnly && !showSurrounding) return null
                         if (deleted && !showDeletedWords) return null
                         const active = idx === activeIndex
                         const ignored = ignoredSet.has(w.id)
@@ -1118,14 +1191,20 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                               type="button"
                               data-word-idx={idx}
                               onMouseDown={(e) => {
+                                if (contextOnly) return
                                 e.preventDefault()
                                 onWordPointerDown(idx, w, e.shiftKey)
                               }}
                               onMouseEnter={() => {
+                                if (contextOnly) {
+                                  setHoverIncludeWordId(w.id)
+                                  return
+                                }
                                 onWordPointerEnter(idx)
                                 if (deleted || ignored) setHoverRestoreWordId(w.id)
                               }}
                               onMouseLeave={() => {
+                                if (hoverIncludeWordId === w.id) setHoverIncludeWordId(null)
                                 if (hoverRestoreWordId === w.id) setHoverRestoreWordId(null)
                               }}
                               onDoubleClick={(e) => {
@@ -1145,7 +1224,9 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                                 deleted && 'text-muted-foreground/60 line-through decoration-destructive/50',
                                 ignored && !deleted && 'text-muted-foreground/70 line-through decoration-dotted',
                                 hiddenTranscript && !deleted && 'text-muted-foreground/50 italic',
-                                active && !deleted && 'bg-primary/20',
+                                contextOnly &&
+                                  'cursor-default border-b border-dashed border-primary/40 text-muted-foreground/50',
+                                active && !deleted && !contextOnly && 'bg-primary/20',
                                 activeFillerHit?.word.id === w.id && 'ring-1 ring-sky-500/60',
                                 activeGapHit?.word.id === w.id && 'ring-1 ring-amber-500/60',
                                 selected && 'bg-sky-500/25',
@@ -1155,6 +1236,17 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                             >
                               {hiddenTranscript ? '·' : w.text}
                             </button>
+                            {contextOnly && hoverIncludeWordId === w.id && (
+                              <button
+                                type="button"
+                                data-testid="include-context-word"
+                                className="absolute -top-6 left-0 z-10 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-primary shadow-sm hover:bg-muted"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => includeContextWord(w.id)}
+                              >
+                                Include
+                              </button>
+                            )}
                             {(deleted || ignored) && hoverRestoreWordId === w.id && (
                               <button
                                 type="button"
@@ -1456,6 +1548,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onTrimClipEdge={onTrimClipEdge}
         />
       </div>
+      <ScriptShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   )
 }

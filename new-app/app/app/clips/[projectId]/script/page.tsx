@@ -5,8 +5,15 @@ import { notFound } from 'next/navigation'
 
 export const metadata = { title: 'Script · Clips' }
 
-export default async function ProjectScriptPage({ params }: { params: Promise<{ projectId: string }> }) {
+export default async function ProjectScriptPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ projectId: string }>
+  searchParams: Promise<{ clipId?: string }>
+}) {
   const { projectId } = await params
+  const { clipId } = await searchParams
   const workspaceId = await resolveWorkspaceId()
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId } })
@@ -14,7 +21,7 @@ export default async function ProjectScriptPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col overflow-hidden">
-      <ScriptEditorEntry projectId={project.id} projectTitle={project.title} />
+      <ScriptEditorEntry projectId={project.id} projectTitle={project.title} clipId={clipId ?? null} />
     </div>
   )
 }
