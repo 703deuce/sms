@@ -12,6 +12,7 @@ import {
 import type { T2vStockMediaType } from '@/lib/t2v/m9-contracts'
 import type { T2vAspect, T2vSceneMedia } from '@/lib/t2v/types'
 import { logT2v } from '@/lib/server/t2v/log'
+import { geminiVisionConfigured } from '@/lib/server/ai/gemini-flash-lite'
 import { batchStockVisionPick, type StockVisionBatchMetrics } from '@/lib/server/t2v/stock-match-vision'
 import { narrationVisualFallback, normalizeVisualQuery } from '@/lib/server/t2v/visual-query'
 
@@ -438,7 +439,7 @@ export async function matchScenes(input: {
     resolved: false,
   }))
 
-  const visionEnabled = Boolean(process.env.OPENAI_API_KEY?.trim())
+  const visionEnabled = geminiVisionConfigured()
   let visionMetrics: StockVisionBatchMetrics | undefined
   const MAX_ROUNDS = 5
 

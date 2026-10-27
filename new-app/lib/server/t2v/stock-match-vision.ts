@@ -2,11 +2,16 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { recordAiUsage } from '@/lib/server/clips/ai-usage'
+import {
+  discoverVisionFlashLiteModel,
+  geminiGenerateJson,
+  geminiVisionTokenCostMicros,
+  type GeminiContentPart,
+} from '@/lib/server/ai/gemini-flash-lite'
 import { logT2v } from '@/lib/server/t2v/log'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
 
-const VISION_MODEL = process.env.T2V_STOCK_VISION_MODEL?.trim() || 'gpt-4o-mini'
-const VISION_CACHE_VERSION = 'v1'
+const VISION_CACHE_VERSION = 'v2-gemini-flash-lite'
 const TIMEOUT_MS = 10_000
 const MAX_SCENES_PER_REQUEST = 8
 
@@ -42,6 +47,7 @@ export type StockVisionBatchMetrics = {
   promptTokens: number
   completionTokens: number
   sceneCount: number
+  model?: string
 }
 
 function thumbAllowed(url: string): boolean {
@@ -60,15 +66,23 @@ function candidateThumb(c: StockCandidate): string | null {
   return url
 }
 
+async function thumbInlinePart(url: string): Promise<GeminiContentPart | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5_000) })
+    if (!res.ok) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (buf.length < 32 || buf.length > 2_000_000) return null
+    const mime = (res.headers.get('content-type') || 'image/jpeg').split(';')[0].trim()
+    return { inlineData: { mimeType: mime || 'image/jpeg', data: buf.toString('base64') } }
+  } catch {
+    return null
+  }
+}
+
 function visionCacheKey(scene: StockVisionSceneInput): string {
   const ids = scene.candidates.map((c) => `${c.provider}:${c.providerId}`).join('|')
   const raw = `${VISION_CACHE_VERSION}|${scene.query}|${ids}`
   return createHash('sha1').update(raw).digest('hex')
-}
-
-function tokenCostMicros(promptTokens: number, completionTokens: number): number {
-  // gpt-4o-mini list pricing (per 1M tokens): input $0.15, output $0.60 → USD micros
-  return Math.round(promptTokens * 0.15 + completionTokens * 0.6)
 }
 
 async function readVisionCache(scene: StockVisionSceneInput): Promise<StockVisionSceneResult | null> {
@@ -103,16 +117,33 @@ function candidateIds(candidates: StockCandidate[]): string[] {
   return candidates.map((c) => `${c.provider}:${c.providerId}`)
 }
 
-async function callOpenAiVisionBatch(
+const RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    scenes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          sceneId: { type: 'string' },
+          pick: { type: 'integer' },
+          reason: { type: 'string' },
+        },
+        required: ['sceneId', 'pick', 'reason'],
+      },
+    },
+  },
+  required: ['scenes'],
+}
+
+async function callGeminiVisionBatch(
   scenes: StockVisionSceneInput[],
+  model: string,
 ): Promise<{
   results: Map<string, { pickIndex: number | 'none'; reason: string }>
   promptTokens: number
   completionTokens: number
 }> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim()
-  if (!apiKey) throw new Error('OPENAI_API_KEY missing')
-
   const sceneBriefs = scenes.map((s) => ({
     sceneId: s.sceneId,
     sceneIndex: s.sceneIndex,
@@ -127,55 +158,34 @@ async function callOpenAiVisionBatch(
     })),
   }))
 
-  const content: Array<{ type: string; text?: string; image_url?: { url: string; detail: 'low' } }> = [
+  const parts: GeminiContentPart[] = [
     {
-      type: 'text',
       text:
         'You pick the best stock VIDEO thumbnail per scene for a short video. ' +
-        'Each scene lists candidate stills (index 0..n-1). ' +
-        'Return JSON: {"scenes":[{"sceneId":string,"pick":number,"reason":string}]} ' +
-        'Use pick=-1 if NONE of the thumbnails match the narration/visual/topic (off-topic). ' +
-        'Prefer literal subject match (what the camera would show). Scene briefs:\n' +
+        'Each scene lists candidate stills in order (index 0..n-1). ' +
+        'Return JSON matching the schema. Use pick=-1 if NONE match narration/visual/topic (off-topic). ' +
+        'Prefer literal on-camera subject match. Scene briefs:\n' +
         JSON.stringify(sceneBriefs),
     },
   ]
 
   for (const s of scenes) {
-    content.push({ type: 'text', text: `Scene ${s.sceneIndex + 1} (${s.sceneId}) thumbnails:` })
+    parts.push({ text: `Scene ${s.sceneIndex + 1} (${s.sceneId}) thumbnails:` })
     for (const c of s.candidates) {
       const url = candidateThumb(c)
-      if (url) {
-        content.push({ type: 'image_url', image_url: { url, detail: 'low' } })
-      }
+      if (!url) continue
+      const img = await thumbInlinePart(url)
+      if (img) parts.push(img)
     }
   }
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: VISION_MODEL,
-      response_format: { type: 'json_object' },
-      max_tokens: 800,
-      messages: [{ role: 'user', content }],
-    }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+  const { text, promptTokens, outputTokens } = await geminiGenerateJson({
+    model,
+    parts,
+    responseSchema: RESPONSE_SCHEMA,
+    temperature: 0.3,
+    timeoutMs: TIMEOUT_MS,
   })
-
-  if (!res.ok) {
-    const t = await res.text()
-    throw new Error(`openai_vision_${res.status}:${t.slice(0, 120)}`)
-  }
-
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
-    usage?: { prompt_tokens?: number; completion_tokens?: number }
-  }
-  const text = json.choices?.[0]?.message?.content
-  if (!text) throw new Error('openai_vision_empty')
 
   const parsed = JSON.parse(text) as {
     scenes?: Array<{ sceneId: string; pick: number; reason?: string }>
@@ -189,11 +199,7 @@ async function callOpenAiVisionBatch(
       reason: String(row.reason ?? '').slice(0, 240),
     })
   }
-  return {
-    results: out,
-    promptTokens: json.usage?.prompt_tokens ?? 0,
-    completionTokens: json.usage?.completion_tokens ?? 0,
-  }
+  return { results: out, promptTokens, completionTokens: outputTokens }
 }
 
 /**
@@ -209,6 +215,7 @@ export async function batchStockVisionPick(input: {
   let promptTokens = 0
   let completionTokens = 0
   let costUsdMicros = 0
+  let modelUsed: string | undefined
 
   const needApi: StockVisionSceneInput[] = []
   for (const scene of input.scenes) {
@@ -237,15 +244,37 @@ export async function batchStockVisionPick(input: {
     }
   }
 
+  if (needApi.length > 0) {
+    try {
+      modelUsed = await discoverVisionFlashLiteModel()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logT2v('stock-vision', 'model unavailable, score fallback', { error: message })
+      for (const scene of needApi) {
+        results.push({
+          sceneId: scene.sceneId,
+          pickIndex: 0,
+          reason: 'vision_unconfigured',
+          fromCache: false,
+          scoreFallback: true,
+        })
+      }
+      needApi.length = 0
+    }
+  }
+
   for (let i = 0; i < needApi.length; i += MAX_SCENES_PER_REQUEST) {
     const chunk = needApi.slice(i, i + MAX_SCENES_PER_REQUEST)
     const chunkStart = Date.now()
     try {
-      const { results: apiMap, promptTokens: pt, completionTokens: ct } = await callOpenAiVisionBatch(chunk)
+      const {
+        results: apiMap,
+        promptTokens: pt,
+        completionTokens: ct,
+      } = await callGeminiVisionBatch(chunk, modelUsed!)
       promptTokens += pt
       completionTokens += ct
-      const chunkCost = tokenCostMicros(pt, ct)
-      costUsdMicros += chunkCost
+      costUsdMicros += geminiVisionTokenCostMicros(pt, ct)
 
       for (const scene of chunk) {
         const row = apiMap.get(scene.sceneId)
@@ -277,6 +306,7 @@ export async function batchStockVisionPick(input: {
           reason,
           latencyMs,
           scoreFallback,
+          model: modelUsed,
         })
         results.push({
           sceneId: scene.sceneId,
@@ -293,6 +323,7 @@ export async function batchStockVisionPick(input: {
         sceneCount: chunk.length,
         latencyMs,
         error: message,
+        model: modelUsed,
       })
       for (const scene of chunk) {
         results.push({
@@ -310,18 +341,19 @@ export async function batchStockVisionPick(input: {
           reason: 'vision_failed',
           latencyMs,
           scoreFallback: true,
+          model: modelUsed,
         })
       }
     }
   }
 
-  if (costUsdMicros > 0 && input.workspaceId) {
+  if (costUsdMicros > 0 && input.workspaceId && modelUsed) {
     await recordAiUsage({
       workspaceId: input.workspaceId,
       projectId: input.projectId ?? null,
       usage: {
-        provider: 'openai',
-        model: VISION_MODEL,
+        provider: 'gemini',
+        model: modelUsed,
         units: promptTokens + completionTokens,
         unitType: 'tokens',
         costUsdMicros,
@@ -335,6 +367,7 @@ export async function batchStockVisionPick(input: {
     promptTokens,
     completionTokens,
     sceneCount: input.scenes.length,
+    model: modelUsed,
   }
 
   logT2v('stock-vision', 'batch complete', {
@@ -343,6 +376,7 @@ export async function batchStockVisionPick(input: {
     costUsdMicros: metrics.costUsdMicros,
     promptTokens: metrics.promptTokens,
     completionTokens: metrics.completionTokens,
+    model: metrics.model,
   })
 
   return { results, metrics }
