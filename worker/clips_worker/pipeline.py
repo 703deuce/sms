@@ -222,6 +222,10 @@ def initial_clip_edits(settings: dict) -> dict:
             "logoSizePct": brand.get("logoSizePct"),
             "logoOpacity": brand.get("logoOpacity"),
             "primaryColor": brand.get("primaryColor"),
+            "introVideoKey": brand.get("introVideoKey"),
+            "outroVideoKey": brand.get("outroVideoKey"),
+            "useIntro": brand.get("useIntro", True),
+            "useOutro": brand.get("useOutro", True),
         }
     return edits
 
