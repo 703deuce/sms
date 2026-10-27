@@ -57,9 +57,11 @@ async function listCompositionExportRows(
     if (!comp) continue
     const fname = exportFilename(comp.title || 'Composition export')
     let downloadUrl: string | null = null
+    let sizeBytes: number | null = null
     if (r.status === 'READY' && r.outputKey) {
       try {
         downloadUrl = await createCachedSignedDownloadUrl(storage, r.outputKey, { downloadFilename: fname })
+        sizeBytes = await storage.getObjectSizeBytes(r.outputKey)
       } catch {
         downloadUrl = null
       }
@@ -77,7 +79,7 @@ async function listCompositionExportRows(
       error: r.error,
       createdAt: r.createdAt.toISOString(),
       expiresAt: null,
-      sizeBytes: null,
+      sizeBytes,
       filename: fname,
       posterUrl: null,
       editorUrl: `/app/clips/${comp.projectId}/script`,

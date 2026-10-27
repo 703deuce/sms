@@ -59,6 +59,8 @@ export function ScriptExportPopover({
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [renderId, setRenderId] = useState<string | null>(null)
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const pollStartedRef = useRef<number>(0)
   const pollStopRef = useRef<(() => void) | null>(null)
   const [publishSlug, setPublishSlug] = useState<string | null>(null)
   const [publishPlayback, setPublishPlayback] = useState<'ready' | 'processing' | null>(null)
@@ -71,8 +73,10 @@ export function ScriptExportPopover({
     if (!open) {
       setProgress(null)
       setRenderId(null)
+      setDownloadUrl(null)
       setBusy(false)
       setPublishSettingsOpen(false)
+      pollStartedRef.current = 0
     }
   }, [open])
 
@@ -110,29 +114,33 @@ export function ScriptExportPopover({
   const pollRender = useCallback(
     (rid: string) => {
       pollStopRef.current?.()
+      pollStartedRef.current = Date.now()
       const t = setInterval(() => {
         void fetch(`/api/clips/compositions/${compositionId}/export/${rid}`)
           .then((r) => r.json())
           .then((data) => {
-            if (typeof data.progress === 'number') setProgress(data.progress)
+            const serverProg = typeof data.progress === 'number' ? data.progress : null
+            const elapsedSec = (Date.now() - pollStartedRef.current) / 1000
+            const softCap = Math.min(92, 8 + Math.floor(elapsedSec / 4))
+            const nextProg = serverProg != null ? Math.max(serverProg, softCap) : softCap
+            setProgress(nextProg)
             if (data.status === 'READY' && data.downloadUrl) {
               clearInterval(t)
               setProgress(100)
               setBusy(false)
-              setRenderId(null)
+              setDownloadUrl(data.downloadUrl)
+              setRenderId(rid)
               toast.success(
-                data.edlDurationMs && data.outputDurationMs
+                data.outputDurationMs
                   ? `Export ready (${Math.round(data.outputDurationMs / 1000)}s)`
                   : 'Export ready',
               )
-              window.open(data.downloadUrl, '_blank')
             } else if (data.status === 'FAILED' || data.status === 'CANCELED') {
               clearInterval(t)
               setBusy(false)
               setRenderId(null)
+              setDownloadUrl(null)
               toast.error(data.error ?? 'Export failed')
-            } else {
-              setProgress((p) => (p == null ? 12 : Math.min(95, p + 8)))
             }
           })
           .catch(() => {})
@@ -495,6 +503,19 @@ export function ScriptExportPopover({
               )}
             </div>
           )}
+          {downloadUrl && !busy ? (
+            <div className="space-y-2">
+              <Button
+                type="button"
+                className="h-10 w-full"
+                onClick={() => window.open(downloadUrl, '_blank')}
+              >
+                <Download className="mr-2 size-4" />
+                Download export
+              </Button>
+              <p className="text-center text-[11px] text-muted-foreground">Also available on Exports</p>
+            </div>
+          ) : null}
           {busy && progress != null ? (
             <div className="space-y-2">
               <div className="flex h-10 flex-col justify-center rounded-lg bg-primary/10 px-3">

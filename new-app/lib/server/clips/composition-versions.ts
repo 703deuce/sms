@@ -8,7 +8,7 @@ import {
   parseScriptCompositionDocument,
 } from '@/lib/server/clips/script-composition'
 
-export const AUTO_VERSION_EVERY = 50
+export const AUTO_VERSION_EVERY = 8
 
 export async function listCompositionVersions(workspaceId: string, compositionId: string) {
   const row = await getCompositionForWorkspace(workspaceId, compositionId)
