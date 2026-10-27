@@ -251,7 +251,10 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             duration_ms = effective_ms or int(dur_s * 1000)
             audio_key = stream_audio_key(workspace_id, vod_id)
             upload_file(audio_key, audio_path, "audio/opus")
-            state = {"audioKey": audio_key}
+            state = {
+                "audioKey": audio_key,
+                "importMeta": {"tags": meta.get("tags") or []},
+            }
             pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
             analyze_id = f"job_{uuid.uuid4().hex}"
             with conn.cursor() as cur:
@@ -337,7 +340,11 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
         )
         audio_key = stream_audio_key(workspace_id, vod_id)
         upload_file(audio_key, audio_out, "audio/opus")
-        state = {"audioKey": audio_key, "localUploadKey": key}
+        state = {
+            "audioKey": audio_key,
+            "localUploadKey": key,
+            "importMeta": {"tags": meta.get("tags") or []},
+        }
         pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
         analyze_id = f"job_{uuid.uuid4().hex}"
 

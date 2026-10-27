@@ -18,6 +18,8 @@ export const streamerSettingsSchema = z.object({
   language: z.string().nullable().default(null),
   captionPosition: z.enum(['seam', 'gameplay_bottom', 'top']).default('seam'),
   gameBadge: z.boolean().default(false),
+  /** Full-VOD Deepgram diarization + caption speaker labels (collab streams). */
+  alwaysDetectSpeakers: z.boolean().default(false),
   chatOverlay: chatOverlaySchema.default({}),
   notify: notifySchema.default({}),
 })

@@ -18,13 +18,17 @@ def transcribe_chunk_with_retry(
     project_id: str,
     chunk_index: int,
     prior_attempts: int = 0,
+    *,
+    vod_provider: str | None = None,
 ):
     delay = 2.0
     attempt = prior_attempts
     last_exc: Exception | None = None
     while attempt < MAX_CHUNK_ATTEMPTS:
         try:
-            res, _meta = transcribe_stream_audio_request(conn, req, workspace_id, project_id)
+            res, _meta = transcribe_stream_audio_request(
+                conn, req, workspace_id, project_id, vod_provider=vod_provider
+            )
             return res
         except Exception as exc:
             last_exc = exc

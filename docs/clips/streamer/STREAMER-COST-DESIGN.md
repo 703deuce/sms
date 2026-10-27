@@ -12,10 +12,18 @@
 IMPORT: audio-only (full VOD) in object storage
         │
         ▼
-FULL-VOD ASR (Groq whisper-large-v3-turbo, chunked <100 MB)
-  • plan_chunks + ffmpeg_slice_opus (shrink slice until ≤ STREAM_CHUNK_MAX_BYTES)
-  • transcribe_stream_audio_request per chunk (Groq default when GROQ_API_KEY set)
-  • Deepgram fallback on Groq errors; STREAM_TRANSCRIBE_PROVIDER overrides auto
+COLLAB DETECT (before ASR)
+  • title/tags heuristics (collab, ft., w/, @…)
+  • optional multiperson probe on a few sampled video frames (analysis proxy / short download)
+  • optional Twitch guest/shared-chat hints in state.importMeta when present
+  • settings.streamer.alwaysDetectSpeakers → force Deepgram diarization
+  • log [clipper:stream] collab_detected … provider=… signals=…
+        │
+        ▼
+FULL-VOD ASR (chunked <100 MB)
+  • Solo: Groq whisper-large-v3-turbo when GROQ_API_KEY set
+  • Collab / alwaysDetectSpeakers: Deepgram diarize=true (full VOD)
+  • Groq errors → Deepgram fallback; STREAM_TRANSCRIBE_PROVIDER overrides auto when not collab-routed
   • merge_words → full project transcript
         │
         ▼
@@ -42,7 +50,9 @@ STREAM_RENDER — caption-grade words on chosen clips only
 | `GROQ_WHISPER_MODEL` | `whisper-large-v3-turbo` | Groq model id |
 | `GROQ_USD_PER_AUDIO_HOUR` | `0.04` | Logged estimate only |
 | `STREAMER_CHUNK_MAX_BYTES` | `104857600` | Per-request upload cap (100 MB) |
-| `DEEPGRAM_CAPTION_MODEL` | `nova-3` | Final-clip caption pass only (`render_job`) |
+| `DEEPGRAM_CAPTION_MODEL` | `nova-3` | Final-clip caption pass only (`render_job`, diarize on) |
+| `settings.streamer.alwaysDetectSpeakers` | `false` | Force full-VOD Deepgram + diarized captions |
+| `STREAMER_COLLAB_PROBE_SAMPLES` | `5` | Video frame samples for multiperson probe |
 | `DEEPGRAM_USD_PER_MIN` | `0.006` | Logged estimate when provider is deepgram for full VOD |
 
 **Code:** `streamer/transcribe_stream.py`, `groq_transcribe.py`, `streamer/chunk_transcribe.py`, `streamer/chunking.py`.

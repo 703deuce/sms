@@ -54,6 +54,8 @@ def parse_metadata(data: dict[str, Any]) -> dict[str, Any]:
             }
         )
     ts = data.get("timestamp")
+    tags_raw = data.get("tags") or []
+    tags = [str(t) for t in tags_raw if t][:50] if isinstance(tags_raw, list) else []
     return {
         "title": data.get("title") or data.get("fulltitle"),
         "channel": data.get("channel") or data.get("uploader"),
@@ -63,6 +65,7 @@ def parse_metadata(data: dict[str, Any]) -> dict[str, Any]:
         "chapters": chapters or None,
         "streamed_at": ts,
         "category": (chapters[0].get("category") if chapters else None) or data.get("genre"),
+        "tags": tags,
     }
 
 

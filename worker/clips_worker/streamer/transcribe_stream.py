@@ -83,9 +83,11 @@ def transcribe_stream_audio_request(
     req: TranscribeReq,
     workspace_id: str,
     project_id: str,
+    *,
+    vod_provider: str | None = None,
 ) -> tuple[TranscribeRes, TranscribeMeta]:
     """Full-VOD chunk transcribe for streamer analyze (not caption-grade Deepgram)."""
-    provider = resolve_stream_transcribe_provider()
+    provider = (vod_provider or resolve_stream_transcribe_provider()).strip().lower()
     if provider == "groq":
         try:
             res = transcribe_groq(req)
@@ -128,8 +130,9 @@ def transcribe_stream_audio_request(
 
 
 def transcribe_clip_caption(req: TranscribeReq) -> TranscribeRes:
-    """Caption-grade Deepgram (nova-3) on final clip audio only."""
+    """Caption-grade Deepgram (nova-3, diarize) on final clip audio only."""
     model = deepgram_caption_model()
     if not deepgram_api_key():
         raise DeepgramTranscribeError("no_api_key")
+    # diarize=true is set in deepgram _listen_params (speaker labels for captions).
     return transcribe_deepgram(req, model=model)

@@ -31,6 +31,11 @@ def auto_multiperson_route_enabled() -> bool:
     )
 
 
+def probe_video_person_count(video: Path) -> PersonCountSummary:
+    """Public entry for multiperson face-count probe (reframe v1 / v3 path)."""
+    return _v3_probe(video)
+
+
 def _v3_probe(video: Path) -> PersonCountSummary:
     if str(V3) not in sys.path:
         sys.path.insert(0, V3_STR)

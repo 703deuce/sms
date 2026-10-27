@@ -23,10 +23,8 @@ from clips_worker.streamer.chat.resolve import resolve_chat_after_transcribe
 from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.metadata import enrich_streamer_meta
 from clips_worker.streamer.rank import rank_moments
-from clips_worker.streamer.transcribe_stream import (
-    log_stream_transcribe_summary,
-    resolve_stream_transcribe_provider,
-)
+from clips_worker.streamer.collab_detect import CollabDetection, detect_collab, log_collab_detection
+from clips_worker.streamer.transcribe_stream import log_stream_transcribe_summary
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
 
 
@@ -104,8 +102,39 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         audio_path = scratch / "audio.opus"
         download_object(audio_key, audio_path)
 
+        probe_video: Path | None = None
+        for key_name in ("analysisProxyKey", "localUploadKey"):
+            storage_key = state.get(key_name)
+            if storage_key:
+                probe_video = scratch / "collab_probe_source.mp4"
+                download_object(str(storage_key), probe_video)
+                break
+
+        collab_cached = state.get("collabDetection")
+        if isinstance(collab_cached, dict) and collab_cached.get("provider"):
+            detection = CollabDetection(
+                collab_detected=bool(collab_cached.get("collabDetected")),
+                provider=str(collab_cached.get("provider")),
+                signals=collab_cached.get("signals") or {},
+            )
+        else:
+            detection = detect_collab(
+                vod=vod,
+                state=state,
+                settings=settings,
+                video_path=probe_video,
+                scratch=scratch,
+            )
+            state["collabDetection"] = {
+                "collabDetected": detection.collab_detected,
+                "provider": detection.provider,
+                "signals": detection.signals,
+            }
+            _save_state(conn, vod_id, state)
+        log_collab_detection(vod_id=vod_id, project_id=project_id, detection=detection)
+        vod_transcribe_provider = detection.provider
+
         chunk_started = time.time()
-        vod_transcribe_provider = resolve_stream_transcribe_provider()
         transcribe_fallback: str | None = None
         chat_executor = ThreadPoolExecutor(max_workers=1)
         chat_future = chat_executor.submit(get_chat, vod, None)
@@ -131,7 +160,13 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             )
             prior = int((chunks_state.get(str(idx)) or {}).get("attempts") or 0)
             res = transcribe_chunk_with_retry(
-                conn, req, workspace_id, project_id, idx, prior_attempts=prior
+                conn,
+                req,
+                workspace_id,
+                project_id,
+                idx,
+                prior_attempts=prior,
+                vod_provider=vod_transcribe_provider,
             )
             wkey = stream_chunk_key(workspace_id, vod_id, idx, "words.json")
             put_json(wkey, res.words)
@@ -160,6 +195,8 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 payload_prog["transcriptionFallbackReason"] = res.fallback_reason
                 if vod_transcribe_provider == "groq" and res.transcription_engine == "deepgram":
                     transcribe_fallback = "groq_deepgram"
+                elif detection.collab_detected and res.transcription_engine != "deepgram":
+                    transcribe_fallback = f"collab_{res.transcription_engine}"
             hb.update(stage=payload_prog["stage"], progress=payload_prog["progress"])
             post_progress(job["id"], payload_prog)
 
