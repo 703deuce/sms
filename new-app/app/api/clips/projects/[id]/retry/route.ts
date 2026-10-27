@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
-import { createId } from '@/lib/supabase/id'
+import { retryClipProject } from '@/lib/server/clips/retry-clip-project'
 import { retryStreamerProject } from '@/lib/server/streamer/retry-project'
 
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -22,26 +22,11 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ data: { ok: true, jobId, jobType } })
     }
 
-    await prisma.clipProject.update({
-      where: { id: projectId },
-      data: {
-        status: 'QUEUED',
-        stage: 'queued',
-        progress: 0,
-        error: null,
-      },
+    const retried = await retryClipProject(workspaceId, projectId)
+    if (!retried) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({
+      data: { ok: true, jobId: retried.jobId, status: retried.status, resume: retried.resume },
     })
-    const jobId = createId('job')
-    await prisma.clipJob.create({
-      data: {
-        id: jobId,
-        projectId,
-        type: 'PROCESS_PROJECT',
-        status: 'QUEUED',
-        payload: { retry: true },
-      },
-    })
-    return NextResponse.json({ data: { ok: true, jobId, status: 'QUEUED' } })
   } catch (err) {
     return jsonError(err, 500)
   }

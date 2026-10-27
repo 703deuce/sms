@@ -191,7 +191,7 @@ def load_project(conn, project_id: str) -> dict:
     return dict(row)
 
 
-from clips_worker.process_helpers import job_payload, stored_transcript_words
+from clips_worker.process_helpers import job_payload, resolve_transcript_for_job
 
 
 def process_job(conn, job: dict) -> None:
@@ -205,7 +205,7 @@ def process_job(conn, job: dict) -> None:
         raise RuntimeError("missing source key")
 
     payload = job_payload(job)
-    words = stored_transcript_words(project) if payload.get("resume") else None
+    words = resolve_transcript_for_job(project, payload)
 
     log(f"processing job={job['id']} project={project['id']}")
     post_progress(

@@ -1,6 +1,7 @@
 import type { ClipProjectStatus } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
+import { shouldResumeClipperFromTranscript } from '@/lib/server/clips/project-retry'
 
 const NON_TERMINAL: ClipProjectStatus[] = [
   'UPLOADING',
@@ -38,7 +39,7 @@ export async function enqueueClipperRecoveryJob(projectId: string, reason: strin
   if (active) return null
 
   const jobId = createId('job')
-  const resume = isTranscriptReadyOrphan(project.stage, project.status)
+  const resume = shouldResumeClipperFromTranscript(project)
 
   await prisma.$transaction([
     prisma.clipProject.update({
@@ -46,7 +47,7 @@ export async function enqueueClipperRecoveryJob(projectId: string, reason: strin
       data: {
         status: 'QUEUED',
         stage: 'queued',
-        progress: resume ? project.progress : 0,
+        progress: resume ? Math.max(project.progress, 45) : 0,
         error: null,
       },
     }),
@@ -56,7 +57,7 @@ export async function enqueueClipperRecoveryJob(projectId: string, reason: strin
         projectId,
         type: 'PROCESS_PROJECT',
         status: 'QUEUED',
-        payload: { resume: true, recovery: reason },
+        payload: resume ? { resume: true, recovery: reason } : { recovery: reason },
         priority: 50,
       },
     }),

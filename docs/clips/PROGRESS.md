@@ -1,7 +1,20 @@
 # Clips build progress
 
 **Production:** https://transovo.ai  
-**Branch:** `master` · **Rollback tag:** `pre-clips-cleanup`
+**Branch:** `master` · **Rollback tag:** `pre-clips-cleanup`  
+**Web live SHA (2026-10-27):** `db41e7a6b` (includes `2f9e01faf` B2 source cache)
+
+## Recently shipped (regular clipper)
+
+| Feature | SHA (approx.) | Notes |
+|---------|---------------|--------|
+| **Deepgram primary + local Whisper fallback** | `eeffb66c7` / `f4df628ce` | Worker `transcribe_provider`; `transcriptionEngine` on progress |
+| **B2 source cache** | `2f9e01faf` | `/opt/clips-worker/cache` bind-mount; `storage.b2_get` `cache_hit=` logs; stable presigned URLs |
+| **Upload ETA (stage-aware)** | `db41e7a6b` | Transcribe from duration×engine rate; picker/reframe tail; 50% poll clamp |
+| **1080p export** | `3083d08d3` | Export dialog + worker render path |
+| **Retry/resume** | *(this push)* | Skip ASR when `transcriptWords` persisted; soft-delete partial clips; B2 cache on re-download; picker pass1 not stored — re-runs on resume |
+
+**Fine-tuning backlog** (after script editor + AI Studio — see `docs/ROADMAP.md`): face/speaker generalization, single-person + corner webcam, auto top/bottom split, clip style variety, wide two-shot crop, Streamer VOD resumable download.
 
 ## Milestones
 

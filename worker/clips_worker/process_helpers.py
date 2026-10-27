@@ -20,3 +20,15 @@ def stored_transcript_words(project: dict) -> list[dict] | None:
     if isinstance(tw, list) and tw:
         return tw
     return None
+
+
+def resolve_transcript_for_job(project: dict, payload: dict) -> list[dict] | None:
+    """Reuse persisted transcript on retry/resume; skip expensive ASR when safe."""
+    if payload.get("force_retranscribe"):
+        return None
+    stored = stored_transcript_words(project)
+    if stored:
+        return stored
+    if payload.get("resume"):
+        return stored
+    return None

@@ -1,6 +1,7 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-27 — Rick: clipper → script editor → AI Studio → **STOP**; then clipper fine-tuning; screenwriting on hold behind `FEATURE_SCREENWRITING`
+**Last updated:** 2026-10-27 — Rick: clipper → script editor → AI Studio → **STOP**; then clipper fine-tuning; screenwriting on hold behind `FEATURE_SCREENWRITING`  
+**Prod clipper (2026-10-27):** Deepgram+Whisper fallback, B2 worker source cache, stage-aware ETA, 1080p export — web `db41e7a6b`, workers redeployed same train.
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.
 
@@ -10,7 +11,7 @@ Single source of truth for build order and status. Update the **Last updated** l
 
 | # | Product | Status (2026-10-27) |
 |---|---------|---------------------|
-| **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS** |
+| **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS** — core pipeline live on prod (see below) |
 | **2** | **Script editor** — Descript-style transcript editor | **SPEC READY** — `docs/clips/SCRIPT-EDITOR-BUILD.md` (+ `docs/clips/script-editor.md`) |
 | **3** | **AI Studio** (Higgsfield-like) | **NOT STARTED** |
 | — | **STOP** after **1–3** ship | No screenwriting until re-enabled |
@@ -35,9 +36,14 @@ Single source of truth for build order and status. Update the **Last updated** l
 | Upload | S3 multipart + Supabase TUS; `clip_upload_parts`; resume; `/chunk` → 410; legacy `app_chunked` rejected on client |
 | Web | `lib/clips/upload.ts`, `lib/server/clips/uploads.ts` |
 | Worker | `pipeline.py`, `clips_worker/render_job.py` |
+| **ASR** | **LIVE** — Deepgram primary, local Whisper fallback (`eeffb66c7`+) |
+| **B2 egress** | **LIVE** — on-disk source cache `2f9e01faf`, `CLIPS_SOURCE_CACHE_MAX_GB`, shared mount both worker lanes |
+| **ETA** | **LIVE** — stage-aware upload ETA + poll clamp (`db41e7a6b`) |
+| **Export** | **LIVE** — 1080p export (`3083d08d3`) |
+| **Retry/resume** | Re-queue skips transcribe when `transcriptWords` on project; picker pass1 re-runs (not persisted); source re-download uses cache |
 | **RENDER_CLIP / `download_object`** | No inner re-import in `run_render_clip_job` — `test_render_job_storage.py`, `test_download_object_shadow.py` |
 | **Worker syntax** | Fixed `streamer/render_job.py` upload `elif` branch (`e3264ed9a`) |
-| **Prod** | Redeploy `clips-worker` when owner approves (not during active VOD jobs) |
+| **Prod workers** | `clips-worker` + `clips-worker-stream` @ `db41e7a6b` worker tree (manager verified Oct 2026) |
 
 **Specs:** `docs/clips/clipping_build_plan.md`, `docs/clips/PROGRESS.md`
 
@@ -71,9 +77,10 @@ Quality and layout intelligence for the **regular clipper** (and shared reframe 
 | Item | Intent |
 |------|--------|
 | **(a) Face + active speaker** | Generalize face tracking and active-speaker reframing across diverse footage; avoid overfitting to one golden test clip. |
-| **(b) Single-person + corner webcam** | Detect one-person / screen-share + small webcam inset; do not treat as multi-speaker drama; prefer full-frame or fit/blur when appropriate. |
-| **(c) Top/bottom split** | Test and auto-select content + face split layout when the scene fits (vs speaker-follow or fit-only). |
+| **(b) Single-person + corner webcam** | Single-person streams with a small corner webcam box must **not** be treated as several people; consider a plain full-frame clip when appropriate. |
+| **(c) Top/bottom split** | Test and **auto-choose** top/bottom split layout when the scene fits (vs speaker-follow or fit-only). |
 | **(d) Variety across clips** | Vary layout treatment and caption/style choices across clips in one project instead of one template for every output. |
+| **(e) Wide two-shot crop** | Fix reframing that crops a wide two-shot and cuts one person in half. |
 
 ---
 
@@ -105,7 +112,8 @@ Further S2–S15 milestones: `docs/clips/PROGRESS.md`.
 
 | Date | Milestone |
 |------|-----------|
-| 2026-10-27 | Roadmap: clipper → script editor (SCRIPT-EDITOR-BUILD.md) → AI Studio → STOP; fine-tuning pass (a–d); Streamer VOD resumable-download stays in backlog |
+| 2026-10-27 | Prod: Deepgram+Whisper, B2 source cache, ETA fix, 1080p export live (`db41e7a6b`); retry/resume transcript-aware (pending push) |
+| 2026-10-27 | Roadmap: clipper → script editor (SCRIPT-EDITOR-BUILD.md) → AI Studio → STOP; fine-tuning pass (a–e); Streamer VOD resumable-download stays in backlog |
 | 2026-10-26 | Roadmap: clipper → script editor → Streamer VOD → AI Studio → screenwriting on hold |
 | 2026-10-26 | `FEATURE_SCREENWRITING` off; middleware 404; nav hidden (`a8f126228`) |
 | 2026-10-26 | Clipper: direct upload `64d759c87`, `app_chunked` guard `ddd3d010d`, worker render fixes `e3264ed9a` |
