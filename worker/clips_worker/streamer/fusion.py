@@ -149,10 +149,7 @@ def fuse_moments(
 
     llm_rows: list[dict] = []
     if llm_ranker and candidates:
-        try:
-            llm_rows = llm_ranker(candidates, words, signals)
-        except Exception:
-            llm_rows = []
+        llm_rows = llm_ranker(candidates, words, signals)
 
     by_id = {r.get("id"): r for r in llm_rows if r.get("id")}
     picks: list[FusionPick] = []

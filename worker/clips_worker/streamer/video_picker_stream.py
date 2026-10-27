@@ -80,7 +80,7 @@ def stream_chunk_video_signals(
                 end_s=abs_end_s,
             )
         else:
-            return idx, [], [0.0], {"ok": False}
+            raise RuntimeError(f"video_picker chunk {idx}: no video source for Gemini watch")
         moments, meta = watch_video_file(proxy, duration_s=chunk_s, chunk_label=f"stream_{idx}")
         for m in moments:
             try:
@@ -100,10 +100,7 @@ def stream_chunk_video_signals(
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futs = [pool.submit(_one, i, s, e) for i, (s, e) in enumerate(ranges)]
         for fut in as_completed(futs):
-            try:
-                idx, moments, curve, meta = fut.result()
-            except Exception:
-                continue
+            idx, moments, curve, meta = fut.result()
             if meta.get("ok"):
                 ok_chunks += 1
             total_usd += float(meta.get("est_usd") or 0)
@@ -127,5 +124,8 @@ def stream_chunk_video_signals(
                     merged[ti] = max(merged[ti], float(val))
     agg = {"chunks": len(ranges), "ok_chunks": ok_chunks, "est_usd": round(total_usd, 6)}
     if ok_chunks == 0:
-        return None, [], agg
+        from clips_worker.picker.picker_errors import log_picker_error
+
+        log_picker_error("gemini", "all stream video_picker chunks failed", None)
+        raise RuntimeError("VIDEO_PICKER_ENABLED but all stream video chunks failed")
     return merged, all_moments, agg

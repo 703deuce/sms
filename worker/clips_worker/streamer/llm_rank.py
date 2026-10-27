@@ -157,21 +157,28 @@ def rank_candidates_batch(
         cue_events=cue_events,
         range_start_ms=range_start_ms,
     )
+    from clips_worker.picker.picker_errors import log_picker_error
+
     try:
         data = chat_json(system, user, SCHEMA, "stream_moments")
         return list(data.get("candidates") or [])
     except Exception as openai_err:
-        print(f"[clipper:stream] llm_rank openai_failed err={openai_err!s} trying=gemini", flush=True)
-        return _rank_batch_gemini(
-            batch,
-            words,
-            signals,
-            video_moments=video_moments,
-            chat_messages=chat_messages,
-            viewer_clips=viewer_clips,
-            cue_events=cue_events,
-            range_start_ms=range_start_ms,
-        )
+        log_picker_error("openai", str(openai_err)[:300], None)
+        print("[clipper:stream] llm_rank openai_failed trying=gemini", flush=True)
+        try:
+            return _rank_batch_gemini(
+                batch,
+                words,
+                signals,
+                video_moments=video_moments,
+                chat_messages=chat_messages,
+                viewer_clips=viewer_clips,
+                cue_events=cue_events,
+                range_start_ms=range_start_ms,
+            )
+        except Exception as gemini_err:
+            log_picker_error("gemini", str(gemini_err)[:300], None)
+            raise RuntimeError("stream llm_rank failed after openai and gemini") from gemini_err
 
 
 def make_llm_ranker(
@@ -188,38 +195,18 @@ def make_llm_ranker(
         batch_size = 10
         for i in range(0, len(candidates), batch_size):
             chunk = candidates[i : i + batch_size]
-            try:
-                out.extend(
-                    rank_candidates_batch(
-                        chunk,
-                        words,
-                        _signals,
-                        video_moments=video_moments,
-                        chat_messages=chat_messages,
-                        viewer_clips=viewer_clips,
-                        cue_events=cue_events,
-                        range_start_ms=range_start_ms,
-                    )
+            out.extend(
+                rank_candidates_batch(
+                    chunk,
+                    words,
+                    _signals,
+                    video_moments=video_moments,
+                    chat_messages=chat_messages,
+                    viewer_clips=viewer_clips,
+                    cue_events=cue_events,
+                    range_start_ms=range_start_ms,
                 )
-            except Exception:
-                try:
-                    import os
-
-                    if os.environ.get("CLIP_LLM_FALLBACK_MODEL"):
-                        pass
-                except Exception:
-                    pass
-                for c in chunk:
-                    out.append(
-                        {
-                            "id": c["id"],
-                            "score": int(c.get("signal_peak", 0.5) * 100),
-                            "keep": True,
-                            "title": f"Moment {c['start_ms'] // 1000}s",
-                            "hook": "",
-                            "category": "other",
-                        }
-                    )
+            )
         return out
 
     return _ranker

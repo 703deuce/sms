@@ -295,27 +295,24 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             vod_signal_curves = merge_chunk_signal_curves(chunk_signal_payloads, duration_s)
             video_signal = None
             video_moments: list[dict] = []
-            try:
-                from clips_worker.video_picker import video_picker_enabled
-                from clips_worker.streamer.video_picker_stream import stream_chunk_video_signals
+            from clips_worker.video_picker import video_picker_enabled
+            from clips_worker.streamer.video_picker_stream import stream_chunk_video_signals
 
-                if video_picker_enabled():
-                    plan_ranges = [
-                        (int(r["startMs"]), int(r["endMs"]))
-                        for r in (state.get("chunkPlan") or {}).get("ranges") or []
-                    ]
-                    if not plan_ranges:
-                        plan_ranges = [(0, duration_ms)]
-                    with stage_span("video_picker", heartbeat=True, chunks=len(plan_ranges)):
-                        video_signal, video_moments, _vp_cost = stream_chunk_video_signals(
-                            vod=vod,
-                            state=state,
-                            ranges=plan_ranges,
-                            scratch=scratch,
-                            job_id=str(job["id"]),
-                        )
-            except Exception as exc:
-                print(f"[clipper:stage] event=skip stage=video_picker error={exc!s}"[:200], flush=True)
+            if video_picker_enabled():
+                plan_ranges = [
+                    (int(r["startMs"]), int(r["endMs"]))
+                    for r in (state.get("chunkPlan") or {}).get("ranges") or []
+                ]
+                if not plan_ranges:
+                    plan_ranges = [(0, duration_ms)]
+                with stage_span("video_picker", heartbeat=True, chunks=len(plan_ranges)):
+                    video_signal, video_moments, _vp_cost = stream_chunk_video_signals(
+                        vod=vod,
+                        state=state,
+                        ranges=plan_ranges,
+                        scratch=scratch,
+                        job_id=str(job["id"]),
+                    )
             with stage_span("rank_moments", heartbeat=True):
                 picks, signals_payload = rank_moments(
                     audio_path=audio_path,

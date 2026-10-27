@@ -12,10 +12,8 @@ from clips_worker.picker.llm import chat_json
 from clips_worker.picker.log_util import json_snippet, picker_info
 from clips_worker.picker.rejects import is_hard_llm_reject
 from clips_worker.picker.scoring import _sent_dict, score_clip
-from clips_worker.picker.fallback import pass1_heuristic_candidates
 from clips_worker.picker_stats import (
     record_pass2_batch_ok,
-    record_pass2_heuristic_fallback,
     record_pass2_moments_capped,
 )
 from clips_worker.picker.titles import SHORT_SOURCE_MAX_MS, strip_internal_sentence_refs, trim_title
@@ -86,36 +84,6 @@ PASS2_SCHEMA = _pass2_response_schema(boundary_fields=True, batched=False)
 
 def _pass2_batch_schema(*, boundary_fields: bool = True) -> dict[str, Any]:
     return _pass2_response_schema(boundary_fields=boundary_fields, batched=True)
-
-
-def _is_openai_schema_http_error(exc: BaseException) -> bool:
-    msg = str(exc).lower()
-    return "http 400" in msg and ("schema" in msg or "response_format" in msg or "setup_start_s" in msg)
-
-
-def _chat_json_pass2(
-    system: str,
-    user: str,
-    *,
-    batched: bool,
-    schema_name: str,
-    timeout_s: float | None = None,
-) -> dict[str, Any]:
-    schema = _pass2_batch_schema(boundary_fields=True) if batched else PASS2_SCHEMA
-    try:
-        return chat_json(system, user, schema, schema_name, timeout_s=timeout_s)
-    except RuntimeError as exc:
-        if not _is_openai_schema_http_error(exc):
-            raise
-        picker_info("pass2_schema_retry_no_boundaries", error=str(exc)[:240])
-        legacy_schema = _pass2_batch_schema(boundary_fields=False) if batched else _pass2_response_schema(boundary_fields=False)
-        try:
-            return chat_json(system, user, legacy_schema, schema_name, timeout_s=timeout_s)
-        except RuntimeError as exc2:
-            if _is_openai_schema_http_error(exc2):
-                picker_info("pass2_schema_failed_open", error=str(exc2)[:240])
-                return {"clips": []}
-            raise
 
 
 def _context_lines(sentences, sig_by, center_lo: int, center_hi: int, ctx_s: float) -> str:
@@ -306,11 +274,11 @@ def _score_moments_batched(
             "Set setup_start_s and payoff_end_s per clip (seconds from trim start).\n"
             f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user_body}"
         )
-    data = _chat_json_pass2(
+    data = chat_json(
         _pass2_system(genre, batched=True),
         user_body,
-        batched=True,
-        schema_name="moments_pass2_batch",
+        _pass2_batch_schema(boundary_fields=True),
+        "moments_pass2_batch",
         timeout_s=timeout_s,
     )
     picker_info("pass2_batch_raw", moments_in=len(moments), raw=json_snippet(data))
@@ -394,9 +362,21 @@ def score_moments(
             moments_in=len(moments),
             batch_moments=len(batch_moments),
         )
-        try:
-            batched, audit = _score_moments_batched(
-                batch_moments,
+        batched, audit = _score_moments_batched(
+            batch_moments,
+            sentences,
+            signals,
+            sig_by,
+            genre,
+            source_duration_s,
+            ctx_s,
+            video_context=video_context,
+            range_start_ms=range_start_ms,
+            visual_moments=visual_moments,
+        )
+        if tail_moments:
+            tail_scored, tail_audit = _score_moments_batched(
+                tail_moments,
                 sentences,
                 signals,
                 sig_by,
@@ -407,27 +387,15 @@ def score_moments(
                 range_start_ms=range_start_ms,
                 visual_moments=visual_moments,
             )
-            if tail_moments:
-                tail_scored = pass1_heuristic_candidates(
-                    tail_moments, sentences, sig_by, genre, source_duration_s=source_duration_s
-                )
-                batched = batched + tail_scored
-            if batched:
-                record_pass2_batch_ok(project_id, len(batched))
-                return batched, audit
-        except Exception as exc:
-            picker_info("pass2_batch_failed", error=str(exc)[:240])
-        heuristic = pass1_heuristic_candidates(
-            moments, sentences, sig_by, genre, source_duration_s=source_duration_s
-        )
-        record_pass2_heuristic_fallback(project_id)
-        picker_info(
-            "pass2_batch_heuristic_fallback",
-            source_duration_s=source_duration_s,
-            moments_in=len(moments),
-            scored=len(heuristic),
-        )
-        return heuristic, []
+            batched = batched + tail_scored
+            audit = audit + tail_audit
+        if not batched:
+            from clips_worker.picker.picker_errors import log_picker_error
+
+            log_picker_error("openai", "pass2 batch returned zero scored moments", None)
+            raise RuntimeError("pass2 returned no scored moments")
+        record_pass2_batch_ok(project_id, len(batched))
+        return batched, audit
     out: list[dict] = []
     audit: list[dict] = []
     reject_counts: Counter[str] = Counter()
@@ -451,7 +419,7 @@ def score_moments(
                 "Full judge context: include setup_start_s and payoff_end_s from visual watch.\n"
                 f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user}"
             )
-        data = _chat_json_pass2(_pass2_system(genre), user, batched=False, schema_name="moments_pass2")
+        data = chat_json(_pass2_system(genre), user, PASS2_SCHEMA, "moments_pass2")
         picker_info("pass2_raw", moment_index=mi, raw=json_snippet(data))
         clips = data.get("clips") or []
         if not clips:

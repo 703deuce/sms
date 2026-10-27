@@ -182,13 +182,24 @@ def format_moments_for_window(
     return format_moments_for_llm(picked, limit=limit)
 
 
+def _gemini_transient_status(status: int) -> bool:
+    return status == 429 or status >= 500
+
+
+def _gemini_transient_exc(exc: Exception) -> bool:
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+    name = type(exc).__name__
+    return "Timeout" in name or "Connection" in name
+
+
 def watch_video_file(
     video_path: Path,
     *,
     duration_s: int,
     chunk_label: str = "upload",
 ) -> tuple[list[dict], dict[str, Any]]:
-    """Call Gemini Flash on a local mp4; never raises (returns empty on failure)."""
+    """Gemini Flash video watch. When VIDEO_PICKER_ENABLED, failures raise after retries."""
     meta: dict[str, Any] = {
         "chunk": chunk_label,
         "frames_est": 0,
@@ -201,8 +212,14 @@ def watch_video_file(
     if not video_picker_enabled():
         return [], meta
     if not video_path.is_file() or video_path.stat().st_size < 1024:
-        return [], meta
+        from clips_worker.picker.picker_errors import log_picker_error
+
+        msg = f"video_picker input missing or too small path={video_path.name}"
+        log_picker_error("gemini", msg, None)
+        raise RuntimeError(msg)
     t0 = stage_begin("video_picker", chunk=chunk_label)
+    from clips_worker.picker.picker_errors import log_picker_error
+
     try:
         model = discover_video_picker_model()
         meta["model"] = model
@@ -224,56 +241,78 @@ def watch_video_file(
             "temperature": 0.35,
             "mediaResolution": "MEDIA_RESOLUTION_LOW",
         }
-        res = requests.post(
-            f"{GEMINI_BASE}/models/{model}:generateContent",
-            params={"key": _key()},
-            json={
-                "systemInstruction": {"parts": [{"text": _SYSTEM}]},
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [
-                            part,
-                            {
-                                "text": (
-                                    f"Video length about {duration_s}s. "
-                                    "List notable visual moments with t_s in seconds from 0."
-                                ),
-                            },
-                        ],
-                    }
-                ],
-                "generationConfig": generation_config,
-            },
-            timeout=video_picker_timeout_s(),
-        )
-        if not res.ok:
-            raise RuntimeError(res.text[:300])
-        data = res.json()
-        usage = data.get("usageMetadata") or {}
-        pt = int(usage.get("promptTokenCount") or 0)
-        ot = int(usage.get("candidatesTokenCount") or 0)
-        meta["prompt_tokens"] = pt
-        meta["output_tokens"] = ot
-        meta["est_usd"] = round(estimate_gemini_usd(pt, ot), 6)
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        parsed = json.loads(text)
-        moments = list(parsed.get("moments") or [])
-        meta["ok"] = True
-        stage_end(
-            "video_picker",
-            t0,
-            chunk=chunk_label,
-            frames=meta["frames_est"],
-            prompt_tokens=pt,
-            output_tokens=ot,
-            est_usd=meta["est_usd"],
-            moments=len(moments),
-        )
-        return moments, meta
+        payload = {
+            "systemInstruction": {"parts": [{"text": _SYSTEM}]},
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        part,
+                        {
+                            "text": (
+                                f"Video length about {duration_s}s. "
+                                "List notable visual moments with t_s in seconds from 0."
+                            ),
+                        },
+                    ],
+                }
+            ],
+            "generationConfig": generation_config,
+        }
+        last_err = "unknown"
+        last_status: int | None = None
+        for attempt in range(3):
+            try:
+                res = requests.post(
+                    f"{GEMINI_BASE}/models/{model}:generateContent",
+                    params={"key": _key()},
+                    json=payload,
+                    timeout=video_picker_timeout_s(),
+                )
+                last_status = res.status_code
+                if _gemini_transient_status(res.status_code) and attempt < 2:
+                    time.sleep(2**attempt)
+                    continue
+                if not res.ok:
+                    last_err = (res.text or res.reason or "error")[:300]
+                    log_picker_error("gemini", last_err, res.status_code)
+                    raise RuntimeError(f"Gemini video_picker HTTP {res.status_code}")
+                data = res.json()
+                usage = data.get("usageMetadata") or {}
+                pt = int(usage.get("promptTokenCount") or 0)
+                ot = int(usage.get("candidatesTokenCount") or 0)
+                meta["prompt_tokens"] = pt
+                meta["output_tokens"] = ot
+                meta["est_usd"] = round(estimate_gemini_usd(pt, ot), 6)
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                parsed = json.loads(text)
+                moments = list(parsed.get("moments") or [])
+                meta["ok"] = True
+                stage_end(
+                    "video_picker",
+                    t0,
+                    chunk=chunk_label,
+                    frames=meta["frames_est"],
+                    prompt_tokens=pt,
+                    output_tokens=ot,
+                    est_usd=meta["est_usd"],
+                    moments=len(moments),
+                )
+                return moments, meta
+            except RuntimeError:
+                raise
+            except Exception as exc:
+                last_err = str(exc)[:300]
+                if _gemini_transient_exc(exc) and attempt < 2:
+                    time.sleep(2**attempt)
+                    continue
+                log_picker_error("gemini", last_err, last_status)
+                raise RuntimeError(f"Gemini video_picker failed: {last_err}") from exc
+        log_picker_error("gemini", last_err, last_status)
+        raise RuntimeError(f"Gemini video_picker failed after retries: {last_err}")
     except Exception as exc:
         stage_end("video_picker", t0, chunk=chunk_label, error=str(exc)[:180])
-        return [], meta
+        raise
 
 
 def watch_upload_range(

@@ -7,7 +7,7 @@ from typing import Any
 from clips_worker.picker.cleanup import finalize_picks
 from clips_worker.picker.config import length_bucket
 from clips_worker.picker.log_util import picker_info
-from clips_worker.picker.fallback import pass1_heuristic_candidates, soft_pass2_fallback
+from clips_worker.picker.fallback import pass1_heuristic_candidates
 from clips_worker.picker.pass1 import find_moments
 from clips_worker.picker.pass2 import score_moments
 from clips_worker.picker.sentences import build_sentences
@@ -95,37 +95,45 @@ def pick_talking_clips(
 
     if video_picker_enabled():
         vpath = settings.get("sourceVideoPath")
-        if vpath and Path(str(vpath)).is_file():
-            import tempfile
+        if not vpath or not Path(str(vpath)).is_file():
+            from clips_worker.picker.picker_errors import log_picker_error
 
-            from clips_worker.picker.work_scratch import video_picker_scratch_dir
+            log_picker_error("gemini", "sourceVideoPath missing or not a file", None)
+            raise RuntimeError("VIDEO_PICKER_ENABLED but source video is not available")
+        import tempfile
 
-            scratch_vp = Path(tempfile.mkdtemp(dir=video_picker_scratch_dir(), prefix="vp_reg_"))
-            vm, _curve, vp_meta = watch_upload_range(
-                Path(str(vpath)),
-                range_start_ms=range_start_ms,
-                range_end_ms=range_end_ms,
-                scratch=scratch_vp,
-            )
-            if vm:
-                visual_moments = vm
-                video_context = format_moments_for_llm(
-                    [
-                        {
-                            **m,
-                            "t_s": (int(m.get("t_ms") or range_start_ms) - range_start_ms) / 1000.0,
-                        }
-                        for m in vm
-                    ]
-                )
-                picker_info(
-                    "video_picker_regular",
-                    moments=len(vm),
-                    ok=bool(vp_meta.get("ok")),
-                    est_usd=vp_meta.get("est_usd"),
-                )
-            elif vp_meta.get("error"):
-                picker_info("video_picker_regular_empty", error=str(vp_meta.get("error"))[:200])
+        from clips_worker.picker.work_scratch import video_picker_scratch_dir
+
+        scratch_vp = Path(tempfile.mkdtemp(dir=video_picker_scratch_dir(), prefix="vp_reg_"))
+        vm, _curve, vp_meta = watch_upload_range(
+            Path(str(vpath)),
+            range_start_ms=range_start_ms,
+            range_end_ms=range_end_ms,
+            scratch=scratch_vp,
+        )
+        if not vp_meta.get("ok"):
+            from clips_worker.picker.picker_errors import log_picker_error
+
+            log_picker_error("gemini", str(vp_meta.get("error") or "video_picker failed"), vp_meta.get("status"))
+            raise RuntimeError("VIDEO_PICKER_ENABLED but Gemini video watch failed")
+        visual_moments = vm
+        video_context = format_moments_for_llm(
+            [
+                {
+                    **m,
+                    "t_s": (int(m.get("t_ms") or range_start_ms) - range_start_ms) / 1000.0,
+                }
+                for m in vm
+            ]
+        )
+        picker_info(
+            "video_picker_regular",
+            moments=len(vm),
+            ok=True,
+            est_usd=vp_meta.get("est_usd"),
+            prompt_tokens=vp_meta.get("prompt_tokens"),
+            output_tokens=vp_meta.get("output_tokens"),
+        )
 
     cache = picker_cache or {}
     scored_from_cache = cache.get("pass2Scored")
@@ -205,15 +213,10 @@ def pick_talking_clips(
         if drain_requested():
             raise WorkerDrainExit("picker_pass2_checkpointed")
         if not scored:
-            scored = pass1_heuristic_candidates(
-                moments, sentences, sig_by, genre, source_duration_s=source_duration_s
-            )
-            if scored:
-                picker_info("pass2_empty_heuristic_fallback", count=len(scored))
-        if not scored and pass2_audit:
-            scored = soft_pass2_fallback(pass2_audit)
-            if scored:
-                picker_info("pass2_soft_audit_fallback", count=len(scored))
+            from clips_worker.picker.picker_errors import log_picker_error
+
+            log_picker_error("openai", "pass2 returned no scored moments", None)
+            raise RuntimeError("pass2 returned no scored moments")
 
     source_duration_s = source_ms / 1000.0
 
