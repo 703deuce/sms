@@ -40,6 +40,14 @@ export function parseScriptCompositionDocument(raw: unknown): ScriptDocumentV1 {
         ? (d.wordSourceAdjust as ScriptDocumentV1['wordSourceAdjust'])
         : undefined,
     reframeKeyframes: Array.isArray(d.reframeKeyframes) ? d.reframeKeyframes : undefined,
+    wordTextOverrides:
+      d.wordTextOverrides && typeof d.wordTextOverrides === 'object'
+        ? (d.wordTextOverrides as Record<string, string>)
+        : undefined,
+    speakerLabels:
+      d.speakerLabels && typeof d.speakerLabels === 'object'
+        ? (d.speakerLabels as Record<string, string>)
+        : undefined,
   }
 }
 
@@ -97,7 +105,13 @@ export async function applyCompositionOpBatch(
   input: OpBatchInput,
 ): Promise<
   | { ok: true; revision: number; document: ScriptDocumentV1; ackedOpIds: string[] }
-  | { ok: false; code: 'NOT_FOUND' | 'STALE_REVISION' | 'INVALID'; revision?: number }
+  | {
+      ok: false
+      code: 'NOT_FOUND' | 'STALE_REVISION' | 'INVALID'
+      revision?: number
+      opId?: string
+      detail?: string
+    }
 > {
   const prisma = getPrisma()
   const row = await getCompositionForWorkspace(workspaceId, compositionId)
@@ -124,7 +138,12 @@ export async function applyCompositionOpBatch(
       continue
     }
 
-    document = applyCompositionOp(document, item.op)
+    try {
+      document = applyCompositionOp(document, item.op)
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'Operation failed'
+      return { ok: false, code: 'INVALID', opId: item.id, detail }
+    }
     revision += 1
     await prisma.$transaction(async (tx) => {
       await tx.scriptCompositionOp.create({

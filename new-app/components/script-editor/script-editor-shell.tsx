@@ -158,6 +158,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const {
     document: serverDocument,
     saveState,
+    saveError,
     deleteWords,
     restoreWords,
     applyOp,
@@ -918,6 +919,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   )
 
   const onReplaceOneFind = useCallback(() => {
+    if (editingLocked) {
+      toast.error('Read-only in this tab — use Edit here to take over')
+      return
+    }
     const hit = findHits[fillerCursor]
     const q = fillerSearchQuery.trim()
     if (!hit || !q) return
@@ -942,11 +947,16 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     replaceInToken,
     findReplaceText,
     safeApplyOp,
+    editingLocked,
     fillerSearchOptions.autoAdvance,
     goToFindHit,
   ])
 
   const onReplaceAllFind = useCallback(() => {
+    if (editingLocked) {
+      toast.error('Read-only in this tab — use Edit here to take over')
+      return
+    }
     const q = fillerSearchQuery.trim()
     if (!q || !findHits.length) return
     const overrides: Record<string, string> = {}
@@ -956,7 +966,13 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     }
     safeApplyOp({ type: 'patch_word_text_overrides', overrides, mode: 'merge' })
     toast.success(`Replaced in ${findHits.length} word(s) · Undo`)
-  }, [findHits, fillerSearchQuery, document.wordTextOverrides, replaceInToken, findReplaceText, safeApplyOp])
+  }, [findHits, fillerSearchQuery, document.wordTextOverrides, replaceInToken, findReplaceText, safeApplyOp, editingLocked])
+
+  useEffect(() => {
+    if (saveState === 'error' && saveError) {
+      toast.error(`Save failed: ${saveError}`)
+    }
+  }, [saveState, saveError])
 
   const onSelectGapHit = useCallback(
     (hit: GapHit) => {
@@ -1720,7 +1736,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           </button>
         )}
         <span className="text-xs text-muted-foreground">
-          {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Saved'}
+          {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? saveError || 'Save failed' : 'Saved'}
         </span>
         <Button
           type="button"
@@ -2485,11 +2501,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
             anchor={speakerRename.rect}
             initialName={speakerRename.initialName}
             onSave={(name) => {
+              if (editingLocked) {
+                toast.error('Read-only in this tab — use Edit here to take over')
+                return
+              }
               safeApplyOp({
                 type: 'patch_speaker_labels',
                 labels: { [speakerRename.speakerId]: name },
               })
-              toast.success('Speaker renamed')
             }}
             onClose={() => setSpeakerRename(null)}
           />

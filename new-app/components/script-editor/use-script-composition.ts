@@ -46,6 +46,8 @@ async function postOpBatch(
     const json = (await res.json().catch(() => ({}))) as {
       data?: { revision: number; document: ScriptDocumentV1; ackedOpIds: string[] }
       error?: string
+      code?: string
+      opId?: string
       revision?: number
     }
 
@@ -72,7 +74,11 @@ async function postOpBatch(
       continue
     }
 
-    throw new Error(json.error || res.statusText)
+    const msg = json.error || res.statusText || 'Save failed'
+    const err = new Error(msg) as Error & { code?: string; opId?: string }
+    err.code = json.code
+    err.opId = json.opId
+    throw err
   }
   throw new Error('Save failed after revision retries')
 }
@@ -90,6 +96,7 @@ export function useScriptComposition(initial: {
   }, [])
   const [revision, setRevision] = useState(initial.revision)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved')
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [undoDepth, setUndoDepth] = useState(0)
   const [redoDepth, setRedoDepth] = useState(0)
 
@@ -151,6 +158,7 @@ export function useScriptComposition(initial: {
       const epochAtEnqueue = localEpochRef.current
       pendingOpsRef.current += 1
       setSaveState('saving')
+      setSaveError(null)
       queueRef.current = queueRef.current
         .then(async () => {
           inFlightRef.current = true
@@ -190,9 +198,10 @@ export function useScriptComposition(initial: {
               }
               break
             }
-          } catch {
+          } catch (e) {
             if (epochAtEnqueue !== localEpochRef.current) return
             saveErrorRef.current = true
+            setSaveError(e instanceof Error ? e.message : 'Save failed')
             batchFail?.()
             setSaveState('error')
           } finally {
@@ -309,6 +318,7 @@ export function useScriptComposition(initial: {
     document,
     revision,
     saveState,
+    saveError,
     deleteWords,
     restoreWords,
     applyOp,

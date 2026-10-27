@@ -190,6 +190,10 @@ const opSchema = z.discriminatedUnion('type', [
     mode: z.enum(['merge', 'replace']).optional(),
   }),
   z.object({
+    type: z.literal('patch_speaker_labels'),
+    labels: z.record(z.string(), z.string().max(120)),
+  }),
+  z.object({
     type: z.literal('replace_scenes'),
     scenes: z.array(
       z.object({
@@ -252,7 +256,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
       if (result.code === 'STALE_REVISION') {
         return NextResponse.json({ error: 'Stale revision', revision: result.revision }, { status: 409 })
       }
-      return NextResponse.json({ error: 'Invalid' }, { status: 400 })
+      console.warn('[composition-ops] rejected batch', {
+        compositionId,
+        code: result.code,
+        opId: result.opId,
+        detail: result.detail,
+      })
+      return NextResponse.json(
+        {
+          error: result.detail ?? 'Invalid operation',
+          code: result.code,
+          opId: result.opId,
+        },
+        { status: 400 },
+      )
     }
     return NextResponse.json({
       data: {
