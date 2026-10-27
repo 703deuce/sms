@@ -34,6 +34,14 @@ export type ClipEditsV2 = {
     }
     presetConfig?: Record<string, unknown>
     customPresetId?: string
+    /** Bottom safe margin % for burned captions (platform export presets). */
+    marginVPct?: number
+  }
+  /** Optional hook title in the first ~2–3s (brand-styled). */
+  hookOverlay?: {
+    enabled?: boolean
+    text?: string
+    durationMs?: number
   }
   layout: {
     mode:
@@ -155,6 +163,24 @@ function normalizeCaptions(
       o.progressBar && typeof o.progressBar === 'object'
         ? (o.progressBar as ClipEditsV2['captions']['progressBar'])
         : base.progressBar,
+    marginVPct:
+      typeof o.marginVPct === 'number' && o.marginVPct >= 6 && o.marginVPct <= 28
+        ? o.marginVPct
+        : base.marginVPct,
+  }
+}
+
+function normalizeHookOverlay(raw: unknown): ClipEditsV2['hookOverlay'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const o = raw as Record<string, unknown>
+  const durationMs = Number(o.durationMs)
+  return {
+    enabled: Boolean(o.enabled),
+    text: typeof o.text === 'string' ? o.text.slice(0, 120) : undefined,
+    durationMs:
+      Number.isFinite(durationMs) && durationMs >= 1500 && durationMs <= 5000
+        ? Math.round(durationMs)
+        : 2500,
   }
 }
 
@@ -224,6 +250,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
             keepMs: Number((o.silenceTrim as { keepMs?: number }).keepMs) || 150,
           }
         : undefined,
+    hookOverlay: normalizeHookOverlay(o.hookOverlay),
   }
 }
 

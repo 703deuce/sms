@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { can } from '@/lib/billing/entitlements'
+import {
+  applyExportPlatformToEdits,
+  EXPORT_PLATFORM_PRESETS,
+  type ExportPlatformId,
+} from '@/lib/clips/export-platform-presets'
 import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
@@ -22,6 +27,7 @@ const bodySchema = z.object({
   aspect: z.enum(['9:16', '4:5', '1:1', '16:9']).default('9:16'),
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
+  exportPlatform: z.enum(['tiktok', 'youtube_shorts', 'instagram_reels']).optional(),
   /** Optional client snapshot — used when PATCH save is still in flight. */
   edits: z.record(z.unknown()).optional(),
 })
@@ -39,20 +45,35 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const raw = await request.text()
     const body = bodySchema.parse(raw ? JSON.parse(raw) : {})
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
-    const edits = body.edits
+    let edits = body.edits
       ? normalizeEdits(mergeEditsPatch(normalizeEdits(clip.edits, bounds), body.edits, bounds), bounds)
       : normalizeEdits(clip.edits, bounds)
+    const exportPlatform = body.exportPlatform as ExportPlatformId | undefined
+    if (exportPlatform) {
+      edits = applyExportPlatformToEdits(edits, exportPlatform)
+    }
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
     let resolution = body.resolution
+    if (exportPlatform) {
+      const platformPreset = EXPORT_PLATFORM_PRESETS[exportPlatform]
+      if (platformPreset.resolution === '1080p' && can(workspaceId, 'export_1080p')) {
+        resolution = '1080p'
+      } else if (platformPreset.resolution === '1080p') {
+        resolution = '720p'
+      }
+    }
     if (resolution === '1080p' && !can(workspaceId, 'export_1080p')) {
       resolution = '720p'
     }
-    const aspect = body.aspect ?? edits.aspectRatio ?? '9:16'
+    const aspect = exportPlatform
+      ? edits.aspectRatio ?? '9:16'
+      : body.aspect ?? edits.aspectRatio ?? '9:16'
     console.info('[clipper:export] request', {
       clipId,
       workspaceId,
       resolution,
       aspect,
+      exportPlatform: exportPlatform ?? null,
       watermark,
       durationMs: clip.endMs - clip.startMs,
     })
