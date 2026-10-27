@@ -227,21 +227,42 @@ export async function revokeTwitchToken(token: string) {
   })
 }
 
-export async function listTwitchEventsubSubscriptions(): Promise<
+export const TWITCH_SUBSCRIPTION_CHECK_INTERVAL_MS = 3600_000
+
+export function twitchSubscriptionsDue(checkedAtIso: string | undefined, nowMs = Date.now()): boolean {
+  if (!checkedAtIso) return true
+  const t = Date.parse(checkedAtIso)
+  if (Number.isNaN(t)) return true
+  return nowMs - t >= TWITCH_SUBSCRIPTION_CHECK_INTERVAL_MS
+}
+
+export async function listTwitchEventsubSubscriptionsForUser(userId: string): Promise<
   { id: string; type: string; status: string; condition: Record<string, string> }[]
 > {
   const appToken = await twitchAppAccessToken()
-  const res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions?first=100', {
-    headers: {
-      'Client-Id': twitchClientId(),
-      Authorization: `Bearer ${appToken}`,
-    },
-  })
-  if (!res.ok) throw new Error(`EventSub list failed: ${res.status}`)
-  const json = (await res.json()) as {
-    data: { id: string; type: string; status: string; condition: Record<string, string> }[]
+  const out: { id: string; type: string; status: string; condition: Record<string, string> }[] = []
+  let cursor: string | undefined
+  for (;;) {
+    const url = new URL('https://api.twitch.tv/helix/eventsub/subscriptions')
+    url.searchParams.set('first', '100')
+    url.searchParams.set('user_id', userId)
+    if (cursor) url.searchParams.set('after', cursor)
+    const res = await fetch(url.toString(), {
+      headers: {
+        'Client-Id': twitchClientId(),
+        Authorization: `Bearer ${appToken}`,
+      },
+    })
+    if (!res.ok) throw new Error(`EventSub list failed: ${res.status}`)
+    const json = (await res.json()) as {
+      data: { id: string; type: string; status: string; condition: Record<string, string> }[]
+      pagination?: { cursor?: string }
+    }
+    out.push(...(json.data ?? []))
+    cursor = json.pagination?.cursor
+    if (!cursor) break
   }
-  return json.data ?? []
+  return out
 }
 
 export async function deleteTwitchEventsubSubscription(id: string): Promise<void> {
@@ -266,10 +287,12 @@ export async function deleteTwitchEventsubSubscriptions(ids: string[]): Promise<
 }
 
 export async function ensureTwitchEventsubForBroadcaster(broadcasterId: string, existingIds: string[]): Promise<string[]> {
-  const subs = await listTwitchEventsubSubscriptions()
-  const enabled = new Set(
-    subs.filter((s) => s.status === 'enabled' && s.condition?.broadcaster_user_id === broadcasterId).map((s) => s.type),
+  const subs = await listTwitchEventsubSubscriptionsForUser(broadcasterId)
+  const enabledSubs = subs.filter(
+    (s) => s.status === 'enabled' && s.condition?.broadcaster_user_id === broadcasterId,
   )
+  const enabledTypes = new Set(enabledSubs.map((s) => s.type))
+  const liveIds = new Set(enabledSubs.map((s) => s.id))
   const secret = process.env.TWITCH_EVENTSUB_SECRET?.trim()
   if (!secret) throw new Error('TWITCH_EVENTSUB_SECRET not configured')
   const callback = twitchWebhookUrl()
@@ -285,9 +308,9 @@ export async function ensureTwitchEventsubForBroadcaster(broadcasterId: string, 
       condition: { broadcaster_user_id: broadcasterId, user_id: broadcasterId },
     })
   }
-  const ids = [...existingIds]
+  const ids = new Set(liveIds)
   for (const sub of required) {
-    if (enabled.has(sub.type)) continue
+    if (enabledTypes.has(sub.type)) continue
     const res = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
       method: 'POST',
       headers: {
@@ -302,9 +325,19 @@ export async function ensureTwitchEventsubForBroadcaster(broadcasterId: string, 
         transport: { method: 'webhook', callback, secret },
       }),
     })
-    if (!res.ok) continue
+    if (!res.ok) {
+      const text = await res.text()
+      console.error(`EventSub create ${sub.type} failed: ${res.status} ${text.slice(0, 200)}`)
+      continue
+    }
     const json = (await res.json()) as { data: { id: string }[] }
-    if (json.data?.[0]?.id) ids.push(json.data[0].id)
+    if (json.data?.[0]?.id) ids.add(json.data[0].id)
   }
-  return ids
+  for (const stale of existingIds) {
+    if (!ids.has(stale)) {
+      console.warn(`EventSub pruning stale subscription id ${stale}`)
+      await deleteTwitchEventsubSubscription(stale).catch(() => undefined)
+    }
+  }
+  return [...ids]
 }

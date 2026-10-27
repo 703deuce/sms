@@ -588,7 +588,12 @@ def main() -> None:
                                     )
                                 conn.commit()
                         mark_generation_failed(conn, job, msg)
-                    elif (job.get("type") or "").startswith("STREAM_"):
+                    elif (job.get("type") or "") in (
+                        "STREAM_IMPORT",
+                        "STREAM_ANALYZE",
+                        "STREAM_RENDER",
+                        "STREAM_AUTOPULL",
+                    ):
                         payload = job.get("payload") or {}
                         if isinstance(payload, str):
                             payload = json.loads(payload)

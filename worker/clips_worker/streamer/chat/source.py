@@ -58,10 +58,8 @@ def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
         return None, "kick_unavailable"
 
     if platform == "twitch" and external_id and not _replay_disabled():
-        from clips_worker.streamer.chat.twitch_gql import TwitchChatReplayError, fetch_all_vod_comments
+        from clips_worker.streamer.chat.twitch_gql import fetch_all_vod_comments
 
         messages, _cursor = fetch_all_vod_comments(str(external_id), state.get("chatCursor"))
-        if messages:
-            return messages, "twitch_gql"
-        raise TwitchChatReplayError("twitch gql returned zero comments")
+        return messages, "twitch_gql"
     return None, "none"

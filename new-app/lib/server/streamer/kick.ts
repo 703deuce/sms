@@ -1,10 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { encryptIntegrationSecret, decryptIntegrationSecret } from '@/lib/integrations/framework/secrets'
-import { kickRedirectUri, kickWebhookUrl } from '@/lib/server/streamer/env'
+import { kickRedirectUri } from '@/lib/server/streamer/env'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
 const SCOPES = ['user:read', 'channel:read', 'events:subscribe']
+
+export const KICK_SUBSCRIPTION_CHECK_INTERVAL_MS = 3600_000
 
 export function kickClientId(): string {
   const id = process.env.KICK_CLIENT_ID?.trim()
@@ -148,9 +150,24 @@ const KICK_EVENT_NAMES = [
   { name: 'chat.message.sent', version: 1 },
 ] as const
 
+type KickSubRow = { subscription_id?: string; id?: string; error?: string; name?: string; event?: string }
+
+export function parseKickSubscriptionCreateRows(data: unknown): string[] {
+  const rows = (data as { data?: KickSubRow[] })?.data ?? []
+  const ids: string[] = []
+  for (const row of rows) {
+    if (row.error) {
+      console.error(`Kick subscription create error (${row.name ?? row.event ?? 'unknown'}): ${row.error}`)
+      continue
+    }
+    const sid = row.subscription_id ?? row.id
+    if (sid) ids.push(String(sid))
+  }
+  return ids
+}
+
 export async function createKickEventSubscriptions(broadcasterUserId: number): Promise<string[]> {
   const token = await kickAppAccessToken()
-  const webhookUrl = kickWebhookUrl()
   const res = await fetch('https://api.kick.com/public/v1/events/subscriptions', {
     method: 'POST',
     headers: {
@@ -161,15 +178,14 @@ export async function createKickEventSubscriptions(broadcasterUserId: number): P
       broadcaster_user_id: broadcasterUserId,
       method: 'webhook',
       events: KICK_EVENT_NAMES.map((e) => ({ name: e.name, version: e.version })),
-      webhook_url: webhookUrl,
     }),
   })
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`Kick subscriptions failed: ${res.status} ${text.slice(0, 300)}`)
   }
-  const json = (await res.json()) as { data?: { id: string }[] }
-  return (json.data ?? []).map((row) => row.id).filter(Boolean)
+  const json = (await res.json()) as { data?: KickSubRow[] }
+  return parseKickSubscriptionCreateRows(json)
 }
 
 async function kickAppAccessToken(): Promise<string> {
@@ -224,20 +240,51 @@ export async function revokeKickToken(token: string) {
   })
 }
 
+export function kickSubscriptionsDue(checkedAtIso: string | undefined, nowMs = Date.now()): boolean {
+  if (!checkedAtIso) return true
+  const t = Date.parse(checkedAtIso)
+  if (Number.isNaN(t)) return true
+  return nowMs - t >= KICK_SUBSCRIPTION_CHECK_INTERVAL_MS
+}
+
+export async function listKickEventSubscriptions(broadcasterUserId: number): Promise<
+  { subscription_id: string; name: string; broadcaster_user_id: number }[]
+> {
+  const token = await kickAppAccessToken()
+  const res = await fetch(
+    `https://api.kick.com/public/v1/events/subscriptions?broadcaster_user_id=${encodeURIComponent(String(broadcasterUserId))}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) return []
+  const json = (await res.json()) as {
+    data?: { subscription_id?: string; id?: string; name?: string; event?: string; broadcaster_user_id: number }[]
+  }
+  const out: { subscription_id: string; name: string; broadcaster_user_id: number }[] = []
+  for (const row of json.data ?? []) {
+    const sid = row.subscription_id ?? row.id
+    const name = row.name ?? row.event ?? ''
+    if (!sid || !name) continue
+    if (Number(row.broadcaster_user_id) !== broadcasterUserId) continue
+    out.push({ subscription_id: String(sid), name, broadcaster_user_id: broadcasterUserId })
+  }
+  return out
+}
+
 export async function ensureKickEventSubscriptions(
   broadcasterUserId: number,
   existingIds: string[],
 ): Promise<string[]> {
-  const token = await kickAppAccessToken()
-  const res = await fetch('https://api.kick.com/public/v1/events/subscriptions', {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) return existingIds
-  const json = (await res.json()) as { data?: { id: string; broadcaster_user_id: number }[] }
-  const have = new Set(
-    (json.data ?? []).filter((s) => s.broadcaster_user_id === broadcasterUserId).map((s) => s.id),
-  )
-  if (have.size >= KICK_EVENT_NAMES.length) return [...have]
+  const remote = await listKickEventSubscriptions(broadcasterUserId)
+  const haveNames = new Set(remote.map((r) => r.name))
+  const ids = new Set(remote.map((r) => r.subscription_id))
+  const missing = KICK_EVENT_NAMES.filter((e) => !haveNames.has(e.name))
+  if (!missing.length) return [...ids]
   const created = await createKickEventSubscriptions(broadcasterUserId)
-  return [...new Set([...existingIds, ...created])]
+  for (const id of created) ids.add(id)
+  for (const stale of existingIds) {
+    if (!ids.has(stale)) {
+      console.warn(`Kick pruning stale subscription id ${stale}`)
+    }
+  }
+  return [...ids]
 }
