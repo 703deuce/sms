@@ -477,6 +477,10 @@ def run_m4_pipeline(
             from clips_worker.internal_callback import post_project_auto_broll
 
             post_project_auto_broll(project_id)
+        if settings.get("autoEmojis") and clip_rows:
+            from clips_worker.internal_callback import post_project_auto_emojis
+
+            post_project_auto_emojis(project_id)
         if clip_rows:
             poster = clip_rows[0].get("posterKey")
             if poster:

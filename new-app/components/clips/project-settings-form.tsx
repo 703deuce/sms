@@ -203,16 +203,29 @@ export function ProjectSettingsForm({
       </Panel>
 
       <Panel title="AI enhance">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <Label htmlFor="auto-broll">Auto stock B-roll</Label>
-            <p className="text-xs text-muted-foreground">Place Pixabay cutaways on clips when processing finishes.</p>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <Label htmlFor="auto-broll">Auto stock B-roll</Label>
+              <p className="text-xs text-muted-foreground">Place Pixabay cutaways on clips when processing finishes.</p>
+            </div>
+            <Switch
+              id="auto-broll"
+              checked={Boolean(settings.autoStockBroll)}
+              onCheckedChange={(v) => onChange({ ...settings, autoStockBroll: v })}
+            />
           </div>
-          <Switch
-            id="auto-broll"
-            checked={Boolean(settings.autoStockBroll)}
-            onCheckedChange={(v) => onChange({ ...settings, autoStockBroll: v })}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <Label htmlFor="auto-emojis">AI emojis in captions</Label>
+              <p className="text-xs text-muted-foreground">Suggest emojis on emphasis words when clips are ready.</p>
+            </div>
+            <Switch
+              id="auto-emojis"
+              checked={Boolean(settings.autoEmojis)}
+              onCheckedChange={(v) => onChange({ ...settings, autoEmojis: v })}
+            />
+          </div>
         </div>
       </Panel>
 
