@@ -51,6 +51,8 @@ def update_t2v_draft_for_job(
 
 
 def mark_t2v_assemble_failed(conn, job: dict, message: str) -> None:
+    if "Canceled" in message or message.strip() == "job_canceled":
+        return
     update_t2v_draft_for_job(
         conn,
         job,

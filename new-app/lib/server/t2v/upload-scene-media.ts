@@ -1,6 +1,7 @@
 import 'server-only'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
+import { copyClipStorageObject } from '@/lib/server/storage/copy-object'
+import { assertValidT2vSceneId } from '@/lib/server/t2v/scene-id'
 import type { T2vSceneMedia } from '@/lib/t2v/types'
 
 export async function mediaFromClipUpload(
@@ -8,28 +9,26 @@ export async function mediaFromClipUpload(
   uploadId: string,
   sceneId: string,
 ): Promise<T2vSceneMedia> {
+  assertValidT2vSceneId(sceneId)
   const upload = await getPrisma().clipUpload.findFirst({
     where: { id: uploadId, workspaceId, status: 'COMPLETE' },
   })
   if (!upload?.key) throw new Error('upload_not_ready')
+  if (upload.mime.startsWith('audio/')) {
+    throw new Error('upload_must_be_image_or_video')
+  }
 
-  const storage = getClipStorage()
   const ext = upload.mime.startsWith('image/') ? 'jpg' : 'mp4'
   const destKey = `ws/${workspaceId}/t2v/scenes/${sceneId}/${uploadId}.${ext}`
-  const downloadUrl = await storage.createSignedDownloadUrl(upload.key, 3600)
-  const res = await fetch(downloadUrl, { signal: AbortSignal.timeout(300_000) })
-  if (!res.ok) throw new Error(`upload_copy_${res.status}`)
-  const buf = Buffer.from(await res.arrayBuffer())
-  await storage.putBytes(destKey, buf, upload.mime || (ext === 'jpg' ? 'image/jpeg' : 'video/mp4'))
-  const previewUrl = await storage.createSignedDownloadUrl(destKey, 3600)
+  const contentType = upload.mime || (ext === 'jpg' ? 'image/jpeg' : 'video/mp4')
+  await copyClipStorageObject(upload.key, destKey, contentType)
+
   const isImage = upload.mime.startsWith('image/')
   return {
     provider: 'upload',
     kind: isImage ? 'image' : 'video',
     assetId: uploadId,
     storageKey: destKey,
-    thumbUrl: previewUrl,
-    previewUrl,
     width: upload.width ?? undefined,
     height: upload.height ?? undefined,
     durationMs: upload.durationMs ?? undefined,

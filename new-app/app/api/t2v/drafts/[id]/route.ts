@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
   try {
     const workspaceId = await resolveWorkspaceId()
     const body = z.object({ baseRevision: z.number().int(), document: z.unknown() }).parse(await request.json())
-    const document = parseAndSanitizeT2vDraft(workspaceId, body.document)
+    const document = await parseAndSanitizeT2vDraft(workspaceId, body.document)
     return NextResponse.json({
       data: await saveT2vDraft(workspaceId, id, body.baseRevision, document),
     })

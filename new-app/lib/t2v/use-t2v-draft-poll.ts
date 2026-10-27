@@ -51,7 +51,7 @@ export function useT2vDraftPoll(
             progress: d.progress ?? 0,
             error: 'Build is taking longer than expected. You can leave and return later.',
           })
-          intervalMsRef.current = Math.min(30_000, intervalMsRef.current + 2000)
+          return
         } else if (elapsed > 120_000) {
           intervalMsRef.current = 5000
         }

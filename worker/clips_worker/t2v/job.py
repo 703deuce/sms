@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from clips_worker.internal_callback import post_internal
-from clips_worker.storage import download_object, put_json, upload_file
+from clips_worker.storage import download_object, upload_file
 from clips_worker.t2v.assemble import Scene, SceneMedia, assemble
 from clips_worker.t2v.render_finalize import finalize_t2v_video
 from clips_worker.t2v.tts_alignment import duration_ms_from_alignment, words_from_alignment
@@ -73,15 +73,6 @@ def _fetch_media(conn, media: dict | None, work: Path, idx: int, workspace_id: s
         raise RuntimeError("invalid_storage_key")
     download_object(str(key), dest)
     return dest
-
-
-def _project_words_key(conn, project_id: str) -> str:
-    with conn.cursor() as cur:
-        cur.execute('SELECT "transcriptKey" FROM clip_projects WHERE id=%s', (project_id,))
-        row = cur.fetchone()
-    if not row or not row[0]:
-        raise RuntimeError("project_missing_transcript_key")
-    return row[0]
 
 
 def run_t2v_assemble_job(conn, job: dict, progress) -> None:
@@ -183,6 +174,8 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
             raise RuntimeError("job_canceled")
         progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 60})
         asm = assemble(scenes, work / "asm", w=w, h=h, fps=30)
+        if _job_aborted(conn, job["id"]):
+            raise RuntimeError("job_canceled")
         progress(job["id"], {"jobStatus": "RUNNING", "stage": "assemble", "progress": 72})
         final = work / "source.mp4"
         finalize_t2v_video(
@@ -207,10 +200,11 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
                 )
             t0 += scenes[idx].dur_s
 
+        if _job_aborted(conn, job["id"]):
+            raise RuntimeError("job_canceled")
         progress(job["id"], {"jobStatus": "RUNNING", "stage": "upload", "progress": 85})
         src_key = f"ws/{workspace_id}/projects/{project_id}/t2v/source_r{revision}.mp4"
         upload_file(src_key, final, "video/mp4")
-        put_json(_project_words_key(conn, project_id), all_words)
 
         post_internal(
             "/api/t2v/internal/assembled",

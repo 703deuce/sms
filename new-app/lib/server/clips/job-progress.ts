@@ -2,13 +2,31 @@ import type { ClipProjectStatus } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { shouldTouchLockedAt } from '@/lib/server/clips/jobs'
 
+function isCanceledTerminal(storedJobStatus: string, jobError?: string | null): boolean {
+  if (storedJobStatus === 'CANCELED') return true
+  if (storedJobStatus === 'FAILED' && jobError && /canceled/i.test(jobError)) return true
+  return false
+}
+
+async function isLatestT2vAssembleJob(projectId: string, jobId: string): Promise<boolean> {
+  const prisma = getPrisma()
+  const latest = await prisma.clipJob.findFirst({
+    where: { projectId, type: 'T2V_ASSEMBLE' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  })
+  return latest?.id === jobId
+}
+
 /** Single round-trip progress apply for worker heartbeats (no transcript blob). */
 export async function applyWorkerJobProgress(input: {
   jobId: string
   jobType?: string
   draftId?: string | null
   storedJobStatus: string
+  storedJobError?: string | null
   projectId: string
+  projectSourceKind?: string | null
   projectStatus?: ClipProjectStatus
   stage?: string
   progress?: number
@@ -22,19 +40,38 @@ export async function applyWorkerJobProgress(input: {
   transcriptionFallbackReason?: string
 }) {
   const prisma = getPrisma()
+
+  if (isCanceledTerminal(input.storedJobStatus, input.storedJobError)) {
+    return
+  }
+  if (
+    input.storedJobStatus === 'FAILED' &&
+    input.jobStatus &&
+    input.jobStatus !== 'FAILED' &&
+    input.jobType === 'T2V_ASSEMBLE'
+  ) {
+    return
+  }
+
+  const skipProjectPatch =
+    input.jobType === 'MUSIC' && input.projectSourceKind === 't2v'
+
   const projectPatch: Record<string, unknown> = {}
-  if (input.projectStatus) projectPatch.status = input.projectStatus
-  if (input.stage !== undefined) projectPatch.stage = input.stage
-  if (input.progress !== undefined) projectPatch.progress = input.progress
-  if (input.error !== undefined) projectPatch.error = input.error
-  if (input.transcriptWords !== undefined) projectPatch.transcriptWords = input.transcriptWords
+  if (!skipProjectPatch) {
+    if (input.projectStatus) projectPatch.status = input.projectStatus
+    if (input.stage !== undefined) projectPatch.stage = input.stage
+    if (input.progress !== undefined) projectPatch.progress = input.progress
+    if (input.error !== undefined) projectPatch.error = input.error
+    if (input.transcriptWords !== undefined) projectPatch.transcriptWords = input.transcriptWords
+  }
 
   const needsSettingsRead =
-    input.etaSeconds !== undefined ||
-    input.chunkDone !== undefined ||
-    input.chunkTotal !== undefined ||
-    input.transcriptionEngine !== undefined ||
-    input.transcriptionFallbackReason !== undefined
+    !skipProjectPatch &&
+    (input.etaSeconds !== undefined ||
+      input.chunkDone !== undefined ||
+      input.chunkTotal !== undefined ||
+      input.transcriptionEngine !== undefined ||
+      input.transcriptionFallbackReason !== undefined)
 
   if (needsSettingsRead) {
     const project = await prisma.clipProject.findUnique({
@@ -71,9 +108,13 @@ export async function applyWorkerJobProgress(input: {
   const heartbeat = shouldTouchLockedAt(input.storedJobStatus, input.jobStatus)
   const terminalFromBody = input.jobStatus === 'DONE' || input.jobStatus === 'FAILED'
   const jobPatch: Record<string, unknown> = {}
-  if (input.jobStatus) {
-    jobPatch.status = input.jobStatus
-    if (terminalFromBody) jobPatch.finishedAt = new Date()
+  if (input.jobStatus && !isCanceledTerminal(input.storedJobStatus, input.storedJobError)) {
+    if (input.jobStatus === 'RUNNING' && input.storedJobStatus === 'FAILED') {
+      /* stale worker — do not resurrect */
+    } else {
+      jobPatch.status = input.jobStatus
+      if (terminalFromBody) jobPatch.finishedAt = new Date()
+    }
   }
   if (heartbeat) jobPatch.lockedAt = new Date()
 
@@ -88,20 +129,22 @@ export async function applyWorkerJobProgress(input: {
 
   const t2vDraftPatch: Record<string, unknown> = {}
   if (input.jobType === 'T2V_ASSEMBLE' && input.draftId) {
-    if (input.jobStatus === 'FAILED') {
-      t2vDraftPatch.status = 'DRAFT'
-      t2vDraftPatch.stage = 'failed'
-      t2vDraftPatch.progress = 0
-      t2vDraftPatch.error = input.error ?? 'Build failed'
-    } else if (input.jobStatus === 'DONE') {
-      t2vDraftPatch.status = 'READY'
-      t2vDraftPatch.stage = input.stage ?? 'done'
-      t2vDraftPatch.progress = input.progress ?? 100
-      t2vDraftPatch.error = null
-    } else if (input.jobStatus === 'RUNNING' || input.stage !== undefined || input.progress !== undefined) {
-      t2vDraftPatch.status = 'ASSEMBLING'
-      if (input.stage !== undefined) t2vDraftPatch.stage = input.stage
-      if (input.progress !== undefined) t2vDraftPatch.progress = input.progress
+    const latest = await isLatestT2vAssembleJob(input.projectId, input.jobId)
+    if (latest) {
+      if (input.jobStatus === 'FAILED') {
+        const err = input.error ?? ''
+        if (!/canceled/i.test(err)) {
+          t2vDraftPatch.status = 'DRAFT'
+          t2vDraftPatch.stage = 'failed'
+          t2vDraftPatch.progress = 0
+          t2vDraftPatch.error = input.error ?? 'Build failed'
+        }
+      } else if (input.jobStatus === 'RUNNING' || input.stage !== undefined || input.progress !== undefined) {
+        t2vDraftPatch.status = 'ASSEMBLING'
+        if (input.stage !== undefined) t2vDraftPatch.stage = input.stage
+        if (input.progress !== undefined) t2vDraftPatch.progress = input.progress
+      }
+      /* READY is set only in applyT2vAssembled — not on job DONE heartbeat */
     }
   }
 

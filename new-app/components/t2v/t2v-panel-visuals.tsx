@@ -68,7 +68,16 @@ export function T2vPanelVisuals({
     const res = await fetch(`/api/t2v/drafts/${draftId}/scenes/${sceneId}/media`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'replace', media: { provider: pick.provider, providerId: pick.providerId } }),
+      body: JSON.stringify({
+        action: 'replace',
+        query: debouncedQ,
+        page: 1,
+        media: {
+          provider: pick.provider === 'pexels_photo' ? 'pexels_photo' : pick.provider,
+          providerId: pick.providerId,
+          stockKind: pick.provider === 'pexels_photo' ? 'photo' : 'video',
+        },
+      }),
     })
     if (!res.ok) {
       toast.error('Could not replace media')

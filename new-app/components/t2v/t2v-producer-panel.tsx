@@ -21,21 +21,30 @@ export function T2vProducerPanel({
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pendingConfirm, setPendingConfirm] = useState<{ message: string; reply: string } | null>(null)
 
-  const send = async () => {
-    const text = input.trim()
+  const send = async (confirmDestructive = false) => {
+    const text = confirmDestructive ? pendingConfirm?.message ?? '' : input.trim()
     if (!text || busy) return
     setBusy(true)
-    setInput('')
-    setMessages((m) => [...m, { role: 'user', content: text }])
+    if (!confirmDestructive) {
+      setInput('')
+      setMessages((m) => [...m, { role: 'user', content: text }])
+    }
     try {
       const res = await fetch(`/api/t2v/drafts/${draftId}/producer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, confirmDestructive }),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'producer_failed')
+      if (body.data?.needsConfirm) {
+        setPendingConfirm({ message: text, reply: body.data.reply ?? '' })
+        setMessages((m) => [...m, { role: 'assistant', content: body.data.message ?? 'Confirm destructive changes?' }])
+        return
+      }
+      setPendingConfirm(null)
       const reply = body.data?.reply ?? 'Done.'
       setMessages((m) => [...m, { role: 'assistant', content: reply }])
       if (body.data?.summaries?.length) {
@@ -71,6 +80,13 @@ export function T2vProducerPanel({
           ))
         )}
       </div>
+      {pendingConfirm ? (
+        <div className="flex flex-wrap gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
+          <p className="flex-1">Confirm scene removal / shorten?</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => setPendingConfirm(null)}>Cancel</Button>
+          <Button type="button" size="sm" onClick={() => void send(true)}>Confirm</Button>
+        </div>
+      ) : null}
       <div className="flex gap-2">
         <Textarea
           rows={2}

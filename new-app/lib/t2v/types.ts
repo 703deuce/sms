@@ -98,6 +98,7 @@ export type T2vDraftV1 = {
     brandTemplateId?: string
     brand?: {
       templateId?: string
+      brandTemplateId?: string
       logoKey?: string
       introVideoKey?: string
       outroVideoKey?: string

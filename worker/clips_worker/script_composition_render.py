@@ -342,6 +342,15 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
             intro_key = brand.get("introVideoKey") if brand.get("useIntro", True) else None
             outro_key = brand.get("outroVideoKey") if brand.get("useOutro", True) else None
+            def _brand_key_ok(key: str | None) -> bool:
+                if not key:
+                    return False
+                return str(key).startswith(f"ws/{workspace_id}/") or str(key).startswith("stock/")
+
+            if intro_key and not _brand_key_ok(str(intro_key)):
+                intro_key = None
+            if outro_key and not _brand_key_ok(str(outro_key)):
+                outro_key = None
             if intro_key or outro_key:
                 from clips_worker.brand_concat import concat_brand_bookends
                 from clips_worker.render_clip import aspect_size

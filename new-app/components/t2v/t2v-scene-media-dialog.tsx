@@ -78,7 +78,13 @@ export function T2vSceneMediaDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'replace',
-          media: { provider: pick.provider, providerId: pick.providerId },
+          query: debouncedPrompt,
+          page: 1,
+          media: {
+            provider: pick.provider === 'pexels_photo' ? 'pexels_photo' : pick.provider,
+            providerId: pick.providerId,
+            stockKind: tab === 'stock_photo' ? 'photo' : 'video',
+          },
         }),
       })
       const applied = await apply.json()

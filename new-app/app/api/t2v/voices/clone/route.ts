@@ -4,6 +4,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
+import { getOrCreateT2vWorkspaceJobProject } from '@/lib/server/t2v/workspace-job-project'
 import type { T2vVoiceCloneJobPayload } from '@/lib/t2v/m9-contracts'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 import { getAuthenticatedUserId } from '@/lib/server/auth/session'
@@ -36,20 +37,7 @@ export async function POST(request: Request) {
       consentAt: new Date().toISOString(),
       consentById: userId,
     }
-    const project =
-      (await prisma.clipProject.findFirst({
-        where: { workspaceId, deletedAt: null, sourceKind: 't2v' },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      })) ??
-      (await prisma.clipProject.findFirst({
-        where: { workspaceId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      }))
-    if (!project) {
-      return NextResponse.json({ error: 'no_project_for_job' }, { status: 400 })
-    }
+    const project = await getOrCreateT2vWorkspaceJobProject(workspaceId)
     const jobId = createId('job')
     await prisma.clipJob.create({
       data: {

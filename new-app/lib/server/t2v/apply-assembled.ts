@@ -51,9 +51,6 @@ export async function applyT2vAssembled(input: {
   if (draftRow.assembledRevision != null && input.revision <= draftRow.assembledRevision) {
     return { skipped: true as const, reason: 'already_applied' }
   }
-  if (draftRow.revision !== input.revision) {
-    return { skipped: true as const, reason: 'revision_mismatch' }
-  }
 
   const doc = draftRow.document as T2vDraftV1
 

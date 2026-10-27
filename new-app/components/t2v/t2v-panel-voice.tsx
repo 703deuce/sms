@@ -17,7 +17,18 @@ export function T2vPanelVoice({
   useEffect(() => {
     void fetch('/api/t2v/voices')
       .then((r) => r.json())
-      .then((b) => setVoices((b.data?.voices ?? []).slice(0, 12)))
+      .then((b) => {
+        const saved = (b.data?.saved ?? []) as Array<{ voiceId: string; name: string }>
+        const library = (b.data?.voices ?? []) as Array<{ voiceId: string; name: string }>
+        const seen = new Set<string>()
+        const merged: Array<{ voiceId: string; name: string }> = []
+        for (const v of [...saved, ...library]) {
+          if (seen.has(v.voiceId)) continue
+          seen.add(v.voiceId)
+          merged.push(v)
+        }
+        setVoices(merged.slice(0, 48))
+      })
       .catch(() => {})
   }, [])
 

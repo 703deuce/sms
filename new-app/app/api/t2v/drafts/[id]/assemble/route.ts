@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { enqueueT2vAssemble } from '@/lib/server/t2v/drafts'
-import { ensureT2vMusicQueuedForBuild } from '@/lib/server/t2v/music'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,7 +10,6 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
   try {
     const { id } = await params
     const workspaceId = await resolveWorkspaceId()
-    await ensureT2vMusicQueuedForBuild(workspaceId, id)
     const data = await enqueueT2vAssemble(workspaceId, id)
     return NextResponse.json({ data })
   } catch (err) {

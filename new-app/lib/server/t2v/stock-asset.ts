@@ -58,7 +58,23 @@ export async function ensureT2vStockAsset(_workspaceId: string, c: StockCandidat
       },
     }))
 
-  const res = await fetch(c.srcUrl, { signal: AbortSignal.timeout(120_000) })
+  const res = await fetch(c.srcUrl, { redirect: 'manual', signal: AbortSignal.timeout(120_000) })
+  if (res.status >= 300 && res.status < 400) {
+    const loc = res.headers.get('location')
+    if (!loc) throw new Error('stock_redirect_missing_location')
+    assertAllowedStockUrl(loc)
+    const follow = await fetch(loc, { signal: AbortSignal.timeout(120_000) })
+    if (!follow.ok) throw new Error(`stock_download_${follow.status}`)
+    await storage.putBytes(
+      objectKey,
+      Buffer.from(await follow.arrayBuffer()),
+      isPhoto ? 'image/jpeg' : 'video/mp4',
+    )
+    return prisma.stockAsset.update({
+      where: { id: row.id },
+      data: { storageKey: objectKey },
+    })
+  }
   if (!res.ok) throw new Error(`stock_download_${res.status}`)
   await storage.putBytes(
     objectKey,

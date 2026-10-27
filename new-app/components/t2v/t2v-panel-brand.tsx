@@ -59,6 +59,7 @@ export function T2vPanelBrand({
               brand: t
                 ? {
                     templateId: id,
+                    brandTemplateId: id,
                     logoKey: t.logoKey ?? undefined,
                     introVideoKey: t.introVideoKey ?? undefined,
                     outroVideoKey: t.outroVideoKey ?? undefined,

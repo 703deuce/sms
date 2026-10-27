@@ -111,8 +111,8 @@ export function T2vPanelText({
                 max={Math.max(200, sceneDurMs - 200)}
                 step={50}
                 value={[t.startMs]}
-                onValueChange={([v]) => {
-                  const startMs = v ?? 0
+                onValueChange={(vals) => {
+                  const startMs = (Array.isArray(vals) ? vals[0] : vals) ?? 0
                   const endMs = Math.max(startMs + 200, t.endMs)
                   updateTexts(
                     scene.texts.map((x) =>
@@ -127,8 +127,8 @@ export function T2vPanelText({
                 max={sceneDurMs}
                 step={50}
                 value={[t.endMs]}
-                onValueChange={([v]) => {
-                  const endMs = v ?? t.endMs
+                onValueChange={(vals) => {
+                  const endMs = (Array.isArray(vals) ? vals[0] : vals) ?? t.endMs
                   updateTexts(
                     scene.texts.map((x) =>
                       x.id === t.id ? clampItem({ ...x, endMs }, sceneDurMs) : x,

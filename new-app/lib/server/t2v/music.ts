@@ -4,8 +4,6 @@ import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { estimateSceneMs } from '@/lib/t2v/estimate'
-import { saveT2vDraft } from '@/lib/server/t2v/drafts'
-
 export function estimateDraftMs(doc: T2vDraftV1): number {
   return doc.scenes.reduce((n, s) => n + estimateSceneMs(s), 0) || 60_000
 }
@@ -98,35 +96,6 @@ export async function enqueueT2vMusicGenerate(
     },
   })
   return { generationId: gen.id, jobId, estimatedCostUsd: musicCostUsd(lengthMs) }
-}
-
-/** Enqueue a bed on build when the draft has no track yet (not disabled). */
-export async function ensureT2vMusicQueuedForBuild(workspaceId: string, draftId: string): Promise<void> {
-  const prisma = getPrisma()
-  const row = await prisma.t2vDraft.findFirstOrThrow({ where: { id: draftId, workspaceId } })
-  const doc = row.document as T2vDraftV1
-  if (doc.music?.disabled) return
-  if (doc.music?.generationId) {
-    const existing = await prisma.aiGeneration.findFirst({
-      where: { id: doc.music.generationId, workspaceId, kind: 'MUSIC' },
-      select: { status: true },
-    })
-    if (existing && existing.status !== 'FAILED') return
-  }
-  const prompt = buildMusicPromptFromDraft(doc)
-  const { generationId } = await enqueueT2vMusicGenerate(workspaceId, draftId, prompt)
-  const music = doc.music ?? { volume: 0.25, duck: true }
-  const next: T2vDraftV1 = {
-    ...doc,
-    music: {
-      ...music,
-      generationId,
-      assetId: generationId,
-      label: music.label ?? doc.settings.tone,
-      prompt,
-    },
-  }
-  await saveT2vDraft(workspaceId, draftId, row.revision, next)
 }
 
 export async function attachUploadedMusic(
