@@ -129,7 +129,7 @@ def ffmpeg_cut_or_copy(src: Path, dest: Path, start_ms: int, end_ms: int) -> Non
     ffmpeg_cut(src, dest, start_ms, end_ms)
 
 
-AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "locked_off")
+AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "grid3", "grid4", "locked_off")
 
 
 def multiperson_reframe_enabled() -> bool:
