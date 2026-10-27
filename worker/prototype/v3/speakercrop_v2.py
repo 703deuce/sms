@@ -1,174 +1,158 @@
-"""Speaker-following 9:16 crop, v2. Free/local only: ffmpeg + OpenCV YuNet + MediaPipe FaceLandmarker + Resemblyzer.
-Usage: python speakercrop.py input.mp4 out_vertical.mp4   (models expected next to this script)
-v2 vs v1: YuNet boxes -> landmarker on face crops (profile faces), voice-embedding tie-breaker,
-look-ahead (decisions shifted earlier), shorter min shot, optional stacked split-screen when both talk."""
-import sys, os, json, time, subprocess
-import numpy as np, cv2, mediapipe as mp
-from mediapipe.tasks.python import vision, BaseOptions
+"""REFRAME_V=2 entry for worker/prototype/v3/speakercrop.py (same argv/env contract as v1).
+
+    python speakercrop.py input.mp4 out_vertical.mp4       # v1 (default)
+    REFRAME_V=2 python speakercrop.py input.mp4 out.mp4    # -> speakercrop_v2.main()
+
+Env read (all already produced by render_clip.run_speakercrop / layout_env):
+  OUT_W OUT_H WORDS CAPTIONS CLIP_START_MS CROP_TRACK_OUT SHOT_OVERRIDES NORENDER FFMPEG_THREADS
+  LAYOUT_MODE FORCE_SPLIT SPLIT MIN_SEG LEAD HYST          <- v1 ignored LAYOUT_MODE/FORCE_SPLIT; v2 honours them
+  MODELS_DIR (default: next to this script, like v1)       GRID (0 disables 2x2)
+"""
+from __future__ import annotations
+import json, os, subprocess, sys, time
+import cv2, numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-INP, OUT = sys.argv[1], sys.argv[2]
-E = lambda k, d: float(os.environ.get(k, d))
-OUT_W, OUT_H = 720, 1280
-SAMPLE_FPS = 5.0
-MIN_SEG = E('MIN_SEG', 0.8)   # drop shots shorter than this (s)
-HYST = E('HYST', 0.5)         # visual score needed to switch
-LEAD = E('LEAD', 0.4)         # look-ahead: move decisions this much earlier (s)
-EASE = E('EASE', 0.2)         # per-frame easing of crop centre
-SPLIT = int(E('SPLIT', 1))    # stacked layout when both talk
-USE_VOICE = int(E('VOICE', 1))
-VIS_W = E('VIS_W', 0.3)      # weight of lip-motion score when voice is on
-t0 = time.time()
+sys.path.insert(0, os.environ.get("CLIPS_WORKER_ROOT", os.path.join(HERE, "..")))   # dir that contains clips_worker/
+from clips_worker import reframe_core as rc
 
-cap = cv2.VideoCapture(INP)
-fps = cap.get(cv2.CAP_PROP_FPS); W = int(cap.get(3)); H = int(cap.get(4))
-step = max(1, round(fps / SAMPLE_FPS))
+LABEL = {0: "A", 1: "B"}                                # v1 shot labels kept for P1/P2 (TS CropTrack compat)
 
-# ---------- 1. YuNet boxes (handles profiles) -> FaceLandmarker on each face crop ----------
-det = cv2.FaceDetectorYN.create(os.path.join(HERE, 'yunet.onnx'), '', (W, H), 0.5, 0.3, 50)
-lm = vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
-    base_options=BaseOptions(model_asset_path=os.path.join(HERE, 'face_landmarker.task')),
-    running_mode=vision.RunningMode.IMAGE, num_faces=1, output_face_blendshapes=True,
-    min_face_detection_confidence=0.2, min_face_presence_confidence=0.2))
-T = []; mouth = [[], []]; xpos = [[], []]; ypos = [[], []]; fsize = [[], []]
-pos = [W * 0.3, W * 0.7]; i = 0
-while True:
-    if not cap.grab(): break
-    if i % step == 0:
-        ok, fr = cap.retrieve(); T.append(i / fps)
-        _, f = det.detect(fr); f = [] if f is None else sorted(f, key=lambda r: -r[2] * r[3])[:2]
-        got = [None, None]
-        for r in f:
-            x, y, w, h = r[:4]; cx = x + w / 2
-            k = 0 if abs(cx - pos[0]) < abs(cx - pos[1]) else 1
-            if got[k] is None: got[k] = r
-        for k in range(2):
-            r = got[k]
-            if r is None:
-                for L in (mouth, xpos, ypos, fsize): L[k].append(np.nan)
-                continue
-            x, y, w, h = r[:4]; cx, cy = x + w / 2, y + h / 2; s = max(w, h) * 1.8
-            pos[k] = 0.8 * pos[k] + 0.2 * cx
-            x0, y0 = int(max(0, cx - s / 2)), int(max(0, cy - s / 2))
-            crop = np.ascontiguousarray(fr[y0:int(y0 + s), x0:int(x0 + s)])
-            res = lm.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)))
-            m = np.nan
-            if res.face_landmarks:
-                pts = res.face_landmarks[0]; ys = [p.y for p in pts]; sz = max(ys) - min(ys)
-                jaw = next(b.score for b in res.face_blendshapes[0] if b.category_name == 'jawOpen')
-                m = abs(pts[13].y - pts[14].y) / max(sz, 1e-6) + 0.3 * jaw
-            mouth[k].append(m); xpos[k].append(cx); ypos[k].append(cy); fsize[k].append(h)
-        if pos[0] > pos[1]: pos.reverse()
-    i += 1
-t_detect = time.time() - t0
-T = np.array(T); n = len(T); mouth = np.array(mouth); xpos = np.array(xpos); ypos = np.array(ypos); fsize = np.array(fsize)
-face_rate = (100 * np.mean(~np.isnan(xpos), axis=1)).tolist()
-lmk_rate = (100 * np.mean(~np.isnan(mouth), axis=1)).tolist()
-print('face box L/R %.0f%%/%.0f%%  lip landmarks L/R %.0f%%/%.0f%%' % (*face_rate, *lmk_rate))
 
-# ---------- 2. audio: RMS gate + voice embeddings ----------
-pcm = subprocess.run(['ffmpeg', '-v', 'error', '-i', INP, '-ac', '1', '-ar', '16000', '-f', 's16le', '-'], capture_output=True).stdout
-a = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768
-hop = int(16000 / SAMPLE_FPS)
-rms_db = np.array([20 * np.log10(np.sqrt(np.mean(a[j*hop:(j+1)*hop]**2) + 1e-12)) for j in range(len(a)//hop)])
-rms_db = np.interp(np.arange(n), np.arange(len(rms_db)), rms_db)
-voiced = rms_db > np.percentile(rms_db, 30)
+def _v1_split_slot_tracks(track: dict) -> tuple[list[int], list[int]]:
+    """Editor preview expects x0_A/x0_B per frame (v1 superset)."""
+    n = len(track["x0"])
+    x0_a = [-1] * n
+    x0_b = [-1] * n
+    fr = track.get("_frames")
+    if not fr:
+        return x0_a, x0_b
+    w, cw = track["W"], track["cw"]
+    seg_of = fr["seg_of"]
+    for i in range(n):
+        si = min(int(seg_of[i]), len(track["segments"]) - 1)
+        sg = track["segments"][si]
+        if sg["layout"] not in ("split", "three") or len(sg["slots"]) < 2:
+            continue
+        for slot, person, out in ((0, sg["slots"][0], x0_a), (1, sg["slots"][1], x0_b)):
+            x = fr["fx"][person, i]
+            if not np.isnan(x):
+                out[i] = int(np.clip(x - cw / 2, 0, w - cw))
+    return x0_a, x0_b
 
-# ---------- 3. visual score ----------
-w = max(2, int(1.0 * SAMPLE_FPS)); act = np.full((2, n), np.nan)
-for k in range(2):
-    for j in range(n):
-        seg = mouth[k, max(0, j - w // 2): j + w // 2 + 1]; seg = seg[~np.isnan(seg)]
-        if len(seg) >= 2: act[k, j] = np.std(seg)
-med = np.nanmedian(act); act /= (med if med > 0 else 1)          # one shared scale for both people
-diff = np.where(np.isnan(act[0]), 1.0, act[0]) - np.where(np.isnan(act[1]), 1.0, act[1])
-diff[~voiced] = np.nan
-win = lambda x, j, r: x[max(0, j - r): j + r + 1]
-sm = np.array([np.nanmean(win(diff, j, 4)) if np.any(~np.isnan(win(diff, j, 4))) else np.nan for j in range(n)])
 
-# voice tie-breaker: 2-cluster Resemblyzer partial embeddings, cluster->person by correlation with visual score
-aud = np.zeros(n)
-t_voice = time.time()
-if USE_VOICE:
-    from resemblyzer import VoiceEncoder
-    from sklearn.cluster import KMeans
-    enc = VoiceEncoder('cpu', verbose=False)
-    _, parts, slices = enc.embed_utterance(a, return_partials=True, rate=4, min_coverage=0.5)
-    pt = np.array([(s.start + s.stop) / 2 / 16000 for s in slices])               # partial centre times (s)
-    pv = np.interp(pt, T, voiced.astype(float)) > 0.5
-    if pv.sum() > 6:
-        km = KMeans(2, n_init=10, random_state=0).fit(parts[pv])
-        d = km.transform(parts)                                                     # distance to each centroid
-        conf = (d[:, 1] - d[:, 0]) / (d.sum(1) + 1e-9)                              # >0 -> cluster 0
-        c_t = np.interp(T, pt, conf)
-        ok_ = voiced & ~np.isnan(sm)
-        sign = np.sign(np.corrcoef(c_t[ok_], sm[ok_])[0, 1]) if ok_.sum() > 5 else 1.0  # cluster 0 = left if +
-        aud = sign * c_t / (np.std(c_t) + 1e-9)                                      # +left / -right, ~unit scale
-        aud[~voiced] = 0
-t_voice = time.time() - t_voice
+def to_v1_compatible(track: dict, t0_ms: int) -> dict:
+    """crop_track v2 = v1 fields (v, W, H, cw, fps, t0_ms, x0, x0_A, x0_B, shots[]) + people[] + segments[] + spk2person."""
+    shots = []
+    for s in track["segments"]:
+        lab = {"single": LABEL.get(s["slots"][0], f"P{s['slots'][0] + 1}") if s["slots"] else "wide",
+               "split": "split", "three": "three", "grid": "grid", "wide": "wide"}[s["layout"]]
+        shots.append({"start_ms": s["start_ms"] + t0_ms, "end_ms": s["end_ms"] + t0_ms, "spk": lab})
+    x0_a, x0_b = _v1_split_slot_tracks(track)
+    keep = {k: v for k, v in track.items() if not k.startswith("_")}
+    return {**keep, "v": 2, "t0_ms": t0_ms, "x0_A": x0_a, "x0_B": x0_b, "shots": shots,
+            "segments": [{**s, "start_ms": s["start_ms"] + t0_ms, "end_ms": s["end_ms"] + t0_ms,
+                          "slots": [f"P{p + 1}" for p in s["slots"]]} for s in track["segments"]],
+            "timings": {k: round(float(v), 3) for k, v in track.get("_timings", {}).items() if isinstance(v, (int, float))}}
 
-# Measured: voice clusters alone matched the pitch proxy 92-98%, lip motion of the profile face is weak.
-# So voice leads (when available) and lip motion maps clusters to faces + adds a smaller vote.
-aud_s = np.array([np.mean(win(aud, j, 2)) for j in range(n)])
-score = (aud_s + VIS_W * np.nan_to_num(sm)) if USE_VOICE else np.nan_to_num(sm)
-raw = np.full(n, -1); raw[score > HYST] = 0; raw[score < -HYST] = 1
-BOTH_T = E('BOTH_T', 1.3)
-both = voiced & (np.nan_to_num(act[0]) > BOTH_T) & (np.nan_to_num(act[1]) > BOTH_T)
 
-spk = np.zeros(n, int); cur = next((int(v) for v in raw if v >= 0), 0)
-for j in range(n):
-    if raw[j] >= 0: cur = raw[j]
-    spk[j] = cur
-if SPLIT:                                   # 2 = stacked, only if both talk for >= 1.5 s
-    r = int(1.5 * SAMPLE_FPS)
-    for j in range(n):
-        if both[j:j + r].all() and j + r <= n: spk[j:j + r] = 2
-minlen = int(round(MIN_SEG * SAMPLE_FPS)); changed = True
-while changed:
-    changed = False; segs = []; s = 0
-    for j in range(1, n + 1):
-        if j == n or spk[j] != spk[s]: segs.append((s, j)); s = j
-    for idx, (s, e) in enumerate(segs):
-        if e - s < minlen and len(segs) > 1:
-            spk[s:e] = spk[segs[idx-1][0]] if idx > 0 else spk[segs[idx+1][0]]; changed = True; break
-# look-ahead: shift the decision timeline earlier by LEAD seconds
-sh = int(round(LEAD * SAMPLE_FPS))
-if sh: spk = np.concatenate([spk[sh:], np.repeat(spk[-1], sh)])
+def main(inp: str, out: str, env: dict | None = None) -> dict:
+    env = dict(os.environ if env is None else env)
+    t0 = time.perf_counter()
+    ow, oh = int(env.get("OUT_W", 720)), int(env.get("OUT_H", 1280))
+    t0_ms = int(env.get("CLIP_START_MS", 0))
+    words = json.load(open(env["WORDS"])) if env.get("WORDS") and os.path.exists(env["WORDS"]) else None
+    cfg = rc.director_cfg_from_env(env)
+    track = rc.analyze_clip(inp, words, cfg, models_dir=env.get("MODELS_DIR", HERE), out_w=ow, out_h=oh)
+    if not track["segments"]:
+        raise SystemExit(3)                              # no faces: caller falls back (blur fit / subject follow)
+    rc.apply_shot_overrides(track, json.loads(env.get("SHOT_OVERRIDES", "[]")))
+    ct = to_v1_compatible(track, t0_ms)
+    crop_out = env.get("CROP_TRACK_OUT", os.path.splitext(out)[0] + ".crop_track.json")
+    json.dump(ct, open(crop_out, "w"), separators=(",", ":"))
+    if int(env.get("NORENDER", 0)):
+        return ct
+    vf = []
+    if int(env.get("CAPTIONS", 1)) and words:
+        try:                                             # same captions module + split_times hook as v1
+            import captions
+            for wd in words:
+                wd.setdefault("spk", 0)
+            base = os.path.splitext(out)[0]
+            seg_at = lambda t: next((s for s in track["segments"] if s["start_s"] <= t < s["end_s"]), track["segments"][-1])
+            info = captions.build(words, inp, base + ".ass", base + ".srt",
+                                  split_times=lambda t: seg_at(t)["layout"] in ("split", "three", "grid"))
+            json.dump(info.pop("words_fixed"), open(base + ".words.json", "w"), indent=0)
+            vf = ["-vf", f"ass={base}.ass:fontsdir={os.path.join(HERE, 'fonts')}".replace(",", r"\,")]
+        except ImportError:
+            pass
+    cap = cv2.VideoCapture(inp); fps = cap.get(cv2.CAP_PROP_FPS)
+    ff = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{ow}x{oh}",
+                           "-r", str(fps), "-i", "-", "-i", inp, "-map", "0:v", "-map", "1:a?", *vf,
+                           "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                           "-threads", env.get("FFMPEG_THREADS", "4"), "-pix_fmt", "yuv420p",
+                           "-c:a", "aac", "-shortest", out], stdin=subprocess.PIPE)
+    i = 0
+    while True:
+        ok, fr = cap.read()
+        if not ok: break
+        lay, crops = rc.frame_crops(track, i)
+        ff.stdin.write(rc.compose_frame(fr, lay, crops, ow, oh).tobytes()); i += 1
+    ff.stdin.close()
+    if ff.wait() != 0:
+        raise SystemExit(4)
+    ct["timings"]["total_s"] = round(time.perf_counter() - t0, 2)
+    json.dump(ct, open(crop_out, "w"), separators=(",", ":"))
+    print(f"speakercrop v2: {i / fps:.1f}s video, {ct['timings']['total_s']}s wall, "
+          f"{len(ct['segments'])} segments, people={[p['id'] for p in ct['people']]}")
+    return ct
 
-for A in (xpos, ypos, fsize):
-    for k in range(2):
-        ok_ = ~np.isnan(A[k])
-        A[k] = np.interp(np.arange(n), np.where(ok_)[0], A[k][ok_]) if ok_.any() else (W * (0.3 + 0.4 * k))
-target = np.array([xpos[min(s, 1), j] if s < 2 else W / 2 for j, s in enumerate(spk)])
-json.dump(dict(t=T.tolist(), speaker=spk.tolist(), raw=raw.tolist(), act=np.nan_to_num(act).tolist(), aud=aud.tolist(),
-               voiced=voiced.tolist(), target_x=target.tolist(), face_rate=face_rate, lmk_rate=lmk_rate), open('analysis.json', 'w'))
 
-# ---------- 4. render ----------
-cw = int(round(H * 9 / 16)) // 2 * 2
-cap = cv2.VideoCapture(INP)
-ff = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{OUT_W}x{OUT_H}', '-r', str(fps),
-                       '-i', '-', '-i', INP, '-map', '0:v', '-map', '1:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
-                       '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', OUT], stdin=subprocess.PIPE)
-cx = target[0]; fi = 0
-def tile(fr, j, k):            # 9:8 tile (720x640 out) around person k's face
-    th = int(H * 0.62); tw = int(th * 9 / 8)
-    x0 = int(np.clip(xpos[k, j] - tw / 2, 0, W - tw)); y0 = int(np.clip(ypos[k, j] - th * 0.4, 0, H - th))
-    return cv2.resize(fr[y0:y0 + th, x0:x0 + tw], (OUT_W, OUT_H // 2), interpolation=cv2.INTER_CUBIC)
-while True:
-    ok, fr = cap.read()
-    if not ok: break
-    j = min(n - 1, int(round(fi / fps * SAMPLE_FPS)))
-    if spk[j] == 2:
-        out = np.vstack([tile(fr, j, 0), tile(fr, j, 1)])
+def render_crop_track(inp: str, out: str, track: dict, env: dict | None = None) -> dict:
+    """CROP_TRACK_IN mode: render a track someone else wrote (subject_reframe.write_motion_crop_track,
+    pipeline.write_fit_blur_crop_track, or an editor-saved track) instead of re-analysing.
+    Fixes the overwrite bug: reframe_clip_preview passes its motion/fit track in here, nothing is recomputed.
+    v1 semantics: x0 >= 0 -> crop [x0, x0+cw); x0 < 0 -> wide blur-fit (a v1 fit track uses -1 for 'wide',
+    so -1 is only treated as split when the shot label says 'split'). The pan cap is applied here too."""
+    env = dict(os.environ if env is None else env)
+    ow, oh = int(env.get("OUT_W", 720)), int(env.get("OUT_H", 1280))
+    cap = cv2.VideoCapture(inp); fps = cap.get(cv2.CAP_PROP_FPS); W = int(cap.get(3)); H = int(cap.get(4))
+    cw = int(track.get("cw", W)); x0 = np.array(track["x0"], float); t0 = int(track.get("t0_ms", 0))
+    lab = np.array(["wide"] * len(x0), dtype=object)
+    for sh in track.get("shots", []):
+        a = max(0, int((sh["start_ms"] - t0) / 1000 * fps)); b = int((sh["end_ms"] - t0) / 1000 * fps)
+        lab[a:b] = sh.get("spk", "wide")
+    single = (x0 >= 0) & (cw < W)
+    if single.any():                                              # One-Euro + 0.15 W/s cap on the given track
+        cx = np.where(single, x0 + cw / 2, np.nan)
+        cx = np.interp(np.arange(len(cx)), np.flatnonzero(single), cx[single])
+        resets = np.flatnonzero(np.diff(single.astype(int)) != 0) + 1
+        x0 = np.where(single, np.clip(rc.smooth_path(cx, fps, frame_w=W, resets=resets) - cw / 2, 0, W - cw), x0)
+    ff = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{ow}x{oh}",
+                           "-r", str(fps), "-i", "-", "-i", inp, "-map", "0:v", "-map", "1:a?", "-c:v", "libx264",
+                           "-preset", "veryfast", "-crf", "20", "-threads", env.get("FFMPEG_THREADS", "4"),
+                           "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", out], stdin=subprocess.PIPE)
+    i = 0
+    while True:
+        ok, fr = cap.read()
+        if not ok: break
+        k = min(i, len(x0) - 1)
+        if x0[k] >= 0 and cw < W:
+            o = rc.compose_frame(fr, "single", [(int(x0[k]), 0, cw, H)], ow, oh)
+        else:
+            o = rc.compose_frame(fr, "wide", [], ow, oh)
+        ff.stdin.write(o.tobytes()); i += 1
+    ff.stdin.close(); ff.wait()
+    return {"frames": i, "cropMethod": track.get("method", "track_in")}
+
+
+def cli(inp: str, out: str) -> None:
+    """Called by the 3-line dispatch at the top of speakercrop.py."""
+    if os.environ.get("CROP_TRACK_IN"):
+        render_crop_track(inp, out, json.load(open(os.environ["CROP_TRACK_IN"])))
     else:
-        tgt = np.interp(fi / fps, T, target); cx += EASE * (tgt - cx)
-        x0 = int(np.clip(cx - cw / 2, 0, W - cw))
-        out = cv2.resize(fr[:, x0:x0 + cw], (OUT_W, OUT_H), interpolation=cv2.INTER_CUBIC)
-    ff.stdin.write(out.tobytes()); fi += 1
-ff.stdin.close(); ff.wait()
-tot = time.time() - t0; dur = fi / fps
-print(f'video {dur:.1f}s | detect {t_detect:.1f}s | voice {t_voice:.1f}s | total {tot:.1f}s | {tot/dur*60:.0f}s wall per min of video')
-segs = []; s = 0
-for j in range(1, n + 1):
-    if j == n or spk[j] != spk[s]: segs.append(f"{T[s]:5.1f}-{T[min(j,n-1)]:5.1f}s {['LEFT','RIGHT','SPLIT'][spk[s]]}"); s = j
-print(' | '.join(segs))
+        main(inp, out)
+
+
+if __name__ == "__main__":
+    cli(sys.argv[1], sys.argv[2])
