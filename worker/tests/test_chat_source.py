@@ -5,7 +5,15 @@ from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.chat.twitch_gql import TwitchChatReplayError
 
 
+def test_get_chat_replay_off_returns_none(monkeypatch):
+    monkeypatch.setenv("TWITCH_VOD_CHAT_REPLAY", "off")
+    msgs, src = get_chat({"platform": "twitch", "externalId": "123", "state": {}})
+    assert msgs is None
+    assert src == "none"
+
+
 def test_get_chat_empty_replay_returns_empty_list(monkeypatch):
+    monkeypatch.delenv("TWITCH_VOD_CHAT_REPLAY", raising=False)
     monkeypatch.setattr(
         "clips_worker.streamer.chat.twitch_gql.fetch_all_vod_comments",
         lambda *a, **k: ([], None),

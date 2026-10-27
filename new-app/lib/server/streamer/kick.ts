@@ -166,8 +166,12 @@ export function parseKickSubscriptionCreateRows(data: unknown): string[] {
   return ids
 }
 
-export async function createKickEventSubscriptions(broadcasterUserId: number): Promise<string[]> {
+export async function createKickEventSubscriptions(
+  broadcasterUserId: number,
+  events?: ReadonlyArray<{ name: string; version: number }>,
+): Promise<string[]> {
   const token = await kickAppAccessToken()
+  const toCreate = events ?? [...KICK_EVENT_NAMES]
   const res = await fetch('https://api.kick.com/public/v1/events/subscriptions', {
     method: 'POST',
     headers: {
@@ -177,7 +181,7 @@ export async function createKickEventSubscriptions(broadcasterUserId: number): P
     body: JSON.stringify({
       broadcaster_user_id: broadcasterUserId,
       method: 'webhook',
-      events: KICK_EVENT_NAMES.map((e) => ({ name: e.name, version: e.version })),
+      events: toCreate.map((e) => ({ name: e.name, version: e.version })),
     }),
   })
   if (!res.ok) {
@@ -282,7 +286,7 @@ export async function ensureKickEventSubscriptions(
   const ids = new Set(remote.map((r) => r.subscription_id))
   const missing = KICK_EVENT_NAMES.filter((e) => !haveNames.has(e.name))
   if (!missing.length) return [...ids]
-  const created = await createKickEventSubscriptions(broadcasterUserId)
+  const created = await createKickEventSubscriptions(broadcasterUserId, missing)
   for (const id of created) ids.add(id)
   for (const stale of existingIds) {
     if (!ids.has(stale)) {
