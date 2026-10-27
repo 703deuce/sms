@@ -121,7 +121,7 @@ def _document_settings_edits(document: dict, project_settings: dict) -> dict:
     doc_settings = document.get("settings") or {}
     captions = doc_settings.get("captions") or {}
     preset = captions.get("presetId") or captions.get("preset") or "bold_pop"
-    return {
+    edits = {
         "v": 2,
         "captions": {
             "enabled": bool(captions.get("enabled", True)),
@@ -131,6 +131,12 @@ def _document_settings_edits(document: dict, project_settings: dict) -> dict:
         "layout": {"mode": doc_settings.get("reframeMode") or "speaker_follow", "shotOverrides": []},
         "aspectRatio": doc_settings.get("aspect") or project_settings.get("aspectRatio") or "9:16",
     }
+    brand = doc_settings.get("brand")
+    if isinstance(brand, dict) and brand:
+        edits["brand"] = brand
+    elif isinstance(project_settings.get("brand"), dict):
+        edits["brand"] = project_settings["brand"]
+    return edits
 
 
 def _export_audio(src: Path, dest: Path, fmt: str) -> None:
@@ -333,6 +339,24 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             out_key = f"{base_key}.{ext}"
             upload_file(out_key, text_path, ctype)
         else:
+            brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
+            intro_key = brand.get("introVideoKey") if brand.get("useIntro", True) else None
+            outro_key = brand.get("outroVideoKey") if brand.get("useOutro", True) else None
+            if intro_key or outro_key:
+                from clips_worker.brand_concat import concat_brand_bookends
+                from clips_worker.render_clip import aspect_size
+                from clips_worker.storage import download_object
+
+                intro_p = td_path / "brand_intro.mp4" if intro_key else None
+                outro_p = td_path / "brand_outro.mp4" if outro_key else None
+                if intro_p:
+                    download_object(str(intro_key), intro_p)
+                if outro_p:
+                    download_object(str(outro_key), outro_p)
+                w, h = aspect_size(aspect, resolution)
+                bookended = td_path / "bookended.mp4"
+                concat_brand_bookends(out_mp4, bookended, intro_p, outro_p, w, h, td_path)
+                out_mp4 = bookended
             out_key = f"{base_key}.mp4"
             upload_file(out_key, out_mp4, "video/mp4")
 

@@ -39,6 +39,7 @@ def finalize_t2v_video(
     w: int,
     h: int,
     work_dir: Path,
+    skip_brand_bookends: bool = False,
 ) -> Path:
     work_dir.mkdir(parents=True, exist_ok=True)
     items, font, primary, muted = text_items_from_document(document, scene_starts_ms)
@@ -51,6 +52,12 @@ def finalize_t2v_video(
         titled = work_dir / "titled.mp4"
         burn_ass(current, ass_path, titled)
         current = titled
+    if skip_brand_bookends:
+        if current != out:
+            import shutil
+
+            shutil.copy2(current, out)
+        return out
     branded = work_dir / "branded.mp4"
     apply_brand_bookends(
         current,

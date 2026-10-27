@@ -193,6 +193,7 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
             w=w,
             h=h,
             work_dir=work / "post",
+            skip_brand_bookends=True,
         )
 
         all_words: list[dict] = []

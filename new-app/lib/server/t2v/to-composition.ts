@@ -1,3 +1,4 @@
+import { brandEditsFromProjectBrand } from '@/lib/clips/brand'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 
@@ -57,6 +58,7 @@ export function draftToComposition(input: {
         enabled: draft.settings.captionsEnabled,
         presetId: draft.settings.captionPresetId,
       },
+      brand: brandEditsFromProjectBrand(draft.settings.brand as Record<string, unknown> | undefined),
     },
   }
 }

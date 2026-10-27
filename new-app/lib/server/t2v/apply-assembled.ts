@@ -57,6 +57,20 @@ export async function applyT2vAssembled(input: {
 
   const doc = draftRow.document as T2vDraftV1
 
+  const prevProject = await prisma.clipProject.findFirst({
+    where: { id: input.projectId, workspaceId: input.workspaceId },
+    select: { uploadId: true },
+  })
+  if (prevProject?.uploadId) {
+    const oldUpl = await prisma.clipUpload.findFirst({
+      where: { id: prevProject.uploadId, workspaceId: input.workspaceId },
+      select: { id: true, key: true, kind: true },
+    })
+    if (oldUpl?.kind === 't2v_source' && oldUpl.key && oldUpl.key !== input.sourceKey) {
+      await prisma.clipUpload.deleteMany({ where: { id: oldUpl.id, workspaceId: input.workspaceId } })
+    }
+  }
+
   const uploadId = createId('upl')
   const driver = storageDriverName()
   await prisma.clipUpload.create({
