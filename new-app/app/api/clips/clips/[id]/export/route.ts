@@ -5,6 +5,7 @@ import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
+import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
 import { logClipEvent } from '@/lib/server/clips/events'
 import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
@@ -21,6 +22,8 @@ const bodySchema = z.object({
   aspect: z.enum(['9:16', '4:5', '1:1', '16:9']).default('9:16'),
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
+  /** Optional client snapshot — used when PATCH save is still in flight. */
+  edits: z.record(z.unknown()).optional(),
 })
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -33,7 +36,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const raw = await request.text()
     const body = bodySchema.parse(raw ? JSON.parse(raw) : {})
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
-    const edits = normalizeEdits(clip.edits, bounds)
+    const edits = body.edits
+      ? normalizeEdits(mergeEditsPatch(normalizeEdits(clip.edits, bounds), body.edits, bounds), bounds)
+      : normalizeEdits(clip.edits, bounds)
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
     let resolution = body.resolution
     if (resolution === '1080p' && !can(workspaceId, 'export_1080p')) {

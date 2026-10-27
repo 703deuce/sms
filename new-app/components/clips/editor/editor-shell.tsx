@@ -581,6 +581,7 @@ export function EditorShell({
         onAudioTrack={(track) => setEdits({ ...edits, audioTrack: track })}
         open={exportOpen}
         onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
+        onBeforeExport={() => flushSave()}
         onClose={() => setExportOpen(false)}
       />
     </div>

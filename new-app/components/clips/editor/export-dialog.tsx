@@ -24,6 +24,7 @@ export function ExportDialog({
   open,
   onClose,
   onAspectChange,
+  onBeforeExport,
 }: {
   clipId: string
   title: string
@@ -31,6 +32,7 @@ export function ExportDialog({
   dubs?: DubRow[]
   onAudioTrack?: (track: string) => void
   onAspectChange?: (aspect: ClipProjectSettings['aspectRatio']) => void
+  onBeforeExport?: () => Promise<void>
   open: boolean
   onClose: () => void
 }) {
@@ -105,11 +107,13 @@ export function ExportDialog({
     setErrorDetail(null)
     const toastId = toast.loading('Starting export…')
     try {
+      await onBeforeExport?.()
       const data = await exportClipWithOptions(clipId, {
         resolution,
         aspect,
         watermark: false,
         alsoSrt,
+        edits,
       })
       setRenderId(data.renderId)
       setStatus(data.status)

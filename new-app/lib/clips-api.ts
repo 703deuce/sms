@@ -193,6 +193,7 @@ export function exportClipWithOptions(
     aspect?: '9:16' | '4:5' | '1:1' | '16:9'
     watermark?: boolean
     alsoSrt?: boolean
+    edits?: unknown
   },
 ) {
   return clipsFetch<{
