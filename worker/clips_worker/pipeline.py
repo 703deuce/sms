@@ -252,6 +252,25 @@ def initial_clip_edits(settings: dict) -> dict:
     return edits
 
 
+def _finalize_regular_clip_edits(
+    edits: dict,
+    clip_file: Path,
+    clip_words: list[dict],
+    settings: dict,
+    mode: str,
+) -> dict:
+    if mode == "anything" or settings.get("streamer"):
+        return edits
+    from clips_worker.regular_auto_layout import apply_regular_auto_layout
+
+    return apply_regular_auto_layout(
+        edits,
+        clip_file,
+        clip_words,
+        streamer=bool(settings.get("streamer")),
+    )
+
+
 def mark_project_ready(conn, project_id: str, error: str | None = None) -> None:
     with conn.cursor() as cur:
         cur.execute(
@@ -517,11 +536,17 @@ def run_m4_pipeline(
                         "posterKey": keys["poster"],
                         "wordsKey": keys["words"],
                         "cropKey": crop_key,
-                        "edits": apply_clip_polish_initial(
-                            initial_clip_edits(settings),
-                            pick,
+                        "edits": _finalize_regular_clip_edits(
+                            apply_clip_polish_initial(
+                                initial_clip_edits(settings),
+                                pick,
+                                clip_words,
+                                settings,
+                            ),
+                            clip_file,
                             clip_words,
                             settings,
+                            mode,
                         ),
                         "aiMeta": ai_meta_out,
                     }
@@ -759,11 +784,17 @@ def run_m4_pipeline(
                         "posterKey": keys["poster"],
                         "wordsKey": keys["words"],
                         "cropKey": crop_key,
-                        "edits": apply_clip_polish_initial(
-                            initial_clip_edits(settings),
-                            pick,
+                        "edits": _finalize_regular_clip_edits(
+                            apply_clip_polish_initial(
+                                initial_clip_edits(settings),
+                                pick,
+                                clip_words,
+                                settings,
+                            ),
+                            clip_file,
                             clip_words,
                             settings,
+                            mode,
                         ),
                         "aiMeta": ai_meta_out,
                     }

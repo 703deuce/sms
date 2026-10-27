@@ -78,6 +78,10 @@ export type ClipEditsV2 = {
   aspectRatio?: ExportAspect
   /** Export-only overlays (headline bar, badge, channel link) — not burned into preview.mp4. */
   exportTemplate?: ClipExportTemplate
+  /** Bundled Kenney SFX on export render (off | subtle | meme). */
+  exportSfx?: 'off' | 'subtle' | 'meme'
+  /** Trim end for loop-friendly Shorts/TikTok (default on for those presets). */
+  loopFriendlyEnd?: boolean
 }
 
 export type ClipBounds = { clipStartMs: number; clipEndMs: number }

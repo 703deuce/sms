@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 ENV HF_HOME=/models/hf
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8', download_root='/models/whisper')"
 
+COPY worker/assets /app/assets
 COPY worker/prototype/v3 /app/v3
 # Bookworm has no fonts-montserrat apt package — fetch static Black for ASS + fontconfig.
 RUN set -eux; \
@@ -51,7 +52,8 @@ RUN pip install --no-cache-dir pytest \
         /app/tests/test_reframe_model_names.py /app/tests/test_layout_router.py \
         /app/tests/test_reframe_integration.py /app/tests/test_person_count_probe.py \
         /app/tests/test_reframe_person_det.py /app/tests/test_polish_render_sync.py \
-        /app/tests/test_zoom_filtergraph_valid.py /app/tests/test_worker_fonts.py
+        /app/tests/test_zoom_filtergraph_valid.py /app/tests/test_worker_fonts.py \
+        /app/tests/test_export_sfx.py /app/tests/test_loop_friendly_trim.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en

@@ -17,6 +17,7 @@ from clips_worker.pipeline import (
     initial_clip_edits,
     insert_clips_batch,
     reframe_clip_preview,
+    _finalize_regular_clip_edits,
 )
 from clips_worker.picker import pick_talking_clips
 from clips_worker.process_helpers import resolve_transcript_for_job
@@ -176,11 +177,17 @@ def run_replace_clip_job(conn, job: dict, post_progress) -> None:
             "posterKey": keys["poster"],
             "wordsKey": keys["words"],
             "cropKey": crop_key,
-            "edits": apply_clip_polish_initial(
-                initial_clip_edits(settings),
-                pick,
+            "edits": _finalize_regular_clip_edits(
+                apply_clip_polish_initial(
+                    initial_clip_edits(settings),
+                    pick,
+                    clip_words,
+                    settings,
+                ),
+                clip_file,
                 clip_words,
                 settings,
+                settings.get("mode") or "talking",
             ),
             "aiMeta": ai_meta_out,
         }

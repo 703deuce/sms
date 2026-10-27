@@ -18,6 +18,8 @@ import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { applyExportPolishEdits } from '@/lib/server/clips/apply-export-polish'
 import { getClipEditorWords } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { getPrisma } from '@/lib/server/db'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 
 const resolutionSchema = z.preprocess((v) => {
   if (v === 720 || v === '720') return '720p'
@@ -68,6 +70,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       words: wordsPayload?.words,
       removeDeadAir: body.removeDeadAir ?? true,
       hookText,
+      exportSfx: body.exportSfx ?? 'off',
     })
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
     let resolution = body.resolution
@@ -85,12 +88,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const aspect = exportPlatform
       ? edits.aspectRatio ?? '9:16'
       : body.aspect ?? edits.aspectRatio ?? '9:16'
-    if (body.exportSfx && body.exportSfx !== 'off') {
-      console.info('[clipper:export] exportSfx requested but no bundled SFX yet', {
-        clipId,
-        mode: body.exportSfx,
-      })
-    }
+    const exportSfx = body.exportSfx ?? 'off'
     console.info('[clipper:export] request', {
       clipId,
       workspaceId,
@@ -99,9 +97,17 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       exportPlatform: exportPlatform ?? null,
       watermark,
       durationMs: clip.endMs - clip.startMs,
+      exportSfx,
+    })
+
+    const prisma = getPrisma()
+    await prisma.clip.update({
+      where: { id: clipId },
+      data: { edits: toPrismaJson(edits) },
     })
 
     if (
+      exportSfx === 'off' &&
       canReuseClipPreviewForExport({
         aspect,
         resolution,

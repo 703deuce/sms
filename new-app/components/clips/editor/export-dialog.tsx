@@ -370,14 +370,12 @@ export function ExportDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="off">Off</SelectItem>
-              <SelectItem value="subtle" disabled={!sfxBundled}>Subtle</SelectItem>
-              <SelectItem value="meme" disabled={!sfxBundled}>Meme</SelectItem>
+              <SelectItem value="subtle">Subtle</SelectItem>
+              <SelectItem value="meme">Meme</SelectItem>
             </SelectContent>
           </Select>
           <p id="export-sfx-hint" className="text-xs text-muted-foreground">
-            {sfxBundled
-              ? 'Royalty-free whoosh and pop on cuts (export only).'
-              : 'Coming soon — no bundled SFX in this build yet (setting is saved as Off).'}
+            Kenney CC0 SFX on export only. Subtle: quiet whoosh on zoom punches. Meme: whoosh + pops on emphasis (under speech).
           </p>
         </div>
         <div className="mt-4 flex items-center justify-between gap-2">

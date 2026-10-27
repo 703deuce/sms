@@ -461,6 +461,13 @@ def render_edited_clip(
     from clips_worker.silence_trim import effective_cut_ranges
 
     edits = {**edits, "cutRanges": effective_cut_ranges(edits, source_words)}
+    from clips_worker.loop_friendly_trim import apply_loop_friendly_trim
+
+    plat = None
+    tpl = edits.get("exportTemplate")
+    if isinstance(tpl, dict) and tpl.get("exportPlatformId"):
+        plat = str(tpl.get("exportPlatformId"))
+    edits = apply_loop_friendly_trim(edits, source_words, export_platform=plat)
     shot_overrides = (edits.get("layout") or {}).get("shotOverrides") or []
     src_words = ensure_word_i(source_words)
     sc_settings = speakercrop_settings_from_edits(settings, edits)
@@ -718,5 +725,49 @@ def render_edited_clip(
             play_h,
         )
         shutil.copy(pb_out, out_mp4)
+
+    export_sfx_mode = str(edits.get("exportSfx") or "off")
+    if export_sfx_mode in ("subtle", "meme"):
+        from clips_worker.export_sfx import (
+            apply_export_sfx_mix,
+            build_export_sfx_events,
+            bundled_sfx_available,
+        )
+
+        if bundled_sfx_available():
+            zoom_kf: list[tuple[float, float]] = [(0.0, 1.0), (length_s, 1.0)]
+            emph: list[int] = []
+            if zoom_cfg.get("enabled"):
+                emph = (
+                    emphasis_indexes_for_zoom(caption_words, cap_edits)
+                    if isinstance(cap_edits, dict)
+                    else []
+                )
+                from clips_worker.zoom_render import (
+                    build_zoom_keyframes,
+                    clamp_zoom_intensity,
+                    layout_switch_times_from_words,
+                )
+
+                zoom_kf = build_zoom_keyframes(
+                    caption_words,
+                    list(emph or []),
+                    length_s,
+                    clamp_zoom_intensity(zoom_cfg.get("intensity")),
+                    layout_switches=layout_switch_times_from_words(caption_words),
+                )
+            elif isinstance(cap_edits, dict):
+                emph = emphasis_indexes_for_zoom(caption_words, cap_edits)
+            events = build_export_sfx_events(
+                export_sfx_mode,
+                duration_s=length_s,
+                zoom_keyframes=zoom_kf,
+                caption_words=caption_words,
+                emphasis=emph,
+            )
+            if events:
+                sfx_out = work_dir / "export_sfx.mp4"
+                apply_export_sfx_mix(out_mp4, sfx_out, events)
+                shutil.copy(sfx_out, out_mp4)
 
     return out_mp4, caption_words, build_srt(caption_words)
