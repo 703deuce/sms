@@ -50,3 +50,7 @@ def post_internal(path: str, payload: dict) -> None:
 
 def post_project_auto_broll(project_id: str) -> None:
     post_internal(f"/api/internal/projects/{project_id}/auto-broll", {})
+
+
+def post_project_auto_emojis(project_id: str) -> None:
+    post_internal(f"/api/internal/projects/{project_id}/auto-emojis", {})

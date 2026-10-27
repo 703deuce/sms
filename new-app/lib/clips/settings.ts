@@ -70,6 +70,7 @@ export const clipProjectSettingsSchema = z.object({
   brand: z.record(z.unknown()).optional(),
   autoStockBroll: z.boolean().default(false),
   autoZoom: z.boolean().default(false),
+  autoEmojis: z.boolean().default(false),
   extras: z
     .object({
       music: z.boolean().default(false),
@@ -94,6 +95,7 @@ export function defaultClipSettings(overrides?: Partial<ClipProjectSettings>): C
     captions: { enabled: true, presetId: 'bold_pop', language: 'en' },
     autoStockBroll: false,
     autoZoom: false,
+    autoEmojis: false,
     extras: { music: false, thumbnails: false, dubLang: null },
     ...overrides,
   })
