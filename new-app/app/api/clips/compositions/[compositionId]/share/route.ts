@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
-import { AuthRequiredError, ForbiddenError, requireAuthenticatedUser } from '@/lib/server/auth/session'
+import { ForbiddenError } from '@/lib/server/auth/session'
+import { resolveClipsActorUserId } from '@/lib/server/clips/clips-auth'
 import { assertCanManageCompositionShare } from '@/lib/server/clips/composition-access'
 import {
   getCompositionShareAccess,
@@ -38,8 +39,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
   try {
     const { compositionId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
-    const user = await requireAuthenticatedUser(request)
-    await assertCanManageCompositionShare(workspaceId, compositionId, user.id)
+    const userId = await resolveClipsActorUserId(request)
+    await assertCanManageCompositionShare(workspaceId, compositionId, userId)
 
     const body = patchSchema.parse(await request.json())
     const baseUrl = shareBaseUrl()
@@ -48,7 +49,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
       await revokeShareLinks(workspaceId, compositionId)
     }
     if (body.linkAccess) {
-      await updateLinkAccess(workspaceId, compositionId, body.linkAccess, user.id)
+      await updateLinkAccess(workspaceId, compositionId, body.linkAccess, userId)
     }
     if (body.inviteEmail && body.inviteRole) {
       const inv = await inviteCollaborator(workspaceId, compositionId, body.inviteEmail, body.inviteRole)
@@ -65,7 +66,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
     if (!access) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ data: access })
   } catch (err) {
-    if (err instanceof AuthRequiredError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (err instanceof ForbiddenError) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     return jsonError(err, 500)
   }

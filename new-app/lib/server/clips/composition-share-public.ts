@@ -95,7 +95,7 @@ async function enrichPublicPayload(
     brandAccentColor: brand.accentColor,
     authorName: authorName ?? null,
     publishedAt: publishedAt?.toISOString() ?? null,
-    viewEvents,
+    viewEvents: canEdit ? viewEvents : [],
     canEdit,
   }
 }

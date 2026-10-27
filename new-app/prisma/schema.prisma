@@ -9164,20 +9164,21 @@ model ScriptCompositionPublish {
 
 model ScriptCompositionPublishView {
   id               String   @id
-  publishId        String
-  compositionId    String
-  workspaceId      String
-  viewerSessionKey String
-  viewerUserId     String?
-  viewerLabel      String?
-  firstViewedAt    DateTime @default(now())
-  lastViewedAt     DateTime @default(now())
+  publishId        String   @map("publish_id")
+  compositionId    String   @map("composition_id")
+  workspaceId      String   @map("workspace_id")
+  viewerSessionKey String   @map("viewer_session_key")
+  viewerUserId     String?  @map("viewer_user_id")
+  viewerLabel      String?  @map("viewer_label")
+  firstViewedAt    DateTime @default(now()) @map("first_viewed_at")
+  lastViewedAt     DateTime @default(now()) @map("last_viewed_at")
 
   publish ScriptCompositionPublish @relation(fields: [publishId], references: [id], onDelete: Cascade)
 
-  @@unique([publishId, viewerSessionKey])
-  @@index([publishId, lastViewedAt(sort: Desc)])
-  @@index([compositionId])
+  // PG NAMEDATALEN 63: migration SQL name is 66 chars; stored index name is truncated (see 20261028140000).
+  @@unique([publishId, viewerSessionKey], map: "script_composition_publish_views_publish_id_viewer_session_key_")
+  @@index([publishId, lastViewedAt(sort: Desc)], map: "script_composition_publish_views_publish_id_last_viewed_at_idx")
+  @@index([compositionId], map: "script_composition_publish_views_composition_id_idx")
   @@map("script_composition_publish_views")
 }
 

@@ -10,7 +10,8 @@ import {
 } from '@/lib/server/clips/composition-comments'
 import { getCompositionForWorkspace } from '@/lib/server/clips/script-composition'
 import { getPrisma } from '@/lib/server/db'
-import { AuthRequiredError, ForbiddenError, requireAuthenticatedUser } from '@/lib/server/auth/session'
+import { ForbiddenError } from '@/lib/server/auth/session'
+import { resolveClipsActorUserId } from '@/lib/server/clips/clips-auth'
 import { assertCanModerateCommentThread } from '@/lib/server/clips/composition-access'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -33,8 +34,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
   try {
     const { compositionId, threadId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
-    const user = await requireAuthenticatedUser(request)
-    const userId = user.id
+    const userId = await resolveClipsActorUserId(request)
     const body = replySchema.parse(await request.json())
     const comp = await getCompositionForWorkspace(workspaceId, compositionId)
     if (!comp) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -62,7 +62,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
 
     return NextResponse.json({ data: { thread: result.thread } })
   } catch (err) {
-    if (err instanceof AuthRequiredError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (err instanceof ForbiddenError) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     return jsonError(err, 500)
   }
@@ -72,18 +71,17 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ composit
   try {
     const { compositionId, threadId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
-    const user = await requireAuthenticatedUser(request)
+    const userId = await resolveClipsActorUserId(request)
     await assertCanModerateCommentThread({
       workspaceId,
       compositionId,
-      userId: user.id,
+      userId,
       threadId,
     })
     const result = await deleteCommentThread(workspaceId, compositionId, threadId)
     if (!result.ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ data: { ok: true } })
   } catch (err) {
-    if (err instanceof AuthRequiredError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (err instanceof ForbiddenError) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     return jsonError(err, 500)
   }
@@ -93,8 +91,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
   try {
     const { compositionId, threadId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
-    const user = await requireAuthenticatedUser(request)
-    const userId = user.id
+    const userId = await resolveClipsActorUserId(request)
     const raw = await request.json()
     if (raw && typeof raw === 'object' && 'commentId' in raw) {
       const body = editSchema.parse(raw)
@@ -125,7 +122,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
     if (!result.ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ data: { thread: result.thread } })
   } catch (err) {
-    if (err instanceof AuthRequiredError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (err instanceof ForbiddenError) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     return jsonError(err, 500)
   }
