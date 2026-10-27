@@ -33,6 +33,7 @@ export function ScriptExportPopover({
   durationMs,
   aspect,
   compositionDoc,
+  projectStatus,
 }: {
   open: boolean
   onClose: () => void
@@ -41,6 +42,8 @@ export function ScriptExportPopover({
   durationMs: number
   aspect: string
   compositionDoc?: ScriptDocumentV1
+  /** Block export while ingest/transcribe still running (§18.3). */
+  projectStatus?: string
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState<ExportTab>('video')
@@ -50,10 +53,13 @@ export function ScriptExportPopover({
   const [burnCaptions, setBurnCaptions] = useState(true)
   const [includeSubs, setIncludeSubs] = useState(false)
   const [includeMarkers, setIncludeMarkers] = useState(true)
+  const [audioFormat, setAudioFormat] = useState<'wav' | 'mp3'>('wav')
+  const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt')
   const [destination, setDestination] = useState<'local' | 'web'>('local')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
   const [renderId, setRenderId] = useState<string | null>(null)
+  const pollStopRef = useRef<(() => void) | null>(null)
   const [publishSlug, setPublishSlug] = useState<string | null>(null)
   const [publishPlayback, setPublishPlayback] = useState<'ready' | 'processing' | null>(null)
   const [publishSettingsOpen, setPublishSettingsOpen] = useState(false)
@@ -103,6 +109,7 @@ export function ScriptExportPopover({
 
   const pollRender = useCallback(
     (rid: string) => {
+      pollStopRef.current?.()
       const t = setInterval(() => {
         void fetch(`/api/clips/compositions/${compositionId}/export/${rid}`)
           .then((r) => r.json())
@@ -112,15 +119,17 @@ export function ScriptExportPopover({
               clearInterval(t)
               setProgress(100)
               setBusy(false)
+              setRenderId(null)
               toast.success(
                 data.edlDurationMs && data.outputDurationMs
                   ? `Export ready (${Math.round(data.outputDurationMs / 1000)}s)`
                   : 'Export ready',
               )
               window.open(data.downloadUrl, '_blank')
-            } else if (data.status === 'FAILED') {
+            } else if (data.status === 'FAILED' || data.status === 'CANCELED') {
               clearInterval(t)
               setBusy(false)
+              setRenderId(null)
               toast.error(data.error ?? 'Export failed')
             } else {
               setProgress((p) => (p == null ? 12 : Math.min(95, p + 8)))
@@ -128,12 +137,26 @@ export function ScriptExportPopover({
           })
           .catch(() => {})
       }, 2000)
-      return () => clearInterval(t)
+      const stop = () => clearInterval(t)
+      pollStopRef.current = stop
+      return stop
     },
     [compositionId],
   )
 
-  const onExportVideo = async () => {
+  const cancelExport = useCallback(async () => {
+    pollStopRef.current?.()
+    pollStopRef.current = null
+    if (renderId) {
+      await fetch(`/api/clips/compositions/${compositionId}/export/${renderId}`, { method: 'DELETE' }).catch(() => {})
+    }
+    setBusy(false)
+    setProgress(null)
+    setRenderId(null)
+    toast.message('Export canceled')
+  }, [compositionId, renderId])
+
+  const startServerExport = async (exportKind: 'video' | 'audio' | 'srt' | 'vtt') => {
     setBusy(true)
     setProgress(4)
     try {
@@ -141,12 +164,13 @@ export function ScriptExportPopover({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          exportKind: 'video',
+          exportKind,
           resolution,
           quality,
           burnCaptions,
           includeSubtitleTrack: includeSubs,
           includeMarkersAsChapters: includeMarkers,
+          audioFormat,
         }),
       })
       const data = await res.json()
@@ -255,6 +279,11 @@ export function ScriptExportPopover({
   }
 
   if (!open) return null
+
+  const exportBlocked =
+    projectStatus != null &&
+    !['READY', 'COMPLETE', 'completed'].includes(projectStatus) &&
+    projectStatus !== 'ready'
 
   const durLabel = `${Math.floor(durationMs / 60000)}:${String(Math.floor((durationMs % 60000) / 1000)).padStart(2, '0')}`
   const tabs: { id: ExportTab; label: string }[] = [
@@ -407,7 +436,7 @@ export function ScriptExportPopover({
           )}
           {tab === 'subtitles' && (
             <ExportRow label="Format">
-              <Select defaultValue="srt">
+              <Select value={subtitleFormat} onValueChange={(v) => setSubtitleFormat(v as 'srt' | 'vtt')}>
                 <SelectTrigger className="h-8 w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -420,7 +449,7 @@ export function ScriptExportPopover({
           )}
           {tab === 'audio' && (
             <ExportRow label="Format">
-              <Select defaultValue="wav">
+              <Select value={audioFormat} onValueChange={(v) => setAudioFormat(v as 'wav' | 'mp3')}>
                 <SelectTrigger className="h-8 w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -467,11 +496,16 @@ export function ScriptExportPopover({
             </div>
           )}
           {busy && progress != null ? (
-            <div className="flex h-10 flex-col justify-center rounded-lg bg-primary/10 px-3">
-              <div className="text-xs font-medium">Exporting {progress}%</div>
-              <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
-                <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+            <div className="space-y-2">
+              <div className="flex h-10 flex-col justify-center rounded-lg bg-primary/10 px-3">
+                <div className="text-xs font-medium">Exporting {progress}%</div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+                </div>
               </div>
+              <Button type="button" variant="ghost" className="h-8 w-full text-xs" onClick={() => void cancelExport()}>
+                Cancel
+              </Button>
             </div>
           ) : tab === 'video' && destination === 'web' && publishSlug ? (
             <div className="flex items-center gap-2">
@@ -537,11 +571,14 @@ export function ScriptExportPopover({
             <Button
               type="button"
               className="h-10 w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:opacity-90"
+              disabled={exportBlocked || busy}
+              title={exportBlocked ? 'Wait for processing to finish' : undefined}
               onClick={() => {
                 if (tab === 'video' && destination === 'web') void onPublishWeb()
-                else if (tab === 'video') void onExportVideo()
+                else if (tab === 'video') void startServerExport('video')
                 else if (tab === 'transcript') onExportTranscript()
-                else if (tab === 'audio' || tab === 'subtitles') void onExportVideo()
+                else if (tab === 'audio') void startServerExport('audio')
+                else if (tab === 'subtitles') void startServerExport(subtitleFormat)
                 else toast.error('Choose a format above')
               }}
             >

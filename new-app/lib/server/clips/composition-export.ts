@@ -123,3 +123,41 @@ export async function getCompositionRender(workspaceId: string, compositionId: s
     where: { id: renderId, compositionId, workspaceId },
   })
 }
+
+export async function cancelCompositionExport(
+  workspaceId: string,
+  compositionId: string,
+  renderId: string,
+  reason = 'Canceled by user',
+) {
+  const row = await getCompositionForWorkspace(workspaceId, compositionId)
+  if (!row) return null
+  const render = await getCompositionRender(workspaceId, compositionId, renderId)
+  if (!render) return null
+  if (render.status === 'READY') return { ok: true, alreadyDone: true as const }
+
+  const prisma = getPrisma()
+  await prisma.scriptCompositionRender.update({
+    where: { id: renderId },
+    data: { status: 'FAILED', error: reason.slice(0, 500) },
+  })
+  const jobs = await prisma.clipJob.findMany({
+    where: {
+      projectId: row.projectId,
+      type: 'RENDER_SCRIPT_COMPOSITION',
+      status: { in: ['QUEUED', 'RUNNING'] },
+    },
+    take: 40,
+    orderBy: { createdAt: 'desc' },
+  })
+  for (const j of jobs) {
+    const p = j.payload as { renderId?: string } | null
+    if (p?.renderId === renderId) {
+      await prisma.clipJob.update({
+        where: { id: j.id },
+        data: { status: 'CANCELED', error: reason.slice(0, 500), lockedBy: null, lockedAt: null },
+      })
+    }
+  }
+  return { ok: true, alreadyDone: false as const }
+}

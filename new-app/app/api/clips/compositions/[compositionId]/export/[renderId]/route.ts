@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
-import { getCompositionRender } from '@/lib/server/clips/composition-export'
+import { cancelCompositionExport, getCompositionRender } from '@/lib/server/clips/composition-export'
 import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -38,6 +38,21 @@ export async function GET(
       downloadUrl,
       error: render.error,
     })
+  } catch (err) {
+    return jsonError(err, 500)
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  ctx: { params: Promise<{ compositionId: string; renderId: string }> },
+) {
+  try {
+    const workspaceId = await resolveWorkspaceId()
+    const { compositionId, renderId } = await ctx.params
+    const result = await cancelCompositionExport(workspaceId, compositionId, renderId)
+    if (!result) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ data: result })
   } catch (err) {
     return jsonError(err, 500)
   }

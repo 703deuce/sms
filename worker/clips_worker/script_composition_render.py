@@ -204,6 +204,9 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
 
         trim_in, trim_out, cut_ranges = edl_to_trim_and_cut_ranges(edl, range_start, range_end)
         edits = _document_settings_edits(document, project_settings)
+        if "burnCaptions" in settings:
+            edits.setdefault("captions", {})
+            edits["captions"]["enabled"] = bool(settings.get("burnCaptions"))
         edits["trim"] = {"in": trim_in, "out": trim_out}
         edits["cutRanges"] = cut_ranges
         broll = document.get("broll") or []
