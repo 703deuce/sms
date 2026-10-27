@@ -165,10 +165,42 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
 
     SCRATCH.mkdir(parents=True, exist_ok=True)
     total = len(clips)
+    clips_ready = sum(1 for c in clips if c.get("previewKey"))
     local_upload: Path | None = None
     render_started = time.time()
 
+    def _render_progress(ready_n: int) -> None:
+        pct = 65 + int(30 * ready_n / max(1, total))
+        eta = eta_seconds(ready_n, total, render_started)
+        stage = f"Rendering {ready_n}/{total}"
+        hb.update(stage=stage, progress=pct)
+        post_progress(
+            job["id"],
+            {
+                "projectStatus": "RENDERING",
+                "stage": stage,
+                "progress": pct,
+                "chunkDone": ready_n,
+                "chunkTotal": total,
+                "etaSeconds": eta,
+                "clipsTotal": total,
+                "clipsReady": ready_n,
+                "jobStatus": "RUNNING",
+            },
+        )
+
     with Heartbeat(job["id"], post_progress, every_s=45) as hb:
+        post_progress(
+            job["id"],
+            {
+                "projectStatus": "RENDERING",
+                "stage": f"Rendering {clips_ready}/{total}",
+                "progress": 65,
+                "clipsTotal": total,
+                "clipsReady": clips_ready,
+                "jobStatus": "RUNNING",
+            },
+        )
         with tempfile.TemporaryDirectory(dir=SCRATCH) as td:
             td_path = Path(td)
             audio_path = td_path / "audio.opus"
@@ -399,22 +431,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     vod_id=vod_id,
                 )
 
-                done_n = idx + 1
-                pct = 65 + int(30 * done_n / total)
-                eta = eta_seconds(done_n, total, render_started)
-                hb.update(stage=f"Rendering {done_n}/{total}", progress=pct)
-                post_progress(
-                    job["id"],
-                    {
-                        "projectStatus": "RENDERING",
-                        "stage": f"Rendering {done_n}/{total}",
-                        "progress": pct,
-                        "chunkDone": done_n,
-                        "chunkTotal": total,
-                        "etaSeconds": eta,
-                        "jobStatus": "RUNNING",
-                    },
-                )
+                clips_ready += 1
+                _render_progress(clips_ready)
 
     mark_project_ready(conn, project_id)
     enqueue_stream_cleanup_job(
