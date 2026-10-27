@@ -1,96 +1,125 @@
 # Streamer — Rick stages (after regular clipper gaps)
 
-**Status:** Stage 1 is the only active build until **manual sign-off** on real **2–6 h** Twitch/Kick VODs. **Do not start Stage 2** until that gate passes.  
-**Regular clipper:** REGULAR-CLIPPER-GAPS pass complete on `master` (Oct 2026).  
-**Billing:** not in scope — record **VOD minutes processed per workspace** only (`StreamUsage.sourceSeconds`).  
-**Logging:** use **`[clipper:stream]`** at every step (import, chunk, transcribe, analyze, render, cleanup, autopull, retry). No secrets in logs.  
-**Reliability:** idempotent jobs, resumable checkpoints in `StreamVod.state`, safe retries; **two-strike rule** for production fixes.
+**Status:** Stage 1 only until **reliability acceptance** (below). **No Stage 2 auto-pull** until that gate passes.  
+**Regular clipper:** REGULAR-CLIPPER-GAPS complete on `master`.  
+**Billing:** not in scope — record **VOD hours processed per workspace per month** (`StreamUsage.sourceSeconds`, idempotent `meter_vod_once`).  
+**Logging:** **`[clipper:stream]`** on every step; include `workspaceId`, `projectId`, `vodId`, `jobId`, `stage` — never tokens or OAuth secrets.  
+**Two-strike rule** for production fixes.
 
-Long-form reference: `new-app/docs/clips/STREAMER_BUILD_SPEC.md` (milestones S0–S15). This doc is the **product gate** Rick asked for, mapped onto that spec.
-
----
-
-## Stage 1 — Paste Twitch/Kick VOD into regular clipper
-
-### User story
-
-Paste a finished VOD / highlight / clip URL on the Streamer path (same product as upload clipper, streamer settings + ranking). User sees **clear progress and errors**. Long VODs use **chunked, resumable download** (worker restart ≠ failed user attempt). **~10 h cap** on analysed duration. When clipping **finishes successfully**, **delete full VOD source** from storage (keep clip outputs + per-clip segments).
-
-### Maps to existing code
-
-| Requirement | Where today | Gap / hardening |
-|-------------|-------------|-----------------|
-| Paste link + attestation | `lib/server/streamer/imports.ts`, `components/streamer/streamer-import-panel.tsx`, `POST /api/streamer/imports` | Wire Streamer tab on `/app/clips/new` if not already default path for paste |
-| `STREAM_IMPORT` → analyze → render | `worker/clips_worker/streamer/import_job.py`, `analyze_job.py`, `render_job.py` | Standardize **`[clipper:stream]`** (today mixed / absent) |
-| Resumable yt-dlp | `worker/clips_worker/streamer/import_cache.py` (`--continue`, scratch dir per `vodId`) | Document retry semantics; ensure reaper + heartbeat don’t count resume as new attempt in UI |
-| Chunked long path | `STREAMER_CHUNK_MIN`, audio-first, chunk keys in `state.chunks` | Progress UI: chunk index + % for 2–6 h runs |
-| ~10 h cap | `STREAMER_MAX_VOD_HOURS` (worker default **12**), `lib/server/streamer/limits.ts` (**12**) | Align product copy + env to **10** if Rick confirms (config-only change) |
-| Delete source after clips ready | `STREAM_CLEANUP` (`cleanup_job.py`), enqueue after render success | **Gate:** delete on **project READY**, not only retention TTL; verify master audio + proxy keys gone |
-| Progress / error states | `JobStatus`, `streamer/stage-stepper.tsx`, `StreamVod.error`, `terminal_failure_progress_payload` | User-visible messages for cap, yt-dlp fail, partial chunk fail |
-| Usage minutes (no billing) | `lib/server/streamer/usage.ts`, worker `streamer/usage.py` `check_cap` / record | Ensure every completed import records **source seconds** once (idempotent) |
-| Idempotent import | `_maybe_complete_import_from_state` in `import_job.py` | Extend checkpoints for chunk loop + analyze enqueue |
-
-### Stage 1 acceptance (must pass before Stage 2)
-
-1. **Manual prod/staging** (owner phone/laptop): **three** paste imports, **2–6 h** each, Twitch and Kick mix, no sub-only VODs.
-2. Each run: refresh mid-import or kill worker once → job **resumes** without user “retry” counting as a new VOD attempt (same `projectId` / `vodId`).
-3. After **READY**: storage has **no** full VOD master; clips play; `StreamVod.sourceDeletedAt` set.
-4. `StreamUsage` increases by analysed seconds; no Stripe/plan UI.
-5. Logs: every stage line searchable as `[clipper:stream]` with `vodId`, `projectId`, `jobId`, `stage` (no URLs with tokens).
-
-### Stage 1 implementation order (suggested)
-
-1. **`[clipper:stream]`** pass — worker streamer jobs + `imports.ts` / status API (small commits).
-2. **Cap 10 h** — `STREAMER_MAX_VOD_HOURS` + `STREAMER_MAX_VOD_HOURS` in limits.ts + UI copy (config).
-3. **Cleanup on READY** — verify/enqueue `STREAM_CLEANUP` immediately after successful `STREAM_RENDER` (not 24 h retention only).
-4. **Progress UX** — expose chunk + download stage from worker `post_progress` payload on project page.
-5. **Hardening tests** — pytest: `import_cache` resume, `_maybe_complete_import_from_state`, cleanup key list (mocked S3).
+Reference: `new-app/docs/clips/STREAMER_BUILD_SPEC.md` (S0–S15). This doc is Rick’s **reliability + storage** contract.
 
 ---
 
-## Stage 2 — Eklipse-style auto-pull (after Stage 1 sign-off)
+## Design principles (Rick addendum)
 
-### User story
+### Storage — never hold a full VOD on the worker
 
-Connect **own** Twitch/Kick channel (OAuth). When a stream **ends**, automatically fetch the saved VOD and run the same pipeline as Stage 1. **Manual pull** for VODs in the **last 14 days** if auto missed. **Email or in-app** notice when clips are ready.
+| Phase | What we fetch | Tooling | Disk budget |
+|-------|----------------|---------|-------------|
+| **Import** | **Audio only** (`bestaudio` / opus) for metadata duration + cap check | `ytdlp.download_audio` (`-f bestaudio`), optional `--download-sections` for user range | Scratch per `vodId`; yt-dlp `--continue` via `import_cache.py` |
+| **Analyze** | Chunked transcribe on **uploaded audio** in object storage | `analyze_job.py`, chunk keys in `state.chunks` | No full video |
+| **Pick moments** | Signals + LLM on transcript | `rank_moments` | No video |
+| **Render** | **Video only for chosen windows** (clip ± pad) | `segments.download_segment` (`--download-sections`) or `cut_local_segment` for user uploads | One segment MP4 at a time; upload `sourceSegKey`; delete local seg after upload |
 
-### Maps to existing code
+**Rules**
 
-| Requirement | Where today | Gap |
-|-------------|-------------|-----|
-| Twitch OAuth + EventSub offline | S13 in spec; `twitch-webhook.ts`, `webhooks/twitch` | Harden idempotent enqueue |
-| Kick OAuth + webhook | S14; `kick.ts`, `webhooks/kick` | VOD discovery via yt-dlp `kick:videos` |
-| Auto enqueue | `enqueueStreamAutopull`, `STREAM_AUTOPULL`, `autopull_job.py` | Reliability + `[clipper:stream]` |
-| Manual pull 14d | Partial: channel pages, `vod-list.ts` | Explicit “Pull VOD” for last 14 days UI + API |
-| Notify clips ready | `lib/server/streamer/notify.ts`, Brevo | Ensure fires once per VOD (`notifiedAt`) |
-| Channel settings | `/app/streamer`, `channel-auto-process.tsx` | Auto-process toggle only when CONNECTED |
+- **No multi-GB files on worker disk** — no “download entire VOD mp4 then upload to S3” for paste Twitch/Kick **vod/highlight** paths.
+- **Temp hygiene:** `cleanup_vod_import_dir` on import success; `TemporaryDirectory` / per-job `td_path` removed on success **and** failure; `STREAM_CLEANUP` deletes audio + chunks from bucket after clips READY.
+- **Resume / retry:** checkpoint `StreamVod.state` (`audioKey`, `chunks`, `segmentKeys` or per-clip `sourceSegKey`); re-run skips finished steps; **per-segment** render retries re-fetch only that section (harden: persist segment attempt in state).
 
-**Do not ship Stage 2** until Stage 1 manual matrix is signed off.
+**Current code vs target**
+
+| Area | Today | Stage 1 change |
+|------|--------|----------------|
+| Long VOD (> `STREAMER_FULL_DOWNLOAD_MAX_MIN`, default 20 min) | Audio-only import ✓ | Keep; add `[clipper:stream]` + progress |
+| Short VOD / highlight paste | **Full `download_video`** → S3 `localUploadKey` ✗ | **Remove short-path full download** — always audio-first for `vod`/`highlight`; only `clip` kind may fetch a single short section |
+| Render | `download_segment` per clip when no local master ✓ | Add per-segment retry + state; never re-download full VOD |
+| User file upload | Master stays in bucket (user already uploaded) | Audio extract + optional analysis proxy only (already partially true) |
+
+### Reliability
+
+- Idempotent job handlers; heartbeat on long jobs (`Heartbeat`, `lockedAt` refresh).
+- Worker reaper retry ≠ new user-facing “attempt” (same `projectId` / `vodId`).
+- Failures: terminal payload + `StreamVod.error`; scratch swept (`sweep_stale_failed_import_dirs`).
+
+### Usage metering (no billing)
+
+- **Record once per VOD:** `meter_vod_once` in `analyze_job.py` → `stream_usage.sourceSeconds` + `vodCount` for calendar month (UTC).
+- **Pre-check:** `check_cap` / `assertStreamCap` before import (cap from `workspace_limits.limits.streamer.monthlyHours`; enforcement optional until billing).
+- **UI:** `GET /api/streamer/usage` — show hours used this month (no Stripe).
+
+### Clip retention (finished outputs)
+
+| Tier | Retention | Config (planned) |
+|------|-----------|------------------|
+| Monthly workspace | **14 days** | `STREAMER_CLIP_RETENTION_DAYS_MONTHLY` (default 14) |
+| Annual workspace | **90 days** | `STREAMER_CLIP_RETENTION_DAYS_ANNUAL` (default 90) |
+
+**Job (not built):** internal maintenance cron — find clip projects / stream VODs older than tier; delete preview/poster/segment/render keys; set `deletedAt`. **Distinct** from **source** cleanup (audio/chunks right after processing).
+
+Workspace tier flag: `workspace_limits.limits.streamer.retentionTier` = `monthly` | `annual` (no billing linkage yet).
 
 ---
 
-## Retention — clip expiry (config, both stages)
+## Stage 1 — Paste Twitch/Kick VOD
 
-| Tier | Clip retention | Mechanism |
-|------|----------------|-----------|
-| Monthly (default) | **14 days** | Scheduled job deletes clip **storage** + soft-delete rows |
-| Annual | **90 days** | Same job, tier from workspace config |
+Same user story as before: paste link, attestation, progress/errors, ~**10 h** analysed cap (align env from 12 → 10 when Rick confirms), source deleted after READY.
 
-**Not built yet:** cleanup job behind env e.g. `STREAMER_CLIP_RETENTION_DAYS_MONTHLY=14`, `STREAMER_CLIP_RETENTION_DAYS_ANNUAL=90`, workspace flag for tier (no billing). Spec detail: STREAMER_BUILD_SPEC §S3 + new maintenance task in `app/api/internal/streamer/maintenance`.
+**Implementation order (storage-first)**
 
-**Distinct from source deletion:** Stage 1 deletes **raw VOD** after processing; retention deletes **finished clips** after N days.
+1. **Eliminate full VOD download** on paste path (`import_job.py` short branch).
+2. **`[clipper:stream]`** across `import_job`, `analyze_job`, `render_job`, `cleanup_job`, `imports.ts`.
+3. **Per-segment retry** + checkpoint in `render_job` / `state.segmentKeys`.
+4. **Cleanup on READY** — enqueue `STREAM_CLEANUP` immediately; verify keys gone.
+5. **Retention job** — config + maintenance route (clips only).
+6. **Progress UX** — audio %, chunk `i/n`, segment `clipId` on project page.
+
+---
+
+## Reliability acceptance (blocks Stage 2 auto-pull)
+
+**Matrix:** **10** consecutive real Twitch/Kick **VOD** imports, each **2–6 h**, paste path, production or staging with worker deploy.
+
+| # | Requirement |
+|---|-------------|
+| R1 | **0 failures** across all 10 (no terminal `FAILED` jobs, project reaches `READY` with ≥1 clip). |
+| R2 | Mix: ≥4 Twitch, ≥4 Kick (remaining either). |
+| R3 | No sub-only / login-gated VODs. |
+| R4 | After each run: no full-VOD object in bucket; `sourceDeletedAt` set; clips playable. |
+| R5 | `StreamUsage` += analysed hours once per VOD. |
+
+**Evidence pack (per run)** — paste into `docs/clips/streamer/RELIABILITY-RUNS.md` or ticket:
+
+```text
+run=01 platform=twitch duration_h=4.2
+projectId=proj_… vodId=svod_…
+jobs: STREAM_IMPORT=job_… STREAM_ANALYZE=job_… STREAM_RENDER=job_… STREAM_CLEANUP=job_…
+result=READY clips=12 sourceDeletedAt=set
+logs: grep '[clipper:stream]' vodId=svod_… (attach redacted excerpt)
+```
+
+**Optional torture (not counted in 10):** kill worker once mid-import on run 3 — must resume to READY without user creating a new project.
+
+**Stage 1 sign-off** = 10/10 matrix + evidence. **Then** Stage 2.
+
+---
+
+## Stage 2 — Auto-pull (after acceptance)
+
+Unchanged intent: OAuth, stream end → autopull, manual pull 14d, notify when ready. Uses **same audio-first + segment render** pipeline as Stage 1.
 
 ---
 
 ## Worker deploy
 
-Any Stage 1 change touching `worker/clips_worker/streamer/**` or job dispatch → commit message **`WORKER DEPLOY`**. Agent A deploys before prod VOD proofs.
+Touches `worker/clips_worker/streamer/**` → commit **`WORKER DEPLOY`**. Run reliability matrix only after deploy.
 
 ---
 
-## Rick decision log
+## Decision log
 
 | Date | Decision |
 |------|----------|
-| 2026-10-27 | Regular clipper gaps complete; Streamer **Stage 1** is next; Stage 2 blocked on 2–6 h VOD proof |
-| — | Confirm **10 h** vs current **12 h** code default |
+| 2026-10-27 | Gaps done; Streamer Stage 1 next |
+| 2026-10-27 | Rick addendum: **no full VOD download**; segment video only; retention 14/90d; usage hours/month; **10×2–6h 0-fail** before auto-pull |
+| — | Confirm **10 h** vs code default **12 h** |
