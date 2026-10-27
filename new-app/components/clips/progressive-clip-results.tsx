@@ -17,12 +17,15 @@ type Props = {
   onDownload?: (clipId: string) => void
   onHidden?: (clipId: string) => void
   cardAspect?: ExportAspect
+  isStreamer?: boolean
 }
 
 function reframeLabel(stage: string | null | undefined): string | null {
   const m = (stage ?? '').match(/^reframe_(\d+)_of_(\d+)$/i)
-  if (!m) return null
-  return `Reframing clip ${m[1]} of ${m[2]}`
+  if (m) return `Reframing clip ${m[1]} of ${m[2]}`
+  const render = (stage ?? '').match(/^Rendering\s+(\d+)\/(\d+)$/i)
+  if (render) return `Rendering clip ${render[1]} of ${render[2]}`
+  return null
 }
 
 export function ProgressiveClipResults({
@@ -35,32 +38,38 @@ export function ProgressiveClipResults({
   onDownload,
   onHidden,
   cardAspect = '9:16',
+  isStreamer = false,
 }: Props) {
-  const pending = Math.max(0, clipsTotal - clips.length)
+  const readyClips = clips.filter((c) => Boolean(c.previewUrl))
+  const pending = clipsTotal > 0 ? Math.max(0, clipsTotal - readyClips.length) : 0
   const reframe = reframeLabel(stage)
   const etaLine = etaSec > 0 ? `ETA ${formatEtaSeconds(etaSec)}` : reframe || 'Reframing clips…'
 
   return (
     <Panel
-      title={clipsTotal > 0 ? `Clips (${clips.length} of ${clipsTotal} ready)` : `Clips (${clips.length} ready)`}
+      title={
+        clipsTotal > 0
+          ? `Clips (${readyClips.length} of ${clipsTotal} ready)`
+          : `Clips (${readyClips.length} ready)`
+      }
       description={etaLine}
     >
       <div className="flex flex-col gap-4">
-        {clips.length > 0 ? <ProjectPeopleStrip clips={clips} /> : null}
-        {clips.length > 0 ? (
+        {readyClips.length > 0 ? <ProjectPeopleStrip clips={readyClips} /> : null}
+        {readyClips.length > 0 ? (
           <ClipGrid
-            clips={clips}
+            clips={readyClips}
             projectId={projectId}
             onDownload={onDownload ?? (() => {})}
             onHidden={onHidden}
-            isStreamer={false}
+            isStreamer={isStreamer}
             cardAspect={cardAspect}
           />
         ) : null}
         {pending > 0 ? (
           <div className="flex flex-col gap-2" aria-live="polite">
             <p className="text-xs text-muted-foreground">
-              {clipsReady > clips.length
+              {clipsReady > readyClips.length
                 ? `Finishing clip ${clipsReady} of ${clipsTotal}…`
                 : `Preparing ${pending} more clip${pending === 1 ? '' : 's'}…`}
             </p>

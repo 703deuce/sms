@@ -9,6 +9,10 @@ export function formatClipProgressStage(stage: string | null | undefined): strin
   if (render) {
     return `Rendering clip ${render[1]} of ${render[2]}`
   }
+  const streamRender = stage.match(/^Rendering\s+(\d+)\/(\d+)$/i)
+  if (streamRender) {
+    return `Rendering clip ${streamRender[1]} of ${streamRender[2]}`
+  }
   const labels: Record<string, string> = {
     transcribing: 'Transcribing audio',
     finding_clips: 'Finding clip moments',

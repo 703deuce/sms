@@ -295,7 +295,7 @@ export function ProjectClipsView({
   const showResults = status === 'READY' && readyHydrated
   const processing = !showResults && status !== 'FAILED' && status !== 'CANCELED'
   const showProgressiveClips =
-    processing && !isStreamer && (clips.length > 0 || clipsTotal > 0 || clipsReady > 0)
+    processing && (clips.length > 0 || clipsTotal > 0 || clipsReady > 0)
   const failedMsg =
     failureCopy?.message ??
     (error?.includes('heavy traffic')
@@ -392,6 +392,7 @@ export function ProjectClipsView({
               onDownload={(id) => void onDownload(id)}
               onHidden={onClipHidden}
               cardAspect={exportAspect}
+              isStreamer={isStreamer}
             />
             </>
           ) : processing ? (
