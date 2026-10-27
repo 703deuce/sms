@@ -147,6 +147,8 @@ def reframe_clip_preview(
     clip_words = json.loads(words_path.read_text())
     crop_method = "speaker_follow"
 
+    render_meta: dict = {}
+
     if has_face_and_speech(clip_file, clip_words):
         rendered = run_speakercrop(
             clip_file,
@@ -156,7 +158,10 @@ def reframe_clip_preview(
             work_dir,
             clip_start_ms=clip_start_ms,
             crop_track_out=crop_track_path,
+            render_meta=render_meta,
         )
+        if render_meta.get("layoutRouteShadow"):
+            ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
         return rendered, crop_method, reframe_settings
 
     preserve_crop_track = False
@@ -189,7 +194,10 @@ def reframe_clip_preview(
         clip_start_ms=clip_start_ms,
         crop_track_out=crop_track_path,
         preserve_existing_crop_track=preserve_crop_track,
+        render_meta=render_meta,
     )
+    if render_meta.get("layoutRouteShadow"):
+        ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
     if not crop_track_path.exists():
         write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
         crop_method = "fit_blur"
@@ -417,6 +425,7 @@ def run_m4_pipeline(
 
             ai_meta_out = {
                 **(pick.get("aiMeta") or {}),
+                **ai_meta,
                 "cropMethod": crop_method,
                 "layoutResolved": resolved_layout,
             }

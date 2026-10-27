@@ -3,6 +3,7 @@ import { shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
 import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
 import { normalizeTranscriptJson, resolveEditorWords } from '@/lib/server/clips/editor-words'
 import type { SourceWord } from '@/lib/clips/source-words'
+import { clipperCapabilities } from '@/lib/server/clips/clipper-capabilities'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
@@ -110,6 +111,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       cropTrack: cropTrack ? await createCachedSignedDownloadUrl(storage, cropTrackKey) : null,
     },
     project: { id: project.id, title: project.title, settings: project.settings },
+    capabilities: clipperCapabilities(),
     aiMeta,
     brollMedia,
   }

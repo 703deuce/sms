@@ -15,7 +15,19 @@ export type SpeakercropLayoutEnv = {
   SAMPLE_FPS?: string
 }
 
-export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): SpeakercropLayoutEnv {
+export type SpeakercropLayoutEnvOptions = {
+  /** When true, preview env may include REFRAME_V=2 (worker only sets this when REFRAME_V2_ENABLED=1). */
+  reframeV2Enabled?: boolean
+}
+
+function maybeReframeV2(opts?: SpeakercropLayoutEnvOptions): Pick<SpeakercropLayoutEnv, 'REFRAME_V'> {
+  return opts?.reframeV2Enabled ? { REFRAME_V: '2' } : {}
+}
+
+export function speakercropLayoutEnv(
+  layout: ClipProjectSettings['layout'],
+  opts?: SpeakercropLayoutEnvOptions,
+): SpeakercropLayoutEnv {
   if (!clipLayoutModes.includes(layout)) {
     layout = 'speaker_follow'
   }
@@ -27,7 +39,7 @@ export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): Spe
       FORCE_SPLIT: '1',
       LAYOUT_MODE: 'split',
       LAYOUT_STYLE: 'split',
-      REFRAME_V: '2',
+      ...maybeReframeV2(opts),
     }
   }
   if (layout === 'fill') {
@@ -44,10 +56,16 @@ export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): Spe
     layout === 'grid4' ||
     layout === 'locked_off'
   ) {
-    return { ...base, SPLIT: '1', LAYOUT_MODE: layout, LAYOUT_STYLE: layout, REFRAME_V: '2' }
+    return {
+      ...base,
+      SPLIT: '1',
+      LAYOUT_MODE: layout,
+      LAYOUT_STYLE: layout,
+      ...maybeReframeV2(opts),
+    }
   }
   if (layout === 'auto') {
-    return speakercropLayoutEnv('dynamic')
+    return speakercropLayoutEnv('dynamic', opts)
   }
   return {
     ...base,

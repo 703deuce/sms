@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Panel } from '@/components/app/page-primitives'
 import { CaptionPresetPicker } from '@/components/clips/caption-preset-picker'
+import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import {
   clipAspectRatios,
   clipGenreLabels,
@@ -48,10 +49,12 @@ export function ProjectSettingsForm({
   settings,
   onChange,
   durationMs,
+  reframeV2Enabled = false,
 }: {
   settings: ClipProjectSettings
   onChange: (s: ClipProjectSettings) => void
   durationMs: number
+  reframeV2Enabled?: boolean
 }) {
   const sourceMs = durationMs > 0 ? durationMs : 60_000
   const end = Math.min(sourceMs, settings.rangeEndMs > 0 ? settings.rangeEndMs : sourceMs)
@@ -161,19 +164,26 @@ export function ProjectSettingsForm({
       <Panel title="Layout & aspect">
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2">
-            {clipLayoutModes.map((layout) => (
+            {clipLayoutModes.map((layout) => {
+              const beta = isClipLayoutBeta(layout)
+              const disabled = beta && !reframeV2Enabled
+              return (
               <button
                 key={layout}
                 type="button"
+                disabled={disabled}
                 onClick={() => onChange({ ...settings, layout })}
                 className={cn(
                   'rounded-lg border px-3 py-2 text-sm surface',
                   settings.layout === layout ? 'border-primary' : 'border-border',
+                  disabled && 'opacity-50',
                 )}
               >
                 {LAYOUT_LABELS[layout]}
+                {beta ? ' (beta)' : ''}
               </button>
-            ))}
+              )
+            })}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Aspect ratio</Label>

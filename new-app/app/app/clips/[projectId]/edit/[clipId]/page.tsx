@@ -33,6 +33,7 @@ export default async function ClipEditorPage({
       posterUrl={posterUrl}
       aiMeta={data.aiMeta}
       brollMedia={data.brollMedia}
+      reframeV2Enabled={data.capabilities.reframeV2Enabled}
     />
   )
 }

@@ -62,6 +62,7 @@ export function EditorShell({
   posterUrl = null,
   aiMeta,
   brollMedia: initialBrollMedia = [],
+  reframeV2Enabled = false,
 }: {
   projectId: string
   projectTitle?: string
@@ -76,6 +77,7 @@ export function EditorShell({
   posterUrl?: string | null
   aiMeta?: { brollIdeas?: string[] } | null
   brollMedia?: BrollMediaRow[]
+  reframeV2Enabled?: boolean
 }) {
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
   const [title, setTitle] = useState(initialTitle)
@@ -349,6 +351,7 @@ export function EditorShell({
           onRerunReframe={() => void requestClipReframe(clipId)}
           onApplyBrand={() => void applyBrand()}
           onEdits={setEdits}
+          reframeV2Enabled={reframeV2Enabled}
         />
       </div>
       <div className={panel === 'captions' ? undefined : 'hidden'} aria-hidden={panel !== 'captions'}>
