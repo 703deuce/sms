@@ -29,7 +29,7 @@ def load_composition_render_context(conn, composition_id: str, render_id: str) -
                    r.resolution, r."aspectRatio", r.settings,
                    c.id AS composition_id, c.document, c.aspect, c."projectId",
                    p."rangeStartMs", p."rangeEndMs", p.settings AS project_settings,
-                   p."transcriptKey", p."transcriptWords", p."uploadId",
+                   p."sourceKind", p."transcriptKey", p."transcriptWords", p."uploadId",
                    u.key AS source_key
             FROM script_composition_renders r
             JOIN script_compositions c ON c.id = r."compositionId"
@@ -117,7 +117,7 @@ def _editor_words_from_transcript(words: list[dict], source_media_id: str, range
     return by_id
 
 
-def _document_settings_edits(document: dict, project_settings: dict) -> dict:
+def _document_settings_edits(document: dict, project_settings: dict, *, source_kind: str | None = None) -> dict:
     doc_settings = document.get("settings") or {}
     captions = doc_settings.get("captions") or {}
     preset = captions.get("presetId") or captions.get("preset") or "bold_pop"
@@ -131,11 +131,12 @@ def _document_settings_edits(document: dict, project_settings: dict) -> dict:
         "layout": {"mode": doc_settings.get("reframeMode") or "speaker_follow", "shotOverrides": []},
         "aspectRatio": doc_settings.get("aspect") or project_settings.get("aspectRatio") or "9:16",
     }
-    brand = doc_settings.get("brand")
-    if isinstance(brand, dict) and brand:
-        edits["brand"] = brand
-    elif isinstance(project_settings.get("brand"), dict):
-        edits["brand"] = project_settings["brand"]
+    if source_kind == "t2v":
+        brand = doc_settings.get("brand")
+        if isinstance(brand, dict) and brand:
+            edits["brand"] = brand
+        elif isinstance(project_settings.get("brand"), dict):
+            edits["brand"] = project_settings["brand"]
     return edits
 
 
@@ -202,6 +203,7 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
     project_settings = ctx.get("project_settings") or {}
     if isinstance(project_settings, str):
         project_settings = json.loads(project_settings)
+    source_kind = str(ctx.get("sourceKind") or "")
 
     with tempfile.TemporaryDirectory() as td, Heartbeat(job["id"], post_progress) as heartbeat:
         td_path = Path(td)
@@ -222,7 +224,7 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
         _ = sum_merged_source_span_ms(edl)
 
         trim_in, trim_out, cut_ranges = edl_to_trim_and_cut_ranges(edl, range_start, range_end)
-        edits = _document_settings_edits(document, project_settings)
+        edits = _document_settings_edits(document, project_settings, source_kind=source_kind)
         if "burnCaptions" in settings:
             edits.setdefault("captions", {})
             edits["captions"]["enabled"] = bool(settings.get("burnCaptions"))
@@ -353,17 +355,21 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             upload_file(out_key, text_path, ctype)
         else:
             brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
-            intro_key = brand.get("introVideoKey") if brand.get("useIntro", True) else None
-            outro_key = brand.get("outroVideoKey") if brand.get("useOutro", True) else None
-            def _brand_key_ok(key: str | None) -> bool:
-                if not key:
-                    return False
-                return str(key).startswith(f"ws/{workspace_id}/") or str(key).startswith("stock/")
+            intro_key = None
+            outro_key = None
+            if source_kind == "t2v":
+                intro_key = brand.get("introVideoKey") if brand.get("useIntro", True) else None
+                outro_key = brand.get("outroVideoKey") if brand.get("useOutro", True) else None
 
-            if intro_key and not _brand_key_ok(str(intro_key)):
-                intro_key = None
-            if outro_key and not _brand_key_ok(str(outro_key)):
-                outro_key = None
+                def _brand_key_ok(key: str | None) -> bool:
+                    if not key:
+                        return False
+                    return str(key).startswith(f"ws/{workspace_id}/") or str(key).startswith("stock/")
+
+                if intro_key and not _brand_key_ok(str(intro_key)):
+                    intro_key = None
+                if outro_key and not _brand_key_ok(str(outro_key)):
+                    outro_key = None
             if intro_key or outro_key:
                 from clips_worker.brand_concat import concat_brand_bookends
                 from clips_worker.render_clip import aspect_size
