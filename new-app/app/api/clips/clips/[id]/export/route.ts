@@ -12,6 +12,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
 import { logClipEvent } from '@/lib/server/clips/events'
+import { recordStreamClipFeedback } from '@/lib/server/clips/stream-feedback'
 import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -98,6 +99,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         edits,
       })
       await logClipEvent(workspaceId, clip.id, 'download')
+      await recordStreamClipFeedback(workspaceId, clip.id, 'download').catch(() => {})
       console.info('[clipper:export] ready_reuse', {
         clipId,
         renderId: ready.renderId,
@@ -131,6 +133,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     if (result.reused && result.downloadUrl) {
       await logClipEvent(workspaceId, clip.id, 'download')
+      await recordStreamClipFeedback(workspaceId, clip.id, 'download').catch(() => {})
       return NextResponse.json({
         data: {
           renderId: result.render.id,
@@ -144,7 +147,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       })
     }
 
-    await logClipEvent(workspaceId, clip.id, 'download')
+    await logClipEvent(workspaceId, clip.id, 'export')
+    await recordStreamClipFeedback(workspaceId, clip.id, 'export').catch(() => {})
     console.info('[clipper:export] enqueued', {
       clipId,
       renderId: result.render.id,

@@ -4,6 +4,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { getClipEditorPayload, mergeEditsPatch } from '@/lib/server/clips/clip-detail'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { enqueueReplaceClip } from '@/lib/server/clips/replace-clip'
+import { recordStreamClipFeedback } from '@/lib/server/clips/stream-feedback'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -59,6 +60,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
     const prisma = getPrisma()
     const updated = await prisma.clip.update({ where: { id }, data })
+
+    if (body.disliked === true) {
+      await recordStreamClipFeedback(workspaceId, id, 'thumbs_down').catch(() => {})
+    }
 
     if (body.hidden === true && body.disliked === true) {
       try {

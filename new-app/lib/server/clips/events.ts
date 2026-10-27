@@ -1,7 +1,7 @@
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
-export type ClipEventType = 'preview_play' | 'download' | 'edit_open' | 'delete'
+export type ClipEventType = 'preview_play' | 'download' | 'edit_open' | 'delete' | 'export' | 'thumbs_down'
 
 export async function logClipEvent(workspaceId: string, clipId: string, eventType: ClipEventType) {
   const prisma = getPrisma()
