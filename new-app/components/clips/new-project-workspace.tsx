@@ -47,6 +47,13 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   const onFile = (file: File, resumeUploadId?: string) => {
     setPendingFile(file)
     if (!resumeUploadId) setUploadId(null)
+    setUpload({
+      filename: file.name,
+      bytes: file.size,
+      loaded: 0,
+      percent: 0,
+      state: 'uploading',
+    })
     void uploadClipFile(
       file,
       (p) => {
@@ -178,9 +185,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
             <StreamerImportPanel />
           ) : tab === 'upload' ? (
             <div className="flex flex-col gap-4">
-              {(!upload || upload.state === 'error') && upload?.state !== 'error' ? (
-                <Dropzone onFile={onFile} />
-              ) : null}
+              {!upload || upload.state === 'error' ? <Dropzone onFile={onFile} /> : null}
               {upload ? (
                 <UploadProgressItem
                   progress={upload}
@@ -190,6 +195,16 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                       ? () => onFile(pendingFile, upload.uploadId)
                       : undefined
                   }
+                  onChooseFile={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'video/*'
+                    input.onchange = () => {
+                      const f = input.files?.[0]
+                      if (f) onFile(f, upload.uploadId)
+                    }
+                    input.click()
+                  }}
                 />
               ) : null}
               {durationMs > 0 && (

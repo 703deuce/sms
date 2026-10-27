@@ -56,9 +56,12 @@ export function ProjectSettingsForm({
   durationMs: number
   reframeV2Enabled?: boolean
 }) {
-  const sourceMs = durationMs > 0 ? durationMs : 60_000
-  const end = Math.min(sourceMs, settings.rangeEndMs > 0 ? settings.rangeEndMs : sourceMs)
-  const start = Math.min(end, settings.rangeStartMs)
+  const durationKnown = durationMs > 0
+  const sourceMs = durationKnown ? durationMs : 0
+  const end = durationKnown
+    ? Math.min(sourceMs, settings.rangeEndMs > 0 ? settings.rangeEndMs : sourceMs)
+    : 0
+  const start = durationKnown ? Math.min(end, settings.rangeStartMs) : 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -122,8 +125,14 @@ export function ProjectSettingsForm({
             <div className="flex items-center justify-between gap-2">
               <Label>Processing range</Label>
               <span className="text-xs text-muted-foreground tabular-nums">
-                {formatMmSs(start)} – {formatMmSs(end)}
-                {durationMs > 0 ? ` · source ${formatMmSs(durationMs)}` : ''}
+                {durationKnown ? (
+                  <>
+                    {formatMmSs(start)} – {formatMmSs(end)}
+                    {` · source ${formatMmSs(durationMs)}`}
+                  </>
+                ) : (
+                  'Waiting for upload…'
+                )}
               </span>
             </div>
             <input

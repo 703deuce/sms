@@ -160,10 +160,23 @@ async function uploadTus(
       },
       onSuccess: () => resolve(),
     })
-    upload.findPreviousUploads().then((prev) => {
-      if (prev.length) upload.resumeFromPreviousUpload(prev[0])
+    const startTus = () => {
       upload.start()
-    })
+    }
+    const resumeTimeout = setTimeout(() => {
+      startTus()
+    }, 8000)
+    upload
+      .findPreviousUploads()
+      .then((prev) => {
+        clearTimeout(resumeTimeout)
+        if (prev.length) upload.resumeFromPreviousUpload(prev[0])
+        startTus()
+      })
+      .catch(() => {
+        clearTimeout(resumeTimeout)
+        startTus()
+      })
   })
 }
 
