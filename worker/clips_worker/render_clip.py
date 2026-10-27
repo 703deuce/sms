@@ -97,6 +97,7 @@ def layout_env(layout: str) -> dict[str, str]:
     if layout == "split":
         env["SPLIT"] = "1"
         env["FORCE_SPLIT"] = "1"
+        env["LAYOUT_MODE"] = "split"
         env["LAYOUT_STYLE"] = "split"
         env["MULTIPERSON"] = "1"
     elif layout == "fill":
@@ -133,10 +134,9 @@ def resolve_clip_layout(settings: dict, clip_index: int) -> str:
 
 def ffmpeg_fit_export(clip_src: Path, out_mp4: Path, width: int, height: int) -> None:
     """Fallback when speakercrop fails (short clips, missing faces, etc.)."""
-    vf = (
-        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1"
-    )
+    from clips_worker.filtergraph import fit_blur_overlay_filter
+
+    vf = fit_blur_overlay_filter("0:v", "vout", width, height)
     threads = str(ffmpeg_threads_per_job())
     subprocess.check_call(
         [
@@ -148,8 +148,12 @@ def ffmpeg_fit_export(clip_src: Path, out_mp4: Path, width: int, height: int) ->
             "error",
             "-i",
             str(clip_src),
-            "-vf",
+            "-filter_complex",
             vf,
+            "-map",
+            "[vout]",
+            "-map",
+            "0:a?",
             "-c:v",
             "libx264",
             "-preset",
@@ -165,6 +169,21 @@ def ffmpeg_fit_export(clip_src: Path, out_mp4: Path, width: int, height: int) ->
     )
 
 
+def speakercrop_env_for_settings(
+    settings: dict,
+    *,
+    words_path: Path | None = None,
+    clip_index: int = 0,
+) -> dict[str, str]:
+    """Env dict passed to speakercrop subprocess (for tests / pipeline parity)."""
+    layout = resolve_clip_layout(settings, clip_index)
+    env = layout_env(layout)
+    if words_path is not None:
+        env["WORDS"] = str(words_path)
+        env["WORDS_JSON"] = str(words_path)
+    return env
+
+
 def run_speakercrop(
     clip_src: Path,
     out_mp4: Path,
@@ -177,13 +196,16 @@ def run_speakercrop(
     no_render: bool = False,
     render_id: str | None = None,
     render_meta: dict[str, Any] | None = None,
+    *,
+    preserve_existing_crop_track: bool = False,
+    clip_index: int = 0,
 ) -> Path:
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
     w, h = aspect_size(aspect, resolution)
     env = os.environ.copy()
     env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
-    layout = settings.get("layout", "speaker_follow")
+    layout = resolve_clip_layout(settings, clip_index)
     env.update(layout_env(layout))
     env["WORDS"] = str(words_path)
     env["WORDS_JSON"] = str(words_path)
@@ -193,7 +215,9 @@ def run_speakercrop(
     if not settings.get("captions", {}).get("enabled", True):
         env["CAPTIONS"] = "0"
     env["CLIP_START_MS"] = str(int(clip_start_ms))
-    if crop_track_out is not None:
+    if preserve_existing_crop_track:
+        env["WRITE_CROP_TRACK"] = "0"
+    elif crop_track_out is not None:
         env["CROP_TRACK_OUT"] = str(crop_track_out)
     elif int(os.environ.get("WRITE_CROP_TRACK", "1")):
         env["CROP_TRACK_OUT"] = str(out_mp4.with_suffix(".crop_track.json"))

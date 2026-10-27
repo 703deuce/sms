@@ -22,6 +22,16 @@ def stored_transcript_words(project: dict) -> list[dict] | None:
     return None
 
 
+def project_layout_for_clip(project: dict, clip_index: int = 0) -> str:
+    """Layout string used when reframing clip N (mirrors pipeline.build_clip_row)."""
+    from clips_worker.render_clip import resolve_clip_layout
+
+    settings = project.get("settings") or {}
+    if isinstance(settings, str):
+        settings = json.loads(settings)
+    return resolve_clip_layout(settings, clip_index)
+
+
 def resolve_transcript_for_job(project: dict, payload: dict) -> list[dict] | None:
     """Reuse persisted transcript on retry/resume; skip expensive ASR when safe."""
     if payload.get("force_retranscribe"):

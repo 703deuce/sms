@@ -1,7 +1,7 @@
 import numpy as np
 
 from clips_worker.crop_format import crop_track_version, is_v2_crop_track, v2_to_legacy_shots
-from clips_worker.filtergraph import grid4_xstack_filter, two_up_vstack_filter
+from clips_worker.filtergraph import grid3_layout_filter, grid4_xstack_filter, two_up_vstack_filter
 from prototype.v3.director import (
     hungarian_map_speakers,
     merge_short_segments,
@@ -81,3 +81,33 @@ def test_crop_v1_v2_parse():
 def test_filtergraph_strings_exact():
     assert two_up_vstack_filter() == "[s0][s1]vstack=inputs=2"
     assert grid4_xstack_filter() == "[s0][s1][s2][s3]xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0"
+    assert (
+        grid3_layout_filter()
+        == "[s0]scale=1080:960:flags=lanczos[t0];[s1][s2]hstack=inputs=2[bot];[t0][bot]vstack=inputs=2"
+    )
+
+
+def test_shot_cuts_histogram_fallback():
+    import numpy as np
+
+    from prototype.v3.shot_cuts import scene_cut_times
+
+    g0 = np.zeros((64, 64), dtype=np.uint8)
+    g1 = np.ones((64, 64), dtype=np.uint8) * 255
+    cuts = scene_cut_times("/nonexistent/video.mp4", gray_frames=[g0, g1, g1], times_s=[0.0, 1.0, 2.0])
+    assert 0.0 in cuts
+
+
+def test_multiperson_hot_path_wired_in_speakercrop():
+    """Dockerfile COPY worker/prototype/v3 → /app/v3; speakercrop imports multiperson_pipeline."""
+    from pathlib import Path
+
+    v3 = Path(__file__).resolve().parents[1] / "prototype" / "v3"
+    assert (v3 / "multiperson_pipeline.py").is_file()
+    assert (v3 / "shot_cuts.py").is_file()
+    src = (v3 / "speakercrop.py").read_text(encoding="utf-8")
+    assert 'os.environ.get("MULTIPERSON"' in src or "MULTIPERSON" in src
+    assert "multiperson_pipeline" in src or "multiperson_run" in src
+    docker = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
+    assert "worker/prototype/v3 /app/v3" in docker
+    assert "test_multiperson_clipper.py" in docker

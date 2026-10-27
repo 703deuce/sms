@@ -6,10 +6,13 @@ import subprocess
 from pathlib import Path
 
 from clips_worker.filtergraph import (
-    DIVIDER_PX,
+    HALF_H,
     OUT_H,
     OUT_W,
-    caption_seam_y,
+    QUAD_W,
+    fit_blur_overlay_filter,
+    grid3_layout_filter_labels,
+    grid4_xstack_filter,
     segment_layout_stack,
     slot_crop_filter,
     two_up_vstack_filter,
@@ -25,6 +28,8 @@ def render_multiperson_v2(src: Path, dest: Path, crop: dict) -> None:
     H = int(crop["H"])
     out_w = int(crop.get("out_w", OUT_W))
     out_h = int(crop.get("out_h", OUT_H))
+    half_h = out_h // 2
+    quad_w = out_w // 2
     segments = crop.get("segments") or []
     if not segments:
         raise ValueError("no segments")
@@ -37,35 +42,51 @@ def render_multiperson_v2(src: Path, dest: Path, crop: dict) -> None:
         base = f"v{si}"
         filters.append(f"[0:v]trim=start={t0}:end={t1},setpts=PTS-STARTPTS[{base}]")
         if layout == "wide":
-            filters.append(
-                f"[{base}]scale={out_w}:{out_h}:force_original_aspect_ratio=decrease,"
-                f"pad={out_w}:{out_h}:(ow-iw)/2:(oh-ih)/2,setsar=1[vout{si}]"
-            )
+            filters.append(fit_blur_overlay_filter(base, f"vout{si}", out_w, out_h))
             concat_in.append(f"[vout{si}]")
             continue
         if layout == "close" and slots:
             sl = slots[0]
             cx, cy = float(sl.get("cx", W / 2)), float(sl.get("cy", H / 2))
             filters.append(
-                slot_crop_filter(base, f"out{si}", cx, cy, W, H, out_w, out_h)
+                slot_crop_filter(base, f"out{si}", cx, cy, W, H, out_w, out_h, letterbox_blur=True)
             )
             concat_in.append(f"[out{si}]")
             continue
         slot_labels = []
         for j, sl in enumerate(slots[:4]):
             cx, cy = float(sl.get("cx", W / 2)), float(sl.get("cy", H / 2))
-            sh = out_h // 2 if layout in ("two_up", "grid3") else out_h // 2
-            sw = out_w if layout == "two_up" else out_w // 2
-            filters.append(slot_crop_filter(base, f"s{si}_{j}", cx, cy, W, H, sw, sh))
+            if layout == "two_up":
+                sw, sh = out_w, half_h
+            elif layout == "grid3":
+                sw, sh = (out_w, half_h) if j == 0 else (quad_w, half_h)
+            else:
+                sw, sh = quad_w, half_h
+            filters.append(
+                slot_crop_filter(
+                    base,
+                    f"s{si}_{j}",
+                    cx,
+                    cy,
+                    W,
+                    H,
+                    sw,
+                    sh,
+                    letterbox_blur=False,
+                )
+            )
             slot_labels.append(f"s{si}_{j}")
         if layout == "two_up" and len(slot_labels) >= 2:
             filters.append(f"[{slot_labels[0]}][{slot_labels[1]}]{two_up_vstack_filter()}[vout{si}]")
         elif layout == "grid4" and len(slot_labels) >= 4:
-            stack = segment_layout_stack("grid4")
             ins = "".join(f"[{lb}]" for lb in slot_labels)
-            filters.append(f"{ins}{stack}[vout{si}]")
+            filters.append(f"{ins}{grid4_xstack_filter()}[vout{si}]")
+        elif layout == "grid3" and len(slot_labels) >= 3:
+            filters.append(grid3_layout_filter_labels(slot_labels[0], slot_labels[1], slot_labels[2], f"vout{si}"))
+        elif slot_labels:
+            filters.append(fit_blur_overlay_filter(slot_labels[0], f"vout{si}", out_w, out_h))
         else:
-            filters.append(f"[{slot_labels[0]}]scale={out_w}:{out_h}[vout{si}]")
+            filters.append(fit_blur_overlay_filter(base, f"vout{si}", out_w, out_h))
         concat_in.append(f"[vout{si}]")
     fg = ";".join(filters)
     concat = "".join(concat_in) + f"concat=n={len(concat_in)}:v=1:a=0[vfinal]"

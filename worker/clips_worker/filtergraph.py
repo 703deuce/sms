@@ -17,9 +17,27 @@ def grid4_xstack_filter() -> str:
     return "[s0][s1][s2][s3]xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0"
 
 
-def grid3_compose_filter() -> str:
-    """Top full width + bottom hstack; expressed as chained filters in segment builder."""
-    return "grid3"
+def grid3_layout_filter() -> str:
+    """One speaker full-width top (1080x960); two speakers hstack bottom (540x960 each)."""
+    return f"[s0]scale={OUT_W}:{HALF_H}:flags=lanczos[t0];[s1][s2]hstack=inputs=2[bot];[t0][bot]vstack=inputs=2"
+
+
+def grid3_layout_filter_labels(l0: str, l1: str, l2: str, out: str) -> str:
+    return (
+        f"[{l0}]scale={OUT_W}:{HALF_H}:flags=lanczos[{out}_t0];"
+        f"[{l1}][{l2}]hstack=inputs=2[{out}_bot];"
+        f"[{out}_t0][{out}_bot]vstack=inputs=2[{out}]"
+    )
+
+
+def fit_blur_overlay_filter(in_label: str, out_label: str, width: int, height: int) -> str:
+    """Blurred background fill (no black bars)."""
+    return (
+        f"[{in_label}]split=2[a][b];"
+        f"[a]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},boxblur=20:2[bg];"
+        f"[b]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
+        f"[bg][fg]overlay=(W-w)/2:(H-h)/2[{out_label}]"
+    )
 
 
 def slot_crop_filter(
@@ -32,15 +50,20 @@ def slot_crop_filter(
     slot_w: int,
     slot_h: int,
     scale: float = 1.0,
+    *,
+    letterbox_blur: bool = True,
 ) -> str:
     crop_w = int(min(src_w, slot_w / max(scale, 0.01)))
     crop_h = int(min(src_h, slot_h / max(scale, 0.01)))
     x = int(max(0, min(src_w - crop_w, cx - crop_w / 2)))
     y = int(max(0, min(src_h - crop_h, cy - crop_h / 2)))
-    return (
-        f"[{in_label}]crop={crop_w}:{crop_h}:{x}:{y},"
-        f"scale={slot_w}:{slot_h}:flags=lanczos[{out_label}]"
-    )
+    cropped = f"[{in_label}]crop={crop_w}:{crop_h}:{x}:{y}[{out_label}_raw]"
+    if letterbox_blur:
+        return (
+            f"{cropped};"
+            f"{fit_blur_overlay_filter(f'{out_label}_raw', out_label, slot_w, slot_h)}"
+        )
+    return f"{cropped};[{out_label}_raw]scale={slot_w}:{slot_h}:flags=lanczos[{out_label}]"
 
 
 def segment_layout_stack(layout: str) -> str:
@@ -49,11 +72,7 @@ def segment_layout_stack(layout: str) -> str:
     if layout == "grid4":
         return grid4_xstack_filter()
     if layout == "grid3":
-        return (
-            f"[top]scale={OUT_W}:{HALF_H}[t0];"
-            f"[b0][b1]hstack=inputs=2[bot];"
-            f"[t0][bot]vstack=inputs=2"
-        )
+        return grid3_layout_filter()
     return ""
 
 

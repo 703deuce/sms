@@ -156,6 +156,7 @@ def reframe_clip_preview(
         )
         return rendered, crop_method, reframe_settings
 
+    preserve_crop_track = False
     if motion_subject:
         wide = write_motion_crop_track(
             clip_file,
@@ -170,6 +171,7 @@ def reframe_clip_preview(
             write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
         else:
             crop_method = "subject_follow"
+            preserve_crop_track = True
     else:
         crop_method = "fit_blur"
         reframe_settings = {**reframe_settings, "layout": "fit"}
@@ -182,7 +184,8 @@ def reframe_clip_preview(
         reframe_settings,
         work_dir,
         clip_start_ms=clip_start_ms,
-        crop_track_out=crop_track_path,
+        crop_track_out=crop_track_path if not preserve_crop_track else None,
+        preserve_existing_crop_track=preserve_crop_track,
     )
     if not crop_track_path.exists():
         write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
