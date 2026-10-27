@@ -20,6 +20,7 @@ RUN chmod +x ./scripts/start-transovo-voice-worker.sh
 RUN pip install --no-cache-dir --upgrade pip \
   && pip install --no-cache-dir \
     "livekit-agents[openai]~=1.8" \
+    "livekit-plugins-deepgram>=0.6,<1" \
     "livekit-plugins-noise-cancellation>=0.2,<0.4" \
     "httpx>=0.27,<0.29" \
     "pydantic>=2.7,<3" \

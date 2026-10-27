@@ -9,8 +9,10 @@ export async function assertTakeTracksFullyUploaded(sessionId: string, takeId: s
   })
   if (!take || take.session.workspaceId !== workspaceId) throw new Error('Take not found')
   if (!take.tracks.length) throw new Error('No tracks on take')
-  const pending = take.tracks.filter((t) => t.status !== 'UPLOADED' || !t.storageKey)
-  if (pending.length) {
+  const { resolveTracksForImport } = await import('@/lib/server/recording/resolve-import-tracks')
+  const resolved = resolveTracksForImport(take.tracks)
+  if (!resolved.length) {
+    const pending = take.tracks.filter((t) => t.status !== 'UPLOADED' || !t.storageKey)
     throw new Error(`Waiting for uploads (${pending.length} track(s) pending)`)
   }
   return take

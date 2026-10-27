@@ -18,18 +18,22 @@ export async function mintJoinToken(opts: {
     ttl: '10m',
     attributes: { role: opts.role, sessionId: opts.sessionId },
   })
+  const isProducer = opts.role === 'producer'
   const grant: VideoGrant = {
     roomJoin: true,
     room: opts.roomName,
+    hidden: isProducer,
     canPublish: true,
     canSubscribe: true,
     canPublishData: true,
-    canPublishSources: [
-      TrackSource.CAMERA,
-      TrackSource.MICROPHONE,
-      TrackSource.SCREEN_SHARE,
-      TrackSource.SCREEN_SHARE_AUDIO,
-    ],
+    canPublishSources: isProducer
+      ? [TrackSource.MICROPHONE]
+      : [
+          TrackSource.CAMERA,
+          TrackSource.MICROPHONE,
+          TrackSource.SCREEN_SHARE,
+          TrackSource.SCREEN_SHARE_AUDIO,
+        ],
     canUpdateOwnMetadata: false,
   }
   at.addGrant(grant)

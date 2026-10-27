@@ -2,6 +2,8 @@ import 'server-only'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 import { setRecordingRoomMetadata } from '@/lib/server/livekit/rooms'
+import { startCloudBackupEgressForTake, stopCloudBackupEgressForTake } from '@/lib/server/livekit/track-egress'
+import { dispatchRoomsTranscriptionAgent } from '@/lib/server/livekit/transcription-dispatch'
 
 export async function startRecordingTake(sessionId: string, workspaceId: string, startAtHostMs: number) {
   const prisma = getPrisma()
@@ -19,14 +21,28 @@ export async function startRecordingTake(sessionId: string, workspaceId: string,
       startAtHostMs: BigInt(startAtHostMs),
     },
   })
-  await setRecordingRoomMetadata(sessionId, {
-    v: 1,
-    recState: 'countdown',
-    takeId: take.id,
-    startAtHostMs,
-  })
+  if (session.kind === 'ROOM') {
+    await setRecordingRoomMetadata(sessionId, {
+      v: 1,
+      recState: 'countdown',
+      takeId: take.id,
+      startAtHostMs,
+    })
+  }
   if (session.status === 'DRAFT') {
     await prisma.recordingSession.update({ where: { id: sessionId }, data: { status: 'LIVE' } })
+  }
+  if (session.kind === 'ROOM') {
+    try {
+      await startCloudBackupEgressForTake(workspaceId, sessionId, take.id)
+    } catch {
+      /* egress is best-effort */
+    }
+    try {
+      await dispatchRoomsTranscriptionAgent(sessionId)
+    } catch {
+      /* captions agent optional */
+    }
   }
   return take
 }
@@ -42,9 +58,16 @@ export async function stopRecordingTake(sessionId: string, workspaceId: string, 
     where: { id: takeId },
     data: { stopAtHostMs: BigInt(stopAtHostMs) },
   })
-  await setRecordingRoomMetadata(sessionId, {
-    v: 1,
-    recState: 'idle',
-  })
+  if (take.session.kind === 'ROOM') {
+    await setRecordingRoomMetadata(sessionId, {
+      v: 1,
+      recState: 'idle',
+    })
+    try {
+      await stopCloudBackupEgressForTake(sessionId, takeId)
+    } catch {
+      /* ignore */
+    }
+  }
   return take
 }

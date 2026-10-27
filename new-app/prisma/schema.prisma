@@ -9061,6 +9061,17 @@ enum RecordingSessionStatus {
 enum RecordingParticipantRole {
   HOST
   GUEST
+  PRODUCER
+}
+
+enum RecordingSessionKind {
+  ROOM
+  EDITOR_SOLO
+}
+
+enum RecordingTrackQuality {
+  HIGH_QUALITY
+  BACKUP
 }
 
 model RecordingSession {
@@ -9070,6 +9081,9 @@ model RecordingSession {
   title           String
   livekitRoom     String                 @unique
   livekitRoomSid  String?
+  kind            RecordingSessionKind     @default(ROOM)
+  cloudBackupEnabled Boolean              @default(true)
+  transcriptionEnabled Boolean            @default(true)
   status          RecordingSessionStatus @default(DRAFT)
   maxParticipants Int                    @default(6)
   liveStartedAt   DateTime?
@@ -9154,6 +9168,7 @@ model RecordingTrack {
   takeId            String
   participantId     String
   kind              RecordingTrackKind
+  qualitySource     RecordingTrackQuality @default(HIGH_QUALITY)
   segmentIndex      Int                  @default(0)
   mimeType          String
   sampleRate        Int?
@@ -9162,6 +9177,8 @@ model RecordingTrack {
   storageKey        String?
   s3UploadId        String?
   bytesExpected     BigInt?
+  livekitEgressId   String?
+  livekitTrackSid   String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 

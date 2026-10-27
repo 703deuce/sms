@@ -609,7 +609,7 @@ worker-src 'self' blob:;
 
 - **Identity reuse:** a second tab with the same identity kicks the first (`DUPLICATE_IDENTITY`). Detect it with a `BroadcastChannel` and block the second tab *before* it connects.
 - **Webhook ordering:** only `room`/`participant` sid, name and identity are present on track events. Don't expect full objects.
-- **No Egress.** Don't enable room composite or track egress. It costs transcode minutes and duplicates local recording.
+- **Cloud backup egress (optional, default on):** When `RecordingSession.cloudBackupEnabled` is true, the server starts **TrackEgress** per published track at take start (and on `track_published` during an active take). Output is **S3-compatible** (Backblaze B2) via `DirectFileOutput` + `S3Upload` (`lib/server/livekit/track-egress.ts`). Egress completes into `RecordingTrack` rows with `qualitySource = BACKUP`; import prefers browser **HIGH_QUALITY** multipart uploads and falls back to backup per participant/kind after reconcile timeout or when the host chooses **Cloud backup** in §25. **Billing:** LiveKit Cloud charges **egress/transcode minutes** (see plan table §5 — Build tier includes a monthly egress minute pool; overage is per-minute). Stop egress on take stop via `stopEgress`. Primary capture remains browser `MediaRecorder` → B2 (no duplicate composite room egress).
 
 ---
 

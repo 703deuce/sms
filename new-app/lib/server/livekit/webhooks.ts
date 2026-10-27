@@ -68,4 +68,24 @@ export async function handleLivekitEvent(event: WebhookEvent): Promise<void> {
       data: { status: 'LEFT' },
     })
   }
+
+  if (eventType === 'egress_ended' && event.egressInfo?.egressId) {
+    const egressId = event.egressInfo.egressId
+    const file = event.egressInfo.fileResults?.[0]
+    const location = file?.location ?? file?.filename
+    await prisma.recordingTrack.updateMany({
+      where: { livekitEgressId: egressId },
+      data: {
+        status: 'UPLOADED',
+        storageKey: location ?? undefined,
+      },
+    })
+  }
+
+  if (eventType === 'track_published' && sessionId && event.track?.sid) {
+    const { maybeStartBackupEgressForPublishedTrack } = await import(
+      '@/lib/server/livekit/track-egress'
+    )
+    await maybeStartBackupEgressForPublishedTrack(sessionId, event.participant?.identity ?? '', event.track)
+  }
 }

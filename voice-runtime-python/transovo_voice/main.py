@@ -71,6 +71,10 @@ async def voice_v3_entrypoint(ctx: JobContext) -> None:
 
 server.rtc_session(agent_name=VOICE_V3_AGENT_NAME)(voice_v3_entrypoint)
 
+from transovo_voice.clips_recording.transcription_agent import register_transcription_agent
+
+register_transcription_agent(server)
+
 
 def _prewarm_voice_v3_observability_modules() -> None:
     import anyio  # noqa: F401

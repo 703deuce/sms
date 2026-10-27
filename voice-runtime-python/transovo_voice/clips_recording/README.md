@@ -8,7 +8,8 @@ Do **not** use `LIVEKIT_SELF_HOSTED_*`, `voice.transovo.ai`, or `RECORDING_LIVEK
 **Primary path:** browser `MediaRecorder` + B2 (Next.js). This package is for optional Cloud-side:
 
 - webhook / reconciliation helpers
-- RoomComposite egress safety track (off by default)
+- **TrackEgress** cloud backup to B2 (session `cloudBackupEnabled`, started from Next.js on take start)
+- **Rooms captions agent** (`transovo-clips-transcription`): Deepgram STT when `CLIPS_RECORDING_WORKER_ENABLED=1` and `CLIPS_ROOMS_TRANSCRIPTION_ENABLED=1` on app; dispatches on take start
 - server participant fallback when a guest browser upload fails
 
 Wire agents behind `CLIPS_RECORDING_WORKER_ENABLED=1` when M15+ ships.

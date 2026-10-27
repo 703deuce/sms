@@ -12,6 +12,10 @@ function httpHostFromWss(wssUrl: string): string {
 export function getLiveKitApi(): LiveKitAPI {
   if (cached) return cached
   const env = getLiveKitServerEnv()
-  cached = new LiveKitAPI(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET, httpHostFromWss(env.LIVEKIT_URL))
+  cached = new LiveKitAPI({
+    apiKey: env.LIVEKIT_API_KEY,
+    secret: env.LIVEKIT_API_SECRET,
+    host: httpHostFromWss(env.LIVEKIT_URL),
+  })
   return cached
 }

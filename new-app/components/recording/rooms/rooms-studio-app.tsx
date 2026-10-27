@@ -33,6 +33,7 @@ import { RoomsFullPage } from './rooms-layout-shell'
 import { PeoplePanel, ParticipantVideoTile, type PeopleRow } from './people-panel'
 import { RoomsUploadCard } from './upload-card'
 import { parseRecControlPayload, parseRecordingRoomMetadata, type RecControlMessage } from '@/lib/recording/rec-control'
+import { computeLocalPublishSubscriptionPermissions } from '@/lib/recording/producer-subscriptions'
 import { bestOffsetFromSamples, offsetFromSample, scheduleAtHostMs } from '@/lib/recording/clock-sync'
 import {
   encodeDataPacketForLiveKit,
@@ -60,8 +61,17 @@ function roleIsHost(role: string) {
 const TOPIC_REC = 'rec-control'
 const TOPIC_PTT = 'ptt'
 const TOPIC_SPOT = 'spotlight'
+const TOPIC_CAPTIONS = 'rooms-captions'
 
-export function RoomsStudioApp({ sessionId, sessionTitle }: { sessionId: string; sessionTitle: string }) {
+export function RoomsStudioApp({
+  sessionId,
+  sessionTitle,
+  captionsAvailable = false,
+}: {
+  sessionId: string
+  sessionTitle: string
+  captionsAvailable?: boolean
+}) {
   const router = useRouter()
   const [payload, setPayload] = useState<JoinPayload | null>(null)
   const [room, setRoom] = useState<Room | null>(null)
@@ -69,6 +79,7 @@ export function RoomsStudioApp({ sessionId, sessionTitle }: { sessionId: string;
   const [spotlight, setSpotlight] = useState<string | null>(null)
   const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null)
   const [captions, setCaptions] = useState<string>('')
+  const [captionsOn, setCaptionsOn] = useState(true)
   const [countdown, setCountdown] = useState<number | null>(null)
   const [recording, setRecording] = useState(false)
   const [recSeconds, setRecSeconds] = useState(0)
@@ -184,6 +195,14 @@ export function RoomsStudioApp({ sessionId, sessionTitle }: { sessionId: string;
         const pkt = parseDataPacket(data, spotlightPacketSchema)
         if (pkt) setSpotlight(pkt.identity)
       }
+      if (topic === TOPIC_CAPTIONS && captionsOn) {
+        try {
+          const json = JSON.parse(new TextDecoder().decode(data)) as { text?: string }
+          if (json.text) setCaptions(json.text)
+        } catch {
+          /* ignore */
+        }
+      }
     })
     lkRoom.on(RoomEvent.RoomMetadataChanged, (meta) => {
       const parsed = parseRecordingRoomMetadata(meta)
@@ -217,6 +236,25 @@ export function RoomsStudioApp({ sessionId, sessionTitle }: { sessionId: string;
       lkRoom.disconnect()
     }
   }, [payload, echoCancellation, screenShareIdentity])
+
+  useEffect(() => {
+    if (!room || !payload) return
+    const plan = computeLocalPublishSubscriptionPermissions({
+      localIdentity: payload.identity,
+      localRole: payload.role,
+      producerMode,
+      pttActive,
+      pttTargetIdentity: pttTarget,
+      participantIdentities: participants.map((p) => ({
+        identity: p.identity,
+        role: (p.attributes?.role as string) || 'guest',
+      })),
+    })
+    room.localParticipant.setTrackSubscriptionPermissions(
+      plan.allParticipantsAllowed,
+      plan.participantTrackPermissions,
+    )
+  }, [room, payload, producerMode, pttActive, pttTarget, participants])
 
   async function runClockSync(r: Room, hostId: string) {
     const samples = []
@@ -512,7 +550,7 @@ export function RoomsStudioApp({ sessionId, sessionTitle }: { sessionId: string;
               ))}
             </div>
           )}
-          {captions ? (
+          {captionsAvailable && captionsOn && captions ? (
             <div className="absolute bottom-4 left-4 right-4 rounded-lg bg-black/60 px-3 py-2 text-center text-base text-white">
               {captions}
             </div>
@@ -634,6 +672,13 @@ export function RoomsStudioApp({ sessionId, sessionTitle }: { sessionId: string;
           }}
         />
         <RoundBtn icon={ScrollText} label="Teleprompter" onClick={() => setTeleprompterOpen(true)} />
+        {captionsAvailable && (
+          <RoundBtn
+            icon={MessageSquare}
+            label={captionsOn ? 'Captions on' : 'Captions off'}
+            onClick={() => setCaptionsOn((v) => !v)}
+          />
+        )}
         <Button variant="outline" className="h-10 rounded-full border-destructive/40 bg-destructive/10 text-destructive" onClick={() => {
           if (showUpload && uploadRows.some((r) => !r.done)) {
             setShowLeaveModal(true)
@@ -702,9 +747,11 @@ export function RoomsStudioApp({ sessionId, sessionTitle }: { sessionId: string;
               <Button
                 onClick={async () => {
                   setShowChooseFiles(false)
-                  if (!activeTakeId || chooseCloudBackup) return
+                  if (!activeTakeId) return
                   const res = await fetch(`/api/recording/sessions/${sessionId}/takes/${activeTakeId}/import`, {
                     method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ preferCloudBackup: chooseCloudBackup }),
                   })
                   const json = await res.json()
                   if (json.data?.scriptUrl) router.push(json.data.scriptUrl)

@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { startLocalTrackRecorder } from '@/lib/recording/local-track-recorder'
-import type { TrackUploadProgress } from '@/lib/recording/track-upload-manager'
-import { listChunksForTrack } from '@/lib/recording/chunk-store'
+import { TrackUploadManager, type TrackUploadProgress } from '@/lib/recording/track-upload-manager'
 import { createId } from '@/lib/supabase/id'
 import { listMediaDeviceOptions } from '@/lib/recording/livekit-devices'
 
@@ -20,32 +19,16 @@ export function useEditorRecorder(projectId: string) {
   const [countdownEnabled, setCountdownEnabled] = useState(true)
   const streamRef = useRef<MediaStream | null>(null)
   const recordersRef = useRef<{ stop: () => Promise<void> }[]>([])
+  const sessionIdRef = useRef<string | null>(null)
+  const participantIdRef = useRef<string | null>(null)
   const takeIdRef = useRef<string | null>(null)
-  const trackIdsRef = useRef<string[]>([])
+  const uploadMgr = useRef<TrackUploadManager | null>(null)
   const recStartRef = useRef<number | null>(null)
 
   useEffect(() => {
     void listMediaDeviceOptions('videoinput').then(setCameras)
     void listMediaDeviceOptions('audioinput').then(setMics)
   }, [projectId])
-
-  const refreshUploadRows = useCallback(async () => {
-    const rows: TrackUploadProgress[] = []
-    for (const trackId of trackIdsRef.current) {
-      const chunks = await listChunksForTrack(trackId)
-      const bytes = chunks.reduce((a, c) => a + c.blob.size, 0)
-      const percent = Math.min(99, Math.round((bytes / (8 * 1024 * 1024)) * 100))
-      rows.push({
-        trackId,
-        participantId: 'local-editor',
-        label: trackId.includes('mic') ? 'Microphone · You' : 'Camera · You',
-        percent,
-        stalled: false,
-        done: false,
-      })
-    }
-    setUploadRows(rows)
-  }, [])
 
   useEffect(() => {
     if (!recording) return
@@ -54,6 +37,19 @@ export function useEditorRecorder(projectId: string) {
     }, 400)
     return () => window.clearInterval(id)
   }, [recording])
+
+  const ensureEditorSession = useCallback(async () => {
+    if (sessionIdRef.current && participantIdRef.current) {
+      return { sessionId: sessionIdRef.current, participantId: participantIdRef.current }
+    }
+    const res = await fetch(`/api/recording/projects/${projectId}/editor-session`, { method: 'POST' })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error ?? 'Could not start editor session')
+    sessionIdRef.current = json.data.sessionId as string
+    participantIdRef.current = json.data.participantId as string
+    uploadMgr.current = new TrackUploadManager(sessionIdRef.current, setUploadRows)
+    return { sessionId: sessionIdRef.current, participantId: participantIdRef.current }
+  }, [projectId])
 
   const ensureStream = useCallback(async () => {
     if (streamRef.current) return streamRef.current
@@ -66,47 +62,17 @@ export function useEditorRecorder(projectId: string) {
   }, [cameraId, micId])
 
   const startRecording = useCallback(async () => {
-    const takeId = createId('rtake')
+    const { sessionId, participantId } = await ensureEditorSession()
+    const startAtHostMs = Date.now() + (countdownEnabled ? 3000 : 0)
+    const takeRes = await fetch(`/api/recording/sessions/${sessionId}/takes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'start', startAtHostMs }),
+    })
+    const takeJson = await takeRes.json()
+    const takeId = takeJson.data?.takeId as string
     takeIdRef.current = takeId
-    const run = async () => {
-      const stream = await ensureStream()
-      setRecording(true)
-      recStartRef.current = Date.now()
-      setRecSeconds(0)
-      const videoTrack = stream.getVideoTracks()[0]
-      const audioTrack = stream.getAudioTracks()[0]
-      recordersRef.current = []
-      const startMs = Date.now()
-      if (videoTrack) {
-        const trackId = createId('rtrk')
-        const vs = new MediaStream([videoTrack])
-        const handle = startLocalTrackRecorder({
-          sessionId: projectId,
-          takeId,
-          trackId,
-          kind: 'CAMERA',
-          stream: vs,
-          onChunk: () => void refreshUploadRows(),
-        })
-        recordersRef.current.push(handle)
-        trackIdsRef.current.push(trackId)
-      }
-      if (audioTrack) {
-        const trackId = createId('rtrk')
-        const vs = new MediaStream([audioTrack])
-        const handle = startLocalTrackRecorder({
-          sessionId: projectId,
-          takeId,
-          trackId,
-          kind: 'MICROPHONE',
-          stream: vs,
-          onChunk: () => void refreshUploadRows(),
-        })
-        recordersRef.current.push(handle)
-        trackIdsRef.current.push(trackId)
-      }
-      await refreshUploadRows()
-    }
+
     if (countdownEnabled) {
       let left = 3
       setCountdown(left)
@@ -121,15 +87,80 @@ export function useEditorRecorder(projectId: string) {
         }, 1000)
       })
     }
-    await run()
-  }, [countdownEnabled, ensureStream, projectId, refreshUploadRows])
+
+    const stream = await ensureStream()
+    setRecording(true)
+    recStartRef.current = Date.now()
+    setRecSeconds(0)
+    const actualStartHostMs = Date.now()
+    recordersRef.current = []
+
+    const videoTrack = stream.getVideoTracks()[0]
+    const audioTrack = stream.getAudioTracks()[0]
+
+    async function registerAndRecord(kind: 'CAMERA' | 'MICROPHONE', track: MediaStreamTrack) {
+      const trackId = createId('rtrk')
+      const vs = new MediaStream([track])
+      await fetch('/api/recording/tracks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          takeId,
+          trackId,
+          participantId,
+          kind,
+          mimeType: kind === 'CAMERA' ? 'video/webm' : 'audio/webm',
+          actualStartHostMs,
+        }),
+      })
+      const handle = startLocalTrackRecorder({
+        sessionId,
+        takeId,
+        trackId,
+        kind,
+        stream: vs,
+        onChunk: () => uploadMgr.current?.pump(trackId),
+      })
+      recordersRef.current.push(handle)
+      await uploadMgr.current?.registerTrack({
+        trackId,
+        sessionId,
+        takeId,
+        mimeType: handle.mimeType,
+        kind,
+        participantId,
+        displayName: 'You',
+        actualStartHostMs,
+        clockOffsetMs: 0,
+      })
+    }
+
+    if (videoTrack) await registerAndRecord('CAMERA', videoTrack)
+    if (audioTrack) await registerAndRecord('MICROPHONE', audioTrack)
+  }, [countdownEnabled, ensureEditorSession, ensureStream])
 
   const stopRecording = useCallback(async () => {
+    const sessionId = sessionIdRef.current
+    const takeId = takeIdRef.current
     setRecording(false)
     for (const r of recordersRef.current) await r.stop()
     recordersRef.current = []
-    setUploadRows((rows) => rows.map((r) => ({ ...r, percent: 100, done: true })))
-    trackIdsRef.current = []
+    if (sessionId && takeId) {
+      const stopAtHostMs = Date.now()
+      await fetch(`/api/recording/sessions/${sessionId}/takes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'stop', takeId, stopAtHostMs }),
+      })
+      const metas = await import('@/lib/recording/chunk-store').then((m) =>
+        m.listTrackMetaForSession(sessionId),
+      )
+      for (const meta of metas.filter((m) => m.takeId === takeId)) {
+        await uploadMgr.current?.pump(meta.trackId, true)
+      }
+      await fetch(`/api/recording/sessions/${sessionId}/takes/${takeId}/import`, { method: 'POST' })
+    }
   }, [])
 
   const disarm = useCallback(() => {

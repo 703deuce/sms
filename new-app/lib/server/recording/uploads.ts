@@ -8,9 +8,7 @@ import {
 } from '@/lib/server/clips/upload-part-bookkeeping'
 import { s3PartSizeBytes } from '@/lib/server/clips/upload-s3-resume'
 
-function recordingTrackObjectKey(workspaceId: string, sessionId: string, trackId: string, ext: string) {
-  return `clips/${workspaceId}/recording/${sessionId}/${trackId}.${ext}`
-}
+import { recordingTrackObjectKey } from '@/lib/server/recording/track-keys'
 
 function extFromMime(mime: string) {
   if (mime.includes('webm')) return 'webm'
