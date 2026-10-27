@@ -43,6 +43,15 @@ export async function runT2vScript(draftId: string, instruction?: string) {
   return parseJson<{ revision: number; document: T2vDraftV1 }>(res)
 }
 
+export async function extractT2vAudio(uploadId: string) {
+  const res = await fetch('/api/t2v/extract', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'audio', uploadId }),
+  })
+  return parseJson<{ title: string; text: string; excerpt: string; wordCount: number }>(res)
+}
+
 export async function extractT2vUrl(url: string) {
   const res = await fetch('/api/t2v/extract', {
     method: 'POST',

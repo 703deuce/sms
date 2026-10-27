@@ -34,6 +34,14 @@ export function T2vBuildProgress({
   }
 
   const label = stage?.replace(/_/g, ' ') || 'Building your video'
+  const stages = [
+    { key: 'voice', label: 'Voice', min: 5 },
+    { key: 'visual', label: 'Visuals', min: 45 },
+    { key: 'assembl', label: 'Assembling', min: 60 },
+    { key: 'upload', label: 'Uploading', min: 85 },
+    { key: 'compos', label: 'Ready', min: 95 },
+  ]
+  const stageNorm = (stage ?? '').toLowerCase()
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
@@ -44,6 +52,17 @@ export function T2vBuildProgress({
         </p>
         <Progress className="mt-3" value={Math.max(5, progress)} />
         <p className="mt-2 text-sm capitalize text-muted-foreground">{label} · {progress}%</p>
+        <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+          {stages.map((s) => {
+            const done = progress >= s.min + 10 || stageNorm.includes(s.key)
+            const active = stageNorm.includes(s.key)
+            return (
+              <li key={s.key} className={active ? 'font-medium text-foreground' : ''}>
+                {done ? '✓' : active ? '⟳' : '○'} {s.label}
+              </li>
+            )
+          })}
+        </ul>
         <p className="mt-1 text-xs text-muted-foreground">You can leave this page; the build continues in the background.</p>
         {onCancel ? (
           <Button type="button" size="sm" variant="outline" className="mt-4" onClick={onCancel}>

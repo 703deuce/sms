@@ -11,6 +11,7 @@ import { matchScenes, searchT2vStock, toSceneMedia, type StockCandidate } from '
 import type { T2vDraftV1, T2vSceneMedia } from '@/lib/t2v/types'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 import { createId } from '@/lib/supabase/id'
+import { mediaFromClipUpload } from '@/lib/server/t2v/upload-scene-media'
 import type { T2vSceneAiImagePayload, T2vSceneAiVideoPayload } from '@/lib/t2v/m9-contracts'
 
 function parseDraft(document: unknown): T2vDraftV1 {
@@ -64,6 +65,11 @@ const postSchema = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('shuffle') }),
   z.object({ action: z.literal('upload'), uploadId: z.string() }),
+  z.object({
+    action: z.literal('focal'),
+    focalX: z.number().min(0).max(1),
+    focalY: z.number().min(0).max(1),
+  }),
   z.object({ action: z.literal('ai_image'), prompt: z.string().min(3) }),
   z.object({ action: z.literal('ai_video'), prompt: z.string().min(3) }),
 ])
@@ -82,7 +88,19 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
     const body = postSchema.parse(await request.json())
 
     if (body.action === 'upload') {
-      return NextResponse.json({ error: 'not_implemented', action: body.action }, { status: 501 })
+      const media = await mediaFromClipUpload(workspaceId, body.uploadId, sceneId)
+      doc.scenes[idx] = { ...scene, media }
+      const saved = await saveT2vDraft(workspaceId, draftId, row.revision, doc)
+      return NextResponse.json({ data: { ...saved, scene: doc.scenes[idx] } })
+    }
+
+    if (body.action === 'focal') {
+      doc.scenes[idx] = {
+        ...scene,
+        media: { ...scene.media, focalX: body.focalX, focalY: body.focalY },
+      }
+      const saved = await saveT2vDraft(workspaceId, draftId, row.revision, doc)
+      return NextResponse.json({ data: { ...saved, scene: doc.scenes[idx] } })
     }
 
     if (body.action === 'ai_image' || body.action === 'ai_video') {

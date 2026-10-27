@@ -1,7 +1,7 @@
 import { Page } from '@/components/app/page-primitives'
 import { T2vScriptReview } from '@/components/t2v/t2v-script-review'
-import { T2vStoryboard } from '@/components/t2v/t2v-storyboard'
 import { T2vStudioShell } from '@/components/t2v/t2v-studio-shell'
+import { getClipStorage } from '@/lib/storage'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -28,7 +28,7 @@ export default async function T2vStudioPage({
   })
   const project = await prisma.clipProject.findFirst({
     where: { id: projectId, workspaceId, sourceKind: 't2v' },
-    select: { id: true, title: true, status: true, rangeEndMs: true },
+    select: { id: true, title: true, status: true, rangeEndMs: true, uploadId: true },
   })
   if (!project || !draft) notFound()
   const doc = draft.document as T2vDraftV1
@@ -39,6 +39,21 @@ export default async function T2vStudioPage({
   const studioMode = mode === 'storyboard' ? 'storyboard' : 'script'
   const storyboardStale =
     composition != null && draft.assembledRevision != null && draft.assembledRevision < draft.revision
+
+  let builtVideoUrl: string | null = null
+  if (project.uploadId) {
+    const upl = await prisma.clipUpload.findFirst({
+      where: { id: project.uploadId, workspaceId },
+      select: { key: true },
+    })
+    if (upl?.key) {
+      try {
+        builtVideoUrl = await getClipStorage().createSignedDownloadUrl(upl.key, 3600)
+      } catch {
+        builtVideoUrl = null
+      }
+    }
+  }
   const toolbar = (
     <>
       <T2vStudioToolbar
@@ -61,29 +76,15 @@ export default async function T2vStudioPage({
         {toolbar}
         <T2vStudioShell
           draftId={draft.id}
+          projectId={project.id}
           initialDocument={doc}
           initialRevision={draft.revision}
           initialStatus={draft.status}
           initialStage={draft.stage}
           initialProgress={draft.progress}
           initialError={draft.error}
-        >
-          {(ctx) => (
-            <T2vStoryboard
-              draftId={draft.id}
-              projectId={project.id}
-              document={ctx.doc}
-              revision={ctx.revision}
-              onDocumentChange={(d, rev) => {
-                ctx.setDoc(d)
-                if (rev != null) ctx.setRevision(rev)
-              }}
-              onAssembling={() => {
-                window.location.reload()
-              }}
-            />
-          )}
-        </T2vStudioShell>
+          builtVideoUrl={builtVideoUrl}
+        />
       </Page>
     )
   }
@@ -96,6 +97,7 @@ export default async function T2vStudioPage({
         projectId={project.id}
         initialRevision={draft.revision}
         initialDocument={doc}
+        draftStatus={draft.status}
       />
     </Page>
   )
