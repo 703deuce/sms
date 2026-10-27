@@ -27,7 +27,10 @@ export type EditorPanelId =
   | 'dub'
   | 'brand'
 
-export const EDITOR_RAIL_ITEMS: {
+/** Clip editor launch rail — transcript, pauses/layout, captions, audio mix (no AI producer / B-roll / dub). */
+const CLIP_EDITOR_RAIL_IDS: EditorPanelId[] = ['transcript', 'layout', 'captions', 'audio']
+
+const ALL_EDITOR_RAIL_ITEMS: {
   id: EditorPanelId
   label: string
   icon: LucideIcon
@@ -35,7 +38,7 @@ export const EDITOR_RAIL_ITEMS: {
 }[] = [
   { id: 'producer', label: 'AI Producer', icon: Sparkles, tone: 'text-lane-ai' },
   { id: 'transcript', label: 'Script', icon: FileText },
-  { id: 'layout', label: 'Layout', icon: LayoutPanelTop, tone: 'text-lane-broll' },
+  { id: 'layout', label: 'Polish', icon: LayoutPanelTop, tone: 'text-lane-broll' },
   { id: 'captions', label: 'Captions', icon: Captions, tone: 'text-lane-caption' },
   { id: 'broll', label: 'B-roll', icon: Clapperboard, tone: 'text-lane-broll' },
   { id: 'audio', label: 'Audio', icon: Music2, tone: 'text-lane-music' },
@@ -43,6 +46,10 @@ export const EDITOR_RAIL_ITEMS: {
   { id: 'dub', label: 'Dub', icon: Languages, tone: 'text-lane-voice' },
   { id: 'brand', label: 'Brand', icon: Palette, tone: 'text-lane-brand' },
 ]
+
+export const EDITOR_RAIL_ITEMS = ALL_EDITOR_RAIL_ITEMS.filter((item) =>
+  CLIP_EDITOR_RAIL_IDS.includes(item.id),
+)
 
 export function editorRailIcon(id: EditorPanelId) {
   return EDITOR_RAIL_ITEMS.find((r) => r.id === id)?.icon ?? FileText

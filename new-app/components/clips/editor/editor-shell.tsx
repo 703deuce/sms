@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { EditorRail, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,21 +18,14 @@ import { outputDurationFromEdits } from '@/lib/clips/editor-playback'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
-import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { clipLayoutChip, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
-import { Timeline } from '@/components/clips/editor/timeline'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
-import { DubPanel } from '@/components/clips/editor/dub-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
-import { BrollPanel } from '@/components/clips/editor/broll-panel'
-import { ThumbnailPanel } from '@/components/clips/editor/thumbnail-panel'
-import { BrandPanel } from '@/components/clips/editor/brand-panel'
-import { ProducerPanel } from '@/components/clips/producer/producer-panel'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
@@ -41,7 +34,6 @@ import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
 import { clipStyleSettingsFromEdits, type BrandTemplateSettings } from '@/lib/clips/brand'
 import { saveClipBrandTemplate } from '@/lib/clips-api'
-import { sourceMsAtOutput } from '@/lib/clips/editor-playback'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
@@ -88,25 +80,24 @@ export function EditorShell({
   brollMedia?: BrollMediaRow[]
   reframeV2Enabled?: boolean
 }) {
-  const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
   const [title, setTitle] = useState(initialTitle)
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
-  const producerPanelRef = useRef<HTMLDivElement>(null)
   const selectPanel = useCallback((id: EditorPanelId) => {
     setPanel(id)
     if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
       setMobilePanelOpen(true)
     }
-    if (id === 'producer') {
-      requestAnimationFrame(() => {
-        producerPanelRef.current?.focus()
-      })
-    }
   }, [])
+
+  useEffect(() => {
+    if (!EDITOR_RAIL_ITEMS.some((item) => item.id === panel)) {
+      setPanel('transcript')
+    }
+  }, [panel])
   const [outputMs, setOutputMs] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [playerMuted, setPlayerMuted] = useState(false)
@@ -128,10 +119,6 @@ export function EditorShell({
     setTrim,
     setCaptions,
     toggleEmphasis,
-    mergeBroll,
-    setBroll,
-    removeBroll,
-    updateBrollItem,
     attachMusicGeneration,
     patchMusic,
     setMusic,
@@ -139,36 +126,20 @@ export function EditorShell({
     updateSfx,
     removeSfx,
     setEdits,
-    applyProducerPatch,
-    producerStrip,
-    clearProducerStrip,
     flushSave,
-    splitLayoutAtSource,
-    setLayoutModeAtSource,
-    cutSectionAtSource,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, words })
 
   const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
 
-  const mergeBrollMedia = useCallback((rows: BrollMediaRow[]) => {
-    setBrollMedia((prev) => {
-      const map = new Map(prev.map((r) => [r.id, r]))
-      for (const row of rows) map.set(row.id, row)
-      return [...map.values()]
-    })
-  }, [])
-
   const musicGenId = edits.audio?.music?.generationId ?? null
   const musicGen = useGeneration(musicGenId)
-  const { dubs, refreshDubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
+  const { dubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
     clipId,
     edits,
     editorWords,
   )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const outDur = outputDurationFromEdits(edits)
-  const playheadSourceMs = useMemo(() => sourceMsAtOutput(edits, outputMs), [edits, outputMs])
-
   useAudioMix({
     videoRef,
     edits,
@@ -345,28 +316,6 @@ export function EditorShell({
 
   const panelBody = (
     <>
-      <div
-        ref={producerPanelRef}
-        tabIndex={-1}
-        id="editor-panel-producer"
-        className={panel === 'producer' ? 'min-h-[min(60vh,520px)] outline-none' : 'hidden'}
-        aria-hidden={panel !== 'producer'}
-      >
-        <EditorPanelErrorBoundary label="AI Producer">
-        <ProducerPanel
-          clipId={clipId}
-          bounds={bounds}
-          edits={edits}
-          onUndo={() => {
-            undo()
-            clearProducerStrip()
-          }}
-          onApplyEdits={(next, n, before) => {
-            applyProducerPatch(next, before, n)
-          }}
-        />
-        </EditorPanelErrorBoundary>
-      </div>
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
         <EditorPanelErrorBoundary label="Script">
         <TranscriptPanel
@@ -413,31 +362,6 @@ export function EditorShell({
           onApplyBrand={() => void applyBrand()}
           onSaveClipTemplate={() => void saveClipTemplate()}
         />
-        <div className="border-t border-border p-3">
-          <HookOverlayPanel
-            clipId={clipId}
-            edits={edits}
-            defaultHook={(aiMeta as { hook?: string } | null)?.hook}
-            onChange={(patch) => setEdits({ ...edits, ...patch })}
-          />
-        </div>
-        </EditorPanelErrorBoundary>
-      </div>
-      <div className={panel === 'broll' ? undefined : 'hidden'} aria-hidden={panel !== 'broll'}>
-        <EditorPanelErrorBoundary label="B-roll">
-        <BrollPanel
-          clipId={clipId}
-          edits={edits}
-          outputDurationMs={outDur}
-          playheadMs={outputMs}
-          aiMeta={aiMeta}
-          brollMedia={brollMedia}
-          onMergeBroll={mergeBroll}
-          onSetBroll={setBroll}
-          onRemoveBroll={removeBroll}
-          onBrollMedia={mergeBrollMedia}
-          onFlushEdits={flushSave}
-        />
         </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'audio' ? undefined : 'hidden'} aria-hidden={panel !== 'audio'}>
@@ -457,28 +381,6 @@ export function EditorShell({
         />
         </EditorPanelErrorBoundary>
       </div>
-      <div className={panel === 'thumbnail' ? undefined : 'hidden'} aria-hidden={panel !== 'thumbnail'}>
-        <EditorPanelErrorBoundary label="Cover">
-        <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
-        </EditorPanelErrorBoundary>
-      </div>
-      <div className={panel === 'dub' ? undefined : 'hidden'} aria-hidden={panel !== 'dub'}>
-        <EditorPanelErrorBoundary label="Dub">
-        <DubPanel
-          clipId={clipId}
-          durationMs={outDur}
-          edits={edits}
-          onEdits={setEdits}
-          onRefresh={refreshDubs}
-          dubs={dubs}
-        />
-        </EditorPanelErrorBoundary>
-      </div>
-      <div className={panel === 'brand' ? undefined : 'hidden'} aria-hidden={panel !== 'brand'}>
-        <EditorPanelErrorBoundary label="Brand">
-        <BrandPanel edits={edits} onEdits={setEdits} />
-        </EditorPanelErrorBoundary>
-      </div>
     </>
   )
 
@@ -494,19 +396,6 @@ export function EditorShell({
           onUndo={undo}
           onRedo={redo}
           onExport={() => setExportOpen(true)}
-          onOpenProducer={() => selectPanel('producer')}
-          producerOpen={panel === 'producer'}
-          producerStrip={
-            producerStrip
-              ? {
-                  changeCount: producerStrip.changeCount,
-                  onUndo: () => {
-                    undo()
-                    clearProducerStrip()
-                  },
-                }
-              : null
-          }
         />
       <EditorMobileRail active={panel} onChange={selectPanel} />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_56px_minmax(0,380px)] xl:grid-cols-[minmax(0,1fr)_56px_minmax(0,420px)]">
@@ -540,7 +429,7 @@ export function EditorShell({
               previewWords={previewWords}
               brandLogoUrl={brandLogoUrl}
               cropTrack={cropTrack}
-              brollMedia={brollMedia}
+              brollMedia={initialBrollMedia}
               videoRef={videoRef}
               onTick={onTick}
             />
@@ -591,24 +480,6 @@ export function EditorShell({
               }
             }}
           />
-          </div>
-          <div className="min-w-0 overflow-x-auto">
-            <Timeline
-              edits={edits}
-              words={editorWords}
-              shots={cropShots}
-              outputMs={outputMs}
-              clipOutputDurationMs={outDur}
-              videoUrl={videoUrl}
-              onSeekOutput={seekOutput}
-              onTrimChange={setTrim}
-              onBrollChange={updateBrollItem}
-              clipStartMs={bounds.clipStartMs}
-              clipEndMs={bounds.clipEndMs}
-              onSplitLayout={() => splitLayoutAtSource(playheadSourceMs)}
-              onCutSection={() => cutSectionAtSource(playheadSourceMs)}
-              onSetLayoutMode={(mode) => setLayoutModeAtSource(playheadSourceMs, mode)}
-            />
           </div>
         </section>
         <EditorRail active={panel} onChange={selectPanel} />

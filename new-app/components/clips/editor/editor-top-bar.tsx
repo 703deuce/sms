@@ -125,24 +125,26 @@ export function EditorTopBar({
           </TooltipContent>
         </Tooltip>
         <Separator orientation="vertical" className="mx-1 h-6" />
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className={cn(
-            'relative gap-1.5',
-            producerOpen && 'border-primary/50 bg-primary/10 text-foreground',
-          )}
-          onClick={() => onOpenProducer?.()}
-          aria-pressed={producerOpen}
-          aria-controls="editor-panel-producer"
-        >
-          <Sparkles className="size-4 text-lane-ai" aria-hidden />
-          AI Producer
-          {pendingPaidCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warning" aria-hidden />
-          )}
-        </Button>
+        {onOpenProducer ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn(
+              'relative gap-1.5',
+              producerOpen && 'border-primary/50 bg-primary/10 text-foreground',
+            )}
+            onClick={() => onOpenProducer()}
+            aria-pressed={producerOpen}
+            aria-controls="editor-panel-producer"
+          >
+            <Sparkles className="size-4 text-lane-ai" aria-hidden />
+            AI Producer
+            {pendingPaidCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warning" aria-hidden />
+            )}
+          </Button>
+        ) : null}
         <PrimaryButton type="button" size="sm" className="gap-1.5" onClick={onExport}>
           <Download className="size-4" aria-hidden />
           Export

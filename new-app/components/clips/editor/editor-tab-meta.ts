@@ -6,7 +6,7 @@ export const TAB_META: Record<
 > = {
   producer: { label: 'AI Producer', hint: 'Edit by chatting' },
   transcript: { label: 'Script', hint: 'Edit video by editing text' },
-  layout: { label: 'Layout', hint: 'Framing & reframe' },
+  layout: { label: 'Polish', hint: 'Shorten pauses & framing' },
   captions: { label: 'Captions', hint: 'Style & animation' },
   broll: { label: 'B-roll', hint: 'Stock & AI footage' },
   audio: { label: 'Audio', hint: 'Music, SFX & mix' },

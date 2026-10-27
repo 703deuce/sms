@@ -326,6 +326,15 @@ export function ProjectClipsView({
               <FileText className="mr-1 size-4" />
               Edit transcript
             </Button>
+          ) : showResults && clips[0] ? (
+            <Button
+              size="sm"
+              data-testid="edit-clip-project"
+              render={<Link href={`/app/clips/${projectId}/edit/${clips[0].id}`} />}
+            >
+              <FileText className="mr-1 size-4" />
+              Edit clip
+            </Button>
           ) : null
         }
         meta={
