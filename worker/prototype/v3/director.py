@@ -14,9 +14,11 @@ except ImportError:  # pragma: no cover
     linear_sum_assignment = None
 
 SWITCH_SEC = float(os.environ.get("DIRECTOR_SWITCH_SEC", "1.5"))
-MIN_SHOT_CLOSE = float(os.environ.get("MIN_SHOT_CLOSE", "1.5"))
+MIN_SHOT_CLOSE = float(os.environ.get("MIN_SHOT_CLOSE", "2.25"))
 MIN_SHOT_MULTI = float(os.environ.get("MIN_SHOT_MULTI", "3.0"))
-LEAD_SEC = float(os.environ.get("DIRECTOR_LEAD_SEC", "0.2"))
+LEAD_SEC = float(os.environ.get("DIRECTOR_LEAD_SEC", "0.4"))
+HYST_MARGIN = float(os.environ.get("DIRECTOR_HYST_MARGIN", "0.15"))
+HYST_HOLD_SEC = float(os.environ.get("DIRECTOR_HYST_HOLD_SEC", "0.6"))
 DIAR_W = float(os.environ.get("DIAR_W", "0.6"))
 VIS_W = float(os.environ.get("VIS_W", "0.4"))
 BACKCHANNEL_MAX = float(os.environ.get("BACKCHANNEL_MAX", "0.8"))
@@ -45,6 +47,8 @@ STYLE_MAP: dict[str, StyleConfig] = {
     "dynamic": StyleConfig("dynamic"),
     "split_debate": StyleConfig("split_debate", allow_grid3=False, allow_grid4=False),
     "grid": StyleConfig("grid", allow_close=False, allow_two_up=False),
+    "grid3": StyleConfig("grid3", allow_close=False, allow_two_up=False, allow_grid4=False),
+    "grid4": StyleConfig("grid4", allow_close=False, allow_two_up=False, allow_grid3=False),
     "locked_off": StyleConfig("locked_off", locked_off=True),
     "split": StyleConfig("split", allow_close=False, allow_grid3=False, allow_grid4=False),
     "fit": StyleConfig("fit", allow_close=False, allow_two_up=False, allow_grid3=False, allow_grid4=False, allow_wide=True),
@@ -115,17 +119,57 @@ def emission_score(
     visible: np.ndarray,
     penalty_off: float = 0.35,
 ) -> float:
+    """Slot-mean cost: lower is better for Viterbi (negated score)."""
     n_per, _ = speak.shape
-    score = 0.0
-    featured = set(slots)
+    if not slots:
+        return 0.0 if layout == "wide" else -0.5
+    slot_scores = [float(np.nanmean(speak[p])) for p in slots if p < n_per]
+    if not slot_scores:
+        return -1.0
+    mean_active = float(np.mean(slot_scores))
+    prior = {"close": 0.0, "two_up": 0.08, "grid3": 0.12, "grid4": 0.15, "wide": 0.2}.get(layout, 0.1)
+    off_pen = 0.0
     for p in range(n_per):
+        if p in slots:
+            continue
         sp = float(np.nanmean(speak[p]))
-        vis = float(np.nanmean(visible[p]))
-        if p in featured:
-            score += sp + 0.15 * vis
-        elif sp > 0.45:
-            score -= penalty_off * sp
-    return score
+        if sp > 0.45:
+            off_pen += penalty_off * sp
+    return mean_active - prior - off_pen
+
+
+def apply_switch_hysteresis(speak: np.ndarray, fps: float) -> np.ndarray:
+    """Dominant speaker per frame; switch only if challenger leads by margin for HYST_HOLD_SEC."""
+    n_per, n_frames = speak.shape
+    if n_frames == 0:
+        return speak
+    hold = max(1, int(round(HYST_HOLD_SEC * fps)))
+    dominant = np.zeros(n_frames, dtype=np.int32)
+    current = int(np.argmax(speak[:, 0]))
+    challenger = current
+    lead = 0
+    for t in range(n_frames):
+        order = np.argsort(-speak[:, t])
+        top, second = int(order[0]), int(order[1]) if n_per > 1 else top
+        if top != current and speak[top, t] - speak[current, t] >= HYST_MARGIN:
+            if top == challenger:
+                lead += 1
+            else:
+                challenger = top
+                lead = 1
+            if lead >= hold:
+                current = challenger
+                lead = 0
+        else:
+            challenger = current
+            lead = 0
+        dominant[t] = current
+    out = speak.copy()
+    for t in range(n_frames):
+        for p in range(n_per):
+            if p != dominant[t]:
+                out[p, t] *= 0.35
+    return out
 
 
 def viterbi_layouts(
@@ -133,6 +177,8 @@ def viterbi_layouts(
     visible: np.ndarray,
     fps: float,
     style: StyleConfig,
+    *,
+    cut_frames: set[int] | None = None,
 ) -> list[tuple[str, tuple[int, ...]]]:
     n_per, n_frames = speak.shape
     states = _allowed_states(n_per, style) if n_per else [("wide", ())]
@@ -157,7 +203,8 @@ def viterbi_layouts(
             best = -1e18
             bi = 0
             for si in range(n_states):
-                trans = 0.0 if si == sj else -switch_cost
+                free_cut = cut_frames and t in cut_frames
+                trans = 0.0 if si == sj or free_cut else -switch_cost
                 val = dp[t - 1, si] + trans
                 if val > best:
                     best = val
@@ -247,6 +294,7 @@ def frames_to_segments(
     times: np.ndarray,
     frames: list[tuple[str, tuple[int, ...]]],
     words: list[dict] | None,
+    fps: float = 30.0,
 ) -> list[dict[str, Any]]:
     if not frames:
         return []
@@ -269,8 +317,10 @@ def frames_to_segments(
     if words and LEAD_SEC > 0:
         for i in range(1, len(segs)):
             wstart = next((w["s"] for w in words if w["s"] >= segs[i]["t0"]), segs[i]["t0"])
-            segs[i]["t0"] = max(segs[i - 1]["t0"], wstart - LEAD_SEC)
-            segs[i - 1]["t1"] = segs[i]["t0"]
+            new_t0 = max(segs[i - 1]["t0"] + 1.0 / max(fps, 1e-6), wstart - LEAD_SEC)
+            new_t0 = min(new_t0, segs[i]["t1"] - 1.0 / max(fps, 1e-6))
+            segs[i]["t0"] = new_t0
+            segs[i - 1]["t1"] = new_t0
     return segs
 
 
@@ -281,8 +331,11 @@ def run_director(
     fps: float,
     style_name: str,
     words: list[dict] | None = None,
+    *,
+    cut_sample_idx: set[int] | None = None,
 ) -> list[dict[str, Any]]:
     style = style_config(style_name)
+    speak = apply_switch_hysteresis(speak, fps)
     if style.locked_off:
         n_per = speak.shape[0]
         med_x = [0] * max(1, n_per)
@@ -295,7 +348,7 @@ def run_director(
                 "locked_cx": med_x,
             }
         ]
-    path = viterbi_layouts(speak, visible, fps, style)
+    path = viterbi_layouts(speak, visible, fps, style, cut_frames=cut_sample_idx)
     path = apply_overlap_rules(path, speak, fps, style)
     path = merge_short_segments(path, fps)
-    return frames_to_segments(times, path, words)
+    return frames_to_segments(times, path, words, fps)

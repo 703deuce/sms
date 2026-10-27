@@ -5,13 +5,19 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
+import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
-  { id: 'speaker_follow', title: 'Speaker follow', desc: 'Track the active speaker.' },
+  { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
+  { id: 'speaker_follow', title: 'Speaker follow', desc: 'Single active speaker.' },
+  { id: 'dynamic', title: 'Dynamic', desc: 'Director picks per scene.' },
+  { id: 'split', title: 'Split (2-up)', desc: 'Stacked two-person layout.' },
+  { id: 'grid3', title: 'Grid 3-up', desc: 'Three speakers visible.' },
+  { id: 'grid4', title: 'Grid 4-up', desc: 'Four speakers visible.' },
   { id: 'fit_blur', title: 'Fit with blur', desc: 'Letterbox with blurred fill.' },
-  { id: 'center_crop', title: 'Center crop', desc: 'Static center crop.' },
+  { id: 'center_crop', title: 'Fill', desc: 'Full-frame crop fill.' },
   { id: 'subject_follow', title: 'Subject follow', desc: 'ClipAnything — later', disabled: true },
 ]
 
@@ -23,6 +29,7 @@ export function LayoutPanel({
   onRerunReframe,
   onApplyBrand,
   onEdits,
+  reframeV2Enabled = false,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -31,6 +38,7 @@ export function LayoutPanel({
   onRerunReframe: (shotIndex: number) => void
   onApplyBrand?: () => void
   onEdits?: (edits: ClipEditsV2) => void
+  reframeV2Enabled?: boolean
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -97,20 +105,27 @@ export function LayoutPanel({
         </div>
       )}
       <div className="grid gap-2 sm:grid-cols-2">
-        {LAYOUTS.map((l) => (
+        {LAYOUTS.map((l) => {
+          const beta = isClipLayoutBeta(l.id)
+          const disabled = l.disabled || (beta && !reframeV2Enabled)
+          return (
           <button
             key={l.id}
             type="button"
-            disabled={l.disabled}
+            disabled={disabled}
             onClick={() => onMode(l.id)}
             className={`rounded-lg border p-3 text-left ${
               edits.layout.mode === l.id ? 'border-primary ring-1 ring-primary' : 'border-border'
-            } ${l.disabled ? 'opacity-50' : ''}`}
+            } ${disabled ? 'opacity-50' : ''}`}
           >
-            <p className="text-sm font-medium">{l.title}</p>
+            <p className="text-sm font-medium">
+              {l.title}
+              {beta ? <span className="ml-1 text-xs font-normal text-muted-foreground">(beta)</span> : null}
+            </p>
             <p className="text-xs text-muted-foreground">{l.desc}</p>
           </button>
-        ))}
+          )
+        })}
       </div>
       <ul className="divide-y divide-border rounded-lg border border-border">
         {shots.map((shot, i) => {

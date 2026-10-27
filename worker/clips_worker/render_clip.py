@@ -129,7 +129,7 @@ def ffmpeg_cut_or_copy(src: Path, dest: Path, start_ms: int, end_ms: int) -> Non
     ffmpeg_cut(src, dest, start_ms, end_ms)
 
 
-AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "locked_off")
+AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "grid3", "grid4", "locked_off")
 
 
 def multiperson_reframe_enabled() -> bool:
@@ -281,7 +281,10 @@ def run_speakercrop(
     if not settings.get("captions", {}).get("enabled", True):
         env["CAPTIONS"] = "0"
     env["CLIP_START_MS"] = str(int(clip_start_ms))
-    if preserve_existing_crop_track:
+    if preserve_existing_crop_track and crop_track_out is not None and crop_track_out.exists():
+        env["CROP_TRACK_IN"] = str(crop_track_out)
+        env.pop("CROP_TRACK_OUT", None)
+    elif preserve_existing_crop_track:
         env["WRITE_CROP_TRACK"] = "0"
     elif crop_track_out is not None:
         env["CROP_TRACK_OUT"] = str(crop_track_out)

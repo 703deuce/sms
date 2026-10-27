@@ -6,11 +6,28 @@ export type SpeakercropLayoutEnv = {
   LAYOUT_MODE: string
   LAYOUT_STYLE: string
   SPLIT: string
-  MULTIPERSON?: string
+  REFRAME_V?: string
   FORCE_SPLIT?: string
+  LEAD?: string
+  MIN_SEG?: string
+  VOICE?: string
+  CAPTIONS?: string
+  SAMPLE_FPS?: string
 }
 
-export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): SpeakercropLayoutEnv {
+export type SpeakercropLayoutEnvOptions = {
+  /** When true, preview env may include REFRAME_V=2 (worker only sets this when REFRAME_V2_ENABLED=1). */
+  reframeV2Enabled?: boolean
+}
+
+function maybeReframeV2(opts?: SpeakercropLayoutEnvOptions): Pick<SpeakercropLayoutEnv, 'REFRAME_V'> {
+  return opts?.reframeV2Enabled ? { REFRAME_V: '2' } : {}
+}
+
+export function speakercropLayoutEnv(
+  layout: ClipProjectSettings['layout'],
+  opts?: SpeakercropLayoutEnvOptions,
+): SpeakercropLayoutEnv {
   if (!clipLayoutModes.includes(layout)) {
     layout = 'speaker_follow'
   }
@@ -22,7 +39,7 @@ export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): Spe
       FORCE_SPLIT: '1',
       LAYOUT_MODE: 'split',
       LAYOUT_STYLE: 'split',
-      MULTIPERSON: '1',
+      ...maybeReframeV2(opts),
     }
   }
   if (layout === 'fill') {
@@ -31,17 +48,29 @@ export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): Spe
   if (layout === 'fit') {
     return { ...base, SPLIT: '0', LAYOUT_MODE: 'fit', LAYOUT_STYLE: 'fit' }
   }
-  if (layout === 'dynamic' || layout === 'split_debate' || layout === 'grid' || layout === 'locked_off') {
-    return { ...base, SPLIT: '1', LAYOUT_MODE: layout, LAYOUT_STYLE: layout, MULTIPERSON: '1' }
+  if (
+    layout === 'dynamic' ||
+    layout === 'split_debate' ||
+    layout === 'grid' ||
+    layout === 'grid3' ||
+    layout === 'grid4' ||
+    layout === 'locked_off'
+  ) {
+    return {
+      ...base,
+      SPLIT: '1',
+      LAYOUT_MODE: layout,
+      LAYOUT_STYLE: layout,
+      ...maybeReframeV2(opts),
+    }
   }
   if (layout === 'auto') {
-    return speakercropLayoutEnv('dynamic')
+    return speakercropLayoutEnv('dynamic', opts)
   }
   return {
     ...base,
     SPLIT: '1',
     LAYOUT_MODE: 'speaker_follow',
     LAYOUT_STYLE: 'speaker_follow',
-    MULTIPERSON: '1',
   }
 }

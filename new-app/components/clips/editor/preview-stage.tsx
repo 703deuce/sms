@@ -5,7 +5,7 @@ import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { keepSegments } from '@/lib/clips/edits'
 import { buildCaptionWords, captionWordsToClipWords } from '@/lib/clips/caption-words'
-import type { CropTrack } from '@/lib/clips/crop-track'
+import { cropPanX, type CropTrack } from '@/lib/clips/crop-track'
 import { shotAt } from '@/lib/clips/crop-track'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
@@ -135,8 +135,9 @@ export function PreviewStage({
         const ov = e.layout.shotOverrides.find((o) => o.i === shotI)?.focus
         const wide = ov === 'both'
         const arr = ov === 'A' ? track.x0_A : ov === 'B' ? track.x0_B : track.x0
-        const x0 = arr[clamp(fi, 0, arr.length - 1)]
-        const fit = wide || x0 === -1
+        const raw = arr?.length ? arr[clamp(fi, 0, arr.length - 1)] : cropPanX(track, fi)
+        const x0 = raw ?? cropPanX(track, fi)
+        const fit = wide || x0 <= -2
         if (fit) {
           v.style.height = `${box.h}px`
           v.style.width = `${box.w}px`

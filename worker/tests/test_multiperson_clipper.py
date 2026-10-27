@@ -118,7 +118,7 @@ def test_multiperson_hot_path_wired_in_speakercrop():
     src = (v3 / "speakercrop.py").read_text(encoding="utf-8")
     assert 'os.environ.get("REFRAME_V"' in src
     assert 'strip() == "2"' in src
-    assert "multiperson_pipeline" in src or "multiperson_run" in src
+    assert "speakercrop_v2" in src
     assert "ImportError" in src
     docker = worker_root / "Dockerfile"
     if docker.is_file():

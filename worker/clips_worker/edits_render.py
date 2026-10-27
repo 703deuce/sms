@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 from clips_worker.caption_words import build_caption_words, caption_words_to_render
+from clips_worker.layout_router import speakercrop_settings_from_edits
 from clips_worker.render_clip import run_speakercrop
 
 V3 = Path(__import__("os").environ.get("SPEAKERCROP_DIR", "/app/v3"))
@@ -293,16 +294,28 @@ def render_edited_clip(
     edits = {**edits, "cutRanges": effective_cut_ranges(edits, source_words)}
     shot_overrides = (edits.get("layout") or {}).get("shotOverrides") or []
     src_words = ensure_word_i(source_words)
+    sc_settings = speakercrop_settings_from_edits(settings, edits)
 
     if is_default_edits(edits, clip_start_ms, clip_end_ms):
         remapped, _ = words_after_edits(src_words, edits)
         wpath = work_dir / "words.json"
         wpath.write_text(json.dumps(remapped))
+        export_settings = dict(sc_settings)
+        if settings.get("aiMeta"):
+            export_settings["aiMeta"] = settings.get("aiMeta")
+        if (export_settings.get("layout") or "").strip() == "auto":
+            resolved = (export_settings.get("aiMeta") or {}).get("layoutResolved")
+            if resolved:
+                export_settings["layout"] = resolved
+            else:
+                from clips_worker.render_clip import resolve_clip_layout
+
+                export_settings["layout"] = resolve_clip_layout(export_settings, 0)
         run_speakercrop(
             clip_src,
             out_mp4,
             wpath,
-            settings,
+            export_settings,
             work_dir,
             clip_start_ms=clip_start_ms,
             shot_overrides=shot_overrides,
@@ -323,10 +336,20 @@ def render_edited_clip(
     wpath.write_text(json.dumps(w_reframe))
 
     full_render = work_dir / "full_render.mp4"
-    settings_nc = json.loads(json.dumps(settings))
+    settings_nc = json.loads(json.dumps(sc_settings))
     if not isinstance(settings_nc, dict):
         settings_nc = {}
+    if settings.get("aiMeta"):
+        settings_nc["aiMeta"] = settings.get("aiMeta")
     settings_nc["captions"] = {**(settings_nc.get("captions") or {}), "enabled": False}
+    if (settings_nc.get("layout") or "").strip() == "auto":
+        resolved = (settings_nc.get("aiMeta") or {}).get("layoutResolved")
+        if resolved:
+            settings_nc["layout"] = resolved
+        else:
+            from clips_worker.render_clip import resolve_clip_layout
+
+            settings_nc["layout"] = resolve_clip_layout(settings_nc, 0)
     run_speakercrop(
         clip_src,
         full_render,

@@ -1,4 +1,5 @@
 import type { ClipProject, ClipUpload } from '@prisma/client'
+import { clipperCapabilities } from '@/lib/server/clips/clipper-capabilities'
 
 export function serializeUpload(row: ClipUpload) {
   return {
@@ -31,5 +32,6 @@ export function serializeProject(row: ClipProject) {
     wordCount: Array.isArray(row.transcriptWords) ? (row.transcriptWords as unknown[]).length : 0,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    capabilities: clipperCapabilities(),
   }
 }

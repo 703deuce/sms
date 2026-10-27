@@ -264,9 +264,14 @@ def _inject_clip_cue_picks(
             },
             peak_ms=sec * 1000,
         )
-        if any(_iou(candidate.start_ms, candidate.end_ms, d.start_ms, d.end_ms) > 0.5 for d in out):
-            continue
-        out.insert(0, candidate)
+        replaced = False
+        for i, d in enumerate(out):
+            if _iou(candidate.start_ms, candidate.end_ms, d.start_ms, d.end_ms) > 0.5:
+                out[i] = candidate
+                replaced = True
+                break
+        if not replaced:
+            out.insert(0, candidate)
     out.sort(key=lambda p: p.score, reverse=True)
     return out[: max(clip_count, len([e for e in cue_events]))]
 

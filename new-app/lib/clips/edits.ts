@@ -33,7 +33,18 @@ export type ClipEditsV2 = {
     customPresetId?: string
   }
   layout: {
-    mode: 'speaker_follow' | 'fit_blur' | 'center_crop' | 'subject_follow'
+    mode:
+      | 'speaker_follow'
+      | 'fit_blur'
+      | 'center_crop'
+      | 'subject_follow'
+      | 'split'
+      | 'fill'
+      | 'fit'
+      | 'grid3'
+      | 'grid4'
+      | 'dynamic'
+      | 'auto'
     shotOverrides: { i: number; focus: 'auto' | 'A' | 'B' | 'both' }[]
   }
   broll?: BrollItem[]

@@ -147,6 +147,8 @@ def reframe_clip_preview(
     clip_words = json.loads(words_path.read_text())
     crop_method = "speaker_follow"
 
+    render_meta: dict = {}
+
     if has_face_and_speech(clip_file, clip_words):
         rendered = run_speakercrop(
             clip_file,
@@ -156,7 +158,10 @@ def reframe_clip_preview(
             work_dir,
             clip_start_ms=clip_start_ms,
             crop_track_out=crop_track_path,
+            render_meta=render_meta,
         )
+        if render_meta.get("layoutRouteShadow"):
+            ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
         return rendered, crop_method, reframe_settings
 
     preserve_crop_track = False
@@ -187,9 +192,12 @@ def reframe_clip_preview(
         reframe_settings,
         work_dir,
         clip_start_ms=clip_start_ms,
-        crop_track_out=crop_track_path if not preserve_crop_track else None,
+        crop_track_out=crop_track_path,
         preserve_existing_crop_track=preserve_crop_track,
+        render_meta=render_meta,
     )
+    if render_meta.get("layoutRouteShadow"):
+        ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
     if not crop_track_path.exists():
         write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
         crop_method = "fit_blur"
@@ -388,7 +396,8 @@ def run_m4_pipeline(
             out_mp4 = td_path / f"out_{idx}.mp4"
             crop_track_path = td_path / f"crop_track_{idx}.json"
             ai_meta = pick.get("aiMeta") or {}
-            clip_settings = {**settings, "layout": resolve_clip_layout(settings, idx)}
+            resolved_layout = resolve_clip_layout(settings, idx)
+            clip_settings = {**settings, "layout": resolved_layout}
             rendered, crop_method, _reframe_settings = reframe_clip_preview(
                 clip_file,
                 out_mp4,
@@ -414,7 +423,12 @@ def run_m4_pipeline(
             elif mode == "anything":
                 raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
 
-            ai_meta_out = {**(pick.get("aiMeta") or {}), "cropMethod": crop_method}
+            ai_meta_out = {
+                **(pick.get("aiMeta") or {}),
+                **ai_meta,
+                "cropMethod": crop_method,
+                "layoutResolved": resolved_layout,
+            }
             if mode == "anything" and not crop_key:
                 raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
 
@@ -433,7 +447,11 @@ def run_m4_pipeline(
                 "wordsKey": keys["words"],
                 "cropKey": crop_key,
                 "edits": initial_clip_edits(settings),
-                "aiMeta": ai_meta_out if mode == "anything" else (pick.get("aiMeta") or {"hook": pick.get("hook")}),
+                "aiMeta": (
+                    ai_meta_out
+                    if mode == "anything"
+                    else {**(pick.get("aiMeta") or {"hook": pick.get("hook")}), "layoutResolved": resolved_layout, "cropMethod": crop_method}
+                ),
             }
 
         clip_rows = run_bounded_indexed_pool(total, render_conc, build_clip_row, on_start=on_reframe_start)

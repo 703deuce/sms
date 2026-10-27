@@ -28,10 +28,18 @@ COPY worker/modal_app /app/modal_app
 COPY worker/tests /app/tests
 
 ENV PYTHONPATH=/app
+ENV CLIPS_WORKER_ROOT=/app
 RUN pip install --no-cache-dir pytest \
-    && pytest -q /app/tests/test_caption_parity.py /app/tests/test_multiperson_clipper.py \
-        /app/tests/test_clip_layout_env.py /app/tests/test_subject_follow_crop_track.py \
-        /app/tests/test_detect_facecam_sampling.py /app/tests/test_studio_sound_e2e.py
+    && pytest -q /app/tests/test_caption_parity.py /app/tests/test_clip_layout_env.py \
+        /app/tests/test_subject_follow_crop_track.py /app/tests/test_detect_facecam_sampling.py \
+        /app/tests/test_studio_sound_e2e.py /app/tests/test_multiperson_clipper.py \
+        /app/tests/test_reframe_director.py /app/tests/test_reframe_ffmpeg_graphs.py \
+        /app/tests/test_reframe_core_pure.py /app/tests/test_reframe_v2_gate.py \
+        /app/tests/test_director_cfg_live.py /app/tests/test_speakercrop_crop_track_in.py \
+        /app/tests/test_render_ai_meta.py /app/tests/test_chat_source.py \
+        /app/tests/test_reframe_model_names.py /app/tests/test_layout_router.py \
+        /app/tests/test_reframe_integration.py /app/tests/test_director_calm.py \
+        /app/tests/test_smoothing_calm.py /app/tests/test_person_count_probe.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en

@@ -9,6 +9,7 @@ from psycopg2.extras import RealDictCursor
 
 from clips_worker.edits_render import normalize_edits, render_edited_clip
 from clips_worker.trim_bounds import expanded_source_cut_ms
+from clips_worker.render_settings import settings_with_clip_ai_meta
 from clips_worker.preview_reuse import can_reuse_clip_preview_for_render
 from clips_worker.render_fit_fallback import merge_job_fit_fallback_payload
 from clips_worker.render_clip import ffmpeg_cut
@@ -23,7 +24,7 @@ def load_render_context(conn, render_id: str) -> dict:
                    r.status, r."outputKey", r."editsVersionHash",
                    r."aspectRatio", r.resolution,
                    c."startMs", c."endMs", c."previewKey", c.edits, c."projectId",
-                   c."sourceSegKey", c."sourceSegStartMs", c."sourceSegEndMs",
+                   c."sourceSegKey", c."sourceSegStartMs", c."sourceSegEndMs", c."aiMeta",
                    p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key
             FROM clip_renders r
             JOIN clips c ON c.id = r."clipId"
@@ -134,6 +135,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
     settings = ctx["settings"] or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
+    settings = settings_with_clip_ai_meta(settings, ctx.get("aiMeta"))
     aspect = ctx.get("aspectRatio") or settings.get("aspectRatio") or "9:16"
     resolution = ctx.get("resolution") or "720p"
     settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}
