@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { isDatabaseReady } from "@/lib/server/app-readiness";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,16 @@ export async function GET() {
     // ignore
   }
 
-  return Response.json({
-    ok: true,
+  const db = await isDatabaseReady();
+  const body = {
+    ok: db,
     app: "transovo-new-app",
     version,
     commitSha: commitSha(),
-  });
+    db,
+  };
+  if (!db) {
+    return Response.json(body, { status: 503, headers: { "Retry-After": "3" } });
+  }
+  return Response.json(body);
 }

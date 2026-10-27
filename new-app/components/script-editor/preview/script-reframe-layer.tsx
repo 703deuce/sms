@@ -4,7 +4,11 @@ import { useRef, useState } from 'react'
 import type { ReframeCropRect } from '@/lib/clips/script-edl/types'
 import { cn } from '@/lib/utils'
 
-/** Draggable crop box for manual reframe (spec §B5 / D1 #47). */
+type DragState =
+  | { mode: 'move'; x0: number; y0: number; crop0: ReframeCropRect }
+  | { mode: 'resize'; x0: number; y0: number; crop0: ReframeCropRect }
+
+/** Draggable + resizable crop box for manual reframe (ui-layouts §7). */
 export function ScriptReframeCropOverlay({
   crop,
   enabled,
@@ -17,30 +21,36 @@ export function ScriptReframeCropOverlay({
   onCommit: () => void
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
-  const [drag, setDrag] = useState<{ x0: number; y0: number; crop0: ReframeCropRect } | null>(null)
+  const [drag, setDrag] = useState<DragState | null>(null)
 
   if (!enabled) return null
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDrag({ x0: e.clientX, y0: e.clientY, crop0: crop })
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  }
+  const parentRect = () => boxRef.current?.parentElement?.getBoundingClientRect()
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!drag || !boxRef.current?.parentElement) return
-    const rect = boxRef.current.parentElement.getBoundingClientRect()
-    const dx = ((e.clientX - drag.x0) / rect.width) * drag.crop0.w
-    const dy = ((e.clientY - drag.y0) / rect.height) * drag.crop0.h
-    onCropChange({
-      ...drag.crop0,
-      cx: Math.min(100, Math.max(0, drag.crop0.cx - dx)),
-      cy: Math.min(100, Math.max(0, drag.crop0.cy - dy)),
-    })
+    if (!drag) return
+    const rect = parentRect()
+    if (!rect) return
+    const dxPct = ((e.clientX - drag.x0) / rect.width) * 100
+    const dyPct = ((e.clientY - drag.y0) / rect.height) * 100
+    if (drag.mode === 'move') {
+      const dx = (dxPct / 100) * drag.crop0.w
+      const dy = (dyPct / 100) * drag.crop0.h
+      onCropChange({
+        ...drag.crop0,
+        cx: Math.min(100, Math.max(0, drag.crop0.cx - dx)),
+        cy: Math.min(100, Math.max(0, drag.crop0.cy - dy)),
+      })
+    } else {
+      onCropChange({
+        ...drag.crop0,
+        w: Math.min(100, Math.max(20, drag.crop0.w + dxPct)),
+        h: Math.min(100, Math.max(20, drag.crop0.h + dyPct)),
+      })
+    }
   }
 
-  const onPointerUp = () => {
+  const endDrag = () => {
     if (drag) onCommit()
     setDrag(null)
   }
@@ -50,8 +60,9 @@ export function ScriptReframeCropOverlay({
       ref={boxRef}
       role="presentation"
       className={cn(
-        'absolute z-10 cursor-grab border-2 border-dashed border-primary shadow-sm',
-        drag && 'cursor-grabbing',
+        'absolute z-10 border-2 border-dashed border-primary shadow-sm',
+        drag?.mode === 'move' ? 'cursor-grab' : '',
+        drag && drag.mode === 'move' && 'cursor-grabbing',
       )}
       style={{
         left: `${crop.cx - crop.w / 2}%`,
@@ -59,10 +70,30 @@ export function ScriptReframeCropOverlay({
         width: `${crop.w}%`,
         height: `${crop.h}%`,
       }}
-      onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
       data-testid="script-reframe-crop-box"
-    />
+    >
+      <div
+        className="absolute inset-0 cursor-grab"
+        onPointerDown={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setDrag({ mode: 'move', x0: e.clientX, y0: e.clientY, crop0: crop })
+          ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+        }}
+      />
+      <div
+        className="absolute -bottom-1 -right-1 size-3 cursor-se-resize rounded-sm border border-primary bg-background"
+        data-testid="script-reframe-resize-handle"
+        onPointerDown={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setDrag({ mode: 'resize', x0: e.clientX, y0: e.clientY, crop0: crop })
+          ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+        }}
+      />
+    </div>
   )
 }

@@ -2,10 +2,12 @@
 
 import { cn } from '@/lib/utils'
 import type { WordbarItem } from '@/lib/clips/script-editor/timeline-model'
+import type { SourceCutRegion } from '@/lib/clips/script-editor/cut-regions'
 
 export function TimelineWordbar({
   items,
   gapChips,
+  cutRegions = [],
   pxPerMs,
   widthPx,
   selectedWordIds,
@@ -15,6 +17,7 @@ export function TimelineWordbar({
 }: {
   items: WordbarItem[]
   gapChips: { outStartMs: number; outEndMs: number; label: string }[]
+  cutRegions?: SourceCutRegion[]
   pxPerMs: number
   widthPx: number
   selectedWordIds: Set<string>
@@ -24,6 +27,17 @@ export function TimelineWordbar({
 }) {
   return (
     <div className="relative h-6 shrink-0 border-b border-border/40 bg-muted/20" style={{ width: widthPx }}>
+      {cutRegions.map((cut) => (
+        <div
+          key={`cut-wb-${cut.loMs}-${cut.wordIds[0]}`}
+          className="pointer-events-none absolute inset-y-0 z-[1] border-x border-red-500/80 bg-red-500/25"
+          style={{
+            left: cut.loMs * pxPerMs,
+            width: Math.max(2, (cut.hiMs - cut.loMs) * pxPerMs),
+          }}
+          title="Cut"
+        />
+      ))}
       {gapChips.map((g) => (
         <div
           key={`gap-${g.outStartMs}`}

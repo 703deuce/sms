@@ -2,10 +2,12 @@
 
 import { cn } from '@/lib/utils'
 import type { TimelineClip } from '@/lib/clips/script-editor/timeline-model'
+import type { SourceCutRegion } from '@/lib/clips/script-editor/cut-regions'
 import { AudioWaveformLane } from '@/components/clips/editor/audio-waveform-lane'
 
 export function TimelineScriptTrack({
   clips,
+  cutRegions = [],
   pxPerMs,
   widthPx,
   durationMs,
@@ -15,6 +17,7 @@ export function TimelineScriptTrack({
   onTrimClipEdge,
 }: {
   clips: TimelineClip[]
+  cutRegions?: SourceCutRegion[]
   pxPerMs: number
   widthPx: number
   durationMs: number
@@ -48,6 +51,17 @@ export function TimelineScriptTrack({
       style={{ width: widthPx, minHeight: 64 }}
       onPointerDown={dragSelect}
     >
+      {cutRegions.map((cut) => (
+        <div
+          key={`cut-st-${cut.loMs}-${cut.wordIds[0]}`}
+          className="pointer-events-none absolute inset-y-0 z-[2] border-x-2 border-red-500/90 bg-red-500/20"
+          style={{
+            left: cut.loMs * pxPerMs,
+            width: Math.max(3, (cut.hiMs - cut.loMs) * pxPerMs),
+          }}
+          title="Cut region"
+        />
+      ))}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 overflow-hidden opacity-80">
         {clips
           .filter((c) => c.kind === 'source')

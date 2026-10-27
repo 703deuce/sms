@@ -1,9 +1,5 @@
-export async function clipsFetch<T>(path: string, init?: RequestInit, attempt = 0): Promise<T> {
+export async function clipsFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } })
-  if ((res.status === 502 || res.status === 503) && attempt < 3) {
-    await new Promise((r) => setTimeout(r, 350 * (attempt + 1)))
-    return clipsFetch<T>(path, init, attempt + 1)
-  }
   const json = (await res.json().catch(() => ({}))) as { data?: T; error?: string }
   if (!res.ok) throw new Error(json.error || res.statusText)
   if (json.error) throw new Error(json.error)

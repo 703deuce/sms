@@ -33,6 +33,8 @@ export function ScriptFillerReviewBar({
   onNext,
   onRemoveOne,
   onRemoveAll,
+  onRemoveAllLexicon,
+  onRemoveAllRepeat,
   onClose,
 }: {
   mode: 'filler' | 'gap'
@@ -52,6 +54,8 @@ export function ScriptFillerReviewBar({
   onNext: () => void
   onRemoveOne: () => void
   onRemoveAll: () => void
+  onRemoveAllLexicon?: () => void
+  onRemoveAllRepeat?: () => void
   onClose: () => void
 }) {
   const pos = total > 0 ? cursor + 1 : 0
@@ -110,7 +114,17 @@ export function ScriptFillerReviewBar({
         <Switch checked={autoAdvance} onCheckedChange={onAutoAdvanceChange} />
         Auto-advance
       </label>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        {mode === 'filler' && onRemoveAllLexicon && (
+          <Button type="button" size="sm" variant="outline" disabled={total === 0} onClick={onRemoveAllLexicon}>
+            All lexicon
+          </Button>
+        )}
+        {mode === 'filler' && onRemoveAllRepeat && (
+          <Button type="button" size="sm" variant="outline" disabled={total === 0} onClick={onRemoveAllRepeat}>
+            All repeats
+          </Button>
+        )}
         <Button type="button" size="sm" variant="secondary" disabled={total === 0} onClick={onRemoveOne}>
           {mode === 'gap' ? 'Shorten' : 'Remove'}
         </Button>

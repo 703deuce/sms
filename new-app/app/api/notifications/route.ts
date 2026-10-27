@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
+import { isDatabaseReady } from '@/lib/server/app-readiness'
 import { getPrisma } from '@/lib/server/db'
 import { resolveInternalUserId } from '@/lib/server/internal-user'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export async function GET(request: Request) {
   try {
+    if (!(await isDatabaseReady())) {
+      return NextResponse.json(
+        { data: { items: [], nextCursor: null } },
+        { status: 503, headers: { 'Retry-After': '3' } },
+      )
+    }
     const workspaceId = await resolveWorkspaceId()
     let userId: string
     try {

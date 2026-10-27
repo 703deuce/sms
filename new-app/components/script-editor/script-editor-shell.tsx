@@ -1001,6 +1001,24 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           }}
           onRemoveOne={onRemoveOneFiller}
           onRemoveAll={onRemoveAllFillers}
+          onRemoveAllLexicon={() => {
+            const hits = listFillerHits(orderedWords, deletedSet, {
+              filter: 'lexicon',
+              selectionOnly: fillerSelectionOnly,
+              selectedIds,
+              avoidHarshCuts: fillerAvoidHarsh,
+            })
+            applyFillerActionToHits(fillerAction, hits)
+          }}
+          onRemoveAllRepeat={() => {
+            const hits = listFillerHits(orderedWords, deletedSet, {
+              filter: 'repeat',
+              selectionOnly: fillerSelectionOnly,
+              selectedIds,
+              avoidHarshCuts: fillerAvoidHarsh,
+            })
+            applyFillerActionToHits(fillerAction, hits)
+          }}
           onClose={() => setFillerReviewOpen(false)}
         />
       )}
@@ -1207,7 +1225,19 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {sideTab === 'properties' && (
-                  <ScriptPropertiesPanel settings={settings} onPatch={patchSettings} />
+                  <ScriptPropertiesPanel
+                    settings={settings}
+                    rangeStartMs={data.rangeStartMs}
+                    playheadMs={playheadMs}
+                    reframeKeyframes={document.reframeKeyframes ?? []}
+                    onPatch={patchSettings}
+                    onAddReframeKeyframe={commitReframeKeyframe}
+                    onDeleteReframeKeyframe={(srcMs) => {
+                      const next = (document.reframeKeyframes ?? []).filter((k) => k.srcMs !== srcMs)
+                      applyOp({ type: 'patch_reframe_keyframes', reframeKeyframes: next })
+                    }}
+                    onSeekReframeKeyframe={(srcMs) => seekToSourceMs(srcMs)}
+                  />
                 )}
                 {sideTab === 'captions' && <ScriptCaptionsPanel settings={settings} onPatch={patchSettings} />}
                 {sideTab === 'edit' && (

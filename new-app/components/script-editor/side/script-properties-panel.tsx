@@ -2,7 +2,14 @@
 
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
-import type { ScriptAspect, ScriptEditorSettings, ScriptReframeMode } from '@/lib/clips/script-edl/types'
+import { Button } from '@/components/ui/button'
+import type {
+  ReframeKeyframe,
+  ScriptAspect,
+  ScriptEditorSettings,
+  ScriptReframeMode,
+} from '@/lib/clips/script-edl/types'
+import { formatScriptTimecode } from '@/lib/clips/script-editor/sync-playhead'
 import { cn } from '@/lib/utils'
 
 const ASPECTS: ScriptAspect[] = ['9:16', '1:1', '4:5', '16:9']
@@ -14,10 +21,22 @@ const REFRAME: { id: ScriptReframeMode; label: string }[] = [
 
 export function ScriptPropertiesPanel({
   settings,
+  rangeStartMs,
+  playheadMs,
+  reframeKeyframes,
   onPatch,
+  onAddReframeKeyframe,
+  onDeleteReframeKeyframe,
+  onSeekReframeKeyframe,
 }: {
   settings: ScriptEditorSettings
+  rangeStartMs: number
+  playheadMs: number
+  reframeKeyframes: ReframeKeyframe[]
   onPatch: (patch: Partial<ScriptEditorSettings>) => void
+  onAddReframeKeyframe: () => void
+  onDeleteReframeKeyframe: (srcMs: number) => void
+  onSeekReframeKeyframe: (srcMs: number) => void
 }) {
   const vol = settings.volumePct ?? 100
 
@@ -58,6 +77,41 @@ export function ScriptPropertiesPanel({
             </button>
           ))}
         </div>
+        {settings.reframeMode === 'manual' && (
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[13px] font-semibold">Keyframes</p>
+              <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={onAddReframeKeyframe}>
+                Add at playhead
+              </Button>
+            </div>
+            <ul className="max-h-32 space-y-1 overflow-y-auto">
+              {reframeKeyframes.length === 0 && (
+                <li className="text-xs text-muted-foreground">Drag the canvas crop box; keyframes save on release.</li>
+              )}
+              {reframeKeyframes.map((kf) => (
+                <li key={kf.srcMs} className="flex items-center justify-between gap-1 rounded-md border border-border px-2 py-1">
+                  <button
+                    type="button"
+                    className="text-left text-xs tabular-nums hover:underline"
+                    onClick={() => onSeekReframeKeyframe(kf.srcMs)}
+                  >
+                    {formatScriptTimecode(kf.srcMs - rangeStartMs)}
+                  </button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-1 text-[10px]"
+                    onClick={() => onDeleteReframeKeyframe(kf.srcMs)}
+                  >
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm">Captions on canvas</span>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import {
+  buildGapChips,
   buildSourceWordChips,
   buildWordChips,
   groupWordbarItems,
@@ -102,7 +103,15 @@ export function TimelinePanel({
     [chips, showDeletedWords],
   )
   const wordbarItems = useMemo(() => groupWordbarItems(wordbarChips, pxPerMs), [wordbarChips, pxPerMs])
-  const gapChips = useMemo(() => [] as { outStartMs: number; outEndMs: number; label: string }[], [])
+  const gapChips = useMemo(
+    () =>
+      buildGapChips(edl).map((g) => ({
+        outStartMs: g.outStartMs,
+        outEndMs: g.outEndMs,
+        label: `${(g.durMs / 1000).toFixed(1)}s`,
+      })),
+    [edl],
+  )
   const clips = useMemo(
     () => sourceTimelineClips(orderedWords, deletedSet, rangeStartMs, span),
     [orderedWords, deletedSet, rangeStartMs, span],
@@ -211,6 +220,7 @@ export function TimelinePanel({
               <TimelineWordbar
                 items={wordbarItems}
                 gapChips={gapChips}
+                cutRegions={cutRegions}
                 pxPerMs={pxPerMs}
                 widthPx={widthPx}
                 selectedWordIds={selectedWordIds}
@@ -223,6 +233,7 @@ export function TimelinePanel({
               />
               <TimelineScriptTrack
                 clips={clips}
+                cutRegions={cutRegions}
                 pxPerMs={pxPerMs}
                 widthPx={widthPx}
                 durationMs={span}
