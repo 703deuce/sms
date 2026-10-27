@@ -36,7 +36,7 @@ export async function POST(request: Request, { params }: Params) {
         data: {
           takeId: take.id,
           index: take.index,
-          startAtHostMs: take.startAtHostMs.toString(),
+          startAtHostMs: Number(take.startAtHostMs),
         },
       })
     }

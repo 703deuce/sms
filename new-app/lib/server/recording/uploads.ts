@@ -143,6 +143,7 @@ export async function registerRecordingTrack(input: {
   sessionId: string
   takeId: string
   participantId: string
+  trackId?: string
   kind: 'CAMERA' | 'MICROPHONE' | 'SCREEN' | 'SCREEN_AUDIO'
   mimeType: string
   sampleRate?: number
@@ -161,7 +162,7 @@ export async function registerRecordingTrack(input: {
   })
   if (!participant) throw new Error('Participant not found')
 
-  const id = createId('rtrk')
+  const id = input.trackId ?? createId('rtrk')
   return prisma.recordingTrack.create({
     data: {
       id,

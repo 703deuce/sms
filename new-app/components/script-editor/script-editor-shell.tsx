@@ -56,6 +56,10 @@ import type { ReframeCropRect, ScriptAspect, ScriptEditorSettings } from '@/lib/
 import type { EditToolsTab } from '@/components/script-editor/side/script-edit-tools-panel'
 import { sourceCutRegions } from '@/lib/clips/script-editor/cut-regions'
 import { ScriptTranscriptContextMenu } from '@/components/script-editor/script-transcript-context-menu'
+import { EditorRecorderBar } from '@/components/recording/editor/editor-recorder-bar'
+import { useEditorRecorder } from '@/components/recording/editor/use-editor-recorder'
+import { TeleprompterPanel } from '@/components/recording/editor/teleprompter-panel'
+import { RoomsUploadCard } from '@/components/recording/rooms/upload-card'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -129,6 +133,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [maxGapSec, setMaxGapSec] = useState(3)
   const [targetGapSec, setTargetGapSec] = useState(0.3)
   const [gapSelectionOnly, setGapSelectionOnly] = useState(false)
+  const [teleprompterOpen, setTeleprompterOpen] = useState(false)
+  const editorRec = useEditorRecorder(data.projectId)
   const [draftCrop, setDraftCrop] = useState<ReframeCropRect | null>(null)
   const [hoverRestoreWordId, setHoverRestoreWordId] = useState<string | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
@@ -1199,14 +1205,57 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           />
         </div>
 
+        <EditorRecorderBar
+          armed={editorRec.armed}
+          recording={editorRec.recording}
+          countdown={editorRec.countdown}
+          recSeconds={editorRec.recSeconds}
+          cameras={editorRec.cameras}
+          mics={editorRec.mics}
+          cameraId={editorRec.cameraId}
+          micId={editorRec.micId}
+          onCameraId={editorRec.setCameraId}
+          onMicId={editorRec.setMicId}
+          countdownEnabled={editorRec.countdownEnabled}
+          onCountdownEnabled={editorRec.setCountdownEnabled}
+          onStart={() => void editorRec.startRecording()}
+          onStop={() => void editorRec.stopRecording()}
+          onPause={() => undefined}
+          onDisarm={editorRec.disarm}
+          onTeleprompter={() => setTeleprompterOpen(true)}
+        />
+        <TeleprompterPanel
+          open={teleprompterOpen}
+          onClose={() => setTeleprompterOpen(false)}
+          scriptText={orderedWords.map((w) => w.text).join(' ')}
+          playing={editorRec.recording}
+          onTogglePlay={() => undefined}
+        />
+        {editorRec.uploadRows.length > 0 && (
+          <div className="pointer-events-none absolute bottom-4 left-4 z-30">
+            <RoomsUploadCard rows={editorRec.uploadRows} />
+          </div>
+        )}
         <div
           className="flex shrink-0 items-center justify-center gap-4 border-t border-border px-3 py-2 text-sm"
           onFocus={() => setTimelineFocused(true)}
           tabIndex={0}
         >
-          <Button type="button" size="icon-sm" variant="outline" onClick={togglePlay} disabled={!data.sourceVideoUrl}>
-            {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
-          </Button>
+          {!editorRec.armed && (
+            <>
+              <Button type="button" size="icon-sm" variant="outline" onClick={togglePlay} disabled={!data.sourceVideoUrl}>
+                {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 bg-lane-record text-white hover:bg-lane-record/90"
+                onClick={() => editorRec.setArmed(true)}
+              >
+                Record
+              </Button>
+            </>
+          )}
           <span className="tabular-nums text-muted-foreground" title="Output timeline (after cuts)">
             {currentLabel} / {durationLabel}
           </span>

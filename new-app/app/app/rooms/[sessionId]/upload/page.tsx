@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { RoomsFullPage, RoomsTopBar } from '@/components/recording/rooms/rooms-layout-shell'
-import { RoomsUploadCard } from '@/components/recording/rooms/upload-card'
+import { UploadRecoveryClient } from '@/components/recording/rooms/upload-recovery-client'
 import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -28,10 +28,7 @@ export default async function RoomsUploadPage({ params }: Props) {
         <p className="max-w-md text-center text-sm text-muted-foreground">
           Files are kept in this browser while upload finishes. Do not close the tab until every track shows a checkmark.
         </p>
-        <RoomsUploadCard />
-        <PrimaryButton render={<Link href="/app/clips" />} className="h-9">
-          Return to projects
-        </PrimaryButton>
+        <UploadRecoveryClient sessionId={sessionId} />
       </div>
     </RoomsFullPage>
   )

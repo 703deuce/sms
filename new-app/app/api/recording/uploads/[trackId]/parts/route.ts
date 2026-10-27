@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { beginRecordingTrackUpload, recordRecordingTrackPart } from '@/lib/server/recording/uploads'
+import { presignRecordingTrackPart } from '@/lib/server/recording/presign-part'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 export const runtime = 'nodejs'
@@ -14,6 +15,11 @@ const initSchema = z.object({
   sessionId: z.string().min(8),
   bytesExpected: z.number().int().positive(),
   mimeType: z.string().min(3),
+})
+
+const presignSchema = z.object({
+  action: z.literal('presign'),
+  partNumber: z.number().int().positive(),
 })
 
 const partSchema = z.object({
@@ -42,6 +48,11 @@ export async function POST(request: Request, { params }: Params) {
         bytesExpected: init.data.bytesExpected,
         mimeType: init.data.mimeType,
       })
+      return NextResponse.json({ data: result })
+    }
+    const presign = presignSchema.safeParse(body)
+    if (presign.success) {
+      const result = await presignRecordingTrackPart(workspaceId, trackId, presign.data.partNumber)
       return NextResponse.json({ data: result })
     }
     const part = partSchema.safeParse(body)

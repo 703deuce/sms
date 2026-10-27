@@ -2,7 +2,7 @@ import 'server-only'
 import { AccessToken, TrackSource, type VideoGrant } from 'livekit-server-sdk'
 import { getLiveKitServerEnv } from '@/lib/server/livekit/env'
 
-export type StudioRole = 'host' | 'guest'
+export type StudioRole = 'host' | 'guest' | 'producer'
 
 export async function mintJoinToken(opts: {
   roomName: string

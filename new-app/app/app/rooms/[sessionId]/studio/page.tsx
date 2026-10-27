@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
-import { RoomsStudioClient } from '@/components/recording/rooms/studio-client'
+import { RoomsStudioApp } from '@/components/recording/rooms/rooms-studio-app'
 import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -15,5 +15,5 @@ export default async function RoomsStudioPage({ params }: Props) {
     select: { title: true },
   })
   if (!session) notFound()
-  return <RoomsStudioClient sessionId={sessionId} sessionTitle={session.title} />
+  return <RoomsStudioApp sessionId={sessionId} sessionTitle={session.title} />
 }

@@ -21,7 +21,7 @@ export async function startRecordingTake(sessionId: string, workspaceId: string,
   })
   await setRecordingRoomMetadata(sessionId, {
     v: 1,
-    recState: 'recording',
+    recState: 'countdown',
     takeId: take.id,
     startAtHostMs,
   })

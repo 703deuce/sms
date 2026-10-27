@@ -11,6 +11,7 @@ const bodySchema = z.object({
   sessionId: z.string().min(8),
   takeId: z.string().min(8),
   participantId: z.string().min(8),
+  trackId: z.string().min(8).optional(),
   kind: z.enum(['CAMERA', 'MICROPHONE', 'SCREEN', 'SCREEN_AUDIO']),
   mimeType: z.string().min(3).max(120),
   sampleRate: z.number().int().positive().optional(),

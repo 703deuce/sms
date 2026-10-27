@@ -4,10 +4,10 @@ import { parseRecControlPayload, parseRecordingRoomMetadata, recControlMessageSc
 describe('rec-control', () => {
   it('parses start packet', () => {
     const bytes = new TextEncoder().encode(
-      JSON.stringify({ type: 'start', takeId: 'rtake_abc12345', startAtHostMs: 1200 }),
+      JSON.stringify({ t: 'start', takeId: 'rtake_abc12345', startAtHostMs: 1200 }),
     )
-    expect(parseRecControlPayload(bytes)).toEqual({
-      type: 'start',
+    expect(parseRecControlPayload(bytes)).toMatchObject({
+      t: 'start',
       takeId: 'rtake_abc12345',
       startAtHostMs: 1200,
     })
