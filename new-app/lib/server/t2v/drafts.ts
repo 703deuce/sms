@@ -44,6 +44,13 @@ export async function saveT2vDraft(workspaceId: string, id: string, baseRevision
     data: { document: doc as never, revision: { increment: 1 } },
   })
   if (res.count === 0) throw new RevisionConflict()
+  const genId = doc.music && !doc.music.disabled ? doc.music.generationId : undefined
+  if (genId) {
+    await getPrisma().t2vDraft.updateMany({
+      where: { id, workspaceId, musicReadyGenerationId: genId },
+      data: { musicReadyGenerationId: null },
+    })
+  }
   return { revision: baseRevision + 1, document: doc }
 }
 

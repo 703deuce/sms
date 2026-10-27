@@ -55,6 +55,7 @@ export function useT2vUndo(
   const [doc, setDoc] = useState(initial)
   const [past, setPast] = useState<T2vDraftV1[]>([])
   const [future, setFuture] = useState<T2vDraftV1[]>([])
+  const persistAfter = useRef<T2vDraftV1 | null>(null)
 
   useEffect(() => {
     revisionRef.current = serverRevision
@@ -79,6 +80,13 @@ export function useT2vUndo(
     saveStack(draftId, { baseRevision: revisionRef.current, past, future })
   }, [draftId, past, future])
 
+  useEffect(() => {
+    if (!persistAfter.current) return
+    const next = persistAfter.current
+    persistAfter.current = null
+    onPersist(next)
+  }, [doc, past, future, onPersist])
+
   const push = useCallback(
     (next: T2vDraftV1) => {
       setPast((p) => [...p.slice(-MAX + 1), doc])
@@ -93,26 +101,22 @@ export function useT2vUndo(
   }, [])
 
   const undo = useCallback(() => {
-    setPast((p) => {
-      if (!p.length) return p
-      const prev = p[p.length - 1]
-      setFuture((f) => [doc, ...f].slice(0, MAX))
-      setDoc(prev)
-      onPersist(prev)
-      return p.slice(0, -1)
-    })
-  }, [doc, onPersist])
+    if (!past.length) return
+    const prev = past[past.length - 1]
+    setPast((p) => p.slice(0, -1))
+    setFuture((f) => [doc, ...f].slice(0, MAX))
+    setDoc(prev)
+    persistAfter.current = prev
+  }, [doc, past])
 
   const redo = useCallback(() => {
-    setFuture((f) => {
-      if (!f.length) return f
-      const [next, ...rest] = f
-      setPast((p) => [...p, doc].slice(-MAX))
-      setDoc(next)
-      onPersist(next)
-      return rest
-    })
-  }, [doc, onPersist])
+    if (!future.length) return
+    const [next, ...rest] = future
+    setPast((p) => [...p, doc].slice(-MAX))
+    setFuture(rest)
+    setDoc(next)
+    persistAfter.current = next
+  }, [doc, future])
 
   return {
     doc,

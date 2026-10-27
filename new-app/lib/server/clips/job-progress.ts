@@ -65,7 +65,9 @@ export async function applyWorkerJobProgress(input: {
   const projectPatch: Record<string, unknown> = {}
   if (!skipProjectPatch) {
     if (input.projectStatus) projectPatch.status = input.projectStatus
-    if (input.stage !== undefined) projectPatch.stage = input.stage
+    let projectStage = input.stage
+    if (input.jobStatus === 'DONE' && projectStage === 'done') projectStage = 'ready'
+    if (projectStage !== undefined) projectPatch.stage = projectStage
     if (input.progress !== undefined) projectPatch.progress = input.progress
     if (input.error !== undefined) projectPatch.error = input.error
     if (input.transcriptWords !== undefined) projectPatch.transcriptWords = input.transcriptWords

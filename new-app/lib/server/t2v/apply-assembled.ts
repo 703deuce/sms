@@ -5,18 +5,11 @@ import { parseScriptCompositionDocument } from '@/lib/server/clips/script-compos
 import { draftToComposition } from '@/lib/server/t2v/to-composition'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage, getClipStorageForObjectKey, storageDriverName } from '@/lib/storage'
+import { deleteClipStorageObjectIfOrphan } from '@/lib/server/storage/delete-object'
+import { getClipStorage, storageDriverName } from '@/lib/storage'
 import { createId } from '@/lib/supabase/id'
 
-async function deleteSourceObjectBestEffort(key: string, driverHint?: string | null) {
-  try {
-    const storage = await getClipStorageForObjectKey(key, driverHint)
-    const url = await storage.createSignedDownloadUrl(key, 60)
-    await fetch(url, { method: 'DELETE' }).catch(() => {})
-  } catch {
-    /* storage may not support DELETE via URL — orphan ok */
-  }
-}
+const PRIOR_SOURCE_KEY_RE = /\/t2v\/source_r\d+_[^/]+\.mp4$/
 
 export async function applyT2vAssembled(input: {
   workspaceId: string
@@ -71,21 +64,22 @@ export async function applyT2vAssembled(input: {
   const driver = storageDriverName()
   const uploadId = createId('upl')
 
+  let priorSourceKey: string | null = null
+  let priorSourceDriver: string | null = null
+
   const result = await prisma.$transaction(async (tx) => {
     const prevProject = await tx.clipProject.findFirst({
       where: { id: input.projectId, workspaceId: input.workspaceId },
       select: { uploadId: true },
     })
-    let oldKey: string | null = null
-    let oldDriver: string | null = null
     if (prevProject?.uploadId) {
       const oldUpl = await tx.clipUpload.findFirst({
         where: { id: prevProject.uploadId, workspaceId: input.workspaceId },
         select: { id: true, key: true, kind: true, storageDriver: true },
       })
       if (oldUpl?.kind === 't2v_source' && oldUpl.key && oldUpl.key !== input.sourceKey) {
-        oldKey = oldUpl.key
-        oldDriver = oldUpl.storageDriver
+        priorSourceKey = oldUpl.key
+        priorSourceDriver = oldUpl.storageDriver
         await tx.clipUpload.deleteMany({ where: { id: oldUpl.id, workspaceId: input.workspaceId } })
       }
     }
@@ -184,14 +178,15 @@ export async function applyT2vAssembled(input: {
       },
     })
 
-    return { project, oldKey, oldDriver }
+    return { project }
   })
 
   if (result.project.transcriptKey) {
     await getClipStorage().putJson(result.project.transcriptKey, input.words)
   }
-  if (result.oldKey && /\/t2v\/source_r\d+\.mp4$/.test(result.oldKey)) {
-    void deleteSourceObjectBestEffort(result.oldKey, result.oldDriver)
+
+  if (priorSourceKey && PRIOR_SOURCE_KEY_RE.test(priorSourceKey) && priorSourceKey !== input.sourceKey) {
+    void deleteClipStorageObjectIfOrphan(priorSourceKey, priorSourceDriver).catch(() => {})
   }
 
   return { projectId: input.projectId, uploadId }
