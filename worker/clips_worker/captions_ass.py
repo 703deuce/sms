@@ -1,6 +1,7 @@
 """Preset-driven ASS caption generator (PlayRes matches output)."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from clips_worker.caption_presets import resolve_preset
@@ -18,9 +19,31 @@ def hex_to_ass(hex_color: str) -> str:
     return "&H00FFFFFF&"
 
 
-def disp(text: str, case: str) -> str:
+def _sentence_boundary(prev: str | None) -> bool:
+    if not prev:
+        return True
+    return bool(re.search(r'[.!?]["\')\]]*$', prev.strip()))
+
+
+def disp(text: str, case: str, sentence_start: bool = False) -> str:
     t = text.replace("{", "(").replace("}", ")")
-    return t.upper() if case == "upper" else t[0:1].upper() + t[1:] if t else t
+    if not t:
+        return t
+    if case == "upper":
+        return t.upper()
+    lower = t.lower()
+    return lower[0:1].upper() + lower[1:] if sentence_start else lower
+
+
+def disp_words(chunk: list[dict], case: str) -> list[str]:
+    if case == "upper":
+        return [disp(w["w"], case) for w in chunk]
+    out: list[str] = []
+    sentence_start = True
+    for w in chunk:
+        out.append(disp(w["w"], case, sentence_start))
+        sentence_start = _sentence_boundary(str(w.get("w", "")))
+    return out
 
 
 def ts(t: float) -> str:
@@ -149,16 +172,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 position, int(play_h * 0.88)
             )
             move = f"{{\\move({cx},{y + int(0.03 * play_h)},{cx},{y},0,150)\\fad(150,0)}}"
-            line = " ".join(disp(w["w"], case) for w in chunk)
+            line = " ".join(disp_words(chunk, case))
             events.append(f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{move}{line}")
             continue
 
         if anim == "karaoke":
             ws, we = float(chunk[0]["s"]), chunk_end
             parts = []
-            for w in chunk:
+            for w, word in zip(chunk, disp_words(chunk, case), strict=True):
                 dur_cs = max(1, int((float(w["e"]) - float(w["s"])) * 100))
-                parts.append(f"{{\\kf{dur_cs}}}{disp(w['w'], case)}")
+                parts.append(f"{{\\kf{dur_cs}}}{word}")
             sec = hex_to_ass(preset["primary"])
             pri = hex_to_ass(preset["active"])
             events.append(
@@ -169,10 +192,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             continue
 
         if anim == "typewriter":
+            cased = disp_words(chunk, case)
             for wi, w in enumerate(chunk):
                 w_start = float(w["s"])
                 w_end = float(chunk[wi + 1]["s"]) if wi + 1 < len(chunk) else chunk_end
-                text = disp(w["w"], case)
+                text = cased[wi]
                 dur_ms = max(1, int((float(w["e"]) - float(w["s"])) * 1000))
                 step = max(1, dur_ms // max(1, len(text)))
                 built = ""
@@ -197,9 +221,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             is_emph = wi in emphasis
             use_box_layer = bool(box) and (preset.get("slug") == "boxed" or (preset.get("slug") == "highlighter" and is_emph))
 
+            cased = disp_words(chunk, case)
             parts: list[str] = []
-            for x in chunk:
-                word = disp(x["w"], case)
+            for xi, x in enumerate(chunk):
+                word = cased[xi]
                 if x is w:
                     tags = []
                     if use_box_layer:
@@ -223,7 +248,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             line = " ".join(parts)
             if use_box_layer:
                 events.append(
-                    f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,{disp(w['w'], case)}"
+                    f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,{cased[ki]}"
                 )
             events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
             emo = emoji_by_word.get(str(wi)) or emoji_by_word.get(wi)

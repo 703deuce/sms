@@ -27,6 +27,24 @@ def test_build_ass_honors_case_position_and_wpl(tmp_path: Path):
     assert "Hello" in body
 
 
+def test_build_ass_sentence_case_lowercases_words(tmp_path: Path):
+    ass = tmp_path / "t2.ass"
+    words = [
+        {"w": "See", "s": 0.0, "e": 0.4, "idx": 0},
+        {"w": "As", "s": 0.4, "e": 0.8, "idx": 1},
+        {"w": "A", "s": 0.8, "e": 1.0, "idx": 2},
+    ]
+    build_ass(
+        words,
+        {"presetId": "clean_white", "case": "sentence", "animation": "none", "wordsPerLine": 3},
+        ass,
+    )
+    body = ass.read_text(encoding="utf-8")
+    assert "}See {" in body or "shad0}See" in body
+    assert "}as {" in body
+    assert "}A" not in body and " As " not in body
+
+
 def test_preview_reuse_false_when_captions_differ():
     edits = default_edits(0, 60_000)
     edits = {
