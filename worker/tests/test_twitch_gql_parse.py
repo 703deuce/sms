@@ -1,29 +1,66 @@
-from clips_worker.streamer.chat.twitch_gql import _extract_page, _parse_comment
+from clips_worker.streamer.chat.twitch_gql import (
+    DEFAULT_GQL_CLIENT_ID,
+    _extract_page,
+    _parse_comment,
+    comments_persisted_hash,
+    gql_client_id,
+)
 
 
-def test_parse_comment_tolerates_missing_fields():
+def test_gql_client_id_only_env_override(monkeypatch):
+    monkeypatch.delenv("TWITCH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("TWITCH_HELIX_CLIENT_ID", raising=False)
+    monkeypatch.delenv("TWITCH_GQL_CLIENT_ID", raising=False)
+    assert gql_client_id() == DEFAULT_GQL_CLIENT_ID
+    monkeypatch.setenv("TWITCH_GQL_CLIENT_ID", "custom")
+    assert gql_client_id() == "custom"
+    monkeypatch.setenv("TWITCH_CLIENT_ID", "helix-should-not-use")
+    assert gql_client_id() == "custom"
+
+
+def test_parse_comment_user_color_on_message():
     node = {
-        "contentOffsetSeconds": 42,
-        "commenter": {"login": "viewer1", "color": "#fff"},
-        "message": {"fragments": [{"text": "hello "}, {"text": "chat"}]},
+        "contentOffsetSeconds": 3,
+        "commenter": {"login": "viewer1"},
+        "message": {"userColor": "#ff00aa", "fragments": [{"text": "yo"}]},
     }
     row = _parse_comment(node)
-    assert row["t_s"] == 42
-    assert row["user"] == "viewer1"
-    assert "hello chat" in row["text"]
+    assert row["color"] == "#ff00aa"
 
 
-def test_extract_page_cursor():
+def test_extract_page_cursor_from_last_edge():
     data = {
         "data": {
             "video": {
                 "comments": {
-                    "edges": [{"node": {"contentOffsetSeconds": 1, "commenter": {"login": "a"}, "message": {"fragments": [{"text": "x"}]}}}],
-                    "pageInfo": {"endCursor": "abc"},
+                    "edges": [
+                        {
+                            "cursor": "c1",
+                            "node": {
+                                "contentOffsetSeconds": 1,
+                                "commenter": {"login": "a"},
+                                "message": {"fragments": [{"text": "x"}]},
+                            },
+                        },
+                        {
+                            "cursor": "c2",
+                            "node": {
+                                "contentOffsetSeconds": 2,
+                                "commenter": {"login": "b"},
+                                "message": {"fragments": [{"text": "y"}]},
+                            },
+                        },
+                    ],
+                    "pageInfo": {"hasNextPage": True, "endCursor": "ignored"},
                 }
             }
         }
     }
-    msgs, cursor = _extract_page(data)
-    assert len(msgs) == 1
-    assert cursor == "abc"
+    msgs, cursor, has_next = _extract_page(data)
+    assert len(msgs) == 2
+    assert cursor == "c2"
+    assert has_next is True
+
+
+def test_comments_hash_default():
+    assert len(comments_persisted_hash()) == 64

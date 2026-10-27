@@ -1,4 +1,4 @@
-"""Twitch GQL VOD comment replay (S5) — public web client id + full query body."""
+"""Twitch GQL VOD comment replay (S5) — persisted query + public GQL client id."""
 from __future__ import annotations
 
 import gzip
@@ -12,53 +12,29 @@ from typing import Any
 import urllib.error
 import urllib.request
 
+from clips_worker.streamer.errors import RetryableError
+
 GQL_URL = "https://gql.twitch.tv/gql"
 MAX_MESSAGES = int(os.environ.get("STREAMER_CHAT_MAX_MESSAGES", "300000"))
 
-# Public web client id (Twitch web app); override with TWITCH_GQL_CLIENT_ID if needed.
-DEFAULT_GQL_CLIENT_ID = "kimne78kx3bnxbr9go8qwyt2"
-
-VIDEO_COMMENTS_BY_OFFSET_QUERY = """
-query VideoCommentsByOffsetOrCursor($videoID: ID!, $contentOffsetSeconds: Float, $cursor: Cursor) {
-  video(id: $videoID) {
-    comments(contentOffsetSeconds: $contentOffsetSeconds, cursor: $cursor) {
-      edges {
-        cursor
-        node {
-          contentOffsetSeconds
-          commenter {
-            login
-            displayName
-            color
-          }
-          message {
-            fragments {
-              text
-            }
-          }
-        }
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-    }
-  }
-}
-""".strip()
+# Twitch web GQL client (override only via TWITCH_GQL_CLIENT_ID — never TWITCH_CLIENT_ID).
+DEFAULT_GQL_CLIENT_ID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
+# TwitchDownloader persisted query hash (override via TWITCH_GQL_COMMENTS_HASH).
+DEFAULT_COMMENTS_HASH = "b70a3591ff0f4e0313d126c6a1502d79a1c02baebb288227c582044aa76adf6a"
 
 
 class TwitchChatReplayError(RuntimeError):
-    """VOD chat replay failed; carries message for job logs."""
+    """VOD chat replay failed with a non-retryable error."""
 
 
 def gql_client_id() -> str:
-    return (
-        os.environ.get("TWITCH_GQL_CLIENT_ID")
-        or os.environ.get("TWITCH_CLIENT_ID")
-        or os.environ.get("TWITCH_HELIX_CLIENT_ID")
-        or DEFAULT_GQL_CLIENT_ID
-    ).strip()
+    raw = (os.environ.get("TWITCH_GQL_CLIENT_ID") or "").strip()
+    return raw or DEFAULT_GQL_CLIENT_ID
+
+
+def comments_persisted_hash() -> str:
+    raw = (os.environ.get("TWITCH_GQL_COMMENTS_HASH") or "").strip()
+    return raw or DEFAULT_COMMENTS_HASH
 
 
 def _headers() -> dict[str, str]:
@@ -75,8 +51,9 @@ def _parse_comment(node: dict) -> dict | None:
         return None
     commenter = node.get("commenter") or {}
     user = commenter.get("login") or commenter.get("displayName") or ""
-    color = commenter.get("color")
-    fragments = node.get("message", {}).get("fragments") or node.get("fragments") or []
+    message = node.get("message") or {}
+    color = message.get("userColor") or commenter.get("color")
+    fragments = message.get("fragments") or node.get("fragments") or []
     parts: list[str] = []
     for frag in fragments:
         if isinstance(frag, dict):
@@ -89,11 +66,12 @@ def _parse_comment(node: dict) -> dict | None:
     return {"t_s": t, "user": user, "color": color, "text": text}
 
 
-def _extract_page(data: Any) -> tuple[list[dict], str | None]:
+def _extract_page(data: Any) -> tuple[list[dict], str | None, bool]:
     messages: list[dict] = []
     cursor: str | None = None
+    has_next = False
     if not isinstance(data, dict):
-        return messages, cursor
+        return messages, cursor, has_next
     if data.get("errors"):
         err = data["errors"][0] if isinstance(data["errors"], list) else data["errors"]
         msg = err.get("message") if isinstance(err, dict) else str(err)
@@ -102,7 +80,11 @@ def _extract_page(data: Any) -> tuple[list[dict], str | None]:
     if not video:
         raise TwitchChatReplayError("gql missing video payload")
     comments = video.get("comments") or {}
-    edges = comments.get("edges") or comments.get("nodes") or []
+    edges = comments.get("edges")
+    if edges is None:
+        raise RetryableError("gql comments edges missing (transient)")
+    page_info = comments.get("pageInfo") or {}
+    has_next = bool(page_info.get("hasNextPage"))
     for edge in edges:
         node = edge.get("node") if isinstance(edge, dict) else edge
         if not isinstance(node, dict):
@@ -110,9 +92,11 @@ def _extract_page(data: Any) -> tuple[list[dict], str | None]:
         parsed = _parse_comment(node)
         if parsed:
             messages.append(parsed)
-    page_info = comments.get("pageInfo") or {}
-    cursor = page_info.get("endCursor") or comments.get("cursor")
-    return messages, cursor
+    if has_next and edges:
+        last = edges[-1]
+        if isinstance(last, dict):
+            cursor = last.get("cursor")
+    return messages, cursor, has_next
 
 
 def _gql_errors_text(payload: Any) -> str | None:
@@ -127,8 +111,8 @@ def _gql_errors_text(payload: Any) -> str | None:
     return first.get("message") if isinstance(first, dict) else str(first)
 
 
-def fetch_vod_comments(video_id: str, cursor: str | None = None) -> tuple[list[dict], str | None]:
-    """Fetch one page of VOD comments. Raises TwitchChatReplayError on failure."""
+def fetch_vod_comments(video_id: str, cursor: str | None = None) -> tuple[list[dict], str | None, bool]:
+    """Fetch one page of VOD comments."""
     variables: dict[str, Any] = {"videoID": video_id}
     if cursor:
         variables["cursor"] = cursor
@@ -137,13 +121,15 @@ def fetch_vod_comments(video_id: str, cursor: str | None = None) -> tuple[list[d
     body = [
         {
             "operationName": "VideoCommentsByOffsetOrCursor",
-            "query": VIDEO_COMMENTS_BY_OFFSET_QUERY,
             "variables": variables,
+            "extensions": {
+                "persistedQuery": {"version": 1, "sha256Hash": comments_persisted_hash()},
+            },
         }
     ]
     backoff = 1.0
     last_err: Exception | None = None
-    for attempt in range(6):
+    for attempt in range(10):
         try:
             time.sleep(0.25 + random.random() * 0.05)
             req = urllib.request.Request(
@@ -159,7 +145,8 @@ def fetch_vod_comments(video_id: str, cursor: str | None = None) -> tuple[list[d
             except urllib.error.HTTPError as e:
                 status = e.code
                 raw = e.read()
-            if status == 429:
+            if status == 429 or status >= 500:
+                last_err = RetryableError(f"gql http {status}")
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
                 continue
@@ -173,23 +160,30 @@ def fetch_vod_comments(video_id: str, cursor: str | None = None) -> tuple[list[d
             if isinstance(payload, list) and payload:
                 payload = payload[0]
             return _extract_page(payload)
-        except TwitchChatReplayError:
-            raise
-        except Exception as exc:
+        except RetryableError as exc:
             last_err = exc
             time.sleep(backoff)
             backoff = min(backoff * 2, 60.0)
+        except TwitchChatReplayError:
+            raise
+        except Exception as exc:
+            last_err = RetryableError(str(exc))
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 60.0)
+    if isinstance(last_err, RetryableError):
+        raise last_err
     raise TwitchChatReplayError(f"gql fetch failed after retries: {last_err}")
 
 
 def fetch_all_vod_comments(video_id: str, start_cursor: str | None = None) -> tuple[list[dict], str | None]:
     out: list[dict] = []
     cursor = start_cursor
-    while len(out) < MAX_MESSAGES:
-        batch, cursor = fetch_vod_comments(video_id, cursor)
-        if not batch:
-            break
+    has_next = True
+    while len(out) < MAX_MESSAGES and has_next:
+        batch, cursor, has_next = fetch_vod_comments(video_id, cursor)
         out.extend(batch)
+        if not has_next:
+            break
         if not cursor:
             break
     return out[:MAX_MESSAGES], cursor
