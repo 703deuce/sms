@@ -27,11 +27,12 @@ import {
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
 import { ExportTemplateSection } from '@/components/clips/editor/export-template-section'
+import { applyExportPreferencesToTemplate } from '@/lib/clips/export-preferences'
 import {
-  applyExportPreferencesToTemplate,
-  loadExportDialogPreferences,
-  saveExportDialogPreferences,
-} from '@/lib/clips/export-preferences'
+  loadMergedExportDialogPreferences,
+  persistExportDialogPreferences,
+} from '@/lib/clips/export-preferences-sync'
+import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
 import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
 import {
   exportSfxBundledAssetsAvailable,
@@ -91,36 +92,43 @@ export function ExportDialog({
   const [exportTemplate, setExportTemplate] = useState<ClipExportTemplate | undefined>(edits.exportTemplate)
   const [exportSfx, setExportSfx] = useState<ExportSfxMode>('off')
   const sfxBundled = exportSfxBundledAssetsAvailable()
+  const [savedChannels, setSavedChannels] = useState<ClipUserStreamerChannelRow[]>([])
+
+  const refreshChannels = () => {
+    void clipsFetch<{ channels: ClipUserStreamerChannelRow[] }>('/api/clips/my-channels')
+      .then((data) => setSavedChannels(data.channels))
+      .catch(() => {})
+  }
 
   useEffect(() => {
     if (!open) return
-    const prefs = loadExportDialogPreferences()
-    setRemoveDeadAir(prefs.removeDeadAir)
-    setAlsoSrt(prefs.alsoSrt)
-    setExportSfx(prefs.exportSfx)
-    if (edits.exportTemplate) {
-      setExportTemplate(applyExportPreferencesToTemplate(edits.exportTemplate, prefs))
-      return
-    }
-    if (platform && (platform === 'kick' || platform === 'twitch')) {
-      setExportTemplate(
-        applyExportPreferencesToTemplate(
-          defaultStreamHeadlineExportTemplate({
-            platform,
-            channelUrl: defaultChannelUrl,
-            suggestedHeadline: undefined,
-          }),
-          prefs,
-        ),
-      )
-      return
-    }
-    setExportTemplate(edits.exportTemplate)
-  }, [open, edits.exportTemplate, platform, defaultChannelUrl])
-
-  useEffect(() => {
-    if (open) setAspect(edits.aspectRatio ?? '9:16')
-  }, [open, edits.aspectRatio])
+    refreshChannels()
+    void loadMergedExportDialogPreferences().then((prefs) => {
+      setRemoveDeadAir(prefs.removeDeadAir)
+      setAlsoSrt(prefs.alsoSrt)
+      setExportSfx(prefs.exportSfx)
+      setAspect(prefs.defaultAspect ?? edits.aspectRatio ?? '9:16')
+      if (prefs.defaultResolution) setResolution(prefs.defaultResolution)
+      if (edits.exportTemplate) {
+        setExportTemplate(applyExportPreferencesToTemplate(edits.exportTemplate, prefs))
+        return
+      }
+      if (platform && (platform === 'kick' || platform === 'twitch')) {
+        setExportTemplate(
+          applyExportPreferencesToTemplate(
+            defaultStreamHeadlineExportTemplate({
+              platform,
+              channelUrl: defaultChannelUrl,
+              suggestedHeadline: undefined,
+            }),
+            prefs,
+          ),
+        )
+        return
+      }
+      setExportTemplate(edits.exportTemplate)
+    })
+  }, [open, edits.exportTemplate, edits.aspectRatio, platform, defaultChannelUrl])
 
   useEffect(() => {
     if (!open) {
@@ -331,7 +339,10 @@ export function ExportDialog({
                   size="sm"
                   variant={resolution === r ? 'default' : 'outline'}
                   disabled={locked}
-                  onClick={() => setResolution(r)}
+                  onClick={() => {
+                    setResolution(r)
+                    persistExportDialogPreferences({ defaultResolution: r })
+                  }}
                 >
                   {r}
                 </Button>
@@ -355,6 +366,7 @@ export function ExportDialog({
                 onClick={() => {
                   setAspect(a)
                   onAspectChange?.(a)
+                  persistExportDialogPreferences({ defaultAspect: a })
                 }}
               >
                 {a}
@@ -406,7 +418,7 @@ export function ExportDialog({
               if (typeof v !== 'string') return
               const mode = normalizeExportSfxMode(v)
               setExportSfx(mode)
-              saveExportDialogPreferences({ exportSfx: mode })
+              persistExportDialogPreferences({ exportSfx: mode })
             }}
           >
             <SelectTrigger className="w-full" aria-describedby="export-sfx-hint">
@@ -432,7 +444,7 @@ export function ExportDialog({
             onCheckedChange={(c) => {
               const on = Boolean(c)
               setRemoveDeadAir(on)
-              saveExportDialogPreferences({ removeDeadAir: on })
+              persistExportDialogPreferences({ removeDeadAir: on })
             }}
           />
         </div>
@@ -444,7 +456,7 @@ export function ExportDialog({
             onCheckedChange={(checked) => {
               const on = Boolean(checked)
               setAlsoSrt(on)
-              saveExportDialogPreferences({ alsoSrt: on })
+              persistExportDialogPreferences({ alsoSrt: on })
             }}
           />
         </div>
@@ -468,13 +480,15 @@ export function ExportDialog({
           exportPlatformId={exportPlatform !== 'none' ? exportPlatform : undefined}
           onChange={(tpl) => {
             setExportTemplate(tpl)
-            saveExportDialogPreferences({
+            persistExportDialogPreferences({
               headlineBarEnabled: Boolean(tpl.headlineBar?.enabled),
               platformBadgeEnabled: Boolean(tpl.platformBadge?.enabled),
               channelLinkEnabled: Boolean(tpl.channelLink?.enabled),
               profanityCensor: Boolean(tpl.profanityCensor),
             })
           }}
+          savedChannels={savedChannels}
+          onChannelsRefresh={refreshChannels}
         />
         <MediaCredits clipId={clipId} edits={edits} />
         {status && status !== 'READY' && status !== 'FAILED' && (

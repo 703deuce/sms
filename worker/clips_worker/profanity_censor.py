@@ -49,38 +49,76 @@ def mask_profanity_in_words(words: list[dict]) -> tuple[list[dict], list[tuple[f
     return out, intervals
 
 
+def _bleep_asset_path(work_dir: Path) -> Path:
+    from clips_worker.export_sfx import sfx_assets_dir
+
+    for name in ("ding.wav", "pop.wav", "record-scratch.wav"):
+        p = sfx_assets_dir() / name
+        if p.is_file():
+            return p
+    tone = work_dir / "bleep_tone.wav"
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=880:duration=0.12",
+            str(tone),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return tone
+
+
 def apply_audio_censor_bleep(
     video: Path,
     out: Path,
     intervals: list[tuple[float, float]],
+    work_dir: Path | None = None,
 ) -> None:
     if not intervals:
         subprocess.check_call(
             ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-c", "copy", str(out)],
         )
         return
+    wd = work_dir or video.parent
+    muted = wd / "profanity_muted.mp4"
     parts: list[str] = []
     for a, b in intervals:
         parts.append(f"volume=0:enable='between(t,{a:.3f},{b:.3f})'")
     af = ",".join(parts)
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-v",
-        "error",
-        "-i",
-        str(video),
-        "-af",
-        af,
-        "-c:v",
-        "copy",
-        "-c:a",
-        "aac",
-        "-movflags",
-        "+faststart",
-        str(out),
-    ]
-    subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video),
+            "-af",
+            af,
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+            str(muted),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    bleep = _bleep_asset_path(wd)
+    from clips_worker.export_sfx import apply_export_sfx_mix
+
+    events = [(bleep, int(max(0.0, a) * 1000), 0.38) for a, _ in intervals]
+    apply_export_sfx_mix(muted, out, events)
+    print('{"tag":"clipper:cut","action":"profanity_bleep","count":%d}' % len(intervals))
 
 
 def censor_clip_words_and_audio(
@@ -92,5 +130,5 @@ def censor_clip_words_and_audio(
     if not intervals:
         return masked, video
     censored = work_dir / "profanity_censor.mp4"
-    apply_audio_censor_bleep(video, censored, intervals)
+    apply_audio_censor_bleep(video, censored, intervals, work_dir)
     return masked, censored

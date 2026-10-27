@@ -9747,6 +9747,31 @@ model ClipRender {
   @@map("clip_renders")
 }
 
+model ClipExportUserPrefs {
+  id          String   @id
+  workspaceId String
+  userId      String
+  prefs       Json     @default("{}")
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@map("clip_export_user_prefs")
+}
+
+model ClipUserStreamerChannel {
+  id          String   @id
+  workspaceId String
+  userId      String
+  platform    String
+  label       String?
+  url         String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId, userId])
+  @@map("clip_user_streamer_channels")
+}
+
 model CaptionPreset {
   id          String   @id
   workspaceId String

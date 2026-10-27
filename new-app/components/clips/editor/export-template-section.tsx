@@ -18,6 +18,8 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { clipsFetch } from '@/lib/clips-api'
 import { ExportHeadlinePreview } from '@/components/clips/editor/export-headline-preview'
+import { ExportSavedChannelsField } from '@/components/clips/editor/export-saved-channels-field'
+import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
 import { toast } from 'sonner'
 
 export function ExportTemplateSection({
@@ -27,6 +29,8 @@ export function ExportTemplateSection({
   platform,
   defaultChannelUrl,
   exportPlatformId,
+  savedChannels = [],
+  onChannelsRefresh,
   onChange,
 }: {
   clipId: string
@@ -35,6 +39,8 @@ export function ExportTemplateSection({
   platform?: 'twitch' | 'kick'
   defaultChannelUrl?: string
   exportPlatformId?: ExportPlatformId
+  savedChannels?: ClipUserStreamerChannelRow[]
+  onChannelsRefresh?: () => void
   onChange: (tpl: ClipExportTemplate) => void
 }) {
   const tpl = edits.exportTemplate || {}
@@ -135,25 +141,34 @@ export function ExportTemplateSection({
         />
       </div>
       {tpl.channelLink?.enabled ? (
-        <Input
-          value={channelUrl}
-          onChange={(e) => {
-            const norm = normalizeChannelUrl(e.target.value)
-            setTpl({ channelLink: { enabled: true, url: norm || e.target.value } })
-          }}
-          placeholder="https://twitch.tv/yourchannel"
-        />
+        <>
+          <Input
+            value={channelUrl}
+            onChange={(e) => {
+              const norm = normalizeChannelUrl(e.target.value)
+              setTpl({ channelLink: { enabled: true, url: norm || e.target.value } })
+            }}
+            placeholder="https://twitch.tv/yourchannel"
+          />
+          <ExportSavedChannelsField
+            platform={platform ?? tpl.platform}
+            channelUrl={channelUrl}
+            savedChannels={savedChannels}
+            onSelectUrl={(url) => setTpl({ channelLink: { enabled: true, url } })}
+            onChannelsChange={() => onChannelsRefresh?.()}
+          />
+        </>
       ) : null}
 
       <div className="flex items-center justify-between gap-2">
-        <Label className="text-sm">Profanity censor</Label>
+        <Label className="text-sm">Profanity bleep</Label>
         <Switch
           checked={Boolean(tpl.profanityCensor)}
           onCheckedChange={(on) => setTpl({ profanityCensor: on })}
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        Mutes curse words in audio and masks them in captions (off by default).
+        Bleeps curse words using transcript timing and masks captions (off by default).
       </p>
 
       <ExportHeadlinePreview

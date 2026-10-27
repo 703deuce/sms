@@ -12,6 +12,8 @@ export type ExportDialogPreferences = {
   platformBadgeEnabled: boolean
   channelLinkEnabled: boolean
   profanityCensor: boolean
+  defaultAspect?: '9:16' | '4:5' | '1:1' | '16:9'
+  defaultResolution?: '720p' | '1080p'
 }
 
 const DEFAULTS: ExportDialogPreferences = {
