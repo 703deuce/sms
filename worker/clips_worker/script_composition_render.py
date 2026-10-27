@@ -122,13 +122,17 @@ def _document_settings_edits(document: dict, project_settings: dict, *, source_k
     doc_settings = document.get("settings") or {}
     captions = doc_settings.get("captions") or {}
     preset = captions.get("presetId") or captions.get("preset") or "bold_pop"
+    cap_edits = {
+        "enabled": bool(captions.get("enabled", True)),
+        "presetId": preset,
+        "burnIn": captions.get("burnIn", True),
+    }
+    for key in ("animation", "size", "position", "case", "wordsPerLine", "colors", "keywordHighlight", "emphasis"):
+        if key in captions and captions[key] is not None:
+            cap_edits[key] = captions[key]
     edits = {
         "v": 2,
-        "captions": {
-            "enabled": bool(captions.get("enabled", True)),
-            "presetId": preset,
-            "burnIn": captions.get("burnIn", True),
-        },
+        "captions": cap_edits,
         "layout": {"mode": doc_settings.get("reframeMode") or "speaker_follow", "shotOverrides": []},
         "aspectRatio": doc_settings.get("aspect") or project_settings.get("aspectRatio") or "9:16",
     }
@@ -205,7 +209,13 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
     workspace_id = ctx["workspaceId"]
     project_id = ctx["projectId"]
     resolution = ctx.get("resolution") or "1080p"
-    aspect = ctx.get("aspectRatio") or ctx.get("aspect") or "9:16"
+    doc_settings = document.get("settings") or {}
+    aspect = (
+        doc_settings.get("aspect")
+        or ctx.get("aspectRatio")
+        or ctx.get("aspect")
+        or "9:16"
+    )
     project_settings = ctx.get("project_settings") or {}
     if isinstance(project_settings, str):
         project_settings = json.loads(project_settings)
@@ -309,6 +319,9 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             render_id=render_id,
             render_meta={},
         )
+        mark_composition_render(conn, render_id, "RENDERING", progress=55)
+        heartbeat.update(stage="render", progress=55)
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render", "progress": 55})
 
         out_mp4 = td_path / "out.mp4"
         has_gaps = any(s.get("kind") == "gap" for s in edl)

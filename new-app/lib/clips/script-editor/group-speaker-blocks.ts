@@ -19,7 +19,11 @@ function speakerSortKey(speakerId: string): number {
   return next
 }
 
-export function groupSpeakerBlocks(words: EditorWord[], maxGapMs = 1200): SpeakerBlock[] {
+export function groupSpeakerBlocks(
+  words: EditorWord[],
+  maxGapMs = 1200,
+  speakerLabels?: Record<string, string>,
+): SpeakerBlock[] {
   speakerOrder.clear()
   const blocks: SpeakerBlock[] = []
   let cur: EditorWord[] = []
@@ -30,9 +34,10 @@ export function groupSpeakerBlocks(words: EditorWord[], maxGapMs = 1200): Speake
     const speakerId = curSpeaker || cur[0].speakerId
     const order = speakerSortKey(speakerId)
     const spkNum = speakerId.replace(/^spk:/, '')
+    const defaultLabel = spkNum === '0' ? 'Speaker 1' : `Speaker ${Number(spkNum) + 1}`
     blocks.push({
       speakerId,
-      speakerLabel: spkNum === '0' ? 'Speaker 1' : `Speaker ${Number(spkNum) + 1}`,
+      speakerLabel: speakerLabels?.[speakerId]?.trim() || defaultLabel,
       color: defaultSpeakerColor(order),
       startMs: cur[0].t0Ms,
       words: cur,

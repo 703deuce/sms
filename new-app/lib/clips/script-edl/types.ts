@@ -111,4 +111,6 @@ export type ScriptDocumentV1 = {
   }
   /** M12 — transcript display overrides from edit-for-clarity (audio unchanged). */
   wordTextOverrides?: Record<string, string>
+  /** Display names per speaker id (e.g. spk:0 → "Rick"). */
+  speakerLabels?: Record<string, string>
 }

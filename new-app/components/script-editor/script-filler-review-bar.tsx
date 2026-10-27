@@ -60,6 +60,12 @@ export function ScriptFillerReviewBar({
   onRemoveAll,
   onRemoveAllLexicon,
   onRemoveAllRepeat,
+  replaceText,
+  onReplaceTextChange,
+  onReplaceOne,
+  onReplaceAll,
+  onFindNext,
+  onFindPrev,
   onClose,
 }: {
   mode: 'filler' | 'gap'
@@ -87,6 +93,12 @@ export function ScriptFillerReviewBar({
   onRemoveAll: () => void
   onRemoveAllLexicon?: () => void
   onRemoveAllRepeat?: () => void
+  replaceText?: string
+  onReplaceTextChange?: (v: string) => void
+  onReplaceOne?: () => void
+  onReplaceAll?: () => void
+  onFindNext?: () => void
+  onFindPrev?: () => void
   onClose: () => void
 }) {
   const pos = total > 0 ? cursor + 1 : 0
@@ -132,6 +144,16 @@ export function ScriptFillerReviewBar({
             value={searchQuery}
             placeholder={queryPlaceholder}
             onChange={(e) => onSearchQueryChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                onFindNext?.()
+              }
+              if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault()
+                onFindPrev?.()
+              }
+            }}
             data-testid="filler-search-query"
           />
         )}
@@ -184,8 +206,25 @@ export function ScriptFillerReviewBar({
           <X className="size-4" />
         </Button>
       </div>
+      {searchMode === 'find' && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-sky-500/20 py-1.5">
+          <Input
+            className="h-8 min-w-[8rem] flex-1 text-xs"
+            value={replaceText ?? ''}
+            placeholder="Replace with…"
+            onChange={(e) => onReplaceTextChange?.(e.target.value)}
+            data-testid="find-replace-with"
+          />
+          <Button type="button" size="sm" variant="secondary" disabled={total === 0} onClick={onReplaceOne}>
+            Replace
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={total === 0} onClick={onReplaceAll}>
+            Replace all
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 border-t border-sky-500/20 py-1.5">
-        {mode === 'filler' ? (
+        {mode === 'filler' && searchMode !== 'find' ? (
           <Select value={action} onValueChange={(v) => typeof v === 'string' && onActionChange(v as FillerReviewAction)}>
             <SelectTrigger className="h-8 w-[12rem] text-xs">
               <SelectValue>{ACTION_LABEL[action]}</SelectValue>
@@ -242,7 +281,11 @@ export function ScriptFillerReviewBar({
       </div>
       {total === 0 && (
         <p className="pb-1 text-[11px] text-muted-foreground" data-testid="filler-zero-hits">
-          {mode === 'gap' ? 'No gaps match' : 'No filler words found'}
+          {mode === 'gap'
+            ? 'No gaps match'
+            : searchMode === 'find'
+              ? 'No matches'
+              : 'No filler words found'}
         </p>
       )}
     </div>

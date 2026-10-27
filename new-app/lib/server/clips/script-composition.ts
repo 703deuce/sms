@@ -136,11 +136,13 @@ export async function applyCompositionOpBatch(
           op: item.op as Prisma.InputJsonValue,
         },
       })
+      const aspect = document.settings?.aspect
       await tx.scriptComposition.update({
         where: { id: compositionId },
         data: {
           document: document as Prisma.InputJsonValue,
           revision,
+          ...(aspect ? { aspect } : {}),
         },
       })
       if (revision % SNAPSHOT_EVERY === 0) {

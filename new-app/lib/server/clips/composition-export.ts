@@ -25,6 +25,8 @@ export async function enqueueCompositionExport(
 ) {
   const row = await getCompositionForWorkspace(workspaceId, compositionId)
   if (!row) return null
+  const document = parseScriptCompositionDocument(row.document)
+  const exportAspect = document.settings?.aspect ?? row.aspect ?? '9:16'
 
   const idempotencyKey = createHash('sha256')
     .update(
@@ -69,7 +71,6 @@ export async function enqueueCompositionExport(
   let edlDurationMs: number | undefined
   const bootstrap = await getScriptBootstrap(workspaceId, row.projectId)
   if (bootstrap?.editorWords?.length) {
-    const document = parseScriptCompositionDocument(row.document)
     const wordsById = new Map(bootstrap.editorWords.map((w) => [w.id, w]))
     edlDurationMs = outputDurationMs(deriveEdl(document, wordsById))
   }
@@ -88,7 +89,7 @@ export async function enqueueCompositionExport(
       status: 'QUEUED',
       idempotencyKey,
       resolution: settings.resolution,
-      aspectRatio: row.aspect ?? '9:16',
+      aspectRatio: exportAspect,
       settings: settingsWithEdl as Prisma.InputJsonValue,
     },
     update: {

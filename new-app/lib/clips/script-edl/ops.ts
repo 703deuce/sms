@@ -71,6 +71,10 @@ export type ReplaceScenesOp = {
   type: 'replace_scenes'
   scenes: NonNullable<ScriptDocumentV1['scenes']>
 }
+export type PatchSpeakerLabelsOp = {
+  type: 'patch_speaker_labels'
+  labels: Record<string, string>
+}
 
 export type { AddMarkerOp, UpdateMarkerOp, DeleteMarkerOp }
 
@@ -103,6 +107,7 @@ export type ScriptCompositionOp =
   | PatchAudioFxOp
   | PatchWordTextOverridesOp
   | ReplaceScenesOp
+  | PatchSpeakerLabelsOp
   | AddMarkerOp
   | UpdateMarkerOp
   | DeleteMarkerOp
@@ -159,6 +164,7 @@ function finalizeDoc(
         : document.transcriptHiddenWordIds,
     wordSourceAdjust: partial.wordSourceAdjust ?? document.wordSourceAdjust,
     reframeKeyframes: partial.reframeKeyframes ?? document.reframeKeyframes,
+    speakerLabels: partial.speakerLabels ?? document.speakerLabels,
   }
 }
 
@@ -185,6 +191,7 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
   let overlays = document.overlays ? [...document.overlays] : undefined
   let audioFx = document.audioFx ? { ...document.audioFx } : undefined
   let wordTextOverrides = document.wordTextOverrides ? { ...document.wordTextOverrides } : undefined
+  let speakerLabels = document.speakerLabels ? { ...document.speakerLabels } : undefined
 
   if (op.type === 'delete_words') {
     for (const id of op.wordIds) {
@@ -368,6 +375,8 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     if (wordTextOverrides && !Object.keys(wordTextOverrides).length) wordTextOverrides = undefined
   } else if (op.type === 'replace_scenes') {
     scenes = op.scenes.length ? [...op.scenes] : undefined
+  } else if (op.type === 'patch_speaker_labels') {
+    speakerLabels = { ...(speakerLabels ?? {}), ...op.labels }
   }
 
   return finalizeDoc(document, order, kept, deleted, {
@@ -386,6 +395,7 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     overlays,
     audioFx,
     wordTextOverrides,
+    speakerLabels,
   })
 }
 
