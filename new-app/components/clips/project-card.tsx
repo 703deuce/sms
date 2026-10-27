@@ -4,6 +4,8 @@ import { CLIP_JOB_STATE, type ClipProjectStatusUi, ProjectStatusBadge } from '@/
 import { DurationChip } from '@/components/clips/ui/duration-chip'
 import { relativeTime } from '@/lib/clips/format'
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
+import { ProjectKindBadge } from '@/components/clips/ui/kind-badge'
+import { t2vProjectHref, t2vStatusLabel } from '@/lib/t2v/project-link'
 import { cn } from '@/lib/utils'
 
 function isProcessing(status: string) {
@@ -21,11 +23,16 @@ export function ProjectCard({
   onToggleSelect?: (id: string) => void
   selectionMode?: boolean
 }) {
-  const processing = isProcessing(project.status)
+  const isT2v = project.sourceKind === 't2v'
+  const t2vLabel = t2vStatusLabel(project)
+  const processing = isT2v
+    ? project.t2vDraftStatus === 'ASSEMBLING' || isProcessing(project.status)
+    : isProcessing(project.status)
   const statusUi = CLIP_JOB_STATE[project.status as ClipProjectStatusUi]
   const stageLabel = project.stage?.replace(/_/g, ' ') || 'Processing'
-  const overlayLabel = statusUi?.label ?? stageLabel
-  const { clipCount, thumbUrl, durationMs } = project
+  const overlayLabel = t2vLabel ?? statusUi?.label ?? stageLabel
+  const { clipCount, thumbUrl, durationMs, t2vSceneCount } = project
+  const href = t2vProjectHref(project)
 
   return (
     <div
@@ -46,7 +53,7 @@ export function ProjectCard({
         </div>
       )}
       <Link
-        href={`/app/clips/${project.id}`}
+        href={href}
         data-testid="project-card"
         className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
@@ -58,8 +65,13 @@ export function ProjectCard({
             <Film className="size-8 text-muted-foreground" aria-hidden />
           </div>
         )}
-        <div className="absolute left-2 top-2 z-10">
-          <ProjectStatusBadge status={project.status} showSpinner={false} />
+        <div className="absolute left-2 top-2 z-10 flex flex-wrap gap-1">
+          <ProjectKindBadge kind={isT2v ? 'video' : 'clips'} />
+          {!isT2v || !t2vLabel ? (
+            <ProjectStatusBadge status={project.status} showSpinner={false} />
+          ) : (
+            <span className="rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">{t2vLabel}</span>
+          )}
         </div>
         {durationMs > 0 && !processing && (
           <DurationChip ms={durationMs} />
@@ -82,7 +94,9 @@ export function ProjectCard({
         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Sparkles className="size-3.5" aria-hidden />
-            {clipCount} clip{clipCount === 1 ? '' : 's'}
+            {isT2v
+              ? `${t2vSceneCount ?? 0} scene${(t2vSceneCount ?? 0) === 1 ? '' : 's'}`
+              : `${clipCount} clip${clipCount === 1 ? '' : 's'}`}
           </span>
           <span className="inline-flex items-center gap-1">
             <Clock className="size-3.5" aria-hidden />

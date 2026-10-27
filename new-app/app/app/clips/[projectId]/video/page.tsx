@@ -5,8 +5,8 @@ import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { T2vStudioBuildingBanner, T2vStudioToolbar } from '@/components/t2v/t2v-studio-toolbar'
 
 export const metadata = { title: 'Video studio · Clips' }
 
@@ -27,43 +27,37 @@ export default async function T2vStudioPage({
   })
   const project = await prisma.clipProject.findFirst({
     where: { id: projectId, workspaceId, sourceKind: 't2v' },
-    select: { id: true, title: true },
+    select: { id: true, title: true, status: true, rangeEndMs: true },
   })
   if (!project || !draft) notFound()
   const doc = draft.document as T2vDraftV1
-
-  const topBar = (
-    <div className="flex items-center justify-between border-b border-border px-4 py-3">
-      <div className="flex items-center gap-3 text-sm">
-        <Link href="/app/clips" className="text-muted-foreground hover:text-foreground">← Drive</Link>
-        <span className="font-medium">{project.title}</span>
-      </div>
-      <div className="flex gap-2 text-sm">
-        <Link
-          href={`/app/clips/${projectId}/video?mode=script`}
-          className={mode === 'script' || !mode ? 'font-medium text-foreground' : 'text-muted-foreground'}
-        >
-          Script
-        </Link>
-        <Link
-          href={`/app/clips/${projectId}/video?mode=storyboard`}
-          className={mode === 'storyboard' ? 'font-medium text-foreground' : 'text-muted-foreground'}
-        >
-          Storyboard
-        </Link>
-        {project && (
-          <Link href={`/app/clips/${projectId}/script`} className="text-primary">
-            Open editor
-          </Link>
-        )}
-      </div>
-    </div>
+  const composition = await prisma.scriptComposition.findFirst({
+    where: { projectId, workspaceId, kind: 'FULL', clipId: null, deletedAt: null },
+    select: { id: true },
+  })
+  const studioMode = mode === 'storyboard' ? 'storyboard' : 'script'
+  const storyboardStale =
+    composition != null && draft.assembledRevision != null && draft.assembledRevision < draft.revision
+  const toolbar = (
+    <>
+      <T2vStudioToolbar
+        projectId={project.id}
+        title={project.title}
+        mode={studioMode}
+        compositionId={composition?.id ?? null}
+        durationMs={project.rangeEndMs || 0}
+        aspect={doc.settings.aspect}
+        projectStatus={project.status}
+        storyboardStale={storyboardStale}
+      />
+      {draft.status === 'ASSEMBLING' ? <T2vStudioBuildingBanner progress={draft.progress} /> : null}
+    </>
   )
 
   if (mode === 'storyboard') {
     return (
       <Page className="flex min-h-0 flex-col p-0">
-        {topBar}
+        {toolbar}
         <T2vStoryboard draftId={draft.id} projectId={project.id} document={doc} />
       </Page>
     )
@@ -71,7 +65,7 @@ export default async function T2vStudioPage({
 
   return (
     <Page className="p-0">
-      {topBar}
+      {toolbar}
       <T2vScriptReview
         draftId={draft.id}
         projectId={project.id}

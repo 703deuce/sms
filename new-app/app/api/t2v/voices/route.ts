@@ -18,7 +18,10 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
       take: 50,
     })
-    return NextResponse.json({ data: { voices, saved, nextPageToken } })
+    const defaultRow = saved.find((s) => (s.labels as { role?: string } | null)?.role === 'default')
+    return NextResponse.json({
+      data: { voices, saved, nextPageToken, defaultVoiceId: defaultRow?.voiceId ?? null },
+    })
   } catch (err) {
     return jsonError(err, 500)
   }

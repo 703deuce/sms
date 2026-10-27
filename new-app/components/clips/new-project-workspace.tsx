@@ -16,7 +16,9 @@ import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/cli
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
 import { StreamerImportPanel } from '@/components/streamer/streamer-import-panel'
 import { classifyImportUrl } from '@/lib/clips/import-url'
-import { Globe, Link2, Loader2, Plus, Radio, UploadCloud } from 'lucide-react'
+import { Clapperboard, Globe, Link2, Loader2, Plus, Radio, UploadCloud } from 'lucide-react'
+import { isT2vFeatureEnabled } from '@/lib/features/t2v'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Enabled?: boolean }) {
@@ -107,9 +109,37 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           <h1 className="text-xl font-semibold">New project</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a file or import from Google Drive or Dropbox.
+          Upload a file, import from Google Drive or Dropbox, or start a text-to-video project.
         </p>
       </header>
+      {isT2vFeatureEnabled() && (
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {(
+            [
+              { href: '/app/clips/new?tab=upload', label: 'Upload file', hint: 'MP4, MOV, WebM', icon: UploadCloud, active: tab === 'upload' },
+              { href: '/app/clips/new?tab=link', label: 'Paste link', hint: 'Drive or Dropbox', icon: Link2, active: tab === 'link' },
+              { href: '/app/clips/new?tab=streamer', label: 'Streamer', hint: 'Twitch or Kick', icon: Radio, active: tab === 'streamer' },
+              { href: '/app/clips/video/new', label: 'Text to video', hint: 'Idea, script, link → video', icon: Clapperboard, active: false },
+            ] as const
+          ).map((card) => (
+            <Link
+              key={card.href}
+              href={card.href}
+              className={cn(
+                'flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:border-primary/40',
+                card.active && 'border-primary bg-primary/8 ring-1 ring-primary/40',
+              )}
+              data-testid={card.label === 'Text to video' ? 'new-project-t2v-card' : undefined}
+            >
+              <span className="grid size-10 place-items-center rounded-lg bg-muted">
+                <card.icon className="size-5 text-primary" aria-hidden />
+              </span>
+              <span className="text-sm font-semibold">{card.label}</span>
+              <span className="text-xs text-muted-foreground">{card.hint}</span>
+            </Link>
+          ))}
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-4">
           <fieldset className="grid grid-cols-1 gap-2 border-0 p-0 sm:grid-cols-3">

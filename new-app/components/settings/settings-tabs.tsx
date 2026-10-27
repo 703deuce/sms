@@ -14,11 +14,14 @@ import { Panel } from '@/components/app/page-primitives'
 import { StatusBadge } from '@/components/app/status'
 import { BUSINESS, TEAM } from '@/lib/data'
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
+import { T2vVoicesSettings } from '@/components/t2v/t2v-voices-settings'
+import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 
 const TABS = [
   { value: 'business', label: 'Business' },
   { value: 'team', label: 'Team' },
   { value: 'billing', label: 'Billing & usage' },
+  ...(isT2vFeatureEnabled() ? [{ value: 'voices' as const, label: 'Voices' }] : []),
   { value: 'preferences', label: 'Preferences' },
   { value: 'notifications', label: 'Notifications' },
   { value: 'security', label: 'Security' },
@@ -136,6 +139,12 @@ export function SettingsTabs() {
           </Table>
         </Panel>
       </TabsContent>
+
+      {isT2vFeatureEnabled() ? (
+        <TabsContent value="voices">
+          <T2vVoicesSettings />
+        </TabsContent>
+      ) : null}
 
       <TabsContent value="billing" className="flex flex-col gap-6">
         <Panel

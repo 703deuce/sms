@@ -6,13 +6,22 @@ import { projectWordsKey } from '@/lib/storage'
 
 export async function listClipProjects(
   workspaceId: string,
-  opts: { q?: string; status?: string; limit?: number; trash?: boolean; folderId?: string | null },
+  opts: {
+    q?: string
+    status?: string
+    kind?: string
+    limit?: number
+    trash?: boolean
+    folderId?: string | null
+  },
 ) {
   const prisma = getPrisma()
   const where: Record<string, unknown> = {
     workspaceId,
     deletedAt: opts.trash ? { not: null } : null,
   }
+  if (opts.kind === 'video') where.sourceKind = 't2v'
+  else if (opts.kind === 'clips') where.sourceKind = { not: 't2v' }
   if (opts.folderId !== undefined) {
     where.folderId = opts.folderId
   }

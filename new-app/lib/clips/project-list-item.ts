@@ -7,4 +7,7 @@ export type ClipProjectListItem = ClipProject & {
   ownerName?: string | null
   isPublished?: boolean
   publishedAt?: string | null
+  t2vDraftStatus?: string | null
+  t2vDraftProgress?: number | null
+  t2vSceneCount?: number | null
 }

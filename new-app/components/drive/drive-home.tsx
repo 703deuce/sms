@@ -29,6 +29,8 @@ import { defaultClipSettings, TOOL_PRESET_MAP } from '@/lib/clips/settings'
 import { uploadClipFile } from '@/lib/clips/upload'
 import { cn } from '@/lib/utils'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
+import { t2vProjectHref } from '@/lib/t2v/project-link'
+import { ProjectKindBadge } from '@/components/clips/ui/kind-badge'
 
 const TEMPLATE_CHIPS: { label: string; preset: string }[] = [
   { label: 'Turn a long video into clips', preset: 'long-video-to-short-video' },
@@ -42,6 +44,7 @@ export function DriveHome({
   initialProjects,
   q,
   status: statusFilter,
+  kind: kindFilter,
   pageView = 'home',
   folders = [],
   showAll = false,
@@ -49,6 +52,7 @@ export function DriveHome({
   initialProjects: ClipProjectListItem[]
   q?: string
   status?: string
+  kind?: string
   pageView?: 'home' | 'trash' | 'recents'
   folders?: { id: string; name: string }[]
   showAll?: boolean
@@ -59,6 +63,7 @@ export function DriveHome({
   const [layout, setLayout] = useState<'grid' | 'list'>('grid')
   const [localSearch, setLocalSearch] = useState(q ?? '')
   const [status, setStatus] = useState(statusFilter ?? 'all')
+  const [kind, setKind] = useState(kindFilter ?? 'all')
   const search = drive?.search ?? localSearch
   const setSearch = drive?.setSearch ?? setLocalSearch
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -86,9 +91,10 @@ export function DriveHome({
     const params = new URLSearchParams()
     if (search.trim()) params.set('q', search.trim())
     if (status && status !== 'all') params.set('status', status)
+    if (kind && kind !== 'all') params.set('kind', kind)
     if (showAll) params.set('view', 'all')
     router.push(`/app/clips?${params.toString()}`)
-  }, [router, search, status, showAll])
+  }, [router, search, status, kind, showAll])
 
   const bulkMove = async (folderId: string | null) => {
     if (!selected.size) return
@@ -284,6 +290,16 @@ export function DriveHome({
               onKeyDown={(e) => e.key === 'Enter' && onSearch()}
             />
           )}
+          <Select value={kind} onValueChange={(v) => v && setKind(v)}>
+            <SelectTrigger className="h-8 w-[130px]" data-testid="drive-kind-filter">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="clips">Clips</SelectItem>
+              {isT2vFeatureEnabled() ? <SelectItem value="video">Text to video</SelectItem> : null}
+            </SelectContent>
+          </Select>
           <Select value={status} onValueChange={(v) => v && setStatus(v)}>
             <SelectTrigger className="h-8 w-[140px]" data-testid="drive-status-filter">
               <SelectValue placeholder="Status" />
@@ -385,8 +401,9 @@ export function DriveHome({
                       />
                     </td>
                     <td className="px-2">
-                      <Link href={`/app/clips/${p.id}`} className="font-medium hover:underline">
+                      <Link href={t2vProjectHref(p)} className="inline-flex items-center gap-2 font-medium hover:underline">
                         {p.title}
+                        <ProjectKindBadge kind={p.sourceKind === 't2v' ? 'video' : 'clips'} />
                       </Link>
                     </td>
                     <td className="px-2 text-xs text-muted-foreground">{p.ownerName ?? '—'}</td>

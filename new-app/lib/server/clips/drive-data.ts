@@ -14,6 +14,7 @@ export const getClipsDriveFolders = cache(async (workspaceId: string) => {
 export type DriveProjectListOpts = {
   q?: string
   status?: string
+  kind?: string
   limit?: number
   folderId?: string
 }
