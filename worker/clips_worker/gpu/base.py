@@ -51,6 +51,7 @@ class RenderRes:
     provider: str = "modal"
     render_ms: float = 0.0
     clip_id: str | None = None
+    cold_start: bool = False
 
 
 class GpuProvider(Protocol):

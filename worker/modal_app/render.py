@@ -11,11 +11,30 @@ from modal_app.app import app
 image = modal.Image.debian_slim(python_version="3.12").apt_install("ffmpeg")
 
 
-@app.cls(image=image, gpu="L4", timeout=1800, scaledown_window=int(os.environ.get("MODAL_SCALEDOWN_S", "60")))
+_MIN_CONTAINERS = max(0, int(os.environ.get("MODAL_RENDER_MIN_CONTAINERS", "1")))
+
+
+@app.cls(
+    image=image,
+    gpu="L4",
+    timeout=1800,
+    scaledown_window=int(os.environ.get("MODAL_SCALEDOWN_S", "120")),
+    min_containers=_MIN_CONTAINERS,
+)
 class Renderer:
+    @modal.enter()
+    def _on_start(self):
+        self._boot_at = time.time()
+
+    @modal.method()
+    def ping(self) -> dict:
+        boot = getattr(self, "_boot_at", time.time())
+        return {"ok": True, "cold_start": (time.time() - boot) < 3.0}
+
     @modal.method()
     def render_one(self, item: dict) -> dict:
         t0 = time.time()
+        cold = (t0 - getattr(self, "_boot_at", t0)) < 3.0
         seg_url = item.get("segment_url")
         upload_url = item.get("out_upload_url")
         fg = item.get("filtergraph") or ""
@@ -75,6 +94,7 @@ class Renderer:
             "size_bytes": len(data),
             "gpu_seconds": elapsed,
             "render_ms": round(elapsed * 1000.0, 1),
+            "cold_start": cold,
         }
 
     @modal.method()

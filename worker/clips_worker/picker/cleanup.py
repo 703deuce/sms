@@ -77,6 +77,19 @@ def finalize_picks(
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
         dur = pick["end_ms"] - pick["start_ms"]
         if dur < min_ms:
+            from clips_worker.picker.extend_setup import extend_short_pick_backward
+
+            extend_short_pick_backward(
+                pick,
+                sentences,
+                signals_by_idx,
+                words,
+                range_start_ms,
+                range_end_ms,
+                min_ms,
+            )
+            dur = pick["end_ms"] - pick["start_ms"]
+        if dur < min_ms:
             dropped_short += 1
             if dur >= 2_500:
                 short_pool.append(pick)

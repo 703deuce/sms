@@ -132,7 +132,6 @@ def pick_talking_clips(
                     output_tokens=vp_meta.get("output_tokens"),
                 )
             else:
-                quota = vp_meta.get("quota") if isinstance(vp_meta.get("quota"), dict) else None
                 picker_info(
                     "video_picker_regular_fail_open",
                     error=str(vp_meta.get("error") or "video_picker failed")[:200],
@@ -163,6 +162,20 @@ def pick_talking_clips(
                     visual_moments=visual_moments or None,
                     range_start_ms=range_start_ms,
                 )
+            if not visual_moments:
+                from clips_worker.picker.signal_candidates import (
+                    merge_pass1_moments,
+                    propose_signal_action_moments,
+                )
+
+                signal_moments = propose_signal_action_moments(
+                    sentences,
+                    signals,
+                    range_start_ms=range_start_ms,
+                    range_end_ms=range_end_ms,
+                )
+                if signal_moments:
+                    moments = merge_pass1_moments(moments, signal_moments)
             if on_picker_checkpoint:
                 on_picker_checkpoint(moments, None)
             if drain_requested():

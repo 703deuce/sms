@@ -20,6 +20,37 @@ from clips_worker.storage import download_object, sign_upload_url, sign_url, upl
 
 log = logging.getLogger(__name__)
 
+_modal_render_warm = False
+
+
+def _gpu_render_print(payload: dict) -> None:
+    print(f"[clipper:gpu_render] {json.dumps(payload)}", flush=True)
+
+
+def _gpu_render_warn(msg: str) -> None:
+    print(f"[clipper:gpu_render] {msg}", flush=True)
+
+
+def gpu_render_local_max_clip_s() -> float:
+    return max(0.0, float(os.environ.get("GPU_RENDER_LOCAL_MAX_CLIP_S", "18")))
+
+
+def _clip_src_duration_s(src_path: Path) -> float:
+    try:
+        from clips_worker.probe import probe_duration
+
+        return float(probe_duration(src_path))
+    except Exception:
+        return 0.0
+
+
+def _prefer_local_for_short_clip(prep: PreparedGpuRender) -> bool:
+    limit = gpu_render_local_max_clip_s()
+    if limit <= 0:
+        return False
+    dur = _clip_src_duration_s(prep.src_path)
+    return dur > 0 and dur <= limit
+
 
 def render_provider_enabled() -> bool:
     name = (os.environ.get("GPU_PROVIDER_RENDER") or "modal").strip().lower()
@@ -158,29 +189,23 @@ def _render_local_ffmpeg(prep: PreparedGpuRender) -> bool:
         subprocess.check_call(cmd)
         ok = prep.dest_path.is_file() and prep.dest_path.stat().st_size > 0
         render_ms = (time.perf_counter() - t0) * 1000.0
-        log.info(
-            "[clipper:gpu_render] %s",
-            json.dumps(
-                {
-                    "clipId": prep.clip_id,
-                    "projectId": prep.project_id,
-                    "provider": "local",
-                    "ok": ok,
-                    "renderMs": round(render_ms, 1),
-                    "gpuSeconds": 0.0,
-                    "sizeBytes": prep.dest_path.stat().st_size if ok else 0,
-                    "filterComplex": prep.filter_complex,
-                    "fallback": True,
-                }
-            ),
+        _gpu_render_print(
+            {
+                "clipId": prep.clip_id,
+                "projectId": prep.project_id,
+                "provider": "local",
+                "ok": ok,
+                "renderMs": round(render_ms, 1),
+                "gpuSeconds": 0.0,
+                "sizeBytes": prep.dest_path.stat().st_size if ok else 0,
+                "filterComplex": prep.filter_complex,
+                "fallback": True,
+                "coldStart": False,
+            }
         )
         return ok
     except Exception as exc:
-        log.warning(
-            "[clipper:gpu_render] local_fallback_failed clipId=%s reason=%s",
-            prep.clip_id,
-            _error_summary(exc),
-        )
+        _gpu_render_warn(f"local_fallback_failed clipId={prep.clip_id} reason={_error_summary(exc)}")
         return False
 
 
@@ -191,8 +216,19 @@ def _apply_render_result(prep: PreparedGpuRender, res: RenderRes) -> bool:
     return prep.dest_path.is_file() and prep.dest_path.stat().st_size > 0
 
 
-def _log_render_result(prep: PreparedGpuRender, res: RenderRes, *, fallback: bool = False) -> None:
+def _log_render_result(
+    prep: PreparedGpuRender,
+    res: RenderRes,
+    *,
+    fallback: bool = False,
+    cold_start: bool | None = None,
+) -> None:
+    global _modal_render_warm
     render_ms = res.render_ms or 0.0
+    if cold_start is None:
+        cold_start = bool(res.cold_start) or (res.provider == "modal" and not _modal_render_warm)
+    if res.provider == "modal" and res.ok:
+        _modal_render_warm = True
     payload: dict[str, object] = {
         "clipId": prep.clip_id,
         "projectId": prep.project_id,
@@ -202,10 +238,11 @@ def _log_render_result(prep: PreparedGpuRender, res: RenderRes, *, fallback: boo
         "gpuSeconds": round(res.gpu_seconds, 3),
         "sizeBytes": res.size_bytes,
         "filterComplex": prep.filter_complex,
+        "coldStart": bool(cold_start),
     }
     if fallback:
         payload["fallback"] = True
-    log.info("[clipper:gpu_render] %s", json.dumps(payload))
+    _gpu_render_print(payload)
 
 
 def render_one_via_provider(
@@ -216,26 +253,31 @@ def render_one_via_provider(
     if not render_provider_enabled():
         return _render_local_ffmpeg(prep)
 
+    if _prefer_local_for_short_clip(prep):
+        _gpu_render_print(
+            {
+                "clipId": prep.clip_id,
+                "projectId": prep.project_id,
+                "provider": "local",
+                "reason": "short_clip",
+                "maxModalClipS": gpu_render_local_max_clip_s(),
+                "clipDurationS": round(_clip_src_duration_s(prep.src_path), 2),
+            }
+        )
+        return _render_local_ffmpeg(prep)
+
     modal_req: RenderReq | None = None
     try:
         modal_req = _prepare_modal_render_req(prep)
     except Exception as exc:
-        log.warning(
-            "[clipper:gpu_render] modal_prepare_failed clipId=%s reason=%s",
-            prep.clip_id,
-            _error_summary(exc),
-        )
+        _gpu_render_warn(f"modal_prepare_failed clipId={prep.clip_id} reason={_error_summary(exc)}")
         return _render_local_ffmpeg(prep)
 
     t0 = time.perf_counter()
     try:
         results = render_with_fallback(conn, [modal_req], prep.workspace_id, prep.project_id)
     except Exception as exc:
-        log.warning(
-            "[clipper:gpu_render] modal_render_failed clipId=%s reason=%s",
-            prep.clip_id,
-            _error_summary(exc),
-        )
+        _gpu_render_warn(f"modal_render_failed clipId={prep.clip_id} reason={_error_summary(exc)}")
         return _render_local_ffmpeg(prep)
 
     if not results:
@@ -246,11 +288,8 @@ def render_one_via_provider(
     _log_render_result(prep, res)
     if res.ok and _apply_render_result(prep, res):
         return True
-    log.warning(
-        "[clipper:gpu_render] modal_result_not_ok clipId=%s provider=%s ok=%s",
-        prep.clip_id,
-        res.provider,
-        res.ok,
+    _gpu_render_warn(
+        f"modal_result_not_ok clipId={prep.clip_id} provider={res.provider} ok={res.ok}"
     )
     return _render_local_ffmpeg(prep)
 
@@ -271,14 +310,15 @@ def render_batch_via_provider(
         reqs: list[RenderReq] = []
         modal_preps: list[PreparedGpuRender] = []
         for prep in batch:
+            if _prefer_local_for_short_clip(prep):
+                out[prep.clip_id] = _render_local_ffmpeg(prep)
+                continue
             try:
                 reqs.append(_prepare_modal_render_req(prep))
                 modal_preps.append(prep)
             except Exception as exc:
-                log.warning(
-                    "[clipper:gpu_render] modal_prepare_failed clipId=%s reason=%s",
-                    prep.clip_id,
-                    _error_summary(exc),
+                _gpu_render_warn(
+                    f"modal_prepare_failed clipId={prep.clip_id} reason={_error_summary(exc)}"
                 )
                 out[prep.clip_id] = _render_local_ffmpeg(prep)
 
@@ -296,7 +336,7 @@ def render_batch_via_provider(
             else:
                 results = render_with_fallback(conn, reqs, ws, proj)
         except Exception as exc:
-            log.warning("gpu.render_batch failed chunk=%s reason=%s", len(reqs), _error_summary(exc))
+            _gpu_render_warn(f"render_batch_failed chunk={len(reqs)} reason={_error_summary(exc)}")
             results = render_with_fallback(conn, reqs, ws, proj)
 
         wall_ms = (time.perf_counter() - t0) * 1000.0

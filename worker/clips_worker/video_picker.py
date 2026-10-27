@@ -236,6 +236,7 @@ def watch_video_file(
         stage_end("video_picker", t0, chunk=chunk_label, error=err_msg[:180], fail_open=True)
         return [], meta
 
+    last_status: int | None = None
     try:
         model = discover_video_picker_model()
         meta["model"] = model

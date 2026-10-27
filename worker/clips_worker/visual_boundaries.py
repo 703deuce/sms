@@ -8,6 +8,7 @@ from clips_worker.video_picker import absolute_moment_ms
 
 DEFAULT_SETUP_LEAD_MS = 2500
 DEFAULT_PAYOFF_TAIL_MS = 1500
+BOUNDARY_ANCHOR_TOLERANCE_MS = 30_000
 
 
 def visual_boundaries_enabled() -> bool:
@@ -27,7 +28,13 @@ def _lead_tail_ms() -> tuple[int, int]:
     return max(0, lead), max(500, tail)
 
 
-def _ms_from_llm_seconds(val: Any, range_start_ms: int) -> int | None:
+def _coerce_boundary_ms(
+    val: Any,
+    *,
+    range_start_ms: int,
+    anchor_ms: int | None,
+    range_end_ms: int | None,
+) -> int | None:
     if val is None or val == "":
         return None
     try:
@@ -36,7 +43,19 @@ def _ms_from_llm_seconds(val: Any, range_start_ms: int) -> int | None:
         return None
     if sec <= 0:
         return None
-    return range_start_ms + int(sec * 1000)
+    candidates: list[int] = [int(sec * 1000)]
+    # Legacy trim-relative hints (pre absolute-second prompt).
+    if range_start_ms:
+        candidates.append(range_start_ms + int(sec * 1000))
+    hi = range_end_ms if range_end_ms is not None else candidates[0] + 120_000
+    lo = max(0, range_start_ms - 5_000)
+    for abs_ms in candidates:
+        if abs_ms < lo or abs_ms > hi + 5_000:
+            continue
+        if anchor_ms is not None and abs(abs_ms - anchor_ms) > BOUNDARY_ANCHOR_TOLERANCE_MS:
+            continue
+        return abs_ms
+    return None
 
 
 def infer_boundaries_from_moments(
@@ -66,9 +85,21 @@ def boundary_fields_from_llm_row(
     row: dict[str, Any],
     *,
     range_start_ms: int = 0,
+    anchor_ms: int | None = None,
+    range_end_ms: int | None = None,
 ) -> tuple[int | None, int | None]:
-    setup = _ms_from_llm_seconds(row.get("setup_start_s"), range_start_ms)
-    payoff = _ms_from_llm_seconds(row.get("payoff_end_s"), range_start_ms)
+    setup = _coerce_boundary_ms(
+        row.get("setup_start_s"),
+        range_start_ms=range_start_ms,
+        anchor_ms=anchor_ms,
+        range_end_ms=range_end_ms,
+    )
+    payoff = _coerce_boundary_ms(
+        row.get("payoff_end_s"),
+        range_start_ms=range_start_ms,
+        anchor_ms=anchor_ms,
+        range_end_ms=range_end_ms,
+    )
     return setup, payoff
 
 
@@ -105,11 +136,17 @@ def resolve_boundaries_for_window(
     *,
     range_start_ms: int = 0,
     range_end_ms: int | None = None,
+    anchor_ms: int | None = None,
 ) -> tuple[int, int, int | None, int | None]:
     """Return (start_ms, end_ms, setup_ms, payoff_ms) for snapping metadata."""
     setup, payoff = None, None
     if llm_row:
-        setup, payoff = boundary_fields_from_llm_row(llm_row, range_start_ms=range_start_ms)
+        setup, payoff = boundary_fields_from_llm_row(
+            llm_row,
+            range_start_ms=range_start_ms,
+            anchor_ms=anchor_ms,
+            range_end_ms=range_end_ms,
+        )
     if setup is None and payoff is None and video_moments:
         setup, payoff = infer_boundaries_from_moments(
             start_ms, end_ms, video_moments, range_start_ms=range_start_ms

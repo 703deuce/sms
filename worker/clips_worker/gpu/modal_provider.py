@@ -103,6 +103,7 @@ class ModalProvider:
                     provider="modal",
                     render_ms=float(raw.get("render_ms") or 0),
                     clip_id=req.clip_id,
+                    cold_start=bool(raw.get("cold_start")),
                 )
             )
         return out

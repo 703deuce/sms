@@ -466,9 +466,12 @@ def run_m4_pipeline(
                 persisted_spans = set(existing_segments)
                 span_lock = threading.Lock()
                 head_executor = ThreadPoolExecutor(max_workers=1)
-                head_render_state: dict = {"by_span": {}}
+                head_render_state: dict = {"by_span": {}, "clip_id_by_span": {}, "head_future": None, "headstart_pick": None}
                 head_future = None
                 headstart_pick: dict | None = None
+                from clips_worker.gpu.render_warmup import warm_modal_renderer_if_needed
+
+                warm_modal_renderer_if_needed(conn)
 
                 from clips_worker.clip_segments import spans_same_segment
 
@@ -545,8 +548,11 @@ def run_m4_pipeline(
                             flush=True,
                         )
 
-                def build_clip_row_from_pick(pick: dict, idx: int) -> dict:
-                    clip_id = f"clip_{uuid.uuid4().hex}"
+                def build_clip_row_from_pick(pick: dict, idx: int, clip_id: str | None = None) -> dict:
+                    sk_pick = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
+                    clip_id = clip_id or head_render_state.get("clip_id_by_span", {}).get(sk_pick)
+                    clip_id = clip_id or f"clip_{uuid.uuid4().hex}"
+                    head_render_state.setdefault("clip_id_by_span", {})[sk_pick] = clip_id
                     clip_file = td_path / f"clip_{idx}.mp4"
                     ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"], clip_index=idx)
                     clip_words = slice_words(words, pick["start_ms"], pick["end_ms"])
@@ -626,7 +632,8 @@ def run_m4_pipeline(
                     if not _mark_span(pick["start_ms"], pick["end_ms"]):
                         return
                     try:
-                        row = build_clip_row_from_pick(pick, clip_index)
+                        cid = head_render_state.get("clip_id_by_span", {}).get(sk)
+                        row = build_clip_row_from_pick(pick, clip_index, clip_id=cid)
                         head_render_state["by_span"][sk] = row
                         _persist_clip_row(row, clip_index, clips_total_hint)
                     except Exception as exc:
@@ -645,6 +652,10 @@ def run_m4_pipeline(
                         return
                     top = early_picks[0]
                     headstart_pick = top
+                    head_render_state["headstart_pick"] = top
+                    sk = _span_key(int(top["start_ms"]), int(top["end_ms"]))
+                    if sk not in head_render_state.setdefault("clip_id_by_span", {}):
+                        head_render_state["clip_id_by_span"][sk] = f"clip_{uuid.uuid4().hex}"
                     print(
                         f"[clipper:speed] project={project_id} phase=headstart_render_begin "
                         f"startMs={top.get('start_ms')} endMs={top.get('end_ms')}",
@@ -742,6 +753,15 @@ def run_m4_pipeline(
                     def build_talking_clip_row(idx: int) -> dict | None:
                         pick = picks[idx]
                         cached = _headstart_row_for_pick(pick)
+                        if cached is None:
+                            from clips_worker.headstart_render import wait_for_headstart_row
+
+                            cached = wait_for_headstart_row(
+                                head_render_state,
+                                _span_key,
+                                pick,
+                                project_id=project_id,
+                            )
                         if cached is not None:
                             return cached
                         if not _mark_span(pick["start_ms"], pick["end_ms"]):
@@ -755,7 +775,9 @@ def run_m4_pipeline(
                                 flush=True,
                             )
                             return None
-                        return build_clip_row_from_pick(pick, idx)
+                        sk = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
+                        cid = head_render_state.get("clip_id_by_span", {}).get(sk)
+                        return build_clip_row_from_pick(pick, idx, clip_id=cid)
 
                     index_order = sorted(
                         range(len(picks)),

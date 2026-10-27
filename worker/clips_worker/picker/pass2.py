@@ -113,9 +113,11 @@ def _pass2_system(genre: str, *, batched: bool = False) -> str:
         [
             "Return PASS 2 JSON only. Score and tighten each moment; cite sentence ids.",
             moment_rule,
-            "For each clip set setup_start_s and payoff_end_s (seconds from trim start): "
-            "setup_start_s includes lead-in before the hook; payoff_end_s lets the visual payoff finish "
-            "(kill/reaction/punchline) plus ~1-2s. Use visual watch notes when present.",
+            "For each clip set setup_start_s and payoff_end_s as ABSOLUTE seconds from the start of the "
+            "full source video (same time axis as sentence timestamps in the transcript, e.g. 148.6 not 0). "
+            "setup_start_s includes lead-in before the hook; payoff_end_s holds through the visual payoff "
+            "(kill/reaction/punchline) plus ~1-2s. Values must be within ±30s of the moment anchor. "
+            "Use null when unsure. Use visual watch notes when present.",
             "title must be <= 60 characters, honest, using the speaker's words; never internal codes like coverage_span.",
             load_core_rubric(),
             load_genre_prompt(genre),
@@ -202,7 +204,15 @@ def _clip_row_from_llm(
         )
 
         if visual_boundaries_enabled():
-            setup_ms, payoff_ms = boundary_fields_from_llm_row(row, range_start_ms=range_start_ms)
+            anchor_idx = int(moment.get("anchor_id", moment.get("start_sentence", ss)))
+            anchor_idx = max(ss, min(anchor_idx, es))
+            anchor_ms = int(sentences[anchor_idx].start_ms)
+            setup_ms, payoff_ms = boundary_fields_from_llm_row(
+                row,
+                range_start_ms=range_start_ms,
+                anchor_ms=anchor_ms,
+                range_end_ms=int(sentences[es].end_ms),
+            )
             if setup_ms is None and payoff_ms is None and visual_moments:
                 lo = int(sentences[ss].start_ms)
                 hi = int(sentences[es].end_ms)
@@ -271,7 +281,8 @@ def _score_moments_batched(
     if video_context:
         user_body = (
             "Full judge context: score each moment using transcript + visual watch together. "
-            "Set setup_start_s and payoff_end_s per clip (seconds from trim start).\n"
+            "Set setup_start_s and payoff_end_s per clip (absolute seconds from source start; "
+            "match transcript timestamps).\n"
             f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user_body}"
         )
     data = chat_json(
@@ -416,7 +427,8 @@ def score_moments(
         user = json.dumps([block], indent=0)
         if video_context:
             user = (
-                "Full judge context: include setup_start_s and payoff_end_s from visual watch.\n"
+                "Full judge context: include setup_start_s and payoff_end_s (absolute source seconds) "
+                "from visual watch.\n"
                 f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user}"
             )
         data = chat_json(_pass2_system(genre), user, PASS2_SCHEMA, "moments_pass2")
