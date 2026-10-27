@@ -11,7 +11,11 @@ from psycopg2.extras import RealDictCursor
 
 from clips_worker.streamer.errors import RetryableError
 
-BACKOFF_MIN = [2, 5, 10, 20, 40]
+BACKOFF_MIN_TWITCH = [2, 5, 10, 20, 40]
+# After initial KICK_VOD_DELAY_S (~5 min), spread polls across ~90 min (Rick: replay publish up to ~1 h).
+BACKOFF_MIN_KICK = [3, 5, 8, 12, 15, 20, 27]
+MAX_AUTOPULL_ATTEMPTS_TWITCH = 6
+MAX_AUTOPULL_ATTEMPTS_KICK = len(BACKOFF_MIN_KICK) + 1
 
 
 def _helix_app_token() -> str:
@@ -141,8 +145,11 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
             )
             return
 
+    max_attempts = MAX_AUTOPULL_ATTEMPTS_KICK if platform == "kick" else MAX_AUTOPULL_ATTEMPTS_TWITCH
+    backoff = BACKOFF_MIN_KICK if platform == "kick" else BACKOFF_MIN_TWITCH
+
     if not matched:
-        if attempt >= 6:
+        if attempt >= max_attempts:
             from clips_worker.streamer.notify import notify_event
 
             _record_skip(
@@ -159,7 +166,7 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
                 data={"error": "VOD not published yet"},
             )
             return
-        delay = BACKOFF_MIN[min(attempt - 1, len(BACKOFF_MIN) - 1)]
+        delay = backoff[min(attempt - 1, len(backoff) - 1)]
         new_id = f"job_{uuid.uuid4().hex}"
         with conn.cursor() as cur:
             cur.execute(
@@ -235,6 +242,13 @@ def _record_skip(conn, channel_id: str | None, code: str, message: str, vod: dic
 
 
 def _match_kick_vod(slug: str, streamed_at: datetime) -> dict | None:
+    from clips_worker.streamer.kick_videos import fetch_kick_channel_videos, match_kick_vod_from_entries
+
+    entries = fetch_kick_channel_videos(slug)
+    matched = match_kick_vod_from_entries(entries, slug, streamed_at)
+    if matched:
+        return matched
+
     try:
         raw = subprocess.check_output(
             ["yt-dlp", "--flat-playlist", "-J", f"https://kick.com/{slug}/videos"],
@@ -245,8 +259,13 @@ def _match_kick_vod(slug: str, streamed_at: datetime) -> dict | None:
     except Exception:
         return None
     target = streamed_at.timestamp()
-    for ent in (data.get("entries") or [])[:5]:
+    for ent in (data.get("entries") or [])[:10]:
         ts = ent.get("timestamp") or ent.get("release_timestamp")
         if ts and abs(float(ts) - target) <= 15 * 60:
-            return {"url": ent.get("url") or ent.get("webpage_url"), "title": ent.get("title"), "id": ent.get("id")}
+            return {
+                "url": ent.get("url") or ent.get("webpage_url"),
+                "title": ent.get("title"),
+                "id": ent.get("id"),
+                "duration": ent.get("duration"),
+            }
     return None

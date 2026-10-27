@@ -13,6 +13,9 @@ describe('resolveStreamPipelinePhase', () => {
       }),
     ).toBe('waiting_replay')
     expect(streamPipelineLabel('waiting_replay')).toBe('Waiting for replay')
+    expect(streamPipelineLabel('waiting_replay', { platform: 'kick' })).toBe(
+      'Waiting for Kick to publish your replay',
+    )
   })
 
   it('maps rendering to clipping', () => {

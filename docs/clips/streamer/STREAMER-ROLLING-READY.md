@@ -90,7 +90,7 @@ Before reframing, `align_segment_ms()` cross-correlates **~5 s** of PCM from the
 | **Rank** | Re-run fusion/LLM on **new** transcript tail or debounced every N chunks; avoid re-LLM entire 8 h stream each tick. | **M** |
 | **Render** | Queue renders only after `stream.offline` (+ optional video-watch pass). | **S** |
 | **State / idempotency** | `chunkPlan.ranges` grows with VOD duration; heartbeat; cap metering still once per VOD. | **S** |
-| **Kick** | No growing VOD — **90 min replay poll** after offline (separate Rick track). | **S** |
+| **Kick** | No confirmed growing replay VOD — **90 min replay poll** after offline (separate Rick track). **Rolling later:** live HLS capture + **audio cross-correlation** to align live chunks with the published replay (`align_segment_ms` / final `audio.opus`). | **S** (poll) / **L** (live HLS rolling) |
 
 **Total engineering (rough):** ~**3–5 engineer-weeks** after stage 1 reliability gate, assuming no video-watch pass in v1 rolling.
 
@@ -113,9 +113,23 @@ Assumptions: 15 min chunks → **~16 analyze chunks**; same Modal/Groq transcrib
 
 ---
 
+## Kick rolling (future — not stage 2 v1)
+
+**Facts:** Kick keeps finished streams as replays on the channel Videos tab (7d / 30d retention) with **15–30 min** (up to **~1 h**) publish delay. The official API exposes **stream start/end webhooks only** — no VOD list endpoint. A **growing VOD during live** is **not confirmed**.
+
+**If we add Kick “while live” later:**
+
+1. Ingest **live HLS** audio in ~10–15 min chunks (IVS `master.m3u8` from live session metadata), not the channel homepage URL.
+2. On `is_live: false`, continue existing **replay poll** (`KICK-VOD-BEHAVIOR.md`) for the canonical VOD URL.
+3. **Time alignment:** Live chunk timestamps are wall-clock / playlist-relative; the published replay starts at VOD t=0. Use **cross-correlation** (same `align_segment_ms()` approach as render): compare ~5 s PCM from each live chunk boundary against the final downloaded replay audio near the expected offset; apply drift correction before merge/rank.
+4. **Risk:** Live HLS capture is higher ToS/bandwidth exposure than post-replay yt-dlp; ship **post-stream autopull + paste** first (Rick gate).
+
+---
+
 ## Out of scope in this change
 
-- Live playlist polling, webhooks driving chunk jobs, Kick 90 m replay autopull.
+- Live playlist polling, webhooks driving chunk jobs (Twitch growing VOD).
+- Kick live HLS rolling (design above only).
 - **Video-watch** pass on top ~25–30 shortlist candidates.
 - Changing default `STREAMER_CHUNK_MIN` from 15 (use env for 10–15).
 

@@ -17,7 +17,17 @@ const LABELS: Record<StreamPipelinePhase, string> = {
   failed: 'Failed',
 }
 
-export function streamPipelineLabel(phase: StreamPipelinePhase): string {
+const WAITING_REPLAY_BY_PLATFORM: Partial<Record<string, string>> = {
+  kick: 'Waiting for Kick to publish your replay',
+}
+
+export function streamPipelineLabel(
+  phase: StreamPipelinePhase,
+  opts?: { platform?: string | null },
+): string {
+  if (phase === 'waiting_replay' && opts?.platform === 'kick') {
+    return WAITING_REPLAY_BY_PLATFORM.kick ?? LABELS.waiting_replay
+  }
   return LABELS[phase]
 }
 

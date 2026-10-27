@@ -133,7 +133,7 @@ function mapStreamerVodRow(
     createdAt: v.createdAt.toISOString(),
     triggeredBy: v.triggeredBy,
     pipelinePhase: phase,
-    pipelineLabel: streamPipelineLabel(phase),
+    pipelineLabel: streamPipelineLabel(phase, { platform: v.platform }),
     error: err,
     canRetry: canRetryClipProject({
       status: v.project.status,
