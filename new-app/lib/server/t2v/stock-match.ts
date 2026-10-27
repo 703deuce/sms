@@ -12,7 +12,7 @@ import {
 import type { T2vStockMediaType } from '@/lib/t2v/m9-contracts'
 import type { T2vAspect, T2vSceneMedia } from '@/lib/t2v/types'
 import { logT2v } from '@/lib/server/t2v/log'
-import { llmPickStockIndex } from '@/lib/server/t2v/stock-match-llm'
+import { batchStockVisionPick, type StockVisionBatchMetrics } from '@/lib/server/t2v/stock-match-vision'
 import { narrationVisualFallback, normalizeVisualQuery } from '@/lib/server/t2v/visual-query'
 
 export type StockCandidate = {
@@ -362,6 +362,37 @@ function logSceneMatch(input: {
   })
 }
 
+async function fetchStockPoolForQuery(
+  q: string,
+  aspect: T2vAspect,
+  sources: Array<'pexels' | 'pixabay'>,
+): Promise<StockCandidate[]> {
+  const batches = await Promise.allSettled([
+    sources.includes('pexels') ? pexels(q, aspect, 1) : Promise.resolve([]),
+    sources.includes('pixabay') ? pixabay(q, aspect, 1) : Promise.resolve([]),
+  ])
+  const pool: StockCandidate[] = []
+  for (const b of batches) if (b.status === 'fulfilled') pool.push(...b.value)
+  return pool
+}
+
+function eligibleVisionCandidates(
+  ranked: StockCandidate[],
+  used: Set<string>,
+  limit = 5,
+): StockCandidate[] {
+  const eligible = ranked.filter(
+    (c) => !used.has(`${c.provider}:${c.providerId}`) && (c.relevance ?? 0) >= MIN_RELEVANCE,
+  )
+  if (eligible.length >= 1) return eligible.slice(0, limit)
+  return ranked.filter((c) => !used.has(`${c.provider}:${c.providerId}`)).slice(0, limit)
+}
+
+export type MatchScenesResult = {
+  byScene: Record<string, { pick: StockCandidate | null; alternates: StockCandidate[] }>
+  visionMetrics?: StockVisionBatchMetrics
+}
+
 export async function matchScenes(input: {
   scenes: {
     id: string
@@ -373,66 +404,160 @@ export async function matchScenes(input: {
   aspect: T2vAspect
   sources: Array<'pexels' | 'pixabay'>
   videoTopic: string
-}): Promise<Record<string, { pick: StockCandidate | null; alternates: StockCandidate[] }>> {
+  workspaceId?: string
+  projectId?: string
+  /** Scene index offset when matching a subset (single-scene shuffle). */
+  sceneIndexOffset?: number
+}): Promise<MatchScenesResult> {
   const topic = input.videoTopic.trim()
   const used = new Set<string>()
   const out: Record<string, { pick: StockCandidate | null; alternates: StockCandidate[] }> = {}
 
-  for (const s of input.scenes) {
-    const scoreKeywords = mergeScoreKeywords(topic, s.visualQuery, s.keywords)
-    const queries = buildTopicAnchoredQueries({
+  type SceneWork = {
+    scene: (typeof input.scenes)[0]
+    sceneIndex: number
+    queries: string[]
+    queryIdx: number
+    ranked: StockCandidate[]
+    usedQuery: string
+    resolved: boolean
+  }
+
+  const work: SceneWork[] = input.scenes.map((s, i) => ({
+    scene: s,
+    sceneIndex: (input.sceneIndexOffset ?? 0) + i,
+    queries: buildTopicAnchoredQueries({
       videoTopic: topic,
       visualQuery: s.visualQuery,
       keywords: s.keywords,
       narration: s.narration,
-    })
+    }),
+    queryIdx: 0,
+    ranked: [],
+    usedQuery: '',
+    resolved: false,
+  }))
 
-    let ranked: StockCandidate[] = []
-    let usedQuery = queries[0] ?? topic
-    let pick: StockCandidate | null = null
+  const visionEnabled = Boolean(process.env.OPENAI_API_KEY?.trim())
+  let visionMetrics: StockVisionBatchMetrics | undefined
+  const MAX_ROUNDS = 5
 
-    for (const q of queries) {
-      let pool: StockCandidate[] = []
-      const batches = await Promise.allSettled([
-        input.sources.includes('pexels') ? pexels(q, input.aspect, 1) : Promise.resolve([]),
-        input.sources.includes('pixabay') ? pixabay(q, input.aspect, 1) : Promise.resolve([]),
-      ])
-      for (const b of batches) if (b.status === 'fulfilled') pool.push(...b.value)
-      ranked = rankPool(pool, scoreKeywords, input.aspect, s.needMs / 1000, topic)
-      usedQuery = q
-      const candidate =
-        ranked.find((c) => !used.has(`${c.provider}:${c.providerId}`) && (c.relevance ?? 0) >= MIN_RELEVANCE) ??
-        ranked.find((c) => !used.has(`${c.provider}:${c.providerId}`)) ??
-        null
-      if (candidate && (candidate.relevance ?? 0) >= MIN_RELEVANCE) {
-        pick = candidate
-        break
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const batchInputs: Array<{
+      work: SceneWork
+      eligible: StockCandidate[]
+      query: string
+    }> = []
+
+    for (const w of work) {
+      if (w.resolved) continue
+      const scoreKeywords = mergeScoreKeywords(topic, w.scene.visualQuery, w.scene.keywords)
+      while (w.queryIdx < w.queries.length) {
+        const q = w.queries[w.queryIdx]
+        const pool = await fetchStockPoolForQuery(q, input.aspect, input.sources)
+        w.ranked = rankPool(pool, scoreKeywords, input.aspect, w.scene.needMs / 1000, topic)
+        w.usedQuery = q
+        const eligible = eligibleVisionCandidates(w.ranked, used)
+        if (eligible.length > 0) {
+          batchInputs.push({ work: w, eligible, query: q })
+          break
+        }
+        w.queryIdx += 1
       }
-      if (candidate && !pick) pick = candidate
-    }
-
-    const lowRelevance = !pick || (pick.relevance ?? 0) < MIN_RELEVANCE
-
-    if (pick && ranked.length >= 2) {
-      const top = ranked.filter((c) => !used.has(`${c.provider}:${c.providerId}`)).slice(0, 5)
-      const borderline =
-        lowRelevance || (top.length >= 2 && top[0].score - top[1].score < 0.06)
-      if (borderline) {
-        const llmIdx = await llmPickStockIndex({
-          videoTopic: topic,
-          sceneVisual: s.visualQuery,
-          narrationSnippet: s.narration ?? '',
-          candidates: top,
+      if (!w.resolved && w.queryIdx >= w.queries.length && w.ranked.length > 0 && batchInputs.every((b) => b.work !== w)) {
+        const fallback =
+          w.ranked.find((c) => !used.has(`${c.provider}:${c.providerId}`)) ?? w.ranked[0] ?? null
+        if (fallback) used.add(`${fallback.provider}:${fallback.providerId}`)
+        const lowRelevance = !fallback || (fallback.relevance ?? 0) < MIN_RELEVANCE
+        logSceneMatch({
+          sceneId: w.scene.id,
+          query: w.usedQuery,
+          ranked: w.ranked,
+          pick: fallback,
+          lowRelevance,
         })
-        if (llmIdx != null && top[llmIdx]) pick = top[llmIdx]
+        out[w.scene.id] = {
+          pick: fallback,
+          alternates: w.ranked.filter((c) => c !== fallback).slice(0, 23),
+        }
+        w.resolved = true
       }
     }
 
-    if (pick) used.add(`${pick.provider}:${pick.providerId}`)
-    logSceneMatch({ sceneId: s.id, query: usedQuery, ranked, pick, lowRelevance })
-    out[s.id] = { pick, alternates: ranked.filter((c) => c !== pick).slice(0, 23) }
+    if (batchInputs.length === 0) break
+
+    const visionResults = new Map<string, { pickIndex: number | 'none'; scoreFallback: boolean }>()
+    if (visionEnabled) {
+      const { results, metrics } = await batchStockVisionPick({
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        scenes: batchInputs.map((b) => ({
+          sceneIndex: b.work.sceneIndex,
+          sceneId: b.work.scene.id,
+          videoTopic: topic,
+          visualQuery: b.work.scene.visualQuery,
+          narration: b.work.scene.narration ?? '',
+          query: b.query,
+          candidates: b.eligible,
+        })),
+      })
+      if (!visionMetrics) visionMetrics = metrics
+      else {
+        visionMetrics.latencyMs += metrics.latencyMs
+        visionMetrics.costUsdMicros += metrics.costUsdMicros
+        visionMetrics.promptTokens += metrics.promptTokens
+        visionMetrics.completionTokens += metrics.completionTokens
+        visionMetrics.sceneCount += metrics.sceneCount
+      }
+      for (const r of results) {
+        visionResults.set(r.sceneId, { pickIndex: r.pickIndex, scoreFallback: r.scoreFallback })
+      }
+    }
+
+    for (const { work: w, eligible } of batchInputs) {
+      const vr = visionResults.get(w.scene.id)
+      let pick: StockCandidate | null = null
+      if (!visionEnabled || !vr || vr.scoreFallback) {
+        pick = eligible[0] ?? null
+      } else if (vr.pickIndex === 'none') {
+        w.queryIdx += 1
+        continue
+      } else {
+        pick = eligible[vr.pickIndex] ?? eligible[0] ?? null
+      }
+      if (!pick) {
+        w.queryIdx += 1
+        continue
+      }
+      used.add(`${pick.provider}:${pick.providerId}`)
+      const lowRelevance = (pick.relevance ?? 0) < MIN_RELEVANCE
+      logSceneMatch({
+        sceneId: w.scene.id,
+        query: w.usedQuery,
+        ranked: w.ranked,
+        pick,
+        lowRelevance,
+      })
+      out[w.scene.id] = { pick, alternates: w.ranked.filter((c) => c !== pick).slice(0, 23) }
+      w.resolved = true
+    }
   }
-  return out
+
+  for (const w of work) {
+    if (w.resolved) continue
+    const pick = w.ranked.find((c) => !used.has(`${c.provider}:${c.providerId}`)) ?? null
+    if (pick) used.add(`${pick.provider}:${pick.providerId}`)
+    logSceneMatch({
+      sceneId: w.scene.id,
+      query: w.usedQuery,
+      ranked: w.ranked,
+      pick,
+      lowRelevance: true,
+    })
+    out[w.scene.id] = { pick, alternates: w.ranked.filter((c) => c !== pick).slice(0, 23) }
+  }
+
+  return { byScene: out, visionMetrics }
 }
 
 export function trimWindow(clipS: number, needS: number): { srcInMs: number; loops: boolean } {

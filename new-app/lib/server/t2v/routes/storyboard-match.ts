@@ -34,7 +34,7 @@ export async function runStoryboardMatch(workspaceId: string, draftId: string, s
   const doc = d.document as T2vDraftV1
   const sources = resolveMediaSources(doc)
   const todo = doc.scenes.filter((s) => !s.media?.locked && (!sceneId || s.id === sceneId))
-  const matched = await matchScenes({
+  const { byScene: matched, visionMetrics } = await matchScenes({
     scenes: todo.map((s) => ({
       id: s.id,
       visualQuery: s.visualQuery,
@@ -45,7 +45,18 @@ export async function runStoryboardMatch(workspaceId: string, draftId: string, s
     aspect: doc.settings.aspect,
     sources,
     videoTopic: doc.title,
+    workspaceId,
+    projectId: d.projectId,
   })
+  if (visionMetrics) {
+    logT2v('stock-match', 'vision batch totals', {
+      draftId,
+      sceneCount: visionMetrics.sceneCount,
+      latencyMs: visionMetrics.latencyMs,
+      costUsdMicros: visionMetrics.costUsdMicros,
+      costUsd: Math.round((visionMetrics.costUsdMicros / 1_000_000) * 10000) / 10000,
+    })
+  }
   const sceneErrors: StoryboardMatchSceneError[] = []
   let applied = 0
   for (const s of todo) {

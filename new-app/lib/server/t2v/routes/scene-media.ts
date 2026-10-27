@@ -174,7 +174,7 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
     let appliedQuery = scene.visualQuery
     if (body.action === 'shuffle') {
       const sources = doc.settings.mediaSources.filter((p): p is 'pexels' | 'pixabay' => p !== 'ai_image')
-      const matched = await matchScenes({
+      const { byScene: matched } = await matchScenes({
         scenes: [
           {
             id: scene.id,
@@ -187,6 +187,9 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
         aspect: doc.settings.aspect,
         sources,
         videoTopic: doc.title,
+        workspaceId,
+        projectId: row.projectId,
+        sceneIndexOffset: doc.scenes.findIndex((sc) => sc.id === scene.id),
       })
       const alt = matched[scene.id]?.alternates?.[0] ?? matched[scene.id]?.pick
       pick = alt ?? null
