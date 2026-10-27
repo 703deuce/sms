@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { encryptIntegrationSecret } from '@/lib/integrations/framework/secrets'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
                   platformState: mergePlatformState(ch.platformState, {
                     eventsubIds: nextIds,
                     eventsubCheckedAt: new Date().toISOString(),
-                  }),
+                  }) as Prisma.InputJsonValue,
                 },
               })
             } catch (subErr) {
@@ -186,7 +187,7 @@ export async function POST(request: Request) {
                   platformState: mergePlatformState(ch.platformState, {
                     kickSubIds: nextIds,
                     kickSubscriptionsCheckedAt: new Date().toISOString(),
-                  }),
+                  }) as Prisma.InputJsonValue,
                 },
               })
             }
