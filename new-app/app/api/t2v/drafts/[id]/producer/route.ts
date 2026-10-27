@@ -65,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const saved = await saveT2vDraft(workspaceId, id, row.revision, applied.document)
       await prisma.t2vDraft.update({
         where: { id },
-        data: { producerProposal: null },
+        data: { producerProposal: Prisma.JsonNull },
       })
       let jobId: string | null = null
       if (applied.requestRebuild) {
