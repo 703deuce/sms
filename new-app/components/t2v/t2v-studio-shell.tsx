@@ -59,6 +59,7 @@ export function T2vStudioShell({
   const [error, setError] = useState(initialError)
   const [matching, setMatching] = useState(false)
   const [building, setBuilding] = useState(false)
+  const [playBuiltUrl, setPlayBuiltUrl] = useState(builtVideoUrl ?? null)
   const revisionRef = useRef(initialRevision)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -72,21 +73,36 @@ export function T2vStudioShell({
   }, [doc.scenes, selectedId])
 
   const onPoll = useCallback(
-    (d: { status: string; stage: string | null; progress: number; error: string | null }) => {
+    (d: {
+      status: string
+      stage: string | null
+      progress: number
+      error: string | null
+      builtVideoUrl?: string | null
+    }) => {
       setStatus(d.status)
       setStage(d.stage)
       setProgress(d.progress)
       setError(d.error)
-      if (d.status === 'READY' && status === 'ASSEMBLING') {
+      if (d.builtVideoUrl) setPlayBuiltUrl(d.builtVideoUrl)
+      if (d.status === 'READY') {
+        console.info('[t2v:build-progress] overlay refresh after READY', { draftId, stage: d.stage })
         void fetch(`/api/t2v/drafts/${draftId}`)
           .then((r) => r.json())
           .then((b) => {
             if (b.data?.document) replace(b.data.document as T2vDraftV1)
             if (b.data?.revision) setRevision(b.data.revision)
+            if (b.data?.builtVideoUrl) setPlayBuiltUrl(b.data.builtVideoUrl)
+          })
+          .catch((e) => {
+            console.error('[t2v:build-progress] refresh after READY failed', {
+              draftId,
+              message: e instanceof Error ? e.message : String(e),
+            })
           })
       }
     },
-    [draftId, replace, status],
+    [draftId, replace],
   )
 
   useT2vDraftPoll(draftId, status === 'ASSEMBLING' || stage === 'failed', onPoll)
@@ -202,6 +218,9 @@ export function T2vStudioShell({
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'assemble_failed')
       setStatus('ASSEMBLING')
+      setStage(body.data?.stage ?? 'voice')
+      setProgress(body.data?.progress ?? 0)
+      console.info('[t2v:build-progress] assemble started', { draftId })
       toast.success('Building video…')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not start build')
@@ -325,7 +344,7 @@ export function T2vStudioShell({
             draftId={draftId}
             doc={doc}
             sceneId={selectedId}
-            builtVideoUrl={builtVideoUrl}
+            builtVideoUrl={playBuiltUrl}
             aspect={doc.settings.aspect}
             onSelectScene={setSelectedId}
           />
