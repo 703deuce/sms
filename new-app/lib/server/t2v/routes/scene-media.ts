@@ -89,6 +89,7 @@ export async function getSceneMedia(
     keywords: scene.keywords,
     needMs: estimateSceneMs(scene),
     mediaType,
+    videoTopic: doc.title,
   })
 
   return NextResponse.json({ data: { candidates } })
@@ -180,10 +181,12 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
             visualQuery: scene.visualQuery,
             keywords: scene.keywords,
             needMs: estimateSceneMs(scene),
+            narration: scene.narration,
           },
         ],
         aspect: doc.settings.aspect,
         sources,
+        videoTopic: doc.title,
       })
       const alt = matched[scene.id]?.alternates?.[0] ?? matched[scene.id]?.pick
       pick = alt ?? null
@@ -213,6 +216,7 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
         keywords: scene.keywords,
         needMs: estimateSceneMs(scene),
         mediaType,
+        videoTopic: doc.title,
       })
       pick = hits.find((h) => String(h.providerId) === wantId) ?? null
       if (!pick) {
@@ -232,6 +236,7 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
           keywords: scene.keywords,
           needMs: estimateSceneMs(scene),
           mediaType: alt,
+          videoTopic: doc.title,
         })
         pick = hits2.find((h) => String(h.providerId) === wantId) ?? null
       }

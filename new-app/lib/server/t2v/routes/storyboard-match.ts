@@ -40,9 +40,11 @@ export async function runStoryboardMatch(workspaceId: string, draftId: string, s
       visualQuery: s.visualQuery,
       keywords: s.keywords,
       needMs: estimateSceneMs(s),
+      narration: s.narration,
     })),
     aspect: doc.settings.aspect,
     sources,
+    videoTopic: doc.title,
   })
   const sceneErrors: StoryboardMatchSceneError[] = []
   let applied = 0
@@ -56,14 +58,15 @@ export async function runStoryboardMatch(workspaceId: string, draftId: string, s
     try {
       const asset = await ensureT2vStockAsset(workspaceId, m.pick)
       s.media = toSceneMedia(m.pick, asset.id, needMs, s.visualQuery)
-      logT2v('match-stock', 'scene stock chosen', {
+      logT2v('stock-match', 'scene stock applied', {
         draftId,
         sceneId: s.id,
-        query: buildSceneStockQuery(s.visualQuery, s.keywords),
+        query: buildSceneStockQuery(s.visualQuery, s.keywords, doc.title),
         provider: m.pick.provider,
         providerId: m.pick.providerId,
         assetId: asset.id,
         score: m.pick.score,
+        relevance: m.pick.relevance,
       })
       applied++
     } catch (err) {

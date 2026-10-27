@@ -11,6 +11,8 @@ import {
 } from '@/lib/server/ai/pexels'
 import type { T2vStockMediaType } from '@/lib/t2v/m9-contracts'
 import type { T2vAspect, T2vSceneMedia } from '@/lib/t2v/types'
+import { logT2v } from '@/lib/server/t2v/log'
+import { llmPickStockIndex } from '@/lib/server/t2v/stock-match-llm'
 
 export type StockCandidate = {
   provider: 'pixabay' | 'pexels' | 'pexels_photo'
@@ -25,11 +27,15 @@ export type StockCandidate = {
   author: string
   tags: string[]
   score: number
-  /** video (default) or still photo (Pexels photos API) */
+  relevance?: number
   stockKind?: 'video' | 'photo'
 }
 
 const TTL_MS = 24 * 60 * 60 * 1000
+/** Bump when query/scoring logic changes so broll_search_cache does not serve stale pools. */
+const STOCK_CACHE_VERSION = 'v3-topic-relevance'
+
+const MIN_RELEVANCE = 0.2
 
 const STOPWORDS = new Set([
   'the',
@@ -51,24 +57,71 @@ const STOPWORDS = new Set([
   'showing',
 ])
 
-/** Primary stock search string: visual description + scene keywords (not generic script filler). */
-export function buildSceneStockQuery(visualQuery: string, keywords: string[]): string {
-  const vq = visualQuery.trim()
-  const kw = keywords.map((k) => k.trim()).filter(Boolean)
-  const parts = [vq, ...kw.filter((k) => !vq.toLowerCase().includes(k.toLowerCase()))]
-  const joined = parts.join(' ').replace(/\s+/g, ' ').trim()
-  return joined.slice(0, 100) || vq.slice(0, 100)
-}
-
-/** When the LLM omits keywords, derive search terms from the visual query. */
-export function extractSceneKeywords(visualQuery: string, keywords: string[]): string[] {
-  const fromKw = keywords.map((k) => k.toLowerCase().trim()).filter(Boolean)
-  if (fromKw.length) return fromKw.slice(0, 6)
-  return visualQuery
+function tokenize(text: string): string[] {
+  return text
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 2 && !STOPWORDS.has(w))
-    .slice(0, 8)
+}
+
+/** Whole-word / whole-tag overlap (avoids "sea" matching "research"). */
+export function keywordTagRelevance(keywords: string[], tags: string[]): number {
+  const tagTokens = new Set<string>()
+  for (const tag of tags) {
+    const t = tag.toLowerCase().trim()
+    if (!t) continue
+    tagTokens.add(t)
+    for (const w of tokenize(t)) tagTokens.add(w)
+  }
+  if (!keywords.length) return 0
+  let hits = 0
+  for (const raw of keywords) {
+    const k = raw.toLowerCase().trim()
+    if (!k) continue
+    const parts = k.split(/\s+/).filter((p) => p.length > 2)
+    if (parts.length > 1) {
+      if (parts.every((p) => tagTokens.has(p))) hits++
+      continue
+    }
+    if (tagTokens.has(k)) hits++
+  }
+  return hits / keywords.length
+}
+
+export function withVideoTopic(query: string, videoTopic: string): string {
+  const t = videoTopic.trim()
+  const q = query.trim()
+  if (!t) return q.slice(0, 100)
+  if (!q) return t.slice(0, 100)
+  if (q.toLowerCase().includes(t.toLowerCase())) return q.slice(0, 100)
+  return `${t} ${q}`.replace(/\s+/g, ' ').trim().slice(0, 100)
+}
+
+/** Primary stock search string: video topic + visual description + scene keywords. */
+export function buildSceneStockQuery(visualQuery: string, keywords: string[], videoTopic = ''): string {
+  const vq = visualQuery.trim()
+  const topic = videoTopic.trim()
+  const kw = keywords.map((k) => k.trim()).filter(Boolean)
+  const parts: string[] = []
+  if (topic) parts.push(topic)
+  if (vq) parts.push(vq)
+  for (const k of kw) {
+    if (!parts.some((p) => p.toLowerCase().includes(k.toLowerCase()))) parts.push(k)
+  }
+  const joined = parts.join(' ').replace(/\s+/g, ' ').trim()
+  return joined.slice(0, 100) || vq.slice(0, 100) || topic.slice(0, 100)
+}
+
+export function extractSceneKeywords(visualQuery: string, keywords: string[]): string[] {
+  const fromKw = keywords.map((k) => k.toLowerCase().trim()).filter(Boolean)
+  if (fromKw.length) return fromKw.slice(0, 8)
+  return tokenize(visualQuery).slice(0, 8)
+}
+
+export function mergeScoreKeywords(videoTopic: string, visualQuery: string, keywords: string[]): string[] {
+  const topic = extractSceneKeywords(videoTopic, [])
+  const scene = extractSceneKeywords(visualQuery, keywords)
+  return [...new Set([...topic, ...scene])]
 }
 
 function targetDims(aspect: T2vAspect) {
@@ -83,7 +136,7 @@ function targetDims(aspect: T2vAspect) {
 
 async function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const prisma = getPrisma()
-  const q = `t2v|${createHash('sha1').update(key).digest('hex')}`
+  const q = `t2v|${STOCK_CACHE_VERSION}|${createHash('sha1').update(key).digest('hex')}`
   const row = await prisma.brollSearchCache.findUnique({ where: { q } })
   if (row && Date.now() - row.createdAt.getTime() < TTL_MS) return row.json as T
   const json = await fn()
@@ -106,14 +159,14 @@ async function pixabay(query: string, aspect: T2vAspect, page: number): Promise<
     u.searchParams.set('safesearch', 'true')
     u.searchParams.set('per_page', '40')
     u.searchParams.set('page', String(page))
-    u.searchParams.set(aspect === '9:16' ? 'min_height' : 'min_width', '1280')
+    u.searchParams.set(aspect === '9:16' ? 'min_height' : 'min_width', '1920')
     const res = await fetch(u, { signal: AbortSignal.timeout(15_000) })
     if (res.status === 429) throw new Error('pixabay_rate_limited')
     if (!res.ok) throw new Error(`pixabay_http_${res.status}`)
     const body = (await res.json()) as { hits?: Record<string, unknown>[] }
     return (body.hits ?? []).flatMap((hit) => {
       const v = (hit.videos ?? {}) as Record<string, { url?: string; width?: number; height?: number; thumbnail?: string }>
-      const r = v.medium?.url ? v.medium : v.small?.url ? v.small : null
+      const r = v.large?.url ? v.large : v.medium?.url ? v.medium : v.small?.url ? v.small : null
       if (!r?.url) return []
       return [{
         provider: 'pixabay' as const,
@@ -139,6 +192,7 @@ async function pixabay(query: string, aspect: T2vAspect, page: number): Promise<
 async function pexelsPhotos(query: string, aspect: T2vAspect, page: number): Promise<StockCandidate[]> {
   if (!pexelsConfigured()) return []
   const orientation = aspect === '9:16' ? 'portrait' : aspect === '16:9' ? 'landscape' : 'square'
+  const queryTags = tokenize(query)
   return cached(`pexels-photo|${query}|${aspect}|${page}`, async () => {
     const { photos } = await pexelsSearchPhotos({ query, orientation, page, perPage: 40 })
     return photos.flatMap((p: PexelsPhoto) => {
@@ -155,7 +209,7 @@ async function pexelsPhotos(query: string, aspect: T2vAspect, page: number): Pro
         srcUrl: src,
         pageUrl: p.url,
         author: p.photographer,
-        tags: query.toLowerCase().split(/\s+/).filter(Boolean),
+        tags: queryTags,
         score: 0,
         stockKind: 'photo' as const,
       }]
@@ -166,12 +220,15 @@ async function pexelsPhotos(query: string, aspect: T2vAspect, page: number): Pro
 async function pexels(query: string, aspect: T2vAspect, page: number): Promise<StockCandidate[]> {
   if (!pexelsConfigured()) return []
   const { w, h } = targetDims(aspect)
+  const queryTags = tokenize(query)
   return cached(`pexels|${query}|${aspect}|${page}`, async () => {
     const orientation = aspect === '9:16' ? 'portrait' : aspect === '16:9' ? 'landscape' : 'square'
-    const { videos } = await pexelsSearchVideos({ query, orientation, size: 'medium', page, perPage: 40 })
+    const { videos } = await pexelsSearchVideos({ query, orientation, size: 'large', page, perPage: 40 })
     return videos.flatMap((v: PexelsVideo) => {
       const f = pickPexelsFile(v, w, h)
       if (!f) return []
+      const slugTags = (v.url.split('/video/')[1] ?? '').replace(/-\d+\/?$/, '').split('-').filter(Boolean)
+      const tags = [...new Set([...queryTags, ...slugTags.map((t) => t.toLowerCase())])]
       return [{
         provider: 'pexels' as const,
         providerId: String(v.id),
@@ -183,7 +240,7 @@ async function pexels(query: string, aspect: T2vAspect, page: number): Promise<S
         srcUrl: f.link,
         pageUrl: v.url,
         author: v.user.name,
-        tags: (v.url.split('/video/')[1] ?? '').replace(/-\d+\/?$/, '').split('-').filter(Boolean),
+        tags,
         score: 0,
       }]
     })
@@ -194,12 +251,7 @@ export function scoreCandidate(
   c: StockCandidate,
   o: { keywords: string[]; aspect: T2vAspect; needS: number },
 ): number {
-  const kw = o.keywords.map((k) => k.toLowerCase()).filter(Boolean)
-  const tagText = `${c.tags.join(' ')}`.toLowerCase()
-  const overlap = kw.length
-    ? kw.filter((k) => tagText.includes(k) || c.tags.some((t) => t.includes(k) || k.includes(t))).length /
-      kw.length
-    : 0
+  const relevance = keywordTagRelevance(o.keywords, c.tags)
   const portrait = c.height > c.width
   const square = Math.abs(c.width - c.height) / Math.max(c.width, c.height) < 0.1
   const orient =
@@ -219,47 +271,130 @@ export function scoreCandidate(
   const res = Math.min(1, Math.max(c.width, c.height) / Math.max(w, h))
   const prior = c.provider === 'pexels' ? 1 : 0.85
   const tooLong = c.durationS > 60 ? 0.05 : 0
-  return 0.35 * overlap + 0.25 * orient + 0.2 * dur + 0.1 * res + 0.1 * prior - tooLong
+  c.relevance = relevance
+  return 0.58 * relevance + 0.14 * orient + 0.12 * dur + 0.08 * res + 0.08 * prior - tooLong
+}
+
+function rankPool(
+  pool: StockCandidate[],
+  scoreKeywords: string[],
+  aspect: T2vAspect,
+  needS: number,
+): StockCandidate[] {
+  const seen = new Set<string>()
+  return pool
+    .filter((c) => {
+      const id = `${c.provider}:${c.providerId}`
+      if (seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
+    .map((c) => ({
+      ...c,
+      score: scoreCandidate(c, { keywords: scoreKeywords, aspect, needS }),
+    }))
+    .sort((a, b) => b.score - a.score)
+}
+
+function logSceneMatch(input: {
+  sceneId: string
+  query: string
+  ranked: StockCandidate[]
+  pick: StockCandidate | null
+  lowRelevance: boolean
+}) {
+  logT2v('stock-match', 'scene ranked', {
+    sceneId: input.sceneId,
+    query: input.query,
+    lowRelevance: input.lowRelevance,
+    top: input.ranked.slice(0, 5).map((c) => ({
+      provider: c.provider,
+      providerId: c.providerId,
+      score: Math.round(c.score * 1000) / 1000,
+      relevance: Math.round((c.relevance ?? 0) * 1000) / 1000,
+    })),
+    pick: input.pick
+      ? {
+          provider: input.pick.provider,
+          providerId: input.pick.providerId,
+          score: input.pick.score,
+          relevance: input.pick.relevance,
+        }
+      : null,
+  })
 }
 
 export async function matchScenes(input: {
-  scenes: { id: string; visualQuery: string; keywords: string[]; needMs: number }[]
+  scenes: {
+    id: string
+    visualQuery: string
+    keywords: string[]
+    needMs: number
+    narration?: string
+  }[]
   aspect: T2vAspect
   sources: Array<'pexels' | 'pixabay'>
+  videoTopic: string
 }): Promise<Record<string, { pick: StockCandidate | null; alternates: StockCandidate[] }>> {
+  const topic = input.videoTopic.trim()
   const used = new Set<string>()
   const out: Record<string, { pick: StockCandidate | null; alternates: StockCandidate[] }> = {}
+
   for (const s of input.scenes) {
     const kw = extractSceneKeywords(s.visualQuery, s.keywords)
-    const primary = buildSceneStockQuery(s.visualQuery, s.keywords)
-    const queries = [primary, s.visualQuery.trim(), kw.slice(0, 3).join(' ')].filter(
-      (q, i, a) => q && a.indexOf(q) === i,
-    )
-    let pool: StockCandidate[] = []
+    const scoreKeywords = mergeScoreKeywords(topic, s.visualQuery, s.keywords)
+    const queries = [
+      buildSceneStockQuery(s.visualQuery, s.keywords, topic),
+      withVideoTopic(kw.join(' '), topic),
+      withVideoTopic(s.visualQuery, topic),
+      withVideoTopic(kw.slice(0, 5).join(' '), topic),
+      topic,
+    ].filter((q, i, a) => q && a.indexOf(q) === i)
+
+    let ranked: StockCandidate[] = []
+    let usedQuery = queries[0] ?? topic
+    let pick: StockCandidate | null = null
+
     for (const q of queries) {
+      let pool: StockCandidate[] = []
       const batches = await Promise.allSettled([
         input.sources.includes('pexels') ? pexels(q, input.aspect, 1) : Promise.resolve([]),
         input.sources.includes('pixabay') ? pixabay(q, input.aspect, 1) : Promise.resolve([]),
       ])
       for (const b of batches) if (b.status === 'fulfilled') pool.push(...b.value)
-      if (pool.length >= 12) break
+      ranked = rankPool(pool, scoreKeywords, input.aspect, s.needMs / 1000)
+      usedQuery = q
+      const candidate =
+        ranked.find((c) => !used.has(`${c.provider}:${c.providerId}`) && (c.relevance ?? 0) >= MIN_RELEVANCE) ??
+        ranked.find((c) => !used.has(`${c.provider}:${c.providerId}`)) ??
+        null
+      if (candidate && (candidate.relevance ?? 0) >= MIN_RELEVANCE) {
+        pick = candidate
+        break
+      }
+      if (candidate && !pick) pick = candidate
     }
-    const seen = new Set<string>()
-    pool = pool
-      .filter((c) => {
-        const id = `${c.provider}:${c.providerId}`
-        if (seen.has(id)) return false
-        seen.add(id)
-        return true
-      })
-      .map((c) => ({
-        ...c,
-        score: scoreCandidate(c, { keywords: kw, aspect: input.aspect, needS: s.needMs / 1000 }),
-      }))
-      .sort((a, b) => b.score - a.score)
-    const pick = pool.find((c) => !used.has(`${c.provider}:${c.providerId}`)) ?? pool[0] ?? null
+
+    const lowRelevance = !pick || (pick.relevance ?? 0) < MIN_RELEVANCE
+
+    if (pick && ranked.length >= 2) {
+      const top = ranked.filter((c) => !used.has(`${c.provider}:${c.providerId}`)).slice(0, 5)
+      const borderline =
+        lowRelevance || (top.length >= 2 && top[0].score - top[1].score < 0.06)
+      if (borderline) {
+        const llmIdx = await llmPickStockIndex({
+          videoTopic: topic,
+          sceneVisual: s.visualQuery,
+          narrationSnippet: s.narration ?? '',
+          candidates: top,
+        })
+        if (llmIdx != null && top[llmIdx]) pick = top[llmIdx]
+      }
+    }
+
     if (pick) used.add(`${pick.provider}:${pick.providerId}`)
-    out[s.id] = { pick, alternates: pool.filter((c) => c !== pick).slice(0, 23) }
+    logSceneMatch({ sceneId: s.id, query: usedQuery, ranked, pick, lowRelevance })
+    out[s.id] = { pick, alternates: ranked.filter((c) => c !== pick).slice(0, 23) }
   }
   return out
 }
@@ -270,7 +405,6 @@ export function trimWindow(clipS: number, needS: number): { srcInMs: number; loo
   return { srcInMs: Math.round(start * 1000), loops: false }
 }
 
-/** Single-scene search for Replace-media drawer (GET …/scenes/[id]/media). */
 export async function searchT2vStock(input: {
   query: string
   aspect: T2vAspect
@@ -278,34 +412,26 @@ export async function searchT2vStock(input: {
   page: number
   keywords?: string[]
   needMs?: number
-  /** Agent B: `photo` uses Pexels photos API when keyed; until then returns [] */
   mediaType?: T2vStockMediaType
+  videoTopic?: string
 }): Promise<StockCandidate[]> {
-  const kw = extractSceneKeywords(input.query, input.keywords ?? [])
+  const topic = input.videoTopic?.trim() ?? ''
+  const q = withVideoTopic(input.query, topic)
+  const scoreKeywords = mergeScoreKeywords(topic, input.query, input.keywords ?? [])
+  const needS = (input.needMs ?? 5000) / 1000
+
   if (input.mediaType === 'photo') {
     if (!input.sources.includes('pexels')) return []
-    const pool = await pexelsPhotos(input.query, input.aspect, input.page)
-    const needS = (input.needMs ?? 5000) / 1000
-    return pool
-      .map((c) => ({
-        ...c,
-        score: scoreCandidate(c, { keywords: kw, aspect: input.aspect, needS }),
-      }))
-      .sort((a, b) => b.score - a.score)
+    const pool = await pexelsPhotos(q, input.aspect, input.page)
+    return rankPool(pool, scoreKeywords, input.aspect, needS)
   }
   const batches = await Promise.allSettled([
-    input.sources.includes('pexels') ? pexels(input.query, input.aspect, input.page) : Promise.resolve([]),
-    input.sources.includes('pixabay') ? pixabay(input.query, input.aspect, input.page) : Promise.resolve([]),
+    input.sources.includes('pexels') ? pexels(q, input.aspect, input.page) : Promise.resolve([]),
+    input.sources.includes('pixabay') ? pixabay(q, input.aspect, input.page) : Promise.resolve([]),
   ])
   const pool: StockCandidate[] = []
   for (const b of batches) if (b.status === 'fulfilled') pool.push(...b.value)
-  const needS = (input.needMs ?? 5000) / 1000
-  return pool
-    .map((c) => ({
-      ...c,
-      score: scoreCandidate(c, { keywords: kw, aspect: input.aspect, needS }),
-    }))
-    .sort((a, b) => b.score - a.score)
+  return rankPool(pool, scoreKeywords, input.aspect, needS)
 }
 
 export function toSceneMedia(

@@ -1,6 +1,7 @@
 import { describe, expect, it, afterEach } from 'vitest'
 import {
   extractSceneKeywords,
+  keywordTagRelevance,
   scoreCandidate,
   trimWindow,
   type StockCandidate,
@@ -16,6 +17,13 @@ describe('extractSceneKeywords', () => {
     const kw = extractSceneKeywords('Solar panels on rooftop', [])
     expect(kw).toContain('solar')
     expect(kw).toContain('panels')
+  })
+})
+
+describe('keywordTagRelevance', () => {
+  it('matches whole words only', () => {
+    expect(keywordTagRelevance(['sea'], ['research', 'ocean'])).toBe(0)
+    expect(keywordTagRelevance(['ocean'], ['research', 'ocean'])).toBe(1)
   })
 })
 
