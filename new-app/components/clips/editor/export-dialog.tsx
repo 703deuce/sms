@@ -27,6 +27,11 @@ import {
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
 import { ExportTemplateSection } from '@/components/clips/editor/export-template-section'
+import {
+  applyExportPreferencesToTemplate,
+  loadExportDialogPreferences,
+  saveExportDialogPreferences,
+} from '@/lib/clips/export-preferences'
 import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
 import {
   exportSfxBundledAssetsAvailable,
@@ -86,17 +91,24 @@ export function ExportDialog({
 
   useEffect(() => {
     if (!open) return
+    const prefs = loadExportDialogPreferences()
+    setRemoveDeadAir(prefs.removeDeadAir)
+    setAlsoSrt(prefs.alsoSrt)
+    setExportSfx(prefs.exportSfx)
     if (edits.exportTemplate) {
-      setExportTemplate(edits.exportTemplate)
+      setExportTemplate(applyExportPreferencesToTemplate(edits.exportTemplate, prefs))
       return
     }
     if (platform && (platform === 'kick' || platform === 'twitch')) {
       setExportTemplate(
-        defaultStreamHeadlineExportTemplate({
-          platform,
-          channelUrl: defaultChannelUrl,
-          suggestedHeadline: undefined,
-        }),
+        applyExportPreferencesToTemplate(
+          defaultStreamHeadlineExportTemplate({
+            platform,
+            channelUrl: defaultChannelUrl,
+            suggestedHeadline: undefined,
+          }),
+          prefs,
+        ),
       )
       return
     }
@@ -381,7 +393,12 @@ export function ExportDialog({
           <p className="text-xs font-medium">Sound effects</p>
           <Select
             value={exportSfx}
-            onValueChange={(v) => typeof v === 'string' && setExportSfx(normalizeExportSfxMode(v))}
+            onValueChange={(v) => {
+              if (typeof v !== 'string') return
+              const mode = normalizeExportSfxMode(v)
+              setExportSfx(mode)
+              saveExportDialogPreferences({ exportSfx: mode })
+            }}
           >
             <SelectTrigger className="w-full" aria-describedby="export-sfx-hint">
               <SelectValue />
@@ -401,14 +418,25 @@ export function ExportDialog({
             <Label className="text-sm">Tighten dead air</Label>
             <p className="text-xs text-muted-foreground">Shorten long pauses and cut um/uh (keeps captions in sync).</p>
           </div>
-          <Switch checked={removeDeadAir} onCheckedChange={(c) => setRemoveDeadAir(Boolean(c))} />
+          <Switch
+            checked={removeDeadAir}
+            onCheckedChange={(c) => {
+              const on = Boolean(c)
+              setRemoveDeadAir(on)
+              saveExportDialogPreferences({ removeDeadAir: on })
+            }}
+          />
         </div>
         <div className="mt-4 flex items-center justify-between gap-2">
           <Label className="text-sm">Also download .srt</Label>
           <Switch
             checked={alsoSrt}
             disabled={edits.captions?.enabled === false}
-            onCheckedChange={(checked) => setAlsoSrt(Boolean(checked))}
+            onCheckedChange={(checked) => {
+              const on = Boolean(checked)
+              setAlsoSrt(on)
+              saveExportDialogPreferences({ alsoSrt: on })
+            }}
           />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">No watermark</p>
@@ -429,7 +457,15 @@ export function ExportDialog({
           platform={platform}
           defaultChannelUrl={defaultChannelUrl}
           exportPlatformId={exportPlatform !== 'none' ? exportPlatform : undefined}
-          onChange={(tpl) => setExportTemplate(tpl)}
+          onChange={(tpl) => {
+            setExportTemplate(tpl)
+            saveExportDialogPreferences({
+              headlineBarEnabled: Boolean(tpl.headlineBar?.enabled),
+              platformBadgeEnabled: Boolean(tpl.platformBadge?.enabled),
+              channelLinkEnabled: Boolean(tpl.channelLink?.enabled),
+              profanityCensor: Boolean(tpl.profanityCensor),
+            })
+          }}
         />
         <MediaCredits clipId={clipId} edits={edits} />
         {status && status !== 'READY' && status !== 'FAILED' && (

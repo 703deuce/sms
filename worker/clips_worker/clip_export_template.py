@@ -129,18 +129,31 @@ def apply_export_template(
     work = video.parent / "export_tpl_stage.mp4"
     stage = video.parent / "export_tpl_composed.mp4"
 
-    # 1) Stack: black 9:16, video band, optional white headline bar on top
-    fc = (
-        f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
-        f"[0:v]scale={play_w}:{video_h}:force_original_aspect_ratio=increase,"
-        f"crop={play_w}:{video_h}:(iw-{play_w})/2:(ih-{video_h})/2[vid];"
-        f"[bg][vid]overlay=0:{video_y}[v1];"
-    )
+    from clips_worker.filtergraph import fit_blur_overlay_filter
+
+    use_blur_fill = layout_mode in ("full_frame", "fit_blur")
+    # 1) Stack: black 9:16, video band (blurred fill for full_frame), optional white headline bar on top
+    if use_blur_fill:
+        fc = (
+            f"color=c=black:s={play_w}x{video_h}:d={duration_ms / 1000:.3f}[bg];"
+            f"{fit_blur_overlay_filter('0:v', 'vid', play_w, video_h)};"
+            f"[bg][vid]overlay=0:0[v1];"
+            f"[v1]pad={play_w}:{play_h}:0:{video_y}:black[v1p];"
+        )
+        v1_label = "[v1p]"
+    else:
+        fc = (
+            f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
+            f"[0:v]scale={play_w}:{video_h}:force_original_aspect_ratio=increase,"
+            f"crop={play_w}:{video_h}:(iw-{play_w})/2:(ih-{video_h})/2[vid];"
+            f"[bg][vid]overlay=0:{video_y}[v1];"
+        )
+        v1_label = "[v1]"
     if headline_on and headline:
-        fc += f"[v1]drawbox=x=0:y=0:w={play_w}:h={bar_h}:color=white@1:t=fill[vout]"
+        fc += f"{v1_label}drawbox=x=0:y=0:w={play_w}:h={bar_h}:color=white@1:t=fill[vout]"
         vmap = "[vout]"
     else:
-        vmap = "[v1]"
+        vmap = v1_label
 
     subprocess.check_call(
         [

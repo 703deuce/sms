@@ -1,8 +1,12 @@
 import type { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
-import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
+import { streamerLiveRealtimeEnabled, streamerTwitchRollingEnabled } from '@/lib/server/streamer/env'
 import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
+import {
+  beginTwitchRollingSession,
+  finalizeTwitchRollingSession,
+} from '@/lib/server/streamer/rolling-autopull'
 import { verifyTwitchEventSubSignature } from '@/lib/server/streamer/twitch-webhook'
 import { handleStreamerNotify } from '@/lib/server/streamer/notify'
 import { getPrisma } from '@/lib/server/db'
@@ -58,15 +62,20 @@ export async function POST(request: Request) {
     const channels = await prisma.streamChannel.findMany({
       where: { platform: 'twitch', externalId: broadcasterId, deletedAt: null },
     })
+    const startedAt = new Date()
+    const streamSessionId = String(event.id || messageId)
     for (const ch of channels) {
       await prisma.streamChannel.update({
         where: { id: ch.id },
         data: {
           platformState: mergePlatformState(ch.platformState, {
-            live: { startedAt: new Date().toISOString(), sessionId: String(event.id || messageId) },
+            live: { startedAt: startedAt.toISOString(), sessionId: streamSessionId },
           }) as Prisma.InputJsonValue,
         },
       })
+      if (streamerTwitchRollingEnabled() && ch.autoProcess) {
+        await beginTwitchRollingSession(ch.id, startedAt, streamSessionId)
+      }
     }
   }
 
@@ -105,6 +114,8 @@ export async function POST(request: Request) {
               reason: vodHealth.message,
             },
           })
+        } else if (streamerTwitchRollingEnabled() && (await finalizeTwitchRollingSession(ch.id))) {
+          console.info(`[clipper:stream] rolling_finalize channelId=${ch.id}`)
         } else {
           await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch', streamSessionId })
         }

@@ -67,6 +67,42 @@ def _state_for_upload(
     return state
 
 
+def _vod_state_dict(vod: dict) -> dict:
+    state = vod.get("state") or {}
+    if isinstance(state, str):
+        state = json.loads(state) if state else {}
+    return state if isinstance(state, dict) else {}
+
+
+def _rolling_import_mode(vod: dict) -> bool:
+    state = _vod_state_dict(vod)
+    mode = str(state.get("processMode") or "").lower()
+    return mode == "rolling" and str(vod.get("platform") or "").lower() == "twitch"
+
+
+def _schedule_rolling_import_tick(
+    conn,
+    *,
+    project_id: str,
+    vod_id: str,
+    chunk_min: int,
+) -> None:
+    new_id = f"job_{uuid.uuid4().hex}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "runAfter", "createdAt")
+            VALUES (%s,%s,'STREAM_IMPORT','QUEUED',%s::jsonb,15,NOW() + (%s || ' minutes')::interval,NOW())
+            """,
+            (new_id, project_id, json.dumps({"vodId": vod_id, "rollingTick": True}), str(chunk_min)),
+        )
+    conn.commit()
+    print(
+        f"[clipper:stream] rolling_import_scheduled vodId={vod_id} projectId={project_id} delayMin={chunk_min}",
+        flush=True,
+    )
+
+
 def _section_from_range(start_ms: int, end_ms: int | None) -> str | None:
     if not start_ms and not end_ms:
         return None
@@ -213,7 +249,9 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             job["id"],
             {"projectStatus": "PREPARING", "stage": "Downloading", "progress": 5, "jobStatus": "RUNNING"},
         )
-        meta_raw = metadata(url)
+        allow_growing = _rolling_import_mode(vod)
+        rolling_finalize = bool(payload.get("rollingFinalize"))
+        meta_raw = metadata(url, allow_twitch_growing_vod=allow_growing)
         meta = parse_metadata(meta_raw)
         dur_s = meta["duration_s"] or 0
         effective_ms = _effective_duration_ms(vod, dur_s)
@@ -286,10 +324,59 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             upload_file(audio_key, audio_path, "audio/opus")
             if staged_audio is not None:
                 delete_local_ingest_file(staged_audio)
+            prior_state = _vod_state_dict(vod)
             state = {
+                **prior_state,
                 "audioKey": audio_key,
                 "importMeta": {"tags": meta.get("tags") or []},
             }
+            growing = bool(meta_raw.get("growing_vod"))
+            rolling = prior_state.get("rolling") if isinstance(prior_state.get("rolling"), dict) else {}
+            chunk_min = int(rolling.get("chunkMin") or 12)
+            if allow_growing and growing and not rolling_finalize:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE clip_projects
+                        SET title=COALESCE(%s, title), stage='live_ingest', progress=15, "updatedAt"=NOW()
+                        WHERE id=%s
+                        """,
+                        (meta.get("title"), project_id),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE stream_vods
+                        SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
+                        WHERE id=%s
+                        """,
+                        (
+                            meta.get("title"),
+                            meta.get("category"),
+                            duration_ms,
+                            json.dumps(meta.get("chapters")) if meta.get("chapters") else None,
+                            json.dumps(state),
+                            vod_id,
+                        ),
+                    )
+                conn.commit()
+                if growing:
+                    _schedule_rolling_import_tick(
+                        conn,
+                        project_id=project_id,
+                        vod_id=vod_id,
+                        chunk_min=chunk_min,
+                    )
+                cleanup_vod_import_dir(vod_id)
+                post_progress(
+                    job["id"],
+                    {
+                        "projectStatus": "PREPARING",
+                        "stage": "live_ingest",
+                        "progress": 18,
+                        "jobStatus": "DONE",
+                    },
+                )
+                return
             pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
             analyze_id = f"job_{uuid.uuid4().hex}"
             with conn.cursor() as cur:

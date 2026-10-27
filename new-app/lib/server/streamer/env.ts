@@ -31,6 +31,12 @@ export function streamerLiveRealtimeEnabled(): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes'
 }
 
+/** Twitch growing archive ingest while live (stage 2; off by default). */
+export function streamerTwitchRollingEnabled(): boolean {
+  const raw = process.env.STREAMER_TWITCH_ROLLING_ENABLED?.trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
 export function streamerPublicFlags() {
   const liveRealtime = streamerLiveRealtimeEnabled()
   return {
