@@ -1,6 +1,7 @@
 import { Page } from '@/components/app/page-primitives'
 import { T2vScriptReview } from '@/components/t2v/t2v-script-review'
 import { T2vStoryboard } from '@/components/t2v/t2v-storyboard'
+import { T2vStudioShell } from '@/components/t2v/t2v-studio-shell'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -58,7 +59,31 @@ export default async function T2vStudioPage({
     return (
       <Page className="flex min-h-0 flex-col p-0">
         {toolbar}
-        <T2vStoryboard draftId={draft.id} projectId={project.id} document={doc} />
+        <T2vStudioShell
+          draftId={draft.id}
+          initialDocument={doc}
+          initialRevision={draft.revision}
+          initialStatus={draft.status}
+          initialStage={draft.stage}
+          initialProgress={draft.progress}
+          initialError={draft.error}
+        >
+          {(ctx) => (
+            <T2vStoryboard
+              draftId={draft.id}
+              projectId={project.id}
+              document={ctx.doc}
+              revision={ctx.revision}
+              onDocumentChange={(d, rev) => {
+                ctx.setDoc(d)
+                if (rev != null) ctx.setRevision(rev)
+              }}
+              onAssembling={() => {
+                window.location.reload()
+              }}
+            />
+          )}
+        </T2vStudioShell>
       </Page>
     )
   }

@@ -1,0 +1,87 @@
+'use client'
+
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { ArrowUp, Sparkles } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import type { T2vDraftV1 } from '@/lib/t2v/types'
+
+type Msg = { role: 'user' | 'assistant'; content: string }
+
+export function T2vProducerPanel({
+  draftId,
+  onDocument,
+}: {
+  draftId: string
+  onDocument: (doc: T2vDraftV1, revision: number) => void
+}) {
+  const [messages, setMessages] = useState<Msg[]>([])
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const send = async () => {
+    const text = input.trim()
+    if (!text || busy) return
+    setBusy(true)
+    setInput('')
+    setMessages((m) => [...m, { role: 'user', content: text }])
+    try {
+      const res = await fetch(`/api/t2v/drafts/${draftId}/producer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'producer_failed')
+      const reply = body.data?.reply ?? 'Done.'
+      setMessages((m) => [...m, { role: 'assistant', content: reply }])
+      if (body.data?.summaries?.length) {
+        toast.message(body.data.summaries.join(' · '))
+      }
+      if (body.data?.document) {
+        onDocument(body.data.document as T2vDraftV1, body.data.revision as number)
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Chat failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex h-full min-h-[320px] flex-col gap-2">
+      <p className="text-xs text-muted-foreground">
+        Try: make scene 3 punchier, use a British female voice, rebuild the video
+      </p>
+      <div className="flex-1 space-y-2 overflow-y-auto rounded-lg border border-border p-2 text-sm">
+        {messages.length === 0 ? (
+          <p className="text-muted-foreground">Ask for script or storyboard changes.</p>
+        ) : (
+          messages.map((m, i) => (
+            <p key={i} className={m.role === 'user' ? 'text-foreground' : 'text-muted-foreground'}>
+              <span className="font-medium">{m.role === 'user' ? 'You' : 'Assistant'}:</span> {m.content}
+            </p>
+          ))
+        )}
+      </div>
+      <div className="flex gap-2">
+        <Textarea
+          rows={2}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Magic Box…"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              void send()
+            }
+          }}
+        />
+        <Button type="button" size="icon" disabled={busy || !input.trim()} onClick={() => void send()} aria-label="Send">
+          {busy ? <Sparkles className="size-4 animate-pulse" /> : <ArrowUp className="size-4" />}
+        </Button>
+      </div>
+    </div>
+  )
+}
