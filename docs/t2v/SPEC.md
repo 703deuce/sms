@@ -491,7 +491,7 @@ Agree on **function signatures** in this spec and `docs/t2v/code/`; do not fork 
 - **Stock:** `matchScenes`, `searchT2vStock`, `ensureT2vStockAsset`, `toSceneMedia` in `lib/server/t2v/stock-match.ts` + `stock-asset.ts`. Routes: `POST …/storyboard`, `GET|POST …/scenes/[sceneId]/media` (Agent A wires; Agent B owns ranking/storage impl).
 - **M5 render (B):** ducking, burned titles, transitions, brand bookends in worker assemble — Agent A ships P5–P10 UI + composition document fields only.
 
-**Git (Rick, 27 Oct 2026 — effective now):** **No feature branches or PRs.** Both agents commit **directly on `master`**. Before each change: `git pull --rebase origin master` → edit → quick `tsc` / tests on touched paths → commit (small, often) → `git pull --rebase origin master && git push origin HEAD:master`. Never force-push; if push rejected, pull --rebase and push again. Deploy: one push → one Coolify build; do not re-trigger deploy manually.
+**Git (Rick, 27 Oct 2026):** **No feature branches or PRs.** Both agents commit on shared branch **`transovo-build`** (`master` only at end of build — no `transovo-build` deploys until Rick says done). Loop: `git pull --rebase origin transovo-build` → edit → quick `tsc` / tests → commit → `git pull --rebase origin transovo-build && git push origin HEAD:transovo-build`. Never force-push.
 
 ---
 

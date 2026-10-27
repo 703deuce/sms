@@ -411,17 +411,17 @@ API-only scripts (`test-drip-campaigns-api.mjs`, etc.) do **not** replace flow r
 
 ---
 
-## Cursor agents — git workflow on `master` (Rick, Oct 2026)
+## Cursor agents — shared branch `transovo-build` (Rick, Oct 2026)
 
-**No feature branches or PRs.** Work directly on `master` (Agent A web, Agent B worker — same rule).
+**No feature branches or PRs.** Agent A (web) and Agent B (worker) commit on **`transovo-build` only**. **`master`** is updated only when Rick says the build is done (no deploys of `transovo-build` until then).
 
-1. `git pull --rebase origin master`
-2. Make the change; run quick validation on what you touched (`npm run typecheck` in `new-app/` for TS, worker tests for Python).
+1. `git pull --rebase origin transovo-build`
+2. Make the change; quick validation on touched paths (`npm run typecheck` in `new-app/` for TS, worker tests for Python).
 3. Commit small and often.
-4. `git pull --rebase origin master && git push origin HEAD:master`
-5. Never `--force` push. If push is rejected, pull --rebase again, then push.
+4. `git pull --rebase origin transovo-build && git push origin HEAD:transovo-build`
+5. Never force-push. If push is rejected, pull --rebase and push again.
 
-Do not wait on PR merges or “next build” queues — always build on latest `master`.
+Land stale PRs by merging into `transovo-build`, push, close PR with comment `landed in transovo-build`.
 
 ---
 
