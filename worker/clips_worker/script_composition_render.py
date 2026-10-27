@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 import subprocess
 import tempfile
 from pathlib import Path
@@ -20,6 +21,8 @@ from clips_worker.script_edl import (
     sum_merged_source_span_ms,
 )
 from clips_worker.storage import download_object, upload_file
+
+log = logging.getLogger(__name__)
 
 
 def load_composition_render_context(conn, composition_id: str, render_id: str) -> dict:
@@ -240,6 +243,21 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
         _ = sum_merged_source_span_ms(edl)
 
         trim_in, trim_out, cut_ranges = edl_to_trim_and_cut_ranges(edl, range_start, range_end)
+        if source_kind == "t2v":
+            deleted_ids = document.get("deletedWordIds") or []
+            has_gaps_pre = any(s.get("kind") == "gap" for s in edl)
+            if not deleted_ids and not has_gaps_pre:
+                prev_out = trim_out
+                trim_out = max(trim_out, range_end)
+                if trim_out != prev_out:
+                    log.info(
+                        "[t2v:export] extended trim_out to full source duration",
+                        extra={
+                            "compositionId": composition_id,
+                            "rangeEndMs": range_end,
+                            "trimOutMs": trim_out,
+                        },
+                    )
         edits = _document_settings_edits(document, project_settings, source_kind=source_kind)
         if "burnCaptions" in settings:
             edits.setdefault("captions", {})

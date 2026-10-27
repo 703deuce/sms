@@ -50,7 +50,12 @@ export function T2vPanelTemplates({
           <p className="text-xs text-muted-foreground">{t.aspect} · {t.category}</p>
         </button>
       ))}
-      {items.length === 0 ? <p className="text-sm text-muted-foreground">No templates — run seed script.</p> : null}
+      {items.length === 0 ? (
+        <p className="col-span-2 text-sm text-muted-foreground">
+          Style templates are being set up for your workspace. You can still adjust captions, transitions, and music in
+          the other style tabs.
+        </p>
+      ) : null}
     </div>
   )
 }

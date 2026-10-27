@@ -3,7 +3,8 @@ import { getPrisma } from '@/lib/server/db'
 import { saveT2vDraft } from '@/lib/server/t2v/drafts'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
 import { estimateSceneMs } from '@/lib/t2v/estimate'
-import { matchScenes, toSceneMedia, type StockCandidate } from '@/lib/server/t2v/stock-match'
+import { buildSceneStockQuery, matchScenes, toSceneMedia, type StockCandidate } from '@/lib/server/t2v/stock-match'
+import { logT2v } from '@/lib/server/t2v/log'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { pexelsConfigured } from '@/lib/server/ai/pexels'
 
@@ -55,6 +56,15 @@ export async function runStoryboardMatch(workspaceId: string, draftId: string, s
     try {
       const asset = await ensureT2vStockAsset(workspaceId, m.pick)
       s.media = toSceneMedia(m.pick, asset.id, needMs, s.visualQuery)
+      logT2v('match-stock', 'scene stock chosen', {
+        draftId,
+        sceneId: s.id,
+        query: buildSceneStockQuery(s.visualQuery, s.keywords),
+        provider: m.pick.provider,
+        providerId: m.pick.providerId,
+        assetId: asset.id,
+        score: m.pick.score,
+      })
       applied++
     } catch (err) {
       const message = err instanceof Error ? err.message : 'stock_copy_failed'

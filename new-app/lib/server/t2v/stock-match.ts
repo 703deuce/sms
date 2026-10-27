@@ -31,6 +31,35 @@ export type StockCandidate = {
 
 const TTL_MS = 24 * 60 * 60 * 1000
 
+const STOPWORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'your',
+  'this',
+  'that',
+  'from',
+  'into',
+  'about',
+  'video',
+  'scene',
+  'clip',
+  'stock',
+  'footage',
+  'show',
+  'showing',
+])
+
+/** Primary stock search string: visual description + scene keywords (not generic script filler). */
+export function buildSceneStockQuery(visualQuery: string, keywords: string[]): string {
+  const vq = visualQuery.trim()
+  const kw = keywords.map((k) => k.trim()).filter(Boolean)
+  const parts = [vq, ...kw.filter((k) => !vq.toLowerCase().includes(k.toLowerCase()))]
+  const joined = parts.join(' ').replace(/\s+/g, ' ').trim()
+  return joined.slice(0, 100) || vq.slice(0, 100)
+}
+
 /** When the LLM omits keywords, derive search terms from the visual query. */
 export function extractSceneKeywords(visualQuery: string, keywords: string[]): string[] {
   const fromKw = keywords.map((k) => k.toLowerCase().trim()).filter(Boolean)
@@ -38,8 +67,8 @@ export function extractSceneKeywords(visualQuery: string, keywords: string[]): s
   return visualQuery
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((w) => w.length > 2)
-    .slice(0, 6)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+    .slice(0, 8)
 }
 
 function targetDims(aspect: T2vAspect) {
@@ -165,9 +194,11 @@ export function scoreCandidate(
   c: StockCandidate,
   o: { keywords: string[]; aspect: T2vAspect; needS: number },
 ): number {
-  const kw = o.keywords.map((k) => k.toLowerCase())
+  const kw = o.keywords.map((k) => k.toLowerCase()).filter(Boolean)
+  const tagText = `${c.tags.join(' ')}`.toLowerCase()
   const overlap = kw.length
-    ? kw.filter((k) => c.tags.some((t) => t.includes(k) || k.includes(t))).length / kw.length
+    ? kw.filter((k) => tagText.includes(k) || c.tags.some((t) => t.includes(k) || k.includes(t))).length /
+      kw.length
     : 0
   const portrait = c.height > c.width
   const square = Math.abs(c.width - c.height) / Math.max(c.width, c.height) < 0.1
@@ -200,7 +231,10 @@ export async function matchScenes(input: {
   const out: Record<string, { pick: StockCandidate | null; alternates: StockCandidate[] }> = {}
   for (const s of input.scenes) {
     const kw = extractSceneKeywords(s.visualQuery, s.keywords)
-    const queries = [s.visualQuery, kw.slice(0, 2).join(' ')].filter((q, i, a) => q && a.indexOf(q) === i)
+    const primary = buildSceneStockQuery(s.visualQuery, s.keywords)
+    const queries = [primary, s.visualQuery.trim(), kw.slice(0, 3).join(' ')].filter(
+      (q, i, a) => q && a.indexOf(q) === i,
+    )
     let pool: StockCandidate[] = []
     for (const q of queries) {
       const batches = await Promise.allSettled([
