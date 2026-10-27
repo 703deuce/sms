@@ -411,19 +411,17 @@ API-only scripts (`test-drip-campaigns-api.mjs`, etc.) do **not** replace flow r
 
 ---
 
-## Cursor agents — shared branch `transovo-build` (Rick, Oct 2026)
+## Cursor Cloud agents — Rick workflow (effective Oct 2026)
 
-**No feature branches or PRs.** Agent A (web) and Agent B (worker) commit on **`transovo-build` only**. **Rick merges** (into `transovo-build` / `master`); agents **do not merge PRs** or land branches themselves.
+**Git:** Commit and push **straight to `master`**. No feature branches, no PR branches, no opening PRs for agent work. **Never force-push.** If push is rejected, `git pull --rebase origin master` and push again.
 
-**Validation (agents):** quick `npm run typecheck` in `new-app/` when you touch TS, plus **fast unit tests only for code you changed** — then commit and push. **Do not** run `next build`, full CI, or “next build” deploy pipelines yourself; move on.
+**Validation (agents): ZERO tests and ZERO builds.** Do **not** run `next build`, `tsc` / typecheck, `pytest`, vitest/jest, or any unit/integration test suite. Do **not** add new test files unless Rick explicitly asks. Write the change, commit, push; **Coolify** is the build check and **Rick’s live clipper (and other) reruns** catch functional problems.
 
-**Deploys (agents):** `transovo-build` is not deployed until Rick says the build is done. When a change on **`master`** actually needs a production fix, you still own Coolify follow-through per `docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md` (monitor build, fix, redeploy until healthy).
+**Deploys:** Push to `master` triggers Coolify. When a production fix is needed, follow `docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md` (monitor build/runtime logs, fix, redeploy until healthy) — still **no** local `next build` as a gate.
 
-1. `git pull --rebase origin transovo-build`
-2. Change → typecheck / targeted unit tests
-3. Commit small and often
-4. `git pull --rebase origin transovo-build && git push origin HEAD:transovo-build`
-5. Never force-push; if rejected, pull --rebase and push again
+1. `git pull --rebase origin master`
+2. Implement → commit (small, focused messages)
+3. `git push origin master`
 
 ---
 
