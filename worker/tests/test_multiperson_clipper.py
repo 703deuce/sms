@@ -99,15 +99,22 @@ def test_shot_cuts_histogram_fallback():
 
 
 def test_multiperson_hot_path_wired_in_speakercrop():
-    """Dockerfile COPY worker/prototype/v3 → /app/v3; speakercrop imports multiperson_pipeline."""
+    """v3 multiperson is opt-in via REFRAME_V=2; speakercrop imports multiperson_pipeline under that gate."""
     from pathlib import Path
 
-    v3 = Path(__file__).resolve().parents[1] / "prototype" / "v3"
+    worker_root = Path(__file__).resolve().parents[1]
+    v3 = worker_root / "prototype" / "v3"
+    if not (v3 / "speakercrop.py").is_file():
+        v3 = Path("/app/v3")
     assert (v3 / "multiperson_pipeline.py").is_file()
     assert (v3 / "shot_cuts.py").is_file()
     src = (v3 / "speakercrop.py").read_text(encoding="utf-8")
-    assert 'os.environ.get("MULTIPERSON"' in src or "MULTIPERSON" in src
+    assert 'os.environ.get("REFRAME_V"' in src
+    assert 'strip() == "2"' in src
     assert "multiperson_pipeline" in src or "multiperson_run" in src
-    docker = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text(encoding="utf-8")
-    assert "worker/prototype/v3 /app/v3" in docker
-    assert "test_multiperson_clipper.py" in docker
+    assert "ImportError" in src
+    docker = worker_root / "Dockerfile"
+    if docker.is_file():
+        docker_src = docker.read_text(encoding="utf-8")
+        assert "worker/prototype/v3 /app/v3" in docker_src
+        assert "test_multiperson_clipper.py" in docker_src
