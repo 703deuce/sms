@@ -27,7 +27,7 @@ def load_render_context(conn, render_id: str) -> dict:
             SELECT r.id AS render_id, r."clipId", r."workspaceId",
                    r.status, r."outputKey", r."editsVersionHash",
                    r."aspectRatio", r.resolution,
-                   c."startMs", c."endMs", c."previewKey", c.edits, c."projectId",
+                   c."startMs", c."endMs", c."previewKey", c."cropKey", c.edits, c."projectId",
                    c."sourceSegKey", c."sourceSegStartMs", c."sourceSegEndMs", c."aiMeta",
                    p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key
             FROM clip_renders r
@@ -115,7 +115,7 @@ def _export_stage_log(render_id: str, stage: str, t0: float, extra: dict | None 
     payload = {"tag": "clipper:export_stage", "renderId": render_id, "stage": stage, "elapsedSec": round(time.perf_counter() - t0, 3)}
     if extra:
         payload.update(extra)
-    _log.info("%s", json.dumps(payload))
+    print(f"[clipper:export_stage] {json.dumps(payload)}", flush=True)
 
 
 def run_render_clip_job(conn, job: dict, post_progress) -> None:
@@ -131,6 +131,9 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
     _export_stage_log(render_id, "load_context", t_job)
     mark_render(conn, render_id, "RENDERING")
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 10, "etaSeconds": 180})
+    from clips_worker.gpu.render_warmup import warm_modal_renderer_if_needed
+
+    warm_modal_renderer_if_needed(conn)
 
     clip_start = int(ctx["startMs"])
     clip_end = int(ctx["endMs"])
@@ -208,33 +211,58 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             audio_assets = {**(audio_assets or {}), "dub_assets": dub}
 
         out_mp4 = td_path / "render.mp4"
-        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 90})
-        t_render = time.perf_counter()
+        from clips_worker.preview_reuse import export_edits_allow_preview_reuse, materialize_export_from_preview
+
         render_meta: dict = {}
-        _, _edited_words, srt_body = render_edited_clip(
-            clip_file,
-            out_mp4,
-            source_words,
-            edits,
-            cut_start,
-            cut_end,
-            settings,
-            td_path,
-            broll_specs=broll_specs or None,
-            audio_assets=audio_assets,
-            render_id=render_id,
-            render_meta=render_meta,
-            conn=conn,
-            workspace_id=workspace_id,
-            project_id=project_id,
-            clip_id=clip_id,
-        )
-        _export_stage_log(
-            render_id,
-            "render_edited_clip",
-            t_job,
-            {"renderSec": round(time.perf_counter() - t_render, 3), "fitFallback": bool(render_meta.get("fit_fallback"))},
-        )
+        preview_crop_track: Path | None = None
+        crop_key = ctx.get("cropKey")
+        if crop_key:
+            preview_crop_track = td_path / "preview_crop_track.json"
+            try:
+                download_object(str(crop_key), preview_crop_track)
+            except Exception:
+                preview_crop_track = None
+
+        if preview_key and export_edits_allow_preview_reuse(aspect, edits, clip_start, clip_end):
+            materialize_export_from_preview(preview_key, resolution, out_mp4, td_path)
+            from clips_worker.edits_render import build_srt, ensure_word_i, words_after_edits
+
+            remapped, _ = words_after_edits(ensure_word_i(source_words), edits)
+            srt_body = build_srt(remapped)
+            _export_stage_log(
+                render_id,
+                "preview_materialize",
+                t_job,
+                {"resolution": resolution, "scaled": resolution != "720p"},
+            )
+        else:
+            post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 90})
+            t_render = time.perf_counter()
+            _, _edited_words, srt_body = render_edited_clip(
+                clip_file,
+                out_mp4,
+                source_words,
+                edits,
+                cut_start,
+                cut_end,
+                settings,
+                td_path,
+                broll_specs=broll_specs or None,
+                audio_assets=audio_assets,
+                render_id=render_id,
+                render_meta=render_meta,
+                conn=conn,
+                workspace_id=workspace_id,
+                project_id=project_id,
+                clip_id=clip_id,
+                preview_crop_track=preview_crop_track,
+            )
+            _export_stage_log(
+                render_id,
+                "render_edited_clip",
+                t_job,
+                {"renderSec": round(time.perf_counter() - t_render, 3), "fitFallback": bool(render_meta.get("fit_fallback"))},
+            )
 
         brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
         intro_key = brand.get("introVideoKey") if brand.get("useIntro", True) else None

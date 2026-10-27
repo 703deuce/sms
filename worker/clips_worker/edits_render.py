@@ -330,6 +330,7 @@ def run_speakercrop_layout_timeline(
     workspace_id: str | None = None,
     project_id: str | None = None,
     clip_id: str | None = None,
+    preview_crop_track: Path | None = None,
 ) -> Path:
     """Export speakercrop honoring per-segment layout modes when they differ."""
     if not needs_per_segment_layout_export(edits):
@@ -337,7 +338,11 @@ def run_speakercrop_layout_timeline(
         wpath = work_dir / "words_export.json"
         wpath.write_text(json.dumps(words_clip_relative))
         dom_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
-        crop_track = _maybe_static_fit_blur_crop_track(clip_src, work_dir, clip_start_ms, dom_mode)
+        crop_track = (
+            preview_crop_track
+            if preview_crop_track is not None and preview_crop_track.is_file()
+            else _maybe_static_fit_blur_crop_track(clip_src, work_dir, clip_start_ms, dom_mode)
+        )
         run_speakercrop(
             clip_src,
             out_mp4,
@@ -507,6 +512,7 @@ def render_edited_clip(
     workspace_id: str | None = None,
     project_id: str | None = None,
     clip_id: str | None = None,
+    preview_crop_track: Path | None = None,
 ) -> tuple[Path, list[dict], str]:
     t0 = time.perf_counter()
     rid = render_id or "unknown"
@@ -519,7 +525,7 @@ def render_edited_clip(
             "elapsedSec": round(time.perf_counter() - t0, 3),
         }
         payload.update(extra)
-        _log.info("%s", json.dumps(payload))
+        print(f"[clipper:export_stage] {json.dumps(payload)}", flush=True)
 
     from clips_worker.silence_trim import effective_cut_ranges
 
@@ -569,6 +575,7 @@ def render_edited_clip(
             workspace_id=workspace_id,
             project_id=project_id,
             clip_id=clip_id,
+            preview_crop_track=preview_crop_track,
         )
         stage("speakercrop_fast_done")
         return out_mp4, remapped, build_srt(remapped)
@@ -615,6 +622,7 @@ def render_edited_clip(
         workspace_id=workspace_id,
         project_id=project_id,
         clip_id=clip_id,
+        preview_crop_track=preview_crop_track,
     )
     stage("speakercrop_nc_done")
 

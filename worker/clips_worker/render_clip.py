@@ -341,12 +341,17 @@ def prepare_speakercrop_gpu_render(
     workspace_id: str,
     project_id: str,
     clip_id: str,
+    *,
+    existing_crop_track: Path | None = None,
 ):
     """Build crop track locally and return PreparedGpuRender for Modal/local batch encode."""
     from clips_worker.filtergraph import fit_blur_overlay_filter
     from clips_worker.gpu_encode import PreparedGpuRender
 
-    track = speakercrop_norender_crop_track(
+    track = (
+        existing_crop_track
+        if existing_crop_track is not None and existing_crop_track.is_file()
+        else speakercrop_norender_crop_track(
         clip_src,
         out_mp4,
         words_path,
@@ -358,8 +363,9 @@ def prepare_speakercrop_gpu_render(
         render_meta=render_meta,
         preserve_existing_crop_track=preserve_existing_crop_track,
         clip_index=clip_index,
+        )
     )
-    if not track:
+    if not track or not track.is_file():
         return None
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
@@ -406,6 +412,7 @@ def _try_gpu_encode_speakercrop(
 ) -> bool:
     from clips_worker.gpu_encode import render_one_via_provider
 
+    existing = crop_track_out if preserve_existing_crop_track and crop_track_out and crop_track_out.is_file() else None
     prep = prepare_speakercrop_gpu_render(
         clip_src,
         out_mp4,
@@ -421,6 +428,7 @@ def _try_gpu_encode_speakercrop(
         workspace_id,
         project_id,
         clip_id,
+        existing_crop_track=existing,
     )
     if not prep:
         return False
