@@ -27,13 +27,13 @@ Same as `descript-ui-layouts.md` §0.2–0.4: dark by default, `bg-background` /
 ### 0.3 State vocabulary used in every control table
 `empty` (no data yet) · `loading` (fetching, skeleton) · `generating` (server job running; shows stage + % from `T2vDraft.status/stage/progress`) · `ready` · `error` (inline message + Retry; never a dead end) · `disabled` (with tooltip saying why) · `stale` (scene changed since last assemble; amber dot).
 
-### 0.5 Build phase: billing deferred (Rick, 27 Oct 2026)
-Until the **end of the full T2V build**, do **not** ship credits, pricing, billing, entitlements enforcement, or usage metering for T2V. Generation stays **ungated** (`FEATURES_ALL_UNLOCKED` — same as the rest of the app during the build). **M7 in this phase** = P16/P17 projects list + entry, P19 exports integration, P20 **Voices only** (list, preview, default, clone UI), P13 export polish — **not** ledger rows, credit checks, studio credits pill, or Settings usage lines. The cost table in §5.8 and UI mocks that mention credits remain the **target design**; implement them in the dedicated billing pass (see §5.8 TODO).
-
 ### 0.4 Truth model (one sentence each)
 - `T2vDraft.document` (`T2vDraftV1`, `code/new-app/lib/t2v/types.ts`) is the authoring truth for **scenes, narration, scene media, voice, music, titles**.
 - `T2V_ASSEMBLE` bakes the draft into a normal **ClipProject source mp4** + `transcriptWords` (from TTS alignment) + a **full ScriptComposition** document.
 - From then on the **Descript-style editor** (`/app/clips/[projectId]/script`) and **RENDER_SCRIPT_COMPOSITION** export work unchanged. Fine edits there never touch the draft; going back to the storyboard and re-assembling preserves deletions whose word ids still exist (stable ids, §5.3).
+
+### 0.5 Build phase: billing deferred (Rick, 27 Oct 2026)
+Until the **end of the full T2V build**, do **not** ship credits, pricing, billing, entitlements enforcement, or usage metering for T2V. Generation stays **ungated** (`FEATURES_ALL_UNLOCKED` — same as the rest of the app during the build). **M7 in this phase** = P16/P17 projects list + entry, P19 exports integration, P20 **Voices only** (list, preview, default, clone UI), P13 export polish — **not** ledger rows, credit checks, studio credits pill, or Settings usage lines. The cost table in §5.8 and UI mocks that mention credits remain the **target design**; implement them in the dedicated billing pass (see §5.8 TODO).
 
 ---
 
