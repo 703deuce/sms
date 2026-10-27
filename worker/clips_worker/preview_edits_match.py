@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from clips_worker.clip_export_template import export_template_overlays_active
 from clips_worker.edits_render import default_edits, is_default_edits
 
 
 def preview_export_matches(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
+    if export_template_overlays_active(tpl):
+        return False
+    sfx = str(edits.get("exportSfx") or "off")
+    if sfx in ("subtle", "meme"):
+        return False
     if not is_default_edits(edits, clip_start_ms, clip_end_ms):
         return False
     d = default_edits(clip_start_ms, clip_end_ms)

@@ -90,6 +90,22 @@ def _platform_label(platform: str) -> tuple[str, str]:
     return "LIVE", "0x9146FF"
 
 
+def export_template_overlays_active(tpl: dict | None) -> bool:
+    """Mirror new-app/lib/clips/export-template.ts exportTemplateOverlaysActive."""
+    if not tpl or not isinstance(tpl, dict):
+        return False
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    if hb.get("enabled") and (str(hb.get("text") or "").strip() or str(tpl.get("suggestedHeadline") or "").strip()):
+        return True
+    pb = tpl.get("platformBadge") if isinstance(tpl.get("platformBadge"), dict) else {}
+    if pb.get("enabled"):
+        return True
+    cl = tpl.get("channelLink") if isinstance(tpl.get("channelLink"), dict) else {}
+    if cl.get("enabled") and str(cl.get("url") or "").strip():
+        return True
+    return False
+
+
 def apply_export_template(
     video: Path,
     out: Path,
