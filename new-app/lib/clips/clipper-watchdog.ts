@@ -12,10 +12,11 @@ export const WATCHDOG_AUTO_RETRY_MAX = 1
 /** Max time without phase/progress movement before we fail or retry. */
 export function phaseStallLimitMs(jobType: string, phase?: string): number {
   const p = (phase ?? '').toLowerCase()
+  if (jobType === 'STREAM_RENDER') return 45 * 60_000
   if (jobType === 'RENDER_CLIP' || p.includes('render')) return 20 * 60_000
+  if (jobType === 'STREAM_ANALYZE' || p.includes('transcrib')) return 60 * 60_000
   if (jobType === 'STREAM_IMPORT' || p.includes('import') || p.includes('pull')) return 60 * 60_000
   if (jobType === 'STREAM_AUTOPULL') return 90 * 60_000
-  if (p.includes('transcrib')) return 45 * 60_000
   if (p.includes('prepar') || p.includes('upload')) return 20 * 60_000
   if (p.includes('find') || p.includes('scan') || p.includes('clip')) return 35 * 60_000
   if (p.includes('reframe') || p.includes('align')) return 40 * 60_000

@@ -9,7 +9,9 @@ import {
 describe('clipper-watchdog', () => {
   it('uses longer limits for transcribe and render', () => {
     expect(phaseStallLimitMs('RENDER_CLIP', 'render_clip')).toBe(20 * 60_000)
-    expect(phaseStallLimitMs('PROCESS', 'transcribing')).toBe(45 * 60_000)
+    expect(phaseStallLimitMs('STREAM_ANALYZE', 'Transcribing')).toBe(60 * 60_000)
+    expect(phaseStallLimitMs('STREAM_RENDER', 'Rendering 1/3')).toBe(45 * 60_000)
+    expect(phaseStallLimitMs('PROCESS', 'transcribing')).toBe(60 * 60_000)
   })
 
   it('detects progress stall from lastChangeAt', () => {
