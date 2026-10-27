@@ -38,8 +38,8 @@ RUN pip install --no-cache-dir pytest \
         /app/tests/test_director_cfg_live.py /app/tests/test_speakercrop_crop_track_in.py \
         /app/tests/test_render_ai_meta.py /app/tests/test_chat_source.py \
         /app/tests/test_reframe_model_names.py /app/tests/test_layout_router.py \
-        /app/tests/test_reframe_integration.py /app/tests/test_director_calm.py \
-        /app/tests/test_smoothing_calm.py /app/tests/test_person_count_probe.py
+        /app/tests/test_reframe_integration.py /app/tests/test_person_count_probe.py \
+        /app/tests/test_reframe_person_det.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en

@@ -52,8 +52,25 @@ def test_split_when_both_talk_back_and_forth():
 def test_grid_for_four_way_crosstalk():
     turns = [(i % 4, a, a + 3) for i, a in enumerate(range(0, 120, 3))]
     post, vis, _, _ = synth(P=4, n=120, turns=turns)
-    segs, *_ = segs_of(post, vis)
+    segs, *_ = segs_of(post, vis, allow_three=False)
     assert max((s["end_s"] - s["start_s"]) for s in segs if s["layout"] == "grid") > 10
+
+
+def test_three_in_layout_states_when_three_or_more_people():
+    from clips_worker.reframe_core import layout_states
+
+    st = layout_states(3, DirectorCfg(allow_three=True, allow_grid=False))
+    assert ("three",) in st
+    st_off = layout_states(3, DirectorCfg(allow_three=False))
+    assert ("three",) not in st_off
+
+
+def test_three_stack_for_three_way_crosstalk():
+    turns = [(i % 3, a, a + 4) for i, a in enumerate(range(0, 120, 4))]
+    post, vis, _, _ = synth(P=3, n=120, turns=turns)
+    segs, *_ = segs_of(post, vis, allow_grid=False, three_bias=1.0)
+    assert any(s["layout"] == "three" for s in segs)
+    assert not any(s["layout"] == "grid" for s in segs)
 
 def test_invisible_person_never_single():
     post, vis, _, _ = synth()
@@ -117,6 +134,50 @@ def test_reid_gallery_hungarian_and_cannot_link():
 
 def test_layout_geometry():
     assert sum(h for *_, h in layout_slots("split", 1080, 1920, 2)) == 1920
+    t = layout_slots("three", 1080, 1920, 3)
+    assert len(t) == 3 and sum(h for *_, h in t) == 1920
     g = layout_slots("grid", 1080, 1920, 4); assert len(g) == 4 and g[3] == (540, 960, 540, 960)
     x, y, w, h = tile_rect(1200, 100, 120, 1280, 720, 9 / 8)
     assert 0 <= x and x + w <= 1280 and 0 <= y and y + h <= 720
+
+
+def test_frame_crops_three_side_pip():
+    from clips_worker.reframe_core import compose_frame, frame_crops
+
+    nfr = 30
+    track = {
+        "W": 1280,
+        "H": 720,
+        "cw": 400,
+        "fps": 30.0,
+        "out_w": 1080,
+        "out_h": 1920,
+        "x0": [-1] * nfr,
+        "people": [{"id": "P1", "screen_s": 10}, {"id": "P2", "screen_s": 8}, {"id": "P3", "screen_s": 6}],
+        "segments": [
+            {"layout": "three", "slots": [0, 1, 2], "start_s": 0.0, "end_s": 1.0},
+        ],
+        "_frames": {
+            "fx": np.full((3, nfr), 640.0),
+            "fy": np.full((3, nfr), 360.0),
+            "fh": np.full((3, nfr), 120.0),
+            "seg_of": np.zeros(nfr, int),
+        },
+    }
+    lay, crops = frame_crops(track, 5)
+    assert lay == "three" and len(crops) == 3
+    fr = np.zeros((720, 1280, 3), np.uint8)
+    out = compose_frame(fr, lay, crops, 1080, 1920)
+    assert out.shape == (1920, 1080, 3)
+
+    track["segments"][0] = {"layout": "side", "slots": [0, 1], "start_s": 0.0, "end_s": 1.0}
+    lay, crops = frame_crops(track, 5)
+    assert lay == "side" and len(crops) == 2
+    out = compose_frame(fr, lay, crops, 1080, 1920)
+    assert out.shape == (1920, 1080, 3)
+
+    track["segments"][0] = {"layout": "pip", "slots": [1], "start_s": 0.0, "end_s": 1.0}
+    lay, crops = frame_crops(track, 5)
+    assert lay == "pip" and len(crops) == 1
+    out = compose_frame(fr, lay, crops, 1080, 1920)
+    assert out.shape == (1920, 1080, 3)

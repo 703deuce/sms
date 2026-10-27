@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass, field
-from typing import Iterable
+from typing import Iterable, Mapping
 
 import cv2  # opencv-contrib-python-headless (already a worker dependency)
 import numpy as np
@@ -110,6 +110,52 @@ def filter_main_faces(faces: np.ndarray, frame_h: int, *, min_frac: float = 0.04
     keep = (h >= min_frac * frame_h) & (h >= min_rel * h.max())
     f = faces[keep]
     return f[np.argsort(-f[:, 3])][:max_faces]
+
+
+def person_detector_enabled(env: Mapping[str, object] | None = None) -> bool:
+    """Stage 2b (IMPLEMENTATION-GUIDE): MediaPipe EfficientDet-Lite0, default off (REFRAME_PERSON_DET)."""
+    src = env if env is not None else os.environ
+    return str(src.get("REFRAME_PERSON_DET", "")).strip().lower() in ("1", "true", "yes")
+
+
+def make_person_detector(model_path: str, *, score: float = 0.4):
+    from mediapipe.tasks.python import BaseOptions, vision
+
+    return vision.ObjectDetector.create_from_options(vision.ObjectDetectorOptions(
+        base_options=BaseOptions(model_asset_path=model_path),
+        running_mode=vision.RunningMode.IMAGE,
+        score_threshold=score,
+        category_allowlist=["person"],
+        max_results=6,
+    ))
+
+
+def _person_boxes_to_face_rows(boxes: list[tuple[float, float, float, float]], scale: float) -> np.ndarray:
+    """Person detections as YuNet-shaped rows (upper body) for ByteTrack; landmarks/score are placeholders."""
+    rows: list[list[float]] = []
+    for ox, oy, bw, bh in boxes:
+        w = bw / scale
+        h = max(bh / scale * 0.35, 24.0)
+        x = ox / scale
+        y = oy / scale
+        rows.append([x, y, w, h] + [0.0] * 10 + [0.55])
+    if not rows:
+        return np.zeros((0, 15), np.float32)
+    return np.array(rows, np.float32)
+
+
+def detect_persons_scaled(pd, frame: np.ndarray, target_w: int = 640) -> np.ndarray:
+    """MediaPipe person detector on a downscaled frame; returns Nx15 rows in full-res pixels."""
+    import cv2
+    import mediapipe as mp
+
+    H, W = frame.shape[:2]
+    s = min(1.0, target_w / W)
+    small = frame if s == 1.0 else cv2.resize(frame, (int(round(W * s)), int(round(H * s))), interpolation=cv2.INTER_AREA)
+    res = pd.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(small, cv2.COLOR_BGR2RGB)))
+    boxes = [(d.bounding_box.origin_x, d.bounding_box.origin_y, d.bounding_box.width, d.bounding_box.height)
+             for d in (res.detections or [])]
+    return _person_boxes_to_face_rows(boxes, s)
 
 
 # --------------------------------------------------------------------------
@@ -256,15 +302,22 @@ def track_faces(video_path: str, params: dict | None = None) -> dict:
         return _empty_face_track(params)
     lm = make_mouth_landmarker(params["mouth_model"]) if params.get("mouth_model") else None
 
-    from clips_worker.reframe_models import SFACE_LEGACY_ONNX, SFACE_ONNX, YUNET_ONNX, resolve_onnx
+    from clips_worker.reframe_models import EFFICIENTDET_TFLITE, SFACE_LEGACY_ONNX, SFACE_ONNX, YUNET_ONNX, resolve_onnx
 
+    env = params.get("env") or {}
     yunet_path = resolve_onnx(models, YUNET_ONNX)
     sface_path = resolve_onnx(models, SFACE_ONNX, SFACE_LEGACY_ONNX)
     if not os.path.isfile(yunet_path) or not os.path.isfile(sface_path):
         return _empty_face_track(params)
     det = make_face_detector(yunet_path, det_w)
+    person_pd = None
+    if person_detector_enabled(env):
+        pd_path = resolve_onnx(models, EFFICIENTDET_TFLITE)
+        if os.path.isfile(pd_path):
+            person_pd = make_person_detector(pd_path)
     emb = FaceEmbedder(sface_path)
     trk = FaceTracker(sample_fps)
+    shot_had_face: set[int] = set()
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return _empty_face_track(params)
@@ -290,6 +343,11 @@ def track_faces(video_path: str, params: dict | None = None) -> dict:
                 trk.reset(); cur_shot = si
             t0 = time.perf_counter()
             faces = filter_main_faces(detect_faces_scaled(det, fr, det_w), H, max_faces=max_people + 1)
+            if len(faces) == 0 and person_pd is not None and si in shot_had_face:
+                faces = filter_main_faces(detect_persons_scaled(person_pd, fr, det_w), H,
+                                          min_frac=0.06, max_faces=max_people + 1)
+            elif len(faces) > 0:
+                shot_had_face.add(si)
             t1 = time.perf_counter()
             for tid, row in trk.update(faces):
                 key = si * 10000 + tid                        # unique per shot
@@ -318,6 +376,8 @@ def track_faces(video_path: str, params: dict | None = None) -> dict:
                 arr[p, :, jj] = b; mouth[p, jj] = m
     if lm is not None:
         lm.close()
+    if person_pd is not None:
+        person_pd.close()
     timings["track"] -= timings["embed"] + timings.get("mouth", 0.0)
     people = [dict(id=f"P{p+1}", x=(arr[p, 0] + arr[p, 2] / 2).tolist(), y=(arr[p, 1] + arr[p, 3] / 2).tolist(),
                    w=arr[p, 2].tolist(), h=arr[p, 3].tolist()) for p in range(P)]
@@ -450,6 +510,8 @@ class DirectorCfg:
     wide_lone_penalty: float = 1.5 # extra cost of wide when exactly one person is on screen
     both_win_s: float = 3.0        # window to call "both are talking" (BOTH_T analogue)
     allow_split: bool = True       # SPLIT
+    allow_three: bool = True       # 3-up vertical stack (P >= 3)
+    three_bias: float = 1.5        # extra cost of three vs single (between split and grid)
     allow_grid: bool = True
     force: str | None = None       # LAYOUT_MODE / FORCE_SPLIT: 'split' | 'fit' | 'fill' | None
 
@@ -458,6 +520,8 @@ def layout_states(P: int, cfg: DirectorCfg) -> list[tuple]:
     st: list[tuple] = [("single", k) for k in range(P)]
     if cfg.allow_split and P >= 2:
         st += [("split", a, b) for a in range(P) for b in range(a + 1, P)]
+    if cfg.allow_three and P >= 3:
+        st.append(("three",))
     if cfg.allow_grid and P >= 3:
         st.append(("grid",))
     st.append(("wide",))
@@ -485,6 +549,10 @@ def emission_costs(post: np.ndarray, visible: np.ndarray, states: list[tuple], c
             both = np.minimum(win[a], win[b]) * 2.0                                   # 1.0 when 50/50
             C[i] = cfg.split_bias - np.log(np.clip(both, eps, 1.0)) - np.log(post[a] + post[b] + eps)
             C[i][~(visible[a] & visible[b])] = np.inf
+        elif s[0] == "three":
+            third = np.sort(win, axis=0)[-3] * 3.0 if P >= 3 else np.zeros(n)
+            C[i] = cfg.three_bias - np.log(np.clip(third, eps, 1.0))
+            C[i][visible.sum(0) < 3] = np.inf
         elif s[0] == "grid":
             third = np.sort(win, axis=0)[-3] * 3.0 if P >= 3 else np.zeros(n)
             C[i] = cfg.grid_bias - np.log(np.clip(third, eps, 1.0))
@@ -865,6 +933,19 @@ def frame_crops(track: dict, i: int) -> tuple[str, list[tuple[int, int, int, int
         x0 = track["x0"][i]; return "single", [(x0, 0, track["cw"], H)]
     if lay == "split":
         return "split", [tile_rect(*face(p), W, H, ow / (oh / 2)) for p in sg["slots"]]
+    if lay == "three":
+        vis = [p for p in range(fr["fx"].shape[0]) if not np.isnan(fr["fx"][p, i])]
+        vis = sorted(vis, key=lambda p: -track["people"][p]["screen_s"])[:3]
+        vis = sorted(vis, key=lambda p: fr["fx"][p, i])
+        return "three", [tile_rect(*face(p), W, H, ow / (oh / 3)) for p in vis]
+    if lay == "side":
+        slots = list(sg["slots"])[:2]
+        tile_aspect = (ow / 2) / max(oh, 1)
+        return "side", [tile_rect(*face(p), W, H, tile_aspect) for p in slots]
+    if lay == "pip":
+        p = int(sg["slots"][0]) if sg["slots"] else 0
+        cam_w = max(ow // 3, 1)
+        return "pip", [tile_rect(*face(p), W, H, cam_w / max(int(cam_w * 4 / 3), 1))]
     if lay == "grid":
         vis = [p for p in range(fr["fx"].shape[0]) if not np.isnan(fr["fx"][p, i])]
         vis = sorted(vis, key=lambda p: -track["people"][p]["screen_s"])[:4]
