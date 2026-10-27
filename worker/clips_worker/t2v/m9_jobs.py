@@ -13,7 +13,12 @@ import requests
 from clips_worker.storage import download_object, upload_file
 from clips_worker.t2v.deck_extract import extract_deck
 from clips_worker.t2v.draft_patch import patch_scene_media
-from clips_worker.t2v.kie_tasks import create_image_task, create_video_task, poll_kie_task
+from clips_worker.t2v.kie_tasks import (
+    create_image_task,
+    create_video_task,
+    poll_kie_task,
+    t2v_kie_callback_url,
+)
 
 
 def _payload(job: dict) -> dict:
@@ -117,9 +122,13 @@ def run_t2v_voice_clone_job(conn, job: dict, progress) -> None:
 
 
 def _download_url(url: str) -> bytes:
-    r = requests.get(url, timeout=300)
+    r = requests.get(url, timeout=300, stream=True)
     r.raise_for_status()
-    return r.content
+    chunks: list[bytes] = []
+    for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
+        if chunk:
+            chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _apply_ai_media(
@@ -139,12 +148,14 @@ def _apply_ai_media(
     prompt = p["prompt"]
     aspect = p.get("aspect") or "16:9"
     progress(job["id"], {"jobStatus": "RUNNING", "stage": "generate", "progress": 15})
+    callback = t2v_kie_callback_url(job["id"])
     if provider == "ai_image":
-        task_id = create_image_task(prompt, aspect)
+        task_id = create_image_task(prompt, aspect, call_back_url=callback)
     else:
-        task_id = create_video_task(prompt, aspect)
+        task_id = create_video_task(prompt, aspect, call_back_url=callback)
+    _merge_payload(conn, job["id"], {"kieTaskId": task_id})
     progress(job["id"], {"jobStatus": "RUNNING", "stage": "poll", "progress": 40})
-    asset_url = poll_kie_task(task_id)
+    asset_url = poll_kie_task(task_id, conn=conn, job_id=job["id"])
     raw = _download_url(asset_url)
     storage_key = f"ws/{workspace_id}/t2v/scenes/{draft_id}/{scene_id}-{secrets.token_hex(8)}.{ext}"
     _upload_bytes(storage_key, raw, mime)

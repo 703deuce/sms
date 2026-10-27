@@ -1,6 +1,8 @@
-"""Kie image/video tasks for T2V scene media (poll-based, no callback)."""
+"""Kie image/video tasks for T2V scene media (poll + optional callback)."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import time
@@ -22,6 +24,21 @@ def _image_model() -> str:
     return (os.environ.get("KIE_IMAGE_MODEL") or "nano-banana-2").strip()
 
 
+def sign_t2v_kie_callback(job_id: str) -> str:
+    secret = (os.environ.get("KIE_CALLBACK_SECRET") or os.environ.get("WORKER_SHARED_SECRET") or "").strip()
+    if not secret:
+        return ""
+    return hmac.new(secret.encode(), job_id.encode(), hashlib.sha256).hexdigest()
+
+
+def t2v_kie_callback_url(job_id: str) -> str | None:
+    base = (os.environ.get("APP_URL") or os.environ.get("WORKER_CALLBACK_URL") or "").strip().rstrip("/")
+    sig = sign_t2v_kie_callback(job_id)
+    if not base or not sig:
+        return None
+    return f"{base}/api/t2v/internal/kie/callback?jobId={job_id}&s={sig}"
+
+
 def kie_aspect_ratio(aspect: str) -> str:
     if aspect in ("9:16", "4:5"):
         return "9:16"
@@ -30,10 +47,10 @@ def kie_aspect_ratio(aspect: str) -> str:
     return "16:9"
 
 
-def create_image_task(prompt: str, aspect: str) -> str:
+def create_image_task(prompt: str, aspect: str, *, call_back_url: str | None = None) -> str:
     body: dict[str, Any] = {
         "model": _image_model(),
-        "callBackUrl": "https://transovo.local/kie-noop",
+        "callBackUrl": call_back_url or "https://transovo.local/kie-noop",
         "input": {
             "prompt": prompt,
             "image_input": [],
@@ -49,6 +66,7 @@ def create_image_task(prompt: str, aspect: str) -> str:
         json=body,
         timeout=60,
     )
+    res.raise_for_status()
     data = res.json()
     if data.get("code") != 200:
         raise RuntimeError(data.get("msg") or "kie_create_image_failed")
@@ -58,11 +76,11 @@ def create_image_task(prompt: str, aspect: str) -> str:
     return str(task_id)
 
 
-def create_video_task(prompt: str, aspect: str, duration_s: int = 5) -> str:
+def create_video_task(prompt: str, aspect: str, duration_s: int = 5, *, call_back_url: str | None = None) -> str:
     res_label = "720P" if aspect != "9:16" else "720P"
     body: dict[str, Any] = {
         "model": "wan/3-0-video",
-        "callBackUrl": "https://transovo.local/kie-noop",
+        "callBackUrl": call_back_url or "https://transovo.local/kie-noop",
         "input": {
             "prompt": prompt,
             "aspect_ratio": kie_aspect_ratio(aspect),
@@ -76,6 +94,7 @@ def create_video_task(prompt: str, aspect: str, duration_s: int = 5) -> str:
         json=body,
         timeout=60,
     )
+    res.raise_for_status()
     data = res.json()
     if data.get("code") != 200:
         raise RuntimeError(data.get("msg") or "kie_create_video_failed")
@@ -92,6 +111,7 @@ def fetch_task(task_id: str) -> dict[str, Any]:
         headers={"Authorization": f"Bearer {_kie_key()}"},
         timeout=60,
     )
+    res.raise_for_status()
     data = res.json()
     if data.get("code") != 200:
         raise RuntimeError(data.get("msg") or "kie_recordInfo_failed")
@@ -109,9 +129,33 @@ def parse_result_url(result_json: str | None) -> str:
     return str(urls[0])
 
 
-def poll_kie_task(task_id: str, *, timeout_s: int = 600, interval_s: float = 4.0) -> str:
+def kie_result_from_job_payload(conn, job_id: str) -> str | None:
+    with conn.cursor() as cur:
+        cur.execute('SELECT payload FROM clip_jobs WHERE id=%s', (job_id,))
+        row = cur.fetchone()
+    if not row or not row[0]:
+        return None
+    payload = row[0]
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    url = payload.get("kieResultUrl")
+    return str(url) if url else None
+
+
+def poll_kie_task(
+    task_id: str,
+    *,
+    timeout_s: int = 600,
+    interval_s: float = 4.0,
+    conn=None,
+    job_id: str | None = None,
+) -> str:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
+        if conn and job_id:
+            early = kie_result_from_job_payload(conn, job_id)
+            if early:
+                return early
         record = fetch_task(task_id)
         state = str(record.get("state") or "").lower()
         if state in ("success", "succeeded", "done"):

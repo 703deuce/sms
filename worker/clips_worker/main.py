@@ -5,7 +5,6 @@ import hashlib
 import hmac
 import json
 import os
-import subprocess
 import sys
 import tempfile
 import time
@@ -17,7 +16,7 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from clips_worker.job_types import JOB_TYPES, job_types_sql_in
+from clips_worker.job_types import job_types_sql_in
 from clips_worker.streamer.job_failure import terminal_failure_progress_payload
 from clips_worker.streamer.lanes import lane_types_sql_in, worker_lane
 from clips_worker.pipeline import run_m4_pipeline

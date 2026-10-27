@@ -1,12 +1,10 @@
 """Extract slide text from PPT/PDF uploads for T2V deck import."""
 from __future__ import annotations
 
-import zipfile
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
 
-def _pptx_slides(path: Path) -> list[dict]:
+def _pptx_slides(path: Path) -> dict:
     from pptx import Presentation
 
     prs = Presentation(str(path))
@@ -32,7 +30,7 @@ def _pptx_slides(path: Path) -> list[dict]:
     return {"title": title, "slides": slides}
 
 
-def _pdf_slides(path: Path) -> list[dict]:
+def _pdf_slides(path: Path) -> dict:
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))

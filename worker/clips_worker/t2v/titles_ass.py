@@ -82,23 +82,25 @@ def build_ass(
         )
     ]
     for it in items:
+        start_ms = max(0, int(it.start_ms))
+        end_ms = max(start_ms + 1, int(it.end_ms))
         fade = r"{\fad(250,250)}" if it.animation != "none" else ""
         if it.kind == "title":
             if it.animation == "slide_up":
                 tag = rf"{{\an5\move({w // 2},{round(h * 0.58)},{w // 2},{h // 2},0,300)\fad(200,250)}}"
             else:
                 tag = rf"{{\an5\pos({w // 2},{h // 2})}}" + fade
-            out.append(f"Dialogue: 2,{_ts(it.start_ms)},{_ts(it.end_ms)},Title,,0,0,0,,{tag}{_esc(it.text)}")
+            out.append(f"Dialogue: 2,{_ts(start_ms)},{_ts(end_ms)},Title,,0,0,0,,{tag}{_esc(it.text)}")
         else:
             x = round(w * 0.06)
             name_y = round(h * (0.80 if it.subtitle else 0.86))
             out.append(
-                f"Dialogue: 2,{_ts(it.start_ms)},{_ts(it.end_ms)},Lower,,0,0,0,,"
+                f"Dialogue: 2,{_ts(start_ms)},{_ts(end_ms)},Lower,,0,0,0,,"
                 f"{{\\an1\\pos({x},{name_y})}}{fade}{_esc(it.text)}"
             )
             if it.subtitle:
                 out.append(
-                    f"Dialogue: 2,{_ts(it.start_ms)},{_ts(it.end_ms)},Sub,,0,0,0,,"
+                    f"Dialogue: 2,{_ts(start_ms)},{_ts(end_ms)},Sub,,0,0,0,,"
                     f"{{\\an1\\pos({x},{round(h * 0.88)})}}{fade}{_esc(it.subtitle)}"
                 )
     return "\n".join(out) + "\n"
