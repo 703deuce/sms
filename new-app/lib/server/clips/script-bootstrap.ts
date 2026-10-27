@@ -49,6 +49,7 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
 
   let transcript = await loadProjectTranscript(storage, project)
   const rangeSpanMs = Math.max(0, project.rangeEndMs - project.rangeStartMs)
+  const uploadDurationMs = project.upload?.durationMs ?? 0
   let mediaAsset = project.scriptMediaAsset
   if (!mediaAsset && project.upload?.key) {
     const id = createId('sma')
@@ -57,9 +58,14 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
         id,
         projectId: project.id,
         workspaceId,
-        durationMs: rangeSpanMs || 1,
+        durationMs: uploadDurationMs || rangeSpanMs || 1,
         sourceKey: project.upload.key,
       },
+    })
+  } else if (mediaAsset && uploadDurationMs > (mediaAsset.durationMs ?? 0)) {
+    mediaAsset = await prisma.scriptMediaAsset.update({
+      where: { id: mediaAsset.id },
+      data: { durationMs: uploadDurationMs },
     })
   }
   transcript = await ensureProjectTranscriptEnriched(
@@ -103,7 +109,7 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
     rangeStartMs: project.rangeStartMs,
     rangeEndMs: project.rangeEndMs,
     durationMs,
-    mediaDurationMs: assetDurationMs || durationMs,
+    mediaDurationMs: Math.max(assetDurationMs, uploadDurationMs, durationMs),
     wordCount: editorWords.length,
     enrichedAt: mediaAsset?.enrichedAt?.toISOString() ?? null,
     sourceVideoUrl,

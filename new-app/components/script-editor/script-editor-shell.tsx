@@ -156,6 +156,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const editorRec = useEditorRecorder(data.projectId)
   const [draftCrop, setDraftCrop] = useState<ReframeCropRect | null>(null)
   const [hoverRestoreWordId, setHoverRestoreWordId] = useState<string | null>(null)
+  const didInitialTimelineFit = useRef(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const [followPlayhead, setFollowPlayhead] = useState(true)
   const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null)
@@ -300,6 +301,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     }
     return ids
   }, [selectedIds, deletedSet])
+
+  const restoreIgnoredForWord = useCallback(
+    (wordId: string) => {
+      if (!ignoredSet.has(wordId)) return
+      applyOp({ type: 'restore_ignored', wordIds: [wordId] })
+      toast.success('Restored word')
+    },
+    [ignoredSet, applyOp],
+  )
 
   const restoreCutForWord = useCallback(
     (wordId: string) => {
@@ -713,6 +723,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   }, [sourceSpanMs, outDur])
 
   useEffect(() => {
+    if (didInitialTimelineFit.current) return
+    didInitialTimelineFit.current = true
     onFit()
   }, [onFit])
 
@@ -1065,15 +1077,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                               }}
                               onMouseEnter={() => {
                                 onWordPointerEnter(idx)
-                                if (deleted) setHoverRestoreWordId(w.id)
+                                if (deleted || ignored) setHoverRestoreWordId(w.id)
                               }}
                               onMouseLeave={() => {
                                 if (hoverRestoreWordId === w.id) setHoverRestoreWordId(null)
                               }}
                               onDoubleClick={(e) => {
-                                if (!deleted) return
                                 e.preventDefault()
-                                restoreCutForWord(w.id)
+                                if (deleted) restoreCutForWord(w.id)
+                                else if (ignored) restoreIgnoredForWord(w.id)
                               }}
                               onContextMenu={(e) => {
                                 e.preventDefault()
@@ -1097,12 +1109,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                             >
                               {hiddenTranscript ? '·' : w.text}
                             </button>
-                            {deleted && hoverRestoreWordId === w.id && (
+                            {(deleted || ignored) && hoverRestoreWordId === w.id && (
                               <button
                                 type="button"
                                 className="absolute -top-6 left-0 z-10 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-primary shadow-sm hover:bg-muted"
                                 onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => restoreCutForWord(w.id)}
+                                onClick={() => {
+                                  if (deleted) restoreCutForWord(w.id)
+                                  else restoreIgnoredForWord(w.id)
+                                }}
                               >
                                 Restore
                               </button>

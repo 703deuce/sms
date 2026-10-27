@@ -11,6 +11,7 @@ import {
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { clipsFetch } from '@/lib/clips-api'
 import {
+  clearPersistedUndo,
   loadPersistedUndo,
   savePersistedUndo,
 } from '@/lib/clips/script-editor/composition-undo-persistence'
@@ -58,7 +59,17 @@ export function useScriptComposition(initial: {
   useEffect(() => {
     const persisted = loadPersistedUndo(initial.compositionId)
     if (!persisted) return
-    if (persisted.revision >= revisionRef.current && persisted.document) {
+    const hasLocalHistory = persisted.undo.length > 0 || persisted.redo.length > 0
+    if (persisted.revision < revisionRef.current) {
+      clearPersistedUndo(initial.compositionId)
+      return
+    }
+    if (
+      persisted.document &&
+      hasLocalHistory &&
+      persisted.revision >= revisionRef.current &&
+      !documentsEqual(documentRef.current, persisted.document)
+    ) {
       setDocument(persisted.document)
       revisionRef.current = persisted.revision
       setRevision(persisted.revision)
