@@ -10,6 +10,7 @@ import {
 } from '@/lib/server/clips/job-reliability'
 import { getPrisma } from '@/lib/server/db'
 import { enqueueClipperRecoveryJob, isTranscriptReadyOrphan } from '@/lib/server/clips/recover-project'
+import { clampEtaBetweenPolls, etaStageKey } from '@/lib/clips/eta-poll'
 import { computeNonStreamerClipEtaSec } from '@/lib/server/clips/project-eta'
 import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
 
@@ -58,14 +59,18 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
         })
       }
     } else if (hasWorkerProgress) {
+      const stageKey = etaStageKey(project.status, project.stage)
+      const previousPollEta =
+        typeof sp.lastEtaPollSec === 'number' && sp.lastEtaPollSec > 0 ? sp.lastEtaPollSec : undefined
+      const previousStageKey =
+        typeof sp.lastEtaStageKey === 'string' ? sp.lastEtaStageKey : undefined
       if (workerEta > 0 && etaUpdatedAt) {
         const ageSec = Math.max(0, Math.floor((Date.now() - new Date(etaUpdatedAt).getTime()) / 1000))
-        etaSec = Math.max(0, workerEta - ageSec)
+        const aged = Math.max(0, workerEta - ageSec)
+        etaSec = clampEtaBetweenPolls(aged, previousPollEta, stageKey, previousStageKey)
       } else if (workerEta > 0) {
-        etaSec = workerEta
+        etaSec = clampEtaBetweenPolls(workerEta, previousPollEta, stageKey, previousStageKey)
       } else if (!isStreamer) {
-        const previousPollEta =
-          typeof sp.lastEtaPollSec === 'number' && sp.lastEtaPollSec > 0 ? sp.lastEtaPollSec : undefined
         const sourceDurationSec = Math.max(0, (project.rangeEndMs - project.rangeStartMs) / 1000)
         etaSec = computeNonStreamerClipEtaSec({
           progress: project.progress,
@@ -77,8 +82,9 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
           chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,
           chunkTotal: typeof sp.chunkTotal === 'number' ? sp.chunkTotal : undefined,
           previousEtaSec: previousPollEta,
+          previousStageKey,
         })
-        if (etaSec > 0 && etaSec !== previousPollEta) {
+        if (etaSec > 0 && (etaSec !== previousPollEta || stageKey !== previousStageKey)) {
           void prisma.clipProject
             .update({
               where: { id: projectId },
@@ -88,6 +94,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
                   streamerProgress: {
                     ...sp,
                     lastEtaPollSec: etaSec,
+                    lastEtaStageKey: stageKey,
                   },
                 },
               },
@@ -96,8 +103,11 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
         }
       }
     } else if (!isStreamer && project.progress > 0) {
+      const stageKey = etaStageKey(project.status, project.stage)
       const previousPollEta =
         typeof sp.lastEtaPollSec === 'number' && sp.lastEtaPollSec > 0 ? sp.lastEtaPollSec : undefined
+      const previousStageKey =
+        typeof sp.lastEtaStageKey === 'string' ? sp.lastEtaStageKey : undefined
       const sourceDurationSec = Math.max(0, (project.rangeEndMs - project.rangeStartMs) / 1000)
       etaSec = computeNonStreamerClipEtaSec({
         progress: project.progress,
@@ -109,8 +119,9 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
         chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,
         chunkTotal: typeof sp.chunkTotal === 'number' ? sp.chunkTotal : undefined,
         previousEtaSec: previousPollEta,
+        previousStageKey,
       })
-      if (etaSec > 0 && etaSec !== previousPollEta) {
+      if (etaSec > 0 && (etaSec !== previousPollEta || stageKey !== previousStageKey)) {
         void prisma.clipProject
           .update({
             where: { id: projectId },
@@ -120,6 +131,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
                 streamerProgress: {
                   ...sp,
                   lastEtaPollSec: etaSec,
+                  lastEtaStageKey: stageKey,
                 },
               },
             },

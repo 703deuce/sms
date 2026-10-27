@@ -66,7 +66,7 @@ function transcribeStageBudgetSec(durationSec: number, engine: TranscriptionEngi
   return base
 }
 
-import { clampEtaBetweenPolls } from '@/lib/clips/eta-poll'
+import { clampEtaBetweenPolls, etaStageKey } from '@/lib/clips/eta-poll'
 
 export { clampEtaBetweenPolls } from '@/lib/clips/eta-poll'
 
@@ -212,6 +212,7 @@ export function computeNonStreamerClipEtaSec(input: {
   chunkDone?: number
   chunkTotal?: number
   previousEtaSec?: number
+  previousStageKey?: string | null
 }): number {
   const progress = input.progress
   const now = input.nowMs ?? Date.now()
@@ -233,5 +234,10 @@ export function computeNonStreamerClipEtaSec(input: {
     raw = progressBasedRemainingSec(elapsedSec, progress)
   }
 
-  return clampEtaBetweenPolls(raw, input.previousEtaSec)
+  return clampEtaBetweenPolls(
+    raw,
+    input.previousEtaSec,
+    etaStageKey(input.status, input.stage),
+    input.previousStageKey,
+  )
 }
