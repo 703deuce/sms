@@ -44,7 +44,7 @@ function isHedgeOrDebugSummary(text: string): boolean {
 
 export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | null {
   if (!meta) return null
-  const candidates = [meta.hook, meta.pass1_why, meta.score_detail]
+  const candidates = [meta.pass1_why, meta.hook, meta.score_detail]
   for (const c of candidates) {
     if (typeof c !== 'string') continue
     const trimmed = stripInternalSentenceRefs(c.trim())
