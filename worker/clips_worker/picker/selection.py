@@ -47,79 +47,6 @@ def _r10_near_duplicate(a: dict, b: dict) -> bool:
     return overlap_ms / max(shorter, 1) > 0.5
 
 
-def _tile_short_source(
-    kept: list[dict],
-    ranked: list[dict],
-    source_duration_ms: int,
-    target: int,
-) -> list[dict]:
-    """Split a short source into non-overlapping clips when LLM/selection yields too few."""
-    if source_duration_ms > 3 * 60_000 or len(kept) >= target:
-        return kept
-    min_dur = 15_000
-    max_dur = 60_000
-    template = kept[0] if kept else (ranked[0] if ranked else None)
-    if len(kept) == 1 and target > 1:
-        lone = kept[0]
-        span_start, span_end = int(lone["start_ms"]), int(lone["end_ms"])
-        span = span_end - span_start
-        if span >= min_dur * 2:
-            step = max(min_dur, span // target)
-            tiles: list[dict] = []
-            t = span_start
-            while t < span_end and len(tiles) < target:
-                end = min(span_end, t + step)
-                if end - t < min_dur:
-                    break
-                if end - t > max_dur:
-                    end = t + max_dur
-                tiles.append(
-                    {
-                        **lone,
-                        "start_ms": t,
-                        "end_ms": end,
-                        "title": f"Clip {len(tiles) + 1}",
-                        "low_confidence": True,
-                    }
-                )
-                t = end
-            if len(tiles) >= 2:
-                picker_info("short_source_split", clips=len(tiles), target=target)
-                return tiles[:target]
-    if template:
-        span_start = int(template["start_ms"])
-        span_end = int(template["end_ms"])
-    else:
-        span_start, span_end = 0, source_duration_ms
-    span = span_end - span_start
-    if span < min_dur * max(1, target - len(kept)):
-        span_start, span_end = 0, source_duration_ms
-        span = source_duration_ms
-    if span < min_dur:
-        return kept
-    need = target - len(kept)
-    chunk_ms = max(min_dur, min(max_dur, span // max(need, 1)))
-    tiles: list[dict] = []
-    t = span_start
-    while t < span_end and len(tiles) < need:
-        end = min(span_end, t + chunk_ms)
-        if end - t < min_dur:
-            break
-        row = {
-            **(template or {}),
-            "start_ms": t,
-            "end_ms": end,
-            "title": f"Clip {len(kept) + len(tiles) + 1}",
-            "low_confidence": True,
-        }
-        tiles.append(row)
-        t = end
-    if not tiles:
-        return kept
-    picker_info("short_source_tile", added=len(tiles), target=target, before=len(kept))
-    return kept + tiles
-
-
 def dedupe_r10(picks: list[dict]) -> list[dict]:
     ranked = sorted(picks, key=lambda x: -_clip_score(x))
     kept: list[dict] = []
@@ -187,30 +114,4 @@ def select_clips(picks: list[dict], source_duration_ms: int) -> list[dict]:
             kept.append(p)
 
     kept = dedupe_r10(kept)
-
-    short_floor = 3 if source_duration_ms <= 3 * 60_000 else 0
-    short_target = min(short_floor, cap) if short_floor else 0
-    if short_target and len(kept) < short_target:
-        relaxed = min(0.85, overlap_drop + 0.35)
-        for p in ranked:
-            if p in kept:
-                continue
-            span = (p["start_ms"], p["end_ms"])
-            dur = span[1] - span[0]
-            if dur < 15_000 or dur > 60_000:
-                continue
-            if any(_overlap(span, (k["start_ms"], k["end_ms"])) > relaxed for k in kept):
-                continue
-            kept.append(p)
-            if len(kept) >= short_target:
-                break
-
-    if short_target and len(kept) < short_target:
-        kept = _tile_short_source(kept, ranked, source_duration_ms, short_target)
-
-    kept = dedupe_r10(kept)
-
-    if short_target and len(kept) < short_target:
-        kept = _tile_short_source([], ranked, source_duration_ms, short_target)
-
     return kept[:cap]
