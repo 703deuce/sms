@@ -6,7 +6,8 @@
 **Logging:** **`[clipper:stream]`** on every step; include `workspaceId`, `projectId`, `vodId`, `jobId`, `stage` — never tokens or OAuth secrets.  
 **Two-strike rule** for production fixes.
 
-Reference: `new-app/docs/clips/STREAMER_BUILD_SPEC.md` (S0–S15). This doc is Rick’s **reliability + storage** contract.
+Reference: `new-app/docs/clips/STREAMER_BUILD_SPEC.md` (S0–S15). This doc is Rick’s **reliability + storage** contract.  
+**Transcription cost (two-pass, selective Deepgram):** `STREAMER-COST-DESIGN.md`.
 
 ---
 
@@ -122,4 +123,5 @@ Touches `worker/clips_worker/streamer/**` → commit **`WORKER DEPLOY`**. Run re
 |------|----------|
 | 2026-10-27 | Gaps done; Streamer Stage 1 next |
 | 2026-10-27 | Rick addendum: **no full VOD download**; segment video only; retention 14/90d; usage hours/month; **10×2–6h 0-fail** before auto-pull |
+| 2026-10-27 | **Two-pass transcribe:** cheap full-audio + chat pass → top ~36×60–120s windows → Deepgram only those; ~45–60 min / 4h VOD; `STREAMER_TRANSCRIBE_SCOPE=full` fallback |
 | — | Confirm **10 h** vs code default **12 h** |
