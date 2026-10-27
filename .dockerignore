@@ -20,7 +20,6 @@ newui2/
 transovo-ui-blueprint/
 ui-rebuild/
 voice-runtime/
-voice-runtime-python/
 
 # Clips CPU worker (host build: worker/Dockerfile + /opt/clips-worker)
 worker/
