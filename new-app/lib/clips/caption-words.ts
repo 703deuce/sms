@@ -54,7 +54,9 @@ export function buildCaptionWords(words: CaptionSourceWord[], edits: ClipEditsV2
     const outS = remapTime(clampStart, segs)
     const outE = remapTimeEnd(clampEnd, segs)
     if (outS === null || outE === null || outE <= outS) continue
-    const text = edits.wordFixes[String(w.i)] ?? w.w
+    const rawText = edits.wordFixes[String(w.i)] ?? w.w
+    const text = typeof rawText === 'string' ? rawText : String(rawText ?? '')
+    if (!text.trim()) continue
     out.push({
       i: w.i,
       text,
@@ -68,7 +70,7 @@ export function buildCaptionWords(words: CaptionSourceWord[], edits: ClipEditsV2
 
 export function captionWordsToClipWords(caption: CaptionWord[]): { w: string; s: number; e: number; idx?: number }[] {
   return caption.map((c) => ({
-    w: c.text,
+    w: typeof c.text === 'string' ? c.text : String(c.text ?? ''),
     s: c.s_ms / 1000,
     e: c.e_ms / 1000,
     idx: c.i,

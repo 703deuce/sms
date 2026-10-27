@@ -5,8 +5,18 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from clips_worker.audio_assets import load_audio_assets
 from clips_worker.job_types import JOB_TYPES
+
+
+@pytest.fixture(autouse=True)
+def _dummy_storage_env(monkeypatch):
+    """Docker build and local pytest run without real Supabase/S3 credentials."""
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+    monkeypatch.setenv("STORAGE_DRIVER", "supabase")
 
 
 def test_studio_sound_job_type_listed():
@@ -26,14 +36,15 @@ def test_load_audio_assets_studio_when_ready(tmp_path):
         }
     }
 
-    fake_storage = MagicMock()
-    fake_storage.download_object.side_effect = lambda _key, dest: Path(dest).write_bytes(b"mp3")
-    with patch.dict(sys.modules, {"clips_worker.storage": fake_storage}):
+    with patch(
+        "clips_worker.audio_assets.download_object",
+        side_effect=lambda _key, dest: Path(dest).write_bytes(b"mp3"),
+    ) as dl:
         assets = load_audio_assets(conn, edits, tmp_path)
 
     assert assets["studio_path"] is not None
     assert assets["studio_mix"] == 0.75
-    fake_storage.download_object.assert_called_once()
+    dl.assert_called_once()
 
 
 def test_studio_sound_job_short_circuits_when_ready():
