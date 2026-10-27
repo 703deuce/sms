@@ -20,7 +20,7 @@ from clips_worker.streamer.upload_proxy import (
     stream_analysis_proxy_key,
 )
 from clips_worker.streamer.usage import check_cap, job_priority
-from clips_worker.streamer.import_cache import cleanup_vod_import_dir, vod_import_dir
+from clips_worker.streamer.import_cache import cleanup_vod_import_dir, pick_completed_audio, sweep_stale_failed_import_dirs, vod_import_dir
 from clips_worker.streamer.ytdlp import download_audio, download_video, metadata, parse_metadata
 
 
@@ -243,125 +243,30 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 )
 
             cache_dir = vod_import_dir(vod_id)
-            try:
-                audio_out = str(cache_dir / "audio.%(ext)s")
-                download_audio(url, audio_out, section=section, progress_cb=on_pct, workdir=str(cache_dir))
-                audio_path = next(cache_dir.glob("audio.*"))
-                duration_ms = effective_ms or int(dur_s * 1000)
-                audio_key = stream_audio_key(workspace_id, vod_id)
-                upload_file(audio_key, audio_path, "audio/opus")
-                state = {"audioKey": audio_key}
-                pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
-                analyze_id = f"job_{uuid.uuid4().hex}"
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE clip_projects
-                        SET title=COALESCE(%s, title), stage='Downloading audio', progress=20, "updatedAt"=NOW()
-                        WHERE id=%s
-                        """,
-                        (meta.get("title"), project_id),
-                    )
-                    cur.execute(
-                        """
-                        UPDATE stream_vods
-                        SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
-                        WHERE id=%s
-                        """,
-                        (
-                            meta.get("title"),
-                            meta.get("category"),
-                            duration_ms,
-                            json.dumps(meta.get("chapters")) if meta.get("chapters") else None,
-                            json.dumps(state),
-                            vod_id,
-                        ),
-                    )
-                    cur.execute(
-                        """
-                        INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
-                        VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
-                        """,
-                        (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
-                    )
-                conn.commit()
-                cleanup_vod_import_dir(vod_id)
-            except Exception:
-                raise
-            post_progress(
-                job["id"],
-                {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
-            )
-            return
-
-        usage = shutil.disk_usage(SCRATCH)
-        est = int(dur_s * 2_000_000)
-        if usage.free < est * 2:
-            raise RuntimeError("Not enough scratch disk for this download")
-
-        def on_pct(pct: float) -> None:
-            prog = 5 + int(min(20, pct * 0.2))
-            hb.update(stage="Downloading", progress=prog)
-            post_progress(
-                job["id"],
-                {"projectStatus": "PREPARING", "stage": "Downloading", "progress": prog, "jobStatus": "RUNNING"},
-            )
-
-        cache_dir = vod_import_dir(vod_id)
-        try:
-            dest = str(cache_dir / "source.mp4")
-
-            download_video(url, dest, section=section, progress_cb=on_pct, workdir=str(cache_dir))
-            path = Path(dest)
-            dur_s, width, height = probe_video(path)
-            duration_ms = int(round(dur_s * 1000))
-            size = path.stat().st_size
-
-            upload_id = f"upl_{uuid.uuid4().hex}"
-            key = upload_source_key(workspace_id, upload_id, "mp4")
-            upload_file(key, path, "video/mp4")
-
-            audio_out = Path(td) / "audio.opus"
-            subprocess.check_call(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-v",
-                    "error",
-                    "-i",
-                    str(path),
-                    "-vn",
-                    "-c:a",
-                    "libopus",
-                    str(audio_out),
-                ]
-            )
+            audio_out = str(cache_dir / "audio.%(ext)s")
+            download_audio(url, audio_out, section=section, progress_cb=on_pct, workdir=str(cache_dir))
+            audio_path = pick_completed_audio(cache_dir)
+            if audio_path is None:
+                raise RuntimeError("audio download incomplete (no finished audio file)")
+            duration_ms = effective_ms or int(dur_s * 1000)
             audio_key = stream_audio_key(workspace_id, vod_id)
-            upload_file(audio_key, audio_out, "audio/opus")
-            state = {"audioKey": audio_key, "localUploadKey": key}
+            upload_file(audio_key, audio_path, "audio/opus")
+            state = {"audioKey": audio_key}
             pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
             analyze_id = f"job_{uuid.uuid4().hex}"
-
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO clip_uploads (id, "workspaceId", key, filename, bytes, mime, "durationMs", width, height, status, "createdAt")
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'COMPLETE',NOW())
-                    """,
-                    (upload_id, workspace_id, key, "stream.mp4", size, "video/mp4", duration_ms, width, height),
-                )
-                cur.execute(
-                    """
                     UPDATE clip_projects
-                    SET "uploadId"=%s, title=COALESCE(%s, title), "rangeEndMs"=GREATEST("rangeEndMs", %s),
-                        stage='Downloading audio', progress=20, "updatedAt"=NOW()
+                    SET title=COALESCE(%s, title), stage='Downloading audio', progress=20, "updatedAt"=NOW()
                     WHERE id=%s
                     """,
-                    (upload_id, meta.get("title"), duration_ms, project_id),
+                    (meta.get("title"), project_id),
                 )
                 cur.execute(
                     """
-                    UPDATE stream_vods SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
+                    UPDATE stream_vods
+                    SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
                     WHERE id=%s
                     """,
                     (
@@ -382,8 +287,102 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 )
             conn.commit()
             cleanup_vod_import_dir(vod_id)
-        except Exception:
-            raise
+            sweep_stale_failed_import_dirs(conn=conn)
+            post_progress(
+                job["id"],
+                {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
+            )
+            return
+
+        usage = shutil.disk_usage(SCRATCH)
+        est = int(dur_s * 2_000_000)
+        if usage.free < est * 2:
+            raise RuntimeError("Not enough scratch disk for this download")
+
+        def on_pct(pct: float) -> None:
+            prog = 5 + int(min(20, pct * 0.2))
+            hb.update(stage="Downloading", progress=prog)
+            post_progress(
+                job["id"],
+                {"projectStatus": "PREPARING", "stage": "Downloading", "progress": prog, "jobStatus": "RUNNING"},
+            )
+
+        cache_dir = vod_import_dir(vod_id)
+        dest = str(cache_dir / "source.mp4")
+
+        download_video(url, dest, section=section, progress_cb=on_pct, workdir=str(cache_dir))
+        path = Path(dest)
+        dur_s, width, height = probe_video(path)
+        duration_ms = int(round(dur_s * 1000))
+        size = path.stat().st_size
+
+        upload_id = f"upl_{uuid.uuid4().hex}"
+        key = upload_source_key(workspace_id, upload_id, "mp4")
+        upload_file(key, path, "video/mp4")
+
+        audio_out = cache_dir / "audio.opus"
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(path),
+                "-vn",
+                "-c:a",
+                "libopus",
+                str(audio_out),
+            ]
+        )
+        audio_key = stream_audio_key(workspace_id, vod_id)
+        upload_file(audio_key, audio_out, "audio/opus")
+        state = {"audioKey": audio_key, "localUploadKey": key}
+        pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
+        analyze_id = f"job_{uuid.uuid4().hex}"
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO clip_uploads (id, "workspaceId", key, filename, bytes, mime, "durationMs", width, height, status, "createdAt")
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'COMPLETE',NOW())
+                """,
+                (upload_id, workspace_id, key, "stream.mp4", size, "video/mp4", duration_ms, width, height),
+            )
+            cur.execute(
+                """
+                UPDATE clip_projects
+                SET "uploadId"=%s, title=COALESCE(%s, title), "rangeEndMs"=GREATEST("rangeEndMs", %s),
+                    stage='Downloading audio', progress=20, "updatedAt"=NOW()
+                WHERE id=%s
+                """,
+                (upload_id, meta.get("title"), duration_ms, project_id),
+            )
+            cur.execute(
+                """
+                UPDATE stream_vods SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
+                WHERE id=%s
+                """,
+                (
+                    meta.get("title"),
+                    meta.get("category"),
+                    duration_ms,
+                    json.dumps(meta.get("chapters")) if meta.get("chapters") else None,
+                    json.dumps(state),
+                    vod_id,
+                ),
+            )
+            cur.execute(
+                """
+                INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
+                VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
+                """,
+                (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
+            )
+        conn.commit()
+        cleanup_vod_import_dir(vod_id)
+
+    sweep_stale_failed_import_dirs(conn=conn)
 
     post_progress(
         job["id"],

@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import re
 
-STREAMER_CLIP_PHRASES = (
-    r"\bclip that\b",
-    r"\bclip this\b",
-    r"\bthat'?s a clip\b",
-    r"\bclip it\b",
-    r"\bclip\s+it\b",
+STREAMER_CLIP_PHRASE_WORDS: tuple[tuple[str, ...], ...] = (
+    ("clip", "that"),
+    ("clip", "this"),
+    ("thats", "a", "clip"),
+    ("that's", "a", "clip"),
+    ("clip", "it"),
 )
 
 CHAT_CLIP_PATTERNS = (
@@ -18,32 +18,37 @@ CHAT_CLIP_PATTERNS = (
 )
 
 
+def _norm_token(text: str) -> str:
+    return re.sub(r"[^\w']+", "", text.lower())
+
+
 def streamer_clip_cue_seconds(words: list[dict], duration_s: int) -> list[float]:
-    """Per-second 0..1 spike when the streamer asks for a clip."""
+    """Per-second 0..1 spike when the streamer asks for a clip (anchored at phrase start)."""
     if duration_s <= 0:
         return []
     out = [0.0] * duration_s
     tokens: list[tuple[int, str]] = []
     for w in words:
-        text = str(w.get("w") or "").strip().lower()
+        text = str(w.get("w") or "").strip()
         if not text:
             continue
         sec = int(float(w.get("s", 0)))
         if sec < 0 or sec >= duration_s:
             continue
-        tokens.append((sec, text))
-    max_window = 6
+        for piece in text.split():
+            tokens.append((sec, piece))
     for i in range(len(tokens)):
-        for win in range(1, min(max_window, len(tokens) - i) + 1):
-            sec = tokens[i][0]
-            phrase = " ".join(t[1] for t in tokens[i : i + win])
-            for pat in STREAMER_CLIP_PHRASES:
-                if re.search(pat, phrase):
-                    for d in range(-1, 3):
-                        j = sec + d
-                        if 0 <= j < duration_s:
-                            out[j] = max(out[j], 1.0 if d == 0 else 0.85)
-                    break
+        for phrase in STREAMER_CLIP_PHRASE_WORDS:
+            n = len(phrase)
+            if i + n > len(tokens):
+                continue
+            if all(_norm_token(tokens[i + j][1]) == phrase[j] for j in range(n)):
+                anchor = tokens[i][0]
+                for d in (0, 1):
+                    j = anchor + d
+                    if 0 <= j < duration_s:
+                        out[j] = max(out[j], 1.0 if d == 0 else 0.85)
+                break
     return out
 
 
