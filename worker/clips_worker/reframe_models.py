@@ -6,6 +6,7 @@ import os
 YUNET_ONNX = "yunet.onnx"
 SFACE_ONNX = "face_recognition_sface_2021dec.onnx"
 SFACE_LEGACY_ONNX = "sface.onnx"
+EFFICIENTDET_TFLITE = "efficientdet_lite0.tflite"
 
 
 def resolve_onnx(models_dir: str, primary: str, legacy: str | None = None) -> str:
