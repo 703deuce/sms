@@ -8,10 +8,16 @@ import {
   geminiVisionTokenCostMicros,
   type GeminiContentPart,
 } from '@/lib/server/ai/gemini-flash-lite'
+import {
+  lunaTokenCostMicros,
+  openAiStockVisionModelId,
+  resolveStockVisionBackend,
+  type StockVisionBackend,
+} from '@/lib/server/t2v/stock-vision-config'
 import { logT2v } from '@/lib/server/t2v/log'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
 
-const VISION_CACHE_VERSION = 'v2-gemini-flash-lite'
+const VISION_CACHE_VERSION = 'v3'
 const TIMEOUT_MS = 10_000
 const MAX_SCENES_PER_REQUEST = 8
 
@@ -48,6 +54,7 @@ export type StockVisionBatchMetrics = {
   completionTokens: number
   sceneCount: number
   model?: string
+  backend?: StockVisionBackend
 }
 
 function thumbAllowed(url: string): boolean {
@@ -79,15 +86,19 @@ async function thumbInlinePart(url: string): Promise<GeminiContentPart | null> {
   }
 }
 
-function visionCacheKey(scene: StockVisionSceneInput): string {
+function visionCacheKey(scene: StockVisionSceneInput, backend: StockVisionBackend, model: string): string {
   const ids = scene.candidates.map((c) => `${c.provider}:${c.providerId}`).join('|')
-  const raw = `${VISION_CACHE_VERSION}|${scene.query}|${ids}`
+  const raw = `${VISION_CACHE_VERSION}|${backend}|${model}|${scene.query}|${ids}`
   return createHash('sha1').update(raw).digest('hex')
 }
 
-async function readVisionCache(scene: StockVisionSceneInput): Promise<StockVisionSceneResult | null> {
+async function readVisionCache(
+  scene: StockVisionSceneInput,
+  backend: StockVisionBackend,
+  model: string,
+): Promise<StockVisionSceneResult | null> {
   const prisma = getPrisma()
-  const q = `t2v|stock-vision|${visionCacheKey(scene)}`
+  const q = `t2v|stock-vision|${visionCacheKey(scene, backend, model)}`
   const row = await prisma.brollSearchCache.findUnique({ where: { q } })
   if (!row) return null
   const data = row.json as { pickIndex: number | 'none'; reason: string }
@@ -103,9 +114,15 @@ async function readVisionCache(scene: StockVisionSceneInput): Promise<StockVisio
   return null
 }
 
-async function writeVisionCache(scene: StockVisionSceneInput, pickIndex: number | 'none', reason: string) {
+async function writeVisionCache(
+  scene: StockVisionSceneInput,
+  backend: StockVisionBackend,
+  model: string,
+  pickIndex: number | 'none',
+  reason: string,
+) {
   const prisma = getPrisma()
-  const q = `t2v|stock-vision|${visionCacheKey(scene)}`
+  const q = `t2v|stock-vision|${visionCacheKey(scene, backend, model)}`
   await prisma.brollSearchCache.upsert({
     where: { q },
     create: { q, json: { pickIndex, reason } },
@@ -115,6 +132,38 @@ async function writeVisionCache(scene: StockVisionSceneInput, pickIndex: number 
 
 function candidateIds(candidates: StockCandidate[]): string[] {
   return candidates.map((c) => `${c.provider}:${c.providerId}`)
+}
+
+function sceneBriefs(scenes: StockVisionSceneInput[]) {
+  return scenes.map((s) => ({
+    sceneId: s.sceneId,
+    sceneIndex: s.sceneIndex,
+    videoTopic: s.videoTopic.slice(0, 200),
+    visualQuery: s.visualQuery.slice(0, 200),
+    narration: s.narration.slice(0, 400),
+    searchQuery: s.query.slice(0, 120),
+    candidates: s.candidates.map((c, i) => ({
+      index: i,
+      id: `${c.provider}:${c.providerId}`,
+      tags: c.tags.slice(0, 12),
+    })),
+  }))
+}
+
+function parseVisionJson(text: string): Map<string, { pickIndex: number | 'none'; reason: string }> {
+  const parsed = JSON.parse(text) as {
+    scenes?: Array<{ sceneId: string; pick: number; reason?: string }>
+  }
+  const out = new Map<string, { pickIndex: number | 'none'; reason: string }>()
+  for (const row of parsed.scenes ?? []) {
+    const pick = Number(row.pick)
+    const pickIndex = pick < 0 ? 'none' : pick
+    out.set(row.sceneId, {
+      pickIndex,
+      reason: String(row.reason ?? '').slice(0, 240),
+    })
+  }
+  return out
 }
 
 const RESPONSE_SCHEMA = {
@@ -136,6 +185,76 @@ const RESPONSE_SCHEMA = {
   required: ['scenes'],
 }
 
+async function callOpenAiLunaVisionBatch(
+  scenes: StockVisionSceneInput[],
+  model: string,
+): Promise<{
+  results: Map<string, { pickIndex: number | 'none'; reason: string }>
+  promptTokens: number
+  completionTokens: number
+}> {
+  const apiKey = process.env.OPENAI_API_KEY?.trim()
+  if (!apiKey) throw new Error('OPENAI_API_KEY missing')
+
+  const content: Array<{ type: string; text?: string; image_url?: { url: string; detail: 'low' } }> = [
+    {
+      type: 'text',
+      text:
+        'You pick the best stock VIDEO thumbnail per scene for a short video. ' +
+        'Return JSON: {"scenes":[{"sceneId":string,"pick":number,"reason":string}]}. ' +
+        'pick is candidate index 0..n-1, or -1 if NONE match narration/visual/topic. ' +
+        'Scene briefs:\n' +
+        JSON.stringify(sceneBriefs(scenes)),
+    },
+  ]
+
+  for (const s of scenes) {
+    content.push({ type: 'text', text: `Scene ${s.sceneIndex + 1} (${s.sceneId}) thumbnails:` })
+    for (const c of s.candidates) {
+      const url = candidateThumb(c)
+      if (!url) continue
+      const img = await thumbInlinePart(url)
+      const inline = img && 'inlineData' in img ? img.inlineData : undefined
+      if (!inline?.data) continue
+      const dataUrl = `data:${inline.mimeType};base64,${inline.data}`
+      content.push({ type: 'image_url', image_url: { url: dataUrl, detail: 'low' } })
+    }
+  }
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_completion_tokens: 900,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content }],
+    }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  })
+
+  if (!res.ok) {
+    const t = await res.text()
+    throw new Error(`openai_vision_${res.status}:${t.slice(0, 120)}`)
+  }
+
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
+    usage?: { prompt_tokens?: number; completion_tokens?: number }
+  }
+  const text = json.choices?.[0]?.message?.content
+  if (!text) throw new Error('openai_vision_empty')
+
+  return {
+    results: parseVisionJson(text),
+    promptTokens: json.usage?.prompt_tokens ?? 0,
+    completionTokens: json.usage?.completion_tokens ?? 0,
+  }
+}
+
 async function callGeminiVisionBatch(
   scenes: StockVisionSceneInput[],
   model: string,
@@ -144,20 +263,6 @@ async function callGeminiVisionBatch(
   promptTokens: number
   completionTokens: number
 }> {
-  const sceneBriefs = scenes.map((s) => ({
-    sceneId: s.sceneId,
-    sceneIndex: s.sceneIndex,
-    videoTopic: s.videoTopic.slice(0, 200),
-    visualQuery: s.visualQuery.slice(0, 200),
-    narration: s.narration.slice(0, 400),
-    searchQuery: s.query.slice(0, 120),
-    candidates: s.candidates.map((c, i) => ({
-      index: i,
-      id: `${c.provider}:${c.providerId}`,
-      tags: c.tags.slice(0, 12),
-    })),
-  }))
-
   const parts: GeminiContentPart[] = [
     {
       text:
@@ -165,7 +270,7 @@ async function callGeminiVisionBatch(
         'Each scene lists candidate stills in order (index 0..n-1). ' +
         'Return JSON matching the schema. Use pick=-1 if NONE match narration/visual/topic (off-topic). ' +
         'Prefer literal on-camera subject match. Scene briefs:\n' +
-        JSON.stringify(sceneBriefs),
+        JSON.stringify(sceneBriefs(scenes)),
     },
   ]
 
@@ -187,19 +292,25 @@ async function callGeminiVisionBatch(
     timeoutMs: TIMEOUT_MS,
   })
 
-  const parsed = JSON.parse(text) as {
-    scenes?: Array<{ sceneId: string; pick: number; reason?: string }>
+  return { results: parseVisionJson(text), promptTokens, completionTokens: outputTokens }
+}
+
+async function resolveVisionModel(backend: StockVisionBackend): Promise<string> {
+  if (backend === 'openai-luna') return openAiStockVisionModelId()
+  return discoverVisionFlashLiteModel()
+}
+
+async function runVisionBatch(
+  chunk: StockVisionSceneInput[],
+  backend: StockVisionBackend,
+  model: string,
+) {
+  if (backend === 'openai-luna') {
+    const r = await callOpenAiLunaVisionBatch(chunk, model)
+    return { ...r, costUsdMicros: lunaTokenCostMicros(r.promptTokens, r.completionTokens) }
   }
-  const out = new Map<string, { pickIndex: number | 'none'; reason: string }>()
-  for (const row of parsed.scenes ?? []) {
-    const pick = Number(row.pick)
-    const pickIndex = pick < 0 ? 'none' : pick
-    out.set(row.sceneId, {
-      pickIndex,
-      reason: String(row.reason ?? '').slice(0, 240),
-    })
-  }
-  return { results: out, promptTokens, completionTokens: outputTokens }
+  const r = await callGeminiVisionBatch(chunk, model)
+  return { ...r, costUsdMicros: geminiVisionTokenCostMicros(r.promptTokens, r.completionTokens) }
 }
 
 /**
@@ -216,10 +327,28 @@ export async function batchStockVisionPick(input: {
   let completionTokens = 0
   let costUsdMicros = 0
   let modelUsed: string | undefined
+  let backendUsed: StockVisionBackend | undefined
 
   const needApi: StockVisionSceneInput[] = []
+  const backend = resolveStockVisionBackend()
+
+  if (backend) {
+    try {
+      modelUsed = await resolveVisionModel(backend)
+      backendUsed = backend
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logT2v('stock-vision', 'model resolve failed, score fallback', {
+        backend,
+        error: message,
+        stockVisionModel: process.env.STOCK_VISION_MODEL ?? '',
+      })
+    }
+  }
+
   for (const scene of input.scenes) {
-    const cached = await readVisionCache(scene)
+    const cached =
+      backendUsed && modelUsed ? await readVisionCache(scene, backendUsed, modelUsed) : null
     if (cached) {
       results.push(cached)
       logT2v('stock-vision', 'scene pick (cache)', {
@@ -244,23 +373,21 @@ export async function batchStockVisionPick(input: {
     }
   }
 
-  if (needApi.length > 0) {
-    try {
-      modelUsed = await discoverVisionFlashLiteModel()
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      logT2v('stock-vision', 'model unavailable, score fallback', { error: message })
-      for (const scene of needApi) {
-        results.push({
-          sceneId: scene.sceneId,
-          pickIndex: 0,
-          reason: 'vision_unconfigured',
-          fromCache: false,
-          scoreFallback: true,
-        })
-      }
-      needApi.length = 0
+  if (needApi.length > 0 && (!backend || !modelUsed)) {
+    logT2v('stock-vision', 'model unavailable, score fallback', {
+      backend: backend ?? 'none',
+      stockVisionModel: process.env.STOCK_VISION_MODEL ?? '',
+    })
+    for (const scene of needApi) {
+      results.push({
+        sceneId: scene.sceneId,
+        pickIndex: 0,
+        reason: 'vision_unconfigured',
+        fromCache: false,
+        scoreFallback: true,
+      })
     }
+    needApi.length = 0
   }
 
   for (let i = 0; i < needApi.length; i += MAX_SCENES_PER_REQUEST) {
@@ -271,10 +398,11 @@ export async function batchStockVisionPick(input: {
         results: apiMap,
         promptTokens: pt,
         completionTokens: ct,
-      } = await callGeminiVisionBatch(chunk, modelUsed!)
+        costUsdMicros: chunkCost,
+      } = await runVisionBatch(chunk, backendUsed!, modelUsed!)
       promptTokens += pt
       completionTokens += ct
-      costUsdMicros += geminiVisionTokenCostMicros(pt, ct)
+      costUsdMicros += chunkCost
 
       for (const scene of chunk) {
         const row = apiMap.get(scene.sceneId)
@@ -295,7 +423,7 @@ export async function batchStockVisionPick(input: {
           pickIndex = 0
         }
         if (row) {
-          await writeVisionCache(scene, pickIndex, reason)
+          await writeVisionCache(scene, backendUsed!, modelUsed!, pickIndex, reason)
         }
         const latencyMs = Date.now() - chunkStart
         logT2v('stock-vision', 'scene pick', {
@@ -307,6 +435,7 @@ export async function batchStockVisionPick(input: {
           latencyMs,
           scoreFallback,
           model: modelUsed,
+          backend: backendUsed,
         })
         results.push({
           sceneId: scene.sceneId,
@@ -324,6 +453,7 @@ export async function batchStockVisionPick(input: {
         latencyMs,
         error: message,
         model: modelUsed,
+        backend: backendUsed,
       })
       for (const scene of chunk) {
         results.push({
@@ -347,12 +477,12 @@ export async function batchStockVisionPick(input: {
     }
   }
 
-  if (costUsdMicros > 0 && input.workspaceId && modelUsed) {
+  if (costUsdMicros > 0 && input.workspaceId && modelUsed && backendUsed) {
     await recordAiUsage({
       workspaceId: input.workspaceId,
       projectId: input.projectId ?? null,
       usage: {
-        provider: 'gemini',
+        provider: backendUsed === 'openai-luna' ? 'openai' : 'gemini',
         model: modelUsed,
         units: promptTokens + completionTokens,
         unitType: 'tokens',
@@ -368,6 +498,7 @@ export async function batchStockVisionPick(input: {
     completionTokens,
     sceneCount: input.scenes.length,
     model: modelUsed,
+    backend: backendUsed,
   }
 
   logT2v('stock-vision', 'batch complete', {
@@ -377,6 +508,8 @@ export async function batchStockVisionPick(input: {
     promptTokens: metrics.promptTokens,
     completionTokens: metrics.completionTokens,
     model: metrics.model,
+    backend: metrics.backend,
+    stockVisionModel: process.env.STOCK_VISION_MODEL ?? '(default)',
   })
 
   return { results, metrics }
