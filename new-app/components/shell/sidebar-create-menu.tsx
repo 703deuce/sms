@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Clapperboard, Plus, Scissors, Video } from 'lucide-react'
+import { Clapperboard, Plus, Scissors, Sparkles } from 'lucide-react'
 import { PrimaryButton } from '@/components/app/primary-button'
 import {
   DropdownMenu,
@@ -9,13 +9,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useRecordingEnabled } from '@/lib/recording/use-recording-enabled'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 
-export function SidebarCreateMenu({ recordingNavEnabled = false }: { recordingNavEnabled?: boolean }) {
-  const recordingEnabledClient = useRecordingEnabled()
-  const recordingEnabled = recordingNavEnabled || recordingEnabledClient
+export function SidebarCreateMenu() {
   const t2vEnabled = isT2vFeatureEnabled()
+
+  const onPick = (product: 'clips' | 'editor' | 'ai-video') => {
+    console.info('[nav:create]', { product })
+  }
 
   return (
     <DropdownMenu>
@@ -32,24 +33,24 @@ export function SidebarCreateMenu({ recordingNavEnabled = false }: { recordingNa
         }
       />
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuItem render={<Link href="/app/clips/new" />}>
+        <DropdownMenuItem
+          render={<Link href="/app/clips/new" onClick={() => onPick('clips')} />}
+        >
           <Clapperboard className="size-4" />
-          New clip project
+          Clips
         </DropdownMenuItem>
-        <DropdownMenuItem render={<Link href="/app/editor" />}>
+        <DropdownMenuItem
+          render={<Link href="/app/editor" onClick={() => onPick('editor')} />}
+        >
           <Scissors className="size-4" />
-          Open editor
+          Editor
         </DropdownMenuItem>
-        {recordingEnabled ? (
-          <DropdownMenuItem render={<Link href="/app/rooms/new" />}>
-            <Video className="size-4" />
-            Record in Rooms
-          </DropdownMenuItem>
-        ) : null}
         {t2vEnabled ? (
-          <DropdownMenuItem render={<Link href="/app/clips/video/new" />}>
-            <Video className="size-4" />
-            Create AI video
+          <DropdownMenuItem
+            render={<Link href="/app/clips/video/new" onClick={() => onPick('ai-video')} />}
+          >
+            <Sparkles className="size-4" />
+            AI Video
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>

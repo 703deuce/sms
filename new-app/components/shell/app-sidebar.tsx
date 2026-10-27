@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
   AudioLines,
@@ -13,7 +14,6 @@ import {
   PenLine,
   Radio,
   Scissors,
-  Sparkles,
   Users,
   Video,
   Film,
@@ -88,8 +88,11 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
   const activeSection = resolveActiveSidebarSection(pathname, searchParams)
   const t2vEnabled = isT2vFeatureEnabled()
 
+  useEffect(() => {
+    console.info('[nav:section]', { activeSection, pathname })
+  }, [activeSection, pathname])
+
   const clipsItems: NavItem[] = [
-    { title: 'New clip project', href: '/app/clips/new', icon: Sparkles },
     { title: 'Streamer', href: '/app/streamer', icon: Radio },
     { title: 'Exports', href: '/app/exports', icon: Download },
   ]
@@ -112,7 +115,7 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
 
   const t2vItems: NavItem[] = t2vEnabled
     ? [
-        { title: 'Create video', href: '/app/clips/video/new', icon: Video },
+        { title: 'New AI Video', href: '/app/clips/video/new', icon: Video },
         { title: 'Templates', href: '/app/clips/video/templates', icon: LayoutTemplate },
         { title: 'AI Video projects', href: '/app/clips?kind=video', icon: Film },
       ]
@@ -144,7 +147,7 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
       </SidebarHeader>
       <SidebarContent className="scrollbar-thin">
         <div className="px-2 pb-2 group-data-[collapsible=icon]:px-1">
-          <SidebarCreateMenu recordingNavEnabled={recordingNavEnabled} />
+          <SidebarCreateMenu />
         </div>
 
         <SidebarProductSection section="clips" title="Clips" active={activeSection === 'clips'}>

@@ -34,7 +34,7 @@ export function SidebarLayoutEffects() {
   useEffect(() => {
     if (isClipEditorPath(pathname)) {
       setOpen(false)
-      console.info('[clips-shell] sidebar collapsed for editor route', { pathname })
+      console.info('[nav:layout] collapsed for editor route', { pathname })
     }
   }, [pathname, setOpen])
 
@@ -43,6 +43,7 @@ export function SidebarLayoutEffects() {
 
     const apply = () => {
       if (mq.matches) {
+        console.info('[nav:layout]', { event: 'auto_collapse_viewport', maxWidth: SIDEBAR_AUTO_COLLAPSE_MAX_WIDTH_PX })
         setOpen(false)
         return
       }

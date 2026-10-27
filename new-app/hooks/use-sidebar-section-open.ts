@@ -16,6 +16,7 @@ export function useSidebarSectionOpen(section: SidebarProductSection, defaultOpe
     (next: boolean) => {
       setOpen(next)
       writeSidebarSectionState(section, next)
+      console.info('[nav:section-persist]', { section, open: next })
     },
     [section],
   )

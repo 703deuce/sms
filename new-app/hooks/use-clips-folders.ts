@@ -15,7 +15,11 @@ export function useClipsFolders(enabled = true) {
     try {
       const res = await clipsFetch<{ data: { folders: ClipsFolderRow[] } }>('/api/clips/folders')
       setFolders(res.data.folders ?? [])
-    } catch {
+    } catch (err) {
+      console.info('[nav:folders]', {
+        event: 'fetch_failed',
+        message: err instanceof Error ? err.message : String(err),
+      })
       setFolders([])
     } finally {
       setLoading(false)
