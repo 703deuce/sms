@@ -92,7 +92,7 @@ r = c.cursor()
 r.execute(\"\"\"
   SELECT count(*) FROM clip_jobs
   WHERE status = 'RUNNING'
-    AND type IN ('IMPORT_URL', 'STREAM_IMPORT', 'RENDER_CLIP', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
+    AND type IN ('IMPORT_URL', 'STREAM_IMPORT', 'RENDER_CLIP', 'RENDER_SCRIPT_COMPOSITION', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
     AND "lockedAt" > NOW() - interval '3 minutes'
 \"\"\")
 print(r.fetchone()[0])
