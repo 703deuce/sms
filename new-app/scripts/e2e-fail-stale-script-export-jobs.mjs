@@ -12,7 +12,7 @@ async function main() {
   let failed = 0
   for (const job of jobs) {
     const payload = job.payload && typeof job.payload === 'object' ? job.payload : {}
-    const renderId = payload.renderId as string | undefined
+    const renderId = typeof payload.renderId === 'string' ? payload.renderId : undefined
     if (!renderId) continue
     const render = await prisma.scriptCompositionRender.findUnique({ where: { id: renderId } })
     if (render) continue
