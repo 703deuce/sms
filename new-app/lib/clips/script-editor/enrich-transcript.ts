@@ -77,6 +77,18 @@ export function enrichTranscriptWords(words: ClipWord[], opts?: EnrichOpts): Enr
 
     out.push(row)
   }
+
+  for (let i = 0; i < out.length - 1; i++) {
+    const a = normalizeToken(out[i].w ?? '')
+    const b = normalizeToken(out[i + 1].w ?? '')
+    if (a === 'you' && b === 'know') {
+      out[i].isFiller = true
+      out[i].fillerKind = 'lexicon'
+      out[i + 1].isFiller = true
+      out[i + 1].fillerKind = 'lexicon'
+    }
+  }
+
   return out
 }
 

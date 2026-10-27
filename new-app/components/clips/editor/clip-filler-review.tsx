@@ -32,10 +32,12 @@ export function ClipFillerReview({
   onOpenChange,
   onAddCut,
   onSeek,
+  clipBounds,
 }: {
   clipId: string
   words: SourceWord[]
   edits: ClipEditsV2
+  clipBounds?: { clipStartMs: number; clipEndMs: number }
   open: boolean
   onOpenChange: (open: boolean) => void
   onAddCut: (range: [number, number]) => void
@@ -44,11 +46,14 @@ export function ClipFillerReview({
   const [fillerCursor, setFillerCursor] = useState(0)
   const [fillerFilter, setFillerFilter] = useState<FillerFilter>('all')
   const [fillerSelectionOnly, setFillerSelectionOnly] = useState(false)
-  const [fillerAvoidHarsh, setFillerAvoidHarsh] = useState(true)
+  const [fillerAvoidHarsh, setFillerAvoidHarsh] = useState(false)
   const [fillerAction, setFillerAction] = useState<FillerReviewAction>('delete')
   const [searchOptions, setSearchOptions] = useState<FillerSearchOptions>(DEFAULT_SEARCH_OPTIONS)
 
-  const orderedWords = useMemo(() => editorWordsForClipFillerReview(clipId, words), [clipId, words])
+  const orderedWords = useMemo(
+    () => editorWordsForClipFillerReview(clipId, words, edits, clipBounds),
+    [clipId, words, edits.trim.in, edits.trim.out, clipBounds],
+  )
   const cutRanges = edits.cutRanges ?? []
   const deletedSet = useMemo(() => deletedEditorWordIds(orderedWords, cutRanges), [orderedWords, cutRanges])
 

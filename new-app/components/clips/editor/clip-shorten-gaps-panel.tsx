@@ -4,6 +4,7 @@ import { ScriptShortenGapsPanel } from '@/components/script-editor/side/script-s
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
+import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
 import { editorWordsForClipFillerReview } from '@/lib/clips/editor/filler-review-words'
 import { gapShortenCutRange, listClipGapHits } from '@/lib/clips/gap-shorten'
 import type { GapFilterMode, GapHit } from '@/lib/clips/script-editor/gap-hits'
@@ -22,6 +23,7 @@ export function ClipShortenGapsPanel({
   words,
   edits,
   clipStartMs,
+  clipEndMs,
   settings,
   onSettingsChange,
   onAddCut,
@@ -32,6 +34,7 @@ export function ClipShortenGapsPanel({
   words: SourceWord[]
   edits: ClipEditsV2
   clipStartMs: number
+  clipEndMs: number
   settings: ClipGapToolSettings
   onSettingsChange: (patch: Partial<ClipGapToolSettings>) => void
   onAddCut: (range: [number, number]) => void
@@ -41,15 +44,24 @@ export function ClipShortenGapsPanel({
   const [cursor, setCursor] = useState(0)
   const [activeHitId, setActiveHitId] = useState<string | null>(null)
 
-  const orderedWords = useMemo(() => editorWordsForClipFillerReview(clipId, words), [clipId, words])
+  const clipBounds = useMemo(() => ({ clipStartMs, clipEndMs }), [clipStartMs, clipEndMs])
+  const scopedWords = useMemo(
+    () => sourceWordsForClipEditing(words, edits, clipBounds),
+    [words, edits.trim.in, edits.trim.out, clipBounds],
+  )
+  const orderedWords = useMemo(
+    () => editorWordsForClipFillerReview(clipId, words, edits, clipBounds),
+    [clipId, words, edits.trim.in, edits.trim.out, clipBounds],
+  )
   const cutRanges = edits.cutRanges ?? []
+  const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
   const wordSpans = useMemo(
     () =>
-      words.map((w) => {
+      scopedWords.map((w) => {
         const { startMs, endMs } = wordSourceMs(w)
         return { s: startMs / 1000, e: endMs / 1000 }
       }),
-    [words],
+    [scopedWords],
   )
   const targetGapMs = Math.round(settings.targetGapSec * 1000)
 
@@ -60,8 +72,9 @@ export function ClipShortenGapsPanel({
         minGapMs: Math.round(settings.minGapSec * 1000),
         maxGapMs: settings.mode === 'between' ? Math.round(settings.maxGapSec * 1000) : undefined,
         targetGapMs,
+        maxPlausibleGapMs,
       }),
-    [orderedWords, cutRanges, settings, targetGapMs],
+    [orderedWords, cutRanges, settings, targetGapMs, maxPlausibleGapMs],
   )
 
   const activeHit = gapHits[cursor] ?? gapHits.find((h) => h.word.id === activeHitId) ?? null

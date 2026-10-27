@@ -16,9 +16,18 @@ export function gapShortenCutRange(
   const remove = symmetricGapTrimMs(gapMs, targetGapMs)
   if (remove <= 50) return null
   const mid = gapStartMs + gapMs / 2
-  const raw: CutRange = [Math.round(mid - remove / 2), Math.round(mid + remove / 2)]
+  let lo = Math.round(mid - remove / 2)
+  let hi = Math.round(mid + remove / 2)
+  lo = Math.max(gapStartMs, lo)
+  hi = Math.min(gapEndMs, hi)
+  if (hi - lo < 40) return null
+  const raw: CutRange = [lo, hi]
   if (words?.length) {
-    return snapCutRangeToWordGaps(raw, words, 60) ?? raw
+    const snapped = snapCutRangeToWordGaps(raw, words, 60) ?? raw
+    return [
+      Math.max(gapStartMs, snapped[0]),
+      Math.min(gapEndMs, snapped[1]),
+    ] as CutRange
   }
   return raw
 }
@@ -72,6 +81,7 @@ export function listClipGapHits(
     minGapMs: number
     maxGapMs?: number
     targetGapMs: number
+    maxPlausibleGapMs?: number
   },
 ): GapHit[] {
   const deleted = new Set<string>()
@@ -83,5 +93,8 @@ export function listClipGapHits(
     minGapMs: opts.minGapMs,
     maxGapMs: opts.maxGapMs,
   })
-  return hits.filter((h) => !gapHitAlreadyCut(h, cutRanges, opts.targetGapMs))
+  const plausible = opts.maxPlausibleGapMs ?? 15_000
+  return hits.filter(
+    (h) => h.gapMs <= plausible && !gapHitAlreadyCut(h, cutRanges, opts.targetGapMs),
+  )
 }

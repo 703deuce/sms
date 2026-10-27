@@ -1,5 +1,6 @@
 'use client'
 
+import { Scissors } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -52,11 +53,13 @@ export function LayoutPanel({
   clipId,
   words = [],
   clipStartMs = 0,
+  clipEndMs = 0,
   gapToolSettings,
   onGapToolSettingsChange,
   onAddCut,
   onSeekSource,
   onOpenGapReview,
+  onOpenFillerReview,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -71,7 +74,9 @@ export function LayoutPanel({
   clipId?: string
   words?: SourceWord[]
   clipStartMs?: number
+  clipEndMs?: number
   gapToolSettings?: ClipGapToolSettings
+  onOpenFillerReview?: () => void
   onGapToolSettingsChange?: (patch: Partial<ClipGapToolSettings>) => void
   onAddCut?: (range: [number, number]) => void
   onSeekSource?: (sourceMs: number) => void
@@ -127,6 +132,12 @@ export function LayoutPanel({
           <p className="text-xs text-muted-foreground">Updates the preview and export framing.</p>
         </div>
       )}
+      {onOpenFillerReview ? (
+        <Button type="button" size="sm" variant="outline" className="w-full gap-1.5" onClick={onOpenFillerReview}>
+          <Scissors className="size-3.5" aria-hidden />
+          Remove filler words
+        </Button>
+      ) : null}
       {clipId && words.length > 0 && gapToolSettings && onGapToolSettingsChange && onAddCut && onSeekSource && onOpenGapReview ? (
         <div className="rounded-lg border border-border">
           <ClipShortenGapsPanel
@@ -134,6 +145,7 @@ export function LayoutPanel({
             words={words}
             edits={edits}
             clipStartMs={clipStartMs}
+            clipEndMs={clipEndMs}
             settings={gapToolSettings}
             onSettingsChange={onGapToolSettingsChange}
             onAddCut={onAddCut}

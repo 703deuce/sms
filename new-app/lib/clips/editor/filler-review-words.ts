@@ -1,10 +1,18 @@
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
+import { sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
 import { enrichTranscriptWords } from '@/lib/clips/script-editor/enrich-transcript'
 import { toEditorWords, type EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 
 /** Map clip transcript words to script-editor filler hits (reuse enrich + stable ids). */
-export function editorWordsForClipFillerReview(clipId: string, words: SourceWord[]): EditorWord[] {
-  const enriched = enrichTranscriptWords(words)
+export function editorWordsForClipFillerReview(
+  clipId: string,
+  words: SourceWord[],
+  edits?: Pick<ClipEditsV2, 'trim'>,
+  clipBounds?: { clipStartMs: number; clipEndMs: number },
+): EditorWord[] {
+  const scoped = edits ? sourceWordsForClipEditing(words, edits, clipBounds) : words
+  const enriched = enrichTranscriptWords(scoped)
   return toEditorWords(`clip:${clipId}`, enriched)
 }
 

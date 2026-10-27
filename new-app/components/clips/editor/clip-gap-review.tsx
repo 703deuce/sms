@@ -8,9 +8,8 @@ import {
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
-import {
-  editorWordsForClipFillerReview,
-} from '@/lib/clips/editor/filler-review-words'
+import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
+import { editorWordsForClipFillerReview } from '@/lib/clips/editor/filler-review-words'
 import { gapShortenCutRange, listClipGapHits } from '@/lib/clips/gap-shorten'
 import type { GapFilterMode } from '@/lib/clips/script-editor/gap-hits'
 import { toast } from 'sonner'
@@ -37,10 +36,12 @@ export function ClipGapReview({
   gapMode,
   targetGapSec,
   onTargetGapSecChange,
+  clipBounds: clipBoundsProp,
 }: {
   clipId: string
   words: SourceWord[]
   edits: ClipEditsV2
+  clipBounds?: { clipStartMs: number; clipEndMs: number }
   open: boolean
   onOpenChange: (open: boolean) => void
   onAddCut: (range: [number, number]) => void
@@ -54,14 +55,28 @@ export function ClipGapReview({
   const [gapCursor, setGapCursor] = useState(0)
   const [searchOptions, setSearchOptions] = useState<FillerSearchOptions>(DEFAULT_SEARCH_OPTIONS)
 
-  const orderedWords = useMemo(() => editorWordsForClipFillerReview(clipId, words), [clipId, words])
+  const clipBounds = useMemo(
+    () =>
+      clipBoundsProp ?? { clipStartMs: edits.trim.in, clipEndMs: edits.trim.out },
+    [clipBoundsProp, edits.trim.in, edits.trim.out],
+  )
+  const scopedWords = useMemo(
+    () => sourceWordsForClipEditing(words, edits, clipBounds),
+    [words, edits.trim.in, edits.trim.out, clipBounds],
+  )
+  const orderedWords = useMemo(
+    () => editorWordsForClipFillerReview(clipId, words, edits, clipBounds),
+    [clipId, words, edits.trim.in, edits.trim.out, clipBounds],
+  )
   const cutRanges = edits.cutRanges ?? []
+  const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
   const wordSpans = useMemo(
-    () => words.map((w) => {
-      const { startMs, endMs } = wordSourceMs(w)
-      return { s: startMs / 1000, e: endMs / 1000 }
-    }),
-    [words],
+    () =>
+      scopedWords.map((w) => {
+        const { startMs, endMs } = wordSourceMs(w)
+        return { s: startMs / 1000, e: endMs / 1000 }
+      }),
+    [scopedWords],
   )
 
   const targetGapMs = Math.round(targetGapSec * 1000)
@@ -72,8 +87,9 @@ export function ClipGapReview({
         minGapMs: Math.round(minGapSec * 1000),
         maxGapMs: gapMode === 'between' ? Math.round(maxGapSec * 1000) : undefined,
         targetGapMs,
+        maxPlausibleGapMs,
       }),
-    [orderedWords, cutRanges, gapMode, minGapSec, maxGapSec, targetGapMs],
+    [orderedWords, cutRanges, gapMode, minGapSec, maxGapSec, targetGapMs, maxPlausibleGapMs],
   )
 
   useEffect(() => {

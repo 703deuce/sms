@@ -6,7 +6,7 @@ import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
-import { PanelRightOpen } from 'lucide-react'
+import { Loader2, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -33,7 +33,7 @@ import { ClipFillerReview } from '@/components/clips/editor/clip-filler-review'
 import { ClipGapReview } from '@/components/clips/editor/clip-gap-review'
 import type { ClipGapToolSettings } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import { StudioSoundPreview } from '@/components/script-editor/studio-sound-preview'
-import { normalizeAudioEdits } from '@/lib/clips/audio'
+import { DEFAULT_STUDIO_SOUND_MIX, normalizeAudioEdits } from '@/lib/clips/audio'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
@@ -150,8 +150,6 @@ export function EditorShell({
 
   const audioNorm = useMemo(() => normalizeAudioEdits(edits.audio), [edits.audio])
   const studioSound = audioNorm.studioSound
-  const studioGenId = studioSound?.enabled && studioSound.generationId ? studioSound.generationId : null
-  const studioGen = useGeneration(studioGenId)
   const musicGenId = edits.audio?.music?.generationId ?? null
   const musicGen = useGeneration(musicGenId)
   const aiExtras = clipEditorAiExtrasEnabled()
@@ -160,6 +158,55 @@ export function EditorShell({
     edits,
     editorWords,
     { enabled: aiExtras },
+  )
+
+  const studioGenId = studioSound?.enabled && studioSound.generationId ? studioSound.generationId : null
+  const studioGen = useGeneration(studioGenId, 1500)
+  const studioEnqueueRef = useRef(false)
+
+  const enqueueStudioSound = useCallback(async () => {
+    const { generationId } = await clipsFetch<{ generationId: string }>(
+      `/api/clips/clips/${clipId}/studio-sound`,
+      { method: 'POST', body: '{}' },
+    )
+    patchStudioSound({
+      enabled: true,
+      generationId,
+      mix: studioSound?.mix ?? DEFAULT_STUDIO_SOUND_MIX,
+    })
+  }, [clipId, patchStudioSound, studioSound?.mix])
+
+  useEffect(() => {
+    if (!studioSound?.enabled || useDubAudio) {
+      studioEnqueueRef.current = false
+      return
+    }
+    if (studioSound.generationId && (studioGen.status === 'READY' || studioGen.status === 'FAILED')) return
+    if (studioSound.generationId && studioGen.running) return
+    if (!studioSound.generationId && !studioEnqueueRef.current) {
+      studioEnqueueRef.current = true
+      void enqueueStudioSound().catch(() => {
+        studioEnqueueRef.current = false
+        toast.error('Could not start Studio Sound')
+      })
+    }
+  }, [
+    studioSound?.enabled,
+    studioSound?.generationId,
+    studioGen.running,
+    studioGen.status,
+    enqueueStudioSound,
+    useDubAudio,
+  ])
+
+  const studioPreviewActive = Boolean(
+    studioSound?.enabled && studioGen.downloadUrl && !useDubAudio,
+  )
+  const studioPreviewLoading = Boolean(
+    studioSound?.enabled &&
+      !useDubAudio &&
+      !studioPreviewActive &&
+      studioGen.status !== 'FAILED',
   )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const outDur = outputDurationFromEdits(edits)
@@ -362,7 +409,6 @@ export function EditorShell({
             else if (ms > edits.trim.out) setTrim({ in: edits.trim.in, out: ms })
           }}
           onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
-          onOpenFillerReview={() => setFillerReviewOpen(true)}
           selectionRef={selectionRef}
         />
         </EditorPanelErrorBoundary>
@@ -382,11 +428,13 @@ export function EditorShell({
           clipId={clipId}
           words={editorWords}
           clipStartMs={bounds.clipStartMs}
+          clipEndMs={bounds.clipEndMs}
           gapToolSettings={gapToolSettings}
           onGapToolSettingsChange={(patch) => setGapToolSettings((s) => ({ ...s, ...patch }))}
           onAddCut={addCutRange}
           onSeekSource={seekSource}
           onOpenGapReview={() => setGapReviewOpen(true)}
+          onOpenFillerReview={() => setFillerReviewOpen(true)}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -441,6 +489,7 @@ export function EditorShell({
         clipId={clipId}
         words={editorWords}
         edits={edits}
+        clipBounds={{ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }}
         open={fillerReviewOpen}
         onOpenChange={setFillerReviewOpen}
         onAddCut={addCutRange}
@@ -450,6 +499,7 @@ export function EditorShell({
         clipId={clipId}
         words={editorWords}
         edits={edits}
+        clipBounds={{ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }}
         open={gapReviewOpen}
         onOpenChange={setGapReviewOpen}
         onAddCut={addCutRange}
@@ -496,11 +546,23 @@ export function EditorShell({
               videoRef={videoRef}
               onTick={onTick}
             />
+            {studioPreviewLoading ? (
+              <div
+                className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-black/45"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs font-medium text-white">
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                  Studio Sound preview…
+                </span>
+              </div>
+            ) : null}
             <StudioSoundPreview
               videoRef={videoRef}
               isolatedUrl={studioGen.downloadUrl}
               mix={studioSound?.mix ?? 0.35}
-              enabled={Boolean(studioSound?.enabled && studioGen.status === 'READY' && !useDubAudio)}
+              enabled={studioPreviewActive}
             />
             </EditorPanelErrorBoundary>
             </div>

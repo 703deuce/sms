@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
 
-export function useGeneration(generationId: string | null) {
+export function useGeneration(generationId: string | null, pollIntervalMs = 2000) {
   const [status, setStatus] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -44,10 +44,10 @@ export function useGeneration(generationId: string | null) {
     const tick = () => {
       void poll().catch(() => {})
     }
-    const t = setInterval(tick, 5000)
+    const t = setInterval(tick, pollIntervalMs)
     tick()
     return () => clearInterval(t)
-  }, [generationId, poll])
+  }, [generationId, poll, pollIntervalMs])
 
   useEffect(() => {
     if (!generationId || !status) return

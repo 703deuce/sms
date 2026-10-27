@@ -467,7 +467,7 @@ export function useEditorState(
         serverUpdatedAt: serverUpdatedAtRef.current,
       })
       void persistEdits().catch(() => {})
-    }, 450)
+    }, 200)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }

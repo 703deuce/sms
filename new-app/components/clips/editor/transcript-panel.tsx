@@ -9,7 +9,8 @@ import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
 import { isWordCut, wordDisplayText } from '@/lib/clips/edits'
 import { gapCutBetweenSourceWords } from '@/lib/clips/gap-shorten'
 import type { SourceWord } from '@/lib/clips/source-words'
-import { wordSourceMs, wordsInRange } from '@/lib/clips/source-words'
+import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
+import { wordSourceMs } from '@/lib/clips/source-words'
 import { speakerLabelForWord } from '@/lib/clips/crop-shots'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
@@ -42,7 +43,6 @@ export function TranscriptPanel({
   onRestoreWord,
   onExtendTrim,
   onToggleEmphasis,
-  onOpenFillerReview,
   onRestoreCutRange,
   selectionRef,
   clipStartMs,
@@ -60,7 +60,6 @@ export function TranscriptPanel({
   onRestoreWord: (word: SourceWord) => void
   onExtendTrim: (sourceMs: number) => void
   onToggleEmphasis?: (wordIndex: number) => void
-  onOpenFillerReview?: () => void
   onRestoreCutRange?: (range: CutRange) => void
   selectionRef: React.MutableRefObject<TranscriptSelection | null>
 }) {
@@ -70,23 +69,24 @@ export function TranscriptPanel({
   const [search, setSearch] = useState('')
   const visible = useMemo(() => {
     if (!words.length) return []
-    const pad = 5000
+    const bounds =
+      clipStartMs != null && clipEndMs != null ? { clipStartMs, clipEndMs } : undefined
+    const core = sourceWordsForClipEditing(words, edits, bounds)
+    const pad = 2000
     const viewMin = edits.trim.in - pad
     const viewMax = edits.trim.out + pad
-    const inView = words.filter((w) => w.e * 1000 >= viewMin && w.s * 1000 <= viewMax)
-    if (inView.length) return inView
-    const inTrim = words.filter((w) => {
-      const { startMs, endMs } = wordSourceMs(w)
-      return endMs >= edits.trim.in && startMs <= edits.trim.out
-    })
-    if (inTrim.length) return inTrim
-    if (clipStartMs != null && clipEndMs != null) {
-      const ranged = wordsInRange(words, clipStartMs, clipEndMs)
-      if (ranged.length) return ranged
+    const extended = words.filter((w) => w.e * 1000 >= viewMin && w.s * 1000 <= viewMax)
+    if (!core.length) return extended.length ? extended : words
+    const coreIds = new Set(core.map((w) => w.i))
+    const merged = [...core]
+    for (const w of extended) {
+      if (!coreIds.has(w.i)) merged.push(w)
     }
-    return words
+    merged.sort((a, b) => a.s - b.s || a.i - b.i)
+    return merged
   }, [words, edits.trim.in, edits.trim.out, clipStartMs, clipEndMs])
   const spkOrder = useMemo(() => speakerOrder(visible, shots), [visible, shots])
+  const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
 
   useEffect(() => {
     selectionRef.current = {
@@ -133,12 +133,13 @@ export function TranscriptPanel({
 
   const renderGapCut = (range: CutRange) => {
     const ms = range[1] - range[0]
+    const pauseLabel = ms >= 1000 ? `pause ${(ms / 1000).toFixed(1)}s` : `pause ${Math.round(ms)}ms`
     return (
       <span
         key={`gap-${range[0]}-${range[1]}`}
         className="mx-0.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] text-amber-900 dark:text-amber-100"
       >
-        <span className="line-through decoration-amber-600/80">pause {Math.round(ms)}ms</span>
+        <span className="line-through decoration-amber-600/80">{pauseLabel}</span>
         {onRestoreCutRange ? (
           <button type="button" className="font-medium text-primary" onClick={() => onRestoreCutRange(range)}>
             Restore
@@ -269,14 +270,6 @@ export function TranscriptPanel({
       )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => (onOpenFillerReview ? onOpenFillerReview() : undefined)}
-          disabled={!onOpenFillerReview}
-        >
-          Remove filler words
-        </Button>
       </div>
       <div className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed">
         {!visible.length ? (
@@ -286,6 +279,8 @@ export function TranscriptPanel({
         ) : null}
         {blocks.map((block, bi) => {
           const dot = SPEAKER_DOT[(block.speakerNum - 1) % SPEAKER_DOT.length]
+          const prevBlockLast =
+            bi > 0 ? blocks[bi - 1].words[blocks[bi - 1].words.length - 1] : null
           return (
             <div key={`${block.spk}-${bi}`}>
               <div className="mt-3 flex items-center gap-1.5 first:mt-0">
@@ -297,8 +292,12 @@ export function TranscriptPanel({
               </div>
               <div className="inline">
                 {block.words.flatMap((w, wi) => {
-                  const next = block.words[wi + 1]
-                  const gapCut = next ? gapCutBetweenSourceWords(w, next, edits.cutRanges) : null
+                  const prev = wi === 0 ? prevBlockLast : block.words[wi - 1]
+                  let gapCut = prev ? gapCutBetweenSourceWords(prev, w, edits.cutRanges ?? []) : null
+                  if (prev && gapCut) {
+                    const gapMs = wordSourceMs(w).startMs - wordSourceMs(prev).endMs
+                    if (gapMs > maxPlausibleGapMs) gapCut = null
+                  }
                   const nodes = [renderWord(w)]
                   if (gapCut) nodes.push(renderGapCut(gapCut))
                   return nodes
