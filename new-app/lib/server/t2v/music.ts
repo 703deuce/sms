@@ -13,7 +13,7 @@ export async function listT2vMusicLibrary(): Promise<T2vMusicLibraryTrack[]> {
   const prisma = getPrisma()
   const gens = await prisma.aiGeneration.findMany({
     where: { kind: 'MUSIC', status: 'READY' },
-    select: { id: true, prompt: true, params: true, outputKey: true },
+    select: { id: true, prompt: true, params: true, storageKey: true },
     take: 200,
   })
   const byCatalogId = new Map<string, string>()
