@@ -97,7 +97,7 @@ export function EditorRail({
             type="button"
             aria-label={label}
             aria-current={isActive ? 'page' : undefined}
-            tabIndex={isActive ? 0 : -1}
+            tabIndex={0}
             onClick={() => onChange(id)}
             className={cn(
               'relative grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

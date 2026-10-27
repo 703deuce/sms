@@ -73,7 +73,7 @@ export function DriveSidebar({ folders }: { folders: FolderRow[] }) {
       {item('/app/rooms', 'Rooms recordings', <Video className="size-4" />, pathname.startsWith('/app/rooms'))}
       {item('/app/clips?view=workspaces', 'Workspaces', <Users className="size-4" />, view === 'workspaces')}
       {item('/app/clips?view=layouts', 'Layout packs', <LayoutTemplate className="size-4" />, view === 'layouts')}
-      {item('https://transovo.ai/help/clips', 'Learn', <GraduationCap className="size-4" />, false)}
+      {item('/app/help', 'Learn', <GraduationCap className="size-4" />, false)}
     </aside>
   )
 }

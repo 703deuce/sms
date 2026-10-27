@@ -74,6 +74,7 @@ export async function GET(request: Request) {
         { status: 503, headers: { 'Retry-After': '2' } },
       )
     }
-    return jsonError(err, 500)
+    console.warn('[notifications] soft-fail', msg)
+    return NextResponse.json({ data: { items: [], nextCursor: null } })
   }
 }

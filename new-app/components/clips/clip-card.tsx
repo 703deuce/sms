@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -32,8 +33,10 @@ export function ClipCard({
   onHidden?: (clipId: string) => void
   isStreamer?: boolean
 }) {
+  const router = useRouter()
   const [thumbBusy, setThumbBusy] = useState(false)
   const [hideBusy, setHideBusy] = useState(false)
+  const [editPending, setEditPending] = useState(false)
   const aiMeta = (clip.aiMeta || {}) as ClipAiMeta
   const why = clipWhySummary(aiMeta)
   const layoutChip = clipLayoutChip(aiMeta)
@@ -165,8 +168,16 @@ export function ClipCard({
           <p className="text-[10px] text-muted-foreground">No signal chips (chat or replay may be unavailable).</p>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="default" render={<Link href={`/app/clips/${projectId}/edit/${clip.id}`} />}>
-            Edit
+          <Button
+            size="sm"
+            variant="default"
+            disabled={editPending}
+            onClick={() => {
+              setEditPending(true)
+              router.push(`/app/clips/${projectId}/edit/${clip.id}`)
+            }}
+          >
+            {editPending ? 'Opening…' : 'Edit'}
           </Button>
           <Button
             size="sm"
