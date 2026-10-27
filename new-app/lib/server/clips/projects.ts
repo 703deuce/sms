@@ -4,9 +4,18 @@ import { getPrisma } from '@/lib/server/db'
 import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
 import { projectWordsKey } from '@/lib/storage'
 
-export async function listClipProjects(workspaceId: string, opts: { q?: string; status?: string; limit?: number }) {
+export async function listClipProjects(
+  workspaceId: string,
+  opts: { q?: string; status?: string; limit?: number; trash?: boolean; folderId?: string | null },
+) {
   const prisma = getPrisma()
-  const where: Record<string, unknown> = { workspaceId, deletedAt: null }
+  const where: Record<string, unknown> = {
+    workspaceId,
+    deletedAt: opts.trash ? { not: null } : null,
+  }
+  if (opts.folderId !== undefined) {
+    where.folderId = opts.folderId
+  }
   if (opts.q?.trim()) where.title = { contains: opts.q.trim(), mode: 'insensitive' }
   if (opts.status && opts.status !== 'all') {
     if (opts.status === 'processing') {

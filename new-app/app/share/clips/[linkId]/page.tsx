@@ -12,9 +12,8 @@ export default async function ShareClipLinkPage({ params }: { params: Promise<{ 
   return (
     <ShareClipViewer
       title={link.composition.title}
-      projectId={link.composition.projectId}
-      compositionId={link.composition.id}
-      mode={link.linkAccess === 'LINK_COMMENT' ? 'comment' : 'view'}
+      publicPath={`/api/public/share/clips/${linkId}`}
+      editHref={`/app/clips/${link.composition.projectId}/script`}
     />
   )
 }

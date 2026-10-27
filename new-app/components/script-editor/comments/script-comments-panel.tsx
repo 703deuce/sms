@@ -26,6 +26,9 @@ export function ScriptCommentsPanel({
   onReply,
   onResolve,
   draftComposer,
+  clipScope,
+  commentScope,
+  onCommentScopeChange,
 }: {
   threads: CommentThreadDto[]
   loading: boolean
@@ -36,6 +39,9 @@ export function ScriptCommentsPanel({
   onReply: (threadId: string, body: string) => Promise<void>
   onResolve: (threadId: string, resolved: boolean) => Promise<void>
   draftComposer?: React.ReactNode
+  clipScope?: boolean
+  commentScope?: 'clip' | 'full'
+  onCommentScopeChange?: (scope: 'clip' | 'full') => void
 }) {
   const [sort, setSort] = useState<SortMode>('timestamp')
   const [replyDraft, setReplyDraft] = useState<Record<string, string>>({})
@@ -72,9 +78,41 @@ export function ScriptCommentsPanel({
             <DropdownMenuItem onClick={onToggleShowResolved}>
               {showResolved ? '✓ ' : ''}Show resolved comments
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                const text = threads
+                  .map((t) => {
+                    const ts = t.comments[0]?.body ?? ''
+                    return `[${formatScriptTimecode(t.startOutMs)}] ${ts}`
+                  })
+                  .join('\n')
+                void navigator.clipboard.writeText(text)
+              }}
+            >
+              Copy all comments
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {clipScope && onCommentScopeChange && (
+        <div className="flex gap-1 border-b border-border px-3 py-2">
+          {(['clip', 'full'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={cn(
+                'h-7 flex-1 rounded-md text-xs font-medium',
+                commentScope === s ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50',
+              )}
+              onClick={() => onCommentScopeChange(s)}
+            >
+              {s === 'clip' ? 'This clip' : 'Full video'}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {draftComposer}

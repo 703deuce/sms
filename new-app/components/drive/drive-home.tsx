@@ -17,6 +17,7 @@ import { PrimaryButton } from '@/components/app/primary-button'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProjectGrid } from '@/components/clips/project-card'
+import { ProjectRowMenu } from '@/components/drive/project-row-menu'
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 import { clipsFetch } from '@/lib/clips-api'
 import { cn } from '@/lib/utils'
@@ -33,10 +34,14 @@ export function DriveHome({
   initialProjects,
   q,
   status,
+  view = 'home',
+  folders = [],
 }: {
   initialProjects: ClipProjectListItem[]
   q?: string
   status?: string
+  view?: 'home' | 'trash' | 'recents'
+  folders?: { id: string; name: string }[]
 }) {
   const router = useRouter()
   const [view, setView] = useState<'grid' | 'list'>('grid')
@@ -67,9 +72,16 @@ export function DriveHome({
     if (!selected.size) return
     await clipsFetch('/api/clips/projects/bulk', {
       method: 'POST',
-      body: JSON.stringify({ action: 'trash', projectIds: [...selected] }),
+      body: JSON.stringify({ action: view === 'trash' ? 'restore' : 'trash', projectIds: [...selected] }),
     })
     setSelected(new Set())
+    router.refresh()
+  }
+
+  const createFolder = async () => {
+    const name = window.prompt('Folder name')
+    if (!name?.trim()) return
+    await clipsFetch('/api/clips/folders', { method: 'POST', body: JSON.stringify({ name: name.trim() }) })
     router.refresh()
   }
 
@@ -100,6 +112,12 @@ export function DriveHome({
       )}
 
       <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
+        {view !== 'trash' && (
+          <Button type="button" variant="outline" size="sm" onClick={() => void createFolder()}>
+            <FolderOpen className="mr-1 size-4" />
+            New folder
+          </Button>
+        )}
         <Link href="/app/rooms/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
           <span className="mr-1 inline-block size-2 rounded-full bg-lane-record" />
           Record
@@ -110,7 +128,9 @@ export function DriveHome({
       </div>
 
       <div className="mx-auto max-w-[800px] text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">What do you want to make?</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {view === 'trash' ? 'Trash' : 'What do you want to make?'}
+        </h1>
         <div className="mt-6 rounded-xl border border-input bg-card p-4 text-left">
           <textarea
             className="min-h-[72px] w-full resize-none bg-transparent text-[15px] outline-none"
@@ -171,13 +191,15 @@ export function DriveHome({
         {selected.size > 0 && (
           <div className="mb-3 flex items-center gap-3 rounded-lg bg-muted px-3 py-2 text-sm">
             <span>{selected.size} selected</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => void bulkTrash()}>Delete</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => void bulkTrash()}>
+              {view === 'trash' ? 'Restore' : 'Delete'}
+            </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(new Set())}>×</Button>
           </div>
         )}
 
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">Recent projects</h2>
+          <h2 className="text-base font-semibold">{view === 'trash' ? 'Deleted projects' : 'Recent projects'}</h2>
           <Link href="/app/clips?view=all" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             View all projects
           </Link>
@@ -208,7 +230,9 @@ export function DriveHome({
                   <th className="w-8 px-2" scope="col" />
                   <th scope="col">Name</th>
                   <th className="w-24 px-2" scope="col">Duration</th>
-                  <th className="w-28 px-2" scope="col">Clips</th>
+                  <th className="w-20 px-2" scope="col">Clips</th>
+                  <th className="w-28 px-2" scope="col">Last viewed</th>
+                  <th className="w-10 px-2" scope="col" />
                 </tr>
               </thead>
               <tbody>
@@ -231,6 +255,12 @@ export function DriveHome({
                       {Math.round(p.durationMs / 1000)}s
                     </td>
                     <td className="px-2">{p.clipCount}</td>
+                    <td className="px-2 text-xs text-muted-foreground">
+                      {p.lastViewedAt ? new Date(p.lastViewedAt).toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-2">
+                      <ProjectRowMenu projectId={p.id} title={p.title} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

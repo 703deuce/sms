@@ -32,6 +32,9 @@ import {
   outputRangeForWordIndices,
   splitMarkerAfterWordIndex,
 } from '@/lib/clips/script-editor/timeline-model'
+import { markersByAfterWordIndex } from '@/lib/clips/script-editor/marker-word-index'
+import { ScriptMarkerHeading } from '@/components/script-editor/markers/script-marker-heading'
+import { CommentMentionTextarea } from '@/components/script-editor/comments/comment-mention-textarea'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -153,7 +156,9 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [shareOpen, setShareOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showResolvedComments, setShowResolvedComments] = useState(false)
+  const [commentScope, setCommentScope] = useState<'clip' | 'full'>('clip')
   const [commentDraft, setCommentDraft] = useState('')
+  const [commentMentionIds, setCommentMentionIds] = useState<string[]>([])
   const commentsApi = useCompositionComments(data.compositionId)
   const document = previewDoc ?? serverDocument
   const readOnlyPreview = previewDoc != null
@@ -291,11 +296,21 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     const ids = new Set<string>()
     for (const t of commentsApi.threads) {
       if (t.resolvedAt) continue
-      if (t.anchorWordStart) ids.add(t.anchorWordStart)
-      if (t.anchorWordEnd) ids.add(t.anchorWordEnd)
+      const i0 = t.anchorWordStart ? orderedWords.findIndex((w) => w.id === t.anchorWordStart) : -1
+      const i1 = t.anchorWordEnd ? orderedWords.findIndex((w) => w.id === t.anchorWordEnd) : i0
+      if (i0 >= 0 && i1 >= 0) {
+        const lo = Math.min(i0, i1)
+        const hi = Math.max(i0, i1)
+        for (let i = lo; i <= hi; i++) ids.add(orderedWords[i].id)
+      } else if (t.anchorWordStart) ids.add(t.anchorWordStart)
     }
     return ids
-  }, [commentsApi.threads])
+  }, [commentsApi.threads, orderedWords])
+
+  const markersAfterIdx = useMemo(
+    () => markersByAfterWordIndex(document, chips, orderedWords, edl),
+    [document, chips, orderedWords, edl],
+  )
 
   const submitCommentFromSelection = useCallback(async () => {
     if (selAnchor == null || selEnd == null) {
@@ -318,6 +333,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       anchorWordStart: orderedWords[lo]?.id,
       anchorWordEnd: orderedWords[hi]?.id,
       quoteText: quote,
+      mentionedUserIds: commentMentionIds.length ? commentMentionIds : undefined,
     })
     setCommentDraft('')
     setCommentsOpen(true)
@@ -1492,6 +1508,17 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                               </button>
                             )}
                             </span>
+                            {markersAfterIdx.get(idx)?.map((m) => (
+                              <span key={m.id} className="block w-full">
+                                <ScriptMarkerHeading
+                                  markerId={m.id}
+                                  label={m.label ?? 'Marker'}
+                                  onRename={(label) => applyOp({ type: 'update_marker', id: m.id, patch: { label } })}
+                                  onRemove={() => applyOp({ type: 'delete_marker', id: m.id })}
+                                  onGoTo={() => seekToOutputMs(m.outMs)}
+                                />
+                              </span>
+                            ))}
                             {showSplit && (
                               <span className="mx-0.5 text-primary" title="Edit boundary">
                                 ¦
@@ -1619,15 +1646,19 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     onSeek={seekToOutputMs}
                     onReply={(threadId, body) => commentsApi.reply(threadId, body)}
                     onResolve={(threadId, resolved) => commentsApi.setResolved(threadId, resolved)}
+                    clipScope={data.clips.length > 0}
+                    commentScope={commentScope}
+                    onCommentScopeChange={setCommentScope}
                     draftComposer={
                       commentDraft || selAnchor != null
                         ? (
                             <div className="mb-2 rounded-lg border border-border bg-muted/40 p-2">
-                              <textarea
+                              <CommentMentionTextarea
                                 className="min-h-[64px] w-full resize-none bg-transparent text-[13px] outline-none"
-                                placeholder="Add a comment…"
+                                placeholder="Add a comment… @ for mentions"
                                 value={commentDraft}
-                                onChange={(e) => setCommentDraft(e.target.value)}
+                                onChange={setCommentDraft}
+                                onMentionIds={setCommentMentionIds}
                               />
                               <div className="mt-2 flex justify-end gap-2">
                                 <Button type="button" size="sm" variant="ghost" onClick={() => setCommentDraft('')}>
@@ -1874,6 +1905,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onTrimClipEdge={onTrimClipEdge}
           playheadOutMs={outputMs}
           outputDurationMs={outDur}
+          onMoveMarker={(id, outMs) => applyOp({ type: 'update_marker', id, patch: { outMs } })}
           markerToolbarExtra={
             <ScriptMarkerListPopover
               document={document}

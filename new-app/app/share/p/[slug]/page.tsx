@@ -9,14 +9,12 @@ export default async function PublishedClipPage({ params }: { params: Promise<{ 
   const pub = await getPublishBySlug(slug)
   if (!pub) notFound()
 
-  const settings = (pub.settings ?? {}) as { allowComments?: boolean }
   return (
     <ShareClipViewer
       title={pub.composition.title}
-      projectId={pub.composition.projectId}
-      compositionId={pub.composition.id}
-      mode={settings.allowComments ? 'comment' : 'view'}
-      viewCount={pub.viewCount}
+      publicPath={`/api/public/share/p/${slug}`}
+      editHref={`/app/clips/${pub.composition.projectId}/script`}
+      initialViewCount={pub.viewCount}
     />
   )
 }

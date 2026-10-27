@@ -9,7 +9,7 @@ const THUMB_TTL = 3600
 
 export async function listClipProjectsForPage(
   workspaceId: string,
-  opts: { q?: string; status?: string; limit?: number },
+  opts: { q?: string; status?: string; limit?: number; trash?: boolean; folderId?: string | null },
 ): Promise<ClipProjectListItem[]> {
   const projects = await listClipProjects(workspaceId, opts)
   if (projects.length === 0) return []

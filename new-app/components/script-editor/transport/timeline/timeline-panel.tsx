@@ -65,6 +65,7 @@ export function TimelinePanel({
   playheadOutMs,
   outputDurationMs,
   markerToolbarExtra,
+  onMoveMarker,
 }: {
   expanded: boolean
   heightPx: number
@@ -97,6 +98,7 @@ export function TimelinePanel({
   playheadOutMs?: number
   outputDurationMs?: number
   markerToolbarExtra?: ReactNode
+  onMoveMarker?: (id: string, outMs: number) => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const span = Math.max(
@@ -248,7 +250,13 @@ export function TimelinePanel({
             </div>
             <div className="relative min-w-0 flex-1" style={{ width: widthPx }}>
               <TimelineRuler durationMs={span} pxPerMs={pxPerMs} widthPx={widthPx} onSeekOutput={onSeekOutput} />
-              <TimelineMarkersLane document={document} widthPx={widthPx} pxPerMs={pxPerMs} onSeek={onSeekOutput} />
+              <TimelineMarkersLane
+                document={document}
+                widthPx={widthPx}
+                pxPerMs={pxPerMs}
+                onSeek={onSeekOutput}
+                onMoveMarker={onMoveMarker}
+              />
               {cutRegions.map((cut) => (
                 <div
                   key={`cut-${cut.loMs}-${cut.wordIds[0]}`}

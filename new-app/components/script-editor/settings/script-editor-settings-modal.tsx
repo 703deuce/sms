@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,7 +13,7 @@ import type { ScriptEditorUserPreferences } from '@/lib/server/clips/editor-pref
 
 export function ScriptEditorSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [prefs, setPrefs] = useState<ScriptEditorUserPreferences | null>(null)
-  const [page, setPage] = useState<'general' | 'account'>('general')
+  const [page, setPage] = useState<'general' | 'account' | 'workspace'>('general')
 
   useEffect(() => {
     if (!open) return
@@ -55,10 +56,20 @@ export function ScriptEditorSettingsModal({ open, onClose }: { open: boolean; on
           >
             Profile & theme
           </button>
+          <p className="mt-4 px-2 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Workspace</p>
+          <button
+            type="button"
+            className={`flex h-8 w-full items-center rounded-lg px-2 ${page === 'workspace' ? 'bg-accent font-medium' : 'hover:bg-accent/60'}`}
+            onClick={() => setPage('workspace')}
+          >
+            Members & billing
+          </button>
         </nav>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
-            <h2 className="text-lg font-semibold">{page === 'general' ? 'General' : 'Profile & theme'}</h2>
+            <h2 className="text-lg font-semibold">
+              {page === 'general' ? 'General' : page === 'account' ? 'Profile & theme' : 'Workspace'}
+            </h2>
             <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
               <X className="size-4" />
             </Button>
@@ -122,7 +133,7 @@ export function ScriptEditorSettingsModal({ open, onClose }: { open: boolean; on
               <div className="space-y-4">
                 <div>
                   <Label>Theme</Label>
-                  <Select value={prefs.theme ?? 'dark'} onValueChange={(v) => void patch({ theme: v as ScriptEditorUserPreferences['theme'] })}>
+                  <Select value={prefs.theme ?? 'dark'} onValueChange={(v) => v && void patch({ theme: v as ScriptEditorUserPreferences['theme'] })}>
                     <SelectTrigger className="mt-2 h-9 w-full max-w-xs">
                       <SelectValue />
                     </SelectTrigger>
@@ -133,10 +144,23 @@ export function ScriptEditorSettingsModal({ open, onClose }: { open: boolean; on
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Workspace members, billing, and connected accounts are managed under Settings in the app shell.
-                </p>
               </div>
+            )}
+            {page === 'workspace' && (
+              <ul className="space-y-2 text-sm">
+                <li>
+                  <Link className="text-primary hover:underline" href="/settings/team">Members</Link>
+                </li>
+                <li>
+                  <Link className="text-primary hover:underline" href="/app/clips/brand">Brand</Link>
+                </li>
+                <li>
+                  <Link className="text-primary hover:underline" href="/settings/billing">Plan & credits</Link>
+                </li>
+                <li>
+                  <Link className="text-primary hover:underline" href="/app/clips/exports">Usage & exports</Link>
+                </li>
+              </ul>
             )}
           </div>
         </div>
