@@ -24,7 +24,7 @@ COPY worker/prototype/v3 /app/v3
 RUN set -eux; \
     mkdir -p /usr/share/fonts/truetype/montserrat /app/v3/fonts; \
     curl -fsSL -o /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf \
-      'https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Black.ttf'; \
+      'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Black.ttf'; \
     cp /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf /app/v3/fonts/Montserrat-Black.ttf; \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \

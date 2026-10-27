@@ -79,41 +79,45 @@ Same user story as before: paste link, attestation, progress/errors, ~**10 h** a
 
 ## Reliability acceptance (blocks Stage 2 auto-pull)
 
-**Matrix:** **10** consecutive real Twitch/Kick **VOD** imports, each **2–6 h**, paste path, production or staging with worker deploy.
+**Gate (Rick, 2026-10-27):** **One** real Twitch **or** Kick **VOD** import (**2–6 h**, paste path, production or staging with worker deploy) completes **end-to-end** with no silent failure.
 
 | # | Requirement |
 |---|-------------|
-| R1 | **0 failures** across all 10 (no terminal `FAILED` jobs, project reaches `READY` with ≥1 clip). |
-| R2 | Mix: ≥4 Twitch, ≥4 Kick (remaining either). |
-| R3 | No sub-only / login-gated VODs. |
-| R4 | After each run: no full-VOD object in bucket; `sourceDeletedAt` set; clips playable. |
+| R1 | **0 failures** — no terminal `FAILED` jobs; project reaches `READY` with ≥1 ranked clip. |
+| R2 | Clips **render** and at least **one** clip **exports** successfully (download). |
+| R3 | Public VOD only — no sub-only / login-gated sources. |
+| R4 | After run: no full-VOD object in bucket; `sourceDeletedAt` set; analyse chunks cleaned; clips playable. |
 | R5 | `StreamUsage` += analysed hours once per VOD. |
+| R6 | Failures stay **user-visible** — plain-English `StreamVod.error` / job payload (muted VOD, VOD disabled, etc.); `[clipper:stream]` logs with `vodId` / `jobId`. |
 
-**Evidence pack (per run)** — paste into `docs/clips/streamer/RELIABILITY-RUNS.md` or ticket:
+**Evidence pack** — paste into `docs/clips/streamer/RELIABILITY-RUNS.md`:
 
 ```text
 run=01 platform=twitch duration_h=4.2
 projectId=proj_… vodId=svod_…
 jobs: STREAM_IMPORT=job_… STREAM_ANALYZE=job_… STREAM_RENDER=job_… STREAM_CLEANUP=job_…
-result=READY clips=12 sourceDeletedAt=set
+result=READY clips=12 exported=1 sourceDeletedAt=set chunks_cleaned=yes
 logs: grep '[clipper:stream]' vodId=svod_… (attach redacted excerpt)
 ```
 
-**Optional torture (not counted in 10):** kill worker once mid-import on run 3 — must resume to READY without user creating a new project.
+**Optional torture (not required for sign-off):** kill worker once mid-import — must resume to READY without a new project.
 
-**Stage 1 sign-off** = 10/10 matrix + evidence. **Then** Stage 2.
+**Stage 1 sign-off** = one clean run + evidence. **Then** Stage 2.
 
 ---
 
 ## Stage 2 — Auto-pull (after acceptance)
 
-Unchanged intent: OAuth, stream end → autopull, manual pull 14d, notify when ready. Uses **same audio-first + segment render** pipeline as Stage 1.
+**Twitch:** EventSub **`stream.offline`** / **`stream.online`**; rolling processing on the **growing archive VOD** while live (chunked analyze from stage 1).  
+**Kick:** poll for **replay** after stream ends (up to **~90 min**).  
+**Shared:** same audio-first + segment render pipeline; **error handling unchanged** — bad streams must not fail silently.  
+OAuth, manual pull 14d, notify when ready — as in build spec.
 
 ---
 
 ## Worker deploy
 
-Touches `worker/clips_worker/streamer/**` → commit **`WORKER DEPLOY`**. Run reliability matrix only after deploy.
+Touches `worker/clips_worker/streamer/**` → commit **`WORKER DEPLOY`**. Run the **one-VOD** acceptance only after deploy.
 
 ---
 
@@ -122,6 +126,7 @@ Touches `worker/clips_worker/streamer/**` → commit **`WORKER DEPLOY`**. Run re
 | Date | Decision |
 |------|----------|
 | 2026-10-27 | Gaps done; Streamer Stage 1 next |
-| 2026-10-27 | Rick addendum: **no full VOD download**; segment video only; retention 14/90d; usage hours/month; **10×2–6h 0-fail** before auto-pull |
+| 2026-10-27 | Rick addendum: **no full VOD download**; segment video only; retention 14/90d; usage hours/month |
+| 2026-10-27 | Rick: **one** clean **2–6h** VOD (rank + render + export + cleanup) replaces **10×** matrix before auto-pull |
 | 2026-10-27 | **Two-pass transcribe:** cheap full-audio + chat pass → top ~36×60–120s windows → Deepgram only those; ~45–60 min / 4h VOD; `STREAMER_TRANSCRIBE_SCOPE=full` fallback |
 | — | Confirm **10 h** vs code default **12 h** |
