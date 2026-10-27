@@ -19,6 +19,7 @@ import { T2vScenePreviewPlayer } from '@/components/t2v/t2v-scene-preview-player
 import { T2vSceneStrip } from '@/components/t2v/t2v-scene-strip'
 import { useT2vDraftPoll } from '@/lib/t2v/use-t2v-draft-poll'
 import { useT2vUndo } from '@/lib/t2v/use-t2v-undo'
+import { fetchJson } from '@/lib/client/fetch-json'
 import { patchT2vDraft } from '@/lib/t2v/t2v-api'
 import type { T2vDraftV1, T2vScene } from '@/lib/t2v/types'
 
@@ -182,9 +183,14 @@ export function T2vStudioShell({
   const runMatch = async () => {
     setMatching(true)
     try {
-      const res = await fetch(`/api/t2v/drafts/${draftId}/storyboard`, { method: 'POST' })
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'match_failed')
+      const body = await fetchJson<{
+        data?: { document?: T2vDraftV1; revision?: number; sceneErrors?: unknown[] }
+        error?: string
+      }>(`/api/t2v/drafts/${draftId}/storyboard`, {
+        method: 'POST',
+        tag: 't2v-match-stock',
+        retryGateway: false,
+      })
       if (saveTimer.current) clearTimeout(saveTimer.current)
       const next = body.data?.document as T2vDraftV1 | undefined
       if (next) {

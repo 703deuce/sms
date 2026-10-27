@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { descriptionWithChapters, youtubeChaptersText } from '@/lib/clips/script-editor/chapters-export'
 import { clipsFetch } from '@/lib/clips-api'
+import { fetchJson } from '@/lib/client/fetch-json'
 import { isCompositionSocialPublishEnabled } from '@/lib/features/composition-social-publish'
 
 type ExportTab = 'video' | 'audio' | 'transcript' | 'subtitles'
@@ -125,20 +126,16 @@ export function ScriptExportPopover({
           setExportError('Export timed out. Check Exports or retry.')
           return
         }
-        void fetch(`/api/clips/compositions/${compositionId}/export/${rid}`)
-          .then(async (r) => {
-            const data = await r.json().catch(() => ({}))
-            if (!r.ok) {
-              throw new Error((data as { error?: string }).error ?? `Export poll failed (${r.status})`)
-            }
-            return data as {
-              status?: string
-              progress?: number
-              downloadUrl?: string
-              error?: string
-              outputDurationMs?: number
-            }
-          })
+        void fetchJson<{
+          status?: string
+          progress?: number
+          downloadUrl?: string
+          error?: string
+          outputDurationMs?: number
+        }>(`/api/clips/compositions/${compositionId}/export/${rid}`, {
+          tag: 'script-export-poll',
+          retryGateway: true,
+        })
           .then((data) => {
             const serverProg = typeof data.progress === 'number' ? data.progress : null
             const elapsedSec = elapsedMs / 1000

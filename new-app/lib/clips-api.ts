@@ -1,7 +1,13 @@
+import { fetchJson } from '@/lib/client/fetch-json'
+
 export async function clipsFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) } })
-  const json = (await res.json().catch(() => ({}))) as { data?: T; error?: string }
-  if (!res.ok) throw new Error(json.error || res.statusText)
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const json = await fetchJson<{ data?: T; error?: string }>(path, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    tag: `clips-api:${method}:${path}`,
+    retryGateway: method === 'GET' || method === 'HEAD',
+  })
   if (json.error) throw new Error(json.error)
   return json.data as T
 }

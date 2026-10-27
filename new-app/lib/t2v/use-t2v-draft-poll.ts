@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { FetchJsonError, fetchJson } from '@/lib/client/fetch-json'
 
 export type T2vPollUpdate = {
   status: string
@@ -35,14 +36,17 @@ export function useT2vDraftPoll(
     const tick = async () => {
       if (cancelled) return
       try {
-        const res = await fetch(`/api/t2v/drafts/${draftId}`)
-        const body = await res.json()
-        if (!res.ok) {
-          console.error('[t2v:build-progress] poll failed', { draftId, status: res.status })
-          schedule(intervalMsRef.current)
-          return
+        const body = await fetchJson<{ data: Record<string, unknown> }>(`/api/t2v/drafts/${draftId}`, {
+          tag: 't2v-draft-poll',
+          retryGateway: true,
+        })
+        const d = body.data as {
+          status: string
+          stage: string | null
+          progress?: number
+          error: string | null
+          builtVideoUrl?: string | null
         }
-        const d = body.data
         onUpdateRef.current({
           status: d.status,
           stage: d.stage,
@@ -70,9 +74,12 @@ export function useT2vDraftPoll(
           intervalMsRef.current = 5000
         }
       } catch (e) {
-        console.error('[t2v:build-progress] poll error', {
+        const message = e instanceof FetchJsonError ? e.message : e instanceof Error ? e.message : String(e)
+        console.info('[fetch-json]', {
+          tag: 't2v-draft-poll',
+          event: 'poll_error',
           draftId,
-          message: e instanceof Error ? e.message : String(e),
+          message,
         })
       }
       schedule(intervalMsRef.current)

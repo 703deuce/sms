@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { formatEtaSeconds } from '@/lib/clips/format-eta'
 import { CircleStop, Loader2 } from 'lucide-react'
 import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import {
@@ -21,6 +20,11 @@ import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/app/page-primitives'
 import { CLIP_JOB_STATE, StatusBadge } from '@/components/app/status'
 import { clampEtaBetweenPolls, etaStageKey } from '@/lib/clips/eta-poll'
+import {
+  formatClipProgressEtaLine,
+  formatClipProgressStageLabel,
+  isClipWaitingForWorker,
+} from '@/lib/clips/progress-eta-label'
 import { formatClipProgressStage } from '@/lib/clips/progress-stage'
 import { cancelProject, getProjectStatus } from '@/lib/clips-api'
 import type { ClipProjectStatusUi } from '@/components/app/status'
@@ -69,6 +73,8 @@ export function JobStatus({
   const lastStageKeyRef = useRef(etaStageKey(initialStatus, initialStage))
   const [chunkDone, setChunkDone] = useState<number | undefined>()
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
+  const [waitingForWorker, setWaitingForWorker] = useState(false)
+  const [queueAhead, setQueueAhead] = useState<number | undefined>()
 
   useEffect(() => {
     let stop = false
@@ -94,6 +100,8 @@ export function JobStatus({
         setEtaSec(polled)
         setChunkDone(data.chunkDone)
         setChunkTotal(data.chunkTotal)
+        setWaitingForWorker(Boolean(data.waitingForWorker))
+        setQueueAhead(data.queueAhead)
         if (['READY', 'FAILED', 'CANCELED'].includes(data.status)) return
       } catch {
         /* ignore transient */
@@ -122,13 +130,29 @@ export function JobStatus({
     formatClipProgressStage(stage) ||
     (status === 'RENDERING' || status === 'REFRAMING' ? 'Reframing & captioning' : null) ||
     stage
-  const stageLabel =
-    status === 'READY'
-      ? 'Ready'
-      : etaSec <= 0 && progress >= 85
-        ? 'Finishing up…'
-        : stageDetail
-  const statusBadgeLabel = processing && stageDetail ? stageDetail : ui.label
+  const stageLabel = formatClipProgressStageLabel({
+    etaSec,
+    progress,
+    status,
+    stage,
+    stageDetail,
+    waitingForWorker,
+    queueAhead,
+  })
+  const etaLine = formatClipProgressEtaLine({
+    etaSec,
+    progress,
+    status,
+    stage,
+    waitingForWorker,
+    queueAhead,
+  })
+  const statusBadgeLabel =
+    processing && isClipWaitingForWorker(status, stage, progress, waitingForWorker)
+      ? 'Waiting for worker'
+      : processing && stageDetail
+        ? stageDetail
+        : ui.label
 
   return (
     <Panel title="Processing your video" description={stageLabel || 'Working on your video…'}>
@@ -146,11 +170,9 @@ export function JobStatus({
                   Chunk {chunkDone ?? 0}/{chunkTotal}
                 </span>
               )}
-              {processing && (
-                <span className="text-sm text-muted-foreground tabular-nums">
-                  {etaSec > 0 ? `ETA ${formatEtaSeconds(etaSec)}` : progress >= 85 ? 'Finishing up…' : 'Almost done…'}
-                </span>
-              )}
+              {processing && etaLine ? (
+                <span className="text-sm text-muted-foreground tabular-nums">{etaLine}</span>
+              ) : null}
             </div>
             <ProcessingStepRail
               steps={fromLink ? STEPS_IMPORT : STEPS_UPLOAD}

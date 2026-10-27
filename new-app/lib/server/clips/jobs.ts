@@ -39,7 +39,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
       (typeof sp.chunkDone === 'number' && sp.chunkDone > 0) ||
       project.progress > 0 ||
       Boolean(project.stage && !['queued', 'Queued'].includes(project.stage))
-    if (isStreamer && project.status === 'QUEUED' && !hasWorkerProgress) {
+    if (project.status === 'QUEUED' && !hasWorkerProgress) {
       waitingForWorker = true
       etaSec = 0
       const job = await prisma.clipJob.findFirst({
