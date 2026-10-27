@@ -42,9 +42,10 @@ test.describe('Rooms prod smoke', () => {
     await host.getByRole('button', { name: 'Yes' }).click()
     await host.getByRole('button', { name: 'Join' }).click()
     await host.waitForURL(/\/studio/, { timeout: 120_000 })
-    const inviteRes = await host.request.post(`/api/recording/sessions/${sessionId}/invites`, {
-      data: { role: 'guest' },
-    })
+    const inviteRes = await host.request.post(
+      `${BASE}/api/recording/sessions/${sessionId}/invites`,
+      { data: { role: 'guest' } },
+    )
     expect(inviteRes.ok()).toBeTruthy()
     const inviteJson = await inviteRes.json()
     const inviteToken = inviteJson.data?.inviteToken as string
@@ -52,9 +53,13 @@ test.describe('Rooms prod smoke', () => {
     const inviteLink = `${BASE}/app/rooms/join?token=${encodeURIComponent(inviteToken)}&role=guest`
 
     await guest.goto(inviteLink, { waitUntil: 'networkidle' })
-    await guest.getByPlaceholder('Display name').fill('E2E Guest')
+    await guest.locator('#rooms-guest-name, input').last().fill('E2E Guest')
     await guest.getByRole('button', { name: 'Continue' }).click()
     await guest.waitForURL(new RegExp(`/app/rooms/${sessionId}`), { timeout: 120_000 })
+    const guestName = guest.getByPlaceholder('Display name')
+    if (await guestName.isVisible().catch(() => false)) {
+      await guestName.fill('E2E Guest')
+    }
     await guest.getByRole('button', { name: 'Yes' }).click()
     await guest.getByRole('button', { name: 'Join' }).click()
     await guest.waitForURL(/\/studio/, { timeout: 120_000 })

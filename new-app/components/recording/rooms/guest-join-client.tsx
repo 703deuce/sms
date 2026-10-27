@@ -64,8 +64,14 @@ export function GuestJoinClient() {
             <Input className="h-9" value={inviteToken} onChange={(e) => setInviteToken(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <label className="text-[13px] font-semibold">Your name</label>
-            <Input className="h-9" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+            <label className="text-[13px] font-semibold" htmlFor="rooms-guest-name">Your name</label>
+            <Input
+              id="rooms-guest-name"
+              className="h-9"
+              placeholder="Display name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
           </div>
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <PrimaryButton
