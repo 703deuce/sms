@@ -120,7 +120,7 @@ configure_voice_application() {
     UPDATE applications SET
       name = 'transovo-voice',
       build_pack = 'dockerfile',
-      base_directory = '/',
+      base_directory = '',
       dockerfile_location = '/voice-runtime-python/Dockerfile',
       dockerfile = NULL,
       start_command = NULL,
