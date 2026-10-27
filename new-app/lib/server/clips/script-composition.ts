@@ -7,6 +7,7 @@ import {
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
+import { maybeCreateAutoVersion } from '@/lib/server/clips/composition-versions'
 
 const SNAPSHOT_EVERY = 200
 
@@ -151,6 +152,7 @@ export async function applyCompositionOpBatch(
         })
       }
     })
+    await maybeCreateAutoVersion(compositionId, revision, document)
     acked.push(item.id)
   }
 
