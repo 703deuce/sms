@@ -164,6 +164,7 @@ def build_crop_track(
         "x0_A": x0_a,
         "x0_B": x0_a,
         "shots": shots,
+        "cropMethod": "subject_follow" if not wide else "fit_blur",
     }
 
 
