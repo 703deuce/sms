@@ -26,14 +26,15 @@ def test_load_audio_assets_studio_when_ready(tmp_path):
         }
     }
 
-    fake_storage = MagicMock()
-    fake_storage.download_object.side_effect = lambda _key, dest: Path(dest).write_bytes(b"mp3")
-    with patch.dict(sys.modules, {"clips_worker.storage": fake_storage}):
+    with patch(
+        "clips_worker.audio_assets.download_object",
+        side_effect=lambda _key, dest: Path(dest).write_bytes(b"mp3"),
+    ) as dl:
         assets = load_audio_assets(conn, edits, tmp_path)
 
     assert assets["studio_path"] is not None
     assert assets["studio_mix"] == 0.75
-    fake_storage.download_object.assert_called_once()
+    dl.assert_called_once()
 
 
 def test_studio_sound_job_short_circuits_when_ready():

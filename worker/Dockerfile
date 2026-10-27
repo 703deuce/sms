@@ -25,6 +25,7 @@ RUN chmod +x /tmp/download-models.sh && bash /tmp/download-models.sh /app/v3
 COPY worker/prototype/v3/transcribe.py /app/transcribe.py
 COPY worker/clips_worker /app/clips_worker
 COPY worker/modal_app /app/modal_app
+COPY worker/scripts /app/scripts
 COPY worker/tests /app/tests
 
 ENV PYTHONPATH=/app
