@@ -1,6 +1,6 @@
 # Transovo Python LiveKit voice worker — independent from transovo-web.
-# Coolify: Base Directory = voice-runtime-python, Dockerfile = Dockerfile.
-# Local from repo root: docker build -f voice-runtime-python/Dockerfile voice-runtime-python
+# Coolify: repo root context, dockerfile_location /voice-runtime-python/Dockerfile.
+# Local: docker build -f voice-runtime-python/Dockerfile .
 
 FROM python:3.12-slim-bookworm
 
@@ -10,9 +10,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends gcc ffmpeg curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
-COPY scripts/start-transovo-voice-worker.sh ./scripts/start-transovo-voice-worker.sh
-COPY transovo_voice ./transovo_voice
+COPY voice-runtime-python/pyproject.toml voice-runtime-python/README.md ./
+COPY voice-runtime-python/scripts/start-transovo-voice-worker.sh ./scripts/start-transovo-voice-worker.sh
+COPY voice-runtime-python/transovo_voice ./transovo_voice
 
 RUN chmod +x ./scripts/start-transovo-voice-worker.sh
 
