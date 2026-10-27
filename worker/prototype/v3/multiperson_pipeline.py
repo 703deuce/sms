@@ -104,7 +104,7 @@ def detect_loop(
                     split.append(Tracklet(tid=next_id, dets=dets))
                     next_id += 1
         tracklets = split
-    return times, frame_by_index, tracklets, gray_samples
+    return times, frame_by_index, tracklets, gray_samples, cut_sample_idx
 
 
 def build_diar_matrix(words: list[dict], person_frames: list[list[float]], times: np.ndarray) -> np.ndarray:
@@ -145,7 +145,7 @@ def run(inp: str, out: str) -> None:
             min_face_presence_confidence=0.2,
         )
     )
-    times_l, frame_by_index, tracklets, _ = detect_loop(cap, det, fps, W, H, inp)
+    times_l, frame_by_index, tracklets, _, cut_sample_idx = detect_loop(cap, det, fps, W, H, inp)
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     if not times_l:
         raise RuntimeError("no frames sampled")
@@ -166,8 +166,8 @@ def run(inp: str, out: str) -> None:
         raise SinglePersonFallback("single person — legacy crop")
 
     mouth = np.zeros((n_persons, n))
-    xpos = np.zeros((n_persons, n))
-    ypos = np.zeros((n_persons, n))
+    xpos = np.full((n_persons, n), np.nan)
+    ypos = np.full((n_persons, n), np.nan)
     for pi, group in enumerate(person_groups):
         for si, t in enumerate(times):
             frame_idx = si
@@ -232,7 +232,15 @@ def run(inp: str, out: str) -> None:
             }
         ]
     else:
-        segments = run_director(times, speak, speak_vis, SAMPLE_FPS, style, words)
+        segments = run_director(
+            times,
+            speak,
+            speak_vis,
+            SAMPLE_FPS,
+            style,
+            words,
+            cut_sample_idx=cut_sample_idx,
+        )
 
     cw = int(round(H * 9 / 16)) // 2 * 2
     dt = 1.0 / SAMPLE_FPS
@@ -255,7 +263,7 @@ def run(inp: str, out: str) -> None:
                 if style_config(style).locked_off:
                     cx = float(np.nanmedian(xpos[pi]))
                 else:
-                    cx = follow(tgt, dt, st, cw)
+                    cx = follow(tgt, dt, st, cw, frame_w=float(W))
                 cy = float(ypos[pi, si]) if not np.isnan(ypos[pi, si]) else H / 2
                 track_pts.append([round(t, 3), round(cx, 2), round(cy, 2)])
             slots_out.append(
