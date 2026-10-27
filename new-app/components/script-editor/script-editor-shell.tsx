@@ -60,6 +60,8 @@ import { EditorRecorderBar } from '@/components/recording/editor/editor-recorder
 import { useEditorRecorder } from '@/components/recording/editor/use-editor-recorder'
 import { TeleprompterPanel } from '@/components/recording/editor/teleprompter-panel'
 import { RoomsUploadCard } from '@/components/recording/rooms/upload-card'
+import { ScriptExportPopover } from '@/components/script-editor/script-export-popover'
+import { ScriptVersionHistoryPanel } from '@/components/script-editor/script-version-history-panel'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -90,12 +92,28 @@ function previewAspectClass(aspect: ScriptAspect): string {
 
 export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const initialDoc = data.document ?? defaultDocument(data.editorWords)
-  const { document, saveState, deleteWords, restoreWords, applyOp, undo, redo, canUndo, canRedo } =
-    useScriptComposition({
-      compositionId: data.compositionId,
-      revision: data.compositionRevision,
-      document: initialDoc,
-    })
+  const {
+    document: serverDocument,
+    saveState,
+    deleteWords,
+    restoreWords,
+    applyOp,
+    undo,
+    redo,
+    replaceFromServer,
+    canUndo,
+    canRedo,
+  } = useScriptComposition({
+    compositionId: data.compositionId,
+    revision: data.compositionRevision,
+    document: initialDoc,
+  })
+  const [previewDoc, setPreviewDoc] = useState<ScriptDocumentV1 | null>(null)
+  const [previewVersionId, setPreviewVersionId] = useState<string | null>(null)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [versionOpen, setVersionOpen] = useState(false)
+  const document = previewDoc ?? serverDocument
+  const readOnlyPreview = previewDoc != null
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
@@ -915,6 +933,17 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         <span className="text-xs text-muted-foreground">
           {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Saved'}
         </span>
+        <Button type="button" size="sm" variant="outline" onClick={() => setVersionOpen((o) => !o)}>
+          Versions
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:opacity-90"
+          onClick={() => setExportOpen(true)}
+        >
+          Export
+        </Button>
       </header>
 
       {fillerReviewOpen && (
@@ -1203,7 +1232,38 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
               }
             }}
           />
+
+          {versionOpen && (
+            <ScriptVersionHistoryPanel
+              open={versionOpen}
+              onClose={() => setVersionOpen(false)}
+              compositionId={data.compositionId}
+              previewVersionId={previewVersionId}
+              onPreview={(id, doc) => {
+                setPreviewVersionId(id)
+                setPreviewDoc(doc)
+              }}
+              onRestoreDocument={(doc, rev) => {
+                replaceFromServer(doc, rev)
+                setPreviewDoc(null)
+                setPreviewVersionId(null)
+              }}
+              onExitPreview={() => {
+                setPreviewDoc(null)
+                setPreviewVersionId(null)
+              }}
+            />
+          )}
         </div>
+
+        <ScriptExportPopover
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+          compositionId={data.compositionId}
+          title={data.title}
+          durationMs={outDur}
+          aspect={settings.aspect ?? '9:16'}
+        />
 
         <EditorRecorderBar
           armed={editorRec.armed}

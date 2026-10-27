@@ -188,6 +188,20 @@ export function useScriptComposition(initial: {
     })
   }, [bumpStacks, enqueueServerOps, setDocument])
 
+  const replaceFromServer = useCallback(
+    (next: ScriptDocumentV1, nextRevision: number) => {
+      localEpochRef.current += 1
+      revisionRef.current = nextRevision
+      setRevision(nextRevision)
+      setDocument(next)
+      undoStackRef.current = []
+      redoStackRef.current = []
+      bumpStacks()
+      setSaveState('saved')
+    },
+    [bumpStacks, setDocument],
+  )
+
   return {
     document,
     revision,
@@ -197,6 +211,7 @@ export function useScriptComposition(initial: {
     applyOp,
     undo,
     redo,
+    replaceFromServer,
     canUndo: undoDepth > 0,
     canRedo: redoDepth > 0,
   }
