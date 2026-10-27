@@ -234,7 +234,7 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
                 edits["audio"] = {
                     "music": {
                         "generationId": mt["assetId"],
-                        "volume": 0.25,
+                        "volume": float(mt.get("volume", 0.25)),
                         "duckDepth": 0.7 if mt.get("duckUnderSpeech") else 0.3,
                         "fadeInMs": 500,
                         "fadeOutMs": 1000,

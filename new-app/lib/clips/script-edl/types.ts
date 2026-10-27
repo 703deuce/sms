@@ -78,7 +78,15 @@ export type ScriptDocumentV1 = {
     outStartMs?: number
   }[]
   /** M10+ — music clips on output timeline. */
-  musicTracks?: { id: string; assetId: string; outStartMs: number; durMs: number; label?: string; duckUnderSpeech?: boolean }[]
+  musicTracks?: {
+    id: string
+    assetId: string
+    outStartMs: number
+    durMs: number
+    label?: string
+    duckUnderSpeech?: boolean
+    volume?: number
+  }[]
   /** Clipper-compatible B-roll (worker `load_broll_specs`). */
   broll?: BrollItem[]
   /** Clipper-compatible audio (worker `load_audio_assets`). */

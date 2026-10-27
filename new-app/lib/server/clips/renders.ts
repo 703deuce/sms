@@ -1,7 +1,12 @@
 import { editsVersionHash, type ClipEditsV2 } from '@/lib/clips/edits'
 import { type ExportAspect, type ExportResolution, renderVersionHash } from '@/lib/clips/export-aspect'
 import { exportFilename } from '@/lib/server/clips/clips'
-import { mapRenderRows, parseExportStatusFilter, renderStatusWhere } from '@/lib/server/clips/export-rows'
+import {
+  type ClipExportRowDto,
+  mapRenderRows,
+  parseExportStatusFilter,
+  renderStatusWhere,
+} from '@/lib/server/clips/export-rows'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
@@ -26,6 +31,72 @@ export async function listClipRenders(workspaceId: string, statusFilter?: 'all' 
     },
   })
   return mapRenderRows(rows)
+}
+
+async function listCompositionExportRows(
+  workspaceId: string,
+  filter: 'all' | 'ready' | 'failed',
+): Promise<ClipExportRowDto[]> {
+  const prisma = getPrisma()
+  const status =
+    filter === 'ready' ? 'READY' : filter === 'failed' ? 'FAILED' : undefined
+  const rows = await prisma.scriptCompositionRender.findMany({
+    where: { workspaceId, ...(status ? { status } : {}) },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    include: {
+      composition: {
+        select: { id: true, title: true, projectId: true, kind: true },
+      },
+    },
+  })
+  const storage = getClipStorage()
+  const out: ClipExportRowDto[] = []
+  for (const r of rows) {
+    const comp = r.composition
+    if (!comp) continue
+    const fname = exportFilename(comp.title || 'Composition export')
+    let downloadUrl: string | null = null
+    if (r.status === 'READY' && r.outputKey) {
+      try {
+        downloadUrl = await createCachedSignedDownloadUrl(storage, r.outputKey, { downloadFilename: fname })
+      } catch {
+        downloadUrl = null
+      }
+    }
+    out.push({
+      id: r.id,
+      clipId: comp.id,
+      projectId: comp.projectId,
+      title: comp.title || 'Script export',
+      resolution: r.resolution,
+      aspectRatio: r.aspectRatio,
+      batchId: null,
+      watermark: false,
+      status: r.status,
+      error: r.error,
+      createdAt: r.createdAt.toISOString(),
+      expiresAt: null,
+      sizeBytes: null,
+      filename: fname,
+      posterUrl: null,
+      editorUrl: `/app/clips/${comp.projectId}/script`,
+      downloadUrl,
+    })
+  }
+  return out
+}
+
+/** Clip renders plus script composition exports (T2V / Descript editor). */
+export async function listWorkspaceExports(workspaceId: string, statusFilter?: 'all' | 'ready' | 'failed') {
+  const filter = parseExportStatusFilter(statusFilter)
+  const [clips, compositions] = await Promise.all([
+    listClipRenders(workspaceId, filter),
+    listCompositionExportRows(workspaceId, filter),
+  ])
+  return [...clips, ...compositions]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 100)
 }
 
 export async function getRenderForWorkspace(workspaceId: string, renderId: string) {
