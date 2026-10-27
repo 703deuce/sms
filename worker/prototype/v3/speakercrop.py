@@ -11,18 +11,16 @@ INP, OUT = sys.argv[1], sys.argv[2]
 E = lambda k, d: float(os.environ.get(k, d))
 if os.environ.get("REFRAME_V", "").strip() == "2":
     try:
-        from multiperson_pipeline import SinglePersonFallback, run as multiperson_run
+        from speakercrop_v2 import cli
 
-        multiperson_run(INP, OUT)
+        cli(INP, OUT)
         sys.exit(0)
     except ImportError as exc:
-        print(f"WARN multiperson unavailable (ImportError): {exc}", file=sys.stderr)
-    except SinglePersonFallback:
-        pass
+        print(f"WARN reframe v2 unavailable: {exc}", file=sys.stderr)
     except Exception as exc:
-        if int(os.environ.get("MULTIPERSON_STRICT", "0")):
+        if os.environ.get("MULTIPERSON_STRICT", "").strip() == "1":
             raise
-        print(f"WARN multiperson fallback: {exc}", file=sys.stderr)
+        print(f"WARN reframe v2 failed, falling back to v1: {exc}", file=sys.stderr)
 OUT_W, OUT_H = int(E('OUT_W', 720)), int(E('OUT_H', 1280))
 SAMPLE_FPS = 5.0
 MIN_SEG = E('MIN_SEG', 0.8)   # drop shots shorter than this (s)
