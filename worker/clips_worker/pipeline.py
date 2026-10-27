@@ -458,9 +458,31 @@ def run_m4_pipeline(
                 head_future = None
                 headstart_pick: dict | None = None
 
+                from clips_worker.clip_segments import spans_same_segment
+
+                def _headstart_row_for_pick(pick: dict) -> dict | None:
+                    sk = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
+                    by_span = head_render_state.get("by_span") or {}
+                    row = by_span.get(sk)
+                    if row is not None:
+                        return row
+                    s0, e0 = int(pick["start_ms"]), int(pick["end_ms"])
+                    for cached in by_span.values():
+                        rs, re = int(cached["startMs"]), int(cached["endMs"])
+                        if spans_same_segment(rs, re, s0, e0):
+                            return cached
+                    if headstart_pick is not None:
+                        hs = int(headstart_pick["start_ms"])
+                        he = int(headstart_pick["end_ms"])
+                        if spans_same_segment(hs, he, s0, e0):
+                            return by_span.get(_span_key(hs, he))
+                    return None
+
                 def _overlap_existing_locked(start_ms: int, end_ms: int) -> bool:
                     """Caller must hold span_lock (non-reentrant threading.Lock)."""
                     for a0, a1 in rendered_spans:
+                        if spans_same_segment(a0, a1, start_ms, end_ms):
+                            continue
                         overlap = max(0, min(a1, end_ms) - max(a0, start_ms))
                         span = max(1, min(a1 - a0, end_ms - start_ms))
                         if overlap / span >= 0.35:
@@ -695,20 +717,27 @@ def run_m4_pipeline(
                             ),
                         )
 
-                    def on_talking_reframe_complete(idx: int, row: dict) -> None:
+                    def on_talking_reframe_complete(idx: int, row: dict | None) -> None:
+                        if row is None:
+                            return
                         _persist_clip_row(row, idx, total_talking)
 
-                    def build_talking_clip_row(idx: int) -> dict:
+                    def build_talking_clip_row(idx: int) -> dict | None:
                         pick = picks[idx]
-                        sk = _span_key(pick["start_ms"], pick["end_ms"])
-                        cached = head_render_state["by_span"].get(sk)
+                        cached = _headstart_row_for_pick(pick)
                         if cached is not None:
                             return cached
                         if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                            for other in head_render_state["by_span"].values():
-                                if _span_key(other["startMs"], other["endMs"]) == sk:
-                                    return other
-                            raise RuntimeError(f"clip span overlap blocked render idx={idx}")
+                            cached = _headstart_row_for_pick(pick)
+                            if cached is not None:
+                                return cached
+                            print(
+                                f"[clipper:overlap] project={project_id} skip_render idx={idx} "
+                                f"startMs={pick.get('start_ms')} endMs={pick.get('end_ms')} "
+                                f"reason=span_overlap",
+                                flush=True,
+                            )
+                            return None
                         return build_clip_row_from_pick(pick, idx)
 
                     index_order = sorted(

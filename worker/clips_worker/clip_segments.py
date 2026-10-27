@@ -8,6 +8,19 @@ def clip_segment_key(start_ms: int, end_ms: int) -> str:
     return f"{int(start_ms)}:{int(end_ms)}"
 
 
+def span_overlap_ratio(a0: int, a1: int, b0: int, b1: int) -> float:
+    overlap = max(0, min(a1, b1) - max(a0, b0))
+    span = max(1, min(a1 - a0, b1 - b0))
+    return overlap / span
+
+
+def spans_same_segment(a0: int, a1: int, b0: int, b1: int, *, near_match_ratio: float = 0.85) -> bool:
+    """Same persisted segment identity, or near-identical span after snap drift."""
+    if clip_segment_key(a0, a1) == clip_segment_key(b0, b1):
+        return True
+    return span_overlap_ratio(a0, a1, b0, b1) >= near_match_ratio
+
+
 def span_tuple(start_ms: int, end_ms: int) -> tuple[int, int]:
     return (int(start_ms), int(end_ms))
 
