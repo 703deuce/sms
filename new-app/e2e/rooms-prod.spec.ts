@@ -53,7 +53,9 @@ test.describe('Rooms prod smoke', () => {
     const inviteLink = `${BASE}/app/rooms/join?token=${encodeURIComponent(inviteToken)}&role=guest`
 
     await guest.goto(inviteLink, { waitUntil: 'networkidle' })
-    await guest.locator('#rooms-guest-name, input').last().fill('E2E Guest')
+    const guestNameInput = guest.locator('#rooms-guest-name')
+    if (await guestNameInput.count()) await guestNameInput.fill('E2E Guest')
+    else await guest.locator('input').nth(1).fill('E2E Guest')
     await guest.getByRole('button', { name: 'Continue' }).click()
     await guest.waitForURL(new RegExp(`/app/rooms/${sessionId}`), { timeout: 120_000 })
     const guestName = guest.getByPlaceholder('Display name')
@@ -71,16 +73,23 @@ test.describe('Rooms prod smoke', () => {
     await host.getByRole('button', { name: 'Stop' }).click()
     const recMs = Date.now() - recStart
 
-    await expect(host.getByText(/upload|uploaded|100%|No tracks/i).first()).toBeVisible({
+    await expect(host.getByText(/upload|uploaded|Keep this browser|No tracks/i).first()).toBeVisible({
       timeout: 180_000,
     })
 
-    const pctTexts = await host.locator('text=/\\d+%/').allTextContents()
-    const has100 = pctTexts.some((t) => t.includes('100'))
     const noTracks = await host.getByText(/No tracks recorded/i).isVisible().catch(() => false)
-
+    let has100 = false
     if (!noTracks) {
-      expect(has100).toBe(true)
+      await expect
+        .poll(
+          async () => {
+            const pcts = await host.locator('text=/\\d+%/').allTextContents()
+            return pcts.some((t) => t.includes('100'))
+          },
+          { timeout: 300_000, intervals: [2000, 5000, 10000] },
+        )
+        .toBe(true)
+      has100 = true
       const gotIt = host.getByRole('button', { name: /Got it/i })
       if (await gotIt.isVisible().catch(() => false)) {
         await gotIt.click()
