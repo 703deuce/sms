@@ -7,7 +7,7 @@
 **Two-strike rule** for production fixes.
 
 Reference: `new-app/docs/clips/STREAMER_BUILD_SPEC.md` (S0–S15). This doc is Rick’s **reliability + storage** contract.  
-**Transcription cost (two-pass, selective Deepgram):** `STREAMER-COST-DESIGN.md`.
+**Transcription cost (full-VOD Groq + Luna rerank; Deepgram captions on finals):** `STREAMER-COST-DESIGN.md`.
 
 ---
 

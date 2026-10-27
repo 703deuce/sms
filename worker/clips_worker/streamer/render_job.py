@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -11,7 +13,10 @@ from psycopg2.extras import RealDictCursor
 
 from clips_worker.heartbeat import Heartbeat
 from clips_worker.pipeline import clip_keys, initial_clip_edits, mark_project_ready
+from clips_worker.deepgram_transcribe import DeepgramTranscribeError, deepgram_api_key
+from clips_worker.gpu.base import TranscribeReq
 from clips_worker.render_clip import ffmpeg_cut, poster_jpg, run_speakercrop, slice_words
+from clips_worker.streamer.transcribe_stream import deepgram_caption_model, transcribe_clip_caption
 from clips_worker.streamer.layout.detect_facecam import detect_facecam_layout
 from clips_worker.streamer.layout.render_stack import render_stack_mp4
 from clips_worker.storage import download_object, put_json, upload_file
@@ -198,12 +203,56 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 rel_end = max(rel_start + 100, end_ms - offset_ms)
 
                 words_path = td_path / f"words_{clip_id}.json"
-                transcript_path = td_path / "transcript.json"
-                if not transcript_key:
-                    raise RuntimeError("missing transcriptKey")
-                download_object(transcript_key, transcript_path)
-                all_words = json.loads(transcript_path.read_text())
-                clip_words = slice_words(all_words, start_ms, end_ms)
+                clip_words: list[dict]
+                caption_audio = td_path / f"caption_{clip_id}.opus"
+                subprocess.check_call(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-ss",
+                        f"{seg_start_s:.3f}",
+                        "-t",
+                        f"{seg_end_s - seg_start_s:.3f}",
+                        "-i",
+                        str(audio_path),
+                        "-c:a",
+                        "libopus",
+                        str(caption_audio),
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if deepgram_api_key():
+                    try:
+                        cap = transcribe_clip_caption(
+                            TranscribeReq(
+                                audio_path=str(caption_audio),
+                                offset_ms=int(seg_start_s * 1000),
+                                language=(settings.get("streamer") or {}).get("language"),
+                            )
+                        )
+                        clip_words = slice_words(cap.words, start_ms, end_ms)
+                        cap_min = max(0.0, (end_ms - start_ms) / 60000.0)
+                        print(
+                            f"[clipper:stream] caption_clip clipId={clip_id} vodId={vod_id} "
+                            f"model={deepgram_caption_model()} clipMinutes={cap_min:.2f}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                    except DeepgramTranscribeError:
+                        transcript_path = td_path / "transcript.json"
+                        if not transcript_key:
+                            raise RuntimeError("missing transcriptKey")
+                        download_object(transcript_key, transcript_path)
+                        all_words = json.loads(transcript_path.read_text())
+                        clip_words = slice_words(all_words, start_ms, end_ms)
+                else:
+                    transcript_path = td_path / "transcript.json"
+                    if not transcript_key:
+                        raise RuntimeError("missing transcriptKey")
+                    download_object(transcript_key, transcript_path)
+                    all_words = json.loads(transcript_path.read_text())
+                    clip_words = slice_words(all_words, start_ms, end_ms)
                 words_path.write_text(json.dumps(clip_words))
 
                 clip_file = td_path / f"clip_{clip_id}.mp4"

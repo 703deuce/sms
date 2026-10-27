@@ -89,11 +89,11 @@ def _extract_words_from_payload(payload: dict[str, Any]) -> list[dict]:
     raise DeepgramTranscribeError("malformed_transcript_no_words")
 
 
-def _listen_params() -> str:
+def _listen_params(model: str | None = None) -> str:
     from urllib.parse import urlencode
 
     params = {
-        "model": deepgram_model(),
+        "model": (model or deepgram_model()).strip() or DEFAULT_MODEL,
         "smart_format": "true",
         "punctuate": "true",
         "language": "en",
@@ -109,12 +109,13 @@ def _http_listen(
     audio_bytes: bytes | None = None,
     audio_url: str | None = None,
     content_type: str = "audio/opus",
+    model: str | None = None,
 ) -> dict[str, Any]:
     api_key = deepgram_api_key()
     if not api_key:
         raise DeepgramTranscribeError("no_api_key")
 
-    url = f"{DEEPGRAM_LISTEN_URL}?{_listen_params()}"
+    url = f"{DEEPGRAM_LISTEN_URL}?{_listen_params(model=model)}"
     if audio_url:
         body = json.dumps({"url": audio_url}).encode("utf-8")
         headers = {
@@ -162,15 +163,15 @@ def _http_listen(
     raise DeepgramTranscribeError("retry_exhausted") from last_exc
 
 
-def transcribe_deepgram(req: TranscribeReq) -> TranscribeRes:
+def transcribe_deepgram(req: TranscribeReq, *, model: str | None = None) -> TranscribeRes:
     payload: dict[str, Any]
     if req.audio_url:
-        payload = _http_listen(audio_url=req.audio_url)
+        payload = _http_listen(audio_url=req.audio_url, model=model)
     elif req.audio_path:
         path = Path(req.audio_path)
         suffix = path.suffix.lower()
         mime = "audio/wav" if suffix == ".wav" else "audio/opus"
-        payload = _http_listen(audio_bytes=path.read_bytes(), content_type=mime)
+        payload = _http_listen(audio_bytes=path.read_bytes(), content_type=mime, model=model)
     else:
         raise DeepgramTranscribeError("no_audio_source")
 

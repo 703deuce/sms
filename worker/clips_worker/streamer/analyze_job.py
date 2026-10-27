@@ -23,6 +23,10 @@ from clips_worker.streamer.chat.resolve import resolve_chat_after_transcribe
 from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.metadata import enrich_streamer_meta
 from clips_worker.streamer.rank import rank_moments
+from clips_worker.streamer.transcribe_stream import (
+    log_stream_transcribe_summary,
+    resolve_stream_transcribe_provider,
+)
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
 
 
@@ -101,6 +105,8 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         download_object(audio_key, audio_path)
 
         chunk_started = time.time()
+        vod_transcribe_provider = resolve_stream_transcribe_provider()
+        transcribe_fallback: str | None = None
         chat_executor = ThreadPoolExecutor(max_workers=1)
         chat_future = chat_executor.submit(get_chat, vod, None)
         all_word_chunks: list[list[dict] | None] = [None] * len(ranges)
@@ -152,10 +158,23 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 payload_prog["transcriptionEngine"] = res.transcription_engine
             if getattr(res, "fallback_reason", None):
                 payload_prog["transcriptionFallbackReason"] = res.fallback_reason
+                if vod_transcribe_provider == "groq" and res.transcription_engine == "deepgram":
+                    transcribe_fallback = "groq_deepgram"
             hb.update(stage=payload_prog["stage"], progress=payload_prog["progress"])
             post_progress(job["id"], payload_prog)
 
         words = merge_words([c for c in all_word_chunks if c], ranges)
+        audio_minutes = analysed_s / 60.0
+        summary_provider = vod_transcribe_provider
+        if transcribe_fallback:
+            summary_provider = "deepgram"
+        log_stream_transcribe_summary(
+            vod_id=vod_id,
+            project_id=project_id,
+            provider=summary_provider,
+            audio_minutes=audio_minutes,
+            fallback=transcribe_fallback,
+        )
         transcript_key = vod["transcriptKey"]
         put_json(transcript_key, words)
         with conn.cursor() as cur:

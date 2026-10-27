@@ -4,6 +4,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from clips_worker.streamer.transcribe_stream import STREAM_CHUNK_MAX_BYTES
+
 
 def plan_chunks(
     duration_ms: int,
@@ -42,22 +44,30 @@ def merge_words(chunks: list[list[dict]], ranges: list[tuple[int, int]]) -> list
 
 
 def ffmpeg_slice_opus(src: Path, dest: Path, start_ms: int, end_ms: int) -> None:
-    start_s = max(0, start_ms) / 1000.0
-    dur_s = max(0.01, (end_ms - start_ms) / 1000.0)
-    subprocess.check_call(
-        [
-            "ffmpeg",
-            "-y",
-            "-ss",
-            f"{start_s:.3f}",
-            "-t",
-            f"{dur_s:.3f}",
-            "-i",
-            str(src),
-            "-c",
-            "copy",
-            str(dest),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    """Slice opus segment; shrink window until file is under STREAM_CHUNK_MAX_BYTES."""
+    lo = start_ms
+    hi = end_ms
+    min_ms = 60_000
+    while True:
+        start_s = max(0, lo) / 1000.0
+        dur_s = max(0.01, (hi - lo) / 1000.0)
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss",
+                f"{start_s:.3f}",
+                "-t",
+                f"{dur_s:.3f}",
+                "-i",
+                str(src),
+                "-c",
+                "copy",
+                str(dest),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if dest.stat().st_size <= STREAM_CHUNK_MAX_BYTES or (hi - lo) <= min_ms:
+            return
+        hi = lo + (hi - lo) // 2
