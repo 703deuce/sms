@@ -1,6 +1,13 @@
 """Headstart render failure must not block the main render pass for the same span."""
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
+
+from clips_worker.headstart_render import await_headstart_render
+
+
 def test_mark_span_discard_pattern():
     rendered = {(0, 20_000)}
     sk = (0, 20_000)
@@ -53,3 +60,28 @@ def test_headstart_failure_releases_span_for_main_pass(words_60s=None):
     _render_pick_async(picks[0])
     assert (0, 20_000) not in rendered_spans
     assert _mark_span(0, 20_000) is True
+
+
+def test_headstart_timeout_releases_span_for_main_pass():
+    rendered_spans: set[tuple[int, int]] = {(0, 20_000)}
+    head_render_state: dict = {"by_span": {}}
+    span_lock = threading.Lock()
+    pick = {"start_ms": 0, "end_ms": 20_000}
+
+    def slow():
+        time.sleep(10)
+
+    ex = ThreadPoolExecutor(max_workers=1)
+    fut: Future = ex.submit(slow)
+    await_headstart_render(
+        ex,
+        fut,
+        head_render_state=head_render_state,
+        rendered_spans=rendered_spans,
+        span_lock=span_lock,
+        span_key=lambda a, b: (int(a), int(b)),
+        headstart_pick=pick,
+        project_id="proj_test",
+        timeout_sec=0.05,
+    )
+    assert (0, 20_000) not in rendered_spans

@@ -440,6 +440,8 @@ def run_m4_pipeline(
                 span_lock = threading.Lock()
                 head_executor = ThreadPoolExecutor(max_workers=1)
                 head_render_state: dict = {"by_span": {}}
+                head_future = None
+                headstart_pick: dict | None = None
 
                 def _overlap_existing(start_ms: int, end_ms: int) -> bool:
                     with span_lock:
@@ -585,15 +587,17 @@ def run_m4_pipeline(
                         )
 
                 def on_headstart(early_picks: list[dict]) -> None:
+                    nonlocal head_future, headstart_pick
                     if not early_picks:
                         return
                     top = early_picks[0]
+                    headstart_pick = top
                     print(
                         f"[clipper:speed] project={project_id} phase=headstart_render_begin "
                         f"startMs={top.get('start_ms')} endMs={top.get('end_ms')}",
                         flush=True,
                     )
-                    head_executor.submit(_render_pick_async, top, 0, max(1, len(early_picks)))
+                    head_future = head_executor.submit(_render_pick_async, top, 0, max(1, len(early_picks)))
 
                 from clips_worker.picker_checkpoint import load_picker_cache, save_picker_cache
                 from clips_worker.process_helpers import job_payload as _job_payload
@@ -626,13 +630,27 @@ def run_m4_pipeline(
                     picker_cache=picker_cache,
                     on_picker_checkpoint=_checkpoint_picker,
                 )
-                head_executor.shutdown(wait=True)
+                post_progress(
+                    job_id,
+                    {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"},
+                )
+                from clips_worker.headstart_render import await_headstart_render
+
+                await_headstart_render(
+                    head_executor,
+                    head_future,
+                    head_render_state=head_render_state,
+                    rendered_spans=rendered_spans,
+                    span_lock=span_lock,
+                    span_key=_span_key,
+                    headstart_pick=headstart_pick,
+                    project_id=project_id,
+                )
                 print(
                     f"[clipper:speed] project={project_id} phase=pick_ms="
                     f"{int((time.monotonic() - pick0) * 1000)} picks={len(picks)}",
                     flush=True,
                 )
-                post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
 
                 if picks:
                     total_talking = len(picks)
