@@ -29,6 +29,8 @@ export type NavItem = {
   exact?: boolean
   badge?: 'soon' | 'new'
   disabled?: boolean
+  /** Hidden from nav unless recording (LiveKit) is enabled — not shown disabled */
+  recordingOnly?: boolean
   isActive?: (pathname: string) => boolean
 }
 
@@ -48,12 +50,11 @@ const CLIPS_ITEMS: NavItem[] = [
     { title: 'Streamer', href: '/app/streamer', icon: Radio, group: 'Create' },
     { title: 'Screenwriting', href: '/app/sw', icon: PenLine, group: 'Create' },
     {
-      title: 'Record',
-      href: '/app/record',
+      title: 'Rooms',
+      href: '/app/rooms/new',
       icon: Video,
       group: 'Create',
-      badge: 'soon',
-      disabled: true,
+      recordingOnly: true,
     },
     { title: 'Projects', href: '/app/clips', icon: Clapperboard, group: 'Library', exact: true },
     {
@@ -82,9 +83,11 @@ const CLIPS_ITEMS: NavItem[] = [
     { title: 'Exports', href: '/app/exports', icon: Download, group: 'Exports' },
 ]
 
-export function clipsNavItems(): NavItem[] {
-  if (isScreenwritingEnabled()) return CLIPS_ITEMS
-  return CLIPS_ITEMS.filter((i) => i.href !== '/app/sw')
+export function clipsNavItems(options?: { showRecording?: boolean }): NavItem[] {
+  let items = CLIPS_ITEMS
+  if (!isScreenwritingEnabled()) items = items.filter((i) => i.href !== '/app/sw')
+  if (!options?.showRecording) items = items.filter((i) => !i.recordingOnly)
+  return items
 }
 
 export const CLIPS: NavContext = {

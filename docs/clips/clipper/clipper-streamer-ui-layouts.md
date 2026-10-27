@@ -1,7 +1,7 @@
 # Transovo CLIPPER + STREAMER: UI layout spec (1440×900)
 
-Prepared Mon Oct 26, 2026 (ET). Read alongside `/workspace/specs/clipper-streamer-bic.md` (features, tracking design).
-Each screen below lists its competitor references first. Every reference image was opened and inspected. Paths are relative to `/workspace/specs/clipper-refs/`.
+Prepared Mon Oct 26, 2026 (ET). Read alongside `docs/clips/clipper/clipper-streamer-bic.md` (features, tracking design).
+Each screen below lists its competitor references first. Every reference image was opened and inspected. Reference PNGs live on the server at `coolify-server:/opt/transovo-refs/clipper/` (not committed to the repo).
 
 > **Rule for Cursor:**
 > - Build exactly the geometry below at a 1440×900 viewport.

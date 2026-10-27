@@ -3,7 +3,7 @@
 Prepared for Rick James by Grok Bot on Mon Oct 26, 2026 (ET).
 Companion files:
 - UI layout spec: `docs/clips/clipper/clipper-streamer-ui-layouts.md`
-- Screenshots (not in repo): `coolify-server:/opt/transovo-refs/clipper-refs/<tool>/`
+- Screenshots (not in repo): `coolify-server:/opt/transovo-refs/clipper/<tool>/`
 - **Phase 2 gate:** do not start clipper/streamer BIC work until Descript milestones **M4.1–M17** are complete.
 - **Diarization (Transovo):** primary is **Deepgram Nova-3 with diarization** (already in production). Do not add pyannote unless integration tests show Nova-3 diarization is insufficient.
 

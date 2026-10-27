@@ -8,6 +8,7 @@ import { LogoMark } from '@/components/brand/logo-mark'
 import { useClipsWorkspace } from '@/components/providers/clips-workspace-provider'
 import { BUSINESS } from '@/lib/data'
 import { clipsNavItems, groupItems, isItemActive, sortGroups } from '@/lib/nav'
+import { useRecordingEnabled } from '@/lib/recording/use-recording-enabled'
 import { cn } from '@/lib/utils'
 import {
   Sidebar,
@@ -27,7 +28,8 @@ export function AppSidebar() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { testMode } = useClipsWorkspace()
-  const groups = sortGroups(groupItems(clipsNavItems()))
+  const recordingEnabled = useRecordingEnabled()
+  const groups = sortGroups(groupItems(clipsNavItems({ showRecording: recordingEnabled })))
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border" data-testid="app-sidebar">
