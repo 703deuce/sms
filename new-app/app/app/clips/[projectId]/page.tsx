@@ -3,6 +3,7 @@ import { StreamHeader } from '@/components/streamer/stream-header'
 import { StreamerProjectChrome } from '@/components/streamer/streamer-project-chrome'
 import { ProjectClipsView } from '@/components/clips/project-clips-view'
 import { listProjectClips } from '@/lib/server/clips/clips'
+import { getProjectStatus } from '@/lib/server/clips/jobs'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { notFound, redirect } from 'next/navigation'
@@ -26,6 +27,8 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
 
   const initialClips =
     project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null
+  const liveStatus =
+    project.status !== 'READY' ? await getProjectStatus(workspaceId, project.id) : null
   const streamVod = await prisma.streamVod.findUnique({ where: { projectId: project.id } })
   const vodState =
     streamVod?.state && typeof streamVod.state === 'object' && !Array.isArray(streamVod.state)
@@ -67,6 +70,9 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         createdAt={project.createdAt.toISOString()}
         sourceDurationMs={Math.max(0, project.rangeEndMs - project.rangeStartMs)}
         isStreamer={Boolean(streamVod)}
+        initialProgress={liveStatus?.progress ?? 0}
+        initialStage={liveStatus?.stage ?? null}
+        initialEtaSec={liveStatus?.etaSec ?? 0}
       />
     </Page>
   )

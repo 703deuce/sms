@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/app/page-primitives'
 import { CLIP_JOB_STATE, StatusBadge } from '@/components/app/status'
 import { clampEtaBetweenPolls } from '@/lib/clips/eta-poll'
+import { formatClipProgressStage } from '@/lib/clips/progress-stage'
 import { cancelProject, getProjectStatus } from '@/lib/clips-api'
 import type { ClipProjectStatusUi } from '@/components/app/status'
 
@@ -43,22 +44,28 @@ function stepIndex(status: string, mode?: string, stage?: string | null, fromLin
 export function JobStatus({
   projectId,
   initialStatus,
+  initialProgress = 0,
+  initialStage = null,
+  initialEtaSec = 0,
   mode,
   fromLink,
 }: {
   projectId: string
   initialStatus?: string
+  initialProgress?: number
+  initialStage?: string | null
+  initialEtaSec?: number
   mode?: 'talking' | 'anything' | 'captions'
   fromLink?: boolean
 }) {
   const [status, setStatus] = useState(initialStatus || 'QUEUED')
-  const [progress, setProgress] = useState(0)
-  const [stage, setStage] = useState<string | null>(null)
+  const [progress, setProgress] = useState(initialProgress)
+  const [stage, setStage] = useState<string | null>(initialStage)
   const [error, setError] = useState<string | null>(null)
   const [wordCount, setWordCount] = useState(0)
-  const [etaSec, setEtaSec] = useState(0)
-  const etaRef = useRef(0)
-  const lastPollEtaRef = useRef(0)
+  const [etaSec, setEtaSec] = useState(initialEtaSec)
+  const etaRef = useRef(initialEtaSec)
+  const lastPollEtaRef = useRef(initialEtaSec)
   const [chunkDone, setChunkDone] = useState<number | undefined>()
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
 
@@ -103,9 +110,10 @@ export function JobStatus({
   const ui = CLIP_JOB_STATE[status as ClipProjectStatusUi] ?? CLIP_JOB_STATE.QUEUED
   const terminal = ['READY', 'FAILED', 'CANCELED'].includes(status)
   const processing = !terminal
+  const stageLabel = formatClipProgressStage(stage) || stage
 
   return (
-    <Panel title="Processing your video" description={stage || 'Working on your video…'}>
+    <Panel title="Processing your video" description={stageLabel || 'Working on your video…'}>
       <div className="flex flex-col gap-4">
         {status === 'FAILED' && (
           <ProjectFailedAlert errorMessage={error || 'Something went wrong. You can try again with a new upload.'} />
@@ -131,7 +139,7 @@ export function JobStatus({
             <Progress value={progress} className="h-2 [&_[data-slot=progress-indicator]]:bg-brand-gradient" aria-label="Processing progress" />
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin shrink-0" aria-hidden />
-              {stage || 'Processing…'}
+              {stageLabel || 'Processing…'}
             </p>
             <AlertDialog>
               <AlertDialogTrigger
