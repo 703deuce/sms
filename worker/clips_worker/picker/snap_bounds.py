@@ -36,6 +36,7 @@ PAD_END_S = 0.35
 MAX_EXTEND_S = 8.0
 SENTENCE_EXTEND_MAX_S = 3.0
 GAP_SENTENCE_END_S = 0.4
+LEADING_DEAD_AIR_S = 0.55
 
 _WORD_NORM = re.compile(r"[^\w\s']+")
 
@@ -192,8 +193,19 @@ def snap_bounds(
     picked_end_ms = end_ms
     s_start = _sentence_at_ms(sentences, start_ms)
     if s_start:
-        start_ms = _advance_to_substantive_start(sentences, s_start)
-        s_start = _sentence_at_ms(sentences, start_ms) or s_start
+        gap_pick = start_ms > s_start.end_ms
+        next_sent = None
+        if gap_pick:
+            for s in sentences:
+                if s.start_ms > s_start.end_ms:
+                    next_sent = s
+                    break
+        if gap_pick and next_sent is not None and start_ms < next_sent.start_ms:
+            start_ms = _advance_to_substantive_start(sentences, next_sent)
+            s_start = next_sent
+        else:
+            start_ms = _advance_to_substantive_start(sentences, s_start)
+            s_start = _sentence_at_ms(sentences, start_ms) or s_start
 
     if not words:
         clip["start_ms"], clip["end_ms"] = start_ms, end_ms
@@ -212,6 +224,9 @@ def snap_bounds(
         we -= 1
 
     last_final = _sentence_final_word_index_at_or_before(words, we)
+    if we < len(words) and not _is_sentence_final_word(words, we):
+        if we + 1 < len(words) and words[we + 1]["s"] - words[we]["e"] >= GAP_SENTENCE_END_S:
+            we = last_final
     if _is_sentence_final_word(words, we):
         end_ms = int(words[we]["e"] * 1000)
     elif _new_incomplete_sentence_after(words, we, last_final):
@@ -237,8 +252,10 @@ def snap_bounds(
     pad_end_ms = int(PAD_END_S * 1000)
     if substantive_wi < len(words):
         w_s = int(words[substantive_wi]["s"] * 1000)
+        prev_end_ms = int(words[substantive_wi - 1]["e"] * 1000) if substantive_wi > 0 else range_start_ms
+        dead_air_before = w_s - prev_end_ms >= int(LEADING_DEAD_AIR_S * 1000)
         prev_is_filler = substantive_wi > 0 and _is_filler_token(words[substantive_wi - 1]["w"])
-        if prev_is_filler:
+        if prev_is_filler or dead_air_before:
             start_ms = w_s
         else:
             start_ms = max(range_start_ms, w_s - pad_start_ms)

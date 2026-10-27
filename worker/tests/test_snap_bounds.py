@@ -62,6 +62,26 @@ def test_intelligence_clip_does_not_end_on_dangling_i():
     assert "destination" in last["w"]
 
 
+def test_start_after_dead_air_does_not_include_silence_pad():
+    parts = [
+        ("Hello", 0.0, 0.3),
+        ("world.", 0.3, 0.7),
+        ("Next", 2.0, 2.2),
+        ("topic", 2.2, 2.5),
+        ("here.", 2.5, 2.9),
+    ]
+    words = _words_from_text(parts)
+    sentences = build_sentences(words, 0, 10_000)
+    clip = {
+        "title": "Next topic",
+        "start_ms": int(1.0 * 1000),
+        "end_ms": int(2.9 * 1000),
+        "length_max_ms": 120_000,
+    }
+    snap_bounds(clip, words, sentences, 0, 10_000)
+    assert clip["start_ms"] >= int(2.0 * 1000)
+
+
 def _word_at_ms(words: list[dict], ms: int) -> int:
     t = ms / 1000.0
     for i in range(len(words) - 1, -1, -1):
