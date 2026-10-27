@@ -9,9 +9,14 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
-  { id: 'speaker_follow', title: 'Speaker follow', desc: 'Track the active speaker.' },
+  { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
+  { id: 'speaker_follow', title: 'Speaker follow', desc: 'Single active speaker.' },
+  { id: 'dynamic', title: 'Dynamic', desc: 'Director picks per scene.' },
+  { id: 'split', title: 'Split (2-up)', desc: 'Stacked two-person layout.' },
+  { id: 'grid3', title: 'Grid 3-up', desc: 'Three speakers visible.' },
+  { id: 'grid4', title: 'Grid 4-up', desc: 'Four speakers visible.' },
   { id: 'fit_blur', title: 'Fit with blur', desc: 'Letterbox with blurred fill.' },
-  { id: 'center_crop', title: 'Center crop', desc: 'Static center crop.' },
+  { id: 'center_crop', title: 'Fill', desc: 'Full-frame crop fill.' },
   { id: 'subject_follow', title: 'Subject follow', desc: 'ClipAnything — later', disabled: true },
 ]
 

@@ -6,8 +6,13 @@ export type SpeakercropLayoutEnv = {
   LAYOUT_MODE: string
   LAYOUT_STYLE: string
   SPLIT: string
-  MULTIPERSON?: string
+  REFRAME_V?: string
   FORCE_SPLIT?: string
+  LEAD?: string
+  MIN_SEG?: string
+  VOICE?: string
+  CAPTIONS?: string
+  SAMPLE_FPS?: string
 }
 
 export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): SpeakercropLayoutEnv {
@@ -22,7 +27,7 @@ export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): Spe
       FORCE_SPLIT: '1',
       LAYOUT_MODE: 'split',
       LAYOUT_STYLE: 'split',
-      MULTIPERSON: '1',
+      REFRAME_V: '2',
     }
   }
   if (layout === 'fill') {
@@ -31,8 +36,15 @@ export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): Spe
   if (layout === 'fit') {
     return { ...base, SPLIT: '0', LAYOUT_MODE: 'fit', LAYOUT_STYLE: 'fit' }
   }
-  if (layout === 'dynamic' || layout === 'split_debate' || layout === 'grid' || layout === 'locked_off') {
-    return { ...base, SPLIT: '1', LAYOUT_MODE: layout, LAYOUT_STYLE: layout, MULTIPERSON: '1' }
+  if (
+    layout === 'dynamic' ||
+    layout === 'split_debate' ||
+    layout === 'grid' ||
+    layout === 'grid3' ||
+    layout === 'grid4' ||
+    layout === 'locked_off'
+  ) {
+    return { ...base, SPLIT: '1', LAYOUT_MODE: layout, LAYOUT_STYLE: layout, REFRAME_V: '2' }
   }
   if (layout === 'auto') {
     return speakercropLayoutEnv('dynamic')
@@ -42,6 +54,5 @@ export function speakercropLayoutEnv(layout: ClipProjectSettings['layout']): Spe
     SPLIT: '1',
     LAYOUT_MODE: 'speaker_follow',
     LAYOUT_STYLE: 'speaker_follow',
-    MULTIPERSON: '1',
   }
 }

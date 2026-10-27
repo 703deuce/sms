@@ -9,6 +9,8 @@ export const clipLayoutModes = [
   'dynamic',
   'split_debate',
   'grid',
+  'grid3',
+  'grid4',
   'locked_off',
   'split',
   'fill',
