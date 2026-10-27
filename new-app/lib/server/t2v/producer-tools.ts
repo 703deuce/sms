@@ -66,7 +66,7 @@ export async function applyT2vProducerTools(
       case 'rewrite_scene': {
         const idx = sceneIndex(next.scenes, t.args.sceneId ?? t.args.scene ?? t.args.position)
         if (idx < 0) {
-          summaries.push(`Scene not found (${sceneId})`)
+          summaries.push(`Scene not found (${String(t.args.sceneId ?? t.args.position ?? '')})`)
           break
         }
         const instruction = String(t.args.instruction ?? t.args.text ?? 'Make it punchier')

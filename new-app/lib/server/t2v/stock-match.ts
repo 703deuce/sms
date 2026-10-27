@@ -277,8 +277,9 @@ export async function searchT2vStock(input: {
 export function toSceneMedia(c: StockCandidate, assetId: string, needMs: number, query: string): T2vSceneMedia {
   const isPhoto = c.stockKind === 'photo'
   const { srcInMs } = isPhoto ? { srcInMs: 0 } : trimWindow(c.durationS, needMs / 1000)
+  const mediaProvider = c.provider === 'pexels_photo' ? 'pexels' : c.provider
   return {
-    provider: c.provider,
+    provider: mediaProvider,
     kind: isPhoto ? 'image' : 'video',
     assetId,
     providerId: c.providerId,
