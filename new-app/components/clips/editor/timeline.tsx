@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BrollItem } from '@/lib/clips/broll'
 import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -9,6 +9,7 @@ import { clampTrimToExtendedBounds, extendedTrimLimits } from '@/lib/clips/trim-
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
+import { layoutModeAtSourceMs } from '@/lib/clips/layout-segments'
 import { shotIndexAt } from '@/lib/clips/crop-shots'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 import { AudioWaveformLane } from '@/components/clips/editor/audio-waveform-lane'
@@ -71,6 +72,24 @@ export function Timeline({
 
   const layoutSegs = edits.layout.layoutSegments || []
   const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const segmentModeAtPlayhead = layoutModeAtSourceMs(edits, outputToSource(outputMs))
+
+  useEffect(() => {
+    if (!ctx) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCtx(null)
+    }
+    const onPointer = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setCtx(null)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('mousedown', onPointer)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mousedown', onPointer)
+    }
+  }, [ctx])
   const layoutModes: ClipEditsV2['layout']['mode'][] = [
     'speaker_follow',
     'split',
@@ -234,39 +253,74 @@ export function Timeline({
       </p>
       {ctx && onSplitLayout ? (
         <div
-          className="fixed z-50 min-w-[180px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg"
+          ref={menuRef}
+          className="fixed z-50 min-w-[200px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg"
           style={{ left: ctx.x, top: ctx.y }}
           role="menu"
+          aria-label="Timeline segment actions"
         >
-          <button type="button" className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" role="menuitem" onClick={() => { onSplitLayout(); setCtx(null) }}>
-            Split layout at playhead
+          <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">At playhead</p>
+          <button
+            type="button"
+            className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            role="menuitem"
+            onClick={() => {
+              onSplitLayout()
+              setCtx(null)
+            }}
+          >
+            Split layout here
           </button>
           {onCutSection ? (
-            <button type="button" className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted" role="menuitem" onClick={() => { onCutSection(); setCtx(null) }}>
+            <button
+              type="button"
+              className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              role="menuitem"
+              onClick={() => {
+                onCutSection()
+                setCtx(null)
+              }}
+            >
               Delete section (cut)
             </button>
           ) : null}
           {onSetLayoutMode ? (
             <>
-              <p className="px-2 py-1 text-[10px] text-muted-foreground">Layout for segment</p>
-              {layoutModes.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                  role="menuitem"
-                  onClick={() => {
-                    onSetLayoutMode(m)
-                    setCtx(null)
-                  }}
-                >
-                  {m.replace(/_/g, ' ')}
-                </button>
-              ))}
+              <div className="my-1 border-t border-border" role="separator" />
+              <p className="px-2 py-1 text-[10px] text-muted-foreground">
+                Layout for this segment
+                <span className="block font-normal text-foreground">
+                  Current: {segmentModeAtPlayhead.replace(/_/g, ' ')}
+                </span>
+              </p>
+              {layoutModes.map((m) => {
+                const active = m === segmentModeAtPlayhead
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`block w-full rounded px-2 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'bg-muted/80 font-medium' : ''}`}
+                    role="menuitem"
+                    aria-current={active ? 'true' : undefined}
+                    onClick={() => {
+                      onSetLayoutMode(m)
+                      setCtx(null)
+                    }}
+                  >
+                    {m.replace(/_/g, ' ')}
+                    {active ? ' · selected' : ''}
+                  </button>
+                )
+              })}
             </>
           ) : null}
-          <button type="button" className="mt-1 block w-full rounded px-2 py-1.5 text-left text-muted-foreground hover:bg-muted" onClick={() => setCtx(null)}>
-            Cancel
+          <div className="my-1 border-t border-border" role="separator" />
+          <button
+            type="button"
+            className="block w-full rounded px-2 py-1.5 text-left text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setCtx(null)}
+          >
+            Close
           </button>
         </div>
       ) : null}
