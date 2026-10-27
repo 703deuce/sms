@@ -180,8 +180,26 @@ const opSchema = z.discriminatedUnion('type', [
           .union([z.literal(-14), z.literal(-16), z.literal(-18), z.literal(-23), z.literal(-24)])
           .nullable()
           .optional(),
+        roomTone: z.boolean().optional(),
       })
       .nullable(),
+  }),
+  z.object({
+    type: z.literal('patch_word_text_overrides'),
+    overrides: z.record(z.string(), z.string().max(200)),
+    mode: z.enum(['merge', 'replace']).optional(),
+  }),
+  z.object({
+    type: z.literal('replace_scenes'),
+    scenes: z.array(
+      z.object({
+        id: z.string().min(1),
+        startWordId: z.string().optional(),
+        label: z.string().max(120).optional(),
+        outStartMs: z.number().min(0).optional(),
+        layoutId: z.string().max(80).optional(),
+      }),
+    ),
   }),
 ])
 

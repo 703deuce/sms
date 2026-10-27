@@ -210,6 +210,24 @@ export function ScriptAudioPanel({
       </div>
 
       <div className="rounded-[10px] border border-border bg-muted/20 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-[13px] font-semibold">Room tone</Label>
+          <Switch
+            checked={document.audioFx?.roomTone ?? false}
+            onCheckedChange={(roomTone) =>
+              onPatchAudioFx({
+                ...document.audioFx,
+                roomTone,
+              })
+            }
+          />
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Loops a quiet 2s bed under timeline gaps on export (−6 dB).
+        </p>
+      </div>
+
+      <div className="rounded-[10px] border border-border bg-muted/20 p-3">
         <p className="text-[13px] font-semibold">Auto-level</p>
         <p className="mt-1 text-xs text-muted-foreground">Target loudness on export (−16 LUFS default).</p>
         <div className="mt-2 flex flex-wrap gap-1">

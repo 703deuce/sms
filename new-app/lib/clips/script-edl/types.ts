@@ -36,6 +36,7 @@ export type ScriptEditorSettings = {
   showDeletedWords?: boolean
   volumePct?: number
   layoutPackId?: string
+  multicam?: { enabled?: boolean; minHoldMs?: number; wideEveryMs?: number }
   captions?: {
     enabled?: boolean
     presetId?: string
@@ -96,5 +97,8 @@ export type ScriptDocumentV1 = {
   audioFx?: {
     studioSound?: { enabled: boolean; mix: number; assetId?: string | null }
     loudnessLufs?: -14 | -16 | -18 | -23 | -24 | null
+    roomTone?: boolean
   }
+  /** M12 — transcript display overrides from edit-for-clarity (audio unchanged). */
+  wordTextOverrides?: Record<string, string>
 }

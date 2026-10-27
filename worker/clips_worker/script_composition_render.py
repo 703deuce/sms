@@ -223,6 +223,8 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             }
         if audio_fx.get("loudnessLufs") is not None:
             edits["loudnessLufs"] = int(audio_fx["loudnessLufs"])
+        if audio_fx.get("roomTone"):
+            edits["roomTone"] = True
         if not edits.get("audio") and document.get("musicTracks"):
             mt = document["musicTracks"][0]
             if mt.get("assetId"):
@@ -284,6 +286,16 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             apply_edl_gap_freezes(src, cut_mp4, out_mp4, edl, td_path, trim_in)
         else:
             out_mp4 = cut_mp4
+
+        if edits.get("roomTone"):
+            gap_segs = [g for g in edl if g.get("kind") == "gap"]
+            if gap_segs:
+                from clips_worker.room_tone import apply_room_tone_under_gaps, extract_room_tone_sample
+
+                room_loop = extract_room_tone_sample(src, td_path)
+                room_out = td_path / "with_room_tone.mp4"
+                apply_room_tone_under_gaps(out_mp4, room_out, room_loop, gap_segs)
+                out_mp4 = room_out
 
         mark_composition_render(conn, render_id, "RENDERING", progress=85)
         heartbeat.update(stage="upload", progress=85)

@@ -44,6 +44,8 @@ export type ClipEditsV2 = {
   silenceTrim?: { enabled?: boolean; minGapMs?: number; keepMs?: number }
   /** Integrated loudness target (LUFS) for export loudnorm. */
   loudnessLufs?: -14 | -16 | -18 | -23 | -24
+  /** Loop quiet room tone under EDL gap segments on export. */
+  roomTone?: boolean
 }
 
 export type ClipBounds = { clipStartMs: number; clipEndMs: number }

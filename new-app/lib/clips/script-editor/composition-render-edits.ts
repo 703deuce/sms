@@ -73,6 +73,16 @@ export function clipEditsFromScriptDocument(
   if (lufs != null) {
     edits.loudnessLufs = lufs
   }
+  if (document.audioFx?.roomTone) {
+    edits.roomTone = true
+  }
+  const overrides = document.wordTextOverrides
+  if (overrides && Object.keys(overrides).length) {
+    for (const [wordId, text] of Object.entries(overrides)) {
+      const idx = wordId.split(':').pop()
+      if (idx) edits.wordFixes[idx] = text
+    }
+  }
 
   return edits
 }
