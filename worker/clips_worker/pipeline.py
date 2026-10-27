@@ -449,18 +449,18 @@ def run_m4_pipeline(
                 head_future = None
                 headstart_pick: dict | None = None
 
-                def _overlap_existing(start_ms: int, end_ms: int) -> bool:
-                    with span_lock:
-                        for a0, a1 in rendered_spans:
-                            overlap = max(0, min(a1, end_ms) - max(a0, start_ms))
-                            span = max(1, min(a1 - a0, end_ms - start_ms))
-                            if overlap / span >= 0.35:
-                                return True
+                def _overlap_existing_locked(start_ms: int, end_ms: int) -> bool:
+                    """Caller must hold span_lock (non-reentrant threading.Lock)."""
+                    for a0, a1 in rendered_spans:
+                        overlap = max(0, min(a1, end_ms) - max(a0, start_ms))
+                        span = max(1, min(a1 - a0, end_ms - start_ms))
+                        if overlap / span >= 0.35:
+                            return True
                     return False
 
                 def _mark_span(start_ms: int, end_ms: int) -> bool:
                     with span_lock:
-                        if _overlap_existing(start_ms, end_ms):
+                        if _overlap_existing_locked(start_ms, end_ms):
                             return False
                         rendered_spans.add(_span_key(start_ms, end_ms))
                         return True
@@ -649,6 +649,7 @@ def run_m4_pipeline(
                         head_future,
                         head_render_state=head_render_state,
                         rendered_spans=rendered_spans,
+                        persisted_spans=persisted_spans,
                         span_lock=span_lock,
                         span_key=_span_key,
                         headstart_pick=headstart_pick,

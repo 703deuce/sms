@@ -8,6 +8,37 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from clips_worker.headstart_render import await_headstart_render
 
 
+def test_mark_span_no_self_deadlock():
+    """Regression: _mark_span must not re-acquire span_lock inside _overlap_existing."""
+    span_lock = threading.Lock()
+    rendered_spans: set[tuple[int, int]] = set()
+
+    def _overlap_existing_locked(start_ms: int, end_ms: int) -> bool:
+        for a0, a1 in rendered_spans:
+            overlap = max(0, min(a1, end_ms) - max(a0, start_ms))
+            span = max(1, min(a1 - a0, end_ms - start_ms))
+            if overlap / span >= 0.35:
+                return True
+        return False
+
+    def _mark_span(start_ms: int, end_ms: int) -> bool:
+        with span_lock:
+            if _overlap_existing_locked(start_ms, end_ms):
+                return False
+            rendered_spans.add((start_ms, end_ms))
+            return True
+
+    done = threading.Event()
+
+    def worker() -> None:
+        assert _mark_span(0, 20_000) is True
+        done.set()
+
+    threading.Thread(target=worker, daemon=True).start()
+    assert done.wait(timeout=2.0)
+    assert (0, 20_000) in rendered_spans
+
+
 def test_mark_span_discard_pattern():
     rendered = {(0, 20_000)}
     sk = (0, 20_000)
@@ -73,11 +104,13 @@ def test_headstart_timeout_releases_span_for_main_pass():
 
     ex = ThreadPoolExecutor(max_workers=1)
     fut: Future = ex.submit(slow)
+    persisted: set[tuple[int, int]] = {(0, 20_000)}
     await_headstart_render(
         ex,
         fut,
         head_render_state=head_render_state,
         rendered_spans=rendered_spans,
+        persisted_spans=persisted,
         span_lock=span_lock,
         span_key=lambda a, b: (int(a), int(b)),
         headstart_pick=pick,
@@ -85,3 +118,4 @@ def test_headstart_timeout_releases_span_for_main_pass():
         timeout_sec=0.05,
     )
     assert (0, 20_000) not in rendered_spans
+    assert (0, 20_000) not in persisted
