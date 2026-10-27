@@ -8,6 +8,7 @@ from typing import Any
 
 from clips_worker.layout_router import PersonCountSummary, route_multiperson_layout
 from clips_worker.reframe_v2 import (
+    V2_ONLY_LAYOUTS,
     layout_for_legacy_reframe,
     layout_shadow_enabled,
     reframe_v2_ops_enabled,
@@ -19,6 +20,15 @@ V3_STR = str(V3)
 _AUTO_ROUTE_LAYOUTS = frozenset(
     {"auto", "dynamic", "grid", "grid3", "grid4", "split", "split_debate"},
 )
+
+
+def auto_multiperson_route_enabled() -> bool:
+    """Production multiperson probe + routing (independent of REFRAME_V2_ENABLED ops gate)."""
+    return os.environ.get("CLIPPER_AUTO_MP_ROUTE", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    )
 
 
 def _v3_probe(video: Path) -> PersonCountSummary:
@@ -41,18 +51,18 @@ def _layout_eligible_for_probe(settings: dict, layout: str) -> bool:
 
 
 def should_run_person_count_probe(settings: dict, layout: str) -> bool:
-    """Probe only when v2 ops is on (with auto-route) or explicit shadow mode (default off)."""
+    """Probe for talking clips when auto MP route is on, v2 ops is on, or shadow mode."""
     if not _layout_eligible_for_probe(settings, layout):
         return False
+    if auto_multiperson_route_enabled():
+        return True
     if reframe_v2_ops_enabled():
-        if os.environ.get("CLIPPER_AUTO_MP_ROUTE", "0").strip() in ("0", "false", "no"):
-            return False
         return True
     return layout_shadow_enabled()
 
 
 def should_apply_probe_routing() -> bool:
-    return reframe_v2_ops_enabled()
+    return auto_multiperson_route_enabled() or reframe_v2_ops_enabled()
 
 
 def apply_production_reframe_routing(
@@ -61,9 +71,11 @@ def apply_production_reframe_routing(
     clip_index: int,
 ) -> tuple[str, dict[str, str], dict[str, Any]]:
     """Returns (applied layout, speakercrop extra env, layoutRouteShadow for aiMeta)."""
+    raw_layout = (settings.get("layout") or "speaker_follow").strip()
     user_layout = resolve_clip_layout(settings, clip_index)
     shadow: dict[str, Any] = {
         "userLayout": user_layout,
+        "settingsLayout": raw_layout,
         "reframeV2Enabled": reframe_v2_ops_enabled(),
         "layoutShadow": layout_shadow_enabled(),
         "probed": False,
@@ -89,15 +101,26 @@ def apply_production_reframe_routing(
         except Exception as exc:
             shadow["probeError"] = type(exc).__name__
 
-    if reframe_v2_ops_enabled():
+    if should_apply_probe_routing() and shadow.get("probed"):
         applied = routed_layout
-        extra["REFRAME_V"] = "2"
-        shadow["appliedLayout"] = applied
-        return applied, extra, shadow
-
-    if want_v2:
+        if want_v2:
+            extra["REFRAME_V"] = "2"
+    elif shadow.get("probed") and layout_shadow_enabled():
         applied = layout_for_legacy_reframe(routed_layout)
+    elif raw_layout != "auto" and (
+        user_layout in V2_ONLY_LAYOUTS
+        or user_layout
+        in (
+            "split_debate",
+            "screen_pip",
+            "pip",
+            "side",
+        )
+    ):
+        applied = user_layout
+        extra["REFRAME_V"] = "2"
     else:
         applied = layout_for_legacy_reframe(user_layout)
+
     shadow["appliedLayout"] = applied
     return applied, extra, shadow

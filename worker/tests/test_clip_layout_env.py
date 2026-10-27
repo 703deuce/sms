@@ -29,6 +29,7 @@ def test_speakercrop_env_fill_fit_split():
 
 def test_speaker_follow_default_uses_legacy_reframe_path(monkeypatch):
     monkeypatch.delenv("REFRAME_V2_ENABLED", raising=False)
+    monkeypatch.setenv("CLIPPER_AUTO_MP_ROUTE", "0")
     monkeypatch.delenv("REFRAME_V", raising=False)
     assert multiperson_reframe_enabled() is False
     spk = speakercrop_env_for_settings({"layout": "speaker_follow"})

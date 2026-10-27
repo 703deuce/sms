@@ -133,10 +133,11 @@ AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "grid
 
 
 def multiperson_reframe_enabled() -> bool:
-    """v3 multiperson pipeline requires ops flag (subprocess may still set REFRAME_V=2 when routed)."""
+    """Multiperson probe/routing enabled (CLIPPER_AUTO_MP_ROUTE or REFRAME_V2_ENABLED ops)."""
+    from clips_worker.reframe_routing import auto_multiperson_route_enabled
     from clips_worker.reframe_v2 import reframe_v2_ops_enabled
 
-    return reframe_v2_ops_enabled()
+    return auto_multiperson_route_enabled() or reframe_v2_ops_enabled()
 
 
 def layout_env(layout: str) -> dict[str, str]:
@@ -256,23 +257,28 @@ def run_speakercrop(
     w, h = aspect_size(aspect, resolution)
     env = os.environ.copy()
     env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
-    layout = resolve_clip_layout(settings, clip_index)
-    from clips_worker.reframe_v2 import reframe_v2_ops_enabled
+    from clips_worker.reframe_routing import apply_production_reframe_routing
+    from clips_worker.screen_share_route import apply_screen_share_env
 
-    if reframe_v2_ops_enabled():
-        from clips_worker.screen_share_route import apply_screen_share_env
+    applied_layout, route_extra, route_shadow = apply_production_reframe_routing(
+        clip_src,
+        settings,
+        clip_index,
+    )
+    layout = applied_layout
+    env.update(layout_env(layout))
+    env.update(route_extra)
+    if render_meta is not None and route_shadow:
+        render_meta["layoutRouteShadow"] = route_shadow
 
-        ss_env, ss_shadow = apply_screen_share_env(clip_src)
-        if ss_env:
-            layout = ss_env.get("LAYOUT_MODE", layout)
+    ss_env, ss_shadow = apply_screen_share_env(clip_src)
+    if ss_env:
+        layout = ss_env.get("LAYOUT_MODE", layout)
         env.update(layout_env(layout))
         env.update(ss_env)
-        if render_meta is not None and ss_shadow:
-            existing = render_meta.get("layoutRouteShadow") or {}
-            render_meta["layoutRouteShadow"] = {**existing, **ss_shadow}
-    else:
-        env.pop("REFRAME_V", None)
-        env.update(layout_env(layout))
+    if render_meta is not None and ss_shadow:
+        existing = render_meta.get("layoutRouteShadow") or {}
+        render_meta["layoutRouteShadow"] = {**existing, **ss_shadow}
     env["WORDS"] = str(words_path)
     env["WORDS_JSON"] = str(words_path)
     env["TRANSCRIPT_SPK"] = "1"
