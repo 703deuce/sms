@@ -277,7 +277,8 @@ export async function searchT2vStock(input: {
 export function toSceneMedia(c: StockCandidate, assetId: string, needMs: number, query: string): T2vSceneMedia {
   const isPhoto = c.stockKind === 'photo'
   const { srcInMs } = isPhoto ? { srcInMs: 0 } : trimWindow(c.durationS, needMs / 1000)
-  const mediaProvider = c.provider === 'pexels_photo' ? 'pexels' : c.provider
+  const mediaProvider: 'pexels' | 'pixabay' =
+    c.provider === 'pexels_photo' || c.provider === 'pexels' ? 'pexels' : 'pixabay'
   return {
     provider: mediaProvider,
     kind: isPhoto ? 'image' : 'video',
@@ -291,7 +292,7 @@ export function toSceneMedia(c: StockCandidate, assetId: string, needMs: number,
     srcInMs,
     focalX: 0.5,
     focalY: 0.5,
-    attribution: { author: c.author, pageUrl: c.pageUrl, provider: c.provider },
+    attribution: { author: c.author, pageUrl: c.pageUrl, provider: mediaProvider },
     query,
   }
 }
