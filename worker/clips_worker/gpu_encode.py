@@ -7,7 +7,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
 import time
+import urllib.error
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,10 +38,23 @@ def _scratch_out_key(workspace_id: str, project_id: str, clip_id: str) -> str:
     return f"ws/{workspace_id}/projects/{project_id}/scratch/render/{clip_id}/out_{uuid.uuid4().hex[:12]}.mp4"
 
 
+def _error_summary(exc: BaseException) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        body_len = 0
+        try:
+            body_len = len(exc.read())
+        except Exception:
+            pass
+        return f"HTTP {exc.code} {exc.reason or 'error'} body_bytes={body_len}"
+    return f"{type(exc).__name__}: {str(exc)[:160]}"
+
+
 def _upload_signed_put_url(object_key: str) -> str:
     signed = sign_upload_url(object_key)
     url = signed.get("url") or ""
     token = signed.get("token") or ""
+    if not url:
+        raise RuntimeError("sign_upload_url returned empty url")
     if token and "token=" not in url:
         sep = "&" if "?" in url else "?"
         return f"{url}{sep}token={token}"
@@ -59,13 +74,18 @@ class PreparedGpuRender:
     out_scratch_key: str | None = None
 
 
-def _prepare_render_req(prep: PreparedGpuRender) -> RenderReq:
+def _ensure_src_uploaded(prep: PreparedGpuRender) -> str:
     if not prep.workspace_id or not prep.project_id:
         raise ValueError("workspace_id and project_id required for gpu render")
     src_key = prep.src_scratch_key or _scratch_src_key(prep.workspace_id, prep.project_id, prep.clip_id)
     if prep.src_scratch_key is None:
         upload_file(src_key, prep.src_path, "video/mp4")
         prep.src_scratch_key = src_key
+    return src_key
+
+
+def _prepare_modal_render_req(prep: PreparedGpuRender) -> RenderReq:
+    src_key = _ensure_src_uploaded(prep)
     out_key = prep.out_scratch_key or _scratch_out_key(prep.workspace_id, prep.project_id, prep.clip_id)
     prep.out_scratch_key = out_key
     return RenderReq(
@@ -78,6 +98,92 @@ def _prepare_render_req(prep: PreparedGpuRender) -> RenderReq:
     )
 
 
+def _render_local_ffmpeg(prep: PreparedGpuRender) -> bool:
+    """Encode on worker disk (no Modal / no output PUT signing)."""
+    from clips_worker.render_concurrency import ffmpeg_threads_per_job
+
+    threads = str(ffmpeg_threads_per_job())
+    prep.dest_path.parent.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
+    try:
+        vcodec = "libx264"
+        extra: list[str] = ["-crf", "20", "-preset", "veryfast"]
+        if prep.filter_complex:
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-threads",
+                threads,
+                "-v",
+                "error",
+                "-i",
+                str(prep.src_path),
+                "-filter_complex",
+                prep.filtergraph or "",
+                "-map",
+                "[vfinal]",
+                "-map",
+                "0:a?",
+                "-c:v",
+                vcodec,
+                *extra,
+                "-c:a",
+                "aac",
+                "-movflags",
+                "+faststart",
+                str(prep.dest_path),
+            ]
+        else:
+            vf = prep.filtergraph or "scale=720:1280"
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-threads",
+                threads,
+                "-v",
+                "error",
+                "-i",
+                str(prep.src_path),
+                "-vf",
+                vf,
+                "-c:v",
+                vcodec,
+                *extra,
+                "-c:a",
+                "aac",
+                "-movflags",
+                "+faststart",
+                str(prep.dest_path),
+            ]
+        subprocess.check_call(cmd)
+        ok = prep.dest_path.is_file() and prep.dest_path.stat().st_size > 0
+        render_ms = (time.perf_counter() - t0) * 1000.0
+        log.info(
+            "[clipper:gpu_render] %s",
+            json.dumps(
+                {
+                    "clipId": prep.clip_id,
+                    "projectId": prep.project_id,
+                    "provider": "local",
+                    "ok": ok,
+                    "renderMs": round(render_ms, 1),
+                    "gpuSeconds": 0.0,
+                    "sizeBytes": prep.dest_path.stat().st_size if ok else 0,
+                    "filterComplex": prep.filter_complex,
+                    "fallback": True,
+                }
+            ),
+        )
+        return ok
+    except Exception as exc:
+        log.warning(
+            "[clipper:gpu_render] local_fallback_failed clipId=%s reason=%s",
+            prep.clip_id,
+            _error_summary(exc),
+        )
+        return False
+
+
 def _apply_render_result(prep: PreparedGpuRender, res: RenderRes) -> bool:
     if not res.ok or not prep.out_scratch_key:
         return False
@@ -85,23 +191,21 @@ def _apply_render_result(prep: PreparedGpuRender, res: RenderRes) -> bool:
     return prep.dest_path.is_file() and prep.dest_path.stat().st_size > 0
 
 
-def _log_render_result(prep: PreparedGpuRender, res: RenderRes) -> None:
+def _log_render_result(prep: PreparedGpuRender, res: RenderRes, *, fallback: bool = False) -> None:
     render_ms = res.render_ms or 0.0
-    log.info(
-        "[clipper:gpu_render] %s",
-        json.dumps(
-            {
-                "clipId": prep.clip_id,
-                "projectId": prep.project_id,
-                "provider": res.provider,
-                "ok": res.ok,
-                "renderMs": round(render_ms, 1),
-                "gpuSeconds": round(res.gpu_seconds, 3),
-                "sizeBytes": res.size_bytes,
-                "filterComplex": prep.filter_complex,
-            }
-        ),
-    )
+    payload: dict[str, object] = {
+        "clipId": prep.clip_id,
+        "projectId": prep.project_id,
+        "provider": res.provider,
+        "ok": res.ok,
+        "renderMs": round(render_ms, 1),
+        "gpuSeconds": round(res.gpu_seconds, 3),
+        "sizeBytes": res.size_bytes,
+        "filterComplex": prep.filter_complex,
+    }
+    if fallback:
+        payload["fallback"] = True
+    log.info("[clipper:gpu_render] %s", json.dumps(payload))
 
 
 def render_one_via_provider(
@@ -110,17 +214,45 @@ def render_one_via_provider(
 ) -> bool:
     """Encode one clip; returns True when dest_path is written."""
     if not render_provider_enabled():
-        return False
+        return _render_local_ffmpeg(prep)
+
+    modal_req: RenderReq | None = None
+    try:
+        modal_req = _prepare_modal_render_req(prep)
+    except Exception as exc:
+        log.warning(
+            "[clipper:gpu_render] modal_prepare_failed clipId=%s reason=%s",
+            prep.clip_id,
+            _error_summary(exc),
+        )
+        return _render_local_ffmpeg(prep)
+
     t0 = time.perf_counter()
-    req = _prepare_render_req(prep)
-    results = render_with_fallback(conn, [req], prep.workspace_id, prep.project_id)
+    try:
+        results = render_with_fallback(conn, [modal_req], prep.workspace_id, prep.project_id)
+    except Exception as exc:
+        log.warning(
+            "[clipper:gpu_render] modal_render_failed clipId=%s reason=%s",
+            prep.clip_id,
+            _error_summary(exc),
+        )
+        return _render_local_ffmpeg(prep)
+
     if not results:
-        return False
+        return _render_local_ffmpeg(prep)
     res = results[0]
     if not res.render_ms:
         res.render_ms = (time.perf_counter() - t0) * 1000.0
     _log_render_result(prep, res)
-    return _apply_render_result(prep, res)
+    if res.ok and _apply_render_result(prep, res):
+        return True
+    log.warning(
+        "[clipper:gpu_render] modal_result_not_ok clipId=%s provider=%s ok=%s",
+        prep.clip_id,
+        res.provider,
+        res.ok,
+    )
+    return _render_local_ffmpeg(prep)
 
 
 def render_batch_via_provider(
@@ -136,7 +268,23 @@ def render_batch_via_provider(
     chunk = modal_render_chunk_size()
     for i in range(0, len(preps), chunk):
         batch = preps[i : i + chunk]
-        reqs = [_prepare_render_req(p) for p in batch]
+        reqs: list[RenderReq] = []
+        modal_preps: list[PreparedGpuRender] = []
+        for prep in batch:
+            try:
+                reqs.append(_prepare_modal_render_req(prep))
+                modal_preps.append(prep)
+            except Exception as exc:
+                log.warning(
+                    "[clipper:gpu_render] modal_prepare_failed clipId=%s reason=%s",
+                    prep.clip_id,
+                    _error_summary(exc),
+                )
+                out[prep.clip_id] = _render_local_ffmpeg(prep)
+
+        if not reqs:
+            continue
+
         t0 = time.perf_counter()
         try:
             provider = get_provider("render", conn)
@@ -148,8 +296,9 @@ def render_batch_via_provider(
             else:
                 results = render_with_fallback(conn, reqs, ws, proj)
         except Exception as exc:
-            log.warning("gpu.render_batch failed chunk=%s error=%s", len(batch), exc)
+            log.warning("gpu.render_batch failed chunk=%s reason=%s", len(reqs), _error_summary(exc))
             results = render_with_fallback(conn, reqs, ws, proj)
+
         wall_ms = (time.perf_counter() - t0) * 1000.0
         if conn is not None and results:
             from clips_worker.gpu.usage import record_modal_render
@@ -161,11 +310,14 @@ def render_batch_via_provider(
                         ws,
                         proj,
                         res.gpu_seconds,
-                        batch=len(batch) > 1,
+                        batch=len(reqs) > 1,
                     )
-        for prep, res in zip(batch, results, strict=False):
+        for prep, res in zip(modal_preps, results, strict=False):
             if not res.render_ms:
-                res.render_ms = wall_ms / max(1, len(batch))
+                res.render_ms = wall_ms / max(1, len(results))
             _log_render_result(prep, res)
-            out[prep.clip_id] = _apply_render_result(prep, res)
+            ok = _apply_render_result(prep, res)
+            if not ok:
+                ok = _render_local_ffmpeg(prep)
+            out[prep.clip_id] = ok
     return out

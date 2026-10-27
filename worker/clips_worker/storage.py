@@ -339,15 +339,42 @@ def sign_url(object_key: str, expires_s: int = 3600) -> str:
     return f"{base}/storage/v1{signed}"
 
 
+def _http_error_summary(exc: urllib.error.HTTPError) -> str:
+    body_len = 0
+    try:
+        body_len = len(exc.read())
+    except Exception:
+        pass
+    return f"HTTP {exc.code} {exc.reason or 'error'} body_bytes={body_len}"
+
+
 def sign_upload_url(object_key: str) -> dict:
+    """Signed PUT target for remote encoders (Modal). S3 uses presigned put_object."""
+    if _uses_s3_api():
+        client = _s3_client()
+        mime = mimetypes.guess_type(object_key.split("/")[-1])[0] or "video/mp4"
+        put_url = client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": storage_bucket(),
+                "Key": object_key,
+                "ContentType": mime,
+            },
+            ExpiresIn=7200,
+        )
+        if not put_url:
+            raise RuntimeError("s3 presigned put_object returned empty url")
+        return {"url": put_url, "token": ""}
+
     base = env("SUPABASE_URL").rstrip("/")
     token = env("SUPABASE_SERVICE_ROLE_KEY")
     bucket = storage_bucket()
     encoded = "/".join(urllib.parse.quote(part, safe="") for part in object_key.split("/"))
     url = f"{base}/storage/v1/object/upload/sign/{bucket}/{encoded}"
+    body = json.dumps({"upsert": False}).encode()
     req = urllib.request.Request(
         url,
-        data=b"{}",
+        data=body,
         method="POST",
         headers={
             "Authorization": f"Bearer {token}",
@@ -355,9 +382,19 @@ def sign_upload_url(object_key: str) -> dict:
             "Content-Type": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data = json.loads(resp.read().decode())
-    return {"url": data.get("url"), "token": data.get("token")}
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        log.warning("storage.sign_upload_url failed driver=supabase %s", _http_error_summary(exc))
+        raise RuntimeError(f"sign_upload_url failed: {_http_error_summary(exc)}") from exc
+
+    signed = data.get("signedUrl") or data.get("signedURL") or data.get("url")
+    if not signed:
+        raise RuntimeError("sign_upload_url response missing signedUrl")
+    if not str(signed).startswith("http"):
+        signed = f"{base}/storage/v1{signed}"
+    return {"url": signed, "token": data.get("token") or ""}
 
 
 def put_json(object_key: str, data: unknown) -> None:

@@ -31,9 +31,12 @@ def _ms_from_llm_seconds(val: Any, range_start_ms: int) -> int | None:
     if val is None or val == "":
         return None
     try:
-        return range_start_ms + int(float(val) * 1000)
+        sec = float(val)
     except (TypeError, ValueError):
         return None
+    if sec <= 0:
+        return None
+    return range_start_ms + int(sec * 1000)
 
 
 def infer_boundaries_from_moments(

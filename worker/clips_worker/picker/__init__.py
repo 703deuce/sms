@@ -85,43 +85,47 @@ def pick_talking_clips(
 
     visual_moments: list[dict] = []
     video_context: str | None = None
-    try:
-        from pathlib import Path
+    from pathlib import Path
 
-        from clips_worker.video_picker import (
-            format_moments_for_llm,
-            video_picker_enabled,
-            watch_upload_range,
-        )
+    from clips_worker.video_picker import (
+        format_moments_for_llm,
+        video_picker_enabled,
+        watch_upload_range,
+    )
 
-        if video_picker_enabled():
-            vpath = settings.get("sourceVideoPath")
-            if vpath and Path(str(vpath)).is_file():
-                import tempfile
+    if video_picker_enabled():
+        vpath = settings.get("sourceVideoPath")
+        if vpath and Path(str(vpath)).is_file():
+            import tempfile
 
-                from clips_worker.streamer.config import SCRATCH
+            from clips_worker.picker.work_scratch import video_picker_scratch_dir
 
-                scratch_vp = Path(tempfile.mkdtemp(dir=SCRATCH, prefix="vp_reg_"))
-                vm, _curve, _meta = watch_upload_range(
-                    Path(str(vpath)),
-                    range_start_ms=range_start_ms,
-                    range_end_ms=range_end_ms,
-                    scratch=scratch_vp,
+            scratch_vp = Path(tempfile.mkdtemp(dir=video_picker_scratch_dir(), prefix="vp_reg_"))
+            vm, _curve, vp_meta = watch_upload_range(
+                Path(str(vpath)),
+                range_start_ms=range_start_ms,
+                range_end_ms=range_end_ms,
+                scratch=scratch_vp,
+            )
+            if vm:
+                visual_moments = vm
+                video_context = format_moments_for_llm(
+                    [
+                        {
+                            **m,
+                            "t_s": (int(m.get("t_ms") or range_start_ms) - range_start_ms) / 1000.0,
+                        }
+                        for m in vm
+                    ]
                 )
-                if vm:
-                    visual_moments = vm
-                    video_context = format_moments_for_llm(
-                        [
-                            {
-                                **m,
-                                "t_s": (int(m.get("t_ms") or range_start_ms) - range_start_ms) / 1000.0,
-                            }
-                            for m in vm
-                        ]
-                    )
-                    picker_info("video_picker_regular", moments=len(vm))
-    except Exception as exc:
-        picker_info("video_picker_regular_skipped", error=str(exc)[:200])
+                picker_info(
+                    "video_picker_regular",
+                    moments=len(vm),
+                    ok=bool(vp_meta.get("ok")),
+                    est_usd=vp_meta.get("est_usd"),
+                )
+            elif vp_meta.get("error"):
+                picker_info("video_picker_regular_empty", error=str(vp_meta.get("error"))[:200])
 
     cache = picker_cache or {}
     scored_from_cache = cache.get("pass2Scored")
