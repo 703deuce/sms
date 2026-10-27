@@ -16,6 +16,7 @@ import {
 } from '@/lib/clips/edits'
 import type { ClipBounds } from '@/lib/clips/edits'
 import { clampTrimToExtendedBounds } from '@/lib/clips/trim-bounds'
+import { headlineBarAllowedForLayout } from '@/lib/clips/export-template'
 import {
   cutRangeForLayoutSegmentAt,
   deleteLayoutSegmentAt,
@@ -208,7 +209,18 @@ export function useEditorState(
 
   const setLayoutMode = useCallback(
     (mode: ClipEditsV2['layout']['mode']) => {
-      setEdits({ ...state.edits, layout: { ...state.edits.layout, mode } })
+      let next: ClipEditsV2 = { ...state.edits, layout: { ...state.edits.layout, mode } }
+      const tpl = next.exportTemplate
+      if (tpl?.headlineBar?.enabled && !headlineBarAllowedForLayout(mode)) {
+        next = {
+          ...next,
+          exportTemplate: {
+            ...tpl,
+            headlineBar: { enabled: false, text: tpl.headlineBar?.text ?? '' },
+          },
+        }
+      }
+      setEdits(next)
     },
     [setEdits, state.edits],
   )

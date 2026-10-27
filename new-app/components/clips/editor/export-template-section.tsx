@@ -97,7 +97,9 @@ export function ExportTemplateSection({
         />
       </div>
       {!headlineAllowed ? (
-        <p className="text-xs text-muted-foreground">Not available with split layouts.</p>
+        <p className="text-xs text-muted-foreground">
+          Headline bar is only available on single-view layouts (not split, stack, or grid).
+        </p>
       ) : headlineEnabled ? (
         <>
           <Input

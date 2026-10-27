@@ -1,6 +1,7 @@
 from clips_worker.layout_router import (
     CONFIDENCE_GATE,
     editor_layout_to_worker,
+    editor_mode_uses_static_fit_blur,
     needs_per_segment_layout_export,
     normalize_layout_segments,
     route_multiperson_layout,
@@ -98,6 +99,9 @@ def test_single_layout_segment_does_not_need_per_segment_export():
 
 
 def test_editor_layout_mapping_and_per_clip_override():
+    assert editor_mode_uses_static_fit_blur("full_frame")
+    assert not editor_mode_uses_static_fit_blur("split")
+    assert editor_layout_to_worker("full_frame") == "fit"
     assert editor_layout_to_worker("fit_blur") == "fit"
     assert editor_layout_to_worker("center_crop") == "fill"
     base = {"layout": "auto", "aspectRatio": "9:16"}

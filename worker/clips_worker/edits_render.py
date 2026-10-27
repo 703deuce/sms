@@ -11,6 +11,7 @@ from pathlib import Path
 
 from clips_worker.caption_words import build_caption_words, caption_words_to_render
 from clips_worker.layout_router import (
+    editor_mode_uses_static_fit_blur,
     needs_per_segment_layout_export,
     speakercrop_settings_for_layout_mode,
     speakercrop_settings_from_edits,
@@ -293,6 +294,21 @@ def _filter_words_for_layout_segment(words: list[dict], seg_start_ms: int, seg_e
     return out
 
 
+def _maybe_static_fit_blur_crop_track(
+    clip_src: Path,
+    work_dir: Path,
+    clip_start_ms: int,
+    editor_mode: str,
+) -> Path | None:
+    if not editor_mode_uses_static_fit_blur(editor_mode):
+        return None
+    from clips_worker.pipeline import write_fit_blur_crop_track
+
+    track = work_dir / f"static_fit_blur_{editor_mode}.crop_track.json"
+    write_fit_blur_crop_track(clip_src, track, clip_start_ms)
+    return track
+
+
 def run_speakercrop_layout_timeline(
     clip_src: Path,
     out_mp4: Path,
@@ -311,6 +327,8 @@ def run_speakercrop_layout_timeline(
         sc_settings = speakercrop_settings_from_edits(settings, edits)
         wpath = work_dir / "words_export.json"
         wpath.write_text(json.dumps(words_clip_relative))
+        dom_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+        crop_track = _maybe_static_fit_blur_crop_track(clip_src, work_dir, clip_start_ms, dom_mode)
         run_speakercrop(
             clip_src,
             out_mp4,
@@ -321,6 +339,8 @@ def run_speakercrop_layout_timeline(
             shot_overrides=shot_overrides,
             render_id=render_id,
             render_meta=render_meta,
+            crop_track_out=crop_track,
+            preserve_existing_crop_track=bool(crop_track),
         )
         return out_mp4
 
@@ -343,7 +363,9 @@ def run_speakercrop_layout_timeline(
         )
         seg_wpath = work_dir / f"layout_words_{i}.json"
         seg_wpath.write_text(json.dumps(seg_words))
-        seg_settings = speakercrop_settings_for_layout_mode(settings, str(seg["mode"]))
+        seg_mode = str(seg["mode"])
+        seg_settings = speakercrop_settings_for_layout_mode(settings, seg_mode)
+        crop_track = _maybe_static_fit_blur_crop_track(trimmed, work_dir, int(seg["startMs"]), seg_mode)
         run_speakercrop(
             trimmed,
             part_out,
@@ -354,6 +376,8 @@ def run_speakercrop_layout_timeline(
             shot_overrides=shot_overrides,
             render_id=render_id,
             render_meta=render_meta,
+            crop_track_out=crop_track,
+            preserve_existing_crop_track=bool(crop_track),
         )
         part_paths.append(part_out)
 

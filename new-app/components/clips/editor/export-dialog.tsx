@@ -39,6 +39,7 @@ import {
   normalizeExportSfxMode,
   type ExportSfxMode,
 } from '@/lib/clips/export-sfx'
+import { ExportLayoutPicker } from '@/components/clips/editor/export-layout-picker'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -53,6 +54,7 @@ export function ExportDialog({
   onAspectChange,
   onBeforeExport,
   layoutMode = 'speaker_follow',
+  onLayoutModeChange,
   platform,
   defaultChannelUrl,
 }: {
@@ -64,6 +66,7 @@ export function ExportDialog({
   onAspectChange?: (aspect: ClipProjectSettings['aspectRatio']) => void
   onBeforeExport?: () => Promise<void>
   layoutMode?: ClipEditsV2['layout']['mode']
+  onLayoutModeChange?: (mode: ClipEditsV2['layout']['mode']) => void
   platform?: 'twitch' | 'kick'
   defaultChannelUrl?: string
   open: boolean
@@ -350,6 +353,9 @@ export function ExportDialog({
             })}
           </div>
         </div>
+        {onLayoutModeChange ? (
+          <ExportLayoutPicker value={layoutMode} onChange={onLayoutModeChange} />
+        ) : null}
         <div className="mt-3">
           <p className="text-xs font-medium">Aspect ratio</p>
           {!exportRequestMatchesClipPreview(aspect, resolution) ? (

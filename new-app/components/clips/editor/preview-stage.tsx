@@ -10,6 +10,11 @@ import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { shotAt } from '@/lib/clips/crop-track'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
+import {
+  LAYOUT_HEADLINE_PREVIEW_FRAC,
+  layoutReservesHeadlineBand,
+  layoutUsesLetterboxBlurPreview,
+} from '@/lib/clips/layout-preview'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { applyPlaybackTime, outputDurationFromEdits } from '@/lib/clips/editor-playback'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
@@ -21,7 +26,15 @@ function clamp(n: number, lo: number, hi: number) {
 function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): boolean {
   if (!track) return false
   const mode = edits.layout?.mode ?? 'speaker_follow'
-  if (mode === 'center_crop' || mode === 'fill' || mode === 'fit' || mode === 'fit_blur') return false
+  if (
+    mode === 'center_crop' ||
+    mode === 'fill' ||
+    mode === 'fit' ||
+    mode === 'fit_blur' ||
+    mode === 'full_frame'
+  ) {
+    return false
+  }
   return true
 }
 
@@ -67,8 +80,14 @@ export function PreviewStage({
   const editsRef = useRef(edits)
   const trackRef = useRef(cropTrack)
   const aspect = edits.aspectRatio ?? '9:16'
+  const layoutMode = edits.layout?.mode ?? 'speaker_follow'
+  const letterboxPreview = layoutUsesLetterboxBlurPreview(layoutMode)
+  const headlineBandPreview = layoutReservesHeadlineBand(layoutMode)
+  const headlineBandPct = headlineBandPreview ? LAYOUT_HEADLINE_PREVIEW_FRAC * 100 : 0
   const normalizedTrack = cropTrack ? normalizeCropTrack(cropTrack) : null
-  const cropPreview = Boolean(videoUrl && normalizedTrack && usesSpeakerCropPreview(edits, normalizedTrack))
+  const cropPreview = Boolean(
+    videoUrl && normalizedTrack && usesSpeakerCropPreview(edits, normalizedTrack) && !letterboxPreview,
+  )
   editsRef.current = edits
   trackRef.current = normalizedTrack
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -86,7 +105,7 @@ export function PreviewStage({
     const el = videoRefInner.current
     if (!el) return
     ;(videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
-  }, [videoRef, cropPreview, aspect, videoUrl])
+  }, [videoRef, cropPreview, letterboxPreview, aspect, videoUrl])
 
   useLayoutEffect(() => {
     const el = wrapRef.current
@@ -115,9 +134,9 @@ export function PreviewStage({
     }
     setCanPlay(false)
     v.src = videoUrl
-    if (b) b.src = videoUrl
+    if (b && (cropPreview || letterboxPreview)) b.src = videoUrl
     v.currentTime = edits.trim.in / 1000
-  }, [videoUrl, edits.trim.in, cropPreview])
+  }, [videoUrl, edits.trim.in, cropPreview, letterboxPreview])
 
   useEffect(() => {
     let raf = 0
@@ -126,6 +145,7 @@ export function PreviewStage({
       const blur = blurRef.current
       const e = editsRef.current
       const track = trackRef.current
+      const letterbox = layoutUsesLetterboxBlurPreview(e.layout?.mode ?? 'speaker_follow')
       let src = e.trim.in
       if (v) {
         src = v.currentTime * 1000
@@ -234,7 +254,42 @@ export function PreviewStage({
             aria-hidden
           />
         ) : null}
-        {cropPreview ? (
+        {letterboxPreview ? (
+          <>
+            {headlineBandPreview ? (
+              <div
+                className="absolute inset-x-0 top-0 z-[2] border-b border-white/20 bg-white/95"
+                style={{ height: `${headlineBandPct}%` }}
+                aria-hidden
+              />
+            ) : null}
+            <video
+              ref={blurRef}
+              className="absolute inset-0 size-full max-w-none scale-110 object-cover blur-2xl"
+              muted
+              playsInline
+              aria-hidden
+            />
+            <video
+              ref={videoRefInner}
+              className={`absolute inset-x-0 z-[1] max-h-none max-w-none object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+              style={{
+                top: `${headlineBandPct}%`,
+                height: `${100 - headlineBandPct}%`,
+              }}
+              playsInline
+              poster={posterUrl ?? undefined}
+              onLoadedMetadata={() => {
+                const v = videoRefInner.current
+                const b = blurRef.current
+                if (v && b) b.currentTime = v.currentTime
+              }}
+              onCanPlay={() => setCanPlay(true)}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+            />
+          </>
+        ) : cropPreview ? (
           <>
             <video
               ref={blurRef}

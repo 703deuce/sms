@@ -655,6 +655,7 @@ export function EditorShell({
         edits={edits}
         dubs={dubs}
         layoutMode={edits.layout.mode}
+        onLayoutModeChange={setLayoutMode}
         platform={
           (aiMeta as { streamer?: { platform?: string } } | null)?.streamer?.platform === 'kick'
             ? 'kick'

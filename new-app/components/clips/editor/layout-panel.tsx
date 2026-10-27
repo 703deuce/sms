@@ -18,11 +18,11 @@ const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string;
   { id: 'split', title: 'Split (2-up)', desc: 'Stacked two-person layout.' },
   { id: 'grid3', title: 'Grid 3-up', desc: 'Three speakers visible.' },
   { id: 'grid4', title: 'Grid 4-up', desc: 'Four speakers visible.' },
-  { id: 'fit_blur', title: 'Fit with blur', desc: 'Letterbox with blurred fill.' },
+  { id: 'fit_blur', title: 'Fit with blur', desc: 'Whole shot letterboxed with blurred fill (no headline band).' },
   {
     id: 'full_frame',
-    title: 'Full frame (stream)',
-    desc: '16:9 at full width, blur fill, headline + source bar on export.',
+    title: 'Full frame',
+    desc: 'Whole 16:9 stream shot, blur fill, headline room on export (no face tracking).',
   },
   { id: 'center_crop', title: 'Fill', desc: 'Full-frame crop fill.' },
   {
