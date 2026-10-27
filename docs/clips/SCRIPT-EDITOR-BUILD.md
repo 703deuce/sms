@@ -2,7 +2,9 @@
 
 **Status:** **M3** — timeline (lane slots + core tools), **output-clock preview** for EDL gaps, recording-ready **take/track** types (§2.7, no capture UI). **Export deferred to M5.** M4 next.  
 **Product spec:** `docs/clips/script-editor.md` (v1.1 — full Descript-at-launch scope).  
-**Owner decisions (2026-10-26):** see §0 “Decisions locked” below. **Scope expansion (2026-10-27):** §0.1.
+**Owner decisions (2026-10-26):** see §0 “Decisions locked” below. **Scope expansion (2026-10-27):** §0.1. **Product order:** `docs/ROADMAP.md` — script editor (this doc) is **phase 1**; no MVP bar.
+
+**Agent cadence:** progress note every **10–15 min** on long work; end with **READY TO PUSH** or a **clear question** (owner standing direction).
 
 ---
 

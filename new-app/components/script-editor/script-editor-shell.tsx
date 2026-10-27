@@ -74,6 +74,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [scrollLeftPx, setScrollLeftPx] = useState(0)
   const dragSelectRef = useRef(false)
   const outputPlayAnchorRef = useRef<{ t: number; out0: number } | null>(null)
+  const playheadMsRef = useRef(playheadMs)
+  playheadMsRef.current = playheadMs
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
@@ -123,8 +125,13 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     if (!playing || !edlUsesOutputClock(edl)) return
     const v = videoRef.current
     if (!v) return
-    const anchor = outputPlayAnchorRef.current ?? { t: performance.now(), out0: outputMs }
-    outputPlayAnchorRef.current = anchor
+    if (!outputPlayAnchorRef.current) {
+      const out0 =
+        sourceMsToOutputTime(playheadMsRef.current, edl) ??
+        Math.max(0, playheadMsRef.current - data.rangeStartMs)
+      outputPlayAnchorRef.current = { t: performance.now(), out0 }
+    }
+    const anchor = outputPlayAnchorRef.current
     let raf = 0
     const tick = () => {
       const out = clampOutputMs(anchor.out0 + (performance.now() - anchor.t), edl)
@@ -134,17 +141,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         outputPlayAnchorRef.current = null
         return
       }
-      const src = sourceMsAtOutput(out, edl, playheadMs)
+      const src = sourceMsAtOutput(out, edl, playheadMsRef.current)
       v.currentTime = videoTimeSecFromSourceMs(src, data.rangeStartMs)
       setPlayheadMs(src)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
-    return () => {
-      cancelAnimationFrame(raf)
-      outputPlayAnchorRef.current = null
-    }
-  }, [playing, edl, outDur, data.rangeStartMs, outputMs, playheadMs])
+    return () => cancelAnimationFrame(raf)
+  }, [playing, edl, outDur, data.rangeStartMs])
 
   const seekToSourceMs = useCallback(
     (ms: number) => {

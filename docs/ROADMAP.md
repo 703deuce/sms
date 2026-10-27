@@ -1,23 +1,33 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-27 — Rick: clipper → **script editor M1–M13** (full Descript-at-launch scope per `SCRIPT-EDITOR-BUILD.md` §0.1) → **STOP** → [polish / fine-tuning pass](#clipper-fine-tuning-pass-after-script-editor); **AI Studio ON HOLD** (Underlord / Overdub / Eye Contact not in launch queue); screenwriting on hold behind `FEATURE_SCREENWRITING`  
-**Prod clipper (2026-10-27):** Deepgram+Whisper fallback, B2 worker source cache, stage-aware ETA, 1080p export; script editor shipping on `305f73fae`+ train.
+**Last updated:** 2026-10-27 — **Standing direction (Rick):** no MVP — every feature ships **complete and best-in-class**. Build order **1→4** below. **AI Studio ON HOLD** (Underlord / Overdub / Eye Contact); screenwriting on hold behind `FEATURE_SCREENWRITING`.  
+**Prod clipper (2026-10-27):** Deepgram+Whisper fallback, B2 worker source cache, stage-aware ETA, 1080p export; script editor train ahead of origin (M1–M3+).
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.
 
 ---
 
-## Build order (owner final)
+## Standing direction (owner)
 
-| # | Product | Status (2026-10-27) |
-|---|---------|---------------------|
-| **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS** — core pipeline live on prod (see below) |
-| **2** | **Script editor** — Descript-style transcript editor | **IN PROGRESS** — M1–M2 shipped on prod; M3+ per `docs/clips/SCRIPT-EDITOR-BUILD.md` |
-| — | **STOP** after script editor milestones ship | No new product work until polish pass (below) |
-| — | **AI Studio** (Higgsfield-like) | **ON HOLD** — not being added yet; no schedule; spec TBD when owner re-enables |
-| — | **Screenwriting** (Final Draft parity) | **ON HOLD** — `FEATURE_SCREENWRITING=0`; code/migrations/data kept (`screenwriting-wip`) |
+| Principle | Rule |
+|-----------|------|
+| **Quality bar** | No MVP. Ship each surface **complete and best-in-class**, not a thin slice. |
+| **Working cadence** | During long runs: post a **short progress note every 10–15 minutes**. Never go silent — end with a **clear question** or **READY TO PUSH**. |
+| **Vision LLM** | Clipper/reframe: **no vision-LLM checker at start**. Optional **Gemini 3.1 frame check** later **only if** quality gaps remain. |
+| **Feature maps** | Owner **Descript feature map + gap matrix** coming → will extend script editor milestones (**M7+**). Until then, follow `docs/clips/SCRIPT-EDITOR-BUILD.md`. |
 
-**Then (after script editor milestones):** [Clipper fine-tuning / polish pass](#clipper-fine-tuning-pass-after-script-editor) across clipper, Streamer, and script editor — not a new product.
+---
+
+## Build order (owner final — 2026-10-27)
+
+| Phase | Product | Scope |
+|-------|---------|--------|
+| **1** | **Script editor** | Full **Descript-style** transcript editor **including recording** (screen, webcam, mic, remote guests when map lands). M1–M6 core + **M7–M13** launch scope + recording milestones TBD. See `docs/clips/SCRIPT-EDITOR-BUILD.md`. |
+| **2** | **Clipper (best-in-class)** | **3–5 person** tracking with **re-ID**; **auto layouts** — full frame, single follow, **2-person split**, **4-person grid** (upsize panels); **varied clip and edit styles**; **calmer speaker-follow** — Deepgram diarization primary, **LEAD ≤ 0**, **MIN_SEG 2–3 s**, **hold on dropout**; full [polish list](#2-clipper-best-in-class-phase-2) below. |
+| **3** | **Streamer** | **Full Streamer** product — **near-real-time VOD clipping** (not true live). Resumable VOD, S2–S15 per `docs/clips/STREAMER_BUILD_SPEC.md` / `PROGRESS.md`. |
+| **4** | **UI polish** | **Every page** — consistent UX, loading/empty/error, performance; **last** after 1–3. |
+
+**Not in queue:** AI Studio (Higgsfield-like). **On hold:** Screenwriting (`FEATURE_SCREENWRITING=0`).
 
 ### Before charging (launch blocker)
 
@@ -27,90 +37,75 @@ Single source of truth for build order and status. Update the **Last updated** l
 
 ---
 
-## 1. Regular clipper (active — NOW)
+## 1. Script editor (phase 1 — active)
 
-**Goal:** End-to-end: direct-to-storage upload → `completeClipUpload` → `createClipProject` / `PROCESS_PROJECT` → worker download by storage key → transcribe → pick clips → preview → `RENDER_CLIP` → thumbnails → export.
-
-| Layer | Notes |
-|-------|--------|
-| Upload | S3 multipart + Supabase TUS; `clip_upload_parts`; resume; `/chunk` → 410; legacy `app_chunked` rejected on client |
-| Web | `lib/clips/upload.ts`, `lib/server/clips/uploads.ts` |
-| Worker | `pipeline.py`, `clips_worker/render_job.py` |
-| **ASR** | **LIVE** — Deepgram primary, local Whisper fallback (`eeffb66c7`+) |
-| **B2 egress** | **LIVE** — on-disk source cache `2f9e01faf`, `CLIPS_SOURCE_CACHE_MAX_GB`, shared mount both worker lanes |
-| **ETA** | **LIVE** — stage-aware upload ETA + poll clamp (`db41e7a6b`) |
-| **Export** | **LIVE** — 1080p export (`3083d08d3`) |
-| **Retry/resume** | Re-queue skips transcribe when `transcriptWords` on project; picker pass1 re-runs (not persisted); source re-download uses cache |
-| **RENDER_CLIP / `download_object`** | No inner re-import in `run_render_clip_job` — `test_render_job_storage.py`, `test_download_object_shadow.py` |
-| **Worker syntax** | Fixed `streamer/render_job.py` upload `elif` branch (`e3264ed9a`) |
-| **Prod workers** | `clips-worker` + `clips-worker-stream` @ `db41e7a6b` worker tree (manager verified Oct 2026) |
-
-**Specs:** `docs/clips/clipping_build_plan.md`, `docs/clips/PROGRESS.md`
-
----
-
-## 2. Script editor (next after clipper)
-
-Descript-style transcript editing.
+Descript-class editor: transcript, timeline, scenes, media, music, recording takes, export integration.
 
 | Doc | Purpose |
 |-----|---------|
-| **`docs/clips/SCRIPT-EDITOR-BUILD.md`** | **Primary build plan** — milestones (§D), Prisma draft, APIs, component tree, EDL/render bridge |
-| **`docs/clips/script-editor.md`** | Implementation spec v1.0 (layout, EDL, tests) |
-| **`docs/clips/script-editor-SOURCES.txt`** | Reference screenshot URLs (Descript help, Kapwing) |
-| `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md` | Earlier notes (superseded by SCRIPT-EDITOR-BUILD.md for order) |
+| **`docs/clips/SCRIPT-EDITOR-BUILD.md`** | Milestones M1–M13 + recording §2.7; Prisma/API/component plan |
+| **`docs/clips/script-editor.md`** | Spec + §D1 browser tests |
+| **`docs/clips/script-editor-SOURCES.txt`** | Reference screenshots |
 
-**Gate:** Regular clipper passes prod browser test → schedule editor milestones per SCRIPT-EDITOR-BUILD.md.
-
----
-
-## 3. AI Studio (on hold)
-
-Higgsfield-like product. **Owner (2026-10-27): not in the build queue** — do not start implementation or scheduling. When re-enabled, spec and order will be decided separately (after polish pass unless owner changes plan).
+**Status (2026-10-27):** M1–M2 on prod; **M3** shipped locally (timeline + lane slots, gap output-clock preview); M4+ next. **Do not** expose premature composition export until M5.
 
 ---
 
-## Clipper fine-tuning pass (after script editor)
+## 2. Clipper best-in-class (phase 2)
 
-Quality and layout intelligence for the **regular clipper** (and shared reframe stack), informed by many real uploads — not tuned to a single test video.
+Runs **after** script editor phase 1 is complete (owner map + milestones). Reuses shared reframe/render stack with script editor.
 
-| Item | Intent |
+### Core pipeline (already live — maintain)
+
+Upload → `PROCESS_PROJECT` → transcribe → pick clips → `RENDER_CLIP` → export. See `docs/clips/clipping_build_plan.md`, `docs/clips/PROGRESS.md`.
+
+| Layer | Notes |
+|-------|--------|
+| ASR | Deepgram primary, Whisper fallback |
+| B2 / cache | Worker source cache, shared mount |
+| Export | 1080p, B-roll via `broll_render.py` |
+
+### Best-in-class deliverables (phase 2)
+
+| Area | Target |
 |------|--------|
-| **(a) Face + active speaker** | Generalize face tracking and active-speaker reframing across diverse footage; avoid overfitting to one golden test clip. |
-| **(b) Single-person + corner webcam** | Single-person streams with a small corner webcam box must **not** be treated as several people; consider a plain full-frame clip when appropriate. |
-| **(c) Top/bottom split** | Test and **auto-choose** top/bottom split layout when the scene fits (vs speaker-follow or fit-only). |
-| **(d) Variety across clips** | Vary layout treatment and caption/style choices across clips in one project instead of one template for every output. |
-| **(e) Wide two-shot crop** | Fix reframing that crops a wide two-shot and cuts one person in half. |
-| **(f) ETA calibration** | Further tune stage-aware ETA as more prod timings land (initial calibration shipped Oct 2026). |
-| **(g) Parallel render** | Further tune `CLIPS_RENDER_CONCURRENCY` / ffmpeg threads per host (initial pool shipped Oct 2026). |
-| **(h) Speaker-follow calmness** | **Owner feedback (proj_89c551443cb34a48a034a2260e9eeeca, 25 min interview):** 2/4 clips framed the wrong talker; one clip panned to the mic ~2 s during a pause before landing on the guest. **Goal:** stay on the current person; switch **slightly late** (not early), only when someone is clearly talking. **Planned (`v3/speakercrop_v2.py`):** `LEAD` 0.4 → 0 or small lag; `MIN_SEG` 0.8 → ~2–3 s; higher `HYST` + require sustained speech (≥~1 s) from new speaker before cut; **Deepgram word-level diarization (`spk`)** as primary who-is-talking signal (Resemblyzer clusters demoted); lips only to map speaker→face; **hold last crop** when face detection drops (pauses, head turns); ignore pauses and backchannels (“yeah”, “mm-hm”) as switch triggers; **regression test** on this interview fixture. |
-| **(i) Multi-person speaker follow (3–5 people)** | **`v3/speakercrop_v2.py` today:** hardcoded 2 slots (`pos=[0.3W,0.7W]`, top-2 faces, `k in 0..1`). **Plan:** track **N** faces with stable IDs (position/IoU tracker plus face embedding re-ID across cuts and head turns); take speaker count and per-word speaker labels from **Deepgram diarization**; map each Deepgram speaker to a face ID by correlating lip motion with that speaker's word times across the clip; crop follows the active speaker under the same calmness rules as **(h)**; when 2+ talk at once, or the speaker is unknown, use a wide or fit-blur group shot (or a 2-up split for two active talkers); off-screen speakers hold the last on-screen subject; add **tests** with a synthetic 3–4 face track. |
+| **Multi-person (3–5)** | Face tracks + **embedding re-ID** across cuts/head turns; map **Deepgram `spk`** → face via lip correlation |
+| **Layouts** | Auto **full**, **single follow**, **2-up split**, **4-person grid**; top/bottom split when scene fits; no bad half-crops on two-shots |
+| **Clip variety** | Diverse layout + caption/style choices **per clip** in a project (not one template for all) |
+| **Speaker-follow calmness** | **LEAD ≤ 0**, **MIN_SEG 2–3 s**, higher hysteresis; sustained speech before switch; **hold** on face dropout; ignore pauses/backchannels |
+| **Corner webcam** | Single stream + small PiP → don’t invent extra speakers; optional full-frame clip |
+| **ETA / render** | Continue calibrating stage ETA; `CLIPS_RENDER_CONCURRENCY` / ffmpeg tuning |
+| **Quality gate** | Ship without vision-LLM; add Gemini 3.1 frame check only if needed |
 
-**Scope:** **Post–script-editor polish** — same pass across **clipper, Streamer, and script editor** (and shared reframe stack). Do not schedule until script editor milestones are done and owner says GO on fine-tuning.
+**Implementation home:** `v3/speakercrop_v2.py`, picker, `ClipEditsV2` layout, worker render.
 
 ---
 
-## Streamer (VOD) — backlog (not in 1–3 sequence)
+## 3. Streamer (phase 3)
 
-**Spec:** `docs/clips/STREAMER_BUILD_SPEC.md`. **No live clipping.**
+**Near-real-time VOD clipping** — not true live. Full milestone set in `docs/clips/STREAMER_BUILD_SPEC.md`.
 
-| Open item | Notes |
-|-----------|--------|
-| **VOD resumable-download fix** | Long imports must survive worker restart/reap: checkpointed download + resume (see spec §0.2.4 idempotent, resumable jobs; `StreamVod.state`). |
+| Priority open item | Notes |
+|--------------------|--------|
+| **VOD resumable download** | Checkpointed import; survive worker restart (`StreamVod.state`) |
 
-Further S2–S15 milestones: `docs/clips/PROGRESS.md`.
+---
+
+## 4. UI polish (phase 4 — last)
+
+Cross-app pass: every route, panel, and workflow — after script editor, clipper phase 2, and Streamer.
+
+---
+
+## AI Studio (on hold)
+
+Higgsfield-like product. **Not in build queue.** Underlord chat, Overdub, Eye Contact stay with AI Studio.
 
 ---
 
 ## Screenwriting (on hold)
 
-**Hidden in prod:** `FEATURE_SCREENWRITING` unset or `0` → no nav link; `/app/sw/*`, `/api/sw/*`, `/s/*` → 404.
-
-**Re-enable:** `FEATURE_SCREENWRITING=1` on web + redeploy.
-
-**Branch:** `screenwriting-wip`  
-**Docs:** `docs/clips/SCREENWRITING-BUILD.md`, `docs/clips/screenwriting-ui.md`, `docs/clips/screenwriting-format-flow.md`, `docs/clips/sw-browser-test-1.md`  
-**Open when resumed:** L07 notes column, L19 breakdown, L20 revisions/locks, inline comments, menus, live collab deploy, **D01–D41**
+`FEATURE_SCREENWRITING=0` → 404. Branch `screenwriting-wip`; docs under `docs/clips/SCREENWRITING-*`.
 
 ---
 
@@ -118,10 +113,8 @@ Further S2–S15 milestones: `docs/clips/PROGRESS.md`.
 
 | Date | Milestone |
 |------|-----------|
-| 2026-10-27 | Prod: Deepgram+Whisper, B2 source cache, ETA fix, 1080p export live (`db41e7a6b`); retry/resume transcript-aware (pending push) |
-| 2026-10-27 | Owner: AI Studio **ON HOLD**; after script editor milestones → STOP → polish pass (not AI Studio) |
-| 2026-10-27 | Roadmap: clipper → script editor (SCRIPT-EDITOR-BUILD.md) → STOP → fine-tuning; Streamer VOD resumable-download stays in backlog |
-| 2026-10-26 | Roadmap: clipper → script editor → Streamer VOD → AI Studio → screenwriting on hold |
-| 2026-10-26 | `FEATURE_SCREENWRITING` off; middleware 404; nav hidden (`a8f126228`) |
-| 2026-10-26 | Clipper: direct upload `64d759c87`, `app_chunked` guard `ddd3d010d`, worker render fixes `e3264ed9a` |
-| 2026-10-26 | `screenwriting-wip` @ `979106404` merged with master flag/roadmap |
+| 2026-10-27 | **Standing direction:** no MVP; order 1 script editor (+recording) → 2 clipper BIC → 3 Streamer → 4 UI polish |
+| 2026-10-27 | Script editor: M3 timeline, M7–M13 docs, B-roll reuse §2.6, recording take model §2.7 |
+| 2026-10-27 | Prod clipper: Deepgram+Whisper, B2 cache, ETA, 1080p (`db41e7a6b`) |
+| 2026-10-27 | AI Studio **ON HOLD** |
+| 2026-10-26 | Clipper upload/render fixes; screenwriting flag off |
