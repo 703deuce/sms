@@ -23,16 +23,16 @@ def test_speakercrop_env_fill_fit_split():
 
     split = speakercrop_env_for_settings({"layout": "split"})
     assert split["LAYOUT_MODE"] == "split"
-    assert split.get("MULTIPERSON") != "1"
+    assert split.get("REFRAME_V") != "2"
     assert split["FORCE_SPLIT"] == "1"
 
 
 def test_speaker_follow_default_uses_legacy_reframe_path(monkeypatch):
     monkeypatch.delenv("REFRAME_V", raising=False)
+    monkeypatch.delenv("CLIPPER_MULTIPERSON_ENABLED", raising=False)
     assert multiperson_reframe_enabled() is False
     spk = speakercrop_env_for_settings({"layout": "speaker_follow"})
     assert spk["LAYOUT_MODE"] == "speaker_follow"
-    assert spk.get("MULTIPERSON") != "1"
     assert spk.get("REFRAME_V") != "2"
 
     speakercrop_src = (
@@ -40,6 +40,15 @@ def test_speaker_follow_default_uses_legacy_reframe_path(monkeypatch):
     ).read_text()
     assert 'REFRAME_V' in speakercrop_src
     assert 'os.environ.get("REFRAME_V"' in speakercrop_src or "REFRAME_V" in speakercrop_src
+
+
+def test_multiperson_env_only_when_clipper_flag_enabled(monkeypatch):
+    monkeypatch.delenv("CLIPPER_MULTIPERSON_ENABLED", raising=False)
+    assert layout_env("split").get("REFRAME_V") != "2"
+    monkeypatch.setenv("CLIPPER_MULTIPERSON_ENABLED", "1")
+    assert layout_env("split")["REFRAME_V"] == "2"
+    assert layout_env("speaker_follow")["REFRAME_V"] == "2"
+    assert layout_env("fill").get("REFRAME_V") != "2"
 
 
 def test_project_layout_matches_pipeline():

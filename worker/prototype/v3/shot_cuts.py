@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from tracking import histogram_shot_cuts
+try:
+    from tracking import histogram_shot_cuts
+except ImportError:
+    from prototype.v3.tracking import histogram_shot_cuts  # type: ignore[no-redef]
 
 
 def _cuts_from_scenedetect(video_path: str) -> list[float]:

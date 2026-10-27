@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from clips_worker.clipper_flags import maybe_set_multiperson_env
 from clips_worker.ffmpeg_util import stderr_tail
 from clips_worker.render_concurrency import ffmpeg_threads_per_job
 
@@ -147,6 +148,7 @@ def layout_env(layout: str) -> dict[str, str]:
         env["FORCE_SPLIT"] = "1"
         env["LAYOUT_MODE"] = "split"
         env["LAYOUT_STYLE"] = "split"
+        maybe_set_multiperson_env(env, layout)
     elif layout == "fill":
         env["SPLIT"] = "0"
         env["LAYOUT_MODE"] = "fill"
@@ -159,10 +161,12 @@ def layout_env(layout: str) -> dict[str, str]:
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = layout
         env["LAYOUT_STYLE"] = layout
+        maybe_set_multiperson_env(env, layout)
     elif layout == "speaker_follow":
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = "speaker_follow"
         env["LAYOUT_STYLE"] = "speaker_follow"
+        maybe_set_multiperson_env(env, layout)
     else:
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = "speaker_follow"

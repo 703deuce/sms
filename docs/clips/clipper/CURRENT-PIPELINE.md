@@ -136,13 +136,13 @@ Production clipper reframing is centered on **`worker/prototype/v3/speakercrop.p
 | Face detection (YuNet) | `worker/prototype/v3/speakercrop.py` | `FaceDetectorYN.create` + per-frame `det.detect` loop | **Yes** — all clip/script reframes via `run_speakercrop` |
 | Face landmarks / lip activity | `speakercrop.py` | `FaceLandmarker.detect` on face crops; `jawOpen` blendshape | **Yes** |
 | Multi-person tracking (2-up legacy) | `speakercrop.py` | Left/right slot assignment (`pos[0]`, `pos[1]`); tracks `xpos`, `ypos`, `mouth` per speaker | **Yes** when `MULTIPERSON=0` or &lt;2 persons |
-| Multiperson tracklets + re-ID (3–5) | `prototype/v3/tracking.py` | IoU association, SFace embed, agglomerative cluster | **Yes** when `MULTIPERSON=1` |
+| Multiperson tracklets + re-ID (3–5) | `prototype/v3/tracking.py` | IoU association, SFace embed, agglomerative cluster | **When** `CLIPPER_MULTIPERSON_ENABLED=1` **and** layout sets `MULTIPERSON=1` |
 | Layout director | `prototype/v3/director.py` | Viterbi + overlap / MIN_SHOT / LEAD | **Yes** |
 | Crop track v2 | `multiperson_pipeline.py`, `crop_format.py` | `version:2` segments + slots | **Yes** |
 | Multiperson render | `clips_worker/multiperson_render.py` | ffmpeg filtergraphs (`filtergraph.py`) | **Yes** |
 | Active speaker selection | `speakercrop.py` | Visual score + optional Resemblyzer (`VOICE`); `HYST` to switch | **Yes** |
 | Split layout (stacked) | `speakercrop.py` | `SPLIT=1` / dual-speaker render branch | **Yes** when `layout_env` sets split / `speaker_follow` |
-| Layout presets | `worker/clips_worker/render_clip.py` | `layout_env(layout)` → `LAYOUT_MODE`, `SPLIT`, `FORCE_SPLIT` env | **Yes** — `speaker_follow`, `split`, `fill`, `fit` |
+| Layout presets | `worker/clips_worker/render_clip.py` | `layout_env(layout)` → `LAYOUT_MODE`, `SPLIT`, `FORCE_SPLIT`; `MULTIPERSON` only via `clipper_flags.clipper_multiperson_enabled()` | **Yes** — `speaker_follow`, `split`, `fill`, `fit` |
 | Smoothing / shots | `speakercrop.py` | `MIN_SEG`, `HYST`, `LEAD`, `EASE` (env from `render_clip.run_speakercrop`) | **Yes** |
 | Speakercrop failure fallback | `render_clip.py` | `ffmpeg_fit_export` | **Yes** — sets `fit_fallback` on render meta |
 | Face+speech gate | `subject_reframe.py` | `has_face_and_speech` | **Yes** — chooses speakercrop vs motion/fit in `reframe_clip_preview` |

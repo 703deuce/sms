@@ -1,7 +1,10 @@
 # Clipper multiperson — progress
 
-**Branch:** `cursor/clipper-multiperson-e321`  
-**Status:** Implementation landed (pytest, no video renders in CI)
+**Status:** Implementation landed on `master`; **multiperson hot path gated** until owner QA.
+
+## Production gate (default OFF)
+
+Worker env `CLIPPER_MULTIPERSON_ENABLED` (default `0`). When off, `layout_env` does **not** set `MULTIPERSON=1` — clips use legacy `speakercrop.py` (2-up + voice). Set `CLIPPER_MULTIPERSON_ENABLED=1` on the worker after short-clip validation.
 
 ## Done
 
