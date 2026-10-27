@@ -18,6 +18,8 @@ import {
   clipWhySummary,
   type ClipAiMeta,
 } from '@/lib/clips/clip-results-chips'
+import { clipCardAspectClass } from '@/lib/clips/card-aspect'
+import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ThumbsDown, EyeOff } from 'lucide-react'
 
 export function ClipCard({
@@ -26,12 +28,14 @@ export function ClipCard({
   onDownload,
   onHidden,
   isStreamer = false,
+  cardAspect = '9:16' as ExportAspect,
 }: {
   clip: ClipCardData
   projectId: string
   onDownload: (clipId: string) => void
   onHidden?: (clipId: string) => void
   isStreamer?: boolean
+  cardAspect?: ExportAspect
 }) {
   const router = useRouter()
   const [thumbBusy, setThumbBusy] = useState(false)
@@ -50,7 +54,7 @@ export function ClipCard({
         method: 'PATCH',
         body: JSON.stringify({ hidden: true, disliked: true }),
       })
-      toast.success('Clip hidden')
+      toast.success('Clip hidden — finding a replacement…')
       onHidden(clip.id)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not hide clip')
@@ -91,7 +95,7 @@ export function ClipCard({
       data-testid="clip-card"
       className="group flex flex-col gap-2 overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
     >
-      <div className="relative aspect-[9/16] bg-muted">
+      <div className={`relative bg-muted ${clipCardAspectClass(cardAspect)}`}>
         {clip.previewUrl || clip.posterUrl ? (
           <ClipCardVideo clipId={clip.id} previewUrl={clip.previewUrl} posterUrl={clip.posterUrl} />
         ) : null}

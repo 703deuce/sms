@@ -1,6 +1,7 @@
 'use client'
 
 import { ClipCard } from '@/components/clips/clip-card'
+import type { ExportAspect } from '@/lib/clips/export-aspect'
 
 export type ClipCardData = {
   id: string
@@ -22,12 +23,14 @@ export function ClipGrid({
   onDownload,
   onHidden,
   isStreamer = false,
+  cardAspect = '9:16' as ExportAspect,
 }: {
   clips: ClipCardData[]
   projectId: string
   onDownload: (clipId: string) => void
   onHidden?: (clipId: string) => void
   isStreamer?: boolean
+  cardAspect?: ExportAspect
 }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -39,6 +42,7 @@ export function ClipGrid({
           onDownload={onDownload}
           onHidden={onHidden}
           isStreamer={isStreamer}
+          cardAspect={cardAspect}
         />
       ))}
     </div>

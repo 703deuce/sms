@@ -130,6 +130,39 @@ export function ProjectClipsView({
     setClips(data.clips as ClipCardData[])
   }, [projectId])
 
+  const replacePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (replacePollRef.current) clearInterval(replacePollRef.current)
+    }
+  }, [])
+
+  const onClipHidden = useCallback(
+    (clipId: string) => {
+      setClips((prev) => prev.filter((c) => c.id !== clipId))
+      if (replacePollRef.current) clearInterval(replacePollRef.current)
+      let attempts = 0
+      const tick = async () => {
+        attempts += 1
+        try {
+          await refreshClipsList()
+        } catch {
+          if (attempts === 2) {
+            toast.error('Could not refresh clips — reload the page if your replacement does not appear.')
+          }
+        }
+        if (attempts >= 18) {
+          if (replacePollRef.current) clearInterval(replacePollRef.current)
+          replacePollRef.current = null
+        }
+      }
+      replacePollRef.current = setInterval(() => void tick(), 4000)
+      void tick()
+    },
+    [refreshClipsList],
+  )
+
   const hydrateReady = useCallback(async (payload: ProjectStatusPayload) => {
     const expected = payload.clipCount ?? 0
     let list: ClipCardData[] = []
@@ -156,16 +189,24 @@ export function ProjectClipsView({
   useEffect(() => {
     if (readyFromServer) return
     let stop = false
+    let attemptsSinceOk = 0
     const pollMs = isStreamer ? 2500 : 4000
     const tick = async () => {
       try {
         let data: ProjectStatusPayload
         try {
           data = await getProjectStatus(projectId)
-        } catch {
-          if (!stop && !terminalRef.current) setTimeout(tick, pollMs)
+        } catch (pollErr) {
+          if (!stop && !terminalRef.current) {
+            if (attemptsSinceOk === 0) {
+              console.warn('[clipper:poll] project status failed', pollErr)
+            }
+            attemptsSinceOk += 1
+            setTimeout(tick, pollMs)
+          }
           return
         }
+        attemptsSinceOk = 0
         if (stop) return
         if (typeof data.etaSec === 'number') setProgressEtaSec(data.etaSec)
         if (data.stage !== undefined) setProgressStage(data.stage ?? null)
@@ -316,7 +357,8 @@ export function ProjectClipsView({
               etaSec={progressEtaSec}
               stage={progressStage}
               onDownload={(id) => void onDownload(id)}
-              onHidden={(id) => setClips((prev) => prev.filter((c) => c.id !== id))}
+              onHidden={onClipHidden}
+              cardAspect={exportAspect}
             />
             </>
           ) : processing ? (
@@ -370,8 +412,9 @@ export function ProjectClipsView({
                 clips={clips}
                 projectId={projectId}
                 onDownload={(id) => void onDownload(id)}
-                onHidden={(id) => setClips((prev) => prev.filter((c) => c.id !== id))}
+                onHidden={onClipHidden}
                 isStreamer={isStreamer}
+                cardAspect={exportAspect}
               />
             )}
           </Panel>

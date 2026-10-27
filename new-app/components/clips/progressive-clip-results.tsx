@@ -4,6 +4,7 @@ import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
 import { ClipGridSkeleton } from '@/components/clips/clip-grid-skeleton'
 import { Panel } from '@/components/app/page-primitives'
 import { formatEtaSeconds } from '@/lib/clips/format-eta'
+import type { ExportAspect } from '@/lib/clips/export-aspect'
 
 type Props = {
   projectId: string
@@ -14,6 +15,7 @@ type Props = {
   stage?: string | null
   onDownload?: (clipId: string) => void
   onHidden?: (clipId: string) => void
+  cardAspect?: ExportAspect
 }
 
 function reframeLabel(stage: string | null | undefined): string | null {
@@ -31,6 +33,7 @@ export function ProgressiveClipResults({
   stage,
   onDownload,
   onHidden,
+  cardAspect = '9:16',
 }: Props) {
   const pending = Math.max(0, clipsTotal - clips.length)
   const reframe = reframeLabel(stage)
@@ -43,17 +46,14 @@ export function ProgressiveClipResults({
     >
       <div className="flex flex-col gap-4">
         {clips.length > 0 ? (
-<<<<<<< HEAD
           <ClipGrid
             clips={clips}
             projectId={projectId}
             onDownload={onDownload ?? (() => {})}
             onHidden={onHidden}
             isStreamer={false}
+            cardAspect={cardAspect}
           />
-=======
-          <ClipGrid clips={clips} projectId={projectId} onDownload={onDownload ?? (() => {})} isStreamer={false} />
->>>>>>> c4744c2ef (feat(editor): transcribe poll, media library, hub processing list)
         ) : null}
         {pending > 0 ? (
           <div className="flex flex-col gap-2" aria-live="polite">

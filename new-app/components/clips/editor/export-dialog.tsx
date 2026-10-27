@@ -167,7 +167,8 @@ export function ExportDialog({
           <div>
             <h2 id="export-dialog-title" className="text-lg font-semibold">Export clip</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {resolution} · captions burned in
+              {resolution}
+              {edits.captions?.enabled === false ? ' · captions off' : ' · captions burned in'}
             </p>
           </div>
         </div>
@@ -234,9 +235,18 @@ export function ExportDialog({
             </SelectContent>
           </Select>
         </div>
+        {edits.captions?.enabled === false ? (
+          <p className="mt-3 text-xs text-muted-foreground" role="note">
+            Captions are disabled for this clip — export will not burn subtitles. Turn captions on in the Captions panel to include them.
+          </p>
+        ) : null}
         <div className="mt-4 flex items-center justify-between gap-2">
           <Label className="text-sm">Also download .srt</Label>
-          <Switch checked={alsoSrt} onCheckedChange={(checked) => setAlsoSrt(Boolean(checked))} />
+          <Switch
+            checked={alsoSrt}
+            disabled={edits.captions?.enabled === false}
+            onCheckedChange={(checked) => setAlsoSrt(Boolean(checked))}
+          />
         </div>
         <p className="mt-2 text-xs text-muted-foreground">No watermark</p>
         {(edits.broll || []).some((b) => b.source === 'ai') && (
