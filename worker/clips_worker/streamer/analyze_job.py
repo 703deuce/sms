@@ -9,29 +9,34 @@ from pathlib import Path
 
 from psycopg2.extras import RealDictCursor
 
-from clips_worker.gpu.base import TranscribeReq
-from clips_worker.streamer.chunk_transcribe import transcribe_chunk_with_retry
 from clips_worker.streamer.progress import analyze_progress_payload
 from clips_worker.heartbeat import Heartbeat
 from clips_worker.pipeline import insert_clips_batch
-from clips_worker.storage import download_object, put_json, sign_url, upload_file
-from clips_worker.streamer.chunking import ffmpeg_slice_opus, merge_words, plan_chunks
-from clips_worker.streamer.config import CHUNK_MIN, CHUNK_OVERLAP_S, SCRATCH
+from clips_worker.storage import download_object, put_json, upload_file
+from clips_worker.streamer.chunking import merge_words
+from clips_worker.streamer.config import SCRATCH
 from clips_worker.streamer.keys import (
     stream_audio_key,
     stream_candidates_key,
     stream_chat_key,
-    stream_chunk_key,
     stream_signals_key,
 )
 from clips_worker.streamer.viewer_clips.fetch import fetch_viewer_clips_for_vod
 from clips_worker.streamer.chat.resolve import resolve_chat_after_transcribe
 from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.metadata import enrich_streamer_meta
-from clips_worker.streamer.chunk_signals import ensure_chunk_signals_stored, merge_chunk_signal_curves
+from clips_worker.streamer.chunk_signals import merge_chunk_signal_curves
+from clips_worker.streamer.long_vod_analyze import (
+    STREAM_VOD_MAX_EST_COST_USD,
+    enforce_vod_cost_cap,
+    log_stream_analyze_summary,
+    resolve_analyze_chunk_plan,
+    transcribe_vod_chunks,
+)
+from clips_worker.streamer.stream_dedupe import dedupe_stream_picks
+from clips_worker.streamer.stream_pipeline import clear_stream_vod_error
 from clips_worker.streamer.rank import rank_moments
 from clips_worker.streamer.collab_detect import CollabDetection, detect_collab, log_collab_detection
-from clips_worker.streamer.modal_transcribe import log_stream_modal_chunk
 from clips_worker.streamer.transcribe_stream import log_stream_transcribe_summary
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
 
@@ -89,6 +94,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
     cap_err = check_cap(conn, workspace_id, analysed_s)
     if cap_err:
         raise RuntimeError(cap_err)
+    clear_stream_vod_error(conn, vod_id)
 
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with Heartbeat(job["id"], post_progress, every_s=45) as hb:
@@ -99,9 +105,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             {"projectStatus": "TRANSCRIBING", "stage": "Transcribing", "progress": 22, "jobStatus": "RUNNING"},
         )
 
-        chunk_ms = CHUNK_MIN * 60 * 1000
-        overlap_ms = CHUNK_OVERLAP_S * 1000
-        ranges = plan_chunks(duration_ms, chunk_ms, overlap_ms)
+        chunk_ms, overlap_ms, ranges = resolve_analyze_chunk_plan(duration_ms)
         state["chunkPlan"] = {
             "v": 1,
             "chunkMs": chunk_ms,
@@ -109,14 +113,13 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             "ranges": [{"startMs": s, "endMs": e} for s, e in ranges],
         }
         _save_state(conn, vod_id, state)
+        chunk_min = chunk_ms // 60_000
         print(
             f"[clipper:stream] analyze_chunk_plan vodId={vod_id} chunks={len(ranges)} "
-            f"chunkMin={CHUNK_MIN} overlapS={CHUNK_OVERLAP_S}",
+            f"chunkMin={chunk_min} overlapS={overlap_ms // 1000}",
             flush=True,
         )
         chunks_state = state.get("chunks") or {}
-        done = {int(k) for k, v in chunks_state.items() if v.get("wordsKey")}
-        chunk_signal_payloads: list[dict] = []
 
         scratch = (SCRATCH / f"analyze_{vod_id}").resolve()
         scratch.mkdir(parents=True, exist_ok=True)
@@ -154,120 +157,32 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             _save_state(conn, vod_id, state)
         log_collab_detection(vod_id=vod_id, project_id=project_id, detection=detection)
         vod_transcribe_provider = detection.provider
+        preflight_est = enforce_vod_cost_cap(
+            vod_transcribe_provider,
+            analysed_s / 60.0,
+            len(ranges),
+        )
+        print(
+            f"[clipper:stream] analyze_cost_preflight vodId={vod_id} est_cost_usd={preflight_est:.4f} "
+            f"cap_usd={STREAM_VOD_MAX_EST_COST_USD}",
+            flush=True,
+        )
 
         chunk_started = time.time()
         transcribe_fallback: str | None = None
-        total_gpu_seconds = 0.0
         first_cold_start_s: float | None = None
         chat_executor = ThreadPoolExecutor(max_workers=1)
         chat_future = chat_executor.submit(get_chat, vod, None)
-        all_word_chunks: list[list[dict] | None] = [None] * len(ranges)
-        for idx, (start_ms, end_ms) in enumerate(ranges):
-            chunk_path = scratch / f"chunk_{idx}.opus"
-            if idx in done:
-                wkey = chunks_state[str(idx)]["wordsKey"]
-                wp = scratch / f"words_{idx}.json"
-                download_object(wkey, wp)
-                all_word_chunks[idx] = json.loads(wp.read_text())
-                if not chunk_path.exists():
-                    ffmpeg_slice_opus(audio_path, chunk_path, start_ms, end_ms)
-                skey_existing = (chunks_state.get(str(idx)) or {}).get("signalsKey")
 
-                def _upload_sig(p: Path, _idx=idx) -> None:
-                    sk = stream_chunk_key(workspace_id, vod_id, _idx, "signals.json")
-                    upload_file(sk, p, "application/json")
+        def _persist_state(st: dict) -> None:
+            _save_state(conn, vod_id, st)
 
-                chunk_signal_payloads.append(
-                    ensure_chunk_signals_stored(
-                        chunk_audio=chunk_path,
-                        words=all_word_chunks[idx] or [],
-                        vod_start_ms=start_ms,
-                        vod_end_ms=end_ms,
-                        signals_key=skey_existing,
-                        scratch=scratch,
-                        chunk_index=idx,
-                        upload_fn=_upload_sig,
-                    )
-                )
-                if not skey_existing:
-                    sk = stream_chunk_key(workspace_id, vod_id, idx, "signals.json")
-                    chunks_state[str(idx)] = {**(chunks_state.get(str(idx)) or {}), "signalsKey": sk}
-                    state["chunks"] = chunks_state
-                    _save_state(conn, vod_id, state)
-                continue
-
-            ffmpeg_slice_opus(audio_path, chunk_path, start_ms, end_ms)
-            ck = stream_chunk_key(workspace_id, vod_id, idx, "opus")
-            upload_file(ck, chunk_path, "audio/opus")
-
-            req = TranscribeReq(
-                audio_path=str(chunk_path),
-                audio_url=sign_url(ck, expires_s=7200),
-                offset_ms=start_ms,
-                language=(settings.get("streamer") or {}).get("language"),
-            )
-            prior = int((chunks_state.get(str(idx)) or {}).get("attempts") or 0)
-            res, chunk_meta = transcribe_chunk_with_retry(
-                conn,
-                req,
-                workspace_id,
-                project_id,
-                idx,
-                prior_attempts=prior,
-                vod_provider=vod_transcribe_provider,
-            )
-            if vod_transcribe_provider.startswith("modal") and getattr(res, "gpu_seconds", 0):
-                total_gpu_seconds += float(res.gpu_seconds)
-            telemetry = chunk_meta.telemetry if chunk_meta else None
-            if vod_transcribe_provider.startswith("modal") and isinstance(telemetry, dict):
-                if first_cold_start_s is None and telemetry.get("cold_start_s"):
-                    first_cold_start_s = float(telemetry["cold_start_s"])
-                log_stream_modal_chunk(
-                    vod_id=vod_id,
-                    chunk_index=idx,
-                    provider=vod_transcribe_provider,
-                    gpu_seconds=float(res.gpu_seconds or 0),
-                    cold_start_s=float(telemetry.get("cold_start_s") or 0),
-                )
-            wkey = stream_chunk_key(workspace_id, vod_id, idx, "words.json")
-            put_json(wkey, res.words)
-            chunks_state[str(idx)] = {
-                "wordsKey": wkey,
-                "startMs": start_ms,
-                "endMs": end_ms,
-                "attempts": prior + 1,
-                "done": True,
-            }
-            state["chunks"] = chunks_state
-            state["analyzeStartedAt"] = state.get("analyzeStartedAt") or chunk_started
-            _save_state(conn, vod_id, state)
-            all_word_chunks[idx] = res.words
-
-            def _upload_sig_fresh(p: Path, _idx=idx) -> None:
-                sk = stream_chunk_key(workspace_id, vod_id, _idx, "signals.json")
-                upload_file(sk, p, "application/json")
-
-            sig_payload = ensure_chunk_signals_stored(
-                chunk_audio=chunk_path,
-                words=res.words,
-                vod_start_ms=start_ms,
-                vod_end_ms=end_ms,
-                signals_key=None,
-                scratch=scratch,
-                chunk_index=idx,
-                upload_fn=_upload_sig_fresh,
-            )
-            chunk_signal_payloads.append(sig_payload)
-            sk = stream_chunk_key(workspace_id, vod_id, idx, "signals.json")
-            chunks_state[str(idx)]["signalsKey"] = sk
-            state["chunks"] = chunks_state
-            _save_state(conn, vod_id, state)
-
-            done_n = len([k for k, v in chunks_state.items() if v.get("wordsKey")])
+        def _on_chunk(done_n: int, total: int, res) -> None:
+            nonlocal transcribe_fallback, first_cold_start_s
             payload_prog = analyze_progress_payload(
-                stage=f"Transcribing {done_n}/{len(ranges)}",
+                stage=f"Transcribing {done_n}/{total}",
                 chunk_done=done_n,
-                chunk_total=len(ranges),
+                chunk_total=total,
                 started_at=float(state.get("analyzeStartedAt") or chunk_started),
             )
             if getattr(res, "transcription_engine", None):
@@ -281,6 +196,22 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             hb.update(stage=payload_prog["stage"], progress=payload_prog["progress"])
             post_progress(job["id"], payload_prog)
 
+        all_word_chunks, chunk_signal_payloads, chunk_metrics = transcribe_vod_chunks(
+            conn=conn,
+            vod_id=vod_id,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            ranges=ranges,
+            audio_path=audio_path,
+            scratch=scratch,
+            state=state,
+            chunks_state=chunks_state,
+            vod_transcribe_provider=vod_transcribe_provider,
+            settings=settings,
+            save_state=_persist_state,
+            on_chunk_progress=_on_chunk,
+        )
+
         words = merge_words([c for c in all_word_chunks if c], ranges)
         audio_minutes = analysed_s / 60.0
         summary_provider = vod_transcribe_provider
@@ -291,7 +222,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             project_id=project_id,
             provider=summary_provider,
             audio_minutes=audio_minutes,
-            gpu_seconds=total_gpu_seconds,
+            gpu_seconds=chunk_metrics.gpu_seconds,
             cold_start_s=first_cold_start_s,
             fallback=transcribe_fallback,
         )
@@ -346,6 +277,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             viewer_clips=viewer_clips or None,
             vod_signal_curves=vod_signal_curves,
         )
+        picks = dedupe_stream_picks(conn, vod, picks)
         signals_payload["chunkedSignals"] = True
         signals_payload["chunkCount"] = len(chunk_signal_payloads)
         sig_key = stream_signals_key(workspace_id, vod_id)
@@ -400,6 +332,14 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 }
             )
         insert_clips_batch(conn, clip_rows)
+        log_stream_analyze_summary(
+            vod_id=vod_id,
+            vod_minutes=audio_minutes,
+            chunks=len(ranges),
+            transcribe_ms=chunk_metrics.transcribe_ms,
+            est_cost_usd=chunk_metrics.est_cost_usd,
+            clips_out=len(clip_rows),
+        )
 
         pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
         render_id = f"job_{uuid.uuid4().hex}"

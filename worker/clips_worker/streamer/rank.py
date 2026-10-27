@@ -34,6 +34,15 @@ def rank_moments(
     duration_s = max(1, int(duration_ms / 1000))
     if vod_signal_curves:
         audio_sig = list(vod_signal_curves.get("audio") or [])
+        reaction_sig = list(vod_signal_curves.get("reaction") or [])
+        if reaction_sig:
+            if len(reaction_sig) < duration_s:
+                reaction_sig.extend([0.0] * (duration_s - len(reaction_sig)))
+            reaction_sig = reaction_sig[:duration_s]
+            audio_sig = [
+                max(audio_sig[i] if i < len(audio_sig) else 0.0, reaction_sig[i])
+                for i in range(duration_s)
+            ]
         transcript_sig = list(vod_signal_curves.get("transcript") or [])
         speaker_sig = list(vod_signal_curves.get("speakerChange") or [])
         if len(audio_sig) < duration_s:

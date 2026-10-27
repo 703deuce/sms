@@ -672,13 +672,11 @@ def main() -> None:
                                 (str(delay_s), msg[:500], job["id"]),
                             )
                         conn.commit()
+                        from clips_worker.streamer.stream_pipeline import user_retry_progress_payload
+
                         post_progress(
                             job["id"],
-                            {
-                                "jobStatus": "RUNNING",
-                                "stage": "retrying",
-                                "error": f"Retrying in {delay_s}s: {msg[:200]}",
-                            },
+                            user_retry_progress_payload(delay_s, msg),
                         )
                         continue
                     if job.get("type") in (

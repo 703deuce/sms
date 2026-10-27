@@ -32,13 +32,17 @@ def score_chunk_signals(
     """Score one rolling chunk; curves are chunk-local 1 Hz, keyed by vodStartMs/vodEndMs."""
     duration_s = max(1, int((vod_end_ms - vod_start_ms) / 1000))
     chunk_words = _words_in_vod_window(words, vod_start_ms, vod_end_ms)
+    audio = audio_signal_per_second(chunk_audio, duration_s)
+    transcript = transcript_signal_per_second(chunk_words, duration_s)
+    reaction = [max(float(a), float(t)) for a, t in zip(audio, transcript, strict=False)]
     return {
         "v": 1,
         "vodStartMs": vod_start_ms,
         "vodEndMs": vod_end_ms,
         "hz": 1,
-        "audio": audio_signal_per_second(chunk_audio, duration_s),
-        "transcript": transcript_signal_per_second(chunk_words, duration_s),
+        "audio": audio,
+        "transcript": transcript,
+        "reaction": reaction,
         "speakerChange": speaker_change_signal_per_second(chunk_words, duration_s),
     }
 
@@ -76,7 +80,7 @@ def ensure_chunk_signals_stored(
 
 def merge_chunk_signal_curves(chunks: list[dict], duration_s: int) -> dict[str, list[float]]:
     """Stitch chunk-local curves into full-VOD 1 Hz series (max in overlap)."""
-    keys = ("audio", "transcript", "speakerChange")
+    keys = ("audio", "transcript", "reaction", "speakerChange")
     out: dict[str, list[float]] = {k: [0.0] * duration_s for k in keys}
     for ch in sorted(chunks, key=lambda c: int(c.get("vodStartMs") or 0)):
         off = int(ch.get("vodStartMs") or 0) // 1000
