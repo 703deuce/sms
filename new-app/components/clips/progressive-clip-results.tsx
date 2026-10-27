@@ -2,6 +2,7 @@
 
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
 import { ClipGridSkeleton } from '@/components/clips/clip-grid-skeleton'
+import { ProjectPeopleStrip } from '@/components/clips/project-people-strip'
 import { Panel } from '@/components/app/page-primitives'
 import { formatEtaSeconds } from '@/lib/clips/format-eta'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
@@ -45,6 +46,7 @@ export function ProgressiveClipResults({
       description={etaLine}
     >
       <div className="flex flex-col gap-4">
+        {clips.length > 0 ? <ProjectPeopleStrip clips={clips} /> : null}
         {clips.length > 0 ? (
           <ClipGrid
             clips={clips}

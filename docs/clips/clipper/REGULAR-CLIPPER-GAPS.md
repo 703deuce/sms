@@ -38,4 +38,4 @@ Source docs: `clipper-streamer-bic.md` §1, `clipper-streamer-ui-layouts.md` §1
 | UI §3 Brand templates depth | Single template id | `brand` settings | Deferred |
 | Ops | Failed upload / transcribe / 0 clips / worker timeout UX | `project-failure-copy.ts`, `project-clips-view.tsx` | **Done** (typed copy + retry) |
 
-**Still in progress / follow-up:** per-segment layout in worker reframe (export uses dominant segment); XML/4K export (deferred). **Done this pass:** reusable clip templates (caption+layout+brand), project/batch apply, results grid multi-select export/download/template.
+**Still in progress / follow-up:** per-segment layout in worker reframe (export uses dominant segment); XML/4K export (deferred). **Done this pass:** reusable clip templates (caption+layout+brand), project/batch apply, results grid multi-select export/download/template; people strip on progressive results + P1 chip; editor picker-why/layout inspector; processing non-fatal error banner; clipper unit tests only (no `run_m4_pipeline` harness).

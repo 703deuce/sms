@@ -135,6 +135,11 @@ export function LayoutPanel({
               }
             />
           </div>
+          {edits.captions?.autoEmojis ? (
+            <p className="text-xs text-muted-foreground">
+              Emoji captions are enabled{edits.captions.keywordHighlight ? ' with keyword emphasis' : ''}.
+            </p>
+          ) : null}
           {silence.enabled && (
             <label className="flex items-center gap-2 text-xs">
               Min gap (ms)

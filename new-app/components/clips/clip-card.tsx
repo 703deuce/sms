@@ -167,9 +167,9 @@ export function ClipCard({
               {layoutChip}
             </span>
           ) : null}
-          {people != null && people > 1 ? (
+          {people != null && people >= 1 ? (
             <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {people} people
+              {people === 1 ? '1 person' : `${people} people`}
             </span>
           ) : null}
           {showClipperDims

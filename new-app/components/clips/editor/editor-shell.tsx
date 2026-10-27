@@ -21,7 +21,7 @@ import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
-import { clipLayoutChip, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
+import { clipLayoutChip, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { Timeline } from '@/components/clips/editor/timeline'
@@ -334,6 +334,8 @@ export function EditorShell({
         : previewAspect === '4:5'
           ? '4 / 5'
           : '9 / 16'
+  const pickerWhy = clipWhySummary(aiMeta as ClipAiMeta | null)
+  const detectedLayout = clipLayoutChip(aiMeta as ClipAiMeta | null)
 
   const panelBody = (
     <>
@@ -538,6 +540,18 @@ export function EditorShell({
             </EditorPanelErrorBoundary>
             </div>
           </div>
+          {pickerWhy || detectedLayout ? (
+            <div className="max-w-xl space-y-1 px-1">
+              {detectedLayout ? (
+                <p className="text-[10px] text-muted-foreground">
+                  <span className="font-medium text-foreground">Detected layout:</span> {detectedLayout}
+                </p>
+              ) : null}
+              {pickerWhy ? (
+                <p className="line-clamp-2 text-xs text-muted-foreground" title={pickerWhy}>{pickerWhy}</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="min-w-0 w-full">
           <PlayerControls
             playing={playing}

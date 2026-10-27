@@ -181,6 +181,14 @@ export function JobStatus({
             }
           />
         )}
+        {processing && error ? (
+          <div
+            className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-foreground"
+            role="status"
+          >
+            {error}
+          </div>
+        ) : null}
         {processing && (
           <>
             <div className="flex flex-wrap items-center gap-2">
