@@ -18,6 +18,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.job_types import JOB_TYPES, job_types_sql_in
+from clips_worker.streamer.job_failure import terminal_failure_progress_payload
 from clips_worker.streamer.lanes import lane_types_sql_in, worker_lane
 from clips_worker.pipeline import run_m4_pipeline
 from clips_worker.render_job import run_render_clip_job
@@ -53,10 +54,11 @@ def db_host_label(dsn: str) -> str:
 def log_models() -> None:
     yunet = V3 / "yunet.onnx"
     land = V3 / "face_landmarker.task"
+    sface = V3 / "face_recognition_sface_2021dec.onnx"
     fonts = V3 / "fonts" / "Poppins-ExtraBold.ttf"
     log(
         f"models yunet={yunet.exists()} face_landmarker={land.exists()} "
-        f"poppins={fonts.exists()} v3_dir={V3.is_dir()}"
+        f"sface={sface.exists()} poppins={fonts.exists()} v3_dir={V3.is_dir()}"
     )
 
 
@@ -626,24 +628,23 @@ def main() -> None:
                         conn.commit()
                         post_progress(
                             job["id"],
-                            {
-                                "projectStatus": "FAILED",
-                                "stage": "failed",
-                                "progress": 0,
-                                "error": msg[:500],
-                                "jobStatus": "FAILED",
-                            },
+                            terminal_failure_progress_payload(job.get("type") or "", msg),
+                        )
+                    elif (job.get("type") or "").startswith("STREAM_"):
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
+                                ("FAILED", msg[:4000], job["id"]),
+                            )
+                        conn.commit()
+                        post_progress(
+                            job["id"],
+                            terminal_failure_progress_payload(job.get("type") or "", msg),
                         )
                     else:
                         post_progress(
                             job["id"],
-                            {
-                                "projectStatus": "FAILED",
-                                "stage": "failed",
-                                "progress": 0,
-                                "error": msg[:500],
-                                "jobStatus": "FAILED",
-                            },
+                            terminal_failure_progress_payload(job.get("type") or "", msg),
                         )
         except Exception as exc:
             log(f"worker loop error: {exc}")
