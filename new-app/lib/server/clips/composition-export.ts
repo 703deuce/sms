@@ -94,6 +94,7 @@ export async function enqueueCompositionExport(
     },
     update: {
       status: 'QUEUED',
+      error: null,
       settings: settingsWithEdl as Prisma.InputJsonValue,
       updatedAt: new Date(),
     },

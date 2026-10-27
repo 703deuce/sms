@@ -60,8 +60,11 @@ export function ScriptExportPopover({
   const [progress, setProgress] = useState<number | null>(null)
   const [renderId, setRenderId] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
   const pollStartedRef = useRef<number>(0)
   const pollStopRef = useRef<(() => void) | null>(null)
+  const pollExportKindRef = useRef<'video' | 'audio' | 'srt' | 'vtt'>('video')
+  const EXPORT_POLL_TIMEOUT_MS = 45 * 60 * 1000
   const [publishSlug, setPublishSlug] = useState<string | null>(null)
   const [publishPlayback, setPublishPlayback] = useState<'ready' | 'processing' | null>(null)
   const [publishSettingsOpen, setPublishSettingsOpen] = useState(false)
@@ -71,12 +74,9 @@ export function ScriptExportPopover({
 
   useEffect(() => {
     if (!open) {
-      setProgress(null)
-      setRenderId(null)
-      setDownloadUrl(null)
-      setBusy(false)
+      pollStopRef.current?.()
+      pollStopRef.current = null
       setPublishSettingsOpen(false)
-      pollStartedRef.current = 0
     }
   }, [open])
 
@@ -116,11 +116,32 @@ export function ScriptExportPopover({
       pollStopRef.current?.()
       pollStartedRef.current = Date.now()
       const t = setInterval(() => {
+        const elapsedMs = Date.now() - pollStartedRef.current
+        if (elapsedMs > EXPORT_POLL_TIMEOUT_MS) {
+          clearInterval(t)
+          setBusy(false)
+          setProgress(null)
+          setRenderId(rid)
+          setExportError('Export timed out. Check Exports or retry.')
+          return
+        }
         void fetch(`/api/clips/compositions/${compositionId}/export/${rid}`)
-          .then((r) => r.json())
+          .then(async (r) => {
+            const data = await r.json().catch(() => ({}))
+            if (!r.ok) {
+              throw new Error((data as { error?: string }).error ?? `Export poll failed (${r.status})`)
+            }
+            return data as {
+              status?: string
+              progress?: number
+              downloadUrl?: string
+              error?: string
+              outputDurationMs?: number
+            }
+          })
           .then((data) => {
             const serverProg = typeof data.progress === 'number' ? data.progress : null
-            const elapsedSec = (Date.now() - pollStartedRef.current) / 1000
+            const elapsedSec = elapsedMs / 1000
             const softCap = Math.min(92, 8 + Math.floor(elapsedSec / 4))
             const nextProg = serverProg != null ? Math.max(serverProg, softCap) : softCap
             setProgress(nextProg)
@@ -128,6 +149,7 @@ export function ScriptExportPopover({
               clearInterval(t)
               setProgress(100)
               setBusy(false)
+              setExportError(null)
               setDownloadUrl(data.downloadUrl)
               setRenderId(rid)
               toast.success(
@@ -138,18 +160,29 @@ export function ScriptExportPopover({
             } else if (data.status === 'FAILED' || data.status === 'CANCELED') {
               clearInterval(t)
               setBusy(false)
-              setRenderId(null)
+              setProgress(null)
+              setRenderId(rid)
               setDownloadUrl(null)
-              toast.error(data.error ?? 'Export failed')
+              const msg = data.error?.trim() || (data.status === 'CANCELED' ? 'Export canceled' : 'Export failed')
+              setExportError(msg)
+              toast.error(msg)
             }
           })
-          .catch(() => {})
+          .catch((err) => {
+            clearInterval(t)
+            setBusy(false)
+            setProgress(null)
+            setRenderId(rid)
+            const msg = err instanceof Error ? err.message : 'Export poll failed'
+            setExportError(msg)
+            toast.error(msg)
+          })
       }, 2000)
       const stop = () => clearInterval(t)
       pollStopRef.current = stop
       return stop
     },
-    [compositionId],
+    [compositionId, EXPORT_POLL_TIMEOUT_MS],
   )
 
   const cancelExport = useCallback(async () => {
@@ -165,6 +198,9 @@ export function ScriptExportPopover({
   }, [compositionId, renderId])
 
   const startServerExport = async (exportKind: 'video' | 'audio' | 'srt' | 'vtt') => {
+    pollExportKindRef.current = exportKind
+    setExportError(null)
+    setDownloadUrl(null)
     setBusy(true)
     setProgress(4)
     try {
@@ -187,7 +223,10 @@ export function ScriptExportPopover({
       pollRender(data.renderId)
     } catch (e) {
       setBusy(false)
-      toast.error(e instanceof Error ? e.message : 'Export failed')
+      setProgress(null)
+      const msg = e instanceof Error ? e.message : 'Export failed'
+      setExportError(msg)
+      toast.error(msg)
     }
   }
 
@@ -503,6 +542,21 @@ export function ScriptExportPopover({
               )}
             </div>
           )}
+          {exportError && !busy ? (
+            <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-sm font-medium text-destructive">Export failed</p>
+              <p className="text-xs text-muted-foreground">{exportError}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={() => void startServerExport(pollExportKindRef.current)}
+              >
+                Retry export
+              </Button>
+            </div>
+          ) : null}
           {downloadUrl && !busy ? (
             <div className="space-y-2">
               <Button
