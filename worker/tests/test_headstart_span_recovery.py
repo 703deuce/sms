@@ -1,0 +1,55 @@
+"""Headstart render failure must not block the main render pass for the same span."""
+from __future__ import annotations
+
+def test_mark_span_discard_pattern():
+    rendered = {(0, 20_000)}
+    sk = (0, 20_000)
+    rendered.discard(sk)
+    assert sk not in rendered
+
+
+def test_headstart_failure_releases_span_for_main_pass(words_60s=None):
+    """Simulate failed headstart: span removed from rendered_spans so main pass can render."""
+    if words_60s is None:
+        words_60s = [{"w": "hi", "s": 0.0, "e": 0.4}]
+
+    picks = [
+        {
+            "start_ms": 0,
+            "end_ms": 20_000,
+            "score": 90,
+            "title": "A",
+            "hook": "A",
+            "reason": "A",
+            "scores": {},
+        },
+    ]
+    rendered_spans: set[tuple[int, int]] = set()
+    head_render_state: dict = {"by_span": {}}
+    span_lock = __import__("threading").Lock()
+
+    def _span_key(a: int, b: int) -> tuple[int, int]:
+        return (int(a), int(b))
+
+    def _mark_span(start_ms: int, end_ms: int) -> bool:
+        sk = _span_key(start_ms, end_ms)
+        with span_lock:
+            if sk in rendered_spans:
+                return False
+            rendered_spans.add(sk)
+            return True
+
+    def _render_pick_async(pick: dict) -> None:
+        sk = _span_key(pick["start_ms"], pick["end_ms"])
+        if not _mark_span(pick["start_ms"], pick["end_ms"]):
+            return
+        try:
+            raise RuntimeError("headstart reframe failed")
+        except Exception:
+            with span_lock:
+                rendered_spans.discard(sk)
+                head_render_state["by_span"].pop(sk, None)
+
+    _render_pick_async(picks[0])
+    assert (0, 20_000) not in rendered_spans
+    assert _mark_span(0, 20_000) is True

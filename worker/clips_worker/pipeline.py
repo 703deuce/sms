@@ -516,12 +516,22 @@ def run_m4_pipeline(
                 }
 
             def _render_pick_async(pick: dict, clip_index: int, clips_total_hint: int) -> None:
+                sk = _span_key(pick["start_ms"], pick["end_ms"])
                 if not _mark_span(pick["start_ms"], pick["end_ms"]):
                     return
-                row = build_clip_row_from_pick(pick, clip_index)
-                sk = _span_key(pick["start_ms"], pick["end_ms"])
-                head_render_state["by_span"][sk] = row
-                _persist_clip_row(row, clip_index, clips_total_hint)
+                try:
+                    row = build_clip_row_from_pick(pick, clip_index)
+                    head_render_state["by_span"][sk] = row
+                    _persist_clip_row(row, clip_index, clips_total_hint)
+                except Exception as exc:
+                    with span_lock:
+                        rendered_spans.discard(sk)
+                        head_render_state["by_span"].pop(sk, None)
+                    print(
+                        f"[clipper:speed] project={project_id} phase=headstart_render_failed "
+                        f"span={sk} error={exc!s}"[:400],
+                        flush=True,
+                    )
 
             def on_headstart(early_picks: list[dict]) -> None:
                 if not early_picks:

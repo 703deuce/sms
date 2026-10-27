@@ -7,6 +7,7 @@ def test_min_pick_duration_relaxes_under_30s():
     assert min_pick_duration_ms(0, 25_000) == 15_000
     assert min_pick_duration_ms(0, 12_000) == 12_000
     assert min_pick_duration_ms(0, 60_000) == 15_000
+    assert min_pick_duration_ms(0, 60_000, relax=True) == 7_500
 
 
 def test_finalize_keeps_clip_on_25s_source():
