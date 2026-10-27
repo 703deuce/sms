@@ -162,11 +162,9 @@ docker exec clips-worker python3 -m pytest -q \\
   /app/tests/test_captions_ass_render.py \\
   /app/tests/test_frame_sampler.py
 
-echo "[deploy-worker] prune old clips-worker images (keep latest + one previous tag)"
-KEEP_TAG="clips-worker:keep-previous"
-docker tag clips-worker:latest "\${KEEP_TAG}" 2>/dev/null || true
-docker images clips-worker --format '{{.Repository}}:{{.Tag}} {{.ID}}' | awk '\$2!="latest" && \$2!="keep-previous" {print \$1}' | xargs -r docker rmi -f 2>/dev/null || true
-docker images --format '{{.Repository}}:{{.Tag}}' | grep '^clips-worker:' | grep -v ':latest\$' | grep -v ':keep-previous\$' | xargs -r docker rmi -f 2>/dev/null || true
+echo "[deploy-worker] prune old clips-worker images (keep latest tag for docker run)"
+PREV_ID=\$(docker images clips-worker:latest --format '{{.ID}}' | head -1)
+docker images clips-worker --format '{{.Repository}}:{{.Tag}} {{.ID}}' | awk -v keep="\${PREV_ID}" '\$2!="latest" && \$3!=keep {print \$1}' | xargs -r docker rmi -f 2>/dev/null || true
 
 echo "[deploy-worker] done"
 REMOTE
