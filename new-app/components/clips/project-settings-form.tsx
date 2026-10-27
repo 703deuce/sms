@@ -24,7 +24,12 @@ const MODE_LABELS: Record<string, string> = {
 }
 
 const LAYOUT_LABELS: Record<string, string> = {
+  auto: 'Auto variety',
   speaker_follow: 'Speaker follow',
+  dynamic: 'Dynamic layouts',
+  split_debate: 'Split debate',
+  grid: 'Grid (3–4 people)',
+  locked_off: 'Locked off',
   split: 'Split screen',
   fill: 'Fill',
   fit: 'Fit with blur',

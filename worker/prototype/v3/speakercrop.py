@@ -9,6 +9,18 @@ from mediapipe.tasks.python import vision, BaseOptions
 HERE = os.path.dirname(os.path.abspath(__file__))
 INP, OUT = sys.argv[1], sys.argv[2]
 E = lambda k, d: float(os.environ.get(k, d))
+if int(os.environ.get("MULTIPERSON", "0")):
+    try:
+        from multiperson_pipeline import SinglePersonFallback, run as multiperson_run
+
+        multiperson_run(INP, OUT)
+        sys.exit(0)
+    except SinglePersonFallback:
+        pass
+    except Exception as exc:
+        if int(os.environ.get("MULTIPERSON_STRICT", "0")):
+            raise
+        print(f"WARN multiperson fallback: {exc}", file=sys.stderr)
 OUT_W, OUT_H = int(E('OUT_W', 720)), int(E('OUT_H', 1280))
 SAMPLE_FPS = 5.0
 MIN_SEG = E('MIN_SEG', 0.8)   # drop shots shorter than this (s)

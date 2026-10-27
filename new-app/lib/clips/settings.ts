@@ -3,7 +3,17 @@ import { CAPTION_PRESETS as CAPTION_PRESET_DEFS, presetSlugToId } from '@/lib/cl
 
 export const CLIP_SETTINGS_VERSION = 2
 
-export const clipLayoutModes = ['speaker_follow', 'split', 'fill', 'fit'] as const
+export const clipLayoutModes = [
+  'auto',
+  'speaker_follow',
+  'dynamic',
+  'split_debate',
+  'grid',
+  'locked_off',
+  'split',
+  'fill',
+  'fit',
+] as const
 export const clipModes = ['talking', 'anything', 'captions'] as const
 export const clipLengthBuckets = ['auto', 'lt30', '30_60', '60_90'] as const
 export const clipAspectRatios = ['9:16', '1:1', '16:9'] as const

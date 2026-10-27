@@ -8,7 +8,7 @@
 
 1. **Do not rebuild** anything that already exists for face detection, tracking, multi-person follow, split layouts, facecam detection, layout presets, smoothing, or diarization.
 2. **All clipper changes** must **extend or upgrade** the components listed in the inventory below — not replace them.
-3. **Wait for the owner implementation guide** before changing any **tracking or layout** code (`speakercrop.py`, YuNet/MediaPipe crop loop, `subject_reframe.py`, streamer `detect_facecam` / `render_stack`, or equivalent).
+3. **Multiperson clipper (2026-10-27):** `worker/prototype/v3/tracking.py`, `director.py`, `multiperson_pipeline.py` extend `speakercrop.py` + `render_clip.layout_env` — crop_track **v2**, SFace re-ID, director Viterbi. Do **not** touch `streamer/layout/*`.
 4. This document is the inventory source of truth; update it when wiring changes, not when rewriting stacks.
 
 ---
@@ -135,7 +135,11 @@ Production clipper reframing is centered on **`worker/prototype/v3/speakercrop.p
 |------------|------|------------------|-------|
 | Face detection (YuNet) | `worker/prototype/v3/speakercrop.py` | `FaceDetectorYN.create` + per-frame `det.detect` loop | **Yes** — all clip/script reframes via `run_speakercrop` |
 | Face landmarks / lip activity | `speakercrop.py` | `FaceLandmarker.detect` on face crops; `jawOpen` blendshape | **Yes** |
-| Multi-person tracking (2-up) | `speakercrop.py` | Left/right slot assignment (`pos[0]`, `pos[1]`); tracks `xpos`, `ypos`, `mouth` per speaker | **Yes** |
+| Multi-person tracking (2-up legacy) | `speakercrop.py` | Left/right slot assignment (`pos[0]`, `pos[1]`); tracks `xpos`, `ypos`, `mouth` per speaker | **Yes** when `MULTIPERSON=0` or &lt;2 persons |
+| Multiperson tracklets + re-ID (3–5) | `prototype/v3/tracking.py` | IoU association, SFace embed, agglomerative cluster | **Yes** when `MULTIPERSON=1` |
+| Layout director | `prototype/v3/director.py` | Viterbi + overlap / MIN_SHOT / LEAD | **Yes** |
+| Crop track v2 | `multiperson_pipeline.py`, `crop_format.py` | `version:2` segments + slots | **Yes** |
+| Multiperson render | `clips_worker/multiperson_render.py` | ffmpeg filtergraphs (`filtergraph.py`) | **Yes** |
 | Active speaker selection | `speakercrop.py` | Visual score + optional Resemblyzer (`VOICE`); `HYST` to switch | **Yes** |
 | Split layout (stacked) | `speakercrop.py` | `SPLIT=1` / dual-speaker render branch | **Yes** when `layout_env` sets split / `speaker_follow` |
 | Layout presets | `worker/clips_worker/render_clip.py` | `layout_env(layout)` → `LAYOUT_MODE`, `SPLIT`, `FORCE_SPLIT` env | **Yes** — `speaker_follow`, `split`, `fill`, `fit` |

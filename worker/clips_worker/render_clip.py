@@ -82,6 +82,9 @@ def ffmpeg_cut(src: Path, dest: Path, start_ms: int, end_ms: int) -> None:
     )
 
 
+AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "locked_off")
+
+
 def layout_env(layout: str) -> dict[str, str]:
     layout = (layout or "speaker_follow").strip()
     env = {
@@ -89,20 +92,43 @@ def layout_env(layout: str) -> dict[str, str]:
         "MIN_SEG": "0.8",
         "VOICE": "1",
         "CAPTIONS": "1",
+        "SAMPLE_FPS": "10",
     }
     if layout == "split":
         env["SPLIT"] = "1"
         env["FORCE_SPLIT"] = "1"
+        env["LAYOUT_STYLE"] = "split"
+        env["MULTIPERSON"] = "1"
     elif layout == "fill":
         env["SPLIT"] = "0"
         env["LAYOUT_MODE"] = "fill"
+        env["LAYOUT_STYLE"] = "fill"
     elif layout == "fit":
         env["SPLIT"] = "0"
         env["LAYOUT_MODE"] = "fit"
+        env["LAYOUT_STYLE"] = "fit"
+    elif layout in ("dynamic", "split_debate", "grid", "locked_off"):
+        env["SPLIT"] = "1"
+        env["LAYOUT_MODE"] = layout
+        env["LAYOUT_STYLE"] = layout
+        env["MULTIPERSON"] = "1"
+    elif layout == "speaker_follow":
+        env["SPLIT"] = "1"
+        env["LAYOUT_MODE"] = "speaker_follow"
+        env["LAYOUT_STYLE"] = "speaker_follow"
+        env["MULTIPERSON"] = "1"
     else:
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = "speaker_follow"
+        env["LAYOUT_STYLE"] = "speaker_follow"
     return env
+
+
+def resolve_clip_layout(settings: dict, clip_index: int) -> str:
+    layout = (settings.get("layout") or "speaker_follow").strip()
+    if layout != "auto":
+        return layout
+    return AUTO_LAYOUT_STYLES[clip_index % len(AUTO_LAYOUT_STYLES)]
 
 
 def ffmpeg_fit_export(clip_src: Path, out_mp4: Path, width: int, height: int) -> None:
@@ -157,8 +183,10 @@ def run_speakercrop(
     w, h = aspect_size(aspect, resolution)
     env = os.environ.copy()
     env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
-    env.update(layout_env(settings.get("layout", "speaker_follow")))
+    layout = settings.get("layout", "speaker_follow")
+    env.update(layout_env(layout))
     env["WORDS"] = str(words_path)
+    env["WORDS_JSON"] = str(words_path)
     env["OUT_W"] = str(w)
     env["OUT_H"] = str(h)
     env["CAPTION_PRESET"] = settings.get("captions", {}).get("presetId", "bold_pop")
