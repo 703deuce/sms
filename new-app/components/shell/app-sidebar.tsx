@@ -27,6 +27,7 @@ import { useClipsWorkspace } from '@/components/providers/clips-workspace-provid
 import { resolveActiveSidebarSection } from '@/lib/app-sidebar-sections'
 import { isItemActive, type NavItem } from '@/lib/nav'
 import { isScreenwritingEnabled } from '@/lib/features/screenwriting'
+import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { useRecordingEnabled } from '@/lib/recording/use-recording-enabled'
 import { cn } from '@/lib/utils'
@@ -87,10 +88,15 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
   const recordingEnabled = recordingNavEnabled || recordingEnabledClient
   const activeSection = resolveActiveSidebarSection(pathname, searchParams)
   const t2vEnabled = isT2vFeatureEnabled()
+  const scriptEditorEnabled = isScriptEditorEnabled()
 
   useEffect(() => {
     console.info('[nav:ai-video-flag]', { enabled: t2vEnabled })
   }, [t2vEnabled])
+
+  useEffect(() => {
+    console.info('[editor:flag]', { enabled: scriptEditorEnabled })
+  }, [scriptEditorEnabled])
 
   useEffect(() => {
     console.info('[nav:section]', { activeSection, pathname })
@@ -101,21 +107,32 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
     { title: 'Exports', href: '/app/exports', icon: Download },
   ]
 
-  const editorItems: NavItem[] = [
-    { title: 'Editor hub', href: '/app/editor', icon: Scissors, isActive: (p) => p === '/app/editor' || p.startsWith('/app/editor/') },
-    ...(recordingEnabled
-      ? [
-          { title: 'Rooms', href: '/app/rooms/new', icon: Video },
-          { title: 'Rooms recordings', href: '/app/rooms', icon: Video },
-        ]
-      : []),
-    { title: 'Media library', href: '/app/clips/media', icon: Images },
-    { title: 'Layout packs', href: '/app/clips?view=layouts', icon: LayoutTemplate },
-    { title: 'Voice', href: '/app/voice', icon: AudioLines, badge: 'soon', disabled: true },
-    ...(isScreenwritingEnabled()
-      ? [{ title: 'Screenwriting', href: '/app/sw', icon: PenLine }]
-      : []),
-  ]
+  const mediaLibraryItem: NavItem = { title: 'Media library', href: '/app/clips/media', icon: Images }
+  const layoutPacksItem: NavItem = {
+    title: 'Layout packs',
+    href: '/app/clips?view=layouts',
+    icon: LayoutTemplate,
+  }
+
+  const editorItems: NavItem[] = scriptEditorEnabled
+    ? [
+        { title: 'Editor hub', href: '/app/editor', icon: Scissors, isActive: (p) => p === '/app/editor' || p.startsWith('/app/editor/') },
+        ...(recordingEnabled
+          ? [
+              { title: 'Rooms', href: '/app/rooms/new', icon: Video },
+              { title: 'Rooms recordings', href: '/app/rooms', icon: Video },
+            ]
+          : []),
+        mediaLibraryItem,
+        layoutPacksItem,
+        { title: 'Voice', href: '/app/voice', icon: AudioLines, badge: 'soon', disabled: true },
+        ...(isScreenwritingEnabled()
+          ? [{ title: 'Screenwriting', href: '/app/sw', icon: PenLine }]
+          : []),
+      ]
+    : []
+
+  const sharedMediaItems: NavItem[] = scriptEditorEnabled ? [] : [mediaLibraryItem, layoutPacksItem]
 
   const t2vItems: NavItem[] = t2vEnabled
     ? [
@@ -165,13 +182,15 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
           </SidebarMenu>
         </SidebarProductSection>
 
-        <SidebarProductSection section="editor" title="Editor" active={activeSection === 'editor'}>
-          <SidebarMenu>
-            {editorItems.map((item) => (
-              <NavLink key={item.href + item.title} item={item} pathname={pathname} searchParams={searchParams} />
-            ))}
-          </SidebarMenu>
-        </SidebarProductSection>
+        {editorItems.length > 0 ? (
+          <SidebarProductSection section="editor" title="Editor" active={activeSection === 'editor'}>
+            <SidebarMenu>
+              {editorItems.map((item) => (
+                <NavLink key={item.href + item.title} item={item} pathname={pathname} searchParams={searchParams} />
+              ))}
+            </SidebarMenu>
+          </SidebarProductSection>
+        ) : null}
 
         {t2vItems.length > 0 ? (
           <SidebarProductSection section="t2v" title="AI Video" active={activeSection === 't2v'}>
@@ -185,6 +204,9 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
 
         <SidebarProductSection section="shared" title="Shared" active={activeSection === 'shared'}>
           <SidebarMenu>
+            {sharedMediaItems.map((item) => (
+              <NavLink key={item.href + item.title} item={item} pathname={pathname} searchParams={searchParams} />
+            ))}
             {sharedItems.map((item) => (
               <NavLink key={item.href + item.title} item={item} pathname={pathname} searchParams={searchParams} />
             ))}

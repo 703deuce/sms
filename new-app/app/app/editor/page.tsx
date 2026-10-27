@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Page, PageHeader } from '@/components/app/page-primitives'
+import { requireScriptEditorPageEnabled } from '@/lib/server/clips/require-script-editor-page'
 import { ProjectStatusBadge } from '@/components/app/status'
 import { ProjectsAutoRefresh } from '@/components/clips/projects-auto-refresh'
 import { getClipsDriveProjects, getClipsWorkspaceId } from '@/lib/server/clips/drive-data'
@@ -9,6 +10,7 @@ export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Script editor' }
 
 export default async function ScriptEditorHubPage() {
+  requireScriptEditorPageEnabled()
   const workspaceId = await getClipsWorkspaceId()
   const projects = await getClipsDriveProjects(workspaceId, { limit: 60 })
   const anyProcessing = projects.some((p) => isClipProjectProcessing(p.status))

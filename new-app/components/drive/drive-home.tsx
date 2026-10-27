@@ -15,6 +15,7 @@ import {
 import { useClipsDriveOptional } from '@/components/drive/clips-drive-context'
 import { formatRelativeTime } from '@/lib/format-relative-time'
 import { toast } from 'sonner'
+import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -160,7 +161,9 @@ export function DriveHome({
     setHeroBusy(true)
     try {
       const project = await createProjectFromPrompt({ prompt: text })
-      router.push(`/app/clips/${project.id}/script`)
+      router.push(
+        isScriptEditorEnabled() ? `/app/clips/${project.id}/script` : `/app/clips/${project.id}`,
+      )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create project')
     } finally {

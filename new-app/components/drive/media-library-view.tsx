@@ -12,6 +12,7 @@ import { defaultClipSettings } from '@/lib/clips/settings'
 import { uploadClipFile } from '@/lib/clips/upload'
 import type { MediaLibraryUploadRow } from '@/lib/server/clips/media-library'
 import { toast } from 'sonner'
+import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 
 function formatBytes(n: number) {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
@@ -40,7 +41,9 @@ export function MediaLibraryView({ uploads }: { uploads: MediaLibraryUploadRow[]
         settings: defaultClipSettings(),
       })
       console.info('[editor:media-library]', 'project_from_upload', { uploadId, projectId: project.id })
-      router.push(`/app/clips/${project.id}/script`)
+      router.push(
+        isScriptEditorEnabled() ? `/app/clips/${project.id}/script` : `/app/clips/${project.id}`,
+      )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create project')
     } finally {
@@ -67,7 +70,7 @@ export function MediaLibraryView({ uploads }: { uploads: MediaLibraryUploadRow[]
     <div className="space-y-6">
       <div className="rounded-xl border border-border p-4">
         <p className="mb-3 text-sm text-muted-foreground">
-          Upload once, then open or create a script-editor project from any file.
+          Upload once, then open or create a clips project from any file.
         </p>
         <Dropzone onFile={onFile} disabled={uploading} />
         {uploading ? (
@@ -97,7 +100,11 @@ export function MediaLibraryView({ uploads }: { uploads: MediaLibraryUploadRow[]
                       {u.projectIds.map((p) => (
                         <li key={p.id}>
                           <Link
-                            href={`/app/clips/${p.id}/script`}
+                            href={
+                              isScriptEditorEnabled()
+                                ? `/app/clips/${p.id}/script`
+                                : `/app/clips/${p.id}`
+                            }
                             className="text-xs text-primary underline-offset-2 hover:underline"
                           >
                             {p.title}
@@ -113,8 +120,20 @@ export function MediaLibraryView({ uploads }: { uploads: MediaLibraryUploadRow[]
               </div>
               <div className="flex shrink-0 gap-2">
                 {u.projectIds[0] ? (
-                  <Button type="button" size="sm" render={<Link href={`/app/clips/${u.projectIds[0].id}/script`} />}>
-                    Open editor
+                  <Button
+                    type="button"
+                    size="sm"
+                    render={
+                      <Link
+                        href={
+                          isScriptEditorEnabled()
+                            ? `/app/clips/${u.projectIds[0].id}/script`
+                            : `/app/clips/${u.projectIds[0].id}`
+                        }
+                      />
+                    }
+                  >
+                    Open project
                   </Button>
                 ) : (
                   <Button

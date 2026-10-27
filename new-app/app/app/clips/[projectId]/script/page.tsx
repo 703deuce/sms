@@ -2,7 +2,8 @@ import { ScriptEditorEntry } from '@/components/script-editor/script-editor-entr
 import { T2vEditorStaleBanner } from '@/components/t2v/t2v-editor-stale-banner'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { isScriptEditorFeatureEnabled } from '@/lib/server/clips/feature-gates'
 
 export const metadata = { title: 'Script · Clips' }
 
@@ -15,6 +16,7 @@ export default async function ProjectScriptPage({
 }) {
   const { projectId } = await params
   const { clipId } = await searchParams
+  if (!isScriptEditorFeatureEnabled()) redirect(`/app/clips/${projectId}`)
   const workspaceId = await resolveWorkspaceId()
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId } })

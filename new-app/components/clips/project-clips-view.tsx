@@ -94,6 +94,7 @@ export function ProjectClipsView({
   initialStage = null,
   initialEtaSec = 0,
   exportAspect = '9:16' as ClipProjectSettings['aspectRatio'],
+  scriptEditorEnabled = false,
 }: {
   projectId: string
   projectTitle: string
@@ -108,6 +109,7 @@ export function ProjectClipsView({
   initialStage?: string | null
   initialEtaSec?: number
   exportAspect?: ClipProjectSettings['aspectRatio']
+  scriptEditorEnabled?: boolean
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
 
@@ -297,7 +299,7 @@ export function ProjectClipsView({
         title={projectTitle}
         description={desc}
         actions={
-          showResults ? (
+          showResults && scriptEditorEnabled ? (
             <Button
               size="sm"
               data-testid="edit-transcript-project"

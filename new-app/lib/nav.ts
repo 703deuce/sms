@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { isScreenwritingEnabled } from '@/lib/features/screenwriting'
+import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 
 export type ProductKey = 'clips'
 export type ContextKey = 'clips' | 'workspace'
@@ -102,10 +103,22 @@ const CLIPS_ITEMS: NavItem[] = [
     { title: 'Learn', href: '/app/help', icon: GraduationCap, group: 'Tools' },
 ]
 
+const SCRIPT_EDITOR_ONLY_HREFS = new Set([
+  '/app/sw',
+  '/app/editor',
+  '/app/voice',
+  '/app/rooms/new',
+  '/app/rooms',
+])
+
 export function clipsNavItems(options?: { showRecording?: boolean }): NavItem[] {
+  const scriptEditorOn = isScriptEditorEnabled()
   let items = CLIPS_ITEMS
-  if (!isScreenwritingEnabled()) items = items.filter((i) => i.href !== '/app/sw')
-  if (!options?.showRecording) items = items.filter((i) => !i.recordingOnly)
+  if (!scriptEditorOn) {
+    items = items.filter((i) => !SCRIPT_EDITOR_ONLY_HREFS.has(i.href.split('?')[0]))
+  }
+  if (!isScreenwritingEnabled() || !scriptEditorOn) items = items.filter((i) => i.href !== '/app/sw')
+  if (!options?.showRecording || !scriptEditorOn) items = items.filter((i) => !i.recordingOnly)
   return items
 }
 

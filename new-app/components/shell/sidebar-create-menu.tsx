@@ -10,9 +10,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
+import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 
 export function SidebarCreateMenu() {
   const t2vEnabled = isT2vFeatureEnabled()
+  const scriptEditorEnabled = isScriptEditorEnabled()
 
   const onPick = (product: 'clips' | 'editor' | 'ai-video') => {
     console.info('[nav:create]', { product })
@@ -39,12 +41,12 @@ export function SidebarCreateMenu() {
           <Clapperboard className="size-4" />
           Clips
         </DropdownMenuItem>
-        <DropdownMenuItem
-          render={<Link href="/app/editor" onClick={() => onPick('editor')} />}
-        >
-          <Scissors className="size-4" />
-          Editor
-        </DropdownMenuItem>
+        {scriptEditorEnabled ? (
+          <DropdownMenuItem render={<Link href="/app/editor" onClick={() => onPick('editor')} />}>
+            <Scissors className="size-4" />
+            Editor
+          </DropdownMenuItem>
+        ) : null}
         {t2vEnabled ? (
           <DropdownMenuItem
             render={<Link href="/app/clips/video/new" onClick={() => onPick('ai-video')} />}

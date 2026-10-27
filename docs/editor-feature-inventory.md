@@ -305,9 +305,9 @@ All routes under `new-app/app/api/clips/compositions/[compositionId]/`:
 
 ---
 
-## 21. Flagging note (for later — not implemented)
+## 21. Feature flag (implemented, default off)
 
-When hiding: record **UI entry** column routes/nav ids per row. Suggested mirror pattern: `SCRIPT_EDITOR_ENABLED` / `NEXT_PUBLIC_SCRIPT_EDITOR_ENABLED` (same approach as AI Video). **Screenwriting** already has its own gate. **Rooms** uses `FEATURE_SCRIPT_RECORDING`. **Social publish** has `isCompositionSocialPublishEnabled()`.
+`SCRIPT_EDITOR_ENABLED` / `NEXT_PUBLIC_SCRIPT_EDITOR_ENABLED` (`lib/features/script-editor-enabled.ts`). When off: hides Editor hub, Create→Editor, **Edit transcript**, script-editor card button; redirects `/app/editor`, `/app/clips/[id]/script`, `/app/sw`, `/app/rooms/*` → clips. **Media library** + **layout packs** stay in Shared nav. **Screenwriting** requires script-editor flag. APIs/code remain. Log: `[editor:flag]`.
 
 ---
 

@@ -7,7 +7,7 @@ import { parseSettings } from '@/lib/server/clips/projects'
 import { getProjectStatus } from '@/lib/server/clips/jobs'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
-import { isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
+import { isScriptEditorFeatureEnabled, isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { notFound, redirect } from 'next/navigation'
 
 function reservedProjectSlugRedirects(): Record<string, string> {
@@ -85,6 +85,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         initialStage={liveStatus?.stage ?? null}
         initialEtaSec={liveStatus?.etaSec ?? 0}
         exportAspect={projectSettings.aspectRatio}
+        scriptEditorEnabled={isScriptEditorFeatureEnabled()}
       />
     </Page>
   )

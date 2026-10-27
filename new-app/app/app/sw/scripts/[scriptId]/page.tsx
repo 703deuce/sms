@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { requireScriptEditorPageEnabled } from '@/lib/server/clips/require-script-editor-page'
 import { Page, PageHeader } from '@/components/app/page-primitives'
 import { ScreenplayEditorPageClient } from '@/components/screenwriting/screenplay-editor-page-client'
 import { getActor } from '@/lib/screenwriting/server/actor'
@@ -11,6 +12,7 @@ import type { JSONContent } from '@tiptap/core'
 export const dynamic = 'force-dynamic'
 
 export default async function ScreenplayEditorPage({ params }: { params: Promise<{ scriptId: string }> }) {
+  requireScriptEditorPageEnabled()
   const { scriptId } = await params
   const actor = getActor()
   const script = await getScriptForOwner(scriptId, actor.id)

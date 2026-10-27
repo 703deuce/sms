@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Page, PageHeader, Panel } from '@/components/app/page-primitives'
+import { requireScriptEditorPageEnabled } from '@/lib/server/clips/require-script-editor-page'
 import { Button } from '@/components/ui/button'
 import { getActor } from '@/lib/screenwriting/server/actor'
 import { listSwProjects } from '@/lib/screenwriting/server/projects'
@@ -10,6 +11,7 @@ export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Screenwriting' }
 
 export default async function ScreenwritingHomePage() {
+  requireScriptEditorPageEnabled()
   const actor = getActor()
   const projects = await listSwProjects(actor.id)
 

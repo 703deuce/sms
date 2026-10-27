@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ScoreRing } from '@/components/clips/ui/score-ring'
 import { DurationChip } from '@/components/clips/ui/duration-chip'
 import type { ClipCardData } from '@/components/clips/clip-grid'
+import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 import { clipsFetch } from '@/lib/clips-api'
 import { formatDur, formatTimecode } from '@/lib/clips/format'
 import { ReasonChips } from '@/components/streamer/reason-chips'
@@ -205,14 +206,16 @@ export function ClipCard({
           >
             {editPending ? 'Opening…' : 'Edit'}
           </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            data-testid="edit-in-script-editor"
-            render={<Link href={`/app/clips/${projectId}/script?clipId=${clip.id}`} />}
-          >
-            Script editor
-          </Button>
+          {isScriptEditorEnabled() ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              data-testid="edit-in-script-editor"
+              render={<Link href={`/app/clips/${projectId}/script?clipId=${clip.id}`} />}
+            >
+              Script editor
+            </Button>
+          ) : null}
           <Button size="sm" variant="outline" onClick={() => onDownload(clip.id)}>Download</Button>
           <Button size="sm" variant="outline" disabled={thumbBusy} onClick={() => void makeThumbnail()}>
             Make thumbnail
