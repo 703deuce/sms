@@ -12,6 +12,7 @@ import { getPrisma } from '@/lib/server/db'
 import { enqueueClipperRecoveryJob, isTranscriptReadyOrphan } from '@/lib/server/clips/recover-project'
 import { clampEtaBetweenPolls, etaStageKey } from '@/lib/clips/eta-poll'
 import { computeNonStreamerClipEtaSec } from '@/lib/server/clips/project-eta'
+import { fairQueueAheadForJob } from '@/lib/server/clips/job-queue-fairness'
 import { enqueueStreamerRecoveryJob } from '@/lib/server/streamer/recover-project'
 
 const TERMINAL: ClipProjectStatus[] = ['READY', 'FAILED', 'CANCELED']
@@ -48,15 +49,7 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
         select: { id: true, priority: true, createdAt: true },
       })
       if (job) {
-        queueAhead = await prisma.clipJob.count({
-          where: {
-            status: 'QUEUED',
-            OR: [
-              { priority: { gt: job.priority } },
-              { priority: job.priority, createdAt: { lt: job.createdAt } },
-            ],
-          },
-        })
+        queueAhead = await fairQueueAheadForJob(job.id)
       }
     } else if (hasWorkerProgress) {
       const stageKey = etaStageKey(project.status, project.stage)

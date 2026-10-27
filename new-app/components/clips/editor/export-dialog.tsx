@@ -167,12 +167,12 @@ export function ExportDialog({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-dialog-title"
-        className="w-full max-w-md rounded-xl border border-border bg-background p-4 shadow-lg focus:outline-none"
+        className="max-h-[min(90dvh,100%)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-xl border border-border bg-background p-4 shadow-lg focus:outline-none sm:max-h-[90dvh] sm:rounded-xl"
       >
         <div className="flex items-start gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg tile-primary">
@@ -254,7 +254,7 @@ export function ExportDialog({
               {aspect} at {resolution} re-renders with your edits and burns captions (preview reuse is 9:16 @ 720p only).
             </p>
           ) : null}
-          <div className="mt-1 flex gap-2">
+          <div className="mt-1 flex flex-wrap gap-2 [&_button]:min-h-10">
             {clipAspectRatios.map((a) => (
               <Button
                 key={a}

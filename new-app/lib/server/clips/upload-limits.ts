@@ -5,7 +5,8 @@ import { storageDriverName, usesS3CompatibleMultipart } from '@/lib/storage/driv
 /** Per-object limit on many Supabase buckets (raise in dashboard when plan allows). */
 export const SUPABASE_OBJECT_MAX_BYTES_DEFAULT = 50 * 1024 * 1024
 export const CLIPS_UPLOAD_MAX_BYTES_STREAMER_DEFAULT = 20 * 1024 * 1024 * 1024
-export const CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT = 20 * 1024 * 1024 * 1024
+/** Regular clipper uploads (multipart/TUS resumable). */
+export const CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT = 3 * 1024 * 1024 * 1024
 export const CLIPS_APP_CHUNK_BYTES = 8 * 1024 * 1024
 
 export function supabaseObjectMaxBytes(): number {
@@ -27,7 +28,7 @@ export function clipUploadMaxBytes(): number {
     const n = Number(raw)
     if (Number.isFinite(n) && n > 0) return Math.floor(n)
   }
-  return CLIPS_UPLOAD_MAX_BYTES_STREAMER_DEFAULT
+  return CLIPS_UPLOAD_MAX_BYTES_S3_DEFAULT
 }
 
 export function formatClipUploadMaxLabel(bytes: number): string {

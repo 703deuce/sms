@@ -5,7 +5,6 @@ import {
   normalizeDropboxShareUrl,
   parseGoogleDriveFileId,
   validateImportUrlForSubmit,
-  YOUTUBE_UNSUPPORTED_MSG,
 } from '@/lib/clips/import-url'
 
 describe('import-url', () => {
@@ -15,10 +14,15 @@ describe('import-url', () => {
     expect(classifyImportUrl('https://youtu.be/abc')).toBe('youtube')
   })
 
-  it('rejects YouTube with user message', () => {
-    const r = validateImportUrlForSubmit('https://www.youtube.com/watch?v=abc')
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.message).toBe(YOUTUBE_UNSUPPORTED_MSG)
+  it('accepts YouTube and Twitch VOD links', () => {
+    expect(validateImportUrlForSubmit('https://www.youtube.com/watch?v=abc')).toEqual({
+      ok: true,
+      kind: 'youtube',
+    })
+    expect(validateImportUrlForSubmit('https://www.twitch.tv/videos/1234567890')).toEqual({
+      ok: true,
+      kind: 'twitch',
+    })
   })
 
   it('parses drive id and builds download url', () => {

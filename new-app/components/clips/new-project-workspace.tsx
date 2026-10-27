@@ -220,8 +220,8 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground">
-                Public Google Drive or Dropbox share links only (max 4GB, 3 hours). YouTube is not supported — upload
-                the file instead.
+                Google Drive, Dropbox, YouTube, or Twitch VOD/clip links (max 3GB, 3 hours). Resumable upload for large
+                files on the Upload tab.
               </p>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <div className="relative min-w-0 flex-1">
@@ -233,13 +233,13 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                     <Input
                       id="import-link-url"
                       className="h-10 pl-9"
-                      placeholder="Paste a Google Drive, Dropbox, or direct video URL"
+                      placeholder="YouTube, Twitch VOD, Drive, or Dropbox link"
                       value={linkUrl}
                       onChange={(e) => {
                         const v = e.target.value
                         setLinkUrl(v)
                         const kind = classifyImportUrl(v)
-                        if (kind === 'twitch' || kind === 'kick') setTab('streamer')
+                        if (kind === 'kick') setTab('streamer')
                       }}
                       autoComplete="url"
                     />
@@ -256,7 +256,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
               </div>
               <p className="flex items-center gap-3 text-xs text-muted-foreground">
                 <Globe className="size-3.5" aria-hidden />
-                Drive & Dropbox supported
+                YouTube, Twitch, Drive & Dropbox
               </p>
             </div>
           )}

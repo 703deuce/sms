@@ -11,7 +11,6 @@ from pathlib import Path
 from clips_worker.import_url_parse import (
     DRIVE_PUBLIC_MSG,
     UNSUPPORTED_MSG,
-    YOUTUBE_UNSUPPORTED,
     classify_url,
     drive_download_url,
     normalize_dropbox_url,
@@ -20,7 +19,7 @@ from clips_worker.import_url_parse import (
 from clips_worker.probe import probe_duration
 from clips_worker.storage import upload_file
 
-MAX_BYTES = 4 * 1024 * 1024 * 1024
+MAX_BYTES = 3 * 1024 * 1024 * 1024
 MAX_DURATION_S = 3 * 3600
 
 
@@ -48,7 +47,7 @@ def _download_http(url: str, dest: Path, max_bytes: int = MAX_BYTES) -> None:
                     break
                 total += len(more)
                 if total > max_bytes:
-                    raise RuntimeError("File exceeds 4GB limit")
+                    raise RuntimeError("File exceeds 3GB limit")
                 f.write(more)
 
 
@@ -84,10 +83,41 @@ def probe_video(path: Path) -> tuple[float, int | None, int | None]:
         raise RuntimeError(f"Invalid video file: {err[:300]}") from exc
 
 
+def _download_ytdlp(url: str, dest: Path, max_bytes: int = MAX_BYTES) -> None:
+    from clips_worker.streamer.ytdlp import download_video, metadata
+
+    meta = metadata(url)
+    if meta.get("is_live") or (meta.get("live_status") or "").lower() in ("is_live", "is_upcoming"):
+        raise RuntimeError("Live streams are not supported — paste the VOD after the stream ends.")
+    dur = float(meta.get("duration") or 0)
+    if dur > MAX_DURATION_S:
+        raise RuntimeError(f"Video exceeds {MAX_DURATION_S // 3600} hour limit")
+    out_tpl = str(dest.with_suffix("")) + ".%(ext)s"
+    download_video(url, out_tpl, section=None)
+    produced = dest if dest.is_file() else dest.with_suffix(".mp4")
+    if not produced.is_file():
+        candidates = sorted(dest.parent.glob(f"{dest.stem}.*"), key=lambda p: p.stat().st_mtime, reverse=True)
+        produced = next((p for p in candidates if p.suffix.lower() in (".mp4", ".mkv", ".webm")), candidates[0] if candidates else dest)
+    if not produced.is_file():
+        raise RuntimeError("Download failed — no video file produced")
+    if produced.stat().st_size > max_bytes:
+        produced.unlink(missing_ok=True)
+        raise RuntimeError("File exceeds 3GB limit")
+    if produced != dest:
+        produced.rename(dest)
+
+
 def download_import_source(source_url: str, dest: Path) -> str:
     kind = classify_url(source_url)
-    if kind == "youtube":
-        raise RuntimeError(YOUTUBE_UNSUPPORTED)
+    if kind in ("youtube", "twitch"):
+        if kind == "twitch":
+            from clips_worker.streamer.urls import parse_stream_url
+
+            parsed = parse_stream_url(source_url)
+            if parsed.get("error"):
+                raise RuntimeError(str(parsed["error"]))
+        _download_ytdlp(source_url, dest)
+        return "imported.mp4"
     if kind == "unsupported":
         raise RuntimeError(UNSUPPORTED_MSG)
     if kind == "drive":

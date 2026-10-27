@@ -6,6 +6,7 @@ import { relativeTime } from '@/lib/clips/format'
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 import { ProjectKindBadge } from '@/components/clips/ui/kind-badge'
 import { t2vProjectHref, t2vStatusLabel } from '@/lib/t2v/project-link'
+import { ProjectCardQueueHint } from '@/components/clips/project-card-queue'
 import { cn } from '@/lib/utils'
 
 function isProcessing(status: string) {
@@ -83,6 +84,7 @@ export function ProjectCard({
           >
             <Loader2 className="size-7 animate-spin text-white" aria-hidden />
             <span className="mt-2 text-center text-xs font-medium leading-snug text-white">{overlayLabel}</span>
+            <ProjectCardQueueHint projectId={project.id} processing={processing} />
             {stageLabel.toLowerCase() !== overlayLabel.toLowerCase() ? (
               <span className="mt-0.5 text-center text-[10px] text-white/80 capitalize">{stageLabel}</span>
             ) : null}

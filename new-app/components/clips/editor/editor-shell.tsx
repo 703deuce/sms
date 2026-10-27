@@ -474,7 +474,7 @@ export function EditorShell({
   )
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col bg-background">
+    <div className="flex h-[calc(100dvh-3.5rem)] max-w-[100vw] flex-col overflow-x-hidden bg-background">
       <EditorTopBar
           backHref={`/app/clips/${projectId}`}
           title={title}
@@ -501,7 +501,7 @@ export function EditorShell({
         />
       <EditorMobileRail active={panel} onChange={selectPanel} />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_56px_minmax(0,380px)] xl:grid-cols-[minmax(0,1fr)_56px_minmax(0,420px)]">
-        <section className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden p-3 md:p-4">
+        <section className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-x-hidden overflow-y-auto p-2 sm:p-3 md:p-4">
           <div className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4">
             <div
               className="relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"

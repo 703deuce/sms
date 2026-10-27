@@ -4,9 +4,9 @@ from __future__ import annotations
 import re
 import urllib.parse
 
-YOUTUBE_UNSUPPORTED = "YouTube links aren't supported yet, please upload the file."
+YOUTUBE_UNSUPPORTED = "Paste a public YouTube video link (not a live stream)."
 DRIVE_PUBLIC_MSG = "Make the file public (Anyone with the link)"
-UNSUPPORTED_MSG = "Only Google Drive and Dropbox share links are supported."
+UNSUPPORTED_MSG = "Supported: Google Drive, Dropbox, YouTube, or Twitch VOD/clip links."
 
 
 def classify_url(raw: str) -> str:

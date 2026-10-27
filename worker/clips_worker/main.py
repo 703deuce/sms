@@ -232,7 +232,17 @@ def claim_job(conn) -> dict | None:
                       )
                   )
                 )
-              ORDER BY priority DESC, "runAfter" ASC
+              ORDER BY priority DESC,
+                (
+                  SELECT COUNT(*)::int FROM clip_jobs j3
+                  JOIN clip_projects p3 ON p3.id = j3."projectId"
+                  JOIN clip_projects pj ON pj.id = clip_jobs."projectId"
+                  WHERE j3.status = 'QUEUED'
+                    AND p3."createdById" = pj."createdById"
+                    AND j3."createdAt" <= clip_jobs."createdAt"
+                ) ASC,
+                "runAfter" ASC,
+                "createdAt" ASC
               FOR UPDATE SKIP LOCKED
               LIMIT 1
             )

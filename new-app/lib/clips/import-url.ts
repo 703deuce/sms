@@ -3,7 +3,7 @@ export type ImportLinkKind = 'drive' | 'dropbox' | 'youtube' | 'twitch' | 'kick'
 const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be', 'www.youtu.be'])
 
 export const YOUTUBE_UNSUPPORTED_MSG =
-  "YouTube links aren't supported yet, please upload the file."
+  'Paste a public YouTube video or Shorts link (not a live stream).'
 
 export function classifyImportUrl(raw: string): ImportLinkKind {
   const trimmed = raw.trim()
@@ -54,20 +54,23 @@ export function googleDriveDownloadUrl(fileId: string): string {
   return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`
 }
 
-export function validateImportUrlForSubmit(raw: string): { ok: true; kind: 'drive' | 'dropbox' } | { ok: false; message: string } {
+export function validateImportUrlForSubmit(
+  raw: string,
+): { ok: true; kind: 'drive' | 'dropbox' | 'youtube' | 'twitch' } | { ok: false; message: string } {
   const kind = classifyImportUrl(raw)
-  if (kind === 'youtube') return { ok: false, message: YOUTUBE_UNSUPPORTED_MSG }
+  if (kind === 'youtube') return { ok: true, kind: 'youtube' }
+  if (kind === 'twitch') return { ok: true, kind: 'twitch' }
   if (kind === 'drive') {
     const id = parseGoogleDriveFileId(raw)
     if (!id) return { ok: false, message: 'Could not read Google Drive file id from this link.' }
     return { ok: true, kind: 'drive' }
   }
   if (kind === 'dropbox') return { ok: true, kind: 'dropbox' }
-  if (kind === 'twitch' || kind === 'kick') {
+  if (kind === 'kick') {
     return {
       ok: false,
-      message: 'Twitch and Kick links open in the Streamer tab — switch tabs to import.',
+      message: 'Kick links open in the Streamer tab — switch tabs to import.',
     }
   }
-  return { ok: false, message: 'Only Google Drive and Dropbox share links are supported.' }
+  return { ok: false, message: 'Supported: Google Drive, Dropbox, YouTube, or Twitch VOD/clip links.' }
 }

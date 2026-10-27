@@ -129,9 +129,13 @@ export async function createClipProjectFromImportUrl(
   const settings = brandRow ? mergeDefaultBrandSettings(baseSettings, brandRow) : baseSettings
 
   const projectId = createId('proj')
-  const title =
-    input.title?.trim() ||
-    (check.kind === 'drive' ? 'Google Drive import' : 'Dropbox import')
+  const defaultTitles: Record<string, string> = {
+    drive: 'Google Drive import',
+    dropbox: 'Dropbox import',
+    youtube: 'YouTube import',
+    twitch: 'Twitch import',
+  }
+  const title = input.title?.trim() || defaultTitles[check.kind] || 'Link import'
   const normalizedUrl = input.sourceUrl.trim()
 
   const project = await prisma.clipProject.create({
