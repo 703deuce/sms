@@ -10,7 +10,11 @@ import tempfile
 from pathlib import Path
 
 from clips_worker.caption_words import build_caption_words, caption_words_to_render
-from clips_worker.layout_router import speakercrop_settings_from_edits
+from clips_worker.layout_router import (
+    needs_per_segment_layout_export,
+    speakercrop_settings_for_layout_mode,
+    speakercrop_settings_from_edits,
+)
 from clips_worker.render_clip import run_speakercrop
 
 V3 = Path(__import__("os").environ.get("SPEAKERCROP_DIR", "/app/v3"))
@@ -57,7 +61,7 @@ def default_edits(clip_start_ms: int, clip_end_ms: int) -> dict:
         "cutRanges": [],
         "wordFixes": {},
         "captions": {"enabled": True, "presetId": "bold_pop"},
-        "layout": {"mode": "speaker_follow", "shotOverrides": []},
+        "layout": {"mode": "speaker_follow", "shotOverrides": [], "layoutSegments": []},
     }
 
 
@@ -96,6 +100,7 @@ def normalize_edits(raw, clip_start_ms: int, clip_end_ms: int) -> dict:
         "layout": {
             "mode": layout.get("mode") or base["layout"]["mode"],
             "shotOverrides": list(layout.get("shotOverrides") or []),
+            "layoutSegments": list(layout.get("layoutSegments") or []),
         },
     }
 
@@ -250,6 +255,147 @@ def ffmpeg_concat_segments(src: Path, dest: Path, segs_sec: list[tuple[float, fl
     )
 
 
+def ffmpeg_trim_clip_segment(src: Path, dest: Path, start_s: float, end_s: float) -> None:
+    if end_s - start_s < 0.08:
+        raise RuntimeError("layout segment too short")
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-ss",
+            f"{start_s:.3f}",
+            "-to",
+            f"{end_s:.3f}",
+            "-i",
+            str(src),
+            "-c",
+            "copy",
+            str(dest),
+        ],
+    )
+
+
+def _filter_words_for_layout_segment(words: list[dict], seg_start_ms: int, seg_end_ms: int, clip_start_ms: int) -> list[dict]:
+    """Words are clip-relative seconds (see words_for_reframe)."""
+    out: list[dict] = []
+    seg_start_s = (seg_start_ms - clip_start_ms) / 1000.0
+    for w in words:
+        mid_source_ms = clip_start_ms + word_mid_ms(w) * 1000.0
+        if mid_source_ms < seg_start_ms or mid_source_ms >= seg_end_ms:
+            continue
+        rel_s = float(w["s"]) - seg_start_s
+        rel_e = float(w["e"]) - seg_start_s
+        out.append({**w, "s": round(max(0, rel_s), 3), "e": round(max(rel_s + 0.01, rel_e), 3)})
+    return out
+
+
+def run_speakercrop_layout_timeline(
+    clip_src: Path,
+    out_mp4: Path,
+    words_clip_relative: list[dict],
+    settings: dict,
+    edits: dict,
+    work_dir: Path,
+    clip_start_ms: int,
+    clip_end_ms: int,
+    shot_overrides: list | None = None,
+    render_id: str | None = None,
+    render_meta: dict | None = None,
+) -> Path:
+    """Export speakercrop honoring per-segment layout modes when they differ."""
+    if not needs_per_segment_layout_export(edits):
+        sc_settings = speakercrop_settings_from_edits(settings, edits)
+        wpath = work_dir / "words_export.json"
+        wpath.write_text(json.dumps(words_clip_relative))
+        run_speakercrop(
+            clip_src,
+            out_mp4,
+            wpath,
+            sc_settings,
+            work_dir,
+            clip_start_ms=clip_start_ms,
+            shot_overrides=shot_overrides,
+            render_id=render_id,
+            render_meta=render_meta,
+        )
+        return out_mp4
+
+    segs = normalize_layout_segments(edits)
+    clip_len_s = max(0.08, (clip_end_ms - clip_start_ms) / 1000.0)
+    part_paths: list[Path] = []
+    for i, seg in enumerate(segs):
+        rel_a = max(0.0, (int(seg["startMs"]) - clip_start_ms) / 1000.0)
+        rel_b = min(clip_len_s, (int(seg["endMs"]) - clip_start_ms) / 1000.0)
+        if rel_b - rel_a < 0.08:
+            continue
+        trimmed = work_dir / f"layout_in_{i}.mp4"
+        part_out = work_dir / f"layout_out_{i}.mp4"
+        ffmpeg_trim_clip_segment(clip_src, trimmed, rel_a, rel_b)
+        seg_words = _filter_words_for_layout_segment(
+            words_clip_relative,
+            int(seg["startMs"]),
+            int(seg["endMs"]),
+            clip_start_ms,
+        )
+        seg_wpath = work_dir / f"layout_words_{i}.json"
+        seg_wpath.write_text(json.dumps(seg_words))
+        seg_settings = speakercrop_settings_for_layout_mode(settings, str(seg["mode"]))
+        run_speakercrop(
+            trimmed,
+            part_out,
+            seg_wpath,
+            seg_settings,
+            work_dir,
+            clip_start_ms=int(seg["startMs"]),
+            shot_overrides=shot_overrides,
+            render_id=render_id,
+            render_meta=render_meta,
+        )
+        part_paths.append(part_out)
+
+    if not part_paths:
+        sc_settings = speakercrop_settings_from_edits(settings, edits)
+        wpath = work_dir / "words_export.json"
+        wpath.write_text(json.dumps(words_clip_relative))
+        run_speakercrop(
+            clip_src,
+            out_mp4,
+            wpath,
+            sc_settings,
+            work_dir,
+            clip_start_ms=clip_start_ms,
+            shot_overrides=shot_overrides,
+            render_id=render_id,
+            render_meta=render_meta,
+        )
+        return out_mp4
+    if len(part_paths) == 1:
+        shutil.copy(part_paths[0], out_mp4)
+        return out_mp4
+    lst = work_dir / "layout_concat.txt"
+    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in part_paths))
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(lst),
+            "-c",
+            "copy",
+            str(out_mp4),
+        ],
+    )
+    return out_mp4
+
+
 def probe_video_size(video: Path) -> tuple[int, int]:
     out = subprocess.check_output(
         [
@@ -321,8 +467,6 @@ def render_edited_clip(
 
     if preview_export_matches(edits, clip_start_ms, clip_end_ms):
         remapped, _ = words_after_edits(src_words, edits)
-        wpath = work_dir / "words.json"
-        wpath.write_text(json.dumps(remapped))
         export_settings = dict(sc_settings)
         if settings.get("aiMeta"):
             export_settings["aiMeta"] = settings.get("aiMeta")
@@ -334,13 +478,16 @@ def render_edited_clip(
                 from clips_worker.render_clip import resolve_clip_layout
 
                 export_settings["layout"] = resolve_clip_layout(export_settings, 0)
-        run_speakercrop(
+        w_reframe = words_for_reframe(source_words, edits, clip_start_ms, clip_end_ms)
+        run_speakercrop_layout_timeline(
             clip_src,
             out_mp4,
-            wpath,
+            w_reframe,
             export_settings,
+            edits,
             work_dir,
-            clip_start_ms=clip_start_ms,
+            clip_start_ms,
+            clip_end_ms,
             shot_overrides=shot_overrides,
             render_id=render_id,
             render_meta=render_meta,
@@ -373,13 +520,15 @@ def render_edited_clip(
             from clips_worker.render_clip import resolve_clip_layout
 
             settings_nc["layout"] = resolve_clip_layout(settings_nc, 0)
-    run_speakercrop(
+    run_speakercrop_layout_timeline(
         clip_src,
         full_render,
-        wpath,
+        w_reframe,
         settings_nc,
+        edits,
         work_dir,
-        clip_start_ms=clip_start_ms,
+        clip_start_ms,
+        clip_end_ms,
         shot_overrides=shot_overrides,
         render_id=render_id,
         render_meta=render_meta,

@@ -23,6 +23,10 @@ def preview_export_matches(edits: dict, clip_start_ms: int, clip_end_ms: int) ->
     layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
     if (layout.get("mode") or d["layout"]["mode"]) != d["layout"]["mode"]:
         return False
+    from clips_worker.layout_router import needs_per_segment_layout_export
+
+    if needs_per_segment_layout_export(edits):
+        return False
     aspect = edits.get("aspectRatio")
     if aspect and aspect != "9:16":
         return False

@@ -110,6 +110,85 @@ def speakercrop_settings_from_edits(base_settings: dict, edits: dict) -> dict:
     return out
 
 
+def speakercrop_settings_for_layout_mode(base_settings: dict, mode: str) -> dict:
+    out = dict(base_settings)
+    m = (mode or "speaker_follow").strip()
+    if m != "speaker_follow":
+        out["layout"] = editor_layout_to_worker(m)
+    return out
+
+
+_VALID_EDITOR_LAYOUT_MODES = frozenset(
+    {
+        "speaker_follow",
+        "fit_blur",
+        "center_crop",
+        "subject_follow",
+        "split",
+        "fill",
+        "fit",
+        "grid3",
+        "grid4",
+        "dynamic",
+        "auto",
+        "screen_pip",
+    }
+)
+
+
+def normalize_layout_segments(edits: dict) -> list[dict]:
+    """Clip-timeline layout segments (source ms), aligned with new-app layout-segments.ts."""
+    layout = edits.get("layout") or {}
+    fallback = str(layout.get("mode") or "speaker_follow")
+    trim = edits.get("trim") or {}
+    tin = int(trim.get("in") or 0)
+    tout = int(trim.get("out") or tin)
+    raw = layout.get("layoutSegments") or []
+    if not isinstance(raw, list) or not raw:
+        return [{"startMs": tin, "endMs": tout, "mode": fallback}]
+    segs: list[dict] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        try:
+            start_ms = int(row.get("startMs"))
+            end_ms = int(row.get("endMs"))
+        except (TypeError, ValueError):
+            continue
+        mode = str(row.get("mode") or fallback)
+        if mode not in _VALID_EDITOR_LAYOUT_MODES:
+            mode = fallback
+        if end_ms <= start_ms:
+            continue
+        segs.append(
+            {
+                "startMs": max(tin, start_ms),
+                "endMs": min(tout, end_ms),
+                "mode": mode,
+            }
+        )
+    if not segs:
+        return [{"startMs": tin, "endMs": tout, "mode": fallback}]
+    segs.sort(key=lambda s: s["startMs"])
+    merged: list[dict] = []
+    for s in segs:
+        prev = merged[-1] if merged else None
+        if prev and prev["mode"] == s["mode"] and prev["endMs"] >= s["startMs"] - 1:
+            prev["endMs"] = max(prev["endMs"], s["endMs"])
+        else:
+            merged.append(dict(s))
+    return merged
+
+
+def needs_per_segment_layout_export(edits: dict) -> bool:
+    """True when export must honor more than one layout mode across the trim span."""
+    segs = normalize_layout_segments(edits)
+    if len(segs) <= 1:
+        return False
+    worker_modes = {editor_layout_to_worker(str(s["mode"])) for s in segs}
+    return len(worker_modes) > 1
+
+
 def summary_from_track_fixture(
     n_persons: int,
     *,

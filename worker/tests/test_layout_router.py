@@ -1,6 +1,8 @@
 from clips_worker.layout_router import (
     CONFIDENCE_GATE,
     editor_layout_to_worker,
+    needs_per_segment_layout_export,
+    normalize_layout_segments,
     route_multiperson_layout,
     speakercrop_settings_from_edits,
     summary_from_track_fixture,
@@ -54,6 +56,45 @@ def test_fit_layout_never_enables_v2():
     s = summary_from_track_fixture(4)
     layout, v2 = route_multiperson_layout(s, "fit")
     assert layout == "fit" and not v2
+
+
+def test_normalize_layout_segments_merges_adjacent():
+    edits = {
+        "trim": {"in": 0, "out": 10_000},
+        "layout": {
+            "mode": "speaker_follow",
+            "layoutSegments": [
+                {"startMs": 0, "endMs": 4000, "mode": "split"},
+                {"startMs": 4000, "endMs": 10_000, "mode": "fit_blur"},
+            ],
+        },
+    }
+    segs = normalize_layout_segments(edits)
+    assert len(segs) == 2
+    assert segs[0]["mode"] == "split"
+    assert segs[1]["mode"] == "fit_blur"
+
+
+def test_needs_per_segment_export_when_modes_differ():
+    edits = {
+        "trim": {"in": 1000, "out": 9000},
+        "layout": {
+            "mode": "speaker_follow",
+            "layoutSegments": [
+                {"startMs": 1000, "endMs": 5000, "mode": "speaker_follow"},
+                {"startMs": 5000, "endMs": 9000, "mode": "split"},
+            ],
+        },
+    }
+    assert needs_per_segment_layout_export(edits) is True
+
+
+def test_single_layout_segment_does_not_need_per_segment_export():
+    edits = {
+        "trim": {"in": 0, "out": 5000},
+        "layout": {"mode": "split", "layoutSegments": [{"startMs": 0, "endMs": 5000, "mode": "split"}]},
+    }
+    assert needs_per_segment_layout_export(edits) is False
 
 
 def test_editor_layout_mapping_and_per_clip_override():
