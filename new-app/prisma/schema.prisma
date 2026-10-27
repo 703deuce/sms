@@ -8888,9 +8888,163 @@ model ClipProject {
   jobs      ClipJob[]
   streamVod StreamVod?
   clipMontages ClipMontage[]
+  scriptMediaAsset ScriptMediaAsset?
+  scriptSpeakers   ScriptSpeaker[]
+  scriptCompositions ScriptComposition[]
 
   @@index([workspaceId, createdAt])
   @@map("clip_projects")
+}
+
+enum ScriptCompositionKind {
+  FULL
+  CLIP
+}
+
+model ScriptMediaAsset {
+  id              String   @id
+  projectId       String   @unique
+  workspaceId     String
+  durationMs      Int
+  fps             Float?
+  sourceKey       String
+  proxyHlsKey     String?
+  audioPeaksKey   String?
+  thumbsSpriteKey String?
+  enrichedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("script_media_assets")
+}
+
+model ScriptSpeaker {
+  id          String   @id
+  projectId   String
+  workspaceId String
+  label       String
+  color       String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, label])
+  @@index([projectId])
+  @@map("script_speakers")
+}
+
+model ScriptComposition {
+  id             String                @id
+  projectId      String
+  workspaceId    String
+  kind           ScriptCompositionKind
+  clipId         String?
+  title          String
+  revision       Int                   @default(0)
+  aspect         String                @default("9:16")
+  captionStyleId String?
+  captionPos     Json?
+  reframe        Json                  @default("{}")
+  document       Json?
+  deletedAt      DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  project   ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clip      Clip?       @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  ops       ScriptCompositionOp[]
+  snapshots ScriptCompositionSnapshot[]
+  versions  ScriptCompositionVersion[]
+  leases    ScriptCompositionLease[]
+  renders   ScriptCompositionRender[]
+
+  @@unique([projectId, kind, clipId])
+  @@index([workspaceId, updatedAt])
+  @@map("script_compositions")
+}
+
+model ScriptCompositionOp {
+  id              String   @id
+  compositionId   String
+  revision        Int
+  baseRevision    Int
+  op              Json
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+
+  composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+
+  @@unique([compositionId, id])
+  @@index([compositionId, revision])
+  @@map("script_composition_ops")
+}
+
+model ScriptCompositionSnapshot {
+  id            String   @id
+  compositionId String
+  revision      Int
+  document      Json
+  createdAt     DateTime @default(now())
+
+  composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+
+  @@unique([compositionId, revision])
+  @@map("script_composition_snapshots")
+}
+
+model ScriptCompositionVersion {
+  id              String   @id
+  compositionId   String
+  revision        Int
+  name            String?
+  auto            Boolean  @default(false)
+  document        Json
+  meta            Json?
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+
+  composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+
+  @@index([compositionId, createdAt])
+  @@map("script_composition_versions")
+}
+
+model ScriptCompositionLease {
+  id            String   @id
+  compositionId String   @unique
+  holderId      String
+  expiresAt     DateTime
+  updatedAt     DateTime @updatedAt
+
+  composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+
+  @@map("script_composition_leases")
+}
+
+model ScriptCompositionRender {
+  id             String   @id
+  compositionId  String
+  workspaceId    String
+  status         String   @default("QUEUED")
+  idempotencyKey String
+  resolution     String
+  aspectRatio    String
+  settings       Json
+  outputKey      String?
+  error          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+
+  @@unique([compositionId, idempotencyKey])
+  @@index([workspaceId, status])
+  @@map("script_composition_renders")
 }
 
 model StreamChannel {
@@ -9107,6 +9261,7 @@ model Clip {
   renders ClipRender[]
   events  ClipEvent[]
   dubTracks DubTrack[]
+  scriptCompositions ScriptComposition[]
 
   @@index([projectId])
   @@map("clips")

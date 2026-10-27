@@ -12,7 +12,7 @@ Single source of truth for build order and status. Update the **Last updated** l
 | # | Product | Status (2026-10-27) |
 |---|---------|---------------------|
 | **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS** — core pipeline live on prod (see below) |
-| **2** | **Script editor** — Descript-style transcript editor | **SPEC READY** — `docs/clips/SCRIPT-EDITOR-BUILD.md` (+ `docs/clips/script-editor.md`) |
+| **2** | **Script editor** — Descript-style transcript editor | **IN PROGRESS** — M1a data plane (`toEditorWords`, EDL, bootstrap API); see `docs/clips/SCRIPT-EDITOR-BUILD.md` |
 | **3** | **AI Studio** (Higgsfield-like) | **NOT STARTED** |
 | — | **STOP** after **1–3** ship | No screenwriting until re-enabled |
 | — | **Screenwriting** (Final Draft parity) | **ON HOLD** — `FEATURE_SCREENWRITING=0`; code/migrations/data kept (`screenwriting-wip`) |
@@ -81,6 +81,10 @@ Quality and layout intelligence for the **regular clipper** (and shared reframe 
 | **(c) Top/bottom split** | Test and **auto-choose** top/bottom split layout when the scene fits (vs speaker-follow or fit-only). |
 | **(d) Variety across clips** | Vary layout treatment and caption/style choices across clips in one project instead of one template for every output. |
 | **(e) Wide two-shot crop** | Fix reframing that crops a wide two-shot and cuts one person in half. |
+| **(f) ETA calibration** | Tune stage-aware ETA against real Deepgram/Whisper timings (owner test data); no in-flight calibration work during feature builds. |
+| **(g) Parallel render** | Parallelize clip reframe/render where safe (throughput; not correctness). |
+
+**Scope:** All items above are **post–1–3 polish** — same pass across **clipper, Streamer, script editor, and AI Studio**. Do not schedule until owner says GO on fine-tuning.
 
 ---
 
