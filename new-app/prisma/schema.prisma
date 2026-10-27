@@ -9657,6 +9657,7 @@ model Clip {
   reason      String?
   startMs     Int
   endMs       Int
+  segmentKey  String?
   score       Int       @default(0)
   scores      Json      @default("{}")
   cropKey     String?
@@ -9681,6 +9682,7 @@ model Clip {
   scriptCompositions ScriptComposition[]
 
   @@index([projectId])
+  @@index([projectId, segmentKey])
   @@map("clips")
 }
 
