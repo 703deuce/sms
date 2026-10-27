@@ -74,7 +74,7 @@ export function ScriptEmptyImport({ projectId, projectTitle }: { projectId: stri
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Link href="/app/clips" className={buttonVariants({ variant: 'outline', className: 'h-11 justify-start gap-2' })}>
+          <Link href="/app/clips/media" className={buttonVariants({ variant: 'outline', className: 'h-11 justify-start gap-2' })}>
             <FolderOpen className="size-4" />
             Import from media library
           </Link>

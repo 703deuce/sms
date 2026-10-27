@@ -43,6 +43,7 @@ export function ProgressiveClipResults({
     >
       <div className="flex flex-col gap-4">
         {clips.length > 0 ? (
+<<<<<<< HEAD
           <ClipGrid
             clips={clips}
             projectId={projectId}
@@ -50,6 +51,9 @@ export function ProgressiveClipResults({
             onHidden={onHidden}
             isStreamer={false}
           />
+=======
+          <ClipGrid clips={clips} projectId={projectId} onDownload={onDownload ?? (() => {})} isStreamer={false} />
+>>>>>>> c4744c2ef (feat(editor): transcribe poll, media library, hub processing list)
         ) : null}
         {pending > 0 ? (
           <div className="flex flex-col gap-2" aria-live="polite">
