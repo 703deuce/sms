@@ -491,10 +491,16 @@ Canvas: core text-to-video ≈ 46 effort-days left, ≈ 53 with 15 % QA. This pl
 `lib/server/ai/openai-json.ts` (`openAiJsonResponse`), `lib/server/ai/pixabay.ts` (search + `ensureStockAsset`, after patch), `lib/server/ai/elevenlabs.ts` (export `fetchWithElevenLabsRetry` or host TTS next to it), `lib/server/ai/kie-image.ts`, `lib/server/clips/broll-gen*`, `lib/server/clips/composition-export.ts` (`enqueueCompositionExport`), `lib/server/clips/projects.ts` (`createClipProjectFromPrompt`), `lib/clips/script-edl/*` (ScriptDocumentV1), `lib/clips/caption-presets.json`, `lib/clips/brand.ts`, `lib/storage` (`getClipStorage().putBytes`), worker `audio_render.py` (ducking), `captions_ass.py`, `brand_concat.py`, `music_job.py`, `script_composition_render.py`, `storage.py`. UI: `script-editor-shell/rail`, `script-export-popover`, `script-storyboard-panel`, `caption-preset-picker`, `brand-panel`, `stock-broll-picker`, `ai-broll-card`, `audio-waveform-lane`, `producer-panel`, `tool-call-card`, `dropzone`, `upload-progress-item`, `primary-button`, `editor-mobile-rail`.
 
 ## 8. Known code issues found during the audit
-- `pixabay.ts ensureStockAsset` uploads with the **Supabase** client but signs with `getClipStorage()`; on prod (`STORAGE_DRIVER` s3/B2) the object is written to the wrong store. Fix: `storage.putBytes` (patch in `code/patches/`). Confirm the prod value of STORAGE_DRIVER before shipping (names-only env check doesn't show values).
-- `script_composition_render.py` ignores `musicTracks[].volume` (fixed 0.25) and doesn't apply brand bookends.
+- `pixabay.ts ensureStockAsset` uploads with the **Supabase** client but signs with `getClipStorage()`; on prod (`STORAGE_DRIVER` s3/B2) the object is written to the wrong store. **Fixed M0** (`9cbba3c9b`): `storage.putBytes` via active driver. Do not re-fix in auto-broll / stock-match paths—**#769** (merged) calls `ensureStockAsset`; align with that stack only if the patch diverges.
+- `script_composition_render.py` ignores `musicTracks[].volume` (fixed 0.25) and doesn't apply brand bookends. **Fix in M5** (editor/composition export path only): read `musicTracks[].volume`, apply `brand_concat` like `render_job.py` after the composition cut. **Do not duplicate clipper brand seeding**—**#772** (open) adds `brandEditsFromProjectBrand` + intro/outro on **new clip** `edits.brand` in `projects.ts` / M4 pipeline; if #772 is unmerged, reuse its `lib/clips/brand.ts` helper when wiring T2V `draftToComposition()` brand fields, but keep worker changes scoped to `script_composition_render.py` (not `pipeline.py` / `render_job.py`).
 - `/app/exports` lists only ClipRender rows.
 - `pixabay.ts searchVideos` sorts portrait-first (clipper bias); T2V uses its own aspect-aware scoring in `stock-match.ts`.
+
+### 8.1 Clipper PR coordination (agent B)
+| PR | State | Overlap with T2V §8 | T2V rule |
+|---|---|---|---|
+| **#769** auto stock B-roll | merged | `ensureStockAsset`, `apply-project-auto-broll`, worker `internal_callback` | Stock storage already fixed at source (`pixabay.ts`); T2V stock in `stock-match.ts` / M4 only. |
+| **#772** brand intro/outro on clip edits | open (stacks clipper gaps) | `brandEditsFromProjectBrand`, template intro/outro keys on **clip** exports | Composition/script export bug stays in **`script_composition_render.py`** + composition document brand; import shared TS mapping after #772 merges. |
 
 ## 9. BLOCKED: keys and accounts
 | Name | Needed for | Status |
