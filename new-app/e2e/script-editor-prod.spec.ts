@@ -86,8 +86,21 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     let outMs: number | null = null
     for (let i = 0; i < 360; i++) {
       const poll = await request.get(`/api/clips/compositions/${compositionId}/export/${renderId}`)
-      expect(poll.status()).not.toBe(404)
-      const body = await poll.json()
+      if (poll.status() === 404) {
+        throw new Error(`export poll 404 renderId=${renderId}`)
+      }
+      if (poll.status() === 502 || poll.status() === 503) {
+        await new Promise((r) => setTimeout(r, 5000))
+        continue
+      }
+      const raw = await poll.text()
+      let body: Record<string, unknown>
+      try {
+        body = JSON.parse(raw) as Record<string, unknown>
+      } catch {
+        await new Promise((r) => setTimeout(r, 5000))
+        continue
+      }
       if (body.edlDurationMs != null) edlMs = body.edlDurationMs
       if (body.outputDurationMs != null) outMs = body.outputDurationMs
       if (body.status === 'READY' && edlMs != null && outMs != null) break
