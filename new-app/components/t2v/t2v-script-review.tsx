@@ -9,6 +9,15 @@ import { PrimaryButton } from '@/components/app/primary-button'
 import { useRouter } from 'next/navigation'
 import type { T2vDraftV1, T2vScene } from '@/lib/t2v/types'
 import { estimateSceneMs } from '@/lib/t2v/estimate'
+import { createId } from '@/lib/supabase/id'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { MoreHorizontal } from 'lucide-react'
 
 type Props = {
   draftId: string
@@ -49,12 +58,60 @@ export function T2vScriptReview({ draftId, projectId, initialRevision, initialDo
     if (saveTimer.current) clearTimeout(saveTimer.current)
   }, [])
 
+  const commitDoc = (next: T2vDraftV1) => {
+    setDoc(next)
+    scheduleSave(next)
+  }
+
   const updateScene = (idx: number, patch: Partial<T2vScene>) => {
     const scenes = [...doc.scenes]
     scenes[idx] = { ...scenes[idx], ...patch }
-    const next = { ...doc, scenes }
-    setDoc(next)
-    scheduleSave(next)
+    commitDoc({ ...doc, scenes })
+  }
+
+  const duplicateScene = (idx: number) => {
+    const src = doc.scenes[idx]
+    const slot = doc.nextSlot
+    const copy: T2vScene = {
+      ...src,
+      id: createId('sc'),
+      slot,
+      voice: src.voice ? { ...src.voice, status: 'stale' } : src.voice,
+    }
+    const scenes = [...doc.scenes]
+    scenes.splice(idx + 1, 0, copy)
+    commitDoc({ ...doc, scenes, nextSlot: slot + 1 })
+  }
+
+  const deleteScene = (idx: number) => {
+    if (doc.scenes.length <= 1) {
+      toast.error('Keep at least one scene')
+      return
+    }
+    const scenes = doc.scenes.filter((_, i) => i !== idx)
+    commitDoc({ ...doc, scenes })
+  }
+
+  const moveScene = (idx: number, delta: number) => {
+    const j = idx + delta
+    if (j < 0 || j >= doc.scenes.length) return
+    const scenes = [...doc.scenes]
+    const [row] = scenes.splice(idx, 1)
+    scenes.splice(j, 0, row)
+    commitDoc({ ...doc, scenes })
+  }
+
+  const regenerateScene = (idx: number) => {
+    setRewriting(true)
+    void runT2vScript(draftId, `Rewrite only scene ${idx + 1} with fresh narration; keep other scenes unchanged.`)
+      .then(async () => {
+        const d = await fetch(`/api/t2v/drafts/${draftId}`).then((r) => r.json())
+        setDoc(d.data.document as T2vDraftV1)
+        setRevision(d.data.revision)
+        toast.success(`Scene ${idx + 1} regenerated`)
+      })
+      .catch(() => toast.error('Regenerate failed'))
+      .finally(() => setRewriting(false))
   }
 
   const totalWords = doc.scenes.reduce((n, s) => n + s.narration.trim().split(/\s+/).filter(Boolean).length, 0)
@@ -130,7 +187,27 @@ export function T2vScriptReview({ draftId, projectId, initialRevision, initialDo
           <div key={scene.id} className="rounded-xl border border-border p-4">
             <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
               <span>Scene {idx + 1}</span>
-              <span>{(estimateSceneMs(scene) / 1000).toFixed(1)}s est</span>
+              <div className="flex items-center gap-2">
+                <span>{(estimateSceneMs(scene) / 1000).toFixed(1)}s est</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Scene actions">
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => duplicateScene(idx)}>Duplicate</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => moveScene(idx, -1)} disabled={idx === 0}>Move up</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => moveScene(idx, 1)} disabled={idx === doc.scenes.length - 1}>
+                      Move down
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => regenerateScene(idx)}>Regenerate</DropdownMenuItem>
+                    <DropdownMenuItem className="text-destructive" onClick={() => deleteScene(idx)}>
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
             <Textarea
               rows={3}

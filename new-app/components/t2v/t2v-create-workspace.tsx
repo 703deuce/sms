@@ -21,7 +21,9 @@ import {
 import { Dropzone } from '@/components/clips/dropzone'
 import { uploadClipFile } from '@/lib/clips/upload'
 import Link from 'next/link'
-import type { T2vAspect, T2vDraftV1 } from '@/lib/t2v/types'
+import type { T2vAspect, T2vDraftV1, T2vVoiceSettings } from '@/lib/t2v/types'
+import { T2vCreateVoicePicker } from '@/components/t2v/t2v-create-voice-picker'
+import { DEFAULT_T2V_VOICE } from '@/lib/t2v/voice-defaults'
 import { splitScript } from '@/lib/t2v/split-script'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -56,6 +58,8 @@ export function T2vCreateWorkspace() {
   const [pexelsOn, setPexelsOn] = useState(false)
   const [platform, setPlatform] = useState<T2vDraftV1['settings']['platform']>('youtube')
   const [sceneSplit, setSceneSplit] = useState<T2vDraftV1['settings']['sceneSplit']>('sentence')
+  const [voice, setVoice] = useState<T2vVoiceSettings>(DEFAULT_T2V_VOICE)
+  const [writingScript, setWritingScript] = useState(false)
 
   useEffect(() => {
     void fetch('/api/t2v/config')
@@ -120,13 +124,16 @@ export function T2vCreateWorkspace() {
   }
 
   const onWriteScript = async () => {
-    if (!draftId) return
+    if (!draftId || writingScript) return
+    setWritingScript(true)
     setLoading(true)
+    console.info('[t2v:script-generate] write script started', { draftId })
     try {
       const draft = await fetch(`/api/t2v/drafts/${draftId}`).then((r) => r.json())
       const doc = draft.data.document as T2vDraftV1
       const nextDoc: T2vDraftV1 = {
         ...doc,
+        voice,
         settings: {
           ...doc.settings,
           aspect,
@@ -139,12 +146,18 @@ export function T2vCreateWorkspace() {
       }
       await patchT2vDraft(draftId, draft.data.revision, nextDoc)
       await runT2vScript(draftId)
+      console.info('[t2v:script-generate] write script completed', { draftId })
       const projectId = params.get('projectId') ?? draft.data.projectId
       router.push(`/app/clips/${projectId}/video?mode=script`)
     } catch (e) {
+      console.error('[t2v:script-generate] write script failed', {
+        draftId,
+        message: e instanceof Error ? e.message : String(e),
+      })
       toast.error(e instanceof Error ? e.message : 'Script generation failed')
     } finally {
       setLoading(false)
+      setWritingScript(false)
     }
   }
 
@@ -200,12 +213,13 @@ export function T2vCreateWorkspace() {
               ☑ Pixabay · {pexelsOn ? '☑ Pexels' : '☐ Pexels (not connected)'}
             </p>
           </div>
+          <T2vCreateVoicePicker value={voice} onChange={setVoice} />
         </div>
         <aside className="space-y-4 rounded-xl border border-border p-4">
           <p className="text-sm text-muted-foreground">Aspect {aspect} · ~{targetDurationS}s</p>
-          <PrimaryButton className="w-full" disabled={loading} onClick={() => void onWriteScript()}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Write script →
+          <PrimaryButton className="w-full" disabled={loading || writingScript} onClick={() => void onWriteScript()}>
+            {loading || writingScript ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {writingScript ? 'Writing script…' : 'Write script →'}
           </PrimaryButton>
         </aside>
       </div>
@@ -294,6 +308,7 @@ export function T2vCreateWorkspace() {
         )}
         {tab === 'deck' && (
           <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Upload a PowerPoint or PDF deck — we extract slide text for your script.</p>
             <Dropzone
               onFile={(file) => {
                 setDeckBusy(true)

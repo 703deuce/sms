@@ -66,4 +66,48 @@ export async function writeScript(input: {
   }
 }
 
+const REWRITE_SYSTEM = `You rewrite an existing multi-scene video script. Return ONLY JSON:
+{"title": string, "musicMood": string, "scenes": [{"narration": string, "onScreenText": string, "visualQuery": string, "keywords": string[], "mood": string}]}
+Keep the same number of scenes unless the instruction requires merging or splitting.
+Apply the user instruction to every scene's narration (tone, length, hook, CTA, etc.) unless the instruction names a single scene (e.g. "scene 2" or "Rewrite only scene 3") — then change only that scene and return all scenes with others unchanged.
+Preserve factual content unless asked to change it.`
+
+/** Quick-rewrite chips (Shorter, Longer, …) — uses current scene text, not the original idea only. */
+export async function rewriteScriptFromDraft(input: {
+  instruction: string
+  settings: T2vDraftV1['settings']
+  title: string
+  scenes: Array<{ narration: string; onScreenText?: string; visualQuery: string; keywords: string[] }>
+}): Promise<LlmScript> {
+  const sceneJson = JSON.stringify(
+    input.scenes.map((s, i) => ({
+      index: i + 1,
+      narration: s.narration,
+      onScreenText: s.onScreenText ?? '',
+      visualQuery: s.visualQuery,
+      keywords: s.keywords,
+    })),
+  )
+  const user = [
+    `Instruction: ${input.instruction}`,
+    `Title: ${input.title || 'Untitled'}`,
+    `Language: ${input.settings.language}. Tone: ${input.settings.tone}.`,
+    `Current script (${input.scenes.length} scenes):`,
+    sceneJson,
+  ].join('\n')
+  const out = await openAiJsonResponse<LlmScript>(REWRITE_SYSTEM, user)
+  if (!Array.isArray(out.scenes) || out.scenes.length === 0) throw new Error('t2v_script_empty')
+  return {
+    ...out,
+    title: out.title || input.title,
+    scenes: out.scenes.map((sc) => ({
+      narration: String(sc.narration ?? '').trim(),
+      onScreenText: String(sc.onScreenText ?? '').trim(),
+      visualQuery: String(sc.visualQuery ?? '').trim().slice(0, 100),
+      keywords: (Array.isArray(sc.keywords) ? sc.keywords : []).map((k) => String(k).toLowerCase()).slice(0, 6),
+      mood: sc.mood,
+    })),
+  }
+}
+
 export { splitScript } from '@/lib/t2v/split-script'

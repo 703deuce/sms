@@ -41,6 +41,35 @@ export function defaultT2vDraft(input: {
   }
 }
 
+/** Preserve scene ids/media when rewriting existing script. */
+export function mergeLlmIntoScenes(llm: LlmScene[], doc: T2vDraftV1): T2vScene[] {
+  if (!doc.scenes.length) return scenesFromLlm(llm, doc)
+  const max = Math.max(llm.length, doc.scenes.length)
+  const out: T2vScene[] = []
+  for (let slot = 0; slot < max; slot++) {
+    const sc = llm[slot]
+    const prev = doc.scenes[slot]
+    if (!sc) {
+      if (prev) out.push(prev)
+      continue
+    }
+    if (prev) {
+      out.push({
+        ...prev,
+        slot,
+        narration: sc.narration,
+        onScreenText: sc.onScreenText,
+        visualQuery: sc.visualQuery || prev.visualQuery,
+        keywords: sc.keywords.length ? sc.keywords : prev.keywords,
+        voice: prev.voice ? { ...prev.voice, status: 'stale' as const } : prev.voice,
+      })
+    } else {
+      out.push(...scenesFromLlm([sc], { ...doc, scenes: [], nextSlot: slot }).map((s) => ({ ...s, slot })))
+    }
+  }
+  return out
+}
+
 export function scenesFromLlm(llm: LlmScene[], doc: T2vDraftV1): T2vScene[] {
   return llm.map((s, slot) => ({
     id: `sc_${slot}_${Math.random().toString(36).slice(2, 8)}`,
