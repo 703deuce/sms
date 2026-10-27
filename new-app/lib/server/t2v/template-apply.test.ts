@@ -17,7 +17,7 @@ const baseDoc = (): T2vDraftV1 => ({
     mediaMix: 'video_first',
     captionsEnabled: true,
   },
-  voice: undefined,
+  voice: null,
   music: { volume: 0.25, duck: true },
   scenes: [
     {
