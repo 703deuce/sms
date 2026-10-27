@@ -1,7 +1,8 @@
-"""ElevenLabs TTS with word timestamps for T2V assemble (worker path).
+"""ElevenLabs /with-timestamps (internal — use voice_cache.get_or_synthesize_voice_clip).
 
-Scene-level synthesis during T2V_ASSEMBLE uses the same /with-timestamps contract as
-new-app/lib/server/ai/elevenlabs-tts.ts. Hash for cache keys is computed in TypeScript only.
+Interactive synthesis: new-app `getOrSynthesizeVoiceClip` + `ttsWithTimestamps` only.
+Worker calls `tts_with_timestamps` solely on cache miss during T2V_ASSEMBLE.
+Cache hash is always `scene.voice.hash` from TypeScript `ttsHash()` — never recomputed here.
 """
 from __future__ import annotations
 
