@@ -29,7 +29,7 @@
 | **Replay length cap (unofficial)** | Community reports **~48 h** of a single live may be reflected in replay; longer lives may truncate or split — treat as **risk** until verified on prod test. | Reddit **[unverified]** — log duration on first marathon Kick. |
 | **Growing replay while live** | **Not confirmed** — post-stream poll only today (`KICK-VOD-BEHAVIOR.md`). | — |
 
-**Product implication:** **30-day Kick subathons** are **rolling marathon mode** (live HLS or periodic reconnects + many replays). Autopull + session stitch + batch publish are **required**; single paste VOD link is wrong tool for the full event.
+**Product implication:** **30-day Kick subathons** require **live HLS capture** (`KICK-LIVE-CAPTURE-DESIGN.md`) — not growing-VOD polling. Autopull + session stitch + batch publish after each segment end; paste link is wrong for the full event.
 
 ---
 
@@ -46,7 +46,7 @@
 stream.online / marathon session start
     → StreamSession (logical id) + StreamVod processMode=marathon
     → every STREAMER_CHUNK_MIN (10–15 min env):
-         fetch ONLY next audio window (HLS section or growing Twitch archive)
+         Twitch: growing archive `audio_only` | Kick: **live HLS** audio chunk (no growing replay)
          → idle gate (§3) → maybe skip transcribe
          → transcribe + signals → object storage; delete local chunk
     → every N hours (default 6): STREAM_RANK_BATCH → clips READY (partial publish)

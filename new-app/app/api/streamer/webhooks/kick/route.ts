@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
 import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
 import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
+import { kickLiveCaptureEnabled } from '@/lib/server/streamer/kick-live-capture'
 import { getPrisma } from '@/lib/server/db'
 
 export const runtime = 'nodejs'
@@ -71,10 +72,17 @@ export async function POST(request: Request) {
     const ch = await prisma.streamChannel.findFirst({ where: { platform: 'kick', login: slug.toLowerCase() } })
     if (!ch) return new NextResponse(null, { status: 204 })
     if (isLive) {
+      const startedAt = String(data.started_at || new Date().toISOString())
       await prisma.streamChannel.update({
         where: { id: ch.id },
-        data: { platformState: { live: { startedAt: new Date().toISOString() } } },
+        data: { platformState: { live: { startedAt } } },
       })
+      // KICK-LIVE-CAPTURE-DESIGN: enqueue STREAM_KICK_LIVE_CAPTURE when KICK_LIVE_CAPTURE_ENABLED=1
+      if (kickLiveCaptureEnabled() && ch.autoProcess) {
+        console.info(
+          `[clipper:stream] kick_live_capture_pending channelId=${ch.id} slug=${slug} (job enqueue not wired)`,
+        )
+      }
     } else {
       const ps = (ch.platformState as Record<string, unknown>) || {}
       const live = (ps.live as { startedAt?: string }) || {}

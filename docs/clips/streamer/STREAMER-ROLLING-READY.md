@@ -113,16 +113,11 @@ Assumptions: 15 min chunks → **~16 analyze chunks**; same Modal/Groq transcrib
 
 ---
 
-## Kick rolling (future — not stage 2 v1)
+## Kick live capture (future — not stage 2 v1)
 
-**Facts:** Kick keeps finished streams as replays on the channel Videos tab (7d / 30d retention) with **15–30 min** (up to **~1 h**) publish delay. The official API exposes **stream start/end webhooks only** — no VOD list endpoint. A **growing VOD during live** is **not confirmed**.
+**Rick correction:** **Growing-VOD rolling is Twitch-only.** Kick publishes replay **after stream end** only.
 
-**If we add Kick “while live” later:**
-
-1. Ingest **live HLS** audio in ~10–15 min chunks (IVS `master.m3u8` from live session metadata), not the channel homepage URL.
-2. On `is_live: false`, continue existing **replay poll** (`KICK-VOD-BEHAVIOR.md`) for the canonical VOD URL.
-3. **Time alignment:** Live chunk timestamps are wall-clock / playlist-relative; the published replay starts at VOD t=0. Use **cross-correlation** (same `align_segment_ms()` approach as render): compare ~5 s PCM from each live chunk boundary against the final downloaded replay audio near the expected offset; apply drift correction before merge/rank.
-4. **Risk:** Live HLS capture is higher ToS/bandwidth exposure than post-replay yt-dlp; ship **post-stream autopull + paste** first (Rick gate).
+See **`KICK-LIVE-CAPTURE-DESIGN.md`**: stream-start webhook → live HLS audio chunks + **~15 min 720p rolling video buffer** for clip render; normal-length streams may use **replay + `align_segment_ms()`** when available.
 
 ---
 

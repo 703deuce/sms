@@ -8,7 +8,7 @@
 | **Retention** | **7 days** for non-verified channels; **up to 30 days** for verified streamers. |
 | **Publish delay** | Typically **15–30 minutes** after shorter streams; **up to ~1 hour** after long streams. |
 | **Official Kick API** | OAuth + **`livestream.status.updated`** webhook (stream start/end). **No official VOD-list or VOD-metadata endpoint** in the public Kick developer API. |
-| **Growing VOD while live** | **Not confirmed** (unlike Twitch archive playlists). Treat **Kick rolling** as a later track. |
+| **Growing VOD while live** | **No** — replay is published **only after stream ends**. **Rolling-from-growing-VOD is Twitch-only.** Kick marathon/near-live → **`KICK-LIVE-CAPTURE-DESIGN.md`** (live HLS). |
 
 ---
 
@@ -44,15 +44,18 @@
 
 ---
 
-## Kick rolling (deferred)
+## Kick live capture (design — build after Twitch stage 1)
 
-Twitch stage 2 can poll a **growing archive VOD** while live. For Kick:
+Rick correction: Kick has **no** growing replay during live. For connected marathon / clips-while-live:
 
-- There is **no confirmed** equivalent growing replay manifest during the live session.
-- **Near-live** would require capturing **live HLS** (`source` on livestream payloads / channel player), which is a different ingest mode (bandwidth, reconnects, ToS).
-- **Alignment to final VOD:** When rolling is built, map live-captured audio timeline to the published replay using the same **`align_segment_ms()`** cross-correlation used at render time (PCM from live chunk vs final VOD `audio.opus` near nominal cut). Design detail: `STREAMER-ROLLING-READY.md` § Kick rolling.
+1. **`livestream.status.updated` (`is_live: true`)** → open **live HLS**; audio-only **10–15 min chunks** (same transcribe/signals as Twitch).
+2. **Rolling 720p video buffer** (~15 min) for render before replay exists; copy segment window on candidate moments.
+3. **Normal-length streams:** prefer **final replay** cuts (yt-dlp sections) aligned with **`align_segment_ms()`** vs live audio when replay is available — more reliable than buffer for short streams.
+4. Reconnects ≤10 min → one session; cap concurrent captures per worker; **disk guard**.
 
-**Rick gate:** Ship Kick **post-stream autopull + paste** first; **do not** block stage 2 Twitch rolling on Kick live HLS.
+Full spec: **`docs/clips/streamer/KICK-LIVE-CAPTURE-DESIGN.md`** (HLS URL resolution, CF/ToS, bandwidth per channel).
+
+**Rick gate:** Ship Kick **post-stream autopull + paste** first; enable `KICK_LIVE_CAPTURE_ENABLED=1` only after Twitch stage 1 reliability.
 
 ---
 
@@ -64,7 +67,7 @@ Twitch stage 2 can poll a **growing archive VOD** while live. For Kick:
 |------|-----------|
 | **Paste VOD** | yt-dlp Kick extractor, audio-only import, no full VOD video retention on our side. |
 | **Auto-pull** | Official **stream end** webhook + **poll** channel videos (v2 API + yt-dlp fallback) up to **~90 min**. |
-| **Rolling** | **Later** — live HLS + correlation to final replay; not in current stage 2 scope. |
+| **Live / marathon** | **Later** — live HLS capture + rolling video buffer (`KICK-LIVE-CAPTURE-DESIGN.md`); replay for post-stream / normal-length render. |
 
 ### Terms of service & reliability
 
