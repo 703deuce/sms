@@ -1,12 +1,14 @@
 """Per-second chat activity signal (S5)."""
 from __future__ import annotations
 
+import re
 import statistics
 
 CHAT_HYPE_TOKENS = (
     "kekw",
     "lul",
     "omegalul",
+    "lmao",
     "pogchamp",
     "pog",
     "letsgo",
@@ -15,9 +17,28 @@ CHAT_HYPE_TOKENS = (
     "clap",
     "!!!",
     "+1",
-    "w ",
-    " w",
 )
+
+LAUGH_EMOTE_TOKENS = (
+    "lul",
+    "kekw",
+    "omegalul",
+    "lmao",
+    "rofl",
+    "lol",
+)
+
+def _emote_laugh_weight(text: str) -> float:
+    t = text.lower()
+    w = 0.0
+    if any(tok in t for tok in LAUGH_EMOTE_TOKENS):
+        w += 2.0
+    if any(tok in t for tok in CHAT_HYPE_TOKENS):
+        w += 1.0
+    if re.search(r"\b[wW]\b", text) or re.search(r"\b[Ll]\b", text):
+        w += 0.75
+    return w
+
 
 STREAMER_CHAT_LAG_S = 6
 ROLLING_S = 300
@@ -60,9 +81,7 @@ def chat_signal_per_second(
         counts[t] += 1.0
         if user:
             chatters[t].add(user)
-        weight = 1.0
-        if any(tok in text for tok in CHAT_HYPE_TOKENS):
-            weight = 2.0
+        weight = 1.0 + _emote_laugh_weight(text)
         hype[t] += weight
 
     unique5 = [0.0] * duration_s

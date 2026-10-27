@@ -4,6 +4,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+MIN_WIDE_CANDIDATES = 50
+PRIMARY_TIER_MIN = 10
+PRIMARY_TIER_MAX = 20
+MORE_MOMENTS_MAX = 25
+
 
 @dataclass
 class FusionPick:
@@ -97,11 +102,13 @@ def fuse_moments(
     """Return ranked clip candidates and signals.json payload."""
     weights = (settings.get("signalWeights") or {}) if isinstance(settings, dict) else {}
     default_w = {
-        "audio": 0.25,
-        "chat": 0.20,
-        "viewerClips": 0.15,
-        "transcript": 0.08,
-        "clipCues": 0.32,
+        "audio": 0.20,
+        "chat": 0.18,
+        "viewerClips": 0.28,
+        "transcript": 0.06,
+        "clipCues": 0.22,
+        "markers": 0.03,
+        "speakerChange": 0.03,
     }
     default_w.update(weights)
     streamer = (settings.get("streamer") or {}) if isinstance(settings, dict) else {}
@@ -117,7 +124,8 @@ def fuse_moments(
         return [], {"v": 1, "hz": 1, "audio": signals.get("audio"), "transcript": signals.get("transcript"), "chat": None, "viewerClips": None, "chapters": chapters or []}
 
     min_sep, prominence = _peak_params(duration_s, min_clip_s, clip_count)
-    peaks = _local_maxima(curve, min_sep_s=min_sep, prominence=prominence)[: max(40, clip_count * 3)]
+    wide_cap = max(MIN_WIDE_CANDIDATES, clip_count * 4)
+    peaks = _local_maxima(curve, min_sep_s=min_sep, prominence=prominence)[:wide_cap]
     candidates: list[dict] = []
     for pi, peak_s in enumerate(peaks):
         start_s = max(0, peak_s - lead_s)
@@ -192,7 +200,7 @@ def fuse_moments(
         if any(_iou(p.start_ms, p.end_ms, d.start_ms, d.end_ms) > 0.3 for d in deduped):
             continue
         deduped.append(p)
-        if len(deduped) >= clip_count:
+        if len(deduped) >= wide_cap:
             break
 
     if cue_events:
@@ -204,21 +212,52 @@ def fuse_moments(
             max_clip_s=max_clip_s,
             lead_s=lead_s,
             tail_s=tail_s,
-            clip_count=clip_count,
+            clip_count=max(clip_count, PRIMARY_TIER_MAX),
         )
 
+    primary_n = min(PRIMARY_TIER_MAX, max(PRIMARY_TIER_MIN, clip_count))
+    candidate_archive: list[dict] = []
+    visible: list[FusionPick] = []
+    for i, p in enumerate(deduped):
+        tier = "primary" if i < primary_n else ("more" if i < primary_n + MORE_MOMENTS_MAX else "archive")
+        sm = dict(p.ai_meta.get("streamer") or {})
+        sm["tier"] = tier
+        sm["render"] = tier == "primary"
+        sm["rankIndex"] = i
+        p.ai_meta = {**p.ai_meta, "streamer": sm}
+        candidate_archive.append(
+            {
+                "startMs": p.start_ms,
+                "endMs": p.end_ms,
+                "score": p.score,
+                "tier": tier,
+                "title": p.title,
+                "peakMs": p.peak_ms,
+            }
+        )
+        if tier in ("primary", "more"):
+            visible.append(p)
+
     payload = {
-        "v": 1,
+        "v": 2,
         "hz": 1,
         "audio": signals.get("audio"),
         "transcript": signals.get("transcript"),
         "chat": signals.get("chat"),
         "viewerClips": signals.get("viewerClips"),
+        "markers": signals.get("markers"),
+        "speakerChange": signals.get("speakerChange"),
         "chapters": chapters or [],
         "combined": curve,
         "clipCues": signals.get("clipCues"),
+        "candidates": candidate_archive,
+        "tierCounts": {
+            "primary": primary_n,
+            "more": MORE_MOMENTS_MAX,
+            "wideGenerated": len(candidates),
+        },
     }
-    return deduped, payload
+    return visible, payload
 
 
 def _inject_clip_cue_picks(

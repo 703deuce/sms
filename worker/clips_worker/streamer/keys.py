@@ -13,6 +13,10 @@ def stream_signals_key(workspace_id: str, vod_id: str) -> str:
     return f"ws/{workspace_id}/streams/{vod_id}/signals.json"
 
 
+def stream_candidates_key(workspace_id: str, vod_id: str) -> str:
+    return f"ws/{workspace_id}/streams/{vod_id}/rank_candidates.json"
+
+
 def stream_chat_key(workspace_id: str, vod_id: str) -> str:
     return f"ws/{workspace_id}/streams/{vod_id}/chat.jsonl.gz"
 

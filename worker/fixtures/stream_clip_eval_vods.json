@@ -1,0 +1,11 @@
+[
+  {
+    "id": "synthetic_short",
+    "description": "Synthetic 10m VOD — viewer clips at 90s and 240s",
+    "durationMs": 600000,
+    "viewerClips": [
+      { "vod_offset_s": 90, "duration_s": 30, "view_count": 12 },
+      { "vod_offset_s": 240, "duration_s": 25, "view_count": 8 }
+    ]
+  }
+]

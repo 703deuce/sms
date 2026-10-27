@@ -17,7 +17,13 @@ from clips_worker.pipeline import insert_clips_batch
 from clips_worker.storage import download_object, put_json, sign_url, upload_file
 from clips_worker.streamer.chunking import ffmpeg_slice_opus, merge_words, plan_chunks
 from clips_worker.streamer.config import CHUNK_MIN, CHUNK_OVERLAP_S, SCRATCH
-from clips_worker.streamer.keys import stream_audio_key, stream_chat_key, stream_chunk_key, stream_signals_key
+from clips_worker.streamer.keys import (
+    stream_audio_key,
+    stream_candidates_key,
+    stream_chat_key,
+    stream_chunk_key,
+    stream_signals_key,
+)
 from clips_worker.streamer.viewer_clips.fetch import fetch_viewer_clips_for_vod
 from clips_worker.streamer.chat.resolve import resolve_chat_after_transcribe
 from clips_worker.streamer.chat.source import get_chat
@@ -280,6 +286,19 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         )
         sig_key = stream_signals_key(workspace_id, vod_id)
         put_json(sig_key, signals_payload)
+        cand_key = stream_candidates_key(workspace_id, vod_id)
+        put_json(
+            cand_key,
+            {
+                "v": 1,
+                "vodId": vod_id,
+                "candidates": signals_payload.get("candidates") or [],
+                "tierCounts": signals_payload.get("tierCounts"),
+            },
+        )
+        state["candidatesKey"] = cand_key
+        state["rankingVersion"] = 2
+        _save_state(conn, vod_id, state)
         with conn.cursor() as cur:
             cur.execute(
                 'UPDATE stream_vods SET "signalsKey" = %s, "updatedAt" = NOW() WHERE id = %s',

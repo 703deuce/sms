@@ -177,6 +177,12 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
             for idx, clip in enumerate(clips):
                 if clip.get("previewKey"):
                     continue
+                ai_meta_row = clip.get("aiMeta") or {}
+                if isinstance(ai_meta_row, str):
+                    ai_meta_row = json.loads(ai_meta_row)
+                streamer_tier = (ai_meta_row.get("streamer") or {}).get("tier")
+                if streamer_tier == "more" or (ai_meta_row.get("streamer") or {}).get("render") is False:
+                    continue
                 clip_id = clip["id"]
                 start_ms = int(clip["startMs"])
                 end_ms = int(clip["endMs"])
