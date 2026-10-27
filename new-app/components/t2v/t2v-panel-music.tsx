@@ -199,7 +199,7 @@ export function T2vPanelMusic({
     <div className="space-y-4 overflow-y-auto p-4">
       <div className="rounded-lg border border-border p-3 text-sm">
         <p className="font-medium">Current track</p>
-        {music?.disabled || !music ? (
+        {music?.disabled || !music?.generationId ? (
           <p className="text-muted-foreground">No music</p>
         ) : (
           <p className="text-muted-foreground">

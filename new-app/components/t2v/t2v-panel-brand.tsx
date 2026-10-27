@@ -75,7 +75,9 @@ export function T2vPanelBrand({
         }}
       >
         <SelectTrigger>
-          <SelectValue placeholder="None" />
+          <SelectValue placeholder="None">
+            {value ? templates.find((t) => t.id === value)?.name ?? 'Brand' : 'None'}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__none">None</SelectItem>
