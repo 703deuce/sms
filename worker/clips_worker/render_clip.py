@@ -129,8 +129,10 @@ AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "lock
 
 
 def multiperson_reframe_enabled() -> bool:
-    """v3 multiperson pipeline is opt-in only (REFRAME_V=2). Default: legacy speakercrop."""
-    return os.environ.get("REFRAME_V", "").strip() == "2"
+    """v3 multiperson pipeline requires ops flag (subprocess may still set REFRAME_V=2 when routed)."""
+    from clips_worker.reframe_v2 import reframe_v2_ops_enabled
+
+    return reframe_v2_ops_enabled()
 
 
 def layout_env(layout: str) -> dict[str, str]:
@@ -155,7 +157,7 @@ def layout_env(layout: str) -> dict[str, str]:
         env["SPLIT"] = "0"
         env["LAYOUT_MODE"] = "fit"
         env["LAYOUT_STYLE"] = "fit"
-    elif layout in ("dynamic", "split_debate", "grid", "locked_off"):
+    elif layout in ("dynamic", "split_debate", "grid", "grid3", "grid4", "locked_off", "screen_pip", "side"):
         env["SPLIT"] = "1"
         env["LAYOUT_MODE"] = layout
         env["LAYOUT_STYLE"] = layout
@@ -251,7 +253,22 @@ def run_speakercrop(
     env = os.environ.copy()
     env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
     layout = resolve_clip_layout(settings, clip_index)
-    env.update(layout_env(layout))
+    from clips_worker.reframe_v2 import reframe_v2_ops_enabled
+
+    if reframe_v2_ops_enabled():
+        from clips_worker.screen_share_route import apply_screen_share_env
+
+        ss_env, ss_shadow = apply_screen_share_env(clip_src)
+        if ss_env:
+            layout = ss_env.get("LAYOUT_MODE", layout)
+        env.update(layout_env(layout))
+        env.update(ss_env)
+        if render_meta is not None and ss_shadow:
+            existing = render_meta.get("layoutRouteShadow") or {}
+            render_meta["layoutRouteShadow"] = {**existing, **ss_shadow}
+    else:
+        env.pop("REFRAME_V", None)
+        env.update(layout_env(layout))
     env["WORDS"] = str(words_path)
     env["WORDS_JSON"] = str(words_path)
     env["OUT_W"] = str(w)

@@ -13,10 +13,13 @@ from clips_worker.filtergraph import (
     fit_blur_overlay_filter,
     grid3_layout_filter_labels,
     grid4_xstack_filter,
+    screen_pip_overlay_filter,
     segment_layout_stack,
+    side_by_side_filter,
     slot_crop_filter,
     two_up_vstack_filter,
 )
+from clips_worker.compose_layout import layout_slots
 from clips_worker.ffmpeg_util import stderr_tail
 from clips_worker.render_concurrency import ffmpeg_threads_per_job
 
@@ -43,6 +46,42 @@ def render_multiperson_v2(src: Path, dest: Path, crop: dict) -> None:
         filters.append(f"[0:v]trim=start={t0}:end={t1},setpts=PTS-STARTPTS[{base}]")
         if layout == "wide":
             filters.append(fit_blur_overlay_filter(base, f"vout{si}", out_w, out_h))
+            concat_in.append(f"[vout{si}]")
+            continue
+        if layout in ("pip", "screen_pip") and slots:
+            sl = slots[0]
+            cx, cy = float(sl.get("cx", W / 2)), float(sl.get("cy", H / 2))
+            pip_slot = layout_slots("screen_pip", out_w, out_h, 2)[1]
+            _, _, ow_pip, oh_pip = pip_slot
+            filters.append(fit_blur_overlay_filter(base, f"bg{si}", out_w, out_h))
+            filters.append(
+                slot_crop_filter(
+                    base,
+                    f"cam{si}",
+                    cx,
+                    cy,
+                    W,
+                    H,
+                    ow_pip,
+                    oh_pip,
+                    letterbox_blur=False,
+                )
+            )
+            filters.append(screen_pip_overlay_filter(f"bg{si}", f"cam{si}", f"vout{si}", out_w, out_h))
+            concat_in.append(f"[vout{si}]")
+            continue
+        if layout == "side" and len(slots) >= 2:
+            slot_labels = []
+            side_slots = layout_slots("side", out_w, out_h, 2)
+            for j, sl in enumerate(slots[:2]):
+                cx, cy = float(sl.get("cx", W / 2)), float(sl.get("cy", H / 2))
+                _, _, sw, sh = (0, 0, side_slots[j][2], side_slots[j][3])
+                filters.append(
+                    slot_crop_filter(base, f"s{si}_{j}", cx, cy, W, H, sw, sh, letterbox_blur=False)
+                )
+                slot_labels.append(f"s{si}_{j}")
+            if len(slot_labels) >= 2:
+                filters.append(f"[{slot_labels[0]}][{slot_labels[1]}]{side_by_side_filter()}[vout{si}]")
             concat_in.append(f"[vout{si}]")
             continue
         if layout == "close" and slots:
