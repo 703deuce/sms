@@ -146,7 +146,20 @@ def _export_audio(src: Path, dest: Path, fmt: str) -> None:
         subprocess.check_call(["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vn", "-c:a", "aac", str(dest)])
 
 
+def _coerce_progress_cb(post_progress):
+    """Accept progress(job_id, payload) or legacy progress(payload) callbacks."""
+
+    def progress(job_id: str, payload: dict) -> None:
+        try:
+            post_progress(job_id, payload)
+        except TypeError:
+            post_progress(payload)
+
+    return progress
+
+
 def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
+    post_progress = _coerce_progress_cb(post_progress)
     payload = job.get("payload") or {}
     if isinstance(payload, str):
         payload = json.loads(payload)
