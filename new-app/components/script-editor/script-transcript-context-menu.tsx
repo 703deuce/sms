@@ -7,14 +7,18 @@ export function ScriptTranscriptContextMenu({
   x,
   y,
   canRestore,
+  canIgnore,
   onRestore,
+  onIgnore,
   onClose,
 }: {
   open: boolean
   x: number
   y: number
   canRestore: boolean
+  canIgnore: boolean
   onRestore: () => void
+  onIgnore: () => void
   onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -45,6 +49,19 @@ export function ScriptTranscriptContextMenu({
       style={{ left: x, top: y }}
       role="menu"
     >
+      {canIgnore && (
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full px-3 py-1.5 text-left hover:bg-muted"
+          onClick={() => {
+            onIgnore()
+            onClose()
+          }}
+        >
+          Ignore
+        </button>
+      )}
       <button
         type="button"
         role="menuitem"

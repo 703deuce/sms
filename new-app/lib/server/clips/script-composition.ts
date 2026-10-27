@@ -10,7 +10,8 @@ import { createId } from '@/lib/supabase/id'
 
 const SNAPSHOT_EVERY = 200
 
-function parseDocument(raw: unknown): ScriptDocumentV1 {
+/** Round-trip parse for DB JSON — must preserve all M4+ document fields. */
+export function parseScriptCompositionDocument(raw: unknown): ScriptDocumentV1 {
   if (!raw || typeof raw !== 'object') return { v: 1, keptWordIds: [], deletedWordIds: [] }
   const d = raw as ScriptDocumentV1
   if (d.v !== 1) return { v: 1, keptWordIds: [], deletedWordIds: [] }
@@ -26,6 +27,16 @@ function parseDocument(raw: unknown): ScriptDocumentV1 {
     markers: Array.isArray(d.markers) ? d.markers : undefined,
     overlays: Array.isArray(d.overlays) ? d.overlays : undefined,
     musicTracks: Array.isArray(d.musicTracks) ? d.musicTracks : undefined,
+    settings: d.settings && typeof d.settings === 'object' ? d.settings : undefined,
+    ignoredWordIds: Array.isArray(d.ignoredWordIds) ? d.ignoredWordIds.map(String) : undefined,
+    transcriptHiddenWordIds: Array.isArray(d.transcriptHiddenWordIds)
+      ? d.transcriptHiddenWordIds.map(String)
+      : undefined,
+    wordSourceAdjust:
+      d.wordSourceAdjust && typeof d.wordSourceAdjust === 'object'
+        ? (d.wordSourceAdjust as ScriptDocumentV1['wordSourceAdjust'])
+        : undefined,
+    reframeKeyframes: Array.isArray(d.reframeKeyframes) ? d.reframeKeyframes : undefined,
   }
 }
 
@@ -40,7 +51,7 @@ export async function ensureFullComposition(
     where: { projectId, kind: 'FULL', clipId: null, deletedAt: null },
   })
   if (existing) {
-    const doc = parseDocument(existing.document)
+    const doc = parseScriptCompositionDocument(existing.document)
     if (!doc.keptWordIds.length && allWordIds.length) {
       const seeded = emptyDocument(allWordIds)
       return prisma.scriptComposition.update({
@@ -93,7 +104,7 @@ export async function applyCompositionOpBatch(
     return { ok: false, code: 'STALE_REVISION', revision: row.revision }
   }
 
-  let document = parseDocument(row.document)
+  let document = parseScriptCompositionDocument(row.document)
   let revision = row.revision
   const acked: string[] = []
 
@@ -104,7 +115,7 @@ export async function applyCompositionOpBatch(
     if (existing) {
       acked.push(item.id)
       revision = existing.revision
-      document = parseDocument(
+      document = parseScriptCompositionDocument(
         (await prisma.scriptComposition.findUniqueOrThrow({ where: { id: compositionId } })).document,
       )
       continue

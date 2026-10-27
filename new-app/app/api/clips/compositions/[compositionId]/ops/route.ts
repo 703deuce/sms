@@ -62,6 +62,34 @@ const opSchema = z.discriminatedUnion('type', [
     gapAtOutMs: z.record(z.string(), z.number()).optional(),
     gapDurMs: z.number().min(1).optional(),
   }),
+  z.object({
+    type: z.literal('patch_word_source_adjust'),
+    wordSourceAdjust: z
+      .record(
+        z.string(),
+        z.object({
+          headTrimMs: z.number().min(0).optional(),
+          tailTrimMs: z.number().min(0).optional(),
+        }),
+      )
+      .optional(),
+  }),
+  z.object({
+    type: z.literal('patch_reframe_keyframes'),
+    reframeKeyframes: z
+      .array(
+        z.object({
+          srcMs: z.number().min(0),
+          crop: z.object({
+            cx: z.number(),
+            cy: z.number(),
+            w: z.number().min(1),
+            h: z.number().min(1),
+          }),
+        }),
+      )
+      .optional(),
+  }),
 ])
 
 const bodySchema = z.object({

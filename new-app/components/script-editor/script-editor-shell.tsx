@@ -23,6 +23,8 @@ import {
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { useScriptComposition } from '@/components/script-editor/use-script-composition'
 import { scrollWordIntoTranscriptPane } from '@/lib/clips/script-editor/scroll-word-into-view'
+import { scrollWordToFollowPlayhead } from '@/lib/clips/script-editor/follow-playhead'
+import { ScriptSelectionToolbar } from '@/components/script-editor/script-selection-toolbar'
 import { TimelinePanel } from '@/components/script-editor/transport/timeline/timeline-panel'
 import {
   buildWordChips,
@@ -130,6 +132,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [draftCrop, setDraftCrop] = useState<ReframeCropRect | null>(null)
   const [hoverRestoreWordId, setHoverRestoreWordId] = useState<string | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const [followPlayhead, setFollowPlayhead] = useState(true)
+  const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null)
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
   const settings = useMemo(() => resolveScriptSettings(document.settings), [document.settings])
@@ -293,14 +297,36 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     [orderedWords, deletedSet, restoreWords],
   )
 
+  const selectedIgnoredIds = useMemo(() => {
+    const ids: string[] = []
+    for (const id of selectedIds) {
+      if (ignoredSet.has(id)) ids.push(id)
+    }
+    return ids
+  }, [selectedIds, ignoredSet])
+
   const onRestoreSelection = useCallback(() => {
     if (selectedDeletedIds.length) {
       restoreWords(selectedDeletedIds)
       setSelAnchor(null)
       setSelEnd(null)
       toast.success('Restored selection')
+      return
     }
-  }, [selectedDeletedIds, restoreWords])
+    if (selectedIgnoredIds.length) {
+      applyOp({ type: 'restore_ignored', wordIds: selectedIgnoredIds })
+      setSelAnchor(null)
+      setSelEnd(null)
+      toast.success('Restored ignored words')
+    }
+  }, [selectedDeletedIds, selectedIgnoredIds, restoreWords, applyOp])
+
+  const onIgnoreSelection = useCallback(() => {
+    if (!selectedKeptIds.length) return
+    applyOp({ type: 'ignore_words', wordIds: selectedKeptIds.filter((id) => !ignoredSet.has(id)) })
+    setSelAnchor(null)
+    setSelEnd(null)
+  }, [selectedKeptIds, ignoredSet, applyOp])
 
   const fillerHits = useMemo(
     () =>
@@ -549,6 +575,41 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     }
   }, [])
 
+  useEffect(() => {
+    const container = transcriptRef.current
+    if (!container) return
+    const onScroll = () => {
+      if (playing) setFollowPlayhead(false)
+    }
+    container.addEventListener('scroll', onScroll, { passive: true })
+    return () => container.removeEventListener('scroll', onScroll)
+  }, [playing])
+
+  useEffect(() => {
+    if (selAnchor == null || selEnd == null) {
+      setSelectionToolbarRect(null)
+      return
+    }
+    const lo = Math.min(selAnchor, selEnd)
+    const hi = Math.max(selAnchor, selEnd)
+    const first = transcriptRef.current?.querySelector(`[data-word-idx="${lo}"]`)
+    const last = transcriptRef.current?.querySelector(`[data-word-idx="${hi}"]`)
+    if (first instanceof HTMLElement && last instanceof HTMLElement) {
+      const r1 = first.getBoundingClientRect()
+      const r2 = last.getBoundingClientRect()
+      setSelectionToolbarRect(
+        new DOMRect(
+          Math.min(r1.left, r2.left),
+          Math.min(r1.top, r2.top),
+          Math.max(r1.right, r2.right) - Math.min(r1.left, r2.left),
+          Math.max(r1.bottom, r2.bottom) - Math.min(r1.top, r2.top),
+        ),
+      )
+    } else {
+      setSelectionToolbarRect(null)
+    }
+  }, [selAnchor, selEnd, orderedWords, playheadMs])
+
   const onDeleteSelection = useCallback(() => {
     if (selectedDeletedIds.length && !selectedKeptIds.length) {
       onRestoreSelection()
@@ -680,6 +741,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         onZoom(1 / 1.15, outputMs)
       }
 
+      if (e.key === 'Escape' && !followPlayhead) {
+        e.preventDefault()
+        setFollowPlayhead(true)
+        return
+      }
+
       if (e.key === 's' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
         onSplitAtPlayhead()
@@ -733,12 +800,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     undo,
     timelineFocused,
     seekToOutputMs,
+    followPlayhead,
   ])
 
   useEffect(() => {
     const el = transcriptRef.current?.querySelector(`[data-word-idx="${activeIndex}"]`) ?? null
-    scrollWordIntoTranscriptPane(transcriptRef.current, el)
-  }, [activeIndex])
+    if (playing && followPlayhead) scrollWordToFollowPlayhead(transcriptRef.current, el)
+    else scrollWordIntoTranscriptPane(transcriptRef.current, el)
+  }, [activeIndex, playing, followPlayhead])
 
   const togglePlay = () => {
     const v = videoRef.current
@@ -894,9 +963,29 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
             </div>
             <div
               ref={transcriptRef}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 select-none"
+              className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 select-none"
               onFocus={() => setTimelineFocused(false)}
             >
+              {!followPlayhead && playing && (
+                <button
+                  type="button"
+                  className="sticky top-2 z-30 mb-2 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium shadow-sm hover:bg-muted"
+                  onClick={() => setFollowPlayhead(true)}
+                >
+                  ↓ Follow playhead
+                </button>
+              )}
+              <ScriptSelectionToolbar
+                anchorRect={selectionToolbarRect}
+                canDelete={selectedKeptIds.length > 0}
+                canIgnore={selectedKeptIds.some((id) => !ignoredSet.has(id))}
+                canRestore={selectedDeletedIds.length > 0 || selectedIgnoredIds.length > 0}
+                canReplaceGap={selectedKeptIds.length > 0 && selAnchor != null && selEnd != null}
+                onDelete={onDeleteSelection}
+                onIgnore={onIgnoreSelection}
+                onRestore={onRestoreSelection}
+                onReplaceGap={onReplaceSelectionWithGap}
+              />
               <div className="mx-auto max-w-[72ch] space-y-4 text-[17px] leading-relaxed">
                 {blocks.map((block) => (
                   <div key={`${block.speakerId}-${block.startMs}`}>
@@ -995,8 +1084,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
               open={ctxMenu != null}
               x={ctxMenu?.x ?? 0}
               y={ctxMenu?.y ?? 0}
-              canRestore={selectedDeletedIds.length > 0}
+              canRestore={selectedDeletedIds.length > 0 || selectedIgnoredIds.length > 0}
+              canIgnore={selectedKeptIds.some((id) => !ignoredSet.has(id) && !deletedSet.has(id))}
               onRestore={onRestoreSelection}
+              onIgnore={onIgnoreSelection}
               onClose={() => setCtxMenu(null)}
             />
           </section>

@@ -32,6 +32,14 @@ export type WordBatchActionOp = {
   gapAtOutMs?: Record<string, number>
   gapDurMs?: number
 }
+export type PatchWordSourceAdjustOp = {
+  type: 'patch_word_source_adjust'
+  wordSourceAdjust?: ScriptDocumentV1['wordSourceAdjust']
+}
+export type PatchReframeKeyframesOp = {
+  type: 'patch_reframe_keyframes'
+  reframeKeyframes?: ScriptDocumentV1['reframeKeyframes']
+}
 
 export type ScriptCompositionOp =
   | DeleteWordsOp
@@ -50,6 +58,8 @@ export type ScriptCompositionOp =
   | ShortenGapsBatchOp
   | SetReframeKeyframeOp
   | WordBatchActionOp
+  | PatchWordSourceAdjustOp
+  | PatchReframeKeyframesOp
 
 export function emptyDocument(allWordIds: string[]): ScriptDocumentV1 {
   return { v: 1, keptWordIds: [...allWordIds], deletedWordIds: [], wordOrder: [...allWordIds] }
@@ -85,8 +95,18 @@ function finalizeDoc(
     overlays: document.overlays,
     musicTracks: document.musicTracks,
     settings: partial.settings ?? document.settings,
-    ignoredWordIds: partial.ignoredWordIds ?? document.ignoredWordIds,
-    transcriptHiddenWordIds: partial.transcriptHiddenWordIds ?? document.transcriptHiddenWordIds,
+    ignoredWordIds:
+      partial.ignoredWordIds !== undefined
+        ? partial.ignoredWordIds.length
+          ? partial.ignoredWordIds
+          : undefined
+        : document.ignoredWordIds,
+    transcriptHiddenWordIds:
+      partial.transcriptHiddenWordIds !== undefined
+        ? partial.transcriptHiddenWordIds.length
+          ? partial.transcriptHiddenWordIds
+          : undefined
+        : document.transcriptHiddenWordIds,
     wordSourceAdjust: partial.wordSourceAdjust ?? document.wordSourceAdjust,
     reframeKeyframes: partial.reframeKeyframes ?? document.reframeKeyframes,
   }
@@ -211,6 +231,12 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     }
   }
 
+  if (op.type === 'patch_word_source_adjust') {
+    wordSourceAdjust = op.wordSourceAdjust ? { ...op.wordSourceAdjust } : undefined
+  } else if (op.type === 'patch_reframe_keyframes') {
+    reframeKeyframes = op.reframeKeyframes ? [...op.reframeKeyframes] : undefined
+  }
+
   if (op.type === 'shorten_gap_before') {
     const removeMs = symmetricGapTrimMs(op.gapMs, op.targetGapMs)
     if (removeMs > 0) {
@@ -258,6 +284,27 @@ export function opsBetweenDocuments(from: ScriptDocumentV1, to: ScriptDocumentV1
   const ops: ScriptCompositionOp[] = []
   if (restoreIds.length) ops.push({ type: 'restore_words', wordIds: restoreIds })
   if (deleteIds.length) ops.push({ type: 'delete_words', wordIds: deleteIds })
+
+  const fromIgn = new Set(from.ignoredWordIds ?? [])
+  const toIgn = new Set(to.ignoredWordIds ?? [])
+  const restoreIgnored = [...fromIgn].filter((id) => !toIgn.has(id))
+  const ignoreIds = [...toIgn].filter((id) => !fromIgn.has(id))
+  if (restoreIgnored.length) ops.push({ type: 'restore_ignored', wordIds: restoreIgnored })
+  if (ignoreIds.length) ops.push({ type: 'ignore_words', wordIds: ignoreIds })
+
+  const fromHid = new Set(from.transcriptHiddenWordIds ?? [])
+  const toHid = new Set(to.transcriptHiddenWordIds ?? [])
+  const showTranscript = [...fromHid].filter((id) => !toHid.has(id))
+  const hideTranscript = [...toHid].filter((id) => !fromHid.has(id))
+  if (showTranscript.length) ops.push({ type: 'show_transcript_words', wordIds: showTranscript })
+  if (hideTranscript.length) ops.push({ type: 'hide_transcript_words', wordIds: hideTranscript })
+
+  if (JSON.stringify(from.wordSourceAdjust ?? null) !== JSON.stringify(to.wordSourceAdjust ?? null)) {
+    ops.push({ type: 'patch_word_source_adjust', wordSourceAdjust: to.wordSourceAdjust })
+  }
+  if (JSON.stringify(from.reframeKeyframes ?? null) !== JSON.stringify(to.reframeKeyframes ?? null)) {
+    ops.push({ type: 'patch_reframe_keyframes', reframeKeyframes: to.reframeKeyframes })
+  }
 
   const fromSplits = (from.splitAtOutMs ?? []).join(',')
   const toSplits = (to.splitAtOutMs ?? []).join(',')

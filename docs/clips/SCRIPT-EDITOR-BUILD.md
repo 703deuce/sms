@@ -7,6 +7,10 @@
 
 **Agent cadence:** progress note every **10–15 min** on long work; end with **READY TO PUSH** or a **clear question** (owner standing direction).
 
+**UI layouts (owner 2026-10-27):** **M4 / M4.1** → `script-editor.md` **§A**. **M5+** net-new panels/dialogs → **`docs/clips/descript/ui-layouts.md`** (owner screenshot spec). Until a section exists there, implement **backend + ops + tests** only.
+
+**Current phase:** **M4.1** (restore cuts, filler/gap/reframe polish, §A selection + follow-playhead) → then **M5**.
+
 ---
 
 ## 0. Decisions locked (owner)

@@ -58,6 +58,15 @@ describe('script op log', () => {
     expect(doc.settings?.captions?.presetId).toBe('minimal')
   })
 
+  it('opsBetweenDocuments includes ignore and transcript fields', () => {
+    let doc = emptyDocument(ids)
+    const ignored = applyCompositionOp(doc, { type: 'ignore_words', wordIds: ['a:1'] })
+    const ops = opsBetweenDocuments(ignored, doc)
+    expect(ops).toContainEqual({ type: 'restore_ignored', wordIds: ['a:1'] })
+    const undone = applyCompositionOps(ignored, ops)
+    expect(documentsEqual(undone, doc)).toBe(true)
+  })
+
   it('opsBetweenDocuments matches snapshot undo stack', () => {
     let doc = emptyDocument(ids)
     const stack: ReturnType<typeof cloneDocument>[] = []
