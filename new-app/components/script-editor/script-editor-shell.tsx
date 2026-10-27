@@ -84,6 +84,8 @@ import { RoomsUploadCard } from '@/components/recording/rooms/upload-card'
 import { ScriptExportPopover } from '@/components/script-editor/script-export-popover'
 import { ScriptVersionHistoryPanel } from '@/components/script-editor/script-version-history-panel'
 import { ScriptShortcutsSheet } from '@/components/script-editor/script-shortcuts-sheet'
+import { StudioSoundPreview } from '@/components/script-editor/studio-sound-preview'
+import { useGeneration } from '@/components/clips/editor/use-generation'
 import { ScriptStoryboardPanel } from '@/components/script-editor/storyboard/script-storyboard-panel'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -206,6 +208,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   )
 
   const videoRef = useRef<HTMLVideoElement>(null)
+  const studioFx = document.audioFx?.studioSound
+  const studioPreviewGen = useGeneration(
+    studioFx?.enabled && studioFx.assetId ? studioFx.assetId : null,
+  )
   const transcriptRef = useRef<HTMLDivElement>(null)
   const layoutRef = useRef(loadScriptEditorLayout())
   const [scriptWidthPct, setScriptWidthPct] = useState(layoutRef.current.scriptWidthPct)
@@ -1775,6 +1781,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     outputDurationSec={outDur / 1000}
                   />
                   <PreviewPillBar settings={settings} onPatch={patchSettings} />
+                  <StudioSoundPreview
+                    videoRef={videoRef}
+                    isolatedUrl={studioPreviewGen.downloadUrl}
+                    mix={studioFx?.mix ?? 0.8}
+                    enabled={Boolean(studioFx?.enabled && studioPreviewGen.status === 'READY')}
+                  />
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Source video unavailable.</p>

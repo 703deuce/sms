@@ -109,6 +109,42 @@ def apply_audio_mix(
     subprocess.check_call(cmd)
 
 
+def apply_studio_sound_mix(video: Path, isolated: Path, out_video: Path, mix: float) -> None:
+    """Blend isolated speech with original program audio."""
+    m = max(0.0, min(1.0, float(mix)))
+    orig = max(0.0, 1.0 - m)
+    fc = (
+        f"[1:a]volume={m:.4f}[iso];[0:a]volume={orig:.4f}[raw];"
+        f"[iso][raw]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[aout]"
+    )
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video),
+            "-i",
+            str(isolated),
+            "-filter_complex",
+            fc,
+            "-map",
+            "0:v:0",
+            "-map",
+            "[aout]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-shortest",
+            str(out_video),
+        ],
+    )
+
+
 def apply_dub_speech_mix(
     video: Path,
     dub_audio: Path,

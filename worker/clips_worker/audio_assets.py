@@ -43,4 +43,25 @@ def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
         download_object(row[0], local)
         sfx_paths.append((local, int(item.get("atMs", 0)), float(item.get("volume", 0.8))))
 
-    return {"music_path": music_path, "music_meta": music_meta, "sfx_paths": sfx_paths}
+    studio_path = None
+    studio_mix = None
+    studio = audio.get("studioSound") or {}
+    if studio.get("enabled") and studio.get("generationId"):
+        gid = studio["generationId"]
+        with conn.cursor() as cur:
+            cur.execute('SELECT "storageKey", status FROM ai_generations WHERE id=%s', (gid,))
+            row = cur.fetchone()
+        if row and row[0] and row[1] == "READY":
+            from clips_worker.storage import download_object
+
+            studio_path = work_dir / "studio_isolated.mp3"
+            download_object(row[0], studio_path)
+            studio_mix = float(studio.get("mix", 0.8))
+
+    return {
+        "music_path": music_path,
+        "music_meta": music_meta,
+        "sfx_paths": sfx_paths,
+        "studio_path": studio_path,
+        "studio_mix": studio_mix,
+    }

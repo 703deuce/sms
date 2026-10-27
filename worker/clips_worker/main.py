@@ -356,6 +356,13 @@ def handle_music(conn, job: dict) -> None:
     _mark_job_done(conn, job["id"])
 
 
+def handle_studio_sound(conn, job: dict) -> None:
+    from clips_worker.studio_sound_job import run_studio_sound_job
+
+    run_studio_sound_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
 def handle_reframe_crop(conn, job: dict) -> None:
     from clips_worker.reframe_crop import run_reframe_crop_job
 
@@ -433,6 +440,7 @@ DISPATCH: dict[str, object] = {
     "RENDER_CLIP": handle_render_clip,
     "REFRAME_CROP": handle_reframe_crop,
     "MUSIC": handle_music,
+    "STUDIO_SOUND": handle_studio_sound,
     "THUMBNAIL": handle_thumbnail,
     "DUB": handle_dub,
 }

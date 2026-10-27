@@ -212,6 +212,15 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
         audio = document.get("audio")
         if audio:
             edits["audio"] = audio
+        audio_fx = document.get("audioFx") or {}
+        studio = audio_fx.get("studioSound") or {}
+        if studio.get("enabled") and studio.get("assetId"):
+            edits.setdefault("audio", {})
+            edits["audio"]["studioSound"] = {
+                "enabled": True,
+                "generationId": studio["assetId"],
+                "mix": float(studio.get("mix", 0.8)),
+            }
         elif document.get("musicTracks"):
             mt = document["musicTracks"][0]
             if mt.get("assetId"):

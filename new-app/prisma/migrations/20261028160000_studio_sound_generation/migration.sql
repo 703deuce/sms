@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "GenerationKind" ADD VALUE IF NOT EXISTS 'STUDIO_SOUND';

@@ -12,9 +12,16 @@ export type ClipAudioSfx = {
   volume?: number
 }
 
+export type ClipStudioSound = {
+  enabled: boolean
+  generationId: string
+  mix?: number
+}
+
 export type ClipEditsAudio = {
   music: ClipAudioMusic | null
   sfx: ClipAudioSfx[]
+  studioSound?: ClipStudioSound | null
 }
 
 export const DEFAULT_MUSIC_VOLUME = 0.25
@@ -71,6 +78,19 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
       }
     }
   }
+  let studioOut: ClipStudioSound | null = null
+  const studio = o.studioSound
+  if (studio && typeof studio === 'object' && studio !== null) {
+    const s = studio as Record<string, unknown>
+    const generationId = String(s.generationId || s.assetId || '')
+    if (generationId) {
+      studioOut = {
+        enabled: Boolean(s.enabled ?? true),
+        generationId,
+        mix: clamp01(s.mix, 0.8),
+      }
+    }
+  }
   const sfxRaw = Array.isArray(o.sfx) ? o.sfx : []
   const sfx: ClipAudioSfx[] = sfxRaw
     .map((row) => {
@@ -85,7 +105,7 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
       }
     })
     .filter(Boolean) as ClipAudioSfx[]
-  return { music: musicOut, sfx }
+  return { music: musicOut, sfx, studioSound: studioOut }
 }
 
 function clamp01(v: unknown, fallback: number): number {

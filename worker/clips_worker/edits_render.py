@@ -364,6 +364,14 @@ def render_edited_clip(
     meta = (audio_assets or {}).get("music_meta") or {}
     music_path = (audio_assets or {}).get("music_path") if audio_assets else None
     sfx_paths = (audio_assets or {}).get("sfx_paths") or [] if audio_assets else []
+    studio_path = (audio_assets or {}).get("studio_path") if audio_assets else None
+    studio_mix = (audio_assets or {}).get("studio_mix") if audio_assets else None
+    if studio_path and studio_path.is_file() and studio_mix is not None:
+        from clips_worker.audio_render import apply_studio_sound_mix
+
+        studio_out = work_dir / "studio_mix.mp4"
+        apply_studio_sound_mix(caption_src, studio_path, studio_out, float(studio_mix))
+        caption_src = studio_out
     if dub_assets and dub_assets.get("dub_audio_path"):
         from clips_worker.audio_render import apply_dub_speech_mix
 

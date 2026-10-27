@@ -9725,6 +9725,7 @@ enum GenerationKind {
   SFX
   THUMBNAIL
   DUB
+  STUDIO_SOUND
 }
 
 enum GenerationStatus {

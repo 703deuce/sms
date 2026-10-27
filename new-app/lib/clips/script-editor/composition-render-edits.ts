@@ -49,6 +49,7 @@ export function clipEditsFromScriptDocument(
 
   const audioFromDoc = document.audio
   const firstMusic = document.musicTracks?.[0]
+  const studio = document.audioFx?.studioSound
   if (audioFromDoc) {
     edits.audio = normalizeAudioEdits(audioFromDoc)
   } else if (firstMusic?.assetId) {
@@ -61,6 +62,12 @@ export function clipEditsFromScriptDocument(
         fadeOutMs: 1000,
       },
     })
+  }
+  if (studio?.enabled && studio.assetId) {
+    edits.audio = {
+      ...(edits.audio ?? { music: null, sfx: [] }),
+      studioSound: { enabled: true, generationId: studio.assetId, mix: studio.mix ?? 0.8 },
+    }
   }
 
   return edits
