@@ -4,6 +4,8 @@ import { resolveSourceMediaId, toEditorWords, type EditorWord } from '@/lib/clip
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { createId } from '@/lib/supabase/id'
+import { ensureFullComposition } from '@/lib/server/clips/script-composition'
+import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import type { ClipWord } from '@/lib/clips/edits'
 
 async function loadProjectTranscript(
@@ -47,6 +49,13 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
   const transcript = await loadProjectTranscript(storage, project)
   const sourceMediaId = resolveSourceMediaId(project)
   const editorWords: EditorWord[] = toEditorWords(sourceMediaId, transcript)
+  const composition = await ensureFullComposition(
+    workspaceId,
+    project.id,
+    project.title,
+    editorWords.map((w) => w.id),
+  )
+  const document = (composition.document ?? null) as ScriptDocumentV1 | null
 
   let sourceVideoUrl: string | null = null
   if (sourceKey) {
@@ -84,6 +93,9 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
     enrichedAt: mediaAsset?.enrichedAt?.toISOString() ?? null,
     sourceVideoUrl,
     editorWords,
+    compositionId: composition.id,
+    compositionRevision: composition.revision,
+    document,
     compositions: project.scriptCompositions,
     clips: project.clips,
     status: project.status,

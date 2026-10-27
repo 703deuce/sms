@@ -13,7 +13,11 @@ import {
   videoTimeSecFromSourceMs,
 } from '@/lib/clips/script-editor/sync-playhead'
 import { loadScriptEditorLayout, saveScriptEditorLayout } from '@/lib/clips/script-editor/panel-layout'
-import { ArrowLeft, Pause, Play } from 'lucide-react'
+import { deriveEdl } from '@/lib/clips/script-edl/derive-edl'
+import { isSourceMsInEdl, nextKeptSourceMs, outputDurationMs } from '@/lib/clips/script-edl/edl-playback'
+import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
+import { useScriptComposition } from '@/components/script-editor/use-script-composition'
+import { ArrowLeft, Pause, Play, Undo2 } from 'lucide-react'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -23,33 +27,64 @@ export type ScriptBootstrapView = {
   wordCount: number
   sourceVideoUrl: string | null
   editorWords: EditorWord[]
+  compositionId: string
+  compositionRevision: number
+  document: ScriptDocumentV1 | null
   clips: { id: string; title: string }[]
   status: string
 }
 
+function defaultDocument(words: EditorWord[]): ScriptDocumentV1 {
+  const ids = words.map((w) => w.id)
+  return { v: 1, keptWordIds: ids, deletedWordIds: [], wordOrder: ids }
+}
+
 export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
+  const initialDoc = data.document ?? defaultDocument(data.editorWords)
+  const { document, saveState, deleteWords, undo, canUndo } = useScriptComposition({
+    compositionId: data.compositionId,
+    revision: data.compositionRevision,
+    document: initialDoc,
+  })
+
   const videoRef = useRef<HTMLVideoElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
   const [scriptWidthPct, setScriptWidthPct] = useState(46)
   const [playheadMs, setPlayheadMs] = useState(data.rangeStartMs)
   const [playing, setPlaying] = useState(false)
+  const [selAnchor, setSelAnchor] = useState<number | null>(null)
+  const [selEnd, setSelEnd] = useState<number | null>(null)
+
+  const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
+  const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
+  const deletedSet = useMemo(() => new Set(document.deletedWordIds), [document.deletedWordIds])
+
+  const orderedWords = useMemo(() => {
+    const order = document.wordOrder ?? [...document.keptWordIds, ...document.deletedWordIds]
+    return order.map((id) => wordsById.get(id)).filter((w): w is EditorWord => Boolean(w))
+  }, [document, wordsById])
 
   useEffect(() => {
     setScriptWidthPct(loadScriptEditorLayout().scriptWidthPct)
   }, [])
 
-  const blocks = useMemo(() => groupSpeakerBlocks(data.editorWords), [data.editorWords])
-  const activeIndex = useMemo(
-    () => findActiveWordIndex(data.editorWords, playheadMs),
-    [data.editorWords, playheadMs],
-  )
+  const blocks = useMemo(() => groupSpeakerBlocks(orderedWords), [orderedWords])
+  const activeIndex = useMemo(() => findActiveWordIndex(orderedWords, playheadMs), [orderedWords, playheadMs])
 
   const syncFromVideo = useCallback(() => {
     const v = videoRef.current
     if (!v) return
-    setPlayheadMs(sourceTimeMsFromVideo(v.currentTime, data.rangeStartMs))
+    let srcMs = sourceTimeMsFromVideo(v.currentTime, data.rangeStartMs)
+    if (!isSourceMsInEdl(srcMs, edl)) {
+      const jump = nextKeptSourceMs(srcMs, edl)
+      if (jump != null) {
+        v.currentTime = videoTimeSecFromSourceMs(jump, data.rangeStartMs)
+        srcMs = jump
+      }
+    }
+    setPlayheadMs(srcMs)
     setPlaying(!v.paused)
-  }, [data.rangeStartMs])
+  }, [data.rangeStartMs, edl])
 
   const seekToSourceMs = useCallback(
     (ms: number) => {
@@ -61,6 +96,58 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     },
     [data.rangeStartMs],
   )
+
+  const wordIndex = useCallback((id: string) => orderedWords.findIndex((w) => w.id === id), [orderedWords])
+
+  const selectedIds = useMemo(() => {
+    if (selAnchor == null || selEnd == null) return new Set<string>()
+    const lo = Math.min(selAnchor, selEnd)
+    const hi = Math.max(selAnchor, selEnd)
+    const ids = new Set<string>()
+    for (let i = lo; i <= hi; i++) {
+      const w = orderedWords[i]
+      if (w && !deletedSet.has(w.id)) ids.add(w.id)
+    }
+    return ids
+  }, [selAnchor, selEnd, orderedWords, deletedSet])
+
+  const onWordClick = (idx: number, w: EditorWord, shift: boolean) => {
+    if (shift && selAnchor != null) setSelEnd(idx)
+    else {
+      setSelAnchor(idx)
+      setSelEnd(idx)
+    }
+    seekToSourceMs(w.t0Ms)
+  }
+
+  const onDeleteSelection = useCallback(() => {
+    const ids = [...selectedIds]
+    if (!ids.length && selAnchor != null) {
+      const w = orderedWords[selAnchor]
+      if (w && !deletedSet.has(w.id)) ids.push(w.id)
+    }
+    if (ids.length) {
+      deleteWords(ids)
+      setSelAnchor(null)
+      setSelEnd(null)
+    }
+  }, [selectedIds, selAnchor, orderedWords, deletedSet, deleteWords])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        onDeleteSelection()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onDeleteSelection, undo])
 
   useEffect(() => {
     const el = transcriptRef.current?.querySelector(`[data-word-idx="${activeIndex}"]`)
@@ -87,9 +174,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       const rect = shell.getBoundingClientRect()
       const delta = ev.clientX - startX
       const next = startPct + (delta / rect.width) * 100
-      const clamped = Math.min(72, Math.max(28, next))
-      latestPct = clamped
-      setScriptWidthPct(clamped)
+      latestPct = Math.min(72, Math.max(28, next))
+      setScriptWidthPct(latestPct)
     }
     const onUp = () => {
       window.removeEventListener('mousemove', onMove)
@@ -100,7 +186,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     window.addEventListener('mouseup', onUp)
   }
 
-  const durationLabel = formatScriptTimecode(data.durationMs)
+  const outDur = outputDurationMs(edl) || data.durationMs
+  const durationLabel = formatScriptTimecode(outDur)
   const currentLabel = formatScriptTimecode(Math.max(0, playheadMs - data.rangeStartMs))
 
   return (
@@ -108,10 +195,16 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
         <Button size="sm" variant="ghost" render={<Link href={`/app/clips/${data.projectId}`} />}>
           <ArrowLeft className="size-4" aria-hidden />
-          Back to project
+          Back
+        </Button>
+        <Button size="sm" variant="ghost" disabled={!canUndo} onClick={() => undo()}>
+          <Undo2 className="size-4" aria-hidden />
+          Undo
         </Button>
         <div className="min-w-0 flex-1 truncate text-sm font-medium">{data.title}</div>
-        <span className="text-xs text-muted-foreground">Full video · read-only (M1)</span>
+        <span className="text-xs text-muted-foreground">
+          {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Saved'} · Delete selection to cut
+        </span>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -120,7 +213,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           style={{ flex: `0 0 ${scriptWidthPct}%` }}
         >
           <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-            {data.wordCount} words · click a word to seek
+            Select words · Delete/Backspace removes from preview (cut)
           </div>
           <div ref={transcriptRef} className="flex-1 overflow-y-auto px-4 py-3">
             <div className="mx-auto max-w-[72ch] space-y-4 text-[17px] leading-relaxed">
@@ -133,8 +226,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                   </div>
                   <p>
                     {block.words.map((w) => {
-                      const idx = data.editorWords.findIndex((x) => x.id === w.id)
+                      const idx = wordIndex(w.id)
                       const active = idx === activeIndex
+                      const deleted = deletedSet.has(w.id)
+                      const selected = selectedIds.has(w.id)
                       return (
                         <button
                           key={w.id}
@@ -142,11 +237,13 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                           data-word-idx={idx}
                           className={cn(
                             'mr-1 inline rounded-sm px-0.5 transition-colors',
-                            w.isFiller && 'text-muted-foreground line-through',
-                            active && 'bg-primary/20',
-                            !active && 'hover:bg-muted/60',
+                            w.isFiller && !deleted && 'text-muted-foreground line-through',
+                            deleted && 'text-muted-foreground/60 line-through decoration-destructive/50',
+                            active && !deleted && 'bg-primary/20',
+                            selected && 'bg-sky-500/25',
+                            !active && !deleted && 'hover:bg-muted/60',
                           )}
-                          onClick={() => seekToSourceMs(w.t0Ms)}
+                          onClick={(e) => onWordClick(idx, w, e.shiftKey)}
                         >
                           {w.text}
                         </button>

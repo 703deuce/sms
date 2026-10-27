@@ -19,5 +19,7 @@ export type ScriptDocumentV1 = {
   v: 1
   keptWordIds: string[]
   deletedWordIds: string[]
+  /** Immutable transcript order for restore / display. */
+  wordOrder?: string[]
   gapInserts?: { afterWordId: string; durMs: number }[]
 }

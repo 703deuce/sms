@@ -3,9 +3,9 @@ import { jsonError } from '@/lib/server/api-error'
 import { getScriptBootstrap } from '@/lib/server/clips/script-bootstrap'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
-export async function GET(_request: Request, ctx: { params: Promise<{ projectId: string }> }) {
+export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const { projectId } = await ctx.params
+    const { id: projectId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const data = await getScriptBootstrap(workspaceId, projectId)
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
