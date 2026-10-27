@@ -73,7 +73,7 @@ export function ExportDialog({
   onClose: () => void
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
-  const [removeDeadAir, setRemoveDeadAir] = useState(true)
+  const [removeDeadAir, setRemoveDeadAir] = useState(false)
   const [aspect, setAspect] = useState<ClipProjectSettings['aspectRatio']>(
     edits.aspectRatio ?? '9:16',
   )

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isInternalClipReasoningText } from '@/lib/clips/clip-results-chips'
 import { cheapSuggestedHeadline } from '@/lib/clips/export-template'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
@@ -20,10 +21,18 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ data: { exportTemplate: edits.exportTemplate, skipped: true } })
     }
     const suggested = cheapSuggestedHeadline({ title: clip.title, aiMeta: clip.aiMeta })
+    if (!suggested || suggested === 'Clip' || isInternalClipReasoningText(suggested)) {
+      return NextResponse.json({ data: { exportTemplate: edits.exportTemplate, skipped: true } })
+    }
     const saved = await persistExportTemplatePatch(
       clipId,
       bounds,
-      { suggestedHeadline: suggested },
+      {
+        suggestedHeadline: suggested,
+        headlineBar: { enabled: false, text: '' },
+        platformBadge: { enabled: false },
+        channelLink: { enabled: false },
+      },
       clip.edits,
       clip.projectId,
     )

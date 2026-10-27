@@ -1,5 +1,7 @@
 import { toast } from 'sonner'
 import { exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
+import { downloadFileFromUrl } from '@/lib/clips/export-download-file'
+import { CLIP_PREVIEW_EXPORT_ASPECT, CLIP_PREVIEW_EXPORT_RESOLUTION } from '@/lib/clips/export-preview-reuse'
 import type { ClipProjectSettings } from '@/lib/clips/settings'
 
 export type ClipExportDownload = {
@@ -24,15 +26,17 @@ export async function exportClipDownload(
   const toastId = toast.loading('Starting export…')
   try {
     const data = await exportClipWithOptions(clipId, {
-      aspect: opts?.aspect ?? '9:16',
-      resolution: opts?.resolution ?? '720p',
+      aspect: opts?.aspect ?? CLIP_PREVIEW_EXPORT_ASPECT,
+      resolution: opts?.resolution ?? CLIP_PREVIEW_EXPORT_RESOLUTION,
       watermark: false,
       removeDeadAir: false,
       exportSfx: 'off',
+      previewWysiwyg: true,
     })
     const filename = data.filename || 'clip.mp4'
     if (data.downloadUrl) {
-      toast.success('Export ready — download starting', { id: toastId })
+      await downloadFileFromUrl(data.downloadUrl, filename)
+      toast.success('Download started', { id: toastId })
       return { downloadUrl: data.downloadUrl, filename }
     }
     const renderId = data.renderId
@@ -44,8 +48,10 @@ export async function exportClipDownload(
       await new Promise((r) => setTimeout(r, attempt < 3 ? 1500 : 2500))
       const row = await getRenderStatus(renderId)
       if (row.status === 'READY' && row.downloadUrl) {
-        toast.success('Export ready — download starting', { id: toastId })
-        return { downloadUrl: row.downloadUrl, filename: row.filename || filename }
+        const outName = row.filename || filename
+        await downloadFileFromUrl(row.downloadUrl, outName)
+        toast.success('Download started', { id: toastId })
+        return { downloadUrl: row.downloadUrl, filename: outName }
       }
       if (row.status === 'FAILED') {
         throw new Error(row.error || 'Export failed')

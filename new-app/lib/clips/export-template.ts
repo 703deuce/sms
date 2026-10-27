@@ -4,6 +4,7 @@ import {
   EXPORT_PLATFORM_PRESETS,
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
+import { isInternalClipReasoningText } from '@/lib/clips/clip-results-chips'
 
 export const EXPORT_HEADLINE_MAX_REGENERATIONS = 5
 
@@ -22,11 +23,11 @@ export function defaultStreamHeadlineExportTemplate(opts: {
   const url = opts.channelUrl ? normalizeChannelUrl(opts.channelUrl) || opts.channelUrl : undefined
   return {
     headlineBar: {
-      enabled: true,
+      enabled: false,
       text: formatHeadlineForExport(opts.suggestedHeadline || ''),
     },
-    platformBadge: { enabled: true },
-    channelLink: { enabled: Boolean(url), url: url || undefined },
+    platformBadge: { enabled: false },
+    channelLink: { enabled: false, url: url || undefined },
     suggestedHeadline: opts.suggestedHeadline,
     platform: opts.platform,
     exportPlatformId: opts.exportPlatformId ?? 'tiktok',
@@ -89,15 +90,46 @@ export function exportTemplateOverlaysActive(tpl: ClipExportTemplate | undefined
   return false
 }
 
+export function clipTitleForExport(clip: { title: string; aiMeta?: unknown }): string {
+  const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<string, unknown>
+  const post = meta.postCopy as { hookText?: string } | undefined
+  if (post?.hookText?.trim() && !isInternalClipReasoningText(post.hookText)) {
+    return post.hookText.trim().slice(0, 120)
+  }
+  if (typeof meta.hook === 'string' && meta.hook.trim() && !isInternalClipReasoningText(meta.hook)) {
+    return meta.hook.trim().slice(0, 120)
+  }
+  const title = clip.title.trim()
+  if (title && !isInternalClipReasoningText(title)) return title.slice(0, 120)
+  return 'Clip'
+}
+
 export function cheapSuggestedHeadline(clip: {
   title: string
   aiMeta?: unknown
 }): string {
-  const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<string, unknown>
-  const post = meta.postCopy as { hookText?: string } | undefined
-  if (post?.hookText?.trim()) return post.hookText.trim().slice(0, 120)
-  if (typeof meta.hook === 'string' && meta.hook.trim()) return meta.hook.trim().slice(0, 120)
-  return clip.title.trim().slice(0, 120)
+  return clipTitleForExport(clip)
+}
+
+const PLACEHOLDER_CHANNEL_SLUGS = new Set([
+  'yourchannel',
+  'your_channel',
+  'your-channel',
+  'username',
+  'channel',
+  'streamer',
+  'example',
+])
+
+export function isPlaceholderChannelUrl(url: string | null | undefined): boolean {
+  if (!url?.trim()) return true
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`)
+    const slug = u.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || ''
+    return !slug || PLACEHOLDER_CHANNEL_SLUGS.has(slug)
+  } catch {
+    return true
+  }
 }
 
 const TWITCH = /^https?:\/\/(www\.)?twitch\.tv\/[a-zA-Z0-9_]{2,25}\/?$/i
@@ -112,13 +144,13 @@ export function normalizeChannelUrl(input: string): string | null {
     const host = u.hostname.replace(/^www\./, '').toLowerCase()
     if (host === 'twitch.tv') {
       const slug = u.pathname.split('/').filter(Boolean)[0]
-      if (!slug) return null
+      if (!slug || isPlaceholderChannelUrl(`https://twitch.tv/${slug}`)) return null
       const url = `https://twitch.tv/${slug}`
       return TWITCH.test(url) ? url : null
     }
     if (host === 'kick.com') {
       const slug = u.pathname.split('/').filter(Boolean)[0]
-      if (!slug) return null
+      if (!slug || isPlaceholderChannelUrl(`https://kick.com/${slug}`)) return null
       const url = `https://kick.com/${slug}`
       return KICK.test(url) ? url : null
     }

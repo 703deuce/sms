@@ -7,7 +7,9 @@ import {
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
 import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
+import { coerceEditsForPreviewExport } from '@/lib/clips/export-edits-coerce'
 import { previewExportMatchesDefault } from '@/lib/clips/export-edits-match'
+import { CLIP_PREVIEW_EXPORT_ASPECT, CLIP_PREVIEW_EXPORT_RESOLUTION } from '@/lib/clips/export-preview-reuse'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
@@ -34,6 +36,8 @@ const bodySchema = z.object({
   watermark: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
   removeDeadAir: z.boolean().optional(),
+  /** Grid download: match preview.mp4 (layout, 9:16, no overlays, no dead-air polish). */
+  previewWysiwyg: z.boolean().optional(),
   exportSfx: z.enum(['off', 'subtle', 'meme']).optional(),
   exportPlatform: z.enum(['tiktok', 'youtube_shorts', 'instagram_reels']).optional(),
   /** Optional client snapshot — used when PATCH save is still in flight. */
@@ -61,7 +65,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       edits = applyExportPlatformToEdits(edits, exportPlatform)
     }
     const exportSfx = body.exportSfx ?? 'off'
-    const removeDeadAir = body.removeDeadAir ?? true
+    const removeDeadAir = body.removeDeadAir ?? false
+    const previewWysiwyg = body.previewWysiwyg === true
+    if (previewWysiwyg && !body.edits && !body.exportPlatform && exportSfx === 'off') {
+      edits = coerceEditsForPreviewExport(edits, clip.aiMeta, bounds)
+    }
     const editsBeforePolish = edits
     const defaultPreviewExport =
       !exportPlatform &&
@@ -100,7 +108,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
     const aspect = exportPlatform
       ? edits.aspectRatio ?? '9:16'
-      : body.aspect ?? edits.aspectRatio ?? '9:16'
+      : previewWysiwyg
+        ? CLIP_PREVIEW_EXPORT_ASPECT
+        : body.aspect ?? edits.aspectRatio ?? '9:16'
+    if (previewWysiwyg && !exportPlatform) {
+      resolution = CLIP_PREVIEW_EXPORT_RESOLUTION
+    }
     console.info('[clipper:export] request', {
       clipId,
       workspaceId,

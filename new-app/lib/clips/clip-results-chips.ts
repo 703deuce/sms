@@ -68,6 +68,22 @@ function isHedgeOrDebugSummary(text: string): boolean {
   )
 }
 
+/** Picker / pass-1 reasoning — not for headlines, hooks, or export burn-in. */
+export function isInternalClipReasoningText(text: string): boolean {
+  const raw = text.trim()
+  if (!raw) return true
+  if (SENTENCE_REF_RE.test(raw)) return true
+  const trimmed = stripInternalSentenceRefs(raw)
+  if (!trimmed || isHedgeOrDebugSummary(trimmed)) return true
+  const t = trimmed.toLowerCase()
+  return (
+    t.startsWith('the laugh at') ||
+    t.includes('may mark') ||
+    t.includes('excited delivery at') ||
+    (/\bat s\d+/i.test(raw) && (t.includes(' and ') || t.includes(' may ')))
+  )
+}
+
 export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | null {
   if (!meta) return null
   const candidates = [meta.pass1_why, meta.hook, meta.score_detail]

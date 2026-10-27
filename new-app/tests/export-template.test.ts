@@ -57,14 +57,15 @@ describe('export-template', () => {
     expect(f.videoHeightPx).toBe(998)
   })
 
-  it('default stream template enables badge and channel', () => {
+  it('default stream template keeps overlays off until user opts in', () => {
     expect(STREAM_HEADLINE_TEMPLATE_ID).toBe('stream_headline')
     const t = defaultStreamHeadlineExportTemplate({
       platform: 'kick',
       channelUrl: 'https://kick.com/adrienbroner',
     })
-    expect(t.headlineBar?.enabled).toBe(true)
-    expect(t.platformBadge?.enabled).toBe(true)
+    expect(t.headlineBar?.enabled).toBe(false)
+    expect(t.platformBadge?.enabled).toBe(false)
+    expect(t.channelLink?.enabled).toBe(false)
     expect(t.channelLink?.url).toBe('https://kick.com/adrienbroner')
   })
 })

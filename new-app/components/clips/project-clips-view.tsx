@@ -145,13 +145,19 @@ export function ProjectClipsView({
     const data = await listProjectClips(projectId, 'score')
     const rows = data.clips as ClipCardData[]
     setClips(rows)
-    for (const c of rows) {
-      if (!c.previewUrl) continue
-      void clipsFetch(`/api/clips/clips/${c.id}/export-headline/prefetch`, {
-        method: 'POST',
-        body: '{}',
-      }).catch(() => {})
-    }
+  }, [projectId])
+
+  const retryProcessing = useCallback(() => {
+    setStatus('QUEUED')
+    setError(null)
+    setClips([])
+    setReadyHydrated(false)
+    void retryProject(projectId)
+      .then(() => toast.success('Processing restarted'))
+      .catch((e) => {
+        setStatus('FAILED')
+        toast.error(e instanceof Error ? e.message : 'Retry failed')
+      })
   }, [projectId])
 
   const replacePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -361,17 +367,7 @@ export function ProjectClipsView({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  void retryProject(projectId)
-                    .then(() => {
-                      setStatus('QUEUED')
-                      setError(null)
-                      setClips([])
-                      setReadyHydrated(false)
-                      toast.success('Processing restarted')
-                    })
-                    .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))
-                }}
+                onClick={() => retryProcessing()}
               >
                 {failureCopy?.retryLabel ?? 'Retry processing'}
               </Button>
@@ -464,17 +460,7 @@ export function ProjectClipsView({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      void retryProject(projectId)
-                        .then(() => {
-                          setStatus('QUEUED')
-                          setError(null)
-                          setClips([])
-                          setReadyHydrated(false)
-                          toast.success('Processing restarted')
-                        })
-                        .catch((e) => toast.error(e instanceof Error ? e.message : 'Retry failed'))
-                    }}
+                    onClick={() => retryProcessing()}
                   >
                     {failureCopy?.retryLabel ?? 'Retry processing'}
                   </Button>

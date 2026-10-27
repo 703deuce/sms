@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ScoreRing } from '@/components/clips/ui/score-ring'
@@ -24,6 +24,7 @@ import { clipCardAspectClass } from '@/lib/clips/card-aspect'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
+import { CLIP_PREVIEW_EXPORT_ASPECT } from '@/lib/clips/export-preview-reuse'
 import { ThumbsDown, EyeOff } from 'lucide-react'
 
 export function ClipCard({
@@ -48,7 +49,6 @@ export function ClipCard({
   const router = useRouter()
   const [thumbBusy, setThumbBusy] = useState(false)
   const [hideBusy, setHideBusy] = useState(false)
-  const [editPending, setEditPending] = useState(false)
   const [downloadBusy, setDownloadBusy] = useState(false)
   const aiMeta = (clip.aiMeta || {}) as ClipAiMeta
   const why = clipWhySummary(aiMeta)
@@ -58,19 +58,12 @@ export function ClipCard({
 
   const editorHref = `/app/clips/${projectId}/edit/${clip.id}`
 
-  const openEditor = () => {
-    setEditPending(true)
-    router.push(editorHref)
-  }
+  useEffect(() => {
+    router.prefetch(editorHref)
+  }, [router, editorHref])
 
-  const triggerFileDownload = (url: string, filename: string) => {
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.rel = 'noopener'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
+  const openEditor = () => {
+    router.push(editorHref)
   }
 
   const runDownload = async () => {
@@ -80,8 +73,7 @@ export function ClipCard({
     }
     setDownloadBusy(true)
     try {
-      const { downloadUrl, filename } = await exportClipDownload(clip.id, { aspect: cardAspect })
-      triggerFileDownload(downloadUrl, filename)
+      await exportClipDownload(clip.id, { aspect: CLIP_PREVIEW_EXPORT_ASPECT })
       if (onDownload) await onDownload(clip.id)
     } catch {
       /* exportClipDownload surfaces toast */
@@ -194,9 +186,14 @@ export function ClipCard({
       </div>
       <div className="flex flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">
-          <button type="button" className="text-left hover:text-primary hover:underline" onClick={() => openEditor()}>
+          <Link
+            href={editorHref}
+            prefetch
+            className="text-left hover:text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
             {clip.title}
-          </button>
+          </Link>
         </h3>
         <p className="text-xs text-muted-foreground tabular-nums">
           <span className="font-medium text-foreground">{formatDur(clip.durationMs)} clip</span>
@@ -267,13 +264,10 @@ export function ClipCard({
           <Button
             size="sm"
             variant="default"
-            disabled={editPending}
-            onClick={(e) => {
-              e.stopPropagation()
-              openEditor()
-            }}
+            render={<Link href={editorHref} prefetch />}
+            onClick={(e) => e.stopPropagation()}
           >
-            {editPending ? 'Opening…' : 'Edit'}
+            Edit
           </Button>
           {isScriptEditorEnabled() ? (
             <Button

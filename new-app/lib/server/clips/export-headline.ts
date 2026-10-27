@@ -4,6 +4,7 @@ import {
   EXPORT_HEADLINE_MAX_REGENERATIONS,
   channelUrlFromVodUrl,
   formatHeadlineForExport,
+  isPlaceholderChannelUrl,
   normalizeChannelUrl,
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
@@ -57,15 +58,16 @@ export function mergeStreamExportTemplate(
 ): ClipExportTemplate {
   const platform = tpl.platform ?? ctx.platform
   const rawUrl = tpl.channelLink?.url || opts?.defaultChannelUrl || ctx.channelUrl || ''
-  const channelUrl = normalizeChannelUrl(rawUrl) || rawUrl.trim() || undefined
-  const channelEnabled = tpl.channelLink?.enabled ?? Boolean(channelUrl)
+  const channelUrl = normalizeChannelUrl(rawUrl) || undefined
+  const channelEnabled =
+    Boolean(tpl.channelLink?.enabled) && Boolean(channelUrl) && !isPlaceholderChannelUrl(channelUrl)
   return {
     ...tpl,
     platform,
-    platformBadge: tpl.platformBadge ?? { enabled: true },
+    platformBadge: tpl.platformBadge ?? { enabled: false },
     channelLink: {
       enabled: channelEnabled,
-      url: channelEnabled ? channelUrl : tpl.channelLink?.url,
+      url: channelEnabled ? channelUrl : undefined,
     },
   }
 }

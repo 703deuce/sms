@@ -121,16 +121,10 @@ export function ClipResultsToolbar({
         disabled={busy}
         onClick={() =>
           void run(async () => {
+            const { exportClipDownload } = await import('@/lib/clips/export-download-client')
+            const { CLIP_PREVIEW_EXPORT_ASPECT } = await import('@/lib/clips/export-preview-reuse')
             for (const id of selectedIds) {
-              const { exportClipDownload } = await import('@/lib/clips/export-download-client')
-              const { downloadUrl, filename } = await exportClipDownload(id, { aspect: exportAspect })
-              const a = document.createElement('a')
-              a.href = downloadUrl
-              a.download = filename
-              a.rel = 'noopener'
-              document.body.appendChild(a)
-              a.click()
-              a.remove()
+              await exportClipDownload(id, { aspect: CLIP_PREVIEW_EXPORT_ASPECT })
             }
             toast.success(`Downloaded ${selectedIds.length} clips`)
           })

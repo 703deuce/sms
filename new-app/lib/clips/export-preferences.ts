@@ -17,12 +17,12 @@ export type ExportDialogPreferences = {
 }
 
 const DEFAULTS: ExportDialogPreferences = {
-  removeDeadAir: true,
+  removeDeadAir: false,
   alsoSrt: false,
   exportSfx: 'off',
-  headlineBarEnabled: true,
-  platformBadgeEnabled: true,
-  channelLinkEnabled: true,
+  headlineBarEnabled: false,
+  platformBadgeEnabled: false,
+  channelLinkEnabled: false,
   profanityCensor: false,
 }
 

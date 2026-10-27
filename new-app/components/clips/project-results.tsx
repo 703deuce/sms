@@ -80,8 +80,7 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
 
   const onDownload = async (clipId: string) => {
     try {
-      const { downloadUrl, filename } = await exportClipDownload(clipId)
-      triggerDownload(downloadUrl, filename)
+      await exportClipDownload(clipId)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed')
     }

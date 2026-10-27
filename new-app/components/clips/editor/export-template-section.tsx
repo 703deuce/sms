@@ -47,7 +47,6 @@ export function ExportTemplateSection({
   const headlineAllowed = headlineBarAllowedForLayout(layoutMode)
   const gens = tpl.headlineGenerations ?? 0
   const [genBusy, setGenBusy] = useState(false)
-  const prefetchedFor = useRef<string | null>(null)
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const withPlatform = useCallback(
@@ -78,29 +77,6 @@ export function ExportTemplateSection({
       if (persistTimer.current) clearTimeout(persistTimer.current)
     }
   }, [])
-
-  useEffect(() => {
-    if (!headlineAllowed) return
-    if (prefetchedFor.current === clipId) return
-    const base = edits.exportTemplate || {}
-    if (base.suggestedHeadline?.trim() || base.headlineBar?.text?.trim()) {
-      prefetchedFor.current = clipId
-      return
-    }
-    prefetchedFor.current = clipId
-    void clipsFetch<{ exportTemplate: ClipExportTemplate }>(
-      `/api/clips/clips/${clipId}/export-headline/prefetch`,
-      { method: 'POST', body: '{}' },
-    )
-      .then((res) => {
-        if (res.exportTemplate) {
-          commitTemplate({ ...base, ...res.exportTemplate }, { persist: true })
-        }
-      })
-      .catch(() => {
-        prefetchedFor.current = null
-      })
-  }, [clipId, headlineAllowed, edits.exportTemplate, commitTemplate])
 
   const setTpl = (patch: Partial<ClipExportTemplate>, persist = true) => {
     commitTemplate({ ...tpl, ...patch }, { persist })
