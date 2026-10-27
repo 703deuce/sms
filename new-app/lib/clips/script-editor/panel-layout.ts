@@ -6,7 +6,7 @@ export type ScriptEditorLayout = {
   timelineHeightPx: number
 }
 
-const DEFAULT: ScriptEditorLayout = { scriptWidthPct: 46, timelineExpanded: true, timelineHeightPx: 280 }
+const DEFAULT: ScriptEditorLayout = { scriptWidthPct: 46, timelineExpanded: true, timelineHeightPx: 340 }
 
 export function loadScriptEditorLayout(): ScriptEditorLayout {
   if (typeof window === 'undefined') return DEFAULT

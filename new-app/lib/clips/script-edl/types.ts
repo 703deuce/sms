@@ -27,4 +27,20 @@ export type ScriptDocumentV1 = {
   splitAtOutMs?: number[]
   /** Per-word pad before token in output (wordbar boundary fix). */
   padBeforeMs?: Record<string, number>
+  /** M7+ — scene metadata (output ms filled when scenes ship). */
+  scenes?: { id: string; startWordId?: string; label?: string; outStartMs?: number; layoutId?: string }[]
+  /** M8+ — markers in output time. */
+  markers?: { id: string; outMs: number; label?: string; exportAsChapter?: boolean }[]
+  /** M9+ — word-anchored overlays; outStartMs optional until anchored via EDL. */
+  overlays?: {
+    id: string
+    anchorWordId: string
+    mediaAssetId: string
+    durMs: number
+    layer?: number
+    label?: string
+    outStartMs?: number
+  }[]
+  /** M10+ — music clips on output timeline. */
+  musicTracks?: { id: string; assetId: string; outStartMs: number; durMs: number; label?: string; duckUnderSpeech?: boolean }[]
 }

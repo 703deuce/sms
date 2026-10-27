@@ -22,6 +22,10 @@ function parseDocument(raw: unknown): ScriptDocumentV1 {
     gapInserts: d.gapInserts,
     splitAtOutMs: Array.isArray(d.splitAtOutMs) ? d.splitAtOutMs.map((n) => Number(n)) : undefined,
     padBeforeMs: d.padBeforeMs && typeof d.padBeforeMs === 'object' ? (d.padBeforeMs as Record<string, number>) : undefined,
+    scenes: Array.isArray(d.scenes) ? d.scenes : undefined,
+    markers: Array.isArray(d.markers) ? d.markers : undefined,
+    overlays: Array.isArray(d.overlays) ? d.overlays : undefined,
+    musicTracks: Array.isArray(d.musicTracks) ? d.musicTracks : undefined,
   }
 }
 

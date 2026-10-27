@@ -1,6 +1,6 @@
 # Script editor — build plan
 
-**Status:** **M3** (in progress) — timeline includes **reserved lanes** for scenes strip, overlays, and music (wired in M7–M10). Core M3: ruler, captions stub, wordbar, script track, zoom/split/trim/gaps. **Export deferred to M5.**  
+**Status:** **M3** — timeline ships ruler, **scenes / overlay / music lane slots**, captions stub, wordbar, script track, zoom/split/trim/gaps; document reserves `scenes`, `overlays`, `musicTracks`, `markers`. **Export deferred to M5.** M4 next.  
 **Product spec:** `docs/clips/script-editor.md` (v1.1 — full Descript-at-launch scope).  
 **Owner decisions (2026-10-26):** see §0 “Decisions locked” below. **Scope expansion (2026-10-27):** §0.1.
 

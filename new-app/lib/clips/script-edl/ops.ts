@@ -85,6 +85,10 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     gapInserts,
     splitAtOutMs,
     padBeforeMs,
+    scenes: document.scenes,
+    markers: document.markers,
+    overlays: document.overlays,
+    musicTracks: document.musicTracks,
   }
 }
 

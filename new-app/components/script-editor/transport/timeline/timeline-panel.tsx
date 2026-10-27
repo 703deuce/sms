@@ -13,8 +13,16 @@ import {
 } from '@/lib/clips/script-editor/timeline-model'
 import { TimelineRuler } from '@/components/script-editor/transport/timeline/timeline-ruler'
 import { TimelineCaptionsLane } from '@/components/script-editor/transport/timeline/timeline-captions-lane'
+import { TimelineScenesStrip } from '@/components/script-editor/transport/timeline/timeline-scenes-strip'
+import { TimelineOverlayLane } from '@/components/script-editor/transport/timeline/timeline-overlay-lane'
 import { TimelineWordbar } from '@/components/script-editor/transport/timeline/timeline-wordbar'
 import { TimelineScriptTrack } from '@/components/script-editor/transport/timeline/timeline-script-track'
+import { TimelineMusicLane } from '@/components/script-editor/transport/timeline/timeline-music-lane'
+import {
+  musicClipsForTimeline,
+  overlayClipsForTimeline,
+  sceneMarkersForTimeline,
+} from '@/lib/clips/script-editor/timeline-lanes'
 import { ChevronDown, ChevronUp, Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -42,7 +50,7 @@ export function TimelinePanel({
   onScrollLeft,
   onSeekOutput,
   onSelectIndices,
-  onPadDrag,
+  onPadDragEnd,
   onTrimClipEdge,
 }: {
   expanded: boolean
@@ -88,6 +96,10 @@ export function TimelinePanel({
     () => timelineClipsFromEdl(edl, document.splitAtOutMs ?? []),
     [edl, document.splitAtOutMs],
   )
+  const sceneMarkers = useMemo(() => sceneMarkersForTimeline(document), [document])
+  const overlayClips = useMemo(() => overlayClipsForTimeline(document), [document])
+  const musicClips = useMemo(() => musicClipsForTimeline(document), [document])
+  const overlayLayerCount = Math.max(1, ...overlayClips.map((c) => c.layer + 1), 1)
 
   const selectionOutRange = useMemo(() => {
     if (selAnchor == null || selEnd == null) return null
@@ -144,13 +156,29 @@ export function TimelinePanel({
           <div className="relative flex min-h-full" style={{ width: widthPx + LANE_LABEL_W }}>
             <div className="sticky left-0 z-20 w-14 shrink-0 border-r border-border/60 bg-background text-[10px] text-muted-foreground">
               <div className="flex h-6 items-center px-1">Ruler</div>
+              <div className="flex h-7 items-center px-1">Scenes</div>
               <div className="flex h-6 items-center px-1">Captions</div>
+              {Array.from({ length: overlayLayerCount }, (_, i) => (
+                <div key={`ol-${i}`} className="flex h-6 items-center px-1">
+                  {i === 0 ? 'Overlay' : `O-${i + 1}`}
+                </div>
+              ))}
               <div className="flex h-6 items-center px-1">Words</div>
               <div className="flex min-h-[64px] items-start px-1 pt-2">Script</div>
+              <div className="flex h-6 items-center px-1 pb-1">Music</div>
             </div>
             <div className="relative min-w-0 flex-1" style={{ width: widthPx }}>
               <TimelineRuler durationMs={span} pxPerMs={pxPerMs} widthPx={widthPx} onSeekOutput={onSeekOutput} />
+              <TimelineScenesStrip
+                widthPx={widthPx}
+                pxPerMs={pxPerMs}
+                scenes={sceneMarkers}
+                onSeekOutput={onSeekOutput}
+              />
               <TimelineCaptionsLane widthPx={widthPx} />
+              {Array.from({ length: overlayLayerCount }, (_, i) => (
+                <TimelineOverlayLane key={i} widthPx={widthPx} pxPerMs={pxPerMs} clips={overlayClips} layerIndex={i} />
+              ))}
               <TimelineWordbar
                 items={wordbarItems}
                 gapChips={gapChips}
@@ -176,6 +204,7 @@ export function TimelinePanel({
                 }}
                 onTrimClipEdge={onTrimClipEdge}
               />
+              <TimelineMusicLane widthPx={widthPx} pxPerMs={pxPerMs} clips={musicClips} />
               <div
                 className="pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-sky-500"
                 style={{ left: outputMs * pxPerMs }}
