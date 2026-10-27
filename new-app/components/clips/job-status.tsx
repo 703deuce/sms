@@ -66,7 +66,6 @@ export function JobStatus({
   const [etaSec, setEtaSec] = useState(initialEtaSec)
   const etaRef = useRef(initialEtaSec)
   const lastPollEtaRef = useRef(initialEtaSec)
-  const lastStageRef = useRef<string | null>(initialStage)
   const [chunkDone, setChunkDone] = useState<number | undefined>()
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
 
@@ -81,15 +80,8 @@ export function JobStatus({
         setStage(data.stage)
         setError(data.error)
         setWordCount(data.wordCount)
-        const stageKey = `${data.status}:${data.stage ?? ''}`
-        const polled = clampEtaBetweenPolls(
-          data.etaSec,
-          lastPollEtaRef.current,
-          stageKey,
-          lastStageRef.current,
-        )
+        const polled = clampEtaBetweenPolls(data.etaSec, lastPollEtaRef.current)
         lastPollEtaRef.current = polled
-        lastStageRef.current = stageKey
         etaRef.current = polled
         setEtaSec(polled)
         setChunkDone(data.chunkDone)
@@ -118,7 +110,12 @@ export function JobStatus({
   const ui = CLIP_JOB_STATE[status as ClipProjectStatusUi] ?? CLIP_JOB_STATE.QUEUED
   const terminal = ['READY', 'FAILED', 'CANCELED'].includes(status)
   const processing = !terminal
-  const stageLabel = formatClipProgressStage(stage) || stage
+  const stageLabel =
+    status === 'READY'
+      ? 'Ready'
+      : etaSec <= 0 && progress >= 85
+        ? 'Finishing up…'
+        : formatClipProgressStage(stage) || (status === 'RENDERING' || status === 'REFRAMING' ? 'Reframing & captioning' : null) || stage
 
   return (
     <Panel title="Processing your video" description={stageLabel || 'Working on your video…'}>

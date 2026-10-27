@@ -117,5 +117,6 @@ describe('clampEtaBetweenPolls', () => {
     expect(clampEtaBetweenPolls(500, 400, 'TRANSCRIBING:', 'TRANSCRIBING:')).toBe(400)
     expect(clampEtaBetweenPolls(100, undefined)).toBe(100)
     expect(clampEtaBetweenPolls(200, 400, 'FINDING_CLIPS:', 'TRANSCRIBING:')).toBe(200)
+    expect(clampEtaBetweenPolls(500, 400, 'FINDING_CLIPS:', 'TRANSCRIBING:')).toBe(400)
   })
 })
