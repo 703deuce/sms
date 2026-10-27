@@ -8,7 +8,8 @@ export type UploadProgress = {
   bytes: number
   loaded: number
   percent: number
-  state: 'idle' | 'uploading' | 'complete' | 'error' | 'canceled'
+  state: 'idle' | 'uploading' | 'finalizing' | 'complete' | 'error' | 'canceled'
+  durationMs?: number
   error?: string
   uploadId?: string
   /** False for oversize / HTTP 413 — same file will always fail. */
@@ -256,6 +257,9 @@ export async function uploadClipFile(
 
     const durationMs = await probeDurationMs(file)
     if (!uploadId) throw new Error('Upload session missing')
+    if (durationMs) {
+      onProgress({ ...base, uploadId, loaded: base.loaded, percent: base.percent, state: 'uploading', durationMs })
+    }
 
     if (storage.mode === 'app_chunked') {
       throw new Error(
@@ -287,8 +291,16 @@ export async function uploadClipFile(
       await uploadTus(file, tusInfo, base, uploadId, onProgress)
     }
 
+    onProgress({
+      ...base,
+      uploadId,
+      loaded: file.size,
+      percent: 100,
+      state: 'finalizing',
+      durationMs,
+    })
     await completeUpload(uploadId, { durationMs, parts: multipartParts })
-    onProgress({ ...base, uploadId, loaded: file.size, percent: 100, state: 'complete' })
+    onProgress({ ...base, uploadId, loaded: file.size, percent: 100, state: 'complete', durationMs })
     return { uploadId }
   } catch (err) {
     const status = (err as { status?: number }).status

@@ -49,11 +49,13 @@ export function ProjectSettingsForm({
   settings,
   onChange,
   durationMs,
+  uploadState,
   reframeV2Enabled = false,
 }: {
   settings: ClipProjectSettings
   onChange: (s: ClipProjectSettings) => void
   durationMs: number
+  uploadState?: 'idle' | 'uploading' | 'finalizing' | 'complete' | 'error' | 'canceled'
   reframeV2Enabled?: boolean
 }) {
   const durationKnown = durationMs > 0
@@ -130,6 +132,10 @@ export function ProjectSettingsForm({
                     {formatMmSs(start)} – {formatMmSs(end)}
                     {` · source ${formatMmSs(durationMs)}`}
                   </>
+                ) : uploadState === 'finalizing' ? (
+                  'Finalizing upload…'
+                ) : uploadState === 'uploading' ? (
+                  'Uploading…'
                 ) : (
                   'Waiting for upload…'
                 )}

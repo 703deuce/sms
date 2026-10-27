@@ -58,13 +58,16 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
       file,
       (p) => {
       setUpload(p)
+      if (p.durationMs && p.durationMs > 0) {
+        setDurationMs(p.durationMs)
+        setSettings((s) => ({ ...s, rangeEndMs: p.durationMs! }))
+      }
       if (p.state === 'complete' && p.uploadId) {
         setUploadId(p.uploadId)
-        void probeDuration(file).then((ms) => {
-          setDurationMs(ms)
-          setSettings((s) => ({ ...s, rangeEndMs: ms }))
+        const ms = p.durationMs ?? 0
+        if (ms > 0) {
           void estimateCredits({ durationMs: ms, rangeStartMs: 0, rangeEndMs: ms, settings }).then(setEstimate).catch(() => {})
-        })
+        }
       }
       if (p.state === 'error' && p.error) toast.error(p.error)
     },
@@ -262,6 +265,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
             settings={settings}
             onChange={setSettings}
             durationMs={durationMs}
+            uploadState={upload?.state}
             reframeV2Enabled={reframeV2Enabled}
           />
           {estimate && tab === 'upload' && (

@@ -33,9 +33,9 @@ export function PlayerControls({
   onVolumeChange?: (pct: number) => void
 }) {
   const max = Math.max(1, outputDurationMs)
-  const pct = outputDurationMs > 0 ? (outputMs / outputDurationMs) * 100 : 0
+  const pct = outputDurationMs > 0 ? Math.min(100, (outputMs / outputDurationMs) * 100) : 0
   return (
-    <div className="flex w-full min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 sm:gap-3">
+    <div className="flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-lg border border-border bg-card/50 px-3 py-2 sm:gap-3">
       <Button type="button" size="icon" variant="outline" className="shrink-0" onClick={onToggle} aria-label={playing ? 'Pause' : 'Play'}>
         {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
       </Button>
@@ -63,7 +63,7 @@ export function PlayerControls({
           min={0}
           max={max}
           step={50}
-          value={[Math.min(outputMs, max)]}
+          value={[Math.min(Math.max(0, outputMs), max)]}
           onValueChange={(v) => {
             const n = Array.isArray(v) ? v[0] : v
             onScrub(typeof n === 'number' ? n : 0)
