@@ -109,6 +109,30 @@ def apply_audio_mix(
     subprocess.check_call(cmd)
 
 
+def apply_loudnorm(video: Path, out_video: Path, target_lufs: int) -> None:
+    """EBU R128 loudness normalize program audio (video stream copied)."""
+    i = int(target_lufs)
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video),
+            "-af",
+            f"loudnorm=I={i}:TP=-1.5:LRA=11",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            str(out_video),
+        ],
+    )
+
+
 def apply_studio_sound_mix(video: Path, isolated: Path, out_video: Path, mix: float) -> None:
     """Blend isolated speech with original program audio."""
     m = max(0.0, min(1.0, float(mix)))

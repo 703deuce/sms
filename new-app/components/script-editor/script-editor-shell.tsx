@@ -84,6 +84,8 @@ import { RoomsUploadCard } from '@/components/recording/rooms/upload-card'
 import { ScriptExportPopover } from '@/components/script-editor/script-export-popover'
 import { ScriptVersionHistoryPanel } from '@/components/script-editor/script-version-history-panel'
 import { ScriptShortcutsSheet } from '@/components/script-editor/script-shortcuts-sheet'
+import { ScriptActionBar, type ScriptAction } from '@/components/script-editor/script-action-bar'
+import { nextMarkerOutMs, prevMarkerOutMs } from '@/lib/clips/script-editor/marker-nav'
 import { StudioSoundPreview } from '@/components/script-editor/studio-sound-preview'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { ScriptStoryboardPanel } from '@/components/script-editor/storyboard/script-storyboard-panel'
@@ -265,6 +267,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [followPlayhead, setFollowPlayhead] = useState(true)
   const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [actionBarOpen, setActionBarOpen] = useState(false)
   const isClipComposition = data.compositionKind === 'CLIP'
   const compositions = data.compositions ?? []
   const compositionTitle = useMemo(() => {
@@ -1185,6 +1188,42 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         setShortcutsOpen(true)
       }
 
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setActionBarOpen(true)
+      }
+
+      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+        const step = 2000
+        if (e.key === 'j' || e.key === 'J') {
+          e.preventDefault()
+          seekToOutputMs(Math.max(0, outputMs - step))
+        }
+        if (e.key === 'k' || e.key === 'K') {
+          e.preventDefault()
+          const v = videoRef.current
+          if (v) {
+            outputPlayAnchorRef.current = null
+            v.pause()
+          }
+        }
+        if (e.key === 'l' || e.key === 'L') {
+          e.preventDefault()
+          seekToOutputMs(Math.min(outDur, outputMs + step))
+        }
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === '.' || e.code === 'Period')) {
+        e.preventDefault()
+        const next = nextMarkerOutMs(document.markers, outputMs)
+        if (next != null) seekToOutputMs(next)
+      }
+      if ((e.metaKey || e.ctrlKey) && e.altKey && e.key === ',') {
+        e.preventDefault()
+        const prev = prevMarkerOutMs(document.markers, outputMs)
+        if (prev != null) seekToOutputMs(prev)
+      }
+
       if (e.altKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
         e.preventDefault()
         setSideTab('project')
@@ -1231,6 +1270,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     submitCommentFromSelection,
     edl,
     outputMs,
+    document.markers,
+    setActionBarOpen,
   ])
 
   const saveProjectScroll = useCallback(() => {
@@ -1272,6 +1313,78 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       v.pause()
     }
   }
+
+  const scriptActions = useMemo((): ScriptAction[] => {
+    return [
+      {
+        id: 'play',
+        label: 'Play / pause',
+        keywords: 'space transport',
+        run: () => togglePlay(),
+      },
+      {
+        id: 'studio',
+        label: 'Studio Sound',
+        keywords: 'audio enhance isolation',
+        run: () => {
+          setSideTab('properties')
+          setSideOpen(true)
+          safeApplyOp({
+            type: 'patch_audio_fx',
+            audioFx: {
+              ...document.audioFx,
+              studioSound: {
+                enabled: true,
+                mix: document.audioFx?.studioSound?.mix ?? 0.8,
+                assetId: document.audioFx?.studioSound?.assetId ?? null,
+              },
+            },
+          })
+        },
+      },
+      {
+        id: 'fillers',
+        label: 'Remove filler words',
+        keywords: 'clean um uh',
+        run: () => {
+          setSideTab('edit')
+          setEditToolsTab('filler')
+          setFillerReviewOpen(true)
+        },
+      },
+      {
+        id: 'gaps',
+        label: 'Shorten word gaps',
+        keywords: 'silence pause',
+        run: () => {
+          setSideTab('edit')
+          setEditToolsTab('gaps')
+          openGapTools()
+        },
+      },
+      {
+        id: 'retakes',
+        label: 'Find retakes',
+        keywords: 'duplicate false start',
+        run: () => {
+          setSideTab('edit')
+          setEditToolsTab('retakes')
+        },
+      },
+      {
+        id: 'marker',
+        label: 'Add marker at playhead',
+        keywords: 'chapter',
+        run: () => addMarkerAtPlayhead(),
+      },
+      {
+        id: 'shortcuts',
+        label: 'Keyboard shortcuts',
+        keywords: 'help',
+        run: () => setShortcutsOpen(true),
+      },
+    ]
+  }, [document.audioFx, safeApplyOp, openGapTools, addMarkerAtPlayhead, edl, outputMs])
 
   const onResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -1374,6 +1487,16 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
             </Label>
           </div>
         )}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="hidden sm:inline-flex"
+          data-testid="script-action-bar-trigger"
+          onClick={() => setActionBarOpen(true)}
+        >
+          Actions ⌘K
+        </Button>
         <Button
           type="button"
           size="icon-sm"
@@ -2235,6 +2358,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       />
       </div>
       <ScriptShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <ScriptActionBar open={actionBarOpen} onOpenChange={setActionBarOpen} actions={scriptActions} />
     </div>
   )
 }

@@ -42,6 +42,8 @@ export type ClipEditsV2 = {
   brand?: unknown
   zoom?: { enabled?: boolean; intensity?: number }
   silenceTrim?: { enabled?: boolean; minGapMs?: number; keepMs?: number }
+  /** Integrated loudness target (LUFS) for export loudnorm. */
+  loudnessLufs?: -14 | -16 | -18 | -23 | -24
 }
 
 export type ClipBounds = { clipStartMs: number; clipEndMs: number }

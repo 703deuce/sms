@@ -69,6 +69,10 @@ export function clipEditsFromScriptDocument(
       studioSound: { enabled: true, generationId: studio.assetId, mix: studio.mix ?? 0.8 },
     }
   }
+  const lufs = document.audioFx?.loudnessLufs
+  if (lufs != null) {
+    edits.loudnessLufs = lufs
+  }
 
   return edits
 }

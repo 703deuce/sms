@@ -221,7 +221,9 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
                 "generationId": studio["assetId"],
                 "mix": float(studio.get("mix", 0.8)),
             }
-        elif document.get("musicTracks"):
+        if audio_fx.get("loudnessLufs") is not None:
+            edits["loudnessLufs"] = int(audio_fx["loudnessLufs"])
+        if not edits.get("audio") and document.get("musicTracks"):
             mt = document["musicTracks"][0]
             if mt.get("assetId"):
                 edits["audio"] = {

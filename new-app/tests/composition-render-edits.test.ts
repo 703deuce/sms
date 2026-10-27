@@ -12,4 +12,13 @@ describe('clipEditsFromScriptDocument studio sound', () => {
     expect(edits.audio?.studioSound?.generationId).toBe('gen_abc')
     expect(edits.audio?.studioSound?.mix).toBe(0.7)
   })
+
+  it('passes loudnessLufs on edits root', () => {
+    const doc = {
+      ...emptyDocument(['w1']),
+      audioFx: { loudnessLufs: -16 as const },
+    }
+    const edits = clipEditsFromScriptDocument(doc, { trimInMs: 0, trimOutMs: 5000, cutRanges: [] })
+    expect(edits.loudnessLufs).toBe(-16)
+  })
 })

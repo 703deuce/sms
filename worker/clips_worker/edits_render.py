@@ -406,6 +406,17 @@ def render_edited_clip(
         )
         caption_src = mixed
 
+    loud_lufs = edits.get("loudnessLufs")
+    if loud_lufs is not None:
+        try:
+            from clips_worker.audio_render import apply_loudnorm
+
+            ln_out = work_dir / "loudnorm.mp4"
+            apply_loudnorm(caption_src, ln_out, int(loud_lufs))
+            caption_src = ln_out
+        except Exception:
+            pass
+
     from clips_worker.render_clip import aspect_size
 
     aspect = settings.get("aspectRatio", "9:16")
