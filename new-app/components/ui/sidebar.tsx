@@ -84,6 +84,12 @@ function SidebarProvider({
 
       // This sets the cookie to keep the sidebar state.
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      try {
+        window.localStorage.setItem("transovo_sidebar_open", openState ? "true" : "false")
+      } catch {
+        /* ignore */
+      }
+      window.dispatchEvent(new CustomEvent("transovo-sidebar-toggled"))
     },
     [setOpenProp, open]
   )

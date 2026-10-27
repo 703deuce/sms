@@ -219,7 +219,7 @@ export function DriveHome({
         {isT2vFeatureEnabled() ? (
           <Link href="/app/clips/video/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             <Clapperboard className="mr-1 size-4" />
-            Text to video
+            AI Video
           </Link>
         ) : null}
         <PrimaryButton render={<Link href="/app/clips/new" />} className="h-8 px-3 text-sm">
@@ -297,7 +297,7 @@ export function DriveHome({
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
               <SelectItem value="clips">Clips</SelectItem>
-              {isT2vFeatureEnabled() ? <SelectItem value="video">Text to video</SelectItem> : null}
+              {isT2vFeatureEnabled() ? <SelectItem value="video">AI Video</SelectItem> : null}
             </SelectContent>
           </Select>
           <Select value={status} onValueChange={(v) => v && setStatus(v)}>

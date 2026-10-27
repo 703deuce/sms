@@ -4,7 +4,7 @@ import { T2vCreateWorkspace } from '@/components/t2v/t2v-create-workspace'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { notFound } from 'next/navigation'
 
-export const metadata = { title: 'Text to video · Clips' }
+export const metadata = { title: 'AI Video · Clips' }
 
 export default function T2vCreatePage() {
   if (!isT2vFeatureEnabled()) notFound()

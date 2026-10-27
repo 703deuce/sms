@@ -107,7 +107,7 @@ export function T2vVoicesSettings() {
   return (
     <Panel
       title="Voices"
-      description="Preview ElevenLabs voices and pick your default for new text-to-video projects."
+      description="Preview ElevenLabs voices and pick your default for new AI Video projects."
       actions={
         <Button
           type="button"

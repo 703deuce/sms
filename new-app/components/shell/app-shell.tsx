@@ -6,6 +6,7 @@ import { AppTopBar } from '@/components/shell/app-topbar'
 import { BreadcrumbTitleProvider } from '@/components/shell/breadcrumb-context'
 import { ShellContextProvider } from '@/components/shell/shell-context-provider'
 import type { PersistedShellContext } from '@/lib/nav-shell-context'
+import { SidebarLayoutEffects } from '@/components/shell/sidebar-layout-effects'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 export function AppShell({
@@ -38,6 +39,7 @@ export function AppShell({
             >
               Skip to content
             </a>
+            <SidebarLayoutEffects />
             <AppSidebar recordingNavEnabled={recordingNavEnabled} />
             <SidebarInset className="min-w-0 bg-background">
               <AppTopBar />

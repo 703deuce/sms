@@ -9,7 +9,7 @@ import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { notFound } from 'next/navigation'
 import { T2vStudioToolbar } from '@/components/t2v/t2v-studio-toolbar'
 
-export const metadata = { title: 'Video studio · Clips' }
+export const metadata = { title: 'AI Video studio · Clips' }
 
 export default async function T2vStudioPage({
   params,
