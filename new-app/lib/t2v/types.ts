@@ -100,7 +100,15 @@ export type T2vDraftV1 = {
     captionsEnabled: boolean
   }
   voice: T2vVoiceSettings | null
-  music: { assetId?: string; generationId?: string; volume: number; duck: boolean; label?: string } | null
+  music: {
+    assetId?: string
+    generationId?: string
+    volume: number
+    duck: boolean
+    label?: string
+    prompt?: string
+    disabled?: boolean
+  } | null
   scenes: T2vScene[]
   nextSlot: number
 }

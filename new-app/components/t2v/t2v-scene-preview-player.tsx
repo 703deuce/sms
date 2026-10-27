@@ -13,15 +13,18 @@ export function T2vScenePreviewPlayer({
   sceneId,
   builtVideoUrl,
   aspect,
+  onSelectScene,
 }: {
   draftId: string
   doc: T2vDraftV1
   sceneId: string | null
   builtVideoUrl?: string | null
   aspect: string
+  onSelectScene?: (id: string) => void
 }) {
   const [playing, setPlaying] = useState(false)
   const [builtMode, setBuiltMode] = useState(false)
+  const [chainScenes, setChainScenes] = useState(false)
   const [preview, setPreview] = useState<{
     mediaUrl: string | null
     voiceUrl: string | null
@@ -31,10 +34,21 @@ export function T2vScenePreviewPlayer({
   } | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const chainTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const idx = doc.scenes.findIndex((s) => s.id === sceneId)
   const scene: T2vScene | null = idx >= 0 ? doc.scenes[idx] : null
   const durMs = scene ? estimateSceneMs(scene) : 0
+
+  const goScene = useCallback(
+    (delta: number) => {
+      if (!sceneId || !onSelectScene) return
+      const i = doc.scenes.findIndex((s) => s.id === sceneId)
+      const next = doc.scenes[i + delta]
+      if (next) onSelectScene(next.id)
+    },
+    [doc.scenes, onSelectScene, sceneId],
+  )
 
   const loadPreview = useCallback(async () => {
     if (!sceneId || builtMode) return
@@ -53,14 +67,29 @@ export function T2vScenePreviewPlayer({
     const a = audioRef.current
     void v?.play().catch(() => {})
     void a?.play().catch(() => {})
+    if (chainScenes && scene && onSelectScene) {
+      if (chainTimer.current) clearTimeout(chainTimer.current)
+      chainTimer.current = setTimeout(() => {
+        const i = doc.scenes.findIndex((s) => s.id === scene.id)
+        const next = doc.scenes[i + 1]
+        if (next) {
+          onSelectScene(next.id)
+        } else {
+          setPlaying(false)
+        }
+      }, durMs)
+    }
     return () => {
       v?.pause()
       a?.pause()
+      if (chainTimer.current) clearTimeout(chainTimer.current)
     }
-  }, [playing, preview?.mediaUrl, preview?.voiceUrl, builtMode])
+  }, [playing, preview?.mediaUrl, preview?.voiceUrl, builtMode, chainScenes, scene, durMs, doc.scenes, onSelectScene])
 
   const aspectClass =
     aspect === '9:16' ? 'aspect-[9/16]' : aspect === '1:1' ? 'aspect-square' : aspect === '4:5' ? 'aspect-[4/5]' : 'aspect-video'
+
+  const togglePlay = () => setPlaying((p) => !p)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-black/90 p-3">
@@ -75,7 +104,7 @@ export function T2vScenePreviewPlayer({
             style={{ objectPosition: `${(preview.focalX ?? 0.5) * 100}% ${(preview.focalY ?? 0.5) * 100}%` }}
             muted
             playsInline
-            loop
+            loop={!chainScenes}
           />
         ) : preview?.mediaUrl ? (
           <img
@@ -97,27 +126,28 @@ export function T2vScenePreviewPlayer({
         ) : null}
         {preview?.voiceUrl ? <audio ref={audioRef} src={preview.voiceUrl} /> : null}
       </div>
-      <div className="mt-2 flex h-12 items-center justify-center gap-2 text-white">
-        <Button type="button" size="icon-sm" variant="ghost" className="text-white" onClick={() => setPlaying(false)}>
+      <div className="mt-2 flex h-12 flex-wrap items-center justify-center gap-2 text-white">
+        <Button type="button" size="icon-sm" variant="ghost" className="text-white" onClick={() => goScene(-1)} aria-label="Previous scene">
           <SkipBack className="size-4" />
         </Button>
-        <Button
-          type="button"
-          size="icon"
-          variant="secondary"
-          onClick={() => setPlaying((p) => !p)}
-          aria-label={playing ? 'Pause' : 'Play'}
-        >
+        <Button type="button" size="icon" variant="secondary" onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
           {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
         </Button>
-        <Button type="button" size="icon-sm" variant="ghost" className="text-white" onClick={() => setPlaying(false)}>
+        <Button type="button" size="icon-sm" variant="ghost" className="text-white" onClick={() => goScene(1)} aria-label="Next scene">
           <SkipForward className="size-4" />
         </Button>
+        <label className="ml-2 flex items-center gap-1 text-xs text-white/80">
+          <input type="checkbox" checked={chainScenes} onChange={(e) => setChainScenes(e.target.checked)} />
+          Play all scenes
+        </label>
         {builtVideoUrl ? (
           <button
             type="button"
-            className="ml-4 text-xs text-white/80 underline"
-            onClick={() => setBuiltMode((b) => !b)}
+            className="ml-2 text-xs text-white/80 underline"
+            onClick={() => {
+              setBuiltMode((b) => !b)
+              setPlaying(false)
+            }}
           >
             {builtMode ? 'Scene preview' : 'Play built video'}
           </button>

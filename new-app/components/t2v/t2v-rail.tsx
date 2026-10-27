@@ -24,9 +24,24 @@ const ITEMS: { id: T2vRailTab; label: string; icon: typeof Film }[] = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
 ]
 
-export function T2vRail({ active, onSelect }: { active: T2vRailTab; onSelect: (t: T2vRailTab) => void }) {
+export function T2vRail({
+  active,
+  onSelect,
+  variant = 'vertical',
+}: {
+  active: T2vRailTab
+  onSelect: (t: T2vRailTab) => void
+  variant?: 'vertical' | 'horizontal'
+}) {
+  const horizontal = variant === 'horizontal'
   return (
-    <nav className="flex w-16 shrink-0 flex-col border-r border-border bg-muted/10 py-1" aria-label="Studio">
+    <nav
+      className={cn(
+        'flex shrink-0 bg-muted/10 py-1',
+        horizontal ? 'min-h-14 w-full flex-row justify-around gap-0 px-1' : 'w-16 flex-col border-r border-border',
+      )}
+      aria-label="Studio"
+    >
       {ITEMS.map((item) => {
         const on = active === item.id
         return (
@@ -35,12 +50,14 @@ export function T2vRail({ active, onSelect }: { active: T2vRailTab; onSelect: (t
             type="button"
             title={item.label}
             className={cn(
-              'relative flex h-14 w-full flex-col items-center justify-center gap-0.5 text-[10px] font-medium',
+              'relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium',
+              horizontal ? 'h-14 min-w-[4.5rem] flex-1' : 'h-14 w-full',
               on ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60',
             )}
             onClick={() => onSelect(item.id)}
           >
-            {on ? <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-primary" /> : null}
+            {on && !horizontal ? <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-primary" /> : null}
+            {on && horizontal ? <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-primary" /> : null}
             <item.icon className="size-4" aria-hidden />
             {item.label}
           </button>

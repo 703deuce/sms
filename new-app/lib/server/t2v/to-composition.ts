@@ -7,6 +7,7 @@ export function draftToComposition(input: {
   words: { w: string; s: number; e: number; i: number }[]
   sceneStartsMs: Record<string, number>
   musicGenerationId?: string | null
+  durationMs?: number
   previous?: ScriptDocumentV1 | null
 }): ScriptDocumentV1 {
   const { draft, sourceMediaId, words } = input
@@ -14,7 +15,8 @@ export function draftToComposition(input: {
   const prevDeleted = new Set(input.previous?.deletedWordIds ?? [])
   const deleted = allIds.filter((id) => prevDeleted.has(id))
   const kept = allIds.filter((id) => !prevDeleted.has(id))
-  const totalMs = words.length ? Math.round(words[words.length - 1].e * 1000) : 0
+  const fromWords = words.length ? Math.round(words[words.length - 1].e * 1000) : 0
+  const totalMs = input.durationMs ?? fromWords
 
   const scenes = draft.scenes.map((sc) => {
     const first = words.find((w) => Math.floor(w.i / 10_000) === sc.slot)

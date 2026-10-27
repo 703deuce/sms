@@ -75,12 +75,21 @@ export async function applyT2vAssembled(input: {
     where: { projectId: input.projectId, kind: 'FULL', clipId: null, deletedAt: null },
   })
   const previous = existing ? parseScriptCompositionDocument(existing.document) : null
+  let musicGenerationId: string | null = null
+  if (doc.music?.generationId && !doc.music.disabled) {
+    const gen = await prisma.aiGeneration.findFirst({
+      where: { id: doc.music.generationId, workspaceId: input.workspaceId, kind: 'MUSIC', status: 'READY' },
+      select: { id: true },
+    })
+    musicGenerationId = gen?.id ?? null
+  }
   const compositionDoc = draftToComposition({
     draft: doc,
     sourceMediaId,
     words: input.words,
     sceneStartsMs: input.sceneStartsMs,
-    musicGenerationId: doc.music?.generationId ?? null,
+    durationMs: input.durationMs,
+    musicGenerationId,
     previous,
   })
 

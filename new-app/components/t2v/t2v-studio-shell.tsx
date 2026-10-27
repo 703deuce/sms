@@ -14,6 +14,7 @@ import { T2vPanelText } from '@/components/t2v/t2v-panel-text'
 import { T2vPanelBrand } from '@/components/t2v/t2v-panel-brand'
 import { T2vPanelStyles } from '@/components/t2v/t2v-panel-styles'
 import { T2vRail, type T2vRailTab } from '@/components/t2v/t2v-rail'
+import { T2vMobileRail } from '@/components/t2v/t2v-mobile-rail'
 import { T2vScenePreviewPlayer } from '@/components/t2v/t2v-scene-preview-player'
 import { T2vSceneStrip } from '@/components/t2v/t2v-scene-strip'
 import { useT2vDraftPoll } from '@/lib/t2v/use-t2v-draft-poll'
@@ -162,8 +163,17 @@ export function T2vStudioShell({
     void persist({ ...doc, scenes })
   }
 
+  const selectAdjacentScene = (delta: number) => {
+    if (!selectedId) return
+    const i = doc.scenes.findIndex((s) => s.id === selectedId)
+    const next = doc.scenes[i + delta]
+    if (next) setSelectedId(next.id)
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
@@ -173,10 +183,18 @@ export function T2vStudioShell({
         e.preventDefault()
         void runBuild()
       }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        selectAdjacentScene(-1)
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        selectAdjacentScene(1)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [undo, redo, doc])
+  }, [undo, redo, doc, selectedId])
 
   const panelTitle =
     tab === 'story'
@@ -219,10 +237,31 @@ export function T2vStudioShell({
         </div>
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="flex min-h-0 flex-1 flex-col lg:max-w-[55%]">
+        <div className="relative order-1 flex min-h-[240px] flex-1 lg:order-2 lg:min-h-0">
+          <T2vScenePreviewPlayer
+            draftId={draftId}
+            doc={doc}
+            sceneId={selectedId}
+            builtVideoUrl={builtVideoUrl}
+            aspect={doc.settings.aspect}
+            onSelectScene={setSelectedId}
+          />
+          {status === 'ASSEMBLING' ? (
+            <T2vBuildProgress
+              progress={progress}
+              stage={stage}
+              error={error}
+              onCancel={() => void cancelBuild()}
+              onRetry={() => void runBuild()}
+            />
+          ) : null}
+        </div>
+        <div className="order-2 flex min-h-0 max-h-[55vh] flex-col lg:order-1 lg:max-h-none lg:max-w-[55%] lg:flex-1">
           <div className="flex min-h-0 flex-1">
-            <T2vRail active={tab} onSelect={setTab} />
-            <div className="flex w-full max-w-[400px] min-w-0 flex-col border-r border-border">
+            <div className="hidden lg:block">
+              <T2vRail active={tab} onSelect={setTab} />
+            </div>
+            <div className="flex w-full min-w-0 flex-col border-r border-border lg:max-w-[400px]">
               <header className="flex h-12 shrink-0 items-center border-b border-border px-4 text-sm font-medium">{panelTitle}</header>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {tab === 'story' ? (
@@ -260,24 +299,7 @@ export function T2vStudioShell({
             </div>
           </div>
           <T2vSceneStrip scenes={doc.scenes} selectedId={selectedId} onSelect={setSelectedId} onReorder={reorder} />
-        </div>
-        <div className="relative min-h-[280px] flex-1 lg:min-h-0">
-          <T2vScenePreviewPlayer
-            draftId={draftId}
-            doc={doc}
-            sceneId={selectedId}
-            builtVideoUrl={builtVideoUrl}
-            aspect={doc.settings.aspect}
-          />
-          {status === 'ASSEMBLING' ? (
-            <T2vBuildProgress
-              progress={progress}
-              stage={stage}
-              error={error}
-              onCancel={() => void cancelBuild()}
-              onRetry={() => void runBuild()}
-            />
-          ) : null}
+          <T2vMobileRail active={tab} onSelect={setTab} />
         </div>
       </div>
     </div>

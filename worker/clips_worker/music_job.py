@@ -7,7 +7,7 @@ import uuid
 from decimal import Decimal
 from pathlib import Path
 
-from clips_worker.elevenlabs import generate_music
+from clips_worker.elevenlabs import generate_music_for_length
 from clips_worker.storage import upload_file
 
 
@@ -46,8 +46,12 @@ def run_music_job(conn, job: dict, post_progress) -> None:
         )
     conn.commit()
 
-    audio, usage = generate_music(str(prompt), length_ms, instrumental)
-    storage_key = f"ws/{workspace_id}/clips/{clip_id or 'none'}/music/{generation_id}.mp3"
+    audio, usage = generate_music_for_length(str(prompt), length_ms, instrumental)
+    t2v_project_id = params.get("t2vProjectId")
+    if t2v_project_id:
+        storage_key = f"ws/{workspace_id}/projects/{t2v_project_id}/t2v/music/{generation_id}.mp3"
+    else:
+        storage_key = f"ws/{workspace_id}/clips/{clip_id or 'none'}/music/{generation_id}.mp3"
 
     with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
         tmp = Path(f.name)
