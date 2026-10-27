@@ -26,6 +26,9 @@ def pick_talking_clips(
     range_start_ms: int,
     range_end_ms: int,
     on_headstart_picks: Callable[[list[dict]], None] | None = None,
+    *,
+    picker_cache: dict[str, Any] | None = None,
+    on_picker_checkpoint: Callable[[list[dict] | None, list[dict] | None], None] | None = None,
 ) -> tuple[list[dict], str | None]:
     """Return (picks, user_message). user_message is set when no clips could be produced."""
     if settings.get("mode") == "captions":
@@ -75,58 +78,85 @@ def pick_talking_clips(
     signals = compute_signals(sentences, audio_path, sentences)
     sig_by = {s.sentence_idx: s for s in signals}
 
-    moments = find_moments(sentences, signals, genre, prompt)
-    if not moments:
-        moments = [
-            {
-                "start_sentence": 0,
-                "end_sentence": min(len(sentences) - 1, max(3, len(sentences) // 2)),
-                "why": "fallback_full_span",
-                "archetype": "story",
-            }
-        ]
-        picker_info("pass1_fallback_span", end_sentence=moments[0]["end_sentence"])
+    from clips_worker.worker_drain import WorkerDrainExit, drain_requested
+
+    cache = picker_cache or {}
+    scored_from_cache = cache.get("pass2Scored")
+    moments_from_cache = cache.get("pass1Moments")
+    scored: list[dict] | None = None
+    pass2_audit: list[dict] = []
+
+    if isinstance(scored_from_cache, list) and scored_from_cache:
+        picker_info("picker_resume_pass2", count=len(scored_from_cache))
+        scored = scored_from_cache
+        moments = moments_from_cache if isinstance(moments_from_cache, list) else []
+    else:
+        if isinstance(moments_from_cache, list) and moments_from_cache:
+            picker_info("picker_resume_pass1", moments=len(moments_from_cache))
+            moments = moments_from_cache
+        else:
+            moments = find_moments(sentences, signals, genre, prompt)
+            if on_picker_checkpoint:
+                on_picker_checkpoint(moments, None)
+            if drain_requested():
+                raise WorkerDrainExit("picker_pass1_checkpointed")
+        if not moments:
+            moments = [
+                {
+                    "start_sentence": 0,
+                    "end_sentence": min(len(sentences) - 1, max(3, len(sentences) // 2)),
+                    "why": "fallback_full_span",
+                    "archetype": "story",
+                }
+            ]
+            picker_info("pass1_fallback_span", end_sentence=moments[0]["end_sentence"])
+
+        source_duration_s = source_ms / 1000.0
+        if on_headstart_picks and settings.get("mode") not in ("captions", "anything"):
+            try:
+                heuristic = pass1_heuristic_candidates(
+                    moments[:5], sentences, sig_by, genre, source_duration_s=source_duration_s
+                )
+                if heuristic:
+                    early = finalize_picks(
+                        heuristic[:2],
+                        sentences,
+                        sig_by,
+                        range_words,
+                        range_start_ms,
+                        range_end_ms,
+                        genre,
+                    )
+                    if early:
+                        picker_info("headstart_picks", count=len(early))
+                        on_headstart_picks(early)
+            except Exception as exc:
+                picker_info("headstart_failed", error=str(exc)[:200])
+
+        scored, pass2_audit = score_moments(
+            moments,
+            sentences,
+            signals,
+            genre,
+            source_duration_s=source_duration_s,
+            project_id=str(settings.get("projectId") or settings.get("project_id") or "").strip() or None,
+        )
+        if on_picker_checkpoint:
+            on_picker_checkpoint(moments, scored)
+        if drain_requested():
+            raise WorkerDrainExit("picker_pass2_checkpointed")
+        if not scored:
+            scored = pass1_heuristic_candidates(
+                moments, sentences, sig_by, genre, source_duration_s=source_duration_s
+            )
+            if scored:
+                picker_info("pass2_empty_heuristic_fallback", count=len(scored))
+        if not scored and pass2_audit:
+            scored = soft_pass2_fallback(pass2_audit)
+            if scored:
+                picker_info("pass2_soft_audit_fallback", count=len(scored))
 
     source_duration_s = source_ms / 1000.0
-    if on_headstart_picks and settings.get("mode") not in ("captions", "anything"):
-        try:
-            heuristic = pass1_heuristic_candidates(
-                moments[:5], sentences, sig_by, genre, source_duration_s=source_duration_s
-            )
-            if heuristic:
-                early = finalize_picks(
-                    heuristic[:2],
-                    sentences,
-                    sig_by,
-                    range_words,
-                    range_start_ms,
-                    range_end_ms,
-                    genre,
-                )
-                if early:
-                    picker_info("headstart_picks", count=len(early))
-                    on_headstart_picks(early)
-        except Exception as exc:
-            picker_info("headstart_failed", error=str(exc)[:200])
-
-    scored, pass2_audit = score_moments(
-        moments,
-        sentences,
-        signals,
-        genre,
-        source_duration_s=source_duration_s,
-        project_id=str(settings.get("projectId") or settings.get("project_id") or "").strip() or None,
-    )
-    if not scored:
-        scored = pass1_heuristic_candidates(
-            moments, sentences, sig_by, genre, source_duration_s=source_duration_s
-        )
-        if scored:
-            picker_info("pass2_empty_heuristic_fallback", count=len(scored))
-    if not scored and pass2_audit:
-        scored = soft_pass2_fallback(pass2_audit)
-        if scored:
-            picker_info("pass2_soft_audit_fallback", count=len(scored))
 
     picks = finalize_picks(
         scored, sentences, sig_by, range_words, range_start_ms, range_end_ms, genre

@@ -595,6 +595,27 @@ def run_m4_pipeline(
                     )
                     head_executor.submit(_render_pick_async, top, 0, max(1, len(early_picks)))
 
+                from clips_worker.picker_checkpoint import load_picker_cache, save_picker_cache
+                from clips_worker.process_helpers import job_payload as _job_payload
+
+                job_pl = _job_payload(job) if job else {}
+                picker_cache = load_picker_cache(job_pl, settings, range_start, range_end)
+
+                def _checkpoint_picker(moments: list[dict] | None, scored: list[dict] | None) -> None:
+                    nonlocal job_pl
+                    if not job:
+                        return
+                    job_pl = save_picker_cache(
+                        conn,
+                        job_id,
+                        job_pl,
+                        settings,
+                        range_start,
+                        range_end,
+                        moments=moments,
+                        scored=scored,
+                    )
+
                 picks, picker_message = pick_talking_clips(
                     words,
                     str(audio_wav),
@@ -602,6 +623,8 @@ def run_m4_pipeline(
                     range_start,
                     range_end,
                     on_headstart_picks=on_headstart,
+                    picker_cache=picker_cache,
+                    on_picker_checkpoint=_checkpoint_picker,
                 )
                 head_executor.shutdown(wait=True)
                 print(

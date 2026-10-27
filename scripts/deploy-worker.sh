@@ -84,7 +84,8 @@ rm -rf "\${REMOTE_SRC}"
 mkdir -p "\${REMOTE_SRC}"
 tar xzf /tmp/worker.tgz -C "\${REMOTE_SRC}"
 
-echo "[deploy-worker] waiting for RUNNING RENDER_* / MUSIC jobs"
+DRAIN_TIMEOUT=\${WORKER_DRAIN_TIMEOUT_SEC:-600}
+echo "[deploy-worker] waiting for RUNNING lane jobs (incl. PROCESS_PROJECT) or graceful drain"
 for i in \$(seq 1 120); do
   running=\$(docker exec clips-worker python3 -c "
 import os, psycopg2
@@ -93,8 +94,11 @@ r = c.cursor()
 r.execute(\"\"\"
   SELECT count(*) FROM clip_jobs
   WHERE status = 'RUNNING'
-    AND type IN ('IMPORT_URL', 'STREAM_IMPORT', 'RENDER_CLIP', 'RENDER_SCRIPT_COMPOSITION', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL')
-    AND "lockedAt" > NOW() - interval '3 minutes'
+    AND type IN (
+      'PROCESS_PROJECT', 'REPLACE_CLIP', 'IMPORT_URL', 'STREAM_IMPORT',
+      'RENDER_CLIP', 'RENDER_SCRIPT_COMPOSITION', 'RENDER_EXPORT', 'MUSIC', 'THUMBNAIL'
+    )
+    AND \"lockedAt\" > NOW() - interval '15 minutes'
 \"\"\")
 print(r.fetchone()[0])
 " 2>/dev/null || echo 0)
@@ -102,7 +106,7 @@ print(r.fetchone()[0])
     echo "[deploy-worker] no blocking jobs"
     break
   fi
-  echo "[deploy-worker] still running=\$running"
+  echo "[deploy-worker] still running=\$running (workers drain on SIGTERM; timeout=\${DRAIN_TIMEOUT}s)"
   sleep 10
 done
 
@@ -118,9 +122,9 @@ start_worker() {
   local name="\$1"
   local lane="\$2"
   local worker_id="\$3"
-  echo "[deploy-worker] stopping \${name} (no overlap with new container)"
-  docker stop "\$name" 2>/dev/null || true
-  for _wait in \$(seq 1 45); do
+  echo "[deploy-worker] stopping \${name} (SIGTERM drain, up to \${DRAIN_TIMEOUT}s)"
+  docker stop -t "\${DRAIN_TIMEOUT}" "\$name" 2>/dev/null || true
+  for _wait in \$(seq 1 "\${DRAIN_TIMEOUT}"); do
     if ! docker ps -q -f name="^\${name}\$" | grep -q .; then
       break
     fi

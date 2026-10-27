@@ -604,8 +604,10 @@ DISPATCH["T2V_SCENE_AI_VIDEO"] = handle_t2v_scene_ai_video
 
 def main() -> None:
     from clips_worker.startup_check import validate_worker_env
+    from clips_worker.worker_drain import drain_requested, install_drain_handlers
 
     validate_worker_env()
+    install_drain_handlers()
     dsn = env("DATABASE_URL")
     host = db_host_label(dsn)
     from clips_worker.worker_identity import worker_instance_id
@@ -632,10 +634,16 @@ def main() -> None:
     idle_polls = 0
     while True:
         try:
+            if drain_requested():
+                log("[clipper:worker] drain complete — exiting")
+                return
             with psycopg2.connect(dsn) as conn:
                 from clips_worker.job_lock import requeue_stale_running_jobs, run_job_with_lock_heartbeat
 
                 requeue_stale_running_jobs(conn)
+                if drain_requested():
+                    log("[clipper:worker] drain complete — exiting")
+                    return
                 job = claim_job(conn)
                 if job and (job.get("type") or "").startswith("STREAM_"):
                     from clips_worker.streamer.disk_guard import disk_guard_blocks_new_stream_work
@@ -663,6 +671,8 @@ def main() -> None:
                 idle_polls = 0
                 log(f"claimed job={job['id']}")
                 try:
+                    from clips_worker.worker_drain import WorkerDrainExit
+
                     from clips_worker.t2v.feature_gate import T2V_JOB_TYPES, ai_video_enabled
 
                     job_type = job.get("type") or ""
@@ -675,6 +685,11 @@ def main() -> None:
                     if not handler:
                         raise RuntimeError(f"unknown job type {job_type}")
                     run_job_with_lock_heartbeat(dsn, conn, job, handler)  # type: ignore[arg-type]
+                except WorkerDrainExit as drain_exc:
+                    log(f"job {job['id']} paused for drain: {drain_exc}")
+                    release_job_claim(conn, job["id"])
+                    log("[clipper:worker] drain complete — exiting")
+                    return
                 except Exception as exc:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")
