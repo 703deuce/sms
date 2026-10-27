@@ -6,7 +6,10 @@ export const metadata = { title: 'Help' }
 export default function HelpPage() {
   return (
     <Page>
-      <PageHeader title="Help" description="Setup guides, carrier forwarding codes and troubleshooting." />
+      <PageHeader
+        title="Help"
+        description="Upload videos, edit clips, captions, layout, B-roll, music, export, and brand."
+      />
       <HelpCenter />
     </Page>
   )
