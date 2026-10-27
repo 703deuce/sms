@@ -96,7 +96,7 @@ export function ClipCard({
           <ClipCardVideo clipId={clip.id} previewUrl={clip.previewUrl} posterUrl={clip.posterUrl} />
         ) : null}
         <div className="absolute left-2 top-2" title={why ?? undefined}>
-          <ScoreRing score={clip.score} />
+          <ScoreRing score={clip.score} display={showClipperDims ? 'letter' : 'numeric'} />
         </div>
         {onHidden ? (
           <button

@@ -51,6 +51,16 @@ export function LayoutPanel({
           Apply brand
         </Button>
       )}
+      {onEdits && (edits.layout.shotOverrides?.length ?? 0) > 0 ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onEdits({ ...edits, layout: { ...edits.layout, shotOverrides: [] } })}
+        >
+          Reset shot overrides to AI
+        </Button>
+      ) : null}
       {onEdits && (
         <div className="space-y-2 rounded-lg border border-border p-3">
           <Label className="text-xs font-medium">Aspect ratio</Label>
@@ -152,7 +162,13 @@ export function LayoutPanel({
           )
         })}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Shots are time ranges from auto reframe. Pick who to follow per shot; use Re-run after large transcript edits.
+      </p>
       <ul className="divide-y divide-border rounded-lg border border-border">
+        {shots.length === 0 ? (
+          <li className="p-3 text-sm text-muted-foreground">No shot list yet — save or re-run reframe to load segments.</li>
+        ) : null}
         {shots.map((shot, i) => {
           const focus =
             edits.layout.shotOverrides.find((s) => s.i === i)?.focus ?? 'auto'

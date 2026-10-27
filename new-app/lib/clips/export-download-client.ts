@@ -1,4 +1,5 @@
 import { exportClip, getRenderStatus } from '@/lib/clips-api'
+import type { ClipProjectSettings } from '@/lib/clips/settings'
 
 export type ClipExportDownload = {
   downloadUrl: string
@@ -6,8 +7,11 @@ export type ClipExportDownload = {
 }
 
 /** Grid / results download — waits for render when export is queued (preview reuse returns immediately). */
-export async function exportClipDownload(clipId: string): Promise<ClipExportDownload> {
-  const data = await exportClip(clipId)
+export async function exportClipDownload(
+  clipId: string,
+  opts?: { aspect?: ClipProjectSettings['aspectRatio'] },
+): Promise<ClipExportDownload> {
+  const data = await exportClip(clipId, { aspect: opts?.aspect })
   const filename = data.filename || data.download || 'clip.mp4'
   if (data.downloadUrl) {
     return { downloadUrl: data.downloadUrl, filename }

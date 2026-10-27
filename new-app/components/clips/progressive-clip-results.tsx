@@ -13,6 +13,7 @@ type Props = {
   etaSec?: number
   stage?: string | null
   onDownload?: (clipId: string) => void
+  onHidden?: (clipId: string) => void
 }
 
 function reframeLabel(stage: string | null | undefined): string | null {
@@ -29,6 +30,7 @@ export function ProgressiveClipResults({
   etaSec = 0,
   stage,
   onDownload,
+  onHidden,
 }: Props) {
   const pending = Math.max(0, clipsTotal - clips.length)
   const reframe = reframeLabel(stage)
@@ -41,7 +43,13 @@ export function ProgressiveClipResults({
     >
       <div className="flex flex-col gap-4">
         {clips.length > 0 ? (
-          <ClipGrid clips={clips} projectId={projectId} onDownload={onDownload} isStreamer={false} />
+          <ClipGrid
+            clips={clips}
+            projectId={projectId}
+            onDownload={onDownload ?? (() => {})}
+            onHidden={onHidden}
+            isStreamer={false}
+          />
         ) : null}
         {pending > 0 ? (
           <div className="flex flex-col gap-2" aria-live="polite">

@@ -17,6 +17,7 @@ import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
+import type { ClipProjectSettings } from '@/lib/clips/settings'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { MontageDialog } from '@/components/streamer/montage-dialog'
@@ -82,6 +83,7 @@ export function ProjectClipsView({
   initialProgress = 0,
   initialStage = null,
   initialEtaSec = 0,
+  exportAspect = '9:16' as ClipProjectSettings['aspectRatio'],
 }: {
   projectId: string
   projectTitle: string
@@ -95,6 +97,7 @@ export function ProjectClipsView({
   initialProgress?: number
   initialStage?: string | null
   initialEtaSec?: number
+  exportAspect?: ClipProjectSettings['aspectRatio']
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
 
@@ -210,7 +213,7 @@ export function ProjectClipsView({
 
   const onDownload = async (clipId: string) => {
     try {
-      const { downloadUrl, filename } = await exportClipDownload(clipId)
+      const { downloadUrl, filename } = await exportClipDownload(clipId, { aspect: exportAspect })
       triggerDownload(downloadUrl, filename)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed')
@@ -303,6 +306,8 @@ export function ProjectClipsView({
             />
           ) : null}
           {showProgressiveClips ? (
+            <>
+            {!isStreamer && clips.length > 0 ? <ProjectPeopleStrip clips={clips} /> : null}
             <ProgressiveClipResults
               projectId={projectId}
               clips={clips}
@@ -311,7 +316,9 @@ export function ProjectClipsView({
               etaSec={progressEtaSec}
               stage={progressStage}
               onDownload={(id) => void onDownload(id)}
+              onHidden={(id) => setClips((prev) => prev.filter((c) => c.id !== id))}
             />
+            </>
           ) : processing ? (
             <ClipGridSkeleton />
           ) : null}

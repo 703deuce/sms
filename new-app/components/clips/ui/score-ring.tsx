@@ -1,8 +1,18 @@
 'use client'
 
 import { useId } from 'react'
+import { overallClipLetterGrade } from '@/lib/clips/score-grade'
 
-export function ScoreRing({ score, size = 40 }: { score: number; size?: number }) {
+export function ScoreRing({
+  score,
+  size = 40,
+  display = 'numeric',
+}: {
+  score: number
+  size?: number
+  /** `letter` shows virality letter grade (matches picker sub-scores). */
+  display?: 'numeric' | 'letter'
+}) {
   const gradId = useId()
   const raw = score <= 10 ? score * 10 : score
   const s = Math.max(0, Math.min(100, Math.round(raw)))
@@ -16,7 +26,11 @@ export function ScoreRing({ score, size = 40 }: { score: number; size?: number }
       className="relative grid place-items-center rounded-full bg-black/55 backdrop-blur-sm"
       style={{ width: size, height: size }}
       role="img"
-      aria-label={`Virality score ${s} out of 100`}
+      aria-label={
+        display === 'letter'
+          ? `Virality grade ${overallClipLetterGrade(score)}`
+          : `Virality score ${s} out of 100`
+      }
     >
       <svg viewBox="0 0 36 36" className="absolute inset-0 -rotate-90">
         <defs>
@@ -40,7 +54,9 @@ export function ScoreRing({ score, size = 40 }: { score: number; size?: number }
           className="transition-[stroke-dashoffset] duration-700"
         />
       </svg>
-      <span className="relative text-[11px] font-semibold tabular-nums text-white">{s}</span>
+      <span className="relative text-[11px] font-semibold tabular-nums text-white">
+        {display === 'letter' ? overallClipLetterGrade(score) : s}
+      </span>
     </div>
   )
 }

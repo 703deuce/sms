@@ -3,6 +3,7 @@ import { StreamHeader } from '@/components/streamer/stream-header'
 import { StreamerProjectChrome } from '@/components/streamer/streamer-project-chrome'
 import { ProjectClipsView } from '@/components/clips/project-clips-view'
 import { listProjectClips } from '@/lib/server/clips/clips'
+import { parseSettings } from '@/lib/server/clips/projects'
 import { getProjectStatus } from '@/lib/server/clips/jobs'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -33,6 +34,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
     redirect(`/app/clips/${project.id}/video`)
   }
 
+  const projectSettings = parseSettings(project.settings)
   const initialClips =
     project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null
   const liveStatus =
@@ -82,6 +84,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         initialProgress={liveStatus?.progress ?? 0}
         initialStage={liveStatus?.stage ?? null}
         initialEtaSec={liveStatus?.etaSec ?? 0}
+        exportAspect={projectSettings.aspectRatio}
       />
     </Page>
   )

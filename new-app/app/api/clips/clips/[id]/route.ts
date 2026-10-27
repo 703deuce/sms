@@ -49,6 +49,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         meta.userFeedback = body.disliked ? 'dislike' : null
       }
       data.aiMeta = meta
+      console.info('[clipper:feedback]', {
+        clipId: id,
+        workspaceId,
+        hidden: body.hidden ?? null,
+        disliked: body.disliked ?? null,
+      })
     }
     const prisma = getPrisma()
     const updated = await prisma.clip.update({ where: { id }, data })

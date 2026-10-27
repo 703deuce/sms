@@ -470,9 +470,24 @@ export function EditorShell({
         <section className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden p-3 md:p-4">
           <div className="relative grid min-h-0 flex-1 place-items-center bg-[radial-gradient(ellipse_at_center,oklch(0.22_0.02_280)_0%,var(--background)_70%)] p-2 md:p-4">
             <div
-              className="h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
+              className="relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10"
               style={{ aspectRatio: aspectStyle }}
             >
+            {(edits.layout.shotOverrides?.length ?? 0) > 0 ? (
+              <span
+                className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
+                aria-hidden
+              >
+                Manual framing
+              </span>
+            ) : edits.layout.mode === 'auto' || edits.layout.mode === 'dynamic' ? (
+              <span
+                className="pointer-events-none absolute left-2 top-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
+                aria-hidden
+              >
+                AI reframing
+              </span>
+            ) : null}
             <EditorPanelErrorBoundary label="Preview">
             <PreviewStage
               videoUrl={videoUrl}

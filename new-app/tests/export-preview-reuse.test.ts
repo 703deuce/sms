@@ -11,6 +11,7 @@ describe('export preview reuse', () => {
   it('matches only 720p 9:16', () => {
     expect(exportRequestMatchesClipPreview('9:16', '720p')).toBe(true)
     expect(exportRequestMatchesClipPreview('9:16', '1080p')).toBe(false)
+    expect(exportRequestMatchesClipPreview('4:5', '720p')).toBe(false)
     expect(exportRequestMatchesClipPreview('1:1', '720p')).toBe(false)
     expect(exportRequestMatchesClipPreview('16:9', '1080p')).toBe(false)
   })
@@ -30,6 +31,9 @@ describe('export preview reuse', () => {
     const edits = defaultEdits(bounds)
     expect(
       canReuseClipPreviewForExport({ aspect: '9:16', resolution: '1080p', edits, bounds }),
+    ).toBe(false)
+    expect(
+      canReuseClipPreviewForExport({ aspect: '4:5', resolution: '720p', edits, bounds }),
     ).toBe(false)
     expect(
       canReuseClipPreviewForExport({ aspect: '1:1', resolution: '720p', edits, bounds }),

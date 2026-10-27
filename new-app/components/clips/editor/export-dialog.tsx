@@ -11,6 +11,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { can } from '@/lib/billing/entitlements'
 import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
+import { exportRequestMatchesClipPreview } from '@/lib/clips/export-preview-reuse'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
@@ -191,6 +192,11 @@ export function ExportDialog({
         </div>
         <div className="mt-3">
           <p className="text-xs font-medium">Aspect ratio</p>
+          {!exportRequestMatchesClipPreview(aspect, resolution) ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {aspect} at {resolution} re-renders with your edits and burns captions (preview reuse is 9:16 @ 720p only).
+            </p>
+          ) : null}
           <div className="mt-1 flex gap-2">
             {clipAspectRatios.map((a) => (
               <Button

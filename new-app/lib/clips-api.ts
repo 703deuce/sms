@@ -113,7 +113,10 @@ export function listProjectClips(projectId: string, sort: 'score' | 'timeline' =
   return clipsFetch<{ clips: unknown[] }>(`/api/clips/projects/${projectId}/clips?sort=${sort}`)
 }
 
-export function exportClip(clipId: string) {
+export function exportClip(
+  clipId: string,
+  opts?: { aspect?: '9:16' | '4:5' | '1:1' | '16:9'; resolution?: '720p' | '1080p' },
+) {
   return clipsFetch<{
     renderId: string
     downloadUrl: string | null
@@ -124,7 +127,11 @@ export function exportClip(clipId: string) {
     jobId?: string
   }>(`/api/clips/clips/${clipId}/export`, {
     method: 'POST',
-    body: JSON.stringify({ resolution: '720p', watermark: false }),
+    body: JSON.stringify({
+      resolution: opts?.resolution ?? '720p',
+      aspect: opts?.aspect ?? '9:16',
+      watermark: false,
+    }),
   })
 }
 
