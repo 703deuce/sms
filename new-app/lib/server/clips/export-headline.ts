@@ -147,9 +147,12 @@ export async function generateExportHeadline(opts: {
   const nextGen = used + 1
   const exportTemplate: ClipExportTemplate = {
     ...tpl,
-    headlineBar: { enabled: tpl.headlineBar?.enabled ?? true, text: headline },
+    headlineBar: { enabled: true, text: headline },
     suggestedHeadline: headline,
     headlineGenerations: nextGen,
+    platformBadge: tpl.platformBadge ?? { enabled: true },
+    channelLink: tpl.channelLink,
+    platform: tpl.platform,
   }
 
   return { headline, generations: nextGen, exportTemplate }

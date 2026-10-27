@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +47,34 @@ export function ExportTemplateSection({
   const headlineAllowed = headlineBarAllowedForLayout(layoutMode)
   const gens = tpl.headlineGenerations ?? 0
   const [genBusy, setGenBusy] = useState(false)
+  const prefetchedFor = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!headlineAllowed) return
+    if (prefetchedFor.current === clipId) return
+    const base = edits.exportTemplate || {}
+    if (base.suggestedHeadline?.trim() || base.headlineBar?.text?.trim()) {
+      prefetchedFor.current = clipId
+      return
+    }
+    prefetchedFor.current = clipId
+    void clipsFetch<{ exportTemplate: ClipExportTemplate }>(
+      `/api/clips/clips/${clipId}/export-headline/prefetch`,
+      { method: 'POST', body: '{}' },
+    )
+      .then((res) => {
+        if (res.exportTemplate) {
+          onChange({
+            ...base,
+            platform: platform ?? base.platform,
+            ...res.exportTemplate,
+          })
+        }
+      })
+      .catch(() => {
+        prefetchedFor.current = null
+      })
+  }, [clipId, headlineAllowed, edits.exportTemplate, onChange, platform])
 
   const setTpl = (patch: Partial<ClipExportTemplate>) => {
     onChange({ ...tpl, platform: platform ?? tpl.platform, ...patch })
@@ -70,7 +98,14 @@ export function ExportTemplateSection({
         generations: number
         exportTemplate: ClipExportTemplate
       }>(`/api/clips/clips/${clipId}/export-headline/generate`, { method: 'POST', body: '{}' })
-      onChange(res.exportTemplate)
+      onChange({
+        ...res.exportTemplate,
+        headlineBar: {
+          enabled: true,
+          text: res.exportTemplate.headlineBar?.text || res.headline,
+        },
+        platform: platform ?? res.exportTemplate.platform ?? tpl.platform,
+      })
       toast.success('New headline ready')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not generate headline')
@@ -100,17 +135,23 @@ export function ExportTemplateSection({
         <p className="text-xs text-muted-foreground">
           Headline bar is only available on single-view layouts (not split, stack, or grid).
         </p>
-      ) : headlineEnabled ? (
+      ) : (
         <>
-          <Input
-            value={tpl.headlineBar?.text ?? tpl.suggestedHeadline ?? ''}
-            maxLength={48}
-            onChange={(e) => setTpl({ headlineBar: { enabled: true, text: e.target.value } })}
-            onBlur={(e) =>
-              setTpl({ headlineBar: { enabled: true, text: formatHeadlineForExport(e.target.value) } })
-            }
-            placeholder="ALL CAPS HEADLINE 🔥"
-          />
+          {headlineEnabled ? (
+            <Input
+              value={tpl.headlineBar?.text ?? tpl.suggestedHeadline ?? ''}
+              maxLength={120}
+              onChange={(e) => setTpl({ headlineBar: { enabled: true, text: e.target.value } })}
+              onBlur={(e) =>
+                setTpl({ headlineBar: { enabled: true, text: formatHeadlineForExport(e.target.value) } })
+              }
+              placeholder={tpl.suggestedHeadline?.trim() || 'ALL CAPS HEADLINE 🔥'}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Turn on the headline bar or use Generate to add a viral headline for export.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" variant="outline" disabled={genBusy} onClick={() => void generate()}>
               <Sparkles className="mr-1 size-3.5" />
@@ -121,7 +162,7 @@ export function ExportTemplateSection({
             </span>
           </div>
         </>
-      ) : null}
+      )}
 
       <div className="flex items-center justify-between gap-2">
         <Label className="text-sm">Platform badge</Label>
