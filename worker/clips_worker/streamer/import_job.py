@@ -1,4 +1,4 @@
-"""STREAM_IMPORT: metadata, short full-download or long audio-first path."""
+"""STREAM_IMPORT: metadata; audio-first for vod/highlight; video section only for clip kind."""
 from __future__ import annotations
 
 import json
@@ -208,14 +208,15 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             raise RuntimeError(cap_err)
 
         kind = vod.get("sourceType") or "vod"
-        use_long = (
-            kind not in ("clip", "upload")
-            and effective_ms > FULL_DOWNLOAD_MAX_MIN * 60 * 1000
-        )
-
         section = _section_from_range(int(vod.get("rangeStartMs") or 0), vod.get("rangeEndMs"))
 
-        if use_long:
+        # Paste Twitch/Kick vod/highlight: never download full MP4 to worker disk (Rick storage contract).
+        if kind != "clip":
+            print(
+                f"[clipper:stream] import_audio_only vodId={vod_id} projectId={project_id} "
+                f"kind={kind} effectiveMs={effective_ms}",
+                flush=True,
+            )
             post_progress(
                 job["id"],
                 {
@@ -297,6 +298,10 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             )
             return
 
+        print(
+            f"[clipper:stream] import_clip_section vodId={vod_id} projectId={project_id} kind=clip",
+            flush=True,
+        )
         usage = shutil.disk_usage(SCRATCH)
         est = int(dur_s * 2_000_000)
         if usage.free < est * 2:
