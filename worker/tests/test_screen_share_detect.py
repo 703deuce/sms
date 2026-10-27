@@ -26,7 +26,7 @@ def test_screen_share_positive_with_corner_face():
     verdict = classify_screen_share_from_samples(static, face_cx_norm=0.92, face_cy_norm=0.88)
     assert verdict.is_screen_share
     assert verdict.face_corner == "br"
-    assert verdict.confidence >= 0.55
+    assert verdict.confidence >= 0.58
 
 
 def test_screen_share_negative_high_motion():
@@ -60,3 +60,16 @@ def test_screen_share_route_gated_off(monkeypatch, tmp_path):
     env, shadow = apply_screen_share_env(p)
     assert env == {}
     assert shadow["screenShareProbe"] is False
+    assert shadow["screenShareVisionGate"] == "reframe_v2_off"
+
+
+def test_screen_share_route_skips_locked_user_layout(monkeypatch, tmp_path):
+    monkeypatch.setenv("REFRAME_V2_ENABLED", "1")
+    from clips_worker.screen_share_route import apply_screen_share_env
+
+    p = tmp_path / "v.mp4"
+    p.write_bytes(b"")
+    env, shadow = apply_screen_share_env(p, settings={"layout": "split"}, applied_layout="split")
+    assert env == {}
+    assert shadow["screenShareProbe"] is False
+    assert shadow["screenShareVisionGate"] == "layout_locked"

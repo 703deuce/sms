@@ -77,15 +77,15 @@ def classify_screen_share_from_samples(
     if face_cx_norm is not None and face_cy_norm is not None:
         corner = face_in_corner_norm(face_cx_norm, face_cy_norm)
 
-    # Tunable thresholds — high structure, low motion (slides/code), face optional but boosts confidence.
-    text_like = edge_mean >= 0.08
-    static_like = flow_mean <= 1.2
+    # Tunable thresholds — high structure, low motion (slides/code); corner face required to route.
+    text_like = edge_mean >= 0.075
+    static_like = flow_mean <= 1.35
     score = 0.0
     if text_like and static_like:
-        score = 0.55 + min(0.25, (edge_mean - 0.08) * 2.0) + min(0.15, (1.2 - flow_mean) / 8.0)
+        score = 0.5 + min(0.28, (edge_mean - 0.075) * 2.2) + min(0.17, (1.35 - flow_mean) / 9.0)
     if corner:
-        score = min(1.0, score + 0.2)
-    is_ss = score >= 0.55 and text_like and static_like and corner is not None
+        score = min(1.0, score + 0.22)
+    is_ss = score >= 0.58 and text_like and static_like and corner is not None
     return ScreenShareVerdict(is_screen_share=is_ss, confidence=round(score, 3), face_corner=corner)
 
 

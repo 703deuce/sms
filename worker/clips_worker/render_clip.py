@@ -271,7 +271,11 @@ def run_speakercrop(
     if render_meta is not None and route_shadow:
         render_meta["layoutRouteShadow"] = route_shadow
 
-    ss_env, ss_shadow = apply_screen_share_env(clip_src)
+    ss_env, ss_shadow = apply_screen_share_env(
+        clip_src,
+        settings=settings,
+        applied_layout=applied_layout,
+    )
     if ss_env:
         layout = ss_env.get("LAYOUT_MODE", layout)
         env.update(layout_env(layout))
