@@ -255,7 +255,10 @@ export async function listKickEventSubscriptions(broadcasterUserId: number): Pro
     `https://api.kick.com/public/v1/events/subscriptions?broadcaster_user_id=${encodeURIComponent(String(broadcasterUserId))}`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
-  if (!res.ok) return []
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Kick list subscriptions failed: ${res.status} ${text.slice(0, 300)}`)
+  }
   const json = (await res.json()) as {
     data?: { subscription_id?: string; id?: string; name?: string; event?: string; broadcaster_user_id: number }[]
   }
