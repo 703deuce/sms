@@ -24,6 +24,7 @@ export function EditorRecorderBar({
   onStart,
   onStop,
   onPause,
+  recordLabel = 'Record into script',
 }: {
   armed: boolean
   onDisarm: () => void
@@ -42,6 +43,7 @@ export function EditorRecorderBar({
   onStart: () => void
   onStop: () => void
   onPause: () => void
+  recordLabel?: string
 }) {
   if (!armed) return null
 
@@ -86,7 +88,7 @@ export function EditorRecorderBar({
         className={cn('h-8 gap-1 bg-lane-record text-white hover:bg-lane-record/90')}
         onClick={onStart}
       >
-        <span className="size-2 rounded-full bg-white" /> Record into script
+        <span className="size-2 rounded-full bg-white" /> {recordLabel}
         <ChevronDown className="size-4 opacity-80" />
       </Button>
       <Popover>

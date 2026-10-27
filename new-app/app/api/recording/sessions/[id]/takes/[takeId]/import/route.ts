@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
-import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
+import { isTrackUploadApiEnabled } from '@/lib/server/recording/solo-recording-gate'
 import { assertTakeTracksFullyUploaded } from '@/lib/server/recording/assert-take-uploaded'
 import { finalizeRecordingTakeToProject } from '@/lib/server/recording/finalize-take'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -11,7 +11,7 @@ type Params = { params: Promise<{ id: string; takeId: string }> }
 
 export async function POST(request: Request, { params }: Params) {
   try {
-    if (!isRecordingFeatureEnabled()) {
+    if (!isTrackUploadApiEnabled()) {
       return NextResponse.json({ error: 'Recording is not enabled' }, { status: 503 })
     }
     const { id: sessionId, takeId } = await params

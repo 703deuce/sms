@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
-import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
+import { isSoloRecordingApiEnabled } from '@/lib/server/recording/solo-recording-gate'
 import { getOrCreateEditorSoloSession } from '@/lib/server/recording/editor-session'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -10,7 +10,7 @@ type Params = { params: Promise<{ projectId: string }> }
 
 export async function POST(_request: Request, { params }: Params) {
   try {
-    if (!isRecordingFeatureEnabled()) {
+    if (!isSoloRecordingApiEnabled()) {
       return NextResponse.json({ error: 'Recording is not enabled' }, { status: 503 })
     }
     const { projectId } = await params

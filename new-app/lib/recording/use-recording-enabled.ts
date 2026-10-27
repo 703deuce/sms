@@ -1,22 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useRecordingConfig } from '@/lib/recording/use-recording-config'
 
+/** LiveKit Rooms recording (legacy name). */
 export function useRecordingEnabled() {
-  const [enabled, setEnabled] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/recording/config')
-      .then((r) => r.json())
-      .then((j) => {
-        if (!cancelled) setEnabled(Boolean(j.enabled))
-      })
-      .catch(() => {
-        if (!cancelled) setEnabled(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-  return enabled
+  const { roomsEnabled } = useRecordingConfig()
+  return roomsEnabled
+}
+
+export function useSoloRecordingEnabled() {
+  const { soloEnabled } = useRecordingConfig()
+  return soloEnabled
 }

@@ -16,6 +16,7 @@ import { useClipsDriveOptional } from '@/components/drive/clips-drive-context'
 import { formatRelativeTime } from '@/lib/format-relative-time'
 import { toast } from 'sonner'
 import { isScriptEditorEnabled } from '@/lib/features/script-editor'
+import { useSoloRecordingEnabled, useRecordingEnabled } from '@/lib/recording/use-recording-enabled'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,6 +60,9 @@ export function DriveHome({
   showAll?: boolean
 }) {
   const router = useRouter()
+  const soloRecordEnabled = useSoloRecordingEnabled()
+  const roomsRecordEnabled = useRecordingEnabled()
+  const recordHref = soloRecordEnabled ? '/app/record' : roomsRecordEnabled ? '/app/rooms/new' : null
   const drive = useClipsDriveOptional()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [layout, setLayout] = useState<'grid' | 'list'>('grid')
@@ -215,10 +219,12 @@ export function DriveHome({
 
       <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
         {pageView !== 'trash' && <NewFolderDialog variant="toolbar" />}
-        <Link href="/app/rooms/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-          <span className="mr-1 inline-block size-2 rounded-full bg-lane-record" />
-          Record
-        </Link>
+        {recordHref ? (
+          <Link href={recordHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            <span className="mr-1 inline-block size-2 rounded-full bg-lane-record" />
+            Record
+          </Link>
+        ) : null}
         {isT2vFeatureEnabled() ? (
           <Link href="/app/clips/video/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             <Clapperboard className="mr-1 size-4" />
@@ -364,10 +370,12 @@ export function DriveHome({
             <p className="text-xs text-muted-foreground">Upload a video or start recording.</p>
             <div className="flex gap-2">
               <PrimaryButton render={<Link href="/app/clips/new" />}>New project</PrimaryButton>
-              <Link href="/app/rooms/new" className={buttonVariants({ variant: 'outline' })}>
-                <Radio className="size-4" />
-                Record
-              </Link>
+              {recordHref ? (
+                <Link href={recordHref} className={buttonVariants({ variant: 'outline' })}>
+                  <Radio className="size-4" />
+                  Record
+                </Link>
+              ) : null}
             </div>
           </div>
         ) : layout === 'grid' ? (

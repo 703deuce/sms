@@ -29,7 +29,7 @@ import { isItemActive, type NavItem } from '@/lib/nav'
 import { isScreenwritingEnabled } from '@/lib/features/screenwriting'
 import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
-import { useRecordingEnabled } from '@/lib/recording/use-recording-enabled'
+import { useRecordingEnabled, useSoloRecordingEnabled } from '@/lib/recording/use-recording-enabled'
 import { cn } from '@/lib/utils'
 import {
   Sidebar,
@@ -85,6 +85,7 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
   const searchParams = useSearchParams()
   const { testMode } = useClipsWorkspace()
   const recordingEnabledClient = useRecordingEnabled()
+  const soloRecordingEnabled = useSoloRecordingEnabled()
   const recordingEnabled = recordingNavEnabled || recordingEnabledClient
   const activeSection = resolveActiveSidebarSection(pathname, searchParams)
   const t2vEnabled = isT2vFeatureEnabled()
@@ -104,6 +105,7 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
 
   const clipsItems: NavItem[] = [
     { title: 'Streamer', href: '/app/streamer', icon: Radio },
+    ...(soloRecordingEnabled ? [{ title: 'Record', href: '/app/record', icon: Video }] : []),
     { title: 'Exports', href: '/app/exports', icon: Download },
   ]
 
