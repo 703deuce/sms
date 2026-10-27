@@ -93,7 +93,7 @@ export function editorEditsReducer(state: State, action: Action): State {
       }
     }
     case 'saved':
-      return { ...state, saveState: 'saved' }
+      return { ...state, saveState: state.saveState === 'dirty' ? 'dirty' : 'saved' }
     case 'saving':
       return { ...state, saveState: 'saving' }
     default:
@@ -111,6 +111,7 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     producerStrip: null,
   })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveGenRef = useRef(0)
   const editsRef = useRef(state.edits)
   editsRef.current = state.edits
 
@@ -321,10 +322,15 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     if (debounceRef.current) clearTimeout(debounceRef.current)
     const savingUi = setTimeout(() => dispatch({ type: 'saving' }), 250)
     debounceRef.current = setTimeout(() => {
+      const gen = ++saveGenRef.current
       dispatch({ type: 'saving' })
       void patchClip(clipId, { edits: editsRef.current })
-        .then(() => dispatch({ type: 'saved' }))
-        .catch(() => dispatch({ type: 'saved' }))
+        .then(() => {
+          if (gen === saveGenRef.current) dispatch({ type: 'saved' })
+        })
+        .catch(() => {
+          if (gen === saveGenRef.current) dispatch({ type: 'saved' })
+        })
     }, 450)
     return () => {
       clearTimeout(savingUi)
@@ -375,12 +381,19 @@ export function useEditorState(clipId: string, bounds: ClipBounds, initialEdits:
     resetEdits: () => setEdits(defaultEdits(bounds), false),
     applyProducerPatch,
     flushSave: () => {
-      if (state.saveState === 'dirty') {
+      if (state.saveState === 'dirty' || state.saveState === 'saving') {
+        const gen = ++saveGenRef.current
         dispatch({ type: 'saving' })
-        void patchClip(clipId, { edits: editsRef.current })
-          .then(() => dispatch({ type: 'saved' }))
-          .catch(() => dispatch({ type: 'saved' }))
+        return patchClip(clipId, { edits: editsRef.current })
+          .then(() => {
+            if (gen === saveGenRef.current) dispatch({ type: 'saved' })
+          })
+          .catch(() => {
+            if (gen === saveGenRef.current) dispatch({ type: 'saved' })
+            throw new Error('Could not save edits')
+          })
       }
+      return Promise.resolve()
     },
   }
 }
