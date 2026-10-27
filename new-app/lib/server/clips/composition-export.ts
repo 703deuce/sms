@@ -5,17 +5,19 @@ import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getCompositionForWorkspace } from '@/lib/server/clips/script-composition'
 
-export type ScriptVideoExportSettings = {
+export type ScriptExportSettings = {
+  exportKind: 'video' | 'audio' | 'srt' | 'vtt' | 'txt' | 'md'
   resolution: '720p' | '1080p' | '4k'
   quality: 'recommended' | 'high' | 'medium' | 'low'
   burnCaptions: boolean
   includeSubtitleTrack: boolean
+  audioFormat?: 'wav' | 'mp3'
 }
 
-export async function enqueueCompositionVideoExport(
+export async function enqueueCompositionExport(
   workspaceId: string,
   compositionId: string,
-  settings: ScriptVideoExportSettings,
+  settings: ScriptExportSettings,
 ) {
   const row = await getCompositionForWorkspace(workspaceId, compositionId)
   if (!row) return null
@@ -74,6 +76,9 @@ export async function enqueueCompositionVideoExport(
 
   return { renderId, status: 'QUEUED' as const }
 }
+
+/** @deprecated use enqueueCompositionExport */
+export const enqueueCompositionVideoExport = enqueueCompositionExport
 
 export async function getCompositionRender(workspaceId: string, compositionId: string, renderId: string) {
   const prisma = getPrisma()

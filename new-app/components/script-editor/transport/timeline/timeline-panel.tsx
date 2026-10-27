@@ -5,11 +5,13 @@ import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import {
   buildSourceWordChips,
+  buildWordChips,
   groupWordbarItems,
   sourceTimelineClips,
   wordIndicesInOutputRange,
   outputRangeForWordIndices,
 } from '@/lib/clips/script-editor/timeline-model'
+import type { EdlSegment } from '@/lib/clips/script-edl/types'
 import type { SourceCutRegion } from '@/lib/clips/script-editor/cut-regions'
 import { TimelineRuler } from '@/components/script-editor/transport/timeline/timeline-ruler'
 import { TimelineCaptionsLane } from '@/components/script-editor/transport/timeline/timeline-captions-lane'
@@ -32,6 +34,7 @@ export function TimelinePanel({
   expanded,
   heightPx,
   document,
+  edl,
   orderedWords,
   deletedSet,
   rangeStartMs,
@@ -58,6 +61,7 @@ export function TimelinePanel({
   expanded: boolean
   heightPx: number
   document: ScriptDocumentV1
+  edl: EdlSegment[]
   orderedWords: EditorWord[]
   deletedSet: Set<string>
   rangeStartMs: number
@@ -82,10 +86,14 @@ export function TimelinePanel({
   onTrimClipEdge?: (clipKey: string, edge: 'start' | 'end', deltaOutMs: number) => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
-  const span = Math.max(1, sourceDurationMs)
+  const span = Math.max(1, sourceDurationMs, edl.reduce((m, s) => (s.kind === 'source' ? Math.max(m, s.outOutMs) : Math.max(m, s.outInMs + s.durMs)), 0))
   const widthPx = span * pxPerMs
 
   const chips = useMemo(
+    () => buildWordChips(document, orderedWords, edl, deletedSet),
+    [document, orderedWords, edl, deletedSet],
+  )
+  const sourceChips = useMemo(
     () => buildSourceWordChips(orderedWords, deletedSet, rangeStartMs),
     [orderedWords, deletedSet, rangeStartMs],
   )
@@ -96,8 +104,8 @@ export function TimelinePanel({
   const wordbarItems = useMemo(() => groupWordbarItems(wordbarChips, pxPerMs), [wordbarChips, pxPerMs])
   const gapChips = useMemo(() => [] as { outStartMs: number; outEndMs: number; label: string }[], [])
   const clips = useMemo(
-    () => sourceTimelineClips(orderedWords, deletedSet, rangeStartMs, sourceDurationMs),
-    [orderedWords, deletedSet, rangeStartMs, sourceDurationMs],
+    () => sourceTimelineClips(orderedWords, deletedSet, rangeStartMs, span),
+    [orderedWords, deletedSet, rangeStartMs, span],
   )
   const sceneMarkers = useMemo(() => sceneMarkersForTimeline(document), [document])
   const overlayClips = useMemo(() => overlayClipsForTimeline(document), [document])

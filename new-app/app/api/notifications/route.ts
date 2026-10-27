@@ -7,7 +7,12 @@ import { resolveWorkspaceId } from '@/lib/server/workspace'
 export async function GET(request: Request) {
   try {
     const workspaceId = await resolveWorkspaceId()
-    const userId = await resolveInternalUserId()
+    let userId: string
+    try {
+      userId = await resolveInternalUserId()
+    } catch {
+      return NextResponse.json({ data: { items: [], nextCursor: null } })
+    }
     const prisma = getPrisma()
     const url = new URL(request.url)
     const cursor = url.searchParams.get('cursor')

@@ -51,20 +51,25 @@ export function useScriptComposition(initial: {
       revisionRef.current,
       undoStackRef.current,
       redoStackRef.current,
+      documentRef.current,
     )
   }, [initial.compositionId])
 
   useEffect(() => {
     const persisted = loadPersistedUndo(initial.compositionId)
     if (!persisted) return
-    if (persisted.revision > revisionRef.current) {
+    if (persisted.revision >= revisionRef.current && persisted.document) {
+      setDocument(persisted.document)
+      revisionRef.current = persisted.revision
+      setRevision(persisted.revision)
+    } else if (persisted.revision > revisionRef.current) {
       revisionRef.current = persisted.revision
       setRevision(persisted.revision)
     }
     if (persisted.undo.length) undoStackRef.current = persisted.undo.map(cloneDocument)
     if (persisted.redo.length) redoStackRef.current = persisted.redo.map(cloneDocument)
     bumpStacks()
-  }, [initial.compositionId, bumpStacks])
+  }, [initial.compositionId, bumpStacks, setDocument])
 
   const enqueueServerOps = useCallback(
     (ops: ScriptCompositionOp[], rollbackDoc: ScriptDocumentV1, onRollback?: () => void) => {
@@ -95,6 +100,7 @@ export function useScriptComposition(initial: {
             res.revision,
             undoStackRef.current,
             redoStackRef.current,
+            documentRef.current,
           )
         })
         .catch(() => {

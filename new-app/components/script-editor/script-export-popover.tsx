@@ -60,11 +60,16 @@ export function ScriptExportPopover({
         void fetch(`/api/clips/compositions/${compositionId}/export/${rid}`)
           .then((r) => r.json())
           .then((data) => {
+            if (typeof data.progress === 'number') setProgress(data.progress)
             if (data.status === 'READY' && data.downloadUrl) {
               clearInterval(t)
               setProgress(100)
               setBusy(false)
-              toast.success('Export ready')
+              toast.success(
+                data.edlDurationMs && data.outputDurationMs
+                  ? `Export ready (${Math.round(data.outputDurationMs / 1000)}s)`
+                  : 'Export ready',
+              )
               window.open(data.downloadUrl, '_blank')
             } else if (data.status === 'FAILED') {
               clearInterval(t)
@@ -89,6 +94,7 @@ export function ScriptExportPopover({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          exportKind: 'video',
           resolution,
           quality,
           burnCaptions,

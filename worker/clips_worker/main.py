@@ -369,6 +369,9 @@ DISPATCH: dict[str, object] = {
     "MUSIC": handle_music,
     "THUMBNAIL": handle_thumbnail,
     "DUB": handle_dub,
+    "RENDER_SCRIPT_COMPOSITION": lambda conn, job, post_progress: __import__(
+        "clips_worker.script_composition_render", fromlist=["run_script_composition_render_job"]
+    ).run_script_composition_render_job(conn, job, post_progress),
 }
 
 
@@ -459,7 +462,13 @@ def main() -> None:
                             },
                         )
                         continue
-                    if job.get("type") in ("RENDER_CLIP", "MUSIC", "THUMBNAIL", "DUB"):
+                    if job.get("type") in (
+                        "RENDER_CLIP",
+                        "RENDER_SCRIPT_COMPOSITION",
+                        "MUSIC",
+                        "THUMBNAIL",
+                        "DUB",
+                    ):
                         if job.get("type") == "DUB":
                             payload = job.get("payload") or {}
                             if isinstance(payload, str):
@@ -481,6 +490,22 @@ def main() -> None:
                                 with conn.cursor() as cur:
                                     cur.execute(
                                         'UPDATE clip_renders SET status = %s, error = %s, "updatedAt" = NOW() WHERE id = %s',
+                                        ("FAILED", msg[:4000], rid),
+                                    )
+                                conn.commit()
+                        if job.get("type") == "RENDER_SCRIPT_COMPOSITION":
+                            payload = job.get("payload") or {}
+                            if isinstance(payload, str):
+                                payload = json.loads(payload)
+                            rid = payload.get("renderId")
+                            if rid:
+                                with conn.cursor() as cur:
+                                    cur.execute(
+                                        """
+                                        UPDATE script_composition_renders
+                                        SET status = %s, error = %s, "updatedAt" = NOW()
+                                        WHERE id = %s
+                                        """,
                                         ("FAILED", msg[:4000], rid),
                                     )
                                 conn.commit()

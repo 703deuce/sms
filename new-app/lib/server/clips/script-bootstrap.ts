@@ -48,7 +48,7 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
     : getClipStorage(driverHint)
 
   let transcript = await loadProjectTranscript(storage, project)
-  const durationMs = Math.max(0, project.rangeEndMs - project.rangeStartMs)
+  const rangeSpanMs = Math.max(0, project.rangeEndMs - project.rangeStartMs)
   let mediaAsset = project.scriptMediaAsset
   if (!mediaAsset && project.upload?.key) {
     const id = createId('sma')
@@ -57,7 +57,7 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
         id,
         projectId: project.id,
         workspaceId,
-        durationMs: durationMs || 1,
+        durationMs: rangeSpanMs || 1,
         sourceKey: project.upload.key,
       },
     })
@@ -75,6 +75,9 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
   }
   const sourceMediaId = resolveSourceMediaId(project)
   const editorWords: EditorWord[] = toEditorWords(sourceMediaId, transcript)
+  const lastWordEndMs = editorWords.reduce((m, w) => Math.max(m, w.t1Ms), project.rangeStartMs)
+  const assetDurationMs = mediaAsset?.durationMs ?? 0
+  const durationMs = Math.max(rangeSpanMs, assetDurationMs, lastWordEndMs - project.rangeStartMs)
   const composition = await ensureFullComposition(
     workspaceId,
     project.id,
@@ -100,6 +103,7 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
     rangeStartMs: project.rangeStartMs,
     rangeEndMs: project.rangeEndMs,
     durationMs,
+    mediaDurationMs: assetDurationMs || durationMs,
     wordCount: editorWords.length,
     enrichedAt: mediaAsset?.enrichedAt?.toISOString() ?? null,
     sourceVideoUrl,

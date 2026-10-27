@@ -21,9 +21,20 @@ export async function GET(
         downloadFilename: 'export.mp4',
       })
     }
+    const settings =
+      render.settings && typeof render.settings === 'object'
+        ? (render.settings as Record<string, unknown>)
+        : {}
+    const progress = typeof settings.progress === 'number' ? settings.progress : null
+    const edlDurationMs = typeof settings.edlDurationMs === 'number' ? settings.edlDurationMs : null
+    const outputDurationMs = typeof settings.outputDurationMs === 'number' ? settings.outputDurationMs : null
+
     return NextResponse.json({
       id: render.id,
       status: render.status,
+      progress,
+      edlDurationMs,
+      outputDurationMs,
       downloadUrl,
       error: render.error,
     })

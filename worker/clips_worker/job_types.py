@@ -16,6 +16,7 @@ JOB_TYPES: tuple[str, ...] = (
     "MUSIC",
     "THUMBNAIL",
     "DUB",
+    "RENDER_SCRIPT_COMPOSITION",
 )
 
 

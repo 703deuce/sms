@@ -3,8 +3,9 @@ import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 const MAX_STACK = 80
 
 export type PersistedUndoState = {
-  v: 1
+  v: 2
   revision: number
+  document?: ScriptDocumentV1
   undo: ScriptDocumentV1[]
   redo: ScriptDocumentV1[]
 }
@@ -19,7 +20,7 @@ export function loadPersistedUndo(compositionId: string): PersistedUndoState | n
     const raw = window.localStorage.getItem(storageKey(compositionId))
     if (!raw) return null
     const parsed = JSON.parse(raw) as PersistedUndoState
-    if (parsed?.v !== 1) return null
+    if (parsed?.v !== 1 && parsed?.v !== 2) return null
     if (!Array.isArray(parsed.undo) || !Array.isArray(parsed.redo)) return null
     return parsed
   } catch {
@@ -32,12 +33,14 @@ export function savePersistedUndo(
   revision: number,
   undo: ScriptDocumentV1[],
   redo: ScriptDocumentV1[],
+  document?: ScriptDocumentV1,
 ): void {
   if (typeof window === 'undefined') return
   try {
     const payload: PersistedUndoState = {
-      v: 1,
+      v: 2,
       revision,
+      document,
       undo: undo.slice(-MAX_STACK),
       redo: redo.slice(-MAX_STACK),
     }

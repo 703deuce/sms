@@ -54,7 +54,7 @@ import {
 } from '@/lib/clips/script-editor/reframe-keyframes'
 import type { ReframeCropRect, ScriptAspect, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
 import type { EditToolsTab } from '@/components/script-editor/side/script-edit-tools-panel'
-import { sourceCutRegions } from '@/lib/clips/script-editor/cut-regions'
+import { outputCutRegions } from '@/lib/clips/script-editor/cut-regions'
 import { ScriptTranscriptContextMenu } from '@/components/script-editor/script-transcript-context-menu'
 import { EditorRecorderBar } from '@/components/recording/editor/editor-recorder-bar'
 import { useEditorRecorder } from '@/components/recording/editor/use-editor-recorder'
@@ -67,6 +67,7 @@ export type ScriptBootstrapView = {
   projectId: string
   title: string
   durationMs: number
+  mediaDurationMs?: number
   rangeStartMs: number
   wordCount: number
   sourceVideoUrl: string | null
@@ -184,12 +185,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const activeIndex = useMemo(() => findActiveWordIndex(orderedWords, playheadMs), [orderedWords, playheadMs])
 
   const outDur = outputDurationMs(edl) || data.durationMs
-  const sourceSpanMs = Math.max(data.durationMs, outDur)
+  const sourceSpanMs = Math.max(data.mediaDurationMs ?? data.durationMs, data.durationMs, outDur)
   const playheadSourceMs = Math.max(0, playheadMs - data.rangeStartMs)
   const outputMs = sourceMsToOutputTime(playheadMs, edl) ?? playheadSourceMs
   const cutRegions = useMemo(
-    () => sourceCutRegions(orderedWords, deletedSet, data.rangeStartMs),
-    [orderedWords, deletedSet, data.rangeStartMs],
+    () => outputCutRegions(orderedWords, deletedSet, edl, data.rangeStartMs),
+    [orderedWords, deletedSet, edl, data.rangeStartMs],
   )
 
   const persistLayout = useCallback(() => {
@@ -706,9 +707,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const onFit = useCallback(() => {
     const shell = globalThis.document.querySelector('[data-script-shell]') as HTMLElement | null
     const viewW = shell ? shell.clientWidth - 80 : 800
-    setPxPerMs(Math.max(0.005, viewW / Math.max(1, sourceSpanMs)))
+    const span = Math.max(outDur, sourceSpanMs)
+    setPxPerMs(Math.max(0.005, viewW / Math.max(1, span)))
     setScrollLeftPx(0)
-  }, [sourceSpanMs])
+  }, [sourceSpanMs, outDur])
+
+  useEffect(() => {
+    onFit()
+  }, [onFit])
 
   const seekToSourceRelativeMs = useCallback(
     (srcRelMs: number) => {
@@ -1325,6 +1331,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           expanded={timelineExpanded}
           heightPx={timelineHeightPx}
           document={document}
+          edl={edl}
           orderedWords={orderedWords}
           deletedSet={deletedSet}
           rangeStartMs={data.rangeStartMs}
@@ -1343,7 +1350,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onZoom={onZoom}
           onFit={onFit}
           onScrollLeft={setScrollLeftPx}
-          onSeekOutput={seekToSourceRelativeMs}
+          onSeekOutput={seekToOutputMs}
           onSelectIndices={(lo, hi) => {
             setSelAnchor(lo)
             setSelEnd(hi)
