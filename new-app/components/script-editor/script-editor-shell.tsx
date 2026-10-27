@@ -324,14 +324,21 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   )
   const activeIndex = useMemo(() => findActiveWordIndex(orderedWords, playheadMs), [orderedWords, playheadMs])
 
-  const outDur = outputDurationMs(edl) || data.durationMs
+  const [probedMediaDurationMs, setProbedMediaDurationMs] = useState<number | null>(null)
+  const authoritativeMediaMs = Math.max(
+    data.mediaDurationMs ?? 0,
+    data.durationMs,
+    probedMediaDurationMs ?? 0,
+  )
+  const edlOutMs = outputDurationMs(edl) || data.durationMs
+  const outDur = Math.max(edlOutMs, authoritativeMediaMs)
   const timelineOutputMs = useMemo(() => {
     const edlEnd = edl.reduce(
       (m, s) => (s.kind === 'source' ? Math.max(m, s.outOutMs) : Math.max(m, s.outInMs + s.durMs)),
       0,
     )
-    return Math.max(1, outDur, edlEnd)
-  }, [edl, outDur])
+    return Math.max(1, outDur, edlEnd, authoritativeMediaMs)
+  }, [edl, outDur, authoritativeMediaMs])
   const lastSrcRel = useMemo(
     () => orderedWords.reduce((m, w) => Math.max(m, w.t1Ms), data.rangeStartMs) - data.rangeStartMs,
     [orderedWords, data.rangeStartMs],
@@ -2134,6 +2141,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                       preload="metadata"
                       playsInline
                       crossOrigin="anonymous"
+                      onLoadedMetadata={(e) => {
+                        const sec = e.currentTarget.duration
+                        if (Number.isFinite(sec) && sec > 0) {
+                          setProbedMediaDurationMs(Math.round(sec * 1000))
+                        }
+                      }}
                       onTimeUpdate={syncFromVideo}
                       onPlay={() => setPlaying(true)}
                       onPause={() => setPlaying(false)}
