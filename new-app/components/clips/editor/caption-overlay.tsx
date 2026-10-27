@@ -14,8 +14,10 @@ function positionClass(position: string) {
 }
 
 function displayCase(text: string, caseMode: string) {
-  if (caseMode === 'upper') return text.toUpperCase()
-  return text.charAt(0).toUpperCase() + text.slice(1)
+  const safe = typeof text === 'string' ? text : ''
+  if (!safe) return ''
+  if (caseMode === 'upper') return safe.toUpperCase()
+  return safe.charAt(0).toUpperCase() + safe.slice(1)
 }
 
 function animClass(animation: string) {

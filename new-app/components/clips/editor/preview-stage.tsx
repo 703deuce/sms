@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { keepSegments } from '@/lib/clips/edits'
@@ -16,6 +16,13 @@ import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
+}
+
+function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): boolean {
+  if (!track) return false
+  const mode = edits.layout?.mode ?? 'speaker_follow'
+  if (mode === 'center_crop' || mode === 'fill' || mode === 'fit' || mode === 'fit_blur') return false
+  return true
 }
 
 function aspectRatioParts(aspect: ExportAspect | undefined): { aw: number; ah: number } {
@@ -60,8 +67,10 @@ export function PreviewStage({
   const editsRef = useRef(edits)
   const trackRef = useRef(cropTrack)
   const aspect = edits.aspectRatio ?? '9:16'
+  const normalizedTrack = cropTrack ? normalizeCropTrack(cropTrack) : null
+  const cropPreview = Boolean(videoUrl && normalizedTrack && usesSpeakerCropPreview(edits, normalizedTrack))
   editsRef.current = edits
-  trackRef.current = cropTrack ? normalizeCropTrack(cropTrack) : null
+  trackRef.current = normalizedTrack
   const [box, setBox] = useState({ w: 0, h: 0 })
   const [playing, setPlaying] = useState(false)
   const [canPlay, setCanPlay] = useState(false)
@@ -144,7 +153,7 @@ export function PreviewStage({
       }
       onTick({ sourceMs: src, outputMs: out, playing: v ? !v.paused : playing })
 
-      if (v && track && box.h > 0 && Array.isArray(track.shots) && track.shots.length > 0) {
+      if (v && track && usesSpeakerCropPreview(e, track) && box.h > 0 && Array.isArray(track.shots) && track.shots.length > 0) {
         const s = box.h / track.H
         const fi = Math.round(((src - track.t0_ms) / 1000) * track.fps)
         const { i: shotI } = shotAt(track, src)
@@ -184,8 +193,13 @@ export function PreviewStage({
     return () => cancelAnimationFrame(raf)
   }, [box.h, box.w, onTick, playing])
 
-  const captionWords =
-    previewWords ?? captionWordsToClipWords(buildCaptionWords(words, edits))
+  const captionWords = useMemo(() => {
+    const raw = previewWords ?? captionWordsToClipWords(buildCaptionWords(words, edits))
+    return raw.map((w) => ({
+      ...w,
+      w: typeof w.w === 'string' ? w.w : String(w.w ?? ''),
+    }))
+  }, [previewWords, words, edits])
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'
 
@@ -205,7 +219,7 @@ export function PreviewStage({
             aria-hidden
           />
         ) : null}
-        {videoUrl && cropTrack ? (
+        {cropPreview ? (
           <>
             <video
               ref={blurRef}

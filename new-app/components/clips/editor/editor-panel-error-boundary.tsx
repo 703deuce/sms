@@ -16,7 +16,26 @@ export class EditorPanelErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error(`[clip-editor:${this.props.label}]`, error, info.componentStack)
+    const tag = '[clip-editor-panel-error]'
+    console.error(tag, {
+      panel: this.props.label,
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    })
+    if (typeof window !== 'undefined') {
+      void fetch('/api/clips/client-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          panel: this.props.label,
+          message: error.message,
+          stack: error.stack,
+          componentStack: info.componentStack,
+          href: window.location.href,
+        }),
+      }).catch(() => {})
+    }
   }
 
   render() {
