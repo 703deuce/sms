@@ -198,7 +198,13 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 else:
                     raise RuntimeError("no url or upload for segment fetch")
 
-                true_start_ms, corr = align_segment_ms(seg_path, audio_path, seg_start_s, seg_end_s)
+                true_start_ms, corr = align_segment_ms(
+                    seg_path,
+                    audio_path,
+                    seg_start_s,
+                    seg_end_s,
+                    log_context={"vodId": vod_id, "clipId": clip_id},
+                )
                 true_end_ms = int(end_ms + (true_start_ms - int(seg_start_s * 1000)))
 
                 seg_key = clip_segment_key(workspace_id, project_id, clip_id)

@@ -7,9 +7,24 @@ import subprocess
 from typing import Any
 
 LIVE_MSG = "We never record live streams. Paste the VOD after the stream ends."
+KICK_LIVE_MSG = "Kick streams are clipped after the stream ends. Paste the replay VOD when it is published."
 
 
-def map_ytdlp_error(stderr: str) -> str:
+def _platform_from_url(url: str) -> str:
+    u = url.lower()
+    if "kick.com" in u:
+        return "kick"
+    if "twitch.tv" in u:
+        return "twitch"
+    return ""
+
+
+def map_ytdlp_error(stderr: str, platform: str = "") -> str:
+    from clips_worker.streamer.import_errors import classify_ytdlp_import_error
+
+    specific = classify_ytdlp_import_error(stderr, platform)
+    if specific:
+        return specific
     s = stderr.lower()
     if "subscriber" in s or "requires authentication" in s:
         return "This VOD is subscriber-only. Download it from your dashboard and upload the file."
@@ -26,7 +41,10 @@ def map_ytdlp_error(stderr: str) -> str:
     return stderr.strip()[:500] or "Download failed"
 
 
-def metadata(url: str, timeout_s: int = 60) -> dict[str, Any]:
+def metadata(url: str, timeout_s: int = 60, *, allow_twitch_growing_vod: bool = False) -> dict[str, Any]:
+    from clips_worker.streamer.import_errors import classify_metadata, classify_ytdlp_import_error
+
+    platform = _platform_from_url(url)
     proc = subprocess.run(
         ["yt-dlp", "-J", "--no-download", "--no-playlist", url],
         capture_output=True,
@@ -34,12 +52,23 @@ def metadata(url: str, timeout_s: int = 60) -> dict[str, Any]:
         timeout=timeout_s,
     )
     if proc.returncode != 0:
-        raise RuntimeError(map_ytdlp_error(proc.stderr or proc.stdout))
+        specific = classify_ytdlp_import_error(proc.stderr or proc.stdout, platform)
+        raise RuntimeError(specific or map_ytdlp_error(proc.stderr or proc.stdout))
     data = json.loads(proc.stdout)
+    meta_err = classify_metadata(data, platform)
+    if meta_err and platform != "twitch":
+        raise RuntimeError(meta_err)
     live = data.get("is_live")
     live_status = (data.get("live_status") or "").lower()
+    if platform == "kick" and (live or live_status in ("is_live", "is_upcoming")):
+        raise RuntimeError(KICK_LIVE_MSG)
     if live or live_status in ("is_live", "is_upcoming"):
+        if allow_twitch_growing_vod and platform == "twitch":
+            data["growing_vod"] = True
+            return data
         raise RuntimeError(LIVE_MSG)
+    if meta_err:
+        raise RuntimeError(meta_err)
     return data
 
 

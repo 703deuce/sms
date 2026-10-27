@@ -28,6 +28,7 @@ from clips_worker.streamer.viewer_clips.fetch import fetch_viewer_clips_for_vod
 from clips_worker.streamer.chat.resolve import resolve_chat_after_transcribe
 from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.metadata import enrich_streamer_meta
+from clips_worker.streamer.chunk_signals import ensure_chunk_signals_stored, merge_chunk_signal_curves
 from clips_worker.streamer.rank import rank_moments
 from clips_worker.streamer.collab_detect import CollabDetection, detect_collab, log_collab_detection
 from clips_worker.streamer.modal_transcribe import log_stream_modal_chunk
@@ -101,8 +102,21 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         chunk_ms = CHUNK_MIN * 60 * 1000
         overlap_ms = CHUNK_OVERLAP_S * 1000
         ranges = plan_chunks(duration_ms, chunk_ms, overlap_ms)
+        state["chunkPlan"] = {
+            "v": 1,
+            "chunkMs": chunk_ms,
+            "overlapMs": overlap_ms,
+            "ranges": [{"startMs": s, "endMs": e} for s, e in ranges],
+        }
+        _save_state(conn, vod_id, state)
+        print(
+            f"[clipper:stream] analyze_chunk_plan vodId={vod_id} chunks={len(ranges)} "
+            f"chunkMin={CHUNK_MIN} overlapS={CHUNK_OVERLAP_S}",
+            flush=True,
+        )
         chunks_state = state.get("chunks") or {}
         done = {int(k) for k, v in chunks_state.items() if v.get("wordsKey")}
+        chunk_signal_payloads: list[dict] = []
 
         scratch = (SCRATCH / f"analyze_{vod_id}").resolve()
         scratch.mkdir(parents=True, exist_ok=True)
@@ -149,14 +163,39 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         chat_future = chat_executor.submit(get_chat, vod, None)
         all_word_chunks: list[list[dict] | None] = [None] * len(ranges)
         for idx, (start_ms, end_ms) in enumerate(ranges):
+            chunk_path = scratch / f"chunk_{idx}.opus"
             if idx in done:
                 wkey = chunks_state[str(idx)]["wordsKey"]
                 wp = scratch / f"words_{idx}.json"
                 download_object(wkey, wp)
                 all_word_chunks[idx] = json.loads(wp.read_text())
+                if not chunk_path.exists():
+                    ffmpeg_slice_opus(audio_path, chunk_path, start_ms, end_ms)
+                skey_existing = (chunks_state.get(str(idx)) or {}).get("signalsKey")
+
+                def _upload_sig(p: Path, _idx=idx) -> None:
+                    sk = stream_chunk_key(workspace_id, vod_id, _idx, "signals.json")
+                    upload_file(sk, p, "application/json")
+
+                chunk_signal_payloads.append(
+                    ensure_chunk_signals_stored(
+                        chunk_audio=chunk_path,
+                        words=all_word_chunks[idx] or [],
+                        vod_start_ms=start_ms,
+                        vod_end_ms=end_ms,
+                        signals_key=skey_existing,
+                        scratch=scratch,
+                        chunk_index=idx,
+                        upload_fn=_upload_sig,
+                    )
+                )
+                if not skey_existing:
+                    sk = stream_chunk_key(workspace_id, vod_id, idx, "signals.json")
+                    chunks_state[str(idx)] = {**(chunks_state.get(str(idx)) or {}), "signalsKey": sk}
+                    state["chunks"] = chunks_state
+                    _save_state(conn, vod_id, state)
                 continue
 
-            chunk_path = scratch / f"chunk_{idx}.opus"
             ffmpeg_slice_opus(audio_path, chunk_path, start_ms, end_ms)
             ck = stream_chunk_key(workspace_id, vod_id, idx, "opus")
             upload_file(ck, chunk_path, "audio/opus")
@@ -203,6 +242,26 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             state["analyzeStartedAt"] = state.get("analyzeStartedAt") or chunk_started
             _save_state(conn, vod_id, state)
             all_word_chunks[idx] = res.words
+
+            def _upload_sig_fresh(p: Path, _idx=idx) -> None:
+                sk = stream_chunk_key(workspace_id, vod_id, _idx, "signals.json")
+                upload_file(sk, p, "application/json")
+
+            sig_payload = ensure_chunk_signals_stored(
+                chunk_audio=chunk_path,
+                words=res.words,
+                vod_start_ms=start_ms,
+                vod_end_ms=end_ms,
+                signals_key=None,
+                scratch=scratch,
+                chunk_index=idx,
+                upload_fn=_upload_sig_fresh,
+            )
+            chunk_signal_payloads.append(sig_payload)
+            sk = stream_chunk_key(workspace_id, vod_id, idx, "signals.json")
+            chunks_state[str(idx)]["signalsKey"] = sk
+            state["chunks"] = chunks_state
+            _save_state(conn, vod_id, state)
 
             done_n = len([k for k, v in chunks_state.items() if v.get("wordsKey")])
             payload_prog = analyze_progress_payload(
@@ -275,6 +334,8 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             )
         conn.commit()
         viewer_clips = fetch_viewer_clips_for_vod(vod, conn)
+        duration_s = max(1, int(duration_ms / 1000))
+        vod_signal_curves = merge_chunk_signal_curves(chunk_signal_payloads, duration_s)
         picks, signals_payload = rank_moments(
             audio_path=audio_path,
             words=words,
@@ -283,7 +344,10 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             chapters=chapters if isinstance(chapters, list) else None,
             chat_messages=chat_messages,
             viewer_clips=viewer_clips or None,
+            vod_signal_curves=vod_signal_curves,
         )
+        signals_payload["chunkedSignals"] = True
+        signals_payload["chunkCount"] = len(chunk_signal_payloads)
         sig_key = stream_signals_key(workspace_id, vod_id)
         put_json(sig_key, signals_payload)
         cand_key = stream_candidates_key(workspace_id, vod_id)
