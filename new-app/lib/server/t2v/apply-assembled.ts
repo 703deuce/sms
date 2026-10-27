@@ -6,10 +6,10 @@ import { draftToComposition } from '@/lib/server/t2v/to-composition'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { getPrisma } from '@/lib/server/db'
 import { deleteClipStorageObjectIfOrphan } from '@/lib/server/storage/delete-object'
+import { projectHasQueuedOrRunningRenderOrExport } from '@/lib/server/t2v/project-active-renders'
+import { isT2vAssembledSourceKey } from '@/lib/server/t2v/source-key'
 import { getClipStorage, storageDriverName } from '@/lib/storage'
 import { createId } from '@/lib/supabase/id'
-
-const PRIOR_SOURCE_KEY_RE = /\/t2v\/source_r\d+_[^/]+\.mp4$/
 
 export async function applyT2vAssembled(input: {
   workspaceId: string
@@ -23,6 +23,10 @@ export async function applyT2vAssembled(input: {
   words: Array<{ w: string; s: number; e: number; i: number; spk?: number }>
 }) {
   const prisma = getPrisma()
+
+  if (!isT2vAssembledSourceKey(input.workspaceId, input.projectId, input.sourceKey)) {
+    throw new Error('invalid_source_key')
+  }
 
   if (input.jobId) {
     const job = await prisma.clipJob.findUnique({
@@ -185,8 +189,15 @@ export async function applyT2vAssembled(input: {
     await getClipStorage().putJson(result.project.transcriptKey, input.words)
   }
 
-  if (priorSourceKey && PRIOR_SOURCE_KEY_RE.test(priorSourceKey) && priorSourceKey !== input.sourceKey) {
-    void deleteClipStorageObjectIfOrphan(priorSourceKey, priorSourceDriver).catch(() => {})
+  if (
+    priorSourceKey &&
+    priorSourceKey !== input.sourceKey &&
+    isT2vAssembledSourceKey(input.workspaceId, input.projectId, priorSourceKey)
+  ) {
+    const deferDelete = await projectHasQueuedOrRunningRenderOrExport(prisma, input.projectId)
+    if (!deferDelete) {
+      void deleteClipStorageObjectIfOrphan(priorSourceKey, priorSourceDriver).catch(() => {})
+    }
   }
 
   return { projectId: input.projectId, uploadId }

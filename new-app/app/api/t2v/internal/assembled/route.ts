@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { applyT2vAssembled } from '@/lib/server/t2v/apply-assembled'
+import { isT2vAssembledSourceKey } from '@/lib/server/t2v/source-key'
 
 const schema = z.object({
   draftId: z.string(),
@@ -31,6 +32,9 @@ export async function POST(request: Request) {
   }
   try {
     const body = schema.parse(JSON.parse(raw))
+    if (!isT2vAssembledSourceKey(body.workspaceId, body.projectId, body.sourceKey)) {
+      return NextResponse.json({ error: 'invalid_source_key' }, { status: 400 })
+    }
     const data = await applyT2vAssembled(body)
     return NextResponse.json({ data })
   } catch (err) {
