@@ -23,7 +23,7 @@
 | Filler / gaps | Lightweight **enrichment at transcript-ready** (additive JSON fields on stored transcript); **backfill on first editor open** if missing. |
 | Launch breadth | **Full Descript-class editor at launch** — everything in spec **§B5** that was “Later” is now **launch-required** (scenes, layouts, markers/chapters, media/B-roll, music, Studio Sound, LLM transcript tools, comments). See §0.1. |
 | Still post-launch | **Eye Contact**, **Overdub / Regenerate AI voice**, **Underlord AI chat** — remain with **AI Studio on hold**. |
-| Recording | **Launch-required** browser recorder + Rooms (**M14–M16**). **Vendor: LiveKit Cloud** (owner 2026-10-27). **Do not** implement LiveKit API until owner brief from official docs. **M18:** desktop menu-bar recorder (post-launch). Design: §2.7 + gap-matrix §R + `descript/recording-cost.md`. |
+| Recording | **Launch-required** browser recorder + Rooms (**M14–M16**). **Vendor: LiveKit Cloud** (owner 2026-10-27). **API normative doc:** `docs/clips/descript/livekit-api-brief.md`. **Do not** start M14–M16 until **M5–M13** editor train is done (current phase: **M4.1** → **M5**). **M18:** desktop menu-bar recorder (post-launch). Design: §2.7 + gap-matrix §R + `recording-cost.md`. |
 | Descript map | **596** features / **485** Launch — `docs/clips/descript/feature-map.md`. Gap matrix drives **M7–M17** and **§D1b** tests. |
 | Shortcuts | Descript doc conflicts resolved per **gap-matrix §4 C1** (⌘G = find next; `S` = split; ⇧⌘S + ⌃⌥T = timeline). |
 
@@ -90,7 +90,7 @@ Done = corresponding **§D1** browser tests pass on **transovo.ai** (fixture `te
 | **M11** | Audio | **D1b 115–120** | Studio Sound, leveling, room tone — **B10** |
 | **M12** | Markers, retakes, sequences | **D1b 121–130** | **B11** |
 | **M13** | Comments, ⌘K, formatting | **D1b 131–140** | **B12–B13** |
-| **M14–M16** | Recording I–III | **D1b 141–161** | §R — LiveKit Cloud after owner API brief |
+| **M14–M16** | Recording I–III | **D1b 141–161** | §R + **`livekit-api-brief.md`** (tokens, webhook, 1080 local / 720 SFU clone, RPC rec-control) |
 | **M17** | Export + settings | **D1b 162–167** | **C3** additions, app settings |
 | **M18** | Desktop recorder (post-launch) | — | gap-matrix R1.2 |
 
@@ -250,9 +250,9 @@ Uploads and “project clips” still resolve to `stock_assets` or generation ro
 
 ### 2.7 Recording takes — forward-compatible source (owner, 2026-10-27; **M14–M16**, **M18** desktop)
 
-**Do not implement LiveKit or capture UI until M14** (and **not** LiveKit API details until owner brief). Model must allow a **recorded take** (multi-track) to replace or supplement today’s single `sourceKey` upload without breaking M2/M3 **word ids**, **EDL**, or op log.
+**Do not implement LiveKit routes, Rooms UI, or capture UI until M14** (after **M5–M13**). **When M14 starts**, implement only against **`docs/clips/descript/livekit-api-brief.md`** (pinned SDK versions, no guessed APIs). Model must allow a **recorded take** (multi-track) to replace or supplement today’s single `sourceKey` upload without breaking M2/M3 **word ids**, **EDL**, or op log.
 
-**Architecture (gap-matrix §R):** browser **MediaRecorder** → chunked upload to B2 (same resumable uploader as B6 import); LiveKit Cloud is **preview/signaling only** for Rooms (M15). Optional composite egress backup is off by default. Cost model: `docs/clips/descript/recording-cost.md`. **Vendor decision:** LiveKit Cloud Ship at launch.
+**Architecture (gap-matrix §R + livekit brief):** browser **MediaRecorder** at **1080p** (or device max) → chunked upload to B2 (same resumable uploader as B6 import); LiveKit Cloud carries **720p preview clone** + signaling for Rooms (M15). **Device changes:** `LocalTrack.replaceTrack`, not ControlBar menus — custom toggles per brief §4. **Start/stop:** RPC `clock.now` sync + reliable data + room metadata (brief §5). **Webhooks:** `POST /api/recording/livekit/webhook` with **raw body** + `WebhookReceiver` (brief §2.3). **Env:** `LIVEKIT_*` in Coolify; `lib/server/livekit/env.ts` fails fast if missing. Optional composite egress backup is off by default. Cost model: `docs/clips/descript/recording-cost.md`.
 
 | Concept | Design |
 |---------|--------|

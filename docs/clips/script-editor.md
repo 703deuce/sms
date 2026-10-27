@@ -430,7 +430,7 @@ Milestones:
 - **M11** Audio (Studio Sound, leveling, …)
 - **M12** Markers, retakes, sequences, multicam
 - **M13** Comments, ⌘K, script formatting
-- **M14–M16** Recording (browser; LiveKit Cloud)
+- **M14–M16** Recording (browser; LiveKit Cloud — see `docs/clips/descript/livekit-api-brief.md`; start after M5–M13)
 - **M17** Export + app settings completion
 - **M18** Desktop recorder (post-launch)
 

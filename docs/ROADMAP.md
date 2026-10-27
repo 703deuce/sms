@@ -22,7 +22,7 @@ Single source of truth for build order and status. Update the **Last updated** l
 
 | Phase | Product | Scope |
 |-------|---------|--------|
-| **1** | **Script editor** | Full **Descript-style** editor **including recording** (M14–M16 browser, LiveKit Cloud; M18 desktop post-launch). M1–M6 core + **M7–M17** per gap matrix. See `docs/clips/SCRIPT-EDITOR-BUILD.md` + `docs/clips/descript/`. |
+| **1** | **Script editor** | Full **Descript-style** editor **including recording** (M14–M16 browser after M5–M13; LiveKit per `docs/clips/descript/livekit-api-brief.md`; M18 desktop post-launch). M1–M6 core + **M7–M17** per gap matrix. See `docs/clips/SCRIPT-EDITOR-BUILD.md` + `docs/clips/descript/`. |
 | **2** | **Clipper (best-in-class)** | **3–5 person** tracking with **re-ID**; **auto layouts** — full frame, single follow, **2-person split**, **4-person grid** (upsize panels); **varied clip and edit styles**; **calmer speaker-follow** — Deepgram diarization primary, **LEAD ≤ 0**, **MIN_SEG 2–3 s**, **hold on dropout**; full [polish list](#2-clipper-best-in-class-phase-2) below. |
 | **3** | **Streamer** | **Full Streamer** product — **near-real-time VOD clipping** (not true live). Resumable VOD, S2–S15 per `docs/clips/STREAMER_BUILD_SPEC.md` / `PROGRESS.md`. |
 | **4** | **UI polish** | **Every page** — consistent UX, loading/empty/error, performance; **last** after 1–3. |

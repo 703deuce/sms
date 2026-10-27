@@ -1317,6 +1317,8 @@ Descript records in three places:
 
 Every recording row in feature map §6.1–6.7 is Launch. Transovo builds everything browser-first. Only the items in §R1.2 need a desktop companion (M18).
 
+**LiveKit Cloud (M15–M16):** normative API + file layout is **`livekit-api-brief.md`** in this folder (official docs + SDK source, 2026-10-26). Pinned packages: `livekit-client@2.23.0`, `@livekit/components-react@2.9.24`, `@livekit/components-styles@1.2.0`, `livekit-server-sdk@2.19.2`. **Do not** start recording milestones until **M5–M13** editor work is complete. **Coolify env** (owner-provisioned): `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `NEXT_PUBLIC_LIVEKIT_URL`.
+
 ### R1. Browser vs desktop feasibility
 
 #### R1.1 Feasible in the browser (Chrome/Edge primary, Firefox/Safari secondary)
