@@ -1,4 +1,6 @@
+import type { BrollItem } from '@/lib/clips/broll'
 import { applySymmetricGapTrim, symmetricGapTrimMs } from '@/lib/clips/script-edl/word-adjust'
+import type { ClipEditsAudio } from '@/lib/clips/audio'
 import type { ReframeCropRect, ScriptDocumentV1, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
 
 export type DeleteWordsOp = { type: 'delete_words'; wordIds: string[] }
@@ -49,6 +51,10 @@ export type AddSceneAtWordOp = {
 }
 export type RemoveSceneOp = { type: 'remove_scene'; sceneId: string }
 export type ReorderScenesOp = { type: 'reorder_scenes'; sceneIds: string[] }
+export type PatchBrollOp = { type: 'patch_broll'; broll: BrollItem[] }
+export type AddMarkerOp = { type: 'add_marker'; outMs: number; markerId?: string; label?: string }
+export type RemoveMarkerOp = { type: 'remove_marker'; markerId: string }
+export type PatchAudioOp = { type: 'patch_audio'; audio: ClipEditsAudio | null }
 
 export type ScriptCompositionOp =
   | DeleteWordsOp
@@ -73,6 +79,10 @@ export type ScriptCompositionOp =
   | AddSceneAtWordOp
   | RemoveSceneOp
   | ReorderScenesOp
+  | PatchBrollOp
+  | AddMarkerOp
+  | RemoveMarkerOp
+  | PatchAudioOp
 
 export function emptyDocument(allWordIds: string[]): ScriptDocumentV1 {
   return { v: 1, keptWordIds: [...allWordIds], deletedWordIds: [], wordOrder: [...allWordIds] }
@@ -104,9 +114,11 @@ function finalizeDoc(
     splitAtOutMs: partial.splitAtOutMs ?? document.splitAtOutMs,
     padBeforeMs: partial.padBeforeMs ?? document.padBeforeMs,
     scenes: partial.scenes !== undefined ? partial.scenes : document.scenes,
-    markers: document.markers,
+    markers: partial.markers !== undefined ? partial.markers : document.markers,
     overlays: document.overlays,
     musicTracks: document.musicTracks,
+    broll: partial.broll !== undefined ? partial.broll : document.broll,
+    audio: partial.audio !== undefined ? partial.audio : document.audio,
     settings: partial.settings ?? document.settings,
     ignoredWordIds:
       partial.ignoredWordIds !== undefined
@@ -138,6 +150,9 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
   let reframeKeyframes = document.reframeKeyframes ? [...document.reframeKeyframes] : undefined
   let settings = document.settings
   let scenes = document.scenes ? [...document.scenes] : undefined
+  let markers = document.markers ? [...document.markers] : undefined
+  let broll = document.broll ? [...document.broll] : undefined
+  let audio = document.audio
 
   if (op.type === 'delete_words') {
     for (const id of op.wordIds) {
@@ -304,6 +319,23 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     const byId = new Map((scenes ?? []).map((s) => [s.id, s]))
     const next = op.sceneIds.map((id) => byId.get(id)).filter((s): s is NonNullable<typeof s> => Boolean(s))
     scenes = next.length ? next : undefined
+  } else if (op.type === 'patch_broll') {
+    broll = [...op.broll]
+  } else if (op.type === 'patch_audio') {
+    audio = op.audio ?? undefined
+  } else if (op.type === 'add_marker') {
+    markers = markers ?? []
+    const id = op.markerId ?? `mrk_${Math.round(op.outMs)}`
+    markers.push({
+      id,
+      outMs: Math.max(0, Math.round(op.outMs)),
+      label: op.label,
+      exportAsChapter: true,
+    })
+    markers.sort((a, b) => a.outMs - b.outMs)
+  } else if (op.type === 'remove_marker') {
+    markers = (markers ?? []).filter((m) => m.id !== op.markerId)
+    if (!markers.length) markers = undefined
   }
 
   return finalizeDoc(document, order, kept, deleted, {
@@ -316,6 +348,9 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     wordSourceAdjust,
     reframeKeyframes,
     scenes,
+    markers,
+    broll,
+    audio,
   })
 }
 

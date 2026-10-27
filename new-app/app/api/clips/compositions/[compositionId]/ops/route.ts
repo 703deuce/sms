@@ -105,6 +105,37 @@ const opSchema = z.discriminatedUnion('type', [
     type: z.literal('reorder_scenes'),
     sceneIds: z.array(z.string().min(8)).min(1),
   }),
+  z.object({
+    type: z.literal('patch_broll'),
+    broll: z.array(
+      z.union([
+        z.object({
+          id: z.string().min(1),
+          source: z.literal('stock'),
+          assetId: z.string().min(1),
+          startMs: z.number().min(0),
+          endMs: z.number().min(0),
+          placement: z.enum(['auto', 'manual']).optional(),
+        }),
+        z.object({
+          id: z.string().min(1),
+          source: z.literal('ai'),
+          generationId: z.string().min(1),
+          startMs: z.number().min(0),
+          endMs: z.number().min(0),
+          placement: z.enum(['auto', 'manual']).optional(),
+        }),
+      ]),
+    ),
+  }),
+  z.object({
+    type: z.literal('add_marker'),
+    outMs: z.number().min(0),
+    markerId: z.string().min(8).optional(),
+    label: z.string().max(120).optional(),
+  }),
+  z.object({ type: z.literal('remove_marker'), markerId: z.string().min(8) }),
+  z.object({ type: z.literal('patch_audio'), audio: z.record(z.string(), z.unknown()).nullable() }),
 ])
 
 const bodySchema = z.object({

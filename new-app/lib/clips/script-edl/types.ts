@@ -1,3 +1,6 @@
+import type { BrollItem } from '@/lib/clips/broll'
+import type { ClipEditsAudio } from '@/lib/clips/audio'
+
 export type EdlSourceSegment = {
   kind: 'source'
   srcInMs: number
@@ -74,6 +77,10 @@ export type ScriptDocumentV1 = {
   }[]
   /** M10+ — music clips on output timeline. */
   musicTracks?: { id: string; assetId: string; outStartMs: number; durMs: number; label?: string; duckUnderSpeech?: boolean }[]
+  /** Clipper-compatible B-roll (worker `load_broll_specs`). */
+  broll?: BrollItem[]
+  /** Clipper-compatible audio (worker `load_audio_assets`). */
+  audio?: ClipEditsAudio
   /** M4 — canvas pills + side panels (aspect, captions, volume). */
   settings?: ScriptEditorSettings
   /** M4 — playback skipped, struck-through in script (spec §B2 ignore). */

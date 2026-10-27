@@ -45,6 +45,7 @@ import { ScriptEditorRail, type ScriptSideTab } from '@/components/script-editor
 import { ScriptCaptionsPanel } from '@/components/script-editor/side/script-captions-panel'
 import { ScriptPropertiesPanel } from '@/components/script-editor/side/script-properties-panel'
 import { ScriptEditToolsPanel } from '@/components/script-editor/side/script-edit-tools-panel'
+import { ScriptMediaPanel } from '@/components/script-editor/side/script-media-panel'
 import { PreviewPillBar } from '@/components/script-editor/preview/preview-pill-bar'
 import { ScriptCaptionOverlay } from '@/components/script-editor/preview/script-caption-overlay'
 import { resolveScriptSettings } from '@/lib/clips/script-editor/default-settings'
@@ -868,6 +869,20 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         return
       }
 
+      if (e.key === '#' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const tag = (e.target as HTMLElement | null)?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+          e.preventDefault()
+          safeApplyOp({
+            type: 'add_marker',
+            outMs: Math.round(outputMs),
+            markerId: `mrk_${crypto.randomUUID().replace(/-/g, '')}`,
+            label: `Marker ${(document.markers?.length ?? 0) + 1}`,
+          })
+          toast.success('Marker at playhead')
+        }
+      }
+
       if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const tag = (e.target as HTMLElement | null)?.tagName
         if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
@@ -949,6 +964,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     activeIndex,
     orderedWords,
     safeApplyOp,
+    document.markers,
+    outputMs,
   ])
 
   const saveProjectScroll = useCallback(() => {
@@ -1481,7 +1498,13 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           {sideOpen && (
             <aside className="hidden h-full min-h-0 w-[min(100%,320px)] shrink-0 flex-col overflow-hidden border-l border-border bg-background lg:flex">
               <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
-                {sideTab === 'properties' ? 'Properties' : sideTab === 'captions' ? 'Captions' : 'Edit tools'}
+                {sideTab === 'properties'
+                  ? 'Properties'
+                  : sideTab === 'captions'
+                    ? 'Captions'
+                    : sideTab === 'media'
+                      ? 'Media'
+                      : 'Edit tools'}
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {sideTab === 'properties' && (
@@ -1500,6 +1523,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                   />
                 )}
                 {sideTab === 'captions' && <ScriptCaptionsPanel settings={settings} onPatch={patchSettings} />}
+                {sideTab === 'media' && (
+                  <ScriptMediaPanel
+                    compositionId={data.compositionId}
+                    document={document}
+                    outputDurationMs={outDur}
+                    playheadOutMs={outputMs}
+                    onPatchBroll={(next) => safeApplyOp({ type: 'patch_broll', broll: next })}
+                  />
+                )}
                 {sideTab === 'edit' && (
                   <ScriptEditToolsPanel
                     tab={editToolsTab}

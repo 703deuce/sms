@@ -1,9 +1,9 @@
 'use client'
 
-import { Captions, SlidersHorizontal, Wand2 } from 'lucide-react'
+import { Captions, Film, SlidersHorizontal, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type ScriptSideTab = 'properties' | 'captions' | 'edit'
+export type ScriptSideTab = 'properties' | 'captions' | 'edit' | 'media'
 
 export function ScriptEditorRail({
   active,
@@ -18,6 +18,7 @@ export function ScriptEditorRail({
     { id: 'properties', label: 'Properties', icon: SlidersHorizontal },
     { id: 'captions', label: 'Captions', icon: Captions },
     { id: 'edit', label: 'Edit tools', icon: Wand2 },
+    { id: 'media', label: 'Media', icon: Film },
   ]
 
   return (

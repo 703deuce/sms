@@ -28,6 +28,8 @@ export function parseScriptCompositionDocument(raw: unknown): ScriptDocumentV1 {
     markers: Array.isArray(d.markers) ? d.markers : undefined,
     overlays: Array.isArray(d.overlays) ? d.overlays : undefined,
     musicTracks: Array.isArray(d.musicTracks) ? d.musicTracks : undefined,
+    broll: Array.isArray(d.broll) ? d.broll : undefined,
+    audio: d.audio && typeof d.audio === 'object' ? d.audio : undefined,
     settings: d.settings && typeof d.settings === 'object' ? d.settings : undefined,
     ignoredWordIds: Array.isArray(d.ignoredWordIds) ? d.ignoredWordIds.map(String) : undefined,
     transcriptHiddenWordIds: Array.isArray(d.transcriptHiddenWordIds)

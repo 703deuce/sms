@@ -217,7 +217,31 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
         edits = _document_settings_edits(document, project_settings)
         edits["trim"] = {"in": trim_in, "out": trim_out}
         edits["cutRanges"] = cut_ranges
+        broll = document.get("broll") or []
+        if broll:
+            edits["broll"] = broll
+        audio = document.get("audio")
+        if audio:
+            edits["audio"] = audio
+        elif document.get("musicTracks"):
+            mt = document["musicTracks"][0]
+            if mt.get("assetId"):
+                edits["audio"] = {
+                    "music": {
+                        "generationId": mt["assetId"],
+                        "volume": 0.25,
+                        "duckDepth": 0.7 if mt.get("duckUnderSpeech") else 0.3,
+                        "fadeInMs": 500,
+                        "fadeOutMs": 1000,
+                    }
+                }
         edits = normalize_edits(edits, trim_in, trim_out)
+
+        from clips_worker.broll_render import load_broll_specs
+        from clips_worker.audio_assets import load_audio_assets
+
+        broll_specs = load_broll_specs(conn, edits, td_path) or None
+        audio_assets = load_audio_assets(conn, edits, td_path) or None
 
         render_settings = {
             **project_settings,
@@ -244,8 +268,8 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             trim_out,
             render_settings,
             td_path,
-            broll_specs=None,
-            audio_assets=None,
+            broll_specs=broll_specs,
+            audio_assets=audio_assets,
             render_id=render_id,
             render_meta={},
         )
