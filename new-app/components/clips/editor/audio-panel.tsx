@@ -1,14 +1,22 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useGeneration } from '@/components/clips/editor/use-generation'
+import { StudioSoundControls } from '@/components/script-editor/studio-sound-controls'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { musicCostUsd, SFX_PRESETS } from '@/lib/clips/audio'
+import {
+  DEFAULT_STUDIO_SOUND_MIX,
+  musicCostUsd,
+  normalizeAudioEdits,
+  SFX_PRESETS,
+  type ClipStudioSound,
+} from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
+import { toast } from 'sonner'
 
 export function AudioPanel({
   clipId,
@@ -22,6 +30,7 @@ export function AudioPanel({
   onAddSfx,
   onUpdateSfx,
   onRemoveSfx,
+  onPatchStudioSound,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -34,6 +43,7 @@ export function AudioPanel({
   onAddSfx: (generationId: string, atMs: number) => void
   onUpdateSfx: (generationId: string, patch: { atMs?: number; volume?: number }) => void
   onRemoveSfx: (generationId: string) => void
+  onPatchStudioSound: (studio: ClipStudioSound | null) => void
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -41,10 +51,48 @@ export function AudioPanel({
   const [customSfx, setCustomSfx] = useState('')
   const [activeGen, setActiveGen] = useState<string | null>(null)
   const gen = useGeneration(activeGen)
-  const music = edits.audio?.music
+  const audioNorm = useMemo(() => normalizeAudioEdits(edits.audio), [edits.audio])
+  const studio = audioNorm.studioSound
+  const studioGen = useGeneration(studio?.generationId ?? null)
+  const studioEnqueueRef = useRef(false)
+  const music = audioNorm.music
   const musicGen = useGeneration(music?.generationId ?? null)
 
   const cost = musicCostUsd(outputDurationMs)
+
+  const enqueueStudioSound = useCallback(async () => {
+    const { generationId } = await clipsFetch<{ generationId: string }>(
+      `/api/clips/clips/${clipId}/studio-sound`,
+      { method: 'POST', body: '{}' },
+    )
+    onPatchStudioSound({
+      enabled: true,
+      generationId,
+      mix: studio?.mix ?? DEFAULT_STUDIO_SOUND_MIX,
+    })
+  }, [clipId, onPatchStudioSound, studio?.mix])
+
+  useEffect(() => {
+    if (!studio?.enabled) {
+      studioEnqueueRef.current = false
+      return
+    }
+    if (studio.generationId && (studioGen.status === 'READY' || studioGen.status === 'FAILED')) return
+    if (studio.generationId && studioGen.running) return
+    if (!studio.generationId && !studioEnqueueRef.current) {
+      studioEnqueueRef.current = true
+      void enqueueStudioSound().catch(() => {
+        studioEnqueueRef.current = false
+        toast.error('Could not start Studio Sound')
+      })
+    }
+  }, [studio?.enabled, studio?.generationId, studioGen.running, studioGen.status, enqueueStudioSound])
+
+  useEffect(() => {
+    if (studioGen.status === 'READY' && studio?.enabled) {
+      toast.success('Studio Sound ready for preview')
+    }
+  }, [studioGen.status, studio?.enabled])
 
   const suggest = async () => {
     setBusy(true)
@@ -99,7 +147,39 @@ export function AudioPanel({
   }
 
   return (
-    <div className="space-y-4 p-3 text-sm">
+    <div className="space-y-4 p-3 text-sm" data-testid="clip-audio-panel">
+      <StudioSoundControls
+        studio={
+          studio
+            ? {
+                enabled: studio.enabled,
+                mix: studio.mix ?? DEFAULT_STUDIO_SOUND_MIX,
+                generationId: studio.generationId,
+              }
+            : null
+        }
+        studioGen={studioGen}
+        defaultMix={DEFAULT_STUDIO_SOUND_MIX}
+        onChange={(next) => {
+          if (!next.enabled) {
+            onPatchStudioSound(
+              studio
+                ? { enabled: false, generationId: studio.generationId, mix: next.mix }
+                : null,
+            )
+            return
+          }
+          onPatchStudioSound({
+            enabled: true,
+            mix: next.mix,
+            generationId: next.generationId ?? studio?.generationId ?? '',
+          })
+        }}
+        onRetryEnqueue={() => {
+          studioEnqueueRef.current = false
+          void enqueueStudioSound()
+        }}
+      />
       <section className="space-y-2">
         <h3 className="font-medium">Music</h3>
         <div className="flex flex-wrap gap-2">

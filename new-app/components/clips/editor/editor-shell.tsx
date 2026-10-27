@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
@@ -29,6 +29,9 @@ import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
+import { ClipFillerReview } from '@/components/clips/editor/clip-filler-review'
+import { StudioSoundPreview } from '@/components/script-editor/studio-sound-preview'
+import { normalizeAudioEdits } from '@/lib/clips/audio'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
@@ -84,6 +87,7 @@ export function EditorShell({
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
+  const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const selectPanel = useCallback((id: EditorPanelId) => {
@@ -126,11 +130,16 @@ export function EditorShell({
     updateSfx,
     removeSfx,
     setEdits,
+    patchStudioSound,
     flushSave,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, words })
 
   const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
 
+  const audioNorm = useMemo(() => normalizeAudioEdits(edits.audio), [edits.audio])
+  const studioSound = audioNorm.studioSound
+  const studioGenId = studioSound?.enabled && studioSound.generationId ? studioSound.generationId : null
+  const studioGen = useGeneration(studioGenId)
   const musicGenId = edits.audio?.music?.generationId ?? null
   const musicGen = useGeneration(musicGenId)
   const { dubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
@@ -318,6 +327,15 @@ export function EditorShell({
     <>
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
         <EditorPanelErrorBoundary label="Script">
+        <ClipFillerReview
+          clipId={clipId}
+          words={editorWords}
+          edits={edits}
+          open={fillerReviewOpen}
+          onOpenChange={setFillerReviewOpen}
+          onAddCut={addCutRange}
+          onSeek={seekSource}
+        />
         <TranscriptPanel
           words={editorWords}
           wordsLoading={wordsLoading}
@@ -334,6 +352,7 @@ export function EditorShell({
             else if (ms > edits.trim.out) setTrim({ in: edits.trim.in, out: ms })
           }}
           onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
+          onOpenFillerReview={() => setFillerReviewOpen(true)}
           selectionRef={selectionRef}
         />
         </EditorPanelErrorBoundary>
@@ -378,6 +397,7 @@ export function EditorShell({
           onAddSfx={(generationId, atMs) => addSfx({ generationId, atMs, volume: 0.8 })}
           onUpdateSfx={updateSfx}
           onRemoveSfx={removeSfx}
+          onPatchStudioSound={patchStudioSound}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -432,6 +452,12 @@ export function EditorShell({
               brollMedia={initialBrollMedia}
               videoRef={videoRef}
               onTick={onTick}
+            />
+            <StudioSoundPreview
+              videoRef={videoRef}
+              isolatedUrl={studioGen.downloadUrl}
+              mix={studioSound?.mix ?? 0.35}
+              enabled={Boolean(studioSound?.enabled && studioGen.status === 'READY' && !useDubAudio)}
             />
             </EditorPanelErrorBoundary>
             </div>

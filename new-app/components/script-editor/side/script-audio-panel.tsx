@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Loader2 } from 'lucide-react'
 import {
   DEFAULT_DUCK_DEPTH,
   DEFAULT_MUSIC_VOLUME,
@@ -15,6 +14,7 @@ import {
   SFX_PRESETS,
   type ClipEditsAudio,
 } from '@/lib/clips/audio'
+import { StudioSoundControls } from '@/components/script-editor/studio-sound-controls'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
@@ -37,9 +37,6 @@ export function ScriptAudioPanel({
   const audio = useMemo(() => normalizeAudioEdits(document.audio ?? { music: null, sfx: [] }), [document.audio])
   const studio = document.audioFx?.studioSound
   const studioGen = useGeneration(studio?.assetId ?? null)
-  const studioBusy = studioGen.running
-  const studioProgress =
-    studioGen.status === 'RUNNING' ? 55 : studioGen.status === 'PENDING' ? 20 : studioGen.status === 'READY' ? 100 : 0
   const enqueueRef = useRef(false)
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -156,58 +153,33 @@ export function ScriptAudioPanel({
 
   return (
     <div className="flex flex-col gap-4 p-3 text-sm" data-testid="script-audio-panel">
-      <div className="rounded-[10px] border border-border bg-muted/20 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <Label className="text-[13px] font-semibold">Studio Sound</Label>
-          {studioBusy ? (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="studio-sound-processing">
-              <Loader2 className="size-3.5 animate-spin" />
-              {studioProgress}%
-            </span>
-          ) : (
-            <Switch
-              checked={studio?.enabled ?? false}
-              onCheckedChange={(enabled) => {
-                if (!enabled) {
-                  onPatchAudioFx({
-                    ...document.audioFx,
-                    studioSound: { enabled: false, mix: studio?.mix ?? 0.8, assetId: studio?.assetId ?? null },
-                  })
-                  return
-                }
-                onPatchAudioFx({
-                  ...document.audioFx,
-                  studioSound: { enabled: true, mix: studio?.mix ?? 0.8, assetId: studio?.assetId ?? null },
-                })
-              }}
-            />
-          )}
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {studioGen.status === 'READY'
-            ? 'Preview uses enhanced audio. Export mixes isolated + original by intensity.'
-            : 'Processes speech isolation on the worker when enabled.'}
-        </p>
-        {studio?.enabled && !studioBusy && (
-          <div className="mt-3 space-y-2">
-            <p className="text-xs">Intensity {Math.round((studio.mix ?? 0.8) * 100)}%</p>
-            <Slider
-              value={[Math.round((studio.mix ?? 0.8) * 100)]}
-              min={0}
-              max={100}
-              step={5}
-              onValueChange={(v) => {
-                const first = Array.isArray(v) ? v[0] : v
-                const mix = (first ?? 80) / 100
-                onPatchAudioFx({
-                  ...document.audioFx,
-                  studioSound: { enabled: true, mix, assetId: studio?.assetId ?? null },
-                })
-              }}
-            />
-          </div>
-        )}
-      </div>
+      <StudioSoundControls
+        studio={
+          studio
+            ? {
+                enabled: studio.enabled,
+                mix: studio.mix ?? 0.8,
+                generationId: studio.assetId ?? null,
+              }
+            : null
+        }
+        studioGen={studioGen}
+        defaultMix={0.8}
+        onChange={(next) => {
+          onPatchAudioFx({
+            ...document.audioFx,
+            studioSound: {
+              enabled: next.enabled,
+              mix: next.mix,
+              assetId: next.generationId ?? studio?.assetId ?? null,
+            },
+          })
+        }}
+        onRetryEnqueue={() => {
+          enqueueRef.current = false
+          void enqueueStudioSound().catch(() => toast.error('Could not start Studio Sound'))
+        }}
+      />
 
       <div className="rounded-[10px] border border-border bg-muted/20 p-3">
         <div className="flex items-center justify-between gap-2">

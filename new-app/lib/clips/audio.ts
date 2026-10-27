@@ -29,6 +29,8 @@ export const DEFAULT_DUCK_DEPTH = 0.7
 export const DEFAULT_MUSIC_FADE_IN_MS = 500
 export const DEFAULT_MUSIC_FADE_OUT_MS = 1000
 export const DEFAULT_SFX_VOLUME = 0.8
+/** Default Studio Sound mix for clip editor (low; user can raise). */
+export const DEFAULT_STUDIO_SOUND_MIX = 0.35
 
 export const SFX_PRESETS: { id: string; label: string; prompt: string }[] = [
   { id: 'whoosh', label: 'Whoosh', prompt: 'Quick cinematic whoosh transition sound' },
@@ -83,11 +85,12 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
   if (studio && typeof studio === 'object' && studio !== null) {
     const s = studio as Record<string, unknown>
     const generationId = String(s.generationId || s.assetId || '')
-    if (generationId) {
+    const enabled = Boolean(s.enabled)
+    if (enabled || generationId) {
       studioOut = {
-        enabled: Boolean(s.enabled ?? true),
+        enabled,
         generationId,
-        mix: clamp01(s.mix, 0.8),
+        mix: clamp01(s.mix, DEFAULT_STUDIO_SOUND_MIX),
       }
     }
   }

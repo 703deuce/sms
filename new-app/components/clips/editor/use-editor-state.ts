@@ -1,8 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useReducer, useRef } from 'react'
-import type { ClipAudioMusic, ClipAudioSfx, ClipEditsAudio } from '@/lib/clips/audio'
-import { DEFAULT_DUCK_DEPTH, DEFAULT_MUSIC_FADE_IN_MS, DEFAULT_MUSIC_FADE_OUT_MS, DEFAULT_MUSIC_VOLUME } from '@/lib/clips/audio'
+import type { ClipAudioMusic, ClipAudioSfx, ClipEditsAudio, ClipStudioSound } from '@/lib/clips/audio'
+import {
+  DEFAULT_DUCK_DEPTH,
+  DEFAULT_MUSIC_FADE_IN_MS,
+  DEFAULT_MUSIC_FADE_OUT_MS,
+  DEFAULT_MUSIC_VOLUME,
+  DEFAULT_STUDIO_SOUND_MIX,
+  normalizeAudioEdits,
+} from '@/lib/clips/audio'
 import type { BrollItem } from '@/lib/clips/broll'
 import { isManualBroll } from '@/lib/clips/broll-auto-utils'
 import {
@@ -295,6 +302,17 @@ export function useEditorState(
     [setEdits, state.edits],
   )
 
+  const patchStudioSound = useCallback(
+    (studio: ClipStudioSound | null) => {
+      const cur = normalizeAudioEdits(state.edits.audio)
+      setEdits({
+        ...state.edits,
+        audio: { ...cur, studioSound: studio },
+      })
+    },
+    [setEdits, state.edits],
+  )
+
   const setMusic = useCallback(
     (music: ClipAudioMusic | null) => {
       const cur = state.edits.audio || { music: null, sfx: [] }
@@ -482,6 +500,7 @@ export function useEditorState(
     updateBrollItem,
     removeBroll,
     setAudio,
+    patchStudioSound,
     setMusic,
     patchMusic,
     addSfx,

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { FILLER_RE, isWordCut, wordDisplayText } from '@/lib/clips/edits'
+import { isWordCut, wordDisplayText } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs, wordsInRange } from '@/lib/clips/source-words'
 import { speakerLabelForWord } from '@/lib/clips/crop-shots'
@@ -41,6 +41,7 @@ export function TranscriptPanel({
   onRestoreWord,
   onExtendTrim,
   onToggleEmphasis,
+  onOpenFillerReview,
   selectionRef,
   clipStartMs,
   clipEndMs,
@@ -57,6 +58,7 @@ export function TranscriptPanel({
   onRestoreWord: (word: SourceWord) => void
   onExtendTrim: (sourceMs: number) => void
   onToggleEmphasis?: (wordIndex: number) => void
+  onOpenFillerReview?: () => void
   selectionRef: React.MutableRefObject<TranscriptSelection | null>
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
@@ -108,16 +110,6 @@ export function TranscriptPanel({
     onAddCut([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
     setSelStart(null)
     setSelEnd(null)
-  }
-
-  const removeFillers = () => {
-    for (const w of visible) {
-      const text = wordDisplayText(w, edits.wordFixes)
-      if (FILLER_RE.test(text.trim())) {
-        const { startMs, endMs } = wordSourceMs(w)
-        onAddCut([Math.round(startMs), Math.round(endMs)])
-      }
-    }
   }
 
   const inTrim = (w: SourceWord) => {
@@ -257,7 +249,14 @@ export function TranscriptPanel({
       )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>
-        <Button size="sm" variant="outline" onClick={removeFillers}>Remove filler words</Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => (onOpenFillerReview ? onOpenFillerReview() : undefined)}
+          disabled={!onOpenFillerReview}
+        >
+          Remove filler words
+        </Button>
       </div>
       <div className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed">
         {!visible.length ? (
