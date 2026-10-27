@@ -159,6 +159,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
     if isinstance(state, str):
         state = json.loads(state)
     audio_key = state.get("audioKey") or stream_audio_key(workspace_id, vod_id)
+    vod_range_start_ms = int(vod.get("rangeStartMs") or 0)
 
     clips = _clips_for_project(conn, project_id)
     if not clips:
@@ -239,7 +240,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
             if not layout_state and clips:
                 sample = td_path / "layout_sample.mp4"
                 first = clips[0]
-                fs = max(0.0, int(first["startMs"]) / 1000.0 - 2)
+                fs = max(0.0, (vod_range_start_ms + int(first["startMs"])) / 1000.0 - 2)
                 fe = fs + 30
                 seg_src = layout_video or local_upload
                 if seg_src:
@@ -266,8 +267,11 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 start_ms = int(clip["startMs"])
                 end_ms = int(clip["endMs"])
                 pad = SEGMENT_PAD_S
-                seg_start_s = max(0.0, start_ms / 1000.0 - pad)
-                seg_end_s = end_ms / 1000.0 + pad
+                # Clip times are relative to the analyzed slice; video fetch uses absolute VOD time.
+                audio_seg_start_s = max(0.0, start_ms / 1000.0 - pad)
+                audio_seg_end_s = end_ms / 1000.0 + pad
+                video_seg_start_s = max(0.0, (vod_range_start_ms + start_ms) / 1000.0 - pad)
+                video_seg_end_s = (vod_range_start_ms + end_ms) / 1000.0 + pad
                 seg_path = td_path / f"seg_{clip_id}.mp4"
 
                 with stage_span("clip_render", heartbeat=True, clip_index=idx, clip_id=clip_id):
@@ -278,8 +282,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             seg_path=seg_path,
                             local_upload=local_upload,
                             url=url,
-                            seg_start_s=seg_start_s,
-                            seg_end_s=seg_end_s,
+                            seg_start_s=video_seg_start_s,
+                            seg_end_s=video_seg_end_s,
                             workspace_id=workspace_id,
                             project_id=project_id,
                             job_id=str(job.get("id") or ""),
@@ -289,11 +293,14 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     true_start_ms, corr = align_segment_ms(
                         seg_path,
                         audio_path,
-                        seg_start_s,
-                        seg_end_s,
+                        audio_seg_start_s,
+                        audio_seg_end_s,
                         log_context={"vodId": vod_id, "clipId": clip_id},
                     )
-                    true_end_ms = int(end_ms + (true_start_ms - int(seg_start_s * 1000)))
+                    true_end_ms = int(
+                        vod_range_start_ms + end_ms + (true_start_ms - int(audio_seg_start_s * 1000))
+                    )
+                    true_start_abs_ms = vod_range_start_ms + true_start_ms
 
                     seg_key = clip_segment_key(workspace_id, project_id, clip_id)
                     upload_file(seg_key, seg_path, "video/mp4")
@@ -316,9 +323,9 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                 "ffmpeg",
                                 "-y",
                                 "-ss",
-                                f"{seg_start_s:.3f}",
+                                f"{audio_seg_start_s:.3f}",
                                 "-t",
-                                f"{seg_end_s - seg_start_s:.3f}",
+                                f"{audio_seg_end_s - audio_seg_start_s:.3f}",
                                 "-i",
                                 str(audio_path),
                                 "-c:a",
@@ -333,7 +340,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                 cap = transcribe_clip_caption(
                                     TranscribeReq(
                                         audio_path=str(caption_audio),
-                                        offset_ms=int(seg_start_s * 1000),
+                                        offset_ms=int(audio_seg_start_s * 1000),
                                         language=(settings.get("streamer") or {}).get("language"),
                                     )
                                 )
@@ -423,7 +430,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                     keys["words"],
                                     crop_key,
                                     seg_key,
-                                    true_start_ms,
+                                    true_start_abs_ms,
                                     true_end_ms,
                                     json.dumps(ai_meta),
                                     json.dumps(initial_clip_edits(settings)),

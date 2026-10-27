@@ -16,6 +16,17 @@ import { StreamerUsageMeter, type StreamUsageView } from '@/components/streamer/
 import { clipsFetch } from '@/lib/clips-api'
 import { cancelClipUpload, fetchUploadLimits, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { Loader2 } from 'lucide-react'
+import {
+  resolveVodImportRangeMs,
+  type VodImportRangeMode,
+} from '@/lib/streamer/vod-import-range'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const PENDING_UPLOAD_KEY = 'streamer-upload-resume-v1'
 
@@ -43,6 +54,10 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [pendingMeta, setPendingMeta] = useState<PendingUploadMeta | null>(null)
   const [maxUploadLabel, setMaxUploadLabel] = useState<string | null>(null)
+  const [rangeMode, setRangeMode] = useState<VodImportRangeMode>('first_minutes')
+  const [firstMinutes, setFirstMinutes] = useState('15')
+  const [rangeStart, setRangeStart] = useState('0:00')
+  const [rangeEnd, setRangeEnd] = useState('15:00')
 
   useEffect(() => {
     void fetchUploadLimits()
@@ -196,16 +211,37 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       .finally(() => setVodCheckBusy(false))
   }
 
+  const buildRangePayload = () => {
+    const mins = parseInt(firstMinutes, 10)
+    return resolveVodImportRangeMs({
+      mode: rangeMode,
+      firstMinutes: Number.isFinite(mins) ? mins : 15,
+      start: rangeStart,
+      end: rangeEnd,
+    })
+  }
+
   const submitUrl = async () => {
     if (!attest) {
       toast.error('Confirm permission to import')
+      return
+    }
+    const range = buildRangePayload()
+    if ('error' in range) {
+      toast.error(range.error)
       return
     }
     setSubmitting(true)
     try {
       const data = await clipsFetch<{ projectId: string }>('/api/streamer/imports', {
         method: 'POST',
-        body: JSON.stringify({ url: url.trim(), attest: true }),
+        body: JSON.stringify({
+          url: url.trim(),
+          attest: true,
+          ...(range.rangeEndMs > 0
+            ? { rangeStartMs: range.rangeStartMs, rangeEndMs: range.rangeEndMs }
+            : {}),
+        }),
       })
       router.push(`/app/clips/${data.projectId}`)
     } catch (e) {
@@ -217,11 +253,22 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
 
   const submitUpload = async () => {
     if (!uploadId) return
+    const range = buildRangePayload()
+    if ('error' in range) {
+      toast.error(range.error)
+      return
+    }
     setSubmitting(true)
     try {
       const data = await clipsFetch<{ projectId: string }>('/api/streamer/imports', {
         method: 'POST',
-        body: JSON.stringify({ uploadId, attest: true }),
+        body: JSON.stringify({
+          uploadId,
+          attest: true,
+          ...(range.rangeEndMs > 0
+            ? { rangeStartMs: range.rangeStartMs, rangeEndMs: range.rangeEndMs }
+            : {}),
+        }),
       })
       router.push(`/app/clips/${data.projectId}`)
     } catch (e) {
@@ -256,6 +303,60 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           </p>
         ) : null}
         <VodUrlCheckBanner view={vodCheck} onRecheck={recheckVod} rechecking={vodCheckBusy} />
+      </div>
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
+        <p className="text-xs font-medium">VOD range (optional)</p>
+        <p className="text-xs text-muted-foreground">
+          Limit download, transcribe, and clip finding to part of the VOD — useful for 10–15 minute tests.
+        </p>
+        <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as VodImportRangeMode)}>
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="full">Full VOD</SelectItem>
+            <SelectItem value="first_minutes">First N minutes</SelectItem>
+            <SelectItem value="start_end">Start → end time</SelectItem>
+          </SelectContent>
+        </Select>
+        {rangeMode === 'first_minutes' ? (
+          <div className="flex items-center gap-2">
+            <Label htmlFor="streamer-first-min" className="shrink-0 text-xs">Minutes</Label>
+            <Input
+              id="streamer-first-min"
+              type="number"
+              min={1}
+              max={720}
+              className="h-9 w-24"
+              value={firstMinutes}
+              onChange={(e) => setFirstMinutes(e.target.value)}
+            />
+          </div>
+        ) : null}
+        {rangeMode === 'start_end' ? (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label htmlFor="streamer-range-start" className="text-xs">Start</Label>
+              <Input
+                id="streamer-range-start"
+                placeholder="0:00"
+                className="h-9"
+                value={rangeStart}
+                onChange={(e) => setRangeStart(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="streamer-range-end" className="text-xs">End</Label>
+              <Input
+                id="streamer-range-end"
+                placeholder="15:00"
+                className="h-9"
+                value={rangeEnd}
+                onChange={(e) => setRangeEnd(e.target.value)}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
       <label className="flex items-start gap-2 text-sm">
         <Checkbox checked={attest} onCheckedChange={(v) => setAttest(v === true)} />

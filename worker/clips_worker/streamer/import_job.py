@@ -41,8 +41,22 @@ def _enforce_paste_vod_duration_cap(vod: dict, effective_ms: int) -> None:
         )
 
 
-def _extract_upload_audio(src: Path, audio_out: Path, long_form: bool) -> None:
-    args = ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vn", "-c:a", "libopus"]
+def _extract_upload_audio(
+    src: Path,
+    audio_out: Path,
+    long_form: bool,
+    *,
+    range_start_ms: int = 0,
+    range_end_ms: int = 0,
+) -> None:
+    args = ["ffmpeg", "-y", "-v", "error"]
+    if range_start_ms > 0:
+        args.extend(["-ss", f"{range_start_ms / 1000.0:.3f}"])
+    args.extend(["-i", str(src), "-vn", "-c:a", "libopus"])
+    if range_end_ms > range_start_ms > 0:
+        args.extend(["-t", f"{(range_end_ms - range_start_ms) / 1000.0:.3f}"])
+    elif range_end_ms > 0:
+        args.extend(["-t", f"{range_end_ms / 1000.0:.3f}"])
     if long_form:
         args.extend(["-b:a", "64k"])
     args.append(str(audio_out))
@@ -218,13 +232,22 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
 
     if not url and (vod.get("platform") == "upload" or vod.get("sourceType") == "upload"):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute('SELECT "uploadId", "rangeEndMs" FROM clip_projects WHERE id=%s', (project_id,))
+            cur.execute(
+                'SELECT "uploadId", "rangeStartMs", "rangeEndMs" FROM clip_projects WHERE id=%s',
+                (project_id,),
+            )
             prow = cur.fetchone()
             cur.execute('SELECT key FROM clip_uploads WHERE id=%s', (prow["uploadId"],))
             urow = cur.fetchone()
         if not prow or not urow:
             raise RuntimeError("missing upload for stream import")
-        effective_ms = int(prow["rangeEndMs"] or vod.get("durationMs") or 0)
+        range_start_ms = int(prow.get("rangeStartMs") or vod.get("rangeStartMs") or 0)
+        range_end_ms = int(prow.get("rangeEndMs") or vod.get("rangeEndMs") or 0)
+        effective_ms = (
+            max(0, range_end_ms - range_start_ms)
+            if range_end_ms > range_start_ms
+            else int(prow["rangeEndMs"] or vod.get("durationMs") or 0)
+        )
         if effective_ms <= 0:
             raise RuntimeError("missing duration on upload")
         cap_err = check_cap(conn, workspace_id, effective_ms // 1000)
@@ -236,9 +259,18 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 src = Path(td) / "upload.mp4"
                 download_object(urow["key"], src)
                 dur_s = probe_duration(src)
-                duration_ms = effective_ms or int(dur_s * 1000)
+                upload_dur_ms = int(dur_s * 1000)
+                if range_end_ms <= range_start_ms and upload_dur_ms > 0:
+                    range_end_ms = upload_dur_ms
+                duration_ms = effective_ms or upload_dur_ms
                 audio_out = Path(td) / "audio.opus"
-                _extract_upload_audio(src, audio_out, long_form=use_long)
+                _extract_upload_audio(
+                    src,
+                    audio_out,
+                    long_form=use_long,
+                    range_start_ms=range_start_ms,
+                    range_end_ms=range_end_ms if range_end_ms > range_start_ms else 0,
+                )
                 audio_key = stream_audio_key(workspace_id, vod_id)
                 upload_file(audio_key, audio_out, "audio/opus")
                 state = _state_for_upload(workspace_id, vod_id, urow["key"], src, td)
