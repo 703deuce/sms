@@ -40,6 +40,7 @@
     "test:power-dialer-post-deploy": "npx tsx scripts/test-power-dialer-post-deploy-fixes.ts",
     "smoke:power-dialer-get": "npx tsx scripts/smoke-power-dialer-get-routes.ts",
     "test:ui-8-browser": "node scripts/ui-8-browser-proof.mjs",
+    "test:e2e:script-prod": "node ./node_modules/@playwright/test/cli.js test e2e/script-editor-prod.spec.ts --config=playwright.prod.config.ts",
     "test:e2e:a11y": "node ./node_modules/@playwright/test/cli.js test e2e/a11y.spec.ts --config=playwright.config.mjs",
     "test:e2e:shots": "node ./node_modules/@playwright/test/cli.js test e2e/ui-screenshots.spec.ts --config=playwright.config.mjs",
     "test": "vitest run",

@@ -5,14 +5,16 @@
  */
 import { PrismaClient } from '@prisma/client'
 
-const PROJECT_ID = process.env.SCRIPT_E2E_PROJECT_ID || 'proj_89c551'
+/** Prod fixture interview project (prefix proj_89c551…). */
+const PROJECT_ID =
+  process.env.SCRIPT_E2E_PROJECT_ID || 'proj_89c551443cb34a48a034a2260e9eeeca'
 
 const prisma = new PrismaClient()
 
 async function main() {
   const project = await prisma.clipProject.findFirst({
     where: { id: PROJECT_ID },
-    include: { scriptCompositions: { where: { kind: 'full', deletedAt: null }, take: 1 } },
+    include: { scriptCompositions: { where: { kind: 'FULL', deletedAt: null }, take: 1 } },
   })
   if (!project?.scriptCompositions[0]) {
     console.error('composition not found')

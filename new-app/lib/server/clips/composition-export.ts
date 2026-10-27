@@ -3,7 +3,10 @@ import { Prisma } from '@prisma/client'
 import { createHash } from 'node:crypto'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
-import { getCompositionForWorkspace } from '@/lib/server/clips/script-composition'
+import { deriveEdl } from '@/lib/clips/script-edl/derive-edl'
+import { outputDurationMs } from '@/lib/clips/script-edl/edl-playback'
+import { getCompositionForWorkspace, parseScriptCompositionDocument } from '@/lib/server/clips/script-composition'
+import { getScriptBootstrap } from '@/lib/server/clips/script-bootstrap'
 
 export type ScriptExportSettings = {
   exportKind: 'video' | 'audio' | 'srt' | 'vtt' | 'txt' | 'md'
@@ -41,7 +44,21 @@ export async function enqueueCompositionExport(
     return { renderId: existing.id, status: existing.status }
   }
 
-  const renderId = createId('scrn')
+  const renderId = existing?.id ?? createId('scrn')
+
+  let edlDurationMs: number | undefined
+  const bootstrap = await getScriptBootstrap(workspaceId, row.projectId)
+  if (bootstrap?.editorWords?.length) {
+    const document = parseScriptCompositionDocument(row.document)
+    const wordsById = new Map(bootstrap.editorWords.map((w) => [w.id, w]))
+    edlDurationMs = outputDurationMs(deriveEdl(document, wordsById))
+  }
+
+  const settingsWithEdl = {
+    ...settings,
+    ...(typeof edlDurationMs === 'number' && edlDurationMs > 0 ? { edlDurationMs } : {}),
+  }
+
   await prisma.scriptCompositionRender.upsert({
     where: { compositionId_idempotencyKey: { compositionId, idempotencyKey } },
     create: {
@@ -52,11 +69,11 @@ export async function enqueueCompositionExport(
       idempotencyKey,
       resolution: settings.resolution,
       aspectRatio: row.aspect ?? '9:16',
-      settings: settings as Prisma.InputJsonValue,
+      settings: settingsWithEdl as Prisma.InputJsonValue,
     },
     update: {
       status: 'QUEUED',
-      settings: settings as Prisma.InputJsonValue,
+      settings: settingsWithEdl as Prisma.InputJsonValue,
       updatedAt: new Date(),
     },
   })

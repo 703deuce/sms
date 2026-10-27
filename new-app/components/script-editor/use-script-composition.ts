@@ -59,28 +59,19 @@ export function useScriptComposition(initial: {
   useEffect(() => {
     const persisted = loadPersistedUndo(initial.compositionId)
     if (!persisted) return
-    const hasLocalHistory = persisted.undo.length > 0 || persisted.redo.length > 0
     if (persisted.revision < revisionRef.current) {
       clearPersistedUndo(initial.compositionId)
       return
     }
-    if (
-      persisted.document &&
-      hasLocalHistory &&
-      persisted.revision >= revisionRef.current &&
-      !documentsEqual(documentRef.current, persisted.document)
-    ) {
-      setDocument(persisted.document)
-      revisionRef.current = persisted.revision
-      setRevision(persisted.revision)
-    } else if (persisted.revision > revisionRef.current) {
-      revisionRef.current = persisted.revision
-      setRevision(persisted.revision)
+    // Bootstrap document is server truth; only restore undo/redo stacks at the same revision.
+    if (persisted.revision !== revisionRef.current) {
+      if (persisted.revision > revisionRef.current) clearPersistedUndo(initial.compositionId)
+      return
     }
     if (persisted.undo.length) undoStackRef.current = persisted.undo.map(cloneDocument)
     if (persisted.redo.length) redoStackRef.current = persisted.redo.map(cloneDocument)
     bumpStacks()
-  }, [initial.compositionId, bumpStacks, setDocument])
+  }, [initial.compositionId, bumpStacks])
 
   const enqueueServerOps = useCallback(
     (ops: ScriptCompositionOp[], rollbackDoc: ScriptDocumentV1, onRollback?: () => void) => {
@@ -105,6 +96,7 @@ export function useScriptComposition(initial: {
           if (epochAtEnqueue !== localEpochRef.current) return
           revisionRef.current = res.revision
           setRevision(res.revision)
+          if (res.document) setDocument(res.document)
           saveErrorRef.current = false
           savePersistedUndo(
             initial.compositionId,
