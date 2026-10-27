@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from clips_worker.stream_headline_ass import burn_stream_headline
+from clips_worker.stream_headline_ass import burn_stream_headline, format_headline_for_export
 
 # Parity with new-app/lib/clips/export-template.ts
 _HEADLINE_TEXT_MIN_Y = {
@@ -189,7 +189,7 @@ def apply_export_template(
         burn_stream_headline(
             current,
             hl_out,
-            headline,
+            format_headline_for_export(headline),
             play_w=play_w,
             play_h=play_h,
             bar_h=bar_h,

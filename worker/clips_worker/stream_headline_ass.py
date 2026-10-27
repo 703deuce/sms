@@ -9,6 +9,7 @@ _EMOJI_RE = re.compile(r"([\U0001F300-\U0001FAFF\U00002700-\U000027BF]+)\s*$")
 _HEADLINE_FONT = "Montserrat"
 _EMOJI_FONT = "Noto Color Emoji"
 _MAX_LINES = 3
+_HEADLINE_CHAR_LIMIT = 72
 
 
 def _font_dirs() -> list[Path]:
@@ -39,8 +40,9 @@ def _split_emoji_runs(text: str) -> str:
     return "".join(out)
 
 
-def _wrap_headline_upper(body: str, max_chars_per_line: int = 22) -> str:
-    words = body.upper().split()
+def _wrap_headline_lines(body: str, max_chars_per_line: int = 22) -> list[str]:
+    """Parity with new-app wrapHeadlineDisplayLines (export-template.ts)."""
+    words = body.split()
     lines: list[str] = []
     cur: list[str] = []
     for w in words:
@@ -52,21 +54,48 @@ def _wrap_headline_upper(body: str, max_chars_per_line: int = 22) -> str:
             cur.append(w)
         if len(lines) >= _MAX_LINES:
             break
-    if cur and len(lines) < _MAX_LINES:
+    if len(lines) < _MAX_LINES and cur:
         lines.append(" ".join(cur))
-    return "\\N".join(lines[:_MAX_LINES])
+    return lines[:_MAX_LINES]
+
+
+def format_headline_for_export(raw: str) -> str:
+    """Parity with new-app formatHeadlineForExport."""
+    trimmed = raw.strip()
+    if not trimmed:
+        return ""
+    m = _EMOJI_RE.search(trimmed)
+    emojis = (m.group(1) if m else "")[:2]
+    body = trimmed[: m.start()].strip() if m else trimmed
+    capped = body[:_HEADLINE_CHAR_LIMIT]
+    upper = capped.upper()
+    return f"{upper} {emojis}".strip() if emojis else upper
 
 
 def prepare_headline_display(raw: str) -> str:
-    trimmed = raw.strip()
+    trimmed = format_headline_for_export(raw)
     m = _EMOJI_RE.search(trimmed)
     emojis = (m.group(1) if m else "")[:2]
     core = trimmed[: m.start()].strip() if m else trimmed
-    wrapped = _wrap_headline_upper(core)
-    flat = wrapped.replace("\\N", " ")
-    if emojis:
-        flat = f"{flat} {emojis}".strip()
-    return _split_emoji_runs(_esc_ass(flat))
+    lines = _wrap_headline_lines(core)
+    if emojis and lines:
+        lines[-1] = f"{lines[-1]} {emojis}".strip()
+    ass_lines = [_split_emoji_runs(_esc_ass(line.upper())) for line in lines if line.strip()]
+    return r"\N".join(ass_lines)
+
+
+def _headline_fonts_dir() -> Path | None:
+    """Directory passed to ffmpeg ass= filter (emoji + Montserrat siblings)."""
+    for candidate in (
+        Path("/usr/share/fonts/truetype/montserrat"),
+        Path("/app/v3/fonts"),
+        Path("/usr/share/fonts/truetype/noto"),
+        Path("/usr/share/fonts/noto"),
+    ):
+        if candidate.is_dir():
+            return candidate
+    dirs = _font_dirs()
+    return dirs[0] if dirs else None
 
 
 def headline_ass_content(
@@ -123,7 +152,7 @@ def burn_stream_headline(
         headline_ass_content(headline, play_w=play_w, play_h=play_h, bar_h=bar_h, duration_ms=duration_ms),
         encoding="utf-8",
     )
-    fontsdir = _font_dirs()[0] if _font_dirs() else None
+    fontsdir = _headline_fonts_dir()
     vf = f"ass={ass}"
     if fontsdir:
         vf = f"ass={ass}:fontsdir={fontsdir}"
