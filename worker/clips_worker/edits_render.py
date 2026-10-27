@@ -487,6 +487,14 @@ def render_edited_clip(
     else:
         shutil.copy(caption_src, out_mp4)
 
+    ho = edits.get("hookOverlay") if isinstance(edits.get("hookOverlay"), dict) else None
+    if ho and ho.get("enabled") and str(ho.get("text") or "").strip():
+        from clips_worker.hook_overlay import apply_hook_overlay
+
+        hooked = work_dir / "hooked.mp4"
+        apply_hook_overlay(out_mp4, hooked, edits, play_w=play_w, play_h=play_h)
+        shutil.copy(hooked, out_mp4)
+
     zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
     if zoom_cfg.get("enabled"):
         from clips_worker.zoom_render import (

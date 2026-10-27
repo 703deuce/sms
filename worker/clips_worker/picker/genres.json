@@ -67,7 +67,7 @@
     "other": "podcast_interview"
   },
   "clip_length_buckets": {
-    "auto": { "min_ms": 15000, "max_ms": 60000, "prefer_min_ms": 25000, "prefer_max_ms": 45000 },
+    "auto": { "min_ms": 15000, "max_ms": 90000, "prefer_min_ms": 25000, "prefer_max_ms": 45000 },
     "lt30": { "min_ms": 10000, "max_ms": 30000 },
     "30_60": { "min_ms": 30000, "max_ms": 60000 },
     "60_90": { "min_ms": 60000, "max_ms": 90000 }

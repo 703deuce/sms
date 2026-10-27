@@ -36,7 +36,7 @@ def finalize_picks(
             end_ms += int(((lo + hi) / 2) * 1000)
         pick = {**row, "start_ms": start_ms, "end_ms": end_ms}
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
-        if pick["end_ms"] - pick["start_ms"] < 5000:
+        if pick["end_ms"] - pick["start_ms"] < 15000:
             dropped_short += 1
             continue
         picks.append(pick)
