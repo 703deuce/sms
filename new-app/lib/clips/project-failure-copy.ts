@@ -48,6 +48,13 @@ export function describeClipProjectFailure(input: {
         retryLabel: 'Retry processing',
       }
     }
+    return {
+      kind: 'ready_empty',
+      title: 'No clips to show',
+      message:
+        'Processing finished but no clips were saved. Try a longer segment, Talking mode, or retry processing.',
+      retryLabel: 'Retry processing',
+    }
   }
 
   if (status !== 'FAILED' && status !== 'CANCELED') {

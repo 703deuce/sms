@@ -12,7 +12,7 @@ from clips_worker.picker.pass1 import find_moments
 from clips_worker.picker.pass2 import score_moments
 from clips_worker.picker.sentences import build_sentences
 from clips_worker.picker.signals import compute_signals
-from clips_worker.picker.titles import ensure_clip_title
+from clips_worker.picker.titles import SHORT_SOURCE_MAX_MS, ensure_clip_title
 
 
 def _slice_words(words: list[dict], range_start_ms: int, range_end_ms: int) -> list[dict]:
@@ -168,13 +168,32 @@ def pick_talking_clips(
 
     picker_info("after_finalize", count=len(picks))
 
+    if not picks and source_ms <= SHORT_SOURCE_MAX_MS and sentences:
+        s0 = max(range_start_ms, int(sentences[0].start_ms))
+        e0 = min(range_end_ms, int(sentences[-1].end_ms))
+        if e0 - s0 >= 800:
+            picks = [
+                {
+                    "start_ms": s0,
+                    "end_ms": e0,
+                    "title": "Highlight",
+                    "hook": "",
+                    "reason": "short_source_emergency",
+                    "archetype": "story",
+                    "score": 55,
+                    "low_confidence": True,
+                    "scores": {"hook": "C", "flow": "C", "value": "C", "trend": "C"},
+                }
+            ]
+            picker_info("short_source_emergency_pick", start_ms=s0, end_ms=e0)
+
     if not picks:
         msg = "No complete, self-contained moments found in this segment."
         picker_info("picker_empty", message=msg)
         return [], msg
 
     for p in picks:
-        ensure_clip_title(p, words, genre)
+        ensure_clip_title(p, words, genre, source_ms=source_ms)
         ss, es = p["start_sentence"], p["end_sentence"]
         p["aiMeta"] = {
             "hook": p.get("hook"),

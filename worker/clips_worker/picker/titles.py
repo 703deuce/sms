@@ -7,6 +7,7 @@ from clips_worker.picker.llm import chat_json
 
 BAD_TITLE_RE = re.compile(r"^[a-z_]+$")
 INTERNAL_TITLES = {"coverage_span", "fallback_full_span", "clip", "story"}
+SHORT_SOURCE_MAX_MS = 120_000
 SENTENCE_REF_RE = re.compile(r"\(\s*s\d+(?:\s*-\s*s\d+)?\s*\)", re.IGNORECASE)
 
 
@@ -55,13 +56,36 @@ def generate_title(transcript_excerpt: str, genre: str) -> str:
         return trim_title(" ".join(words[:8]) or "Clip moment")
 
 
-def ensure_clip_title(clip: dict, words: list[dict], genre: str) -> None:
-    title = trim_title(str(clip.get("title") or ""))
-    if not needs_title(title):
-        clip["title"] = title
+def _clip_word_excerpt(words: list[dict], start_ms: int, end_ms: int) -> str:
+    return " ".join(w["w"] for w in words if w["e"] * 1000 >= start_ms and w["s"] * 1000 <= end_ms)
+
+
+def ensure_short_source_hook(clip: dict, words: list[dict], source_ms: int) -> None:
+    if source_ms > SHORT_SOURCE_MAX_MS:
+        return
+    hook = str(clip.get("hook") or "").strip()
+    if len(hook) >= 8:
         return
     s, e = int(clip["start_ms"]), int(clip["end_ms"])
-    excerpt = " ".join(
-        w["w"] for w in words if w["e"] * 1000 >= s and w["s"] * 1000 <= e
-    )
+    opener = _clip_word_excerpt(words, s, e).split()
+    if not opener:
+        return
+    clip["hook"] = trim_title(" ".join(opener[:14]), 72)
+
+
+def ensure_clip_title(clip: dict, words: list[dict], genre: str, *, source_ms: int | None = None) -> None:
+    title = trim_title(str(clip.get("title") or ""))
+    s, e = int(clip["start_ms"]), int(clip["end_ms"])
+    excerpt = _clip_word_excerpt(words, s, e)
+    if source_ms is not None and source_ms <= SHORT_SOURCE_MAX_MS and excerpt:
+        clip["title"] = trim_title(excerpt.split(".")[0].split("?")[0] or excerpt, 60)
+        if needs_title(clip["title"]):
+            clip["title"] = generate_title(excerpt, genre)
+        ensure_short_source_hook(clip, words, source_ms)
+        return
+    if not needs_title(title):
+        clip["title"] = title
+        ensure_short_source_hook(clip, words, source_ms or 0)
+        return
     clip["title"] = generate_title(excerpt, genre)
+    ensure_short_source_hook(clip, words, source_ms or 0)

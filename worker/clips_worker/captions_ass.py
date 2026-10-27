@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from clips_worker.caption_presets import resolve_preset
+from clips_worker.caption_safe_area import clamp_caption_export_style
 
 POP_TAG = r"\fscx85\fscy85\t(0,80,\fscx112\fscy112)\t(80,160,\fscx100\fscy100)"
 BOUNCE_TAG = r"\fscy70\t(0,90,\fscy118)\t(90,180,\fscy100)"
@@ -110,6 +111,7 @@ def build_ass(
     play_w: int = 720,
     play_h: int = 1280,
 ) -> None:
+    edits_captions = clamp_caption_export_style(edits_captions if isinstance(edits_captions, dict) else {}, play_h)
     preset = resolve_preset(edits_captions.get("presetId") or edits_captions.get("preset"))
     inline = edits_captions.get("presetConfig")
     if isinstance(inline, dict) and inline:

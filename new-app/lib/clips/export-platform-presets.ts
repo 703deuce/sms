@@ -1,3 +1,4 @@
+import { clampCaptionExportStyle } from '@/lib/clips/caption-safe-area'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { outputDurationMs } from '@/lib/clips/edits'
@@ -59,17 +60,27 @@ export function applyExportPlatformToEdits(
 ): ClipEditsV2 {
   const preset = EXPORT_PLATFORM_PRESETS[platform]
   const cap = edits.captions || {}
-  return {
+  const merged = {
     ...edits,
     aspectRatio: preset.aspect,
     captions: {
       ...cap,
       position: preset.captionPosition,
-      marginVPct: preset.captionSafeMarginVPct,
+      marginVPct: Math.max(cap.marginVPct ?? 0, preset.captionSafeMarginVPct),
       presetConfig: {
         ...(cap.presetConfig || {}),
         marginVPct: preset.captionSafeMarginVPct,
       },
+    },
+  }
+  const safe = clampCaptionExportStyle(merged.captions, preset.resolution === '1080p' ? 1920 : 1280)
+  return {
+    ...merged,
+    captions: {
+      ...merged.captions,
+      marginVPct: safe.marginVPct,
+      size: safe.sizePct,
+      position: safe.position as ClipEditsV2['captions']['position'],
     },
   }
 }

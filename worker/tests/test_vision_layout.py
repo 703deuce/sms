@@ -5,8 +5,10 @@ import pytest
 from clips_worker.layout_router import PersonCountSummary, route_multiperson_layout, summary_from_track_fixture
 from clips_worker.vision_layout import (
     _PROJECT_SPEND,
+    _PROJECT_STATS,
     apply_vision_layout_to_summary,
     layout_from_vision_advice,
+    log_project_vision_stats,
     should_call_vision_layout,
     VisionLayoutAdvice,
 )
@@ -94,3 +96,19 @@ def test_vision_gemini_parse_and_cost(monkeypatch, tmp_path):
     assert advice is not None
     assert advice.est_cost_usd == pytest.approx(0.00016, rel=1e-3)
     assert advice.recommended_layout == "screen_pip"
+
+
+def test_log_project_vision_stats_emits_summary(capsys):
+    _PROJECT_STATS.clear()
+    _PROJECT_STATS["p1"] = {
+        "trigger_checks": 4,
+        "trigger_calls": 2,
+        "trigger_success": 1,
+        "est_usd": 0.00032,
+    }
+    log_project_vision_stats("p1")
+    out = capsys.readouterr().out
+    assert "[clipper:vision] project_summary" in out
+    assert "trigger_rate=0.500" in out
+    assert "est_usd_total=0.00032" in out
+    assert "p1" not in _PROJECT_STATS

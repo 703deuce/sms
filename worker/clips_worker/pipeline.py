@@ -296,7 +296,8 @@ def run_m4_pipeline(
 
     mode = settings.get("mode") or "talking"
     pipeline_t0 = time.monotonic()
-    with tempfile.TemporaryDirectory() as td:
+    try:
+      with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         src = local_src if local_src is not None else td_path / "source.mp4"
         if local_src is None:
@@ -801,3 +802,7 @@ def run_m4_pipeline(
             job_id,
             {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE", "error": None},
         )
+    finally:
+        from clips_worker.vision_layout import log_project_vision_stats
+
+        log_project_vision_stats(project_id)

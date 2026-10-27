@@ -23,6 +23,32 @@ _PER_PROJECT_USD = float(os.environ.get("CLIPPER_VISION_LAYOUT_MAX_USD_PER_PROJE
 _EST_USD_PER_FRAME = float(os.environ.get("CLIPPER_VISION_LAYOUT_EST_USD_PER_FRAME", "0.00008"))
 
 _PROJECT_SPEND: dict[str, float] = {}
+_PROJECT_STATS: dict[str, dict[str, float | int]] = {}
+
+
+def _stats_for(project_id: str | None) -> dict[str, float | int]:
+    key = (project_id or "").strip() or "_unknown"
+    return _PROJECT_STATS.setdefault(
+        key,
+        {"trigger_checks": 0, "trigger_calls": 0, "trigger_success": 0, "est_usd": 0.0},
+    )
+
+
+def log_project_vision_stats(project_id: str | None) -> None:
+    key = (project_id or "").strip() or "_unknown"
+    bucket = _PROJECT_STATS.pop(key, None)
+    if not bucket:
+        return
+    checks = int(bucket.get("trigger_checks") or 0)
+    calls = int(bucket.get("trigger_calls") or 0)
+    success = int(bucket.get("trigger_success") or 0)
+    est = float(bucket.get("est_usd") or 0.0)
+    rate = (success / calls) if calls else 0.0
+    print(
+        f"[clipper:vision] project_summary project={project_id or '-'} "
+        f"checks={checks} calls={calls} success={success} trigger_rate={rate:.3f} est_usd_total={est:.5f}",
+        flush=True,
+    )
 
 _LAYOUT_ENUM = (
     "speaker_follow",
@@ -263,17 +289,22 @@ def maybe_vision_layout_advice(
     )
     if not should:
         return None
+    stats = _stats_for(project_id)
+    stats["trigger_checks"] = int(stats.get("trigger_checks") or 0) + 1
     jpegs = sample_video_jpegs(video)
     if not jpegs:
         return None
     est_cost = len(jpegs) * _EST_USD_PER_FRAME
     if not _project_budget_ok(project_id, est_cost):
         return None
+    stats["trigger_calls"] = int(stats.get("trigger_calls") or 0) + 1
     t0 = time.perf_counter()
     try:
         raw = call_vision_layout_gemini(jpegs, audio_speaker_count=audio_n)
         advice = _parse_advice(raw, est_cost, reason)
         _record_project_spend(project_id, est_cost)
+        stats["trigger_success"] = int(stats.get("trigger_success") or 0) + 1
+        stats["est_usd"] = float(stats.get("est_usd") or 0.0) + est_cost
         ms = int((time.perf_counter() - t0) * 1000)
         print(
             f"[clipper:vision] ok ms={ms} est_usd={est_cost:.5f} trigger={reason} "

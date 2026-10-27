@@ -12,6 +12,12 @@ describe('project-failure-copy', () => {
     expect(copy?.retryLabel).toContain('retry')
   })
 
+  it('maps silent empty ready to ready_empty default', () => {
+    const copy = describeClipProjectFailure({ status: 'READY', clipCount: 0 })
+    expect(copy?.kind).toBe('ready_empty')
+    expect(copy?.message).toMatch(/no clips were saved/i)
+  })
+
   it('maps transcribe errors', () => {
     const copy = describeClipProjectFailure({
       status: 'FAILED',
