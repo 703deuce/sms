@@ -369,10 +369,11 @@ DISPATCH: dict[str, object] = {
     "MUSIC": handle_music,
     "THUMBNAIL": handle_thumbnail,
     "DUB": handle_dub,
-    "RENDER_SCRIPT_COMPOSITION": lambda conn, job, post_progress: __import__(
-        "clips_worker.script_composition_render", fromlist=["run_script_composition_render_job"]
-    ).run_script_composition_render_job(conn, job, post_progress),
 }
+
+from clips_worker.script_composition_render import run_script_composition_render_job  # noqa: E402
+
+DISPATCH["RENDER_SCRIPT_COMPOSITION"] = run_script_composition_render_job
 
 
 def main() -> None:
