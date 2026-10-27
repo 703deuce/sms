@@ -865,6 +865,18 @@ def frame_crops(track: dict, i: int) -> tuple[str, list[tuple[int, int, int, int
         x0 = track["x0"][i]; return "single", [(x0, 0, track["cw"], H)]
     if lay == "split":
         return "split", [tile_rect(*face(p), W, H, ow / (oh / 2)) for p in sg["slots"]]
+    if lay == "three":
+        slots = list(sg["slots"])[:3]
+        tile_aspect = ow / max(oh / 3, 1)
+        return "three", [tile_rect(*face(p), W, H, tile_aspect) for p in slots]
+    if lay == "side":
+        slots = list(sg["slots"])[:2]
+        tile_aspect = (ow / 2) / max(oh, 1)
+        return "side", [tile_rect(*face(p), W, H, tile_aspect) for p in slots]
+    if lay == "pip":
+        p = int(sg["slots"][0]) if sg["slots"] else 0
+        cam_w = max(ow // 3, 1)
+        return "pip", [tile_rect(*face(p), W, H, cam_w / max(int(cam_w * 4 / 3), 1))]
     if lay == "grid":
         vis = [p for p in range(fr["fx"].shape[0]) if not np.isnan(fr["fx"][p, i])]
         vis = sorted(vis, key=lambda p: -track["people"][p]["screen_s"])[:4]
