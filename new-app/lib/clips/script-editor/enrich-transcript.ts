@@ -31,6 +31,12 @@ export const SCRIPT_FILLER_LEXICON = new Set([
 
 const NORM = /[^\w\s']/g
 
+/** Deepgram / clip JSON may use `w`, `word`, or `text`. */
+export function clipWordSurfaceText(word: ClipWord & Record<string, unknown>): string {
+  const raw = word.w ?? word.word ?? word.text
+  return typeof raw === 'string' ? raw : ''
+}
+
 export function normalizeToken(w: string): string {
   return w.toLowerCase().replace(NORM, '').trim()
 }
@@ -63,12 +69,15 @@ export function enrichTranscriptWords(words: ClipWord[], opts?: EnrichOpts): Enr
       if (gap >= gapThresholdMs) row.gapBeforeMs = gap
     }
 
-    const token = normalizeToken(w.w ?? '')
+    const surface = clipWordSurfaceText(w as ClipWord & Record<string, unknown>)
+    const token = normalizeToken(surface)
     if (token && SCRIPT_FILLER_LEXICON.has(token)) {
       row.isFiller = true
       row.fillerKind = 'lexicon'
     } else if (markRepeated && i > 0) {
-      const prevToken = normalizeToken(words[i - 1].w ?? '')
+      const prevToken = normalizeToken(
+        clipWordSurfaceText(words[i - 1] as ClipWord & Record<string, unknown>),
+      )
       if (token && token === prevToken && token.length > 1) {
         row.isFiller = true
         row.fillerKind = 'repeat'
@@ -79,8 +88,8 @@ export function enrichTranscriptWords(words: ClipWord[], opts?: EnrichOpts): Enr
   }
 
   for (let i = 0; i < out.length - 1; i++) {
-    const a = normalizeToken(out[i].w ?? '')
-    const b = normalizeToken(out[i + 1].w ?? '')
+    const a = normalizeToken(clipWordSurfaceText(out[i] as ClipWord & Record<string, unknown>))
+    const b = normalizeToken(clipWordSurfaceText(out[i + 1] as ClipWord & Record<string, unknown>))
     if (a === 'you' && b === 'know') {
       out[i].isFiller = true
       out[i].fillerKind = 'lexicon'

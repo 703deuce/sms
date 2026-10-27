@@ -165,6 +165,7 @@ export function EditorShell({
   const studioEnqueueRef = useRef(false)
 
   const enqueueStudioSound = useCallback(async () => {
+    studioEnqueueRef.current = true
     const { generationId } = await clipsFetch<{ generationId: string }>(
       `/api/clips/clips/${clipId}/studio-sound`,
       { method: 'POST', body: '{}' },
@@ -176,6 +177,14 @@ export function EditorShell({
     })
   }, [clipId, patchStudioSound, studioSound?.mix])
 
+  const startStudioSoundPreview = useCallback(() => {
+    studioEnqueueRef.current = false
+    void enqueueStudioSound().catch(() => {
+      studioEnqueueRef.current = false
+      toast.error('Could not start Studio Sound')
+    })
+  }, [enqueueStudioSound])
+
   useEffect(() => {
     if (!studioSound?.enabled || useDubAudio) {
       studioEnqueueRef.current = false
@@ -184,18 +193,14 @@ export function EditorShell({
     if (studioSound.generationId && (studioGen.status === 'READY' || studioGen.status === 'FAILED')) return
     if (studioSound.generationId && studioGen.running) return
     if (!studioSound.generationId && !studioEnqueueRef.current) {
-      studioEnqueueRef.current = true
-      void enqueueStudioSound().catch(() => {
-        studioEnqueueRef.current = false
-        toast.error('Could not start Studio Sound')
-      })
+      void startStudioSoundPreview()
     }
   }, [
     studioSound?.enabled,
     studioSound?.generationId,
     studioGen.running,
     studioGen.status,
-    enqueueStudioSound,
+    startStudioSoundPreview,
     useDubAudio,
   ])
 
@@ -466,6 +471,7 @@ export function EditorShell({
           onUpdateSfx={updateSfx}
           onRemoveSfx={removeSfx}
           onPatchStudioSound={patchStudioSound}
+          onStartStudioSound={startStudioSoundPreview}
         />
         </EditorPanelErrorBoundary>
       </div>

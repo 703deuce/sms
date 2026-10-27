@@ -32,6 +32,7 @@ export function AudioPanel({
   onUpdateSfx,
   onRemoveSfx,
   onPatchStudioSound,
+  onStartStudioSound,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -45,6 +46,7 @@ export function AudioPanel({
   onUpdateSfx: (generationId: string, patch: { atMs?: number; volume?: number }) => void
   onRemoveSfx: (generationId: string) => void
   onPatchStudioSound: (studio: ClipStudioSound | null) => void
+  onStartStudioSound?: () => void
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -164,6 +166,7 @@ export function AudioPanel({
         defaultMix={DEFAULT_STUDIO_SOUND_MIX}
         onChange={(next) => {
           if (!next.enabled) {
+            studioEnqueueRef.current = false
             onPatchStudioSound(
               studio
                 ? { enabled: false, generationId: studio.generationId, mix: next.mix }
@@ -171,11 +174,24 @@ export function AudioPanel({
             )
             return
           }
+          const priorId = (next.generationId ?? studio?.generationId ?? '').trim()
+          const ready = studioGen.status === 'READY' && Boolean(studioGen.downloadUrl)
           onPatchStudioSound({
             enabled: true,
             mix: next.mix,
-            generationId: next.generationId ?? studio?.generationId ?? '',
+            generationId: ready && priorId ? priorId : '',
           })
+          if (!ready || studioGen.failed) {
+            studioEnqueueRef.current = false
+            if (onStartStudioSound) {
+              onStartStudioSound()
+            } else {
+              void enqueueStudioSound().catch(() => {
+                studioEnqueueRef.current = false
+                toast.error('Could not start Studio Sound')
+              })
+            }
+          }
         }}
         onRetryEnqueue={() => {
           studioEnqueueRef.current = false

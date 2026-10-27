@@ -65,6 +65,8 @@ type Action =
   | { type: 'clearProducerStrip' }
   | { type: 'saved' }
   | { type: 'saving' }
+  | { type: 'serverSync'; edits: ClipEditsV2 }
+  | { type: 'needsSave' }
 
 function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
   return canonicalEditsJson(a) === canonicalEditsJson(b)
@@ -120,6 +122,13 @@ export function editorEditsReducer(state: State, action: Action): State {
       return { ...state, saveState: state.saveState === 'dirty' ? 'dirty' : 'saved' }
     case 'saving':
       return { ...state, saveState: 'saving' }
+    case 'serverSync':
+      if (editsEqual(state.edits, action.edits)) {
+        return { ...state, saveState: 'saved' }
+      }
+      return { ...state, edits: action.edits, saveState: 'saved' }
+    case 'needsSave':
+      return { ...state, saveState: 'dirty' }
     default:
       return state
   }
@@ -143,7 +152,12 @@ export function useEditorState(
     producerStrip: null,
   })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saveGenRef = useRef(0)
+  const localRevisionRef = useRef(
+    draft && draftDiffersFromServer(draft, safeInitial) ? 1 : 0,
+  )
+  const savedRevisionRef = useRef(0)
+  const saveInFlightRef = useRef(false)
+  const savePendingRef = useRef(false)
   const serverUpdatedAtRef = useRef(opts?.serverUpdatedAt)
   const wordsRef = useRef(opts?.words ?? [])
   wordsRef.current = opts?.words ?? wordsRef.current
@@ -157,20 +171,32 @@ export function useEditorState(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
   }, [])
 
-  const setEdits = useCallback((edits: ClipEditsV2, pushHistory = true) => {
-    dispatch({ type: 'set', edits, pushHistory })
+  const bumpLocalRevision = useCallback(() => {
+    localRevisionRef.current += 1
   }, [])
+
+  const setEdits = useCallback((edits: ClipEditsV2, pushHistory = true) => {
+    bumpLocalRevision()
+    dispatch({ type: 'set', edits, pushHistory })
+  }, [bumpLocalRevision])
 
   /** One undo step for a full producer patch (not per-field). */
   const applyProducerPatch = useCallback(
     (edits: ClipEditsV2, before?: ClipEditsV2, producerChangeCount?: number) => {
+      bumpLocalRevision()
       dispatch({ type: 'BATCH', edits, before, producerChangeCount })
     },
-    [],
+    [bumpLocalRevision],
   )
 
-  const undo = useCallback(() => dispatch({ type: 'undo' }), [])
-  const redo = useCallback(() => dispatch({ type: 'redo' }), [])
+  const undo = useCallback(() => {
+    bumpLocalRevision()
+    dispatch({ type: 'undo' })
+  }, [bumpLocalRevision])
+  const redo = useCallback(() => {
+    bumpLocalRevision()
+    dispatch({ type: 'redo' })
+  }, [bumpLocalRevision])
   const clearProducerStrip = useCallback(() => dispatch({ type: 'clearProducerStrip' }), [])
 
   const wordSpans = useCallback(() => {
@@ -430,28 +456,69 @@ export function useEditorState(
     [setEdits, state.edits, wordSpans],
   )
 
-  const persistEdits = useCallback(async () => {
-    const gen = saveGenRef.current
+  const processSaveQueue = useCallback(async () => {
+    if (saveInFlightRef.current) {
+      savePendingRef.current = true
+      return
+    }
+    if (savedRevisionRef.current >= localRevisionRef.current) {
+      dispatch({ type: 'saved' })
+      return
+    }
+
+    saveInFlightRef.current = true
+    dispatch({ type: 'saving' })
     try {
-      const res = await patchClip(clipId, {
-        edits: editsRef.current,
-        expectedUpdatedAt: serverUpdatedAtRef.current,
-      })
-      if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
-      clearEditorAutosaveDraft(clipId)
-      if (gen === saveGenRef.current) dispatch({ type: 'saved' })
-      return res
-    } catch (err) {
-      if (err instanceof FetchJsonError && err.status === 409 && err.conflictData) {
-        const data = err.conflictData as { edits?: ClipEditsV2; updatedAt?: string }
-        if (data.edits) {
-          dispatch({ type: 'set', edits: normalizeEdits(data.edits, bounds), pushHistory: false })
-          if (data.updatedAt) serverUpdatedAtRef.current = data.updatedAt
-          toast.error('Edits were updated elsewhere — loaded the latest saved version')
+      while (savedRevisionRef.current < localRevisionRef.current) {
+        const revisionAtSend = localRevisionRef.current
+        writeEditorAutosaveDraft(clipId, {
+          edits: editsRef.current,
+          savedAt: new Date().toISOString(),
+          serverUpdatedAt: serverUpdatedAtRef.current,
+        })
+        try {
+          const res = await patchClip(clipId, {
+            edits: editsRef.current,
+            expectedUpdatedAt: serverUpdatedAtRef.current,
+          })
+          if (revisionAtSend !== localRevisionRef.current) {
+            continue
+          }
+          if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
+          clearEditorAutosaveDraft(clipId)
+          savedRevisionRef.current = revisionAtSend
+          break
+        } catch (err) {
+          if (err instanceof FetchJsonError && err.status === 409 && err.conflictData) {
+            const data = err.conflictData as { edits?: ClipEditsV2; updatedAt?: string }
+            if (data.updatedAt) serverUpdatedAtRef.current = data.updatedAt
+            if (data.edits && revisionAtSend === localRevisionRef.current) {
+              dispatch({
+                type: 'serverSync',
+                edits: normalizeEdits(data.edits, bounds),
+              })
+              savedRevisionRef.current = revisionAtSend
+              toast.error('Edits were updated elsewhere — loaded the latest saved version')
+              break
+            }
+            continue
+          }
+          throw err
         }
       }
-      if (gen === saveGenRef.current) dispatch({ type: 'saved' })
-      throw err
+    } catch {
+      /* keep dirty; user can retry */
+    } finally {
+      saveInFlightRef.current = false
+      const pending = savePendingRef.current
+      savePendingRef.current = false
+      dispatch({ type: 'saved' })
+      if (savedRevisionRef.current < localRevisionRef.current) {
+        dispatch({ type: 'needsSave' })
+      }
+      if (pending && savedRevisionRef.current < localRevisionRef.current) {
+        void processSaveQueue()
+      }
     }
   }, [bounds, clipId])
 
@@ -459,19 +526,12 @@ export function useEditorState(
     if (state.saveState !== 'dirty') return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      const gen = ++saveGenRef.current
-      dispatch({ type: 'saving' })
-      writeEditorAutosaveDraft(clipId, {
-        edits: editsRef.current,
-        savedAt: new Date().toISOString(),
-        serverUpdatedAt: serverUpdatedAtRef.current,
-      })
-      void persistEdits().catch(() => {})
+      void processSaveQueue()
     }, 200)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [clipId, persistEdits, state.edits, state.saveState])
+  }, [clipId, processSaveQueue, state.edits, state.saveState])
 
   useEffect(() => {
     if (!state.producerStrip) return
@@ -525,16 +585,14 @@ export function useEditorState(
       serverUpdatedAtRef.current = iso
     },
     flushSave: () => {
-      if (state.saveState === 'dirty' || state.saveState === 'saving') {
-        const gen = ++saveGenRef.current
-        dispatch({ type: 'saving' })
-        return persistEdits()
-          .then(() => undefined)
-          .catch(() => {
-            throw new Error('Could not save edits')
-          })
+      if (savedRevisionRef.current >= localRevisionRef.current) {
+        return Promise.resolve()
       }
-      return Promise.resolve()
+      return processSaveQueue().then(() => {
+        if (savedRevisionRef.current < localRevisionRef.current) {
+          throw new Error('Could not save edits')
+        }
+      })
     },
   }
 }
