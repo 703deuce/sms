@@ -11,6 +11,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import { formatDur, formatTimecode } from '@/lib/clips/format'
 import { ReasonChips } from '@/components/streamer/reason-chips'
 import { ClipCardVideo } from '@/components/clips/clip-card-video'
+import { clipLayoutChip, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 
 export function ClipCard({
   clip,
@@ -38,6 +39,9 @@ export function ClipCard({
       setThumbBusy(false)
     }
   }
+  const aiMeta = (clip.aiMeta || {}) as ClipAiMeta
+  const whyLine = clipWhySummary(aiMeta)
+  const layoutChip = clipLayoutChip(aiMeta)
   const scores = (clip.scores || {}) as Record<string, string>
   const streamerReasons =
     (clip.aiMeta as { streamer?: { reasons?: { kind: string; label: string; value?: string }[] } })?.streamer
@@ -61,7 +65,7 @@ export function ClipCard({
         {clip.previewUrl || clip.posterUrl ? (
           <ClipCardVideo clipId={clip.id} previewUrl={clip.previewUrl} posterUrl={clip.posterUrl} />
         ) : null}
-        <div className="absolute left-2 top-2">
+        <div className="absolute left-2 top-2" title={whyLine ?? undefined}>
           <ScoreRing score={clip.score} />
         </div>
         <DurationChip ms={clip.durationMs} />
@@ -94,10 +98,13 @@ export function ClipCard({
                 {label} {grade ?? '—'}
               </span>
             ))}
+            {layoutChip ? (
+              <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{layoutChip}</span>
+            ) : null}
           </div>
         ) : null}
-        {clip.reason ? (
-          <p className="line-clamp-2 text-xs text-muted-foreground">{clip.reason}</p>
+        {whyLine || clip.reason ? (
+          <p className="line-clamp-2 text-xs text-muted-foreground">{whyLine || clip.reason}</p>
         ) : null}
         <ReasonChips
           score={isStreamer ? clip.score : undefined}
