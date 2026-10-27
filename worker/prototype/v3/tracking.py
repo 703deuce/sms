@@ -118,7 +118,13 @@ def histogram_shot_cuts(gray_frames: list[np.ndarray], thresh: float = 0.35) -> 
 
 
 def sface_path(models_dir: str) -> str:
-    return os.path.join(models_dir, SFACE_FILENAME)
+    primary = os.path.join(models_dir, SFACE_FILENAME)
+    if os.path.isfile(primary):
+        return primary
+    legacy = os.path.join(models_dir, "sface.onnx")
+    if os.path.isfile(legacy):
+        return legacy
+    return primary
 
 
 def load_sface(models_dir: str) -> cv2.FaceRecognizerSF:

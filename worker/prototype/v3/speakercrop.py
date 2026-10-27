@@ -9,6 +9,11 @@ from mediapipe.tasks.python import vision, BaseOptions
 HERE = os.path.dirname(os.path.abspath(__file__))
 INP, OUT = sys.argv[1], sys.argv[2]
 E = lambda k, d: float(os.environ.get(k, d))
+if os.environ.get("CROP_TRACK_IN"):
+    from speakercrop_v2 import cli
+
+    cli(INP, OUT)
+    sys.exit(0)
 if os.environ.get("REFRAME_V", "").strip() == "2":
     try:
         from speakercrop_v2 import cli

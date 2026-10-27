@@ -10,6 +10,12 @@ import numpy as np
 from tracking import Det, Tracklet, associate_frame, cluster_tracklets, embed_tracklet, load_sface
 
 HERE = Path(__file__).resolve().parent
+import sys
+
+WORKER_ROOT = HERE.parents[1]
+if str(WORKER_ROOT) not in sys.path:
+    sys.path.insert(0, str(WORKER_ROOT))
+from clips_worker.reframe_models import YUNET_ONNX, resolve_onnx
 PROBE_SAMPLE_FPS = float(os.environ.get("PROBE_SAMPLE_FPS", "1"))
 PROBE_MAX_WIDTH = int(os.environ.get("PROBE_MAX_WIDTH", "640"))
 PROBE_MAX_SAMPLES = int(os.environ.get("PROBE_MAX_SAMPLES", "120"))
@@ -26,7 +32,7 @@ def probe_person_count(video_path: str) -> dict:
     sar_den = cap.get(cv2.CAP_PROP_SAR_DEN) or 1.0
     if sar_den and abs(float(sar_num) / float(sar_den) - 1.0) > 0.02:
         w = int(round(w * float(sar_num) / float(sar_den)))
-    det_path = os.path.join(HERE, "yunet.onnx")
+    det_path = resolve_onnx(str(HERE), YUNET_ONNX)
     det = cv2.FaceDetectorYN.create(det_path, "", (640, 480), 0.55, 0.3, 50)
     scale = PROBE_MAX_WIDTH / max(w, h)
     nw, nh = max(1, int(w * scale)), max(1, int(h * scale))

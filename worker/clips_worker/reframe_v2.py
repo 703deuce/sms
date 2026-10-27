@@ -3,18 +3,13 @@ from __future__ import annotations
 
 import os
 
-<<<<<<< HEAD
-=======
 V2_ONLY_LAYOUTS = frozenset(
     {"grid3", "grid4", "dynamic", "grid", "split_debate", "locked_off"},
 )
 
->>>>>>> 1ee3de94e (fix(clipper): #762 review — models, routing, export aiMeta, probe, CI)
 
 def reframe_v2_ops_enabled() -> bool:
     return os.environ.get("REFRAME_V2_ENABLED", "").strip() == "1"
-<<<<<<< HEAD
-=======
 
 
 def layout_shadow_enabled() -> bool:
@@ -28,4 +23,3 @@ def layout_for_legacy_reframe(requested: str) -> str:
     if layout in V2_ONLY_LAYOUTS:
         return "speaker_follow"
     return layout
->>>>>>> 493490e22 (fix(clipper): #762 watchdog — shadow probe gate, director layouts, probe memory, CI)

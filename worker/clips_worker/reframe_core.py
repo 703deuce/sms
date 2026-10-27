@@ -270,6 +270,10 @@ def track_faces(video_path: str, params: dict | None = None) -> dict:
         return _empty_face_track(params)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     W, H = int(cap.get(3)), int(cap.get(4))
+    sar_num = cap.get(cv2.CAP_PROP_SAR_NUM) or 1.0
+    sar_den = cap.get(cv2.CAP_PROP_SAR_DEN) or 1.0
+    if sar_den and abs(float(sar_num) / float(sar_den) - 1.0) > 0.02:
+        W = int(round(W * float(sar_num) / float(sar_den)))
     step = max(1, round(fps / sample_fps))
     T: list[float] = []
     tracklets: dict[int, Tracklet] = {}
@@ -437,9 +441,9 @@ def speaker_posterior(turns: np.ndarray, spk2person: dict[int, int], act: np.nda
 @dataclass
 class DirectorCfg:
     sample_fps: float = 5.0
-    min_hold_s: float = 1.5        # MIN_SEG (raised from 0.8; bic wants 1.5-2 s)
+    min_hold_s: float = 2.25       # MIN_SHOT_CLOSE (bic wants 1.5–2 s+; v2 default)
     lead_s: float = 0.4            # LEAD / LEAD_WORDS: onset anticipation
-    switch_cost: float = 2.0       # HYST * 4: hysteresis = cost of any cut
+    switch_cost: float = 2.4       # HYST(0.6) * 4: hysteresis = cost of any cut
     split_bias: float = 1.2        # extra cost of 2-up vs single
     grid_bias: float = 1.8         # extra cost of grid vs single
     wide_bias: float = 0.9

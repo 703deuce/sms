@@ -8,6 +8,16 @@ def test_director_cfg_uses_calmer_defaults():
     assert cfg.switch_cost == 4 * 0.6
 
 
+def test_speakercrop_v2_calls_reframe_core_director_cfg():
+    from pathlib import Path
+
+    v2 = (
+        Path(__file__).resolve().parents[1] / "prototype" / "v3" / "speakercrop_v2.py"
+    ).read_text(encoding="utf-8")
+    assert "rc.director_cfg_from_env" in v2
+    assert "rc.analyze_clip" in v2
+
+
 def test_director_cfg_maps_multiperson_layout_modes():
     g3 = director_cfg_from_env({"LAYOUT_MODE": "grid3"})
     assert g3.allow_grid and not g3.allow_split
