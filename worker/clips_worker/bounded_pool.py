@@ -1,7 +1,7 @@
 """Run indexed tasks with bounded concurrency; results preserve input order."""
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, TypeVar
 
 R = TypeVar("R")
@@ -12,10 +12,12 @@ def run_bounded_indexed_pool(
     max_workers: int,
     worker: Callable[[int], R],
     on_start: Callable[[int, int], None] | None = None,
+    on_complete: Callable[[int, R], None] | None = None,
 ) -> list[R]:
     if count <= 0:
         return []
     workers = max(1, max_workers)
+    results: list[R | None] = [None] * count
 
     def _task(idx: int) -> tuple[int, R]:
         if on_start is not None:
@@ -23,6 +25,10 @@ def run_bounded_indexed_pool(
         return idx, worker(idx)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        pairs = list(executor.map(_task, range(count)))
-    pairs.sort(key=lambda p: p[0])
-    return [row for _, row in pairs]
+        futures = [executor.submit(_task, i) for i in range(count)]
+        for fut in as_completed(futures):
+            idx, row = fut.result()
+            results[idx] = row
+            if on_complete is not None:
+                on_complete(idx, row)
+    return [row for row in results if row is not None]

@@ -27,17 +27,21 @@ def reframe_progress_payload(
     *,
     base_pct: int = 55,
     span_pct: int = 30,
+    clips_ready: int | None = None,
 ) -> dict:
-    completed_guess = min(idx, clip_total)
+    completed_guess = clips_ready if clips_ready is not None else min(idx, clip_total)
     progress = base_pct + int(span_pct * completed_guess / max(1, clip_total))
     eta = reframe_eta_seconds(completed_guess, clip_total, started_at, concurrency)
-    return {
+    payload = {
         "projectStatus": "REFRAMING",
         "stage": f"reframe_{idx + 1}_of_{clip_total}",
         "progress": min(99, progress),
         "etaSeconds": max(0, eta),
         "jobStatus": "RUNNING",
+        "clipsTotal": clip_total,
+        "clipsReady": max(0, completed_guess),
     }
+    return payload
 
 
 def picker_progress_payload(stage: str, progress: int, eta_seconds_val: int | None = None) -> dict:

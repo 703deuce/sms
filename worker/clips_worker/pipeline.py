@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
+
+import psycopg2
 
 from clips_worker.clip_progress import reframe_progress_payload
 
@@ -382,11 +386,44 @@ def run_m4_pipeline(
         render_conc = clips_render_concurrency()
 
         reframe_started_at = time.time()
+        clips_ready_lock = threading.Lock()
+        clips_ready_count = 0
+        dsn = os.environ["DATABASE_URL"]
+
+        post_progress(
+            job_id,
+            {
+                **reframe_progress_payload(0, total, reframe_started_at, render_conc, clips_ready=0),
+                "projectStatus": "REFRAMING",
+                "stage": f"reframe_1_of_{total}",
+            },
+        )
+        print(
+            f"[clipper:progress] job={job_id} project={project_id} event=reframe_start clips_total={total}",
+            flush=True,
+        )
 
         def on_reframe_start(idx: int, clip_total: int) -> None:
             post_progress(
                 job_id,
-                reframe_progress_payload(idx, clip_total, reframe_started_at, render_conc),
+                reframe_progress_payload(idx, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count),
+            )
+
+        def on_reframe_complete(idx: int, row: dict) -> None:
+            nonlocal clips_ready_count
+            with psycopg2.connect(dsn) as ins_conn:
+                insert_clips_batch(ins_conn, [row])
+            with clips_ready_lock:
+                clips_ready_count += 1
+                ready = clips_ready_count
+            post_progress(
+                job_id,
+                reframe_progress_payload(idx, total, reframe_started_at, render_conc, clips_ready=ready),
+            )
+            print(
+                f"[clipper:progress] job={job_id} project={project_id} event=clip_ready "
+                f"clip_index={idx + 1} clips_ready={ready} clips_total={total}",
+                flush=True,
             )
 
         def build_clip_row(idx: int) -> dict:
@@ -459,25 +496,30 @@ def run_m4_pipeline(
                 ),
             }
 
-        clip_rows = run_bounded_indexed_pool(total, render_conc, build_clip_row, on_start=on_reframe_start)
+        clip_rows = run_bounded_indexed_pool(
+            total,
+            render_conc,
+            build_clip_row,
+            on_start=on_reframe_start,
+            on_complete=on_reframe_complete,
+        )
 
-        for idx in range(total):
-            post_progress(
-                job_id,
-                {
-                    "projectStatus": "RENDERING",
-                    "stage": f"render_{idx + 1}_of_{total}",
-                    "progress": 85 + int(14 * (idx + 1) / total),
-                    "jobStatus": "RUNNING",
-                },
-            )
+        post_progress(
+            job_id,
+            {
+                "projectStatus": "RENDERING",
+                "stage": "finalizing",
+                "progress": 92,
+                "jobStatus": "RUNNING",
+                "clipsTotal": total,
+                "clipsReady": clips_ready_count,
+            },
+        )
 
         if mode == "anything":
             for row in clip_rows:
                 if not row.get("cropKey"):
                     raise RuntimeError(f"pipeline invariant: missing cropKey for clip {row.get('id')}")
-
-        insert_clips_batch(conn, clip_rows)
         if settings.get("autoStockBroll") and clip_rows:
             from clips_worker.internal_callback import post_project_auto_broll
 
