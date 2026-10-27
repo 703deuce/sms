@@ -154,8 +154,8 @@ export function ClipCard({
               ))
             : null}
         </div>
-        {clip.reason ? (
-          <p className="line-clamp-2 text-xs text-muted-foreground">{clip.reason}</p>
+        {why || clip.reason ? (
+          <p className="line-clamp-2 text-xs text-muted-foreground">{why || clip.reason}</p>
         ) : null}
         <ReasonChips
           score={isStreamer ? clip.score : undefined}
