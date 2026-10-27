@@ -30,10 +30,10 @@ export function TimelineWordbar({
       {cutRegions.map((cut) => (
         <div
           key={`cut-wb-${cut.loMs}-${cut.wordIds[0]}`}
-          className="pointer-events-none absolute inset-y-0 z-[1] border-x border-red-500/80 bg-red-500/25"
+          className="pointer-events-none absolute inset-y-0 z-[1] border-x-2 border-red-600/90 bg-red-500/35 bg-[repeating-linear-gradient(135deg,rgba(239,68,68,0.35)_0px,rgba(239,68,68,0.35)_4px,transparent_4px,transparent_8px)]"
           style={{
             left: cut.loMs * pxPerMs,
-            width: Math.max(2, (cut.hiMs - cut.loMs) * pxPerMs),
+            width: Math.max(8, (cut.hiMs - cut.loMs) * pxPerMs),
           }}
           title="Cut"
           data-testid="timeline-cut-region"

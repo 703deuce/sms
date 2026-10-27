@@ -15,13 +15,15 @@ export function listFillerHits(
     selectionOnly?: boolean
     selectedIds?: Set<string>
     avoidHarshCuts?: boolean
+    ignoredSet?: Set<string>
   },
 ): FillerHit[] {
   const filter = opts?.filter ?? 'all'
+  const ignored = opts?.ignoredSet
   const hits: FillerHit[] = []
   for (let i = 0; i < orderedWords.length; i++) {
     const w = orderedWords[i]
-    if (!w.isFiller || deletedSet.has(w.id)) continue
+    if (!w.isFiller || deletedSet.has(w.id) || ignored?.has(w.id)) continue
     if (filter === 'lexicon' && w.fillerKind !== 'lexicon') continue
     if (filter === 'repeat' && w.fillerKind !== 'repeat') continue
     if (opts?.selectionOnly && opts.selectedIds && !opts.selectedIds.has(w.id)) continue

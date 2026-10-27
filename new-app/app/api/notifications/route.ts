@@ -5,6 +5,26 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveInternalUserId } from '@/lib/server/internal-user'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 15
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('notifications_query_timeout')), ms)
+    p.then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(t)
+        reject(e)
+      },
+    )
+  })
+}
+
 export async function GET(request: Request) {
   try {
     if (!(await isDatabaseReady())) {
@@ -23,12 +43,15 @@ export async function GET(request: Request) {
     const prisma = getPrisma()
     const url = new URL(request.url)
     const cursor = url.searchParams.get('cursor')
-    const items = await prisma.inAppNotification.findMany({
+    const items = await withTimeout(
+      prisma.inAppNotification.findMany({
       where: { workspaceId, userId },
       orderBy: { createdAt: 'desc' },
       take: 30,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    })
+      }),
+      8000,
+    )
     return NextResponse.json({
       data: {
         items: items.map((n) => ({
@@ -44,6 +67,13 @@ export async function GET(request: Request) {
       },
     })
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('notifications_query_timeout')) {
+      return NextResponse.json(
+        { data: { items: [], nextCursor: null } },
+        { status: 503, headers: { 'Retry-After': '2' } },
+      )
+    }
     return jsonError(err, 500)
   }
 }

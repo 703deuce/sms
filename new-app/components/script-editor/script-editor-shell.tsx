@@ -21,6 +21,7 @@ import {
   sourceMsAtOutput,
 } from '@/lib/clips/script-editor/output-playback'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
+import type { ScriptCompositionOp } from '@/lib/clips/script-edl/ops'
 import { useScriptComposition } from '@/components/script-editor/use-script-composition'
 import { scrollWordIntoTranscriptPane } from '@/lib/clips/script-editor/scroll-word-into-view'
 import { scrollWordToFollowPlayhead } from '@/lib/clips/script-editor/follow-playhead'
@@ -48,7 +49,9 @@ import { PreviewPillBar } from '@/components/script-editor/preview/preview-pill-
 import { ScriptCaptionOverlay } from '@/components/script-editor/preview/script-caption-overlay'
 import { resolveScriptSettings } from '@/lib/clips/script-editor/default-settings'
 import { formatGapChip, listFillerHits, type FillerFilter } from '@/lib/clips/script-editor/filler-hits'
-import { listGapHits, type GapFilterMode, type GapHit } from '@/lib/clips/script-editor/gap-hits'
+import { gapMsBetween, listGapHits, type GapFilterMode, type GapHit } from '@/lib/clips/script-editor/gap-hits'
+import { ScriptGapChipMenu } from '@/components/script-editor/script-gap-chip-menu'
+import { useCompositionTabLock } from '@/components/script-editor/use-composition-tab-lock'
 import {
   cropAtSourceMs,
   cropToVideoStyle,
@@ -126,6 +129,30 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [versionOpen, setVersionOpen] = useState(false)
   const document = previewDoc ?? serverDocument
   const readOnlyPreview = previewDoc != null
+  const tabLock = useCompositionTabLock(data.compositionId)
+  const editingLocked = readOnlyPreview || tabLock.readOnly
+
+  const safeApplyOp = useCallback(
+    (op: ScriptCompositionOp) => {
+      if (editingLocked) return
+      applyOp(op)
+    },
+    [editingLocked, applyOp],
+  )
+  const safeDeleteWords = useCallback(
+    (wordIds: string[]) => {
+      if (editingLocked) return
+      deleteWords(wordIds)
+    },
+    [editingLocked, deleteWords],
+  )
+  const safeRestoreWords = useCallback(
+    (wordIds: string[]) => {
+      if (editingLocked) return
+      restoreWords(wordIds)
+    },
+    [editingLocked, restoreWords],
+  )
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
@@ -176,7 +203,6 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const editorRec = useEditorRecorder(data.projectId)
   const [draftCrop, setDraftCrop] = useState<ReframeCropRect | null>(null)
   const [hoverRestoreWordId, setHoverRestoreWordId] = useState<string | null>(null)
-  const didInitialTimelineFit = useRef(false)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const [followPlayhead, setFollowPlayhead] = useState(true)
   const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null)
@@ -200,11 +226,6 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     () => new Set(document.transcriptHiddenWordIds ?? []),
     [document.transcriptHiddenWordIds],
   )
-  const fillerCount = useMemo(
-    () => data.editorWords.filter((w) => w.isFiller && !deletedSet.has(w.id)).length,
-    [data.editorWords, deletedSet],
-  )
-
   const orderedWords = useMemo(() => {
     const order = document.wordOrder ?? [...document.keptWordIds, ...document.deletedWordIds]
     return order.map((id) => wordsById.get(id)).filter((w): w is EditorWord => Boolean(w))
@@ -215,9 +236,23 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const activeIndex = useMemo(() => findActiveWordIndex(orderedWords, playheadMs), [orderedWords, playheadMs])
 
   const outDur = outputDurationMs(edl) || data.durationMs
-  const sourceSpanMs = Math.max(data.mediaDurationMs ?? data.durationMs, data.durationMs, outDur)
-  const playheadSourceMs = Math.max(0, playheadMs - data.rangeStartMs)
-  const outputMs = sourceMsToOutputTime(playheadMs, edl) ?? playheadSourceMs
+  const timelineOutputMs = useMemo(() => {
+    const edlEnd = edl.reduce(
+      (m, s) => (s.kind === 'source' ? Math.max(m, s.outOutMs) : Math.max(m, s.outInMs + s.durMs)),
+      0,
+    )
+    return Math.max(1, outDur, edlEnd)
+  }, [edl, outDur])
+  const lastSrcRel = useMemo(
+    () => orderedWords.reduce((m, w) => Math.max(m, w.t1Ms), data.rangeStartMs) - data.rangeStartMs,
+    [orderedWords, data.rangeStartMs],
+  )
+  const sourceSpanMs = Math.max(1, data.mediaDurationMs ?? 0, data.durationMs, lastSrcRel)
+  const playheadOutMs = useMemo(
+    () => sourceMsToOutputTime(playheadMs, edl) ?? Math.max(0, playheadMs - data.rangeStartMs),
+    [playheadMs, edl, data.rangeStartMs],
+  )
+  const outputMs = playheadOutMs
   const cutRegions = useMemo(
     () => outputCutRegions(orderedWords, deletedSet, edl, data.rangeStartMs),
     [orderedWords, deletedSet, edl, data.rangeStartMs],
@@ -334,7 +369,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const restoreIgnoredForWord = useCallback(
     (wordId: string) => {
       if (!ignoredSet.has(wordId)) return
-      applyOp({ type: 'restore_ignored', wordIds: [wordId] })
+      safeApplyOp({ type: 'restore_ignored', wordIds: [wordId] })
       toast.success('Restored word')
     },
     [ignoredSet, applyOp],
@@ -378,7 +413,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       return
     }
     if (selectedIgnoredIds.length) {
-      applyOp({ type: 'restore_ignored', wordIds: selectedIgnoredIds })
+      safeApplyOp({ type: 'restore_ignored', wordIds: selectedIgnoredIds })
       setSelAnchor(null)
       setSelEnd(null)
       toast.success('Restored ignored words')
@@ -387,7 +422,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
 
   const onIgnoreSelection = useCallback(() => {
     if (!selectedKeptIds.length) return
-    applyOp({ type: 'ignore_words', wordIds: selectedKeptIds.filter((id) => !ignoredSet.has(id)) })
+    safeApplyOp({ type: 'ignore_words', wordIds: selectedKeptIds.filter((id) => !ignoredSet.has(id)) })
     setSelAnchor(null)
     setSelEnd(null)
   }, [selectedKeptIds, ignoredSet, applyOp])
@@ -399,8 +434,9 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         selectionOnly: fillerSelectionOnly,
         selectedIds: selectedIds,
         avoidHarshCuts: fillerAvoidHarsh,
+        ignoredSet,
       }),
-    [orderedWords, deletedSet, fillerFilter, fillerSelectionOnly, selectedIds, fillerAvoidHarsh],
+    [orderedWords, deletedSet, fillerFilter, fillerSelectionOnly, selectedIds, fillerAvoidHarsh, ignoredSet],
   )
 
   const activeFillerHit = fillerHits[fillerCursor] ?? null
@@ -413,6 +449,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         maxGapMs: Math.round(maxGapSec * 1000),
         selectionOnly: gapSelectionOnly || (reviewMode === 'gap' && fillerSelectionOnly),
         selectedIds: selectedIds,
+        document,
       }),
     [
       orderedWords,
@@ -424,6 +461,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       fillerSelectionOnly,
       reviewMode,
       selectedIds,
+      document,
     ],
   )
 
@@ -446,17 +484,23 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     [settings.aspect],
   )
 
+  const sourceMsAtPlayhead = useMemo(() => {
+    const rel = sourceMsAtOutput(outputMs, edl)
+    if (rel != null) return data.rangeStartMs + rel
+    return playheadMs
+  }, [data.rangeStartMs, edl, outputMs, playheadMs])
+
   const liveCrop = useMemo(() => {
     if (draftCrop) return draftCrop
     if (settings.reframeMode === 'center_crop') return { ...baseCrop, cx: 50, cy: 50 }
-    return cropAtSourceMs(document.reframeKeyframes, playheadMs, baseCrop)
-  }, [draftCrop, settings.reframeMode, document.reframeKeyframes, playheadMs, baseCrop])
+    return cropAtSourceMs(document.reframeKeyframes, sourceMsAtPlayhead, baseCrop)
+  }, [draftCrop, settings.reframeMode, document.reframeKeyframes, sourceMsAtPlayhead, baseCrop])
 
   const videoCropStyle = useMemo(() => cropToVideoStyle(liveCrop), [liveCrop])
 
   const patchSettings = useCallback(
     (patch: Partial<ScriptEditorSettings>) => {
-      applyOp({ type: 'patch_settings', patch })
+      safeApplyOp({ type: 'patch_settings', patch })
     },
     [applyOp],
   )
@@ -519,7 +563,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           if (out != null) gapAtOutMs[h.word.id] = out
           maxDur = Math.max(maxDur, h.word.t1Ms - h.word.t0Ms)
         }
-        applyOp({
+        safeApplyOp({
           type: 'word_batch_action',
           action: 'replace_with_gap',
           wordIds,
@@ -527,7 +571,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           gapDurMs: Math.max(1, Math.round(maxDur)),
         })
       } else {
-        applyOp({ type: 'word_batch_action', action, wordIds })
+        safeApplyOp({ type: 'word_batch_action', action, wordIds })
       }
       toast.success(`Applied to ${wordIds.length} word(s)${savedMs ? ` (−${(savedMs / 1000).toFixed(1)} s)` : ''}. Undo`)
     },
@@ -539,7 +583,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       const hit = gapHits[gapCursor]
       if (!hit) return
       const targetMs = Math.round(targetGapSec * 1000)
-      applyOp({
+      safeApplyOp({
         type: 'shorten_gap_before',
         wordId: hit.word.id,
         prevWordId: hit.prevWord.id,
@@ -578,7 +622,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         targetGapMs: targetMs,
       }))
       const saved = gapHits.reduce((s, h) => s + Math.max(0, h.gapMs - targetMs), 0)
-      applyOp({ type: 'shorten_gaps_batch', items })
+      safeApplyOp({ type: 'shorten_gaps_batch', items })
       toast.success(`Shortened ${items.length} gap(s) (−${(saved / 1000).toFixed(1)} s). Undo`)
       setFillerReviewOpen(false)
       return
@@ -599,10 +643,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
 
   const commitReframeKeyframe = useCallback(() => {
     const crop = draftCrop ?? liveCrop
-    applyOp({ type: 'set_reframe_keyframe', srcMs: Math.round(playheadMs), crop })
+    safeApplyOp({ type: 'set_reframe_keyframe', srcMs: Math.round(playheadMs), crop })
     setDraftCrop(null)
     patchSettings({ reframeMode: 'manual' })
-  }, [applyOp, draftCrop, liveCrop, patchSettings, playheadMs])
+  }, [safeApplyOp, draftCrop, liveCrop, patchSettings, playheadMs])
 
   const onSelectFillerHit = useCallback(
     (hit: { index: number; word: EditorWord }) => {
@@ -695,7 +739,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       }
     }
     if (ids.length) {
-      deleteWords(ids)
+      safeDeleteWords(ids)
       setSelAnchor(null)
       setSelEnd(null)
     }
@@ -723,13 +767,13 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
       if (w && !deletedSet.has(w.id)) wordIds.push(w.id)
     }
     if (!wordIds.length) return
-    applyOp({ type: 'replace_with_gap', wordIds, atOutMs: Math.round(range.outLo), durMs })
+    safeApplyOp({ type: 'replace_with_gap', wordIds, atOutMs: Math.round(range.outLo), durMs })
     setSelAnchor(null)
     setSelEnd(null)
   }, [selAnchor, selEnd, chips, orderedWords, deletedSet, applyOp])
 
   const onSplitAtPlayhead = useCallback(() => {
-    applyOp({ type: 'add_split', outMs: Math.round(outputMs) })
+    safeApplyOp({ type: 'add_split', outMs: Math.round(outputMs) })
   }, [applyOp, outputMs])
 
   const onZoom = useCallback(
@@ -746,18 +790,20 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   )
 
   const onFit = useCallback(() => {
-    const shell = globalThis.document.querySelector('[data-script-shell]') as HTMLElement | null
-    const viewW = shell ? shell.clientWidth - 80 : 800
-    const span = Math.max(outDur, sourceSpanMs)
-    setPxPerMs(Math.max(0.005, viewW / Math.max(1, span)))
+    const scroller = globalThis.document.querySelector('[data-timeline-scroller]') as HTMLElement | null
+    if (!scroller) return
+    const viewW = scroller.clientWidth
+    if (viewW < 48) return
+    const laneLabelW = 56
+    setPxPerMs(Math.max(0.005, (viewW - laneLabelW) / Math.max(1, timelineOutputMs)))
     setScrollLeftPx(0)
-  }, [sourceSpanMs, outDur])
+  }, [timelineOutputMs])
 
   useEffect(() => {
-    if (didInitialTimelineFit.current) return
-    didInitialTimelineFit.current = true
-    onFit()
-  }, [onFit])
+    if (!timelineExpanded) return
+    const id = requestAnimationFrame(() => onFit())
+    return () => cancelAnimationFrame(id)
+  }, [timelineExpanded, timelineOutputMs, onFit])
 
   const seekToSourceRelativeMs = useCallback(
     (srcRelMs: number) => {
@@ -779,14 +825,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         for (const c of chips) {
           if (c.outStartMs >= targetOut && c.outStartMs <= outEnd) ids.push(c.wordId)
         }
-        if (ids.length) deleteWords(ids)
+        if (ids.length) safeDeleteWords(ids)
       } else if (edge === 'end' && deltaOutMs > 0) {
         for (const w of orderedWords) {
           if (deletedSet.has(w.id)) continue
           const out = sourceMsToOutputTime(w.t1Ms, edl)
           if (out != null && out > outEnd && out <= targetOut) ids.push(w.id)
         }
-        if (ids.length) applyOp({ type: 'restore_words', wordIds: ids })
+        if (ids.length) safeApplyOp({ type: 'restore_words', wordIds: ids })
       }
     },
     [chips, deleteWords, orderedWords, deletedSet, edl, applyOp],
@@ -897,7 +943,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
 
   const includeContextWord = useCallback(
     (wordId: string) => {
-      applyOp({ type: 'include_context_words', wordIds: [wordId] })
+      safeApplyOp({ type: 'include_context_words', wordIds: [wordId] })
     },
     [applyOp],
   )
@@ -988,11 +1034,11 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           <ArrowLeft className="size-4" aria-hidden />
           Back to project
         </Button>
-        <Button size="sm" variant="ghost" disabled={!canUndo} onClick={() => undo()}>
+        <Button size="sm" variant="ghost" disabled={!canUndo || editingLocked} onClick={() => undo()}>
           <Undo2 className="size-4" aria-hidden />
           Undo
         </Button>
-        <Button size="sm" variant="ghost" disabled={!canRedo} onClick={() => redo()}>
+        <Button size="sm" variant="ghost" disabled={!canRedo || editingLocked} onClick={() => redo()}>
           <Redo2 className="size-4" aria-hidden />
           Redo
         </Button>
@@ -1022,14 +1068,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         >
           <HelpCircle className="size-4" />
         </Button>
-        {fillerCount > 0 && (
+        {fillerHits.length > 0 && (
           <button
             type="button"
             onClick={openFillerTools}
             className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-800 dark:text-sky-200 hover:bg-sky-500/20"
-            title="Open filler tools"
+            title="Review-bar hits (same filter as filler tools)"
+            data-testid="script-filler-count-badge"
           >
-            Fillers {fillerCount}
+            Fillers {fillerHits.length}
           </button>
         )}
         <span className="text-xs text-muted-foreground">
@@ -1047,6 +1094,18 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           Export
         </Button>
       </header>
+
+      {tabLock.foreignTab && (
+        <div
+          className="flex items-center justify-between gap-2 border-b border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs"
+          data-testid="script-tab-lock-banner"
+        >
+          <span>Open in another tab — edits here are read-only until you take over.</span>
+          <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => tabLock.claimEditingHere()}>
+            Edit here
+          </Button>
+        </div>
+      )}
 
       {fillerReviewOpen && (
         <ScriptFillerReviewBar
@@ -1176,15 +1235,37 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                         const hiddenTranscript = transcriptHiddenSet.has(w.id)
                         const selected = selectedIds.has(w.id)
                         const showSplit = splitAfterIdx.has(idx)
+                        const prevWord = idx > 0 ? orderedWords[idx - 1] : null
+                        const gapMs =
+                          prevWord && !deleted && !deletedSet.has(prevWord.id)
+                            ? gapMsBetween(prevWord, w, document)
+                            : 0
                         return (
                           <span key={w.id} className="inline">
-                            {w.gapBeforeMs != null && w.gapBeforeMs >= 1000 && !deleted && (
-                              <span
-                                className="mr-1 inline rounded bg-muted px-1 text-[11px] text-muted-foreground"
-                                title={`${(w.gapBeforeMs / 1000).toFixed(1)}s pause`}
-                              >
-                                {formatGapChip(w.gapBeforeMs)}
-                              </span>
+                            {gapMs >= 400 && !deleted && prevWord && (
+                              <ScriptGapChipMenu
+                                gapMs={gapMs}
+                                targetGapSec={targetGapSec}
+                                onShorten={() => {
+                                  safeApplyOp({
+                                    type: 'shorten_gap_before',
+                                    wordId: w.id,
+                                    prevWordId: prevWord.id,
+                                    gapMs,
+                                    targetGapMs: Math.round(targetGapSec * 1000),
+                                  })
+                                }}
+                                onRemove={() => {
+                                  safeApplyOp({
+                                    type: 'shorten_gap_before',
+                                    wordId: w.id,
+                                    prevWordId: prevWord.id,
+                                    gapMs,
+                                    targetGapMs: 0,
+                                  })
+                                }}
+                                onKeep={() => undefined}
+                              />
                             )}
                             <span className="relative inline">
                             <button
@@ -1297,7 +1378,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                 if (!w || !prev) return
                 const gapMs = w.t0Ms - prev.t1Ms
                 const targetMs = Math.round(targetGapSec * 1000)
-                applyOp({
+                safeApplyOp({
                   type: 'shorten_gap_before',
                   wordId: w.id,
                   prevWordId: prev.id,
@@ -1327,19 +1408,21 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     previewAspectClass(settings.aspect ?? '9:16'),
                   )}
                 >
-                  <video
-                    ref={videoRef}
-                    className="h-full w-full object-cover"
-                    style={videoCropStyle}
-                    src={data.sourceVideoUrl}
-                    controls={false}
-                    preload="metadata"
-                    playsInline
-                    onTimeUpdate={syncFromVideo}
-                    onPlay={() => setPlaying(true)}
-                    onPause={() => setPlaying(false)}
-                    onClick={togglePlay}
-                  />
+                  <div className="absolute inset-0 overflow-hidden">
+                    <video
+                      ref={videoRef}
+                      className="absolute max-w-none object-cover"
+                      style={videoCropStyle}
+                      src={data.sourceVideoUrl}
+                      controls={false}
+                      preload="metadata"
+                      playsInline
+                      onTimeUpdate={syncFromVideo}
+                      onPlay={() => setPlaying(true)}
+                      onPause={() => setPlaying(false)}
+                      onClick={togglePlay}
+                    />
+                  </div>
                   <ScriptReframeCropOverlay
                     crop={liveCrop}
                     enabled={settings.reframeMode === 'manual'}
@@ -1378,7 +1461,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     onAddReframeKeyframe={commitReframeKeyframe}
                     onDeleteReframeKeyframe={(srcMs) => {
                       const next = (document.reframeKeyframes ?? []).filter((k) => k.srcMs !== srcMs)
-                      applyOp({ type: 'patch_reframe_keyframes', reframeKeyframes: next })
+                      safeApplyOp({ type: 'patch_reframe_keyframes', reframeKeyframes: next })
                     }}
                     onSeekReframeKeyframe={(srcMs) => seekToSourceMs(srcMs)}
                   />
@@ -1524,8 +1607,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           orderedWords={orderedWords}
           deletedSet={deletedSet}
           rangeStartMs={data.rangeStartMs}
-          sourceDurationMs={sourceSpanMs}
-          playheadSourceMs={playheadSourceMs}
+          sourceDurationMs={timelineOutputMs}
+          playheadSourceMs={playheadOutMs}
           cutRegions={cutRegions}
           showDeletedWords={showDeletedWords}
           videoUrl={data.sourceVideoUrl}
@@ -1544,7 +1627,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
             setSelAnchor(lo)
             setSelEnd(hi)
           }}
-          onPadDragEnd={(wordId, padMs) => applyOp({ type: 'set_pad_before', wordId, padMs })}
+          onPadDragEnd={(wordId, padMs) => safeApplyOp({ type: 'set_pad_before', wordId, padMs })}
           onTrimClipEdge={onTrimClipEdge}
         />
       </div>

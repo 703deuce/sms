@@ -54,10 +54,10 @@ export function TimelineScriptTrack({
       {cutRegions.map((cut) => (
         <div
           key={`cut-st-${cut.loMs}-${cut.wordIds[0]}`}
-          className="pointer-events-none absolute inset-y-0 z-[2] border-x-2 border-red-500/90 bg-red-500/20"
+          className="pointer-events-none absolute inset-y-0 z-[2] border-x-2 border-red-600/90 bg-red-500/30 bg-[repeating-linear-gradient(135deg,rgba(239,68,68,0.4)_0px,rgba(239,68,68,0.4)_5px,transparent_5px,transparent_10px)]"
           style={{
             left: cut.loMs * pxPerMs,
-            width: Math.max(3, (cut.hiMs - cut.loMs) * pxPerMs),
+            width: Math.max(10, (cut.hiMs - cut.loMs) * pxPerMs),
           }}
           title="Cut region"
           data-testid="timeline-cut-region"

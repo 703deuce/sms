@@ -87,7 +87,11 @@ export function TimelinePanel({
   onTrimClipEdge?: (clipKey: string, edge: 'start' | 'end', deltaOutMs: number) => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
-  const span = Math.max(1, sourceDurationMs, edl.reduce((m, s) => (s.kind === 'source' ? Math.max(m, s.outOutMs) : Math.max(m, s.outInMs + s.durMs)), 0))
+  const span = Math.max(
+    1,
+    sourceDurationMs,
+    edl.reduce((m, s) => (s.kind === 'source' ? Math.max(m, s.outOutMs) : Math.max(m, s.outInMs + s.durMs)), 0),
+  )
   const widthPx = span * pxPerMs
 
   const chips = useMemo(
@@ -179,7 +183,12 @@ export function TimelinePanel({
         />
       </div>
       {expanded && (
-        <div ref={scrollerRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden" onWheel={onWheel}>
+        <div
+          ref={scrollerRef}
+          data-timeline-scroller
+          className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden"
+          onWheel={onWheel}
+        >
           <div className="relative flex min-h-full" style={{ width: widthPx + LANE_LABEL_W }}>
             <div className="sticky left-0 z-20 w-14 shrink-0 border-r border-border/60 bg-background text-[10px] text-muted-foreground">
               <div className="flex h-6 items-center px-1">Ruler</div>

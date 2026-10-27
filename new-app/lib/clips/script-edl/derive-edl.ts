@@ -45,13 +45,13 @@ export function deriveEdl(
   const segments: EdlSegment[] = []
   let outMs = 0
   const deleted = new Set(document.deletedWordIds)
-  const ignored = new Set(document.ignoredWordIds ?? [])
   const order = document.wordOrder?.length
     ? document.wordOrder
     : [...document.keptWordIds, ...document.deletedWordIds]
+  /** Ignored words stay in the EDL (audio plays); only deleted words are cut. */
   const kept = order
     .map((id) => wordsById.get(id))
-    .filter((w): w is EditorWord => Boolean(w && !deleted.has(w.id) && !ignored.has(w.id)))
+    .filter((w): w is EditorWord => Boolean(w && !deleted.has(w.id)))
     .sort((a, b) => a.t0Ms - b.t0Ms)
 
   const pushGap = (durMs: number, freezeSrcMs: number) => {

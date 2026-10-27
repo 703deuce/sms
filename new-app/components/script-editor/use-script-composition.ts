@@ -9,7 +9,10 @@ import {
   type ScriptCompositionOp,
 } from '@/lib/clips/script-edl/ops'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
-import { clipsFetch } from '@/lib/clips-api'
+import {
+  fetchCompositionSync,
+  rebaseOpsForTarget,
+} from '@/lib/clips/script-editor/composition-sync'
 import {
   clearPersistedUndo,
   loadPersistedUndo,
@@ -18,6 +21,57 @@ import {
 
 function newOpId(): string {
   return `op_${crypto.randomUUID().replace(/-/g, '')}`
+}
+
+type OpPayload = { id: string; op: ScriptCompositionOp }
+
+async function postOpBatch(
+  compositionId: string,
+  baseRevision: number,
+  ops: OpPayload[],
+  targetDoc: ScriptDocumentV1,
+): Promise<{ revision: number; document: ScriptDocumentV1; ackedOpIds: string[] }> {
+  let revision = baseRevision
+  let pending = ops
+  let target = targetDoc
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const res = await fetch(`/api/clips/compositions/${compositionId}/ops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseRevision: revision, ops: pending }),
+    })
+    const json = (await res.json().catch(() => ({}))) as {
+      data?: { revision: number; document: ScriptDocumentV1; ackedOpIds: string[] }
+      error?: string
+      revision?: number
+    }
+
+    if (res.ok && json.data) {
+      return json.data
+    }
+
+    if (res.status === 409) {
+      const sync = await fetchCompositionSync(compositionId)
+      revision = sync.revision
+      const rebased = rebaseOpsForTarget(sync.document, target)
+      if (!rebased.length) {
+        if (documentsEqual(sync.document, target)) {
+          return { revision: sync.revision, document: sync.document, ackedOpIds: [] }
+        }
+        pending = opsBetweenDocuments(sync.document, target).map((op) => ({
+          id: newOpId(),
+          op,
+        }))
+      } else {
+        pending = rebased.map((op) => ({ id: newOpId(), op }))
+      }
+      continue
+    }
+
+    throw new Error(json.error || res.statusText)
+  }
+  throw new Error('Save failed after revision retries')
 }
 
 export function useScriptComposition(initial: {
@@ -43,6 +97,7 @@ export function useScriptComposition(initial: {
   const saveErrorRef = useRef(false)
   const queueRef = useRef<Promise<void>>(Promise.resolve())
   const localEpochRef = useRef(0)
+  const inFlightRef = useRef(false)
 
   const bumpStacks = useCallback(() => {
     setUndoDepth(undoStackRef.current.length)
@@ -63,7 +118,6 @@ export function useScriptComposition(initial: {
       clearPersistedUndo(initial.compositionId)
       return
     }
-    // Bootstrap document is server truth; only restore undo/redo stacks at the same revision.
     if (persisted.revision !== revisionRef.current) {
       if (persisted.revision > revisionRef.current) clearPersistedUndo(initial.compositionId)
       return
@@ -74,55 +128,62 @@ export function useScriptComposition(initial: {
   }, [initial.compositionId, bumpStacks])
 
   const enqueueServerOps = useCallback(
-    (ops: ScriptCompositionOp[], rollbackDoc: ScriptDocumentV1, onRollback?: () => void) => {
+    (ops: ScriptCompositionOp[], targetDoc: ScriptDocumentV1, onHardFail?: () => void) => {
       if (!ops.length) return
       const epochAtEnqueue = localEpochRef.current
       pendingOpsRef.current += 1
       setSaveState('saving')
       queueRef.current = queueRef.current
         .then(async () => {
-          const payloadOps = ops.map((op) => ({ id: newOpId(), op }))
-          const res = await clipsFetch<{
-            revision: number
-            document: ScriptDocumentV1
-            ackedOpIds: string[]
-          }>(`/api/clips/compositions/${initial.compositionId}/ops`, {
-            method: 'POST',
-            body: JSON.stringify({
-              baseRevision: revisionRef.current,
-              ops: payloadOps,
-            }),
-          })
-          if (epochAtEnqueue !== localEpochRef.current) return
-          revisionRef.current = res.revision
-          setRevision(res.revision)
-          if (res.document) setDocument(res.document)
-          saveErrorRef.current = false
-          savePersistedUndo(
-            initial.compositionId,
-            res.revision,
-            undoStackRef.current,
-            redoStackRef.current,
-            documentRef.current,
-          )
-        })
-        .catch(() => {
-          if (epochAtEnqueue !== localEpochRef.current) return
-          saveErrorRef.current = true
-          onRollback?.()
-          setDocument(rollbackDoc)
-          bumpStacks()
-          setSaveState('error')
+          if (inFlightRef.current) {
+            await new Promise<void>((r) => {
+              const tick = () => {
+                if (!inFlightRef.current) r()
+                else setTimeout(tick, 16)
+              }
+              tick()
+            })
+          }
+          inFlightRef.current = true
+          try {
+            const payloadOps = ops.map((op) => ({ id: newOpId(), op }))
+            const res = await postOpBatch(
+              initial.compositionId,
+              revisionRef.current,
+              payloadOps,
+              targetDoc,
+            )
+            if (epochAtEnqueue !== localEpochRef.current) return
+            revisionRef.current = res.revision
+            setRevision(res.revision)
+            if (res.document && !documentsEqual(res.document, documentRef.current)) {
+              setDocument(res.document)
+            }
+            saveErrorRef.current = false
+            savePersistedUndo(
+              initial.compositionId,
+              res.revision,
+              undoStackRef.current,
+              redoStackRef.current,
+              documentRef.current,
+            )
+          } catch {
+            if (epochAtEnqueue !== localEpochRef.current) return
+            saveErrorRef.current = true
+            onHardFail?.()
+            setSaveState('error')
+          } finally {
+            inFlightRef.current = false
+          }
         })
         .finally(() => {
           pendingOpsRef.current = Math.max(0, pendingOpsRef.current - 1)
-          if (pendingOpsRef.current === 0) {
-            setSaveState(saveErrorRef.current ? 'error' : 'saved')
-            if (!saveErrorRef.current) saveErrorRef.current = false
+          if (pendingOpsRef.current === 0 && !saveErrorRef.current) {
+            setSaveState('saved')
           }
         })
     },
-    [bumpStacks, initial.compositionId, setDocument],
+    [initial.compositionId, setDocument],
   )
 
   const commitLocal = useCallback(
@@ -132,7 +193,10 @@ export function useScriptComposition(initial: {
       redoStackRef.current = []
       setDocument(next)
       bumpStacks()
-      enqueueServerOps(serverOps, before)
+      enqueueServerOps(serverOps, next, () => {
+        setDocument(before)
+        bumpStacks()
+      })
     },
     [bumpStacks, enqueueServerOps, setDocument],
   )
@@ -174,9 +238,10 @@ export function useScriptComposition(initial: {
     const ops = opsBetweenDocuments(current, prev)
     setDocument(prev)
     bumpStacks()
-    enqueueServerOps(ops, current, () => {
+    enqueueServerOps(ops, prev, () => {
       undoStackRef.current.push(cloneDocument(prev))
       redoStackRef.current.pop()
+      setDocument(current)
       bumpStacks()
     })
   }, [bumpStacks, enqueueServerOps, setDocument])
@@ -190,9 +255,10 @@ export function useScriptComposition(initial: {
     const ops = opsBetweenDocuments(current, next)
     setDocument(next)
     bumpStacks()
-    enqueueServerOps(ops, current, () => {
+    enqueueServerOps(ops, next, () => {
       redoStackRef.current.push(cloneDocument(next))
       undoStackRef.current.pop()
+      setDocument(current)
       bumpStacks()
     })
   }, [bumpStacks, enqueueServerOps, setDocument])

@@ -35,16 +35,23 @@ export function cropAtSourceMs(
   return last.crop
 }
 
-/** CSS for cover-crop inside a box (percent-based focal point). */
+/** CSS for manual crop preview inside an overflow-hidden stage (percent crop rect). */
 export function cropToVideoStyle(crop: ReframeCropRect): {
-  objectPosition: string
-  transform: string
-  transformOrigin: string
+  width: string
+  height: string
+  left: string
+  top: string
+  maxWidth: string
 } {
-  const scale = Math.max(100 / crop.w, 100 / crop.h)
+  const wPct = (100 / crop.w) * 100
+  const hPct = (100 / crop.h) * 100
+  const leftPct = -((crop.cx - crop.w / 2) / crop.w) * 100
+  const topPct = -((crop.cy - crop.h / 2) / crop.h) * 100
   return {
-    objectPosition: `${crop.cx}% ${crop.cy}%`,
-    transform: `scale(${scale})`,
-    transformOrigin: `${crop.cx}% ${crop.cy}%`,
+    width: `${wPct}%`,
+    height: `${hPct}%`,
+    left: `${leftPct}%`,
+    top: `${topPct}%`,
+    maxWidth: 'none',
   }
 }

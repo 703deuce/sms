@@ -58,12 +58,109 @@ test.describe('Script editor prod (M4.1 + export)', () => {
     await page.waitForTimeout(1000)
     await expect(page.locator(`button[data-word-idx="${idx}"]`)).not.toHaveClass(/line-through/)
 
+    const scroller = page.locator('[data-timeline-scroller]')
     await page.getByRole('button', { name: 'Fit composition' }).click()
-    const shell = page.locator('[data-script-shell]')
-    const shellW = await shell.evaluate((el) => el.clientWidth)
-    const timelineScroller = page.locator('[data-script-shell] .overflow-x-auto').first()
-    const timelineW = await timelineScroller.evaluate((el) => el.scrollWidth)
-    expect(timelineW).toBeGreaterThanOrEqual(shellW * 0.7)
+    await expect(scroller).toBeVisible()
+    const { scrollWidth, clientWidth } = await scroller.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }))
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 8)
+  })
+
+  test('M4.1 #1: rapid undo/redo saves without Save failed', async ({ page }) => {
+    test.setTimeout(300_000)
+    if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
+      test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
+    }
+    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await expect(page.locator('[data-script-shell]')).toBeVisible({ timeout: 120_000 })
+    const wordBtn = page.locator('button[data-word-idx]').nth(3)
+    await wordBtn.click()
+    await page.keyboard.press('Delete')
+    await expect(page.getByText(/^Saved$/)).toBeVisible({ timeout: 60_000 })
+    for (let i = 0; i < 6; i++) {
+      await page.getByRole('button', { name: 'Undo' }).click()
+      await page.getByRole('button', { name: 'Redo' }).click()
+    }
+    await expect(page.getByText('Save failed')).not.toBeVisible({ timeout: 90_000 })
+    await expect(page.getByText(/^Saved$/)).toBeVisible({ timeout: 90_000 })
+  })
+
+  test('M4.1 #1b: concurrent composition tabs show lock banner', async ({ browser }) => {
+    test.setTimeout(300_000)
+    const storage = process.env.ROOMS_E2E_STORAGE_STATE || process.env.E2E_STORAGE_STATE
+    if (!storage) test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
+    const ctx1 = await browser.newContext({ storageState: storage })
+    const ctx2 = await browser.newContext({ storageState: storage })
+    const p1 = await ctx1.newPage()
+    const p2 = await ctx2.newPage()
+    await p1.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'domcontentloaded', timeout: 180_000 })
+    await p2.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'domcontentloaded', timeout: 180_000 })
+    await expect(p2.getByTestId('script-tab-lock-banner')).toBeVisible({ timeout: 60_000 })
+    await ctx1.close()
+    await ctx2.close()
+  })
+
+  test('M4.1 #3: filler badge matches edit-tools hit count', async ({ page }) => {
+    test.setTimeout(300_000)
+    if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
+      test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
+    }
+    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    const badge = page.getByTestId('script-filler-count-badge')
+    if (!(await badge.isVisible().catch(() => false))) {
+      test.skip(true, 'No filler hits on fixture')
+    }
+    const badgeN = Number((await badge.textContent())?.replace(/[^\d]/g, '') || '0')
+    await badge.click()
+    await expect(page.getByTestId('script-edit-tools-panel')).toBeVisible({ timeout: 30_000 })
+    const hitsLine = page.locator('[data-testid="script-edit-tools-panel"] p.text-xs.text-muted-foreground').first()
+    const panelN = Number((await hitsLine.textContent())?.replace(/[^\d]/g, '') || '0')
+    expect(badgeN).toBe(panelN)
+  })
+
+  test('M4.1 #4: ignore filler does not change output duration', async ({ page }) => {
+    test.setTimeout(300_000)
+    if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
+      test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
+    }
+    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    const durBefore = await page.locator('span[title="Output timeline (after cuts)"]').textContent()
+    const fillerWord = page.locator('button[data-word-idx].underline').first()
+    if (!(await fillerWord.isVisible().catch(() => false))) test.skip(true, 'No filler word')
+    await fillerWord.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: /Ignore/i }).click()
+    await expect(page.getByText(/^Saved$/)).toBeVisible({ timeout: 60_000 })
+    const durAfter = await page.locator('span[title="Output timeline (after cuts)"]').textContent()
+    expect(durAfter).toBe(durBefore)
+  })
+
+  test('M4.1 #5: gap chip opens shorten menu', async ({ page }) => {
+    test.setTimeout(300_000)
+    if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
+      test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
+    }
+    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    const chip = page.getByTestId('script-gap-chip').first()
+    if (!(await chip.isVisible().catch(() => false))) test.skip(true, 'No gap chip')
+    await chip.click()
+    await expect(page.getByTestId('script-gap-chip-menu')).toBeVisible()
+  })
+
+  test('M4.1 #7: cut regions span meaningful width on timeline', async ({ page }) => {
+    test.setTimeout(300_000)
+    if (!process.env.ROOMS_E2E_STORAGE_STATE && !process.env.E2E_STORAGE_STATE) {
+      test.skip(true, 'Set ROOMS_E2E_STORAGE_STATE')
+    }
+    await page.goto(`/app/clips/${PROJECT_ID}/script`, { waitUntil: 'networkidle', timeout: 180_000 })
+    await page.locator('button[data-word-idx]').first().click()
+    await page.keyboard.press('Delete')
+    await expect(page.getByText(/^Saved$/)).toBeVisible({ timeout: 60_000 })
+    const region = page.locator('[data-testid="timeline-cut-region"]').first()
+    await expect(region).toBeVisible({ timeout: 30_000 })
+    const w = await region.evaluate((el) => el.getBoundingClientRect().width)
+    expect(w).toBeGreaterThan(6)
   })
 
   test('M4.1 §5/§7/§10: filler bar, reframe, timeline cuts', async ({ page }) => {

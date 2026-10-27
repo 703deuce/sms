@@ -67,8 +67,10 @@ export function outputCutRegions(
     }
     const out0 = sourceMsToOutputTime(w.t0Ms, edl)
     const out1 = sourceMsToOutputTime(w.t1Ms, edl)
-    const lo = Math.max(0, out0 ?? w.t0Ms - rangeStartMs)
-    const hi = Math.max(lo + 1, out1 ?? w.t1Ms - rangeStartMs)
+    const srcLo = Math.max(0, w.t0Ms - rangeStartMs)
+    const srcHi = Math.max(srcLo + 1, w.t1Ms - rangeStartMs)
+    const lo = Math.max(0, out0 ?? srcLo)
+    const hi = Math.max(lo + 80, out1 ?? srcHi, srcHi)
     if (!run) run = { ids: [w.id], lo, hi }
     else {
       run.ids.push(w.id)
