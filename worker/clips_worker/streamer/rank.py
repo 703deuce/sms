@@ -109,15 +109,15 @@ def rank_moments(
     ranker = llm_ranker
     if ranker is None and use_llm:
         from clips_worker.streamer.llm_rank import make_llm_ranker
-        from clips_worker.video_picker import format_moments_for_llm
 
-        vm = video_moments or []
-        meta = {"duration_s": duration_s}
-        if vm:
-            meta["video_moments"] = format_moments_for_llm(
-                [{"t_s": (m.get("t_ms") or 0) / 1000.0, "reason": m.get("reason"), "score": m.get("score")} for m in vm]
-            )
-        ranker = make_llm_ranker(words, meta=meta)
+        ranker = make_llm_ranker(
+            words,
+            video_moments=video_moments,
+            chat_messages=chat_messages,
+            viewer_clips=viewer_clips,
+            cue_events=cue_events,
+            range_start_ms=0,
+        )
     picks, payload = fuse_moments(
         duration_s=duration_s,
         signals=signals,

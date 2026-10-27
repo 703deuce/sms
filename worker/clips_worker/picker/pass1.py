@@ -60,6 +60,9 @@ def find_moments(
     signals: list[SentenceSignals],
     genre: str,
     user_prompt: str,
+    *,
+    visual_moments: list[dict] | None = None,
+    range_start_ms: int = 0,
 ) -> list[dict]:
     if not sentences:
         return []
@@ -86,10 +89,28 @@ def find_moments(
             sentences_in_chunk=len(chunk),
             transcript_chars=len(transcript),
         )
+        from clips_worker.video_picker import format_moments_for_window
+
+        visual_block = ""
+        if visual_moments:
+            slice_txt = format_moments_for_window(
+                visual_moments,
+                lo_ms,
+                hi_ms,
+                range_start_ms=range_start_ms,
+            )
+            if slice_txt:
+                visual_block = (
+                    "\n\nVisual watch (Gemini, seconds from trim start). "
+                    "Propose visual-only moments even when the transcript is quiet:\n"
+                    f"{slice_txt}\n"
+                )
         user = (
             f"User focus: {user_prompt or '(none)'}\n"
-            "Return PASS 1 JSON. Find up to 3 candidates per 3 min of transcript; overgenerate.\n\n"
+            "Return PASS 1 JSON. Find up to 3 candidates per 3 min of transcript; overgenerate.\n"
+            "Use transcript AND visual notes together; visual-only beats count.\n\n"
             f"Transcript chunk ({lo_ms}-{hi_ms} ms):\n{transcript}"
+            f"{visual_block}"
         )
         data = chat_json(_pass1_system(genre), user, PASS1_SCHEMA, "moments_pass1")
         if not (data.get("moments") or []):

@@ -237,7 +237,10 @@ def _score_moments_batched(
     timeout_s = float(os.environ.get("CLIP_PASS2_BATCH_TIMEOUT_S", "45"))
     user_body = json.dumps(blocks, indent=0)
     if video_context:
-        user_body = f"Visual moments from Gemini video watch:\n{video_context}\n\n{user_body}"
+        user_body = (
+            "Full judge context: score each moment using transcript + visual watch together.\n"
+            f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user_body}"
+        )
     data = chat_json(
         _pass2_system(genre, batched=True),
         user_body,

@@ -66,7 +66,17 @@ def _words_excerpt(words: list[dict], start_ms: int, end_ms: int, pad_ms: int = 
     return " ".join(parts).strip()[:4000]
 
 
-def _rank_batch_gemini(batch: list[dict], words: list[dict], meta: dict | None = None) -> list[dict]:
+def _rank_batch_gemini(
+    batch: list[dict],
+    words: list[dict],
+    signals: dict,
+    *,
+    video_moments: list[dict] | None = None,
+    chat_messages: list[dict] | None = None,
+    viewer_clips: list[dict] | None = None,
+    cue_events: list[dict] | None = None,
+    range_start_ms: int = 0,
+) -> list[dict]:
     import os
 
     if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_GEMINI_API_KEY")):
@@ -74,20 +84,20 @@ def _rank_batch_gemini(batch: list[dict], words: list[dict], meta: dict | None =
     import requests
     from clips_worker.gemini_vision import GEMINI_BASE, discover_model, _key
 
+    from clips_worker.streamer.llm_rank_context import format_stream_rank_batch
+
     system = _load_prompt()
-    lines = []
-    for c in batch:
-        excerpt = _words_excerpt(words, c["start_ms"], c["end_ms"])
-        peak = c.get("signal_peak", 0)
-        lines.append(
-            f"id={c['id']} window={c['start_ms']}-{c['end_ms']}ms signal_peak={peak:.2f}\n{excerpt}\n"
-        )
-    user = "Rank these stream moments:\n\n" + "\n---\n".join(lines)
-    if meta:
-        user += f"\nContext: {meta}"
-        vm = meta.get("video_moments") if isinstance(meta, dict) else None
-        if vm:
-            user += f"\n\nVisual watch pass (Gemini):\n{vm}"
+    user = format_stream_rank_batch(
+        batch,
+        words,
+        signals,
+        words_excerpt_fn=_words_excerpt,
+        video_moments=video_moments,
+        chat_messages=chat_messages,
+        viewer_clips=viewer_clips,
+        cue_events=cue_events,
+        range_start_ms=range_start_ms,
+    )
     model = discover_model()
     res = requests.post(
         f"{GEMINI_BASE}/models/{model}:generateContent",
@@ -113,38 +123,71 @@ def rank_candidates_batch(
     batch: list[dict],
     words: list[dict],
     signals: dict,
-    meta: dict | None = None,
+    *,
+    video_moments: list[dict] | None = None,
+    chat_messages: list[dict] | None = None,
+    viewer_clips: list[dict] | None = None,
+    cue_events: list[dict] | None = None,
+    range_start_ms: int = 0,
 ) -> list[dict]:
+    from clips_worker.streamer.llm_rank_context import format_stream_rank_batch
+
     system = _load_prompt()
-    lines = []
-    for c in batch:
-        excerpt = _words_excerpt(words, c["start_ms"], c["end_ms"])
-        peak = c.get("signal_peak", 0)
-        lines.append(
-            f"id={c['id']} window={c['start_ms']}-{c['end_ms']}ms signal_peak={peak:.2f}\n{excerpt}\n"
-        )
-    user = "Rank these stream moments:\n\n" + "\n---\n".join(lines)
-    if meta:
-        user += f"\nContext: {meta}"
-        vm = meta.get("video_moments") if isinstance(meta, dict) else None
-        if vm:
-            user += f"\n\nVisual watch pass (Gemini):\n{vm}"
+    user = format_stream_rank_batch(
+        batch,
+        words,
+        signals,
+        words_excerpt_fn=_words_excerpt,
+        video_moments=video_moments,
+        chat_messages=chat_messages,
+        viewer_clips=viewer_clips,
+        cue_events=cue_events,
+        range_start_ms=range_start_ms,
+    )
     try:
         data = chat_json(system, user, SCHEMA, "stream_moments")
         return list(data.get("candidates") or [])
     except Exception as openai_err:
         print(f"[clipper:stream] llm_rank openai_failed err={openai_err!s} trying=gemini", flush=True)
-        return _rank_batch_gemini(batch, words, meta)
+        return _rank_batch_gemini(
+            batch,
+            words,
+            signals,
+            video_moments=video_moments,
+            chat_messages=chat_messages,
+            viewer_clips=viewer_clips,
+            cue_events=cue_events,
+            range_start_ms=range_start_ms,
+        )
 
 
-def make_llm_ranker(words: list[dict], meta: dict | None = None):
+def make_llm_ranker(
+    words: list[dict],
+    *,
+    video_moments: list[dict] | None = None,
+    chat_messages: list[dict] | None = None,
+    viewer_clips: list[dict] | None = None,
+    cue_events: list[dict] | None = None,
+    range_start_ms: int = 0,
+):
     def _ranker(candidates: list[dict], _words: list[dict], _signals: dict) -> list[dict]:
         out: list[dict] = []
         batch_size = 10
         for i in range(0, len(candidates), batch_size):
             chunk = candidates[i : i + batch_size]
             try:
-                out.extend(rank_candidates_batch(chunk, words, _signals, meta))
+                out.extend(
+                    rank_candidates_batch(
+                        chunk,
+                        words,
+                        _signals,
+                        video_moments=video_moments,
+                        chat_messages=chat_messages,
+                        viewer_clips=viewer_clips,
+                        cue_events=cue_events,
+                        range_start_ms=range_start_ms,
+                    )
+                )
             except Exception:
                 try:
                     import os

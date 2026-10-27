@@ -83,6 +83,46 @@ def pick_talking_clips(
 
     from clips_worker.worker_drain import WorkerDrainExit, drain_requested
 
+    visual_moments: list[dict] = []
+    video_context: str | None = None
+    try:
+        from pathlib import Path
+
+        from clips_worker.video_picker import (
+            format_moments_for_llm,
+            video_picker_enabled,
+            watch_upload_range,
+        )
+
+        if video_picker_enabled():
+            vpath = settings.get("sourceVideoPath")
+            if vpath and Path(str(vpath)).is_file():
+                import tempfile
+
+                from clips_worker.streamer.config import SCRATCH
+
+                scratch_vp = Path(tempfile.mkdtemp(dir=SCRATCH, prefix="vp_reg_"))
+                vm, _curve, _meta = watch_upload_range(
+                    Path(str(vpath)),
+                    range_start_ms=range_start_ms,
+                    range_end_ms=range_end_ms,
+                    scratch=scratch_vp,
+                )
+                if vm:
+                    visual_moments = vm
+                    video_context = format_moments_for_llm(
+                        [
+                            {
+                                **m,
+                                "t_s": (int(m.get("t_ms") or range_start_ms) - range_start_ms) / 1000.0,
+                            }
+                            for m in vm
+                        ]
+                    )
+                    picker_info("video_picker_regular", moments=len(vm))
+    except Exception as exc:
+        picker_info("video_picker_regular_skipped", error=str(exc)[:200])
+
     cache = picker_cache or {}
     scored_from_cache = cache.get("pass2Scored")
     moments_from_cache = cache.get("pass1Moments")
@@ -99,7 +139,14 @@ def pick_talking_clips(
             moments = moments_from_cache
         else:
             with stage_span("picker_pass1", heartbeat=True):
-                moments = find_moments(sentences, signals, genre, prompt)
+                moments = find_moments(
+                    sentences,
+                    signals,
+                    genre,
+                    prompt,
+                    visual_moments=visual_moments or None,
+                    range_start_ms=range_start_ms,
+                )
             if on_picker_checkpoint:
                 on_picker_checkpoint(moments, None)
             if drain_requested():
@@ -136,32 +183,6 @@ def pick_talking_clips(
                         on_headstart_picks(early)
             except Exception as exc:
                 picker_info("headstart_failed", error=str(exc)[:200])
-
-        video_context = ""
-        try:
-            from pathlib import Path
-
-            from clips_worker.video_picker import format_moments_for_llm, video_picker_enabled, watch_upload_range
-
-            if video_picker_enabled():
-                vpath = settings.get("sourceVideoPath")
-                if vpath and Path(str(vpath)).is_file():
-                    import tempfile
-
-                    from clips_worker.streamer.config import SCRATCH
-
-                    scratch_vp = Path(tempfile.mkdtemp(dir=SCRATCH, prefix="vp_reg_"))
-                    vm, _curve, _meta = watch_upload_range(
-                        Path(str(vpath)),
-                        range_start_ms=range_start_ms,
-                        range_end_ms=range_end_ms,
-                        scratch=scratch_vp,
-                    )
-                    if vm:
-                        video_context = format_moments_for_llm(vm)
-                        picker_info("video_picker_regular", moments=len(vm))
-        except Exception as exc:
-            picker_info("video_picker_regular_skipped", error=str(exc)[:200])
 
         with stage_span("picker_pass2", heartbeat=True):
             scored, pass2_audit = score_moments(

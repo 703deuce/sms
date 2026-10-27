@@ -141,6 +141,15 @@ def moments_to_per_second(moments: list[dict], duration_s: int) -> list[float]:
     return curve
 
 
+def absolute_moment_ms(moment: dict, range_start_ms: int = 0) -> int:
+    if moment.get("t_ms") is not None:
+        return int(moment["t_ms"])
+    try:
+        return range_start_ms + int(float(moment.get("t_s") or 0) * 1000)
+    except (TypeError, ValueError):
+        return range_start_ms
+
+
 def format_moments_for_llm(moments: list[dict], limit: int = 40) -> str:
     lines: list[str] = []
     for m in moments[:limit]:
@@ -153,6 +162,24 @@ def format_moments_for_llm(moments: list[dict], limit: int = 40) -> str:
         if reason:
             lines.append(f"- {t:.1f}s score={sc:.2f}: {reason}")
     return "\n".join(lines)
+
+
+def format_moments_for_window(
+    moments: list[dict],
+    lo_ms: int,
+    hi_ms: int,
+    *,
+    range_start_ms: int = 0,
+    pad_ms: int = 8000,
+    limit: int = 24,
+) -> str:
+    """Timestamped visual notes for a transcript chunk (absolute ms on source)."""
+    picked: list[dict] = []
+    for m in moments:
+        t_ms = absolute_moment_ms(m, range_start_ms)
+        if lo_ms - pad_ms <= t_ms <= hi_ms + pad_ms:
+            picked.append({**m, "t_s": (t_ms - range_start_ms) / 1000.0})
+    return format_moments_for_llm(picked, limit=limit)
 
 
 def watch_video_file(
@@ -262,5 +289,10 @@ def watch_upload_range(
     proxy = scratch / "video_picker_upload.mp4"
     make_watch_proxy(src_video, proxy, start_s, end_s)
     moments, meta = watch_video_file(proxy, duration_s=duration_s, chunk_label="regular")
+    for m in moments:
+        try:
+            m["t_ms"] = range_start_ms + int(float(m.get("t_s") or 0) * 1000)
+        except (TypeError, ValueError):
+            pass
     curve = moments_to_per_second(moments, duration_s)
     return moments, curve, meta
