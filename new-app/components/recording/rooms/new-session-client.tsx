@@ -44,12 +44,12 @@ export function RoomsNewClient() {
         <div className="surface w-full max-w-[480px] space-y-4 rounded-xl border border-border bg-card p-6">
           <h1 className="text-xl font-semibold">Record with others</h1>
           <div className="space-y-2">
-            <label className="text-[13px] font-semibold">Room title</label>
-            <Input className="h-9" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <label className="text-[13px] font-semibold" htmlFor="rooms-new-title">Room title</label>
+            <Input id="rooms-new-title" className="h-9" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <label className="text-[13px] font-semibold">Your name</label>
-            <Input className="h-9" value={hostName} onChange={(e) => setHostName(e.target.value)} />
+            <label className="text-[13px] font-semibold" htmlFor="rooms-new-host-name">Your name</label>
+            <Input id="rooms-new-host-name" className="h-9" value={hostName} onChange={(e) => setHostName(e.target.value)} />
           </div>
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <PrimaryButton className="h-9 w-full" disabled={loading || !title.trim()} onClick={create}>

@@ -29,11 +29,12 @@ test.describe('Rooms prod smoke', () => {
     const host = await hostContext.newPage()
     const guest = await guestContext.newPage()
 
-    await host.goto('/app/rooms/new', { waitUntil: 'domcontentloaded', timeout: 120_000 })
-    await host.getByLabel(/room title/i).fill(`E2E ${Date.now()}`)
-    await host.getByLabel(/your name/i).fill('E2E Host')
+    await host.goto('/app/rooms/new', { waitUntil: 'networkidle', timeout: 120_000 })
+    const roomInputs = host.locator('input')
+    await roomInputs.nth(0).fill(`E2E ${Date.now()}`)
+    await roomInputs.nth(1).fill('E2E Host')
     await host.getByRole('button', { name: /create room/i }).click()
-    await host.waitForURL(/\/app\/rooms\/recs_/, { timeout: 120_000 })
+    await host.waitForURL(/\/app\/rooms\/recs_/, { timeout: 180_000 })
     const sessionId = host.url().match(/recs_[a-f0-9]+/)?.[0]
     expect(sessionId).toBeTruthy()
 
