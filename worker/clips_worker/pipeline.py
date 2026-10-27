@@ -143,6 +143,7 @@ def reframe_clip_preview(
     ai_meta: dict,
     *,
     motion_subject: bool,
+    clip_index: int = 0,
 ) -> tuple[Path, str, dict]:
     """Pick speaker-follow vs fit-blur based on sustained face presence."""
     from clips_worker.subject_reframe import has_face_and_speech, write_motion_crop_track
@@ -163,6 +164,7 @@ def reframe_clip_preview(
             clip_start_ms=clip_start_ms,
             crop_track_out=crop_track_path,
             render_meta=render_meta,
+            clip_index=clip_index,
         )
         if render_meta.get("layoutRouteShadow"):
             ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
@@ -199,6 +201,7 @@ def reframe_clip_preview(
         crop_track_out=crop_track_path,
         preserve_existing_crop_track=preserve_crop_track,
         render_meta=render_meta,
+        clip_index=clip_index,
     )
     if render_meta.get("layoutRouteShadow"):
         ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
@@ -367,6 +370,12 @@ def run_m4_pipeline(
             picks, picker_message = pick_talking_clips(words, str(audio_wav), settings, range_start, range_end)
             post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
 
+        print(
+            f"[clipper:picker] project={project_id} mode={mode} picks={len(picks)} "
+            f"message={picker_message!r}",
+            flush=True,
+        )
+
         if not picks:
             empty_msg = picker_message or "No complete, self-contained moments found."
             mark_project_ready(conn, project_id, error=empty_msg)
@@ -450,6 +459,7 @@ def run_m4_pipeline(
                 crop_track_path,
                 ai_meta,
                 motion_subject=mode == "anything",
+                clip_index=idx,
             )
             poster = td_path / f"poster_{idx}.jpg"
             poster_jpg(rendered, poster)

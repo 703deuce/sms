@@ -292,6 +292,10 @@ def process_job(conn, job: dict) -> None:
         _ = probe_duration(src)
         if words:
             log(f"resume: skipping transcribe ({len(words)} words on project)")
+            print(
+                f"[clipper:transcribe] project={project['id']} skipped=true words={len(words)}",
+                flush=True,
+            )
             post_progress(
                 job["id"],
                 {
@@ -310,6 +314,11 @@ def process_job(conn, job: dict) -> None:
 
             model = os.environ.get("ASR_MODEL", "small.en")
             words, tx_meta = transcribe_video_file(conn, project, src, model=model)
+            print(
+                f"[clipper:transcribe] project={project['id']} words={len(words)} "
+                f"engine={getattr(tx_meta, 'transcription_engine', 'unknown')}",
+                flush=True,
+            )
 
             post_progress(
                 job["id"],
@@ -596,6 +605,13 @@ def main() -> None:
                 except Exception as exc:
                     msg = format_subprocess_error(exc)
                     log(f"job {job['id']} failed: {msg}")
+                    job_type = job.get("type") or ""
+                    if job_type == "PROCESS_PROJECT":
+                        print(
+                            f"[clipper:job] failed job={job['id']} project={job.get('projectId')} "
+                            f"error={msg[:240]}",
+                            flush=True,
+                        )
                     traceback.print_exc()
                     from clips_worker.streamer.errors import RetryableError
 
