@@ -1,6 +1,6 @@
 'use client'
 
-import { streamHeadlineFrameLayout } from '@/lib/clips/export-template'
+import { streamHeadlineFrameLayout, wrapHeadlineDisplayLines } from '@/lib/clips/export-template'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 
 export function ExportHeadlinePreview({
@@ -26,6 +26,7 @@ export function ExportHeadlinePreview({
   const footerH = footerHeightPx * scale
   const textY = barH * 0.45
   const badgeBottom = videoTop + videoH - 14
+  const headlineLines = headline ? wrapHeadlineDisplayLines(headline) : []
 
   return (
     <div className="mt-2 overflow-hidden rounded-md border border-border bg-zinc-800 text-white">
@@ -36,7 +37,11 @@ export function ExportHeadlinePreview({
             className="absolute inset-x-0 top-0 bg-white px-1 text-center font-bold leading-tight text-black"
             style={{ height: barH, paddingTop: Math.max(2, textY - 4) }}
           >
-            <span className="text-[9px]">{headline}</span>
+            <div className="flex flex-col items-center justify-center gap-0 text-[8px] leading-[1.1]">
+              {headlineLines.map((line) => (
+                <span key={line}>{line}</span>
+              ))}
+            </div>
           </div>
         ) : null}
         <div

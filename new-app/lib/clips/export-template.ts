@@ -166,6 +166,39 @@ export function formatHeadlineForExport(raw: string): string {
   return `${upper}${emojis ? ` ${emojis}` : ''}`.trim()
 }
 
+const HEADLINE_WRAP_MAX_LINES = 3
+const HEADLINE_WRAP_CHARS_PER_LINE = 22
+
+/** Preview + parity with worker stream_headline_ass wrap (export burns multi-line ASS). */
+export function wrapHeadlineDisplayLines(formatted: string, maxCharsPerLine = HEADLINE_WRAP_CHARS_PER_LINE): string[] {
+  const trimmed = formatted.trim()
+  if (!trimmed) return []
+  const emojiTail = (trimmed.match(/(\p{Extended_Pictographic}+)$/u) || [])[0] || ''
+  const body = trimmed.slice(0, trimmed.length - emojiTail.length).trim()
+  const emojis = [...emojiTail].slice(0, 2).join('')
+  const words = body.split(/\s+/).filter(Boolean)
+  const lines: string[] = []
+  let cur: string[] = []
+  for (const w of words) {
+    const trial = [...cur, w].join(' ')
+    if (trial.length > maxCharsPerLine && cur.length > 0) {
+      lines.push(cur.join(' '))
+      cur = [w]
+    } else {
+      cur.push(w)
+    }
+    if (lines.length >= HEADLINE_WRAP_MAX_LINES) break
+  }
+  if (lines.length < HEADLINE_WRAP_MAX_LINES && cur.length) {
+    lines.push(cur.join(' '))
+  }
+  const capped = lines.slice(0, HEADLINE_WRAP_MAX_LINES)
+  if (emojis && capped.length) {
+    capped[capped.length - 1] = `${capped[capped.length - 1]} ${emojis}`.trim()
+  }
+  return capped
+}
+
 export function headlineTextMinY(
   platformId: ExportPlatformId | undefined,
   playH = 1920,
