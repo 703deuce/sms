@@ -1,4 +1,5 @@
 import 'server-only'
+import { Readable } from 'stream'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
@@ -11,6 +12,8 @@ const ALLOWED_STOCK_HOSTS = new Set([
   'pixabay.com',
 ])
 
+const MAX_REDIRECTS = 5
+
 function stockProviderKey(c: StockCandidate): { provider: string; providerId: string } {
   if (c.stockKind === 'photo' && c.provider === 'pexels') {
     return { provider: 'pexels_photo', providerId: c.providerId }
@@ -22,6 +25,22 @@ function assertAllowedStockUrl(srcUrl: string) {
   const host = new URL(srcUrl).hostname.toLowerCase()
   const ok = [...ALLOWED_STOCK_HOSTS].some((h) => host === h || host.endsWith(`.${h}`))
   if (!ok) throw new Error('stock_url_not_allowed')
+}
+
+async function fetchStockResponse(initialUrl: string): Promise<Response> {
+  let url = initialUrl
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    assertAllowedStockUrl(url)
+    const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(120_000) })
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('location')
+      if (!loc) throw new Error('stock_redirect_missing_location')
+      url = new URL(loc, url).href
+      continue
+    }
+    return res
+  }
+  throw new Error('stock_redirect_too_many')
 }
 
 /**
@@ -58,29 +77,11 @@ export async function ensureT2vStockAsset(_workspaceId: string, c: StockCandidat
       },
     }))
 
-  const res = await fetch(c.srcUrl, { redirect: 'manual', signal: AbortSignal.timeout(120_000) })
-  if (res.status >= 300 && res.status < 400) {
-    const loc = res.headers.get('location')
-    if (!loc) throw new Error('stock_redirect_missing_location')
-    assertAllowedStockUrl(loc)
-    const follow = await fetch(loc, { signal: AbortSignal.timeout(120_000) })
-    if (!follow.ok) throw new Error(`stock_download_${follow.status}`)
-    await storage.putBytes(
-      objectKey,
-      Buffer.from(await follow.arrayBuffer()),
-      isPhoto ? 'image/jpeg' : 'video/mp4',
-    )
-    return prisma.stockAsset.update({
-      where: { id: row.id },
-      data: { storageKey: objectKey },
-    })
-  }
-  if (!res.ok) throw new Error(`stock_download_${res.status}`)
-  await storage.putBytes(
-    objectKey,
-    Buffer.from(await res.arrayBuffer()),
-    isPhoto ? 'image/jpeg' : 'video/mp4',
-  )
+  const res = await fetchStockResponse(c.srcUrl)
+  if (!res.ok || !res.body) throw new Error(`stock_download_${res.status}`)
+  const contentType = isPhoto ? 'image/jpeg' : 'video/mp4'
+  const body = Readable.fromWeb(res.body as import('stream/web').ReadableStream)
+  await storage.putStream(objectKey, body, contentType)
   return prisma.stockAsset.update({
     where: { id: row.id },
     data: { storageKey: objectKey },

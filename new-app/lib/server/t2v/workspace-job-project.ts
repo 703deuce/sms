@@ -1,4 +1,5 @@
 import 'server-only'
+import { Prisma } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
@@ -12,18 +13,30 @@ export async function getOrCreateT2vWorkspaceJobProject(workspaceId: string) {
     select: { id: true },
   })
   if (existing) return existing
+
   const id = createId('proj')
-  await prisma.clipProject.create({
-    data: {
-      id,
-      workspaceId,
-      title: HUB_TITLE,
-      status: 'READY',
-      sourceKind: 't2v',
-      stage: 'ready',
-      progress: 100,
-      settings: { t2vWorkspaceHub: true },
-    },
-  })
-  return { id }
+  try {
+    await prisma.clipProject.create({
+      data: {
+        id,
+        workspaceId,
+        title: HUB_TITLE,
+        status: 'READY',
+        sourceKind: 't2v',
+        stage: 'ready',
+        progress: 100,
+        settings: { t2vWorkspaceHub: true },
+      },
+    })
+    return { id }
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const again = await prisma.clipProject.findFirst({
+        where: { workspaceId, title: HUB_TITLE, deletedAt: null },
+        select: { id: true },
+      })
+      if (again) return again
+    }
+    throw err
+  }
 }

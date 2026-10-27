@@ -30,6 +30,11 @@ const sceneMediaSchema = z.object({
   assetId: z.string().optional(),
   providerId: z.string().optional(),
   storageKey: z.string().optional(),
+  srcInMs: z.number().finite().min(0).optional(),
+  durationMs: z.number().finite().min(0).optional(),
+  width: z.number().finite().min(1).optional(),
+  height: z.number().finite().min(1).optional(),
+  attribution: z.string().max(500).optional(),
   focalX: z.number().optional(),
   focalY: z.number().optional(),
   kenBurns: z.string().optional(),
@@ -67,10 +72,16 @@ function sanitizeSceneMedia(workspaceId: string, media: Record<string, unknown>)
   const parsed = sceneMediaSchema.safeParse(media)
   const next = { ...(parsed.success ? parsed.data : media) } as Record<string, unknown>
   delete next.srcUrl
+  const keepRemoteThumb =
+    next.provider === 'upload' || next.provider === 'ai_image' || next.provider === 'ai_video'
   const thumb = next.thumbUrl
-  if (typeof thumb !== 'string' || !thumbUrlAllowed(thumb)) delete next.thumbUrl
+  if (typeof thumb === 'string' && thumb) {
+    if (!keepRemoteThumb && !thumbUrlAllowed(thumb)) delete next.thumbUrl
+  }
   const preview = next.previewUrl
-  if (typeof preview !== 'string' || !thumbUrlAllowed(preview)) delete next.previewUrl
+  if (typeof preview === 'string' && preview) {
+    if (!keepRemoteThumb && !thumbUrlAllowed(preview)) delete next.previewUrl
+  }
   const sk = next.storageKey
   if (typeof sk === 'string' && sk && !storageKeyAllowedForWorkspace(workspaceId, sk)) {
     delete next.storageKey

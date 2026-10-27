@@ -19,14 +19,15 @@ export async function resolveT2vBrandSettings(
     })
     if (row) {
       const st = (row.settings ?? {}) as Record<string, unknown>
+      const prev = settings.brand
       brand = {
         templateId: row.id,
         brandTemplateId: row.id,
         logoKey: row.logoKey ?? undefined,
         introVideoKey: row.introVideoKey ?? undefined,
         outroVideoKey: row.outroVideoKey ?? undefined,
-        useIntro: Boolean(row.introVideoKey),
-        useOutro: Boolean(row.outroVideoKey),
+        useIntro: prev?.useIntro ?? Boolean(row.introVideoKey),
+        useOutro: prev?.useOutro ?? Boolean(row.outroVideoKey),
         primaryColor: typeof st.primaryColor === 'string' ? st.primaryColor : brand?.primaryColor,
         secondaryColor: typeof st.secondaryColor === 'string' ? st.secondaryColor : brand?.secondaryColor,
         fontFamily: typeof st.fontFamily === 'string' ? st.fontFamily : brand?.fontFamily,

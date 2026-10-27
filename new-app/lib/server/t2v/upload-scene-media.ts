@@ -21,7 +21,7 @@ export async function mediaFromClipUpload(
   const ext = upload.mime.startsWith('image/') ? 'jpg' : 'mp4'
   const destKey = `ws/${workspaceId}/t2v/scenes/${sceneId}/${uploadId}.${ext}`
   const contentType = upload.mime || (ext === 'jpg' ? 'image/jpeg' : 'video/mp4')
-  await copyClipStorageObject(upload.key, destKey, contentType)
+  await copyClipStorageObject(upload.key, destKey, contentType, upload.storageDriver)
 
   const isImage = upload.mime.startsWith('image/')
   return {
