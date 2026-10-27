@@ -5,16 +5,20 @@ import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { patchT2vDraft } from '@/lib/t2v/t2v-api'
+import { PrimaryButton } from '@/components/app/primary-button'
+import { useRouter } from 'next/navigation'
 import type { T2vDraftV1, T2vScene } from '@/lib/t2v/types'
 import { estimateSceneMs } from '@/lib/t2v/estimate'
 
 type Props = {
   draftId: string
+  projectId: string
   initialRevision: number
   initialDocument: T2vDraftV1
 }
 
-export function T2vScriptReview({ draftId, initialRevision, initialDocument }: Props) {
+export function T2vScriptReview({ draftId, projectId, initialRevision, initialDocument }: Props) {
+  const router = useRouter()
   const [doc, setDoc] = useState(initialDocument)
   const [revision, setRevision] = useState(initialRevision)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -53,6 +57,11 @@ export function T2vScriptReview({ draftId, initialRevision, initialDocument }: P
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 py-6">
+      <div className="flex justify-end">
+        <PrimaryButton type="button" onClick={() => router.push(`/app/clips/${projectId}/video?mode=storyboard`)}>
+          Make storyboard →
+        </PrimaryButton>
+      </div>
       <Input
         className="border-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
         value={doc.title}

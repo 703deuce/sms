@@ -474,7 +474,7 @@ Agree on **function signatures** in this spec and `docs/t2v/code/`; do not fork 
 | Owner | Milestones / scope | Live paths (when landed) |
 |---|---|---|
 | **Agent A (web + deploys)** | M0; **M2–M3**; **M4 storyboard UI** + routes that call B’s stock libs; **M5–M8 UI/routes** (not worker render); all **deploys** | `app/api/t2v/*`, `components/t2v/*`, `drafts.ts`, `draftToComposition`, `script_composition_render` **music volume** (web export path only where applicable) |
-| **Agent B (worker/backend)** | **M1** worker TTS deduped with web `#783` / `elevenlabs-tts.ts` + `T2vVoiceClip` cache (one hash/alignment format — **no third TTS path**); **M4** stock (`#784` `stock-match.ts`, `stock-asset.ts`, `pexels.ts`); **M5 worker render** — music ducking, titles/LT (`titles_ass.py`), xfade transitions, brand intro/outro in **T2V assemble** | `worker/clips_worker/t2v/*`, `assemble.py`, `job.py` |
+| **Agent B (worker/backend)** | **M1** worker TTS deduped with web `#783` / `elevenlabs-tts.ts` + `T2vVoiceClip` cache (one hash/alignment format — **no third TTS path**); **M4** stock (`#784`); **M5 worker render** — music ducking, titles/LT, xfade, brand intro/outro in **T2V assemble** (Agent A does **not** duplicate in `job.py` once B lands) | `worker/clips_worker/t2v/*`, `assemble.py`, `job.py` |
 
 **Contracts (do not fork):**
 - **TTS:** Web preview only via `lib/server/ai/elevenlabs-tts.ts` + `lib/server/t2v/voice-cache.ts` (`ttsHash` computed in TS; worker reads cache / calls `elevenlabs_tts.py` with same models + fallback). Scene route: `POST …/scenes/[sceneId]/voice`.

@@ -28,6 +28,7 @@ import { attachMediaToProject, clipsFetch, createProject, createProjectFromPromp
 import { defaultClipSettings, TOOL_PRESET_MAP } from '@/lib/clips/settings'
 import { uploadClipFile } from '@/lib/clips/upload'
 import { cn } from '@/lib/utils'
+import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 
 const TEMPLATE_CHIPS: { label: string; preset: string }[] = [
   { label: 'Turn a long video into clips', preset: 'long-video-to-short-video' },
@@ -209,6 +210,12 @@ export function DriveHome({
           <span className="mr-1 inline-block size-2 rounded-full bg-lane-record" />
           Record
         </Link>
+        {isT2vFeatureEnabled() ? (
+          <Link href="/app/clips/video/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            <Clapperboard className="mr-1 size-4" />
+            Text to video
+          </Link>
+        ) : null}
         <PrimaryButton render={<Link href="/app/clips/new" />} className="h-8 px-3 text-sm">
           New project
         </PrimaryButton>
