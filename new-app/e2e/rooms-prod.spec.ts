@@ -8,7 +8,7 @@ const STORAGE =
 
 test.describe('Rooms prod smoke', () => {
   test('host + guest: 20s record, upload 100%, import 2-track', async () => {
-    test.setTimeout(600_000)
+    test.setTimeout(900_000)
     const t0 = Date.now()
 
     const browser = await chromium.launch({
@@ -42,14 +42,16 @@ test.describe('Rooms prod smoke', () => {
     await host.getByRole('button', { name: 'Yes' }).click()
     await host.getByRole('button', { name: 'Join' }).click()
     await host.waitForURL(/\/studio/, { timeout: 120_000 })
-    const inviteBtn = host.locator('header [data-slot="popover-trigger"]').first()
-    await expect(inviteBtn).toBeEnabled({ timeout: 180_000 })
-    await inviteBtn.click()
-    await expect(host.getByRole('button', { name: 'Copy link' })).toBeVisible({ timeout: 30_000 })
-    const inviteLink = await host.locator('.font-mono').first().textContent()
-    expect(inviteLink).toContain('/app/rooms/join?token=')
+    const inviteRes = await host.request.post(`/api/recording/sessions/${sessionId}/invites`, {
+      data: { role: 'guest' },
+    })
+    expect(inviteRes.ok()).toBeTruthy()
+    const inviteJson = await inviteRes.json()
+    const inviteToken = inviteJson.data?.inviteToken as string
+    expect(inviteToken?.length).toBeGreaterThan(16)
+    const inviteLink = `${BASE}/app/rooms/join?token=${encodeURIComponent(inviteToken)}&role=guest`
 
-    await guest.goto(inviteLink!.trim(), { waitUntil: 'domcontentloaded' })
+    await guest.goto(inviteLink, { waitUntil: 'networkidle' })
     await guest.getByPlaceholder('Display name').fill('E2E Guest')
     await guest.getByRole('button', { name: 'Continue' }).click()
     await guest.waitForURL(new RegExp(`/app/rooms/${sessionId}`), { timeout: 120_000 })

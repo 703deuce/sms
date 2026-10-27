@@ -538,12 +538,19 @@ export function RoomsStudioApp({
 
   return (
     <RoomsFullPage>
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-4">
-        <Link href={sessionTitle ? `/app/clips` : '/app/clips'} className="text-[13px] text-muted-foreground hover:text-foreground">
+      <header className="relative z-20 grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-3 border-b border-border bg-background px-4">
+        <Link
+          href="/app/clips"
+          className="text-[13px] text-muted-foreground hover:text-foreground"
+        >
           ← Back to editor
         </Link>
-        <span className="flex-1 truncate text-center text-sm font-semibold">{sessionTitle}</span>
-        {isHost ? <RoomsInvitePopover sessionId={sessionId} disabled={!connected} /> : null}
+        <span className="pointer-events-none truncate text-center text-sm font-semibold">
+          {sessionTitle}
+        </span>
+        <div className="relative z-30 flex justify-end">
+          {isHost ? <RoomsInvitePopover sessionId={sessionId} disabled={!connected} /> : null}
+        </div>
       </header>
       {producerMode && (
         <div className="flex h-10 items-center justify-between bg-[oklch(0.35_0.05_100)] px-4 text-[13px]">

@@ -1,0 +1,34 @@
+
+Running 1 test using 1 worker
+
+(node:168439) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:168439) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 e2e/rooms-prod.spec.ts:10:7 › Rooms prod smoke › host + guest: 20s record, upload 100%, import 2-track (7.2s)
+
+
+  1) e2e/rooms-prod.spec.ts:10:7 › Rooms prod smoke › host + guest: 20s record, upload 100%, import 2-track 
+
+    Error: expect.toBeVisible: Error: strict mode violation: getByRole('button', { name: 'Invite' }) resolved to 2 elements:
+        1) <button tabindex="0" type="button" id="base-ui-_r_c_" aria-expanded="false" aria-haspopup="dialog" data-slot="popover-trigger" data-base-ui-click-trigger="">…</button> aka locator('#base-ui-_r_c_')
+        2) <button disabled tabindex="0" type="button" data-disabled="" data-slot="button" class="group/button inline-flex shrink-0 items-center justify-center rounded-lg border bg-clip-padding font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dar…>Invite</button> aka getByText('Invite')
+
+    Call log:
+    [2m  - expect.toBeVisible with timeout 120000ms[22m
+    [2m  - waiting for getByRole('button', { name: 'Invite' })[22m
+
+
+      43 |     await host.getByRole('button', { name: 'Join' }).click()
+      44 |     await host.waitForURL(/\/studio/, { timeout: 120_000 })
+    > 45 |     await expect(host.getByRole('button', { name: 'Invite' })).toBeVisible({ timeout: 120_000 })
+         |                                                                ^
+      46 |
+      47 |     await host.getByRole('button', { name: 'Invite' }).click()
+      48 |     await expect(host.getByRole('button', { name: 'Copy link' })).toBeVisible({ timeout: 30_000 })
+        at /workspace/new-app/e2e/rooms-prod.spec.ts:45:64
+
+    Error Context: test-results/rooms-prod-Rooms-prod-smok-317f5-d-upload-100-import-2-track/error-context.md
+
+  1 failed
+    e2e/rooms-prod.spec.ts:10:7 › Rooms prod smoke › host + guest: 20s record, upload 100%, import 2-track 
