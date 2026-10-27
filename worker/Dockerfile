@@ -27,7 +27,8 @@ ENV CLIPS_WORKER_ROOT=/app
 RUN pip install --no-cache-dir pytest \
     && pytest -q /app/tests/test_caption_parity.py /app/tests/test_clip_layout_env.py \
         /app/tests/test_subject_follow_crop_track.py /app/tests/test_detect_facecam_sampling.py \
-        /app/tests/test_reframe_director.py /app/tests/test_reframe_ffmpeg_graphs.py
+        /app/tests/test_reframe_director.py /app/tests/test_reframe_ffmpeg_graphs.py \
+        /app/tests/test_multiperson_clipper.py /app/tests/test_reframe_core_pure.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en

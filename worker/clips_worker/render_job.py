@@ -14,6 +14,15 @@ from clips_worker.render_clip import ffmpeg_cut
 from clips_worker.storage import download_object, upload_file
 
 
+def settings_with_clip_ai_meta(settings: dict, ai_meta) -> dict:
+    ai = ai_meta or {}
+    if isinstance(ai, str):
+        ai = json.loads(ai)
+    if not isinstance(ai, dict):
+        ai = {}
+    return {**settings, "aiMeta": ai}
+
+
 def load_render_context(conn, render_id: str) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -22,7 +31,7 @@ def load_render_context(conn, render_id: str) -> dict:
                    r.status, r."outputKey", r."editsVersionHash",
                    r."aspectRatio", r.resolution,
                    c."startMs", c."endMs", c."previewKey", c.edits, c."projectId",
-                   c."sourceSegKey", c."sourceSegStartMs", c."sourceSegEndMs",
+                   c."sourceSegKey", c."sourceSegStartMs", c."sourceSegEndMs", c."aiMeta",
                    p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key
             FROM clip_renders r
             JOIN clips c ON c.id = r."clipId"
@@ -133,6 +142,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
     settings = ctx["settings"] or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
+    settings = settings_with_clip_ai_meta(settings, ctx.get("aiMeta"))
     aspect = ctx.get("aspectRatio") or settings.get("aspectRatio") or "9:16"
     resolution = ctx.get("resolution") or "720p"
     settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}

@@ -12,7 +12,7 @@ from pathlib import Path
 from clips_worker.frame_sampler import sample_frames
 from clips_worker.gemini_vision import plan_thumbnail
 from clips_worker.kie_image import create_image_task, upload_jpeg
-from clips_worker.render_job import load_render_context, load_source_words
+from clips_worker.render_job import load_render_context, load_source_words, settings_with_clip_ai_meta
 from clips_worker.edits_render import normalize_edits, render_edited_clip
 from clips_worker.render_clip import ffmpeg_cut
 from clips_worker.storage import download_object
@@ -37,16 +37,17 @@ def run_thumbnail_job(conn, job: dict, post_progress) -> None:
 
     with conn.cursor() as cur:
         cur.execute(
-            'SELECT c.id, c."projectId", c."workspaceId", c.title, c."startMs", c."endMs", c.edits, p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key FROM clips c JOIN clip_projects p ON p.id=c."projectId" LEFT JOIN clip_uploads u ON u.id=p."uploadId" WHERE c.id=%s',
+            'SELECT c.id, c."projectId", c."workspaceId", c.title, c."startMs", c."endMs", c.edits, c."aiMeta", p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key FROM clips c JOIN clip_projects p ON p.id=c."projectId" LEFT JOIN clip_uploads u ON u.id=p."uploadId" WHERE c.id=%s',
             (clip_id,),
         )
         row = cur.fetchone()
     if not row:
         raise RuntimeError("clip not found")
-    clip_id, project_id, workspace_id, title, start_ms, end_ms, edits, settings, tkey, twords, source_key = row
+    clip_id, project_id, workspace_id, title, start_ms, end_ms, edits, ai_meta, settings, tkey, twords, source_key = row
     clip_start, clip_end = int(start_ms), int(end_ms)
     edits = normalize_edits(edits, clip_start, clip_end)
     settings = settings if isinstance(settings, dict) else json.loads(settings or "{}")
+    settings = settings_with_clip_ai_meta(settings, ai_meta)
 
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "thumbnail", "progress": 10})
 

@@ -27,6 +27,36 @@ def blend_targets(prev: float, nxt: float, alpha: float = 0.35) -> float:
 # Stage 1: shot detection (NEW)
 # --------------------------------------------------------------------------
 
+def _resolve_sface_model(models: str) -> str:
+    primary = os.path.join(models, "face_recognition_sface_2021dec.onnx")
+    if os.path.isfile(primary):
+        return primary
+    legacy = os.path.join(models, "sface.onnx")
+    if os.path.isfile(legacy):
+        return legacy
+    return primary
+
+
+def _empty_face_track(params: dict | None) -> dict:
+    params = params or {}
+    dur = float(params.get("duration_s") or 1.0)
+    fps = float(params.get("fps") or 30.0)
+    sample_fps = float(params.get("sample_fps") or 5.0)
+    return {
+        "v": 2,
+        "fps": fps,
+        "sample_fps": sample_fps,
+        "W": 0,
+        "H": 0,
+        "t": [],
+        "shots": [(0.0, dur)],
+        "people": [],
+        "mouth": [],
+        "_tracklets": {},
+        "_timings": {"detect": 0.0, "track": 0.0, "embed": 0.0, "n": 0, "n_emb": 0},
+    }
+
+
 def detect_shots(video_path: str, *, downscale: int = 4, adaptive_threshold: float = 3.0,
                  min_scene_len_s: float = 0.5, fps: float = 30.0) -> list[tuple[float, float]]:
     """Return [(start_s, end_s), ...] hard cuts. PySceneDetect 0.7.2 AdaptiveDetector.
@@ -230,13 +260,22 @@ def track_faces(video_path: str, params: dict | None = None) -> dict:
     det_w = int(params.get("det_w") or 640)
     max_people = int(params.get("max_people") or 5)
     emb_every = int(params.get("emb_every") or 2)
-    shots = params.get("shots") or detect_shots(video_path)
+    try:
+        shots = params.get("shots") or detect_shots(video_path)
+    except Exception:
+        return _empty_face_track(params)
     lm = make_mouth_landmarker(params["mouth_model"]) if params.get("mouth_model") else None
 
-    det = make_face_detector(os.path.join(models, "yunet.onnx"), det_w)
-    emb = FaceEmbedder(os.path.join(models, "sface.onnx"))
+    yunet_path = os.path.join(models, "yunet.onnx")
+    sface_path = _resolve_sface_model(models)
+    if not os.path.isfile(yunet_path) or not os.path.isfile(sface_path):
+        return _empty_face_track(params)
+    det = make_face_detector(yunet_path, det_w)
+    emb = FaceEmbedder(sface_path)
     trk = FaceTracker(sample_fps)
     cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return _empty_face_track(params)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     W, H = int(cap.get(3)), int(cap.get(4))
     step = max(1, round(fps / sample_fps))

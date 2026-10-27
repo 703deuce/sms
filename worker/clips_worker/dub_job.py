@@ -16,7 +16,7 @@ from clips_worker.elevenlabs_dub import (
     poll_dubbing,
 )
 from clips_worker.render_clip import ffmpeg_cut
-from clips_worker.render_job import load_source_words
+from clips_worker.render_job import load_source_words, settings_with_clip_ai_meta
 from clips_worker.storage import download_object, upload_file
 
 DUB_COST_MICROS_PER_MIN = int(0.50 * 1_000_000)
@@ -34,7 +34,7 @@ def run_dub_job(conn, job: dict, post_progress) -> None:
         cur.execute(
             """
             SELECT d.id, d."clipId", d."targetLang", d.status,
-                   c."projectId", c."workspaceId", c."startMs", c."endMs", c.edits,
+                   c."projectId", c."workspaceId", c."startMs", c."endMs", c.edits, c."aiMeta",
                    p.settings, p."transcriptKey", p."transcriptWords", u.key AS source_key
             FROM dub_tracks d
             JOIN clips c ON c.id = d."clipId"
@@ -57,6 +57,7 @@ def run_dub_job(conn, job: dict, post_progress) -> None:
         start_ms,
         end_ms,
         edits,
+        ai_meta,
         settings,
         tkey,
         twords,
@@ -69,6 +70,7 @@ def run_dub_job(conn, job: dict, post_progress) -> None:
     clip_start, clip_end = int(start_ms), int(end_ms)
     edits = normalize_edits(edits, clip_start, clip_end)
     settings = settings if isinstance(settings, dict) else json.loads(settings or "{}")
+    settings = settings_with_clip_ai_meta(settings, ai_meta)
     duration_s = max(1.0, (clip_end - clip_start) / 1000.0)
 
     with conn.cursor() as cur:
