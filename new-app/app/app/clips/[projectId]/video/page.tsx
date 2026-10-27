@@ -2,8 +2,8 @@ import { Page } from '@/components/app/page-primitives'
 import { T2vScriptReview } from '@/components/t2v/t2v-script-review'
 import { T2vStudioStoryboard } from '@/components/t2v/t2v-studio-storyboard'
 import { getClipStorage } from '@/lib/storage'
-import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { getPrisma } from '@/lib/server/db'
+import { requireAiVideoPageEnabled } from '@/lib/server/t2v/require-ai-video-page'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { notFound } from 'next/navigation'
@@ -18,7 +18,7 @@ export default async function T2vStudioPage({
   params: Promise<{ projectId: string }>
   searchParams: Promise<{ mode?: string }>
 }) {
-  if (!isT2vFeatureEnabled()) notFound()
+  requireAiVideoPageEnabled()
   const { projectId } = await params
   const { mode } = await searchParams
   const workspaceId = await resolveWorkspaceId()

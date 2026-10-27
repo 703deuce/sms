@@ -1,5 +1,6 @@
 import type { ClipProjectStatus } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
+import { isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { getPrisma } from '@/lib/server/db'
 import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
 import { projectWordsKey } from '@/lib/storage'
@@ -42,7 +43,13 @@ export async function listClipProjects(
     workspaceId,
     deletedAt: opts.trash ? { not: null } : null,
   }
-  if (opts.kind === 'video') where.sourceKind = 't2v'
+  const t2vOn = isT2vFeatureEnabled()
+  if (!t2vOn) {
+    if (opts.kind === 'video') {
+      return []
+    }
+    where.sourceKind = { not: 't2v' }
+  } else if (opts.kind === 'video') where.sourceKind = 't2v'
   else if (opts.kind === 'clips') where.sourceKind = { not: 't2v' }
   if (opts.folderId !== undefined) {
     where.folderId = opts.folderId

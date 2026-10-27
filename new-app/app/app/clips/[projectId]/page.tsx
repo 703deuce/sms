@@ -6,26 +6,30 @@ import { listProjectClips } from '@/lib/server/clips/clips'
 import { getProjectStatus } from '@/lib/server/clips/jobs'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { notFound, redirect } from 'next/navigation'
 
-const RESERVED_PROJECT_SLUGS: Record<string, string> = {
-  exports: '/app/exports',
-  brand: '/app/clips/brand',
-  new: '/app/clips/new',
-  video: '/app/clips/video/new',
+function reservedProjectSlugRedirects(): Record<string, string> {
+  return {
+    exports: '/app/exports',
+    brand: '/app/clips/brand',
+    new: '/app/clips/new',
+    video: isT2vFeatureEnabled() ? '/app/clips/video/new' : '/app/clips',
+  }
 }
 
 export const metadata = { title: 'Project · Clips' }
 
 export default async function ClipProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
-  const reserved = RESERVED_PROJECT_SLUGS[projectId]
+  const reserved = reservedProjectSlugRedirects()[projectId]
   if (reserved) redirect(reserved)
   const workspaceId = await resolveWorkspaceId()
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId } })
   if (!project) notFound()
   if (project.sourceKind === 't2v') {
+    if (!isT2vFeatureEnabled()) redirect('/app/clips')
     redirect(`/app/clips/${project.id}/video`)
   }
 

@@ -119,19 +119,21 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           <h1 className="text-xl font-semibold">New project</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a file, import from Google Drive or Dropbox, or start an AI Video project.
+          Upload a file, import from Google Drive or Dropbox
+          {isT2vFeatureEnabled() ? ', or start an AI Video project' : ''}.
         </p>
       </header>
-      {isT2vFeatureEnabled() && (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {(
-            [
-              { href: '/app/clips/new?tab=upload', label: 'Upload file', hint: 'MP4, MOV, WebM', icon: UploadCloud, active: tab === 'upload' },
-              { href: '/app/clips/new?tab=link', label: 'Paste link', hint: 'Drive or Dropbox', icon: Link2, active: tab === 'link' },
-              { href: '/app/clips/new?tab=streamer', label: 'Streamer', hint: 'Twitch or Kick', icon: Radio, active: tab === 'streamer' },
-              { href: '/app/clips/video/new', label: 'AI Video', hint: 'Idea, script, or link → video', icon: Clapperboard, active: false },
-            ] as const
-          ).map((card) => (
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {(
+          [
+            { href: '/app/clips/new?tab=upload', label: 'Upload file', hint: 'MP4, MOV, WebM', icon: UploadCloud, active: tab === 'upload' },
+            { href: '/app/clips/new?tab=link', label: 'Paste link', hint: 'Drive or Dropbox', icon: Link2, active: tab === 'link' },
+            { href: '/app/clips/new?tab=streamer', label: 'Streamer', hint: 'Twitch or Kick', icon: Radio, active: tab === 'streamer' },
+            ...(isT2vFeatureEnabled()
+              ? [{ href: '/app/clips/video/new', label: 'AI Video', hint: 'Idea, script, or link → video', icon: Clapperboard, active: false as boolean }]
+              : []),
+          ] as const
+        ).map((card) => (
             <Link
               key={card.href}
               href={card.href}
@@ -148,8 +150,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
               <span className="text-xs text-muted-foreground">{card.hint}</span>
             </Link>
           ))}
-        </div>
-      )}
+      </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-4">
           <fieldset className="grid grid-cols-1 gap-2 border-0 p-0 sm:grid-cols-3">

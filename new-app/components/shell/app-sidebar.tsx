@@ -89,6 +89,10 @@ export function AppSidebar({ recordingNavEnabled = false }: { recordingNavEnable
   const t2vEnabled = isT2vFeatureEnabled()
 
   useEffect(() => {
+    console.info('[nav:ai-video-flag]', { enabled: t2vEnabled })
+  }, [t2vEnabled])
+
+  useEffect(() => {
     console.info('[nav:section]', { activeSection, pathname })
   }, [activeSection, pathname])
 

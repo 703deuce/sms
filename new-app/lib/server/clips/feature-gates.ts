@@ -1,4 +1,5 @@
 import 'server-only'
+import { isAiVideoEnabledFromEnv } from '@/lib/features/ai-video-enabled'
 import { isRecordingLiveKitConfigured } from '@/lib/server/livekit/recording-room-service'
 
 /** @deprecated use isRecordingLiveKitConfigured */
@@ -17,8 +18,12 @@ export function isCompositionSocialPublishEnabled(): boolean {
   return process.env.FEATURE_COMPOSITION_SOCIAL_PUBLISH === '1'
 }
 
-/** Text-to-video product surfaces (P1–P20). Off unless FEATURE_T2V=1. */
+/** Text-to-video product surfaces. Off unless AI_VIDEO_ENABLED / NEXT_PUBLIC_AI_VIDEO_ENABLED (or legacy FEATURE_T2V). */
 export function isT2vFeatureEnabled(): boolean {
-  const v = (process.env.FEATURE_T2V ?? '').trim().toLowerCase()
-  return v === '1' || v === 'true' || v === 'on' || v === 'yes'
+  return isAiVideoEnabledFromEnv({
+    AI_VIDEO_ENABLED: process.env.AI_VIDEO_ENABLED,
+    NEXT_PUBLIC_AI_VIDEO_ENABLED: process.env.NEXT_PUBLIC_AI_VIDEO_ENABLED,
+    FEATURE_T2V: process.env.FEATURE_T2V,
+    NEXT_PUBLIC_FEATURE_T2V: process.env.NEXT_PUBLIC_FEATURE_T2V,
+  })
 }

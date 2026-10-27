@@ -581,9 +581,17 @@ def main() -> None:
                 idle_polls = 0
                 log(f"claimed job={job['id']}")
                 try:
-                    handler = DISPATCH.get(job.get("type") or "")
+                    from clips_worker.t2v.feature_gate import T2V_JOB_TYPES, ai_video_enabled
+
+                    job_type = job.get("type") or ""
+                    if job_type in T2V_JOB_TYPES and not ai_video_enabled():
+                        msg = "ai_video_disabled"
+                        log(f"[t2v:feature-gate] refusing job id={job['id']} type={job_type}")
+                        mark_generation_failed(conn, job, msg)
+                        continue
+                    handler = DISPATCH.get(job_type)
                     if not handler:
-                        raise RuntimeError(f"unknown job type {job.get('type')}")
+                        raise RuntimeError(f"unknown job type {job_type}")
                     run_job_with_lock_heartbeat(dsn, conn, job, handler)  # type: ignore[arg-type]
                 except Exception as exc:
                     msg = format_subprocess_error(exc)
