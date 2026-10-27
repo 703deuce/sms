@@ -24,6 +24,12 @@ function thumbUrlAllowed(url: string): boolean {
   }
 }
 
+const attributionSchema = z.object({
+  author: z.string(),
+  pageUrl: z.string().url(),
+  provider: z.enum(['pexels', 'pixabay']),
+})
+
 const sceneMediaSchema = z.object({
   provider: z.enum(['pexels', 'pixabay', 'upload', 'ai_image', 'ai_video', 'color']).optional(),
   kind: z.enum(['video', 'image', 'color']),
@@ -34,7 +40,7 @@ const sceneMediaSchema = z.object({
   durationMs: z.number().finite().min(0).optional(),
   width: z.number().finite().min(1).optional(),
   height: z.number().finite().min(1).optional(),
-  attribution: z.string().max(500).optional(),
+  attribution: attributionSchema.optional(),
   focalX: z.number().optional(),
   focalY: z.number().optional(),
   kenBurns: z.string().optional(),
@@ -68,20 +74,28 @@ const t2vDraftSchema = z.object({
   nextSlot: z.number(),
 })
 
+/** Drop invalid media fields one at a time; never return the raw unvalidated object. */
+function stripSceneMedia(media: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...media }
+  delete out.srcUrl
+  for (let guard = 0; guard < 32; guard++) {
+    const parsed = sceneMediaSchema.safeParse(out)
+    if (parsed.success) return { ...parsed.data }
+    const issue = parsed.error.issues[0]
+    const key = issue?.path[0]
+    if (typeof key !== 'string' || !(key in out)) break
+    delete out[key]
+  }
+  const kind = out.kind === 'video' || out.kind === 'image' || out.kind === 'color' ? out.kind : 'color'
+  return { kind }
+}
+
 function sanitizeSceneMedia(workspaceId: string, media: Record<string, unknown>): Record<string, unknown> {
-  const parsed = sceneMediaSchema.safeParse(media)
-  const next = { ...(parsed.success ? parsed.data : media) } as Record<string, unknown>
-  delete next.srcUrl
-  const keepRemoteThumb =
-    next.provider === 'upload' || next.provider === 'ai_image' || next.provider === 'ai_video'
+  const next = stripSceneMedia(media)
   const thumb = next.thumbUrl
-  if (typeof thumb === 'string' && thumb) {
-    if (!keepRemoteThumb && !thumbUrlAllowed(thumb)) delete next.thumbUrl
-  }
+  if (typeof thumb === 'string' && thumb && !thumbUrlAllowed(thumb)) delete next.thumbUrl
   const preview = next.previewUrl
-  if (typeof preview === 'string' && preview) {
-    if (!keepRemoteThumb && !thumbUrlAllowed(preview)) delete next.previewUrl
-  }
+  if (typeof preview === 'string' && preview && !thumbUrlAllowed(preview)) delete next.previewUrl
   const sk = next.storageKey
   if (typeof sk === 'string' && sk && !storageKeyAllowedForWorkspace(workspaceId, sk)) {
     delete next.storageKey

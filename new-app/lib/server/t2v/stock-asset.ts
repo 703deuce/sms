@@ -22,7 +22,9 @@ function stockProviderKey(c: StockCandidate): { provider: string; providerId: st
 }
 
 function assertAllowedStockUrl(srcUrl: string) {
-  const host = new URL(srcUrl).hostname.toLowerCase()
+  const u = new URL(srcUrl)
+  if (u.protocol !== 'https:') throw new Error('stock_url_not_https')
+  const host = u.hostname.toLowerCase()
   const ok = [...ALLOWED_STOCK_HOSTS].some((h) => host === h || host.endsWith(`.${h}`))
   if (!ok) throw new Error('stock_url_not_allowed')
 }
