@@ -20,6 +20,7 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/app/page-primitives'
 import { CLIP_JOB_STATE, StatusBadge } from '@/components/app/status'
+import { clampEtaBetweenPolls } from '@/lib/clips/eta-poll'
 import { cancelProject, getProjectStatus } from '@/lib/clips-api'
 import type { ClipProjectStatusUi } from '@/components/app/status'
 
@@ -57,6 +58,7 @@ export function JobStatus({
   const [wordCount, setWordCount] = useState(0)
   const [etaSec, setEtaSec] = useState(0)
   const etaRef = useRef(0)
+  const lastPollEtaRef = useRef(0)
   const [chunkDone, setChunkDone] = useState<number | undefined>()
   const [chunkTotal, setChunkTotal] = useState<number | undefined>()
 
@@ -71,8 +73,10 @@ export function JobStatus({
         setStage(data.stage)
         setError(data.error)
         setWordCount(data.wordCount)
-        etaRef.current = data.etaSec
-        setEtaSec(data.etaSec)
+        const polled = clampEtaBetweenPolls(data.etaSec, lastPollEtaRef.current || undefined)
+        lastPollEtaRef.current = polled
+        etaRef.current = polled
+        setEtaSec(polled)
         setChunkDone(data.chunkDone)
         setChunkTotal(data.chunkTotal)
         if (['READY', 'FAILED', 'CANCELED'].includes(data.status)) return
@@ -131,13 +135,12 @@ export function JobStatus({
             </p>
             <AlertDialog>
               <AlertDialogTrigger
-                render={
-                  <Button variant="ghost" size="sm" className="self-start gap-1.5">
-                    <CircleStop className="size-4" aria-hidden />
-                    Cancel processing
-                  </Button>
-                }
-              />
+                className="self-start gap-1.5"
+                render={<Button variant="ghost" size="sm" nativeButton={false} />}
+              >
+                <CircleStop className="size-4" aria-hidden />
+                Cancel processing
+              </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Cancel processing?</AlertDialogTitle>

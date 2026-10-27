@@ -30,6 +30,30 @@ function clipCountLabel(n: number) {
   return n === 1 ? '1 clip' : `${n} clips`
 }
 
+function formatCreatedFallback(iso: string) {
+  try {
+    return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(iso))
+  } catch {
+    return ''
+  }
+}
+
+function ClientCreatedDate({ iso }: { iso: string }) {
+  const [text, setText] = useState(() => formatCreatedFallback(iso))
+  useEffect(() => {
+    try {
+      setText(new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(iso)))
+    } catch {
+      setText(formatCreatedFallback(iso))
+    }
+  }, [iso])
+  return (
+    <time dateTime={iso} className="text-xs" suppressHydrationWarning>
+      {text}
+    </time>
+  )
+}
+
 function pageDescription(status: string, error: string | null) {
   if (status === 'READY') return 'Your clips are ready.'
   if (status === 'FAILED') return error || 'Processing failed.'
@@ -166,11 +190,7 @@ export function ProjectClipsView({
               />
             ) : null}
             <span>{clipCountLabel(clips.length)}</span>
-            {createdAt ? (
-              <time dateTime={createdAt} className="text-xs">
-                {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(createdAt))}
-              </time>
-            ) : null}
+            {createdAt ? <ClientCreatedDate iso={createdAt} /> : null}
           </div>
         }
       />

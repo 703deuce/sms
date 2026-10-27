@@ -64,16 +64,68 @@ export async function getProjectStatus(workspaceId: string, projectId: string) {
       } else if (workerEta > 0) {
         etaSec = workerEta
       } else if (!isStreamer) {
+        const previousPollEta =
+          typeof sp.lastEtaPollSec === 'number' && sp.lastEtaPollSec > 0 ? sp.lastEtaPollSec : undefined
+        const sourceDurationSec = Math.max(0, (project.rangeEndMs - project.rangeStartMs) / 1000)
         etaSec = computeNonStreamerClipEtaSec({
           progress: project.progress,
           createdAtMs: project.createdAt.getTime(),
+          status: project.status,
+          stage: project.stage,
+          sourceDurationSec,
+          settings,
+          chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,
+          chunkTotal: typeof sp.chunkTotal === 'number' ? sp.chunkTotal : undefined,
+          previousEtaSec: previousPollEta,
         })
+        if (etaSec > 0 && etaSec !== previousPollEta) {
+          void prisma.clipProject
+            .update({
+              where: { id: projectId },
+              data: {
+                settings: {
+                  ...settings,
+                  streamerProgress: {
+                    ...sp,
+                    lastEtaPollSec: etaSec,
+                  },
+                },
+              },
+            })
+            .catch(() => {})
+        }
       }
     } else if (!isStreamer && project.progress > 0) {
+      const previousPollEta =
+        typeof sp.lastEtaPollSec === 'number' && sp.lastEtaPollSec > 0 ? sp.lastEtaPollSec : undefined
+      const sourceDurationSec = Math.max(0, (project.rangeEndMs - project.rangeStartMs) / 1000)
       etaSec = computeNonStreamerClipEtaSec({
         progress: project.progress,
         createdAtMs: project.createdAt.getTime(),
+        status: project.status,
+        stage: project.stage,
+        sourceDurationSec,
+        settings,
+        chunkDone: typeof sp.chunkDone === 'number' ? sp.chunkDone : undefined,
+        chunkTotal: typeof sp.chunkTotal === 'number' ? sp.chunkTotal : undefined,
+        previousEtaSec: previousPollEta,
       })
+      if (etaSec > 0 && etaSec !== previousPollEta) {
+        void prisma.clipProject
+          .update({
+            where: { id: projectId },
+            data: {
+              settings: {
+                ...settings,
+                streamerProgress: {
+                  ...sp,
+                  lastEtaPollSec: etaSec,
+                },
+              },
+            },
+          })
+          .catch(() => {})
+      }
     }
   }
   const clipCount =
