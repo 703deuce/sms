@@ -128,10 +128,30 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
     elif platform == "kick" and vod.get("login"):
         matched = _match_kick_vod(str(vod["login"]), streamed_at)
 
+    if platform == "twitch" and vod.get("channel_external"):
+        from clips_worker.streamer.vod_saving import channel_stores_past_broadcasts
+
+        if not channel_stores_past_broadcasts(str(vod["channel_external"])):
+            _record_skip(
+                conn,
+                vod.get("channelId"),
+                "store_past_broadcasts_off",
+                "No Twitch archive VODs — turn on Store past broadcasts in Creator Dashboard.",
+                vod,
+            )
+            return
+
     if not matched:
         if attempt >= 6:
             from clips_worker.streamer.notify import notify_event
 
+            _record_skip(
+                conn,
+                vod.get("channelId"),
+                "kick_replay_pending" if platform == "kick" else "vod_unavailable",
+                "Replay VOD not published yet after stream ended.",
+                vod,
+            )
             notify_event(
                 workspace_id=vod["workspaceId"],
                 type="autopull_failed",
@@ -179,6 +199,42 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
             (import_id, vod["projectId"], json.dumps({"vodId": vod_id})),
         )
     conn.commit()
+
+
+def _record_skip(conn, channel_id: str | None, code: str, message: str, vod: dict) -> None:
+    if not channel_id:
+        return
+    import json
+    from datetime import datetime, timezone
+
+    entry = {
+        "at": datetime.now(timezone.utc).isoformat(),
+        "code": code,
+        "message": message,
+        "title": vod.get("title") or "Stream",
+    }
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE stream_channels
+            SET "platformState" = jsonb_set(
+              COALESCE("platformState", '{}'::jsonb),
+              '{skippedStreams}',
+              (
+                jsonb_build_array(%s::jsonb)
+                || COALESCE("platformState"->'skippedStreams', '[]'::jsonb)
+              )
+            ),
+            "updatedAt" = NOW()
+            WHERE id = %s
+            """,
+            (json.dumps(entry), channel_id),
+        )
+    conn.commit()
+    print(
+        f"[clipper:stream] stream_skipped channelId={channel_id} code={code} message={message[:120]}",
+        flush=True,
+    )
 
 
 def _match_kick_vod(slug: str, streamed_at: datetime) -> dict | None:

@@ -7,6 +7,11 @@ import { verifyTwitchEventSubSignature } from '@/lib/server/streamer/twitch-webh
 import { handleStreamerNotify } from '@/lib/server/streamer/notify'
 import { getPrisma } from '@/lib/server/db'
 import { mergePlatformState } from '@/lib/server/streamer/platform-state'
+import {
+  appendChannelSkippedStream,
+  checkTwitchChannelVodSaving,
+  persistChannelVodSaving,
+} from '@/lib/server/streamer/vod-health'
 
 export const runtime = 'nodejs'
 
@@ -79,9 +84,31 @@ export async function POST(request: Request) {
         where: { id: ch.id },
         data: { platformState: mergePlatformState(ch.platformState, { live: null }) as Prisma.InputJsonValue },
       })
-      if (ch.autoProcess) {
-        await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch', streamSessionId })
-      } else {
+      if (ch.autoProcess && ch.externalId) {
+        const vodHealth = await checkTwitchChannelVodSaving(ch.externalId, ch.login)
+        await persistChannelVodSaving(ch.id, vodHealth)
+        if (vodHealth.status === 'blocked') {
+          await appendChannelSkippedStream(ch.id, {
+            at: new Date().toISOString(),
+            code: vodHealth.code,
+            message: vodHealth.message,
+            title: `Stream ${startedAt.toISOString().slice(0, 16)}`,
+            streamSessionId,
+          })
+          await handleStreamerNotify({
+            workspaceId: ch.workspaceId,
+            type: 'stream_ready',
+            data: {
+              title: 'Auto-clip skipped',
+              action: 'vod_settings',
+              channelId: ch.id,
+              reason: vodHealth.message,
+            },
+          })
+        } else {
+          await enqueueStreamAutopull(ch.id, startedAt, { platform: 'twitch', streamSessionId })
+        }
+      } else if (!ch.autoProcess) {
         await handleStreamerNotify({
           workspaceId: ch.workspaceId,
           type: 'stream_ready',

@@ -10,6 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { StreamerTosNote } from '@/components/streamer/tos-note'
+import { VodUrlCheckBanner } from '@/components/streamer/vod-saving-alert'
+import type { VodAvailabilityView } from '@/lib/streamer/vod-availability'
 import { StreamerUsageMeter, type StreamUsageView } from '@/components/streamer/usage-meter'
 import { clipsFetch } from '@/lib/clips-api'
 import { cancelClipUpload, fetchUploadLimits, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
@@ -33,6 +35,8 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [attest, setAttest] = useState(false)
   const [preview, setPreview] = useState<{ title?: string; platform: string; kind: string } | null>(null)
   const [resolveError, setResolveError] = useState<string | null>(null)
+  const [vodCheck, setVodCheck] = useState<VodAvailabilityView | null>(null)
+  const [vodCheckBusy, setVodCheckBusy] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [upload, setUpload] = useState<UploadProgress | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
@@ -151,6 +155,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
     if (trimmed.length < 12) {
       setPreview(null)
       setResolveError(null)
+      setVodCheck(null)
       return
     }
     const t = setTimeout(() => {
@@ -161,14 +166,35 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
         .then((data) => {
           setPreview({ platform: data.platform, kind: data.kind, title: data.title ?? undefined })
           setResolveError(null)
+          setVodCheckBusy(true)
+          void clipsFetch<VodAvailabilityView>('/api/streamer/vod-check', {
+            method: 'POST',
+            body: JSON.stringify({ url: trimmed }),
+          })
+            .then((v) => setVodCheck(v))
+            .catch(() => setVodCheck(null))
+            .finally(() => setVodCheckBusy(false))
         })
         .catch((e) => {
           setPreview(null)
+          setVodCheck(null)
           setResolveError(e instanceof Error ? e.message : 'Could not parse link')
         })
     }, 400)
     return () => clearTimeout(t)
   }, [url])
+
+  const recheckVod = () => {
+    const trimmed = url.trim()
+    if (trimmed.length < 12) return
+    setVodCheckBusy(true)
+    void clipsFetch<VodAvailabilityView>('/api/streamer/vod-check', {
+      method: 'POST',
+      body: JSON.stringify({ url: trimmed }),
+    })
+      .then((v) => setVodCheck(v))
+      .finally(() => setVodCheckBusy(false))
+  }
 
   const submitUrl = async () => {
     if (!attest) {
@@ -229,6 +255,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
             {preview.title ? ` · ${preview.title}` : ''}
           </p>
         ) : null}
+        <VodUrlCheckBanner view={vodCheck} onRecheck={recheckVod} rechecking={vodCheckBusy} />
       </div>
       <label className="flex items-start gap-2 text-sm">
         <Checkbox checked={attest} onCheckedChange={(v) => setAttest(v === true)} />
@@ -237,7 +264,13 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       <StreamerTosNote />
       <PrimaryButton
         type="button"
-        disabled={!url.trim() || !attest || !!resolveError || submitting}
+        disabled={
+          !url.trim() ||
+          !attest ||
+          !!resolveError ||
+          submitting ||
+          vodCheck?.status === 'blocked'
+        }
         onClick={() => void submitUrl()}
       >
         {submitting ? <Loader2 className="size-4 animate-spin" /> : 'Find clips'}
