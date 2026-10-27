@@ -1,20 +1,14 @@
 #!/usr/bin/env node
-/** Mark a script composition render + clip job cancelled (ops; does not restart workers). */
+/** Mark script composition render + clip jobs cancelled (ops). */
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
-const renderId = process.argv[2]
-const reason = process.argv[3] || 'cancelled by ops'
 
-async function main() {
-  if (!renderId) {
-    console.error('Usage: cancel-script-export-job.mjs <scrn_id> [reason]')
-    process.exit(1)
-  }
+async function cancelRender(renderId, reason) {
   const render = await prisma.scriptCompositionRender.findUnique({ where: { id: renderId } })
   if (!render) {
     console.error('render not found', renderId)
-    process.exit(1)
+    return false
   }
   await prisma.scriptCompositionRender.update({
     where: { id: renderId },
@@ -25,11 +19,11 @@ async function main() {
       type: 'RENDER_SCRIPT_COMPOSITION',
       status: { in: ['QUEUED', 'RUNNING'] },
     },
-    take: 20,
+    take: 50,
   })
   for (const j of jobs) {
-    const p = j.payload as { renderId?: string } | null
-    if (p?.renderId === renderId) {
+    const p = j.payload
+    if (p && typeof p === 'object' && p.renderId === renderId) {
       await prisma.clipJob.update({
         where: { id: j.id },
         data: { status: 'CANCELED', error: reason.slice(0, 500), lockedBy: null, lockedAt: null },
@@ -38,6 +32,41 @@ async function main() {
     }
   }
   console.log('[canceled render]', renderId)
+  return true
+}
+
+async function cancelJobId(jobId, reason) {
+  const job = await prisma.clipJob.findUnique({ where: { id: jobId } })
+  if (!job) {
+    console.error('job not found', jobId)
+    return false
+  }
+  await prisma.clipJob.update({
+    where: { id: jobId },
+    data: { status: 'CANCELED', error: reason.slice(0, 500), lockedBy: null, lockedAt: null },
+  })
+  const p = job.payload
+  if (p && typeof p === 'object' && p.renderId) {
+    await prisma.scriptCompositionRender.updateMany({
+      where: { id: p.renderId, status: { in: ['QUEUED', 'RENDERING'] } },
+      data: { status: 'FAILED', error: reason.slice(0, 500) },
+    })
+  }
+  console.log('[canceled job]', jobId)
+  return true
+}
+
+async function main() {
+  const reason = process.argv.find((a) => a.startsWith('--reason='))?.slice(9) || 'cancelled by owner'
+  const args = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+  if (!args.length) {
+    console.error('Usage: cancel-script-export-job.mjs <scrn_id|cjob_id> [...] [--reason=text]')
+    process.exit(1)
+  }
+  for (const id of args) {
+    if (id.startsWith('cjob_')) await cancelJobId(id, reason)
+    else await cancelRender(id, reason)
+  }
   await prisma.$disconnect()
 }
 

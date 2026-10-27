@@ -1,0 +1,25 @@
+{
+  "description": "Dense kept words (~200ms each, 20ms inter-word gap) — shared with worker/tests/test_script_edl_duration.py",
+  "padMs": 80,
+  "sourceDurationMs": 10000,
+  "rangeStartMs": 0,
+  "rangeEndMs": 10000,
+  "words": [
+    { "id": "m:0", "index": 0, "t0Ms": 0, "t1Ms": 200, "text": "w0", "speakerId": "s0" },
+    { "id": "m:1", "index": 1, "t0Ms": 220, "t1Ms": 420, "text": "w1", "speakerId": "s0" },
+    { "id": "m:2", "index": 2, "t0Ms": 440, "t1Ms": 640, "text": "w2", "speakerId": "s0" },
+    { "id": "m:3", "index": 3, "t0Ms": 660, "t1Ms": 860, "text": "w3", "speakerId": "s0" },
+    { "id": "m:4", "index": 4, "t0Ms": 880, "t1Ms": 1080, "text": "w4", "speakerId": "s0" },
+    { "id": "m:5", "index": 5, "t0Ms": 1100, "t1Ms": 1300, "text": "w5", "speakerId": "s0" },
+    { "id": "m:6", "index": 6, "t0Ms": 1320, "t1Ms": 1520, "text": "w6", "speakerId": "s0" },
+    { "id": "m:7", "index": 7, "t0Ms": 1540, "t1Ms": 1740, "text": "w7", "speakerId": "s0" },
+    { "id": "m:8", "index": 8, "t0Ms": 1760, "t1Ms": 1960, "text": "w8", "speakerId": "s0" },
+    { "id": "m:9", "index": 9, "t0Ms": 1980, "t1Ms": 2180, "text": "w9", "speakerId": "s0" }
+  ],
+  "document": {
+    "v": 1,
+    "keptWordIds": ["m:0", "m:1", "m:2", "m:3", "m:4", "m:5", "m:6", "m:7", "m:8", "m:9"],
+    "deletedWordIds": [],
+    "wordOrder": ["m:0", "m:1", "m:2", "m:3", "m:4", "m:5", "m:6", "m:7", "m:8", "m:9"]
+  }
+}

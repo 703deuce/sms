@@ -9,8 +9,15 @@ from pathlib import Path
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.edits_render import build_srt, normalize_edits, render_edited_clip
-from clips_worker.render_clip import aspect_size, ffmpeg_cut
-from clips_worker.script_edl import derive_edl, edl_to_cut_ranges_and_trim, output_duration_ms
+from clips_worker.edl_gap_render import apply_edl_gap_freezes
+from clips_worker.heartbeat import Heartbeat
+from clips_worker.render_clip import aspect_size, ffmpeg_cut_or_copy, probe_duration_ms
+from clips_worker.script_edl import (
+    derive_edl,
+    edl_to_trim_and_cut_ranges,
+    output_duration_ms,
+    sum_merged_source_span_ms,
+)
 from clips_worker.storage import download_object, upload_file
 
 
@@ -126,23 +133,6 @@ def _document_settings_edits(document: dict, project_settings: dict) -> dict:
     }
 
 
-def _probe_duration_ms(video: Path) -> int:
-    out = subprocess.check_output(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(video),
-        ],
-        text=True,
-    ).strip()
-    return int(float(out) * 1000)
-
-
 def _export_audio(src: Path, dest: Path, fmt: str) -> None:
     if fmt == "wav":
         subprocess.check_call(
@@ -194,7 +184,7 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
     if isinstance(project_settings, str):
         project_settings = json.loads(project_settings)
 
-    with tempfile.TemporaryDirectory() as td:
+    with tempfile.TemporaryDirectory() as td, Heartbeat(job["id"], post_progress) as heartbeat:
         td_path = Path(td)
         source_words = _load_transcript_words(ctx, td_path)
         upload_id = ctx.get("uploadId")
@@ -210,10 +200,9 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
 
         edl = derive_edl(document, words_by_id)
         edl_out_ms = output_duration_ms(edl)
+        _ = sum_merged_source_span_ms(edl)
 
-        trim_in, trim_out, cut_ranges = edl_to_cut_ranges_and_trim(
-            document, words_by_id, range_start, range_end,
-        )
+        trim_in, trim_out, cut_ranges = edl_to_trim_and_cut_ranges(edl, range_start, range_end)
         edits = _document_settings_edits(document, project_settings)
         edits["trim"] = {"in": trim_in, "out": trim_out}
         edits["cutRanges"] = cut_ranges
@@ -253,15 +242,19 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
         src = td_path / "source.mp4"
         download_object(source_key, src)
         mark_composition_render(conn, render_id, "RENDERING", progress=15)
-        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render", "progress": 15})
+        heartbeat.update(stage="download", progress=15)
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "download", "progress": 15})
 
         clip_file = td_path / "clip.mp4"
-        ffmpeg_cut(src, clip_file, range_start, range_end)
+        ffmpeg_cut_or_copy(src, clip_file, trim_in, trim_out)
+        mark_composition_render(conn, render_id, "RENDERING", progress=25)
+        heartbeat.update(stage="trim", progress=25)
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "trim", "progress": 25})
 
-        out_mp4 = td_path / "out.mp4"
+        cut_mp4 = td_path / "cut.mp4"
         _, caption_words, srt_body = render_edited_clip(
             clip_file,
-            out_mp4,
+            cut_mp4,
             source_words,
             edits,
             trim_in,
@@ -274,7 +267,15 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             render_meta={},
         )
 
+        out_mp4 = td_path / "out.mp4"
+        has_gaps = any(s.get("kind") == "gap" for s in edl)
+        if has_gaps:
+            apply_edl_gap_freezes(src, cut_mp4, out_mp4, edl, td_path, trim_in)
+        else:
+            out_mp4 = cut_mp4
+
         mark_composition_render(conn, render_id, "RENDERING", progress=85)
+        heartbeat.update(stage="upload", progress=85)
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "upload", "progress": 85})
 
         base_key = f"ws/{workspace_id}/projects/{project_id}/compositions/{composition_id}/renders/{render_id}"
@@ -309,7 +310,7 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             out_key = f"{base_key}.mp4"
             upload_file(out_key, out_mp4, "video/mp4")
 
-        actual_ms = _probe_duration_ms(out_mp4) if export_kind == "video" else edl_out_ms
+        actual_ms = probe_duration_ms(out_mp4) if export_kind == "video" else edl_out_ms
         with conn.cursor() as cur:
             cur.execute(
                 """

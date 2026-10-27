@@ -53,6 +53,23 @@ def slice_words(words: list[dict], start_ms: int, end_ms: int) -> list[dict]:
     return out
 
 
+def probe_duration_ms(video: Path) -> int:
+    out = subprocess.check_output(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(video),
+        ],
+        text=True,
+    ).strip()
+    return int(float(out) * 1000)
+
+
 def ffmpeg_cut(src: Path, dest: Path, start_ms: int, end_ms: int) -> None:
     threads = str(ffmpeg_threads_per_job())
     subprocess.check_call(
@@ -80,6 +97,32 @@ def ffmpeg_cut(src: Path, dest: Path, start_ms: int, end_ms: int) -> None:
             str(dest),
         ],
     )
+
+
+def ffmpeg_cut_or_copy(src: Path, dest: Path, start_ms: int, end_ms: int) -> None:
+    """Skip re-encode when extracting (almost) the full source."""
+    try:
+        dur_ms = probe_duration_ms(src)
+    except Exception:
+        ffmpeg_cut(src, dest, start_ms, end_ms)
+        return
+    span = max(0, end_ms - start_ms)
+    if start_ms <= 500 and span >= dur_ms - 1000:
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(src),
+                "-c",
+                "copy",
+                str(dest),
+            ],
+        )
+        return
+    ffmpeg_cut(src, dest, start_ms, end_ms)
 
 
 AUTO_LAYOUT_STYLES = ("dynamic", "speaker_follow", "split_debate", "grid", "locked_off")

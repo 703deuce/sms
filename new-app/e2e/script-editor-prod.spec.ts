@@ -4,9 +4,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const BASE = process.env.PLAYWRIGHT_BASE_URL || 'https://transovo.ai'
-/** Owner-run prod tests only. Source must be ≤2 min (e.g. test_interview_60s project). */
+/** Owner-run prod tests only. Fixture must be 1–3 min source (or trimmed range), e.g. test_interview_60s. */
 const PROJECT_ID = process.env.SCRIPT_E2E_PROJECT_ID
-const MAX_SOURCE_MS = Number(process.env.SCRIPT_E2E_MAX_MS || 120_000)
+const MAX_SOURCE_MS = Number(process.env.SCRIPT_E2E_MAX_MS || 180_000)
 
 test.describe('Script editor prod (M4.1 + export)', () => {
   test.beforeAll(() => {

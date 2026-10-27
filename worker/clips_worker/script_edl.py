@@ -75,6 +75,7 @@ def derive_edl(document: dict, words_by_id: dict[str, dict], pad_ms: int = DEFAU
 
     segments: list[EdlSegment] = []
     out_ms = 0
+    prev_src_out = 0
 
     def push_gap(dur_ms: int, freeze_src_ms: int) -> None:
         nonlocal out_ms
@@ -87,8 +88,10 @@ def derive_edl(document: dict, words_by_id: dict[str, dict], pad_ms: int = DEFAU
         prev = kept[i - 1] if i > 0 else None
         t0, t1 = _effective_bounds(w, document)
         pad_before = _pad_before(document, w["id"], pad_ms) if prev else 0
-        src_in = max(0, t0 - pad_before)
+        src_in_raw = max(0, t0 - pad_before)
+        src_in = max(src_in_raw, prev_src_out) if prev else src_in_raw
         src_out = t1 + pad_ms
+        prev_src_out = src_out
         dur = max(1, src_out - src_in)
         out_out = out_ms + dur
         segments.append(
@@ -135,44 +138,66 @@ def output_duration_ms(edl: list[EdlSegment]) -> int:
     return max_out
 
 
+def _merged_source_spans(edl: list[EdlSegment]) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    for seg in edl:
+        if seg["kind"] != "source":
+            continue
+        s_in = int(seg["srcInMs"])
+        s_out = int(seg["srcOutMs"])
+        if spans and spans[-1][1] >= s_in - 1:
+            spans[-1] = (spans[-1][0], max(spans[-1][1], s_out))
+        else:
+            spans.append((s_in, s_out))
+    return spans
+
+
+def _merge_cut_ranges(cuts: list[list[int]]) -> list[list[int]]:
+    pairs = sorted([[int(c[0]), int(c[1])] for c in cuts if c and len(c) >= 2], key=lambda x: x[0])
+    out: list[list[int]] = []
+    for s, e in pairs:
+        if e <= s:
+            continue
+        if out and s <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], e)
+        else:
+            out.append([s, e])
+    return out
+
+
+def edl_to_trim_and_cut_ranges(
+    edl: list[EdlSegment],
+    range_start_ms: int,
+    range_end_ms: int,
+) -> tuple[int, int, list[list[int]]]:
+    """Cut silences between EDL kept source spans (matches editor preview)."""
+    spans = _merged_source_spans(edl)
+    if not spans:
+        return range_start_ms, range_end_ms, []
+    trim_in = max(range_start_ms, spans[0][0])
+    trim_out = min(range_end_ms, spans[-1][1])
+    cuts: list[list[int]] = []
+    if spans[0][0] > trim_in:
+        cuts.append([trim_in, spans[0][0]])
+    for i in range(len(spans) - 1):
+        gap_start, gap_end = spans[i][1], spans[i + 1][0]
+        if gap_end > gap_start + 1:
+            cuts.append([gap_start, gap_end])
+    if spans[-1][1] < trim_out:
+        cuts.append([spans[-1][1], trim_out])
+    return trim_in, trim_out, _merge_cut_ranges(cuts)
+
+
+def sum_merged_source_span_ms(edl: list[EdlSegment]) -> int:
+    return sum(max(0, b - a) for a, b in _merged_source_spans(edl))
+
+
 def edl_to_cut_ranges_and_trim(
     document: dict,
     words_by_id: dict[str, dict],
     range_start_ms: int,
     range_end_ms: int,
 ) -> tuple[int, int, list[list[int]]]:
-    """Deleted/ignored words → source-ms cut ranges inside trim window."""
-    deleted = set(document.get("deletedWordIds") or [])
-    ignored = set(document.get("ignoredWordIds") or [])
-    cut_ids = deleted | ignored
-    order = document.get("wordOrder") or (
-        list(document.get("keptWordIds") or []) + list(document.get("deletedWordIds") or [])
-    )
-    cuts: list[list[int]] = []
-    run_lo: int | None = None
-    run_hi: int | None = None
-
-    def flush() -> None:
-        nonlocal run_lo, run_hi
-        if run_lo is not None and run_hi is not None:
-            cuts.append([run_lo, run_hi])
-        run_lo, run_hi = None, None
-
-    for wid in order:
-        w = words_by_id.get(wid)
-        if not w:
-            continue
-        if wid not in cut_ids:
-            flush()
-            continue
-        t0, t1 = _effective_bounds(w, document)
-        lo = max(range_start_ms, t0)
-        hi = min(range_end_ms, t1)
-        if hi <= lo:
-            continue
-        if run_lo is None:
-            run_lo, run_hi = lo, hi
-        else:
-            run_hi = max(run_hi, hi)
-    flush()
-    return range_start_ms, range_end_ms, cuts
+    """Legacy: prefer edl_to_trim_and_cut_ranges(derive_edl(...), ...)."""
+    edl = derive_edl(document, words_by_id)
+    return edl_to_trim_and_cut_ranges(edl, range_start_ms, range_end_ms)

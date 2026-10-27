@@ -59,13 +59,16 @@ export function deriveEdl(
     outMs += durMs
   }
 
+  let prevSrcOut = 0
   for (let i = 0; i < kept.length; i++) {
     const w = kept[i]
     const prev = i > 0 ? kept[i - 1] : null
     const bounds = effectiveWordBounds(w, document)
     const padBefore = prev ? padBeforeWord(document, w.id, defaultPad) : 0
-    const srcInMs = Math.max(0, bounds.t0Ms - padBefore)
+    const srcInRaw = Math.max(0, bounds.t0Ms - padBefore)
+    const srcInMs = prev ? Math.max(srcInRaw, prevSrcOut) : srcInRaw
     const srcOutMs = bounds.t1Ms + defaultPad
+    prevSrcOut = srcOutMs
     const dur = Math.max(1, srcOutMs - srcInMs)
     const outOutMs = outMs + dur
     segments.push({

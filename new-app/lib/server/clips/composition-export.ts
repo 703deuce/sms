@@ -45,6 +45,25 @@ export async function enqueueCompositionExport(
     return { renderId: existing.id, status: existing.status }
   }
 
+  if (existing && (existing.status === 'QUEUED' || existing.status === 'RENDERING')) {
+    const activeJobs = await prisma.clipJob.findMany({
+      where: {
+        projectId: row.projectId,
+        type: 'RENDER_SCRIPT_COMPOSITION',
+        status: { in: ['QUEUED', 'RUNNING'] },
+      },
+      take: 30,
+      orderBy: { createdAt: 'desc' },
+    })
+    const linked = activeJobs.find((j) => {
+      const p = j.payload as { renderId?: string } | null
+      return p?.renderId === existing.id
+    })
+    if (linked) {
+      return { renderId: existing.id, status: existing.status }
+    }
+  }
+
   const renderId = existing?.id ?? createId('scrn')
 
   let edlDurationMs: number | undefined
