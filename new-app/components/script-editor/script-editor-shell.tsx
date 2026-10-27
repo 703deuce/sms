@@ -86,6 +86,11 @@ import { ScriptVersionHistoryPanel } from '@/components/script-editor/script-ver
 import { ScriptShortcutsSheet } from '@/components/script-editor/script-shortcuts-sheet'
 import { ScriptActionBar, type ScriptAction } from '@/components/script-editor/script-action-bar'
 import { nextMarkerOutMs, prevMarkerOutMs } from '@/lib/clips/script-editor/marker-nav'
+import { nextSceneOutMs, prevSceneOutMs } from '@/lib/clips/script-editor/scene-nav'
+import { buildAutoMulticamScenes } from '@/lib/clips/script-editor/multicam-scenes'
+import { ScriptVuMeter } from '@/components/script-editor/transport/script-vu-meter'
+import { ScriptClarityPanel } from '@/components/script-editor/side/script-clarity-panel'
+import { ScriptMulticamPanel } from '@/components/script-editor/side/script-multicam-panel'
 import { StudioSoundPreview } from '@/components/script-editor/studio-sound-preview'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { ScriptStoryboardPanel } from '@/components/script-editor/storyboard/script-storyboard-panel'
@@ -243,6 +248,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [fillerAction, setFillerAction] = useState<FillerReviewAction>('delete')
   const [fillerSearchMode, setFillerSearchMode] = useState<FillerSearchMode>('filler')
   const [fillerSearchQuery, setFillerSearchQuery] = useState('')
+  const [clarityOpen, setClarityOpen] = useState(false)
+  const fillerFindIndexRef = useRef(0)
   const [fillerSearchOptions, setFillerSearchOptions] = useState<FillerSearchOptions>({
     autoAdvance: true,
     previewResults: false,
@@ -1089,7 +1096,15 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         e.preventDefault()
         const v = videoRef.current
         if (v) {
-          if (v.paused) {
+          if (e.shiftKey) {
+            seekToOutputMs(outputMs)
+            if (v.paused) {
+              if (edlUsesOutputClock(edl)) {
+                outputPlayAnchorRef.current = { t: performance.now(), out0: outputMs }
+              }
+              void v.play()
+            }
+          } else if (v.paused) {
             if (edlUsesOutputClock(edl)) {
               outputPlayAnchorRef.current = { t: performance.now(), out0: outputMs }
             }
@@ -1100,6 +1115,81 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           }
         }
         return
+      }
+
+      if (e.key === 'Home') {
+        e.preventDefault()
+        seekToOutputMs(0)
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+        e.preventDefault()
+        setTimelineExpanded(false)
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        setSelAnchor(0)
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setReviewMode('filler')
+        setFillerSearchMode('find')
+        setFillerReviewOpen(true)
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g' && !e.shiftKey) {
+        e.preventDefault()
+        const q = fillerSearchQuery.trim().toLowerCase()
+        if (!q) return
+        const hits = orderedWords
+          .map((w, i) => ({ w, i }))
+          .filter(({ w }) => (document.wordTextOverrides?.[w.id] ?? w.text).toLowerCase().includes(q))
+        if (!hits.length) return
+        fillerFindIndexRef.current = (fillerFindIndexRef.current + 1) % hits.length
+        const hit = hits[fillerFindIndexRef.current]
+        setSelAnchor(hit.i)
+        seekToOutputMs(sourceMsToOutputTime(hit.w.t0Ms, edl) ?? outputMs)
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault()
+        const q = fillerSearchQuery.trim().toLowerCase()
+        if (!q) return
+        const hits = orderedWords
+          .map((w, i) => ({ w, i }))
+          .filter(({ w }) => (document.wordTextOverrides?.[w.id] ?? w.text).toLowerCase().includes(q))
+        if (!hits.length) return
+        fillerFindIndexRef.current =
+          (fillerFindIndexRef.current - 1 + hits.length) % hits.length
+        const hit = hits[fillerFindIndexRef.current]
+        setSelAnchor(hit.i)
+        seekToOutputMs(sourceMsToOutputTime(hit.w.t0Ms, edl) ?? outputMs)
+        return
+      }
+
+      if (e.altKey && e.metaKey && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        setSideTab('properties')
+        setSideOpen(true)
+        return
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '.' || e.code === 'Period')) {
+        e.preventDefault()
+        const next = nextSceneOutMs(document, orderedWords, edl, outputMs)
+        if (next != null) seekToOutputMs(next)
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === ',') {
+        e.preventDefault()
+        const prev = prevSceneOutMs(document, orderedWords, edl, outputMs)
+        if (prev != null) seekToOutputMs(prev)
       }
 
       if (e.key === '#' && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -1272,6 +1362,17 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     outputMs,
     document.markers,
     setActionBarOpen,
+    document,
+    document.wordTextOverrides,
+    fillerSearchQuery,
+    orderedWords,
+    edl,
+    setReviewMode,
+    setFillerSearchMode,
+    setFillerReviewOpen,
+    setSideTab,
+    setSideOpen,
+    setTimelineExpanded,
   ])
 
   const saveProjectScroll = useCallback(() => {
@@ -1780,7 +1881,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                                 !active && !deleted && 'hover:bg-muted/60',
                               )}
                             >
-                              {hiddenTranscript ? '·' : w.text}
+                              {hiddenTranscript ? '·' : document.wordTextOverrides?.[w.id] ?? w.text}
                             </button>
                             {contextOnly && hoverIncludeWordId === w.id && (
                               <button
@@ -1921,6 +2022,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     mix={studioFx?.mix ?? 0.8}
                     enabled={Boolean(studioFx?.enabled && studioPreviewGen.status === 'READY')}
                   />
+                  <ScriptVuMeter videoRef={videoRef} />
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Source video unavailable.</p>
@@ -2049,7 +2151,22 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                   </>
                 )}
                 {!commentsOpen && sideTab === 'layouts' && (
-                  <ScriptLayoutsPanel settings={settings} onPatch={patchSettings} />
+                  <>
+                    <ScriptMulticamPanel
+                      document={document}
+                      sceneCount={document.scenes?.length ?? 0}
+                      onPatchSettings={(patch) => safeApplyOp({ type: 'patch_settings', patch })}
+                      onAutoMulticam={() => {
+                        const scenes = buildAutoMulticamScenes(orderedWords, {
+                          minHoldMs: document.settings?.multicam?.minHoldMs ?? 2000,
+                          wideEveryMs: document.settings?.multicam?.wideEveryMs ?? 45_000,
+                        })
+                        safeApplyOp({ type: 'replace_scenes', scenes })
+                        toast.success(`Added ${scenes.length} multicam scenes`)
+                      }}
+                    />
+                    <ScriptLayoutsPanel settings={settings} onPatch={patchSettings} />
+                  </>
                 )}
                 {!commentsOpen && sideTab === 'elements' && (
                   <ScriptElementsPanel
@@ -2097,6 +2214,11 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                     compositionId={data.compositionId}
                     onDeleteRetakeWords={(wordIds) => safeDeleteWords(wordIds)}
                     onAiTool={(action) => {
+                      if (action === 'edit_for_clarity') {
+                        setSideTab('edit')
+                        setClarityOpen(true)
+                        return
+                      }
                       if (action === 'studio_sound') {
                         setSideTab('properties')
                         setSideOpen(true)
@@ -2140,6 +2262,17 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                           label: ch.label,
                         })
                       }
+                    }}
+                  />
+                )}
+                {!commentsOpen && sideTab === 'edit' && clarityOpen && (
+                  <ScriptClarityPanel
+                    compositionId={data.compositionId}
+                    onApply={(edits) => {
+                      const overrides: Record<string, string> = {}
+                      for (const e of edits) overrides[e.wordId] = e.text
+                      safeApplyOp({ type: 'patch_word_text_overrides', overrides, mode: 'merge' })
+                      setClarityOpen(false)
                     }}
                   />
                 )}
