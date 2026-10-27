@@ -11,19 +11,50 @@ import { clipsFetch } from '@/lib/clips-api'
 import { formatDur, formatTimecode } from '@/lib/clips/format'
 import { ReasonChips } from '@/components/streamer/reason-chips'
 import { ClipCardVideo } from '@/components/clips/clip-card-video'
+import {
+  clipLayoutChip,
+  clipPersonCount,
+  clipWhySummary,
+  type ClipAiMeta,
+} from '@/lib/clips/clip-results-chips'
+import { ThumbsDown, EyeOff } from 'lucide-react'
 
 export function ClipCard({
   clip,
   projectId,
   onDownload,
+  onHidden,
   isStreamer = false,
 }: {
   clip: ClipCardData
   projectId: string
   onDownload: (clipId: string) => void
+  onHidden?: (clipId: string) => void
   isStreamer?: boolean
 }) {
   const [thumbBusy, setThumbBusy] = useState(false)
+  const [hideBusy, setHideBusy] = useState(false)
+  const aiMeta = (clip.aiMeta || {}) as ClipAiMeta
+  const why = clipWhySummary(aiMeta)
+  const layoutChip = clipLayoutChip(aiMeta)
+  const people = clipPersonCount(aiMeta)
+
+  const hideClip = async () => {
+    if (!onHidden) return
+    setHideBusy(true)
+    try {
+      await clipsFetch(`/api/clips/clips/${clip.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ hidden: true, disliked: true }),
+      })
+      toast.success('Clip hidden')
+      onHidden(clip.id)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not hide clip')
+    } finally {
+      setHideBusy(false)
+    }
+  }
   const makeThumbnail = async () => {
     setThumbBusy(true)
     try {
@@ -61,9 +92,20 @@ export function ClipCard({
         {clip.previewUrl || clip.posterUrl ? (
           <ClipCardVideo clipId={clip.id} previewUrl={clip.previewUrl} posterUrl={clip.posterUrl} />
         ) : null}
-        <div className="absolute left-2 top-2">
+        <div className="absolute left-2 top-2" title={why ?? undefined}>
           <ScoreRing score={clip.score} />
         </div>
+        {onHidden ? (
+          <button
+            type="button"
+            disabled={hideBusy}
+            onClick={() => void hideClip()}
+            className="absolute right-2 top-2 rounded-md bg-black/55 p-1.5 text-white opacity-0 ring-1 ring-white/20 transition group-hover:opacity-100 focus:opacity-100"
+            aria-label="Hide clip"
+          >
+            <EyeOff className="size-4" aria-hidden />
+          </button>
+        ) : null}
         <DurationChip ms={clip.durationMs} />
       </div>
       <div className="flex flex-col gap-2 p-3">
@@ -87,15 +129,31 @@ export function ClipCard({
             </div>
           )
         })()}
-        {showClipperDims ? (
-          <div className="flex flex-wrap gap-1.5">
-            {dims.map(([label, grade]) => (
-              <span key={label} className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {label} {grade ?? '—'}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap gap-1.5">
+          <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary tabular-nums">
+            Score {clip.score}
+          </span>
+          {layoutChip ? (
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {layoutChip}
+            </span>
+          ) : null}
+          {people != null && people > 1 ? (
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {people} people
+            </span>
+          ) : null}
+          {showClipperDims
+            ? dims.map(([label, grade]) => (
+                <span
+                  key={label}
+                  className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                >
+                  {label} {grade ?? '—'}
+                </span>
+              ))
+            : null}
+        </div>
         {clip.reason ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{clip.reason}</p>
         ) : null}
@@ -122,6 +180,12 @@ export function ClipCard({
           <Button size="sm" variant="outline" disabled={thumbBusy} onClick={() => void makeThumbnail()}>
             Make thumbnail
           </Button>
+          {onHidden ? (
+            <Button size="sm" variant="ghost" disabled={hideBusy} onClick={() => void hideClip()}>
+              <ThumbsDown className="mr-1 size-3.5" aria-hidden />
+              Not for me
+            </Button>
+          ) : null}
         </div>
       </div>
     </article>

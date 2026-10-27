@@ -132,7 +132,12 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
             description={error || 'No complete, self-contained moments were found in this segment.'}
           />
         ) : (
-          <ClipGrid clips={clips} projectId={projectId} onDownload={(id) => void onDownload(id)} />
+          <ClipGrid
+            clips={clips}
+            projectId={projectId}
+            onDownload={(id) => void onDownload(id)}
+            onHidden={(id) => setClips((prev) => prev.filter((c) => c.id !== id))}
+          />
         )}
       </Panel>
     </div>

@@ -10,6 +10,8 @@ const patchSchema = z.object({
   title: z.string().min(1).max(120).optional(),
   favorite: z.boolean().optional(),
   edits: z.record(z.unknown()).optional(),
+  hidden: z.boolean().optional(),
+  disliked: z.boolean().optional(),
 })
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -38,6 +40,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (body.edits !== undefined) {
       const { normalizeEdits } = await import('@/lib/clips/edits')
       data.edits = mergeEditsPatch(normalizeEdits(clip.edits, bounds), body.edits, bounds)
+    }
+    if (body.hidden !== undefined || body.disliked !== undefined) {
+      const prev = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<string, unknown>
+      const meta = { ...prev }
+      if (body.hidden !== undefined) meta.userHidden = body.hidden
+      if (body.disliked !== undefined) {
+        meta.userFeedback = body.disliked ? 'dislike' : null
+      }
+      data.aiMeta = meta
     }
     const prisma = getPrisma()
     const updated = await prisma.clip.update({ where: { id }, data })
