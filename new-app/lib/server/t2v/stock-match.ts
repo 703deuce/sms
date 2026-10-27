@@ -274,7 +274,12 @@ export async function searchT2vStock(input: {
     .sort((a, b) => b.score - a.score)
 }
 
-export function toSceneMedia(c: StockCandidate, assetId: string, needMs: number, query: string): T2vSceneMedia {
+export function toSceneMedia(
+  c: StockCandidate,
+  assetId: string | undefined,
+  needMs: number,
+  query: string,
+): T2vSceneMedia {
   const isPhoto = c.stockKind === 'photo'
   const { srcInMs } = isPhoto ? { srcInMs: 0 } : trimWindow(c.durationS, needMs / 1000)
   const mediaProvider: 'pexels' | 'pixabay' =
@@ -282,7 +287,7 @@ export function toSceneMedia(c: StockCandidate, assetId: string, needMs: number,
   return {
     provider: mediaProvider,
     kind: isPhoto ? 'image' : 'video',
-    assetId,
+    ...(assetId && assetId !== 'pending' ? { assetId } : {}),
     providerId: c.providerId,
     thumbUrl: c.thumbUrl,
     previewUrl: c.previewUrl,

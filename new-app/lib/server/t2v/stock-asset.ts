@@ -1,16 +1,17 @@
 import 'server-only'
-import { Readable } from 'stream'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
 
-const ALLOWED_STOCK_HOSTS = new Set([
+const ALLOWED_STOCK_HOST_SUFFIXES = [
   'videos.pexels.com',
   'images.pexels.com',
+  'pexels.com',
   'player.vimeo.com',
+  'vimeo.com',
   'cdn.pixabay.com',
   'pixabay.com',
-])
+] as const
 
 const MAX_REDIRECTS = 5
 
@@ -21,12 +22,15 @@ function stockProviderKey(c: StockCandidate): { provider: string; providerId: st
   return { provider: c.provider, providerId: c.providerId }
 }
 
+function hostAllowedForStockFetch(host: string): boolean {
+  const h = host.toLowerCase()
+  return ALLOWED_STOCK_HOST_SUFFIXES.some((suffix) => h === suffix || h.endsWith(`.${suffix}`))
+}
+
 function assertAllowedStockUrl(srcUrl: string) {
   const u = new URL(srcUrl)
   if (u.protocol !== 'https:') throw new Error('stock_url_not_https')
-  const host = u.hostname.toLowerCase()
-  const ok = [...ALLOWED_STOCK_HOSTS].some((h) => host === h || host.endsWith(`.${h}`))
-  if (!ok) throw new Error('stock_url_not_allowed')
+  if (!hostAllowedForStockFetch(u.hostname)) throw new Error('stock_url_not_allowed')
 }
 
 async function fetchStockResponse(initialUrl: string): Promise<Response> {
@@ -80,10 +84,11 @@ export async function ensureT2vStockAsset(_workspaceId: string, c: StockCandidat
     }))
 
   const res = await fetchStockResponse(c.srcUrl)
-  if (!res.ok || !res.body) throw new Error(`stock_download_${res.status}`)
+  if (!res.ok) throw new Error(`stock_download_${res.status}`)
   const contentType = isPhoto ? 'image/jpeg' : 'video/mp4'
-  const body = Readable.fromWeb(res.body as import('stream/web').ReadableStream)
-  await storage.putStream(objectKey, body, contentType)
+  const bytes = Buffer.from(await res.arrayBuffer())
+  if (bytes.length < 64) throw new Error('stock_download_empty')
+  await storage.putBytes(objectKey, bytes, contentType)
   return prisma.stockAsset.update({
     where: { id: row.id },
     data: { storageKey: objectKey },

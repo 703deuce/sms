@@ -6,6 +6,7 @@ import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { getPrisma } from '@/lib/server/db'
 import { createT2vDraft } from '@/lib/server/t2v/drafts'
 import { defaultT2vDraft } from '@/lib/t2v/defaults'
+import { pexelsConfigured } from '@/lib/server/ai/pexels'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 
 const createSchema = z.object({
@@ -26,6 +27,9 @@ export async function POST(request: Request) {
     const workspaceId = await resolveWorkspaceId()
     const body = createSchema.parse(await request.json())
     const doc = defaultT2vDraft(body)
+    if (pexelsConfigured() && !doc.settings.mediaSources.includes('pexels')) {
+      doc.settings.mediaSources = [...doc.settings.mediaSources, 'pexels']
+    }
     if (body.templateId) doc.settings.templateId = body.templateId
     const draft = await createT2vDraft(workspaceId, doc)
     return NextResponse.json({

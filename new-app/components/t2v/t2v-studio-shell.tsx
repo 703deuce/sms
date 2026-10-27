@@ -169,10 +169,23 @@ export function T2vStudioShell({
       const res = await fetch(`/api/t2v/drafts/${draftId}/storyboard`, { method: 'POST' })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'match_failed')
-      const next = (body.data?.document ?? body.data) as T2vDraftV1
-      push(next)
-      if (body.data?.revision) setRevision(body.data.revision)
-      toast.success('Storyboard media matched')
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      const next = body.data?.document as T2vDraftV1 | undefined
+      if (next) {
+        replace(next)
+        if (body.data?.revision != null) {
+          setRevision(body.data.revision)
+          revisionRef.current = body.data.revision
+        }
+      }
+      const sceneErrors = (body.data?.sceneErrors ?? []) as Array<{ sceneId: string; error: string }>
+      if (sceneErrors.length) {
+        toast.warning(
+          `Stock matched with ${sceneErrors.length} copy issue(s). Thumbnails saved; retry match or pick manually.`,
+        )
+      } else {
+        toast.success('Storyboard media matched')
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not match media')
     } finally {
