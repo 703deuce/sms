@@ -9,6 +9,7 @@ import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { Button } from '@/components/ui/button'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
+import { ProjectPeopleStrip } from '@/components/clips/project-people-strip'
 import { ClipGridSkeleton } from '@/components/clips/clip-grid-skeleton'
 import { JobStatus } from '@/components/clips/job-status'
 import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
@@ -273,6 +274,7 @@ export function ProjectClipsView({
       ) : (
         <div className="flex flex-col gap-4">
           {isStreamer ? <MontageProgress projectId={projectId} pollKey={montagePollKey} /> : null}
+          {!isStreamer && clips.length > 0 ? <ProjectPeopleStrip clips={clips} /> : null}
           <Panel
             title={clipCountLabel(clips.length)}
             description="Sorted by score. Hover a card to preview."
