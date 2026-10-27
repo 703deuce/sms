@@ -120,7 +120,7 @@ export function ScriptFillerReviewBar({
         {variant === 'clip' ? (
           <span className="inline-flex h-8 items-center gap-1.5 px-1 text-xs font-medium" data-testid="filler-search-mode">
             <Search className="size-3.5 shrink-0 opacity-70" aria-hidden />
-            Review filler words
+            {mode === 'gap' ? 'Review pauses' : 'Review filler words'}
           </span>
         ) : (
           <Select
@@ -248,7 +248,7 @@ export function ScriptFillerReviewBar({
               ))}
             </SelectContent>
           </Select>
-        ) : variant === 'clip' ? null : (
+        ) : mode === 'gap' || searchMode === 'gaps' ? (
           <label className="flex items-center gap-2 text-xs">
             Shorten to
             <Input
@@ -262,7 +262,7 @@ export function ScriptFillerReviewBar({
             />
             s
           </label>
-        )}
+        ) : null}
         {variant !== 'clip' ? (
           <label className="flex items-center gap-1.5">
             <Switch checked={selectionOnly} onCheckedChange={onSelectionOnlyChange} />
@@ -292,10 +292,10 @@ export function ScriptFillerReviewBar({
             </Button>
           ) : null}
           <Button type="button" size="sm" variant="secondary" disabled={total === 0} onClick={onRemoveOne}>
-            {variant === 'clip' ? 'Approve' : mode === 'gap' ? 'Shorten' : 'Remove'}
+            {mode === 'gap' ? 'Shorten' : variant === 'clip' ? 'Approve' : 'Remove'}
           </Button>
           <Button type="button" size="sm" disabled={total === 0} onClick={onRemoveAll}>
-            {variant === 'clip' ? 'Approve all' : mode === 'gap' ? 'Shorten all' : 'Remove all'}
+            {mode === 'gap' ? 'Shorten all' : variant === 'clip' ? 'Approve all' : 'Remove all'}
           </Button>
         </div>
       </div>

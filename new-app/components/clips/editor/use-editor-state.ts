@@ -214,6 +214,15 @@ export function useEditorState(
     [setEdits, state.edits],
   )
 
+  const restoreCutRange = useCallback(
+    (range: CutRange) => {
+      const cuts = subtractRangeFromCuts(state.edits.cutRanges, range)
+      if (editsEqual(state.edits, { ...state.edits, cutRanges: cuts })) return
+      setEdits({ ...state.edits, cutRanges: cuts })
+    },
+    [setEdits, state.edits],
+  )
+
   const setLayoutMode = useCallback(
     (mode: ClipEditsV2['layout']['mode']) => {
       let next: ClipEditsV2 = { ...state.edits, layout: { ...state.edits.layout, mode } }
@@ -488,6 +497,7 @@ export function useEditorState(
     addCutRange,
     setWordFix,
     restoreWord,
+    restoreCutRange,
     setLayoutMode,
     setShotOverride,
     setTrim,

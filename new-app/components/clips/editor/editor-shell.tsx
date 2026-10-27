@@ -30,6 +30,8 @@ import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { ClipFillerReview } from '@/components/clips/editor/clip-filler-review'
+import { ClipGapReview } from '@/components/clips/editor/clip-gap-review'
+import type { ClipGapToolSettings } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import { StudioSoundPreview } from '@/components/script-editor/studio-sound-preview'
 import { normalizeAudioEdits } from '@/lib/clips/audio'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
@@ -88,6 +90,13 @@ export function EditorShell({
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
   const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
+  const [gapReviewOpen, setGapReviewOpen] = useState(false)
+  const [gapToolSettings, setGapToolSettings] = useState<ClipGapToolSettings>({
+    mode: 'more_than',
+    minGapSec: 0.6,
+    maxGapSec: 3,
+    targetGapSec: 0.35,
+  })
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const selectPanel = useCallback((id: EditorPanelId) => {
@@ -118,6 +127,7 @@ export function EditorShell({
     addCutRange,
     setWordFix,
     restoreWord,
+    restoreCutRange,
     setLayoutMode,
     setShotOverride,
     setTrim,
@@ -343,6 +353,7 @@ export function EditorShell({
           onAddCut={addCutRange}
           onWordFix={setWordFix}
           onRestoreWord={restoreWord}
+          onRestoreCutRange={restoreCutRange}
           onExtendTrim={(ms) => {
             if (ms < edits.trim.in) setTrim({ in: ms, out: edits.trim.out })
             else if (ms > edits.trim.out) setTrim({ in: edits.trim.in, out: ms })
@@ -365,6 +376,14 @@ export function EditorShell({
           onEdits={setEdits}
           reframeV2Enabled={reframeV2Enabled}
           appliedLayoutLabel={clipLayoutChip(aiMeta as ClipAiMeta | null)}
+          clipId={clipId}
+          words={editorWords}
+          clipStartMs={bounds.clipStartMs}
+          gapToolSettings={gapToolSettings}
+          onGapToolSettingsChange={(patch) => setGapToolSettings((s) => ({ ...s, ...patch }))}
+          onAddCut={addCutRange}
+          onSeekSource={seekSource}
+          onOpenGapReview={() => setGapReviewOpen(true)}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -423,6 +442,20 @@ export function EditorShell({
         onOpenChange={setFillerReviewOpen}
         onAddCut={addCutRange}
         onSeek={seekSource}
+      />
+      <ClipGapReview
+        clipId={clipId}
+        words={editorWords}
+        edits={edits}
+        open={gapReviewOpen}
+        onOpenChange={setGapReviewOpen}
+        onAddCut={addCutRange}
+        onSeek={seekSource}
+        minGapSec={gapToolSettings.minGapSec}
+        maxGapSec={gapToolSettings.maxGapSec}
+        gapMode={gapToolSettings.mode}
+        targetGapSec={gapToolSettings.targetGapSec}
+        onTargetGapSecChange={(n) => setGapToolSettings((s) => ({ ...s, targetGapSec: n }))}
       />
       <EditorMobileRail active={panel} onChange={selectPanel} />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_56px_minmax(0,380px)] xl:grid-cols-[minmax(0,1fr)_56px_minmax(0,420px)]">

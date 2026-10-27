@@ -5,8 +5,9 @@ import { Scissors, Search, Undo2, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
 import { isWordCut, wordDisplayText } from '@/lib/clips/edits'
+import { gapCutBetweenSourceWords } from '@/lib/clips/gap-shorten'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs, wordsInRange } from '@/lib/clips/source-words'
 import { speakerLabelForWord } from '@/lib/clips/crop-shots'
@@ -42,6 +43,7 @@ export function TranscriptPanel({
   onExtendTrim,
   onToggleEmphasis,
   onOpenFillerReview,
+  onRestoreCutRange,
   selectionRef,
   clipStartMs,
   clipEndMs,
@@ -59,6 +61,7 @@ export function TranscriptPanel({
   onExtendTrim: (sourceMs: number) => void
   onToggleEmphasis?: (wordIndex: number) => void
   onOpenFillerReview?: () => void
+  onRestoreCutRange?: (range: CutRange) => void
   selectionRef: React.MutableRefObject<TranscriptSelection | null>
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
@@ -126,6 +129,23 @@ export function TranscriptPanel({
     const last = blocks[blocks.length - 1]
     if (last && last.spk === spk) last.words.push(w)
     else blocks.push({ spk, speakerNum, words: [w] })
+  }
+
+  const renderGapCut = (range: CutRange) => {
+    const ms = range[1] - range[0]
+    return (
+      <span
+        key={`gap-${range[0]}-${range[1]}`}
+        className="mx-0.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] text-amber-900 dark:text-amber-100"
+      >
+        <span className="line-through decoration-amber-600/80">pause {Math.round(ms)}ms</span>
+        {onRestoreCutRange ? (
+          <button type="button" className="font-medium text-primary" onClick={() => onRestoreCutRange(range)}>
+            Restore
+          </button>
+        ) : null}
+      </span>
+    )
   }
 
   const renderWord = (w: SourceWord) => {
@@ -275,7 +295,15 @@ export function TranscriptPanel({
                   Speaker {block.speakerNum}
                 </span>
               </div>
-              <div className="inline">{block.words.map((w) => renderWord(w))}</div>
+              <div className="inline">
+                {block.words.flatMap((w, wi) => {
+                  const next = block.words[wi + 1]
+                  const gapCut = next ? gapCutBetweenSourceWords(w, next, edits.cutRanges) : null
+                  const nodes = [renderWord(w)]
+                  if (gapCut) nodes.push(renderGapCut(gapCut))
+                  return nodes
+                })}
+              </div>
             </div>
           )
         })}

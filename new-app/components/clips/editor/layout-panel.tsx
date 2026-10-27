@@ -11,6 +11,11 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipAspectRatios } from '@/lib/clips/settings'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
+import {
+  ClipShortenGapsPanel,
+  type ClipGapToolSettings,
+} from '@/components/clips/editor/clip-shorten-gaps-panel'
+import type { SourceWord } from '@/lib/clips/source-words'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
   { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
@@ -44,6 +49,14 @@ export function LayoutPanel({
   onEdits,
   reframeV2Enabled = false,
   appliedLayoutLabel = null,
+  clipId,
+  words = [],
+  clipStartMs = 0,
+  gapToolSettings,
+  onGapToolSettingsChange,
+  onAddCut,
+  onSeekSource,
+  onOpenGapReview,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -55,6 +68,14 @@ export function LayoutPanel({
   reframeV2Enabled?: boolean
   /** Runtime layout from reframe (read-only inspector). */
   appliedLayoutLabel?: string | null
+  clipId?: string
+  words?: SourceWord[]
+  clipStartMs?: number
+  gapToolSettings?: ClipGapToolSettings
+  onGapToolSettingsChange?: (patch: Partial<ClipGapToolSettings>) => void
+  onAddCut?: (range: [number, number]) => void
+  onSeekSource?: (sourceMs: number) => void
+  onOpenGapReview?: () => void
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -106,8 +127,24 @@ export function LayoutPanel({
           <p className="text-xs text-muted-foreground">Updates the preview and export framing.</p>
         </div>
       )}
+      {clipId && words.length > 0 && gapToolSettings && onGapToolSettingsChange && onAddCut && onSeekSource && onOpenGapReview ? (
+        <div className="rounded-lg border border-border">
+          <ClipShortenGapsPanel
+            clipId={clipId}
+            words={words}
+            edits={edits}
+            clipStartMs={clipStartMs}
+            settings={gapToolSettings}
+            onSettingsChange={onGapToolSettingsChange}
+            onAddCut={onAddCut}
+            onSeek={onSeekSource}
+            onOpenReview={onOpenGapReview}
+          />
+        </div>
+      ) : null}
       {onEdits && (
         <div className="space-y-3 rounded-lg border border-border p-3">
+          <p className="text-xs font-medium text-muted-foreground">Export-only (no preview)</p>
           {aiExtras ? (
             <>
           <div className="flex items-center justify-between gap-2">
