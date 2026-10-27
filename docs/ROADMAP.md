@@ -1,6 +1,6 @@
 # Transovo product roadmap
 
-**Last updated:** 2026-10-26 — owner final priority order (clipper → script editor → Streamer VOD → AI Studio); screenwriting on hold behind flag
+**Last updated:** 2026-10-27 — Rick: clipper → script editor → AI Studio → **STOP**; then clipper fine-tuning; screenwriting on hold behind `FEATURE_SCREENWRITING`
 
 Single source of truth for build order and status. Update the **Last updated** line at every milestone.
 
@@ -8,13 +8,15 @@ Single source of truth for build order and status. Update the **Last updated** l
 
 ## Build order (owner final)
 
-| # | Product | Status (2026-10-26) |
+| # | Product | Status (2026-10-27) |
 |---|---------|---------------------|
-| **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS — TOP PRIORITY, NOW** |
-| **2** | **Script editor** — Descript-style transcript editor | **SPEC READY** — see `docs/clips/script-editor.md`; **do not implement until regular clipper passes prod browser test** |
-| **3** | **Streamer** — VOD-first only (link import, auto-import after stream, uploads, chat signals, clip-that, near-live polling). **No live clipping.** | **PARTIAL** — after script editor spec + clipper ship |
-| **4** | **AI Studio** (Higgsfield-like) | **NOT STARTED** |
-| **5** | **Screenwriting** (Final Draft parity) | **ON HOLD** — `FEATURE_SCREENWRITING=0`; all code, migrations, and data kept (`screenwriting-wip`) |
+| **1** | **Regular clipper** — upload → process → clips → render/export (any size, resumable, survives deploys) | **IN PROGRESS** |
+| **2** | **Script editor** — Descript-style transcript editor | **SPEC READY** — `docs/clips/SCRIPT-EDITOR-BUILD.md` (+ `docs/clips/script-editor.md`) |
+| **3** | **AI Studio** (Higgsfield-like) | **NOT STARTED** |
+| — | **STOP** after **1–3** ship | No screenwriting until re-enabled |
+| — | **Screenwriting** (Final Draft parity) | **ON HOLD** — `FEATURE_SCREENWRITING=0`; code/migrations/data kept (`screenwriting-wip`) |
+
+**Then (after 1–3):** [Clipper fine-tuning pass](#clipper-fine-tuning-pass-after-13) (reframe/layout quality across many videos — not a new product).
 
 ### Before charging (launch blocker)
 
@@ -41,34 +43,53 @@ Single source of truth for build order and status. Update the **Last updated** l
 
 ---
 
-## 2. Script editor (spec ready — gated on clipper)
+## 2. Script editor (next after clipper)
 
 Descript-style transcript editing.
 
 | Doc | Purpose |
 |-----|---------|
+| **`docs/clips/SCRIPT-EDITOR-BUILD.md`** | **Primary build plan** — milestones (§D), Prisma draft, APIs, component tree, EDL/render bridge |
 | **`docs/clips/script-editor.md`** | Implementation spec v1.0 (layout, EDL, tests) |
 | **`docs/clips/script-editor-SOURCES.txt`** | Reference screenshot URLs (Descript help, Kapwing) |
-| **`docs/clips/SCRIPT-EDITOR-BUILD.md`** | Milestones (§D), Prisma draft, APIs, component tree, EDL/render bridge |
-| `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md` | Earlier notes (superseded by script-editor.md for build order) |
+| `new-app/docs/clips/DESCRIPT_BUILD_SPEC.md` | Earlier notes (superseded by SCRIPT-EDITOR-BUILD.md for order) |
 
-**Gate:** Owner confirms regular clipper prod browser test → then schedule editor milestones (§D in spec).
-
----
-
-## 3. Streamer (VOD)
-
-**Spec:** `docs/clips/STREAMER_BUILD_SPEC.md`. Live clipping stays frozen.
+**Gate:** Regular clipper passes prod browser test → schedule editor milestones per SCRIPT-EDITOR-BUILD.md.
 
 ---
 
-## 4. AI Studio
+## 3. AI Studio
 
-Higgsfield-like product; spec and schedule TBD after prior priorities.
+Higgsfield-like product; spec and schedule after clipper + script editor ship.
 
 ---
 
-## 5. Screenwriting (on hold)
+## Clipper fine-tuning pass (after 1–3)
+
+Quality and layout intelligence for the **regular clipper** (and shared reframe stack), informed by many real uploads — not tuned to a single test video.
+
+| Item | Intent |
+|------|--------|
+| **(a) Face + active speaker** | Generalize face tracking and active-speaker reframing across diverse footage; avoid overfitting to one golden test clip. |
+| **(b) Single-person + corner webcam** | Detect one-person / screen-share + small webcam inset; do not treat as multi-speaker drama; prefer full-frame or fit/blur when appropriate. |
+| **(c) Top/bottom split** | Test and auto-select content + face split layout when the scene fits (vs speaker-follow or fit-only). |
+| **(d) Variety across clips** | Vary layout treatment and caption/style choices across clips in one project instead of one template for every output. |
+
+---
+
+## Streamer (VOD) — backlog (not in 1–3 sequence)
+
+**Spec:** `docs/clips/STREAMER_BUILD_SPEC.md`. **No live clipping.**
+
+| Open item | Notes |
+|-----------|--------|
+| **VOD resumable-download fix** | Long imports must survive worker restart/reap: checkpointed download + resume (see spec §0.2.4 idempotent, resumable jobs; `StreamVod.state`). |
+
+Further S2–S15 milestones: `docs/clips/PROGRESS.md`.
+
+---
+
+## Screenwriting (on hold)
 
 **Hidden in prod:** `FEATURE_SCREENWRITING` unset or `0` → no nav link; `/app/sw/*`, `/api/sw/*`, `/s/*` → 404.
 
@@ -84,7 +105,8 @@ Higgsfield-like product; spec and schedule TBD after prior priorities.
 
 | Date | Milestone |
 |------|-----------|
-| 2026-10-26 | Roadmap: clipper → script editor (wait for spec) → Streamer VOD → AI Studio → screenwriting on hold |
+| 2026-10-27 | Roadmap: clipper → script editor (SCRIPT-EDITOR-BUILD.md) → AI Studio → STOP; fine-tuning pass (a–d); Streamer VOD resumable-download stays in backlog |
+| 2026-10-26 | Roadmap: clipper → script editor → Streamer VOD → AI Studio → screenwriting on hold |
 | 2026-10-26 | `FEATURE_SCREENWRITING` off; middleware 404; nav hidden (`a8f126228`) |
 | 2026-10-26 | Clipper: direct upload `64d759c87`, `app_chunked` guard `ddd3d010d`, worker render fixes `e3264ed9a` |
 | 2026-10-26 | `screenwriting-wip` @ `979106404` merged with master flag/roadmap |
