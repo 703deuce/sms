@@ -259,7 +259,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   )
 
   const onFit = useCallback(() => {
-    const shell = document.querySelector('[data-script-shell]') as HTMLElement | null
+    const shell = globalThis.document.querySelector('[data-script-shell]') as HTMLElement | null
     const viewW = shell ? shell.clientWidth - 80 : 800
     setPxPerMs(Math.max(0.005, viewW / Math.max(1, outDur)))
     setScrollLeftPx(0)

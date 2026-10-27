@@ -41,7 +41,9 @@ export function TimelineWordbar({
         const selected =
           item.kind === 'word'
             ? selectedWordIds.has(item.wordId)
-            : item.wordIds.some((id) => selectedWordIds.has(id))
+            : item.kind === 'group'
+              ? item.wordIds.some((id: string) => selectedWordIds.has(id))
+              : false
         return (
           <button
             key={`${item.kind}-${item.outStartMs}`}
@@ -54,9 +56,15 @@ export function TimelineWordbar({
             style={{ left, width: w }}
             onClick={() => {
               if (item.kind === 'word') onSelectWord(item.wordId)
-              else if (item.wordIds[0]) onSelectWord(item.wordIds[0])
+              else if (item.kind === 'group' && item.wordIds[0]) onSelectWord(item.wordIds[0])
             }}
-            title={item.kind === 'word' ? item.text : `${item.wordIds.length} words`}
+            title={
+              item.kind === 'word'
+                ? item.text
+                : item.kind === 'group'
+                  ? `${item.wordIds.length} words`
+                  : item.label
+            }
           >
             {item.kind === 'word' ? item.text : item.label}
           </button>

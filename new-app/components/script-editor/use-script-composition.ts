@@ -20,7 +20,12 @@ export function useScriptComposition(initial: {
   revision: number
   document: ScriptDocumentV1
 }) {
-  const [document, setDocument] = useState<ScriptDocumentV1>(initial.document)
+  const [document, setDocumentState] = useState<ScriptDocumentV1>(initial.document)
+  const documentRef = useRef<ScriptDocumentV1>(initial.document)
+  const setDocument = useCallback((next: ScriptDocumentV1) => {
+    documentRef.current = next
+    setDocumentState(next)
+  }, [])
   const [revision, setRevision] = useState(initial.revision)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved')
   const [undoDepth, setUndoDepth] = useState(0)
@@ -39,7 +44,7 @@ export function useScriptComposition(initial: {
   }, [])
 
   const enqueueServerOps = useCallback(
-    (ops: ScriptCompositionOp[], rollbackDoc: ScriptDocumentV1) => {
+    (ops: ScriptCompositionOp[], rollbackDoc: ScriptDocumentV1, onRollback?: () => void) => {
       if (!ops.length) return
       pendingOpsRef.current += 1
       setSaveState('saving')
@@ -60,12 +65,15 @@ export function useScriptComposition(initial: {
             })
             revisionRef.current = res.revision
             setRevision(res.revision)
+            if (res.document) setDocument(res.document)
           }
           saveErrorRef.current = false
         })
         .catch(() => {
           saveErrorRef.current = true
+          onRollback?.()
           setDocument(rollbackDoc)
+          bumpStacks()
           setSaveState('error')
         })
         .finally(() => {
@@ -76,7 +84,7 @@ export function useScriptComposition(initial: {
           }
         })
     },
-    [initial.compositionId],
+    [bumpStacks, initial.compositionId, setDocument],
   )
 
   const commitLocal = useCallback(
@@ -92,12 +100,12 @@ export function useScriptComposition(initial: {
 
   const applyOp = useCallback(
     (op: ScriptCompositionOp) => {
-      const before = document
+      const before = documentRef.current
       const next = applyCompositionOp(before, op)
       if (documentsEqual(before, next)) return
       commitLocal(next, [op], before)
     },
-    [commitLocal, document],
+    [commitLocal],
   )
 
   const deleteWords = useCallback(
@@ -112,24 +120,30 @@ export function useScriptComposition(initial: {
   const undo = useCallback(() => {
     const prev = undoStackRef.current.pop()
     if (!prev) return
-    const current = document
+    const current = documentRef.current
     redoStackRef.current.push(cloneDocument(current))
     const ops = opsBetweenDocuments(current, prev)
     setDocument(prev)
     bumpStacks()
-    enqueueServerOps(ops, current)
-  }, [bumpStacks, document, enqueueServerOps])
+    enqueueServerOps(ops, current, () => {
+      undoStackRef.current.push(cloneDocument(prev))
+      redoStackRef.current.pop()
+    })
+  }, [bumpStacks, enqueueServerOps, setDocument])
 
   const redo = useCallback(() => {
     const next = redoStackRef.current.pop()
     if (!next) return
-    const current = document
+    const current = documentRef.current
     undoStackRef.current.push(cloneDocument(current))
     const ops = opsBetweenDocuments(current, next)
     setDocument(next)
     bumpStacks()
-    enqueueServerOps(ops, current)
-  }, [bumpStacks, document, enqueueServerOps])
+    enqueueServerOps(ops, current, () => {
+      redoStackRef.current.push(cloneDocument(next))
+      undoStackRef.current.pop()
+    })
+  }, [bumpStacks, enqueueServerOps, setDocument])
 
   return {
     document,

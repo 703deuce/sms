@@ -103,7 +103,14 @@ export function TimelinePanel({
 
   const selectionOutRange = useMemo(() => {
     if (selAnchor == null || selEnd == null) return null
-    return outputRangeForWordIndices(chips, orderedWords, Math.min(selAnchor, selEnd), Math.max(selAnchor, selEnd))
+    const range = outputRangeForWordIndices(
+      chips,
+      orderedWords,
+      Math.min(selAnchor, selEnd),
+      Math.max(selAnchor, selEnd),
+    )
+    if (!range) return null
+    return { lo: range.outLo, hi: range.outHi }
   }, [selAnchor, selEnd, chips, orderedWords])
 
   useEffect(() => {
