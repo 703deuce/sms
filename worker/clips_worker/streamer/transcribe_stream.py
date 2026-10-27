@@ -1,4 +1,4 @@
-"""Streamer VOD transcription provider (Groq full-VOD + Deepgram fallback)."""
+"""Streamer VOD transcription (Modal GPU + Deepgram fallback)."""
 from __future__ import annotations
 
 import os
@@ -10,47 +10,39 @@ from clips_worker.deepgram_transcribe import (
     deepgram_api_key,
     transcribe_deepgram,
 )
-from clips_worker.gpu import transcribe_with_fallback
 from clips_worker.gpu.base import TranscribeReq, TranscribeRes
-from clips_worker.groq_transcribe import (
-    GroqTranscribeError,
-    StreamTranscribeCost,
-    groq_api_key,
-    groq_usd_per_audio_hour,
-    transcribe_groq,
+from clips_worker.streamer.modal_transcribe import (
+    StreamModalTranscribeError,
+    estimate_modal_cost_usd,
+    transcribe_stream_modal_with_meta,
 )
 
-# Max upload size per Groq request (Rick: <100 MB per chunk).
 STREAM_CHUNK_MAX_BYTES = int(os.environ.get("STREAMER_CHUNK_MAX_BYTES", str(100 * 1024 * 1024)))
 
 
 def resolve_stream_transcribe_provider() -> str:
-    """groq | deepgram | local — see STREAM_TRANSCRIBE_PROVIDER."""
+    """modal | deepgram — streamer default is Modal (no Groq)."""
     explicit = (os.environ.get("STREAM_TRANSCRIBE_PROVIDER") or "").strip().lower()
-    has_groq = bool(groq_api_key())
-    has_dg = bool(deepgram_api_key())
-    if explicit == "groq":
-        return "groq" if has_groq else ("deepgram" if has_dg else "local")
     if explicit == "deepgram":
-        return "deepgram" if has_dg else "local"
-    if explicit == "local":
-        return "local"
-    # Auto: prefer Groq when key exists (Rick: switch from Deepgram once GROQ_API_KEY is set).
-    if has_groq:
-        return "groq"
-    if has_dg:
-        return "deepgram"
-    return "local"
+        return "deepgram" if deepgram_api_key() else "modal"
+    if explicit == "modal":
+        return "modal"
+    return "modal"
+
+
+def stream_whisper_model() -> str:
+    return (
+        os.environ.get("STREAM_WHISPER_GPU_MODEL") or os.environ.get("WHISPER_GPU_MODEL") or "large-v3-turbo"
+    ).strip()
 
 
 def deepgram_caption_model() -> str:
-    """Nova-3 for caption-grade words on final clips only (render path)."""
     return (os.environ.get("DEEPGRAM_CAPTION_MODEL") or "nova-3").strip() or "nova-3"
 
 
-def estimate_stream_transcribe_cost_usd(provider: str, audio_minutes: float) -> float:
-    if provider == "groq":
-        return (audio_minutes / 60.0) * groq_usd_per_audio_hour()
+def estimate_stream_transcribe_cost_usd(provider: str, audio_minutes: float, gpu_seconds: float = 0.0) -> float:
+    if provider in ("modal", "modal_diarize"):
+        return estimate_modal_cost_usd(gpu_seconds)
     if provider == "deepgram":
         try:
             per_min = float(os.environ.get("DEEPGRAM_USD_PER_MIN", "0.006"))
@@ -66,16 +58,42 @@ def log_stream_transcribe_summary(
     project_id: str,
     provider: str,
     audio_minutes: float,
+    gpu_seconds: float = 0.0,
+    cold_start_s: float | None = None,
     fallback: str | None = None,
 ) -> None:
-    cost = estimate_stream_transcribe_cost_usd(provider, audio_minutes)
+    cost = estimate_stream_transcribe_cost_usd(provider, audio_minutes, gpu_seconds)
     fb = fallback or "none"
+    cold = cold_start_s if cold_start_s is not None else 0.0
     print(
         f"[clipper:stream] transcribe_vod vodId={vod_id} projectId={project_id} "
-        f"provider={provider} audioMinutes={audio_minutes:.1f} costUsdEst={cost:.4f} fallback={fb}",
+        f"provider={provider} audioMinutes={audio_minutes:.1f} gpuSeconds={gpu_seconds:.2f} "
+        f"coldStartS={cold:.2f} costUsdEst={cost:.4f} fallback={fb}",
         file=sys.stderr,
         flush=True,
     )
+
+
+def _deepgram_fallback(
+    conn,
+    req: TranscribeReq,
+    workspace_id: str,
+    project_id: str,
+    reason: str,
+) -> tuple[TranscribeRes, TranscribeMeta]:
+    if not deepgram_api_key():
+        raise StreamModalTranscribeError(reason)
+    print(
+        f"[clipper:stream] transcribe_chunk modal_failed reason={reason} falling_back=deepgram",
+        file=sys.stderr,
+        flush=True,
+    )
+    res = transcribe_deepgram(req)
+    meta = TranscribeMeta(transcription_engine="deepgram", fallback_reason=f"modal_{reason}")
+    res.transcription_engine = meta.transcription_engine
+    res.fallback_reason = meta.fallback_reason
+    res.provider = "deepgram"
+    return res, meta
 
 
 def transcribe_stream_audio_request(
@@ -86,28 +104,8 @@ def transcribe_stream_audio_request(
     *,
     vod_provider: str | None = None,
 ) -> tuple[TranscribeRes, TranscribeMeta]:
-    """Full-VOD chunk transcribe for streamer analyze (not caption-grade Deepgram)."""
+    """Full-VOD chunk transcribe for streamer analyze."""
     provider = (vod_provider or resolve_stream_transcribe_provider()).strip().lower()
-    if provider == "groq":
-        try:
-            res = transcribe_groq(req)
-            meta = TranscribeMeta(transcription_engine="groq")
-            res.transcription_engine = meta.transcription_engine
-            return res, meta
-        except GroqTranscribeError as exc:
-            if deepgram_api_key():
-                print(
-                    f"[clipper:stream] transcribe_chunk groq_failed reason={exc.reason} falling_back=deepgram",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                res = transcribe_deepgram(req)
-                meta = TranscribeMeta(transcription_engine="deepgram", fallback_reason=f"groq_{exc.reason}")
-                res.transcription_engine = meta.transcription_engine
-                res.fallback_reason = meta.fallback_reason
-                return res, meta
-            raise
-
     if provider == "deepgram":
         try:
             res = transcribe_deepgram(req)
@@ -115,18 +113,27 @@ def transcribe_stream_audio_request(
             res.transcription_engine = meta.transcription_engine
             return res, meta
         except DeepgramTranscribeError as exc:
-            res = transcribe_with_fallback(conn, req, workspace_id, project_id)
-            engine = "local_whisper" if res.provider == "local" else res.provider
-            meta = TranscribeMeta(transcription_engine=engine, fallback_reason=exc.reason)
-            res.transcription_engine = meta.transcription_engine
-            res.fallback_reason = meta.fallback_reason
-            return res, meta
+            raise StreamModalTranscribeError(exc.reason) from exc
 
-    res = transcribe_with_fallback(conn, req, workspace_id, project_id)
-    engine = "local_whisper" if res.provider == "local" else res.provider
-    meta = TranscribeMeta(transcription_engine=engine)
-    res.transcription_engine = meta.transcription_engine
-    return res, meta
+    diarize = provider == "modal_diarize"
+    modal_provider = "modal_diarize" if diarize else "modal"
+    req_with_model = TranscribeReq(
+        audio_url=req.audio_url,
+        audio_path=req.audio_path,
+        offset_ms=req.offset_ms,
+        language=req.language,
+        initial_prompt=req.initial_prompt,
+        model=stream_whisper_model(),
+    )
+    try:
+        res, telemetry = transcribe_stream_modal_with_meta(req_with_model, diarize=diarize)
+        meta = TranscribeMeta(transcription_engine=modal_provider, telemetry=telemetry)
+        res.transcription_engine = meta.transcription_engine
+        return res, meta
+    except StreamModalTranscribeError as exc:
+        if deepgram_api_key():
+            return _deepgram_fallback(conn, req, workspace_id, project_id, exc.reason)
+        raise
 
 
 def transcribe_clip_caption(req: TranscribeReq) -> TranscribeRes:
@@ -134,5 +141,4 @@ def transcribe_clip_caption(req: TranscribeReq) -> TranscribeRes:
     model = deepgram_caption_model()
     if not deepgram_api_key():
         raise DeepgramTranscribeError("no_api_key")
-    # diarize=true is set in deepgram _listen_params (speaker labels for captions).
     return transcribe_deepgram(req, model=model)

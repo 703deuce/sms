@@ -75,13 +75,20 @@ def normalize_words(raw_segments: list[dict], offset_ms: int = 0) -> list[dict]:
             s = float(item.get("start", 0)) + offset_s
             e = float(item.get("end", 0)) + offset_s
             p = float(item.get("prob", item.get("probability", 0)))
-        out.append(
-            {
-                "w": w,
-                "s": round(s, 3),
-                "e": round(e, 3),
-                "p": round(p, 3),
-                "i": pos,
-            }
-        )
+        row: dict = {
+            "w": w,
+            "s": round(s, 3),
+            "e": round(e, 3),
+            "p": round(p, 3),
+            "i": pos,
+        }
+        spk = item.get("spk")
+        if spk is None and item.get("speaker") is not None:
+            spk = item.get("speaker")
+        if spk is not None:
+            try:
+                row["spk"] = int(spk)
+            except (TypeError, ValueError):
+                pass
+        out.append(row)
     return out

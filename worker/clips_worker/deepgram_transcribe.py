@@ -198,6 +198,7 @@ def transcribe_deepgram(req: TranscribeReq, *, model: str | None = None) -> Tran
 class TranscribeMeta:
     transcription_engine: str
     fallback_reason: str | None = None
+    telemetry: dict | None = None
 
     def as_progress_fields(self) -> dict[str, str]:
         out = {"transcriptionEngine": self.transcription_engine}

@@ -10,9 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from clips_worker.deepgram_transcribe import deepgram_api_key
 from clips_worker.reframe_routing import probe_video_person_count
-from clips_worker.streamer.transcribe_stream import resolve_stream_transcribe_provider
 
 _TITLE_COLLAB_RE = re.compile(
     r"(?i)\b(collab|collaboration|co-?stream|dual\s*stream|multistream)\b"
@@ -125,15 +123,9 @@ def multiperson_probe_signal(video: Path, duration_ms: int, scratch: Path) -> di
 
 def resolve_vod_transcribe_provider(collab_detected: bool, settings: dict) -> str:
     streamer = _streamer_settings(settings)
-    if streamer.get("alwaysDetectSpeakers"):
-        if deepgram_api_key():
-            return "deepgram"
-        return resolve_stream_transcribe_provider()
-    if collab_detected:
-        if deepgram_api_key():
-            return "deepgram"
-        return resolve_stream_transcribe_provider()
-    return resolve_stream_transcribe_provider()
+    if streamer.get("alwaysDetectSpeakers") or collab_detected:
+        return "modal_diarize"
+    return "modal"
 
 
 def detect_collab(

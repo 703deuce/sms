@@ -26,10 +26,10 @@ def transcribe_chunk_with_retry(
     last_exc: Exception | None = None
     while attempt < MAX_CHUNK_ATTEMPTS:
         try:
-            res, _meta = transcribe_stream_audio_request(
+            res, meta = transcribe_stream_audio_request(
                 conn, req, workspace_id, project_id, vod_provider=vod_provider
             )
-            return res
+            return res, meta
         except Exception as exc:
             last_exc = exc
             attempt += 1

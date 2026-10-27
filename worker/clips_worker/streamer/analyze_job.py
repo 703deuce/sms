@@ -24,6 +24,7 @@ from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.metadata import enrich_streamer_meta
 from clips_worker.streamer.rank import rank_moments
 from clips_worker.streamer.collab_detect import CollabDetection, detect_collab, log_collab_detection
+from clips_worker.streamer.modal_transcribe import log_stream_modal_chunk
 from clips_worker.streamer.transcribe_stream import log_stream_transcribe_summary
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
 
@@ -136,6 +137,8 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
 
         chunk_started = time.time()
         transcribe_fallback: str | None = None
+        total_gpu_seconds = 0.0
+        first_cold_start_s: float | None = None
         chat_executor = ThreadPoolExecutor(max_workers=1)
         chat_future = chat_executor.submit(get_chat, vod, None)
         all_word_chunks: list[list[dict] | None] = [None] * len(ranges)
@@ -159,7 +162,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 language=(settings.get("streamer") or {}).get("language"),
             )
             prior = int((chunks_state.get(str(idx)) or {}).get("attempts") or 0)
-            res = transcribe_chunk_with_retry(
+            res, chunk_meta = transcribe_chunk_with_retry(
                 conn,
                 req,
                 workspace_id,
@@ -168,6 +171,19 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 prior_attempts=prior,
                 vod_provider=vod_transcribe_provider,
             )
+            if vod_transcribe_provider.startswith("modal") and getattr(res, "gpu_seconds", 0):
+                total_gpu_seconds += float(res.gpu_seconds)
+            telemetry = chunk_meta.telemetry if chunk_meta else None
+            if vod_transcribe_provider.startswith("modal") and isinstance(telemetry, dict):
+                if first_cold_start_s is None and telemetry.get("cold_start_s"):
+                    first_cold_start_s = float(telemetry["cold_start_s"])
+                log_stream_modal_chunk(
+                    vod_id=vod_id,
+                    chunk_index=idx,
+                    provider=vod_transcribe_provider,
+                    gpu_seconds=float(res.gpu_seconds or 0),
+                    cold_start_s=float(telemetry.get("cold_start_s") or 0),
+                )
             wkey = stream_chunk_key(workspace_id, vod_id, idx, "words.json")
             put_json(wkey, res.words)
             chunks_state[str(idx)] = {
@@ -193,9 +209,9 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 payload_prog["transcriptionEngine"] = res.transcription_engine
             if getattr(res, "fallback_reason", None):
                 payload_prog["transcriptionFallbackReason"] = res.fallback_reason
-                if vod_transcribe_provider == "groq" and res.transcription_engine == "deepgram":
-                    transcribe_fallback = "groq_deepgram"
-                elif detection.collab_detected and res.transcription_engine != "deepgram":
+                if vod_transcribe_provider.startswith("modal") and res.transcription_engine == "deepgram":
+                    transcribe_fallback = "modal_deepgram"
+                elif detection.collab_detected and res.transcription_engine != "modal_diarize":
                     transcribe_fallback = f"collab_{res.transcription_engine}"
             hb.update(stage=payload_prog["stage"], progress=payload_prog["progress"])
             post_progress(job["id"], payload_prog)
@@ -210,6 +226,8 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             project_id=project_id,
             provider=summary_provider,
             audio_minutes=audio_minutes,
+            gpu_seconds=total_gpu_seconds,
+            cold_start_s=first_cold_start_s,
             fallback=transcribe_fallback,
         )
         transcript_key = vod["transcriptKey"]
