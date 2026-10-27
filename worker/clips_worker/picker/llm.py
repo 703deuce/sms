@@ -34,7 +34,14 @@ def _request_body(system: str, user: str, schema: dict[str, Any], schema_name: s
     return body
 
 
-def chat_json(system: str, user: str, schema: dict[str, Any], schema_name: str = "response") -> dict[str, Any]:
+def chat_json(
+    system: str,
+    user: str,
+    schema: dict[str, Any],
+    schema_name: str = "response",
+    *,
+    timeout_s: float | None = None,
+) -> dict[str, Any]:
     key = os.environ["OPENAI_API_KEY"]
     payload = json.dumps(_request_body(system, user, schema, schema_name)).encode()
     req = urllib.request.Request(
@@ -44,7 +51,7 @@ def chat_json(system: str, user: str, schema: dict[str, Any], schema_name: str =
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
+        with urllib.request.urlopen(req, timeout=timeout_s if timeout_s is not None else 180) as resp:
             data = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode(errors="replace")

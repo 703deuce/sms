@@ -8,7 +8,12 @@ from clips_worker.picker.llm import chat_json
 BAD_TITLE_RE = re.compile(r"^[a-z_]+$")
 INTERNAL_TITLES = {"coverage_span", "fallback_full_span", "clip", "story"}
 SHORT_SOURCE_MAX_MS = 120_000
+OPENING_HOOK_WINDOW_MS = 3000
 SENTENCE_REF_RE = re.compile(r"\(\s*s\d+(?:\s*-\s*s\d+)?\s*\)", re.IGNORECASE)
+HOOK_BOOST_RE = re.compile(
+    r"\b(why|how|never|always|secret|mistake|truth|stop|wrong|best|worst|crazy|insane)\b",
+    re.IGNORECASE,
+)
 
 
 def strip_internal_sentence_refs(text: str) -> str:
@@ -60,6 +65,59 @@ def _clip_word_excerpt(words: list[dict], start_ms: int, end_ms: int) -> str:
     return " ".join(w["w"] for w in words if w["e"] * 1000 >= start_ms and w["s"] * 1000 <= end_ms)
 
 
+def _phrase_hook_score(text: str) -> float:
+    t = strip_internal_sentence_refs(text).strip()
+    if len(t) < 4:
+        return -1.0
+    score = min(len(t), 96) / 24.0
+    if "?" in t:
+        score += 2.0
+    if "!" in t:
+        score += 1.0
+    if HOOK_BOOST_RE.search(t):
+        score += 1.5
+    return score
+
+
+def strongest_opening_hook(words: list[dict], clip_start_ms: int, window_ms: int = OPENING_HOOK_WINDOW_MS) -> str:
+    """Best standalone hook line from the first few seconds of the clip (absolute source ms)."""
+    end_ms = clip_start_ms + window_ms
+    opener = _clip_word_excerpt(words, clip_start_ms, end_ms).strip()
+    if not opener:
+        return ""
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", opener) if p.strip()]
+    if not parts:
+        parts = [opener]
+    best = max(parts, key=_phrase_hook_score)
+    return trim_title(best, 72)
+
+
+def title_reads_as_standalone_hook(title: str | None) -> bool:
+    t = strip_internal_sentence_refs(title or "").strip()
+    if len(t) < 12 or t.lower() in INTERNAL_TITLES:
+        return False
+    if BAD_TITLE_RE.match(t):
+        return False
+    return len(t.split()) >= 3
+
+
+def polish_clip_hook_and_title(clip: dict, words: list[dict]) -> None:
+    start_ms = int(clip["start_ms"])
+    opener = strongest_opening_hook(words, start_ms)
+    if not opener:
+        return
+    hook = strip_internal_sentence_refs(str(clip.get("hook") or ""))
+    title = strip_internal_sentence_refs(str(clip.get("title") or ""))
+    if _phrase_hook_score(hook) < _phrase_hook_score(opener):
+        clip["hook"] = opener
+    if not title_reads_as_standalone_hook(title):
+        candidate = str(clip.get("hook") or opener)
+        if title_reads_as_standalone_hook(candidate):
+            clip["title"] = trim_title(candidate, 60)
+        elif title_reads_as_standalone_hook(opener):
+            clip["title"] = trim_title(opener, 60)
+
+
 def ensure_short_source_hook(clip: dict, words: list[dict], source_ms: int) -> None:
     if source_ms > SHORT_SOURCE_MAX_MS:
         return
@@ -82,10 +140,13 @@ def ensure_clip_title(clip: dict, words: list[dict], genre: str, *, source_ms: i
         if needs_title(clip["title"]):
             clip["title"] = generate_title(excerpt, genre)
         ensure_short_source_hook(clip, words, source_ms)
+        polish_clip_hook_and_title(clip, words)
         return
     if not needs_title(title):
         clip["title"] = title
         ensure_short_source_hook(clip, words, source_ms or 0)
+        polish_clip_hook_and_title(clip, words)
         return
     clip["title"] = generate_title(excerpt, genre)
     ensure_short_source_hook(clip, words, source_ms or 0)
+    polish_clip_hook_and_title(clip, words)

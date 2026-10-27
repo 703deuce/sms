@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections import Counter
 from typing import Any
 
@@ -65,6 +66,18 @@ PASS2_SCHEMA = {
 }
 
 
+def _pass2_batch_schema() -> dict[str, Any]:
+    item = json.loads(json.dumps(PASS2_SCHEMA["properties"]["clips"]["items"]))
+    item["properties"]["moment_index"] = {"type": "integer"}
+    item["required"] = list(item["required"]) + ["moment_index"]
+    return {
+        "type": "object",
+        "properties": {"clips": {"type": "array", "items": item}},
+        "required": ["clips"],
+        "additionalProperties": False,
+    }
+
+
 def _context_lines(sentences, sig_by, center_lo: int, center_hi: int, ctx_s: float) -> str:
     if not sentences:
         return ""
@@ -80,12 +93,18 @@ def _context_lines(sentences, sig_by, center_lo: int, center_hi: int, ctx_s: flo
     return "\n".join(lines)
 
 
-def _pass2_system(genre: str) -> str:
+def _pass2_system(genre: str, *, batched: bool = False) -> str:
     ex = load_examples()
+    moment_rule = (
+        "Return exactly one clip object in clips[] per moment in the user payload; "
+        "each clip must include moment_index matching the payload."
+        if batched
+        else "Return exactly one clip object in clips[] for the single moment in the user payload."
+    )
     return "\n\n".join(
         [
             "Return PASS 2 JSON only. Score and tighten each moment; cite sentence ids.",
-            "Return exactly one clip object in clips[] for the single moment in the user payload.",
+            moment_rule,
             "title must be <= 60 characters, honest, using the speaker's words; never internal codes like coverage_span.",
             load_core_rubric(),
             load_genre_prompt(genre),
@@ -164,6 +183,82 @@ def _clip_row_from_llm(
     return base
 
 
+def _score_moments_batched(
+    moments: list[dict],
+    sentences: list[Sentence],
+    signals: list[SentenceSignals],
+    sig_by: dict,
+    genre: str,
+    source_duration_s: float | None,
+    ctx_s: float,
+) -> tuple[list[dict], list[dict]]:
+    blocks: list[dict] = []
+    for mi, m in enumerate(moments):
+        ss = max(0, min(int(m["start_sentence"]), len(sentences) - 1))
+        es = max(ss, min(int(m["end_sentence"]), len(sentences) - 1))
+        blocks.append(
+            {
+                "moment_index": mi,
+                "pass1_why": m.get("why", ""),
+                "archetype": m.get("archetype"),
+                "approx_start_id": ss,
+                "approx_end_id": es,
+                "context_transcript": _context_lines(sentences, sig_by, ss, es, ctx_s),
+            }
+        )
+    timeout_s = float(os.environ.get("CLIP_PASS2_BATCH_TIMEOUT_S", "45"))
+    data = chat_json(
+        _pass2_system(genre, batched=True),
+        json.dumps(blocks, indent=0),
+        _pass2_batch_schema(),
+        "moments_pass2_batch",
+        timeout_s=timeout_s,
+    )
+    picker_info("pass2_batch_raw", moments_in=len(moments), raw=json_snippet(data))
+    by_index: dict[int, dict] = {}
+    for row in data.get("clips") or []:
+        mi = int(row.get("moment_index", -1))
+        if mi < 0 or mi >= len(moments):
+            continue
+        by_index[mi] = row
+    out: list[dict] = []
+    audit: list[dict] = []
+    reject_counts: Counter[str] = Counter()
+    for mi, m in enumerate(moments):
+        row = by_index.get(mi)
+        if not row:
+            audit.append(
+                {
+                    "hard_reject": False,
+                    "llm_reject": True,
+                    "reject_reason": "missing_batch_row",
+                    "start_sentence": m.get("start_sentence"),
+                    "end_sentence": m.get("end_sentence"),
+                }
+            )
+            reject_counts["missing_batch_row"] += 1
+            continue
+        parsed = _clip_row_from_llm(row, m, sentences, sig_by, genre, source_duration_s)
+        if not parsed:
+            continue
+        audit.append(parsed)
+        if parsed.get("llm_reject"):
+            code = (parsed.get("reject_reason") or "llm_reject").split(":")[0].strip()
+            reject_counts[code] += 1
+            continue
+        if parsed.get("gate_reject"):
+            reject_counts[parsed.get("reject_reason") or "gate"] += 1
+            continue
+        out.append({k: v for k, v in parsed.items() if k not in ("hard_reject", "llm_reject", "gate_reject")})
+    picker_info(
+        "pass2_batch_done",
+        scored=len(out),
+        audited=len(audit),
+        rejected=dict(reject_counts),
+    )
+    return out, audit
+
+
 def score_moments(
     moments: list[dict],
     sentences: list[Sentence],
@@ -176,11 +271,20 @@ def score_moments(
     ctx_s = float(genres_config().get("pass2_context_seconds", 120))
     sig_by = {s.sentence_idx: s for s in signals}
     if source_duration_s is not None and source_duration_s <= SHORT_SOURCE_MAX_MS / 1000.0:
+        picker_info("pass2_batch_start", source_duration_s=source_duration_s, moments_in=len(moments))
+        try:
+            batched, audit = _score_moments_batched(
+                moments, sentences, signals, sig_by, genre, source_duration_s, ctx_s
+            )
+            if batched:
+                return batched, audit
+        except Exception as exc:
+            picker_info("pass2_batch_failed", error=str(exc)[:240])
         heuristic = pass1_heuristic_candidates(
             moments, sentences, sig_by, genre, source_duration_s=source_duration_s
         )
         picker_info(
-            "pass2_skip_llm_short_source",
+            "pass2_batch_heuristic_fallback",
             source_duration_s=source_duration_s,
             moments_in=len(moments),
             scored=len(heuristic),

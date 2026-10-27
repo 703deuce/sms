@@ -100,17 +100,14 @@ def apply_production_reframe_routing(
             shadow["confidence"] = round(summary.confidence, 4)
             corner_hint = False
             screen_hint = False
-            source_ms = int(settings.get("sourceDurationMs") or 0)
-            skip_heavy_vision = 0 < source_ms <= 120_000
-            if not skip_heavy_vision:
-                try:
-                    from clips_worker.screen_share_detect import probe_screen_share_video
+            try:
+                from clips_worker.screen_share_detect import probe_screen_share_video
 
-                    ss = probe_screen_share_video(str(clip_src), sample_count=4, models_dir=str(V3))
-                    corner_hint = bool(ss.face_corner)
-                    screen_hint = bool(ss.is_screen_share or ss.confidence >= 0.45)
-                except Exception:
-                    pass
+                ss = probe_screen_share_video(str(clip_src), sample_count=4, models_dir=str(V3))
+                corner_hint = bool(ss.face_corner)
+                screen_hint = bool(ss.is_screen_share or ss.confidence >= 0.45)
+            except Exception:
+                pass
             vision_used = False
             if summary is not None:
                 from clips_worker.vision_layout import (
