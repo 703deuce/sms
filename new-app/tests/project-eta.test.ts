@@ -2,10 +2,18 @@ import { describe, expect, it } from 'vitest'
 import {
   clampEtaBetweenPolls,
   computeNonStreamerClipEtaSec,
-  PICKER_ETA_SEC,
+  estimatedClipCount,
+  pickerEtaSec,
+  PICKER_ETA_AT_REFERENCE_SEC,
+  reframeWallSec,
   REFRAME_ETA_SEC_PER_CLIP,
+  DEEPGRAM_DOWNLOAD_BUFFER_SEC,
+  reframeTailEstimateSec,
+  TRANSCRIBE_RATE_DEEPGRAM,
   TRANSCRIBE_RATE_LOCAL_WHISPER,
 } from '@/lib/server/clips/project-eta'
+
+const INTERVIEW_25M_SEC = 25 * 60
 
 describe('computeNonStreamerClipEtaSec', () => {
   it('hides ETA until progress starts', () => {
@@ -36,15 +44,67 @@ describe('computeNonStreamerClipEtaSec', () => {
       settings: { transcriptionEngine: 'local_whisper' },
     })
     const transcribeBudget = durationSec * TRANSCRIBE_RATE_LOCAL_WHISPER
-    const tailPicker = PICKER_ETA_SEC
-    const clipCount = Math.min(12, Math.max(3, Math.ceil(durationSec / 120)))
-    const tailReframe = clipCount * REFRAME_ETA_SEC_PER_CLIP
+    const tailPicker = pickerEtaSec(durationSec)
+    const tailReframe = reframeTailEstimateSec(estimatedClipCount(durationSec))
     const transcribeRem = Math.max(30, transcribeBudget - 600)
     const expected = Math.round(transcribeRem + tailPicker + tailReframe)
     expect(eta).toBe(expected)
     expect(eta).toBeLessThan(20 * 60)
     const naive = Math.round(600 * (100 - 12) / 12)
     expect(naive).toBeGreaterThan(eta * 3)
+  })
+
+  it('calibrates ~9–10 min for 25 min Deepgram interview at transcribe start (proj_89c551…)', () => {
+    const durationSec = INTERVIEW_25M_SEC
+    const eta = computeNonStreamerClipEtaSec({
+      progress: 10,
+      createdAtMs: 0,
+      nowMs: 0,
+      status: 'TRANSCRIBING',
+      stage: 'transcribing',
+      sourceDurationSec: durationSec,
+      settings: { transcriptionEngine: 'deepgram' },
+    })
+    const transcribe = durationSec * TRANSCRIBE_RATE_DEEPGRAM + DEEPGRAM_DOWNLOAD_BUFFER_SEC
+    const picker = PICKER_ETA_AT_REFERENCE_SEC
+    const reframe = reframeTailEstimateSec(estimatedClipCount(durationSec))
+    expect(eta).toBeGreaterThanOrEqual(Math.round(transcribe + picker + reframe) - 2)
+    expect(eta).toBeLessThanOrEqual(Math.round(transcribe + picker + reframe) + 2)
+    expect(eta).toBeGreaterThanOrEqual(9 * 60)
+    expect(eta).toBeLessThanOrEqual(10 * 60 + 30)
+  })
+
+  it('drops picker tail during FINDING_CLIPS without re-inflating to ~15 min', () => {
+    const durationSec = INTERVIEW_25M_SEC
+    const eta = computeNonStreamerClipEtaSec({
+      progress: 53,
+      createdAtMs: 0,
+      nowMs: 90_000,
+      status: 'FINDING_CLIPS',
+      stage: 'picker_pass1',
+      sourceDurationSec: durationSec,
+      settings: { transcriptionEngine: 'deepgram' },
+    })
+    const picker = pickerEtaSec(durationSec)
+    const reframe = reframeTailEstimateSec(estimatedClipCount(durationSec))
+    expect(eta).toBeLessThanOrEqual(Math.round(picker + reframe + 30))
+    expect(eta).toBeLessThan(12 * 60)
+    const oldInflated = estimatedClipCount(25 * 60) * 60 + picker + 110
+    expect(eta).toBeLessThan(oldInflated)
+  })
+
+  it('accounts for parallel reframe when stage is reframe_2_of_4', () => {
+    const remaining = computeNonStreamerClipEtaSec({
+      progress: 60,
+      createdAtMs: 0,
+      nowMs: 400_000,
+      status: 'REFRAMING',
+      stage: 'reframe_2_of_4',
+      sourceDurationSec: INTERVIEW_25M_SEC,
+      settings: { transcriptionEngine: 'deepgram' },
+    })
+    expect(remaining).toBe(reframeWallSec(3))
+    expect(remaining).toBe(Math.ceil(3 / 2) * REFRAME_ETA_SEC_PER_CLIP)
   })
 })
 

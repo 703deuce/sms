@@ -1,9 +1,16 @@
 /** ETA for non-streamer clip projects (worker rarely sends etaSeconds). */
 
-export const TRANSCRIBE_RATE_DEEPGRAM = 0.03
+/** Deepgram ASR rate on source duration (measured on 25 min interview). */
+export const TRANSCRIBE_RATE_DEEPGRAM = 0.05
+/** Download + queue jitter on top of ASR budget (Deepgram stage ~1m15–1m50 total). */
+export const DEEPGRAM_DOWNLOAD_BUFFER_SEC = 35
 export const TRANSCRIBE_RATE_LOCAL_WHISPER = 0.25
-export const PICKER_ETA_SEC = 180
-export const REFRAME_ETA_SEC_PER_CLIP = 60
+/** Picker ~3 min at 25 min source; scales with source duration / transcript length proxy. */
+export const PICKER_ETA_AT_REFERENCE_SEC = 180
+export const PICKER_REFERENCE_DURATION_SEC = 25 * 60
+export const REFRAME_ETA_SEC_PER_CLIP = 65
+/** ~4 clips on a 25 min interview (proj_89c551…). */
+export const CLIPS_PER_REFERENCE_DURATION = 4
 
 export type TranscriptionEngine = 'deepgram' | 'local_whisper'
 
@@ -21,6 +28,43 @@ export function transcribeRate(engine: TranscriptionEngine): number {
   return engine === 'local_whisper' ? TRANSCRIBE_RATE_LOCAL_WHISPER : TRANSCRIBE_RATE_DEEPGRAM
 }
 
+export function resolveRenderConcurrency(): number {
+  const raw = process.env.CLIPS_RENDER_CONCURRENCY
+  const n = raw ? parseInt(raw, 10) : 2
+  if (!Number.isFinite(n)) return 2
+  return Math.max(1, Math.min(8, n))
+}
+
+export function pickerEtaSec(durationSec: number): number {
+  if (durationSec <= 0) return PICKER_ETA_AT_REFERENCE_SEC
+  const scaled = PICKER_ETA_AT_REFERENCE_SEC * (durationSec / PICKER_REFERENCE_DURATION_SEC)
+  return Math.max(60, Math.round(scaled))
+}
+
+export function estimatedClipCount(durationSec: number): number {
+  if (durationSec <= 0) return CLIPS_PER_REFERENCE_DURATION
+  const scaled = (durationSec / PICKER_REFERENCE_DURATION_SEC) * CLIPS_PER_REFERENCE_DURATION
+  return Math.min(12, Math.max(3, Math.round(scaled)))
+}
+
+/** Wall-clock reframe tail while clips are still in flight (parallel pool). */
+export function reframeWallSec(clipCount: number, concurrency = resolveRenderConcurrency()): number {
+  const clips = Math.max(1, clipCount)
+  const conc = Math.max(1, concurrency)
+  return Math.ceil(clips / conc) * REFRAME_ETA_SEC_PER_CLIP
+}
+
+/** Upfront reframe budget before parallelism (matches pre-parallel ~65s × clip serial wall). */
+export function reframeTailEstimateSec(clipCount: number): number {
+  return Math.max(1, clipCount) * REFRAME_ETA_SEC_PER_CLIP
+}
+
+function transcribeStageBudgetSec(durationSec: number, engine: TranscriptionEngine): number {
+  const base = durationSec * transcribeRate(engine)
+  if (engine === 'deepgram') return base + DEEPGRAM_DOWNLOAD_BUFFER_SEC
+  return base
+}
+
 import { clampEtaBetweenPolls } from '@/lib/clips/eta-poll'
 
 export { clampEtaBetweenPolls } from '@/lib/clips/eta-poll'
@@ -32,20 +76,28 @@ function parseClipStage(stage: string | null | undefined): { current: number; to
   return { current: Number(m[1]), total: Number(m[2]) }
 }
 
-function estimatedClipCount(durationSec: number): number {
-  if (durationSec <= 0) return 4
-  return Math.min(12, Math.max(3, Math.ceil(durationSec / 120)))
-}
-
 function reframeRemainingSec(current: number, total: number): number {
   const remainingClips = Math.max(0, total - current + 1)
-  return remainingClips * REFRAME_ETA_SEC_PER_CLIP
+  return reframeWallSec(remainingClips)
 }
 
 function tailAfterPickerSec(durationSec: number, stage: string | null | undefined): number {
   const clipStage = parseClipStage(stage)
   const clips = clipStage?.total ?? estimatedClipCount(durationSec)
-  return clips * REFRAME_ETA_SEC_PER_CLIP
+  return reframeTailEstimateSec(clips)
+}
+
+function pickerRemainingSec(stage: string | null | undefined, progress: number, durationSec: number): number {
+  const budget = pickerEtaSec(durationSec)
+  if (stage === 'picker_done') return 0
+  if (stage === 'picker_pass1' || stage === 'finding_clips' || stage === 'vision_rank') {
+    return budget
+  }
+  if (progress >= 52 && progress < 55) {
+    const frac = Math.min(1, Math.max(0, (progress - 52) / 3))
+    return Math.round(budget * (1 - frac))
+  }
+  return budget
 }
 
 function transcribeRemainingSec(input: {
@@ -55,8 +107,7 @@ function transcribeRemainingSec(input: {
   chunkTotal?: number
   elapsedSec: number
 }): number {
-  const rate = transcribeRate(input.engine)
-  const budget = input.durationSec * rate
+  const budget = transcribeStageBudgetSec(input.durationSec, input.engine)
   if (input.chunkTotal && input.chunkTotal > 0) {
     const done = input.chunkDone ?? 0
     const frac = Math.min(1, Math.max(0, done / input.chunkTotal))
@@ -95,7 +146,7 @@ function stageAwareRemainingSec(input: {
   }
 
   if (status === 'FINDING_CLIPS' || status === 'SCANNING') {
-    return PICKER_ETA_SEC + tailAfterPickerSec(durationSec, stage)
+    return pickerRemainingSec(stage, progress, durationSec) + tailAfterPickerSec(durationSec, stage)
   }
 
   if (status === 'TRANSCRIBING') {
@@ -106,13 +157,16 @@ function stageAwareRemainingSec(input: {
       chunkTotal: input.chunkTotal,
       elapsedSec,
     })
-    return transcribe + PICKER_ETA_SEC + tailAfterPickerSec(durationSec, stage)
+    return transcribe + pickerEtaSec(durationSec) + tailAfterPickerSec(durationSec, stage)
   }
 
   if (status === 'PREPARING' || status === 'UPLOADING' || status === 'QUEUED' || status === 'DRAFT') {
     if (progress <= 0) return 0
-    const transcribe = durationSec * transcribeRate(engine)
-    return Math.max(60, transcribe + PICKER_ETA_SEC + tailAfterPickerSec(durationSec, stage))
+    const transcribe = transcribeStageBudgetSec(durationSec, engine)
+    return Math.max(
+      60,
+      transcribe + pickerEtaSec(durationSec) + tailAfterPickerSec(durationSec, stage),
+    )
   }
 
   if (progress > 0) {

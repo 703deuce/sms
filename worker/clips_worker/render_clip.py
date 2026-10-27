@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from clips_worker.ffmpeg_util import stderr_tail
+from clips_worker.render_concurrency import ffmpeg_threads_per_job
 
 V3 = Path(os.environ.get("SPEAKERCROP_DIR", "/app/v3"))
 
@@ -53,10 +54,13 @@ def slice_words(words: list[dict], start_ms: int, end_ms: int) -> list[dict]:
 
 
 def ffmpeg_cut(src: Path, dest: Path, start_ms: int, end_ms: int) -> None:
+    threads = str(ffmpeg_threads_per_job())
     subprocess.check_call(
         [
             "ffmpeg",
             "-y",
+            "-threads",
+            threads,
             "-v",
             "error",
             "-ss",
@@ -107,10 +111,13 @@ def ffmpeg_fit_export(clip_src: Path, out_mp4: Path, width: int, height: int) ->
         f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1"
     )
+    threads = str(ffmpeg_threads_per_job())
     subprocess.check_call(
         [
             "ffmpeg",
             "-y",
+            "-threads",
+            threads,
             "-v",
             "error",
             "-i",
@@ -149,6 +156,7 @@ def run_speakercrop(
     resolution = settings.get("exportResolution", "720p")
     w, h = aspect_size(aspect, resolution)
     env = os.environ.copy()
+    env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
     env.update(layout_env(settings.get("layout", "speaker_follow")))
     env["WORDS"] = str(words_path)
     env["OUT_W"] = str(w)
@@ -189,10 +197,13 @@ def run_speakercrop(
 
 
 def poster_jpg(video: Path, dest: Path) -> None:
+    threads = str(ffmpeg_threads_per_job())
     subprocess.check_call(
         [
             "ffmpeg",
             "-y",
+            "-threads",
+            threads,
             "-v",
             "error",
             "-i",

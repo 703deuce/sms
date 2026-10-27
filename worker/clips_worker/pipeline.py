@@ -9,7 +9,9 @@ from pathlib import Path
 
 from clips_worker.anything_picker import pick_anything_clips
 from clips_worker.picker import pick_talking_clips
+from clips_worker.bounded_pool import run_bounded_indexed_pool
 from clips_worker.render_clip import ffmpeg_cut, poster_jpg, run_speakercrop, slice_words
+from clips_worker.render_concurrency import clips_render_concurrency
 from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, put_json, upload_file
 
@@ -356,17 +358,21 @@ def run_m4_pipeline(
             return
 
         total = max(1, len(picks))
-        clip_rows: list[dict] = []
-        for idx, pick in enumerate(picks):
+        render_conc = clips_render_concurrency()
+
+        def on_reframe_start(idx: int, clip_total: int) -> None:
             post_progress(
                 job_id,
                 {
                     "projectStatus": "REFRAMING",
-                    "stage": f"reframe_{idx + 1}_of_{total}",
-                    "progress": 55 + int(30 * idx / total),
+                    "stage": f"reframe_{idx + 1}_of_{clip_total}",
+                    "progress": 55 + int(30 * idx / clip_total),
                     "jobStatus": "RUNNING",
                 },
             )
+
+        def build_clip_row(idx: int) -> dict:
+            pick = picks[idx]
             clip_id = f"clip_{uuid.uuid4().hex}"
             clip_file = td_path / f"clip_{idx}.mp4"
             ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"])
@@ -377,12 +383,12 @@ def run_m4_pipeline(
             out_mp4 = td_path / f"out_{idx}.mp4"
             crop_track_path = td_path / f"crop_track_{idx}.json"
             ai_meta = pick.get("aiMeta") or {}
-            rendered, crop_method, reframe_settings = reframe_clip_preview(
+            rendered, crop_method, _reframe_settings = reframe_clip_preview(
                 clip_file,
                 out_mp4,
                 words_path,
                 settings,
-                td_path,
+                td_path / f"reframe_work_{idx}",
                 pick["start_ms"],
                 crop_track_path,
                 ai_meta,
@@ -406,25 +412,27 @@ def run_m4_pipeline(
             if mode == "anything" and not crop_key:
                 raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
 
-            clip_rows.append(
-                {
-                    "id": clip_id,
-                    "projectId": project_id,
-                    "workspaceId": workspace_id,
-                    "title": pick["title"],
-                    "reason": pick.get("reason") or pick.get("hook"),
-                    "startMs": pick["start_ms"],
-                    "endMs": pick["end_ms"],
-                    "score": pick["score"],
-                    "scores": pick.get("scores") or {},
-                    "previewKey": keys["preview"],
-                    "posterKey": keys["poster"],
-                    "wordsKey": keys["words"],
-                    "cropKey": crop_key,
-                    "edits": initial_clip_edits(settings),
-                    "aiMeta": ai_meta_out if mode == "anything" else (pick.get("aiMeta") or {"hook": pick.get("hook")}),
-                }
-            )
+            return {
+                "id": clip_id,
+                "projectId": project_id,
+                "workspaceId": workspace_id,
+                "title": pick["title"],
+                "reason": pick.get("reason") or pick.get("hook"),
+                "startMs": pick["start_ms"],
+                "endMs": pick["end_ms"],
+                "score": pick["score"],
+                "scores": pick.get("scores") or {},
+                "previewKey": keys["preview"],
+                "posterKey": keys["poster"],
+                "wordsKey": keys["words"],
+                "cropKey": crop_key,
+                "edits": initial_clip_edits(settings),
+                "aiMeta": ai_meta_out if mode == "anything" else (pick.get("aiMeta") or {"hook": pick.get("hook")}),
+            }
+
+        clip_rows = run_bounded_indexed_pool(total, render_conc, build_clip_row, on_start=on_reframe_start)
+
+        for idx in range(total):
             post_progress(
                 job_id,
                 {
