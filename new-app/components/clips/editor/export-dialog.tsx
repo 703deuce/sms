@@ -50,6 +50,7 @@ export function ExportDialog({
   const [status, setStatus] = useState<string | null>(null)
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
+  const [durationMs, setDurationMs] = useState<number | null>(null)
 
   useEffect(() => {
     if (open) setAspect(edits.aspectRatio ?? '9:16')
@@ -63,6 +64,7 @@ export function ExportDialog({
       setBusy(false)
       setErrorDetail(null)
       setThumbnailUrl(null)
+      setDurationMs(null)
     }
   }, [open])
 
@@ -84,19 +86,30 @@ export function ExportDialog({
   useEffect(() => {
     if (!renderId || status === 'READY' || status === 'FAILED') return
     const t = setInterval(() => {
-      void getRenderStatus(renderId).then((r) => {
-        setStatus(r.status)
-        if (r.status === 'FAILED' && r.error) {
-          setErrorDetail(r.error)
-          toast.error(r.error)
-        }
-        if (r.status === 'READY' && r.downloadUrl) {
-          setDownloadUrl(r.downloadUrl)
-          setFilename(r.filename)
-          setErrorDetail(null)
-          toast.success('Export ready — download below')
-        }
-      })
+      void getRenderStatus(renderId)
+        .then((r) => {
+          setStatus(r.status)
+          if (typeof r.durationMs === 'number') setDurationMs(r.durationMs)
+          if (r.status === 'FAILED') {
+            const msg = r.error || 'Export failed'
+            setErrorDetail(msg)
+            setBusy(false)
+            toast.error(msg)
+            return
+          }
+          if (r.status === 'READY' && r.downloadUrl) {
+            setDownloadUrl(r.downloadUrl)
+            setFilename(r.filename || 'clip.mp4')
+            setErrorDetail(null)
+            setBusy(false)
+            toast.success('Export ready — download below')
+          }
+        })
+        .catch((e) => {
+          const msg = e instanceof Error ? e.message : 'Could not check export status'
+          setErrorDetail(msg)
+          setBusy(false)
+        })
     }, 2000)
     return () => clearInterval(t)
   }, [renderId, status])
@@ -117,12 +130,14 @@ export function ExportDialog({
       })
       setRenderId(data.renderId)
       setStatus(data.status)
+      if (typeof data.durationMs === 'number') setDurationMs(data.durationMs)
       if (data.downloadUrl) {
         setDownloadUrl(data.downloadUrl)
-        setFilename(data.filename)
+        setFilename(data.filename || 'clip.mp4')
         toast.success('Export ready', { id: toastId })
       } else {
-        toast.loading('Rendering…', { id: toastId })
+        setStatus(data.status === 'READY' ? 'READY' : 'RUNNING')
+        toast.loading('Rendering export…', { id: toastId })
       }
       if (alsoSrt) window.open(`/api/clips/clips/${clipId}/srt`, '_blank')
     } catch (e) {
@@ -229,7 +244,16 @@ export function ExportDialog({
           </p>
         )}
         <MediaCredits clipId={clipId} edits={edits} />
-        {status && status !== 'READY' && status !== 'FAILED' && <p className="mt-3 text-sm">Status: {status}…</p>}
+        {status && status !== 'READY' && status !== 'FAILED' && (
+          <p className="mt-3 text-sm" role="status" aria-live="polite">
+            {status === 'QUEUED' ? 'Queued for rendering…' : 'Rendering export…'}
+          </p>
+        )}
+        {durationMs != null && durationMs > 0 && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Clip length: {Math.round(durationMs / 1000)}s
+          </p>
+        )}
         {status === 'FAILED' && errorDetail && (
           <pre className="mt-3 max-h-40 overflow-auto rounded border border-destructive/30 bg-destructive/5 p-2 text-xs whitespace-pre-wrap text-destructive">
             {errorDetail}

@@ -17,9 +17,18 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       m.getPrisma().clip.findUnique({ where: { id: render.clipId } }),
     )
     const filename = render.filename || exportFilename(clip?.title || 'clip')
+    const durationMs = clip ? clip.endMs - clip.startMs : null
     let downloadUrl: string | null = null
     if (render.status === 'READY' && render.outputKey) {
       downloadUrl = await createCachedSignedDownloadUrl(storage, render.outputKey, { downloadFilename: filename })
+    }
+    if (render.status === 'READY' && downloadUrl) {
+      console.info('[clipper:export] render_ready', {
+        renderId: render.id,
+        clipId: render.clipId,
+        filename,
+        durationMs,
+      })
     }
     return NextResponse.json({
       data: {
@@ -28,9 +37,14 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
         downloadUrl,
         filename,
         error: render.error,
+        durationMs,
+        sizeBytes: render.sizeBytes != null ? Number(render.sizeBytes) : null,
       },
     })
   } catch (err) {
+    console.error('[clipper:export] render_status_failed', {
+      message: err instanceof Error ? err.message : String(err),
+    })
     return jsonError(err, 500)
   }
 }

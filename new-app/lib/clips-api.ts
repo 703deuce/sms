@@ -212,13 +212,20 @@ export function exportClipWithOptions(
     watermark: boolean
     status: string
     jobId?: string
+    durationMs?: number
   }>(`/api/clips/clips/${clipId}/export`, { method: 'POST', body: JSON.stringify(body) })
 }
 
 export function getRenderStatus(renderId: string) {
-  return clipsFetch<{ id: string; status: string; downloadUrl: string | null; filename: string; error: string | null }>(
-    `/api/clips/renders/${renderId}`,
-  )
+  return clipsFetch<{
+    id: string
+    status: string
+    downloadUrl: string | null
+    filename: string
+    error: string | null
+    durationMs?: number | null
+    sizeBytes?: number | null
+  }>(`/api/clips/renders/${renderId}`)
 }
 
 export function exportProjectAll(projectId: string) {
