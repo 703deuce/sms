@@ -27,7 +27,7 @@ export function ScriptEmptyImport({ projectId, projectTitle }: { projectId: stri
     setBusy(true)
     try {
       await attachMediaToProject(projectId, { sourceUrl: url.trim() })
-      router.push(`/app/clips/${projectId}`)
+      router.push(`/app/clips/${projectId}/script`)
       router.refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Import failed')
@@ -47,7 +47,7 @@ export function ScriptEmptyImport({ projectId, projectTitle }: { projectId: stri
       if (p.state === 'complete' && p.uploadId) {
         try {
           await attachMediaToProject(projectId, { uploadId: p.uploadId })
-          router.push(`/app/clips/${projectId}`)
+          router.push(`/app/clips/${projectId}/script`)
           router.refresh()
         } catch (e) {
           toast.error(e instanceof Error ? e.message : 'Could not attach media')

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { stripArtistSongNames } from '@/lib/clips/audio'
-import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
+import { scriptEditorOpenAiJson } from '@/lib/server/ai/script-editor-openai'
 import { jsonError } from '@/lib/server/api-error'
+import { logEditor } from '@/lib/server/clips/script-editor-log'
 import { getCompositionAudioContext } from '@/lib/server/clips/composition-audio'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -16,10 +17,12 @@ export async function POST(_request: Request, ctx: { params: Promise<{ compositi
     const ctxAudio = await getCompositionAudioContext(workspaceId, compositionId)
     if (!ctxAudio) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const result = await openAiJsonResponse<{ prompt: string; mood: string; bpmHint: number }>(
+    const started = Date.now()
+    const result = await scriptEditorOpenAiJson<{ prompt: string; mood: string; bpmHint: number }>(
       SYSTEM,
       `Transcript:\n${ctxAudio.transcriptText || '(no words)'}`,
     )
+    logEditor('music-suggest', 'ok', { compositionId, latencyMs: Date.now() - started })
     const prompt = stripArtistSongNames(String(result.prompt || '').slice(0, 500))
     return NextResponse.json({
       data: {

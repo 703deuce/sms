@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { GPT_6_LUNA_MODEL_ID, gpt6ChatCompletionExtras } from '@/lib/server/ai/gpt-6-luna-chat'
 import type { AiJobKind } from '@/lib/screenwriting/ai/estimate'
 
 function client() {
@@ -19,15 +20,15 @@ const PROMPTS: Record<AiJobKind, string> = {
 
 export async function runSwOpenAi(kind: AiJobKind, inputText: string): Promise<{ text: string; model: string }> {
   const openai = client()
-  const model = process.env.SW_OPENAI_MODEL || 'gpt-4o-mini'
+  const model = process.env.SW_OPENAI_MODEL?.trim() || GPT_6_LUNA_MODEL_ID
   const res = await openai.chat.completions.create({
     model,
     messages: [
       { role: 'system', content: PROMPTS[kind] },
       { role: 'user', content: inputText.slice(0, 120_000) },
     ],
-    temperature: 0.4,
-  })
+    ...gpt6ChatCompletionExtras(model),
+  } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming)
   const text = res.choices[0]?.message?.content?.trim() || ''
   return { text, model }
 }

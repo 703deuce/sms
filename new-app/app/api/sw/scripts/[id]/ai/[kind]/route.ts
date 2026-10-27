@@ -6,6 +6,7 @@ import { chargeCredits } from '@/lib/screenwriting/server/credits'
 import { getScriptForOwner } from '@/lib/screenwriting/server/scripts'
 import { getPrisma } from '@/lib/server/db'
 import { estimateCredits, stableInputHash, type AiJobKind } from '@/lib/screenwriting/ai/estimate'
+import { logEditor } from '@/lib/server/clips/script-editor-log'
 import { runSwOpenAi } from '@/lib/screenwriting/ai/openai-run'
 
 const kinds = new Set<AiJobKind>([
@@ -52,7 +53,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const inputText =
       body.inputText ||
       JSON.stringify(row.pmJson ?? {}).slice(0, 120_000)
+    const started = Date.now()
     const { text, model } = await runSwOpenAi(kind as AiJobKind, inputText)
+    logEditor('sw-ai', kind, { scriptId: id, model, latencyMs: Date.now() - started, cached: false })
     await chargeCredits(actor.id, credits, kind)
 
     await prisma.swAiResult.create({

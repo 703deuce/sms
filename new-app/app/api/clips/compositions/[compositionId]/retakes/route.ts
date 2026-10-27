@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
+import { scriptEditorOpenAiJson } from '@/lib/server/ai/script-editor-openai'
 import { jsonError } from '@/lib/server/api-error'
+import { logEditor } from '@/lib/server/clips/script-editor-log'
 import { getCompositionAudioContext } from '@/lib/server/clips/composition-audio'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -22,9 +23,11 @@ export async function POST(_request: Request, ctx: { params: Promise<{ compositi
       text: w.text,
     }))
 
-    const result = await openAiJsonResponse<{
+    const started = Date.now()
+    const result = await scriptEditorOpenAiJson<{
       ranges: { startMs: number; endMs: number; reason: string; wordIds: string[] }[]
     }>(SYSTEM, JSON.stringify({ words: rows.slice(0, 2000) }))
+    logEditor('retakes', 'ok', { compositionId, rangeCount: result.ranges?.length ?? 0, latencyMs: Date.now() - started })
 
     const validIds = new Set(rows.map((w) => w.id))
     const ranges = (result.ranges ?? [])
