@@ -37,13 +37,17 @@ def _merge_payload(conn, job_id: str, patch: dict) -> None:
     conn.commit()
 
 
-def _upload_bytes(key: str, data: bytes, mime: str) -> None:
-    tmp = Path(f"/tmp/t2v-up-{secrets.token_hex(6)}")
-    try:
-        tmp.write_bytes(data)
-        upload_file(key, tmp, mime)
-    finally:
-        tmp.unlink(missing_ok=True)
+def _upload_file(key: str, local: Path, mime: str) -> None:
+    upload_file(key, local, mime)
+
+
+def _download_url_to_file(url: str, dest: Path) -> None:
+    with requests.get(url, timeout=300, stream=True) as r:
+        r.raise_for_status()
+        with dest.open("wb") as f:
+            for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
+                if chunk:
+                    f.write(chunk)
 
 
 def run_t2v_extract_deck_job(conn, job: dict, progress) -> None:
@@ -121,16 +125,6 @@ def run_t2v_voice_clone_job(conn, job: dict, progress) -> None:
     progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})
 
 
-def _download_url(url: str) -> bytes:
-    r = requests.get(url, timeout=300, stream=True)
-    r.raise_for_status()
-    chunks: list[bytes] = []
-    for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
-        if chunk:
-            chunks.append(chunk)
-    return b"".join(chunks)
-
-
 def _apply_ai_media(
     conn,
     job: dict,
@@ -156,9 +150,14 @@ def _apply_ai_media(
     _merge_payload(conn, job["id"], {"kieTaskId": task_id})
     progress(job["id"], {"jobStatus": "RUNNING", "stage": "poll", "progress": 40})
     asset_url = poll_kie_task(task_id, conn=conn, job_id=job["id"])
-    raw = _download_url(asset_url)
     storage_key = f"ws/{workspace_id}/t2v/scenes/{draft_id}/{scene_id}-{secrets.token_hex(8)}.{ext}"
-    _upload_bytes(storage_key, raw, mime)
+    with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as f:
+        tmp = Path(f.name)
+    try:
+        _download_url_to_file(asset_url, tmp)
+        _upload_file(storage_key, tmp, mime)
+    finally:
+        tmp.unlink(missing_ok=True)
     media: dict[str, Any] = {
         "provider": provider,
         "kind": kind,

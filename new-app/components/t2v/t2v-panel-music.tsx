@@ -34,18 +34,7 @@ export function T2vPanelMusic({
   const activeGen = music?.generationId ?? null
   const musicGen = useGeneration(activeGen)
   const attachRef = useRef<string | null>(null)
-
-  const refreshMeta = useCallback(async () => {
-    const res = await fetch(`/api/t2v/drafts/${draftId}/music`)
-    const body = await res.json()
-    if (!res.ok) return
-    setTracks(body.data?.tracks ?? [])
-    if (!prompt && body.data?.suggestedPrompt) setPrompt(body.data.suggestedPrompt)
-  }, [draftId, prompt])
-
-  useEffect(() => {
-    void refreshMeta()
-  }, [refreshMeta])
+  const refreshMetaRef = useRef<() => Promise<void>>(async () => {})
 
   const attachGeneration = useCallback(
     async (generationId: string, label?: string) => {
@@ -61,10 +50,29 @@ export function T2vPanelMusic({
       }
       onChange(body.data.document as T2vDraftV1)
       toast.success('Music attached')
-      void refreshMeta()
+      void refreshMetaRef.current()
     },
-    [draftId, onChange, refreshMeta],
+    [draftId, onChange],
   )
+
+  const refreshMeta = useCallback(async () => {
+    const res = await fetch(`/api/t2v/drafts/${draftId}/music`)
+    const body = await res.json()
+    if (!res.ok) return
+    setTracks(body.data?.tracks ?? [])
+    if (!prompt && body.data?.suggestedPrompt) setPrompt(body.data.suggestedPrompt)
+    const readyId = body.data?.musicReadyGenerationId as string | null | undefined
+    if (readyId && readyId !== attachRef.current) {
+      attachRef.current = readyId
+      void attachGeneration(readyId)
+    }
+  }, [draftId, prompt, attachGeneration])
+
+  refreshMetaRef.current = refreshMeta
+
+  useEffect(() => {
+    void refreshMeta()
+  }, [refreshMeta])
 
   useEffect(() => {
     if (!activeGen || musicGen.status !== 'READY') return

@@ -25,7 +25,12 @@ def _image_model() -> str:
 
 
 def sign_t2v_kie_callback(job_id: str) -> str:
-    secret = (os.environ.get("KIE_CALLBACK_SECRET") or os.environ.get("WORKER_SHARED_SECRET") or "").strip()
+    secret = (
+        os.environ.get("KIE_T2V_CALLBACK_SECRET")
+        or os.environ.get("KIE_CALLBACK_SECRET")
+        or os.environ.get("WORKER_SHARED_SECRET")
+        or ""
+    ).strip()
     if not secret:
         return ""
     return hmac.new(secret.encode(), job_id.encode(), hashlib.sha256).hexdigest()

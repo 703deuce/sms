@@ -123,8 +123,12 @@ export function T2vTemplatesGallery({ draftId }: { draftId?: string }) {
           {filtered.map((t) => (
             <article key={t.id} className="overflow-hidden rounded-xl border border-border">
               <button type="button" className="block w-full text-left" onClick={() => setPreview(t)}>
-                <div className="aspect-video bg-muted">
-                  {t.thumbUrl ? <img src={t.thumbUrl} alt="" className="size-full object-cover" /> : null}
+                <div className="flex aspect-video items-center justify-center bg-muted text-xs text-muted-foreground">
+                  {t.thumbUrl ? (
+                    <img src={t.thumbUrl} alt="" className="size-full object-cover" />
+                  ) : (
+                    <span>Preview coming soon</span>
+                  )}
                 </div>
                 <div className="p-3">
                   <p className="text-sm font-medium">{t.name}</p>

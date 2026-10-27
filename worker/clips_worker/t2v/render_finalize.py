@@ -39,6 +39,7 @@ def finalize_t2v_video(
     w: int,
     h: int,
     work_dir: Path,
+    workspace_id: str = "",
     skip_brand_bookends: bool = False,
 ) -> Path:
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -59,12 +60,11 @@ def finalize_t2v_video(
             shutil.copy2(current, out)
         return out
     branded = work_dir / "branded.mp4"
-    ws = str((document.get("settings") or {}).get("workspaceId") or "")
     apply_brand_bookends(
         current,
         branded,
         settings=document.get("settings"),
-        workspace_id=ws,
+        workspace_id=workspace_id,
         w=w,
         h=h,
         work_dir=work_dir,

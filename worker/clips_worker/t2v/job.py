@@ -186,6 +186,7 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
             w=w,
             h=h,
             work_dir=work / "post",
+            workspace_id=workspace_id,
             skip_brand_bookends=True,
         )
 

@@ -41,6 +41,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     data: {
       tracks,
       music: doc.music,
+      musicReadyGenerationId: row.musicReadyGenerationId,
       suggestedPrompt: buildMusicPromptFromDraft(doc),
     },
   })
@@ -118,6 +119,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       },
     }
     const saved = await saveT2vDraft(workspaceId, id, row.revision, next)
+    await getPrisma().t2vDraft.update({
+      where: { id },
+      data: { musicReadyGenerationId: null },
+    })
     return NextResponse.json({ data: saved })
   } catch (err) {
     return jsonError(err, 400)

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 import { clipsFetch } from '@/lib/clips-api'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { BrandTemplateSettings } from '@/lib/clips/brand'
 
@@ -83,6 +84,42 @@ export function T2vPanelBrand({
           ))}
         </SelectContent>
       </Select>
+      {doc.settings.brand?.introVideoKey ? (
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="t2v-brand-intro">Intro on export</Label>
+          <Switch
+            id="t2v-brand-intro"
+            checked={doc.settings.brand.useIntro ?? true}
+            onCheckedChange={(checked) =>
+              onChange({
+                ...doc,
+                settings: {
+                  ...doc.settings,
+                  brand: { ...doc.settings.brand!, useIntro: Boolean(checked) },
+                },
+              })
+            }
+          />
+        </div>
+      ) : null}
+      {doc.settings.brand?.outroVideoKey ? (
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="t2v-brand-outro">Outro on export</Label>
+          <Switch
+            id="t2v-brand-outro"
+            checked={doc.settings.brand.useOutro ?? true}
+            onCheckedChange={(checked) =>
+              onChange({
+                ...doc,
+                settings: {
+                  ...doc.settings,
+                  brand: { ...doc.settings.brand!, useOutro: Boolean(checked) },
+                },
+              })
+            }
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

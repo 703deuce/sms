@@ -5,7 +5,12 @@ import { fetchKieTask, parseResultVideoUrl } from '@/lib/server/ai/kie'
 import { parseResultImageUrl } from '@/lib/server/ai/kie-image'
 
 function verifyJobSig(jobId: string, sig: string): boolean {
-  const secret = (process.env.KIE_CALLBACK_SECRET || process.env.WORKER_SHARED_SECRET || '').trim()
+  const secret = (
+    process.env.KIE_T2V_CALLBACK_SECRET ||
+    process.env.KIE_CALLBACK_SECRET ||
+    process.env.WORKER_SHARED_SECRET ||
+    ''
+  ).trim()
   if (!secret || !jobId || !sig) return false
   const expected = createHmac('sha256', secret).update(jobId).digest('hex')
   try {
