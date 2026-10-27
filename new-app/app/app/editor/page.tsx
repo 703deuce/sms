@@ -12,8 +12,11 @@ export default async function ScriptEditorHubPage() {
   const editable = projects.filter((p) => p.status === 'READY')
 
   return (
-    <Page title="Script editor" description="Open a project to edit the full transcript and composition.">
-      <PageHeader title="Script editor" description="Descript-style editing lives inside each project." />
+    <Page>
+      <PageHeader
+        title="Script editor"
+        description="Open a project to edit the full transcript and composition. Descript-style editing lives inside each project."
+      />
       {editable.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No ready projects yet.{' '}

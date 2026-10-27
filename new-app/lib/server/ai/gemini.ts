@@ -5,6 +5,7 @@ import {
   discoverVisionFlashLiteModel,
   geminiGenerateJson,
   geminiVisionTokenCostMicros,
+  type GeminiContentPart,
 } from '@/lib/server/ai/gemini-flash-lite'
 
 export { discoverVisionFlashLiteModel } from '@/lib/server/ai/gemini-flash-lite'
@@ -44,7 +45,7 @@ export async function planThumbnailFromFrames(input: {
     required: ['bestFrameIndexes', 'titleText', 'prompts'],
   }
 
-  const parts: { inlineData?: { mimeType: string; data: string }; text?: string }[] = []
+  const parts: GeminiContentPart[] = []
   for (const f of input.frames) {
     parts.push({
       inlineData: { mimeType: 'image/jpeg', data: f.jpeg.toString('base64') },
