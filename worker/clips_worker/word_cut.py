@@ -45,12 +45,24 @@ def snap_cut_range_to_word_gaps(cut: list[int], words: list[dict], pad_ms: int =
     return [int(start), int(end)]
 
 
+def _is_exact_word_span(cut: list[int], words: list[dict]) -> bool:
+    a, b = int(cut[0]), int(cut[1])
+    for w in words:
+        ws, we = _word_span_ms(w)
+        if ws == a and we == b:
+            return True
+    return False
+
+
 def sanitize_cut_ranges(cuts: list, words: list[dict], pad_ms: int = WORD_CUT_PAD_MS) -> list:
     out: list = []
     for c in cuts:
         if not c or len(c) < 2:
             continue
         pair = [int(c[0]), int(c[1])]
+        if _is_exact_word_span(pair, words):
+            out.append(pair)
+            continue
         if cut_intersects_word_interior(pair, words):
             snapped = snap_cut_range_to_word_gaps(pair, words, pad_ms)
             if snapped:
