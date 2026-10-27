@@ -1,10 +1,15 @@
 FROM python:3.11-slim-bookworm
 
+ARG GIT_COMMIT=unknown
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libglib2.0-0 libegl1 libgl1 libgles2 curl build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+ARG GIT_COMMIT
+ENV CLIPS_WORKER_GIT_SHA=${GIT_COMMIT}
+RUN echo "${GIT_COMMIT}" > /app/CLIPS_WORKER_GIT_SHA
 COPY worker/requirements-m4.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir 'numpy==1.26.4'

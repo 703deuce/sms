@@ -25,8 +25,9 @@ REQUIRED_ENV_KEYS=(
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
+GIT_COMMIT="$(git rev-parse "${REF}^{commit}" 2>/dev/null || echo "${REF}")"
 
-echo "[deploy-worker] archiving worker/ @ ${REF}"
+echo "[deploy-worker] archiving worker/ @ ${REF} (${GIT_COMMIT})"
 git archive --format=tar.gz -o "$TARBALL" "${REF}" worker/
 
 echo "[deploy-worker] scp → ${HOST}:/tmp/worker.tgz"
@@ -107,7 +108,7 @@ done
 
 echo "[deploy-worker] docker build"
 cd "\${REMOTE_SRC}"
-docker build -f worker/Dockerfile -t clips-worker:latest .
+docker build -f worker/Dockerfile --build-arg GIT_COMMIT="${GIT_COMMIT}" -t clips-worker:latest .
 
 # Stable public URL — Coolify renames web containers on every deploy; container-name callbacks go stale.
 WORKER_CALLBACK_URL="\${WORKER_CALLBACK_URL:-https://transovo.ai}"
