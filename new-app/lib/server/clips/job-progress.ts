@@ -44,6 +44,12 @@ export async function applyWorkerJobProgress(input: {
   if (isCanceledTerminal(input.storedJobStatus, input.storedJobError)) {
     return
   }
+  if (input.storedJobStatus === 'DONE' && input.jobType === 'T2V_ASSEMBLE') {
+    /* Late DONE heartbeats must not touch draft (applyT2vAssembled already set READY). */
+    if (input.jobStatus && input.jobStatus !== 'DONE') {
+      return
+    }
+  }
   if (
     input.storedJobStatus === 'FAILED' &&
     input.jobStatus &&
@@ -129,9 +135,19 @@ export async function applyWorkerJobProgress(input: {
 
   const t2vDraftPatch: Record<string, unknown> = {}
   if (input.jobType === 'T2V_ASSEMBLE' && input.draftId) {
-    const latest = await isLatestT2vAssembleJob(input.projectId, input.jobId)
+    const terminalJob =
+      input.jobStatus === 'DONE' ||
+      input.storedJobStatus === 'DONE' ||
+      isCanceledTerminal(input.storedJobStatus, input.storedJobError)
+    const latest = terminalJob ? false : await isLatestT2vAssembleJob(input.projectId, input.jobId)
     if (latest) {
-      if (input.jobStatus === 'FAILED') {
+      const draftRow = await prisma.t2vDraft.findUnique({
+        where: { id: input.draftId },
+        select: { status: true },
+      })
+      if (draftRow?.status === 'READY') {
+        /* Do not regress a completed build. */
+      } else if (input.jobStatus === 'FAILED') {
         const err = input.error ?? ''
         if (!/canceled/i.test(err)) {
           t2vDraftPatch.status = 'DRAFT'
@@ -139,12 +155,11 @@ export async function applyWorkerJobProgress(input: {
           t2vDraftPatch.progress = 0
           t2vDraftPatch.error = input.error ?? 'Build failed'
         }
-      } else if (input.jobStatus === 'RUNNING' || input.stage !== undefined || input.progress !== undefined) {
+      } else if (input.jobStatus === 'RUNNING') {
         t2vDraftPatch.status = 'ASSEMBLING'
         if (input.stage !== undefined) t2vDraftPatch.stage = input.stage
         if (input.progress !== undefined) t2vDraftPatch.progress = input.progress
       }
-      /* READY is set only in applyT2vAssembled — not on job DONE heartbeat */
     }
   }
 

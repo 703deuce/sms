@@ -113,24 +113,8 @@ def run_music_job(conn, job: dict, post_progress) -> None:
     if draft_id and t2v_project_id:
         with conn.cursor() as cur:
             cur.execute(
-                'SELECT revision, "assembledRevision", document FROM t2v_drafts WHERE id=%s',
-                (draft_id,),
+                'UPDATE t2v_drafts SET "musicReadyGenerationId"=%s, "updatedAt"=NOW() WHERE id=%s',
+                (str(generation_id), draft_id),
             )
-            drow = cur.fetchone()
-        if drow:
-            rev, asm_rev, doc = drow[0], drow[1], drow[2]
-            if isinstance(doc, str):
-                doc = json.loads(doc)
-            music = (doc or {}).get("music") or {}
-            if (
-                asm_rev is not None
-                and rev == asm_rev
-                and str(music.get("generationId") or "") == str(generation_id)
-            ):
-                with conn.cursor() as cur:
-                    cur.execute(
-                        'UPDATE t2v_drafts SET revision=revision+1, "updatedAt"=NOW() WHERE id=%s',
-                        (draft_id,),
-                    )
     conn.commit()
     post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})

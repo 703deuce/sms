@@ -11,6 +11,27 @@ def _payload(job: dict) -> dict:
     return payload or {}
 
 
+def _is_latest_t2v_assemble(conn, job: dict) -> bool:
+    if job.get("type") != "T2V_ASSEMBLE":
+        return False
+    p = _payload(job)
+    project_id = p.get("projectId")
+    if not project_id:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id FROM clip_jobs
+            WHERE "projectId"=%s AND type='T2V_ASSEMBLE'
+            ORDER BY "createdAt" DESC
+            LIMIT 1
+            """,
+            (project_id,),
+        )
+        row = cur.fetchone()
+    return bool(row and row[0] == job.get("id"))
+
+
 def update_t2v_draft_for_job(
     conn,
     job: dict,
@@ -22,6 +43,8 @@ def update_t2v_draft_for_job(
     clear_error: bool = False,
 ) -> None:
     if job.get("type") != "T2V_ASSEMBLE":
+        return
+    if not _is_latest_t2v_assemble(conn, job):
         return
     draft_id = _payload(job).get("draftId")
     if not draft_id:
@@ -52,6 +75,10 @@ def update_t2v_draft_for_job(
 
 def mark_t2v_assemble_failed(conn, job: dict, message: str) -> None:
     if "Canceled" in message or message.strip() == "job_canceled":
+        return
+    if job.get("status") == "CANCELED":
+        return
+    if not _is_latest_t2v_assemble(conn, job):
         return
     update_t2v_draft_for_job(
         conn,

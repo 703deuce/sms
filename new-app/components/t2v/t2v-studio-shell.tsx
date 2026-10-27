@@ -43,7 +43,13 @@ export function T2vStudioShell({
   initialError: string | null
   builtVideoUrl?: string | null
 }) {
-  const { doc, push, replace, undo, redo, canUndo, canRedo } = useT2vUndo(draftId, initialDocument)
+  const saveNowRef = useRef<(next: T2vDraftV1) => void>(() => {})
+  const { doc, push, replace, undo, redo, canUndo, canRedo } = useT2vUndo(
+    draftId,
+    initialDocument,
+    initialRevision,
+    (next) => saveNowRef.current(next),
+  )
   const [revision, setRevision] = useState(initialRevision)
   const [tab, setTab] = useState<T2vRailTab>('story')
   const [selectedId, setSelectedId] = useState<string | null>(initialDocument.scenes[0]?.id ?? null)
@@ -117,6 +123,31 @@ export function T2vStudioShell({
     },
     [draftId, push, refreshDraft],
   )
+
+  const saveNow = useCallback(
+    (next: T2vDraftV1) => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      void (async () => {
+        try {
+          const r = await patchT2vDraft(draftId, revisionRef.current, next)
+          revisionRef.current = r.revision
+          setRevision(r.revision)
+        } catch (e) {
+          if (e instanceof Error && e.message === 'revision_conflict') {
+            toast.error('Draft changed elsewhere — reloaded latest version')
+            await refreshDraft()
+          } else {
+            toast.error('Could not save')
+          }
+        }
+      })()
+    },
+    [draftId, refreshDraft],
+  )
+
+  useEffect(() => {
+    saveNowRef.current = saveNow
+  }, [saveNow])
 
   const cancelBuild = async () => {
     const res = await fetch(`/api/t2v/drafts/${draftId}/assemble/cancel`, { method: 'POST' })

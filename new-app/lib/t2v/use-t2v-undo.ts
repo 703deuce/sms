@@ -7,20 +7,19 @@ const MAX = 50
 const STORAGE_PREFIX = 't2v-undo:'
 
 type StackState = {
-  doc: T2vDraftV1
+  baseRevision: number
   past: T2vDraftV1[]
   future: T2vDraftV1[]
 }
 
-function loadStack(draftId: string, fallback: T2vDraftV1): StackState | null {
+function loadStack(draftId: string, serverRevision: number): Pick<StackState, 'past' | 'future'> | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem(`${STORAGE_PREFIX}${draftId}`)
     if (!raw) return null
     const parsed = JSON.parse(raw) as StackState
-    if (!parsed?.doc || parsed.doc.v !== 1) return null
+    if (parsed.baseRevision !== serverRevision) return null
     return {
-      doc: parsed.doc,
       past: Array.isArray(parsed.past) ? parsed.past.slice(-MAX) : [],
       future: Array.isArray(parsed.future) ? parsed.future.slice(0, MAX) : [],
     }
@@ -35,7 +34,7 @@ function saveStack(draftId: string, state: StackState) {
     localStorage.setItem(
       `${STORAGE_PREFIX}${draftId}`,
       JSON.stringify({
-        doc: state.doc,
+        baseRevision: state.baseRevision,
         past: state.past.slice(-MAX),
         future: state.future.slice(0, MAX),
       }),
@@ -45,27 +44,40 @@ function saveStack(draftId: string, state: StackState) {
   }
 }
 
-export function useT2vUndo(draftId: string, initial: T2vDraftV1) {
+export function useT2vUndo(
+  draftId: string,
+  initial: T2vDraftV1,
+  serverRevision: number,
+  onPersist: (next: T2vDraftV1) => void,
+) {
   const hydrated = useRef(false)
+  const revisionRef = useRef(serverRevision)
   const [doc, setDoc] = useState(initial)
   const [past, setPast] = useState<T2vDraftV1[]>([])
   const [future, setFuture] = useState<T2vDraftV1[]>([])
 
   useEffect(() => {
+    revisionRef.current = serverRevision
+  }, [serverRevision])
+
+  useEffect(() => {
+    setDoc(initial)
+  }, [initial])
+
+  useEffect(() => {
     if (hydrated.current) return
     hydrated.current = true
-    const stored = loadStack(draftId, initial)
+    const stored = loadStack(draftId, serverRevision)
     if (stored) {
-      setDoc(stored.doc)
       setPast(stored.past)
       setFuture(stored.future)
     }
-  }, [draftId, initial])
+  }, [draftId, serverRevision])
 
   useEffect(() => {
     if (!hydrated.current) return
-    saveStack(draftId, { doc, past, future })
-  }, [draftId, doc, past, future])
+    saveStack(draftId, { baseRevision: revisionRef.current, past, future })
+  }, [draftId, past, future])
 
   const push = useCallback(
     (next: T2vDraftV1) => {
@@ -86,9 +98,10 @@ export function useT2vUndo(draftId: string, initial: T2vDraftV1) {
       const prev = p[p.length - 1]
       setFuture((f) => [doc, ...f].slice(0, MAX))
       setDoc(prev)
+      onPersist(prev)
       return p.slice(0, -1)
     })
-  }, [doc])
+  }, [doc, onPersist])
 
   const redo = useCallback(() => {
     setFuture((f) => {
@@ -96,9 +109,10 @@ export function useT2vUndo(draftId: string, initial: T2vDraftV1) {
       const [next, ...rest] = f
       setPast((p) => [...p, doc].slice(-MAX))
       setDoc(next)
+      onPersist(next)
       return rest
     })
-  }, [doc])
+  }, [doc, onPersist])
 
   return {
     doc,
