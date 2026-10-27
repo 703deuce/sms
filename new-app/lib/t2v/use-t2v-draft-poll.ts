@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { FetchJsonError, fetchJson } from '@/lib/client/fetch-json'
 
 export type T2vPollUpdate = {
   status: string
@@ -28,6 +27,8 @@ export function useT2vDraftPoll(
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
 
+    const pollInterval = () => (document.hidden ? 8000 : intervalMsRef.current)
+
     const schedule = (ms: number) => {
       if (cancelled) return
       timer = setTimeout(() => void tick(), ms)
@@ -36,17 +37,14 @@ export function useT2vDraftPoll(
     const tick = async () => {
       if (cancelled) return
       try {
-        const body = await fetchJson<{ data: Record<string, unknown> }>(`/api/t2v/drafts/${draftId}`, {
-          tag: 't2v-draft-poll',
-          retryGateway: true,
-        })
-        const d = body.data as {
-          status: string
-          stage: string | null
-          progress?: number
-          error: string | null
-          builtVideoUrl?: string | null
+        const res = await fetch(`/api/t2v/drafts/${draftId}`)
+        const body = await res.json()
+        if (!res.ok) {
+          console.error('[t2v:build-progress] poll failed', { draftId, status: res.status })
+          schedule(pollInterval())
+          return
         }
+        const d = body.data
         onUpdateRef.current({
           status: d.status,
           stage: d.stage,
@@ -74,21 +72,27 @@ export function useT2vDraftPoll(
           intervalMsRef.current = 5000
         }
       } catch (e) {
-        const message = e instanceof FetchJsonError ? e.message : e instanceof Error ? e.message : String(e)
-        console.info('[fetch-json]', {
-          tag: 't2v-draft-poll',
-          event: 'poll_error',
+        console.error('[t2v:build-progress] poll error', {
           draftId,
-          message,
+          message: e instanceof Error ? e.message : String(e),
         })
       }
-      schedule(intervalMsRef.current)
+      schedule(pollInterval())
     }
+
+    const onVisibility = () => {
+      if (!document.hidden) {
+        console.info('[t2v:build-progress] tab focused, refetch', { draftId })
+        void tick()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     void tick()
     return () => {
       cancelled = true
       if (timer) clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [draftId, enabled])
 }

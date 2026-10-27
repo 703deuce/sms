@@ -28,7 +28,7 @@ export default async function T2vStudioPage({
   })
   const project = await prisma.clipProject.findFirst({
     where: { id: projectId, workspaceId, sourceKind: 't2v' },
-    select: { id: true, title: true, status: true, rangeEndMs: true, uploadId: true },
+    select: { id: true, title: true, status: true, rangeStartMs: true, rangeEndMs: true, uploadId: true },
   })
   if (!project || !draft) notFound()
   const doc = draft.document as T2vDraftV1
@@ -41,11 +41,13 @@ export default async function T2vStudioPage({
     composition != null && draft.assembledRevision != null && draft.assembledRevision < draft.revision
 
   let builtVideoUrl: string | null = null
+  let builtDurationMs = project.rangeEndMs ?? 0
   if (project.uploadId) {
     const upl = await prisma.clipUpload.findFirst({
       where: { id: project.uploadId, workspaceId },
-      select: { key: true },
+      select: { key: true, durationMs: true },
     })
+    if (upl?.durationMs && upl.durationMs > 0) builtDurationMs = upl.durationMs
     if (upl?.key) {
       try {
         builtVideoUrl = await getClipStorage().createSignedDownloadUrl(upl.key, 3600)
@@ -61,7 +63,7 @@ export default async function T2vStudioPage({
         title={project.title}
         mode={studioMode}
         compositionId={composition?.id ?? null}
-        durationMs={project.rangeEndMs || 0}
+        durationMs={builtDurationMs}
         aspect={doc.settings.aspect}
         projectStatus={project.status}
         storyboardStale={storyboardStale}

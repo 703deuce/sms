@@ -48,15 +48,20 @@ export function T2vPanelVisuals({
   const [finding, setFinding] = useState(false)
   const [applyingId, setApplyingId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const freezeCandidatesRef = useRef(false)
 
   useEffect(() => {
     if (scene) setQ(scene.visualQuery)
-  }, [scene?.id, scene?.visualQuery])
+  }, [sceneId])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 350)
     return () => clearTimeout(t)
   }, [q])
+
+  useEffect(() => {
+    freezeCandidatesRef.current = false
+  }, [sceneId])
 
   useEffect(() => {
     if (!sceneId) return
@@ -67,7 +72,10 @@ export function T2vPanelVisuals({
       signal: ac.signal,
     })
       .then((r) => r.json())
-      .then((b) => setCandidates(b.data?.candidates ?? []))
+      .then((b) => {
+        if (freezeCandidatesRef.current) return
+        setCandidates(b.data?.candidates ?? [])
+      })
       .catch((e) => {
         if (e?.name !== 'AbortError') setCandidates([])
       })
@@ -123,6 +131,7 @@ export function T2vPanelVisuals({
         return
       }
       console.info('[t2v:scene-media] visual applied', { draftId, sceneId, provider: pick.provider })
+      freezeCandidatesRef.current = true
       toast.success('Visual updated')
       onRefresh()
     } catch (e) {

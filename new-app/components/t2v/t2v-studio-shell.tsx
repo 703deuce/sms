@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Undo2, Redo2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -76,6 +77,7 @@ export function T2vStudioShell({
   const [playBuiltUrl, setPlayBuiltUrl] = useState(builtVideoUrl ?? null)
   const revisionRef = useRef(initialRevision)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     revisionRef.current = revision
@@ -101,6 +103,7 @@ export function T2vStudioShell({
       if (d.builtVideoUrl) setPlayBuiltUrl(d.builtVideoUrl)
       if (d.status === 'READY') {
         console.info('[t2v:build-progress] overlay refresh after READY', { draftId, stage: d.stage })
+        router.refresh()
         void fetch(`/api/t2v/drafts/${draftId}`)
           .then((r) => r.json())
           .then((b) => {
@@ -116,7 +119,7 @@ export function T2vStudioShell({
           })
       }
     },
-    [draftId, replace],
+    [draftId, replace, router],
   )
 
   useT2vDraftPoll(draftId, status === 'ASSEMBLING' || stage === 'failed', onPoll)

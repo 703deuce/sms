@@ -39,6 +39,9 @@ export function T2vScenePreviewPlayer({
   const idx = doc.scenes.findIndex((s) => s.id === sceneId)
   const scene: T2vScene | null = idx >= 0 ? doc.scenes[idx] : null
   const durMs = scene ? estimateSceneMs(scene) : 0
+  const mediaSig = scene
+    ? `${scene.media.kind}:${scene.media.assetId ?? ''}:${scene.media.providerId ?? ''}:${scene.media.thumbUrl ?? ''}`
+    : ''
 
   const goScene = useCallback(
     (delta: number) => {
@@ -55,11 +58,11 @@ export function T2vScenePreviewPlayer({
     const res = await fetch(`/api/t2v/drafts/${draftId}/scenes/${sceneId}/preview`)
     const body = await res.json()
     if (res.ok) setPreview(body.data)
-  }, [draftId, sceneId, builtMode])
+  }, [draftId, sceneId, builtMode, mediaSig])
 
   useEffect(() => {
     void loadPreview()
-  }, [loadPreview])
+  }, [loadPreview, mediaSig])
 
   useEffect(() => {
     if (!playing || builtMode) return
