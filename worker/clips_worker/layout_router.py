@@ -79,10 +79,32 @@ def editor_layout_to_worker(mode: str) -> str:
     return "speaker_follow"
 
 
+def _dominant_layout_mode_from_edits(edits: dict) -> str:
+    layout = edits.get("layout") or {}
+    segs = layout.get("layoutSegments") or []
+    if not isinstance(segs, list) or not segs:
+        return str(layout.get("mode") or "speaker_follow")
+    trim = edits.get("trim") or {}
+    tin = int(trim.get("in") or 0)
+    tout = int(trim.get("out") or tin)
+    best = str(layout.get("mode") or "speaker_follow")
+    best_len = 0
+    for row in segs:
+        if not isinstance(row, dict):
+            continue
+        a = max(tin, int(row.get("startMs") or tin))
+        b = min(tout, int(row.get("endMs") or tout))
+        ln = max(0, b - a)
+        if ln > best_len:
+            best_len = ln
+            best = str(row.get("mode") or best)
+    return best
+
+
 def speakercrop_settings_from_edits(base_settings: dict, edits: dict) -> dict:
     """Per-clip layout overrides project settings when editor mode is not speaker_follow."""
     out = dict(base_settings)
-    mode = (edits.get("layout") or {}).get("mode") or "speaker_follow"
+    mode = _dominant_layout_mode_from_edits(edits)
     if mode != "speaker_follow":
         out["layout"] = editor_layout_to_worker(str(mode))
     return out
