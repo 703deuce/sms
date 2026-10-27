@@ -19,7 +19,7 @@ from psycopg2.extras import RealDictCursor
 from clips_worker.job_types import job_types_sql_in
 from clips_worker.streamer.job_failure import terminal_failure_progress_payload
 from clips_worker.streamer.lanes import lane_types_sql_in, worker_lane
-from clips_worker.pipeline import run_m4_pipeline
+from clips_worker.pipeline import extract_wav_for_picker, run_m4_pipeline
 from clips_worker.render_job import run_render_clip_job
 from clips_worker.probe import format_subprocess_error, probe_duration
 from clips_worker.storage import download_object
@@ -285,11 +285,20 @@ def process_job(conn, job: dict) -> None:
     )
 
     with tempfile.TemporaryDirectory() as td:
-        src = Path(td) / "source.mp4"
+        td_path = Path(td)
+        src = td_path / "source.mp4"
+        t0 = time.monotonic()
         download_object(key, src)
+        print(
+            f"[clipper:speed] project={project['id']} phase=source_download_ms="
+            f"{int((time.monotonic() - t0) * 1000)}",
+            flush=True,
+        )
         post_progress(job["id"], {"projectStatus": "PREPARING", "stage": "preparing", "progress": 8})
 
         _ = probe_duration(src)
+        audio_wav = td_path / "audio.wav"
+        extract_wav_for_picker(src, audio_wav)
         if words:
             log(f"resume: skipping transcribe ({len(words)} words on project)")
             print(
@@ -313,10 +322,16 @@ def process_job(conn, job: dict) -> None:
             )
 
             model = os.environ.get("ASR_MODEL", "small.en")
+            tx0 = time.monotonic()
             words, tx_meta = transcribe_video_file(conn, project, src, model=model)
             print(
                 f"[clipper:transcribe] project={project['id']} words={len(words)} "
                 f"engine={getattr(tx_meta, 'transcription_engine', 'unknown')}",
+                flush=True,
+            )
+            print(
+                f"[clipper:speed] project={project['id']} phase=transcribe_ms="
+                f"{int((time.monotonic() - tx0) * 1000)}",
                 flush=True,
             )
 
@@ -332,7 +347,17 @@ def process_job(conn, job: dict) -> None:
                 },
             )
 
-    run_m4_pipeline(conn, job["id"], project, words, key, post_progress, job=job)
+        run_m4_pipeline(
+            conn,
+            job["id"],
+            project,
+            words,
+            key,
+            post_progress,
+            job=job,
+            local_src=src,
+            local_audio_wav=audio_wav,
+        )
     log(f"finished job={job['id']}")
 
 

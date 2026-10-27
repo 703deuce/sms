@@ -13,11 +13,13 @@ def run_bounded_indexed_pool(
     worker: Callable[[int], R],
     on_start: Callable[[int, int], None] | None = None,
     on_complete: Callable[[int, R], None] | None = None,
+    index_order: list[int] | None = None,
 ) -> list[R]:
     if count <= 0:
         return []
     workers = max(1, max_workers)
     results: list[R | None] = [None] * count
+    order = index_order if index_order is not None else list(range(count))
 
     def _task(idx: int) -> tuple[int, R]:
         if on_start is not None:
@@ -25,7 +27,7 @@ def run_bounded_indexed_pool(
         return idx, worker(idx)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(_task, i) for i in range(count)]
+        futures = [executor.submit(_task, i) for i in order if 0 <= i < count]
         for fut in as_completed(futures):
             idx, row = fut.result()
             results[idx] = row

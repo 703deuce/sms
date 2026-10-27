@@ -1,11 +1,13 @@
 """Multi-pass talking-mode clip picker."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from clips_worker.picker.cleanup import finalize_picks
 from clips_worker.picker.config import length_bucket
 from clips_worker.picker.log_util import picker_info
+from clips_worker.picker.fallback import pass1_heuristic_candidates
 from clips_worker.picker.pass1 import find_moments
 from clips_worker.picker.pass2 import score_moments
 from clips_worker.picker.sentences import build_sentences
@@ -23,6 +25,7 @@ def pick_talking_clips(
     settings: dict[str, Any],
     range_start_ms: int,
     range_end_ms: int,
+    on_headstart_picks: Callable[[list[dict]], None] | None = None,
 ) -> tuple[list[dict], str | None]:
     """Return (picks, user_message). user_message is set when no clips could be produced."""
     if settings.get("mode") == "captions":
@@ -85,6 +88,27 @@ def pick_talking_clips(
         picker_info("pass1_fallback_span", end_sentence=moments[0]["end_sentence"])
 
     source_duration_s = source_ms / 1000.0
+    if on_headstart_picks and settings.get("mode") not in ("captions", "anything"):
+        try:
+            heuristic = pass1_heuristic_candidates(
+                moments[:5], sentences, sig_by, genre, source_duration_s=source_duration_s
+            )
+            if heuristic:
+                early = finalize_picks(
+                    heuristic[:2],
+                    sentences,
+                    sig_by,
+                    range_words,
+                    range_start_ms,
+                    range_end_ms,
+                    genre,
+                )
+                if early:
+                    picker_info("headstart_picks", count=len(early))
+                    on_headstart_picks(early)
+        except Exception as exc:
+            picker_info("headstart_failed", error=str(exc)[:200])
+
     scored, _pass2_audit = score_moments(
         moments, sentences, signals, genre, source_duration_s=source_duration_s
     )
