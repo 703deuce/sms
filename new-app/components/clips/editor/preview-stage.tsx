@@ -137,7 +137,7 @@ export function PreviewStage({
         const arr = ov === 'A' ? track.x0_A : ov === 'B' ? track.x0_B : track.x0
         const raw = arr?.length ? arr[clamp(fi, 0, arr.length - 1)] : cropPanX(track, fi)
         const x0 = raw ?? cropPanX(track, fi)
-        const fit = wide || x0 === -1
+        const fit = wide || x0 < 0
         if (fit) {
           v.style.height = `${box.h}px`
           v.style.width = `${box.w}px`

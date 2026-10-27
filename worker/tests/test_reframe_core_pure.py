@@ -12,5 +12,6 @@ def test_reframe_core_has_no_storage_import():
 def test_track_faces_shape():
     from clips_worker.reframe_core import track_faces
 
-    out = track_faces("/dev/null", {"duration_s": 2, "fps": 10})
-    assert out["track"]
+    out = track_faces("/dev/null", {"duration_s": 2, "fps": 10, "shots": [(0.0, 2.0)]})
+    assert out["v"] == 2
+    assert isinstance(out["people"], list)

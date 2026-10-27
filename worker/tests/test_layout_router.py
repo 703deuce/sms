@@ -7,9 +7,15 @@ from clips_worker.layout_router import (
 )
 
 
-def test_route_two_persons_to_split():
+def test_route_two_persons_auto_uses_director():
     s = summary_from_track_fixture(2, confidence=0.9)
     layout, v2 = route_multiperson_layout(s, "auto")
+    assert layout == "dynamic" and v2 is True
+
+
+def test_route_two_persons_explicit_split():
+    s = summary_from_track_fixture(2, confidence=0.9)
+    layout, v2 = route_multiperson_layout(s, "split")
     assert layout == "split" and v2 is True
 
 

@@ -19,7 +19,7 @@ import { classifyImportUrl } from '@/lib/clips/import-url'
 import { Globe, Link2, Loader2, Plus, Radio, UploadCloud } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export function NewProjectWorkspace() {
+export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Enabled?: boolean }) {
   const router = useRouter()
   const params = useSearchParams()
   const preset = params.get('preset')
@@ -213,7 +213,12 @@ export function NewProjectWorkspace() {
           )}
         </div>
         <div className="flex flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
-          <ProjectSettingsForm settings={settings} onChange={setSettings} durationMs={durationMs} />
+          <ProjectSettingsForm
+            settings={settings}
+            onChange={setSettings}
+            durationMs={durationMs}
+            reframeV2Enabled={reframeV2Enabled}
+          />
           {estimate && tab === 'upload' && (
             <p className="text-xs text-muted-foreground">
               {testMode

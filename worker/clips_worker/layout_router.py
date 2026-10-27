@@ -43,7 +43,9 @@ def route_multiperson_layout(
         return layout, False
     n = min(summary.n_persons, 5)
     if n == 2:
-        return "split", True
+        if layout in ("split", "split_debate"):
+            return layout, True
+        return "dynamic", True
     if n == 3:
         return "grid3", True
     if n == 4:

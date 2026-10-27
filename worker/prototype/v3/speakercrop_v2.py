@@ -62,6 +62,7 @@ def main(inp: str, out: str, env: dict | None = None) -> dict:
     ow, oh = int(env.get("OUT_W", 720)), int(env.get("OUT_H", 1280))
     t0_ms = int(env.get("CLIP_START_MS", 0))
     words = json.load(open(env["WORDS"])) if env.get("WORDS") and os.path.exists(env["WORDS"]) else None
+    words_for_cap = words
     cfg = rc.director_cfg_from_env(env)
     track = rc.analyze_clip(inp, words, cfg, models_dir=env.get("MODELS_DIR", HERE), out_w=ow, out_h=oh)
     if not track["segments"]:
@@ -72,20 +73,7 @@ def main(inp: str, out: str, env: dict | None = None) -> dict:
     json.dump(ct, open(crop_out, "w"), separators=(",", ":"))
     if int(env.get("NORENDER", 0)):
         return ct
-    vf = []
-    if int(env.get("CAPTIONS", 1)) and words:
-        try:                                             # same captions module + split_times hook as v1
-            import captions
-            for wd in words:
-                wd.setdefault("spk", 0)
-            base = os.path.splitext(out)[0]
-            seg_at = lambda t: next((s for s in track["segments"] if s["start_s"] <= t < s["end_s"]), track["segments"][-1])
-            info = captions.build(words, inp, base + ".ass", base + ".srt",
-                                  split_times=lambda t: seg_at(t)["layout"] in ("split", "three", "grid"))
-            json.dump(info.pop("words_fixed"), open(base + ".words.json", "w"), indent=0)
-            vf = ["-vf", f"ass={base}.ass:fontsdir={os.path.join(HERE, 'fonts')}".replace(",", r"\,")]
-        except ImportError:
-            pass
+    vf = _caption_vf(env, words_for_cap, inp, out, track)
     cap = cv2.VideoCapture(inp); fps = cap.get(cv2.CAP_PROP_FPS)
     ff = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{ow}x{oh}",
                            "-r", str(fps), "-i", "-", "-i", inp, "-map", "0:v", "-map", "1:a?", *vf,
@@ -108,6 +96,31 @@ def main(inp: str, out: str, env: dict | None = None) -> dict:
     return ct
 
 
+def _caption_vf(env: dict, words, inp: str, out: str, track: dict) -> list[str]:
+    if not (int(env.get("CAPTIONS", 1)) and words):
+        return []
+    try:
+        import captions
+
+        for wd in words:
+            wd.setdefault("spk", 0)
+        base = os.path.splitext(out)[0]
+        seg_at = lambda t: next(
+            (s for s in track.get("segments", []) if s.get("start_s", 0) <= t < s.get("end_s", 1e9)),
+            track.get("segments", [{}])[-1],
+        )
+        captions.build(
+            words,
+            inp,
+            base + ".ass",
+            base + ".srt",
+            split_times=lambda t: seg_at(t).get("layout") in ("split", "three", "grid"),
+        )
+        return ["-vf", f"ass={base}.ass:fontsdir={os.path.join(HERE, 'fonts')}".replace(",", r"\,")]
+    except ImportError:
+        return []
+
+
 def render_crop_track(inp: str, out: str, track: dict, env: dict | None = None) -> dict:
     """CROP_TRACK_IN mode: render a track someone else wrote (subject_reframe.write_motion_crop_track,
     pipeline.write_fit_blur_crop_track, or an editor-saved track) instead of re-analysing.
@@ -128,8 +141,10 @@ def render_crop_track(inp: str, out: str, track: dict, env: dict | None = None) 
         cx = np.interp(np.arange(len(cx)), np.flatnonzero(single), cx[single])
         resets = np.flatnonzero(np.diff(single.astype(int)) != 0) + 1
         x0 = np.where(single, np.clip(rc.smooth_path(cx, fps, frame_w=W, resets=resets) - cw / 2, 0, W - cw), x0)
+    words = json.load(open(env["WORDS"])) if env.get("WORDS") and os.path.exists(env["WORDS"]) else None
+    vf = _caption_vf(env, words, inp, out, track)
     ff = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{ow}x{oh}",
-                           "-r", str(fps), "-i", "-", "-i", inp, "-map", "0:v", "-map", "1:a?", "-c:v", "libx264",
+                           "-r", str(fps), "-i", "-", "-i", inp, "-map", "0:v", "-map", "1:a?", *vf, "-c:v", "libx264",
                            "-preset", "veryfast", "-crf", "20", "-threads", env.get("FFMPEG_THREADS", "4"),
                            "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", out], stdin=subprocess.PIPE)
     i = 0

@@ -23,6 +23,26 @@ def blend_targets(prev: float, nxt: float, alpha: float = 0.35) -> float:
     return prev * (1 - alpha) + nxt * alpha
 
 
+def _empty_face_track(params: dict | None) -> dict:
+    params = params or {}
+    dur = float(params.get("duration_s") or 1.0)
+    fps = float(params.get("fps") or 30.0)
+    sample_fps = float(params.get("sample_fps") or 5.0)
+    return {
+        "v": 2,
+        "fps": fps,
+        "sample_fps": sample_fps,
+        "W": 0,
+        "H": 0,
+        "t": [],
+        "shots": [(0.0, dur)],
+        "people": [],
+        "mouth": [],
+        "_tracklets": {},
+        "_timings": {"detect": 0.0, "track": 0.0, "embed": 0.0, "n": 0, "n_emb": 0},
+    }
+
+
 # --------------------------------------------------------------------------
 # Stage 1: shot detection (NEW)
 # --------------------------------------------------------------------------
@@ -230,13 +250,24 @@ def track_faces(video_path: str, params: dict | None = None) -> dict:
     det_w = int(params.get("det_w") or 640)
     max_people = int(params.get("max_people") or 5)
     emb_every = int(params.get("emb_every") or 2)
-    shots = params.get("shots") or detect_shots(video_path)
+    try:
+        shots = params.get("shots") or detect_shots(video_path)
+    except Exception:
+        return _empty_face_track(params)
     lm = make_mouth_landmarker(params["mouth_model"]) if params.get("mouth_model") else None
 
-    det = make_face_detector(os.path.join(models, "yunet.onnx"), det_w)
-    emb = FaceEmbedder(os.path.join(models, "sface.onnx"))
+    from clips_worker.reframe_models import SFACE_LEGACY_ONNX, SFACE_ONNX, YUNET_ONNX, resolve_onnx
+
+    yunet_path = resolve_onnx(models, YUNET_ONNX)
+    sface_path = resolve_onnx(models, SFACE_ONNX, SFACE_LEGACY_ONNX)
+    if not os.path.isfile(yunet_path) or not os.path.isfile(sface_path):
+        return _empty_face_track(params)
+    det = make_face_detector(yunet_path, det_w)
+    emb = FaceEmbedder(sface_path)
     trk = FaceTracker(sample_fps)
     cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return _empty_face_track(params)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     W, H = int(cap.get(3)), int(cap.get(4))
     step = max(1, round(fps / sample_fps))
@@ -710,8 +741,9 @@ def director_cfg_from_env(env: dict, sample_fps: float = 5.0) -> DirectorCfg:
     FIX: speakercrop v1 never read LAYOUT_MODE / FORCE_SPLIT."""
     g = lambda k, d: float(env.get(k, d))
     mode = env.get("LAYOUT_MODE", "speaker_follow")
-    cfg = DirectorCfg(sample_fps=sample_fps, min_hold_s=max(1.5, g("MIN_SEG", 1.5)), lead_s=g("LEAD", 0.4),
-                      switch_cost=4 * g("HYST", 0.5), allow_split=bool(int(g("SPLIT", 1))),
+    min_close = g("MIN_SHOT_CLOSE", g("MIN_SEG", 2.25))
+    cfg = DirectorCfg(sample_fps=sample_fps, min_hold_s=max(2.25, min_close), lead_s=g("LEAD", 0.4),
+                      switch_cost=4 * g("HYST", 0.6), allow_split=bool(int(g("SPLIT", 1))),
                       allow_grid=bool(int(g("GRID", 1))))
     if int(g("FORCE_SPLIT", 0)):
         cfg.force = "split"

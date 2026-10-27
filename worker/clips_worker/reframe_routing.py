@@ -27,7 +27,9 @@ def _v3_probe(video: Path) -> PersonCountSummary:
 
 
 def should_auto_route_person_count(settings: dict, layout: str) -> bool:
-    if os.environ.get("CLIPPER_AUTO_MP_ROUTE", "1").strip() in ("0", "false", "no"):
+    if not reframe_v2_ops_enabled():
+        return False
+    if os.environ.get("CLIPPER_AUTO_MP_ROUTE", "0").strip() in ("0", "false", "no"):
         return False
     if (settings.get("mode") or "talking") != "talking":
         return False
