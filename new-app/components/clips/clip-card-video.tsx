@@ -121,7 +121,6 @@ export function ClipCardVideo({
         playsInline
         loop
         data-testid="clip-card-video"
-        onClick={() => void togglePlay()}
         onMouseEnter={() => void hoverPreview()}
         onMouseLeave={hoverLeave}
       />
@@ -132,7 +131,17 @@ export function ClipCardVideo({
             : 'absolute bottom-2 left-2 right-2 flex items-center gap-1 rounded-md bg-black/60 p-1.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100'
         }
       >
-        <Button type="button" size="icon" variant="ghost" className="size-7 text-white" onClick={() => void togglePlay()} aria-label={playing ? 'Pause' : 'Play'}>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-7 text-white"
+          onClick={(e) => {
+            e.stopPropagation()
+            void togglePlay()
+          }}
+          aria-label={playing ? 'Pause' : 'Play'}
+        >
           {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
         </Button>
         {playing || controlsRevealed ? (
@@ -142,14 +151,24 @@ export function ClipCardVideo({
               size="icon"
               variant="ghost"
               className="size-7 text-white"
-              onClick={() => void toggleMute()}
+              onClick={(e) => {
+                e.stopPropagation()
+                void toggleMute()
+              }}
               aria-label={muted || needsUnmute ? 'Unmute' : 'Mute'}
             >
               {muted || needsUnmute ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
             </Button>
             <Slider className="min-w-0 flex-1" min={0} max={100} value={[volume]} onValueChange={(v) => onVolume(Array.isArray(v) ? v[0] ?? 100 : 100)} aria-label="Volume" />
             {needsUnmute ? (
-              <button type="button" className="text-[10px] font-medium text-amber-300 underline" onClick={() => void toggleMute()}>
+              <button
+                type="button"
+                className="text-[10px] font-medium text-amber-300 underline"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void toggleMute()
+                }}
+              >
                 Unmute
               </button>
             ) : null}

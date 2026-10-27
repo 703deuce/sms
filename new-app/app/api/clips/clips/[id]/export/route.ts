@@ -7,6 +7,7 @@ import {
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
 import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
+import { previewExportMatchesDefault } from '@/lib/clips/export-edits-match'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
@@ -59,19 +60,31 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (exportPlatform) {
       edits = applyExportPlatformToEdits(edits, exportPlatform)
     }
+    const exportSfx = body.exportSfx ?? 'off'
+    const removeDeadAir = body.removeDeadAir ?? true
+    const editsBeforePolish = edits
+    const defaultPreviewExport =
+      !exportPlatform &&
+      exportSfx === 'off' &&
+      previewExportMatchesDefault(editsBeforePolish, bounds)
+    const skipPolishForPreviewReuse =
+      defaultPreviewExport && removeDeadAir === false && !body.edits
+
     const wordsPayload = await getClipEditorWords(workspaceId, clipId)
     const hookText =
       typeof clip.aiMeta === 'object' && clip.aiMeta && 'hook' in clip.aiMeta
         ? String((clip.aiMeta as { hook?: string }).hook ?? '')
         : edits.hookOverlay?.text ?? null
-    edits = applyExportPolishEdits(edits, {
-      exportPlatform: exportPlatform ?? null,
-      streamClip: false,
-      words: wordsPayload?.words,
-      removeDeadAir: body.removeDeadAir ?? true,
-      hookText,
-      exportSfx: body.exportSfx ?? 'off',
-    })
+    if (!skipPolishForPreviewReuse) {
+      edits = applyExportPolishEdits(edits, {
+        exportPlatform: exportPlatform ?? null,
+        streamClip: false,
+        words: wordsPayload?.words,
+        removeDeadAir,
+        hookText,
+        exportSfx,
+      })
+    }
     const watermark = body.watermark ?? !can(workspaceId, 'no_watermark')
     let resolution = body.resolution
     if (exportPlatform) {
@@ -88,7 +101,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const aspect = exportPlatform
       ? edits.aspectRatio ?? '9:16'
       : body.aspect ?? edits.aspectRatio ?? '9:16'
-    const exportSfx = body.exportSfx ?? 'off'
     console.info('[clipper:export] request', {
       clipId,
       workspaceId,
@@ -98,13 +110,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       watermark,
       durationMs: clip.endMs - clip.startMs,
       exportSfx,
+      skipPolishForPreviewReuse,
     })
 
     const prisma = getPrisma()
-    await prisma.clip.update({
-      where: { id: clipId },
-      data: { edits: toPrismaJson(edits) },
-    })
+    if (!skipPolishForPreviewReuse) {
+      await prisma.clip.update({
+        where: { id: clipId },
+        data: { edits: toPrismaJson(edits) },
+      })
+    }
 
     if (
       exportSfx === 'off' &&

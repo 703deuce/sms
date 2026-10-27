@@ -18,7 +18,6 @@ import { ExportAllDialog } from '@/components/clips/export-all-dialog'
 import { ClipResultsToolbar } from '@/components/clips/clip-results-toolbar'
 import { ClipTemplateProjectActions } from '@/components/clips/clip-template-project-actions'
 import { mergeMonotonicProjectPoll } from '@/lib/clips/eta-poll'
-import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { clipsFetch, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 import type { ClipProjectSettings } from '@/lib/clips/settings'
@@ -281,27 +280,6 @@ export function ProjectClipsView({
     }
   }, [projectId, hydrateReady, readyFromServer, isStreamer, refreshClipsList])
 
-  const triggerDownload = (url: string, filename: string) => {
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.rel = 'noopener'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-  }
-
-  const onDownload = async (clipId: string) => {
-    try {
-      const { downloadUrl, filename } = await exportClipDownload(clipId, { aspect: exportAspect })
-      triggerDownload(downloadUrl, filename)
-      toast.success('Download started')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Export failed')
-    }
-  }
-
-
   const failureCopy = describeClipProjectFailure({
     status,
     error,
@@ -422,7 +400,6 @@ export function ProjectClipsView({
               clipsReady={clipsReady}
               etaSec={progressEtaSec}
               stage={progressStage}
-              onDownload={(id) => void onDownload(id)}
               onHidden={onClipHidden}
               cardAspect={exportAspect}
               isStreamer={isStreamer}
@@ -517,7 +494,6 @@ export function ProjectClipsView({
                 <ClipGrid
                   clips={clips}
                   projectId={projectId}
-                  onDownload={(id) => void onDownload(id)}
                   onHidden={onClipHidden}
                   isStreamer={isStreamer}
                   cardAspect={exportAspect}

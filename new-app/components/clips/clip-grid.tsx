@@ -30,7 +30,7 @@ export function ClipGrid({
 }: {
   clips: ClipCardData[]
   projectId: string
-  onDownload: (clipId: string) => void
+  onDownload?: (clipId: string) => void | Promise<void>
   onHidden?: (clipId: string) => void
   isStreamer?: boolean
   cardAspect?: ExportAspect

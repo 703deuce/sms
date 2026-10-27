@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 from clips_worker.caption_words import build_caption_words, caption_words_to_render
 from clips_worker.layout_router import (
@@ -482,6 +486,19 @@ def render_edited_clip(
     render_id: str | None = None,
     render_meta: dict | None = None,
 ) -> tuple[Path, list[dict], str]:
+    t0 = time.perf_counter()
+    rid = render_id or "unknown"
+
+    def stage(name: str, **extra: object) -> None:
+        payload = {
+            "tag": "clipper:export_stage",
+            "renderId": rid,
+            "stage": f"edits_render:{name}",
+            "elapsedSec": round(time.perf_counter() - t0, 3),
+        }
+        payload.update(extra)
+        _log.info("%s", json.dumps(payload))
+
     from clips_worker.silence_trim import effective_cut_ranges
 
     edits = {**edits, "cutRanges": effective_cut_ranges(edits, source_words)}
@@ -498,7 +515,9 @@ def render_edited_clip(
 
     from clips_worker.preview_edits_match import preview_export_matches
 
-    if preview_export_matches(edits, clip_start_ms, clip_end_ms):
+    preview_fast = preview_export_matches(edits, clip_start_ms, clip_end_ms)
+    stage("path", path="preview_fast" if preview_fast else "full_cut_pipeline")
+    if preview_fast:
         remapped, _ = words_after_edits(src_words, edits)
         export_settings = dict(sc_settings)
         if settings.get("aiMeta"):
@@ -525,6 +544,7 @@ def render_edited_clip(
             render_id=render_id,
             render_meta=render_meta,
         )
+        stage("speakercrop_fast_done")
         return out_mp4, remapped, build_srt(remapped)
 
     segs_ms = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
@@ -566,6 +586,7 @@ def render_edited_clip(
         render_id=render_id,
         render_meta=render_meta,
     )
+    stage("speakercrop_nc_done")
 
     cut_mp4 = work_dir / "cut.mp4"
     if len(segs_sec) == 1 and segs_sec[0][0] <= 0.01 and abs(segs_sec[0][1] - (clip_end_ms - clip_start_ms) / 1000) < 0.1:
@@ -794,4 +815,5 @@ def render_edited_clip(
                 apply_export_sfx_mix(out_mp4, sfx_out, events)
                 shutil.copy(sfx_out, out_mp4)
 
+    stage("full_pipeline_done")
     return out_mp4, caption_words, build_srt(caption_words)

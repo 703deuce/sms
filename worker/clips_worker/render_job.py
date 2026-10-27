@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import tempfile
+import time
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 
 from psycopg2.extras import RealDictCursor
 
@@ -107,7 +111,15 @@ def load_source_words(ctx: dict, work_dir: Path) -> list[dict]:
     return out
 
 
+def _export_stage_log(render_id: str, stage: str, t0: float, extra: dict | None = None) -> None:
+    payload = {"tag": "clipper:export_stage", "renderId": render_id, "stage": stage, "elapsedSec": round(time.perf_counter() - t0, 3)}
+    if extra:
+        payload.update(extra)
+    _log.info("%s", json.dumps(payload))
+
+
 def run_render_clip_job(conn, job: dict, post_progress) -> None:
+    t_job = time.perf_counter()
     payload = job.get("payload") or {}
     if isinstance(payload, str):
         payload = json.loads(payload)
@@ -116,6 +128,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         raise RuntimeError("missing renderId")
 
     ctx = load_render_context(conn, render_id)
+    _export_stage_log(render_id, "load_context", t_job)
     mark_render(conn, render_id, "RENDERING")
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 10, "etaSeconds": 180})
 
@@ -156,6 +169,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             tmp.unlink(missing_ok=True)
         mark_render(conn, render_id, "READY", preview_key, size, None, None)
         post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})
+        _export_stage_log(render_id, "preview_reuse", t_job, {"sizeBytes": size})
         return
 
     if not source_key:
@@ -169,13 +183,16 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         td_path = Path(td)
         src = td_path / "source.mp4"
         download_object(source_key, src)
+        _export_stage_log(render_id, "download_source", t_job)
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 28, "etaSeconds": 120})
         clip_file = td_path / "clip.mp4"
         cut_start, cut_end = expanded_source_cut_ms(clip_start, clip_end, edits)
         rel_start = cut_start - source_offset_ms
         rel_end = cut_end - source_offset_ms
         ffmpeg_cut(src, clip_file, rel_start, rel_end)
+        _export_stage_log(render_id, "ffmpeg_cut", t_job)
         source_words = load_source_words(ctx, td_path)
+        _export_stage_log(render_id, "load_words", t_job, {"wordCount": len(source_words)})
 
         from clips_worker.broll_render import load_broll_specs
 
@@ -192,6 +209,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
 
         out_mp4 = td_path / "render.mp4"
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 90})
+        t_render = time.perf_counter()
         render_meta: dict = {}
         _, _edited_words, srt_body = render_edited_clip(
             clip_file,
@@ -206,6 +224,12 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             audio_assets=audio_assets,
             render_id=render_id,
             render_meta=render_meta,
+        )
+        _export_stage_log(
+            render_id,
+            "render_edited_clip",
+            t_job,
+            {"renderSec": round(time.perf_counter() - t_render, 3), "fitFallback": bool(render_meta.get("fit_fallback"))},
         )
 
         brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
@@ -229,6 +253,7 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             out_mp4 = bookended
 
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 82, "etaSeconds": 30})
+        _export_stage_log(render_id, "pre_upload", t_job)
         out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.mp4"
         srt_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.srt"
         upload_file(out_key, out_mp4, "video/mp4")
@@ -238,3 +263,4 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         if render_meta.get("fit_fallback"):
             merge_job_fit_fallback_payload(conn, job["id"], str(render_meta.get("speakercrop_tail") or ""))
         post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})
+        _export_stage_log(render_id, "done", t_job, {"sizeBytes": size})

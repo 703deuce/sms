@@ -23,6 +23,7 @@ import {
 import { clipCardAspectClass } from '@/lib/clips/card-aspect'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
+import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { ThumbsDown, EyeOff } from 'lucide-react'
 
 export function ClipCard({
@@ -37,7 +38,7 @@ export function ClipCard({
 }: {
   clip: ClipCardData
   projectId: string
-  onDownload: (clipId: string) => void
+  onDownload?: (clipId: string) => void | Promise<void>
   onHidden?: (clipId: string) => void
   isStreamer?: boolean
   cardAspect?: ExportAspect
@@ -54,6 +55,40 @@ export function ClipCard({
   const layoutChip = clipLayoutChip(aiMeta)
   const people = clipPersonCount(aiMeta)
   const fallbackLabel = clipFallbackPickLabel(aiMeta, clip.reason)
+
+  const editorHref = `/app/clips/${projectId}/edit/${clip.id}`
+
+  const openEditor = () => {
+    setEditPending(true)
+    router.push(editorHref)
+  }
+
+  const triggerFileDownload = (url: string, filename: string) => {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+
+  const runDownload = async () => {
+    if (!clip.previewUrl && !clip.posterUrl) {
+      toast.error('Preview still processing — try again in a moment')
+      return
+    }
+    setDownloadBusy(true)
+    try {
+      const { downloadUrl, filename } = await exportClipDownload(clip.id, { aspect: cardAspect })
+      triggerFileDownload(downloadUrl, filename)
+      if (onDownload) await onDownload(clip.id)
+    } catch {
+      /* exportClipDownload surfaces toast */
+    } finally {
+      setDownloadBusy(false)
+    }
+  }
 
   const hideClip = async () => {
     if (!onHidden) return
@@ -106,9 +141,28 @@ export function ClipCard({
         selected ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-primary/40'
       }`}
     >
-      <div className={`relative bg-muted ${clipCardAspectClass(cardAspect)}`}>
+      <div
+        className={`relative cursor-pointer bg-muted ${clipCardAspectClass(cardAspect)}`}
+        role="link"
+        tabIndex={0}
+        aria-label={`Open ${clip.title} in editor`}
+        onClick={(e) => {
+          const t = e.target as HTMLElement
+          if (t.closest('button, label, input, a, [data-slot="button"]')) return
+          openEditor()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            openEditor()
+          }
+        }}
+      >
         {onToggleSelect ? (
-          <label className="absolute left-2 bottom-2 z-10 flex cursor-pointer items-center gap-1 rounded-md bg-black/55 px-2 py-1 text-[10px] text-white">
+          <label
+            className="absolute left-2 bottom-2 z-10 flex cursor-pointer items-center gap-1 rounded-md bg-black/55 px-2 py-1 text-[10px] text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
             <input
               type="checkbox"
               checked={selected}
@@ -139,7 +193,11 @@ export function ClipCard({
         <DurationChip ms={clip.durationMs} />
       </div>
       <div className="flex flex-col gap-2 p-3">
-        <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">{clip.title}</h3>
+        <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">
+          <button type="button" className="text-left hover:text-primary hover:underline" onClick={() => openEditor()}>
+            {clip.title}
+          </button>
+        </h3>
         <p className="text-xs text-muted-foreground tabular-nums">
           <span className="font-medium text-foreground">{formatDur(clip.durationMs)} clip</span>
           {' · '}
@@ -210,9 +268,9 @@ export function ClipCard({
             size="sm"
             variant="default"
             disabled={editPending}
-            onClick={() => {
-              setEditPending(true)
-              router.push(`/app/clips/${projectId}/edit/${clip.id}`)
+            onClick={(e) => {
+              e.stopPropagation()
+              openEditor()
             }}
           >
             {editPending ? 'Opening…' : 'Edit'}
@@ -228,13 +286,14 @@ export function ClipCard({
             </Button>
           ) : null}
           <Button
+            type="button"
             size="sm"
             variant="outline"
             disabled={downloadBusy || (!clip.previewUrl && !clip.posterUrl)}
             title={!clip.previewUrl && !clip.posterUrl ? 'Preview still processing' : undefined}
-            onClick={() => {
-              setDownloadBusy(true)
-              Promise.resolve(onDownload(clip.id)).finally(() => setDownloadBusy(false))
+            onClick={(e) => {
+              e.stopPropagation()
+              void runDownload()
             }}
           >
             {downloadBusy ? 'Exporting…' : 'Download'}
