@@ -16,6 +16,7 @@ import {
 } from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
+import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import { toast } from 'sonner'
 
 export function AudioPanel({
@@ -57,6 +58,7 @@ export function AudioPanel({
   const studioEnqueueRef = useRef(false)
   const music = audioNorm.music
   const musicGen = useGeneration(music?.generationId ?? null)
+  const aiExtras = clipEditorAiExtrasEnabled()
 
   const cost = musicCostUsd(outputDurationMs)
 
@@ -180,6 +182,7 @@ export function AudioPanel({
           void enqueueStudioSound()
         }}
       />
+      {aiExtras ? (
       <section className="space-y-2">
         <h3 className="font-medium">Music</h3>
         <div className="flex flex-wrap gap-2">
@@ -245,7 +248,9 @@ export function AudioPanel({
           </div>
         )}
       </section>
+      ) : null}
 
+      {aiExtras ? (
       <section className="space-y-2">
         <h3 className="font-medium">Sound effects</h3>
         <div className="flex flex-wrap gap-1">
@@ -282,6 +287,7 @@ export function AudioPanel({
           ))}
         </ul>
       </section>
+      ) : null}
     </div>
   )
 }

@@ -67,8 +67,12 @@ export function ScriptFillerReviewBar({
   onFindNext,
   onFindPrev,
   onClose,
+  variant = 'default',
+  onSkipOne,
 }: {
   mode: 'filler' | 'gap'
+  variant?: 'default' | 'clip'
+  onSkipOne?: () => void
   searchMode: FillerSearchMode
   onSearchModeChange: (m: FillerSearchMode) => void
   searchQuery: string
@@ -113,21 +117,28 @@ export function ScriptFillerReviewBar({
       data-testid="script-filler-review-bar"
     >
       <div className="flex flex-wrap items-center gap-2 py-1">
-        <Select
-          value={searchMode}
-          onValueChange={(v) => typeof v === 'string' && onSearchModeChange(v as FillerSearchMode)}
-        >
-          <SelectTrigger className="h-8 w-[10.5rem] text-xs" data-testid="filler-search-mode">
-            <Search className="mr-1 size-3.5 shrink-0 opacity-70" aria-hidden />
-            <SelectValue>{SEARCH_MODE_LABEL[searchMode]}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="find">Find (⌘F)</SelectItem>
-            <SelectItem value="filler">Remove filler words</SelectItem>
-            <SelectItem value="gaps">Shorten word gaps</SelectItem>
-          </SelectContent>
-        </Select>
-        {mode === 'filler' && searchMode === 'filler' ? (
+        {variant === 'clip' ? (
+          <span className="inline-flex h-8 items-center gap-1.5 px-1 text-xs font-medium" data-testid="filler-search-mode">
+            <Search className="size-3.5 shrink-0 opacity-70" aria-hidden />
+            Review filler words
+          </span>
+        ) : (
+          <Select
+            value={searchMode}
+            onValueChange={(v) => typeof v === 'string' && onSearchModeChange(v as FillerSearchMode)}
+          >
+            <SelectTrigger className="h-8 w-[10.5rem] text-xs" data-testid="filler-search-mode">
+              <Search className="mr-1 size-3.5 shrink-0 opacity-70" aria-hidden />
+              <SelectValue>{SEARCH_MODE_LABEL[searchMode]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="find">Find (⌘F)</SelectItem>
+              <SelectItem value="filler">Remove filler words</SelectItem>
+              <SelectItem value="gaps">Shorten word gaps</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        {mode === 'filler' && searchMode === 'filler' && variant !== 'clip' ? (
           <Select value={filter} onValueChange={(v) => typeof v === 'string' && onFilterChange(v as FillerFilter)}>
             <SelectTrigger className="h-8 min-w-[11rem] flex-1 text-xs">
               <SelectValue>{filterLabel}</SelectValue>
@@ -138,6 +149,8 @@ export function ScriptFillerReviewBar({
               <SelectItem value="repeat">Repeated words</SelectItem>
             </SelectContent>
           </Select>
+        ) : variant === 'clip' ? (
+          <span className="min-w-[8rem] flex-1 text-muted-foreground">Step through each hit</span>
         ) : (
           <Input
             className="h-8 min-w-[8rem] flex-1 text-xs"
@@ -224,7 +237,7 @@ export function ScriptFillerReviewBar({
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2 border-t border-sky-500/20 py-1.5">
-        {mode === 'filler' && searchMode !== 'find' ? (
+        {mode === 'filler' && searchMode !== 'find' && variant !== 'clip' ? (
           <Select value={action} onValueChange={(v) => typeof v === 'string' && onActionChange(v as FillerReviewAction)}>
             <SelectTrigger className="h-8 w-[12rem] text-xs">
               <SelectValue>{ACTION_LABEL[action]}</SelectValue>
@@ -235,7 +248,7 @@ export function ScriptFillerReviewBar({
               ))}
             </SelectContent>
           </Select>
-        ) : (
+        ) : variant === 'clip' ? null : (
           <label className="flex items-center gap-2 text-xs">
             Shorten to
             <Input
@@ -250,11 +263,13 @@ export function ScriptFillerReviewBar({
             s
           </label>
         )}
-        <label className="flex items-center gap-1.5">
-          <Switch checked={selectionOnly} onCheckedChange={onSelectionOnlyChange} />
-          Selection only
-        </label>
-        {mode === 'filler' && (
+        {variant !== 'clip' ? (
+          <label className="flex items-center gap-1.5">
+            <Switch checked={selectionOnly} onCheckedChange={onSelectionOnlyChange} />
+            Selection only
+          </label>
+        ) : null}
+        {mode === 'filler' && variant !== 'clip' && (
           <label className="flex items-center gap-1.5" title="Keeps filler words if cutting them would sound unnatural">
             <Switch checked={avoidHarshCuts} onCheckedChange={onAvoidHarshCutsChange} />
             Avoid harsh cuts
@@ -271,11 +286,16 @@ export function ScriptFillerReviewBar({
               All repeats
             </Button>
           )}
+          {variant === 'clip' && onSkipOne ? (
+            <Button type="button" size="sm" variant="outline" disabled={total === 0} onClick={onSkipOne}>
+              Skip
+            </Button>
+          ) : null}
           <Button type="button" size="sm" variant="secondary" disabled={total === 0} onClick={onRemoveOne}>
-            {mode === 'gap' ? 'Shorten' : 'Remove'}
+            {variant === 'clip' ? 'Approve' : mode === 'gap' ? 'Shorten' : 'Remove'}
           </Button>
           <Button type="button" size="sm" disabled={total === 0} onClick={onRemoveAll}>
-            {mode === 'gap' ? 'Shorten all' : 'Remove all'}
+            {variant === 'clip' ? 'Approve all' : mode === 'gap' ? 'Shorten all' : 'Remove all'}
           </Button>
         </div>
       </div>

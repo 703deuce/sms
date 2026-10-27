@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
+import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipAspectRatios } from '@/lib/clips/settings'
@@ -57,6 +58,12 @@ export function LayoutPanel({
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
+  const aiExtras = clipEditorAiExtrasEnabled()
+  const layoutOptions = LAYOUTS.filter((l) => {
+    if (l.disabled) return aiExtras
+    if (isClipLayoutBeta(l.id) && !reframeV2Enabled) return aiExtras
+    return true
+  })
   return (
     <div className="flex flex-col gap-4">
       {appliedLayoutLabel ? (
@@ -101,6 +108,8 @@ export function LayoutPanel({
       )}
       {onEdits && (
         <div className="space-y-3 rounded-lg border border-border p-3">
+          {aiExtras ? (
+            <>
           <div className="flex items-center justify-between gap-2">
             <Label className="text-xs font-medium">Auto zoom on emphasis</Label>
             <Switch
@@ -129,6 +138,8 @@ export function LayoutPanel({
               />
             </div>
           )}
+            </>
+          ) : null}
           <div className="flex items-center justify-between gap-2">
             <Label className="text-xs font-medium">Silence trim on export</Label>
             <Switch
@@ -163,8 +174,9 @@ export function LayoutPanel({
           )}
         </div>
       )}
+      {layoutOptions.length > 0 ? (
       <div className="grid gap-2 sm:grid-cols-2">
-        {LAYOUTS.map((l) => {
+        {layoutOptions.map((l) => {
           const beta = isClipLayoutBeta(l.id)
           const disabled = l.disabled || (beta && !reframeV2Enabled)
           return (
@@ -186,6 +198,9 @@ export function LayoutPanel({
           )
         })}
       </div>
+      ) : null}
+      {aiExtras ? (
+      <>
       <p className="text-xs text-muted-foreground">
         Shots are time ranges from auto reframe. Pick who to follow per shot; use Re-run after large transcript edits.
       </p>
@@ -228,6 +243,8 @@ export function LayoutPanel({
           )
         })}
       </ul>
+      </>
+      ) : null}
     </div>
   )
 }

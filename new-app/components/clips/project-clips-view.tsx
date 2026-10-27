@@ -28,6 +28,7 @@ import { MontageDialog } from '@/components/streamer/montage-dialog'
 import { MontageProgress } from '@/components/streamer/montage-progress'
 import { Clapperboard, Film, FileText, Sparkles } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 
 type ProjectStatusPayload = {
@@ -114,6 +115,7 @@ export function ProjectClipsView({
   scriptEditorEnabled?: boolean
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
+  const router = useRouter()
 
   useEffect(() => {
     try {
@@ -345,7 +347,14 @@ export function ProjectClipsView({
             <Button
               size="sm"
               data-testid="edit-clip-project"
-              render={<Link href={`/app/clips/${projectId}/edit/${clips[0].id}`} />}
+              onClick={() => {
+                try {
+                  sessionStorage.setItem(`clips-proj-scroll-${projectId}`, String(window.scrollY))
+                } catch {
+                  /* ignore */
+                }
+                router.push(`/app/clips/${projectId}/edit/${clips[0].id}`)
+              }}
             >
               <FileText className="mr-1 size-4" />
               Edit clip

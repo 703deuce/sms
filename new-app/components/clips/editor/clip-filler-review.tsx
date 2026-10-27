@@ -91,29 +91,32 @@ export function ClipFillerReview({
     [onAddCut],
   )
 
+  const onSkipOne = useCallback(() => {
+    if (!fillerHits.length) return
+    setFillerCursor((c) => (c >= fillerHits.length - 1 ? 0 : c + 1))
+  }, [fillerHits.length])
+
   const onRemoveOne = useCallback(() => {
     const hit = fillerHits[fillerCursor]
     if (!hit) return
-    if (fillerAction === 'ignore') {
-      if (searchOptions.autoAdvance) setFillerCursor((c) => Math.min(c + 1, Math.max(0, fillerHits.length - 1)))
-      return
-    }
-    applyHits(fillerAction, [hit])
+    applyHits('delete', [hit])
     if (searchOptions.autoAdvance) setFillerCursor((c) => Math.min(c, Math.max(0, fillerHits.length - 2)))
-  }, [applyHits, fillerAction, fillerCursor, fillerHits, searchOptions.autoAdvance])
+  }, [applyHits, fillerCursor, fillerHits, searchOptions.autoAdvance])
 
   const onRemoveAll = useCallback(() => {
-    applyHits(fillerAction, fillerHits)
+    applyHits('delete', fillerHits)
     onOpenChange(false)
-  }, [applyHits, fillerAction, fillerHits, onOpenChange])
+  }, [applyHits, fillerHits, onOpenChange])
 
   if (!open) return null
 
   return (
     <ScriptFillerReviewBar
+      variant="clip"
       mode="filler"
       searchMode="filler"
       onSearchModeChange={() => {}}
+      onSkipOne={onSkipOne}
       searchQuery=""
       onSearchQueryChange={() => {}}
       searchOptions={searchOptions}

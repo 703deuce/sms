@@ -132,6 +132,7 @@ export function EditorShell({
     setEdits,
     patchStudioSound,
     flushSave,
+    syncServerUpdatedAt,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, words })
 
   const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
@@ -304,10 +305,14 @@ export function EditorShell({
 
   useEffect(() => {
     const t = setTimeout(() => {
-      if (title !== initialTitle) void patchClip(clipId, { title })
+      if (title !== initialTitle) {
+        void patchClip(clipId, { title }).then((res) => {
+          if (res.updatedAt) syncServerUpdatedAt(res.updatedAt)
+        })
+      }
     }, 800)
     return () => clearTimeout(t)
-  }, [clipId, initialTitle, title])
+  }, [clipId, initialTitle, syncServerUpdatedAt, title])
 
   const TabIcon = editorRailIcon(panel)
   const meta = TAB_META[panel]
@@ -327,15 +332,6 @@ export function EditorShell({
     <>
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
         <EditorPanelErrorBoundary label="Script">
-        <ClipFillerReview
-          clipId={clipId}
-          words={editorWords}
-          edits={edits}
-          open={fillerReviewOpen}
-          onOpenChange={setFillerReviewOpen}
-          onAddCut={addCutRange}
-          onSeek={seekSource}
-        />
         <TranscriptPanel
           words={editorWords}
           wordsLoading={wordsLoading}
@@ -377,6 +373,8 @@ export function EditorShell({
         <CaptionsPanel
           clipId={clipId}
           edits={edits}
+          words={editorWords}
+          onWordFix={setWordFix}
           onChange={setCaptions}
           onApplyBrand={() => void applyBrand()}
           onSaveClipTemplate={() => void saveClipTemplate()}
@@ -417,6 +415,15 @@ export function EditorShell({
           onRedo={redo}
           onExport={() => setExportOpen(true)}
         />
+      <ClipFillerReview
+        clipId={clipId}
+        words={editorWords}
+        edits={edits}
+        open={fillerReviewOpen}
+        onOpenChange={setFillerReviewOpen}
+        onAddCut={addCutRange}
+        onSeek={seekSource}
+      />
       <EditorMobileRail active={panel} onChange={selectPanel} />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_56px_minmax(0,380px)] xl:grid-cols-[minmax(0,1fr)_56px_minmax(0,420px)]">
         <section className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-x-hidden overflow-y-auto p-2 sm:p-3 md:p-4">

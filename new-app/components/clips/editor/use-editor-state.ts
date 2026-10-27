@@ -449,7 +449,6 @@ export function useEditorState(
   useEffect(() => {
     if (state.saveState !== 'dirty') return
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    const savingUi = setTimeout(() => dispatch({ type: 'saving' }), 250)
     debounceRef.current = setTimeout(() => {
       const gen = ++saveGenRef.current
       dispatch({ type: 'saving' })
@@ -461,7 +460,6 @@ export function useEditorState(
       void persistEdits().catch(() => {})
     }, 450)
     return () => {
-      clearTimeout(savingUi)
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [clipId, persistEdits, state.edits, state.saveState])
@@ -513,6 +511,9 @@ export function useEditorState(
     cutSectionAtSource,
     resetEdits: () => setEdits(defaultEdits(bounds), false),
     applyProducerPatch,
+    syncServerUpdatedAt: (iso: string) => {
+      serverUpdatedAtRef.current = iso
+    },
     flushSave: () => {
       if (state.saveState === 'dirty' || state.saveState === 'saving') {
         const gen = ++saveGenRef.current

@@ -17,6 +17,8 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolvePreset } from '@/lib/clips/caption-presets'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { wordDisplayText } from '@/lib/clips/edits'
+import type { SourceWord } from '@/lib/clips/source-words'
 import { clipsFetch } from '@/lib/clips-api'
 import { cn } from '@/lib/utils'
 
@@ -27,17 +29,22 @@ type CustomPreset = { id: string; name: string; config: Record<string, unknown> 
 export function CaptionsPanel({
   clipId,
   edits,
+  words = [],
+  onWordFix,
   onChange,
   onApplyBrand,
   onSaveClipTemplate,
 }: {
   clipId?: string
   edits: ClipEditsV2
+  words?: SourceWord[]
+  onWordFix?: (index: number, text: string) => void
   onChange: (captions: ClipEditsV2['captions']) => void
   onApplyBrand?: () => void
   onSaveClipTemplate?: () => void
 }) {
   const cap = edits.captions ?? {}
+  const [editingWordI, setEditingWordI] = useState<number | null>(null)
   const presetId = cap.presetId || 'bold_pop'
   const preset = resolvePreset(presetId)
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>([])
@@ -87,6 +94,59 @@ export function CaptionsPanel({
         <span className="text-sm font-medium">Captions</span>
         <Switch checked={cap.enabled !== false} onCheckedChange={(v) => patch({ enabled: v })} />
       </div>
+
+      {onWordFix && words.length > 0 ? (
+        <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3" data-testid="caption-word-corrections">
+          <p className="text-xs font-medium text-muted-foreground">Caption text</p>
+          <p className="text-[11px] text-muted-foreground">Double-click a word to fix spelling without re-timing.</p>
+          <div className="max-h-40 overflow-y-auto text-sm leading-relaxed">
+            {words.map((w) => {
+              const display = wordDisplayText(w, edits.wordFixes)
+              const fixed = Boolean(edits.wordFixes?.[String(w.i)]?.trim())
+              if (editingWordI === w.i) {
+                return (
+                  <span key={w.i} className="mr-1 inline-flex">
+                    <input
+                      autoFocus
+                      className="w-24 rounded border border-border bg-background px-1 py-0.5 text-sm"
+                      defaultValue={display}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          onWordFix(w.i, e.currentTarget.value)
+                          setEditingWordI(null)
+                        }
+                        if (e.key === 'Escape') setEditingWordI(null)
+                      }}
+                      onBlur={(e) => {
+                        onWordFix(w.i, e.target.value)
+                        setEditingWordI(null)
+                      }}
+                    />
+                  </span>
+                )
+              }
+              return (
+                <button
+                  key={w.i}
+                  type="button"
+                  className={cn(
+                    'mr-1 rounded px-0.5 hover:bg-accent',
+                    fixed && 'bg-primary/15 ring-1 ring-primary/30',
+                  )}
+                  onDoubleClick={(e) => {
+                    e.preventDefault()
+                    setEditingWordI(w.i)
+                  }}
+                  title={fixed ? `Corrected from “${w.w}”` : 'Double-click to edit'}
+                >
+                  {display}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {customPresets.length > 0 ? (
         <div className="space-y-2" data-testid="caption-custom-presets">
