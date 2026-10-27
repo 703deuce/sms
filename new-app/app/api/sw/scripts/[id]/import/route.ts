@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
@@ -79,7 +80,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       const meta = (row.editorMeta ?? {}) as Record<string, unknown>
       await prisma.swScript.update({
         where: { id },
-        data: { editorMeta: { ...meta, titlePage } },
+        data: { editorMeta: { ...meta, titlePage } as Prisma.InputJsonValue },
       })
     }
 

@@ -62,11 +62,13 @@ export function RoomsInvitePopover({
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className="h-8 text-[13px]" disabled={disabled}>
-          Invite
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" className="h-8 text-[13px]" disabled={disabled}>
+            Invite
+          </Button>
+        }
+      />
       <PopoverContent className="w-[360px] p-4" align="end">
         <p className="text-sm font-semibold">Invite to room</p>
         <p className="mt-1 text-[13px] text-muted-foreground">

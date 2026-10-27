@@ -18,6 +18,10 @@ if git push origin "$BRANCH" 2>/dev/null; then
   exit 0
 fi
 
+if [[ "${SKIP_WEB_VERIFY:-}" != "1" ]] && [[ -x "$ROOT/scripts/verify-web-before-push.sh" ]]; then
+  bash "$ROOT/scripts/verify-web-before-push.sh"
+fi
+
 HEAD_SHA="$(git rev-parse HEAD)"
 if [[ -x "$ROOT/scripts/git-push-commit-via-gh-api.sh" ]]; then
   echo "[git-push-ff] git push failed; using GitHub API for $HEAD_SHA"

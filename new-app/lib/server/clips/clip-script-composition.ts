@@ -31,7 +31,15 @@ export function surroundingContextWordIds(
 export async function ensureClipComposition(
   workspaceId: string,
   projectId: string,
-  clip: { id: string; title: string; startMs: number; endMs: number; edits: unknown; aspect?: string | null },
+  clip: {
+    id: string
+    title: string
+    startMs: number
+    endMs: number
+    edits: unknown
+    aspect?: string | null
+    cropKey?: string | null
+  },
   editorWords: EditorWord[],
 ) {
   const prisma = getPrisma()
@@ -41,7 +49,7 @@ export async function ensureClipComposition(
   const clipIds = wordIdsInClipRange(editorWords, clip.startMs, clip.endMs)
   const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
   const edits = normalizeEdits(clip.edits, bounds)
-  const aspect = (edits.aspect as string) || clip.aspect || '9:16'
+  const aspect = clip.aspect || '9:16'
 
   if (existing) {
     const doc = parseScriptCompositionDocument(existing.document)
@@ -52,7 +60,7 @@ export async function ensureClipComposition(
         data: {
           document: seeded as Prisma.InputJsonValue,
           aspect,
-          reframe: (edits.cropKey ? {} : existing.reframe) as Prisma.InputJsonValue,
+          reframe: (clip.cropKey ? {} : existing.reframe) as Prisma.InputJsonValue,
         },
       })
     }
@@ -125,6 +133,6 @@ export async function syncClipBoundsFromComposition(
   const endMs = Math.max(...kept.map((w) => w.t1Ms))
   await prisma.clip.update({
     where: { id: row.clipId },
-    data: { startMs, endMs, durationMs: Math.max(1, endMs - startMs) },
+    data: { startMs, endMs },
   })
 }

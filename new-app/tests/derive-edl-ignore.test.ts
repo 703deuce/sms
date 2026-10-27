@@ -6,9 +6,9 @@ import { applyCompositionOp, emptyDocument } from '@/lib/clips/script-edl/ops'
 
 describe('deriveEdl ignore', () => {
   const words: EditorWord[] = [
-    { id: 'a:0', text: 'hi', t0Ms: 0, t1Ms: 500, speakerId: 's1' },
-    { id: 'a:1', text: 'um', t0Ms: 2000, t1Ms: 2500, speakerId: 's1', isFiller: true },
-    { id: 'a:2', text: 'there', t0Ms: 5000, t1Ms: 5500, speakerId: 's1' },
+    { id: 'a:0', index: 0, text: 'hi', t0Ms: 0, t1Ms: 500, speakerId: 's1' },
+    { id: 'a:1', index: 1, text: 'um', t0Ms: 2000, t1Ms: 2500, speakerId: 's1', isFiller: true },
+    { id: 'a:2', index: 2, text: 'there', t0Ms: 5000, t1Ms: 5500, speakerId: 's1' },
   ]
   const map = new Map(words.map((w) => [w.id, w]))
 

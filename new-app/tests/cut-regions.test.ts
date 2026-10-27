@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { sourceCutRegions } from '@/lib/clips/script-editor/cut-regions'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 
+let wordSeq = 0
 function w(id: string, t0: number, t1: number): EditorWord {
   return {
     id,
     text: id,
     t0Ms: t0,
     t1Ms: t1,
+    index: wordSeq++,
     speakerId: 's1',
-    speakerLabel: 'A',
-    confidence: 1,
     isFiller: false,
   }
 }

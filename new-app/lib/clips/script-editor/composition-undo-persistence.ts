@@ -3,7 +3,7 @@ import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 const MAX_STACK = 80
 
 export type PersistedUndoState = {
-  v: 2
+  v: 1 | 2
   revision: number
   document?: ScriptDocumentV1
   undo: ScriptDocumentV1[]

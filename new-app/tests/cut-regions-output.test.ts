@@ -6,9 +6,9 @@ import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
 describe('outputCutRegions', () => {
   it('maps deleted words to output timeline spans', () => {
     const words: EditorWord[] = [
-      { id: 'a', text: 'hi', t0Ms: 0, t1Ms: 400, speaker: 'S1' },
-      { id: 'b', text: 'um', t0Ms: 2000, t1Ms: 2400, speaker: 'S1' },
-      { id: 'c', text: 'bye', t0Ms: 4000, t1Ms: 4400, speaker: 'S1' },
+      { id: 'a', index: 0, text: 'hi', t0Ms: 0, t1Ms: 400, speakerId: 'S1' },
+      { id: 'b', index: 1, text: 'um', t0Ms: 2000, t1Ms: 2400, speakerId: 'S1' },
+      { id: 'c', index: 2, text: 'bye', t0Ms: 4000, t1Ms: 4400, speakerId: 'S1' },
     ]
     const byId = new Map(words.map((w) => [w.id, w]))
     const document = {

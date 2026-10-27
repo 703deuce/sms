@@ -30,6 +30,6 @@ describe('rec-control', () => {
       takeId: 'rtake_abc12345',
       stopAtHostMs: 9000,
     })
-    expect(parsed.type).toBe('stop')
+    expect('type' in parsed ? parsed.type : parsed.t).toBe('stop')
   })
 })

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 
@@ -45,7 +46,7 @@ export async function retryStreamerProject(workspaceId: string, projectId: strin
         projectId,
         type: jobType,
         status: 'QUEUED',
-        payload,
+        payload: payload as Prisma.InputJsonValue,
         priority: 50,
       },
     }),

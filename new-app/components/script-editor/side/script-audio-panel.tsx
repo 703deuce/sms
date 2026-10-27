@@ -140,7 +140,8 @@ export function ScriptAudioPanel({
               max={100}
               step={5}
               onValueChange={(v) => {
-                const mix = (v[0] ?? 80) / 100
+                const first = Array.isArray(v) ? v[0] : v
+                const mix = (first ?? 80) / 100
                 onPatchAudioFx({
                   ...document.audioFx,
                   studioSound: { enabled: true, mix, assetId: studio?.assetId ?? null },

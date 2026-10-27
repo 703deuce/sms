@@ -1,6 +1,6 @@
+import { Prisma, type SwProjectKind } from '@prisma/client'
 import { emptyScreenplayDoc } from '@/lib/screenwriting/schema/empty-doc'
 import { getPrisma } from '@/lib/server/db'
-import type { SwProjectKind } from '@prisma/client'
 
 export async function listSwProjects(ownerId: string) {
   const prisma = getPrisma()
@@ -48,7 +48,7 @@ export async function createSwScriptInProject(
       templateKey: 'feature',
       formatSpec: { key: 'feature' },
       pmJson: input.pmJson as object,
-      editorMeta: input.editorMeta ?? undefined,
+      editorMeta: (input.editorMeta ?? undefined) as Prisma.InputJsonValue | undefined,
     },
   })
 }

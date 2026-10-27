@@ -9,9 +9,19 @@ const PROJECT_ID = process.env.SCRIPT_E2E_PROJECT_ID
 const MAX_SOURCE_MS = Number(process.env.SCRIPT_E2E_MAX_MS || 180_000)
 
 test.describe('Script editor prod (M4.1 + export)', () => {
-  test.beforeAll(() => {
+  test.beforeAll(async ({ request }) => {
     if (!PROJECT_ID) {
-      test.skip(true, 'Set SCRIPT_E2E_PROJECT_ID to a ≤2 min fixture project (not the 32 min proj)')
+      test.skip(true, 'Set SCRIPT_E2E_PROJECT_ID to test_interview_60s (or other ≤3 min fixture)')
+      return
+    }
+    const bootRes = await request.get(`/api/clips/projects/${PROJECT_ID}/script/bootstrap`)
+    if (!bootRes.ok()) return
+    const bootJson = await bootRes.json()
+    const durationMs = bootJson.data?.durationMs as number | undefined
+    if (typeof durationMs === 'number' && durationMs > MAX_SOURCE_MS) {
+      throw new Error(
+        `SCRIPT_E2E_PROJECT_ID fixture is ${Math.round(durationMs / 1000)}s — max ${MAX_SOURCE_MS / 1000}s. Use trimmed test_interview_60s, not long sources.`,
+      )
     }
   })
 
