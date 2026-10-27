@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipEditorPayload, mergeEditsPatch } from '@/lib/server/clips/clip-detail'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
+import { enqueueReplaceClip } from '@/lib/server/clips/replace-clip'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -58,6 +59,21 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
     const prisma = getPrisma()
     const updated = await prisma.clip.update({ where: { id }, data })
+
+    if (body.hidden === true && body.disliked === true) {
+      try {
+        const enq = await enqueueReplaceClip(workspaceId, id)
+        if (enq?.jobId) {
+          console.info('[clipper:replace] queued from PATCH', { clipId: id, jobId: enq.jobId })
+        }
+      } catch (err) {
+        console.error('[clipper:replace] enqueue failed', {
+          clipId: id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
     return NextResponse.json({ data: { id: updated.id, title: updated.title, edits: updated.edits } })
   } catch (err) {
     return jsonError(err, 400)

@@ -349,6 +349,13 @@ def handle_render_clip(conn, job: dict) -> None:
     run_render_clip_job(conn, job, post_progress)
 
 
+def handle_replace_clip(conn, job: dict) -> None:
+    from clips_worker.replace_clip_job import run_replace_clip_job
+
+    run_replace_clip_job(conn, job, post_progress)
+    _mark_job_done(conn, job["id"])
+
+
 def handle_thumbnail(conn, job: dict) -> None:
     from clips_worker.thumbnail_job import run_thumbnail_job
 
@@ -451,6 +458,7 @@ DISPATCH: dict[str, object] = {
     "STREAM_MONTAGE": handle_stream_montage,
     "STREAM_AUTOPULL": handle_stream_autopull,
     "PROCESS_PROJECT": process_job,
+    "REPLACE_CLIP": handle_replace_clip,
     "RENDER_CLIP": handle_render_clip,
     "REFRAME_CROP": handle_reframe_crop,
     "MUSIC": handle_music,

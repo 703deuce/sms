@@ -24,6 +24,13 @@ from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, put_json, upload_file
 
 
+def extract_wav_for_picker(src: Path, audio_wav: Path) -> None:
+    """16 kHz mono WAV for picker / energy analysis (shared by PROCESS_PROJECT and REPLACE_CLIP)."""
+    subprocess.check_call(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-ac", "1", "-ar", "16000", str(audio_wav)],
+    )
+
+
 def clip_keys(workspace_id: str, project_id: str, clip_id: str) -> dict[str, str]:
     base = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}"
     return {
@@ -286,9 +293,7 @@ def run_m4_pipeline(
         src = td_path / "source.mp4"
         download_object(source_key, src)
         audio_wav = td_path / "audio.wav"
-        subprocess.check_call(
-            ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-ac", "1", "-ar", "16000", str(audio_wav)],
-        )
+        extract_wav_for_picker(src, audio_wav)
         if job_payload.get("singleClip"):
             dur_ms = int(round(probe_duration(src) * 1000))
             start_ms = range_start
