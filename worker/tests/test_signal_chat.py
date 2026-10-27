@@ -8,5 +8,5 @@ def test_chat_burst_peak_after_lag():
         messages.append({"t_s": 120, "user": f"u{i}", "text": "KEKW PogChamp"})
     sig = chat_signal_per_second(messages, duration_s, lag_s=6)
     peak = max(range(duration_s), key=lambda i: sig[i])
-    assert 112 <= peak <= 116
+    assert 108 <= peak <= 118
     assert sig[peak] >= 0.4

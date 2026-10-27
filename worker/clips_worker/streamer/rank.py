@@ -11,6 +11,7 @@ from clips_worker.streamer.clip_cues import (
 )
 from clips_worker.streamer.fusion import FusionPick, fuse_moments
 from clips_worker.streamer.signals import audio_signal_per_second, transcript_signal_per_second
+from clips_worker.streamer.config import stream_chat_reaction_weight, stream_chat_signal_enabled
 from clips_worker.streamer.signals.chat import chat_signal_per_second
 from clips_worker.streamer.signals.markers import markers_signal_per_second
 from clips_worker.streamer.signals.speaker_change import speaker_change_signal_per_second
@@ -32,17 +33,25 @@ def rank_moments(
     vod_signal_curves: dict[str, list[float]] | None = None,
 ) -> tuple[list[FusionPick], dict]:
     duration_s = max(1, int(duration_ms / 1000))
+    chat_sig: list[float] | None = None
+    if stream_chat_signal_enabled() and chat_messages:
+        chat_sig = chat_signal_per_second(chat_messages, duration_s)
     if vod_signal_curves:
         audio_sig = list(vod_signal_curves.get("audio") or [])
         reaction_sig = list(vod_signal_curves.get("reaction") or [])
-        if reaction_sig:
-            if len(reaction_sig) < duration_s:
-                reaction_sig.extend([0.0] * (duration_s - len(reaction_sig)))
-            reaction_sig = reaction_sig[:duration_s]
-            audio_sig = [
-                max(audio_sig[i] if i < len(audio_sig) else 0.0, reaction_sig[i])
+        if len(reaction_sig) < duration_s:
+            reaction_sig.extend([0.0] * (duration_s - len(reaction_sig)))
+        reaction_sig = reaction_sig[:duration_s]
+        if chat_sig:
+            w = stream_chat_reaction_weight(settings)
+            reaction_sig = [
+                max(reaction_sig[i], w * (chat_sig[i] if i < len(chat_sig) else 0.0))
                 for i in range(duration_s)
             ]
+        audio_sig = [
+            max(audio_sig[i] if i < len(audio_sig) else 0.0, reaction_sig[i])
+            for i in range(duration_s)
+        ]
         transcript_sig = list(vod_signal_curves.get("transcript") or [])
         speaker_sig = list(vod_signal_curves.get("speakerChange") or [])
         if len(audio_sig) < duration_s:
@@ -59,8 +68,13 @@ def rank_moments(
         transcript_sig = transcript_signal_per_second(words, duration_s)
         speaker_sig = speaker_change_signal_per_second(words, duration_s)
     streamer_cues = streamer_clip_cue_seconds(words, duration_s)
-    chat_sig = chat_signal_per_second(chat_messages or [], duration_s) if chat_messages else None
-    chat_cues = chat_clip_cue_seconds(chat_messages or [], duration_s) if chat_messages else None
+    if chat_sig is None and stream_chat_signal_enabled() and chat_messages:
+        chat_sig = chat_signal_per_second(chat_messages, duration_s)
+    chat_cues = (
+        chat_clip_cue_seconds(chat_messages or [], duration_s)
+        if stream_chat_signal_enabled() and chat_messages
+        else None
+    )
     viewer_sig = viewer_clips_signal_per_second(viewer_clips or [], duration_s) if viewer_clips else None
     marker_sig = markers_signal_per_second(chapters, duration_s) if chapters else None
     viewer_cues = viewer_clip_cue_seconds(viewer_clips or [], duration_s) if viewer_clips else None

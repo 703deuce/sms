@@ -35,6 +35,10 @@ if [[ -d "$REPO_ROOT/worker/tests" ]]; then
     tests/test_silence_trim.py \
     tests/test_replace_clip_pick.py \
     tests/test_edits_render_zoom.py \
+    tests/test_signal_chat.py \
+    tests/test_signal_chat_bins.py \
+    tests/test_rank_chat_spike.py \
+    tests/test_chat_source.py \
     -q
 fi
 

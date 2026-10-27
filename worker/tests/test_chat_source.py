@@ -5,7 +5,15 @@ from clips_worker.streamer.chat.source import get_chat
 from clips_worker.streamer.chat.twitch_gql import TwitchChatReplayError
 
 
+def test_get_chat_disabled_flag(monkeypatch):
+    monkeypatch.setenv("STREAM_CHAT_SIGNAL", "0")
+    msgs, src = get_chat({"platform": "twitch", "externalId": "123", "state": {}})
+    assert msgs is None
+    assert src == "disabled"
+
+
 def test_get_chat_replay_off_returns_none(monkeypatch):
+    monkeypatch.setenv("STREAM_CHAT_SIGNAL", "1")
     monkeypatch.setenv("TWITCH_VOD_CHAT_REPLAY", "off")
     msgs, src = get_chat({"platform": "twitch", "externalId": "123", "state": {}})
     assert msgs is None
@@ -13,6 +21,7 @@ def test_get_chat_replay_off_returns_none(monkeypatch):
 
 
 def test_get_chat_empty_replay_returns_empty_list(monkeypatch):
+    monkeypatch.setenv("STREAM_CHAT_SIGNAL", "1")
     monkeypatch.delenv("TWITCH_VOD_CHAT_REPLAY", raising=False)
     monkeypatch.setattr(
         "clips_worker.streamer.chat.twitch_gql.fetch_all_vod_comments",
@@ -26,7 +35,8 @@ def test_get_chat_empty_replay_returns_empty_list(monkeypatch):
 def test_get_chat_kick_unavailable(monkeypatch):
     from clips_worker.streamer.chat import kick_chat
 
-    monkeypatch.setattr(kick_chat, "fetch_kick_vod_chat", lambda *a, **k: None)
+    monkeypatch.setenv("STREAM_CHAT_SIGNAL", "1")
+    monkeypatch.setattr(kick_chat, "fetch_kick_vod_chat", lambda _vod: None)
     msgs, src = get_chat({"platform": "kick", "url": "https://kick.com/x/videos/1", "state": {}})
     assert msgs is None
     assert src == "kick_unavailable"

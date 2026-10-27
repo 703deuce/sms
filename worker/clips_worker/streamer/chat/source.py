@@ -24,6 +24,11 @@ def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
     Returns (messages, chatSource).
     chatSource: twitch_replay | none | captured (future S13)
     """
+    from clips_worker.streamer.config import stream_chat_signal_enabled
+
+    if not stream_chat_signal_enabled():
+        return None, "disabled"
+
     state = vod.get("state") or {}
     if isinstance(state, str):
         state = json.loads(state)
@@ -52,7 +57,7 @@ def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
     if platform == "kick":
         from clips_worker.streamer.chat.kick_chat import fetch_kick_vod_chat
 
-        messages = fetch_kick_vod_chat(vod.get("url"), external_id)
+        messages = fetch_kick_vod_chat(vod)
         if messages:
             return messages, "kick_replay"
         return None, "kick_unavailable"

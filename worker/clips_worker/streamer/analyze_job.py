@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 from psycopg2.extras import RealDictCursor
@@ -14,7 +14,7 @@ from clips_worker.heartbeat import Heartbeat
 from clips_worker.pipeline import insert_clips_batch
 from clips_worker.storage import download_object, put_json, upload_file
 from clips_worker.streamer.chunking import merge_words
-from clips_worker.streamer.config import SCRATCH
+from clips_worker.streamer.config import SCRATCH, stream_chat_signal_enabled
 from clips_worker.streamer.keys import (
     stream_audio_key,
     stream_candidates_key,
@@ -36,6 +36,7 @@ from clips_worker.streamer.long_vod_analyze import (
 from clips_worker.streamer.stream_dedupe import dedupe_stream_picks
 from clips_worker.streamer.stream_pipeline import clear_stream_vod_error
 from clips_worker.streamer.rank import rank_moments
+from clips_worker.streamer.signals.chat import chat_bin_metrics, log_clipper_chat
 from clips_worker.streamer.collab_detect import CollabDetection, detect_collab, log_collab_detection
 from clips_worker.streamer.transcribe_stream import log_stream_transcribe_summary
 from clips_worker.streamer.usage import check_cap, job_priority, meter_vod_once
@@ -173,7 +174,11 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         transcribe_fallback: str | None = None
         first_cold_start_s: float | None = None
         chat_executor = ThreadPoolExecutor(max_workers=1)
-        chat_future = chat_executor.submit(get_chat, vod, None)
+        if stream_chat_signal_enabled():
+            chat_future = chat_executor.submit(get_chat, vod, None)
+        else:
+            chat_future = Future()
+            chat_future.set_result((None, "disabled"))
 
         def _persist_state(st: dict) -> None:
             _save_state(conn, vod_id, st)
@@ -265,8 +270,20 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 (chat_source, len(chat_messages) if chat_messages else 0, vod_id),
             )
         conn.commit()
-        viewer_clips = fetch_viewer_clips_for_vod(vod, conn)
         duration_s = max(1, int(duration_ms / 1000))
+        platform = str(vod.get("platform") or "unknown").lower()
+        chat_metrics = (
+            chat_bin_metrics(chat_messages, duration_s) if chat_messages else None
+        )
+        chat_used = bool(stream_chat_signal_enabled() and chat_messages)
+        log_clipper_chat(
+            vod_id=vod_id,
+            platform=platform,
+            message_count=len(chat_messages) if chat_messages else 0,
+            metrics=chat_metrics,
+            used=chat_used,
+        )
+        viewer_clips = fetch_viewer_clips_for_vod(vod, conn)
         vod_signal_curves = merge_chunk_signal_curves(chunk_signal_payloads, duration_s)
         picks, signals_payload = rank_moments(
             audio_path=audio_path,

@@ -27,3 +27,16 @@ DEFAULT_MONTHLY_HOURS = _float("STREAMER_DEFAULT_MONTHLY_HOURS", 40.0)
 MAX_RUNNING_ANALYZE = _int("STREAMER_MAX_RUNNING_PER_WORKSPACE", 1)
 LLM_CANDIDATES = _int("STREAMER_LLM_CANDIDATES", 40)
 SCRATCH = Path(os.environ.get("STREAMER_SCRATCH_DIR", "/tmp/streamer"))
+
+
+def stream_chat_signal_enabled() -> bool:
+    """VOD chat replay + ranker chat signal (default on). Set STREAM_CHAT_SIGNAL=0 to disable."""
+    raw = (os.environ.get("STREAM_CHAT_SIGNAL") or "1").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def stream_chat_reaction_weight(settings: dict | None = None) -> float:
+    streamer = (settings or {}).get("streamer") if isinstance(settings, dict) else {}
+    if isinstance(streamer, dict) and streamer.get("chatReactionWeight") is not None:
+        return float(streamer["chatReactionWeight"])
+    return _float("STREAM_CHAT_REACTION_WEIGHT", 0.45)
