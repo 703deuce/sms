@@ -11,6 +11,7 @@ import { isT2vAssembledSourceKey } from '@/lib/server/t2v/source-key'
 import { getClipStorage, storageDriverName } from '@/lib/storage'
 import { ttsHash } from '@/lib/server/ai/elevenlabs-tts'
 import { createId } from '@/lib/supabase/id'
+import { logT2v } from '@/lib/server/t2v/log'
 
 function draftWithVoicesReadyAfterAssemble(doc: T2vDraftV1): T2vDraftV1 {
   if (!doc.voice) return doc
@@ -46,6 +47,14 @@ export async function applyT2vAssembled(input: {
   if (!isT2vAssembledSourceKey(input.workspaceId, input.projectId, input.sourceKey)) {
     throw new Error('invalid_source_key')
   }
+  logT2v('assemble-apply', 'applyT2vAssembled start', {
+    draftId: input.draftId,
+    projectId: input.projectId,
+    jobId: input.jobId,
+    revision: input.revision,
+    durationMs: input.durationMs,
+    wordCount: input.words.length,
+  })
 
   if (input.jobId) {
     const job = await prisma.clipJob.findUnique({
@@ -221,5 +230,11 @@ export async function applyT2vAssembled(input: {
     }
   }
 
+  logT2v('assemble-apply', 'applyT2vAssembled done', {
+    draftId: input.draftId,
+    projectId: input.projectId,
+    uploadId,
+    durationMs: input.durationMs,
+  })
   return { projectId: input.projectId, uploadId }
 }

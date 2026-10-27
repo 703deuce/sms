@@ -10,7 +10,11 @@ from clips_worker.storage import download_object, upload_file
 from clips_worker.t2v.assemble import Scene, SceneMedia, assemble
 from clips_worker.t2v.render_finalize import finalize_t2v_video
 from clips_worker.t2v.tts_alignment import duration_ms_from_alignment, words_from_alignment
+from clips_worker.render_clip import probe_duration_ms
 from clips_worker.t2v.voice_cache import get_or_synthesize_voice_clip
+import logging
+
+log = logging.getLogger(__name__)
 
 ASPECT_DIMS = {
     "16:9": (1280, 720),
@@ -207,6 +211,31 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
         src_key = f"ws/{workspace_id}/projects/{project_id}/t2v/source_r{revision}_{job['id']}.mp4"
         upload_file(src_key, final, "video/mp4")
 
+        probed_ms = probe_duration_ms(final)
+        duration_ms = max(int(asm["durationMs"]), probed_ms)
+        if probed_ms > int(asm["durationMs"]):
+            log.info(
+                "[t2v:assemble] duration from probe exceeds scene sum",
+                extra={
+                    "draftId": draft_id,
+                    "jobId": job["id"],
+                    "asmDurationMs": asm["durationMs"],
+                    "probedMs": probed_ms,
+                },
+            )
+        if all_words:
+            last_end_ms = round(max(w.get("e", 0) for w in all_words) * 1000)
+            if last_end_ms < duration_ms:
+                log.info(
+                    "[t2v:assemble] transcript ends before file duration",
+                    extra={
+                        "draftId": draft_id,
+                        "jobId": job["id"],
+                        "lastWordEndMs": last_end_ms,
+                        "durationMs": duration_ms,
+                    },
+                )
+
         post_internal(
             "/api/t2v/internal/assembled",
             {
@@ -216,7 +245,7 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
                 "revision": revision,
                 "jobId": job["id"],
                 "sourceKey": src_key,
-                "durationMs": asm["durationMs"],
+                "durationMs": duration_ms,
                 "sceneStartsMs": scene_starts,
                 "words": all_words,
             },
