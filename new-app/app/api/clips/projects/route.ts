@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
+import { clipperLog } from '@/lib/server/clips/clipper-log'
 import {
   createClipProject,
   createClipProjectFromImportUrl,
@@ -56,8 +57,19 @@ export async function POST(request: Request) {
         : 'sourceUrl' in body
           ? await createClipProjectFromImportUrl(workspaceId, body)
           : await createClipProject(workspaceId, body)
+    const settings = (project.settings ?? {}) as Record<string, unknown>
+    clipperLog('project', 'created', {
+      projectId: project.id,
+      workspaceId,
+      status: project.status,
+      mode: String(settings.mode ?? 'talking'),
+      source: 'prompt' in body ? 'prompt' : 'sourceUrl' in body ? 'import' : 'upload',
+    })
     return NextResponse.json({ data: serializeProject(project) })
   } catch (err) {
+    console.error('[clipper:project] create_failed', {
+      error: err instanceof Error ? err.message : 'unknown',
+    })
     return jsonError(err, 400)
   }
 }

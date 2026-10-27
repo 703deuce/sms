@@ -15,7 +15,8 @@ import { ProgressiveClipResults } from '@/components/clips/progressive-clip-resu
 import { JobStatus } from '@/components/clips/job-status'
 import { ProjectFailedAlert } from '@/components/clips/project-failed-alert'
 import { ExportAllDialog } from '@/components/clips/export-all-dialog'
-import { exportClip, getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
+import { exportClipDownload } from '@/lib/clips/export-download-client'
+import { getProjectStatus, listProjectClips, retryProject } from '@/lib/clips-api'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { MontageDialog } from '@/components/streamer/montage-dialog'
@@ -209,8 +210,8 @@ export function ProjectClipsView({
 
   const onDownload = async (clipId: string) => {
     try {
-      const data = await exportClip(clipId)
-      if (data.downloadUrl) triggerDownload(data.downloadUrl, data.filename || data.download || 'clip.mp4')
+      const { downloadUrl, filename } = await exportClipDownload(clipId)
+      triggerDownload(downloadUrl, filename)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed')
     }

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { EmptyState, Panel } from '@/components/app/page-primitives'
 import { ClipGrid, type ClipCardData } from '@/components/clips/clip-grid'
 import { JobStatus } from '@/components/clips/job-status'
-import { exportClip, exportProjectAll, listProjectClips } from '@/lib/clips-api'
+import { exportClipDownload } from '@/lib/clips/export-download-client'
+import { exportProjectAll, listProjectClips } from '@/lib/clips-api'
 import { Clapperboard } from 'lucide-react'
 
 type ProjectStatusPayload = {
@@ -79,8 +80,8 @@ export function ProjectResults({ projectId, initialStatus }: { projectId: string
 
   const onDownload = async (clipId: string) => {
     try {
-      const data = await exportClip(clipId)
-      if (data.downloadUrl) triggerDownload(data.downloadUrl, data.filename || 'clip.mp4')
+      const { downloadUrl, filename } = await exportClipDownload(clipId)
+      triggerDownload(downloadUrl, filename)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed')
     }

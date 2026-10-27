@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
+import { clipperLog } from '@/lib/server/clips/clipper-log'
 import { createClipUpload } from '@/lib/server/clips/uploads'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -18,6 +19,12 @@ export async function POST(request: Request) {
     const workspaceId = await resolveWorkspaceId()
     const body = bodySchema.parse(await request.json())
     const created = await createClipUpload(workspaceId, body)
+    clipperLog('upload', 'start', {
+      uploadId: created.uploadId,
+      bytes: body.bytes,
+      mode: created.storage.mode,
+      workspaceId,
+    })
     return NextResponse.json({
       data: {
         uploadId: created.uploadId,

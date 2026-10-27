@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
+import { clipperLog } from '@/lib/server/clips/clipper-log'
 import { completeClipUpload } from '@/lib/server/clips/uploads'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -22,6 +23,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const workspaceId = await resolveWorkspaceId()
     const body = bodySchema.parse(await request.json())
     const row = await completeClipUpload(workspaceId, id, body.parts, body)
+    clipperLog('upload', 'complete', {
+      uploadId: id,
+      workspaceId,
+      durationMs: body.durationMs ?? row.durationMs ?? null,
+      bytes: row.bytes != null ? Number(row.bytes) : null,
+    })
     return NextResponse.json({ data: { id: row.id } })
   } catch (err) {
     return jsonError(err, 400)

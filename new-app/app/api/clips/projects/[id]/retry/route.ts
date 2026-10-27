@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { clipperLog } from '@/lib/server/clips/clipper-log'
 import { retryClipProject } from '@/lib/server/clips/retry-clip-project'
 import { retryStreamerProject } from '@/lib/server/streamer/retry-project'
 
@@ -24,6 +25,12 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
 
     const retried = await retryClipProject(workspaceId, projectId)
     if (!retried) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    clipperLog('retry', 'project_requeued', {
+      projectId,
+      workspaceId,
+      jobId: retried.jobId,
+      resume: retried.resume,
+    })
     return NextResponse.json({
       data: { ok: true, jobId: retried.jobId, status: retried.status, resume: retried.resume },
     })
