@@ -250,6 +250,183 @@ def speakercrop_env_for_settings(
     return env
 
 
+def _speakercrop_subprocess(
+    clip_src: Path,
+    out_mp4: Path,
+    env: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    cmd = [sys.executable, str(V3 / "speakercrop.py"), str(clip_src), str(out_mp4)]
+    return subprocess.run(cmd, cwd=str(V3), env=env, capture_output=True, text=True)
+
+
+def speakercrop_norender_crop_track(
+    clip_src: Path,
+    out_mp4: Path,
+    words_path: Path,
+    settings: dict,
+    work_dir: Path,
+    clip_start_ms: int = 0,
+    shot_overrides: list | None = None,
+    crop_track_out: Path | None = None,
+    render_meta: dict[str, Any] | None = None,
+    *,
+    preserve_existing_crop_track: bool = False,
+    clip_index: int = 0,
+) -> Path | None:
+    """Run speakercrop analysis only; return crop track path when written."""
+    aspect = settings.get("aspectRatio", "9:16")
+    resolution = settings.get("exportResolution", "720p")
+    w, h = aspect_size(aspect, resolution)
+    env = os.environ.copy()
+    env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
+    from clips_worker.reframe_routing import apply_production_reframe_routing
+    from clips_worker.screen_share_route import apply_screen_share_env
+
+    applied_layout, route_extra, route_shadow = apply_production_reframe_routing(
+        clip_src,
+        settings,
+        clip_index,
+        words_path=words_path,
+    )
+    layout = applied_layout
+    env.update(layout_env(layout))
+    env.update(route_extra)
+    if render_meta is not None and route_shadow:
+        render_meta["layoutRouteShadow"] = route_shadow
+    ss_env, ss_shadow = apply_screen_share_env(clip_src, settings=settings, applied_layout=applied_layout)
+    if ss_env:
+        layout = ss_env.get("LAYOUT_MODE", layout)
+        env.update(layout_env(layout))
+        env.update(ss_env)
+    if render_meta is not None and ss_shadow:
+        existing = render_meta.get("layoutRouteShadow") or {}
+        render_meta["layoutRouteShadow"] = {**existing, **ss_shadow}
+    env["WORDS"] = str(words_path)
+    env["WORDS_JSON"] = str(words_path)
+    env["TRANSCRIPT_SPK"] = "1"
+    env["OUT_W"] = str(w)
+    env["OUT_H"] = str(h)
+    env["CAPTION_PRESET"] = settings.get("captions", {}).get("presetId", "bold_pop")
+    if not settings.get("captions", {}).get("enabled", True):
+        env["CAPTIONS"] = "0"
+    env["CLIP_START_MS"] = str(int(clip_start_ms))
+    env["NORENDER"] = "1"
+    if preserve_existing_crop_track and crop_track_out is not None and crop_track_out.exists():
+        env["CROP_TRACK_IN"] = str(crop_track_out)
+    elif crop_track_out is not None:
+        env["CROP_TRACK_OUT"] = str(crop_track_out)
+    else:
+        env["CROP_TRACK_OUT"] = str(out_mp4.with_suffix(".crop_track.json"))
+    if shot_overrides:
+        env["SHOT_OVERRIDES"] = json.dumps(shot_overrides)
+    proc = _speakercrop_subprocess(clip_src, out_mp4, env)
+    if proc.returncode != 0:
+        return None
+    track = crop_track_out or Path(env["CROP_TRACK_OUT"])
+    return track if track.exists() else None
+
+
+def prepare_speakercrop_gpu_render(
+    clip_src: Path,
+    out_mp4: Path,
+    words_path: Path,
+    settings: dict,
+    work_dir: Path,
+    clip_start_ms: int,
+    crop_track_out: Path | None,
+    shot_overrides: list | None,
+    render_meta: dict[str, Any] | None,
+    preserve_existing_crop_track: bool,
+    clip_index: int,
+    workspace_id: str,
+    project_id: str,
+    clip_id: str,
+):
+    """Build crop track locally and return PreparedGpuRender for Modal/local batch encode."""
+    from clips_worker.filtergraph import fit_blur_overlay_filter
+    from clips_worker.gpu_encode import PreparedGpuRender
+
+    track = speakercrop_norender_crop_track(
+        clip_src,
+        out_mp4,
+        words_path,
+        settings,
+        work_dir,
+        clip_start_ms=clip_start_ms,
+        shot_overrides=shot_overrides,
+        crop_track_out=crop_track_out,
+        render_meta=render_meta,
+        preserve_existing_crop_track=preserve_existing_crop_track,
+        clip_index=clip_index,
+    )
+    if not track:
+        return None
+    aspect = settings.get("aspectRatio", "9:16")
+    resolution = settings.get("exportResolution", "720p")
+    w, h = aspect_size(aspect, resolution)
+    try:
+        crop = json.loads(track.read_text())
+        if int(crop.get("v", crop.get("version", 1))) == 2 or int(crop.get("version", 1)) == 2:
+            from clips_worker.multiperson_render import build_multiperson_filter_complex
+
+            fg = build_multiperson_filter_complex(crop)
+            use_fc = True
+        else:
+            fg = fit_blur_overlay_filter("0:v", "vfinal", w, h)
+            use_fc = True
+    except Exception:
+        return None
+    return PreparedGpuRender(
+        clip_id=clip_id,
+        src_path=clip_src,
+        dest_path=out_mp4,
+        filtergraph=fg,
+        filter_complex=use_fc,
+        workspace_id=workspace_id,
+        project_id=project_id,
+    )
+
+
+def _try_gpu_encode_speakercrop(
+    conn,
+    clip_src: Path,
+    out_mp4: Path,
+    words_path: Path,
+    settings: dict,
+    work_dir: Path,
+    clip_start_ms: int,
+    crop_track_out: Path | None,
+    shot_overrides: list | None,
+    render_meta: dict[str, Any] | None,
+    preserve_existing_crop_track: bool,
+    clip_index: int,
+    workspace_id: str,
+    project_id: str,
+    clip_id: str,
+) -> bool:
+    from clips_worker.gpu_encode import render_one_via_provider
+
+    prep = prepare_speakercrop_gpu_render(
+        clip_src,
+        out_mp4,
+        words_path,
+        settings,
+        work_dir,
+        clip_start_ms,
+        crop_track_out,
+        shot_overrides,
+        render_meta,
+        preserve_existing_crop_track,
+        clip_index,
+        workspace_id,
+        project_id,
+        clip_id,
+    )
+    if not prep:
+        return False
+    return render_one_via_provider(conn, prep)
+
+
 def run_speakercrop(
     clip_src: Path,
     out_mp4: Path,
@@ -265,6 +442,10 @@ def run_speakercrop(
     *,
     preserve_existing_crop_track: bool = False,
     clip_index: int = 0,
+    workspace_id: str | None = None,
+    project_id: str | None = None,
+    clip_id: str | None = None,
+    conn=None,
 ) -> Path:
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
@@ -321,9 +502,43 @@ def run_speakercrop(
     if no_render:
         env["NORENDER"] = "1"
         env["CAPTIONS"] = "0"
+    cid = clip_id or render_id
+    if (
+        not no_render
+        and conn is not None
+        and workspace_id
+        and project_id
+        and cid
+    ):
+        from clips_worker.gpu_encode import render_provider_enabled
+
+        if render_provider_enabled():
+            if _try_gpu_encode_speakercrop(
+                conn,
+                clip_src,
+                out_mp4,
+                words_path,
+                settings,
+                work_dir,
+                clip_start_ms,
+                crop_track_out,
+                shot_overrides,
+                render_meta,
+                preserve_existing_crop_track,
+                clip_index,
+                workspace_id,
+                project_id,
+                cid,
+            ):
+                preset = env["CAPTION_PRESET"]
+                ass = Path(str(out_mp4).replace(".mp4", ".ass"))
+                if ass.exists() and preset != "bold_pop":
+                    from clips_worker.caption_presets import apply_preset_to_ass
+
+                    apply_preset_to_ass(ass, preset)
+                return out_mp4
     preset = env["CAPTION_PRESET"]
-    cmd = [sys.executable, str(V3 / "speakercrop.py"), str(clip_src), str(out_mp4)]
-    proc = subprocess.run(cmd, cwd=str(V3), env=env, capture_output=True, text=True)
+    proc = _speakercrop_subprocess(clip_src, out_mp4, env)
     if proc.returncode != 0:
         tail = stderr_tail(proc.stderr or proc.stdout or "", lines=25)
         rid = render_id or "unknown"

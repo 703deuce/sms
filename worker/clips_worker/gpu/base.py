@@ -37,6 +37,9 @@ class RenderReq:
     filtergraph: str | None = None
     out_upload_url: str | None = None
     encoder: str = "libx264"
+    """When True, filtergraph is a full -filter_complex graph ending in [vfinal]."""
+    filter_complex: bool = False
+    clip_id: str | None = None
 
 
 @dataclass
@@ -46,6 +49,8 @@ class RenderRes:
     size_bytes: int = 0
     gpu_seconds: float = 0.0
     provider: str = "modal"
+    render_ms: float = 0.0
+    clip_id: str | None = None
 
 
 class GpuProvider(Protocol):

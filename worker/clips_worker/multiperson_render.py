@@ -24,7 +24,8 @@ from clips_worker.ffmpeg_util import stderr_tail
 from clips_worker.render_concurrency import ffmpeg_threads_per_job
 
 
-def render_multiperson_v2(src: Path, dest: Path, crop: dict) -> None:
+def build_multiperson_filter_complex(crop: dict) -> str:
+    """Return ffmpeg -filter_complex string ending in [vfinal] (no encode)."""
     if int(crop.get("version", 1)) != 2:
         raise ValueError("expected crop version 2")
     W = int(crop["W"])
@@ -129,7 +130,11 @@ def render_multiperson_v2(src: Path, dest: Path, crop: dict) -> None:
         concat_in.append(f"[vout{si}]")
     fg = ";".join(filters)
     concat = "".join(concat_in) + f"concat=n={len(concat_in)}:v=1:a=0[vfinal]"
-    vf = f"{fg};{concat}"
+    return f"{fg};{concat}"
+
+
+def render_multiperson_v2(src: Path, dest: Path, crop: dict) -> None:
+    vf = build_multiperson_filter_complex(crop)
     threads = str(ffmpeg_threads_per_job())
     cmd = [
         "ffmpeg",

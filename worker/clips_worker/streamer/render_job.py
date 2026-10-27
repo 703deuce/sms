@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 from psycopg2.extras import RealDictCursor
@@ -122,6 +123,25 @@ def _save_state(conn, vod_id: str, state: dict) -> None:
             (json.dumps(state), vod_id),
         )
     conn.commit()
+
+
+@dataclass
+class _StreamClipWork:
+    clip_id: str
+    idx: int
+    start_ms: int
+    clip_words: list
+    words_path: Path
+    clip_file: Path
+    out_mp4: Path
+    crop_track: Path
+    use_stack: bool
+    clip_layout: dict
+    ai_meta: dict
+    seg_key: str
+    true_start_abs_ms: int
+    true_end_ms: int
+    gpu_prep: object | None = None
 
 
 def _clips_for_project(conn, project_id: str) -> list[dict]:
@@ -253,6 +273,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     _save_state(conn, vod_id, state)
 
             transcript_key = vod.get("transcriptKey")
+            pending_work: list[_StreamClipWork] = []
 
             for idx, clip in enumerate(clips):
                 if clip.get("previewKey"):
@@ -305,10 +326,6 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     seg_key = clip_segment_key(workspace_id, project_id, clip_id)
                     upload_file(seg_key, seg_path, "video/mp4")
                     state = _checkpoint_segment_key(conn, vod_id, state, clip_id, seg_key)
-                    try:
-                        seg_path.unlink(missing_ok=True)
-                    except OSError:
-                        pass
 
                     offset_ms = true_start_ms
                     rel_start = max(0, start_ms - offset_ms)
@@ -370,6 +387,10 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
 
                     clip_file = td_path / f"clip_{clip_id}.mp4"
                     ffmpeg_cut(seg_path, clip_file, rel_start, rel_end, clip_index=idx)
+                    try:
+                        seg_path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
                     out_mp4 = td_path / f"out_{clip_id}.mp4"
                     crop_track = td_path / f"crop_{clip_id}.json"
                     streamer_layout = (settings.get("streamer") or {}).get("layout", "stack")
@@ -383,37 +404,98 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                         and clip_layout.get("layout") == "stack"
                         and clip_layout.get("facecam")
                     )
-                    with stage_span("reframe", heartbeat=True, clip_index=idx):
-                        if use_stack:
-                            render_stack_mp4(clip_file, out_mp4, clip_layout)
-                            rendered = out_mp4
+                    pending_work.append(
+                        _StreamClipWork(
+                            clip_id=clip_id,
+                            idx=idx,
+                            start_ms=start_ms,
+                            clip_words=clip_words,
+                            words_path=words_path,
+                            clip_file=clip_file,
+                            out_mp4=out_mp4,
+                            crop_track=crop_track,
+                            use_stack=use_stack,
+                            clip_layout=clip_layout if isinstance(clip_layout, dict) else {},
+                            ai_meta=ai_meta,
+                            seg_key=seg_key,
+                            true_start_abs_ms=true_start_abs_ms,
+                            true_end_ms=true_end_ms,
+                        )
+                    )
+
+            from clips_worker.gpu_encode import render_batch_via_provider, render_provider_enabled
+            from clips_worker.render_clip import prepare_speakercrop_gpu_render
+
+            gpu_ok: dict[str, bool] = {}
+            if pending_work and render_provider_enabled():
+                gpu_preps = []
+                for work in pending_work:
+                    if work.use_stack:
+                        continue
+                    prep = prepare_speakercrop_gpu_render(
+                        work.clip_file,
+                        work.out_mp4,
+                        work.words_path,
+                        settings,
+                        td_path,
+                        clip_start_ms=work.start_ms,
+                        crop_track_out=work.crop_track,
+                        shot_overrides=None,
+                        render_meta=None,
+                        preserve_existing_crop_track=False,
+                        clip_index=work.idx,
+                        workspace_id=workspace_id,
+                        project_id=project_id,
+                        clip_id=work.clip_id,
+                    )
+                    work.gpu_prep = prep
+                    if prep is not None:
+                        gpu_preps.append(prep)
+                if gpu_preps:
+                    with stage_span("gpu_render_batch", heartbeat=True, clip_count=len(gpu_preps)):
+                        gpu_ok = render_batch_via_provider(conn, gpu_preps)
+
+            for work in pending_work:
+                with stage_span("clip_render", heartbeat=True, clip_index=work.idx, clip_id=work.clip_id):
+                    with stage_span("reframe", heartbeat=True, clip_index=work.idx):
+                        if work.use_stack:
+                            render_stack_mp4(work.clip_file, work.out_mp4, work.clip_layout)
+                            rendered = work.out_mp4
+                        elif work.gpu_prep and gpu_ok.get(work.clip_id):
+                            rendered = work.out_mp4
                         else:
                             rendered = run_speakercrop(
-                                clip_file,
-                                out_mp4,
-                                words_path,
+                                work.clip_file,
+                                work.out_mp4,
+                                work.words_path,
                                 settings,
                                 td_path,
-                                clip_start_ms=start_ms,
-                                crop_track_out=crop_track,
+                                clip_start_ms=work.start_ms,
+                                crop_track_out=work.crop_track,
+                                conn=conn,
+                                workspace_id=workspace_id,
+                                project_id=project_id,
+                                clip_id=work.clip_id,
+                                clip_index=work.idx,
                             )
-                    ai_streamer = dict((ai_meta.get("streamer") or {}))
-                    if clip_layout:
-                        ai_streamer["layout"] = clip_layout if isinstance(clip_layout, dict) else {"layout": clip_layout}
-                    poster = td_path / f"poster_{clip_id}.jpg"
+                    ai_streamer = dict((work.ai_meta.get("streamer") or {}))
+                    if work.clip_layout:
+                        ai_streamer["layout"] = work.clip_layout
+                    poster = td_path / f"poster_{work.clip_id}.jpg"
                     poster_jpg(rendered, poster)
-                    keys = clip_keys(workspace_id, project_id, clip_id)
+                    keys = clip_keys(workspace_id, project_id, work.clip_id)
                     upload_file(keys["preview"], rendered, "video/mp4")
                     upload_file(keys["poster"], poster, "image/jpeg")
-                    put_json(keys["words"], clip_words)
+                    put_json(keys["words"], work.clip_words)
                     crop_key = None
-                    if crop_track.exists():
-                        upload_file(keys["crop_track"], crop_track, "application/json")
+                    if work.crop_track.exists():
+                        upload_file(keys["crop_track"], work.crop_track, "application/json")
                         crop_key = keys["crop_track"]
 
+                    ai_meta = work.ai_meta
                     if ai_streamer:
                         ai_meta = {**ai_meta, "streamer": ai_streamer}
-                    with stage_span("db_write_clip", clip_id=clip_id):
+                    with stage_span("db_write_clip", clip_id=work.clip_id):
                         with conn.cursor() as cur:
                             cur.execute(
                                 """
@@ -429,12 +511,12 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                     keys["poster"],
                                     keys["words"],
                                     crop_key,
-                                    seg_key,
-                                    true_start_abs_ms,
-                                    true_end_ms,
+                                    work.seg_key,
+                                    work.true_start_abs_ms,
+                                    work.true_end_ms,
                                     json.dumps(ai_meta),
                                     json.dumps(initial_clip_edits(settings)),
-                                    clip_id,
+                                    work.clip_id,
                                 ),
                             )
                         conn.commit()
@@ -442,8 +524,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     delete_clip_source_segment(
                         workspace_id,
                         project_id,
-                        clip_id,
-                        seg_key,
+                        work.clip_id,
+                        work.seg_key,
                         vod_id=vod_id,
                     )
 

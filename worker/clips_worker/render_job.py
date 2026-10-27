@@ -224,6 +224,10 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             audio_assets=audio_assets,
             render_id=render_id,
             render_meta=render_meta,
+            conn=conn,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            clip_id=clip_id,
         )
         _export_stage_log(
             render_id,

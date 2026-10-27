@@ -174,6 +174,10 @@ def reframe_clip_preview(
     *,
     motion_subject: bool,
     clip_index: int = 0,
+    conn=None,
+    workspace_id: str | None = None,
+    project_id: str | None = None,
+    clip_id: str | None = None,
 ) -> tuple[Path, str, dict]:
     """Pick speaker-follow vs fit-blur based on sustained face presence."""
     from clips_worker.subject_reframe import has_face_and_speech, write_motion_crop_track
@@ -195,6 +199,10 @@ def reframe_clip_preview(
             crop_track_out=crop_track_path,
             render_meta=render_meta,
             clip_index=clip_index,
+            conn=conn,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            clip_id=clip_id,
         )
         if render_meta.get("layoutRouteShadow"):
             ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
@@ -232,6 +240,10 @@ def reframe_clip_preview(
         preserve_existing_crop_track=preserve_crop_track,
         render_meta=render_meta,
         clip_index=clip_index,
+        conn=conn,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        clip_id=clip_id,
     )
     if render_meta.get("layoutRouteShadow"):
         ai_meta["layoutRouteShadow"] = render_meta["layoutRouteShadow"]
@@ -557,6 +569,10 @@ def run_m4_pipeline(
                         ai_meta,
                         motion_subject=mode == "anything",
                         clip_index=idx,
+                        conn=conn,
+                        workspace_id=workspace_id,
+                        project_id=project_id,
+                        clip_id=clip_id,
                     )
                     poster = td_path / f"poster_{idx}.jpg"
                     poster_jpg(rendered, poster)
@@ -865,6 +881,10 @@ def run_m4_pipeline(
                         ai_meta,
                         motion_subject=mode == "anything",
                         clip_index=idx,
+                        conn=conn,
+                        workspace_id=workspace_id,
+                        project_id=project_id,
+                        clip_id=clip_id,
                     )
                     poster = td_path / f"poster_{idx}.jpg"
                     poster_jpg(rendered, poster)

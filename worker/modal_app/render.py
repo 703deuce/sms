@@ -26,21 +26,50 @@ class Renderer:
             src = f"{td}/in.mp4"
             out = f"{td}/out.mp4"
             urllib.request.urlretrieve(seg_url, src)
+            use_fc = bool(item.get("filter_complex"))
             vf = fg if fg else "scale=1080:1920"
             vcodec = "h264_nvenc" if enc == "h264_nvenc" else "libx264"
             extra = ["-preset", "p5", "-cq", "21"] if vcodec == "h264_nvenc" else ["-crf", "20"]
-            subprocess.check_call(
-                ["ffmpeg", "-y", "-v", "error", "-i", src, "-vf", vf, "-c:v", vcodec, *extra, "-c:a", "aac", out],
-            )
+            if use_fc:
+                subprocess.check_call(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-v",
+                        "error",
+                        "-i",
+                        src,
+                        "-filter_complex",
+                        vf,
+                        "-map",
+                        "[vfinal]",
+                        "-map",
+                        "0:a?",
+                        "-c:v",
+                        vcodec,
+                        *extra,
+                        "-c:a",
+                        "aac",
+                        "-movflags",
+                        "+faststart",
+                        out,
+                    ],
+                )
+            else:
+                subprocess.check_call(
+                    ["ffmpeg", "-y", "-v", "error", "-i", src, "-vf", vf, "-c:v", vcodec, *extra, "-c:a", "aac", out],
+                )
             with open(out, "rb") as f:
                 data = f.read()
             req = urllib.request.Request(upload_url, data=data, method="PUT")
             urllib.request.urlopen(req, timeout=600)
+        elapsed = time.time() - t0
         return {
             "ok": True,
             "duration_ms": 0,
             "size_bytes": len(data),
-            "gpu_seconds": time.time() - t0,
+            "gpu_seconds": elapsed,
+            "render_ms": round(elapsed * 1000.0, 1),
         }
 
     @modal.method()

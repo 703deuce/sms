@@ -81,6 +81,7 @@ class ModalProvider:
             {
                 "segment_url": r.segment_url,
                 "filtergraph": r.filtergraph,
+                "filter_complex": bool(r.filter_complex),
                 "out_upload_url": r.out_upload_url,
                 "encoder": r.encoder,
             }
@@ -92,7 +93,7 @@ class ModalProvider:
             Cls = modal.Cls.from_name(APP_NAME, "Renderer")
             raws = Cls().render_batch.remote(items)
         out: list[RenderRes] = []
-        for raw in raws:
+        for req, raw in zip(reqs, raws, strict=True):
             out.append(
                 RenderRes(
                     ok=bool(raw.get("ok")),
@@ -100,6 +101,8 @@ class ModalProvider:
                     size_bytes=int(raw.get("size_bytes") or 0),
                     gpu_seconds=float(raw.get("gpu_seconds") or 0),
                     provider="modal",
+                    render_ms=float(raw.get("render_ms") or 0),
+                    clip_id=req.clip_id,
                 )
             )
         return out

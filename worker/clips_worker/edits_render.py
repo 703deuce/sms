@@ -325,6 +325,11 @@ def run_speakercrop_layout_timeline(
     shot_overrides: list | None = None,
     render_id: str | None = None,
     render_meta: dict | None = None,
+    *,
+    conn=None,
+    workspace_id: str | None = None,
+    project_id: str | None = None,
+    clip_id: str | None = None,
 ) -> Path:
     """Export speakercrop honoring per-segment layout modes when they differ."""
     if not needs_per_segment_layout_export(edits):
@@ -345,6 +350,10 @@ def run_speakercrop_layout_timeline(
             render_meta=render_meta,
             crop_track_out=crop_track,
             preserve_existing_crop_track=bool(crop_track),
+            conn=conn,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            clip_id=clip_id,
         )
         return out_mp4
 
@@ -382,6 +391,10 @@ def run_speakercrop_layout_timeline(
             render_meta=render_meta,
             crop_track_out=crop_track,
             preserve_existing_crop_track=bool(crop_track),
+            conn=conn,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            clip_id=clip_id,
         )
         part_paths.append(part_out)
 
@@ -399,6 +412,10 @@ def run_speakercrop_layout_timeline(
             shot_overrides=shot_overrides,
             render_id=render_id,
             render_meta=render_meta,
+            conn=conn,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            clip_id=clip_id,
         )
         return out_mp4
     if len(part_paths) == 1:
@@ -485,6 +502,11 @@ def render_edited_clip(
     audio_assets: dict | None = None,
     render_id: str | None = None,
     render_meta: dict | None = None,
+    *,
+    conn=None,
+    workspace_id: str | None = None,
+    project_id: str | None = None,
+    clip_id: str | None = None,
 ) -> tuple[Path, list[dict], str]:
     t0 = time.perf_counter()
     rid = render_id or "unknown"
@@ -543,6 +565,10 @@ def render_edited_clip(
             shot_overrides=shot_overrides,
             render_id=render_id,
             render_meta=render_meta,
+            conn=conn,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            clip_id=clip_id,
         )
         stage("speakercrop_fast_done")
         return out_mp4, remapped, build_srt(remapped)
@@ -585,6 +611,10 @@ def render_edited_clip(
         shot_overrides=shot_overrides,
         render_id=render_id,
         render_meta=render_meta,
+        conn=conn,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        clip_id=clip_id,
     )
     stage("speakercrop_nc_done")
 

@@ -151,6 +151,10 @@ def run_replace_clip_job(conn, job: dict, post_progress) -> None:
             crop_track_path,
             ai_meta,
             clip_index=idx,
+            conn=conn,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            clip_id=clip_id,
         )
         poster = td_path / "poster.jpg"
         poster_jpg(rendered, poster)

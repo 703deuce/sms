@@ -31,3 +31,27 @@ def record_modal_transcribe(
             (usage_id, workspace_id, project_id, units, cost_micros, datetime.now(timezone.utc)),
         )
     conn.commit()
+
+
+def record_modal_render(
+    conn,
+    workspace_id: str,
+    project_id: str,
+    gpu_seconds: float,
+    *,
+    batch: bool = False,
+) -> None:
+    extra = SCALEDOWN_S if batch else 0.0
+    units = gpu_seconds + extra
+    cost_micros = int(round(units * L4_USD_PER_S * 1_000_000))
+    usage_id = f"aiu_{uuid.uuid4().hex[:24]}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO ai_usage (
+              id, "workspaceId", "projectId", provider, model, units, "unitType", "costUsdMicros", "createdAt"
+            ) VALUES (%s, %s, %s, 'modal', 'L4:render', %s, 'gpu_s', %s, %s)
+            """,
+            (usage_id, workspace_id, project_id, units, cost_micros, datetime.now(timezone.utc)),
+        )
+    conn.commit()
