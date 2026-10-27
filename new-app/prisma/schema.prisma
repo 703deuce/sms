@@ -8896,11 +8896,89 @@ model ClipProject {
   recordingSessions  RecordingSession[]
   folderId           String?
   lastViewedAt       DateTime?
+  sourceKind         String            @default("upload")
   folder             ClipProjectFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  t2vDraft           T2vDraft?
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, folderId])
+  @@index([workspaceId, sourceKind, createdAt])
   @@map("clip_projects")
+}
+
+model T2vDraft {
+  id                String      @id
+  workspaceId       String
+  projectId         String      @unique
+  project           ClipProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document          Json
+  revision          Int         @default(0)
+  status            String      @default("DRAFT")
+  stage             String?
+  progress          Int         @default(0)
+  error             String?
+  assembledRevision Int?
+  createdById       String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([workspaceId, updatedAt])
+  @@map("t2v_drafts")
+}
+
+model T2vVoiceClip {
+  id            String   @id
+  workspaceId   String
+  hash          String
+  provider      String   @default("elevenlabs")
+  voiceId       String
+  modelId       String
+  text          String
+  storageKey    String
+  durationMs    Int
+  alignment     Json
+  chars         Int
+  costUsdMicros Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@unique([workspaceId, hash])
+  @@map("t2v_voice_clips")
+}
+
+model T2vTemplate {
+  id           String   @id
+  workspaceId  String?
+  name         String
+  category     String
+  aspect       String   @default("16:9")
+  previewKey   String?
+  thumbKey     String?
+  settings     Json
+  sampleScript String?
+  sortOrder    Int      @default(0)
+  isPublished  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId, category, sortOrder])
+  @@map("t2v_templates")
+}
+
+model T2vSavedVoice {
+  id          String    @id
+  workspaceId String
+  provider    String    @default("elevenlabs")
+  voiceId     String
+  name        String
+  labels      Json?
+  previewUrl  String?
+  isClone     Boolean   @default(false)
+  consentAt   DateTime?
+  consentById String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, provider, voiceId])
+  @@map("t2v_saved_voices")
 }
 
 model ClipProjectFolder {
@@ -9726,6 +9804,8 @@ enum GenerationKind {
   THUMBNAIL
   DUB
   STUDIO_SOUND
+  TTS_VOICE
+  AI_IMAGE
 }
 
 enum GenerationStatus {

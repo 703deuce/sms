@@ -196,20 +196,7 @@ export async function ensureStockAsset(hit: PixabayHitInternal) {
 
   if (!row.storageKey) {
     const buf = await downloadRenditionToBuffer(hit.srcUrl, hit.fallbackSrcUrl)
-    const { supabase, bucket } = await import('@/lib/storage/supabase-driver').then((m) => {
-      const c = m.getSupabaseStorageConfig()
-      if (!c) throw new Error('storage not configured')
-      const { createClient } = require('@supabase/supabase-js') as typeof import('@supabase/supabase-js')
-      return {
-        supabase: createClient(c.url, c.key, { auth: { persistSession: false } }),
-        bucket: c.bucket,
-      }
-    })
-    const { error } = await supabase.storage.from(bucket).upload(objectKey, buf, {
-      contentType: 'video/mp4',
-      upsert: true,
-    })
-    if (error) throw new Error(error.message)
+    await storage.putBytes(objectKey, buf, 'video/mp4')
     const updated = await prisma.stockAsset.update({
       where: { id: row.id },
       data: { storageKey: objectKey },

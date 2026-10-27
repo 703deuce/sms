@@ -18,6 +18,7 @@ JOB_TYPES: tuple[str, ...] = (
     "DUB",
     "STUDIO_SOUND",
     "RENDER_SCRIPT_COMPOSITION",
+    "T2V_ASSEMBLE",
 )
 
 

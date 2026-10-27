@@ -11,6 +11,7 @@ const RESERVED_PROJECT_SLUGS: Record<string, string> = {
   exports: '/app/exports',
   brand: '/app/clips/brand',
   new: '/app/clips/new',
+  video: '/app/clips/video/new',
 }
 
 export const metadata = { title: 'Project · Clips' }
@@ -23,6 +24,9 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   const prisma = getPrisma()
   const project = await prisma.clipProject.findFirst({ where: { id: projectId, workspaceId } })
   if (!project) notFound()
+  if (project.sourceKind === 't2v') {
+    redirect(`/app/clips/${project.id}/video`)
+  }
 
   const initialClips =
     project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null

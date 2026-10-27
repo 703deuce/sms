@@ -16,3 +16,9 @@ export function isRecordingFeatureEnabled(): boolean {
 export function isCompositionSocialPublishEnabled(): boolean {
   return process.env.FEATURE_COMPOSITION_SOCIAL_PUBLISH === '1'
 }
+
+/** Text-to-video product surfaces (P1–P20). Off unless FEATURE_T2V=1. */
+export function isT2vFeatureEnabled(): boolean {
+  const v = (process.env.FEATURE_T2V ?? '').trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'on' || v === 'yes'
+}

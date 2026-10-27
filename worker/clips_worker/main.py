@@ -462,6 +462,22 @@ def handle_script_composition_render(conn, job: dict) -> None:
 DISPATCH["RENDER_SCRIPT_COMPOSITION"] = handle_script_composition_render
 
 
+def handle_t2v_assemble(conn, job: dict) -> None:
+    from clips_worker.t2v.job import run_t2v_assemble_job
+
+    def progress(job_id: str, payload: dict) -> None:
+        terminal = payload.get("jobStatus") in ("DONE", "FAILED")
+        if terminal:
+            post_progress_terminal(job_id, payload)
+        else:
+            post_progress_resilient(job_id, payload)
+
+    run_t2v_assemble_job(conn, job, progress)
+
+
+DISPATCH["T2V_ASSEMBLE"] = handle_t2v_assemble
+
+
 def main() -> None:
     from clips_worker.startup_check import validate_worker_env
 
@@ -552,6 +568,7 @@ def main() -> None:
                     if job.get("type") in (
                         "RENDER_CLIP",
                         "RENDER_SCRIPT_COMPOSITION",
+                        "T2V_ASSEMBLE",
                         "MUSIC",
                         "THUMBNAIL",
                         "DUB",
