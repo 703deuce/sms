@@ -16,6 +16,7 @@ import type { T2vProjectMusicRow } from '@/lib/t2v/music-types'
 import { estimateSceneMs } from '@/lib/t2v/estimate'
 
 const MOODS = ['Upbeat', 'Calm', 'Corporate', 'Cinematic', 'Inspiring', 'Playful', 'Dramatic', 'Lo-fi'] as const
+const STALE_REVISION_TOAST = 'Draft changed elsewhere — refresh and try again'
 
 export function T2vPanelMusic({
   draftId,
@@ -64,7 +65,7 @@ export function T2vPanelMusic({
       })
       const body = await res.json()
       if (res.status === 409) {
-        toast.error('Draft changed elsewhere — refresh and try again')
+        toast.error(STALE_REVISION_TOAST)
         return
       }
       if (!res.ok) {
@@ -111,7 +112,10 @@ export function T2vPanelMusic({
         }),
       })
       const body = await res.json()
-      if (res.status === 409) throw new Error('revision_conflict')
+      if (res.status === 409) {
+        toast.error(STALE_REVISION_TOAST)
+        return
+      }
       if (!res.ok) throw new Error(body.error ?? 'generate_failed')
       if (body.data?.document && body.data?.revision != null) {
         applySaved({ document: body.data.document as T2vDraftV1, revision: body.data.revision as number })
@@ -133,6 +137,10 @@ export function T2vPanelMusic({
       body: JSON.stringify({ action: 'clear', baseRevision: revisionRef.current }),
     })
     const body = await res.json()
+    if (res.status === 409) {
+      toast.error(STALE_REVISION_TOAST)
+      return
+    }
     if (!res.ok) {
       toast.error(body.error ?? 'clear_failed')
       return
@@ -168,6 +176,10 @@ export function T2vPanelMusic({
             }),
           })
           const body = await res.json()
+          if (res.status === 409) {
+            toast.error(STALE_REVISION_TOAST)
+            return
+          }
           if (!res.ok) throw new Error(body.error ?? 'upload_failed')
           pendingAttachGen.current = null
           applySaved(body.data as { document: T2vDraftV1; revision: number })
