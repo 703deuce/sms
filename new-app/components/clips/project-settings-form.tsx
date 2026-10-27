@@ -119,7 +119,7 @@ export function ProjectSettingsForm({
                   settings.clipLength === b ? 'border-primary bg-accent' : 'border-border',
                 )}
               >
-                {b === 'auto' ? 'Auto' : b === 'lt30' ? '<30s' : b === '30_60' ? '30–60s' : '60–90s'}
+                {b === 'auto' ? 'Auto (15–90s)' : b === 'lt30' ? '<30s' : b === '30_60' ? '30–60s' : '60–90s'}
               </button>
             ))}
           </div>

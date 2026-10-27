@@ -20,6 +20,7 @@ import {
 } from '@/lib/clips/clip-results-chips'
 import { clipCardAspectClass } from '@/lib/clips/card-aspect'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
+import { ClipPostCopy } from '@/components/clips/clip-post-copy'
 import { ThumbsDown, EyeOff } from 'lucide-react'
 
 export function ClipCard({
@@ -136,7 +137,9 @@ export function ClipCard({
       <div className="flex flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-medium leading-snug break-words">{clip.title}</h3>
         <p className="text-xs text-muted-foreground tabular-nums">
-          Source {formatTimecode(clip.startMs)}–{formatTimecode(clip.endMs)} · {formatDur(clip.durationMs)} · score {clip.score}
+          <span className="font-medium text-foreground">{formatDur(clip.durationMs)} clip</span>
+          {' · '}
+          Source {formatTimecode(clip.startMs)}–{formatTimecode(clip.endMs)} · score {clip.score}
         </p>
         {(() => {
           const meta = (clip.aiMeta as { streamer?: { meta?: { game?: string; vodUrlAt?: string } } })?.streamer?.meta
@@ -182,6 +185,7 @@ export function ClipCard({
         {why || clip.reason ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{why || clip.reason}</p>
         ) : null}
+        {!isStreamer ? <ClipPostCopy clipId={clip.id} aiMeta={clip.aiMeta} /> : null}
         <ReasonChips
           score={isStreamer ? clip.score : undefined}
           reasons={streamerReasons}
