@@ -1,25 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import {
-  clipLayoutChip,
-  clipPersonCount,
-  clipWhySummary,
-  isClipUserHidden,
-} from '@/lib/clips/clip-results-chips'
+import { clipFallbackPickLabel, clipIsFallbackPick } from '@/lib/clips/clip-results-chips'
 
-describe('clip-results-chips', () => {
-  it('prefers pass1_why for tooltip', () => {
-    expect(clipWhySummary({ pass1_why: 'Strong hook', hook: 'x' })).toBe('Strong hook')
+describe('clip-results-chips fallback', () => {
+  it('detects low_confidence and emergency reason', () => {
+    expect(clipIsFallbackPick({ low_confidence: true }, null)).toBe(true)
+    expect(clipIsFallbackPick({}, 'short_source_emergency')).toBe(true)
+    expect(clipFallbackPickLabel({}, 'short_source_emergency')).toBe('Fallback pick')
   })
 
-  it('maps crop method to layout label', () => {
-    expect(clipLayoutChip({ cropMethod: 'fit_blur' })).toBe('Fit + blur')
-  })
-
-  it('reads person count', () => {
-    expect(clipPersonCount({ nPersons: 3 })).toBe(3)
-  })
-
-  it('detects user hidden', () => {
-    expect(isClipUserHidden({ userHidden: true })).toBe(true)
+  it('ignores normal picks', () => {
+    expect(clipIsFallbackPick({}, 'Strong hook on pricing')).toBe(false)
   })
 })

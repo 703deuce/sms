@@ -11,7 +11,8 @@ from clips_worker.picker.llm import chat_json
 from clips_worker.picker.log_util import json_snippet, picker_info
 from clips_worker.picker.rejects import is_hard_llm_reject
 from clips_worker.picker.scoring import _sent_dict, score_clip
-from clips_worker.picker.titles import strip_internal_sentence_refs, trim_title
+from clips_worker.picker.fallback import pass1_heuristic_candidates
+from clips_worker.picker.titles import SHORT_SOURCE_MAX_MS, strip_internal_sentence_refs, trim_title
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
 
@@ -174,6 +175,17 @@ def score_moments(
         return [], []
     ctx_s = float(genres_config().get("pass2_context_seconds", 120))
     sig_by = {s.sentence_idx: s for s in signals}
+    if source_duration_s is not None and source_duration_s <= SHORT_SOURCE_MAX_MS / 1000.0:
+        heuristic = pass1_heuristic_candidates(
+            moments, sentences, sig_by, genre, source_duration_s=source_duration_s
+        )
+        picker_info(
+            "pass2_skip_llm_short_source",
+            source_duration_s=source_duration_s,
+            moments_in=len(moments),
+            scored=len(heuristic),
+        )
+        return heuristic, []
     out: list[dict] = []
     audit: list[dict] = []
     reject_counts: Counter[str] = Counter()

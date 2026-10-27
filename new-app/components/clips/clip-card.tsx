@@ -16,6 +16,7 @@ import { ClipCardVideo } from '@/components/clips/clip-card-video'
 import {
   clipLayoutChip,
   clipPersonCount,
+  clipFallbackPickLabel,
   clipWhySummary,
   type ClipAiMeta,
 } from '@/lib/clips/clip-results-chips'
@@ -51,6 +52,7 @@ export function ClipCard({
   const why = clipWhySummary(aiMeta)
   const layoutChip = clipLayoutChip(aiMeta)
   const people = clipPersonCount(aiMeta)
+  const fallbackLabel = clipFallbackPickLabel(aiMeta, clip.reason)
 
   const hideClip = async () => {
     if (!onHidden) return
@@ -162,6 +164,14 @@ export function ClipCard({
           <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary tabular-nums">
             Score {clip.score}
           </span>
+          {fallbackLabel ? (
+            <span
+              className="rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-200"
+              title="Lower-confidence moment — you can still preview, edit, and export"
+            >
+              {fallbackLabel}
+            </span>
+          ) : null}
           {layoutChip ? (
             <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
               {layoutChip}

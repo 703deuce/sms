@@ -9,9 +9,34 @@ export type ClipAiMeta = {
   layoutResolved?: string
   nPersons?: number
   personCount?: number
+  low_confidence?: boolean
   userHidden?: boolean
   userFeedback?: 'dislike' | null
   signals?: { sentence?: number }[]
+}
+
+const FALLBACK_REASON_RE =
+  /fallback|emergency|short_source|short-source|span fallback|coverage_span/i
+
+/** Picker fallback / emergency picks — still exportable; label in results grid. */
+export function clipIsFallbackPick(
+  meta: ClipAiMeta | null | undefined,
+  reason?: string | null,
+): boolean {
+  if (meta?.low_confidence) return true
+  const r = (reason || '').trim()
+  return Boolean(r && FALLBACK_REASON_RE.test(r))
+}
+
+export function clipFallbackPickLabel(
+  meta: ClipAiMeta | null | undefined,
+  reason?: string | null,
+): string | null {
+  if (!clipIsFallbackPick(meta, reason)) return null
+  const r = (reason || '').toLowerCase()
+  if (r.includes('emergency') || r.includes('short_source')) return 'Fallback pick'
+  if (r.includes('span')) return 'Span fallback'
+  return 'Fallback pick'
 }
 
 const LAYOUT_LABELS: Record<string, string> = {

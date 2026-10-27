@@ -295,514 +295,522 @@ def run_m4_pipeline(
     range_end = int(project.get("rangeEndMs") or 0)
 
     mode = settings.get("mode") or "talking"
+    source_duration_ms = max(1, range_end - range_start) if range_end > range_start else 0
+    if source_duration_ms > 0:
+        settings = {**settings, "sourceDurationMs": source_duration_ms}
     pipeline_t0 = time.monotonic()
     try:
-      with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        src = local_src if local_src is not None else td_path / "source.mp4"
-        if local_src is None:
-            dl0 = time.monotonic()
-            download_object(source_key, src)
-            print(
-                f"[clipper:speed] project={project_id} phase=pipeline_source_download_ms="
-                f"{int((time.monotonic() - dl0) * 1000)}",
-                flush=True,
-            )
-        audio_wav = local_audio_wav if local_audio_wav is not None else td_path / "audio.wav"
-        if local_audio_wav is None:
-            extract_wav_for_picker(src, audio_wav)
-        talking_render_done = False
-        talking_clip_rows: list[dict] | None = None
-        if job_payload.get("singleClip"):
-            dur_ms = int(round(probe_duration(src) * 1000))
-            start_ms = range_start
-            end_ms = range_end if range_end > range_start else dur_ms
-            picks = [
-                {
-                    "start_ms": start_ms,
-                    "end_ms": end_ms,
-                    "score": 100,
-                    "title": project.get("title") or "Clip",
-                    "reason": "Imported clip",
-                    "hook": "Imported clip",
-                }
-            ]
-            picker_message = None
-        elif mode == "anything":
-            post_progress(
-                job_id,
-                {"projectStatus": "SCANNING", "stage": "scanning", "progress": 55, "jobStatus": "RUNNING"},
-            )
-            picks, picker_message = pick_anything_clips(
-                conn,
-                src,
-                words,
-                settings,
-                range_start,
-                range_end,
-                workspace_id,
-                project_id,
-                td_path,
-            )
-            post_progress(
-                job_id,
-                {"projectStatus": "FINDING_CLIPS", "stage": "vision_rank", "progress": 58, "jobStatus": "RUNNING"},
-            )
-        elif settings.get("streamer") and not job_payload.get("singleClip"):
-            from clips_worker.streamer.keys import stream_signals_key
-            from clips_worker.streamer.rank import rank_moments
-
-            post_progress(
-                job_id,
-                {"projectStatus": "FINDING_CLIPS", "stage": "Finding moments", "progress": 52, "jobStatus": "RUNNING"},
-            )
-            dur_ms = range_end if range_end > range_start else int(round(probe_duration(src) * 1000))
-            fusion_picks, signals_payload = rank_moments(
-                audio_path=audio_wav,
-                words=words,
-                duration_ms=dur_ms,
-                settings=settings,
-            )
-            picks = [
-                {
-                    "start_ms": p.start_ms,
-                    "end_ms": p.end_ms,
-                    "score": p.score,
-                    "title": p.title,
-                    "reason": p.hook,
-                    "hook": p.hook,
-                    "scores": p.scores,
-                    "aiMeta": p.ai_meta,
-                }
-                for p in fusion_picks
-            ]
-            picker_message = None
-            with conn.cursor() as cur:
-                cur.execute('SELECT id FROM stream_vods WHERE "projectId" = %s LIMIT 1', (project_id,))
-                row = cur.fetchone()
-            if row:
-                sig_key = stream_signals_key(workspace_id, row[0])
-                put_json(sig_key, signals_payload)
-                with conn.cursor() as cur:
-                    cur.execute(
-                        'UPDATE stream_vods SET "signalsKey" = %s, "updatedAt" = NOW() WHERE id = %s',
-                        (sig_key, row[0]),
-                    )
-                conn.commit()
-            post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
-        else:
-            post_progress(
-                job_id,
-                {"projectStatus": "FINDING_CLIPS", "stage": "finding_clips", "progress": 52, "jobStatus": "RUNNING"},
-            )
-            post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_pass1", "progress": 52, "jobStatus": "RUNNING"})
-            pick0 = time.monotonic()
-            render_conc = clips_render_concurrency()
-            rendered_spans: set[tuple[int, int]] = set()
-            persisted_spans: set[tuple[int, int]] = set()
-            span_lock = threading.Lock()
-            head_executor = ThreadPoolExecutor(max_workers=1)
-            head_render_state: dict = {"by_span": {}}
-
-            def _overlap_existing(start_ms: int, end_ms: int) -> bool:
-                with span_lock:
-                    for a0, a1 in rendered_spans:
-                        overlap = max(0, min(a1, end_ms) - max(a0, start_ms))
-                        span = max(1, min(a1 - a0, end_ms - start_ms))
-                        if overlap / span >= 0.35:
-                            return True
-                return False
-
-            def _mark_span(start_ms: int, end_ms: int) -> bool:
-                with span_lock:
-                    if _overlap_existing(start_ms, end_ms):
-                        return False
-                    rendered_spans.add(_span_key(start_ms, end_ms))
-                    return True
-
-            reframe_started_at = time.time()
-            clips_ready_lock = threading.Lock()
-            clips_ready_count = 0
-            dsn = os.environ["DATABASE_URL"]
-
-            def _persist_clip_row(row: dict, clip_index: int, clips_total: int) -> None:
-                nonlocal clips_ready_count
-                sk = _span_key(int(row["startMs"]), int(row["endMs"]))
-                with span_lock:
-                    if sk in persisted_spans:
-                        return
-                    persisted_spans.add(sk)
-                with psycopg2.connect(dsn) as ins_conn:
-                    insert_clips_batch(ins_conn, [row])
-                with clips_ready_lock:
-                    clips_ready_count += 1
-                    ready = clips_ready_count
-                post_progress(
-                    job_id,
-                    reframe_progress_payload(
-                        clip_index, clips_total, reframe_started_at, render_conc, clips_ready=ready
-                    ),
-                )
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            src = local_src if local_src is not None else td_path / "source.mp4"
+            if local_src is None:
+                dl0 = time.monotonic()
+                download_object(source_key, src)
                 print(
-                    f"[clipper:progress] job={job_id} project={project_id} event=clip_ready "
-                    f"clip_index={clip_index + 1} clips_ready={ready} clips_total={clips_total}",
+                    f"[clipper:speed] project={project_id} phase=pipeline_source_download_ms="
+                    f"{int((time.monotonic() - dl0) * 1000)}",
                     flush=True,
                 )
-                if ready == 1:
-                    print(
-                        f"[clipper:speed] project={project_id} phase=first_clip_card_ms="
-                        f"{int((time.monotonic() - pipeline_t0) * 1000)}",
-                        flush=True,
-                    )
-
-            def build_clip_row_from_pick(pick: dict, idx: int) -> dict:
-                clip_id = f"clip_{uuid.uuid4().hex}"
-                clip_file = td_path / f"clip_{idx}.mp4"
-                ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"])
-                clip_words = slice_words(words, pick["start_ms"], pick["end_ms"])
-                words_path = td_path / f"words_{idx}.json"
-                words_path.write_text(json.dumps(clip_words))
-
-                out_mp4 = td_path / f"out_{idx}.mp4"
-                crop_track_path = td_path / f"crop_track_{idx}.json"
-                ai_meta = pick.get("aiMeta") or {}
-                resolved_layout = resolve_clip_layout(settings, idx)
-                clip_settings = {**settings, "layout": resolved_layout}
-                rendered, crop_method, _reframe_settings = reframe_clip_preview(
-                    clip_file,
-                    out_mp4,
-                    words_path,
-                    clip_settings,
-                    td_path / f"reframe_work_{idx}",
-                    pick["start_ms"],
-                    crop_track_path,
-                    ai_meta,
-                    motion_subject=mode == "anything",
-                    clip_index=idx,
-                )
-                poster = td_path / f"poster_{idx}.jpg"
-                poster_jpg(rendered, poster)
-
-                keys = clip_keys(workspace_id, project_id, clip_id)
-                upload_file(keys["preview"], rendered, "video/mp4")
-                upload_file(keys["poster"], poster, "image/jpeg")
-                put_json(keys["words"], clip_words)
-                crop_key = None
-                if crop_track_path.exists():
-                    upload_file(keys["crop_track"], crop_track_path, "application/json")
-                    crop_key = keys["crop_track"]
-                elif mode == "anything":
-                    raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
-
-                ai_meta_out = finalize_clip_ai_meta(pick, ai_meta, crop_method, resolved_layout)
-                if mode == "anything" and not crop_key:
-                    raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
-
-                return {
-                    "id": clip_id,
-                    "projectId": project_id,
-                    "workspaceId": workspace_id,
-                    "title": pick["title"],
-                    "reason": pick.get("reason") or pick.get("hook"),
-                    "startMs": pick["start_ms"],
-                    "endMs": pick["end_ms"],
-                    "score": pick["score"],
-                    "scores": pick.get("scores") or {},
-                    "previewKey": keys["preview"],
-                    "posterKey": keys["poster"],
-                    "wordsKey": keys["words"],
-                    "cropKey": crop_key,
-                    "edits": initial_clip_edits(settings),
-                    "aiMeta": ai_meta_out,
-                }
-
-            def _render_pick_async(pick: dict, clip_index: int, clips_total_hint: int) -> None:
-                sk = _span_key(pick["start_ms"], pick["end_ms"])
-                if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                    return
-                try:
-                    row = build_clip_row_from_pick(pick, clip_index)
-                    head_render_state["by_span"][sk] = row
-                    _persist_clip_row(row, clip_index, clips_total_hint)
-                except Exception as exc:
-                    with span_lock:
-                        rendered_spans.discard(sk)
-                        head_render_state["by_span"].pop(sk, None)
-                    print(
-                        f"[clipper:speed] project={project_id} phase=headstart_render_failed "
-                        f"span={sk} error={exc!s}"[:400],
-                        flush=True,
-                    )
-
-            def on_headstart(early_picks: list[dict]) -> None:
-                if not early_picks:
-                    return
-                top = early_picks[0]
-                print(
-                    f"[clipper:speed] project={project_id} phase=headstart_render_begin "
-                    f"startMs={top.get('start_ms')} endMs={top.get('end_ms')}",
-                    flush=True,
-                )
-                head_executor.submit(_render_pick_async, top, 0, max(1, len(early_picks)))
-
-            picks, picker_message = pick_talking_clips(
-                words,
-                str(audio_wav),
-                settings,
-                range_start,
-                range_end,
-                on_headstart_picks=on_headstart,
-            )
-            head_executor.shutdown(wait=True)
-            print(
-                f"[clipper:speed] project={project_id} phase=pick_ms="
-                f"{int((time.monotonic() - pick0) * 1000)} picks={len(picks)}",
-                flush=True,
-            )
-            post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
-
-            if picks:
-                total_talking = len(picks)
-                post_progress(
-                    job_id,
+            audio_wav = local_audio_wav if local_audio_wav is not None else td_path / "audio.wav"
+            if local_audio_wav is None:
+                extract_wav_for_picker(src, audio_wav)
+            talking_render_done = False
+            talking_clip_rows: list[dict] | None = None
+            if job_payload.get("singleClip"):
+                dur_ms = int(round(probe_duration(src) * 1000))
+                start_ms = range_start
+                end_ms = range_end if range_end > range_start else dur_ms
+                picks = [
                     {
-                        **reframe_progress_payload(
-                            0, total_talking, reframe_started_at, render_conc, clips_ready=clips_ready_count
-                        ),
-                        "projectStatus": "REFRAMING",
-                        "stage": f"reframe_1_of_{total_talking}",
-                    },
+                        "start_ms": start_ms,
+                        "end_ms": end_ms,
+                        "score": 100,
+                        "title": project.get("title") or "Clip",
+                        "reason": "Imported clip",
+                        "hook": "Imported clip",
+                    }
+                ]
+                picker_message = None
+            elif mode == "anything":
+                post_progress(
+                    job_id,
+                    {"projectStatus": "SCANNING", "stage": "scanning", "progress": 55, "jobStatus": "RUNNING"},
                 )
-                print(
-                    f"[clipper:progress] job={job_id} project={project_id} event=reframe_start clips_total={total_talking}",
-                    flush=True,
+                picks, picker_message = pick_anything_clips(
+                    conn,
+                    src,
+                    words,
+                    settings,
+                    range_start,
+                    range_end,
+                    workspace_id,
+                    project_id,
+                    td_path,
                 )
+                post_progress(
+                    job_id,
+                    {"projectStatus": "FINDING_CLIPS", "stage": "vision_rank", "progress": 58, "jobStatus": "RUNNING"},
+                )
+            elif settings.get("streamer") and not job_payload.get("singleClip"):
+                from clips_worker.streamer.keys import stream_signals_key
+                from clips_worker.streamer.rank import rank_moments
 
-                def on_talking_reframe_start(idx: int, clip_total: int) -> None:
+                post_progress(
+                    job_id,
+                    {"projectStatus": "FINDING_CLIPS", "stage": "Finding moments", "progress": 52, "jobStatus": "RUNNING"},
+                )
+                dur_ms = range_end if range_end > range_start else int(round(probe_duration(src) * 1000))
+                fusion_picks, signals_payload = rank_moments(
+                    audio_path=audio_wav,
+                    words=words,
+                    duration_ms=dur_ms,
+                    settings=settings,
+                )
+                picks = [
+                    {
+                        "start_ms": p.start_ms,
+                        "end_ms": p.end_ms,
+                        "score": p.score,
+                        "title": p.title,
+                        "reason": p.hook,
+                        "hook": p.hook,
+                        "scores": p.scores,
+                        "aiMeta": p.ai_meta,
+                    }
+                    for p in fusion_picks
+                ]
+                picker_message = None
+                with conn.cursor() as cur:
+                    cur.execute('SELECT id FROM stream_vods WHERE "projectId" = %s LIMIT 1', (project_id,))
+                    row = cur.fetchone()
+                if row:
+                    sig_key = stream_signals_key(workspace_id, row[0])
+                    put_json(sig_key, signals_payload)
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            'UPDATE stream_vods SET "signalsKey" = %s, "updatedAt" = NOW() WHERE id = %s',
+                            (sig_key, row[0]),
+                        )
+                    conn.commit()
+                post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
+            else:
+                post_progress(
+                    job_id,
+                    {"projectStatus": "FINDING_CLIPS", "stage": "finding_clips", "progress": 52, "jobStatus": "RUNNING"},
+                )
+                post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_pass1", "progress": 52, "jobStatus": "RUNNING"})
+                pick0 = time.monotonic()
+                render_conc = clips_render_concurrency()
+                rendered_spans: set[tuple[int, int]] = set()
+                persisted_spans: set[tuple[int, int]] = set()
+                span_lock = threading.Lock()
+                head_executor = ThreadPoolExecutor(max_workers=1)
+                head_render_state: dict = {"by_span": {}}
+
+                def _overlap_existing(start_ms: int, end_ms: int) -> bool:
+                    with span_lock:
+                        for a0, a1 in rendered_spans:
+                            overlap = max(0, min(a1, end_ms) - max(a0, start_ms))
+                            span = max(1, min(a1 - a0, end_ms - start_ms))
+                            if overlap / span >= 0.35:
+                                return True
+                    return False
+
+                def _mark_span(start_ms: int, end_ms: int) -> bool:
+                    with span_lock:
+                        if _overlap_existing(start_ms, end_ms):
+                            return False
+                        rendered_spans.add(_span_key(start_ms, end_ms))
+                        return True
+
+                reframe_started_at = time.time()
+                clips_ready_lock = threading.Lock()
+                clips_ready_count = 0
+                dsn = os.environ["DATABASE_URL"]
+
+                def _persist_clip_row(row: dict, clip_index: int, clips_total: int) -> None:
+                    nonlocal clips_ready_count
+                    sk = _span_key(int(row["startMs"]), int(row["endMs"]))
+                    with span_lock:
+                        if sk in persisted_spans:
+                            return
+                        persisted_spans.add(sk)
+                    with psycopg2.connect(dsn) as ins_conn:
+                        insert_clips_batch(ins_conn, [row])
+                    with clips_ready_lock:
+                        clips_ready_count += 1
+                        ready = clips_ready_count
                     post_progress(
                         job_id,
                         reframe_progress_payload(
-                            idx, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count
+                            clip_index, clips_total, reframe_started_at, render_conc, clips_ready=ready
                         ),
                     )
+                    print(
+                        f"[clipper:progress] job={job_id} project={project_id} event=clip_ready "
+                        f"clip_index={clip_index + 1} clips_ready={ready} clips_total={clips_total}",
+                        flush=True,
+                    )
+                    if ready == 1:
+                        print(
+                            f"[clipper:speed] project={project_id} phase=first_clip_card_ms="
+                            f"{int((time.monotonic() - pipeline_t0) * 1000)}",
+                            flush=True,
+                        )
 
-                def on_talking_reframe_complete(idx: int, row: dict) -> None:
-                    _persist_clip_row(row, idx, total_talking)
+                def build_clip_row_from_pick(pick: dict, idx: int) -> dict:
+                    clip_id = f"clip_{uuid.uuid4().hex}"
+                    clip_file = td_path / f"clip_{idx}.mp4"
+                    ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"])
+                    clip_words = slice_words(words, pick["start_ms"], pick["end_ms"])
+                    words_path = td_path / f"words_{idx}.json"
+                    words_path.write_text(json.dumps(clip_words))
 
-                def build_talking_clip_row(idx: int) -> dict:
-                    pick = picks[idx]
+                    out_mp4 = td_path / f"out_{idx}.mp4"
+                    crop_track_path = td_path / f"crop_track_{idx}.json"
+                    ai_meta = pick.get("aiMeta") or {}
+                    resolved_layout = resolve_clip_layout(settings, idx)
+                    clip_settings = {**settings, "layout": resolved_layout}
+                    rendered, crop_method, _reframe_settings = reframe_clip_preview(
+                        clip_file,
+                        out_mp4,
+                        words_path,
+                        clip_settings,
+                        td_path / f"reframe_work_{idx}",
+                        pick["start_ms"],
+                        crop_track_path,
+                        ai_meta,
+                        motion_subject=mode == "anything",
+                        clip_index=idx,
+                    )
+                    poster = td_path / f"poster_{idx}.jpg"
+                    poster_jpg(rendered, poster)
+
+                    keys = clip_keys(workspace_id, project_id, clip_id)
+                    upload_file(keys["preview"], rendered, "video/mp4")
+                    upload_file(keys["poster"], poster, "image/jpeg")
+                    put_json(keys["words"], clip_words)
+                    crop_key = None
+                    if crop_track_path.exists():
+                        upload_file(keys["crop_track"], crop_track_path, "application/json")
+                        crop_key = keys["crop_track"]
+                    elif mode == "anything":
+                        raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
+
+                    ai_meta_out = finalize_clip_ai_meta(pick, ai_meta, crop_method, resolved_layout)
+                    if mode == "anything" and not crop_key:
+                        raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
+
+                    return {
+                        "id": clip_id,
+                        "projectId": project_id,
+                        "workspaceId": workspace_id,
+                        "title": pick["title"],
+                        "reason": pick.get("reason") or pick.get("hook"),
+                        "startMs": pick["start_ms"],
+                        "endMs": pick["end_ms"],
+                        "score": pick["score"],
+                        "scores": pick.get("scores") or {},
+                        "previewKey": keys["preview"],
+                        "posterKey": keys["poster"],
+                        "wordsKey": keys["words"],
+                        "cropKey": crop_key,
+                        "edits": initial_clip_edits(settings),
+                        "aiMeta": ai_meta_out,
+                    }
+
+                def _render_pick_async(pick: dict, clip_index: int, clips_total_hint: int) -> None:
                     sk = _span_key(pick["start_ms"], pick["end_ms"])
-                    cached = head_render_state["by_span"].get(sk)
-                    if cached is not None:
-                        return cached
                     if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                        for other in head_render_state["by_span"].values():
-                            if _span_key(other["startMs"], other["endMs"]) == sk:
-                                return other
-                        raise RuntimeError(f"clip span overlap blocked render idx={idx}")
-                    return build_clip_row_from_pick(pick, idx)
+                        return
+                    try:
+                        row = build_clip_row_from_pick(pick, clip_index)
+                        head_render_state["by_span"][sk] = row
+                        _persist_clip_row(row, clip_index, clips_total_hint)
+                    except Exception as exc:
+                        with span_lock:
+                            rendered_spans.discard(sk)
+                            head_render_state["by_span"].pop(sk, None)
+                        print(
+                            f"[clipper:speed] project={project_id} phase=headstart_render_failed "
+                            f"span={sk} error={exc!s}"[:400],
+                            flush=True,
+                        )
 
-                index_order = sorted(
-                    range(len(picks)),
-                    key=lambda i: -float(picks[i].get("score") or 0),
+                def on_headstart(early_picks: list[dict]) -> None:
+                    if not early_picks:
+                        return
+                    top = early_picks[0]
+                    print(
+                        f"[clipper:speed] project={project_id} phase=headstart_render_begin "
+                        f"startMs={top.get('start_ms')} endMs={top.get('end_ms')}",
+                        flush=True,
+                    )
+                    head_executor.submit(_render_pick_async, top, 0, max(1, len(early_picks)))
+
+                picks, picker_message = pick_talking_clips(
+                    words,
+                    str(audio_wav),
+                    settings,
+                    range_start,
+                    range_end,
+                    on_headstart_picks=on_headstart,
                 )
-                talking_clip_rows = run_bounded_indexed_pool(
-                    len(picks),
-                    render_conc,
-                    build_talking_clip_row,
-                    on_start=on_talking_reframe_start,
-                    on_complete=on_talking_reframe_complete,
-                    index_order=index_order,
-                )
-            else:
-                talking_clip_rows = []
-            talking_render_done = True
-
-        print(
-            f"[clipper:picker] project={project_id} mode={mode} picks={len(picks)} "
-            f"message={picker_message!r}",
-            flush=True,
-        )
-
-        if not picks:
-            empty_msg = picker_message or "No complete, self-contained moments found."
-            mark_project_ready(conn, project_id, error=empty_msg)
-            post_progress(
-                job_id,
-                {
-                    "projectStatus": "READY",
-                    "stage": "ready",
-                    "progress": 100,
-                    "jobStatus": "DONE",
-                    "error": empty_msg,
-                },
-            )
-            return
-
-        total = max(1, len(picks))
-        if talking_render_done:
-            clip_rows = talking_clip_rows or []
-        else:
-            render_conc = clips_render_concurrency()
-            reframe_started_at = time.time()
-            clips_ready_lock = threading.Lock()
-            clips_ready_count = 0
-            dsn = os.environ["DATABASE_URL"]
-
-            post_progress(
-                job_id,
-                {
-                    **reframe_progress_payload(0, total, reframe_started_at, render_conc, clips_ready=0),
-                    "projectStatus": "REFRAMING",
-                    "stage": f"reframe_1_of_{total}",
-                },
-            )
-            print(
-                f"[clipper:progress] job={job_id} project={project_id} event=reframe_start clips_total={total}",
-                flush=True,
-            )
-
-            def on_reframe_start(idx: int, clip_total: int) -> None:
-                post_progress(
-                    job_id,
-                    reframe_progress_payload(idx, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count),
-                )
-
-            def on_reframe_complete(idx: int, row: dict) -> None:
-                nonlocal clips_ready_count
-                with psycopg2.connect(dsn) as ins_conn:
-                    insert_clips_batch(ins_conn, [row])
-                with clips_ready_lock:
-                    clips_ready_count += 1
-                    ready = clips_ready_count
-                post_progress(
-                    job_id,
-                    reframe_progress_payload(idx, total, reframe_started_at, render_conc, clips_ready=ready),
-                )
+                head_executor.shutdown(wait=True)
                 print(
-                    f"[clipper:progress] job={job_id} project={project_id} event=clip_ready "
-                    f"clip_index={idx + 1} clips_ready={ready} clips_total={total}",
+                    f"[clipper:speed] project={project_id} phase=pick_ms="
+                    f"{int((time.monotonic() - pick0) * 1000)} picks={len(picks)}",
                     flush=True,
                 )
-                if ready == 1:
+                post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"})
+
+                if picks:
+                    total_talking = len(picks)
+                    post_progress(
+                        job_id,
+                        {
+                            **reframe_progress_payload(
+                                0, total_talking, reframe_started_at, render_conc, clips_ready=clips_ready_count
+                            ),
+                            "projectStatus": "REFRAMING",
+                            "stage": f"reframe_1_of_{total_talking}",
+                        },
+                    )
                     print(
-                        f"[clipper:speed] project={project_id} phase=first_clip_card_ms="
-                        f"{int((time.monotonic() - pipeline_t0) * 1000)}",
+                        f"[clipper:progress] job={job_id} project={project_id} event=reframe_start clips_total={total_talking}",
                         flush=True,
                     )
 
-            def build_clip_row(idx: int) -> dict:
-                pick = picks[idx]
-                clip_id = f"clip_{uuid.uuid4().hex}"
-                clip_file = td_path / f"clip_{idx}.mp4"
-                ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"])
-                clip_words = slice_words(words, pick["start_ms"], pick["end_ms"])
-                words_path = td_path / f"words_{idx}.json"
-                words_path.write_text(json.dumps(clip_words))
+                    def on_talking_reframe_start(idx: int, clip_total: int) -> None:
+                        post_progress(
+                            job_id,
+                            reframe_progress_payload(
+                                idx, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count
+                            ),
+                        )
 
-                out_mp4 = td_path / f"out_{idx}.mp4"
-                crop_track_path = td_path / f"crop_track_{idx}.json"
-                ai_meta = pick.get("aiMeta") or {}
-                resolved_layout = resolve_clip_layout(settings, idx)
-                clip_settings = {**settings, "layout": resolved_layout}
-                rendered, crop_method, _reframe_settings = reframe_clip_preview(
-                    clip_file,
-                    out_mp4,
-                    words_path,
-                    clip_settings,
-                    td_path / f"reframe_work_{idx}",
-                    pick["start_ms"],
-                    crop_track_path,
-                    ai_meta,
-                    motion_subject=mode == "anything",
-                    clip_index=idx,
-                )
-                poster = td_path / f"poster_{idx}.jpg"
-                poster_jpg(rendered, poster)
+                    def on_talking_reframe_complete(idx: int, row: dict) -> None:
+                        _persist_clip_row(row, idx, total_talking)
 
-                keys = clip_keys(workspace_id, project_id, clip_id)
-                upload_file(keys["preview"], rendered, "video/mp4")
-                upload_file(keys["poster"], poster, "image/jpeg")
-                put_json(keys["words"], clip_words)
-                crop_key = None
-                if crop_track_path.exists():
-                    upload_file(keys["crop_track"], crop_track_path, "application/json")
-                    crop_key = keys["crop_track"]
-                elif mode == "anything":
-                    raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
+                    def build_talking_clip_row(idx: int) -> dict:
+                        pick = picks[idx]
+                        sk = _span_key(pick["start_ms"], pick["end_ms"])
+                        cached = head_render_state["by_span"].get(sk)
+                        if cached is not None:
+                            return cached
+                        if not _mark_span(pick["start_ms"], pick["end_ms"]):
+                            for other in head_render_state["by_span"].values():
+                                if _span_key(other["startMs"], other["endMs"]) == sk:
+                                    return other
+                            raise RuntimeError(f"clip span overlap blocked render idx={idx}")
+                        return build_clip_row_from_pick(pick, idx)
 
-                ai_meta_out = finalize_clip_ai_meta(pick, ai_meta, crop_method, resolved_layout)
-                if mode == "anything" and not crop_key:
-                    raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
+                    index_order = sorted(
+                        range(len(picks)),
+                        key=lambda i: -float(picks[i].get("score") or 0),
+                    )
+                    talking_clip_rows = run_bounded_indexed_pool(
+                        len(picks),
+                        render_conc,
+                        build_talking_clip_row,
+                        on_start=on_talking_reframe_start,
+                        on_complete=on_talking_reframe_complete,
+                        index_order=index_order,
+                    )
+                else:
+                    talking_clip_rows = []
+                talking_render_done = True
 
-                return {
-                    "id": clip_id,
-                    "projectId": project_id,
-                    "workspaceId": workspace_id,
-                    "title": pick["title"],
-                    "reason": pick.get("reason") or pick.get("hook"),
-                    "startMs": pick["start_ms"],
-                    "endMs": pick["end_ms"],
-                    "score": pick["score"],
-                    "scores": pick.get("scores") or {},
-                    "previewKey": keys["preview"],
-                    "posterKey": keys["poster"],
-                    "wordsKey": keys["words"],
-                    "cropKey": crop_key,
-                    "edits": initial_clip_edits(settings),
-                    "aiMeta": ai_meta_out,
-                }
-
-            index_order = sorted(range(len(picks)), key=lambda i: -float(picks[i].get("score") or 0))
-            clip_rows = run_bounded_indexed_pool(
-                len(picks),
-                render_conc,
-                build_clip_row,
-                on_start=on_reframe_start,
-                on_complete=on_reframe_complete,
-                index_order=index_order,
+            print(
+                f"[clipper:picker] project={project_id} mode={mode} picks={len(picks)} "
+                f"message={picker_message!r}",
+                flush=True,
             )
 
-        clips_ready_final = len(clip_rows)
-        post_progress(
-            job_id,
-            {
-                "projectStatus": "RENDERING",
-                "stage": "finalizing",
-                "progress": 92,
-                "jobStatus": "RUNNING",
-                "clipsTotal": total,
-                "clipsReady": clips_ready_final,
-            },
-        )
+            if not picks:
+                empty_msg = picker_message or "No complete, self-contained moments found."
+                mark_project_ready(conn, project_id, error=empty_msg)
+                post_progress(
+                    job_id,
+                    {
+                        "projectStatus": "READY",
+                        "stage": "ready",
+                        "progress": 100,
+                        "jobStatus": "DONE",
+                        "error": empty_msg,
+                    },
+                )
+                return
 
-        if mode == "anything":
-            for row in clip_rows:
-                if not row.get("cropKey"):
-                    raise RuntimeError(f"pipeline invariant: missing cropKey for clip {row.get('id')}")
-        if settings.get("autoStockBroll") and clip_rows:
-            from clips_worker.internal_callback import post_project_auto_broll
+            total = max(1, len(picks))
+            if talking_render_done:
+                clip_rows = talking_clip_rows or []
+            else:
+                render_conc = clips_render_concurrency()
+                reframe_started_at = time.time()
+                clips_ready_lock = threading.Lock()
+                clips_ready_count = 0
+                dsn = os.environ["DATABASE_URL"]
 
-            post_project_auto_broll(project_id)
-        if settings.get("autoEmojis") and clip_rows:
-            from clips_worker.internal_callback import post_project_auto_emojis
+                post_progress(
+                    job_id,
+                    {
+                        **reframe_progress_payload(0, total, reframe_started_at, render_conc, clips_ready=0),
+                        "projectStatus": "REFRAMING",
+                        "stage": f"reframe_1_of_{total}",
+                    },
+                )
+                print(
+                    f"[clipper:progress] job={job_id} project={project_id} event=reframe_start clips_total={total}",
+                    flush=True,
+                )
 
-            post_project_auto_emojis(project_id)
-        if clip_rows:
-            poster = clip_rows[0].get("posterKey")
-            if poster:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        'UPDATE clip_projects SET "thumbKey" = %s, "updatedAt" = NOW() WHERE id = %s',
-                        (poster, project_id),
+                def on_reframe_start(idx: int, clip_total: int) -> None:
+                    post_progress(
+                        job_id,
+                        reframe_progress_payload(idx, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count),
                     )
-                conn.commit()
-        mark_project_ready(conn, project_id)
-        post_progress(
-            job_id,
-            {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE", "error": None},
-        )
+
+                def on_reframe_complete(idx: int, row: dict) -> None:
+                    nonlocal clips_ready_count
+                    with psycopg2.connect(dsn) as ins_conn:
+                        insert_clips_batch(ins_conn, [row])
+                    with clips_ready_lock:
+                        clips_ready_count += 1
+                        ready = clips_ready_count
+                    post_progress(
+                        job_id,
+                        reframe_progress_payload(idx, total, reframe_started_at, render_conc, clips_ready=ready),
+                    )
+                    print(
+                        f"[clipper:progress] job={job_id} project={project_id} event=clip_ready "
+                        f"clip_index={idx + 1} clips_ready={ready} clips_total={total}",
+                        flush=True,
+                    )
+                    if ready == 1:
+                        print(
+                            f"[clipper:speed] project={project_id} phase=first_clip_card_ms="
+                            f"{int((time.monotonic() - pipeline_t0) * 1000)}",
+                            flush=True,
+                        )
+
+                def build_clip_row(idx: int) -> dict:
+                    pick = picks[idx]
+                    clip_id = f"clip_{uuid.uuid4().hex}"
+                    clip_file = td_path / f"clip_{idx}.mp4"
+                    ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"])
+                    clip_words = slice_words(words, pick["start_ms"], pick["end_ms"])
+                    words_path = td_path / f"words_{idx}.json"
+                    words_path.write_text(json.dumps(clip_words))
+
+                    out_mp4 = td_path / f"out_{idx}.mp4"
+                    crop_track_path = td_path / f"crop_track_{idx}.json"
+                    ai_meta = pick.get("aiMeta") or {}
+                    resolved_layout = resolve_clip_layout(settings, idx)
+                    clip_settings = {**settings, "layout": resolved_layout}
+                    rendered, crop_method, _reframe_settings = reframe_clip_preview(
+                        clip_file,
+                        out_mp4,
+                        words_path,
+                        clip_settings,
+                        td_path / f"reframe_work_{idx}",
+                        pick["start_ms"],
+                        crop_track_path,
+                        ai_meta,
+                        motion_subject=mode == "anything",
+                        clip_index=idx,
+                    )
+                    poster = td_path / f"poster_{idx}.jpg"
+                    poster_jpg(rendered, poster)
+
+                    keys = clip_keys(workspace_id, project_id, clip_id)
+                    upload_file(keys["preview"], rendered, "video/mp4")
+                    upload_file(keys["poster"], poster, "image/jpeg")
+                    put_json(keys["words"], clip_words)
+                    crop_key = None
+                    if crop_track_path.exists():
+                        upload_file(keys["crop_track"], crop_track_path, "application/json")
+                        crop_key = keys["crop_track"]
+                    elif mode == "anything":
+                        raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
+
+                    ai_meta_out = finalize_clip_ai_meta(pick, ai_meta, crop_method, resolved_layout)
+                    if mode == "anything" and not crop_key:
+                        raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
+
+                    return {
+                        "id": clip_id,
+                        "projectId": project_id,
+                        "workspaceId": workspace_id,
+                        "title": pick["title"],
+                        "reason": pick.get("reason") or pick.get("hook"),
+                        "startMs": pick["start_ms"],
+                        "endMs": pick["end_ms"],
+                        "score": pick["score"],
+                        "scores": pick.get("scores") or {},
+                        "previewKey": keys["preview"],
+                        "posterKey": keys["poster"],
+                        "wordsKey": keys["words"],
+                        "cropKey": crop_key,
+                        "edits": initial_clip_edits(settings),
+                        "aiMeta": ai_meta_out,
+                    }
+
+                index_order = sorted(range(len(picks)), key=lambda i: -float(picks[i].get("score") or 0))
+                clip_rows = run_bounded_indexed_pool(
+                    len(picks),
+                    render_conc,
+                    build_clip_row,
+                    on_start=on_reframe_start,
+                    on_complete=on_reframe_complete,
+                    index_order=index_order,
+                )
+
+            clips_ready_final = len(clip_rows)
+            post_progress(
+                job_id,
+                {
+                    "projectStatus": "RENDERING",
+                    "stage": "finalizing",
+                    "progress": 92,
+                    "jobStatus": "RUNNING",
+                    "clipsTotal": total,
+                    "clipsReady": clips_ready_final,
+                },
+            )
+
+            if mode == "anything":
+                for row in clip_rows:
+                    if not row.get("cropKey"):
+                        raise RuntimeError(f"pipeline invariant: missing cropKey for clip {row.get('id')}")
+            if settings.get("autoStockBroll") and clip_rows:
+                from clips_worker.internal_callback import post_project_auto_broll
+
+                post_project_auto_broll(project_id)
+            if settings.get("autoEmojis") and clip_rows:
+                from clips_worker.internal_callback import post_project_auto_emojis
+
+                post_project_auto_emojis(project_id)
+            if clip_rows:
+                poster = clip_rows[0].get("posterKey")
+                if poster:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            'UPDATE clip_projects SET "thumbKey" = %s, "updatedAt" = NOW() WHERE id = %s',
+                            (poster, project_id),
+                        )
+                    conn.commit()
+            mark_project_ready(conn, project_id)
+            post_progress(
+                job_id,
+                {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE", "error": None},
+            )
     finally:
         from clips_worker.vision_layout import log_project_vision_stats
 
+        print(
+            f"[clipper:speed] project={project_id} phase=pipeline_total_ms="
+            f"{int((time.monotonic() - pipeline_t0) * 1000)}",
+            flush=True,
+        )
         log_project_vision_stats(project_id)
