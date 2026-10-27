@@ -19,6 +19,7 @@ from clips_worker.picker import pick_talking_clips
 from clips_worker.bounded_pool import run_bounded_indexed_pool
 from clips_worker.render_clip import ffmpeg_cut, poster_jpg, resolve_clip_layout, run_speakercrop, slice_words
 from clips_worker.render_concurrency import clips_render_concurrency
+from clips_worker.clip_ai_meta import finalize_clip_ai_meta
 from clips_worker.probe import probe_duration
 from clips_worker.storage import download_object, put_json, upload_file
 
@@ -219,9 +220,13 @@ def initial_clip_edits(settings: dict) -> dict:
     if isinstance(cap_preset, dict):
         cap = {**cap, **cap_preset}
     edits: dict = {"captions": cap}
+    aspect = settings.get("aspectRatio") or "9:16"
+    edits["aspectRatio"] = aspect
     if settings.get("autoZoom"):
         edits["zoom"] = {"enabled": True, "intensity": 1.08}
         cap["keywordHighlight"] = True
+    if settings.get("autoEmojis"):
+        cap["autoEmojis"] = True
     if brand:
         edits["brand"] = {
             "templateId": brand.get("templateId"),
@@ -475,12 +480,7 @@ def run_m4_pipeline(
             elif mode == "anything":
                 raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
 
-            ai_meta_out = {
-                **(pick.get("aiMeta") or {}),
-                **ai_meta,
-                "cropMethod": crop_method,
-                "layoutResolved": resolved_layout,
-            }
+            ai_meta_out = finalize_clip_ai_meta(pick, ai_meta, crop_method, resolved_layout)
             if mode == "anything" and not crop_key:
                 raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
 
@@ -499,11 +499,7 @@ def run_m4_pipeline(
                 "wordsKey": keys["words"],
                 "cropKey": crop_key,
                 "edits": initial_clip_edits(settings),
-                "aiMeta": (
-                    ai_meta_out
-                    if mode == "anything"
-                    else {**(pick.get("aiMeta") or {"hook": pick.get("hook")}), "layoutResolved": resolved_layout, "cropMethod": crop_method}
-                ),
+                "aiMeta": ai_meta_out,
             }
 
         clip_rows = run_bounded_indexed_pool(
