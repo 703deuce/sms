@@ -1,5 +1,9 @@
 # Clips build decisions
 
+- **2026-10-27:** **Descript gap matrix** checked in under `docs/clips/descript/` (`feature-map.md`, `gap-matrix.md`, `recording-cost.md`). Milestones **M7–M17** (+ **M18** desktop recorder post-launch) replace the earlier M7–M13 slice in `SCRIPT-EDITOR-BUILD.md`. Extended browser tests are **§D1b #67–#167** (replaces obsolete D1 rows 67–98 in `script-editor.md`).
+- **2026-10-27:** **Recording vendor = LiveKit Cloud** for Rooms (M15–M16). Do **not** guess LiveKit API shapes in code until the owner delivers an official-docs brief. Local-first capture + B2 chunk upload (gap-matrix §R) is provider-agnostic. See `recording-cost.md` for economics; owner chose Cloud for launch ops/SLA.
+- **2026-10-27:** **Shortcut conflicts** in Descript docs (⌘G, Slip Y vs S, ⇧⌘S): use **gap-matrix §4 C1** resolutions (⌘G = find next; split on `S` only; timeline toggle ⌃⌥T + ⇧⌘S unchanged).
+- **2026-10-27:** **M18 (post-launch):** menu-bar/tray recorder, macOS system audio, global hotkeys, teleprompter hidden from screen capture — desktop companion only (gap-matrix §R1.2).
 - **2026-10-25:** Build on `master` into the existing Coolify `new-app` deployment (`transovo.ai`), not a `clips` branch or `clips-staging` app. Rollback tag: `pre-clips-cleanup`.
 - **2026-10-25:** Legacy phone/receptionist/dialer UI removed from `new-app/`; Prisma models kept with schema comment `legacy, unused` — no destructive DB migration.
 - **2026-10-25:** Coolify build sets `SKIP_VOICE_V3_SYNC=1` so Voice V3 sync is skipped for the clips-only app.

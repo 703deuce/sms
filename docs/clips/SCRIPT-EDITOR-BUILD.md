@@ -1,8 +1,9 @@
 # Script editor — build plan
 
-**Status:** **M3** — timeline (lane slots + core tools), **output-clock preview** for EDL gaps, recording-ready **take/track** types (§2.7, no capture UI). **Export deferred to M5.** M4 next.  
-**Product spec:** `docs/clips/script-editor.md` (v1.1 — full Descript-at-launch scope).  
-**Owner decisions (2026-10-26):** see §0 “Decisions locked” below. **Scope expansion (2026-10-27):** §0.1. **Product order:** `docs/ROADMAP.md` — script editor (this doc) is **phase 1**; no MVP bar.
+**Status:** **M4** shipped (enrichment, filler tools, captions/reframe pills); **M5** next (save, versions, export).  
+**Product spec:** `docs/clips/script-editor.md` (§D1 tests **1–66**; extended **§D1b #67–#167** in gap matrix).  
+**Descript inventory:** `docs/clips/descript/feature-map.md` (596 features), `docs/clips/descript/gap-matrix.md` (B6–B13, M7–M18, recording §R).  
+**Owner decisions (2026-10-26):** see §0 “Decisions locked” below. **Gap matrix merge (2026-10-27):** §0.1–§0.3, §1 (M7–M17), §12–§14. **Product order:** `docs/ROADMAP.md` — script editor is **phase 1**; no MVP bar.
 
 **Agent cadence:** progress note every **10–15 min** on long work; end with **READY TO PUSH** or a **clear question** (owner standing direction).
 
@@ -22,24 +23,51 @@
 | Filler / gaps | Lightweight **enrichment at transcript-ready** (additive JSON fields on stored transcript); **backfill on first editor open** if missing. |
 | Launch breadth | **Full Descript-class editor at launch** — everything in spec **§B5** that was “Later” is now **launch-required** (scenes, layouts, markers/chapters, media/B-roll, music, Studio Sound, LLM transcript tools, comments). See §0.1. |
 | Still post-launch | **Eye Contact**, **Overdub / Regenerate AI voice**, **Underlord AI chat** — remain with **AI Studio on hold**. |
-| Recording | **Descript-style capture** (screen, webcam, mic, remote guests) is **launch-required** but **not built yet** — owner will supply feature map + milestones. **Design now:** multi-track **takes** as composition source (§2.7). |
+| Recording | **Launch-required** browser recorder + Rooms (**M14–M16**). **Vendor: LiveKit Cloud** (owner 2026-10-27). **Do not** implement LiveKit API until owner brief from official docs. **M18:** desktop menu-bar recorder (post-launch). Design: §2.7 + gap-matrix §R + `descript/recording-cost.md`. |
+| Descript map | **596** features / **485** Launch — `docs/clips/descript/feature-map.md`. Gap matrix drives **M7–M17** and **§D1b** tests. |
+| Shortcuts | Descript doc conflicts resolved per **gap-matrix §4 C1** (⌘G = find next; `S` = split; ⇧⌘S + ⌃⌥T = timeline). |
 
-### 0.1 Launch scope expansion (owner, 2026-10-27)
+### 0.1 Launch scope (gap matrix §3 — replaces prior M7–M13 table)
 
-Former §B5 “Later” items are **launch-required**. Implement in **M7+** after M1–M6; **M2/M3 document + EDL** must stay forward-compatible (reserve tokens and JSON fields; do not break existing `keptWordIds` / gap / split ops).
+Paste these over matching rows of `script-editor.md` §B5 (captions / aspect / burn-in / volume rows unchanged). Full text: `docs/clips/descript/gap-matrix.md` §3.
 
-| Area | Launch deliverable | Milestone |
-|------|-------------------|-----------|
-| **Scenes** | `/` inserts `sceneBreak`; per-scene aspect, reframe, caption visibility; scene thumbnails in script | **M7** |
-| **Layouts** | Layout picker per scene (Descript-style templates) | **M7** |
-| **Markers / chapters** | `#` marker token; transport markers dropdown; chapter metadata on export | **M8** |
-| **B-roll / media** | **Reuse clipper B-roll** (see §2.6): same `ClipEditsV2.broll` / `stock_assets`, worker `broll_render.py`, clip editor stock + AI UI; script **Media** panel calls same APIs; anchors on `wordId`, times mapped via EDL | **M9** |
-| **Music** | Music lane: library, fade in/out, auto-duck under speech | **M10** |
-| **Studio Sound** | Enhance voice toggle + intensity; CPU worker (**DeepFilterNet** or similar OSS); preview uses processed proxy | **M11** |
-| **LLM transcript ops** | Remove retakes, edit-for-clarity, filler/gap removal via **cheap LLM text ops** on transcript (not Underlord chat) | **M12** |
-| **Comments** | Comments panel on words/ranges; single editor + lease (no live multi-user) | **M13** |
+| Feature | Transovo scope | Launch? |
+|---------|----------------|---------|
+| Studio Sound | §B10 — server job on proxy, intensity 0–100% | **M11** |
+| Scenes (`/`) | §B7 — sceneBreak, rail, storyboard, layers | **M8** |
+| Layouts | §B8 — packs, Smart Fill, remix, default pack | **M9** |
+| B-roll / media | §B9 — reuse clipper `BrollItem` / worker (§2.6) | **M10** |
+| Music | §B9.4 + §B10 — lane, fades, ducking | **M10/M11** |
+| Markers / chapters | §B11.1 — `#`, export chapters, AI chapters | **M12** |
+| Remove retakes | §B11.2 — LLM + review (not Underlord) | **M12** |
+| Comments / access | §B12 — commenters don't take §C5 lock | **M13** |
+| Recording | §R — editor recorder **M14**, Rooms **M15**, workflow **M16**; desktop **M18** | **Launch** |
+| Eye Contact, Overdub, Underlord, edit-for-clarity generative | — | **Later** |
 
-**Timeline (M3):** ship lane **slots** for scenes strip, **overlay** stack, and **music** now (empty or placeholder until M7–M10), so later work does not reshuffle layout.
+**Timeline (M3):** lane **slots** for scenes, overlays, and music remain; M7+ fills them per gap matrix.
+
+### 0.2 Milestone train M7–M18 (gap matrix §6.1)
+
+| M | Name | Spec sections |
+|---|------|----------------|
+| **M7** | Projects and import | B6, B13.4–5 |
+| **M8** | Scenes, canvas, layers | B7 |
+| **M9** | Layouts and packs | B8 |
+| **M10** | Media, B-roll, music | B9 |
+| **M11** | Audio (Studio Sound, leveling, meter) | B10 |
+| **M12** | Markers, retakes, sequences, multicam | B11 |
+| **M13** | Collaboration and commands | B12, B13.1–3, C1 |
+| **M14–M16** | Recording I–III (browser) | §R in gap-matrix |
+| **M17** | Export + app settings completion | C3 additions, B13.4 |
+| **M18** | Desktop companion (post-launch) | gap-matrix R1.2 |
+
+M14–M16 can parallel M7–M13 after **M6**; M14 needs B6 resumable uploader + composition model.
+
+### 0.3 §D1b browser tests (#67–#167)
+
+**Do not** use the old `script-editor.md` D1 rows **67–98** (superseded 2026-10-27). Core gate remains **§D1 #1–#66** in `script-editor.md`.
+
+Extended acceptance tests **#67–#167** (fixtures + step tables) live in **`docs/clips/descript/gap-matrix.md` §6.2**. Milestone column in that table matches §0.2 above.
 
 ---
 
@@ -53,15 +81,18 @@ Done = corresponding **§D1** browser tests pass on **transovo.ai** (fixture `te
 | **M2** | Core text editing + undo | 12–28 | Document model + op log + IndexedDB queue, EDL derive v1, delete/ignore/restore/correct/cut-paste, undo stack, speaker rename |
 | **M3** | Timeline | 29–36 | Lanes §B4 incl. **scenes / overlay / music slots**, wordbar, script track, transport, zoom, split/trim/ripple |
 | **M4** | Fillers, gaps, captions, reframe, properties | 37–48 | Enrichment UI, filler/gap tools B3, caption panel, reframe, properties §B5 (aspect, captions toggle, volume) |
-| **M5** | Save, versions, export, reliability, performance | 49–60 | §C2 save status, versions, export popover §C3 (+ **chapter metadata** when M8 done), render jobs §C5, 3 h perf §C4 |
+| **M5** | Save, versions, export, reliability, performance | 49–60 | §C2 save status, versions, export popover §C3, render jobs §C5, 3 h perf §C4 |
 | **M6** | Transovo integration | 61–66 | Entry from project + clip cards, Library ▸ Editor, shortcuts sheet, no dead controls audit |
-| **M7** | Scenes + layouts | 67–72 | `sceneBreak` token, per-scene aspect/reframe/captions, script thumbnails, layout picker |
-| **M8** | Markers + chapters | 73–77 | `#` marker, ruler flags, transport dropdown, export chapter tags |
-| **M9** | Media + B-roll overlays | 78–84 | Media panel (reuse `BrollPanel` / stock search APIs), word anchors → `broll[]` via EDL; timeline overlay lanes; **no new render graph** |
-| **M10** | Music lane | 85–88 | Library, lane UI, fades, ducking under speech |
-| **M11** | Studio Sound | 89–91 | Worker enhance job, proxy preview, Properties intensity |
-| **M12** | LLM transcript tools | 92–95 | Remove retakes, edit-for-clarity, bulk filler/gap (LLM); review + undo |
-| **M13** | Comments | 96–98 | Comments panel, anchors to words/ranges, export omit internal notes |
+| **M7** | Projects and import | **D1b 67–82** | Compositions menu, Project panel, import/PDF, speakers, glossary — **B6** |
+| **M8** | Scenes, canvas, layers | **D1b 83–100** | `/`, thumbnails, canvas/layers — **B7** |
+| **M9** | Layouts and packs | **D1b 101–107** | **B8** |
+| **M10** | Media, B-roll, music | **D1b 108–114** | **B9** + clipper reuse §2.6 |
+| **M11** | Audio | **D1b 115–120** | Studio Sound, leveling, room tone — **B10** |
+| **M12** | Markers, retakes, sequences | **D1b 121–130** | **B11** |
+| **M13** | Comments, ⌘K, formatting | **D1b 131–140** | **B12–B13** |
+| **M14–M16** | Recording I–III | **D1b 141–161** | §R — LiveKit Cloud after owner API brief |
+| **M17** | Export + settings | **D1b 162–167** | **C3** additions, app settings |
+| **M18** | Desktop recorder (post-launch) | — | gap-matrix R1.2 |
 
 **Visual gate (every milestone):** spot-check **§D2** (20 items) against SOURCES URLs before marking milestone done.
 
@@ -71,44 +102,7 @@ Done = corresponding **§D1** browser tests pass on **transovo.ai** (fixture `te
 2. **M1b (UI shell):** layout regions, loading/empty/error states, read-only sync.  
 3. **M2:** op log write path + EDL + editing gestures.  
 4. **M3–M6:** core editor + export integration (`clipEditsFromComposition()` mid M2).  
-5. **M7–M13:** full Descript-at-launch scope (§0.1); timeline lane slots from M3 avoid rework.
-
-### §D1 tests for M7–M13 (browser; full steps in `script-editor.md`)
-
-| # | Feature | M | One-line acceptance |
-|---|---------|---|---------------------|
-| 67 | Scene insert | M7 | `/` at cursor → scene boundary + thumbnail in script; duration unchanged |
-| 68 | Per-scene aspect | M7 | Scene 2 set to 9:16 → preview crop changes only in that scene |
-| 69 | Per-scene captions | M7 | Turn captions off for scene 1 → hidden in preview, on in scene 2 |
-| 70 | Scene reframe | M7 | Manual keyframe in scene 2 survives a cut in scene 1 |
-| 71 | Layout picker | M7 | Apply layout template to current scene → canvas matches preset |
-| 72 | Scene strip | M7 | Timeline scenes strip shows numbered thumbs aligned to scene starts |
-| 73 | Marker insert | M8 | `#` at word → marker flag on ruler + entry in markers dropdown |
-| 74 | Marker seek | M8 | Pick marker in transport dropdown → playhead jumps |
-| 75 | Chapter export | M8 | Export video with chapters → file has chapter markers at flagged markers |
-| 76 | Marker rename | M8 | Edit marker label → persists after reload |
-| 77 | Marker delete | M8 | Delete marker → removed from ruler and export metadata |
-| 78 | Media panel upload | M9 | Upload image → appears in Media panel; drag to word creates overlay |
-| 79 | Project clip media | M9 | Insert project clip as overlay anchored to word → moves when words move |
-| 80 | Pixabay stock | M9 | Search Pixabay, insert stock video → overlay lane clip + preview |
-| 81 | Overlay trim | M9 | Drag overlay edges on timeline → duration changes, anchor word unchanged |
-| 82 | Overlay delete | M9 | Delete overlay → lane and preview clear; script unchanged |
-| 83 | Multi overlay lanes | M9 | Two overlays on different layers → both visible, selectable |
-| 84 | Overlay export | M9 | Export MP4 → same `broll_render` compositing as clip editor; timing matches preview |
-| 85 | Music insert | M10 | Add track from library → music lane clip, audible on play |
-| 86 | Music fade | M10 | Fade in/out handles → smooth audibility at edges |
-| 87 | Ducking | M10 | Duck under speech on → music lowers during dialogue |
-| 88 | Music export | M10 | Export MP3/MP4 includes music mix with ducking |
-| 89 | Studio Sound job | M11 | Enable enhance → job runs; status in Properties |
-| 90 | Studio Sound preview | M11 | When proxy ready, preview plays enhanced speech at set intensity |
-| 91 | Studio Sound export | M11 | Export uses enhanced audio when toggle on |
-| 92 | Remove retakes | M12 | LLM tool finds retake block → review → delete applies as cut ops |
-| 93 | Edit for clarity | M12 | Suggest shorter phrasing → accept updates text + keeps media mapping |
-| 94 | LLM filler pass | M12 | Bulk filler suggestion → Remove all uses one undo step |
-| 95 | LLM undo | M12 | One undo after LLM bulk → full revert |
-| 96 | Comment on word | M13 | Add comment on word → pin visible in panel |
-| 97 | Comment on range | M13 | Select range → comment → shows span in panel |
-| 98 | Comments not in export | M13 | Export video/SRT → comment text absent |
+5. **M7–M17** (+ **M18** desktop): gap-matrix scope (§0.2); **§D1b #67–#167** in `descript/gap-matrix.md` §6.2.
 
 ---
 
@@ -254,9 +248,11 @@ Implement spec §B1 rules (80 ms pad, gap segments, contiguous merge). **Unit-te
 
 Uploads and “project clips” still resolve to `stock_assets` or generation rows the worker can load — same as adding B-roll on a clip today.
 
-### 2.7 Recording takes — forward-compatible source (owner, 2026-10-27; **milestones TBD**)
+### 2.7 Recording takes — forward-compatible source (owner, 2026-10-27; **M14–M16**, **M18** desktop)
 
-**Do not implement capture UI yet.** Model must allow a **recorded take** (multi-track) to replace or supplement today’s single `sourceKey` upload without breaking M2/M3 **word ids**, **EDL**, or op log.
+**Do not implement LiveKit or capture UI until M14** (and **not** LiveKit API details until owner brief). Model must allow a **recorded take** (multi-track) to replace or supplement today’s single `sourceKey` upload without breaking M2/M3 **word ids**, **EDL**, or op log.
+
+**Architecture (gap-matrix §R):** browser **MediaRecorder** → chunked upload to B2 (same resumable uploader as B6 import); LiveKit Cloud is **preview/signaling only** for Rooms (M15). Optional composite egress backup is off by default. Cost model: `docs/clips/descript/recording-cost.md`. **Vendor decision:** LiveKit Cloud Ship at launch.
 
 | Concept | Design |
 |---------|--------|
@@ -299,6 +295,22 @@ model ScriptMediaTrack {
 ```
 
 `ScriptMediaAsset` remains the **denormalized** per-project row for bootstrap (proxy/peaks/sprite); for takes, populate from primary track or link `takeId`.
+
+### 2.8 M2/M3 forward-compatibility audit (gap matrix, 2026-10-27)
+
+Required for M7–M17 without breaking existing compositions. **M4** uses `document.settings`; op log already supports `patch_settings`.
+
+| Capability | Reserved in codebase today | Gap-matrix owner |
+|------------|---------------------------|------------------|
+| **Multiple compositions / project** | `ScriptComposition` many per `projectId`; bootstrap lists compositions; app still enforces one `FULL` until M7 | B6.1–B6.2 |
+| **`sceneBreak` / `marker` tokens** | §2.3 token kinds; `document.scenes[]`, `markers[]` on `ScriptDocumentV1` | B7, B11.1 |
+| **Layers + z-order** | `overlays[].layer`; B7 `layers[]` in spec | M8 B7 |
+| **Word-anchored overlays** | `overlays[].anchorWordId`; export via `BrollItem` §2.6 | M10 B9 |
+| **Music lanes + ducking** | `document.musicTracks[]` with `duckUnderSpeech` | M10 B9.4 |
+| **Multitrack sequences** | B6.1 `sequences[]` at project level (Prisma/types in M12); script interleave by time | B11.3 |
+| **Recorded takes** | `media-source.ts` (`ScriptRecordingTake`, `ScriptMediaTrack`, `take:{id}` word namespace) | §R, M14–M16 |
+
+**Follow-ups before M7 ship:** relax “one FULL composition” rule; document `sequences[]` JSON schema; optional token-array migration from word-id lists (no change to stable `wordId`).
 
 ---
 
@@ -670,8 +682,53 @@ Mirror clipper lessons (spec §C5):
 
 ## 10. References
 
-- Spec: `docs/clips/script-editor.md`  
+- Spec: `docs/clips/script-editor.md` (§D1 **#1–#66**; §D1b in gap matrix)  
+- Descript inventory: `docs/clips/descript/README.md`  
 - Screenshots: `docs/clips/script-editor-SOURCES.txt`  
 - Roadmap: `docs/ROADMAP.md`  
 - Clipper EDL today: `new-app/lib/clips/edits.ts` (`keepSegments`, `remapTime`, `editsVersionHash`)  
 - Render enqueue: `new-app/lib/server/clips/renders.ts`
+
+---
+
+## 12. Extended product spec (B6–B13)
+
+**Authoritative paste-ready text:** `docs/clips/descript/gap-matrix.md` **§4** (B6 Projects/import through B13 settings/speakers). That file is checked in alongside the 596-row `feature-map.md`. When editing behavior, update gap-matrix §4 first, then sync any excerpts here.
+
+| Section | Topic |
+|---------|--------|
+| **B6** | Projects, compositions, Project panel, import, backups |
+| **B7** | Scenes, canvas, layers, caption/timeline additions |
+| **B8** | Layouts and layout packs |
+| **B9** | Media panel, B-roll, library, stock, music/SFX |
+| **B10** | Studio Sound, leveling, room tone, automation, VU |
+| **B11** | Markers/chapters, retakes, sequences, multicam |
+| **B12** | Comments and project access |
+| **B13** | Menus, ⌘K action bar, script formatting, app settings |
+
+---
+
+## 13. Shortcuts (C1 additions)
+
+Merged from gap-matrix §4 **C1 additions**. Conflicts with Descript’s own docs are resolved as follows:
+
+- **⌘G** — Find next (not word-gap adjust; gap adjust stays context menu).
+- **Split** — `S` only (not ⇧⌘S; ⇧⌘S remains **toggle timeline** with ⌃⌥T).
+- **Slip tool** — `Y` (not `S`).
+
+Full shortcut table (add as features land): gap-matrix §4 lines “C1 additions (shortcuts)”.
+
+---
+
+## 14. Export extensions (C3 additions)
+
+Merged from gap-matrix §4 **C3 additions** (M17):
+
+- **Range:** Current scene, All scenes (one file each), Markers (one file each), All compositions.
+- **GIF:** ≤30 s, 480p/720p, 10/15 fps.
+- **MP4:** optional embedded subtitle track (`mov_text`); burn-in remains separate.
+- **Audio:** ID3 / MP4 metadata (title, episode, artwork, chapters from markers).
+- **Transcript:** markers as headers, timecode offset, optional ignored text.
+- **Sequence:** export soloed sequence track as mono WAV.
+
+See gap-matrix §4 for Descript reference links.

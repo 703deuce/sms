@@ -423,15 +423,18 @@ Milestones:
 - **M4** Filler/gaps, captions, reframe, properties
 - **M5** Save, versions, export, reliability, performance
 - **M6** Transovo integration
-- **M7** Scenes + layouts
-- **M8** Markers + chapters
-- **M9** Media + B-roll overlays
-- **M10** Music lane
-- **M11** Studio Sound
-- **M12** LLM transcript tools (not Underlord chat)
-- **M13** Comments
+- **M7** Projects and import
+- **M8** Scenes, canvas, layers
+- **M9** Layouts and packs
+- **M10** Media, B-roll, music
+- **M11** Audio (Studio Sound, leveling, …)
+- **M12** Markers, retakes, sequences, multicam
+- **M13** Comments, ⌘K, script formatting
+- **M14–M16** Recording (browser; LiveKit Cloud)
+- **M17** Export + app settings completion
+- **M18** Desktop recorder (post-launch)
 
-Each test is run in Chrome on transovo.ai production with the fixture project **"test_interview_60s"** and a **3 h fixture** (two speakers, fillers present). "✓" means the expected result is observed on screen.
+Each test **#1–#66** is run in Chrome on transovo.ai production with the fixture project **"test_interview_60s"** and a **3 h fixture** (two speakers, fillers present). Extended tests **#67–#167** are **§D1b** (see below). "✓" means the expected result is observed on screen.
 
 | # | Feature | M | Browser test (steps → expected) |
 |---|---|---|---|
@@ -501,38 +504,14 @@ Each test is run in Chrome on transovo.ai production with the fixture project **
 | 64 | Isolation | M6 | Delete words in a clip composition → the full video composition and other clips are unchanged. |
 | 65 | Shortcuts sheet | M6 | Press Cmd/Ctrl+/ → the sheet lists every shortcut from §C1, and each listed one works when tried. |
 | 66 | No dead controls | M6 | Click every button and menu item in the editor → each does something visible or shows a reason-tooltip. None is a no-op. |
-| 67 | Scene insert | M7 | Type `/` at the cursor (not in Correct mode) → a scene boundary appears in the script with a thumbnail chip; total duration unchanged. |
-| 68 | Per-scene aspect | M7 | Set scene 2 to 9:16 in Properties → preview letterbox/crop changes only while playhead is in scene 2. |
-| 69 | Per-scene captions | M7 | Disable captions for scene 1 → preview hides captions in that scene; scene 2 still shows them. |
-| 70 | Scene reframe | M7 | Add a manual reframe keyframe in scene 2, make a cut in scene 1 → scene 2 crop unchanged after reload. |
-| 71 | Layout picker | M7 | Open layout picker for current scene, choose a template → preview matches the layout preset. |
-| 72 | Scene strip | M7 | Timeline scenes strip shows numbered thumbnails at each scene start, aligned with the ruler. |
-| 73 | Marker insert | M8 | Press `#` at a word → a flag appears on the ruler and the marker is listed in the transport markers menu. |
-| 74 | Marker seek | M8 | Transport ▸ Markers → pick one → playhead seeks to that output time. |
-| 75 | Chapter export | M8 | Mark a marker "Chapter", export video → output file includes chapter metadata at that time. |
-| 76 | Marker rename | M8 | Rename a marker in the dropdown or Properties → label persists after reload. |
-| 77 | Marker delete | M8 | Delete marker → flag and dropdown entry removed; export no longer lists it. |
-| 78 | Media panel upload | M9 | Media panel ▸ Upload image → asset listed (same storage path as clip B-roll); drag onto a word → `broll` entry + overlay lane + preview (clipper preview path). |
-| 79 | Project clip media | M9 | Pick a project clip in Media panel, drop on word → anchored overlay; after a word move, output `startMs`/`endMs` still track the anchor via EDL. |
-| 80 | Pixabay stock | M9 | Stock search (same UI/API as clip editor) → insert → `stock_assets` id on `BrollItem`; preview and export match clip editor B-roll. |
-| 81 | Overlay trim | M9 | Drag overlay clip edges on timeline → duration updates; anchor word unchanged. |
-| 82 | Overlay delete | M9 | Select overlay, Delete → removed from lane and preview; script text unchanged. |
-| 83 | Multi overlay lanes | M9 | Add overlays on two layers → both visible; selecting one opens overlay Properties. |
-| 84 | Overlay export | M9 | Export 1080p video → overlays match preview placement and timing. |
-| 85 | Music insert | M10 | Music panel ▸ add track → clip on music lane; audible during playback. |
-| 86 | Music fade | M10 | Adjust fade in/out on music clip → smooth entry/exit at clip edges. |
-| 87 | Ducking | M10 | Enable duck under speech → music level drops during dialogue, restores in gaps. |
-| 88 | Music export | M10 | Export audio or video → music mix includes ducking and fades. |
-| 89 | Studio Sound job | M11 | Toggle Enhance voice → job queued; Properties shows progress. |
-| 90 | Studio Sound preview | M11 | When enhanced proxy is ready, preview plays enhanced audio at the chosen intensity. |
-| 91 | Studio Sound export | M11 | Export with enhance on → rendered audio uses enhanced speech. |
-| 92 | Remove retakes | M12 | Edit tools ▸ Remove retakes → LLM highlights a retake block → Accept deletes via normal cut ops. |
-| 93 | Edit for clarity | M12 | Edit for clarity on a paragraph → suggestion shown → Accept updates text overrides; media unchanged unless user cuts. |
-| 94 | LLM filler pass | M12 | LLM suggests fillers → Remove all in one action → one undo step restores all. |
-| 95 | LLM undo | M12 | After test 94, one Cmd/Ctrl+Z → transcript and timeline match pre-LLM state. |
-| 96 | Comment on word | M13 | Right-click word ▸ Add comment → thread appears in Comments panel with timecode link. |
-| 97 | Comment on range | M13 | Select a phrase, add comment → panel shows range anchor; click seeks to start. |
-| 98 | Comments not in export | M13 | Export video and SRT → comment bodies are not present in output files. |
+
+## D1b. Extended acceptance tests (#67–#167)
+
+**Supersedes** the former D1 rows 67–98 (2026-10-27). Do not use the old scene-only M7–M13 test slice.
+
+Full step → expected tables, fixtures (`test_screen_30s.mp4`, `test_slides.pdf`, `test_two_cams/`, …), and milestone mapping **M7–M17** (+ recording **M14–M16**, desktop **M18**): **`docs/clips/descript/gap-matrix.md` §6.2**.
+
+Build plan milestone overview: `docs/clips/SCRIPT-EDITOR-BUILD.md` §0.2–§0.3. Descript feature inventory: `docs/clips/descript/feature-map.md`.
 
 ## D2. "Looks right" visual checklist (compare with `descript-refs/contact_sheet.png`)
 
