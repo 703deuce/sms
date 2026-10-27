@@ -4,8 +4,7 @@ ARG GIT_COMMIT=unknown
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libglib2.0-0 libegl1 libgl1 libgles2 curl build-essential \
-    fontconfig fonts-montserrat \
-    && fc-cache -f \
+    fontconfig ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -20,10 +19,13 @@ ENV HF_HOME=/models/hf
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('small.en', device='cpu', compute_type='int8', download_root='/models/whisper')"
 
 COPY worker/prototype/v3 /app/v3
+# Bookworm has no fonts-montserrat apt package — fetch static Black for ASS + fontconfig.
 RUN set -eux; \
-    MONT=$(find /usr/share/fonts -iname 'Montserrat-Black.ttf' -o -iname 'Montserrat-Bold.ttf' 2>/dev/null | head -1); \
-    test -n "$MONT"; \
-    cp "$MONT" /app/v3/fonts/Montserrat-Black.ttf; \
+    mkdir -p /usr/share/fonts/truetype/montserrat /app/v3/fonts; \
+    curl -fsSL -o /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf \
+      'https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Black.ttf'; \
+    cp /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf /app/v3/fonts/Montserrat-Black.ttf; \
+    fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
     test -s /app/v3/fonts/Montserrat-Black.ttf
 COPY worker/prototype /app/prototype
