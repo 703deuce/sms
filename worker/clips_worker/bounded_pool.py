@@ -28,8 +28,10 @@ def run_bounded_indexed_pool(
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(_task, i) for i in order if 0 <= i < count]
+        from clips_worker.stage_log import future_result
+
         for fut in as_completed(futures):
-            idx, row = fut.result()
+            idx, row = future_result(fut, "reframe_pool_worker")
             results[idx] = row
             if on_complete is not None:
                 on_complete(idx, row)

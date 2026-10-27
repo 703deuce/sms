@@ -145,9 +145,12 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
     if not vod_id:
         raise RuntimeError("missing vodId")
 
+    from clips_worker.stage_log import bind_stage_context, stage_span
+
     vod = _load_vod(conn, vod_id)
     workspace_id = vod["workspaceId"]
     project_id = vod["project_id"]
+    bind_stage_context(project_id=str(project_id), job_id=str(job["id"]))
     settings = vod.get("settings") or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
@@ -204,7 +207,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
         with tempfile.TemporaryDirectory(dir=SCRATCH) as td:
             td_path = Path(td)
             audio_path = td_path / "audio.opus"
-            download_object(audio_key, audio_path)
+            with stage_span("source_download", heartbeat=True):
+                download_object(audio_key, audio_path)
 
             layout_video: Path | None = None
             if vod.get("platform") == "upload":
@@ -266,170 +270,175 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 seg_end_s = end_ms / 1000.0 + pad
                 seg_path = td_path / f"seg_{clip_id}.mp4"
 
-                _fetch_segment_mp4(
-                    clip,
-                    state,
-                    seg_path=seg_path,
-                    local_upload=local_upload,
-                    url=url,
-                    seg_start_s=seg_start_s,
-                    seg_end_s=seg_end_s,
-                    workspace_id=workspace_id,
-                    project_id=project_id,
-                    job_id=str(job.get("id") or ""),
-                    vod_id=vod_id,
-                )
+                with stage_span("clip_render", heartbeat=True, clip_index=idx, clip_id=clip_id):
+                    with stage_span("segment_download", heartbeat=True):
+                        _fetch_segment_mp4(
+                            clip,
+                            state,
+                            seg_path=seg_path,
+                            local_upload=local_upload,
+                            url=url,
+                            seg_start_s=seg_start_s,
+                            seg_end_s=seg_end_s,
+                            workspace_id=workspace_id,
+                            project_id=project_id,
+                            job_id=str(job.get("id") or ""),
+                            vod_id=vod_id,
+                        )
 
-                true_start_ms, corr = align_segment_ms(
-                    seg_path,
-                    audio_path,
-                    seg_start_s,
-                    seg_end_s,
-                    log_context={"vodId": vod_id, "clipId": clip_id},
-                )
-                true_end_ms = int(end_ms + (true_start_ms - int(seg_start_s * 1000)))
+                    true_start_ms, corr = align_segment_ms(
+                        seg_path,
+                        audio_path,
+                        seg_start_s,
+                        seg_end_s,
+                        log_context={"vodId": vod_id, "clipId": clip_id},
+                    )
+                    true_end_ms = int(end_ms + (true_start_ms - int(seg_start_s * 1000)))
 
-                seg_key = clip_segment_key(workspace_id, project_id, clip_id)
-                upload_file(seg_key, seg_path, "video/mp4")
-                state = _checkpoint_segment_key(conn, vod_id, state, clip_id, seg_key)
-                try:
-                    seg_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-
-                offset_ms = true_start_ms
-                rel_start = max(0, start_ms - offset_ms)
-                rel_end = max(rel_start + 100, end_ms - offset_ms)
-
-                words_path = td_path / f"words_{clip_id}.json"
-                clip_words: list[dict]
-                caption_audio = td_path / f"caption_{clip_id}.opus"
-                subprocess.check_call(
-                    [
-                        "ffmpeg",
-                        "-y",
-                        "-ss",
-                        f"{seg_start_s:.3f}",
-                        "-t",
-                        f"{seg_end_s - seg_start_s:.3f}",
-                        "-i",
-                        str(audio_path),
-                        "-c:a",
-                        "libopus",
-                        str(caption_audio),
-                    ],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                if deepgram_api_key():
+                    seg_key = clip_segment_key(workspace_id, project_id, clip_id)
+                    upload_file(seg_key, seg_path, "video/mp4")
+                    state = _checkpoint_segment_key(conn, vod_id, state, clip_id, seg_key)
                     try:
-                        cap = transcribe_clip_caption(
-                            TranscribeReq(
-                                audio_path=str(caption_audio),
-                                offset_ms=int(seg_start_s * 1000),
-                                language=(settings.get("streamer") or {}).get("language"),
+                        seg_path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+
+                    offset_ms = true_start_ms
+                    rel_start = max(0, start_ms - offset_ms)
+                    rel_end = max(rel_start + 100, end_ms - offset_ms)
+
+                    words_path = td_path / f"words_{clip_id}.json"
+                    clip_words: list[dict]
+                    caption_audio = td_path / f"caption_{clip_id}.opus"
+                    with stage_span("captions", heartbeat=True, clip_index=idx):
+                        subprocess.check_call(
+                            [
+                                "ffmpeg",
+                                "-y",
+                                "-ss",
+                                f"{seg_start_s:.3f}",
+                                "-t",
+                                f"{seg_end_s - seg_start_s:.3f}",
+                                "-i",
+                                str(audio_path),
+                                "-c:a",
+                                "libopus",
+                                str(caption_audio),
+                            ],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                        if deepgram_api_key():
+                            try:
+                                cap = transcribe_clip_caption(
+                                    TranscribeReq(
+                                        audio_path=str(caption_audio),
+                                        offset_ms=int(seg_start_s * 1000),
+                                        language=(settings.get("streamer") or {}).get("language"),
+                                    )
+                                )
+                                clip_words = slice_words(cap.words, start_ms, end_ms)
+                                cap_min = max(0.0, (end_ms - start_ms) / 60000.0)
+                                print(
+                                    f"[clipper:stream] caption_clip clipId={clip_id} vodId={vod_id} "
+                                    f"model={deepgram_caption_model()} clipMinutes={cap_min:.2f}",
+                                    file=sys.stderr,
+                                    flush=True,
+                                )
+                            except DeepgramTranscribeError:
+                                transcript_path = td_path / "transcript.json"
+                                if not transcript_key:
+                                    raise RuntimeError("missing transcriptKey")
+                                download_object(transcript_key, transcript_path)
+                                all_words = json.loads(transcript_path.read_text())
+                                clip_words = slice_words(all_words, start_ms, end_ms)
+                        else:
+                            transcript_path = td_path / "transcript.json"
+                            if not transcript_key:
+                                raise RuntimeError("missing transcriptKey")
+                            download_object(transcript_key, transcript_path)
+                            all_words = json.loads(transcript_path.read_text())
+                            clip_words = slice_words(all_words, start_ms, end_ms)
+                    words_path.write_text(json.dumps(clip_words))
+
+                    clip_file = td_path / f"clip_{clip_id}.mp4"
+                    ffmpeg_cut(seg_path, clip_file, rel_start, rel_end, clip_index=idx)
+                    out_mp4 = td_path / f"out_{clip_id}.mp4"
+                    crop_track = td_path / f"crop_{clip_id}.json"
+                    streamer_layout = (settings.get("streamer") or {}).get("layout", "stack")
+                    ai_meta = clip.get("aiMeta") or {}
+                    if isinstance(ai_meta, str):
+                        ai_meta = json.loads(ai_meta)
+                    clip_layout = (ai_meta.get("streamer") or {}).get("layout") or layout_state or {}
+                    use_stack = (
+                        streamer_layout == "stack"
+                        and isinstance(clip_layout, dict)
+                        and clip_layout.get("layout") == "stack"
+                        and clip_layout.get("facecam")
+                    )
+                    with stage_span("reframe", heartbeat=True, clip_index=idx):
+                        if use_stack:
+                            render_stack_mp4(clip_file, out_mp4, clip_layout)
+                            rendered = out_mp4
+                        else:
+                            rendered = run_speakercrop(
+                                clip_file,
+                                out_mp4,
+                                words_path,
+                                settings,
+                                td_path,
+                                clip_start_ms=start_ms,
+                                crop_track_out=crop_track,
                             )
-                        )
-                        clip_words = slice_words(cap.words, start_ms, end_ms)
-                        cap_min = max(0.0, (end_ms - start_ms) / 60000.0)
-                        print(
-                            f"[clipper:stream] caption_clip clipId={clip_id} vodId={vod_id} "
-                            f"model={deepgram_caption_model()} clipMinutes={cap_min:.2f}",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-                    except DeepgramTranscribeError:
-                        transcript_path = td_path / "transcript.json"
-                        if not transcript_key:
-                            raise RuntimeError("missing transcriptKey")
-                        download_object(transcript_key, transcript_path)
-                        all_words = json.loads(transcript_path.read_text())
-                        clip_words = slice_words(all_words, start_ms, end_ms)
-                else:
-                    transcript_path = td_path / "transcript.json"
-                    if not transcript_key:
-                        raise RuntimeError("missing transcriptKey")
-                    download_object(transcript_key, transcript_path)
-                    all_words = json.loads(transcript_path.read_text())
-                    clip_words = slice_words(all_words, start_ms, end_ms)
-                words_path.write_text(json.dumps(clip_words))
+                    ai_streamer = dict((ai_meta.get("streamer") or {}))
+                    if clip_layout:
+                        ai_streamer["layout"] = clip_layout if isinstance(clip_layout, dict) else {"layout": clip_layout}
+                    poster = td_path / f"poster_{clip_id}.jpg"
+                    poster_jpg(rendered, poster)
+                    keys = clip_keys(workspace_id, project_id, clip_id)
+                    upload_file(keys["preview"], rendered, "video/mp4")
+                    upload_file(keys["poster"], poster, "image/jpeg")
+                    put_json(keys["words"], clip_words)
+                    crop_key = None
+                    if crop_track.exists():
+                        upload_file(keys["crop_track"], crop_track, "application/json")
+                        crop_key = keys["crop_track"]
 
-                clip_file = td_path / f"clip_{clip_id}.mp4"
-                ffmpeg_cut(seg_path, clip_file, rel_start, rel_end)
-                out_mp4 = td_path / f"out_{clip_id}.mp4"
-                crop_track = td_path / f"crop_{clip_id}.json"
-                streamer_layout = (settings.get("streamer") or {}).get("layout", "stack")
-                ai_meta = clip.get("aiMeta") or {}
-                if isinstance(ai_meta, str):
-                    ai_meta = json.loads(ai_meta)
-                clip_layout = (ai_meta.get("streamer") or {}).get("layout") or layout_state or {}
-                use_stack = (
-                    streamer_layout == "stack"
-                    and isinstance(clip_layout, dict)
-                    and clip_layout.get("layout") == "stack"
-                    and clip_layout.get("facecam")
-                )
-                if use_stack:
-                    render_stack_mp4(clip_file, out_mp4, clip_layout)
-                    rendered = out_mp4
-                else:
-                    rendered = run_speakercrop(
-                        clip_file,
-                        out_mp4,
-                        words_path,
-                        settings,
-                        td_path,
-                        clip_start_ms=start_ms,
-                        crop_track_out=crop_track,
+                    if ai_streamer:
+                        ai_meta = {**ai_meta, "streamer": ai_streamer}
+                    with stage_span("db_write_clip", clip_id=clip_id):
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                UPDATE clips SET
+                                  "previewKey"=%s, "posterKey"=%s, "wordsKey"=%s, "cropKey"=%s,
+                                  "sourceSegKey"=%s, "sourceSegStartMs"=%s, "sourceSegEndMs"=%s,
+                                  "aiMeta"=%s::jsonb,
+                                  edits=%s::jsonb, "updatedAt"=NOW()
+                                WHERE id=%s
+                                """,
+                                (
+                                    keys["preview"],
+                                    keys["poster"],
+                                    keys["words"],
+                                    crop_key,
+                                    seg_key,
+                                    true_start_ms,
+                                    true_end_ms,
+                                    json.dumps(ai_meta),
+                                    json.dumps(initial_clip_edits(settings)),
+                                    clip_id,
+                                ),
+                            )
+                        conn.commit()
+
+                    delete_clip_source_segment(
+                        workspace_id,
+                        project_id,
+                        clip_id,
+                        seg_key,
+                        vod_id=vod_id,
                     )
-                ai_streamer = dict((ai_meta.get("streamer") or {}))
-                if clip_layout:
-                    ai_streamer["layout"] = clip_layout if isinstance(clip_layout, dict) else {"layout": clip_layout}
-                poster = td_path / f"poster_{clip_id}.jpg"
-                poster_jpg(rendered, poster)
-                keys = clip_keys(workspace_id, project_id, clip_id)
-                upload_file(keys["preview"], rendered, "video/mp4")
-                upload_file(keys["poster"], poster, "image/jpeg")
-                put_json(keys["words"], clip_words)
-                crop_key = None
-                if crop_track.exists():
-                    upload_file(keys["crop_track"], crop_track, "application/json")
-                    crop_key = keys["crop_track"]
-
-                if ai_streamer:
-                    ai_meta = {**ai_meta, "streamer": ai_streamer}
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE clips SET
-                          "previewKey"=%s, "posterKey"=%s, "wordsKey"=%s, "cropKey"=%s,
-                          "sourceSegKey"=%s, "sourceSegStartMs"=%s, "sourceSegEndMs"=%s,
-                          "aiMeta"=%s::jsonb,
-                          edits=%s::jsonb, "updatedAt"=NOW()
-                        WHERE id=%s
-                        """,
-                        (
-                            keys["preview"],
-                            keys["poster"],
-                            keys["words"],
-                            crop_key,
-                            seg_key,
-                            true_start_ms,
-                            true_end_ms,
-                            json.dumps(ai_meta),
-                            json.dumps(initial_clip_edits(settings)),
-                            clip_id,
-                        ),
-                    )
-                conn.commit()
-
-                delete_clip_source_segment(
-                    workspace_id,
-                    project_id,
-                    clip_id,
-                    seg_key,
-                    vod_id=vod_id,
-                )
 
                 clips_ready += 1
                 _render_progress(clips_ready)

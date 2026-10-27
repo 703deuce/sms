@@ -26,9 +26,16 @@ def await_headstart_render(
 ) -> None:
     """Wait up to timeout for optional headstart work; never block the pipeline indefinitely."""
     limit = timeout_sec if timeout_sec is not None else headstart_render_timeout_sec()
+    from clips_worker.stage_log import future_result
+
     if future is not None:
         try:
-            future.result(timeout=limit)
+            future_result(
+                future,
+                "headstart_render",
+                timeout=limit,
+                project=project_id,
+            )
         except FuturesTimeoutError:
             print(
                 f"[clipper:speed] project={project_id} phase=headstart_render_timeout "

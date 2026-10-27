@@ -48,45 +48,47 @@ def insert_clips_batch(conn, rows: list[dict]) -> int:
     if not rows:
         return 0
     from clips_worker.clip_segments import row_segment_key
+    from clips_worker.stage_log import stage_span
 
     inserted = 0
-    with conn.cursor() as cur:
-        for row in rows:
-            seg_key = row.get("segmentKey") or row_segment_key(row)
-            cur.execute(
-                """
-                INSERT INTO clips (
-                  id, "projectId", "workspaceId", title, reason,
-                  "startMs", "endMs", "segmentKey", score, scores,
-                  "previewKey", "posterKey", "wordsKey", "cropKey", edits, "aiMeta",
-                  favorite, "createdAt", "updatedAt"
-                ) VALUES (
-                  %s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
+    with stage_span("db_write_clips", count=len(rows)):
+        with conn.cursor() as cur:
+            for row in rows:
+                seg_key = row.get("segmentKey") or row_segment_key(row)
+                cur.execute(
+                    """
+                    INSERT INTO clips (
+                      id, "projectId", "workspaceId", title, reason,
+                      "startMs", "endMs", "segmentKey", score, scores,
+                      "previewKey", "posterKey", "wordsKey", "cropKey", edits, "aiMeta",
+                      favorite, "createdAt", "updatedAt"
+                    ) VALUES (
+                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
+                    )
+                    ON CONFLICT ("projectId", "segmentKey") WHERE "deletedAt" IS NULL DO NOTHING
+                    """,
+                    (
+                        row["id"],
+                        row["projectId"],
+                        row["workspaceId"],
+                        row["title"],
+                        row.get("reason"),
+                        row["startMs"],
+                        row["endMs"],
+                        seg_key,
+                        row["score"],
+                        json.dumps(row.get("scores") or {}),
+                        row.get("previewKey"),
+                        row.get("posterKey"),
+                        row.get("wordsKey"),
+                        row.get("cropKey"),
+                        json.dumps(row.get("edits") or {}),
+                        json.dumps(row.get("aiMeta") or {}),
+                    ),
                 )
-                ON CONFLICT ("projectId", "segmentKey") WHERE "deletedAt" IS NULL DO NOTHING
-                """,
-                (
-                    row["id"],
-                    row["projectId"],
-                    row["workspaceId"],
-                    row["title"],
-                    row.get("reason"),
-                    row["startMs"],
-                    row["endMs"],
-                    seg_key,
-                    row["score"],
-                    json.dumps(row.get("scores") or {}),
-                    row.get("previewKey"),
-                    row.get("posterKey"),
-                    row.get("wordsKey"),
-                    row.get("cropKey"),
-                    json.dumps(row.get("edits") or {}),
-                    json.dumps(row.get("aiMeta") or {}),
-                ),
-            )
-            if cur.rowcount:
-                inserted += 1
-    conn.commit()
+                if cur.rowcount:
+                    inserted += 1
+        conn.commit()
     return inserted
 
 
@@ -329,6 +331,9 @@ def run_m4_pipeline(
     if source_duration_ms > 0:
         settings = {**settings, "sourceDurationMs": source_duration_ms}
     pipeline_t0 = time.monotonic()
+    from clips_worker.stage_log import bind_stage_context, stage_span
+
+    bind_stage_context(project_id=project_id, job_id=job_id)
     from clips_worker.clip_segments import load_project_segment_spans, load_project_segments_with_preview
 
     existing_segments = load_project_segment_spans(conn, project_id)
@@ -370,17 +375,18 @@ def run_m4_pipeline(
                     job_id,
                     {"projectStatus": "SCANNING", "stage": "scanning", "progress": 55, "jobStatus": "RUNNING"},
                 )
-                picks, picker_message = pick_anything_clips(
-                    conn,
-                    src,
-                    words,
-                    settings,
-                    range_start,
-                    range_end,
-                    workspace_id,
-                    project_id,
-                    td_path,
-                )
+                with stage_span("scene_scan", heartbeat=True):
+                    picks, picker_message = pick_anything_clips(
+                        conn,
+                        src,
+                        words,
+                        settings,
+                        range_start,
+                        range_end,
+                        workspace_id,
+                        project_id,
+                        td_path,
+                    )
                 post_progress(
                     job_id,
                     {"projectStatus": "FINDING_CLIPS", "stage": "vision_rank", "progress": 58, "jobStatus": "RUNNING"},
@@ -499,7 +505,7 @@ def run_m4_pipeline(
                 def build_clip_row_from_pick(pick: dict, idx: int) -> dict:
                     clip_id = f"clip_{uuid.uuid4().hex}"
                     clip_file = td_path / f"clip_{idx}.mp4"
-                    ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"])
+                    ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"], clip_index=idx)
                     clip_words = slice_words(words, pick["start_ms"], pick["end_ms"])
                     words_path = td_path / f"words_{idx}.json"
                     words_path.write_text(json.dumps(clip_words))
@@ -620,32 +626,34 @@ def run_m4_pipeline(
                         scored=scored,
                     )
 
-                picks, picker_message = pick_talking_clips(
-                    words,
-                    str(audio_wav),
-                    settings,
-                    range_start,
-                    range_end,
-                    on_headstart_picks=on_headstart,
-                    picker_cache=picker_cache,
-                    on_picker_checkpoint=_checkpoint_picker,
-                )
+                with stage_span("picker", heartbeat=True):
+                    picks, picker_message = pick_talking_clips(
+                        words,
+                        str(audio_wav),
+                        settings,
+                        range_start,
+                        range_end,
+                        on_headstart_picks=on_headstart,
+                        picker_cache=picker_cache,
+                        on_picker_checkpoint=_checkpoint_picker,
+                    )
                 post_progress(
                     job_id,
                     {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"},
                 )
                 from clips_worker.headstart_render import await_headstart_render
 
-                await_headstart_render(
-                    head_executor,
-                    head_future,
-                    head_render_state=head_render_state,
-                    rendered_spans=rendered_spans,
-                    span_lock=span_lock,
-                    span_key=_span_key,
-                    headstart_pick=headstart_pick,
-                    project_id=project_id,
-                )
+                with stage_span("headstart_render", heartbeat=True):
+                    await_headstart_render(
+                        head_executor,
+                        head_future,
+                        head_render_state=head_render_state,
+                        rendered_spans=rendered_spans,
+                        span_lock=span_lock,
+                        span_key=_span_key,
+                        headstart_pick=headstart_pick,
+                        project_id=project_id,
+                    )
                 print(
                     f"[clipper:speed] project={project_id} phase=pick_ms="
                     f"{int((time.monotonic() - pick0) * 1000)} picks={len(picks)}",
@@ -697,14 +705,15 @@ def run_m4_pipeline(
                         range(len(picks)),
                         key=lambda i: -float(picks[i].get("score") or 0),
                     )
-                    talking_clip_rows = run_bounded_indexed_pool(
-                        len(picks),
-                        render_conc,
-                        build_talking_clip_row,
-                        on_start=on_talking_reframe_start,
-                        on_complete=on_talking_reframe_complete,
-                        index_order=index_order,
-                    )
+                    with stage_span("reframe", heartbeat=True, clips=len(picks)):
+                        talking_clip_rows = run_bounded_indexed_pool(
+                            len(picks),
+                            render_conc,
+                            build_talking_clip_row,
+                            on_start=on_talking_reframe_start,
+                            on_complete=on_talking_reframe_complete,
+                            index_order=index_order,
+                        )
                 else:
                     talking_clip_rows = []
                 talking_render_done = True
@@ -795,7 +804,7 @@ def run_m4_pipeline(
                         return None
                     clip_id = f"clip_{uuid.uuid4().hex}"
                     clip_file = td_path / f"clip_{idx}.mp4"
-                    ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"])
+                    ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"], clip_index=idx)
                     clip_words = slice_words(words, pick["start_ms"], pick["end_ms"])
                     words_path = td_path / f"words_{idx}.json"
                     words_path.write_text(json.dumps(clip_words))
@@ -865,14 +874,15 @@ def run_m4_pipeline(
                     }
 
                 index_order = sorted(range(len(picks)), key=lambda i: -float(picks[i].get("score") or 0))
-                clip_rows = run_bounded_indexed_pool(
-                    len(picks),
-                    render_conc,
-                    build_clip_row,
-                    on_start=on_reframe_start,
-                    on_complete=on_reframe_complete,
-                    index_order=index_order,
-                )
+                with stage_span("reframe", heartbeat=True, clips=len(picks)):
+                    clip_rows = run_bounded_indexed_pool(
+                        len(picks),
+                        render_conc,
+                        build_clip_row,
+                        on_start=on_reframe_start,
+                        on_complete=on_reframe_complete,
+                        index_order=index_order,
+                    )
 
             clips_ready_final = len(load_project_segments_with_preview(conn, project_id))
             post_progress(

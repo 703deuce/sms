@@ -311,6 +311,9 @@ def process_job(conn, job: dict) -> None:
     payload = job_payload(job)
     words = resolve_transcript_for_job(project, payload)
 
+    from clips_worker.stage_log import bind_stage_context, stage_span
+
+    bind_stage_context(project_id=str(project["id"]), job_id=str(job["id"]))
     log(f"processing job={job['id']} project={project['id']}")
     post_progress(
         job["id"],
@@ -320,13 +323,8 @@ def process_job(conn, job: dict) -> None:
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         src = td_path / "source.mp4"
-        t0 = time.monotonic()
-        download_object(key, src)
-        print(
-            f"[clipper:speed] project={project['id']} phase=source_download_ms="
-            f"{int((time.monotonic() - t0) * 1000)}",
-            flush=True,
-        )
+        with stage_span("source_download", heartbeat=True):
+            download_object(key, src)
         post_progress(job["id"], {"projectStatus": "PREPARING", "stage": "preparing", "progress": 8})
 
         _ = probe_duration(src)
@@ -355,16 +353,11 @@ def process_job(conn, job: dict) -> None:
             )
 
             model = os.environ.get("ASR_MODEL", "small.en")
-            tx0 = time.monotonic()
-            words, tx_meta = transcribe_video_file(conn, project, src, model=model)
+            with stage_span("transcribe", heartbeat=True, model=model):
+                words, tx_meta = transcribe_video_file(conn, project, src, model=model)
             print(
                 f"[clipper:transcribe] project={project['id']} words={len(words)} "
                 f"engine={getattr(tx_meta, 'transcription_engine', 'unknown')}",
-                flush=True,
-            )
-            print(
-                f"[clipper:speed] project={project['id']} phase=transcribe_ms="
-                f"{int((time.monotonic() - tx0) * 1000)}",
                 flush=True,
             )
 

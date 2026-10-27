@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -76,9 +77,12 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
     if not vod_id:
         raise RuntimeError("missing vodId")
 
+    from clips_worker.stage_log import bind_stage_context, stage_span
+
     vod = _load_vod(conn, vod_id)
     workspace_id = vod["workspaceId"]
     project_id = vod["project_id"]
+    bind_stage_context(project_id=str(project_id), job_id=str(job["id"]))
     state = vod.get("state") or {}
     if isinstance(state, str):
         state = json.loads(state)
@@ -126,7 +130,8 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
 
             scratch.mkdir(parents=True, exist_ok=True)
             audio_path = scratch / "audio.opus"
-            download_object(audio_key, audio_path)
+            with stage_span("source_download", heartbeat=True):
+                download_object(audio_key, audio_path)
 
             probe_video: Path | None = None
             for key_name in ("analysisProxyKey", "localUploadKey"):
@@ -203,21 +208,22 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                 hb.update(stage=payload_prog["stage"], progress=payload_prog["progress"])
                 post_progress(job["id"], payload_prog)
 
-            all_word_chunks, chunk_signal_payloads, chunk_metrics = transcribe_vod_chunks(
-                conn=conn,
-                vod_id=vod_id,
-                workspace_id=workspace_id,
-                project_id=project_id,
-                ranges=ranges,
-                audio_path=audio_path,
-                scratch=scratch,
-                state=state,
-                chunks_state=chunks_state,
-                vod_transcribe_provider=vod_transcribe_provider,
-                settings=settings,
-                save_state=_persist_state,
-                on_chunk_progress=_on_chunk,
-            )
+            with stage_span("transcribe", heartbeat=True, chunks=len(ranges)):
+                all_word_chunks, chunk_signal_payloads, chunk_metrics = transcribe_vod_chunks(
+                    conn=conn,
+                    vod_id=vod_id,
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    ranges=ranges,
+                    audio_path=audio_path,
+                    scratch=scratch,
+                    state=state,
+                    chunks_state=chunks_state,
+                    vod_transcribe_provider=vod_transcribe_provider,
+                    settings=settings,
+                    save_state=_persist_state,
+                    on_chunk_progress=_on_chunk,
+                )
 
             words = merge_words([c for c in all_word_chunks if c], ranges)
             audio_minutes = analysed_s / 60.0
@@ -250,7 +256,8 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             if isinstance(chapters, str):
                 chapters = json.loads(chapters)
             try:
-                chat_messages, chat_source, state = resolve_chat_after_transcribe(chat_future, state)
+                with stage_span("chat_resolve", heartbeat=True):
+                    chat_messages, chat_source, state = resolve_chat_after_transcribe(chat_future, state)
             finally:
                 chat_executor.shutdown(wait=False)
             if state.get("chatError"):
@@ -286,16 +293,17 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             )
             viewer_clips = fetch_viewer_clips_for_vod(vod, conn)
             vod_signal_curves = merge_chunk_signal_curves(chunk_signal_payloads, duration_s)
-            picks, signals_payload = rank_moments(
-                audio_path=audio_path,
-                words=words,
-                duration_ms=duration_ms,
-                settings=settings,
-                chapters=chapters if isinstance(chapters, list) else None,
-                chat_messages=chat_messages,
-                viewer_clips=viewer_clips or None,
-                vod_signal_curves=vod_signal_curves,
-            )
+            with stage_span("rank_moments", heartbeat=True):
+                picks, signals_payload = rank_moments(
+                    audio_path=audio_path,
+                    words=words,
+                    duration_ms=duration_ms,
+                    settings=settings,
+                    chapters=chapters if isinstance(chapters, list) else None,
+                    chat_messages=chat_messages,
+                    viewer_clips=viewer_clips or None,
+                    vod_signal_curves=vod_signal_curves,
+                )
             picks = dedupe_stream_picks(conn, vod, picks)
             signals_payload["chunkedSignals"] = True
             signals_payload["chunkCount"] = len(chunk_signal_payloads)

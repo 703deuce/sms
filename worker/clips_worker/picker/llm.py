@@ -50,9 +50,16 @@ def chat_json(
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         method="POST",
     )
+    from clips_worker.stage_log import wait_heartbeat
+
+    limit = timeout_s if timeout_s is not None else 180
+
+    def _call() -> dict:
+        with urllib.request.urlopen(req, timeout=limit) as resp:
+            return json.loads(resp.read())
+
     try:
-        with urllib.request.urlopen(req, timeout=timeout_s if timeout_s is not None else 180) as resp:
-            data = json.loads(resp.read())
+        data = wait_heartbeat("picker_llm", _call)
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode(errors="replace")
         snippet = raw[:500]

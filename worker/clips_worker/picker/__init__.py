@@ -75,7 +75,10 @@ def pick_talking_clips(
     if not sentences:
         return [], "No transcript in the selected time range."
 
-    signals = compute_signals(sentences, audio_path, sentences)
+    from clips_worker.stage_log import stage_span
+
+    with stage_span("scene_scan_signals", heartbeat=True):
+        signals = compute_signals(sentences, audio_path, sentences)
     sig_by = {s.sentence_idx: s for s in signals}
 
     from clips_worker.worker_drain import WorkerDrainExit, drain_requested
@@ -95,7 +98,8 @@ def pick_talking_clips(
             picker_info("picker_resume_pass1", moments=len(moments_from_cache))
             moments = moments_from_cache
         else:
-            moments = find_moments(sentences, signals, genre, prompt)
+            with stage_span("picker_pass1", heartbeat=True):
+                moments = find_moments(sentences, signals, genre, prompt)
             if on_picker_checkpoint:
                 on_picker_checkpoint(moments, None)
             if drain_requested():
@@ -133,14 +137,15 @@ def pick_talking_clips(
             except Exception as exc:
                 picker_info("headstart_failed", error=str(exc)[:200])
 
-        scored, pass2_audit = score_moments(
-            moments,
-            sentences,
-            signals,
-            genre,
-            source_duration_s=source_duration_s,
-            project_id=str(settings.get("projectId") or settings.get("project_id") or "").strip() or None,
-        )
+        with stage_span("picker_pass2", heartbeat=True):
+            scored, pass2_audit = score_moments(
+                moments,
+                sentences,
+                signals,
+                genre,
+                source_duration_s=source_duration_s,
+                project_id=str(settings.get("projectId") or settings.get("project_id") or "").strip() or None,
+            )
         if on_picker_checkpoint:
             on_picker_checkpoint(moments, scored)
         if drain_requested():
@@ -158,9 +163,10 @@ def pick_talking_clips(
 
     source_duration_s = source_ms / 1000.0
 
-    picks = finalize_picks(
-        scored, sentences, sig_by, range_words, range_start_ms, range_end_ms, genre
-    )
+    with stage_span("selection", heartbeat=True):
+        picks = finalize_picks(
+            scored, sentences, sig_by, range_words, range_start_ms, range_end_ms, genre
+        )
     if not picks and scored:
         picks = finalize_picks(
             scored,

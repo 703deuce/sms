@@ -141,6 +141,13 @@ def _http_error_snippet(exc: urllib.error.HTTPError, limit: int = 200) -> str:
 
 
 def download_object(object_key: str, dest: Path) -> None:
+    from clips_worker.stage_log import log_storage_key, stage_span
+
+    with stage_span("download", heartbeat=True, key=log_storage_key("object", object_key)):
+        _download_object_inner(object_key, dest)
+
+
+def _download_object_inner(object_key: str, dest: Path) -> None:
     if object_key.startswith(STAGING_KEY_PREFIX):
         upload_id = object_key[len(STAGING_KEY_PREFIX) :]
         _download_staging(upload_id, dest)
@@ -184,6 +191,18 @@ def _download_s3_cached(object_key: str, dest: Path) -> None:
 
 
 def upload_file(object_key: str, path: Path, content_type: str | None = None) -> None:
+    from clips_worker.stage_log import log_storage_key, stage_span
+
+    with stage_span(
+        "upload",
+        heartbeat=True,
+        key=log_storage_key("object", object_key),
+        bytes=path.stat().st_size if path.is_file() else 0,
+    ):
+        _upload_file_inner(object_key, path, content_type)
+
+
+def _upload_file_inner(object_key: str, path: Path, content_type: str | None = None) -> None:
     if _uses_s3_api():
         _upload_s3(object_key, path, content_type)
         try:

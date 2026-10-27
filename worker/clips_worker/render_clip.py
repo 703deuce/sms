@@ -74,9 +74,18 @@ def probe_duration_ms(video: Path) -> int:
     return int(float(out) * 1000)
 
 
-def ffmpeg_cut(src: Path, dest: Path, start_ms: int, end_ms: int) -> None:
+def ffmpeg_cut(
+    src: Path,
+    dest: Path,
+    start_ms: int,
+    end_ms: int,
+    *,
+    clip_index: int | None = None,
+) -> None:
+    from clips_worker.stage_log import ffmpeg_run
+
     threads = str(ffmpeg_threads_per_job())
-    subprocess.check_call(
+    ffmpeg_run(
         [
             "ffmpeg",
             "-y",
@@ -100,6 +109,8 @@ def ffmpeg_cut(src: Path, dest: Path, start_ms: int, end_ms: int) -> None:
             "aac",
             str(dest),
         ],
+        stage="clip_ffmpeg_cut",
+        clip_index=clip_index,
     )
 
 
