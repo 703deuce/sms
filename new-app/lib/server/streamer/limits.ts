@@ -2,8 +2,15 @@ import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
 export const STREAMER_DEFAULT_MONTHLY_HOURS = 40
-/** One-shot paste VOD link cap (marathon/connected bypasses). */
-export const STREAMER_PASTE_MAX_VOD_HOURS = 10
+
+function parsePasteMaxVodHours(): number {
+  const raw = process.env.STREAMER_PASTE_MAX_VOD_HOURS ?? process.env.STREAMER_MAX_VOD_HOURS
+  const n = raw ? Number(raw) : 10
+  return Number.isFinite(n) && n > 0 ? n : 10
+}
+
+/** One-shot paste VOD link cap (marathon/connected bypasses). Parity: worker `PASTE_MAX_VOD_HOURS`. */
+export const STREAMER_PASTE_MAX_VOD_HOURS = parsePasteMaxVodHours()
 export const STREAMER_MAX_VOD_HOURS = STREAMER_PASTE_MAX_VOD_HOURS
 
 export type StreamerLimits = {
