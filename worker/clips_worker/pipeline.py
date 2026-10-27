@@ -184,7 +184,7 @@ def reframe_clip_preview(
         reframe_settings,
         work_dir,
         clip_start_ms=clip_start_ms,
-        crop_track_out=crop_track_path if not preserve_crop_track else None,
+        crop_track_out=crop_track_path,
         preserve_existing_crop_track=preserve_crop_track,
     )
     if not crop_track_path.exists():
@@ -386,7 +386,8 @@ def run_m4_pipeline(
             out_mp4 = td_path / f"out_{idx}.mp4"
             crop_track_path = td_path / f"crop_track_{idx}.json"
             ai_meta = pick.get("aiMeta") or {}
-            clip_settings = {**settings, "layout": resolve_clip_layout(settings, idx)}
+            resolved_layout = resolve_clip_layout(settings, idx)
+            clip_settings = {**settings, "layout": resolved_layout}
             rendered, crop_method, _reframe_settings = reframe_clip_preview(
                 clip_file,
                 out_mp4,
@@ -412,7 +413,11 @@ def run_m4_pipeline(
             elif mode == "anything":
                 raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
 
-            ai_meta_out = {**(pick.get("aiMeta") or {}), "cropMethod": crop_method}
+            ai_meta_out = {
+                **(pick.get("aiMeta") or {}),
+                "cropMethod": crop_method,
+                "layoutResolved": resolved_layout,
+            }
             if mode == "anything" and not crop_key:
                 raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
 
@@ -431,7 +436,11 @@ def run_m4_pipeline(
                 "wordsKey": keys["words"],
                 "cropKey": crop_key,
                 "edits": initial_clip_edits(settings),
-                "aiMeta": ai_meta_out if mode == "anything" else (pick.get("aiMeta") or {"hook": pick.get("hook")}),
+                "aiMeta": (
+                    ai_meta_out
+                    if mode == "anything"
+                    else {**(pick.get("aiMeta") or {"hook": pick.get("hook")}), "layoutResolved": resolved_layout, "cropMethod": crop_method}
+                ),
             }
 
         clip_rows = run_bounded_indexed_pool(total, render_conc, build_clip_row, on_start=on_reframe_start)

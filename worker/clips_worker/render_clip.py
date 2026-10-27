@@ -260,7 +260,10 @@ def run_speakercrop(
     if not settings.get("captions", {}).get("enabled", True):
         env["CAPTIONS"] = "0"
     env["CLIP_START_MS"] = str(int(clip_start_ms))
-    if preserve_existing_crop_track:
+    if preserve_existing_crop_track and crop_track_out is not None and crop_track_out.exists():
+        env["CROP_TRACK_IN"] = str(crop_track_out)
+        env.pop("CROP_TRACK_OUT", None)
+    elif preserve_existing_crop_track:
         env["WRITE_CROP_TRACK"] = "0"
     elif crop_track_out is not None:
         env["CROP_TRACK_OUT"] = str(crop_track_out)
