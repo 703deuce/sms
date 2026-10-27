@@ -33,7 +33,7 @@ import {
   splitMarkerAfterWordIndex,
 } from '@/lib/clips/script-editor/timeline-model'
 import { toast } from 'sonner'
-import { ArrowLeft, Pause, Play, Redo2, Scissors, Undo2 } from 'lucide-react'
+import { ArrowLeft, LayoutGrid, Pause, Play, Redo2, Rows3, Scissors, Undo2 } from 'lucide-react'
 import {
   ScriptFillerReviewBar,
   type FillerSearchMode,
