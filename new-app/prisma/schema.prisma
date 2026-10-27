@@ -506,6 +506,7 @@ model Workspace {
   forwardingSetupDraft                   ForwardingSetupDraft?
   clipUploads                            ClipUpload[]
   clipProjects                           ClipProject[]
+  recordingSessions                      RecordingSession[]
   streamChannels                         StreamChannel[]
   streamVods                             StreamVod[]
   streamLayoutPresets                    StreamLayoutPreset[]
@@ -8891,6 +8892,7 @@ model ClipProject {
   scriptMediaAsset ScriptMediaAsset?
   scriptSpeakers   ScriptSpeaker[]
   scriptCompositions ScriptComposition[]
+  recordingSessions  RecordingSession[]
 
   @@index([workspaceId, createdAt])
   @@map("clip_projects")
@@ -9045,6 +9047,69 @@ model ScriptCompositionRender {
   @@unique([compositionId, idempotencyKey])
   @@index([workspaceId, status])
   @@map("script_composition_renders")
+}
+
+enum RecordingSessionStatus {
+  DRAFT
+  LIVE
+  ENDED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum RecordingParticipantRole {
+  HOST
+  GUEST
+}
+
+model RecordingSession {
+  id              String                 @id
+  workspaceId     String
+  projectId       String?
+  title           String
+  livekitRoom     String                 @unique
+  livekitRoomSid  String?
+  status          RecordingSessionStatus @default(DRAFT)
+  maxParticipants Int                    @default(6)
+  liveStartedAt   DateTime?
+  liveEndedAt     DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  workspace    Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project      ClipProject?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  participants RecordingParticipant[]
+  webhookEvents RecordingWebhookEvent[]
+
+  @@index([workspaceId, status])
+  @@map("recording_sessions")
+}
+
+model RecordingParticipant {
+  id          String                   @id
+  sessionId   String
+  role        RecordingParticipantRole
+  displayName String
+  createdAt   DateTime                 @default(now())
+
+  session RecordingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("recording_participants")
+}
+
+model RecordingWebhookEvent {
+  id             String   @id
+  livekitEventId String   @unique
+  eventType      String
+  payload        Json
+  createdAt      DateTime @default(now())
+
+  sessionId String?
+  session   RecordingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@map("recording_webhook_events")
 }
 
 model StreamChannel {

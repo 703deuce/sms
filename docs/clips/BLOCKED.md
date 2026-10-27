@@ -13,10 +13,4 @@
 
 When you add a row, include **date**, **milestone**, and link to code (`lib/server/...`, route, flag name).
 
-## Resolved
-
-| ID | Resolved | Notes |
-|----|----------|-------|
-| **BLK-001** | 2026-10-27 | LiveKit Cloud credentials **already in Coolify** (`LIVEKIT_*` @ `sms-6w01zoya.livekit.cloud`). Recording is **Cloud-only** via `recording-room-service.ts`. |
-
-**Resolved:** move new rows here with date and commit SHA.
+**Resolved:** move rows here with date and commit SHA when unblocked.
