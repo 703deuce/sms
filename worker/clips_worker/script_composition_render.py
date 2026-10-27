@@ -22,7 +22,8 @@ def load_composition_render_context(conn, composition_id: str, render_id: str) -
                    r.resolution, r."aspectRatio", r.settings,
                    c.id AS composition_id, c.document, c.aspect, c."projectId",
                    p."rangeStartMs", p."rangeEndMs", p.settings AS project_settings,
-                   p."transcriptKey", p."transcriptWords", u.key AS source_key
+                   p."transcriptKey", p."transcriptWords", p."uploadId",
+                   u.key AS source_key
             FROM script_composition_renders r
             JOIN script_compositions c ON c.id = r."compositionId"
             JOIN clip_projects p ON p.id = c."projectId"
@@ -191,7 +192,8 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         source_words = _load_transcript_words(ctx, td_path)
-        source_media_id = f"proj:{project_id}"
+        upload_id = ctx.get("uploadId")
+        source_media_id = f"clip_upload:{upload_id}" if upload_id else f"import:{project_id}"
         words_by_id = _editor_words_from_transcript(source_words, source_media_id, range_start)
 
         if range_end <= range_start:
