@@ -47,7 +47,7 @@ export function T2vPanelText({
     <div className="space-y-4 p-4">
       <div>
         <Label>Scene</Label>
-        <Select value={sceneId} onValueChange={setSceneId}>
+        <Select value={sceneId} onValueChange={(v) => v && setSceneId(v)}>
           <SelectTrigger className="mt-1">
             <SelectValue />
           </SelectTrigger>

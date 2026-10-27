@@ -31,12 +31,13 @@ export function T2vPanelBrand({
       <Label>Brand template</Label>
       <Select
         value={value || '__none'}
-        onValueChange={(id) =>
+        onValueChange={(id) => {
+          if (!id) return
           onChange({
             ...doc,
             settings: { ...doc.settings, brandTemplateId: id === '__none' ? undefined : id },
           })
-        }
+        }}
       >
         <SelectTrigger>
           <SelectValue placeholder="None" />

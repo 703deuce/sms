@@ -39,7 +39,10 @@ export function T2vPanelMusic({
           max={100}
           step={5}
           value={[Math.round(music.volume * 100)]}
-          onValueChange={([v]) => onChange({ ...doc, music: { ...music, volume: v / 100 } })}
+          onValueChange={(vals) => {
+            const v = Array.isArray(vals) ? vals[0] : vals
+            onChange({ ...doc, music: { ...music, volume: Number(v) / 100 } })
+          }}
         />
       </div>
       <div className="flex items-center justify-between gap-3">
