@@ -190,6 +190,20 @@ export function ProjectSettingsForm({
         </div>
       </Panel>
 
+      <Panel title="AI enhance">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <Label htmlFor="auto-broll">Auto stock B-roll</Label>
+            <p className="text-xs text-muted-foreground">Place Pixabay cutaways on clips when processing finishes.</p>
+          </div>
+          <Switch
+            id="auto-broll"
+            checked={Boolean(settings.autoStockBroll)}
+            onCheckedChange={(v) => onChange({ ...settings, autoStockBroll: v })}
+          />
+        </div>
+      </Panel>
+
       <Panel title="Captions">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">

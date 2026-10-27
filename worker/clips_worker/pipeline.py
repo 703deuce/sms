@@ -453,6 +453,10 @@ def run_m4_pipeline(
                     raise RuntimeError(f"pipeline invariant: missing cropKey for clip {row.get('id')}")
 
         insert_clips_batch(conn, clip_rows)
+        if settings.get("autoStockBroll") and clip_rows:
+            from clips_worker.internal_callback import post_project_auto_broll
+
+            post_project_auto_broll(project_id)
         if clip_rows:
             poster = clip_rows[0].get("posterKey")
             if poster:
