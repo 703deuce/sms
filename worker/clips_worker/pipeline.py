@@ -43,22 +43,27 @@ def clip_keys(workspace_id: str, project_id: str, clip_id: str) -> dict[str, str
     }
 
 
-def insert_clips_batch(conn, rows: list[dict]) -> None:
+def insert_clips_batch(conn, rows: list[dict]) -> int:
+    """Insert clip rows; skip duplicates for same project segment. Returns rows inserted."""
     if not rows:
-        return
+        return 0
+    from clips_worker.clip_segments import row_segment_key
+
+    inserted = 0
     with conn.cursor() as cur:
         for row in rows:
+            seg_key = row.get("segmentKey") or row_segment_key(row)
             cur.execute(
                 """
                 INSERT INTO clips (
                   id, "projectId", "workspaceId", title, reason,
-                  "startMs", "endMs", score, scores,
+                  "startMs", "endMs", "segmentKey", score, scores,
                   "previewKey", "posterKey", "wordsKey", "cropKey", edits, "aiMeta",
                   favorite, "createdAt", "updatedAt"
                 ) VALUES (
-                  %s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
+                  %s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s::jsonb,false,NOW(),NOW()
                 )
-                ON CONFLICT (id) DO NOTHING
+                ON CONFLICT ("projectId", "segmentKey") WHERE "deletedAt" IS NULL DO NOTHING
                 """,
                 (
                     row["id"],
@@ -68,6 +73,7 @@ def insert_clips_batch(conn, rows: list[dict]) -> None:
                     row.get("reason"),
                     row["startMs"],
                     row["endMs"],
+                    seg_key,
                     row["score"],
                     json.dumps(row.get("scores") or {}),
                     row.get("previewKey"),
@@ -78,7 +84,10 @@ def insert_clips_batch(conn, rows: list[dict]) -> None:
                     json.dumps(row.get("aiMeta") or {}),
                 ),
             )
+            if cur.rowcount:
+                inserted += 1
     conn.commit()
+    return inserted
 
 
 def write_fit_blur_crop_track(video: Path, crop_out: Path, clip_start_ms: int) -> None:
@@ -320,6 +329,10 @@ def run_m4_pipeline(
     if source_duration_ms > 0:
         settings = {**settings, "sourceDurationMs": source_duration_ms}
     pipeline_t0 = time.monotonic()
+    from clips_worker.clip_segments import load_project_segment_spans, load_project_segments_with_preview
+
+    existing_segments = load_project_segment_spans(conn, project_id)
+    existing_preview_segments = load_project_segments_with_preview(conn, project_id)
     try:
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
@@ -422,8 +435,8 @@ def run_m4_pipeline(
                 post_progress(job_id, {"projectStatus": "FINDING_CLIPS", "stage": "picker_pass1", "progress": 52, "jobStatus": "RUNNING"})
                 pick0 = time.monotonic()
                 render_conc = clips_render_concurrency()
-                rendered_spans: set[tuple[int, int]] = set()
-                persisted_spans: set[tuple[int, int]] = set()
+                rendered_spans = set(existing_segments)
+                persisted_spans = set(existing_segments)
                 span_lock = threading.Lock()
                 head_executor = ThreadPoolExecutor(max_workers=1)
                 head_render_state: dict = {"by_span": {}}
@@ -457,7 +470,9 @@ def run_m4_pipeline(
                             return
                         persisted_spans.add(sk)
                     with psycopg2.connect(dsn) as ins_conn:
-                        insert_clips_batch(ins_conn, [row])
+                        inserted = insert_clips_batch(ins_conn, [row])
+                    if not inserted:
+                        return
                     with clips_ready_lock:
                         clips_ready_count += 1
                         ready = clips_ready_count
@@ -703,10 +718,17 @@ def run_m4_pipeline(
                         reframe_progress_payload(idx, clip_total, reframe_started_at, render_conc, clips_ready=clips_ready_count),
                     )
 
-                def on_reframe_complete(idx: int, row: dict) -> None:
+                def on_reframe_complete(idx: int, row: dict | None) -> None:
                     nonlocal clips_ready_count
+                    if row is None:
+                        return
+                    sk = _span_key(int(row["startMs"]), int(row["endMs"]))
+                    if sk in existing_preview_segments:
+                        return
                     with psycopg2.connect(dsn) as ins_conn:
-                        insert_clips_batch(ins_conn, [row])
+                        inserted = insert_clips_batch(ins_conn, [row])
+                    if not inserted:
+                        return
                     with clips_ready_lock:
                         clips_ready_count += 1
                         ready = clips_ready_count
@@ -726,8 +748,10 @@ def run_m4_pipeline(
                             flush=True,
                         )
 
-                def build_clip_row(idx: int) -> dict:
+                def build_clip_row(idx: int) -> dict | None:
                     pick = picks[idx]
+                    if _span_key(pick["start_ms"], pick["end_ms"]) in existing_preview_segments:
+                        return None
                     clip_id = f"clip_{uuid.uuid4().hex}"
                     clip_file = td_path / f"clip_{idx}.mp4"
                     ffmpeg_cut(src, clip_file, pick["start_ms"], pick["end_ms"])
@@ -809,7 +833,7 @@ def run_m4_pipeline(
                     index_order=index_order,
                 )
 
-            clips_ready_final = len(clip_rows)
+            clips_ready_final = len(load_project_segments_with_preview(conn, project_id))
             post_progress(
                 job_id,
                 {
@@ -817,7 +841,7 @@ def run_m4_pipeline(
                     "stage": "finalizing",
                     "progress": 92,
                     "jobStatus": "RUNNING",
-                    "clipsTotal": total,
+                    "clipsTotal": max(total, clips_ready_final),
                     "clipsReady": clips_ready_final,
                 },
             )

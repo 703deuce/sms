@@ -12,7 +12,7 @@ def run_bounded_indexed_pool(
     max_workers: int,
     worker: Callable[[int], R],
     on_start: Callable[[int, int], None] | None = None,
-    on_complete: Callable[[int, R], None] | None = None,
+    on_complete: Callable[[int, R | None], None] | None = None,
     index_order: list[int] | None = None,
 ) -> list[R]:
     if count <= 0:

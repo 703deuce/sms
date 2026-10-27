@@ -350,14 +350,14 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                         "aiMeta": ai_meta,
                     }
                 )
-            insert_clips_batch(conn, clip_rows)
+            inserted = insert_clips_batch(conn, clip_rows)
             log_stream_analyze_summary(
                 vod_id=vod_id,
                 vod_minutes=audio_minutes,
                 chunks=len(ranges),
                 transcribe_ms=chunk_metrics.transcribe_ms,
                 est_cost_usd=chunk_metrics.est_cost_usd,
-                clips_out=len(clip_rows),
+                clips_out=inserted if inserted else len(clip_rows),
             )
 
             pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
