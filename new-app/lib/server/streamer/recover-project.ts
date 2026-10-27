@@ -1,7 +1,7 @@
 import type { ClipProjectStatus } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
-import { pickStreamerRetryJobType } from '@/lib/server/streamer/retry-project'
+import { pickStreamerRetryJobType, streamAnalyzePhaseComplete } from '@/lib/server/streamer/retry-project'
 
 const NON_TERMINAL: ClipProjectStatus[] = [
   'QUEUED',
@@ -42,7 +42,7 @@ export async function enqueueStreamerRecoveryJob(projectId: string, reason: stri
       : {}
   const hasAudioKey = Boolean(state.audioKey)
   const clipCount = await prisma.clip.count({ where: { projectId, deletedAt: null } })
-  const jobType = pickStreamerRetryJobType(hasAudioKey, clipCount)
+  const jobType = pickStreamerRetryJobType(hasAudioKey, clipCount, streamAnalyzePhaseComplete(state))
   const jobId = createId('job')
 
   await prisma.$transaction([

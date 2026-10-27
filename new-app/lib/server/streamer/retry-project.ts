@@ -2,9 +2,18 @@ import { Prisma } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 
-export function pickStreamerRetryJobType(hasAudioKey: boolean, clipCount: number) {
+/** True when STREAM_ANALYZE finished (rank/enqueue render) even if zero clip rows. */
+export function streamAnalyzePhaseComplete(state: Record<string, unknown>): boolean {
+  return Boolean(state.candidatesKey || state.signalsKey || state.rankingVersion)
+}
+
+export function pickStreamerRetryJobType(
+  hasAudioKey: boolean,
+  clipCount: number,
+  analyzeComplete = false,
+) {
   if (!hasAudioKey) return 'STREAM_IMPORT' as const
-  if (clipCount > 0) return 'STREAM_RENDER' as const
+  if (clipCount > 0 || analyzeComplete) return 'STREAM_RENDER' as const
   return 'STREAM_ANALYZE' as const
 }
 
@@ -21,7 +30,7 @@ export async function retryStreamerProject(workspaceId: string, projectId: strin
 
   const hasAudioKey = Boolean(state.audioKey)
   const clipCount = await prisma.clip.count({ where: { projectId, deletedAt: null } })
-  const jobType = pickStreamerRetryJobType(hasAudioKey, clipCount)
+  const jobType = pickStreamerRetryJobType(hasAudioKey, clipCount, streamAnalyzePhaseComplete(state))
   const payload: Record<string, unknown> = { vodId: vod.id, resume: true }
 
   const jobId = createId('job')

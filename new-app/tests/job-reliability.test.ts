@@ -6,7 +6,7 @@ import {
   shouldFailJobAfterStale,
   stalledProjectErrorMessage,
 } from '@/lib/server/clips/job-reliability'
-import { pickStreamerRetryJobType } from '@/lib/server/streamer/retry-project'
+import { pickStreamerRetryJobType, streamAnalyzePhaseComplete } from '@/lib/server/streamer/retry-project'
 
 describe('job reliability', () => {
   it('uses 3 minute stale heartbeat (worker lock parity)', () => {
@@ -33,5 +33,7 @@ describe('job reliability', () => {
     expect(pickStreamerRetryJobType(false, 0)).toBe('STREAM_IMPORT')
     expect(pickStreamerRetryJobType(true, 0)).toBe('STREAM_ANALYZE')
     expect(pickStreamerRetryJobType(true, 3)).toBe('STREAM_RENDER')
+    expect(streamAnalyzePhaseComplete({ candidatesKey: 'k' })).toBe(true)
+    expect(pickStreamerRetryJobType(true, 0, true)).toBe('STREAM_RENDER')
   })
 })
