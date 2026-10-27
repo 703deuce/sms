@@ -162,10 +162,8 @@ export function EditorShell({
 
   const studioGenId = studioSound?.enabled && studioSound.generationId ? studioSound.generationId : null
   const studioGen = useGeneration(studioGenId, 1500)
-  const studioEnqueueRef = useRef(false)
 
   const enqueueStudioSound = useCallback(async () => {
-    studioEnqueueRef.current = true
     const { generationId } = await clipsFetch<{ generationId: string }>(
       `/api/clips/clips/${clipId}/studio-sound`,
       { method: 'POST', body: '{}' },
@@ -178,40 +176,19 @@ export function EditorShell({
   }, [clipId, patchStudioSound, studioSound?.mix])
 
   const startStudioSoundPreview = useCallback(() => {
-    studioEnqueueRef.current = false
     void enqueueStudioSound().catch(() => {
-      studioEnqueueRef.current = false
       toast.error('Could not start Studio Sound')
     })
   }, [enqueueStudioSound])
 
-  useEffect(() => {
-    if (!studioSound?.enabled || useDubAudio) {
-      studioEnqueueRef.current = false
-      return
-    }
-    if (studioSound.generationId && (studioGen.status === 'READY' || studioGen.status === 'FAILED')) return
-    if (studioSound.generationId && studioGen.running) return
-    if (!studioSound.generationId && !studioEnqueueRef.current) {
-      void startStudioSoundPreview()
-    }
-  }, [
-    studioSound?.enabled,
-    studioSound?.generationId,
-    studioGen.running,
-    studioGen.status,
-    startStudioSoundPreview,
-    useDubAudio,
-  ])
-
   const studioPreviewActive = Boolean(
-    studioSound?.enabled && studioGen.downloadUrl && !useDubAudio,
+    studioSound?.enabled && studioGen.status === 'READY' && studioGen.downloadUrl && !useDubAudio,
   )
   const studioPreviewLoading = Boolean(
     studioSound?.enabled &&
       !useDubAudio &&
       !studioPreviewActive &&
-      studioGen.status !== 'FAILED',
+      studioGen.running,
   )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const outDur = outputDurationFromEdits(edits)

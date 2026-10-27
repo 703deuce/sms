@@ -141,20 +141,27 @@ export function useEditorState(
   opts?: { serverUpdatedAt?: string; words?: SourceWord[] },
 ) {
   const safeInitial = normalizeEdits(initialEdits, bounds)
-  const draft = readEditorAutosaveDraft(clipId)
-  const restored =
-    draft && draftDiffersFromServer(draft, safeInitial) ? normalizeEdits(draft.edits, bounds) : safeInitial
+  let draft = readEditorAutosaveDraft(clipId)
+  if (
+    draft &&
+    opts?.serverUpdatedAt &&
+    draft.serverUpdatedAt &&
+    draft.serverUpdatedAt !== opts.serverUpdatedAt
+  ) {
+    clearEditorAutosaveDraft(clipId)
+    draft = null
+  }
+  const draftDiffers = Boolean(draft && draftDiffersFromServer(draft, safeInitial))
+  const restored = draftDiffers ? normalizeEdits(draft!.edits, bounds) : safeInitial
   const [state, dispatch] = useReducer(editorEditsReducer, {
     edits: restored,
     past: [],
     future: [],
-    saveState: draft && draftDiffersFromServer(draft, safeInitial) ? 'dirty' : 'saved',
+    saveState: draftDiffers ? 'dirty' : 'saved',
     producerStrip: null,
   })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const localRevisionRef = useRef(
-    draft && draftDiffersFromServer(draft, safeInitial) ? 1 : 0,
-  )
+  const localRevisionRef = useRef(draftDiffers ? 1 : 0)
   const savedRevisionRef = useRef(0)
   const saveInFlightRef = useRef(false)
   const savePendingRef = useRef(false)
@@ -165,7 +172,7 @@ export function useEditorState(
   editsRef.current = state.edits
 
   useEffect(() => {
-    if (draft && draftDiffersFromServer(draft, safeInitial)) {
+    if (draftDiffers) {
       toast.message('Restored unsaved edits from this device')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
@@ -176,6 +183,7 @@ export function useEditorState(
   }, [])
 
   const setEdits = useCallback((edits: ClipEditsV2, pushHistory = true) => {
+    if (editsEqual(editsRef.current, edits)) return
     bumpLocalRevision()
     dispatch({ type: 'set', edits, pushHistory })
   }, [bumpLocalRevision])
@@ -183,6 +191,7 @@ export function useEditorState(
   /** One undo step for a full producer patch (not per-field). */
   const applyProducerPatch = useCallback(
     (edits: ClipEditsV2, before?: ClipEditsV2, producerChangeCount?: number) => {
+      if (editsEqual(editsRef.current, edits)) return
       bumpLocalRevision()
       dispatch({ type: 'BATCH', edits, before, producerChangeCount })
     },
@@ -340,10 +349,10 @@ export function useEditorState(
   const patchStudioSound = useCallback(
     (studio: ClipStudioSound | null) => {
       const cur = normalizeAudioEdits(state.edits.audio)
-      setEdits({
-        ...state.edits,
-        audio: { ...cur, studioSound: studio },
-      })
+      const nextAudio = { ...cur, studioSound: studio }
+      const next = { ...state.edits, audio: nextAudio }
+      if (editsEqual(state.edits, next)) return
+      setEdits(next)
     },
     [setEdits, state.edits],
   )

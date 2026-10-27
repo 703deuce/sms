@@ -58,6 +58,8 @@ export function AudioPanel({
   const studio = audioNorm.studioSound
   const studioGen = useGeneration(studio?.generationId ?? null)
   const studioEnqueueRef = useRef(false)
+  const studioReadyToastRef = useRef<string | null>(null)
+  const sawStudioRunningRef = useRef(false)
   const music = audioNorm.music
   const musicGen = useGeneration(music?.generationId ?? null)
   const aiExtras = clipEditorAiExtrasEnabled()
@@ -77,26 +79,17 @@ export function AudioPanel({
   }, [clipId, onPatchStudioSound, studio?.mix])
 
   useEffect(() => {
-    if (!studio?.enabled) {
-      studioEnqueueRef.current = false
-      return
-    }
-    if (studio.generationId && (studioGen.status === 'READY' || studioGen.status === 'FAILED')) return
-    if (studio.generationId && studioGen.running) return
-    if (!studio.generationId && !studioEnqueueRef.current) {
-      studioEnqueueRef.current = true
-      void enqueueStudioSound().catch(() => {
-        studioEnqueueRef.current = false
-        toast.error('Could not start Studio Sound')
-      })
-    }
-  }, [studio?.enabled, studio?.generationId, studioGen.running, studioGen.status, enqueueStudioSound])
+    if (studioGen.running) sawStudioRunningRef.current = true
+  }, [studioGen.running])
 
   useEffect(() => {
-    if (studioGen.status === 'READY' && studio?.enabled) {
-      toast.success('Studio Sound ready for preview')
-    }
-  }, [studioGen.status, studio?.enabled])
+    if (studioGen.status !== 'READY' || !studio?.enabled || !studio.generationId) return
+    if (!sawStudioRunningRef.current) return
+    if (studioReadyToastRef.current === studio.generationId) return
+    studioReadyToastRef.current = studio.generationId
+    sawStudioRunningRef.current = false
+    toast.success('Studio Sound ready for preview')
+  }, [studio?.enabled, studio?.generationId, studioGen.status])
 
   const suggest = async () => {
     setBusy(true)
@@ -175,13 +168,12 @@ export function AudioPanel({
             return
           }
           const priorId = (next.generationId ?? studio?.generationId ?? '').trim()
-          const ready = studioGen.status === 'READY' && Boolean(studioGen.downloadUrl)
           onPatchStudioSound({
             enabled: true,
             mix: next.mix,
-            generationId: ready && priorId ? priorId : '',
+            generationId: priorId,
           })
-          if (!ready || studioGen.failed) {
+          if (!priorId || studioGen.failed) {
             studioEnqueueRef.current = false
             if (onStartStudioSound) {
               onStartStudioSound()
