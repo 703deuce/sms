@@ -298,11 +298,20 @@ def render_edited_clip(
         remapped, _ = words_after_edits(src_words, edits)
         wpath = work_dir / "words.json"
         wpath.write_text(json.dumps(remapped))
+        export_settings = dict(settings)
+        if (export_settings.get("layout") or "").strip() == "auto":
+            resolved = (export_settings.get("aiMeta") or {}).get("layoutResolved")
+            if resolved:
+                export_settings["layout"] = resolved
+            else:
+                from clips_worker.render_clip import resolve_clip_layout
+
+                export_settings["layout"] = resolve_clip_layout(export_settings, 0)
         run_speakercrop(
             clip_src,
             out_mp4,
             wpath,
-            settings,
+            export_settings,
             work_dir,
             clip_start_ms=clip_start_ms,
             shot_overrides=shot_overrides,
@@ -327,6 +336,14 @@ def render_edited_clip(
     if not isinstance(settings_nc, dict):
         settings_nc = {}
     settings_nc["captions"] = {**(settings_nc.get("captions") or {}), "enabled": False}
+    if (settings_nc.get("layout") or "").strip() == "auto":
+        resolved = (settings_nc.get("aiMeta") or {}).get("layoutResolved")
+        if resolved:
+            settings_nc["layout"] = resolved
+        else:
+            from clips_worker.render_clip import resolve_clip_layout
+
+            settings_nc["layout"] = resolve_clip_layout(settings_nc, 0)
     run_speakercrop(
         clip_src,
         full_render,
