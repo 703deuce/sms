@@ -1,4 +1,7 @@
-"""Layout director: Viterbi + post-process for multiperson clipper."""
+"""v1 / prototype-only layout director (threshold merge + viterbi_layouts).
+
+Live reframe v2 (`REFRAME_V=2`) uses `clips_worker.reframe_core.viterbi_layout` instead.
+Kept for multiperson_pipeline experiments and local scripts — not worker Docker CI."""
 from __future__ import annotations
 
 import os
