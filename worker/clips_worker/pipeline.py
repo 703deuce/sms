@@ -4,8 +4,11 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+import time
 import uuid
 from pathlib import Path
+
+from clips_worker.clip_progress import reframe_progress_payload
 
 from clips_worker.anything_picker import pick_anything_clips
 from clips_worker.picker import pick_talking_clips
@@ -365,15 +368,12 @@ def run_m4_pipeline(
         total = max(1, len(picks))
         render_conc = clips_render_concurrency()
 
+        reframe_started_at = time.time()
+
         def on_reframe_start(idx: int, clip_total: int) -> None:
             post_progress(
                 job_id,
-                {
-                    "projectStatus": "REFRAMING",
-                    "stage": f"reframe_{idx + 1}_of_{clip_total}",
-                    "progress": 55 + int(30 * idx / clip_total),
-                    "jobStatus": "RUNNING",
-                },
+                reframe_progress_payload(idx, clip_total, reframe_started_at, render_conc),
             )
 
         def build_clip_row(idx: int) -> dict:

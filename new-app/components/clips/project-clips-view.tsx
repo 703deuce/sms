@@ -71,6 +71,9 @@ export function ProjectClipsView({
   createdAt,
   sourceDurationMs = 0,
   isStreamer = false,
+  initialProgress = 0,
+  initialStage = null,
+  initialEtaSec = 0,
 }: {
   projectId: string
   projectTitle: string
@@ -81,6 +84,9 @@ export function ProjectClipsView({
   createdAt?: string
   sourceDurationMs?: number
   isStreamer?: boolean
+  initialProgress?: number
+  initialStage?: string | null
+  initialEtaSec?: number
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
 
@@ -253,7 +259,14 @@ export function ProjectClipsView({
       ) : !showResults ? (
         <div className="flex flex-col gap-6">
           {!isStreamer ? (
-            <JobStatus projectId={projectId} initialStatus={status} fromLink={fromLink} />
+            <JobStatus
+              projectId={projectId}
+              initialStatus={status}
+              initialProgress={initialProgress}
+              initialStage={initialStage}
+              initialEtaSec={initialEtaSec}
+              fromLink={fromLink}
+            />
           ) : null}
           {processing && <ClipGridSkeleton />}
         </div>
