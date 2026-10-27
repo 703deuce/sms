@@ -13,11 +13,14 @@ import {
   videoTimeSecFromSourceMs,
 } from '@/lib/clips/script-editor/sync-playhead'
 import { loadScriptEditorLayout, saveScriptEditorLayout } from '@/lib/clips/script-editor/panel-layout'
-import { deriveEdl } from '@/lib/clips/script-edl/derive-edl'
+import { deriveEdl, sourceMsToOutputTime } from '@/lib/clips/script-edl/derive-edl'
 import { isSourceMsInEdl, nextKeptSourceMs, outputDurationMs } from '@/lib/clips/script-edl/edl-playback'
+import { clipsFetch } from '@/lib/clips-api'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { useScriptComposition } from '@/components/script-editor/use-script-composition'
-import { ArrowLeft, Pause, Play, Undo2 } from 'lucide-react'
+import { scrollWordIntoTranscriptPane } from '@/lib/clips/script-editor/scroll-word-into-view'
+import { ArrowLeft, Download, Pause, Play, Redo2, Undo2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -41,7 +44,7 @@ function defaultDocument(words: EditorWord[]): ScriptDocumentV1 {
 
 export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const initialDoc = data.document ?? defaultDocument(data.editorWords)
-  const { document, saveState, deleteWords, undo, canUndo } = useScriptComposition({
+  const { document, saveState, deleteWords, undo, redo, canUndo, canRedo } = useScriptComposition({
     compositionId: data.compositionId,
     revision: data.compositionRevision,
     document: initialDoc,
@@ -52,8 +55,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const [scriptWidthPct, setScriptWidthPct] = useState(46)
   const [playheadMs, setPlayheadMs] = useState(data.rangeStartMs)
   const [playing, setPlaying] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [selAnchor, setSelAnchor] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
+  const dragSelectRef = useRef(false)
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
@@ -111,7 +116,8 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     return ids
   }, [selAnchor, selEnd, orderedWords, deletedSet])
 
-  const onWordClick = (idx: number, w: EditorWord, shift: boolean) => {
+  const onWordPointerDown = (idx: number, w: EditorWord, shift: boolean) => {
+    dragSelectRef.current = true
     if (shift && selAnchor != null) setSelEnd(idx)
     else {
       setSelAnchor(idx)
@@ -119,6 +125,23 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     }
     seekToSourceMs(w.t0Ms)
   }
+
+  const onWordPointerEnter = (idx: number) => {
+    if (!dragSelectRef.current) return
+    setSelEnd(idx)
+  }
+
+  useEffect(() => {
+    const endDrag = () => {
+      dragSelectRef.current = false
+    }
+    window.addEventListener('mouseup', endDrag)
+    window.addEventListener('pointerup', endDrag)
+    return () => {
+      window.removeEventListener('mouseup', endDrag)
+      window.removeEventListener('pointerup', endDrag)
+    }
+  }, [])
 
   const onDeleteSelection = useCallback(() => {
     const ids = [...selectedIds]
@@ -144,16 +167,21 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
         e.preventDefault()
         undo()
       }
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        (e.key === 'y' || (e.key === 'z' && e.shiftKey) || (e.key === 'Z' && e.shiftKey))
+      ) {
+        e.preventDefault()
+        redo()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onDeleteSelection, undo])
+  }, [onDeleteSelection, redo, undo])
 
   useEffect(() => {
-    const el = transcriptRef.current?.querySelector(`[data-word-idx="${activeIndex}"]`)
-    if (el && typeof el.scrollIntoView === 'function') {
-      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    }
+    const el = transcriptRef.current?.querySelector(`[data-word-idx="${activeIndex}"]`) ?? null
+    scrollWordIntoTranscriptPane(transcriptRef.current, el)
   }, [activeIndex])
 
   const togglePlay = () => {
@@ -187,11 +215,37 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   }
 
   const outDur = outputDurationMs(edl) || data.durationMs
+  const outputMs = sourceMsToOutputTime(playheadMs, edl) ?? Math.max(0, playheadMs - data.rangeStartMs)
   const durationLabel = formatScriptTimecode(outDur)
-  const currentLabel = formatScriptTimecode(Math.max(0, playheadMs - data.rangeStartMs))
+  const currentLabel = formatScriptTimecode(outputMs)
+
+  const onExport = async () => {
+    setExporting(true)
+    try {
+      const res = await clipsFetch<{
+        renderId: string
+        status: string
+        downloadUrl: string | null
+        filename: string
+      }>(`/api/clips/compositions/${data.compositionId}/export/video`, {
+        method: 'POST',
+        body: JSON.stringify({ resolution: '720p', aspect: '9:16', watermark: false }),
+      })
+      if (res.downloadUrl) {
+        window.open(res.downloadUrl, '_blank', 'noopener')
+        toast.success('Export ready')
+      } else {
+        toast.message('Export queued', { description: `Render ${res.renderId} · ${res.status}` })
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
-    <div data-script-shell className="flex min-h-[calc(100dvh-8rem)] flex-col rounded-xl border border-border bg-background">
+    <div data-script-shell className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-background">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
         <Button size="sm" variant="ghost" render={<Link href={`/app/clips/${data.projectId}`} />}>
           <ArrowLeft className="size-4" aria-hidden />
@@ -201,21 +255,32 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           <Undo2 className="size-4" aria-hidden />
           Undo
         </Button>
+        <Button size="sm" variant="ghost" disabled={!canRedo} onClick={() => redo()}>
+          <Redo2 className="size-4" aria-hidden />
+          Redo
+        </Button>
         <div className="min-w-0 flex-1 truncate text-sm font-medium">{data.title}</div>
+        <Button size="sm" variant="default" disabled={exporting} onClick={() => void onExport()}>
+          <Download className="size-4" aria-hidden />
+          Export
+        </Button>
         <span className="text-xs text-muted-foreground">
-          {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Saved'} · Delete selection to cut
+          {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Saved'} · output preview
         </span>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <section
-          className="flex min-h-[240px] min-w-0 flex-col border-b border-border lg:border-b-0 lg:border-r"
+          className="flex h-full min-h-0 min-w-0 flex-col border-b border-border lg:border-b-0 lg:border-r"
           style={{ flex: `0 0 ${scriptWidthPct}%` }}
         >
           <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
             Select words · Delete/Backspace removes from preview (cut)
           </div>
-          <div ref={transcriptRef} className="flex-1 overflow-y-auto px-4 py-3">
+          <div
+            ref={transcriptRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 select-none"
+          >
             <div className="mx-auto max-w-[72ch] space-y-4 text-[17px] leading-relaxed">
               {blocks.map((block) => (
                 <div key={`${block.speakerId}-${block.startMs}`}>
@@ -235,6 +300,11 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                           key={w.id}
                           type="button"
                           data-word-idx={idx}
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            onWordPointerDown(idx, w, e.shiftKey)
+                          }}
+                          onMouseEnter={() => onWordPointerEnter(idx)}
                           className={cn(
                             'mr-1 inline rounded-sm px-0.5 transition-colors',
                             w.isFiller && !deleted && 'text-muted-foreground line-through',
@@ -243,7 +313,6 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                             selected && 'bg-sky-500/25',
                             !active && !deleted && 'hover:bg-muted/60',
                           )}
-                          onClick={(e) => onWordClick(idx, w, e.shiftKey)}
                         >
                           {w.text}
                         </button>
@@ -263,12 +332,12 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           onMouseDown={onResizeStart}
         />
 
-        <section className="flex min-h-[280px] min-w-0 flex-1 flex-col">
-          <div className="flex flex-1 items-center justify-center bg-muted/30 p-4">
+        <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 flex-1 items-start justify-center overflow-hidden bg-muted/30 p-4">
             {data.sourceVideoUrl ? (
               <video
                 ref={videoRef}
-                className="max-h-full max-w-full rounded-lg bg-black shadow-md"
+                className="max-h-[min(70vh,100%)] w-full max-w-full rounded-lg bg-black shadow-md object-contain"
                 src={data.sourceVideoUrl}
                 controls={false}
                 preload="metadata"
@@ -286,7 +355,7 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
             <Button type="button" size="icon-sm" variant="outline" onClick={togglePlay} disabled={!data.sourceVideoUrl}>
               {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
             </Button>
-            <span className="tabular-nums text-muted-foreground">
+            <span className="tabular-nums text-muted-foreground" title="Output timeline (after cuts)">
               {currentLabel} / {durationLabel}
             </span>
           </div>

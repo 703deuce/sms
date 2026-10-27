@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono'
 export const metadata: Metadata = {
   title: { default: 'Transovo Clips', template: '%s · Transovo Clips' },
   description: 'Turn long videos into short clips, edit by transcript, and export ready-to-post videos.',
+  icons: { icon: [{ url: '/icon.svg', type: 'image/svg+xml' }] },
 }
 
 export const viewport: Viewport = {

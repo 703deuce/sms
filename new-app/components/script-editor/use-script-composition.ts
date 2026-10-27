@@ -1,7 +1,13 @@
 'use client'
 
-import { useCallback, useState } from 'react'
-import { applyCompositionOp } from '@/lib/clips/script-edl/ops'
+import { useCallback, useRef, useState } from 'react'
+import {
+  applyCompositionOp,
+  cloneDocument,
+  documentsEqual,
+  opsBetweenDocuments,
+  type ScriptCompositionOp,
+} from '@/lib/clips/script-edl/ops'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { clipsFetch } from '@/lib/clips-api'
 
@@ -17,61 +23,115 @@ export function useScriptComposition(initial: {
   const [document, setDocument] = useState<ScriptDocumentV1>(initial.document)
   const [revision, setRevision] = useState(initial.revision)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'error'>('saved')
-  const [undoDoc, setUndoDoc] = useState<ScriptDocumentV1 | null>(null)
+  const [undoDepth, setUndoDepth] = useState(0)
+  const [redoDepth, setRedoDepth] = useState(0)
 
-  const postOp = useCallback(
-    async (op: { type: 'delete_words'; wordIds: string[] } | { type: 'restore_words'; wordIds: string[] }, base: ScriptDocumentV1) => {
+  const revisionRef = useRef(initial.revision)
+  const undoStackRef = useRef<ScriptDocumentV1[]>([])
+  const redoStackRef = useRef<ScriptDocumentV1[]>([])
+  const pendingOpsRef = useRef(0)
+  const saveErrorRef = useRef(false)
+  const queueRef = useRef<Promise<void>>(Promise.resolve())
+
+  const bumpStacks = useCallback(() => {
+    setUndoDepth(undoStackRef.current.length)
+    setRedoDepth(redoStackRef.current.length)
+  }, [])
+
+  const enqueueServerOps = useCallback(
+    (ops: ScriptCompositionOp[], rollbackDoc: ScriptDocumentV1) => {
+      if (!ops.length) return
+      pendingOpsRef.current += 1
       setSaveState('saving')
-      const opId = newOpId()
-      try {
-        const res = await clipsFetch<{
-          revision: number
-          document: ScriptDocumentV1
-          ackedOpIds: string[]
-        }>(`/api/clips/compositions/${initial.compositionId}/ops`, {
-          method: 'POST',
-          body: JSON.stringify({
-            baseRevision: revision,
-            ops: [{ id: opId, op }],
-          }),
+      queueRef.current = queueRef.current
+        .then(async () => {
+          for (const op of ops) {
+            const opId = newOpId()
+            const res = await clipsFetch<{
+              revision: number
+              document: ScriptDocumentV1
+              ackedOpIds: string[]
+            }>(`/api/clips/compositions/${initial.compositionId}/ops`, {
+              method: 'POST',
+              body: JSON.stringify({
+                baseRevision: revisionRef.current,
+                ops: [{ id: opId, op }],
+              }),
+            })
+            revisionRef.current = res.revision
+            setRevision(res.revision)
+          }
+          saveErrorRef.current = false
         })
-        setRevision(res.revision)
-        setDocument(res.document)
-        setSaveState('saved')
-        return true
-      } catch {
-        setDocument(base)
-        setSaveState('error')
-        return false
-      }
+        .catch(() => {
+          saveErrorRef.current = true
+          setDocument(rollbackDoc)
+          setSaveState('error')
+        })
+        .finally(() => {
+          pendingOpsRef.current = Math.max(0, pendingOpsRef.current - 1)
+          if (pendingOpsRef.current === 0) {
+            setSaveState(saveErrorRef.current ? 'error' : 'saved')
+            if (!saveErrorRef.current) saveErrorRef.current = false
+          }
+        })
     },
-    [initial.compositionId, revision],
+    [initial.compositionId],
+  )
+
+  const commitLocal = useCallback(
+    (next: ScriptDocumentV1, serverOps: ScriptCompositionOp[], before: ScriptDocumentV1) => {
+      undoStackRef.current.push(cloneDocument(before))
+      redoStackRef.current = []
+      setDocument(next)
+      bumpStacks()
+      enqueueServerOps(serverOps, before)
+    },
+    [bumpStacks, enqueueServerOps],
   )
 
   const deleteWords = useCallback(
     (wordIds: string[]) => {
-      if (!wordIds.length) return
-      setUndoDoc(document)
-      const next = applyCompositionOp(document, { type: 'delete_words', wordIds })
-      setDocument(next)
-      void postOp({ type: 'delete_words', wordIds }, document)
+      const unique = [...new Set(wordIds)].filter(Boolean)
+      if (!unique.length) return
+      const before = document
+      const next = applyCompositionOp(before, { type: 'delete_words', wordIds: unique })
+      if (documentsEqual(before, next)) return
+      commitLocal(next, [{ type: 'delete_words', wordIds: unique }], before)
     },
-    [document, postOp],
+    [commitLocal, document],
   )
 
   const undo = useCallback(() => {
-    if (!undoDoc) return
-    const toRestore = document.deletedWordIds.filter((id) => !undoDoc.deletedWordIds.includes(id))
-    if (!toRestore.length) {
-      setDocument(undoDoc)
-      setUndoDoc(null)
-      return
-    }
-    const base = document
-    setDocument(undoDoc)
-    setUndoDoc(null)
-    void postOp({ type: 'restore_words', wordIds: toRestore }, base)
-  }, [document, postOp, undoDoc])
+    const prev = undoStackRef.current.pop()
+    if (!prev) return
+    const current = document
+    redoStackRef.current.push(cloneDocument(current))
+    const ops = opsBetweenDocuments(current, prev)
+    setDocument(prev)
+    bumpStacks()
+    enqueueServerOps(ops, current)
+  }, [bumpStacks, document, enqueueServerOps])
 
-  return { document, revision, saveState, deleteWords, undo, canUndo: Boolean(undoDoc) }
+  const redo = useCallback(() => {
+    const next = redoStackRef.current.pop()
+    if (!next) return
+    const current = document
+    undoStackRef.current.push(cloneDocument(current))
+    const ops = opsBetweenDocuments(current, next)
+    setDocument(next)
+    bumpStacks()
+    enqueueServerOps(ops, current)
+  }, [bumpStacks, document, enqueueServerOps])
+
+  return {
+    document,
+    revision,
+    saveState,
+    deleteWords,
+    undo,
+    redo,
+    canUndo: undoDepth > 0,
+    canRedo: redoDepth > 0,
+  }
 }

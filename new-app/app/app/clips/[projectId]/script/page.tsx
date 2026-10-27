@@ -1,4 +1,3 @@
-import { Page } from '@/components/app/page-primitives'
 import { ScriptEditorEntry } from '@/components/script-editor/script-editor-entry'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
@@ -14,8 +13,8 @@ export default async function ProjectScriptPage({ params }: { params: Promise<{ 
   if (!project) notFound()
 
   return (
-    <Page>
+    <div className="flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col overflow-hidden">
       <ScriptEditorEntry projectId={project.id} projectTitle={project.title} />
-    </Page>
+    </div>
   )
 }
