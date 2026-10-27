@@ -10,24 +10,23 @@ Legend: **done** · **partial** · **not done**
 |---|--------|--------|
 | M0–M7 | **done** | See prior rows in git history |
 | M8 | **not done** | Browser QA matrix (Rick) |
-| M9 | **partial** | Templates gallery, clone, deck/AI; optional template preview videos |
+| M9 | **done** | Templates gallery + preview video UI; `seed-t2v-template-previews.ts` for assets |
 
 ## Pages (SPEC §3)
 
 | ID | Surface | Status |
 |----|---------|--------|
-| P1–P7, P9, P11–P20 | **done** | Create incl. **audio** source; studio §3.0; ElevenLabs P6 music |
-| P8 Text | **partial** | Default timings; no full per-item timing editor |
-| P10 Brand | **done** | Template → `settings.brand` for worker |
+| P1–P20 | **done** | P8 per-scene title/LT timing sliders; P10 brand at export; studio page serializable props only |
 
 ## Ops
 
 | Item | Status |
 |------|--------|
-| `origin/master` | **merged** into `transovo-build` (merge commit on branch) |
+| `origin/master` | **ancestor of** `transovo-build` (`merge-base --is-ancestor`) |
 | Music | ElevenLabs `MUSIC` job reuse (no stock library seed) |
+| Code review batch | Critical + should-fix + listed minors addressed on branch |
 
-## Remaining (non-billing, non-M8)
+## Notes
 
-- P8 text timing editor; M9 template preview video assets
-- Brand bookend vs caption timeline offset (assemble vs export) — **partial**
+- Assemble skips brand bookends; composition export applies intro/outro (`script_composition_render.py`).
+- Undo/redo persisted per draft in `localStorage`; storyboard/producer/template edits push history.

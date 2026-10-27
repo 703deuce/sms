@@ -140,6 +140,18 @@ export function T2vTemplatesGallery({ draftId }: { draftId?: string }) {
           <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl bg-card p-4 shadow-lg">
             <h2 className="text-lg font-semibold">{preview.name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{preview.description}</p>
+            {preview.previewUrl ? (
+              <video
+                className="mt-3 w-full rounded-lg border border-border"
+                src={preview.previewUrl}
+                controls
+                playsInline
+                preload="metadata"
+                poster={preview.thumbUrl ?? undefined}
+              />
+            ) : preview.thumbUrl ? (
+              <img src={preview.thumbUrl} alt="" className="mt-3 w-full rounded-lg border border-border object-cover" />
+            ) : null}
             {preview.sampleScript ? (
               <p className="mt-3 rounded-lg bg-muted p-3 text-sm">{preview.sampleScript}</p>
             ) : null}
