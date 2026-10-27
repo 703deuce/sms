@@ -126,6 +126,7 @@ def rank_moments(
         chapters=chapters,
         llm_ranker=ranker,
         cue_events=cue_events,
+        video_moments=video_moments,
     )
     range_end = duration_ms
     snapped = [snap_fusion_pick(p, words, range_start_ms=0, range_end_ms=range_end) for p in picks]

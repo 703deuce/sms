@@ -33,6 +33,7 @@ def finalize_picks(
     genre: str = "podcast",
     *,
     relax_duration: bool = False,
+    visual_moments: list[dict] | None = None,
 ) -> list[dict]:
     gkey = resolve_genre_key(genre)
     gmeta = genre_meta(genre)
@@ -56,6 +57,23 @@ def finalize_picks(
             lo, hi = float(laugh_tail[0]), float(laugh_tail[1])
             end_ms += int(((lo + hi) / 2) * 1000)
         pick = {**row, "start_ms": start_ms, "end_ms": end_ms}
+        if visual_moments and not pick.get("boundary_setup_ms") and not pick.get("boundary_payoff_ms"):
+            try:
+                from clips_worker.visual_boundaries import infer_boundaries_from_moments, visual_boundaries_enabled
+
+                if visual_boundaries_enabled():
+                    setup_ms, payoff_ms = infer_boundaries_from_moments(
+                        pick["start_ms"],
+                        pick["end_ms"],
+                        visual_moments,
+                        range_start_ms=range_start_ms,
+                    )
+                    if setup_ms is not None:
+                        pick["boundary_setup_ms"] = setup_ms
+                    if payoff_ms is not None:
+                        pick["boundary_payoff_ms"] = payoff_ms
+            except Exception:
+                pass
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
         dur = pick["end_ms"] - pick["start_ms"]
         if dur < min_ms:

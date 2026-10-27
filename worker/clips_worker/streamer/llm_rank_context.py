@@ -126,4 +126,9 @@ def format_stream_rank_batch(
             block.append("clip_call_hits:\n" + "\n".join(ch))
         block.append("visual_watch:\n" + _visual_hit(vm, start_ms, end_ms, range_start_ms))
         blocks.append("\n".join(block))
-    return "Rank these stream moments (use ALL signals together):\n\n" + "\n---\n".join(blocks)
+    header = (
+        "Rank these stream moments (use ALL signals together). "
+        "For each candidate return setup_start_s and payoff_end_s (seconds from VOD slice start): "
+        "setup_start_s includes lead-in; payoff_end_s holds through the visual payoff plus ~1-2s.\n\n"
+    )
+    return header + "\n---\n".join(blocks)

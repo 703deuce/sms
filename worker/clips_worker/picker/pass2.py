@@ -50,6 +50,8 @@ PASS2_SCHEMA = {
                     "reject_reason": {"type": "string"},
                     "title": {"type": "string", "maxLength": 60},
                     "why_care": {"type": "string"},
+                    "setup_start_s": {"type": "number"},
+                    "payoff_end_s": {"type": "number"},
                 },
                 "required": [
                     "start_id",
@@ -110,6 +112,9 @@ def _pass2_system(genre: str, *, batched: bool = False) -> str:
         [
             "Return PASS 2 JSON only. Score and tighten each moment; cite sentence ids.",
             moment_rule,
+            "For each clip set setup_start_s and payoff_end_s (seconds from trim start): "
+            "setup_start_s includes lead-in before the hook; payoff_end_s lets the visual payoff finish "
+            "(kill/reaction/punchline) plus ~1-2s. Use visual watch notes when present.",
             "title must be <= 60 characters, honest, using the speaker's words; never internal codes like coverage_span.",
             load_core_rubric(),
             load_genre_prompt(genre),
@@ -125,6 +130,9 @@ def _clip_row_from_llm(
     sig_by: dict,
     genre: str,
     source_duration_s: float | None,
+    *,
+    range_start_ms: int = 0,
+    visual_moments: list[dict] | None = None,
 ) -> dict[str, Any] | None:
     reason = str(row.get("reject_reason") or "")
     hard = bool(row.get("reject")) and is_hard_llm_reject(reason)
@@ -185,6 +193,27 @@ def _clip_row_from_llm(
             "gate_reject": False,
         }
     )
+    try:
+        from clips_worker.visual_boundaries import (
+            boundary_fields_from_llm_row,
+            infer_boundaries_from_moments,
+            visual_boundaries_enabled,
+        )
+
+        if visual_boundaries_enabled():
+            setup_ms, payoff_ms = boundary_fields_from_llm_row(row, range_start_ms=range_start_ms)
+            if setup_ms is None and payoff_ms is None and visual_moments:
+                lo = int(sentences[ss].start_ms)
+                hi = int(sentences[es].end_ms)
+                setup_ms, payoff_ms = infer_boundaries_from_moments(
+                    lo, hi, visual_moments, range_start_ms=range_start_ms
+                )
+            if setup_ms is not None:
+                base["boundary_setup_ms"] = setup_ms
+            if payoff_ms is not None:
+                base["boundary_payoff_ms"] = payoff_ms
+    except Exception:
+        pass
     return base
 
 
@@ -219,6 +248,8 @@ def _score_moments_batched(
     source_duration_s: float | None,
     ctx_s: float,
     video_context: str | None = None,
+    range_start_ms: int = 0,
+    visual_moments: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     blocks: list[dict] = []
     for mi, m in enumerate(moments):
@@ -238,7 +269,8 @@ def _score_moments_batched(
     user_body = json.dumps(blocks, indent=0)
     if video_context:
         user_body = (
-            "Full judge context: score each moment using transcript + visual watch together.\n"
+            "Full judge context: score each moment using transcript + visual watch together. "
+            "Set setup_start_s and payoff_end_s per clip (seconds from trim start).\n"
             f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user_body}"
         )
     data = chat_json(
@@ -272,7 +304,16 @@ def _score_moments_batched(
             )
             reject_counts["missing_batch_row"] += 1
             continue
-        parsed = _clip_row_from_llm(row, m, sentences, sig_by, genre, source_duration_s)
+        parsed = _clip_row_from_llm(
+            row,
+            m,
+            sentences,
+            sig_by,
+            genre,
+            source_duration_s,
+            range_start_ms=range_start_ms,
+            visual_moments=visual_moments,
+        )
         if not parsed:
             continue
         audit.append(parsed)
@@ -301,6 +342,8 @@ def score_moments(
     source_duration_s: float | None = None,
     project_id: str | None = None,
     video_context: str | None = None,
+    range_start_ms: int = 0,
+    visual_moments: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     if not moments:
         return [], []
@@ -328,6 +371,8 @@ def score_moments(
                 source_duration_s,
                 ctx_s,
                 video_context=video_context,
+                range_start_ms=range_start_ms,
+                visual_moments=visual_moments,
             )
             if tail_moments:
                 tail_scored = pass1_heuristic_candidates(
@@ -368,6 +413,11 @@ def score_moments(
             "context_transcript": _context_lines(sentences, sig_by, ss, es, ctx_s),
         }
         user = json.dumps([block], indent=0)
+        if video_context:
+            user = (
+                "Full judge context: include setup_start_s and payoff_end_s from visual watch.\n"
+                f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user}"
+            )
         data = chat_json(_pass2_system(genre), user, PASS2_SCHEMA, "moments_pass2")
         picker_info("pass2_raw", moment_index=mi, raw=json_snippet(data))
         clips = data.get("clips") or []
@@ -384,7 +434,16 @@ def score_moments(
             )
             continue
         row = clips[0]
-        parsed = _clip_row_from_llm(row, m, sentences, sig_by, genre, source_duration_s)
+        parsed = _clip_row_from_llm(
+            row,
+            m,
+            sentences,
+            sig_by,
+            genre,
+            source_duration_s,
+            range_start_ms=range_start_ms,
+            visual_moments=visual_moments,
+        )
         if not parsed:
             continue
         audit.append(parsed)

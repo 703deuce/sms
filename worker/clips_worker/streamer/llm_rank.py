@@ -36,6 +36,8 @@ SCHEMA = {
                     },
                     "suggestedCaption": {"type": "string"},
                     "hashtags": {"type": "array", "items": {"type": "string"}},
+                    "setup_start_s": {"type": "number"},
+                    "payoff_end_s": {"type": "number"},
                 },
                 "required": ["id", "score", "keep", "title", "hook", "category"],
                 "additionalProperties": False,

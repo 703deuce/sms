@@ -21,6 +21,11 @@ def snap_fusion_pick(
         "end_ms": pick.end_ms,
         "length_max_ms": pick.end_ms - pick.start_ms + 15_000,
     }
+    meta = pick.ai_meta or {}
+    if meta.get("boundary_setup_ms") is not None:
+        clip["boundary_setup_ms"] = meta["boundary_setup_ms"]
+    if meta.get("boundary_payoff_ms") is not None:
+        clip["boundary_payoff_ms"] = meta["boundary_payoff_ms"]
     snap_bounds(clip, words, sentences, range_start_ms, range_end_ms)
     pick.start_ms = int(clip["start_ms"])
     pick.end_ms = int(clip["end_ms"])

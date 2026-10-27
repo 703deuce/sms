@@ -29,7 +29,12 @@ class Renderer:
             use_fc = bool(item.get("filter_complex"))
             vf = fg if fg else "scale=1080:1920"
             vcodec = "h264_nvenc" if enc == "h264_nvenc" else "libx264"
-            extra = ["-preset", "p5", "-cq", "21"] if vcodec == "h264_nvenc" else ["-crf", "20"]
+            # Match worker local fallback (libx264 crf 20 veryfast); avoid softer NVENC CQ.
+            extra = (
+                ["-preset", "p4", "-rc", "vbr", "-cq", "18", "-b:v", "0"]
+                if vcodec == "h264_nvenc"
+                else ["-crf", "20", "-preset", "veryfast"]
+            )
             if use_fc:
                 subprocess.check_call(
                     [

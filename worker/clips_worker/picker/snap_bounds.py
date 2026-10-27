@@ -179,6 +179,66 @@ def _clamp_ms_to_words(ms: int, words: list[dict], edge: str) -> int:
     return int(w["e"] * 1000)
 
 
+def _apply_visual_boundary_anchors(
+    clip: dict[str, Any],
+    words: list[dict],
+    sentences: list[Sentence],
+    range_start_ms: int,
+    range_end_ms: int,
+    start_ms: int,
+    end_ms: int,
+    *,
+    before_start: int,
+    before_end: int,
+) -> tuple[int, int]:
+    try:
+        from clips_worker.visual_boundaries import visual_boundaries_enabled
+    except Exception:
+        return start_ms, end_ms
+    if not visual_boundaries_enabled():
+        return start_ms, end_ms
+    setup = clip.get("boundary_setup_ms")
+    payoff = clip.get("boundary_payoff_ms")
+    if setup is None and payoff is None:
+        return start_ms, end_ms
+    try:
+        if setup is not None:
+            setup_i = int(setup)
+            if start_ms > setup_i + 250:
+                start_ms = setup_i
+                if words:
+                    start_ms = _clamp_ms_to_words(start_ms, words, "start")
+                else:
+                    start_ms = max(range_start_ms, setup_i)
+            elif start_ms < setup_i:
+                start_ms = max(range_start_ms, start_ms)
+        if payoff is not None:
+            payoff_i = int(payoff)
+            target_end = payoff_i + int(PAD_END_S * 1000)
+            if end_ms < target_end - 150:
+                end_ms = target_end
+                end_ms = min(range_end_ms, end_ms)
+                if words:
+                    we = _word_index_at_ms(words, end_ms, "end")
+                    extend_limit = min(range_end_ms, target_end + int(SENTENCE_EXTEND_MAX_S * 1000))
+                    if not _is_sentence_final_word(words, we):
+                        for j in range(we + 1, len(words)):
+                            if int(words[j]["e"] * 1000) > extend_limit:
+                                break
+                            if _is_sentence_final_word(words, j):
+                                we = j
+                                end_ms = min(range_end_ms, int(words[we]["e"] * 1000))
+                                break
+                    else:
+                        end_ms = min(range_end_ms, int(words[we]["e"] * 1000))
+            end_ms = max(end_ms, min(range_end_ms, payoff_i))
+        if end_ms <= start_ms:
+            return before_start, before_end
+    except Exception:
+        return start_ms, end_ms
+    return start_ms, end_ms
+
+
 def snap_bounds(
     clip: dict[str, Any],
     words: list[dict],
@@ -272,6 +332,18 @@ def snap_bounds(
     end_ms = min(range_end_ms, int(words[we_end]["e"] * 1000))
     if end_ms <= start_ms:
         start_ms, end_ms = before
+
+    start_ms, end_ms = _apply_visual_boundary_anchors(
+        clip,
+        words,
+        sentences,
+        range_start_ms,
+        range_end_ms,
+        start_ms,
+        end_ms,
+        before_start=before[0],
+        before_end=before[1],
+    )
 
     clip["start_ms"] = start_ms
     clip["end_ms"] = end_ms

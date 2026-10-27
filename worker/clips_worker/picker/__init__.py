@@ -193,6 +193,8 @@ def pick_talking_clips(
                 source_duration_s=source_duration_s,
                 project_id=str(settings.get("projectId") or settings.get("project_id") or "").strip() or None,
                 video_context=video_context or None,
+                range_start_ms=range_start_ms,
+                visual_moments=visual_moments or None,
             )
         if on_picker_checkpoint:
             on_picker_checkpoint(moments, scored)
@@ -213,7 +215,14 @@ def pick_talking_clips(
 
     with stage_span("selection", heartbeat=True):
         picks = finalize_picks(
-            scored, sentences, sig_by, range_words, range_start_ms, range_end_ms, genre
+            scored,
+            sentences,
+            sig_by,
+            range_words,
+            range_start_ms,
+            range_end_ms,
+            genre,
+            visual_moments=visual_moments or None,
         )
     if not picks and scored:
         picks = finalize_picks(
@@ -225,6 +234,7 @@ def pick_talking_clips(
             range_end_ms,
             genre,
             relax_duration=True,
+            visual_moments=visual_moments or None,
         )
         if picks:
             picker_info("finalize_relaxed_duration", count=len(picks))
@@ -251,6 +261,7 @@ def pick_talking_clips(
             range_end_ms,
             genre,
             relax_duration=True,
+            visual_moments=visual_moments or None,
         )
         if picks:
             picker_info("span_fallback_picks", count=len(picks))

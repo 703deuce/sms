@@ -1,4 +1,7 @@
-"""Modal/local GPU encode for clip previews and exports (filtergraph built on worker)."""
+"""Modal/local GPU encode for clip previews and exports (filtergraph built on worker).
+
+Encode quality: local fallback uses libx264 crf 20; Modal Renderer mirrors that (see modal_app/render.py).
+"""
 from __future__ import annotations
 
 import json

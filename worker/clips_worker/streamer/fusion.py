@@ -98,6 +98,7 @@ def fuse_moments(
     chapters: list[dict] | None = None,
     llm_ranker=None,
     cue_events: list[dict] | None = None,
+    video_moments: list[dict] | None = None,
 ) -> tuple[list[FusionPick], dict]:
     """Return ranked clip candidates and signals.json payload."""
     weights = (settings.get("signalWeights") or {}) if isinstance(settings, dict) else {}
@@ -167,10 +168,27 @@ def fuse_moments(
         category = llm.get("category") or "other"
         title = (llm.get("title") or f"Moment at {cand['start_ms'] // 1000}s")[:60]
         hook = (llm.get("hook") or title)[:90]
+        start_ms = int(cand["start_ms"])
+        end_ms = int(cand["end_ms"])
+        boundary_setup_ms = None
+        boundary_payoff_ms = None
+        try:
+            from clips_worker.visual_boundaries import resolve_boundaries_for_window
+
+            start_ms, end_ms, boundary_setup_ms, boundary_payoff_ms = resolve_boundaries_for_window(
+                start_ms,
+                end_ms,
+                llm if llm else None,
+                video_moments,
+                range_start_ms=0,
+                range_end_ms=int(duration_s * 1000),
+            )
+        except Exception:
+            pass
         picks.append(
             FusionPick(
-                start_ms=cand["start_ms"],
-                end_ms=cand["end_ms"],
+                start_ms=start_ms,
+                end_ms=end_ms,
                 title=title,
                 hook=hook,
                 score=total,
@@ -191,6 +209,14 @@ def fuse_moments(
                         "signalPeak": cand["signal_peak"],
                     },
                     "hook": hook,
+                    **(
+                        {
+                            "boundary_setup_ms": boundary_setup_ms,
+                            "boundary_payoff_ms": boundary_payoff_ms,
+                        }
+                        if boundary_setup_ms is not None or boundary_payoff_ms is not None
+                        else {}
+                    ),
                 },
                 peak_ms=cand["peak_ms"],
             )
