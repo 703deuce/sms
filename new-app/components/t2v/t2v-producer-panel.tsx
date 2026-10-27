@@ -21,7 +21,11 @@ export function T2vProducerPanel({
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const [pendingConfirm, setPendingConfirm] = useState<{ message: string; reply: string } | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    message: string
+    reply: string
+    proposalId: string
+  } | null>(null)
 
   const send = async (confirmDestructive = false) => {
     const text = confirmDestructive ? pendingConfirm?.message ?? '' : input.trim()
@@ -35,12 +39,20 @@ export function T2vProducerPanel({
       const res = await fetch(`/api/t2v/drafts/${draftId}/producer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, confirmDestructive }),
+        body: JSON.stringify({
+          message: text,
+          confirmDestructive,
+          proposalId: confirmDestructive ? pendingConfirm?.proposalId : undefined,
+        }),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'producer_failed')
       if (body.data?.needsConfirm) {
-        setPendingConfirm({ message: text, reply: body.data.reply ?? '' })
+        setPendingConfirm({
+          message: text,
+          reply: body.data.reply ?? '',
+          proposalId: body.data.proposalId as string,
+        })
         setMessages((m) => [...m, { role: 'assistant', content: body.data.message ?? 'Confirm destructive changes?' }])
         return
       }
