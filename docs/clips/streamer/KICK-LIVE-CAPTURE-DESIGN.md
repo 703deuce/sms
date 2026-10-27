@@ -131,18 +131,15 @@ Claim job only if under caps; else requeue with delay.
 
 ## 6. Bandwidth & CPU per concurrent live channel
 
-**Assumptions:** 720p @ ~2.5 Mbps video buffer + 128 kbps audio for analyze; 15 min buffer; 15 min audio chunks.
+**Measured (probe 2026-10-27):** lowest HLS rung **230 kbps**, `ffmpeg -c copy` 45 s → **~0.30 Mbps** avg, **~0 CPU** — see **`KICK-LIVE-CAPTURE-SCALE-PROBE.md`**.
 
-| Resource | Per channel (steady state) | Notes |
-|----------|----------------------------|-------|
-| **Ingress bandwidth** | **~2.6 Mbps** (~**1.0 GB/h**) | Video ring + audio demux from same master (audio may be lower if separate variant ~128 kbps → **~0.5 GB/h** audio-only + smaller video buffer) |
-| **Disk** | **~300–400 MB** peak scratch | Ring buffer + one chunk |
-| **CPU** | **~0.1–0.3 core** ffmpeg demux/copy | No transcode on buffer; chunk opus encode light |
-| **GPU** | Same as Twitch chunks | **~0.35 GPU-s / audio min** Modal transcribe (`STREAMER-COST-DESIGN.md`) |
+| Resource | Analyze-only (lowest rung) | + 720p rolling buffer |
+|----------|----------------------------|------------------------|
+| **Ingress** | **~0.3 Mbps** (~135 MB/h) | **+~2–3 Mbps** when buffer active |
+| **CPU** | **negligible** (copy) | **~0.1–0.3 core** demux |
+| **GPU** | **~$0.0114/h** transcribe | same |
 
-**Example:** **10** concurrent Kick marathons on one worker fleet → **~10 GB/h** ingress + **~3–4 GB** scratch — requires **dedicated stream-worker** pool, not shared with burst paste jobs.
-
-**Cost (transcribe only, 24 h live):** ~$0.27 GPU / day per channel (same as marathon doc); buffer adds **negligible** $ vs ASR.
+**Scale:** **30** concurrent ≈ **~9 Mbps** ingress + **~$0.34/h** ASR (upper bound, no idle-skip).
 
 ---
 
