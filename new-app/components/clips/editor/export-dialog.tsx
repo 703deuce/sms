@@ -23,17 +23,21 @@ export function ExportDialog({
   onAudioTrack,
   open,
   onClose,
+  onAspectChange,
 }: {
   clipId: string
   title: string
   edits: ClipEditsV2
   dubs?: DubRow[]
   onAudioTrack?: (track: string) => void
+  onAspectChange?: (aspect: ClipProjectSettings['aspectRatio']) => void
   open: boolean
   onClose: () => void
 }) {
   const [alsoSrt, setAlsoSrt] = useState(false)
-  const [aspect, setAspect] = useState<ClipProjectSettings['aspectRatio']>('9:16')
+  const [aspect, setAspect] = useState<ClipProjectSettings['aspectRatio']>(
+    edits.aspectRatio ?? '9:16',
+  )
   const [resolution, setResolution] = useState<'720p' | '1080p'>(() =>
     can('', 'export_1080p') ? '1080p' : '720p',
   )
@@ -44,6 +48,10 @@ export function ExportDialog({
   const [status, setStatus] = useState<string | null>(null)
   const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) setAspect(edits.aspectRatio ?? '9:16')
+  }, [open, edits.aspectRatio])
 
   useEffect(() => {
     if (!open) {
@@ -170,7 +178,10 @@ export function ExportDialog({
                 key={a}
                 size="sm"
                 variant={aspect === a ? 'default' : 'outline'}
-                onClick={() => setAspect(a)}
+                onClick={() => {
+                  setAspect(a)
+                  onAspectChange?.(a)
+                }}
               >
                 {a}
               </Button>
