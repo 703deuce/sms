@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 import os
 import shutil
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -15,6 +17,8 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from clips_worker.source_cache import get_source_cache
+
+log = logging.getLogger(__name__)
 
 # Browser/CDN-friendly; objects are immutable at a given key+version.
 _OBJECT_CACHE_CONTROL = "private, max-age=31536000, immutable"
@@ -119,6 +123,23 @@ def _s3_object_meta(object_key: str) -> tuple[str, int]:
     return etag, size
 
 
+def _s3_missing_key(exc: ClientError) -> bool:
+    code = str(exc.response.get("Error", {}).get("Code", ""))
+    return code in ("404", "NoSuchKey", "NotFound")
+
+
+def _http_error_snippet(exc: urllib.error.HTTPError, limit: int = 200) -> str:
+    try:
+        raw = exc.read().decode("utf-8", errors="replace")
+    except Exception:
+        raw = ""
+    text = raw.replace("\n", " ").strip()[:limit]
+    for token_key in ("token", "signature", "secret", "authorization"):
+        if token_key in text.lower():
+            return "(redacted)"
+    return text or "(empty)"
+
+
 def download_object(object_key: str, dest: Path) -> None:
     if object_key.startswith(STAGING_KEY_PREFIX):
         upload_id = object_key[len(STAGING_KEY_PREFIX) :]
@@ -128,9 +149,26 @@ def download_object(object_key: str, dest: Path) -> None:
         try:
             _download_s3_cached(object_key, dest)
             return
-        except ClientError:
-            _download_supabase(object_key, dest)
-            return
+        except ClientError as exc:
+            if _s3_missing_key(exc):
+                if object_key.startswith("stock/"):
+                    raise RuntimeError(f"storage_object_missing:{object_key}") from exc
+                log.warning(
+                    "[clips:storage] s3 head/download missing key=%s, trying supabase fallback",
+                    object_key,
+                )
+                try:
+                    _download_supabase(object_key, dest)
+                    return
+                except urllib.error.HTTPError as http_exc:
+                    log.error(
+                        "[clips:storage] supabase fallback failed key=%s status=%s body=%s",
+                        object_key,
+                        http_exc.code,
+                        _http_error_snippet(http_exc),
+                    )
+                    raise RuntimeError(f"storage_object_missing:{object_key}") from http_exc
+            raise
     _download_supabase(object_key, dest)
 
 
@@ -186,8 +224,17 @@ def _download_supabase(object_key: str, dest: Path) -> None:
         url,
         headers={"Authorization": f"Bearer {token}", "apikey": token},
     )
-    with urllib.request.urlopen(req, timeout=600) as resp:
-        dest.write_bytes(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            dest.write_bytes(resp.read())
+    except urllib.error.HTTPError as exc:
+        log.error(
+            "[clips:storage] supabase download failed key=%s status=%s body=%s",
+            object_key,
+            exc.code,
+            _http_error_snippet(exc),
+        )
+        raise
 
 
 def _upload_supabase(object_key: str, path: Path, content_type: str | None) -> None:

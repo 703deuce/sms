@@ -2,6 +2,7 @@ import 'server-only'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
+import { logT2v, logT2vError } from '@/lib/server/t2v/log'
 
 const ALLOWED_STOCK_HOST_SUFFIXES = [
   'videos.pexels.com',
@@ -49,22 +50,87 @@ async function fetchStockResponse(initialUrl: string): Promise<Response> {
   throw new Error('stock_redirect_too_many')
 }
 
+async function stockObjectExists(storageKey: string): Promise<boolean> {
+  const storage = getClipStorage()
+  try {
+    const size = await storage.getObjectSizeBytes(storageKey)
+    return size != null && size > 0
+  } catch {
+    return false
+  }
+}
+
+async function ingestStockBytes(
+  objectKey: string,
+  c: StockCandidate,
+  rowId: string,
+): Promise<{ id: string; storageKey: string | null }> {
+  const prisma = getPrisma()
+  const storage = getClipStorage()
+  const isPhoto = c.stockKind === 'photo'
+  assertAllowedStockUrl(c.srcUrl)
+  logT2v('stock', 'ingest from provider', {
+    assetId: rowId,
+    provider: c.provider,
+    providerId: c.providerId,
+    storageKey: objectKey,
+  })
+  const res = await fetchStockResponse(c.srcUrl)
+  if (!res.ok) throw new Error(`stock_download_${res.status}`)
+  const contentType = isPhoto ? 'image/jpeg' : 'video/mp4'
+  const bytes = Buffer.from(await res.arrayBuffer())
+  if (bytes.length < 64) throw new Error('stock_download_empty')
+  await storage.putBytes(objectKey, bytes, contentType)
+  return prisma.stockAsset.update({
+    where: { id: rowId },
+    data: { storageKey: objectKey },
+  })
+}
+
 /**
  * Copy provider renditions into clip storage via the active driver (B2/S3/local).
  * Only server-resolved CDN URLs from stock search may be fetched.
  */
 export async function ensureT2vStockAsset(_workspaceId: string, c: StockCandidate) {
   const prisma = getPrisma()
-  const storage = getClipStorage()
   const { provider, providerId } = stockProviderKey(c)
   const isPhoto = c.stockKind === 'photo'
   const objectKey = `stock/${provider}/${providerId}.${isPhoto ? 'jpg' : 'mp4'}`
   const existing = await prisma.stockAsset.findUnique({
     where: { provider_providerId: { provider, providerId } },
   })
-  if (existing?.storageKey) return existing
 
-  assertAllowedStockUrl(c.srcUrl)
+  if (existing?.storageKey) {
+    const ok = await stockObjectExists(existing.storageKey)
+    if (ok) {
+      logT2v('stock', 'reuse cached row', {
+        assetId: existing.id,
+        provider,
+        providerId,
+        storageKey: existing.storageKey,
+      })
+      return existing
+    }
+    logT2v('stock', 'storage object missing, re-ingest', {
+      assetId: existing.id,
+      provider,
+      providerId,
+      storageKey: existing.storageKey,
+    })
+    try {
+      return await ingestStockBytes(existing.storageKey, c, existing.id)
+    } catch (err) {
+      logT2vError('stock', 're-ingest failed, clearing storageKey', err, {
+        assetId: existing.id,
+        provider,
+        providerId,
+      })
+      await prisma.stockAsset.update({
+        where: { id: existing.id },
+        data: { storageKey: null },
+      })
+    }
+  }
 
   const row =
     existing ??
@@ -83,14 +149,5 @@ export async function ensureT2vStockAsset(_workspaceId: string, c: StockCandidat
       },
     }))
 
-  const res = await fetchStockResponse(c.srcUrl)
-  if (!res.ok) throw new Error(`stock_download_${res.status}`)
-  const contentType = isPhoto ? 'image/jpeg' : 'video/mp4'
-  const bytes = Buffer.from(await res.arrayBuffer())
-  if (bytes.length < 64) throw new Error('stock_download_empty')
-  await storage.putBytes(objectKey, bytes, contentType)
-  return prisma.stockAsset.update({
-    where: { id: row.id },
-    data: { storageKey: objectKey },
-  })
+  return ingestStockBytes(objectKey, c, row.id)
 }

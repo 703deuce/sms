@@ -75,7 +75,31 @@ def _fetch_media(conn, media: dict | None, work: Path, idx: int, workspace_id: s
         raise RuntimeError(f"scene_media_{idx}_missing_storage_key")
     if not _storage_key_ok(workspace_id, str(key)):
         raise RuntimeError("invalid_storage_key")
-    download_object(str(key), dest)
+    key_s = str(key)
+    try:
+        download_object(key_s, dest)
+    except RuntimeError as exc:
+        msg = str(exc)
+        if msg.startswith("storage_object_missing:") and key_s.startswith("stock/"):
+            from clips_worker.t2v.stock_repair import repair_stock_asset
+
+            asset_id = media.get("assetId")
+            log.warning(
+                "[t2v:stock] assemble media missing, attempting repair sceneIdx=%s assetId=%s storageKey=%s",
+                idx,
+                asset_id,
+                key_s,
+            )
+            if repair_stock_asset(conn, key_s, str(asset_id) if asset_id else None):
+                download_object(key_s, dest)
+                log.info(
+                    "[t2v:stock] assemble media repaired sceneIdx=%s storageKey=%s",
+                    idx,
+                    key_s,
+                )
+                return dest
+            raise RuntimeError(f"scene_media_{idx}_stock_object_missing:{key_s}") from exc
+        raise
     return dest
 
 

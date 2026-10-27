@@ -23,6 +23,19 @@ import { fetchJson } from '@/lib/client/fetch-json'
 import { patchT2vDraft } from '@/lib/t2v/t2v-api'
 import type { T2vDraftV1, T2vScene } from '@/lib/t2v/types'
 
+function humanizeBuildError(msg: string | null): string | null {
+  if (!msg) return null
+  const stock = /^scene_media_(\d+)_stock_object_missing:/.exec(msg)
+  if (stock) {
+    const n = Number(stock[1]) + 1
+    return `Scene ${n} stock clip is missing from storage. Open Visuals for that scene and choose the clip again (or run Find visuals), then rebuild.`
+  }
+  if (msg === 'HTTP Error 400: Bad Request' || msg.startsWith('storage_object_missing:')) {
+    return 'A scene video file is missing from storage. Update visuals and build again.'
+  }
+  return msg
+}
+
 export function T2vStudioShell({
   draftId,
   projectId,
@@ -358,7 +371,7 @@ export function T2vStudioShell({
             <T2vBuildProgress
               progress={progress}
               stage={stage}
-              error={error}
+              error={humanizeBuildError(error)}
               onCancel={() => void cancelBuild()}
               onRetry={() => void runBuild()}
             />
