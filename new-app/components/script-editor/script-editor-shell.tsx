@@ -380,7 +380,16 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     }))
   }, [data.clips, data.compositionKind, data.rangeStartMs, edl, outDur])
 
-  const markerListClips = useMemo(() => timelineClipSpans, [timelineClipSpans])
+  const markerListClips = useMemo(
+    () =>
+      timelineClipSpans?.map((c) => ({
+        id: c.id,
+        title: c.label,
+        outStartMs: c.outStartMs,
+        outEndMs: c.outEndMs,
+      })),
+    [timelineClipSpans],
+  )
 
   useEffect(() => {
     void clipsFetch<ScriptEditorUserPreferences>('/api/clips/editor-preferences')

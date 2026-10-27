@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Code,
   Copy,
@@ -66,6 +66,7 @@ export function ShareClipViewer({
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false)
   const [viewsOpen, setViewsOpen] = useState(false)
   const [startAt, setStartAt] = useState(false)
+  const viewBeaconSent = useRef(false)
 
   const load = useCallback(async () => {
     const res = await fetch(publicPath, { credentials: 'include' })
@@ -80,6 +81,21 @@ export function ShareClipViewer({
     }, 4000)
     return () => clearInterval(t)
   }, [load, data?.playbackStatus])
+
+  useEffect(() => {
+    if (!data || data.signInRequired || viewBeaconSent.current) return
+    if (data.playbackStatus === 'unavailable') return
+    viewBeaconSent.current = true
+    const viewUrl = `${publicPath.replace(/\/$/, '')}/view`
+    void fetch(viewUrl, { method: 'POST', credentials: 'include' })
+      .then((res) => res.json())
+      .then((json: { data?: { viewCount?: number } }) => {
+        if (json.data?.viewCount != null) {
+          setData((prev) => (prev ? { ...prev, viewCount: json.data!.viewCount! } : prev))
+        }
+      })
+      .catch(() => {})
+  }, [data, publicPath])
 
   const pageUrl = typeof window !== 'undefined' ? window.location.href.split('?')[0] : ''
   const embedUrl = `${pageUrl}${pageUrl.includes('?') ? '&' : '?'}embed=1`

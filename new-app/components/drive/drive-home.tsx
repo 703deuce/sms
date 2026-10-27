@@ -20,6 +20,8 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProjectGrid } from '@/components/clips/project-card'
+import { MoveToFolderDialog } from '@/components/drive/move-to-folder-dialog'
+import { NewFolderDialog } from '@/components/drive/new-folder-dialog'
 import { ProjectRowMenu } from '@/components/drive/project-row-menu'
 import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 import { attachMediaToProject, clipsFetch, createProject, createProjectFromPrompt } from '@/lib/clips-api'
@@ -62,6 +64,7 @@ export function DriveHome({
   const [dragOver, setDragOver] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [heroBusy, setHeroBusy] = useState(false)
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
 
   const projects = initialProjects
 
@@ -86,18 +89,25 @@ export function DriveHome({
     router.push(`/app/clips?${params.toString()}`)
   }, [router, search, status, showAll])
 
+  const bulkMove = async (folderId: string | null) => {
+    if (!selected.size) return
+    await clipsFetch('/api/clips/projects/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'move',
+        projectIds: [...selected],
+        folderId,
+      }),
+    })
+    setSelected(new Set())
+    router.refresh()
+  }
+
   const bulkAction = async (action: 'trash' | 'restore' | 'duplicate' | 'move') => {
     if (!selected.size) return
     if (action === 'move') {
-      const folderId = window.prompt('Folder id (leave empty for root)')
-      await clipsFetch('/api/clips/projects/bulk', {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'move',
-          projectIds: [...selected],
-          folderId: folderId?.trim() ? folderId.trim() : null,
-        }),
-      })
+      setBulkMoveOpen(true)
+      return
     } else {
       await clipsFetch('/api/clips/projects/bulk', {
         method: 'POST',
@@ -108,13 +118,6 @@ export function DriveHome({
       })
     }
     setSelected(new Set())
-    router.refresh()
-  }
-
-  const createFolder = async () => {
-    const name = window.prompt('Folder name')
-    if (!name?.trim()) return
-    await clipsFetch('/api/clips/folders', { method: 'POST', body: JSON.stringify({ name: name.trim() }) })
     router.refresh()
   }
 
@@ -201,12 +204,7 @@ export function DriveHome({
       )}
 
       <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
-        {pageView !== 'trash' && (
-          <Button type="button" variant="outline" size="sm" onClick={() => void createFolder()}>
-            <FolderOpen className="mr-1 size-4" />
-            New folder
-          </Button>
-        )}
+        {pageView !== 'trash' && <NewFolderDialog variant="toolbar" />}
         <Link href="/app/rooms/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
           <span className="mr-1 inline-block size-2 rounded-full bg-lane-record" />
           Record
@@ -386,13 +384,19 @@ export function DriveHome({
                     </td>
                     <td className="px-2 text-xs text-muted-foreground">{p.ownerName ?? '—'}</td>
                     <td className="px-2 text-xs text-muted-foreground" title={new Date(p.createdAt).toLocaleString()}>
-                      {formatRelativeTime(p.createdAt)}
+                      {formatRelativeTime(p.createdAt.toISOString())}
                     </td>
                     <td className="px-2 text-xs text-muted-foreground">
-                      {p.publishedAt ? formatRelativeTime(p.publishedAt) : p.isPublished ? 'Yes' : '—'}
+                      {p.publishedAt
+                        ? formatRelativeTime(
+                            typeof p.publishedAt === 'string' ? p.publishedAt : p.publishedAt.toISOString(),
+                          )
+                        : p.isPublished
+                          ? 'Yes'
+                          : '—'}
                     </td>
                     <td className="px-2">
-                      <ProjectRowMenu projectId={p.id} title={p.title} />
+                      <ProjectRowMenu projectId={p.id} title={p.title} folders={folders} />
                     </td>
                   </tr>
                 ))}
@@ -415,6 +419,14 @@ export function DriveHome({
           </div>
         ))}
       </div>
+
+      <MoveToFolderDialog
+        open={bulkMoveOpen}
+        onOpenChange={setBulkMoveOpen}
+        folders={folders}
+        onSelect={(folderId) => bulkMove(folderId)}
+        title="Move selected projects"
+      />
     </div>
   )
 }

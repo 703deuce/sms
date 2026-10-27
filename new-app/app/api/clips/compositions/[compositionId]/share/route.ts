@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
+import { AuthRequiredError, ForbiddenError, requireAuthenticatedUser } from '@/lib/server/auth/session'
+import { assertCanManageCompositionShare } from '@/lib/server/clips/composition-access'
 import {
   getCompositionShareAccess,
   inviteCollaborator,
@@ -9,7 +11,6 @@ import {
   shareBaseUrl,
   updateLinkAccess,
 } from '@/lib/server/clips/composition-share'
-import { resolveInternalUserId } from '@/lib/server/internal-user'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const patchSchema = z.object({
@@ -37,7 +38,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
   try {
     const { compositionId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
-    const userId = await resolveInternalUserId()
+    const user = await requireAuthenticatedUser(request)
+    await assertCanManageCompositionShare(workspaceId, compositionId, user.id)
+
     const body = patchSchema.parse(await request.json())
     const baseUrl = shareBaseUrl()
 
@@ -45,7 +48,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
       await revokeShareLinks(workspaceId, compositionId)
     }
     if (body.linkAccess) {
-      await updateLinkAccess(workspaceId, compositionId, body.linkAccess, userId)
+      await updateLinkAccess(workspaceId, compositionId, body.linkAccess, user.id)
     }
     if (body.inviteEmail && body.inviteRole) {
       const inv = await inviteCollaborator(workspaceId, compositionId, body.inviteEmail, body.inviteRole)
@@ -62,6 +65,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
     if (!access) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({ data: access })
   } catch (err) {
+    if (err instanceof AuthRequiredError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     return jsonError(err, 500)
   }
 }

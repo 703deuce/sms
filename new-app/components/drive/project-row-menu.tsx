@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Copy, FolderInput, Link2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { FolderInput, Link2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { MoveToFolderDialog } from '@/components/drive/move-to-folder-dialog'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -16,13 +18,16 @@ import { clipsFetch } from '@/lib/clips-api'
 export function ProjectRowMenu({
   projectId,
   title,
+  folders = [],
   onTrash,
 }: {
   projectId: string
   title: string
+  folders?: { id: string; name: string }[]
   onTrash?: () => void
 }) {
   const router = useRouter()
+  const [moveOpen, setMoveOpen] = useState(false)
 
   const copyLink = () => {
     const url = `${window.location.origin}/app/clips/${projectId}`
@@ -54,7 +59,7 @@ export function ProjectRowMenu({
           <Pencil className="mr-2 size-4" />
           Rename project
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => void moveToFolder(null)}>
+        <DropdownMenuItem onClick={() => setMoveOpen(true)}>
           <FolderInput className="mr-2 size-4" />
           Move to…
         </DropdownMenuItem>
@@ -80,6 +85,12 @@ export function ProjectRowMenu({
           Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <MoveToFolderDialog
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+        folders={folders}
+        onSelect={(folderId) => moveToFolder(folderId)}
+      />
     </DropdownMenu>
   )
 }

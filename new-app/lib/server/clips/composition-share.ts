@@ -2,6 +2,7 @@ import type { Prisma, ScriptLinkAccess, ScriptShareRole } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 import { generateShareToken, hashShareToken } from '@/lib/screenwriting/sharing/token'
+import { isWorkspaceEditor } from '@/lib/server/clips/composition-access'
 import { getCompositionForWorkspace } from '@/lib/server/clips/script-composition'
 import { enqueueCompositionExport } from '@/lib/server/clips/composition-export'
 import { getPublicAppOrigin } from '@/lib/server/public-url'
@@ -90,7 +91,7 @@ export async function updateLinkAccess(
     data: { linkAccess },
   })
   if (linkAccess === 'LINK_VIEW' || linkAccess === 'LINK_COMMENT') {
-    await ensurePublishRenderPipeline(workspaceId, compositionId)
+    await ensurePublishRenderPipeline(workspaceId, compositionId, { allowEnqueue: true, actorUserId: userId })
   }
   return linkAccess
 }
@@ -168,10 +169,17 @@ async function upsertPublishRecord(
   })
 }
 
-export async function ensurePublishRenderPipeline(workspaceId: string, compositionId: string) {
+const PUBLISH_RENDER_COOLDOWN_MS = 10 * 60 * 1000
+
+export async function ensurePublishRenderPipeline(
+  workspaceId: string,
+  compositionId: string,
+  opts?: { allowEnqueue?: boolean; actorUserId?: string },
+) {
   const prisma = getPrisma()
   let pub = await prisma.scriptCompositionPublish.findUnique({ where: { compositionId } })
   if (!pub) {
+    if (!opts?.allowEnqueue) return null
     pub = await upsertPublishRecord(workspaceId, compositionId, {})
   }
   if (!pub) return null
@@ -187,12 +195,28 @@ export async function ensurePublishRenderPipeline(workspaceId: string, compositi
     }
   }
 
+  if (!opts?.allowEnqueue) return pub
+
+  if (opts.actorUserId) {
+    const canEnqueue = await isWorkspaceEditor(workspaceId, opts.actorUserId)
+    if (!canEnqueue) return pub
+  }
+
+  const lastEnqueued = typeof prev.publishRenderEnqueuedAt === 'string' ? Date.parse(prev.publishRenderEnqueuedAt) : 0
+  if (existingRenderId && Number.isFinite(lastEnqueued) && Date.now() - lastEnqueued < PUBLISH_RENDER_COOLDOWN_MS) {
+    return pub
+  }
+
   const render = await enqueueCompositionExport(workspaceId, compositionId, PUBLISH_RENDER_SETTINGS)
   if (!render) return pub
   return prisma.scriptCompositionPublish.update({
     where: { id: pub.id },
     data: {
-      settings: { ...prev, publishRenderId: render.renderId } as Prisma.InputJsonValue,
+      settings: {
+        ...prev,
+        publishRenderId: render.renderId,
+        publishRenderEnqueuedAt: new Date().toISOString(),
+      } as Prisma.InputJsonValue,
       updatedAt: new Date(),
     },
   })
@@ -227,10 +251,11 @@ export async function upsertPublish(
   workspaceId: string,
   compositionId: string,
   settings: PublishSettings,
+  actorUserId?: string,
 ) {
   const pub = await upsertPublishRecord(workspaceId, compositionId, settings)
   if (!pub) return null
-  await ensurePublishRenderPipeline(workspaceId, compositionId)
+  await ensurePublishRenderPipeline(workspaceId, compositionId, { allowEnqueue: true, actorUserId })
   return syncPublishOutputFromRender(compositionId)
 }
 
@@ -279,24 +304,3 @@ export async function removeCollaborator(workspaceId: string, compositionId: str
   return true
 }
 
-export async function incrementPublishViewCount(compositionId: string, viewerLabel?: string) {
-  const prisma = getPrisma()
-  const pub = await prisma.scriptCompositionPublish.findUnique({ where: { compositionId } })
-  if (!pub) return 0
-  const settings = (pub.settings ?? {}) as Record<string, unknown>
-  const events = Array.isArray(settings.viewEvents) ? [...settings.viewEvents] : []
-  events.unshift({
-    at: new Date().toISOString(),
-    label: viewerLabel?.trim() || 'Viewer',
-  })
-  const viewEvents = events.slice(0, 50)
-  await prisma.scriptCompositionPublish.update({
-    where: { id: pub.id },
-    data: {
-      viewCount: { increment: 1 },
-      settings: { ...settings, viewEvents } as Prisma.InputJsonValue,
-    },
-  })
-  const next = await prisma.scriptCompositionPublish.findUnique({ where: { compositionId } })
-  return next?.viewCount ?? 0
-}

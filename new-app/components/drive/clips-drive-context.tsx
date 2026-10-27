@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useMemo, useState } from 'react'
+import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 
 type ClipsDriveContextValue = {
   search: string
@@ -11,6 +12,8 @@ type ClipsDriveContextValue = {
   setTranscribingTitle: (v: string) => void
   syncing: boolean
   setSyncing: (v: boolean) => void
+  activityProjects: ClipProjectListItem[]
+  setActivityProjects: (projects: ClipProjectListItem[]) => void
 }
 
 const ClipsDriveContext = createContext<ClipsDriveContextValue | null>(null)
@@ -20,6 +23,7 @@ export function ClipsDriveProvider({ children }: { children: React.ReactNode }) 
   const [transcribingOpen, setTranscribingOpen] = useState(false)
   const [transcribingTitle, setTranscribingTitle] = useState('')
   const [syncing, setSyncing] = useState(false)
+  const [activityProjects, setActivityProjects] = useState<ClipProjectListItem[]>([])
   const value = useMemo(
     () => ({
       search,
@@ -30,8 +34,10 @@ export function ClipsDriveProvider({ children }: { children: React.ReactNode }) 
       setTranscribingTitle,
       syncing,
       setSyncing,
+      activityProjects,
+      setActivityProjects,
     }),
-    [search, transcribingOpen, transcribingTitle, syncing],
+    [search, transcribingOpen, transcribingTitle, syncing, activityProjects],
   )
   return <ClipsDriveContext.Provider value={value}>{children}</ClipsDriveContext.Provider>
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
+import { isCompositionSocialPublishEnabled } from '@/lib/server/clips/feature-gates'
 import { enqueueCompositionSocialPublish } from '@/lib/server/clips/composition-social-publish'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -12,6 +13,9 @@ const bodySchema = z.object({
 
 export async function POST(request: Request, ctx: { params: Promise<{ compositionId: string }> }) {
   try {
+    if (!isCompositionSocialPublishEnabled()) {
+      return NextResponse.json({ error: 'Social publish is not available' }, { status: 403 })
+    }
     const { compositionId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
     const body = bodySchema.parse(await request.json())

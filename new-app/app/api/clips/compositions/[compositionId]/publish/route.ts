@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { getCompositionForWorkspace } from '@/lib/server/clips/script-composition'
 import { syncPublishOutputFromRender, unpublish, upsertPublish } from '@/lib/server/clips/composition-share'
+import { AuthRequiredError, ForbiddenError, requireAuthenticatedUser } from '@/lib/server/auth/session'
+import { assertCanManageCompositionShare } from '@/lib/server/clips/composition-access'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
 const publishSchema = z.object({
@@ -42,8 +44,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
   try {
     const { compositionId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
+    const user = await requireAuthenticatedUser(request)
+    await assertCanManageCompositionShare(workspaceId, compositionId, user.id)
     const settings = publishSchema.parse(await request.json())
-    const pub = await upsertPublish(workspaceId, compositionId, settings)
+    const pub = await upsertPublish(workspaceId, compositionId, settings, user.id)
     if (!pub) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const synced = (await syncPublishOutputFromRender(compositionId)) ?? pub
     return NextResponse.json({
@@ -56,6 +60,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ compositio
       },
     })
   } catch (err) {
+    if (err instanceof AuthRequiredError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     return jsonError(err, 500)
   }
 }
@@ -64,8 +70,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
   try {
     const { compositionId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
+    const user = await requireAuthenticatedUser(request)
+    await assertCanManageCompositionShare(workspaceId, compositionId, user.id)
     const settings = publishSchema.parse(await request.json())
-    const pub = await upsertPublish(workspaceId, compositionId, settings)
+    const pub = await upsertPublish(workspaceId, compositionId, settings, user.id)
     if (!pub) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({
       data: {
@@ -75,14 +83,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ compositi
       },
     })
   } catch (err) {
+    if (err instanceof AuthRequiredError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     return jsonError(err, 400)
   }
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ compositionId: string }> }) {
+export async function DELETE(request: Request, ctx: { params: Promise<{ compositionId: string }> }) {
   try {
     const { compositionId } = await ctx.params
     const workspaceId = await resolveWorkspaceId()
+    const user = await requireAuthenticatedUser(request)
+    await assertCanManageCompositionShare(workspaceId, compositionId, user.id)
     await unpublish(workspaceId, compositionId)
     return NextResponse.json({ data: { ok: true } })
   } catch (err) {

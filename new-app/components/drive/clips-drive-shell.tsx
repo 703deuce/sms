@@ -2,7 +2,6 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect } from 'react'
-import type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 import { DriveActivityCard } from '@/components/drive/drive-activity-card'
 import { DriveSidebar } from '@/components/drive/drive-sidebar'
 import { DriveTopBar } from '@/components/drive/drive-top-bar'
@@ -21,19 +20,25 @@ function isDriveChromeRoute(pathname: string) {
 
 function ClipsDriveShellInner({
   children,
-  projects,
   folders,
 }: {
   children: React.ReactNode
-  projects: ClipProjectListItem[]
   folders: { id: string; name: string }[]
 }) {
   const pathname = usePathname()
   const router = useRouter()
   const params = useSearchParams()
   const showChrome = isDriveChromeRoute(pathname)
-  const { search, setSearch, transcribingOpen, setTranscribingOpen, transcribingTitle, syncing, setSyncing } =
-    useClipsDrive()
+  const {
+    search,
+    setSearch,
+    transcribingOpen,
+    setTranscribingOpen,
+    transcribingTitle,
+    syncing,
+    setSyncing,
+    activityProjects,
+  } = useClipsDrive()
 
   useEffect(() => {
     const q = params.get('q')
@@ -47,29 +52,13 @@ function ClipsDriveShellInner({
     router.push(`/app/clips?${next.toString()}`)
   }, [params, router, search])
 
-  const createFolder = async () => {
-    const name = window.prompt('Folder name')
-    if (!name?.trim()) return
-    setSyncing(true)
-    try {
-      await fetch('/api/clips/folders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() }),
-      })
-      router.refresh()
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   if (!showChrome) {
     return <>{children}</>
   }
 
   return (
     <div className="flex min-h-0 flex-1" data-testid="clips-drive-shell">
-      <DriveSidebar folders={folders} onNewFolder={() => void createFolder()} />
+      <DriveSidebar folders={folders} />
       <div className="flex min-w-0 flex-1 flex-col">
         <DriveTopBar
           searchValue={search}
@@ -78,7 +67,7 @@ function ClipsDriveShellInner({
           syncing={syncing}
         />
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-        <DriveActivityCard projects={projects} />
+        <DriveActivityCard projects={activityProjects} />
         <DriveTranscribingDialog
           open={transcribingOpen}
           fileName={transcribingTitle}
@@ -91,16 +80,14 @@ function ClipsDriveShellInner({
 
 export function ClipsDriveShell({
   children,
-  projects,
   folders,
 }: {
   children: React.ReactNode
-  projects: ClipProjectListItem[]
   folders: { id: string; name: string }[]
 }) {
   return (
     <ClipsDriveProvider>
-      <ClipsDriveShellInner projects={projects} folders={folders}>{children}</ClipsDriveShellInner>
+      <ClipsDriveShellInner folders={folders}>{children}</ClipsDriveShellInner>
     </ClipsDriveProvider>
   )
 }

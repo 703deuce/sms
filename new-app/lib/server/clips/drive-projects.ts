@@ -1,5 +1,6 @@
 import { getPrisma } from '@/lib/server/db'
 import { listClipProjectsForPage } from '@/lib/server/clips/project-list'
+import type { Prisma } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 
 export async function listDriveProjects(
@@ -118,7 +119,7 @@ export async function duplicateClipProjects(workspaceId: string, projectIds: str
         title: `${p.title} (copy)`,
         uploadId: p.uploadId,
         sourceUrl: p.sourceUrl,
-        settings: p.settings,
+        settings: (p.settings ?? {}) as Prisma.InputJsonValue,
         rangeStartMs: p.rangeStartMs,
         rangeEndMs: p.rangeEndMs,
         status: p.status,

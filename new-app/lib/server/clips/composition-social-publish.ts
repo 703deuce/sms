@@ -16,7 +16,7 @@ export async function enqueueCompositionSocialPublish(
   const row = await getCompositionForWorkspace(workspaceId, compositionId)
   if (!row) return null
 
-  await ensurePublishRenderPipeline(workspaceId, compositionId)
+  await ensurePublishRenderPipeline(workspaceId, compositionId, { allowEnqueue: true, actorUserId: undefined })
   const pub = await syncPublishOutputFromRender(compositionId)
   if (!pub?.outputKey) {
     return { status: 'processing' as const, renderPending: true }

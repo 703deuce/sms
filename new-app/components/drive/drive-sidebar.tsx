@@ -12,24 +12,17 @@ import {
   LayoutTemplate,
   Lock,
   Palette,
-  Plus,
   Share2,
   Sparkles,
   Users,
   Video,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { NewFolderDialog } from '@/components/drive/new-folder-dialog'
 import { cn } from '@/lib/utils'
 
 type FolderRow = { id: string; name: string }
 
-export function DriveSidebar({
-  folders,
-  onNewFolder,
-}: {
-  folders: FolderRow[]
-  onNewFolder?: () => void
-}) {
+export function DriveSidebar({ folders }: { folders: FolderRow[] }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const view = searchParams.get('view') ?? 'home'
@@ -63,11 +56,7 @@ export function DriveSidebar({
 
       <p className="mb-1 mt-4 flex items-center justify-between px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         Library
-        {onNewFolder && (
-          <Button type="button" variant="ghost" size="icon-sm" className="size-5" onClick={onNewFolder} title="New folder">
-            <Plus className="size-3.5" />
-          </Button>
-        )}
+        <NewFolderDialog variant="sidebar" />
       </p>
       {item('/app/clips?view=recents', 'Recents', <Clock className="size-4" />, view === 'recents')}
       {item('/app/clips?view=shared', 'Shared with me', <Share2 className="size-4" />, view === 'shared')}

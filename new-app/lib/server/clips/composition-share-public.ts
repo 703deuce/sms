@@ -1,11 +1,12 @@
 import { getScriptBootstrap } from '@/lib/server/clips/script-bootstrap'
 import {
-  ensurePublishRenderPipeline,
-  incrementPublishViewCount,
   signedPublishPlaybackUrl,
   syncPublishOutputFromRender,
 } from '@/lib/server/clips/composition-share'
+import { viewerCanAccessGatedShare, isWorkspaceEditor } from '@/lib/server/clips/composition-access'
+import { listPublishViewEvents } from '@/lib/server/clips/publish-views'
 import { getWorkspaceBrandForShare } from '@/lib/server/clips/workspace-brand-share'
+import { getAuthenticatedUser } from '@/lib/server/auth/session'
 import { getPrisma } from '@/lib/server/db'
 import { getPublicAppOrigin } from '@/lib/server/public-url'
 
@@ -39,44 +40,49 @@ export type PublicClipPlayback = {
 export type PublicShareRequestContext = {
   embed?: boolean
   viewerSignedIn?: boolean
+  viewerUserId?: string | null
+  viewerLabel?: string | null
 }
 
-function parseViewEvents(settings: Record<string, unknown>): ViewEventDto[] {
-  if (!Array.isArray(settings.viewEvents)) return []
-  return settings.viewEvents
-    .filter((e): e is { at: string; label?: string } => e != null && typeof e === 'object' && typeof (e as { at?: unknown }).at === 'string')
-    .slice(0, 50)
-}
-
-function viewerLooksSignedIn(request?: Request): boolean {
-  if (!request) return false
-  const cookie = request.headers.get('cookie') ?? ''
-  if (/new-app-viewer=1/.test(cookie)) return true
-  if (/sb-[^=]+-auth-token=/.test(cookie)) return true
-  if (process.env.DEV_AUTH_BYPASS === '1' && cookie.includes('dev-auth')) return true
-  return false
+async function resolvePublicViewerContext(request?: Request): Promise<PublicShareRequestContext> {
+  const url = request ? new URL(request.url) : null
+  const authUser = await getAuthenticatedUser(request)
+  return {
+    embed: url?.searchParams.get('embed') === '1',
+    viewerSignedIn: authUser != null,
+    viewerUserId: authUser?.id ?? null,
+    viewerLabel: authUser?.email ?? authUser?.supabaseUser?.email ?? null,
+  }
 }
 
 function accessBlocked(
   settings: Record<string, unknown>,
   ctx: PublicShareRequestContext,
+  hasShareAccess: boolean,
 ): boolean {
-  const signedIn = ctx.viewerSignedIn === true
-  if (ctx.embed && settings.requireSignInToEmbed === true) return !signedIn
-  if (settings.requireSignInToView === true) return !signedIn
-  return false
+  const needsSignIn =
+    (ctx.embed && settings.requireSignInToEmbed === true) || settings.requireSignInToView === true
+  if (!needsSignIn) return false
+  return !ctx.viewerSignedIn || !hasShareAccess
 }
 
 async function enrichPublicPayload(
-  base: Omit<PublicClipPlayback, 'brandName' | 'brandLogoUrl' | 'brandAccentColor' | 'viewEvents' | 'signInRequired'>,
+  base: Omit<PublicClipPlayback, 'brandName' | 'brandLogoUrl' | 'brandAccentColor' | 'viewEvents' | 'signInRequired' | 'canEdit'>,
   workspaceId: string,
+  compositionId: string,
+  publishId: string | null,
   settings: Record<string, unknown>,
   ctx: PublicShareRequestContext,
+  hasShareAccess: boolean,
   authorName?: string | null,
   publishedAt?: Date | null,
 ): Promise<PublicClipPlayback> {
   const brand = await getWorkspaceBrandForShare(workspaceId)
-  const blocked = accessBlocked(settings, ctx)
+  const blocked = accessBlocked(settings, ctx, hasShareAccess)
+  const viewEvents = publishId ? await listPublishViewEvents(publishId) : []
+  const canEdit =
+    ctx.viewerUserId != null && (await isWorkspaceEditor(workspaceId, ctx.viewerUserId))
+
   return {
     ...base,
     playbackUrl: blocked ? null : base.playbackUrl,
@@ -89,16 +95,14 @@ async function enrichPublicPayload(
     brandAccentColor: brand.accentColor,
     authorName: authorName ?? null,
     publishedAt: publishedAt?.toISOString() ?? null,
-    viewEvents: parseViewEvents(settings),
+    viewEvents,
+    canEdit,
   }
 }
 
 async function resolvePublishPlayback(
-  workspaceId: string,
   compositionId: string,
-  projectId: string,
 ): Promise<{ playbackUrl: string | null; playbackStatus: 'ready' | 'processing' | 'unavailable' }> {
-  await ensurePublishRenderPipeline(workspaceId, compositionId)
   const pub = await syncPublishOutputFromRender(compositionId)
   if (!pub) {
     return { playbackUrl: null, playbackStatus: 'unavailable' }
@@ -138,11 +142,7 @@ export async function getPublicShareClipPayload(
   linkId: string,
   request?: Request,
 ): Promise<PublicClipPlayback | null> {
-  const url = request ? new URL(request.url) : null
-  const ctx: PublicShareRequestContext = {
-    embed: url?.searchParams.get('embed') === '1',
-    viewerSignedIn: viewerLooksSignedIn(request),
-  }
+  const ctx = await resolvePublicViewerContext(request)
   const prisma = getPrisma()
   const link = await prisma.scriptCompositionShareLink.findFirst({
     where: { id: linkId, revokedAt: null },
@@ -158,8 +158,11 @@ export async function getPublicShareClipPayload(
 
   const publish = await prisma.scriptCompositionPublish.findUnique({ where: { compositionId } })
   const settings = (publish?.settings ?? {}) as Record<string, unknown>
-  const playback = await resolvePublishPlayback(workspaceId, compositionId, projectId)
-  const viewCount = accessBlocked(settings, ctx) ? (publish?.viewCount ?? 0) : await incrementPublishViewCount(compositionId)
+  const hasShareAccess =
+    ctx.viewerUserId != null
+      ? await viewerCanAccessGatedShare(workspaceId, compositionId, ctx.viewerUserId)
+      : false
+  const playback = await resolvePublishPlayback(compositionId)
 
   const author =
     settings.showAuthor !== false
@@ -175,15 +178,18 @@ export async function getPublicShareClipPayload(
       compositionId,
       projectId,
       mode: link.linkAccess === 'LINK_COMMENT' ? 'comment' : 'view',
-      viewCount,
+      viewCount: publish?.viewCount ?? 0,
       showTranscript: settings.showTranscript !== false,
       allowComments: settings.allowComments === true || link.linkAccess === 'LINK_COMMENT',
       allowDownload: settings.allowDownload === true && playback.playbackStatus === 'ready',
       transcriptText: transcriptFromBootstrap(bootstrap),
     },
     workspaceId,
+    compositionId,
+    publish?.id ?? null,
     settings,
     ctx,
+    hasShareAccess,
     author,
     publish?.publishedAt ?? null,
   )
@@ -193,11 +199,7 @@ export async function getPublicPublishPayload(
   publicSlug: string,
   request?: Request,
 ): Promise<PublicClipPlayback | null> {
-  const url = request ? new URL(request.url) : null
-  const ctx: PublicShareRequestContext = {
-    embed: url?.searchParams.get('embed') === '1',
-    viewerSignedIn: viewerLooksSignedIn(request),
-  }
+  const ctx = await resolvePublicViewerContext(request)
   const prisma = getPrisma()
   const pub = await prisma.scriptCompositionPublish.findUnique({
     where: { publicSlug },
@@ -209,8 +211,11 @@ export async function getPublicPublishPayload(
   if (!bootstrap) return null
 
   const settings = (pub.settings ?? {}) as Record<string, unknown>
-  const playback = await resolvePublishPlayback(pub.workspaceId, pub.compositionId, pub.composition.projectId)
-  const viewCount = accessBlocked(settings, ctx) ? pub.viewCount : await incrementPublishViewCount(pub.compositionId)
+  const hasShareAccess =
+    ctx.viewerUserId != null
+      ? await viewerCanAccessGatedShare(pub.workspaceId, pub.compositionId, ctx.viewerUserId)
+      : false
+  const playback = await resolvePublishPlayback(pub.compositionId)
 
   const author =
     settings.showAuthor !== false
@@ -227,15 +232,18 @@ export async function getPublicPublishPayload(
       projectId: pub.composition.projectId,
       publicSlug,
       mode: 'view',
-      viewCount,
+      viewCount: pub.viewCount,
       showTranscript: settings.showTranscript !== false,
       allowComments: settings.allowComments === true,
       allowDownload: settings.allowDownload === true && playback.playbackStatus === 'ready',
       transcriptText: transcriptFromBootstrap(bootstrap),
     },
     pub.workspaceId,
+    pub.compositionId,
+    pub.id,
     settings,
     ctx,
+    hasShareAccess,
     author,
     pub.publishedAt,
   )

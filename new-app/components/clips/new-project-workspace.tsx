@@ -7,7 +7,6 @@ import { PrimaryButton } from '@/components/app/primary-button'
 import { Dropzone } from '@/components/clips/dropzone'
 import { UploadProgressItem } from '@/components/clips/upload-progress-item'
 import { ProjectSettingsForm } from '@/components/clips/project-settings-form'
-import { Page, PageHeader } from '@/components/app/page-primitives'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createProject, createProjectFromLink, estimateCredits } from '@/lib/clips-api'
@@ -101,13 +100,16 @@ export function NewProjectWorkspace() {
   const testMode = featuresAllUnlocked()
 
   return (
-    <Page>
-      <PageHeader
-        icon={Plus}
-        iconTone="brand"
-        title="New project"
-        description="Upload a file or import from Google Drive or Dropbox."
-      />
+    <div className="p-4 md:p-6">
+      <header className="mb-6">
+        <div className="flex items-center gap-2">
+          <Plus className="size-5 text-brand" aria-hidden />
+          <h1 className="text-xl font-semibold">New project</h1>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Upload a file or import from Google Drive or Dropbox.
+        </p>
+      </header>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-4">
           <fieldset className="grid grid-cols-1 gap-2 border-0 p-0 sm:grid-cols-3">
@@ -236,7 +238,7 @@ export function NewProjectWorkspace() {
           ) : null}
         </div>
       </div>
-    </Page>
+    </div>
   )
 }
 

@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import { descriptionWithChapters, youtubeChaptersText } from '@/lib/clips/script-editor/chapters-export'
 import { clipsFetch } from '@/lib/clips-api'
+import { isCompositionSocialPublishEnabled } from '@/lib/features/composition-social-publish'
 
 type ExportTab = 'video' | 'audio' | 'transcript' | 'subtitles'
 
@@ -348,7 +349,7 @@ export function ScriptExportPopover({
                 Advanced
                 {advancedOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
               </button>
-              {destination === 'web' && (
+              {destination === 'web' && isCompositionSocialPublishEnabled() && (
                 <div className="mt-2 space-y-2 border-t border-border pt-3">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Post to social</p>
                   {(

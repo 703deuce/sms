@@ -9156,9 +9156,29 @@ model ScriptCompositionPublish {
   updatedAt     DateTime @updatedAt
 
   composition ScriptComposition @relation(fields: [compositionId], references: [id], onDelete: Cascade)
+  views       ScriptCompositionPublishView[]
 
   @@index([workspaceId])
   @@map("script_composition_publish")
+}
+
+model ScriptCompositionPublishView {
+  id               String   @id
+  publishId        String
+  compositionId    String
+  workspaceId      String
+  viewerSessionKey String
+  viewerUserId     String?
+  viewerLabel      String?
+  firstViewedAt    DateTime @default(now())
+  lastViewedAt     DateTime @default(now())
+
+  publish ScriptCompositionPublish @relation(fields: [publishId], references: [id], onDelete: Cascade)
+
+  @@unique([publishId, viewerSessionKey])
+  @@index([publishId, lastViewedAt(sort: Desc)])
+  @@index([compositionId])
+  @@map("script_composition_publish_views")
 }
 
 model ScriptCompositionCollaborator {

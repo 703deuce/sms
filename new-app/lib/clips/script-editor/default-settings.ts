@@ -27,20 +27,22 @@ export function resolveScriptSettings(
   } | null,
 ): ScriptEditorSettings {
   const base = defaultScriptEditorSettings()
+  const baseCaptions = base.captions ?? { enabled: true, presetId: 'bold_pop' }
   const withPrefs = prefs
     ? {
         ...base,
         aspect: prefs.defaultClipAspect ?? base.aspect,
         captions: {
-          ...base.captions,
-          presetId: prefs.defaultCaptionStyleId ?? base.captions.presetId,
+          ...baseCaptions,
+          presetId: prefs.defaultCaptionStyleId ?? baseCaptions.presetId,
         },
       }
     : base
   if (!raw) return withPrefs
+  const mergedCaptions = { ...(withPrefs.captions ?? baseCaptions), ...(raw.captions ?? {}) }
   return {
     ...withPrefs,
     ...raw,
-    captions: { ...withPrefs.captions, ...raw.captions },
+    captions: mergedCaptions,
   }
 }
