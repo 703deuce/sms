@@ -450,6 +450,8 @@ class DirectorCfg:
     wide_lone_penalty: float = 1.5 # extra cost of wide when exactly one person is on screen
     both_win_s: float = 3.0        # window to call "both are talking" (BOTH_T analogue)
     allow_split: bool = True       # SPLIT
+    allow_three: bool = True       # 3-up vertical stack (P >= 3)
+    three_bias: float = 1.5        # extra cost of three vs single (between split and grid)
     allow_grid: bool = True
     force: str | None = None       # LAYOUT_MODE / FORCE_SPLIT: 'split' | 'fit' | 'fill' | None
 
@@ -458,6 +460,8 @@ def layout_states(P: int, cfg: DirectorCfg) -> list[tuple]:
     st: list[tuple] = [("single", k) for k in range(P)]
     if cfg.allow_split and P >= 2:
         st += [("split", a, b) for a in range(P) for b in range(a + 1, P)]
+    if cfg.allow_three and P >= 3:
+        st.append(("three",))
     if cfg.allow_grid and P >= 3:
         st.append(("grid",))
     st.append(("wide",))
@@ -485,6 +489,10 @@ def emission_costs(post: np.ndarray, visible: np.ndarray, states: list[tuple], c
             both = np.minimum(win[a], win[b]) * 2.0                                   # 1.0 when 50/50
             C[i] = cfg.split_bias - np.log(np.clip(both, eps, 1.0)) - np.log(post[a] + post[b] + eps)
             C[i][~(visible[a] & visible[b])] = np.inf
+        elif s[0] == "three":
+            third = np.sort(win, axis=0)[-3] * 3.0 if P >= 3 else np.zeros(n)
+            C[i] = cfg.three_bias - np.log(np.clip(third, eps, 1.0))
+            C[i][visible.sum(0) < 3] = np.inf
         elif s[0] == "grid":
             third = np.sort(win, axis=0)[-3] * 3.0 if P >= 3 else np.zeros(n)
             C[i] = cfg.grid_bias - np.log(np.clip(third, eps, 1.0))
@@ -866,9 +874,10 @@ def frame_crops(track: dict, i: int) -> tuple[str, list[tuple[int, int, int, int
     if lay == "split":
         return "split", [tile_rect(*face(p), W, H, ow / (oh / 2)) for p in sg["slots"]]
     if lay == "three":
-        slots = list(sg["slots"])[:3]
-        tile_aspect = ow / max(oh / 3, 1)
-        return "three", [tile_rect(*face(p), W, H, tile_aspect) for p in slots]
+        vis = [p for p in range(fr["fx"].shape[0]) if not np.isnan(fr["fx"][p, i])]
+        vis = sorted(vis, key=lambda p: -track["people"][p]["screen_s"])[:3]
+        vis = sorted(vis, key=lambda p: fr["fx"][p, i])
+        return "three", [tile_rect(*face(p), W, H, ow / (oh / 3)) for p in vis]
     if lay == "side":
         slots = list(sg["slots"])[:2]
         tile_aspect = (ow / 2) / max(oh, 1)
