@@ -1,5 +1,6 @@
 import 'server-only'
 import { isAiVideoEnabledFromEnv } from '@/lib/features/ai-video-enabled'
+import { isScriptEditorEnabledFromEnv } from '@/lib/features/script-editor-enabled'
 import { isRecordingLiveKitConfigured } from '@/lib/server/livekit/recording-room-service'
 
 /** @deprecated use isRecordingLiveKitConfigured */
@@ -26,4 +27,25 @@ export function isT2vFeatureEnabled(): boolean {
     FEATURE_T2V: process.env.FEATURE_T2V,
     NEXT_PUBLIC_FEATURE_T2V: process.env.NEXT_PUBLIC_FEATURE_T2V,
   })
+}
+
+/** Full Descript-style `/script` editor product. Off unless SCRIPT_EDITOR_ENABLED (Rick launch default). */
+export function isScriptEditorFeatureEnabled(): boolean {
+  return isScriptEditorEnabledFromEnv({
+    SCRIPT_EDITOR_ENABLED: process.env.SCRIPT_EDITOR_ENABLED,
+    NEXT_PUBLIC_SCRIPT_EDITOR_ENABLED: process.env.NEXT_PUBLIC_SCRIPT_EDITOR_ENABLED,
+  })
+}
+
+/** Screenwriting nav + pages require script editor launch flag (env gate alone is not enough). */
+export function isScreenwritingProductEnabled(): boolean {
+  if (!isScriptEditorFeatureEnabled()) return false
+  const v = (
+    process.env.FEATURE_SCREENWRITING ??
+    process.env.NEXT_PUBLIC_FEATURE_SCREENWRITING ??
+    ''
+  )
+    .trim()
+    .toLowerCase()
+  return v === '1' || v === 'true' || v === 'on' || v === 'yes'
 }
