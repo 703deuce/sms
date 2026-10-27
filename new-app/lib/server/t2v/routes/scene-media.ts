@@ -10,6 +10,8 @@ import { estimateSceneMs } from '@/lib/t2v/estimate'
 import { matchScenes, searchT2vStock, toSceneMedia, type StockCandidate } from '@/lib/server/t2v/stock-match'
 import type { T2vDraftV1, T2vSceneMedia } from '@/lib/t2v/types'
 import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
+import { createId } from '@/lib/supabase/id'
+import type { T2vSceneAiImagePayload, T2vSceneAiVideoPayload } from '@/lib/t2v/m9-contracts'
 
 function parseDraft(document: unknown): T2vDraftV1 {
   const d = document as T2vDraftV1
@@ -41,6 +43,7 @@ export async function getSceneMedia(
         ? sources.filter((s) => s === 'pixabay')
         : sources
 
+  const mediaType = query.type === 'photo' ? 'photo' : 'video'
   const candidates = await searchT2vStock({
     query: q,
     aspect: doc.settings.aspect,
@@ -48,6 +51,7 @@ export async function getSceneMedia(
     page,
     keywords: scene.keywords,
     needMs: estimateSceneMs(scene),
+    mediaType,
   })
 
   return NextResponse.json({ data: { candidates } })
@@ -61,6 +65,7 @@ const postSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('shuffle') }),
   z.object({ action: z.literal('upload'), uploadId: z.string() }),
   z.object({ action: z.literal('ai_image'), prompt: z.string().min(3) }),
+  z.object({ action: z.literal('ai_video'), prompt: z.string().min(3) }),
 ])
 
 export async function postSceneMedia(draftId: string, sceneId: string, request: Request) {
@@ -76,8 +81,31 @@ export async function postSceneMedia(draftId: string, sceneId: string, request: 
     const scene = doc.scenes[idx]
     const body = postSchema.parse(await request.json())
 
-    if (body.action === 'ai_image' || body.action === 'upload') {
+    if (body.action === 'upload') {
       return NextResponse.json({ error: 'not_implemented', action: body.action }, { status: 501 })
+    }
+
+    if (body.action === 'ai_image' || body.action === 'ai_video') {
+      const jobType = body.action === 'ai_image' ? 'T2V_SCENE_AI_IMAGE' : 'T2V_SCENE_AI_VIDEO'
+      const base: T2vSceneAiImagePayload = {
+        workspaceId,
+        draftId,
+        sceneId,
+        prompt: body.prompt,
+        aspect: doc.settings.aspect,
+      }
+      const payload: T2vSceneAiImagePayload | T2vSceneAiVideoPayload = base
+      const jobId = createId('job')
+      await getPrisma().clipJob.create({
+        data: {
+          id: jobId,
+          projectId: row.projectId,
+          type: jobType,
+          status: 'QUEUED',
+          payload,
+        },
+      })
+      return NextResponse.json({ data: { jobId, status: 'queued' } }, { status: 202 })
     }
 
     let pick: StockCandidate | null = null

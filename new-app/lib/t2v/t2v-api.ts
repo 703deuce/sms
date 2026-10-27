@@ -52,6 +52,34 @@ export async function extractT2vUrl(url: string) {
   return parseJson<{ title: string; text: string; excerpt: string; wordCount: number }>(res)
 }
 
+export async function startT2vDeckExtract(input: { uploadId: string; draftId?: string; projectId?: string }) {
+  const res = await fetch('/api/t2v/extract/deck', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return parseJson<{ jobId: string; status: string }>(res)
+}
+
+export async function pollT2vDeckExtract(jobId: string) {
+  const res = await fetch(`/api/t2v/extract/deck?jobId=${encodeURIComponent(jobId)}`)
+  return parseJson<{
+    jobId: string
+    status: string
+    error?: string | null
+    result?: { title?: string; slides: Array<{ index: number; narration: string }> }
+  }>(res)
+}
+
+export async function applyT2vTemplate(templateId: string, draftId: string) {
+  const res = await fetch(`/api/t2v/templates/${templateId}/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ draftId }),
+  })
+  return parseJson<{ revision: number; document: T2vDraftV1 }>(res)
+}
+
 export async function fetchT2vDraft(id: string) {
   const res = await fetch(`/api/t2v/drafts/${id}`)
   return parseJson<{ id: string; projectId: string; revision: number; document: T2vDraftV1; status: string }>(res)

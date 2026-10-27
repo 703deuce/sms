@@ -8,13 +8,24 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { createT2vDraft, extractT2vUrl, patchT2vDraft, runT2vScript } from '@/lib/t2v/t2v-api'
+import {
+  applyT2vTemplate,
+  createT2vDraft,
+  extractT2vUrl,
+  patchT2vDraft,
+  pollT2vDeckExtract,
+  runT2vScript,
+  startT2vDeckExtract,
+} from '@/lib/t2v/t2v-api'
+import { Dropzone } from '@/components/clips/dropzone'
+import { uploadClipFile } from '@/lib/clips/upload'
+import Link from 'next/link'
 import type { T2vAspect, T2vDraftV1 } from '@/lib/t2v/types'
 import { splitScript } from '@/lib/t2v/split-script'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type SourceTab = 'prompt' | 'script' | 'url'
+type SourceTab = 'prompt' | 'script' | 'url' | 'deck'
 
 const ASPECTS: T2vAspect[] = ['16:9', '9:16', '1:1', '4:5']
 const LENGTHS: Array<30 | 60 | 90 | 120 | 180> = [30, 60, 90, 120, 180]
@@ -23,6 +34,7 @@ export function T2vCreateWorkspace() {
   const router = useRouter()
   const params = useSearchParams()
   const draftId = params.get('d')
+  const templateId = params.get('template')
   const step = params.get('step') === '2' ? 2 : 1
 
   const [tab, setTab] = useState<SourceTab>('prompt')
@@ -35,6 +47,9 @@ export function T2vCreateWorkspace() {
   const [tone, setTone] = useState<T2vDraftV1['settings']['tone']>('friendly')
   const [loading, setLoading] = useState(false)
   const [fetchingUrl, setFetchingUrl] = useState(false)
+  const [deckUploadId, setDeckUploadId] = useState<string | null>(null)
+  const [deckBusy, setDeckBusy] = useState(false)
+  const [deckSlides, setDeckSlides] = useState<number | null>(null)
 
   const scriptEstimate = useMemo(() => {
     if (tab !== 'script' || !text.trim()) return null
@@ -44,20 +59,28 @@ export function T2vCreateWorkspace() {
     return { scenes: scenes.length, words, sec }
   }, [tab, text])
 
-  const canContinue = tab === 'url' ? Boolean(extractPreview?.text?.trim()) : Boolean(text.trim())
+  const canContinue =
+    tab === 'url'
+      ? Boolean(extractPreview?.text?.trim())
+      : tab === 'deck'
+        ? Boolean(deckSlides && text.trim())
+        : Boolean(text.trim())
 
   const onContinue = async () => {
     if (!canContinue) return
     setLoading(true)
     try {
-      const sourceKind = tab === 'url' ? 'blog' : tab
+      const sourceKind = tab === 'url' ? 'blog' : tab === 'deck' ? 'ppt' : tab
       const payloadText = tab === 'url' ? extractPreview!.text : text
       const { id, projectId } = await createT2vDraft({
         sourceKind,
         text: payloadText,
         url: tab === 'url' ? url : undefined,
+        uploadId: tab === 'deck' ? deckUploadId ?? undefined : undefined,
+        templateId: templateId ?? undefined,
         settings: { aspect, targetDurationS },
       })
+      if (templateId) await applyT2vTemplate(templateId, id)
       router.push(`/app/clips/video/new?d=${id}&step=2&projectId=${projectId}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create draft')
@@ -147,19 +170,22 @@ export function T2vCreateWorkspace() {
   return (
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold">Text to video</h1>
-          <p className="text-sm text-muted-foreground">Idea, script, or link → finished video</p>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">Text to video</h1>
+            <p className="text-sm text-muted-foreground">Idea, script, link, or deck → finished video</p>
+          </div>
+          <Link href="/app/clips/video/templates" className="text-sm text-primary">Browse templates</Link>
         </div>
-        <div className="flex gap-1 rounded-lg border border-border p-1">
-          {(['prompt', 'script', 'url'] as SourceTab[]).map((t) => (
+        <div className="flex flex-wrap gap-1 rounded-lg border border-border p-1">
+          {(['prompt', 'script', 'url', 'deck'] as SourceTab[]).map((t) => (
             <button
               key={t}
               type="button"
               className={cn('flex-1 rounded-md py-2 text-sm capitalize', tab === t && 'bg-muted font-medium')}
               onClick={() => setTab(t)}
             >
-              {t === 'prompt' ? 'Idea' : t === 'url' ? 'URL / Blog' : 'Script'}
+              {t === 'prompt' ? 'Idea' : t === 'url' ? 'URL / Blog' : t === 'deck' ? 'PPT / PDF' : 'Script'}
             </button>
           ))}
         </div>
@@ -176,6 +202,44 @@ export function T2vCreateWorkspace() {
               </p>
             ) : null}
           </>
+        )}
+        {tab === 'deck' && (
+          <div className="space-y-3">
+            <Dropzone
+              onFile={(file) => {
+                setDeckBusy(true)
+                setDeckSlides(null)
+                void uploadClipFile(file, (p) => {
+                  if (p.state === 'complete' && p.uploadId) {
+                    setDeckUploadId(p.uploadId)
+                    void startT2vDeckExtract({ uploadId: p.uploadId })
+                      .then(async ({ jobId }) => {
+                        for (let i = 0; i < 40; i++) {
+                          await new Promise((r) => setTimeout(r, 1500))
+                          const st = await pollT2vDeckExtract(jobId)
+                          const stNorm = st.status.toLowerCase()
+                          if (stNorm === 'ready' || stNorm === 'succeeded' || stNorm === 'complete') {
+                            const slides = st.result?.slides ?? []
+                            setDeckSlides(slides.length)
+                            setText(slides.map((s) => s.narration).filter(Boolean).join('\n\n'))
+                            return
+                          }
+                          if (st.status === 'failed') throw new Error(st.error ?? 'extract_failed')
+                        }
+                        toast.message('Deck extraction is queued — Agent B worker will fill slides when ready')
+                      })
+                      .catch(() => toast.error('Could not extract deck yet'))
+                      .finally(() => setDeckBusy(false))
+                  }
+                  if (p.state === 'error') setDeckBusy(false)
+                }).catch(() => setDeckBusy(false))
+              }}
+            />
+            {deckBusy ? <p className="text-sm text-muted-foreground">Extracting slides…</p> : null}
+            {deckSlides != null ? (
+              <p className="text-xs text-muted-foreground">{deckSlides} slides detected</p>
+            ) : null}
+          </div>
         )}
         {tab === 'url' && (
           <div className="space-y-3">

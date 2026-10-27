@@ -7,7 +7,8 @@ import { PrimaryButton } from '@/components/app/primary-button'
 import { Button } from '@/components/ui/button'
 import type { T2vDraftV1, T2vScene } from '@/lib/t2v/types'
 import { estimateSceneMs } from '@/lib/t2v/estimate'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Wand2 } from 'lucide-react'
+import { T2vSceneMediaDialog } from '@/components/t2v/t2v-scene-media-dialog'
 
 type Props = {
   draftId: string
@@ -20,6 +21,7 @@ export function T2vStoryboard({ draftId, projectId, document: initial, onDocumen
   const [doc, setDoc] = useState(initial)
   const [matching, setMatching] = useState(false)
   const [building, setBuilding] = useState(false)
+  const [mediaSceneId, setMediaSceneId] = useState<string | null>(null)
 
   const runMatch = async () => {
     setMatching(true)
@@ -79,13 +81,27 @@ export function T2vStoryboard({ draftId, projectId, document: initial, onDocumen
               )}
             </div>
             <div className="space-y-1 p-3 text-sm">
-              <p className="font-medium">Scene {idx + 1}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">Scene {idx + 1}</p>
+                <Button type="button" size="icon-sm" variant="ghost" aria-label="Replace media" onClick={() => setMediaSceneId(scene.id)}>
+                  <Wand2 className="size-4" />
+                </Button>
+              </div>
               <p className="line-clamp-2 text-muted-foreground">{scene.narration}</p>
               <p className="text-xs text-muted-foreground">{(estimateSceneMs(scene) / 1000).toFixed(1)}s</p>
             </div>
           </article>
         ))}
       </div>
+      {mediaSceneId ? (
+        <T2vSceneMediaDialog
+          open
+          draftId={draftId}
+          sceneId={mediaSceneId}
+          defaultPrompt={doc.scenes.find((s) => s.id === mediaSceneId)?.visualQuery ?? ''}
+          onClose={() => setMediaSceneId(null)}
+        />
+      ) : null}
     </div>
   )
 }

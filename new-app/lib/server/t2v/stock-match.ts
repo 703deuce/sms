@@ -2,6 +2,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { pexelsConfigured, pexelsSearchVideos, pickPexelsFile, type PexelsVideo } from '@/lib/server/ai/pexels'
+import type { T2vStockMediaType } from '@/lib/t2v/m9-contracts'
 import type { T2vAspect, T2vSceneMedia } from '@/lib/t2v/types'
 
 export type StockCandidate = {
@@ -207,7 +208,12 @@ export async function searchT2vStock(input: {
   page: number
   keywords?: string[]
   needMs?: number
+  /** Agent B: `photo` uses Pexels photos API when keyed; until then returns [] */
+  mediaType?: T2vStockMediaType
 }): Promise<StockCandidate[]> {
+  if (input.mediaType === 'photo') {
+    return []
+  }
   const kw = extractSceneKeywords(input.query, input.keywords ?? [])
   const batches = await Promise.allSettled([
     input.sources.includes('pexels') ? pexels(input.query, input.aspect, input.page) : Promise.resolve([]),
