@@ -28,7 +28,7 @@ def _lead_tail_ms() -> tuple[int, int]:
 
 
 def _ms_from_llm_seconds(val: Any, range_start_ms: int) -> int | None:
-    if val is None:
+    if val is None or val == "":
         return None
     try:
         return range_start_ms + int(float(val) * 1000)

@@ -22,67 +22,100 @@ from clips_worker.picker.titles import SHORT_SOURCE_MAX_MS, strip_internal_sente
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
 
-PASS2_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "clips": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "start_id": {"type": "integer"},
-                    "end_id": {"type": "integer"},
-                    "payoff_id": {"type": "integer"},
-                    "archetype": {"type": "string"},
-                    "scores": {
-                        "type": "object",
-                        "properties": {
-                            "hook": {"type": "number"},
-                            "self_contained": {"type": "number"},
-                            "payoff": {"type": "number"},
-                            "energy": {"type": "number"},
-                            "value": {"type": "number"},
-                        },
-                        "required": ["hook", "self_contained", "payoff", "energy", "value"],
-                        "additionalProperties": False,
-                    },
-                    "reject": {"type": "boolean"},
-                    "reject_reason": {"type": "string"},
-                    "title": {"type": "string", "maxLength": 60},
-                    "why_care": {"type": "string"},
-                    "setup_start_s": {"type": "number"},
-                    "payoff_end_s": {"type": "number"},
-                },
-                "required": [
-                    "start_id",
-                    "end_id",
-                    "payoff_id",
-                    "archetype",
-                    "scores",
-                    "reject",
-                    "reject_reason",
-                    "title",
-                    "why_care",
-                ],
-                "additionalProperties": False,
+
+def _pass2_clip_item_schema(*, boundary_fields: bool, batched: bool = False) -> dict[str, Any]:
+    props: dict[str, Any] = {
+        "start_id": {"type": "integer"},
+        "end_id": {"type": "integer"},
+        "payoff_id": {"type": "integer"},
+        "archetype": {"type": "string"},
+        "scores": {
+            "type": "object",
+            "properties": {
+                "hook": {"type": "number"},
+                "self_contained": {"type": "number"},
+                "payoff": {"type": "number"},
+                "energy": {"type": "number"},
+                "value": {"type": "number"},
             },
-        }
-    },
-    "required": ["clips"],
-    "additionalProperties": False,
-}
-
-
-def _pass2_batch_schema() -> dict[str, Any]:
-    item = json.loads(json.dumps(PASS2_SCHEMA["properties"]["clips"]["items"]))
-    item["properties"]["moment_index"] = {"type": "integer"}
-    item["required"] = list(item["required"]) + ["moment_index"]
+            "required": ["hook", "self_contained", "payoff", "energy", "value"],
+            "additionalProperties": False,
+        },
+        "reject": {"type": "boolean"},
+        "reject_reason": {"type": "string"},
+        "title": {"type": "string", "maxLength": 60},
+        "why_care": {"type": "string"},
+    }
+    required = [
+        "start_id",
+        "end_id",
+        "payoff_id",
+        "archetype",
+        "scores",
+        "reject",
+        "reject_reason",
+        "title",
+        "why_care",
+    ]
+    if boundary_fields:
+        props["setup_start_s"] = {"type": ["number", "null"]}
+        props["payoff_end_s"] = {"type": ["number", "null"]}
+        required.extend(["setup_start_s", "payoff_end_s"])
+    if batched:
+        props["moment_index"] = {"type": "integer"}
+        required.append("moment_index")
     return {
         "type": "object",
-        "properties": {"clips": {"type": "array", "items": item}},
+        "properties": props,
+        "required": required,
+        "additionalProperties": False,
+    }
+
+
+def _pass2_response_schema(*, boundary_fields: bool, batched: bool = False) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {"clips": {"type": "array", "items": _pass2_clip_item_schema(boundary_fields=boundary_fields, batched=batched)}},
         "required": ["clips"],
         "additionalProperties": False,
     }
+
+
+PASS2_SCHEMA = _pass2_response_schema(boundary_fields=True, batched=False)
+
+
+def _pass2_batch_schema(*, boundary_fields: bool = True) -> dict[str, Any]:
+    return _pass2_response_schema(boundary_fields=boundary_fields, batched=True)
+
+
+def _is_openai_schema_http_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "http 400" in msg and ("schema" in msg or "response_format" in msg or "setup_start_s" in msg)
+
+
+def _chat_json_pass2(
+    system: str,
+    user: str,
+    *,
+    batched: bool,
+    schema_name: str,
+    timeout_s: float | None = None,
+) -> dict[str, Any]:
+    schema = _pass2_batch_schema(boundary_fields=True) if batched else PASS2_SCHEMA
+    try:
+        return chat_json(system, user, schema, schema_name, timeout_s=timeout_s)
+    except RuntimeError as exc:
+        if not _is_openai_schema_http_error(exc):
+            raise
+        picker_info("pass2_schema_retry_no_boundaries", error=str(exc)[:240])
+        legacy_schema = _pass2_batch_schema(boundary_fields=False) if batched else _pass2_response_schema(boundary_fields=False)
+        try:
+            return chat_json(system, user, legacy_schema, schema_name, timeout_s=timeout_s)
+        except RuntimeError as exc2:
+            if _is_openai_schema_http_error(exc2):
+                picker_info("pass2_schema_failed_open", error=str(exc2)[:240])
+                return {"clips": []}
+            raise
 
 
 def _context_lines(sentences, sig_by, center_lo: int, center_hi: int, ctx_s: float) -> str:
@@ -273,11 +306,11 @@ def _score_moments_batched(
             "Set setup_start_s and payoff_end_s per clip (seconds from trim start).\n"
             f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user_body}"
         )
-    data = chat_json(
+    data = _chat_json_pass2(
         _pass2_system(genre, batched=True),
         user_body,
-        _pass2_batch_schema(),
-        "moments_pass2_batch",
+        batched=True,
+        schema_name="moments_pass2_batch",
         timeout_s=timeout_s,
     )
     picker_info("pass2_batch_raw", moments_in=len(moments), raw=json_snippet(data))
@@ -418,7 +451,7 @@ def score_moments(
                 "Full judge context: include setup_start_s and payoff_end_s from visual watch.\n"
                 f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user}"
             )
-        data = chat_json(_pass2_system(genre), user, PASS2_SCHEMA, "moments_pass2")
+        data = _chat_json_pass2(_pass2_system(genre), user, batched=False, schema_name="moments_pass2")
         picker_info("pass2_raw", moment_index=mi, raw=json_snippet(data))
         clips = data.get("clips") or []
         if not clips:
