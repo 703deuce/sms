@@ -6,7 +6,7 @@ export function defaultCropForAspect(aspect: ScriptAspect): ReframeCropRect {
   if (aspect === '16:9') return { cx: 50, cy: 50, w: 100, h: 100 }
   if (aspect === '1:1') return { cx: 50, cy: 50, w: 56, h: 100 }
   if (aspect === '4:5') return { cx: 50, cy: 45, w: 64, h: 100 }
-  if (aspect === '4:5') return { cx: 50, cy: 45, w: 80, h: 100 }
+  if (aspect === '9:16') return { cx: 50, cy: 45, w: 80, h: 100 }
   return { cx: 50, cy: 45, w: 56, h: 100 }
 }
 
