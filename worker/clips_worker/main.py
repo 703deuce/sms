@@ -440,12 +440,12 @@ from clips_worker.script_composition_render import run_script_composition_render
 
 
 def handle_script_composition_render(conn, job: dict) -> None:
-    def progress(payload: dict) -> None:
+    def progress(job_id: str, payload: dict) -> None:
         terminal = payload.get("jobStatus") in ("DONE", "FAILED")
         if terminal:
-            post_progress_terminal(job["id"], payload)
+            post_progress_terminal(job_id, payload)
         else:
-            post_progress_resilient(job["id"], payload)
+            post_progress_resilient(job_id, payload)
 
     run_script_composition_render_job(conn, job, progress)
 
