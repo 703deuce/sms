@@ -17,8 +17,9 @@ cmds = [
 ]
 
 [phases.build]
+# DB migrations run at container start (new-app/scripts/start-production.mjs), not during
+# image build — build containers often cannot reach Supabase (P1001).
 cmds = [
-  "bash scripts/deploy-db-migrations.sh",
   "cd new-app && bash scripts/coolify-build.sh",
 ]
 

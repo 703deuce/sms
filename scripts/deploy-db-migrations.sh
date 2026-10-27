@@ -3,8 +3,16 @@
 # Coolify: set DATABASE_URL on the web app so this runs on every deploy.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SCHEMA="${ROOT}/new-app/prisma/schema.prisma"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [[ -f "${ROOT}/new-app/prisma/schema.prisma" ]]; then
+  SCHEMA="${ROOT}/new-app/prisma/schema.prisma"
+elif [[ -f "${ROOT}/prisma/schema.prisma" ]]; then
+  SCHEMA="${ROOT}/prisma/schema.prisma"
+else
+  echo "[db-deploy] ERROR: cannot find prisma/schema.prisma (script_dir=${SCRIPT_DIR})"
+  exit 1
+fi
 prisma() {
   # --schema must follow the subcommand (e.g. migrate deploy --schema=...)
   (cd "${ROOT}/new-app" && npx --yes pnpm@12.3.4 exec prisma "$@" --schema="${SCHEMA}")
@@ -12,6 +20,12 @@ prisma() {
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "[db-deploy] DATABASE_URL is not set — skipping prisma migrate deploy (local/image build without DB)."
+  exit 0
+fi
+
+# Never fail image builds when the DB is unreachable (Coolify build network / P1001).
+if [[ "${SKIP_DB_MIGRATE_AT_BUILD:-}" == "1" || "${NIXPACKS_PHASE:-}" == "build" ]]; then
+  echo "[db-deploy] SKIP: migrations deferred to container start (SKIP_DB_MIGRATE_AT_BUILD / NIXPACKS build phase)."
   exit 0
 fi
 
@@ -132,6 +146,12 @@ if [[ "$deploy_code" -ne 0 ]]; then
     recover_failed_s10_montage_migration
     echo "[db-deploy] Retrying prisma migrate deploy after s10 montage recovery..."
     prisma migrate deploy
+  elif echo "$deploy_out" | grep -qiE 'P1001|Can.t reach database server'; then
+    if [[ "${ALLOW_BUILD_MIGRATE_SKIP:-}" == "1" ]]; then
+      echo "[db-deploy] WARNING: database unreachable (P1001) — skipping (ALLOW_BUILD_MIGRATE_SKIP=1)."
+      exit 0
+    fi
+    exit "$deploy_code"
   else
     exit "$deploy_code"
   fi

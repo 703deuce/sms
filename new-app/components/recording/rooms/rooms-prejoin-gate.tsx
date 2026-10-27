@@ -59,7 +59,7 @@ export function RoomsPrejoinGate({
         return
       }
 
-      const isHost = isSessionHostClient(sessionId)
+      const isHost = hostFromCookie || isSessionHostClient(sessionId)
       if (isHost) {
         try {
           const res = await fetch(`/api/recording/sessions/${sessionId}/token`, { method: 'POST' })
@@ -96,7 +96,7 @@ export function RoomsPrejoinGate({
     return () => {
       cancelled = true
     }
-  }, [sessionId])
+  }, [hostFromCookie, sessionId])
 
   if (loading) {
     return (

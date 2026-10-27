@@ -73,6 +73,11 @@ cp -a node_modules/@prisma/client .next/standalone/node_modules/@prisma/ 2>/dev/
 if [[ -d prisma ]]; then
   mkdir -p .next/standalone/prisma
   cp -a prisma/schema.prisma .next/standalone/prisma/
+  if [[ -d prisma/migrations ]]; then
+    cp -a prisma/migrations .next/standalone/prisma/
+  fi
 fi
+# Start script + runtime migrate helper (Docker / standalone cwd)
+cp -a scripts/start-production.mjs scripts/run-db-migrations.mjs .next/standalone/ 2>/dev/null || true
 
 echo "[new-app/coolify-build] complete"

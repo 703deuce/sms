@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 import { RoomsPrejoinGate } from '@/components/recording/rooms/rooms-prejoin-gate'
 import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
@@ -16,5 +17,13 @@ export default async function RoomsPrejoinPage({ params }: Props) {
     select: { id: true, title: true },
   })
   if (!session) notFound()
-  return <RoomsPrejoinGate sessionId={session.id} sessionTitle={session.title} />
+  const cookieStore = await cookies()
+  const hostFromCookie = cookieStore.get(`rooms_host_${session.id}`)?.value === '1'
+  return (
+    <RoomsPrejoinGate
+      sessionId={session.id}
+      sessionTitle={session.title}
+      hostFromCookie={hostFromCookie}
+    />
+  )
 }
