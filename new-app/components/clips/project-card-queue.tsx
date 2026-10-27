@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { formatClipQueueHint } from '@/lib/clips/progress-eta-label'
+import { clipQueueAttention, formatClipQueueHint } from '@/lib/clips/progress-eta-label'
 import { getProjectStatus } from '@/lib/clips-api'
 
 export function ProjectCardQueueHint({ projectId, processing }: { projectId: string; processing: boolean }) {
@@ -18,7 +18,16 @@ export function ProjectCardQueueHint({ projectId, processing }: { projectId: str
         .then((data) => {
           if (cancelled) return
           if (data.waitingForWorker) {
-            setHint(formatClipQueueHint(data.queueAhead) || ' · Queued')
+            const attention = clipQueueAttention({
+              waitingForWorker: true,
+              status: data.status,
+              stage: data.stage,
+              progress: data.progress,
+              queuedElapsedSec: data.queuedElapsedSec,
+            })
+            if (attention === 'stalled') setHint(' · Queue stalled')
+            else if (attention === 'slow') setHint(' · Queue slow')
+            else setHint(formatClipQueueHint(data.queueAhead) || ' · Queued')
           } else {
             setHint('')
           }
