@@ -195,6 +195,19 @@ def upload_file(object_key: str, path: Path, content_type: str | None = None) ->
         _upload_supabase(object_key, path, content_type)
 
 
+def object_byte_size(object_key: str) -> int:
+    """Best-effort object size for cleanup accounting."""
+    if object_key.startswith(STAGING_KEY_PREFIX):
+        return 0
+    if _uses_s3_api():
+        try:
+            _, size = _s3_object_meta(object_key)
+            return size
+        except ClientError:
+            return 0
+    return 0
+
+
 def delete_object(object_key: str) -> None:
     if _uses_s3_api():
         client = _s3_client()

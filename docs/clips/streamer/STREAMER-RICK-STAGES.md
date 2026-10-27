@@ -25,7 +25,9 @@ Reference: `new-app/docs/clips/STREAMER_BUILD_SPEC.md` (S0–S15). This doc is R
 **Rules**
 
 - **No multi-GB files on worker disk** — no “download entire VOD mp4 then upload to S3” for paste Twitch/Kick **vod/highlight** paths.
-- **Temp hygiene:** `cleanup_vod_import_dir` on import success; `TemporaryDirectory` / per-job `td_path` removed on success **and** failure; `STREAM_CLEANUP` deletes audio + chunks from bucket after clips READY.
+- **Temp hygiene:** `cleanup_vod_import_dir` on import success; `TemporaryDirectory` / per-job `td_path` removed on success **and** failure.
+- **Bulky object lifecycle:** During processing only — full-VOD **audio** (`audio.opus`), **chunk opus**, **shortlist `source_seg.mp4`**, chat, analysis proxy, upload master. **`STREAM_CLEANUP`** (and failure enqueue) deletes bulky keys on **READY and FAILED**, logs `[clipper:stream] cleanup_storage … bytesFreed=…`. **Keep:** merged **transcript**, **`signals.json`**, **per-chunk `signalsKey`**, **`rank_candidates.json`**, final **preview/poster** (retention 14d monthly / 90d annual, env-configurable). Re-rank / more clips re-fetch **new** segments from the platform VOD URL while it still exists.
+- **Disk guard:** stream lane refuses new `STREAM_*` claims when scratch disk **> 85%** (`STREAMER_DISK_GUARD_PCT`), logs `[clipper:stream] disk_guard_blocked`.
 - **Resume / retry:** checkpoint `StreamVod.state` (`audioKey`, `chunks`, `segmentKeys` or per-clip `sourceSegKey`); re-run skips finished steps; **per-segment** render retries re-fetch only that section (harden: persist segment attempt in state).
 
 **Current code vs target**

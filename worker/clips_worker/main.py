@@ -204,6 +204,22 @@ def post_progress_terminal(job_id: str, payload: dict) -> None:
         log(f"progress terminal post failed (job may already be DONE in DB) job={job_id}: {exc}")
 
 
+def release_job_claim(conn, job_id: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE clip_jobs
+            SET status = 'QUEUED',
+                "lockedBy" = NULL,
+                "lockedAt" = NULL,
+                attempts = GREATEST(0, attempts - 1)
+            WHERE id = %s
+            """,
+            (job_id,),
+        )
+    conn.commit()
+
+
 def claim_job(conn) -> dict | None:
     from clips_worker.worker_identity import worker_instance_id
 
@@ -613,6 +629,12 @@ def main() -> None:
 
                 requeue_stale_running_jobs(conn)
                 job = claim_job(conn)
+                if job and (job.get("type") or "").startswith("STREAM_"):
+                    from clips_worker.streamer.disk_guard import disk_guard_blocks_new_stream_work
+
+                    if disk_guard_blocks_new_stream_work():
+                        release_job_claim(conn, job["id"])
+                        job = None
                 if not job:
                     idle_polls += 1
                     if worker_lane() == "stream" and idle_polls % 60 == 1:
@@ -759,7 +781,24 @@ def main() -> None:
                                     """,
                                     (vod_id,),
                                 )
+                                cur.execute(
+                                    'SELECT "projectId" FROM stream_vods WHERE id=%s',
+                                    (vod_id,),
+                                )
+                                prow = cur.fetchone()
                         conn.commit()
+                        if vod_id and prow:
+                            try:
+                                from clips_worker.streamer.storage_cleanup import enqueue_stream_cleanup_job
+
+                                enqueue_stream_cleanup_job(
+                                    conn,
+                                    str(prow[0]),
+                                    vod_id,
+                                    delay_hours=0,
+                                )
+                            except Exception as cleanup_exc:
+                                log(f"[clipper:stream] failure_cleanup_enqueue_failed vodId={vod_id}: {cleanup_exc}")
                         post_progress(
                             job["id"],
                             terminal_failure_progress_payload(job.get("type") or "", msg),

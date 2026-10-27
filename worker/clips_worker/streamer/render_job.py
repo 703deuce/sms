@@ -22,6 +22,7 @@ from clips_worker.streamer.layout.render_stack import render_stack_mp4
 from clips_worker.storage import download_object, put_json, upload_file
 from clips_worker.streamer.align import align_segment_ms
 from clips_worker.streamer.config import SCRATCH, SEGMENT_PAD_S, SOURCE_RETENTION_HOURS
+from clips_worker.streamer.storage_cleanup import delete_clip_source_segment, enqueue_stream_cleanup_job
 from clips_worker.streamer.keys import clip_segment_key, stream_audio_key
 from clips_worker.streamer.progress import eta_seconds
 from clips_worker.streamer.segments import cut_local_segment, download_segment
@@ -390,6 +391,14 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     )
                 conn.commit()
 
+                delete_clip_source_segment(
+                    workspace_id,
+                    project_id,
+                    clip_id,
+                    seg_key,
+                    vod_id=vod_id,
+                )
+
                 done_n = idx + 1
                 pct = 65 + int(30 * done_n / total)
                 eta = eta_seconds(done_n, total, render_started)
@@ -408,16 +417,12 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 )
 
     mark_project_ready(conn, project_id)
-    cleanup_id = f"job_{uuid.uuid4().hex}"
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "runAfter", "createdAt")
-            VALUES (%s,%s,'STREAM_CLEANUP','QUEUED',%s::jsonb,0,NOW() + (%s || ' hours')::interval,NOW())
-            """,
-            (cleanup_id, project_id, json.dumps({"vodId": vod_id}), str(SOURCE_RETENTION_HOURS)),
-        )
-    conn.commit()
+    enqueue_stream_cleanup_job(
+        conn,
+        project_id,
+        vod_id,
+        delay_hours=float(SOURCE_RETENTION_HOURS),
+    )
     post_progress(
         job["id"],
         {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE"},
