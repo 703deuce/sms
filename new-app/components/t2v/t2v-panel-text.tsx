@@ -28,8 +28,11 @@ export function T2vPanelText({
 }) {
   const [sceneId, setSceneId] = useState(doc.scenes[0]?.id ?? '')
   const sceneIdx = doc.scenes.findIndex((s) => s.id === sceneId)
-  const scene = sceneIdx >= 0 ? doc.scenes[sceneIdx] : null
-  const sceneDurMs = useMemo(() => (scene ? estimateSceneMs(scene) : 5000), [scene])
+  if (sceneIdx < 0) {
+    return <p className="p-4 text-sm text-muted-foreground">Add scenes before editing titles.</p>
+  }
+  const scene = doc.scenes[sceneIdx]
+  const sceneDurMs = useMemo(() => estimateSceneMs(scene), [scene])
 
   const updateTexts = (texts: T2vTextItem[]) => {
     if (sceneIdx < 0) return
@@ -65,11 +68,7 @@ export function T2vPanelText({
       },
       sceneDurMs,
     )
-    updateTexts([...(scene?.texts ?? []), item])
-  }
-
-  if (!scene) {
-    return <p className="p-4 text-sm text-muted-foreground">Add scenes before editing titles.</p>
+    updateTexts([...scene.texts, item])
   }
 
   return (

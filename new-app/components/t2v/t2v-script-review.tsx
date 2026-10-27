@@ -190,11 +190,13 @@ export function T2vScriptReview({ draftId, projectId, initialRevision, initialDo
               <div className="flex items-center gap-2">
                 <span>{(estimateSceneMs(scene) / 1000).toFixed(1)}s est</span>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Scene actions">
-                      <MoreHorizontal className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label="Scene actions">
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    }
+                  />
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => duplicateScene(idx)}>Duplicate</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => moveScene(idx, -1)} disabled={idx === 0}>Move up</DropdownMenuItem>
