@@ -1,6 +1,5 @@
-/** UI + API gate for connected-channel auto-pull (worker/EventSub unchanged). */
+/** UI + API gate for connected-channel auto-pull (worker/EventSub unchanged). Default off until ops enables. */
 export function streamerAutopullUiEnabled(): boolean {
   const raw = process.env.STREAMER_AUTOPULL_ENABLED?.trim().toLowerCase()
-  if (raw === '0' || raw === 'false' || raw === 'no') return false
-  return true
+  return raw === '1' || raw === 'true' || raw === 'yes'
 }
