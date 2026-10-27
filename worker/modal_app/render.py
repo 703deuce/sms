@@ -11,7 +11,7 @@ from modal_app.app import app
 image = modal.Image.debian_slim(python_version="3.12").apt_install("ffmpeg")
 
 
-_MIN_CONTAINERS = max(0, int(os.environ.get("MODAL_RENDER_MIN_CONTAINERS", "1")))
+_MIN_CONTAINERS = max(0, int(os.environ.get("MODAL_RENDER_MIN_CONTAINERS", "0")))
 
 
 @app.cls(
