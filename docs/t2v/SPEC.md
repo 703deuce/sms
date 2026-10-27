@@ -468,6 +468,22 @@ Bench `tests/bench_t2v_60s.py`: 12 scenes × 5 s, 1280×720@30, mixed transition
 
 ---
 
+## 5.10 Parallel build ownership (web vs worker backend)
+Agree on **function signatures** in this spec and `docs/t2v/code/`; do not fork alternate APIs.
+
+| Owner | Milestones / scope | Live paths (when landed) |
+|---|---|---|
+| **Agent A (web + deploys)** | M0 schema/plumbing; **M2–M3, M4 storyboard UI**, M5–M8; all Coolify/web + worker **deploys** | `new-app/app/api/t2v/*`, `components/t2v/*`, `lib/server/t2v/drafts.ts`, `draftToComposition`, composition export fixes |
+| **Agent B (worker/backend only)** | **M1** worker TTS (`worker/clips_worker/t2v/elevenlabs_tts.py`, `tts_alignment.py`, cache DB, ElevenLabs smoke); **M4** stock backend (`stock-match.ts`, `stock-asset.ts`, `pexels.ts`, ranking/dedupe/trim) | Worker assemble TTS; stock search **server** modules only |
+
+**Contracts (call these names; stub in tests only until B lands):**
+- **TTS (preview + cache):** `ttsWithTimestamps()`, `ttsHash()`, `getOrSynthesizeVoiceClip()` — `docs/t2v/code/new-app/lib/server/ai/elevenlabs-tts.ts` + `voice-cache.ts`; worker mirror `tts_with_timestamps()` in `elevenlabs_tts.py`.
+- **Stock search (M4):** `searchT2vStock({ query, aspect, providers, type, page })` → ranked hits; `materializeT2vStockHit(hit)` → `{ storageKey, … }` — `docs/t2v/code/new-app/lib/server/t2v/stock-match.ts` + `stock-asset.ts`. UI calls `GET …/scenes/[id]/media` only.
+
+**Process:** `git pull` before every push (clipper + T2V PRs merge via webhook). Agent A does **not** re-trigger deploy if a merge just fired; one deploy per pushed SHA.
+
+---
+
 ## 6. Milestones (agent-days; reconciled with the canvas)
 Canvas: core text-to-video ≈ 46 effort-days left, ≈ 53 with 15 % QA. This plan: **50 days for core (M0–M8)**, because the worker assembly, titles, alignment and stock scoring are already written and tested here (≈ 3 days of the canvas estimate). Parity pack M9 ≈ 14 days follows.
 

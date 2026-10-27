@@ -1,4 +1,6 @@
+import { Suspense } from 'react'
 import { Page } from '@/components/app/page-primitives'
+import { T2vCreateWorkspace } from '@/components/t2v/t2v-create-workspace'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { notFound } from 'next/navigation'
 
@@ -8,10 +10,9 @@ export default function T2vCreatePage() {
   if (!isT2vFeatureEnabled()) notFound()
   return (
     <Page>
-      <div className="mx-auto max-w-2xl py-12 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Text to video</h1>
-        <p className="mt-2 text-muted-foreground">Create flow ships in milestone M2 (FEATURE_T2V is on).</p>
-      </div>
+      <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Loading…</p>}>
+        <T2vCreateWorkspace />
+      </Suspense>
     </Page>
   )
 }

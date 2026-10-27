@@ -1,6 +1,6 @@
 import 'server-only'
 import { NextResponse } from 'next/server'
-import { isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
+import { t2vFeatureDisabledResponse } from '@/lib/server/t2v/t2v-api-guard'
 import { getOrSynthesizeVoiceClip } from '@/lib/server/t2v/voice-cache'
 import { wordsFromAlignment } from '@/lib/server/t2v/tts-alignment'
 import type { T2vDraftV1, T2vScene } from '@/lib/t2v/types'
@@ -20,9 +20,8 @@ export async function postSceneVoice(
   draftId: string,
   sceneId: string,
 ): Promise<NextResponse> {
-  if (!isT2vFeatureEnabled()) {
-    return NextResponse.json({ error: 'feature_disabled' }, { status: 404 })
-  }
+  const disabled = t2vFeatureDisabledResponse()
+  if (disabled) return disabled
   const workspaceId = await resolveWorkspaceId()
   const prisma = getPrisma()
   const row = await prisma.t2vDraft.findFirst({ where: { id: draftId, workspaceId } })
