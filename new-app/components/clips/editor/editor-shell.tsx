@@ -20,6 +20,7 @@ import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
+import { clipLayoutChip, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { Timeline } from '@/components/clips/editor/timeline'
@@ -367,6 +368,7 @@ export function EditorShell({
           onApplyBrand={() => void applyBrand()}
           onEdits={setEdits}
           reframeV2Enabled={reframeV2Enabled}
+          appliedLayoutLabel={clipLayoutChip(aiMeta as ClipAiMeta | null)}
         />
         </EditorPanelErrorBoundary>
       </div>

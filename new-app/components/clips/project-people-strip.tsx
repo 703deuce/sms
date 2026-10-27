@@ -35,7 +35,9 @@ export function ProjectPeopleStrip({ clips }: { clips: ClipCardData[] }) {
       className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm"
       data-testid="project-people-strip"
     >
-      <span className="text-muted-foreground">People found:</span>
+      <span className="text-muted-foreground">
+        People found{n > 1 ? ` (${n} speakers)` : ''}:
+      </span>
       <div className="flex flex-wrap items-center gap-1.5" role="list" aria-label="Detected people">
         {Array.from({ length: n }, (_, i) => {
           const label = `P${i + 1}`

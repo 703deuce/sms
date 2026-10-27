@@ -21,6 +21,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ projectId:
     })
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const result = await applyProjectAutoStockBroll(project.workspaceId, projectId)
+    console.info('[clipper:broll] worker callback', { projectId, ...result })
     return NextResponse.json({ data: result })
   } catch (err) {
     return jsonError(err, 500)

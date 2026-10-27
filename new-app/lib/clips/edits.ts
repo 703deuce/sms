@@ -46,6 +46,7 @@ export type ClipEditsV2 = {
       | 'grid4'
       | 'dynamic'
       | 'auto'
+      | 'screen_pip'
     shotOverrides: { i: number; focus: 'auto' | 'A' | 'B' | 'both' }[]
   }
   broll?: BrollItem[]
@@ -113,6 +114,7 @@ const LAYOUT_MODES: ClipEditsV2['layout']['mode'][] = [
   'grid4',
   'dynamic',
   'auto',
+  'screen_pip',
 ]
 
 const EXPORT_ASPECTS: ExportAspect[] = ['9:16', '4:5', '1:1', '16:9']

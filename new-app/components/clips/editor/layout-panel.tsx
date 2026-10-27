@@ -10,6 +10,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipAspectRatios } from '@/lib/clips/settings'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
+import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
   { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
@@ -20,6 +21,11 @@ const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string;
   { id: 'grid4', title: 'Grid 4-up', desc: 'Four speakers visible.' },
   { id: 'fit_blur', title: 'Fit with blur', desc: 'Letterbox with blurred fill.' },
   { id: 'center_crop', title: 'Fill', desc: 'Full-frame crop fill.' },
+  {
+    id: 'screen_pip',
+    title: 'Screen + camera',
+    desc: 'Screen share full frame with speaker PiP (when detected).',
+  },
   { id: 'subject_follow', title: 'Subject follow', desc: 'ClipAnything — later', disabled: true },
 ]
 
@@ -32,6 +38,7 @@ export function LayoutPanel({
   onApplyBrand,
   onEdits,
   reframeV2Enabled = false,
+  appliedLayoutLabel = null,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -41,11 +48,22 @@ export function LayoutPanel({
   onApplyBrand?: () => void
   onEdits?: (edits: ClipEditsV2) => void
   reframeV2Enabled?: boolean
+  /** Runtime layout from reframe (read-only inspector). */
+  appliedLayoutLabel?: string | null
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
   return (
     <div className="flex flex-col gap-4">
+      {appliedLayoutLabel ? (
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">
+          <span className="text-muted-foreground">Detected layout: </span>
+          <span className="font-medium text-foreground">{appliedLayoutLabel}</span>
+        </div>
+      ) : null}
+      <p className="text-xs text-muted-foreground">
+        Trim handles can extend up to {MAX_TRIM_EXTEND_MS / 1000}s beyond the AI clip bounds on export.
+      </p>
       {onApplyBrand && (
         <Button type="button" size="sm" variant="outline" onClick={onApplyBrand}>
           Apply brand

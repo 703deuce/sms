@@ -58,5 +58,11 @@ export async function applyProjectAutoStockBroll(
     placements += items.length
   }
 
+  console.info('[clipper:broll] project auto-stock complete', {
+    projectId,
+    clipsProcessed: clips.length,
+    clipsUpdated,
+    placements,
+  })
   return { clipsProcessed: clips.length, clipsUpdated, placements }
 }
