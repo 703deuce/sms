@@ -3,6 +3,7 @@ import { type ExportAspect, type ExportResolution, renderVersionHash } from '@/l
 import { exportFilename } from '@/lib/server/clips/clips'
 import {
   type ClipExportRowDto,
+  mapCompositionExportRows,
   mapRenderRows,
   parseExportStatusFilter,
   renderStatusWhere,
@@ -12,13 +13,26 @@ import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { createId } from '@/lib/supabase/id'
 
-export async function listClipRenders(workspaceId: string, statusFilter?: 'all' | 'ready' | 'failed') {
+const DEFAULT_EXPORTS_PAGE_SIZE = 40
+const MAX_EXPORTS_PAGE_SIZE = 100
+
+function clampExportLimit(limit?: number): number {
+  if (limit == null || !Number.isFinite(limit)) return DEFAULT_EXPORTS_PAGE_SIZE
+  return Math.min(Math.max(1, Math.floor(limit)), MAX_EXPORTS_PAGE_SIZE)
+}
+
+export async function listClipRenders(
+  workspaceId: string,
+  statusFilter?: 'all' | 'ready' | 'failed',
+  limit?: number,
+) {
   const prisma = getPrisma()
   const filter = parseExportStatusFilter(statusFilter)
+  const take = clampExportLimit(limit)
   const rows = await prisma.clipRender.findMany({
     where: { workspaceId, ...renderStatusWhere(filter) },
     orderBy: { createdAt: 'desc' },
-    take: 100,
+    take,
     include: {
       clip: {
         select: {
@@ -36,6 +50,7 @@ export async function listClipRenders(workspaceId: string, statusFilter?: 'all' 
 async function listCompositionExportRows(
   workspaceId: string,
   filter: 'all' | 'ready' | 'failed',
+  limit: number,
 ): Promise<ClipExportRowDto[]> {
   const prisma = getPrisma()
   const status =
@@ -43,62 +58,31 @@ async function listCompositionExportRows(
   const rows = await prisma.scriptCompositionRender.findMany({
     where: { workspaceId, ...(status ? { status } : {}) },
     orderBy: { createdAt: 'desc' },
-    take: 100,
+    take: limit,
     include: {
       composition: {
         select: { id: true, title: true, projectId: true, kind: true },
       },
     },
   })
-  const storage = getClipStorage()
-  const out: ClipExportRowDto[] = []
-  for (const r of rows) {
-    const comp = r.composition
-    if (!comp) continue
-    const fname = exportFilename(comp.title || 'Composition export')
-    let downloadUrl: string | null = null
-    let sizeBytes: number | null = null
-    if (r.status === 'READY' && r.outputKey) {
-      try {
-        downloadUrl = await createCachedSignedDownloadUrl(storage, r.outputKey, { downloadFilename: fname })
-        sizeBytes = await storage.getObjectSizeBytes(r.outputKey)
-      } catch {
-        downloadUrl = null
-      }
-    }
-    out.push({
-      id: r.id,
-      clipId: comp.id,
-      projectId: comp.projectId,
-      title: comp.title || 'Script export',
-      resolution: r.resolution,
-      aspectRatio: r.aspectRatio,
-      batchId: null,
-      watermark: false,
-      status: r.status,
-      error: r.error,
-      createdAt: r.createdAt.toISOString(),
-      expiresAt: null,
-      sizeBytes,
-      filename: fname,
-      posterUrl: null,
-      editorUrl: `/app/clips/${comp.projectId}/script`,
-      downloadUrl,
-    })
-  }
-  return out
+  return mapCompositionExportRows(rows)
 }
 
 /** Clip renders plus script composition exports (T2V / Descript editor). */
-export async function listWorkspaceExports(workspaceId: string, statusFilter?: 'all' | 'ready' | 'failed') {
+export async function listWorkspaceExports(
+  workspaceId: string,
+  statusFilter?: 'all' | 'ready' | 'failed',
+  opts?: { limit?: number },
+) {
   const filter = parseExportStatusFilter(statusFilter)
+  const limit = clampExportLimit(opts?.limit)
   const [clips, compositions] = await Promise.all([
-    listClipRenders(workspaceId, filter),
-    listCompositionExportRows(workspaceId, filter),
+    listClipRenders(workspaceId, filter, limit),
+    listCompositionExportRows(workspaceId, filter, limit),
   ])
   return [...clips, ...compositions]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 100)
+    .slice(0, limit)
 }
 
 export async function getRenderForWorkspace(workspaceId: string, renderId: string) {

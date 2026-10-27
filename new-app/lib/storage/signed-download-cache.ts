@@ -20,13 +20,21 @@ async function objectVersionToken(
   return size != null ? `size:${size}` : objectKey
 }
 
+export type SignedDownloadUrlOptions = {
+  downloadFilename?: string
+  /** When set, skips storage HEAD for cache versioning (list views). */
+  versionHint?: string
+}
+
 export async function createCachedSignedDownloadUrl(
   storage: ClipStorageDriver,
   objectKey: string,
-  options?: { downloadFilename?: string },
+  options?: SignedDownloadUrlOptions,
   expiresInSec: number = CLIPS_BROWSER_DOWNLOAD_TTL_SEC,
 ): Promise<string> {
-  const version = await objectVersionToken(storage, objectKey)
+  const version =
+    options?.versionHint?.trim() ||
+    (await objectVersionToken(storage, objectKey))
   const cacheKey = `${objectKey}:${version}:${options?.downloadFilename ?? ''}`
   const now = Date.now()
   const hit = urlCache.get(cacheKey)

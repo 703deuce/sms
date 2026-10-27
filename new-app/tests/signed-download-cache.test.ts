@@ -26,4 +26,12 @@ describe('createCachedSignedDownloadUrl', () => {
     expect(a).toBe(b)
     expect(storage.createSignedDownloadUrl).toHaveBeenCalledTimes(1)
   })
+
+  it('skips storage HEAD when versionHint is provided', async () => {
+    const storage = mockStorage()
+    await createCachedSignedDownloadUrl(storage, 'ws/x/out.mp4', { versionHint: 'render:r1:1:123' })
+    expect(storage.getObjectVersionToken).not.toHaveBeenCalled()
+    expect(storage.getObjectSizeBytes).not.toHaveBeenCalled()
+    expect(storage.createSignedDownloadUrl).toHaveBeenCalledTimes(1)
+  })
 })

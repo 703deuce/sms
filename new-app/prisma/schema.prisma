@@ -9157,6 +9157,7 @@ model ScriptCompositionRender {
 
   @@unique([compositionId, idempotencyKey])
   @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
   @@map("script_composition_renders")
 }
 

@@ -14,6 +14,28 @@ import {
 import { CACHE_CONTROL_IMMUTABLE } from '@/lib/storage/signed-download-cache'
 
 const MAX_PARTS = 10_000
+/** Cap slow B2/S3 HEAD during list views (exports page). */
+export const OBJECT_HEAD_TIMEOUT_MS = 3_000
+
+async function headObjectWithTimeout(
+  client: ReturnType<typeof getInternalS3Client>,
+  bucket: string,
+  objectKey: string,
+): Promise<{ ContentLength?: number; ETag?: string } | null> {
+  const { HeadObjectCommand } = await import('@aws-sdk/client-s3')
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), OBJECT_HEAD_TIMEOUT_MS)
+  try {
+    return await client.send(
+      new HeadObjectCommand({ Bucket: bucket, Key: objectKey }),
+      { abortSignal: controller.signal },
+    )
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 export function createS3CompatibleStorageDriver(
   getConfig: () => S3Config | null,
@@ -115,30 +137,17 @@ export function createS3CompatibleStorageDriver(
     async getObjectSizeBytes(objectKey: string): Promise<number | null> {
       const cfg = getConfig()
       if (!cfg) return null
-      const { HeadObjectCommand } = await import('@aws-sdk/client-s3')
-      try {
-        const out = await getInternalS3Client(cfg).send(
-          new HeadObjectCommand({ Bucket: cfg.bucket, Key: objectKey }),
-        )
-        return typeof out.ContentLength === 'number' ? out.ContentLength : null
-      } catch {
-        return null
-      }
+      const out = await headObjectWithTimeout(getInternalS3Client(cfg), cfg.bucket, objectKey)
+      return out && typeof out.ContentLength === 'number' ? out.ContentLength : null
     },
     async getObjectVersionToken(objectKey: string): Promise<string> {
       const cfg = getConfig()
       if (!cfg) return objectKey
-      const { HeadObjectCommand } = await import('@aws-sdk/client-s3')
-      try {
-        const out = await getInternalS3Client(cfg).send(
-          new HeadObjectCommand({ Bucket: cfg.bucket, Key: objectKey }),
-        )
-        const etag = out.ETag?.replace(/"/g, '') ?? ''
-        const size = out.ContentLength ?? 0
-        return etag ? `etag:${etag}` : `size:${size}`
-      } catch {
-        return objectKey
-      }
+      const out = await headObjectWithTimeout(getInternalS3Client(cfg), cfg.bucket, objectKey)
+      if (!out) return objectKey
+      const etag = out.ETag?.replace(/"/g, '') ?? ''
+      const size = out.ContentLength ?? 0
+      return etag ? `etag:${etag}` : `size:${size}`
     },
   }
 }
