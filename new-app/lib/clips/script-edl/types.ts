@@ -15,6 +15,30 @@ export type EdlGapSegment = {
 
 export type EdlSegment = EdlSourceSegment | EdlGapSegment
 
+export type ScriptAspect = '9:16' | '1:1' | '4:5' | '16:9'
+
+export type ScriptReframeMode = 'speaker_follow' | 'center_crop' | 'manual'
+
+/** Composition preview / export prefs (M4 — maps to clip edits at export). */
+export type ScriptEditorSettings = {
+  aspect?: ScriptAspect
+  reframeMode?: ScriptReframeMode
+  captionsEnabled?: boolean
+  volumePct?: number
+  captions?: {
+    enabled?: boolean
+    presetId?: string
+    animation?: string
+    size?: number
+    position?: string
+    case?: string
+    wordsPerLine?: number
+    colors?: { a?: string; b?: string }
+    keywordHighlight?: boolean
+    emphasis?: number[]
+  }
+}
+
 /** v1 document: ordered kept word ids + explicit gap inserts (M2 expands token model). */
 export type ScriptDocumentV1 = {
   v: 1
@@ -43,4 +67,6 @@ export type ScriptDocumentV1 = {
   }[]
   /** M10+ — music clips on output timeline. */
   musicTracks?: { id: string; assetId: string; outStartMs: number; durMs: number; label?: string; duckUnderSpeech?: boolean }[]
+  /** M4 — canvas pills + side panels (aspect, captions, volume). */
+  settings?: ScriptEditorSettings
 }

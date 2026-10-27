@@ -46,6 +46,18 @@ describe('script op log', () => {
     expect(reloaded.deletedWordIds.sort()).toEqual(['a:0', 'a:2'].sort())
   })
 
+  it('patch_settings merges composition prefs', () => {
+    let doc = emptyDocument(ids)
+    doc = applyCompositionOp(doc, { type: 'patch_settings', patch: { aspect: '16:9', volumePct: 80 } })
+    expect(doc.settings?.aspect).toBe('16:9')
+    expect(doc.settings?.volumePct).toBe(80)
+    doc = applyCompositionOp(doc, {
+      type: 'patch_settings',
+      patch: { captions: { presetId: 'minimal' } },
+    })
+    expect(doc.settings?.captions?.presetId).toBe('minimal')
+  })
+
   it('opsBetweenDocuments matches snapshot undo stack', () => {
     let doc = emptyDocument(ids)
     const stack: ReturnType<typeof cloneDocument>[] = []

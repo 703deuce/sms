@@ -29,7 +29,18 @@ import {
   outputRangeForWordIndices,
   splitMarkerAfterWordIndex,
 } from '@/lib/clips/script-editor/timeline-model'
+import { toast } from 'sonner'
 import { ArrowLeft, Pause, Play, Redo2, Scissors, Undo2 } from 'lucide-react'
+import { ScriptFillerReviewBar } from '@/components/script-editor/script-filler-review-bar'
+import { ScriptEditorRail, type ScriptSideTab } from '@/components/script-editor/script-editor-rail'
+import { ScriptCaptionsPanel } from '@/components/script-editor/side/script-captions-panel'
+import { ScriptPropertiesPanel } from '@/components/script-editor/side/script-properties-panel'
+import { ScriptEditToolsPanel } from '@/components/script-editor/side/script-edit-tools-panel'
+import { PreviewPillBar } from '@/components/script-editor/preview/preview-pill-bar'
+import { ScriptCaptionOverlay } from '@/components/script-editor/preview/script-caption-overlay'
+import { resolveScriptSettings } from '@/lib/clips/script-editor/default-settings'
+import { formatGapChip, listFillerHits, type FillerFilter } from '@/lib/clips/script-editor/filler-hits'
+import type { ScriptAspect, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
 
 export type ScriptBootstrapView = {
   projectId: string
@@ -49,6 +60,13 @@ export type ScriptBootstrapView = {
 function defaultDocument(words: EditorWord[]): ScriptDocumentV1 {
   const ids = words.map((w) => w.id)
   return { v: 1, keptWordIds: ids, deletedWordIds: [], wordOrder: ids }
+}
+
+function previewAspectClass(aspect: ScriptAspect): string {
+  if (aspect === '1:1') return 'aspect-square'
+  if (aspect === '4:5') return 'aspect-[4/5]'
+  if (aspect === '16:9') return 'aspect-video'
+  return 'aspect-[9/16]'
 }
 
 export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
@@ -76,8 +94,18 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
   const outputPlayAnchorRef = useRef<{ t: number; out0: number } | null>(null)
   const playheadMsRef = useRef(playheadMs)
   playheadMsRef.current = playheadMs
+  const previewBoxRef = useRef<HTMLDivElement>(null)
+  const [previewBoxH, setPreviewBoxH] = useState(480)
+  const [sideOpen, setSideOpen] = useState(true)
+  const [sideTab, setSideTab] = useState<ScriptSideTab>('properties')
+  const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
+  const [fillerCursor, setFillerCursor] = useState(0)
+  const [fillerFilter, setFillerFilter] = useState<FillerFilter>('all')
+  const [fillerSelectionOnly, setFillerSelectionOnly] = useState(false)
+  const [fillerAvoidHarsh, setFillerAvoidHarsh] = useState(true)
 
   const wordsById = useMemo(() => new Map(data.editorWords.map((w) => [w.id, w])), [data.editorWords])
+  const settings = useMemo(() => resolveScriptSettings(document.settings), [document.settings])
   const edl = useMemo(() => deriveEdl(document, wordsById, { padMs: 0 }), [document, wordsById])
   const deletedSet = useMemo(() => new Set(document.deletedWordIds), [document.deletedWordIds])
   const fillerCount = useMemo(
@@ -186,6 +214,93 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
     }
     return ids
   }, [selAnchor, selEnd, orderedWords, deletedSet])
+
+  const fillerHits = useMemo(
+    () =>
+      listFillerHits(orderedWords, deletedSet, {
+        filter: fillerFilter,
+        selectionOnly: fillerSelectionOnly,
+        selectedIds: selectedIds,
+        avoidHarshCuts: fillerAvoidHarsh,
+      }),
+    [orderedWords, deletedSet, fillerFilter, fillerSelectionOnly, selectedIds, fillerAvoidHarsh],
+  )
+
+  const activeFillerHit = fillerHits[fillerCursor] ?? null
+
+  const keptWords = useMemo(
+    () => orderedWords.filter((w) => !deletedSet.has(w.id)),
+    [orderedWords, deletedSet],
+  )
+
+  const patchSettings = useCallback(
+    (patch: Partial<ScriptEditorSettings>) => {
+      applyOp({ type: 'patch_settings', patch })
+    },
+    [applyOp],
+  )
+
+  useEffect(() => {
+    if (fillerCursor >= fillerHits.length) setFillerCursor(Math.max(0, fillerHits.length - 1))
+  }, [fillerCursor, fillerHits.length])
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    const pct = settings.volumePct ?? 100
+    v.volume = Math.min(2, Math.max(0, pct / 100))
+  }, [settings.volumePct])
+
+  useEffect(() => {
+    const el = previewBoxRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setPreviewBoxH(el.clientHeight))
+    ro.observe(el)
+    setPreviewBoxH(el.clientHeight)
+    return () => ro.disconnect()
+  }, [])
+
+  const openFillerTools = useCallback(() => {
+    setSideOpen(true)
+    setSideTab('edit')
+    setFillerReviewOpen(true)
+  }, [])
+
+  const removeFillerIds = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return
+      const ms = ids.reduce((sum, id) => {
+        const w = wordsById.get(id)
+        return w ? sum + (w.t1Ms - w.t0Ms) : sum
+      }, 0)
+      deleteWords(ids)
+      toast.success(`Removed ${ids.length} filler word(s) (−${(ms / 1000).toFixed(1)} s). Undo`)
+    },
+    [deleteWords, wordsById],
+  )
+
+  const onRemoveOneFiller = useCallback(() => {
+    const hit = fillerHits[fillerCursor]
+    if (!hit) return
+    removeFillerIds([hit.word.id])
+    setFillerCursor((c) => Math.min(c, Math.max(0, fillerHits.length - 2)))
+  }, [fillerCursor, fillerHits, removeFillerIds])
+
+  const onRemoveAllFillers = useCallback(() => {
+    const ids = fillerHits.map((h) => h.word.id)
+    removeFillerIds(ids)
+    setFillerReviewOpen(false)
+  }, [fillerHits, removeFillerIds])
+
+  const onSelectFillerHit = useCallback(
+    (hit: { index: number; word: EditorWord }) => {
+      setFillerCursor(fillerHits.findIndex((h) => h.word.id === hit.word.id))
+      setSelAnchor(hit.index)
+      setSelEnd(hit.index)
+      seekToSourceMs(Math.max(data.rangeStartMs, hit.word.t0Ms - 1000))
+    },
+    [data.rangeStartMs, fillerHits, seekToSourceMs],
+  )
 
   const onWordPointerDown = (idx: number, w: EditorWord, shift: boolean) => {
     dragSelectRef.current = true
@@ -457,10 +572,41 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           Split
         </Button>
         <div className="min-w-0 flex-1 truncate text-sm font-medium">{data.title}</div>
+        {fillerCount > 0 && (
+          <button
+            type="button"
+            onClick={openFillerTools}
+            className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-800 dark:text-sky-200 hover:bg-sky-500/20"
+            title="Open filler tools"
+          >
+            Fillers {fillerCount}
+          </button>
+        )}
         <span className="text-xs text-muted-foreground">
           {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Saved'}
         </span>
       </header>
+
+      {fillerReviewOpen && (
+        <ScriptFillerReviewBar
+          total={fillerHits.length}
+          cursor={fillerCursor}
+          filter={fillerFilter}
+          onFilterChange={(f) => {
+            setFillerFilter(f)
+            setFillerCursor(0)
+          }}
+          selectionOnly={fillerSelectionOnly}
+          onSelectionOnlyChange={setFillerSelectionOnly}
+          avoidHarshCuts={fillerAvoidHarsh}
+          onAvoidHarshCutsChange={setFillerAvoidHarsh}
+          onPrev={() => setFillerCursor((c) => (fillerHits.length ? (c - 1 + fillerHits.length) % fillerHits.length : 0))}
+          onNext={() => setFillerCursor((c) => (fillerHits.length ? (c + 1) % fillerHits.length : 0))}
+          onRemoveOne={onRemoveOneFiller}
+          onRemoveAll={onRemoveAllFillers}
+          onClose={() => setFillerReviewOpen(false)}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
@@ -493,6 +639,14 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                         const showSplit = splitAfterIdx.has(idx)
                         return (
                           <span key={w.id} className="inline">
+                            {w.gapBeforeMs != null && w.gapBeforeMs >= 1000 && !deleted && (
+                              <span
+                                className="mr-1 inline rounded bg-muted px-1 text-[11px] text-muted-foreground"
+                                title={`${(w.gapBeforeMs / 1000).toFixed(1)}s pause`}
+                              >
+                                {formatGapChip(w.gapBeforeMs)}
+                              </span>
+                            )}
                             <button
                               type="button"
                               data-word-idx={idx}
@@ -503,9 +657,10 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
                               onMouseEnter={() => onWordPointerEnter(idx)}
                               className={cn(
                                 'mr-1 inline rounded-sm px-0.5 transition-colors',
-                                w.isFiller && !deleted && 'text-muted-foreground line-through',
+                                w.isFiller && !deleted && 'text-muted-foreground underline decoration-dotted decoration-sky-500/70',
                                 deleted && 'text-muted-foreground/60 line-through decoration-destructive/50',
                                 active && !deleted && 'bg-primary/20',
+                                activeFillerHit?.word.id === w.id && 'ring-1 ring-sky-500/60',
                                 selected && 'bg-sky-500/25',
                                 !active && !deleted && 'hover:bg-muted/60',
                               )}
@@ -535,25 +690,77 @@ export function ScriptEditorShell({ data }: { data: ScriptBootstrapView }) {
           />
 
           <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="flex min-h-0 flex-1 items-start justify-center overflow-hidden bg-muted/30 p-4">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/30 p-4">
               {data.sourceVideoUrl ? (
-                <video
-                  ref={videoRef}
-                  className="max-h-full w-full max-w-full rounded-lg bg-black shadow-md object-contain"
-                  src={data.sourceVideoUrl}
-                  controls={false}
-                  preload="metadata"
-                  playsInline
-                  onTimeUpdate={syncFromVideo}
-                  onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
-                  onClick={togglePlay}
-                />
+                <div
+                  ref={previewBoxRef}
+                  className={cn(
+                    'relative max-h-full w-auto max-w-full overflow-hidden rounded-xl bg-black shadow-md ring-1 ring-white/10',
+                    previewAspectClass(settings.aspect ?? '9:16'),
+                  )}
+                >
+                  <video
+                    ref={videoRef}
+                    className="h-full w-full object-cover"
+                    src={data.sourceVideoUrl}
+                    controls={false}
+                    preload="metadata"
+                    playsInline
+                    onTimeUpdate={syncFromVideo}
+                    onPlay={() => setPlaying(true)}
+                    onPause={() => setPlaying(false)}
+                    onClick={togglePlay}
+                  />
+                  <ScriptCaptionOverlay
+                    keptWords={keptWords}
+                    rangeStartMs={data.rangeStartMs}
+                    currentTimeSec={playheadMs / 1000}
+                    settings={settings}
+                    boxHeightPx={previewBoxH}
+                    outputDurationSec={outDur / 1000}
+                  />
+                  <PreviewPillBar settings={settings} onPatch={patchSettings} />
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Source video unavailable.</p>
               )}
             </div>
           </section>
+
+          {sideOpen && (
+            <aside className="hidden h-full min-h-0 w-[min(100%,320px)] shrink-0 flex-col overflow-hidden border-l border-border bg-background lg:flex">
+              <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+                {sideTab === 'properties' ? 'Properties' : sideTab === 'captions' ? 'Captions' : 'Edit tools'}
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {sideTab === 'properties' && (
+                  <ScriptPropertiesPanel settings={settings} onPatch={patchSettings} />
+                )}
+                {sideTab === 'captions' && <ScriptCaptionsPanel settings={settings} onPatch={patchSettings} />}
+                {sideTab === 'edit' && (
+                  <ScriptEditToolsPanel
+                    fillerHits={fillerHits}
+                    activeHitId={activeFillerHit?.word.id ?? null}
+                    rangeStartMs={data.rangeStartMs}
+                    onSelectHit={onSelectFillerHit}
+                    onOpenReview={() => setFillerReviewOpen(true)}
+                  />
+                )}
+              </div>
+            </aside>
+          )}
+
+          <ScriptEditorRail
+            active={sideTab}
+            open={sideOpen}
+            onToggle={(tab) => {
+              if (sideOpen && sideTab === tab) setSideOpen(false)
+              else {
+                setSideTab(tab)
+                setSideOpen(true)
+              }
+            }}
+          />
         </div>
 
         <div

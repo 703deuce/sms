@@ -1,4 +1,4 @@
-import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
+import type { ScriptDocumentV1, ScriptEditorSettings } from '@/lib/clips/script-edl/types'
 
 export type DeleteWordsOp = { type: 'delete_words'; wordIds: string[] }
 export type RestoreWordsOp = { type: 'restore_words'; wordIds: string[] }
@@ -7,6 +7,7 @@ export type InsertGapOp = { type: 'insert_gap'; atOutMs: number; durMs: number }
 export type RemoveGapOp = { type: 'remove_gap_at'; atOutMs: number }
 export type ReplaceWithGapOp = { type: 'replace_with_gap'; wordIds: string[]; atOutMs: number; durMs: number }
 export type SetPadBeforeOp = { type: 'set_pad_before'; wordId: string; padMs: number }
+export type PatchSettingsOp = { type: 'patch_settings'; patch: Partial<ScriptEditorSettings> }
 
 export type ScriptCompositionOp =
   | DeleteWordsOp
@@ -16,6 +17,7 @@ export type ScriptCompositionOp =
   | RemoveGapOp
   | ReplaceWithGapOp
   | SetPadBeforeOp
+  | PatchSettingsOp
 
 export function emptyDocument(allWordIds: string[]): ScriptDocumentV1 {
   return { v: 1, keptWordIds: [...allWordIds], deletedWordIds: [], wordOrder: [...allWordIds] }
@@ -76,6 +78,17 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     padBeforeMs[op.wordId] = Math.max(0, Math.round(op.padMs))
   }
 
+  let settings = document.settings
+  if (op.type === 'patch_settings') {
+    settings = {
+      ...(settings ?? {}),
+      ...op.patch,
+      captions: op.patch.captions
+        ? { ...(settings?.captions ?? {}), ...op.patch.captions }
+        : settings?.captions,
+    }
+  }
+
   const keptWordIds = order.filter((id) => kept.has(id))
   return {
     v: 1,
@@ -89,6 +102,7 @@ export function applyCompositionOp(document: ScriptDocumentV1, op: ScriptComposi
     markers: document.markers,
     overlays: document.overlays,
     musicTracks: document.musicTracks,
+    settings,
   }
 }
 
@@ -137,6 +151,10 @@ export function opsBetweenDocuments(from: ScriptDocumentV1, to: ScriptDocumentV1
     if (fromPad[wordId] !== toPad[wordId]) {
       ops.push({ type: 'set_pad_before', wordId, padMs: toPad[wordId] })
     }
+  }
+
+  if (JSON.stringify(from.settings ?? {}) !== JSON.stringify(to.settings ?? {})) {
+    ops.push({ type: 'patch_settings', patch: to.settings ?? {} })
   }
 
   return ops

@@ -17,6 +17,10 @@ const opSchema = z.discriminatedUnion('type', [
     durMs: z.number().min(1),
   }),
   z.object({ type: z.literal('set_pad_before'), wordId: z.string().min(1), padMs: z.number().min(0) }),
+  z.object({
+    type: z.literal('patch_settings'),
+    patch: z.record(z.string(), z.unknown()),
+  }),
 ])
 
 const bodySchema = z.object({

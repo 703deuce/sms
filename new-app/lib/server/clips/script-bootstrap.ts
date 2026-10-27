@@ -7,6 +7,7 @@ import { createId } from '@/lib/supabase/id'
 import { ensureFullComposition } from '@/lib/server/clips/script-composition'
 import type { ScriptDocumentV1 } from '@/lib/clips/script-edl/types'
 import type { ClipWord } from '@/lib/clips/edits'
+import { ensureProjectTranscriptEnriched } from '@/lib/server/clips/script-enrich'
 
 async function loadProjectTranscript(
   storage: ReturnType<typeof getClipStorage>,
@@ -46,7 +47,32 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
     ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
     : getClipStorage(driverHint)
 
-  const transcript = await loadProjectTranscript(storage, project)
+  let transcript = await loadProjectTranscript(storage, project)
+  const durationMs = Math.max(0, project.rangeEndMs - project.rangeStartMs)
+  let mediaAsset = project.scriptMediaAsset
+  if (!mediaAsset && project.upload?.key) {
+    const id = createId('sma')
+    mediaAsset = await prisma.scriptMediaAsset.create({
+      data: {
+        id,
+        projectId: project.id,
+        workspaceId,
+        durationMs: durationMs || 1,
+        sourceKey: project.upload.key,
+      },
+    })
+  }
+  transcript = await ensureProjectTranscriptEnriched(
+    workspaceId,
+    project.id,
+    project.transcriptKey,
+    transcript,
+    storage,
+    mediaAsset?.id ?? null,
+  )
+  if (mediaAsset?.id) {
+    mediaAsset = await prisma.scriptMediaAsset.findUnique({ where: { id: mediaAsset.id } })
+  }
   const sourceMediaId = resolveSourceMediaId(project)
   const editorWords: EditorWord[] = toEditorWords(sourceMediaId, transcript)
   const composition = await ensureFullComposition(
@@ -65,21 +91,6 @@ export async function getScriptBootstrap(workspaceId: string, projectId: string)
     } catch {
       sourceVideoUrl = null
     }
-  }
-
-  const durationMs = Math.max(0, project.rangeEndMs - project.rangeStartMs)
-  let mediaAsset = project.scriptMediaAsset
-  if (!mediaAsset && sourceKey) {
-    const id = createId('sma')
-    mediaAsset = await prisma.scriptMediaAsset.create({
-      data: {
-        id,
-        projectId: project.id,
-        workspaceId,
-        durationMs: durationMs || 1,
-        sourceKey,
-      },
-    })
   }
 
   return {
