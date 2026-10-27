@@ -9,7 +9,26 @@ import { deleteClipStorageObjectIfOrphan } from '@/lib/server/storage/delete-obj
 import { projectHasQueuedOrRunningRenderOrExport } from '@/lib/server/t2v/project-active-renders'
 import { isT2vAssembledSourceKey } from '@/lib/server/t2v/source-key'
 import { getClipStorage, storageDriverName } from '@/lib/storage'
+import { ttsHash } from '@/lib/server/ai/elevenlabs-tts'
 import { createId } from '@/lib/supabase/id'
+
+function draftWithVoicesReadyAfterAssemble(doc: T2vDraftV1): T2vDraftV1 {
+  if (!doc.voice) return doc
+  const voice = doc.voice
+  const scenes = doc.scenes.map((s) => {
+    if (s.muted || !s.narration.trim()) return s
+    const hash = ttsHash(s.narration, voice)
+    return {
+      ...s,
+      voice: {
+        ...s.voice,
+        hash,
+        status: 'ready' as const,
+      },
+    }
+  })
+  return { ...doc, scenes }
+}
 
 export async function applyT2vAssembled(input: {
   workspaceId: string
@@ -170,9 +189,11 @@ export async function applyT2vAssembled(input: {
       })
     }
 
+    const assembledDoc = draftWithVoicesReadyAfterAssemble(doc)
     await tx.t2vDraft.update({
       where: { id: input.draftId },
       data: {
+        document: assembledDoc as Prisma.InputJsonValue,
         assembledRevision: input.revision,
         status: 'READY',
         stage: 'done',

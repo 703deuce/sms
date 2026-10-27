@@ -42,6 +42,17 @@ export function T2vPanelText({
   }
 
   const addItem = (kind: T2vTextItem['kind']) => {
+    if (kind === 'title') {
+      const existing = scene.texts.find((t) => t.kind === 'title')
+      if (existing) {
+        updateTexts(
+          scene.texts.map((t) =>
+            t.id === existing.id ? { ...t, text: t.text.trim() || scene.onScreenText || 'Title' } : t,
+          ),
+        )
+        return
+      }
+    }
     const item: T2vTextItem = clampItem(
       {
         id: createId('tx'),
