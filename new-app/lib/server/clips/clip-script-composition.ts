@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import type { EditorWord } from '@/lib/clips/script-editor/to-editor-words'
-import { emptyDocument, parseScriptCompositionDocument } from '@/lib/server/clips/script-composition'
+import { emptyDocument } from '@/lib/clips/script-edl/ops'
+import { parseScriptCompositionDocument } from '@/lib/server/clips/script-composition'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 import { normalizeEdits } from '@/lib/clips/edits'
