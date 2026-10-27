@@ -23,7 +23,6 @@ import { outputDurationMs } from '@/lib/clips/edits'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
 import { formatHeadlineForExport, type ClipExportTemplate } from '@/lib/clips/export-template'
 import { ExportTemplateSection } from '@/components/clips/editor/export-template-section'
-import { patchClip } from '@/lib/clips-api'
 import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
 import {
   exportSfxBundledAssetsAvailable,
