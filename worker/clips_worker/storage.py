@@ -10,6 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -397,7 +398,7 @@ def sign_upload_url(object_key: str) -> dict:
     return {"url": signed, "token": data.get("token") or ""}
 
 
-def put_json(object_key: str, data: unknown) -> None:
+def put_json(object_key: str, data: Any) -> None:
     import tempfile
 
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:

@@ -18,6 +18,7 @@ from clips_worker.layout_router import (
     editor_mode_uses_static_fit_blur,
     editor_mode_uses_stream_frame,
     needs_per_segment_layout_export,
+    normalize_layout_segments,
     speakercrop_settings_for_layout_mode,
     speakercrop_settings_from_edits,
 )
