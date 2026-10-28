@@ -11,6 +11,12 @@ from clips_worker.picker.formatting import format_sentence_line
 from clips_worker.picker.llm import chat_json
 from clips_worker.picker.log_util import json_snippet, picker_info
 from clips_worker.picker.rejects import is_hard_llm_reject
+from clips_worker.picker.final_score import (
+    apply_combined_scores,
+    gemini_score_from_record,
+    moment_has_gemini_provenance,
+    normalize_transcript_score,
+)
 from clips_worker.picker.scoring import _sent_dict, score_clip
 from clips_worker.picker_stats import (
     record_pass2_batch_ok,
@@ -145,9 +151,10 @@ def _clip_row_from_llm(
     length_policy: ClipLengthPolicy | None = None,
     range_end_ms: int | None = None,
 ) -> dict[str, Any] | None:
+    gemini_moment = moment_has_gemini_provenance(moment)
     reason = str(row.get("reject_reason") or "")
     hard = bool(row.get("reject")) and is_hard_llm_reject(reason)
-    if row.get("reject"):
+    if row.get("reject") and not (gemini_moment and not hard):
         from clips_worker.decision_log import decision_log
 
         decision_log(
@@ -165,6 +172,16 @@ def _clip_row_from_llm(
             "start_sentence": int(moment["start_sentence"]),
             "end_sentence": int(moment["end_sentence"]),
         }
+    if row.get("reject") and gemini_moment:
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "pass2",
+            "gemini_override_llm_reject",
+            reason=reason[:120],
+            gemini_score=gemini_score_from_record(moment),
+        )
+        row = {**row, "reject": False, "reject_reason": ""}
     ss = int(row["start_id"])
     es = int(row["end_id"])
     payoff_id = int(row["payoff_id"])
@@ -212,8 +229,9 @@ def _clip_row_from_llm(
         length_min_s=length_policy.scoring_min_s if length_policy else None,
         length_max_s=length_policy.scoring_max_s if length_policy else None,
         skip_length_penalty=bool(length_policy),
-        visual_payoff_moment=bool(moment.get("visual_origin") or moment.get("from_visual")),
+        visual_payoff_moment=gemini_moment or bool(moment.get("visual_origin") or moment.get("from_visual")),
     )
+    g_carry = gemini_score_from_record(moment)
     base = {
         "start_sentence": ss,
         "end_sentence": es,
@@ -227,42 +245,44 @@ def _clip_row_from_llm(
         "hard_reject": False,
         "reject_reason": scored.get("reject_reason") if scored.get("reject") else "",
     }
+    if g_carry is not None:
+        base["gemini_score"] = g_carry
+        base["from_visual_watch"] = bool(moment.get("from_visual_watch"))
+    if scored.get("score_0_100") is not None:
+        base["score_0_100"] = scored["score_0_100"]
+    base["transcript_score"] = normalize_transcript_score(
+        {"score_0_100": scored.get("score_0_100"), "final": scored.get("final")}
+    )
     if scored.get("reject"):
         from clips_worker.decision_log import decision_log
 
         decision_log(
             "pass2",
-            "reject",
+            "transcript_gate",
             reason=str(scored.get("reject_reason") or "gate"),
-            score=scored.get("score_0_100"),
-            final=scored.get("final"),
+            transcript_score=base["transcript_score"],
+            gemini_score=g_carry,
             title=str(row.get("title") or "")[:60],
         )
-        base["gate_reject"] = True
-        base["final"] = scored.get("final")
-        base["score"] = scored.get("score_0_100")
+        if not gemini_moment:
+            base["gate_reject"] = True
+            base["final"] = scored.get("final")
+            base["score"] = scored.get("score_0_100")
+            apply_combined_scores(base, log=True, stage="pass2")
+            return base
+        base["gate_reject"] = False
+        base["scores"] = scored.get("scores") or {}
+        apply_combined_scores(base, log=True, stage="pass2")
         return base
     base.update(
         {
-            "final": scored["final"],
-            "score": scored["score_0_100"],
             "scores": scored["scores"],
             "score_detail": scored["score_detail"],
             "scoring": scored,
             "gate_reject": False,
         }
     )
-    from clips_worker.decision_log import decision_log
-
-    decision_log(
-        "pass2",
-        "keep",
-        score=scored["score_0_100"],
-        final=scored["final"],
-        title=str(base.get("title") or "")[:60],
-        start_sentence=ss,
-        end_sentence=es,
-    )
+    apply_combined_scores(base, log=True, stage="pass2")
     try:
         from clips_worker.visual_boundaries import (
             boundary_fields_from_llm_row,

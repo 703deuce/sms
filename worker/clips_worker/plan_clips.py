@@ -10,7 +10,7 @@ DEFAULT_MIN_CLIP_MS = 15_000
 
 
 def _pick_score(p: dict) -> float:
-    return float(p.get("final", p.get("score", 0) or 0))
+    return float(p.get("final_score") or 0.0)
 
 
 def _overlap_ratio(a: dict, b: dict) -> float:

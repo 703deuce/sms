@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from clips_worker.picker.log_util import picker_info
 from clips_worker.picker.sentences import Sentence
+from clips_worker.picker.final_score import normalize_gemini_score
 
 
 def _ms_for_moment(m: dict, range_start_ms: int, key: str) -> int | None:
@@ -90,6 +91,8 @@ def pass1_moments_from_visual(
                 "locator": "",
                 "why": what[:500] or "Gemini video-watch moment",
                 "from_visual_watch": True,
+                "visual_origin": True,
+                "gemini_score": normalize_gemini_score(m.get("score")),
                 "visual_score": float(m.get("score") or 0),
             }
         )

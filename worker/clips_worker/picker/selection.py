@@ -4,8 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from clips_worker.overlap_policy import PICK_OVERLAP_RATIO, pick_spans_duplicate, span_overlap_ratio
-from clips_worker.picker.config import selection_settings
+from clips_worker.picker.final_score import apply_combined_scores, rank_sort_key
 from clips_worker.picker.log_util import picker_info
 
 
@@ -24,17 +23,11 @@ def _r10_near_duplicate(a: dict, b: dict) -> bool:
 
 
 def _clip_score(p: dict) -> float:
-    gem = float(p.get("gemini_score") or p.get("visual_score") or 0)
-    base = float(p.get("final", p.get("score", 0) / 10))
-    return base + 0.35 * gem
+    return float(p.get("final_score") or 0.0)
 
 
-def _selection_sort_key(p: dict) -> tuple[float, float, float]:
-    return (
-        -_clip_score(p),
-        -float(p.get("gemini_score") or p.get("visual_score") or 0),
-        -int(p.get("end_ms") or 0),
-    )
+def _selection_sort_key(p: dict) -> tuple[float, float, float, int]:
+    return rank_sort_key(p)
 
 
 def dedupe_r10(picks: list[dict]) -> list[dict]:

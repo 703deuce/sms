@@ -28,8 +28,9 @@ def test_e1_chat_overlay_gate_no_unbound_local():
 
 
 def test_chat_overlay_fail_open_wrapper():
-    src = Path("clips_worker/chat_overlay_apply.py")
-    text = src.read_text(encoding="utf-8")
+    from clips_worker import chat_overlay_apply as coa
+
+    text = Path(coa.__file__).read_text(encoding="utf-8")
     assert "chat_overlay_skipped" in text
     assert "except Exception" in text
 
@@ -60,6 +61,39 @@ def test_c8_uncovered_sections_labels():
 def test_c8_daily_quota_remembered():
     remember_gemini_daily_quota("gemini-x", {"quotaId": "GenerateRequestsPerDayPerProject"})
     assert gemini_model_skipped_daily_quota("gemini-x")
+
+
+def test_c7_combined_score_weights_and_apex_regression():
+    from clips_worker.picker.final_score import (
+        TRANSCRIPT_WEIGHT,
+        VIDEO_WEIGHT,
+        apply_combined_scores,
+        combined_final_score,
+        rank_sort_key,
+    )
+
+    assert VIDEO_WEIGHT == 1.5 and TRANSCRIPT_WEIGHT == 1.0
+    assert combined_final_score(0.85, 0.0) == pytest.approx((1.5 * 0.85) / 2.5)
+    assert combined_final_score(None, 0.67) == pytest.approx(0.67 / 2.5)
+
+    apex = {
+        "title": "Apex win",
+        "gemini_score": 0.85,
+        "from_visual_watch": True,
+        "score_0_100": 0,
+        "start_ms": 139_000,
+        "end_ms": 163_000,
+    }
+    apply_combined_scores(apex, log=False)
+    talk = {
+        "title": "Talk clip",
+        "score_0_100": 67,
+        "start_ms": 0,
+        "end_ms": 60_000,
+    }
+    apply_combined_scores(talk, log=False)
+    assert apex["final_score"] > talk["final_score"]
+    assert rank_sort_key(apex) < rank_sort_key(talk)
 
 
 def test_c6_cleanup_does_not_call_plan_clips():

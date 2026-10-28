@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from clips_worker.picker.config import genre_meta, resolve_genre_key, snap_settings
 from clips_worker.picker.extend_setup import extend_pick_to_min_duration
+from clips_worker.picker.final_score import apply_combined_scores
 from clips_worker.picker.log_util import picker_info
 from clips_worker.picker.selection import select_clips
 from clips_worker.picker.snap_bounds import snap_bounds
@@ -188,12 +189,10 @@ def finalize_picks(
         pick = {**pick_row, "start_ms": start_ms, "end_ms": end_ms}
         if visual_moments:
             gs = _gemini_score_for_pick(pick, visual_moments, range_start_ms)
-            if gs is not None:
+            if gs is not None and pick.get("gemini_score") is None:
                 pick["gemini_score"] = gs
                 pick["from_visual"] = gs >= 0.45
-                base_final = float(pick.get("final") or pick.get("score", 0) / 10)
-                pick["final"] = round(min(10.0, base_final * 0.6 + gs * 4.0), 2)
-                pick["score"] = int(round(float(pick["final"]) * 10))
+        apply_combined_scores(pick, log=True, stage="finalize")
         if not pick.get("length_max_ms"):
             pick["length_max_ms"] = length_policy.effective_max_duration_ms(pick, range_end_ms)
         max_ms = int(pick.get("length_max_ms") or max_ms)
