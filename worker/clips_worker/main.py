@@ -317,6 +317,10 @@ def process_job(conn, job: dict) -> None:
     from clips_worker.stage_log import bind_stage_context, stage_span
 
     bind_stage_context(project_id=str(project["id"]), job_id=str(job["id"]))
+    if str(job.get("type") or "") == "PROCESS_PROJECT":
+        from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
+
+        schedule_modal_warmup_background()
     log(f"processing job={job['id']} project={project['id']}")
     post_progress(
         job["id"],

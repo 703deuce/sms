@@ -101,6 +101,13 @@ def video_picker_fps() -> float:
         return 0.5
 
 
+def video_picker_user_part_order() -> str:
+    raw = (os.environ.get("VIDEO_PICKER_USER_PART_ORDER") or "video_first").strip().lower()
+    if raw in ("transcript_first", "text_first", "transcript_before_video"):
+        return "transcript_first"
+    return "video_first"
+
+
 def video_picker_keep_audio() -> bool:
     """Picker proxies always keep audio for Gemini (original audio + transcript)."""
     raw = (os.environ.get("VIDEO_PICKER_KEEP_AUDIO") or "true").strip().lower()
@@ -483,6 +490,9 @@ def _gemini_watch_payload(
     *,
     system: str,
     user_text: str,
+    fps: float | None = None,
+    media_resolution: str | None = None,
+    part_order: str | None = None,
 ) -> dict[str, Any]:
     raw_bytes = video_path.read_bytes()
     if len(raw_bytes) > 18 * 1024 * 1024:
@@ -490,27 +500,22 @@ def _gemini_watch_payload(
         make_watch_proxy(video_path, slim, 0.0, float(duration_s))
         raw_bytes = slim.read_bytes()
     b64 = base64.b64encode(raw_bytes).decode("ascii")
-    fps = video_picker_fps()
+    use_fps = fps if fps is not None else video_picker_fps()
     part: dict[str, Any] = {
         "inline_data": {"mime_type": "video/mp4", "data": b64},
-        "video_metadata": {"fps": fps},
+        "video_metadata": {"fps": use_fps},
     }
+    text_part = {"text": user_text}
+    order = part_order or video_picker_user_part_order()
+    user_parts = [text_part, part] if order == "transcript_first" else [part, text_part]
     return {
         "systemInstruction": {"parts": [{"text": system}]},
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    part,
-                    {"text": user_text},
-                ],
-            }
-        ],
+        "contents": [{"role": "user", "parts": user_parts}],
         "generationConfig": {
             "responseMimeType": "application/json",
             "responseSchema": WATCH_RESPONSE_SCHEMA,
             "temperature": 0.35,
-            "mediaResolution": video_picker_media_resolution(),
+            "mediaResolution": media_resolution or video_picker_media_resolution(),
         },
     }
 
@@ -608,8 +613,13 @@ def watch_video_file(
     scratch: Path | None = None,
     trim_start_s: float = 0.0,
     trim_end_s: float | None = None,
+    model_override: str | None = None,
+    fps_override: float | None = None,
+    media_resolution_override: str | None = None,
+    user_part_order: str | None = None,
+    fail_open: bool = True,
 ) -> tuple[list[dict], dict[str, Any]]:
-    """Gemini Flash video watch. Fail-open after retries: log error, return empty moments."""
+    """Gemini Flash video watch. Fail-open after retries unless fail_open=False."""
     meta: dict[str, Any] = {
         "chunk": chunk_label,
         "frames_est": 0,
@@ -648,10 +658,12 @@ def watch_video_file(
         return [], meta
 
     try:
-        model = discover_video_picker_model()
+        model = model_override or discover_video_picker_model()
         meta["model"] = model
-        fps = video_picker_fps()
+        fps = fps_override if fps_override is not None else video_picker_fps()
         meta["fps"] = fps
+        meta["media_resolution"] = media_resolution_override or video_picker_media_resolution()
+        meta["user_part_order"] = user_part_order or video_picker_user_part_order()
         meta["frames_est"] = max(1, int(duration_s * fps))
         meta["min_moments"] = min_moments_for_video(int(duration_s))
         system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
@@ -660,7 +672,15 @@ def watch_video_file(
             f"TIMESTAMPED TRANSCRIPT:\n{transcript_text[:16000] if transcript_text else '(none)'}\n\n"
             "Return sections and moments JSON for this video only."
         )
-        payload = _gemini_watch_payload(video_path, duration_s, system=system, user_text=user_text)
+        payload = _gemini_watch_payload(
+            video_path,
+            duration_s,
+            system=system,
+            user_text=user_text,
+            fps=fps,
+            media_resolution=meta["media_resolution"],
+            part_order=meta["user_part_order"],
+        )
         last_err = "unknown"
         last_status: int | None = None
         for attempt in range(3):
@@ -680,6 +700,8 @@ def watch_video_file(
                     summary, quota = gemini_error_log_fields(err_body)
                     last_err = summary or err_body[:300]
                     last_status = res.status_code
+                    if not fail_open:
+                        raise RuntimeError(last_err)
                     return _fail_open(last_err, res.status_code, quota or None)
                 data = res.json()
                 usage = data.get("usageMetadata") or {}
@@ -699,6 +721,7 @@ def watch_video_file(
                     chunk_offset_s=0.0,
                     max_span_s=max_span,
                 )
+                meta["moments_raw"] = moments
                 if not skip_edge_reassess and source_video is not None and scratch is not None:
                     t_end = trim_end_s if trim_end_s is not None else trim_start_s + float(duration_s)
                     moments = reassess_edge_moments(
@@ -731,9 +754,15 @@ def watch_video_file(
                 if _gemini_transient_exc(exc) and attempt < 2:
                     time.sleep(2**attempt)
                     continue
+                if not fail_open:
+                    raise
                 return _fail_open(last_err, last_status, None)
+        if not fail_open:
+            raise RuntimeError(last_err)
         return _fail_open(last_err, last_status, None)
     except Exception as exc:
+        if not fail_open:
+            raise
         return _fail_open(str(exc)[:300], last_status, None)
 
 

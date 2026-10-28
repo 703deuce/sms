@@ -480,10 +480,6 @@ def run_m4_pipeline(
                 head_render_state: dict = {"by_span": {}, "clip_id_by_span": {}, "head_future": None, "headstart_pick": None}
                 head_future = None
                 headstart_pick: dict | None = None
-                from clips_worker.gpu.render_warmup import warm_modal_renderer_if_needed
-
-                warm_modal_renderer_if_needed(conn)
-
                 from clips_worker.clip_segments import spans_same_segment
 
                 def _headstart_row_for_pick(pick: dict) -> dict | None:
