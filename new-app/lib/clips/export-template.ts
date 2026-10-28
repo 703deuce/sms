@@ -5,15 +5,19 @@ import {
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
 import { clipDisplayTitle, isInternalClipReasoningText } from '@/lib/clips/clip-results-chips'
-import { layoutReservesHeadlineBand } from '@/lib/clips/layout-preview'
+import { STREAM_HEADLINE_BAR_FRAC, STREAM_HEADLINE_FOOTER_FRAC } from '@/lib/clips/headline-band-layout'
+
+export {
+  STREAM_HEADLINE_BAR_FRAC,
+  STREAM_HEADLINE_FOOTER_FRAC,
+  editorHeadlineBandAllowed,
+  headlineBarAllowedForLayout,
+} from '@/lib/clips/headline-band-layout'
 
 export const EXPORT_HEADLINE_MAX_REGENERATIONS = 5
 
 /** Selectable in regular clipper + default for stream clips. */
 export const STREAM_HEADLINE_TEMPLATE_ID = 'stream_headline'
-
-export const STREAM_HEADLINE_BAR_FRAC = 0.2
-export const STREAM_HEADLINE_FOOTER_FRAC = 0.28
 
 export function defaultStreamHeadlineExportTemplate(opts: {
   platform: 'twitch' | 'kick'
@@ -58,29 +62,6 @@ export const exportTemplateSchema = z.object({
 })
 
 export type ClipExportTemplate = z.infer<typeof exportTemplateSchema>
-
-const SPLIT_LAYOUT_MODES = new Set([
-  'split',
-  'grid3',
-  'grid4',
-  'dynamic',
-  'screen_pip',
-  'split_debate',
-  'grid',
-  'two_up',
-])
-
-/** Editor + preview: headline band is allowed and reserved for this layout. */
-export function editorHeadlineBandAllowed(mode: ClipEditsV2['layout']['mode'] | string): boolean {
-  return headlineBarAllowedForLayout(mode) && layoutReservesHeadlineBand(mode)
-}
-
-/** Headline bar only on single-view layouts (export-time rule). */
-export function headlineBarAllowedForLayout(mode: ClipEditsV2['layout']['mode'] | string): boolean {
-  const m = String(mode || 'speaker_follow')
-  if (SPLIT_LAYOUT_MODES.has(m)) return false
-  return true
-}
 
 export function normalizeExportTemplate(raw: unknown): ClipExportTemplate | undefined {
   if (!raw || typeof raw !== 'object') return undefined

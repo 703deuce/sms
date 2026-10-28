@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "next dev --port 3100",
     "build": "prisma generate --schema=prisma/schema.prisma && next build",
+    "verify:clips-import-cycle": "node scripts/verify-clips-import-cycle.mjs",
     "start": "node scripts/start-production.mjs",
     "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 bash scripts/typecheck-from-git.sh",
     "test:phone": "node scripts/test-phone-runtime-logic.mjs && node scripts/test-phone-recording-resolve.mjs && node scripts/test-phone-complete.mjs",
