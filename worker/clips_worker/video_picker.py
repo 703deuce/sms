@@ -17,6 +17,7 @@ from clips_worker.video_picker_prompt import (
     VISUAL_WATCH_PASS1_HINT,
     VISUAL_WATCH_PASS2_HINT,
     build_video_picker_system_prompt,
+    min_moments_for_video,
 )
 
 _MIN_MOMENT_S = 5.0
@@ -49,10 +50,12 @@ WATCH_RESPONSE_SCHEMA: dict[str, Any] = {
                     "hook_s": {"type": "number"},
                     "category": {"type": "array", "items": _CATEGORY_ITEM},
                     "what_happened": {"type": "string"},
+                    "unverified": {"type": "string"},
+                    "confidence": {"type": "number"},
                     "why_it_works": {"type": "string"},
                     "touches_edge": {
                         "type": "string",
-                        "enum": ["none", "start", "end"],
+                        "enum": ["none", "start", "end", "both"],
                     },
                     "score": {"type": "number"},
                 },
@@ -63,6 +66,8 @@ WATCH_RESPONSE_SCHEMA: dict[str, Any] = {
                     "hook_s",
                     "category",
                     "what_happened",
+                    "unverified",
+                    "confidence",
                     "why_it_works",
                     "touches_edge",
                     "score",
@@ -97,8 +102,11 @@ def video_picker_fps() -> float:
 
 
 def video_picker_keep_audio() -> bool:
+    """Picker proxies always keep audio for Gemini (original audio + transcript)."""
     raw = (os.environ.get("VIDEO_PICKER_KEEP_AUDIO") or "true").strip().lower()
-    return raw not in ("0", "false", "no", "off")
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return True
 
 
 def video_picker_media_resolution() -> str:
@@ -187,11 +195,50 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
+def max_span_seconds(target_clip_len_s: int | None) -> float:
+    return 90.0 if target_clip_len_s is None else float(target_clip_len_s)
+
+
+def format_timestamped_transcript(
+    sentences: list[Any],
+    range_start_ms: int,
+    range_end_ms: int,
+) -> str:
+    lines: list[str] = []
+    for s in sentences:
+        end_ms = int(getattr(s, "end_ms", 0))
+        start_ms = int(getattr(s, "start_ms", 0))
+        if end_ms < range_start_ms or start_ms > range_end_ms:
+            continue
+        t = (start_ms - range_start_ms) / 1000.0
+        text = str(getattr(s, "text", "") or "").strip()
+        if text:
+            lines.append(f"[{t:.2f}s] {text}")
+    return "\n".join(lines) if lines else "(no transcript lines in this range)"
+
+
+def _apply_max_span(
+    start: float,
+    end: float,
+    peak: float,
+    hook: float,
+    max_span_s: float,
+) -> tuple[float, float, float, float]:
+    if end - start <= max_span_s:
+        return start, end, peak, hook
+    end = start + max_span_s
+    peak = min(peak, end - 0.01)
+    hook = min(hook, peak)
+    hook = max(hook, start)
+    return start, end, peak, hook
+
+
 def validate_and_normalize_moments(
     raw: list[dict],
     duration_s: float,
     *,
     chunk_offset_s: float = 0.0,
+    max_span_s: float | None = None,
 ) -> list[dict]:
     """Clamp times, enforce ordering, drop spans <5s; add legacy t_s/reason fields."""
     dur = max(1.0, float(duration_s))
@@ -216,12 +263,16 @@ def validate_and_normalize_moments(
             if not (start <= hook <= peak < end):
                 peak = _clamp((start + end) / 2, start + 0.001, end - 0.001)
                 hook = _clamp(start + 0.5 * (peak - start), start, peak)
+        if max_span_s is not None and max_span_s > 0:
+            start, end, peak, hook = _apply_max_span(start, end, peak, hook, max_span_s)
         if not (start <= hook <= peak < end):
             continue
         score = max(0.0, min(1.0, float(row.get("score") or 0)))
         edge = str(row.get("touches_edge") or "none").lower()
-        if edge not in ("none", "start", "end"):
+        if edge not in ("none", "start", "end", "both"):
             edge = "none"
+        conf = max(0.0, min(1.0, float(row.get("confidence") or 0.5)))
+        unverified = str(row.get("unverified") or "").strip()[:500]
         cats = row.get("category") or []
         if isinstance(cats, str):
             cats = [c.strip() for c in cats.split("+") if c.strip()]
@@ -234,6 +285,8 @@ def validate_and_normalize_moments(
             "hook_s": round(hook + chunk_offset_s, 3),
             "category": list(cats)[:6],
             "what_happened": what[:1200],
+            "unverified": unverified,
+            "confidence": round(conf, 3),
             "why_it_works": why[:600],
             "touches_edge": edge,
             "score": round(score, 3),
@@ -366,7 +419,9 @@ def merge_stream_moments(moments: list[dict], overlap_s: float) -> list[dict]:
         cur = dict(kept[i])
         if i + 1 < len(kept):
             nxt = kept[i + 1]
-            if cur.get("touches_edge") == "end" and nxt.get("touches_edge") == "start":
+            cur_edge = cur.get("touches_edge")
+            nxt_edge = nxt.get("touches_edge")
+            if cur_edge in ("end", "both") and nxt_edge in ("start", "both"):
                 try:
                     if float(nxt.get("start_s")) - float(cur.get("end_s")) < overlap_s * 2:
                         merged = dict(cur)
@@ -412,12 +467,147 @@ def _gemini_transient_exc(exc: Exception) -> bool:
     return "Timeout" in name or "Connection" in name
 
 
+def _log_min_moments_shortfall(duration_s: int, count: int, chunk_label: str) -> None:
+    need = min_moments_for_video(int(duration_s))
+    if count < need:
+        print(
+            f"[clipper:video_picker] WARNING min_moments_required={need} moments_returned={count} "
+            f"chunk={chunk_label} (keeping model output; no filler)",
+            flush=True,
+        )
+
+
+def _gemini_watch_payload(
+    video_path: Path,
+    duration_s: int,
+    *,
+    system: str,
+    user_text: str,
+) -> dict[str, Any]:
+    raw_bytes = video_path.read_bytes()
+    if len(raw_bytes) > 18 * 1024 * 1024:
+        slim = video_path.parent / f"{video_path.stem}_slim.mp4"
+        make_watch_proxy(video_path, slim, 0.0, float(duration_s))
+        raw_bytes = slim.read_bytes()
+    b64 = base64.b64encode(raw_bytes).decode("ascii")
+    fps = video_picker_fps()
+    part: dict[str, Any] = {
+        "inline_data": {"mime_type": "video/mp4", "data": b64},
+        "video_metadata": {"fps": fps},
+    }
+    return {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    part,
+                    {"text": user_text},
+                ],
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseSchema": WATCH_RESPONSE_SCHEMA,
+            "temperature": 0.35,
+            "mediaResolution": video_picker_media_resolution(),
+        },
+    }
+
+
+def reassess_edge_moments(
+    moments: list[dict],
+    *,
+    rel_duration_s: float,
+    trim_start_s: float,
+    trim_end_s: float,
+    src_video: Path | None,
+    scratch: Path | None,
+    transcript_text: str,
+    target_clip_len_s: int | None,
+    chunk_label: str,
+) -> list[dict]:
+    if not moments or src_video is None or scratch is None or not src_video.is_file():
+        return moments
+    pad = 55.0
+    max_span = max_span_seconds(target_clip_len_s)
+    out: list[dict] = []
+    for m in moments:
+        edge = str(m.get("touches_edge") or "none")
+        if edge == "none":
+            out.append(m)
+            continue
+        try:
+            rs = float(m["start_s"])
+            re = float(m["end_s"])
+        except (TypeError, ValueError, KeyError):
+            out.append(m)
+            continue
+        abs_start = trim_start_s + rs
+        abs_end = trim_start_s + re
+        ext_lo = max(0.0, abs_start - pad)
+        ext_hi = abs_end + pad
+        if edge in ("start", "both") and rs <= 1.5:
+            ext_lo = max(0.0, trim_start_s - pad)
+        if edge in ("end", "both") and re >= rel_duration_s - 1.5:
+            ext_hi = max(ext_hi, trim_end_s + pad)
+        proxy = scratch / f"edge_reassess_{chunk_label}_{len(out)}.mp4"
+        make_watch_proxy(src_video, proxy, ext_lo, ext_hi)
+        ext_dur = max(1, int(ext_hi - ext_lo))
+        edge_user = (
+            "Reassess this chunk-edge moment using the expanded video and transcript. "
+            "Return moments[] with zero or one updated moment. Do not lower score because of edge; "
+            "update boundaries if neighbor context completes the clip. Drop only if confidence would "
+            "stay below 0.35 and the moment cannot stand alone.\n"
+            f"Prior moment JSON:\n{json.dumps(m, default=str)[:4000]}\n\n"
+            f"Timestamped transcript:\n{transcript_text[:12000]}"
+        )
+        reassessed, _meta = watch_video_file(
+            proxy,
+            duration_s=ext_dur,
+            chunk_label=f"{chunk_label}_edge",
+            target_clip_len_s=target_clip_len_s,
+            transcript_text=transcript_text,
+            skip_edge_reassess=True,
+            trim_start_s=ext_lo,
+            trim_end_s=ext_hi,
+        )
+        if reassessed:
+            best = dict(reassessed[0])
+            shift = ext_lo - trim_start_s
+            for key in ("start_s", "end_s", "peak_s", "hook_s", "t_s"):
+                try:
+                    best[key] = round(float(best[key]) + shift, 3)
+                except (TypeError, ValueError, KeyError):
+                    pass
+            normed = validate_and_normalize_moments(
+                [best],
+                rel_duration_s,
+                chunk_offset_s=0.0,
+                max_span_s=max_span,
+            )
+            if normed:
+                out.append(normed[0])
+            elif float(m.get("confidence") or 0) >= 0.35:
+                out.append(m)
+            continue
+        if float(m.get("confidence") or 0) >= 0.35:
+            out.append(m)
+    return out or moments
+
+
 def watch_video_file(
     video_path: Path,
     *,
     duration_s: int,
     chunk_label: str = "upload",
     target_clip_len_s: int | None = None,
+    transcript_text: str = "",
+    skip_edge_reassess: bool = False,
+    source_video: Path | None = None,
+    scratch: Path | None = None,
+    trim_start_s: float = 0.0,
+    trim_end_s: float | None = None,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Gemini Flash video watch. Fail-open after retries: log error, return empty moments."""
     meta: dict[str, Any] = {
@@ -460,44 +650,17 @@ def watch_video_file(
     try:
         model = discover_video_picker_model()
         meta["model"] = model
-        raw_bytes = video_path.read_bytes()
-        if len(raw_bytes) > 18 * 1024 * 1024:
-            slim = video_path.parent / f"{video_path.stem}_slim.mp4"
-            make_watch_proxy(video_path, slim, 0.0, float(duration_s))
-            raw_bytes = slim.read_bytes()
-        b64 = base64.b64encode(raw_bytes).decode("ascii")
         fps = video_picker_fps()
         meta["fps"] = fps
         meta["frames_est"] = max(1, int(duration_s * fps))
-        part: dict[str, Any] = {
-            "inline_data": {"mime_type": "video/mp4", "data": b64},
-            "video_metadata": {"fps": fps},
-        }
+        meta["min_moments"] = min_moments_for_video(int(duration_s))
         system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
-        generation_config: dict[str, Any] = {
-            "responseMimeType": "application/json",
-            "responseSchema": WATCH_RESPONSE_SCHEMA,
-            "temperature": 0.35,
-            "mediaResolution": video_picker_media_resolution(),
-        }
-        payload = {
-            "systemInstruction": {"parts": [{"text": system}]},
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        part,
-                        {
-                            "text": (
-                                "Watch the attached video and transcript cues in the frames. "
-                                "Return sections and moments JSON for this clip only."
-                            ),
-                        },
-                    ],
-                }
-            ],
-            "generationConfig": generation_config,
-        }
+        user_text = (
+            "Use the attached video (original audio) and the timestamped transcript below together.\n\n"
+            f"TIMESTAMPED TRANSCRIPT:\n{transcript_text[:16000] if transcript_text else '(none)'}\n\n"
+            "Return sections and moments JSON for this video only."
+        )
+        payload = _gemini_watch_payload(video_path, duration_s, system=system, user_text=user_text)
         last_err = "unknown"
         last_status: int | None = None
         for attempt in range(3):
@@ -528,11 +691,28 @@ def watch_video_file(
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 parsed = json.loads(text)
                 meta["sections_count"] = len(parsed.get("sections") or [])
+                max_span = max_span_seconds(target_clip_len_s)
                 moments = validate_and_normalize_moments(
                     list(parsed.get("moments") or []),
                     float(duration_s),
                     chunk_offset_s=0.0,
+                    max_span_s=max_span,
                 )
+                if not skip_edge_reassess and source_video is not None and scratch is not None:
+                    t_end = trim_end_s if trim_end_s is not None else trim_start_s + float(duration_s)
+                    moments = reassess_edge_moments(
+                        moments,
+                        rel_duration_s=float(duration_s),
+                        trim_start_s=trim_start_s,
+                        trim_end_s=t_end,
+                        src_video=source_video,
+                        scratch=scratch,
+                        transcript_text=transcript_text,
+                        target_clip_len_s=target_clip_len_s,
+                        chunk_label=chunk_label,
+                    )
+                _log_min_moments_shortfall(duration_s, len(moments), chunk_label)
+                meta["min_moments_met"] = len(moments) >= int(meta.get("min_moments") or 0)
                 meta["ok"] = True
                 stage_end(
                     "video_picker",
@@ -563,17 +743,28 @@ def watch_upload_range(
     range_end_ms: int,
     scratch: Path,
     target_clip_len_s: int | None = None,
+    sentences: list[Any] | None = None,
 ) -> tuple[list[dict], list[float], dict[str, Any]]:
     start_s = max(0.0, range_start_ms / 1000.0)
     end_s = range_end_ms / 1000.0 if range_end_ms > range_start_ms else start_s + 60.0
     duration_s = max(1, int(end_s - start_s))
     proxy = scratch / "video_picker_upload.mp4"
     make_watch_proxy(src_video, proxy, start_s, end_s)
+    transcript = (
+        format_timestamped_transcript(sentences or [], range_start_ms, range_end_ms)
+        if sentences
+        else ""
+    )
     moments, meta = watch_video_file(
         proxy,
         duration_s=duration_s,
         chunk_label="regular",
         target_clip_len_s=target_clip_len_s,
+        transcript_text=transcript,
+        source_video=src_video,
+        scratch=scratch,
+        trim_start_s=start_s,
+        trim_end_s=end_s,
     )
     attach_absolute_ms(moments, range_start_ms)
     curve = moments_to_per_second(

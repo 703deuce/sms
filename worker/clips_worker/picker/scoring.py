@@ -95,6 +95,7 @@ def score_clip(
     relax_ending: bool = False,
     length_min_s: float | None = None,
     length_max_s: float | None = None,
+    skip_length_penalty: bool = False,
 ) -> dict[str, Any]:
     g = global_config()
     G = genre_meta(genre)
@@ -133,9 +134,10 @@ def score_clip(
     if source_duration_s and source_duration_s > 0:
         max_s = min(max_s, float(source_duration_s))
         min_s = min(min_s, max_s)
-    over = max(0.0, min_s - dur, dur - max_s)
-    lor = P.get("length_out_of_range") or {}
-    pen += min(float(lor.get("max", 2)), over * float(lor.get("per_second", 0.05)))
+    if not skip_length_penalty:
+        over = max(0.0, min_s - dur, dur - max_s)
+        lor = P.get("length_out_of_range") or {}
+        pen += min(float(lor.get("max", 2)), over * float(lor.get("per_second", 0.05)))
 
     final = max(0.0, min(10.0, 10 * ((1 - lam) * base / 10 + lam * sig) - pen))
     flow = round((scores["self_contained"] + scores["payoff"]) / 2)

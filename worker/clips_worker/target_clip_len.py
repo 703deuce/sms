@@ -7,7 +7,7 @@ from typing import Any
 ABS_MAX_MS = 90_000
 ABS_MIN_MS = 15_000
 ALLOWED_TARGET_S = frozenset({15, 30, 60, 90})
-FIXED_TOLERANCE = 0.25
+FIXED_TOLERANCE = 0.25  # legacy pass1 hints only; fixed max is hard cap at target_s
 
 _LEGACY_CLIP_LENGTH_TO_S = {
     "lt30": 30,
@@ -110,15 +110,13 @@ class ClipLengthPolicy:
     def pass1_length_hint(self) -> str:
         if self.mode == "auto":
             return (
-                "Clip length: AUTO — each moment may use up to 90s when needed so full setup + visual "
-                "payoff fit; prefer the shortest span that still feels complete (often 20–60s for gaming)."
+                "Clip length: AUTO — shortest complete moment up to 90s; typical gaming ~30s, talking/IRL ~60s "
+                "are suggestions not caps."
             )
         t = self.target_s or 30
-        lo = int(t * (1 - FIXED_TOLERANCE))
-        hi = int(t * (1 + FIXED_TOLERANCE))
         return (
-            f"Clip length: target ~{t}s (acceptable {lo}–{hi}s). Shorter only if the moment is already "
-            "complete; do not cut payoff early to hit the target."
+            f"Clip length: maximum {t}s per clip (shorter when complete). Do not pad to fill; trim only if "
+            "no complete version fits within the max."
         )
 
     def pass2_length_hint(self) -> str:
@@ -142,21 +140,19 @@ def clip_length_policy(target_s: int | None) -> ClipLengthPolicy:
             max_ms=ABS_MAX_MS,
             prefer_min_ms=ABS_MIN_MS,
             prefer_max_ms=ABS_MAX_MS,
-            scoring_min_s=ABS_MIN_MS / 1000.0,
-            scoring_max_s=ABS_MAX_MS / 1000.0,
+            scoring_min_s=0.0,
+            scoring_max_s=999.0,
         )
-    target_ms = int(target_s) * 1000
-    lo = max(ABS_MIN_MS, int(target_ms * (1 - FIXED_TOLERANCE)))
-    hi = min(ABS_MAX_MS, int(target_ms * (1 + FIXED_TOLERANCE)))
+    target_ms = min(ABS_MAX_MS, int(target_s) * 1000)
     return ClipLengthPolicy(
         mode="fixed",
         target_s=int(target_s),
-        min_ms=lo,
-        max_ms=hi,
-        prefer_min_ms=lo,
-        prefer_max_ms=hi,
-        scoring_min_s=lo / 1000.0,
-        scoring_max_s=hi / 1000.0,
+        min_ms=ABS_MIN_MS,
+        max_ms=target_ms,
+        prefer_min_ms=ABS_MIN_MS,
+        prefer_max_ms=target_ms,
+        scoring_min_s=0.0,
+        scoring_max_s=999.0,
     )
 
 

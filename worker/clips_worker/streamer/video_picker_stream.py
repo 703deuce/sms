@@ -46,6 +46,7 @@ def stream_chunk_video_signals(
     scratch: Path,
     job_id: str,
     target_clip_len_s: int | None = None,
+    transcript_text: str = "",
 ) -> tuple[list[float] | None, list[dict], dict[str, Any]]:
     """Returns slice-relative 1Hz video curve, flat moments (vod-relative ms), aggregate cost meta."""
     empty_meta: dict[str, Any] = {"chunks": 0, "ok_chunks": 0, "est_usd": 0.0}
@@ -86,11 +87,18 @@ def stream_chunk_video_signals(
             )
         else:
             return idx, [], [0.0], {"ok": False, "error": "no_video_source"}
+        trim_lo_s = abs_start_s if base_absolute else rel_start_s
+        trim_hi_s = abs_end_s if base_absolute else rel_end_s
         moments, meta = watch_video_file(
             proxy,
             duration_s=chunk_s,
             chunk_label=f"stream_{idx}",
             target_clip_len_s=target_clip_len_s,
+            transcript_text=transcript_text,
+            source_video=base,
+            scratch=chunk_dir,
+            trim_start_s=trim_lo_s,
+            trim_end_s=trim_hi_s,
         )
         for m in moments:
             for key in ("start_s", "end_s", "peak_s", "hook_s", "t_s"):

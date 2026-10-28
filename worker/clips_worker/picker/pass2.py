@@ -175,6 +175,7 @@ def _clip_row_from_llm(
         source_duration_s=source_duration_s,
         length_min_s=length_policy.scoring_min_s if length_policy else None,
         length_max_s=length_policy.scoring_max_s if length_policy else None,
+        skip_length_penalty=bool(length_policy),
     )
     base = {
         "start_sentence": ss,
