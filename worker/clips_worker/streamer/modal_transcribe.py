@@ -93,27 +93,33 @@ def transcribe_stream_modal_with_meta(req: TranscribeReq, *, diarize: bool) -> t
             model=model,
         )
         hb.start()
+        pool = ThreadPoolExecutor(max_workers=1)
         try:
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                fut = pool.submit(_remote_transcribe, req, diarize=diarize, model=model)
+            fut = pool.submit(_remote_transcribe, req, diarize=diarize, model=model)
+            try:
                 raw = fut.result(timeout=timeout_s)
-        except FuturesTimeout as exc:
-            last_exc = StreamModalTranscribeError(f"hard_timeout_{int(timeout_s)}s")
-            decision_log(
-                "modal_transcribe",
-                "end",
-                ok=False,
-                attempt=attempts,
-                elapsed_ms=int((time.perf_counter() - t0) * 1000),
-                error=str(last_exc),
-            )
-            if attempts >= 2:
-                stop.set()
-                hb.join(timeout=1.0)
+            except FuturesTimeout as exc:
+                fut.cancel()
+                last_exc = StreamModalTranscribeError(f"hard_timeout_{int(timeout_s)}s")
+                decision_log(
+                    "transcribe",
+                    "transcribe_timeout",
+                    attempt=attempts,
+                    timeout_s=timeout_s,
+                    elapsed_ms=int((time.perf_counter() - t0) * 1000),
+                    model=model,
+                )
+                decision_log(
+                    "modal_transcribe",
+                    "end",
+                    ok=False,
+                    attempt=attempts,
+                    elapsed_ms=int((time.perf_counter() - t0) * 1000),
+                    error=str(last_exc),
+                )
                 raise last_exc from exc
-            stop.set()
-            hb.join(timeout=1.0)
-            continue
+        except StreamModalTranscribeError:
+            raise
         except Exception as exc:
             last_exc = StreamModalTranscribeError(type(exc).__name__)
             decision_log(
@@ -131,13 +137,10 @@ def transcribe_stream_modal_with_meta(req: TranscribeReq, *, diarize: bool) -> t
                     attempt=attempts + 1,
                     reason=str(exc)[:120],
                 )
-                stop.set()
-                hb.join(timeout=1.0)
                 continue
-            stop.set()
-            hb.join(timeout=1.0)
             raise last_exc from exc
         finally:
+            pool.shutdown(wait=False, cancel_futures=True)
             stop.set()
             hb.join(timeout=1.0)
 

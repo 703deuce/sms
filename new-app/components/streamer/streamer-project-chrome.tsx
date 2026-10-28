@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { HypeTimeline } from '@/components/streamer/hype-timeline'
 import { StreamerLayoutPill } from '@/components/streamer/streamer-layout-pill'
+import { StopAutoPullButton } from '@/components/streamer/stop-auto-pull-button'
 import { StreamerStageStepper } from '@/components/streamer/stage-stepper'
 import { Progress } from '@/components/ui/progress'
 import { formatEtaSeconds } from '@/lib/clips/format-eta'
@@ -28,6 +29,7 @@ export function StreamerProjectChrome({
   projectStatus: initialProjectStatus,
   sourceDeletedAt,
   layout,
+  rollingLive,
 }: {
   vodId: string
   projectId: string
@@ -36,6 +38,7 @@ export function StreamerProjectChrome({
   projectStatus?: string
   sourceDeletedAt?: string | null
   layout?: Record<string, unknown> | null
+  rollingLive?: boolean
 }) {
   const [stage, setStage] = useState(initialStage)
   const [progress, setProgress] = useState(initialProgress ?? 0)
@@ -101,6 +104,7 @@ export function StreamerProjectChrome({
           chunkTotal={chunkTotal}
         />
         <StreamerLayoutPill projectId={projectId} layout={layout ?? null} />
+        <StopAutoPullButton projectId={projectId} initialLive={Boolean(rollingLive)} />
       </div>
       {processing && waitingForWorker ? (
         <div className="space-y-1 rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">

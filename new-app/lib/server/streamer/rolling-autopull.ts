@@ -27,7 +27,7 @@ export async function stopChannelRollingAutopull(channelId: string, reason: stri
   const vods = await prisma.streamVod.findMany({
     where: {
       channelId,
-      triggeredBy: 'auto',
+      triggeredBy: { in: ['auto', 'paste'] },
       state: { path: ['rolling', 'live'], equals: true },
     },
     select: { id: true, projectId: true, state: true },
@@ -64,6 +64,7 @@ export async function stopChannelRollingAutopull(channelId: string, reason: stri
       data: {
         state: {
           ...state,
+          autoProcess: false,
           rolling: {
             ...rolling,
             live: false,
@@ -74,10 +75,79 @@ export async function stopChannelRollingAutopull(channelId: string, reason: stri
       },
     })
     console.info(
-      `[clipper:autopull] rolling_stopped channelId=${channelId} vodId=${vod.id} reason=${reason} cancelledJobs=${cancelledAll.join(',') || 'none'}`,
+      `[streamer:decision] ${JSON.stringify({
+        ts: Date.now() / 1000,
+        stage: 'streamer_autopull',
+        event: 'rolling_stopped',
+        channelId,
+        vodId: vod.id,
+        reason,
+        cancelledJobIds: cancelledAll,
+      })}`,
     )
   }
   return { stoppedVods: vods.length, cancelledJobIds: cancelledAll }
+}
+
+/** Stop rolling live capture for a paste (or auto) project by vod id. */
+export async function stopProjectRollingAutopull(projectId: string, reason: string) {
+  const prisma = getPrisma()
+  const vod = await prisma.streamVod.findFirst({
+    where: { projectId },
+    select: { id: true, projectId: true, channelId: true, state: true },
+  })
+  if (!vod) return { stopped: false, cancelledJobIds: [] as string[] }
+  const state = (vod.state as Record<string, unknown>) || {}
+  const rolling = (state.rolling as Record<string, unknown>) || {}
+  if (!rolling.live) return { stopped: false, cancelledJobIds: [] as string[] }
+
+  const cancelledAll: string[] = []
+  const pending = await prisma.clipJob.findMany({
+    where: { projectId: vod.projectId, type: 'STREAM_IMPORT', status: 'QUEUED' },
+    select: { id: true, payload: true },
+  })
+  for (const job of pending) {
+    const payload = job.payload as Record<string, unknown> | null
+    if (payload?.vodId !== vod.id || payload?.rollingTick == null) continue
+    await prisma.clipJob.update({
+      where: { id: job.id },
+      data: {
+        status: 'FAILED',
+        error: 'Cancelled by operator (auto-pull off)',
+        finishedAt: new Date(),
+        lockedBy: null,
+        lockedAt: null,
+      },
+    })
+    cancelledAll.push(job.id)
+  }
+  await prisma.streamVod.update({
+    where: { id: vod.id },
+    data: {
+      state: {
+        ...state,
+        autoProcess: false,
+        rolling: {
+          ...rolling,
+          live: false,
+          stoppedReason: reason,
+          stoppedAt: new Date().toISOString(),
+        },
+      },
+    },
+  })
+  console.info(
+    `[streamer:decision] ${JSON.stringify({
+      ts: Date.now() / 1000,
+      stage: 'streamer_autopull',
+      event: 'rolling_stopped',
+      projectId,
+      vodId: vod.id,
+      reason,
+      cancelledJobIds: cancelledAll,
+    })}`,
+  )
+  return { stopped: true, cancelledJobIds: cancelledAll }
 }
 
 /** Start a growing-VOD rolling session when Twitch goes live (stage 2). */
@@ -158,6 +228,7 @@ export async function beginTwitchRollingSession(
         streamedAt: startedAt,
         priority: 15,
         state: {
+          autoProcess: true,
           processMode: 'rolling',
           streamSessionId: streamSessionId || archive?.streamId || undefined,
           ...(liveCapture

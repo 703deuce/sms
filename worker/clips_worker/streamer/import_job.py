@@ -406,13 +406,19 @@ def _complete_rolling_window_import(
     chunk_min = rolling_chunk_min(prior)
     schedule_tick = (live and not finalize) or (schedule_growing_tick and not rolling_finalize)
     if schedule_tick:
-        _schedule_rolling_import_tick(
-            conn,
-            project_id=project_id,
-            vod_id=vod_id,
-            chunk_min=chunk_min,
-            exclude_job_id=str(job["id"]),
-        )
+        from clips_worker.streamer.rolling_ingest import rolling_autopull_stop_reason
+
+        stop_reason = rolling_autopull_stop_reason(conn, vod)
+        if stop_reason:
+            stop_rolling_session(conn, vod_id, reason=stop_reason, project_id=project_id)
+        else:
+            _schedule_rolling_import_tick(
+                conn,
+                project_id=project_id,
+                vod_id=vod_id,
+                chunk_min=chunk_min,
+                exclude_job_id=str(job["id"]),
+            )
     elif finalize:
         stop_rolling_session(conn, vod_id, reason="stream_offline")
     cleanup_vod_import_dir(vod_id)
@@ -677,6 +683,20 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
         rangeEndMs=vod.get("rangeEndMs"),
         section=_section_from_range(int(vod.get("rangeStartMs") or 0), vod.get("rangeEndMs")),
     )
+
+    rolling_tick = payload.get("rollingTick") is not None
+    if rolling_tick or _rolling_import_mode(vod):
+        from clips_worker.streamer.rolling_ingest import abort_rolling_autopull_if_stopped
+
+        if abort_rolling_autopull_if_stopped(
+            conn,
+            vod=vod,
+            vod_id=vod_id,
+            project_id=str(vod["project_id"]),
+            job=job,
+            post_progress=post_progress,
+        ):
+            return vod
 
     if _maybe_complete_import_from_state(conn, vod, job, vod["project_id"], vod_id, post_progress):
         return vod

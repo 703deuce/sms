@@ -84,6 +84,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [rangeMode, setRangeMode] = useState<VodImportRangeMode>('first_minutes')
   const [firstMinutes, setFirstMinutes] = useState('15')
   const [lastMinutesPreset, setLastMinutesPreset] = useState<string>('5')
+  const lastMinutesUserPickedRef = useRef(false)
   const [lastMinutesCustom, setLastMinutesCustom] = useState('15')
   const [rangeStart, setRangeStart] = useState('0:00')
   const [rangeEnd, setRangeEnd] = useState('15:00')
@@ -218,8 +219,10 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           })
           if (data.isLive || data.pastedAs === 'channel') {
             setRangeMode('last_minutes')
-            setLastMinutesPreset(data.isLive ? '5' : '15')
-            if (!data.isLive) setLastMinutesCustom('15')
+            if (!lastMinutesUserPickedRef.current) {
+              setLastMinutesPreset(data.isLive ? '5' : '15')
+              if (!data.isLive) setLastMinutesCustom('15')
+            }
           } else {
             setRangeMode((m) => (m === 'last_minutes' ? 'first_minutes' : m))
           }
@@ -450,7 +453,13 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
             <Label className="text-xs">
               {isLiveCapture ? 'Minutes to capture on first pull' : 'Last minutes (from current VOD length)'}
             </Label>
-            <Select value={lastMinutesPreset} onValueChange={setLastMinutesPreset}>
+            <Select
+              value={lastMinutesPreset}
+              onValueChange={(v) => {
+                lastMinutesUserPickedRef.current = true
+                setLastMinutesPreset(v)
+              }}
+            >
               <SelectTrigger className="h-9 w-full max-w-xs">
                 <SelectValue />
               </SelectTrigger>
@@ -475,7 +484,10 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
                   max={720}
                   className="h-9 w-24"
                   value={lastMinutesCustom}
-                  onChange={(e) => setLastMinutesCustom(e.target.value)}
+                  onChange={(e) => {
+                    lastMinutesUserPickedRef.current = true
+                    setLastMinutesCustom(e.target.value)
+                  }}
                 />
               </div>
             ) : null}

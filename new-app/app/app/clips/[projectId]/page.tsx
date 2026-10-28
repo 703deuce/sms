@@ -45,6 +45,11 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
       ? (streamVod.state as Record<string, unknown>)
       : null
   const vodLayout = (vodState?.layout as Record<string, unknown> | undefined) ?? null
+  const rollingLive =
+    vodState?.rolling &&
+    typeof vodState.rolling === 'object' &&
+    !Array.isArray(vodState.rolling) &&
+    (vodState.rolling as Record<string, unknown>).live === true
   const vodChatMeta =
     vodState?.chatMeta && typeof vodState.chatMeta === 'object' && !Array.isArray(vodState.chatMeta)
       ? (vodState.chatMeta as {
@@ -79,6 +84,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
             projectStatus={project.status}
             sourceDeletedAt={streamVod.sourceDeletedAt?.toISOString() ?? null}
             layout={vodLayout}
+            rollingLive={rollingLive}
           />
         </div>
       ) : null}

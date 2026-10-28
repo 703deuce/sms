@@ -172,6 +172,7 @@ export async function createStreamerImport(
   }
   if (liveCaptureImport) {
     vodState.liveCapture = true
+    vodState.autoProcess = true
     if (streamStartedAtIso) vodState.streamStartedAt = streamStartedAtIso
     if (archiveResolveReason) vodState.archiveResolveReason = archiveResolveReason
     vodState.processMode = 'rolling'

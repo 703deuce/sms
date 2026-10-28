@@ -122,6 +122,58 @@ def rolling_min_new_ms() -> int:
     return _int("STREAMER_ROLLING_MIN_NEW_MS", 45_000)
 
 
+def rolling_autopull_stop_reason(conn, vod: dict[str, Any]) -> str | None:
+    """If rolling auto-pull must not run, return a short reason (else None)."""
+    vod_id = str(vod.get("id") or "")
+    if vod_id:
+        with conn.cursor() as cur:
+            cur.execute(
+                'SELECT state, "channelId", "triggeredBy" FROM stream_vods WHERE id=%s',
+                (vod_id,),
+            )
+            row = cur.fetchone()
+        if row:
+            vod = {**vod, "state": row[0], "channelId": row[1], "triggeredBy": row[2]}
+    state = vod.get("state") or {}
+    if isinstance(state, str):
+        state = json.loads(state) if state else {}
+    rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
+    if not rolling.get("live"):
+        return "rolling_not_live"
+    if state.get("autoProcess") is False:
+        return "auto_process_off"
+    triggered = str(vod.get("triggeredBy") or "").lower()
+    channel_id = vod.get("channelId")
+    if triggered == "auto" and channel_id:
+        with conn.cursor() as cur:
+            cur.execute('SELECT "autoProcess" FROM stream_channels WHERE id=%s', (str(channel_id),))
+            row = cur.fetchone()
+        if row is not None and not row[0]:
+            return "auto_process_off"
+    return None
+
+
+def abort_rolling_autopull_if_stopped(
+    conn,
+    *,
+    vod: dict[str, Any],
+    vod_id: str,
+    project_id: str,
+    job: dict,
+    post_progress,
+) -> bool:
+    """Log rolling_stopped and exit import without capture. Returns True if aborted."""
+    reason = rolling_autopull_stop_reason(conn, vod)
+    if not reason:
+        return False
+    stop_rolling_session(conn, vod_id, reason=reason, project_id=project_id)
+    post_progress(
+        job["id"],
+        {"projectStatus": "PREPARING", "stage": "live_ingest", "progress": 18, "jobStatus": "DONE"},
+    )
+    return True
+
+
 def anchor_rolling_session_started_at(rolling: dict, *, seed: bool) -> tuple[dict, str | None, bool]:
     """
     Session cap clock uses ONLY rolling.sessionStartedAt (first pull of this session).
