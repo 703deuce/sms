@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-off Gemini video-picker replay (no edge reassess, no render)."""
+"""Adaptive Gemini 3.8 video-picker replay on mixed_4min (no edge reassess, no render)."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ import time
 import tempfile
 from pathlib import Path
 
-# Run from worker image: PYTHONPATH=/app python3 scripts/replay_video_picker_benchmark.py
+# PYTHONPATH=/app python3 scripts/replay_video_picker_benchmark.py
 
 PROJECT_ID = os.environ.get("BENCH_PROJECT_ID", "proj_3edeaf9309b74bbfa8ce5313b0e346c3")
 UPLOAD_KEY = os.environ.get(
@@ -17,16 +17,16 @@ UPLOAD_KEY = os.environ.get(
     "ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4",
 )
 
-MODEL_38 = "gemini-3.8-flash"
-MODEL_LITE = "gemini-3.5-flash-lite"
-MODEL_25 = "gemini-2.5-flash"
+VIDEO_PICKER_MODEL = "gemini-3.8-flash"
 
-SETTING_PATCHES: list[tuple[str, dict]] = [
-    ("a_baseline", {}),
-    ("b_medium_res", {"VIDEO_PICKER_MEDIA_RES": "MEDIA_RESOLUTION_MEDIUM"}),
-    ("c_fps_1_0", {"VIDEO_PICKER_FPS": "1.0"}),
-    ("d_transcript_first", {"VIDEO_PICKER_USER_PART_ORDER": "transcript_first"}),
-    ("d_video_first", {"VIDEO_PICKER_USER_PART_ORDER": "video_first"}),
+# Current prod defaults (cheapest).
+CURRENT_SETTINGS: dict = {}
+
+# Only if current misses apex or meow (cheapest → pricier).
+ESCALATIONS: list[tuple[str, dict]] = [
+    ("medium_res", {"VIDEO_PICKER_MEDIA_RES": "MEDIA_RESOLUTION_MEDIUM"}),
+    ("fps_1_0", {"VIDEO_PICKER_FPS": "1.0"}),
+    ("transcript_after_video", {"VIDEO_PICKER_USER_PART_ORDER": "video_first"}),
 ]
 
 
@@ -53,6 +53,10 @@ def score_coverage(moments: list[dict], duration_s: float = 226.0) -> dict[str, 
         if ss >= 165.0 or es >= 200.0 or peak >= 168.0:
             meow = True
     return {"apex": apex, "meow": meow}
+
+
+def coverage_ok(cov: dict) -> bool:
+    return bool(cov.get("apex") and cov.get("meow"))
 
 
 def moment_rows(moments: list[dict]) -> list[dict]:
@@ -110,11 +114,21 @@ def _load_transcript(duration_s: float) -> str:
     )
 
 
+def _loud_rate_limit(row: dict) -> None:
+    if row.get("rate_limited") or row.get("status") == 429:
+        print(
+            f"\n[bench] *** GEMINI 429 RATE LIMIT on {VIDEO_PICKER_MODEL} — "
+            f"no model fallback; fix quota or retry later ***\n"
+            f"error={row.get('error')}\n",
+            flush=True,
+        )
+        sys.exit(2)
+
+
 def run_variant(
     name: str,
     env_patch: dict,
     *,
-    model: str,
     shared_src: Path,
     transcript: str,
     duration_s: int = 226,
@@ -125,7 +139,11 @@ def run_variant(
     proxy = scratch / "watch.mp4"
     make_watch_proxy(shared_src, proxy, 0.0, float(duration_s))
 
-    patch = {**env_patch, "VIDEO_PICKER_MODEL": model}
+    patch = {
+        **env_patch,
+        "VIDEO_PICKER_MODEL": VIDEO_PICKER_MODEL,
+        "VIDEO_PICKER_FALLBACK_MODEL": "",
+    }
     saved = {k: os.environ.get(k) for k in patch}
     os.environ.update({k: str(v) for k, v in patch.items()})
     try:
@@ -135,7 +153,7 @@ def run_variant(
             chunk_label=f"bench_{name}",
             transcript_text=transcript,
             skip_edge_reassess=True,
-            model_override=model,
+            model_override=VIDEO_PICKER_MODEL,
             fps_override=float(env_patch["VIDEO_PICKER_FPS"]) if "VIDEO_PICKER_FPS" in env_patch else None,
             media_resolution_override=env_patch.get("VIDEO_PICKER_MEDIA_RES"),
             user_part_order=env_patch.get("VIDEO_PICKER_USER_PART_ORDER"),
@@ -151,10 +169,10 @@ def run_variant(
     cov = score_coverage(moments, float(duration_s))
     status = meta.get("status")
     err = meta.get("error")
-    rate_limited = status == 429 or (err and "429" in str(err))
+    rate_limited = bool(meta.get("rate_limited")) or status == 429 or (err and "429" in str(err))
     return {
         "variant": name,
-        "model": meta.get("model") or model,
+        "model": meta.get("model") or VIDEO_PICKER_MODEL,
         "fps": meta.get("fps"),
         "media_resolution": meta.get("media_resolution"),
         "user_part_order": meta.get("user_part_order"),
@@ -169,91 +187,63 @@ def run_variant(
         "status": status,
         "rate_limited": rate_limited,
         "error": err,
+        "time_invalid": meta.get("time_invalid"),
     }
 
 
-def build_variant_list() -> list[tuple[str, dict, str]]:
-    out: list[tuple[str, dict, str]] = []
-    for name, patch in SETTING_PATCHES:
-        out.append((f"38_{name}", patch, MODEL_38))
-    out.append(("25_a_baseline", {}, MODEL_25))
-    best = {"VIDEO_PICKER_USER_PART_ORDER": "transcript_first"}
-    # Model shootout at winning settings (3.8 side = 38_d_transcript_first above).
-    out.append(("e_35_flash_lite", best, MODEL_LITE))
-    return out
-
-
-def pick_default_model(results: list[dict]) -> str | None:
-    """Prefer 3.8-flash when multiple models hit apex+meow at transcript_first."""
-    winners: list[tuple[str, float]] = []
-    for row in results:
-        if not row.get("ok"):
-            continue
-        cov = row.get("coverage") or {}
-        if not (cov.get("apex") and cov.get("meow")):
-            continue
-        if row.get("user_part_order") != "transcript_first" and not str(row.get("variant", "")).startswith("e_"):
-            continue
-        model = str(row.get("model") or "")
-        cost = float(row.get("est_usd") or 999.0)
-        winners.append((model, cost))
-    if not winners:
-        for row in results:
-            if not row.get("ok"):
-                continue
-            cov = row.get("coverage") or {}
-            if cov.get("apex") and cov.get("meow"):
-                winners.append((str(row.get("model") or ""), float(row.get("est_usd") or 999.0)))
-    if not winners:
-        return None
-    prefer = {MODEL_38: 0, MODEL_LITE: 1}
-    winners.sort(key=lambda t: (prefer.get(t[0], 9), t[1]))
-    return winners[0][0]
-
-
 def main() -> None:
-    sleep_s = float(os.environ.get("BENCH_SLEEP_S", "25"))
-    only = (os.environ.get("BENCH_ONLY") or "").strip()
+    sleep_s = float(os.environ.get("BENCH_SLEEP_S", "20"))
     duration_s = 226
     root = Path(tempfile.mkdtemp(prefix="vp_bench_shared_"))
     shared_src = _shared_download(root)
     transcript = _load_transcript(float(duration_s))
-    print(f"[bench] shared source={shared_src} transcript_chars={len(transcript)}", flush=True)
+    print(
+        f"[bench] model={VIDEO_PICKER_MODEL} source={shared_src} transcript_chars={len(transcript)}",
+        flush=True,
+    )
 
-    variants = build_variant_list()
-    if only:
-        variants = [v for v in variants if v[0] == only or v[0].endswith(only)]
-        if not variants:
-            raise SystemExit(f"BENCH_ONLY={only!r} matched no variants")
     results: list[dict] = []
-    for i, (name, patch, model) in enumerate(variants):
-        print(f"[bench] === {name} model={model} ===", flush=True)
+    plan: list[tuple[str, dict]] = [("current_settings", CURRENT_SETTINGS)]
+
+    def _run(name: str, patch: dict) -> dict:
+        print(f"[bench] === {name} ===", flush=True)
         try:
-            row = run_variant(
-                name,
-                patch,
-                model=model,
-                shared_src=shared_src,
-                transcript=transcript,
-                duration_s=duration_s,
-            )
+            row = run_variant(name, patch, shared_src=shared_src, transcript=transcript, duration_s=duration_s)
         except Exception as exc:
             row = {
                 "variant": name,
-                "model": model,
+                "model": VIDEO_PICKER_MODEL,
                 "ok": False,
                 "error": str(exc)[:400],
                 "rate_limited": "429" in str(exc),
             }
         results.append(row)
         print(json.dumps(row, indent=2), flush=True)
-        if i + 1 < len(variants) and sleep_s > 0:
-            time.sleep(sleep_s)
+        _loud_rate_limit(row)
+        return row
 
-    winner = pick_default_model(results)
+    first = _run(plan[0][0], plan[0][1])
+    winner: dict | None = first if first.get("ok") and coverage_ok(first.get("coverage") or {}) else None
+
+    if winner is None and first.get("ok"):
+        for name, patch in ESCALATIONS:
+            if sleep_s > 0:
+                time.sleep(sleep_s)
+            row = _run(name, patch)
+            if row.get("ok") and coverage_ok(row.get("coverage") or {}):
+                winner = row
+                break
+
+    if winner is None and results:
+        ok_runs = [r for r in results if r.get("ok")]
+        if ok_runs:
+            winner = min(ok_runs, key=lambda r: float(r.get("est_usd") or 999))
+
     summary = {
-        "recommended_VIDEO_PICKER_MODEL": winner,
-        "models": [MODEL_38, MODEL_LITE, MODEL_25],
+        "VIDEO_PICKER_MODEL": VIDEO_PICKER_MODEL,
+        "winning_variant": (winner or {}).get("variant"),
+        "coverage": (winner or {}).get("coverage"),
+        "est_usd": (winner or {}).get("est_usd"),
     }
     print(f"[bench] summary {json.dumps(summary)}", flush=True)
 

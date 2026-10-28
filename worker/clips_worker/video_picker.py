@@ -120,12 +120,8 @@ def video_picker_burn_timecode() -> bool:
 
 
 def video_picker_fallback_model() -> str:
-    from clips_worker.gemini_vision import DEFAULT_VIDEO_PICKER_FALLBACK_MODEL
-
-    return (
-        (os.environ.get("VIDEO_PICKER_FALLBACK_MODEL") or DEFAULT_VIDEO_PICKER_FALLBACK_MODEL).strip()
-        or DEFAULT_VIDEO_PICKER_FALLBACK_MODEL
-    )
+    """Optional override only — no default fallback (Rick: stay on VIDEO_PICKER_MODEL)."""
+    return (os.environ.get("VIDEO_PICKER_FALLBACK_MODEL") or "").strip()
 
 
 def video_picker_keep_audio() -> bool:
@@ -875,6 +871,13 @@ def watch_video_file(
                     err_body = (res.text if res is not None else "") or last_err
                     summary, quota = gemini_error_log_fields(err_body)
                     last_err = summary or err_body[:300]
+                    if last_status == 429:
+                        meta["rate_limited"] = True
+                        print(
+                            f"[clipper:video_picker] ERROR GEMINI_RATE_LIMIT model={active_model} "
+                            f"status=429 chunk={chunk_label} err={last_err[:200]}",
+                            flush=True,
+                        )
                     if not fail_open:
                         raise RuntimeError(last_err)
                     return _fail_open(last_err, last_status, quota or None)
