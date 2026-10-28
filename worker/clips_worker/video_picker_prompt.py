@@ -23,6 +23,7 @@ STEP 1: SEGMENT BY ACTIVITY
 Split the video into sections by what is actually happening: gaming, talking, reaction, irl, creative. Start a new section whenever the activity changes (the match ends and they talk to chat, they play a video, walk outside, pick up a guitar) and re-apply the matching criteria. Never judge talking by gameplay standards or the reverse. A section can carry more than one label.
 
 STEP 2: FIND MOMENTS, APPLYING EVERY CRITERION THAT FITS
+{discovery_density}
 Review every section you identified (talking, gaming, reaction, etc.) and consider clip-worthy moments in each — there is no per-section quota, but do not skip a whole activity type if it has strong clips. Good moments can appear anywhere in the video; do not space them artificially. Check each moment against every group that applies, not only the section label. A hilarious comment during dull gameplay is a great talking clip.
 
 1. GAMING (competitive, casual, horror, roleplay)
@@ -114,9 +115,19 @@ _MIN_MOMENTS_PER_CHUNK_CAP = 24
 
 
 def min_moments_for_video(video_len_s: int) -> int:
-    """Soft target for discovery (~1 per 50s) — not a filler floor."""
+    """Legacy telemetry / fallback spacing hint — not a ship or filler floor."""
     video_len_s = max(1, int(video_len_s))
     return max(1, min(_MIN_MOMENTS_PER_CHUNK_CAP, int(round(video_len_s / 50.0))))
+
+
+def discovery_density_guidance(video_len_s: int) -> str:
+    video_len_s = max(1, int(video_len_s))
+    lo = max(1, video_len_s // 60)
+    hi = max(lo, video_len_s // 40)
+    return (
+        f"Density guidance only (not a quota): a {video_len_s}s video often has about {lo}–{hi} strong "
+        f"standalone moments (~1 per 40–60s). Return every real moment that passes quality — never invent filler."
+    )
 
 
 def length_rule_text(target_clip_len_s: int | None) -> str:
@@ -128,6 +139,6 @@ def length_rule_text(target_clip_len_s: int | None) -> str:
 def build_video_picker_system_prompt(video_len_s: int, target_clip_len_s: int | None) -> str:
     return _PROMPT_V3.format(
         video_len_s=int(video_len_s),
-        min_moments=min_moments_for_video(int(video_len_s)),
+        discovery_density=discovery_density_guidance(int(video_len_s)),
         length_rule=length_rule_text(target_clip_len_s),
     )

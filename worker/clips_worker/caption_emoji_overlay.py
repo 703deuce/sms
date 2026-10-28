@@ -1,69 +1,35 @@
 """Twemoji PNG overlays for export (libass cannot render color emoji reliably)."""
 from __future__ import annotations
 
-import re
-import subprocess
 from pathlib import Path
 
-from clips_worker.ffmpeg_util import ffmpeg_threads_per_job
+from clips_worker.emoji_whitelist import EMOJI_WHITELIST_SET
+
+TWEMOJI_DIR = Path(__file__).resolve().parents[1] / "assets" / "twemoji"
 
 
-def _codepoint(emoji: str) -> str | None:
-    cps = [f"{ord(ch):x}" for ch in emoji if ord(ch) > 0x1F300 or ord(ch) > 0x7F]
+def twemoji_codepoint(emoji: str) -> str | None:
+    """Filename stem for Twemoji 14 (strip U+FE0F / U+200D per Twitter asset names)."""
+    cps: list[str] = []
+    for ch in emoji or "":
+        cp = ord(ch)
+        if cp in (0xFE0F, 0x200D):
+            continue
+        if cp > 0x7F or cp >= 0x1F300:
+            cps.append(f"{cp:x}")
     if not cps:
         return None
     return "-".join(cps)
 
 
-def burn_emoji_png_overlays(
-    video: Path,
-    *,
-    emoji_events: list[tuple[float, float, str, int, int]],
-    work_dir: Path,
-) -> Path:
-    """Overlay PNG emojis; emoji_events = (start_s, end_s, emoji, x, y)."""
-    if not emoji_events:
-        return video
-    cur = video
-    threads = str(ffmpeg_threads_per_job())
-    for i, (t0, t1, emo, x, y) in enumerate(emoji_events):
-        cp = _codepoint(emo)
-        if not cp:
-            continue
-        png = work_dir / f"emoji_{i}.png"
-        url = f"https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/{cp}.png"
-        try:
-            import urllib.request
-
-            urllib.request.urlretrieve(url, png)
-        except Exception:
-            continue
-        if not png.is_file():
-            continue
-        out = work_dir / f"emoji_step_{i}.mp4"
-        vf = f"overlay={x}:{y}:enable='between(t,{t0:.3f},{t1:.3f})'"
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-threads",
-                threads,
-                "-i",
-                str(cur),
-                "-i",
-                str(png),
-                "-filter_complex",
-                vf,
-                "-c:a",
-                "copy",
-                str(out),
-            ],
-            check=False,
-            capture_output=True,
-        )
-        if out.is_file():
-            cur = out
-    return cur
+def twemoji_png_path(emoji: str) -> Path | None:
+    if emoji not in EMOJI_WHITELIST_SET:
+        return None
+    stem = twemoji_codepoint(emoji)
+    if not stem:
+        return None
+    path = TWEMOJI_DIR / f"{stem}.png"
+    return path if path.is_file() else None
 
 
 def emoji_events_from_words(
@@ -74,8 +40,9 @@ def emoji_events_from_words(
     play_h: int,
     fontsize: int,
     position: str = "bottom",
-) -> list[tuple[float, float, str, int, int]]:
-    events: list[tuple[float, float, str, int, int]] = []
+) -> list[tuple[float, float, str, int, int, Path]]:
+    """(start_s, end_s, emoji, x, y, png_path) for each whitelisted word emoji."""
+    events: list[tuple[float, float, str, int, int, Path]] = []
     y_base = {"bottom": int(play_h * 0.88), "middle": play_h // 2, "top": int(play_h * 0.12)}.get(
         position, int(play_h * 0.88)
     )
@@ -87,9 +54,37 @@ def emoji_events_from_words(
         emo = emoji_by_word.get(str(wi)) or emoji_by_word.get(wi)
         if not emo or not isinstance(emo, str):
             continue
-        if not emo:
+        png = twemoji_png_path(emo.strip())
+        if not png:
             continue
         t0 = float(w.get("s", 0))
         t1 = float(w.get("e", t0 + 0.4))
-        events.append((t0, t1 + 0.6, emo, cx, emo_y))
+        events.append((t0, t1 + 0.6, emo.strip(), cx, emo_y, png))
     return events
+
+
+def build_caption_burn_filter_complex(
+    *,
+    ass_path: Path,
+    fontsdir: Path,
+    emoji_events: list[tuple[float, float, str, int, int, Path]],
+) -> tuple[str, list[Path], str]:
+    """Single ffmpeg filter graph: ASS burn + all emoji PNG overlays. Input 0 = video; 1..N = PNGs."""
+    ass_esc = str(ass_path).replace(":", r"\,")
+    fonts_esc = str(fontsdir).replace(":", r"\,")
+    chain = f"[0:v]ass={ass_esc}:fontsdir={fonts_esc}[v0]"
+    extra_inputs: list[Path] = []
+    prev = "v0"
+    for i, (t0, t1, _emo, x, y, png) in enumerate(emoji_events):
+        inp = i + 1
+        extra_inputs.append(png)
+        nxt = f"v{inp}"
+        chain += (
+            f";[{prev}][{inp}:v]overlay={x}:{y}:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]"
+        )
+        prev = nxt
+    return chain, extra_inputs, prev
+
+
+# Back-compat alias
+_codepoint = twemoji_codepoint

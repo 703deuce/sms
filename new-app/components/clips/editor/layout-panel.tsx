@@ -62,6 +62,7 @@ export function LayoutPanel({
   gapToolSettings,
   onGapToolSettingsChange,
   onAddCut,
+  onSetCutRanges,
   onSeekSource,
   onOpenGapReview,
   onOpenFillerReview,
@@ -84,6 +85,7 @@ export function LayoutPanel({
   onOpenFillerReview?: () => void
   onGapToolSettingsChange?: (patch: Partial<ClipGapToolSettings>) => void
   onAddCut?: (range: [number, number]) => void
+  onSetCutRanges?: (ranges: [number, number][]) => void
   onSeekSource?: (sourceMs: number) => void
   onOpenGapReview?: () => void
 }) {
@@ -154,7 +156,7 @@ export function LayoutPanel({
             settings={gapToolSettings}
             onSettingsChange={onGapToolSettingsChange}
             onAddCut={onAddCut}
-            onSetCutRanges={(ranges) => onEdits?.({ ...edits, cutRanges: ranges })}
+            onSetCutRanges={onSetCutRanges}
             onSeek={onSeekSource}
             onOpenReview={onOpenGapReview}
           />

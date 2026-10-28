@@ -223,8 +223,6 @@ def finalize_picks(
 
     want = compute_pick_want(settings if isinstance(settings, dict) else {}, duration_ms)
     selected = plan_clips(selected, min_clip_ms=MIN_SHIPPED_CLIP_MS)
-    if len(selected) > want:
-        selected = sorted(selected, key=lambda p: -float(p.get("final", p.get("score", 0) or 0)))[:want]
     log_pick_stage("regular", want=want, final=len(selected))
     picker_info(
         "finalize_done",

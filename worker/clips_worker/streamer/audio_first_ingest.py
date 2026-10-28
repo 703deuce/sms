@@ -260,6 +260,7 @@ def ingest_clip_section_video(
         return metrics
 
     from clips_worker.streamer.http_download import run_ytdlp
+    from clips_worker.streamer.upload_proxy import ytdlp_section_format
 
     section = _section_spec(start_s, end_s)
     partial = wd / f"section_{clip_id}.%(ext)s"
@@ -271,7 +272,7 @@ def ingest_clip_section_video(
         "12",
         "--continue",
         "-f",
-        "bv*[height<=1080][fps<=60]+ba/b[height<=1080]/b",
+        ytdlp_section_format(),
         "--merge-output-format",
         "mp4",
         "--download-sections",

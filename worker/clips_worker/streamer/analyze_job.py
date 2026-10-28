@@ -333,6 +333,18 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             from clips_worker.streamer.video_picker_stream import stream_chunk_video_signals
 
             if video_picker_enabled():
+                from clips_worker.streamer.upload_proxy import ensure_vod_analysis_proxy
+
+                state = ensure_vod_analysis_proxy(
+                    vod=vod,
+                    state=state,
+                    workspace_id=workspace_id,
+                    vod_id=vod_id,
+                    scratch=scratch,
+                    job_id=str(job["id"]),
+                )
+                if state.get("analysisProxyKey"):
+                    _save_state(conn, vod_id, state)
                 from clips_worker.video_picker import resolve_video_picker_stream_ranges
 
                 analysed_ms = max(1, int(duration_ms))
@@ -359,6 +371,9 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                         target_clip_len_s=settings.get("target_clip_len_s"),
                         transcript_text=vp_transcript,
                     )
+                    from clips_worker.video_picker import dedupe_overlapping_video_picker_moments
+
+                    video_moments = dedupe_overlapping_video_picker_moments(video_moments)
             with stage_span("rank_moments", heartbeat=True):
                 picks, signals_payload = rank_moments(
                     audio_path=audio_path,
@@ -379,7 +394,6 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             from clips_worker.plan_clips import fusion_pick_as_plan_dict, fusion_picks_from_planned, plan_clips
 
             want = compute_pick_want(settings, duration_ms)
-            picks = sorted(picks, key=lambda p: p.score, reverse=True)[:want]
             planned = plan_clips([fusion_pick_as_plan_dict(p) for p in picks])
             picks = fusion_picks_from_planned(planned)
             log_pick_stage(

@@ -483,7 +483,7 @@ def burn_captions(
     play_w: int | None = None,
     play_h: int | None = None,
 ) -> None:
-    from clips_worker.captions_ass import build_ass
+    from clips_worker.captions_ass import build_ass, resolve_preset, margin_v_px
 
     if play_w is None or play_h is None:
         play_w, play_h = probe_video_size(video)
@@ -494,10 +494,56 @@ def burn_captions(
         cap = {**cap, "presetId": "bold_pop", "animation": "pop"}
     build_ass(words, cap, ass, play_w=play_w, play_h=play_h)
     fontsdir = V3 / "fonts"
-    vf = f"ass={ass}:fontsdir={fontsdir}".replace(",", r"\,")
-    subprocess.check_call(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-vf", vf, "-c:a", "copy", str(out)],
-    )
+    emoji_by_word = cap.get("emojiByWord") if isinstance(cap.get("emojiByWord"), dict) else {}
+    emoji_events: list = []
+    if emoji_by_word:
+        from clips_worker.caption_emoji_overlay import emoji_events_from_words
+
+        preset = resolve_preset(cap.get("presetId") or cap.get("preset"))
+        size_pct = float(cap.get("size") or cap.get("sizePct") or preset["sizePct"])
+        if size_pct < 3:
+            size_pct = float(preset["sizePct"])
+        size_pct = max(3.0, min(12.0, size_pct))
+        fontsize = round(size_pct / 100 * play_h)
+        position = cap.get("position") or preset["position"]
+        emoji_events = emoji_events_from_words(
+            words,
+            emoji_by_word,
+            play_w=play_w,
+            play_h=play_h,
+            fontsize=fontsize,
+            position=str(position),
+        )
+    if emoji_events:
+        from clips_worker.caption_emoji_overlay import build_caption_burn_filter_complex
+
+        fc, pngs, vout_label = build_caption_burn_filter_complex(
+            ass_path=ass,
+            fontsdir=fontsdir,
+            emoji_events=emoji_events,
+        )
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
+        for png in pngs:
+            cmd.extend(["-i", str(png)])
+        cmd.extend(
+            [
+                "-filter_complex",
+                fc,
+                "-map",
+                f"[{vout_label}]",
+                "-map",
+                "0:a?",
+                "-c:a",
+                "copy",
+                str(out),
+            ]
+        )
+        subprocess.check_call(cmd)
+    else:
+        vf = f"ass={ass}:fontsdir={fontsdir}".replace(",", r"\,")
+        subprocess.check_call(
+            ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-vf", vf, "-c:a", "copy", str(out)],
+        )
 
 
 def render_edited_clip(

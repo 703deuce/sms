@@ -132,9 +132,7 @@ export function ClipShortenGapsPanel({
         }
         if (onSetCutRanges) onSetCutRanges(next)
         else {
-          for (const r of next) {
-            if (!cutRanges.some(([a, b]) => a === r[0] && b === r[1])) onAddCut(r)
-          }
+          toast.error('Shorten all is unavailable in this panel')
         }
         const remaining = listClipGapHits(orderedWords, next, {
           mode: settings.mode,

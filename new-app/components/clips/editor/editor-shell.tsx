@@ -144,6 +144,7 @@ export function EditorShell({
     canRedo,
     saveState,
     addCutRange,
+    setCutRanges,
     setWordFix,
     restoreWord,
     restoreCutRange,
@@ -481,6 +482,7 @@ export function EditorShell({
           gapToolSettings={gapToolSettings}
           onGapToolSettingsChange={(patch) => setGapToolSettings((s) => ({ ...s, ...patch }))}
           onAddCut={addCutRange}
+          onSetCutRanges={setCutRanges}
           onSeekSource={seekSource}
           onOpenGapReview={() => setGapReviewOpen(true)}
           onOpenFillerReview={() => setFillerReviewOpen(true)}

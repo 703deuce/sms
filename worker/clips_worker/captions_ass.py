@@ -256,17 +256,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,{cased[ki]}"
                 )
             events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
-            emo = emoji_by_word.get(str(wi)) or emoji_by_word.get(wi)
-            if emo and not os.environ.get("CAPTION_EMOJI_PNG_EXPORT"):
-                cx = play_w // 2
-                y_base = {"bottom": int(play_h * 0.88), "middle": play_h // 2, "top": int(play_h * 0.12)}.get(
-                    position, int(play_h * 0.88)
-                )
-                emo_y = y_base - int(fontsize * 1.6)
-                emo_end = min(chunk_end + 0.6, w_end + 0.6)
-                events.append(
-                    f"Dialogue: 1,{ts(w_start)},{ts(emo_end)},Cap,,0,0,0,,"
-                    f"{{\\pos({cx},{emo_y})\\fs{int(fontsize * 1.6)}}}{emo}"
-                )
+            # Color emoji export uses bundled Twemoji PNGs in burn_captions (not libass).
 
     ass_path.write_text(header + "\n".join(events) + "\n")

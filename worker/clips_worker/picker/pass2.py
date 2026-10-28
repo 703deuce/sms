@@ -450,7 +450,8 @@ def score_moments(
 
     picker_info("pass2_start", moments_in=len(moments))
 
-    def _score_one(mi: int, m: dict) -> tuple[list[dict], list[dict]]:
+    def _score_one(mi: int, m: dict) -> tuple[list[dict], list[dict], Counter[str]]:
+        local_rejects: Counter[str] = Counter()
         ss = max(0, min(int(m["start_sentence"]), len(sentences) - 1))
         es = max(ss, min(int(m["end_sentence"]), len(sentences) - 1))
         block = {
@@ -478,7 +479,7 @@ def score_moments(
         local_out: list[dict] = []
         local_audit: list[dict] = []
         if not clips:
-            reject_counts["empty_clips"] += 1
+            local_rejects["empty_clips"] += 1
             local_audit.append(
                 {
                     "hard_reject": False,
@@ -488,7 +489,7 @@ def score_moments(
                     "end_sentence": es,
                 }
             )
-            return local_out, local_audit
+            return local_out, local_audit, local_rejects
         row = clips[0]
         parsed = _clip_row_from_llm(
             row,
@@ -503,17 +504,17 @@ def score_moments(
             range_end_ms=range_end_ms,
         )
         if not parsed:
-            return local_out, local_audit
+            return local_out, local_audit, local_rejects
         local_audit.append(parsed)
         if parsed.get("llm_reject"):
             code = (parsed.get("reject_reason") or "llm_reject").split(":")[0].strip()
-            reject_counts[code] += 1
-            return local_out, local_audit
+            local_rejects[code] += 1
+            return local_out, local_audit, local_rejects
         if parsed.get("gate_reject"):
-            reject_counts[parsed.get("reject_reason") or "gate"] += 1
-            return local_out, local_audit
+            local_rejects[parsed.get("reject_reason") or "gate"] += 1
+            return local_out, local_audit, local_rejects
         local_out.append({k: v for k, v in parsed.items() if k not in ("hard_reject", "llm_reject", "gate_reject")})
-        return local_out, local_audit
+        return local_out, local_audit, local_rejects
 
     workers = min(4, max(1, len(moments)))
     if len(moments) > 1 and workers > 1:
@@ -522,12 +523,14 @@ def score_moments(
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futs = [pool.submit(_score_one, mi, m) for mi, m in enumerate(moments)]
             for fut in as_completed(futs):
-                scored, aud = fut.result()
+                scored, aud, rejects = fut.result()
+                reject_counts.update(rejects)
                 out.extend(scored)
                 audit.extend(aud)
     else:
         for mi, m in enumerate(moments):
-            scored, aud = _score_one(mi, m)
+            scored, aud, rejects = _score_one(mi, m)
+            reject_counts.update(rejects)
             out.extend(scored)
             audit.extend(aud)
 

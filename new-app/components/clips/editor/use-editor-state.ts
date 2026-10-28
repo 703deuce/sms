@@ -58,6 +58,7 @@ type State = {
 
 type Action =
   | { type: 'set'; edits: ClipEditsV2; pushHistory?: boolean }
+  | { type: 'addCuts'; cutRanges: CutRange[] }
   | { type: 'APPLY_PATCH'; edits: ClipEditsV2 }
   /** Producer batch: always one undo step even when canonical edits match (e.g. no-op patch). */
   | { type: 'BATCH'; edits: ClipEditsV2; before?: ClipEditsV2; producerChangeCount?: number }
@@ -80,6 +81,12 @@ export function editorEditsReducer(state: State, action: Action): State {
       const push = action.pushHistory !== false
       const past = push ? [...state.past, state.edits].slice(-MAX_UNDO) : state.past
       return { ...state, edits: action.edits, past, future: push ? [] : state.future, saveState: 'dirty' }
+    }
+    case 'addCuts': {
+      const next = { ...state.edits, cutRanges: action.cutRanges }
+      if (editsEqual(state.edits, next)) return state
+      const past = [...state.past, state.edits].slice(-MAX_UNDO)
+      return { ...state, edits: next, past, future: [], saveState: 'dirty' }
     }
     case 'APPLY_PATCH': {
       if (editsEqual(state.edits, action.edits)) return state
@@ -188,9 +195,21 @@ export function useEditorState(
 
   const setEdits = useCallback((edits: ClipEditsV2, pushHistory = true) => {
     if (editsEqual(editsRef.current, edits)) return
+    editsRef.current = edits
     bumpLocalRevision()
     dispatch({ type: 'set', edits, pushHistory })
   }, [bumpLocalRevision])
+
+  const setCutRanges = useCallback(
+    (cutRanges: CutRange[]) => {
+      const next = { ...editsRef.current, cutRanges }
+      if (editsEqual(editsRef.current, next)) return
+      editsRef.current = next
+      bumpLocalRevision()
+      dispatch({ type: 'addCuts', cutRanges })
+    },
+    [bumpLocalRevision],
+  )
 
   /** One undo step for a full producer patch (not per-field). */
   const applyProducerPatch = useCallback(
@@ -231,9 +250,12 @@ export function useEditorState(
           : snapped
         cuts = mergeCutRanges([...cuts, nextRange])
       }
-      setEdits({ ...editsRef.current, cutRanges: cuts })
+      const nextEdits = { ...editsRef.current, cutRanges: cuts }
+      editsRef.current = nextEdits
+      bumpLocalRevision()
+      dispatch({ type: 'addCuts', cutRanges: cuts })
     },
-    [setEdits, wordSpans],
+    [bumpLocalRevision, wordSpans],
   )
 
   const addCutRange = useCallback(
@@ -597,6 +619,7 @@ export function useEditorState(
     clearProducerStrip,
     addCutRange,
     addCutRanges,
+    setCutRanges,
     setWordFix,
     restoreWord,
     restoreCutRange,

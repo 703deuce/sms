@@ -37,7 +37,8 @@ def test_caption_horizontal_margins_scale_with_play_res():
         assert "WrapStyle: 2" in text
 
 
-def test_emoji_by_word_renders_overlay_line():
+def test_emoji_by_word_not_in_ass_libass():
+    """Emoji export uses bundled Twemoji PNGs in burn_captions, not libass glyphs."""
     with tempfile.TemporaryDirectory() as td:
         ass = Path(td) / "t.ass"
         build_ass(
@@ -48,8 +49,7 @@ def test_emoji_by_word_renders_overlay_line():
             play_h=1280,
         )
         text = ass.read_text()
-        assert "🔥" in text
-        assert "\\pos(" in text
+        assert "🔥" not in text
 
 
 def test_all_presets_ass_tags():
