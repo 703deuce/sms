@@ -652,7 +652,8 @@ def resolve_video_picker_stream_ranges(duration_ms: int) -> list[tuple[int, int]
 
 
 def _gemini_transient_status(status: int) -> bool:
-    return status in (429, 503, 502, 504) or status >= 500
+    # 429 is quota — retrying burns free-tier budget; fall through to lite model instead.
+    return status in (503, 502, 504) or status >= 500
 
 
 _GEMINI_TRANSIENT_BACKOFF_S = (2.0, 5.0, 12.0, 25.0)
@@ -667,7 +668,7 @@ def _log_video_picker_model_fallback(
     status: int | None = None,
 ) -> None:
     print(
-        f"[clipper:video_picker] WARNING {json.dumps({'event': 'model_fallback', 'chunk': chunk_label, 'from': from_model, 'to': to_model, 'reason': reason, 'status': status})}",
+        f"[clipper:video_picker] ERROR {json.dumps({'event': 'model_fallback', 'chunk': chunk_label, 'from': from_model, 'to': to_model, 'reason': reason, 'status': status})}",
         flush=True,
     )
 
@@ -1128,6 +1129,15 @@ def watch_video_file(
                     if last_status == 429 or "quota exceeded" in last_err.lower():
                         meta["rate_limited"] = True
                         meta["status"] = last_status or 429
+                        from clips_worker.picker.picker_errors import gemini_error_log_fields
+
+                        _summary, quota = gemini_error_log_fields(last_err)
+                        if quota:
+                            meta["quota"] = quota
+                        print(
+                            f"[clipper:video_picker] ERROR {json.dumps({'event': 'gemini_rate_limited', 'chunk': chunk_label, 'model': active_model, 'status': last_status, 'quota': quota})}",
+                            flush=True,
+                        )
                     break
 
                 try:

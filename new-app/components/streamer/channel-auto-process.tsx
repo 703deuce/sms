@@ -10,10 +10,14 @@ export function ChannelAutoProcessToggle({
   channelId,
   connected,
   initial,
+  rollingEnabled = false,
+  platform = 'twitch',
 }: {
   channelId: string
   connected: boolean
   initial: boolean
+  rollingEnabled?: boolean
+  platform?: string
 }) {
   const [checked, setChecked] = useState(initial)
   const [busy, setBusy] = useState(false)
@@ -27,7 +31,13 @@ export function ChannelAutoProcessToggle({
         body: JSON.stringify({ autoProcess: next }),
       })
       setChecked(next)
-      toast.success(next ? 'Auto-import enabled when stream ends' : 'Auto-import off')
+      toast.success(
+        next
+          ? platform === 'twitch' && rollingEnabled
+            ? 'Live follow on — auto-clip while live and after stream ends'
+            : 'Auto-import enabled when stream ends'
+          : 'Auto-import off',
+      )
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not update channel')
     } finally {
@@ -43,10 +53,16 @@ export function ChannelAutoProcessToggle({
           disabled={!connected || busy}
           onCheckedChange={(v) => void onChange(v === true)}
         />
-        <Label className="font-normal">Auto-import VOD when stream ends</Label>
+        <Label className="font-normal">
+          {platform === 'twitch' && rollingEnabled
+            ? 'Follow live & auto-clip'
+            : 'Auto-import VOD when stream ends'}
+        </Label>
       </label>
       <p className="text-xs text-muted-foreground pl-6">
-        Waits for the platform VOD, then queues the same highlight pipeline as a pasted link (not live clipping).
+        {platform === 'twitch' && rollingEnabled
+          ? 'EventSub while connected: pulls new archive minutes during the stream, then a final pass when you go offline.'
+          : 'Waits for the platform VOD, then queues the same highlight pipeline as a pasted link (not live clipping).'}
       </p>
     </div>
   )

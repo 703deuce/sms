@@ -82,7 +82,7 @@ export async function beginTwitchRollingSession(
         state: {
           processMode: 'rolling',
           streamSessionId: streamSessionId || archive?.streamId || undefined,
-          rolling: { live: true, chunkMin: DEFAULT_CHUNK_MIN },
+          rolling: { live: true, chunkMin: DEFAULT_CHUNK_MIN, sessionStartedAt: startedAt.toISOString() },
         },
       },
     })

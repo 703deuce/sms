@@ -52,7 +52,7 @@ export function ClipFillerReview({
 
   const orderedWords = useMemo(
     () => editorWordsForClipFillerReview(clipId, words, edits, clipBounds),
-    [clipId, words, edits.trim.in, edits.trim.out, clipBounds],
+    [clipId, words, edits.trim.in, edits.trim.out, edits.cutRanges, clipBounds],
   )
   const cutRanges = edits.cutRanges ?? []
   const deletedSet = useMemo(() => deletedEditorWordIds(orderedWords, cutRanges), [orderedWords, cutRanges])

@@ -731,6 +731,17 @@ def run_m4_pipeline(
                     job_id,
                     {"projectStatus": "FINDING_CLIPS", "stage": "picker_done", "progress": 55, "jobStatus": "RUNNING"},
                 )
+                vp_cache = (job_pl_state.get("pickerCache") or {}).get("videoPicker") or {}
+                if vp_cache.get("model_used"):
+                    post_progress(
+                        job_id,
+                        {
+                            "videoPickerModel": vp_cache.get("model_used"),
+                            "videoPickerModelRequested": vp_cache.get("model_requested"),
+                            "videoPickerFallback": bool(vp_cache.get("model_fallback")),
+                            "videoPickerFallbackReason": vp_cache.get("fallback_reason"),
+                        },
+                    )
                 from clips_worker.headstart_render import await_headstart_render
 
                 with stage_span("headstart_render", heartbeat=True):

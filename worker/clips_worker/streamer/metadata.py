@@ -47,14 +47,19 @@ def enrich_streamer_meta(
     channel = None
     if vod.get("channelLogin"):
         channel = vod["channelLogin"]
+    vod_base_ms = int(vod.get("rangeStartMs") or 0)
+    abs_clip_start = vod_base_ms + int(clip_start_ms)
+    abs_peak = vod_base_ms + int(peak_ms)
     meta = {
         "game": game,
         "vodTitle": vod.get("title"),
         "channel": channel,
-        "vodOffsetMs": clip_start_ms,
-        "vodUrlAt": twitch_vod_timestamp_url(vod.get("url"), clip_start_ms),
+        "vodOffsetMs": abs_clip_start,
+        "vodUrlAt": twitch_vod_timestamp_url(vod.get("url"), abs_clip_start),
         "platform": vod.get("platform"),
     }
     streamer["meta"] = meta
+    streamer["vodRangeStartMs"] = vod_base_ms
+    streamer["peakMs"] = abs_peak
     out = {**ai_meta, "streamer": streamer}
     return out

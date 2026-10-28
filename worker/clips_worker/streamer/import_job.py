@@ -111,18 +111,225 @@ def _allow_twitch_growing_vod(vod: dict) -> bool:
     return int(end) > start
 
 
-def _has_pending_stream_import(conn, project_id: str, vod_id: str) -> bool:
+def _has_pending_stream_import(conn, project_id: str, vod_id: str, *, exclude_job_id: str | None = None) -> bool:
     with conn.cursor() as cur:
         cur.execute(
             """
             SELECT 1 FROM clip_jobs
             WHERE "projectId"=%s AND type='STREAM_IMPORT' AND status IN ('QUEUED','RUNNING')
               AND payload->>'vodId'=%s
+              AND (%s::text IS NULL OR id <> %s)
+            LIMIT 1
+            """,
+            (project_id, vod_id, exclude_job_id, exclude_job_id),
+        )
+        return cur.fetchone() is not None
+
+
+def _has_pending_stream_analyze(conn, project_id: str, vod_id: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1 FROM clip_jobs
+            WHERE "projectId"=%s AND type='STREAM_ANALYZE' AND status IN ('QUEUED','RUNNING')
+              AND payload->>'vodId'=%s
             LIMIT 1
             """,
             (project_id, vod_id),
         )
         return cur.fetchone() is not None
+
+
+def _rolling_import_idle_done(
+    conn,
+    *,
+    job: dict,
+    vod: dict,
+    project_id: str,
+    vod_id: str,
+    post_progress,
+    reason: str,
+) -> None:
+    from clips_worker.streamer.rolling_ingest import rolling_chunk_min
+
+    state = _vod_state_dict(vod)
+    rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
+    if rolling.get("live") and not rolling.get("finalize"):
+        chunk_min = rolling_chunk_min(state)
+        _schedule_rolling_import_tick(conn, project_id=project_id, vod_id=vod_id, chunk_min=chunk_min)
+    print(
+        f"[clipper:autopull] rolling_import_deferred vodId={vod_id} projectId={project_id} "
+        f"jobId={job['id']} reason={reason}",
+        flush=True,
+    )
+    post_progress(
+        job["id"],
+        {"projectStatus": "PREPARING", "stage": "live_ingest", "progress": 18, "jobStatus": "DONE"},
+    )
+
+
+def _rolling_preflight_after_meta(
+    conn,
+    *,
+    job: dict,
+    vod: dict,
+    project_id: str,
+    vod_id: str,
+    payload: dict,
+    post_progress,
+    meta_dur_s: float,
+) -> bool:
+    """Plan rolling window or defer. Returns True when this import job should exit."""
+    if not _rolling_import_mode(vod):
+        return False
+    from clips_worker.streamer.rolling_ingest import (
+        apply_rolling_pull_plan,
+        rolling_chunk_min,
+        stop_rolling_session,
+    )
+
+    if _has_pending_stream_analyze(conn, project_id, vod_id):
+        _rolling_import_idle_done(
+            conn,
+            job=job,
+            vod=vod,
+            project_id=project_id,
+            vod_id=vod_id,
+            post_progress=post_progress,
+            reason="analyze_pending",
+        )
+        return True
+    if _has_pending_stream_import(conn, project_id, vod_id, exclude_job_id=str(job["id"])):
+        _rolling_import_idle_done(
+            conn,
+            job=job,
+            vod=vod,
+            project_id=project_id,
+            vod_id=vod_id,
+            post_progress=post_progress,
+            reason="import_pending",
+        )
+        return True
+
+    rolling_finalize = bool(payload.get("rollingFinalize"))
+    state = _vod_state_dict(vod)
+    rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
+    finalize = rolling_finalize or bool(rolling.get("finalize"))
+    total_ms = int(max(0.0, meta_dur_s) * 1000)
+    plan_out = apply_rolling_pull_plan(
+        conn,
+        vod,
+        total_vod_ms=total_ms,
+        finalize=finalize,
+        job_id=str(job["id"]),
+    )
+    if plan_out == "stop_session":
+        stop_rolling_session(conn, vod_id, reason="max_session_hours")
+        post_progress(
+            job["id"],
+            {"projectStatus": "PREPARING", "stage": "live_ingest", "progress": 18, "jobStatus": "DONE"},
+        )
+        return True
+    if plan_out is None:
+        if finalize:
+            stop_rolling_session(conn, vod_id, reason="stream_offline")
+        else:
+            _rolling_import_idle_done(
+                conn,
+                job=job,
+                vod=vod,
+                project_id=project_id,
+                vod_id=vod_id,
+                post_progress=post_progress,
+                reason="no_new_vod_ms",
+            )
+        return True
+    return False
+
+
+def _complete_rolling_window_import(
+    conn,
+    *,
+    job: dict,
+    vod: dict,
+    project_id: str,
+    vod_id: str,
+    payload: dict,
+    state: dict,
+    meta: dict,
+    duration_ms: int,
+    post_progress,
+    hb,
+) -> None:
+    from clips_worker.streamer.rolling_ingest import (
+        mark_rolling_pull_complete,
+        rolling_chunk_min,
+        stop_rolling_session,
+    )
+
+    end_ms = int(vod.get("rangeEndMs") or 0)
+    mark_rolling_pull_complete(conn, vod_id, end_ms)
+    prior = _vod_state_dict(vod)
+    merged_state = {**prior, **state, "processMode": "rolling"}
+    pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "auto")
+    analyze_id = f"job_{uuid.uuid4().hex}"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE clip_projects
+            SET title=COALESCE(%s, title), stage='live_ingest', progress=20, "updatedAt"=NOW()
+            WHERE id=%s
+            """,
+            (meta.get("title"), project_id),
+        )
+        cur.execute(
+            """
+            UPDATE stream_vods
+            SET title=%s, category=%s, "durationMs"=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
+            WHERE id=%s
+            """,
+            (
+                meta.get("title"),
+                meta.get("category"),
+                duration_ms,
+                json.dumps(meta.get("chapters")) if meta.get("chapters") else None,
+                json.dumps(merged_state),
+                vod_id,
+            ),
+        )
+        cur.execute(
+            """
+            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
+            VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
+            """,
+            (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
+        )
+    conn.commit()
+    rolling_finalize = bool(payload.get("rollingFinalize"))
+    rolling = prior.get("rolling") if isinstance(prior.get("rolling"), dict) else {}
+    live = bool(rolling.get("live")) and not rolling_finalize
+    finalize = rolling_finalize or bool(rolling.get("finalize"))
+    chunk_min = rolling_chunk_min(prior)
+    if live and not finalize:
+        _schedule_rolling_import_tick(
+            conn,
+            project_id=project_id,
+            vod_id=vod_id,
+            chunk_min=chunk_min,
+        )
+    elif finalize:
+        stop_rolling_session(conn, vod_id, reason="stream_offline")
+    cleanup_vod_import_dir(vod_id)
+    hb.update(stage="live_ingest", progress=22)
+    post_progress(
+        job["id"],
+        {
+            "projectStatus": "QUEUED",
+            "stage": "live_ingest",
+            "progress": 22,
+            "jobStatus": "DONE",
+        },
+    )
 
 
 def _schedule_rolling_import_tick(
@@ -166,6 +373,8 @@ def _section_from_range(start_ms: int, end_ms: int | None) -> str | None:
 
 def _maybe_complete_import_from_state(conn, vod: dict, job: dict, project_id: str, vod_id: str, post_progress) -> bool:
     """Idempotent: skip re-download when audio is already in storage."""
+    if _rolling_import_mode(vod):
+        return False
     state = vod.get("state") or {}
     if isinstance(state, str):
         state = json.loads(state)
@@ -323,6 +532,18 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
         meta_raw = metadata(url, allow_twitch_growing_vod=allow_growing)
         meta = parse_metadata(meta_raw)
         dur_s = meta["duration_s"] or 0
+        if _rolling_preflight_after_meta(
+            conn,
+            job=job,
+            vod=vod,
+            project_id=project_id,
+            vod_id=vod_id,
+            payload=payload,
+            post_progress=post_progress,
+            meta_dur_s=float(dur_s),
+        ):
+            cleanup_vod_import_dir(vod_id)
+            return
         effective_ms = _effective_duration_ms(vod, dur_s)
         _enforce_paste_vod_duration_cap(vod, effective_ms)
         cap_err = check_cap(conn, workspace_id, effective_ms // 1000)
@@ -402,6 +623,21 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             growing = bool(meta_raw.get("growing_vod"))
             rolling = prior_state.get("rolling") if isinstance(prior_state.get("rolling"), dict) else {}
             chunk_min = int(rolling.get("chunkMin") or 12)
+            if _rolling_import_mode(vod):
+                _complete_rolling_window_import(
+                    conn,
+                    job=job,
+                    vod=vod,
+                    project_id=project_id,
+                    vod_id=vod_id,
+                    payload=payload,
+                    state=state,
+                    meta=meta,
+                    duration_ms=duration_ms,
+                    post_progress=post_progress,
+                    hb=hb,
+                )
+                return
             if allow_growing and growing and not rolling_finalize:
                 with conn.cursor() as cur:
                     cur.execute(

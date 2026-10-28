@@ -4,6 +4,7 @@ import { Page, PageHeader } from '@/components/app/page-primitives'
 import { ObsFallbackDocs } from '@/components/streamer/obs-fallback-docs'
 import { Button } from '@/components/ui/button'
 import { ChannelAutoProcessToggle } from '@/components/streamer/channel-auto-process'
+import { ChannelLiveFollowStatus } from '@/components/streamer/channel-live-follow-status'
 import { ChannelClipLengthSettings } from '@/components/streamer/channel-clip-length-settings'
 import { VodSavingAlert } from '@/components/streamer/vod-saving-alert'
 import type { VodAvailabilityView } from '@/lib/streamer/vod-availability'
@@ -24,6 +25,18 @@ export default async function StreamerChannelPage({ params }: { params: Promise<
   const ps = (channel.platformState as Record<string, unknown>) || {}
   const vodSaving = ps.vodSaving as VodAvailabilityView | undefined
   const skippedStreams = Array.isArray(ps.skippedStreams) ? ps.skippedStreams : []
+  const helixLive = Boolean((ps.live as { startedAt?: string } | undefined)?.startedAt)
+  const rollingVod = flags.twitchRollingEnabled
+    ? await prisma.streamVod.findFirst({
+        where: { channelId: channel.id, triggeredBy: 'auto' },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, projectId: true, state: true },
+      })
+    : null
+  const rollingState =
+    rollingVod?.state && typeof rollingVod.state === 'object'
+      ? ((rollingVod.state as Record<string, unknown>).rolling as Record<string, unknown> | undefined)
+      : undefined
 
   return (
     <Page>
@@ -62,6 +75,16 @@ export default async function StreamerChannelPage({ params }: { params: Promise<
             channelId={channel.id}
             connected={channel.status === 'CONNECTED'}
             initial={channel.autoProcess}
+            platform={channel.platform}
+            rollingEnabled={flags.twitchRollingEnabled && flags.autopullUiEnabled}
+          />
+          <ChannelLiveFollowStatus
+            platform={channel.platform}
+            autoProcess={channel.autoProcess}
+            rollingEnabled={flags.twitchRollingEnabled && flags.autopullUiEnabled}
+            helixLive={helixLive}
+            rolling={rollingState as Parameters<typeof ChannelLiveFollowStatus>[0]['rolling']}
+            projectId={rollingVod?.projectId}
           />
           <ChannelClipLengthSettings channelId={channel.id} initialSettings={channel.settings} />
           <VodSavingAlert initial={vodSaving} channelId={channel.id} />

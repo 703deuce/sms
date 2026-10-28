@@ -77,6 +77,10 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
     if not vod_id:
         raise RuntimeError("missing vodId")
 
+    from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
+
+    schedule_modal_warmup_background()
+
     from clips_worker.stage_log import bind_stage_context, stage_span
 
     vod = _load_vod(conn, vod_id)

@@ -29,6 +29,17 @@ from clips_worker.streamer.progress import eta_seconds
 from clips_worker.streamer.segments import cut_local_segment, download_segment
 
 
+def _clip_vod_range_start_ms(clip: dict, vod_default: int) -> int:
+    meta = clip.get("aiMeta") or {}
+    if isinstance(meta, str):
+        meta = json.loads(meta) if meta else {}
+    sm = (meta.get("streamer") or {}) if isinstance(meta, dict) else {}
+    if sm.get("vodRangeStartMs") is not None:
+        return int(sm["vodRangeStartMs"])
+    return vod_default
+
+
+
 def _checkpoint_segment_key(conn, vod_id: str, state: dict, clip_id: str, seg_key: str) -> dict:
     merged = dict(state)
     keys = dict(merged.get("segmentKeys") or {})
@@ -260,7 +271,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
             if not layout_state and clips:
                 sample = td_path / "layout_sample.mp4"
                 first = clips[0]
-                fs = max(0.0, (vod_range_start_ms + int(first["startMs"])) / 1000.0 - 2)
+                fs = max(0.0, (_clip_vod_range_start_ms(first, vod_range_start_ms) + int(first["startMs"])) / 1000.0 - 2)
                 fe = fs + 30
                 seg_src = layout_video or local_upload
                 if seg_src:
@@ -291,8 +302,9 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 # Clip times are relative to the analyzed slice; video fetch uses absolute VOD time.
                 audio_seg_start_s = max(0.0, start_ms / 1000.0 - pad)
                 audio_seg_end_s = end_ms / 1000.0 + pad
-                video_seg_start_s = max(0.0, (vod_range_start_ms + start_ms) / 1000.0 - pad)
-                video_seg_end_s = (vod_range_start_ms + end_ms) / 1000.0 + pad
+                clip_vod_start = _clip_vod_range_start_ms(clip, vod_range_start_ms)
+                video_seg_start_s = max(0.0, (clip_vod_start + start_ms) / 1000.0 - pad)
+                video_seg_end_s = (clip_vod_start + end_ms) / 1000.0 + pad
                 seg_path = td_path / f"seg_{clip_id}.mp4"
 
                 with stage_span("clip_render", heartbeat=True, clip_index=idx, clip_id=clip_id):
@@ -319,9 +331,9 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                         log_context={"vodId": vod_id, "clipId": clip_id},
                     )
                     true_end_ms = int(
-                        vod_range_start_ms + end_ms + (true_start_ms - int(audio_seg_start_s * 1000))
+                        clip_vod_start + end_ms + (true_start_ms - int(audio_seg_start_s * 1000))
                     )
-                    true_start_abs_ms = vod_range_start_ms + true_start_ms
+                    true_start_abs_ms = clip_vod_start + true_start_ms
 
                     seg_key = clip_segment_key(workspace_id, project_id, clip_id)
                     upload_file(seg_key, seg_path, "video/mp4")
