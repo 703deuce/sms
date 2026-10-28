@@ -9,11 +9,11 @@ export type FixedClipLengthSeconds = (typeof fixedClipLengthSeconds)[number]
 export type ClipLengthChoice = 'auto' | FixedClipLengthSeconds
 
 export const clipLengthChoiceLabels: Record<ClipLengthChoice, string> = {
-  auto: 'Auto',
-  15: '15s',
-  30: '30s',
-  60: '60s',
-  90: '90s',
+  auto: 'Auto (AI picks, up to 90s)',
+  15: 'Up to 15s',
+  30: 'Up to 30s',
+  60: 'Up to 60s',
+  90: 'Up to 90s',
 }
 
 export const clipLengthChoices: ClipLengthChoice[] = ['auto', 15, 30, 60, 90]

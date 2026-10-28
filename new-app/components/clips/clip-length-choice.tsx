@@ -21,7 +21,7 @@ export function ClipLengthChoice({
     <div className={cn('flex flex-col gap-2', className)}>
       <Label>Clip length</Label>
       <p className="text-xs text-muted-foreground">
-        Auto lets the AI pick length per moment (up to 90s). Fixed caps each clip at your choice.
+        Auto lets the AI pick length per moment (up to 90s). Other options set a maximum length per clip.
       </p>
       <div className="flex flex-wrap gap-2">
         {clipLengthChoices.map((choice) => (
