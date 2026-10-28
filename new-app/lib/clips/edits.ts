@@ -49,6 +49,7 @@ export type ClipEditsV2 = {
     mode:
       | 'speaker_follow'
       | 'fit_blur'
+      | 'fit_top'
       | 'full_frame'
       | 'center_crop'
       | 'subject_follow'
@@ -80,6 +81,12 @@ export type ClipEditsV2 = {
   exportTemplate?: ClipExportTemplate
   /** Bundled Kenney SFX on export render (off | subtle | meme). */
   exportSfx?: 'off' | 'subtle' | 'meme'
+  /** Stream chat burn-in (VOD chat replay in lower blur band). */
+  chatOverlay?: {
+    enabled?: boolean
+    position?: 'gameplay_right' | 'gameplay_left' | 'bottom'
+    opacity?: number
+  }
   /** Trim end for loop-friendly Shorts/TikTok (default on for those presets). */
   loopFriendlyEnd?: boolean
 }
@@ -125,6 +132,7 @@ function migrateLegacyEdits(raw: Record<string, unknown>, bounds: ClipBounds): R
 const LAYOUT_MODES: ClipEditsV2['layout']['mode'][] = [
   'speaker_follow',
   'fit_blur',
+  'fit_top',
   'full_frame',
   'center_crop',
   'subject_follow',
@@ -277,6 +285,20 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
         : undefined,
     hookOverlay: normalizeHookOverlay(o.hookOverlay),
     exportTemplate: normalizeExportTemplate(o.exportTemplate),
+    chatOverlay: normalizeChatOverlay(o.chatOverlay),
+  }
+}
+
+function normalizeChatOverlay(raw: unknown): ClipEditsV2['chatOverlay'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const c = raw as Record<string, unknown>
+  const opacity = Number(c.opacity)
+  const pos = c.position
+  return {
+    enabled: Boolean(c.enabled),
+    position:
+      pos === 'gameplay_left' || pos === 'bottom' || pos === 'gameplay_right' ? pos : 'bottom',
+    opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.2, opacity)) : 0.6,
   }
 }
 

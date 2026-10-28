@@ -43,6 +43,7 @@ const LAYOUT_LABELS: Record<string, string> = {
   speaker_follow: 'Speaker follow',
   subject_follow: 'Subject follow',
   fit_blur: 'Fit + blur',
+  fit_top: 'Headline top',
   full_frame: 'Full frame',
   multiperson: 'Multi-person',
   screen_pip: 'Screen + cam',

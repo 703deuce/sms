@@ -285,18 +285,53 @@ def initial_clip_edits(settings: dict) -> dict:
     return edits
 
 
-def streamer_initial_clip_edits(settings: dict, vod: dict | None = None) -> dict:
-    """Default stream clip editor state: fit+blur letterbox (not face/stack auto crop)."""
+def streamer_initial_clip_edits(
+    settings: dict,
+    vod: dict | None = None,
+    *,
+    suggested_headline: str = "",
+    clip_start_ms: int = 0,
+    clip_end_ms: int = 0,
+) -> dict:
+    """Default stream clip editor: fit_top + headline bar when headline on, else fit_blur."""
+    from clips_worker.stream_headline_ass import format_headline_for_export
+
     edits = initial_clip_edits(settings)
-    edits["layout"] = {"mode": "fit_blur", "shotOverrides": []}
+    edits["v"] = 2
+    if clip_end_ms > clip_start_ms:
+        edits["trim"] = {"in": int(clip_start_ms), "out": int(clip_end_ms)}
+
     platform = str((vod or {}).get("platform") or "twitch").lower()
     if platform not in ("twitch", "kick"):
         platform = "twitch"
+    login = str((vod or {}).get("channelLogin") or "").strip().lower()
     channel_url = (vod or {}).get("url") or ""
+    if login:
+        channel_url = f"https://kick.com/{login}" if platform == "kick" else f"https://twitch.tv/{login}"
+    elif channel_url and not str(channel_url).startswith("http"):
+        channel_url = f"https://{channel_url}"
+
+    headline_text = format_headline_for_export(suggested_headline or "")
+    headline_on = bool(headline_text)
+    layout_mode = "fit_top" if headline_on else "fit_blur"
+    edits["layout"] = {"mode": layout_mode, "shotOverrides": []}
+
+    streamer_cfg = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
+    chat_cfg = streamer_cfg.get("chatOverlay") if isinstance(streamer_cfg.get("chatOverlay"), dict) else {}
+    edits["chatOverlay"] = {
+        "enabled": bool(chat_cfg.get("enabled")),
+        "position": chat_cfg.get("position") or "bottom",
+        "opacity": float(chat_cfg.get("opacity") or 0.6),
+    }
+
     edits["exportTemplate"] = {
-        "headlineBar": {"enabled": False, "text": ""},
-        "platformBadge": {"enabled": False},
-        "channelLink": {"enabled": False, "url": channel_url[:200] if channel_url else None},
+        "headlineBar": {"enabled": headline_on, "text": headline_text},
+        "platformBadge": {"enabled": True},
+        "channelLink": {
+            "enabled": bool(channel_url),
+            "url": str(channel_url)[:200] if channel_url else None,
+        },
+        "suggestedHeadline": headline_text or suggested_headline[:120] if suggested_headline else "",
         "platform": platform,
         "exportPlatformId": "tiktok",
     }

@@ -493,6 +493,15 @@ export function ExportDialog({
               profanityCensor: Boolean(tpl.profanityCensor),
             })
           }}
+          onPatchEdits={(patch) => {
+            if (patch.layout?.mode) onLayoutModeChange?.(patch.layout.mode)
+            if (patch.layout || patch.chatOverlay) {
+              void patchClip(clipId, { edits: patch }).catch(() => {
+                toast.error('Could not save clip settings')
+              })
+            }
+          }}
+          chatAvailable={platform === 'twitch' || platform === 'kick'}
           savedChannels={savedChannels}
           onChannelsRefresh={refreshChannels}
         />

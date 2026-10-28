@@ -7,6 +7,7 @@ from pathlib import Path
 
 _EMOJI_RE = re.compile(r"([\U0001F300-\U0001FAFF\U00002700-\U000027BF]+)\s*$")
 _HEADLINE_FONT = "Montserrat"
+_HEADLINE_FONT_FIT_TOP = "Anton"
 _EMOJI_FONT = "Noto Color Emoji"
 _MAX_LINES = 3
 _HEADLINE_CHAR_LIMIT = 72
@@ -105,10 +106,17 @@ def headline_ass_content(
     play_h: int,
     bar_h: int,
     duration_ms: int,
+    bar_y: int = 0,
+    fit_top: bool = False,
 ) -> str:
     display = prepare_headline_display(headline)
-    fontsize = max(28, min(50, int(bar_h * 0.20)))
-    y_center = int(bar_h * 0.55)
+    if fit_top:
+        fontsize = max(56, min(92, int(bar_h * 0.18)))
+        font = _HEADLINE_FONT_FIT_TOP
+    else:
+        fontsize = max(28, min(50, int(bar_h * 0.20)))
+        font = _HEADLINE_FONT
+    y_center = bar_y + int(bar_h * 0.52)
     cs = max(1, duration_ms) // 10
     h_part, rem = divmod(cs, 360000)
     m_part, rem = divmod(rem, 6000)
@@ -128,7 +136,7 @@ ScaledBorderAndShadow: yes
 {fonts_lines}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Headline,{_HEADLINE_FONT},{fontsize},&H00000000,&H00000000,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,8,36,36,{max(8, bar_h // 10)},1
+Style: Headline,{font},{fontsize},&H00000000,&H00000000,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,8,20,20,{max(8, bar_h // 12)},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -146,10 +154,20 @@ def burn_stream_headline(
     play_h: int,
     bar_h: int,
     duration_ms: int,
+    bar_y: int = 0,
+    fit_top: bool = False,
 ) -> Path:
     ass = video.parent / "stream_headline.ass"
     ass.write_text(
-        headline_ass_content(headline, play_w=play_w, play_h=play_h, bar_h=bar_h, duration_ms=duration_ms),
+        headline_ass_content(
+            headline,
+            play_w=play_w,
+            play_h=play_h,
+            bar_h=bar_h,
+            duration_ms=duration_ms,
+            bar_y=bar_y,
+            fit_top=fit_top,
+        ),
         encoding="utf-8",
     )
     fontsdir = _headline_fonts_dir()

@@ -178,6 +178,7 @@ export function ClipCard({
             previewUrl={clip.previewUrl}
             posterUrl={clip.posterUrl}
             previewEdits={previewEdits}
+            overlayBurnedIn={isStreamer}
           />
         ) : null}
         <div className="absolute left-2 top-2" title={why ?? undefined}>

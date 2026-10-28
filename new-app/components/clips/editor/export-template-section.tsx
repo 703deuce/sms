@@ -32,6 +32,8 @@ export function ExportTemplateSection({
   savedChannels = [],
   onChannelsRefresh,
   onChange,
+  onPatchEdits,
+  chatAvailable = true,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -42,6 +44,9 @@ export function ExportTemplateSection({
   savedChannels?: ClipUserStreamerChannelRow[]
   onChannelsRefresh?: () => void
   onChange: (tpl: ClipExportTemplate) => void
+  onPatchEdits?: (patch: Partial<ClipEditsV2>) => void
+  /** False when VOD has no chat log — toggle disabled with note. */
+  chatAvailable?: boolean
 }) {
   const tpl = edits.exportTemplate || {}
   const headlineAllowed = headlineBarAllowedForLayout(layoutMode)
@@ -124,17 +129,22 @@ export function ExportTemplateSection({
 
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-border p-3">
-      <p className="text-xs font-medium">Stream headline template (export only)</p>
-      <p className="text-xs text-muted-foreground">Preview stays clean; headline, badge, and link burn in on export.</p>
+      <p className="text-xs font-medium">Stream headline template</p>
+      <p className="text-xs text-muted-foreground">
+        fit_top layout: white headline band, full-width video, blur footer. Toggle headline off for fit_blur.
+      </p>
 
       <div className="flex items-center justify-between gap-2">
         <Label className="text-sm">Headline bar</Label>
         <Switch
           checked={headlineEnabled && headlineAllowed}
           disabled={!headlineAllowed}
-          onCheckedChange={(on) =>
+          onCheckedChange={(on) => {
             setTpl({ headlineBar: { enabled: on, text: headlineText || tpl.suggestedHeadline || '' } })
-          }
+            onPatchEdits?.({
+              layout: { mode: on ? 'fit_top' : 'fit_blur', shotOverrides: edits.layout?.shotOverrides ?? [] },
+            })
+          }}
         />
       </div>
       {!headlineAllowed ? (
@@ -224,6 +234,32 @@ export function ExportTemplateSection({
             onChannelsChange={() => onChannelsRefresh?.()}
           />
         </>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <Label className="text-sm">Show chat</Label>
+          <p className="text-xs text-muted-foreground">
+            Burn VOD chat into the lower blur band (export continues if chat is missing).
+          </p>
+        </div>
+        <Switch
+          checked={Boolean(edits.chatOverlay?.enabled)}
+          disabled={!chatAvailable}
+          onCheckedChange={(on) =>
+            onPatchEdits?.({
+              chatOverlay: {
+                ...edits.chatOverlay,
+                enabled: on,
+                position: edits.chatOverlay?.position ?? 'bottom',
+                opacity: edits.chatOverlay?.opacity ?? 0.6,
+              },
+            })
+          }
+        />
+      </div>
+      {!chatAvailable ? (
+        <p className="text-xs text-muted-foreground">No chat log for this VOD — chat overlay unavailable.</p>
       ) : null}
 
       <div className="flex items-center justify-between gap-2">

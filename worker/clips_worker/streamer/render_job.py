@@ -13,10 +13,11 @@ from pathlib import Path
 from psycopg2.extras import RealDictCursor
 
 from clips_worker.heartbeat import Heartbeat
-from clips_worker.pipeline import clip_keys, initial_clip_edits, mark_project_ready
+from clips_worker.pipeline import clip_keys, mark_project_ready
+from clips_worker.edits_render import normalize_edits
 from clips_worker.deepgram_transcribe import DeepgramTranscribeError, deepgram_api_key
 from clips_worker.gpu.base import TranscribeReq
-from clips_worker.render_clip import ffmpeg_cut, poster_jpg, run_speakercrop, slice_words
+from clips_worker.render_clip import ffmpeg_cut, poster_jpg, slice_words
 from clips_worker.streamer.transcribe_stream import deepgram_caption_model, transcribe_clip_caption
 from clips_worker.streamer.layout.detect_facecam import detect_facecam_layout
 from clips_worker.streamer.layout.render_stack import render_stack_mp4
@@ -152,6 +153,8 @@ class _StreamClipWork:
     seg_key: str
     true_start_abs_ms: int
     true_end_ms: int
+    clip_edits: dict
+    end_ms: int
     gpu_prep: object | None = None
 
 
@@ -405,14 +408,16 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                         pass
                     out_mp4 = td_path / f"out_{clip_id}.mp4"
                     crop_track = td_path / f"crop_{clip_id}.json"
-                    streamer_layout = (settings.get("streamer") or {}).get("layout", "fit_blur")
+                    raw_edits = clip.get("edits") or {}
+                    if isinstance(raw_edits, str):
+                        raw_edits = json.loads(raw_edits) if raw_edits else {}
+                    clip_edits = normalize_edits(raw_edits, start_ms, end_ms)
                     ai_meta = clip.get("aiMeta") or {}
                     if isinstance(ai_meta, str):
                         ai_meta = json.loads(ai_meta)
                     clip_layout = (ai_meta.get("streamer") or {}).get("layout") or layout_state or {}
                     use_stack = (
-                        streamer_layout == "stack"
-                        and isinstance(clip_layout, dict)
+                        isinstance(clip_layout, dict)
                         and clip_layout.get("layout") == "stack"
                         and clip_layout.get("facecam")
                     )
@@ -432,40 +437,10 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             seg_key=seg_key,
                             true_start_abs_ms=true_start_abs_ms,
                             true_end_ms=true_end_ms,
+                            clip_edits=clip_edits,
+                            end_ms=end_ms,
                         )
                     )
-
-            from clips_worker.gpu_encode import render_batch_via_provider, render_provider_enabled
-            from clips_worker.render_clip import prepare_speakercrop_gpu_render
-
-            gpu_ok: dict[str, bool] = {}
-            if pending_work and render_provider_enabled():
-                gpu_preps = []
-                for work in pending_work:
-                    if work.use_stack:
-                        continue
-                    prep = prepare_speakercrop_gpu_render(
-                        work.clip_file,
-                        work.out_mp4,
-                        work.words_path,
-                        settings,
-                        td_path,
-                        clip_start_ms=work.start_ms,
-                        crop_track_out=work.crop_track,
-                        shot_overrides=None,
-                        render_meta=None,
-                        preserve_existing_crop_track=False,
-                        clip_index=work.idx,
-                        workspace_id=workspace_id,
-                        project_id=project_id,
-                        clip_id=work.clip_id,
-                    )
-                    work.gpu_prep = prep
-                    if prep is not None:
-                        gpu_preps.append(prep)
-                if gpu_preps:
-                    with stage_span("gpu_render_batch", heartbeat=True, clip_count=len(gpu_preps)):
-                        gpu_ok = render_batch_via_provider(conn, gpu_preps)
 
             for work in pending_work:
                 with stage_span("clip_render", heartbeat=True, clip_index=work.idx, clip_id=work.clip_id):
@@ -473,23 +448,26 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                         if work.use_stack:
                             render_stack_mp4(work.clip_file, work.out_mp4, work.clip_layout)
                             rendered = work.out_mp4
-                        elif work.gpu_prep and gpu_ok.get(work.clip_id):
-                            rendered = work.out_mp4
                         else:
-                            rendered = run_speakercrop(
+                            from clips_worker.streamer.layout.stream_preview_render import (
+                                render_stream_clip_preview,
+                            )
+
+                            render_stream_clip_preview(
                                 work.clip_file,
                                 work.out_mp4,
-                                work.words_path,
-                                settings,
-                                td_path,
+                                edits=work.clip_edits,
+                                settings=settings,
+                                clip_words=work.clip_words,
+                                work_dir=td_path / f"render_{work.clip_id}",
                                 clip_start_ms=work.start_ms,
-                                crop_track_out=work.crop_track,
+                                clip_end_ms=work.end_ms,
                                 conn=conn,
-                                workspace_id=workspace_id,
                                 project_id=project_id,
                                 clip_id=work.clip_id,
-                                clip_index=work.idx,
+                                vod_id=vod_id,
                             )
+                            rendered = work.out_mp4
                     ai_streamer = dict((work.ai_meta.get("streamer") or {}))
                     if work.clip_layout:
                         ai_streamer["layout"] = work.clip_layout
@@ -527,7 +505,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                     work.true_start_abs_ms,
                                     work.true_end_ms,
                                     json.dumps(ai_meta),
-                                    json.dumps(initial_clip_edits(settings)),
+                                    json.dumps(work.clip_edits),
                                     work.clip_id,
                                 ),
                             )

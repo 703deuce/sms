@@ -32,6 +32,7 @@ function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): bo
     mode === 'fill' ||
     mode === 'fit' ||
     mode === 'fit_blur' ||
+    mode === 'fit_top' ||
     mode === 'full_frame'
   ) {
     return false
@@ -318,7 +319,7 @@ export function PreviewStage({
         ) : videoUrl ? (
           <video
             ref={videoRefInner}
-            className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+            className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
             poster={posterUrl ?? undefined}
             onCanPlay={() => setCanPlay(true)}

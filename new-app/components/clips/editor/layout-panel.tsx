@@ -27,6 +27,11 @@ const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string;
   { id: 'grid4', title: 'Grid 4-up', desc: 'Four speakers visible.' },
   { id: 'fit_blur', title: 'Fit with blur', desc: 'Whole shot letterboxed with blurred fill (no headline band).' },
   {
+    id: 'fit_top',
+    title: 'Headline + video',
+    desc: 'CLIPZ-style: white headline band, full-width 16:9 video, blur footer.',
+  },
+  {
     id: 'full_frame',
     title: 'Full frame',
     desc: 'Whole 16:9 stream shot, blur fill, headline room on export (no face tracking).',

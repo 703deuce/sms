@@ -392,7 +392,13 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                         "posterKey": None,
                         "wordsKey": None,
                         "cropKey": None,
-                        "edits": streamer_initial_clip_edits(settings, vod),
+                        "edits": streamer_initial_clip_edits(
+                            settings,
+                            vod,
+                            suggested_headline=(pick.title or pick.hook or "")[:120],
+                            clip_start_ms=pick.start_ms,
+                            clip_end_ms=pick.end_ms,
+                        ),
                         "aiMeta": ai_meta,
                     }
                 )

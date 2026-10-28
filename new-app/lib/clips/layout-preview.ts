@@ -6,6 +6,11 @@ export function layoutUsesLetterboxBlurPreview(mode: ClipEditsV2['layout']['mode
   return mode === 'fit_blur' || mode === 'full_frame'
 }
 
+/** Rick fit_top: preview.mp4 is pre-composed; HTML overlay uses overlayLayout(). */
+export function layoutUsesStreamFitTopPreview(mode: ClipEditsV2['layout']['mode'] | string): boolean {
+  return mode === 'fit_top'
+}
+
 /** Preview + export template: reserve top band for headline bar. */
 export function layoutReservesHeadlineBand(mode: ClipEditsV2['layout']['mode'] | string): boolean {
   return mode === 'full_frame'

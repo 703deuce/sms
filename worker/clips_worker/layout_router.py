@@ -62,13 +62,17 @@ def route_multiperson_layout(
 
 def editor_mode_uses_static_fit_blur(mode: str) -> bool:
     """No face-tracking crop — full 16:9 in frame (fit speakercrop layout)."""
-    return (mode or "").strip() in ("full_frame", "fit_blur")
+    return (mode or "").strip() in ("full_frame", "fit_blur", "fit_top")
+
+
+def editor_mode_uses_stream_frame(mode: str) -> bool:
+    return (mode or "").strip() in ("fit_blur", "fit_top", "full_frame")
 
 
 def editor_layout_to_worker(mode: str) -> str:
     """Map clip editor layout.mode → worker speakercrop layout id (parity with new-app layout-mode-map.ts)."""
     m = (mode or "speaker_follow").strip()
-    if m in ("fit_blur", "full_frame"):
+    if m in ("fit_blur", "full_frame", "fit_top"):
         return "fit"
     if m == "center_crop":
         return "fill"
@@ -134,6 +138,7 @@ _VALID_EDITOR_LAYOUT_MODES = frozenset(
     {
         "speaker_follow",
         "fit_blur",
+        "fit_top",
         "full_frame",
         "center_crop",
         "subject_follow",

@@ -22,6 +22,7 @@ export function normalizeLayoutSegments(
   const modes = new Set<ClipEditsV2['layout']['mode']>([
     'speaker_follow',
     'fit_blur',
+    'fit_top',
     'full_frame',
     'center_crop',
     'subject_follow',

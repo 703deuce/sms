@@ -13,11 +13,13 @@ export function ClipCardVideo({
   previewUrl,
   posterUrl,
   previewEdits,
+  overlayBurnedIn = false,
 }: {
   clipId: string
   previewUrl: string | null
   posterUrl: string | null
   previewEdits?: ClipEditsV2
+  overlayBurnedIn?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -142,7 +144,12 @@ export function ClipCardVideo({
         onMouseLeave={hoverLeave}
       />
       {previewEdits ? (
-        <ExportTemplateOverlay edits={previewEdits} boxWidth={box.w} boxHeight={box.h} />
+        <ExportTemplateOverlay
+          edits={previewEdits}
+          boxWidth={box.w}
+          boxHeight={box.h}
+          burnedIn={overlayBurnedIn}
+        />
       ) : null}
       <div
         className={

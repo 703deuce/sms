@@ -430,6 +430,10 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
     if not vod_id:
         raise RuntimeError("missing vodId")
 
+    from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
+
+    schedule_modal_warmup_background()
+
     from psycopg2.extras import RealDictCursor
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:

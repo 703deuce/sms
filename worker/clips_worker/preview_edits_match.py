@@ -10,6 +10,9 @@ def preview_export_matches(edits: dict, clip_start_ms: int, clip_end_ms: int) ->
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
     if export_template_overlays_active(tpl):
         return False
+    chat = edits.get("chatOverlay") if isinstance(edits.get("chatOverlay"), dict) else {}
+    if chat.get("enabled"):
+        return False
     sfx = str(edits.get("exportSfx") or "off")
     if sfx in ("subtle", "meme"):
         return False

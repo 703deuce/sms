@@ -11,6 +11,7 @@ const EXPORT_LAYOUT_OPTIONS: {
   { id: 'speaker_follow', label: 'Speaker follow', hint: 'Active speaker crop' },
   { id: 'full_frame', label: 'Full frame', hint: 'Whole 16:9, blur fill, headline room' },
   { id: 'fit_blur', label: 'Fit + blur', hint: 'Letterbox, no headline band' },
+  { id: 'fit_top', label: 'Headline top', hint: 'White headline band + full-width video (stream default)' },
   { id: 'center_crop', label: 'Fill crop', hint: 'Edge-to-edge crop' },
 ]
 

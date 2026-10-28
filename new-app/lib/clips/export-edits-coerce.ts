@@ -7,6 +7,7 @@ import type { ClipAiMeta } from '@/lib/clips/clip-results-chips'
 const LAYOUT_MODES = new Set<ClipEditsV2['layout']['mode']>([
   'speaker_follow',
   'fit_blur',
+  'fit_top',
   'full_frame',
   'center_crop',
   'subject_follow',
@@ -61,8 +62,16 @@ export function coerceEditsForPreviewExport(
   let next = base
   const streamer = Boolean(opts?.streamer)
   if (layoutDefault) {
+    const headlineOn = Boolean(
+      base.exportTemplate?.headlineBar?.enabled &&
+        (base.exportTemplate.headlineBar.text?.trim() || base.exportTemplate.suggestedHeadline),
+    )
     if (streamer && (!fromMeta || fromMeta === 'speaker_follow' || fromMeta === 'split')) {
-      next = mergeEditsPatch(next, { layout: { mode: 'fit_blur', shotOverrides: [] } }, bounds)
+      next = mergeEditsPatch(
+        next,
+        { layout: { mode: headlineOn ? 'fit_top' : 'fit_blur', shotOverrides: [] } },
+        bounds,
+      )
     } else if (fromMeta) {
       next = mergeEditsPatch(next, { layout: { mode: fromMeta, shotOverrides: [] } }, bounds)
     } else if (streamer) {

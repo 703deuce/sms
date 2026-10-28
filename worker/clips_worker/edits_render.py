@@ -16,6 +16,7 @@ _log = logging.getLogger(__name__)
 from clips_worker.caption_words import build_caption_words, caption_words_to_render
 from clips_worker.layout_router import (
     editor_mode_uses_static_fit_blur,
+    editor_mode_uses_stream_frame,
     needs_per_segment_layout_export,
     speakercrop_settings_for_layout_mode,
     speakercrop_settings_from_edits,
@@ -712,6 +713,14 @@ def render_edited_clip(
     resolution = settings.get("exportResolution", "720p")
     play_w, play_h = aspect_size(aspect, resolution)
 
+    layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+    if editor_mode_uses_stream_frame(layout_mode):
+        from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
+
+        layout_mp4 = work_dir / "stream_layout.mp4"
+        render_stream_clip_layout(caption_src, layout_mp4, edits, layout_mode, play_w=play_w, play_h=play_h)
+        caption_src = layout_mp4
+
     tpl_censor = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
     if tpl_censor and tpl_censor.get("profanityCensor"):
         from clips_worker.profanity_censor import censor_clip_words_and_audio
@@ -720,6 +729,8 @@ def render_edited_clip(
 
     final = work_dir / "final.mp4"
     cap_edits = edits.get("captions") or {}
+    if layout_mode == "fit_top" and isinstance(cap_edits, dict):
+        cap_edits = {**cap_edits, "marginVPct": 6, "position": "bottom"}
     if int(cap_edits.get("enabled", True)):
         burn_captions(caption_src, caption_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
         caption_src = final
@@ -780,10 +791,9 @@ def render_edited_clip(
         shutil.copy(zoomed, out_mp4)
 
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
-    if tpl:
+    if tpl and not editor_mode_uses_stream_frame(layout_mode):
         from clips_worker.clip_export_template import apply_export_template
 
-        layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
         templated = work_dir / "export_template.mp4"
         apply_export_template(
             out_mp4,
@@ -854,6 +864,39 @@ def render_edited_clip(
                 sfx_out = work_dir / "export_sfx.mp4"
                 apply_export_sfx_mix(out_mp4, sfx_out, events)
                 shutil.copy(sfx_out, out_mp4)
+
+    if conn and project_id and chat_overlay_enabled(edits):
+        from clips_worker.streamer.chat_overlay_render import (
+            apply_chat_overlay_safe,
+            chat_lines_for_clip,
+            chat_overlay_enabled,
+            load_vod_chat_messages,
+            load_vod_for_project,
+        )
+
+        vod = load_vod_for_project(conn, project_id)
+        if vod:
+            msgs = load_vod_chat_messages(conn, vod)
+            abs_start = int(edits.get("trim", {}).get("in") or clip_start_ms)
+            abs_end = int(edits.get("trim", {}).get("out") or clip_end_ms)
+            lines = chat_lines_for_clip(
+                msgs,
+                clip_start_abs_ms=abs_start,
+                clip_end_abs_ms=abs_end,
+                clip_start_rel_ms=clip_start_ms,
+                clip_end_rel_ms=clip_end_ms,
+            )
+            chat_out = work_dir / "chat_overlay.mp4"
+            apply_chat_overlay_safe(
+                out_mp4,
+                chat_out,
+                edits=edits,
+                chat_lines=lines,
+                layout_mode=layout_mode,
+                clip_id=str(clip_id or ""),
+                vod_id=str(vod.get("id") or ""),
+            )
+            shutil.copy(chat_out, out_mp4)
 
     stage("full_pipeline_done")
     return out_mp4, caption_words, build_srt(caption_words)

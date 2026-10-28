@@ -4,6 +4,7 @@ import type { ClipProjectSettings } from '@/lib/clips/settings'
 export function editorLayoutToWorker(mode: string): ClipProjectSettings['layout'] {
   switch (mode) {
     case 'fit_blur':
+    case 'fit_top':
     case 'full_frame':
       return 'fit'
     case 'center_crop':
