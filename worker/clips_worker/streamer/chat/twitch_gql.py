@@ -16,6 +16,7 @@ from clips_worker.streamer.errors import RetryableError
 
 GQL_URL = "https://gql.twitch.tv/gql"
 MAX_MESSAGES = int(os.environ.get("STREAMER_CHAT_MAX_MESSAGES", "300000"))
+DEFAULT_CHAT_FETCH_BUDGET_S = float(os.environ.get("STREAMER_CHAT_FETCH_BUDGET_S", "90"))
 
 # Twitch web GQL client (override only via TWITCH_GQL_CLIENT_ID — never TWITCH_CLIENT_ID).
 DEFAULT_GQL_CLIENT_ID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
@@ -25,6 +26,10 @@ DEFAULT_COMMENTS_HASH = "b70a3591ff0f4e0313d126c6a1502d79a1c02baebb288227c582044
 
 class TwitchChatReplayError(RuntimeError):
     """VOD chat replay failed with a non-retryable error."""
+
+
+class ChatFetchBudgetExceeded(TwitchChatReplayError):
+    """VOD chat replay stopped: time budget exhausted (non-fatal for analyze)."""
 
 
 def gql_client_id() -> str:
@@ -111,13 +116,18 @@ def _gql_errors_text(payload: Any) -> str | None:
     return first.get("message") if isinstance(first, dict) else str(first)
 
 
-def fetch_vod_comments(video_id: str, cursor: str | None = None) -> tuple[list[dict], str | None, bool]:
+def fetch_vod_comments(
+    video_id: str,
+    cursor: str | None = None,
+    *,
+    content_offset_seconds: int = 0,
+) -> tuple[list[dict], str | None, bool]:
     """Fetch one page of VOD comments."""
     variables: dict[str, Any] = {"videoID": video_id}
     if cursor:
         variables["cursor"] = cursor
     else:
-        variables["contentOffsetSeconds"] = 0
+        variables["contentOffsetSeconds"] = max(0, int(content_offset_seconds))
     body = [
         {
             "operationName": "VideoCommentsByOffsetOrCursor",
@@ -175,17 +185,64 @@ def fetch_vod_comments(video_id: str, cursor: str | None = None) -> tuple[list[d
     raise TwitchChatReplayError(f"gql fetch failed after retries: {last_err}")
 
 
-def fetch_all_vod_comments(video_id: str, start_cursor: str | None = None) -> tuple[list[dict], str | None]:
+def fetch_all_vod_comments(
+    video_id: str,
+    start_cursor: str | None = None,
+    *,
+    content_offset_seconds: int = 0,
+    stop_after_seconds: int | None = None,
+    time_budget_s: float | None = None,
+) -> tuple[list[dict], str | None]:
+    """Page VOD chat replay; optional offset/stop window and hard wall-clock budget."""
+    budget = DEFAULT_CHAT_FETCH_BUDGET_S if time_budget_s is None else float(time_budget_s)
+    deadline = time.monotonic() + max(5.0, budget)
+    stop_after = stop_after_seconds
+    offset_s = max(0, int(content_offset_seconds))
     out: list[dict] = []
     cursor = start_cursor
     has_next = True
+    first_page = cursor is None
+    budget_hit = False
+
     while len(out) < MAX_MESSAGES and has_next:
-        batch, cursor, has_next = fetch_vod_comments(video_id, cursor)
-        out.extend(batch)
+        if time.monotonic() >= deadline:
+            budget_hit = True
+            break
+        page_offset = offset_s if first_page and not cursor else 0
+        batch, cursor, has_next = fetch_vod_comments(
+            video_id,
+            cursor,
+            content_offset_seconds=page_offset,
+        )
+        first_page = False
+        if stop_after is not None:
+            for row in batch:
+                t = int(row.get("t_s", 0))
+                if t > stop_after:
+                    has_next = False
+                    break
+                if t >= offset_s:
+                    out.append(row)
+        else:
+            out.extend(batch)
         if not has_next:
             break
         if not cursor:
             break
+
+    if budget_hit:
+        print(
+            f"[clipper:chat] WARNING chat_fetch_budget_exceeded videoId={video_id} "
+            f"budget_s={budget:.0f} offset_s={offset_s} stop_after_s={stop_after} "
+            f"messages={len(out)} — continuing analyze without chat signals",
+            flush=True,
+        )
+        if out:
+            return out[:MAX_MESSAGES], cursor
+        raise ChatFetchBudgetExceeded(
+            f"chat fetch budget {budget:.0f}s exceeded (offset={offset_s}s stop={stop_after})"
+        )
+
     return out[:MAX_MESSAGES], cursor
 
 

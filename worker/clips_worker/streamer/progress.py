@@ -13,6 +13,13 @@ def eta_seconds(done: int, total: int, started_at: float) -> int | None:
     return int(per * remain)
 
 
+def worker_progress_transcription_engine(engine: str | None) -> str | None:
+    """Progress API only accepts deepgram | local_whisper (Zod); omit Modal/Groq labels."""
+    if engine in ("deepgram", "local_whisper"):
+        return engine
+    return None
+
+
 def analyze_progress_payload(
     *,
     stage: str,

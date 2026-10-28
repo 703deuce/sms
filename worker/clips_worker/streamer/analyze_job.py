@@ -10,7 +10,7 @@ from pathlib import Path
 
 from psycopg2.extras import RealDictCursor
 
-from clips_worker.streamer.progress import analyze_progress_payload
+from clips_worker.streamer.progress import analyze_progress_payload, worker_progress_transcription_engine
 from clips_worker.heartbeat import Heartbeat
 from clips_worker.pipeline import insert_clips_batch
 from clips_worker.storage import download_object, put_json, upload_file
@@ -201,7 +201,9 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                     started_at=float(state.get("analyzeStartedAt") or chunk_started),
                 )
                 if getattr(res, "transcription_engine", None):
-                    payload_prog["transcriptionEngine"] = res.transcription_engine
+                    allowed = worker_progress_transcription_engine(res.transcription_engine)
+                    if allowed:
+                        payload_prog["transcriptionEngine"] = allowed
                 if getattr(res, "fallback_reason", None):
                     payload_prog["transcriptionFallbackReason"] = res.fallback_reason
                     if vod_transcribe_provider.startswith("modal") and res.transcription_engine == "deepgram":

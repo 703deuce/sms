@@ -19,6 +19,34 @@ def _replay_disabled() -> bool:
     return not gql_client_id()
 
 
+def _vod_chat_window_s(vod: dict) -> tuple[int, int | None]:
+    """Absolute VOD seconds [start, end] for chat replay (trim range or full analysed span)."""
+    start_ms = int(vod.get("rangeStartMs") or 0)
+    range_end = vod.get("rangeEndMs")
+    dur_ms = int(vod.get("durationMs") or 0)
+    if range_end is not None:
+        end_ms = int(range_end)
+    elif dur_ms > 0:
+        end_ms = start_ms + dur_ms
+    else:
+        end_ms = start_ms
+    start_s = max(0, start_ms // 1000)
+    end_s = max(start_s, end_ms // 1000) if end_ms > start_ms else None
+    return start_s, end_s
+
+
+def _rebase_chat_to_analyzed_span(messages: list[dict], range_start_s: int) -> list[dict]:
+    if range_start_s <= 0 or not messages:
+        return messages
+    rebased: list[dict] = []
+    for row in messages:
+        try:
+            t = int(row.get("t_s", row.get("t", 0)))
+        except (TypeError, ValueError):
+            continue
+        rebased.append({**row, "t_s": t - range_start_s})
+    return rebased
+
 def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
     """
     Returns (messages, chatSource).
@@ -63,8 +91,26 @@ def get_chat(vod: dict, conn=None) -> tuple[list[dict] | None, str]:
         return None, "kick_unavailable"
 
     if platform == "twitch" and external_id and not _replay_disabled():
-        from clips_worker.streamer.chat.twitch_gql import fetch_all_vod_comments
+        from clips_worker.streamer.chat.twitch_gql import (
+            ChatFetchBudgetExceeded,
+            fetch_all_vod_comments,
+        )
 
-        messages, _cursor = fetch_all_vod_comments(str(external_id), state.get("chatCursor"))
+        range_start_s, range_end_s = _vod_chat_window_s(vod)
+        print(
+            f"[clipper:chat] twitch_replay videoId={external_id} offset_s={range_start_s} "
+            f"stop_s={range_end_s}",
+            flush=True,
+        )
+        try:
+            messages, _cursor = fetch_all_vod_comments(
+                str(external_id),
+                state.get("chatCursor"),
+                content_offset_seconds=range_start_s,
+                stop_after_seconds=range_end_s,
+            )
+        except ChatFetchBudgetExceeded:
+            messages = []
+        messages = _rebase_chat_to_analyzed_span(messages, range_start_s)
         return messages, "twitch_gql"
     return None, "none"
