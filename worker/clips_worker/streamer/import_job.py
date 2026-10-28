@@ -560,6 +560,47 @@ def _effective_duration_ms(vod: dict, meta_dur_s: float) -> int:
     return int(meta_dur_s * 1000)
 
 
+def _log_import_failed(
+    exc: BaseException,
+    *,
+    vod_id: str,
+    job_id: str,
+    vod: dict | None,
+) -> None:
+    from clips_worker.decision_log import decision_log, flush_decision_log
+    from clips_worker.streamer.http_download import YtdlpDownloadError
+
+    range_start = int(vod.get("rangeStartMs") or 0) if vod else 0
+    range_end = vod.get("rangeEndMs") if vod else None
+    section = _section_from_range(range_start, int(range_end) if range_end is not None else None) if vod else None
+
+    exit_code = getattr(exc, "exit_code", None)
+    stderr_tail = getattr(exc, "stderr_tail", None)
+    reason = getattr(exc, "reason", None) or str(exc)[:500]
+    if isinstance(exc, YtdlpDownloadError):
+        exit_code = exc.exit_code
+        stderr_tail = exc.stderr_tail
+        reason = exc.reason or reason
+    elif isinstance(exc, subprocess.CalledProcessError):
+        exit_code = exc.returncode
+        stderr_tail = (getattr(exc, "stderr", None) or str(exc))[-4000:]
+        reason = f"ffmpeg failed (exit {exc.returncode})"
+
+    decision_log(
+        "stream_import",
+        "import_failed",
+        vod_id=vod_id,
+        job_id=job_id,
+        reason=reason,
+        exit_code=exit_code,
+        stderr_tail=stderr_tail or str(exc)[-2000:],
+        range=section,
+        rangeStartMs=range_start,
+        rangeEndMs=range_end,
+    )
+    flush_decision_log(force=True)
+
+
 def run_stream_import_job(conn, job: dict, post_progress) -> None:
     payload = job.get("payload") or {}
     if isinstance(payload, str):
@@ -571,14 +612,18 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
     from clips_worker.decision_log import bind_decision_log, flush_decision_log, unbind_decision_log
 
     bind_decision_log(conn, str(job.get("id") or ""))
+    vod_snapshot: dict | None = None
     try:
-        _run_stream_import_job_inner(conn, job, post_progress, payload, vod_id)
+        vod_snapshot = _run_stream_import_job_inner(conn, job, post_progress, payload, vod_id)
+    except Exception as exc:
+        _log_import_failed(exc, vod_id=vod_id, job_id=str(job.get("id") or ""), vod=vod_snapshot)
+        raise
     finally:
         flush_decision_log(force=True)
         unbind_decision_log()
 
 
-def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, vod_id: str) -> None:
+def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, vod_id: str) -> dict | None:
     from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
 
     schedule_modal_warmup_background()
@@ -588,17 +633,41 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             """
-            SELECT v.*, p."workspaceId", p.settings, p.id AS project_id
+            SELECT v.*, p."workspaceId", p.settings, p.id AS project_id, c.login AS channel_login
             FROM stream_vods v
             JOIN clip_projects p ON p.id = v."projectId"
+            LEFT JOIN stream_channels c ON c.id = v."channelId"
             WHERE v.id = %s
             """,
             (vod_id,),
         )
         vod = dict(cur.fetchone())
+    if vod.get("channel_login") and not vod.get("channelLogin"):
+        vod["channelLogin"] = vod["channel_login"]
+
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "stream_import",
+        "import_begin",
+        vod_id=vod_id,
+        job_id=str(job.get("id") or ""),
+        url=vod.get("url"),
+        platform=vod.get("platform"),
+        triggeredBy=vod.get("triggeredBy"),
+        allowGrowing=_allow_twitch_growing_vod(vod),
+    )
+    decision_log(
+        "stream_import",
+        "range_plan",
+        vod_id=vod_id,
+        rangeStartMs=int(vod.get("rangeStartMs") or 0),
+        rangeEndMs=vod.get("rangeEndMs"),
+        section=_section_from_range(int(vod.get("rangeStartMs") or 0), vod.get("rangeEndMs")),
+    )
 
     if _maybe_complete_import_from_state(conn, vod, job, vod["project_id"], vod_id, post_progress):
-        return
+        return vod
 
     url = vod.get("url")
     workspace_id = vod["workspaceId"]
@@ -669,10 +738,15 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
             job["id"],
             {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
         )
-        return
+        return vod
 
     if not url:
         raise RuntimeError("missing stream url")
+
+    allow_growing = _allow_twitch_growing_vod(vod)
+    from clips_worker.streamer.twitch_archive_resolve import guard_twitch_growing_archive_url
+
+    guard_twitch_growing_archive_url(vod, url, allow_growing=allow_growing)
 
     with Heartbeat(job["id"], post_progress, every_s=45) as hb:
         hb.update(stage="Downloading", progress=5)
@@ -696,7 +770,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
             meta_dur_s=float(dur_s),
         ):
             cleanup_vod_import_dir(vod_id)
-            return
+            return vod
         effective_ms = _effective_duration_ms(vod, dur_s)
         _enforce_paste_vod_duration_cap(vod, effective_ms)
         cap_err = check_cap(conn, workspace_id, effective_ms // 1000)
@@ -795,7 +869,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                     post_progress=post_progress,
                     hb=hb,
                 )
-                return
+                return vod
             if allow_growing and growing and not rolling_finalize:
                 if duration_ms <= 0:
                     _rolling_import_idle_done(
@@ -808,7 +882,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                         reason="no_audio_downloaded",
                     )
                     cleanup_vod_import_dir(vod_id)
-                    return
+                    return vod
                 _complete_rolling_window_import(
                     conn,
                     job=job,
@@ -824,7 +898,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                     analyze_source="growing_live_import",
                     schedule_growing_tick=True,
                 )
-                return
+                return vod
             pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
             analyze_id = f"job_{uuid.uuid4().hex}"
             with conn.cursor() as cur:
@@ -865,7 +939,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                 job["id"],
                 {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
             )
-            return
+            return vod
 
         print(
             f"[clipper:stream] import_clip_section vodId={vod_id} projectId={project_id} kind=clip",

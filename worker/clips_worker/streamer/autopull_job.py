@@ -86,11 +86,15 @@ def _match_twitch_vod(
             if str(v.get("stream_id") or "") == str(stream_id):
                 return _normalize_helix_video(v, parse_twitch_duration)
 
-    target = streamed_at.timestamp()
-    for v in data.get("data") or []:
-        created = datetime.fromisoformat(v["created_at"].replace("Z", "+00:00")).timestamp()
-        if abs(created - target) <= 15 * 60:
-            return _normalize_helix_video(v, parse_twitch_duration)
+    from clips_worker.streamer.twitch_archive_resolve import pick_live_twitch_archive
+
+    picked, _reason, _candidates = pick_live_twitch_archive(
+        list(data.get("data") or []),
+        stream_id=str(stream_id) if stream_id else None,
+        stream_started_at=streamed_at,
+    )
+    if picked:
+        return _normalize_helix_video(picked, parse_twitch_duration)
     return None
 
 

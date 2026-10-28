@@ -10,6 +10,31 @@ from clips_worker.streamer.errors import RetryableError
 from clips_worker.streamer.ytdlp import map_ytdlp_error
 
 
+class YtdlpDownloadError(RuntimeError):
+    """yt-dlp exited non-zero after retries."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        exit_code: int | None = None,
+        stderr_tail: str = "",
+        reason: str = "",
+    ) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+        self.stderr_tail = (stderr_tail or "")[-4000:]
+        self.reason = (reason or message or "download_failed")[:500]
+
+
+def _stderr_error_line(stderr: str) -> str:
+    for line in reversed((stderr or "").splitlines()):
+        low = line.lower()
+        if "error" in low or "failed" in low:
+            return line.strip()[:500]
+    return ""
+
+
 def _friendly_step_error(stderr: str, step: str) -> str:
     s = (stderr or "").lower()
     if "502" in s or "bad gateway" in s:
@@ -66,4 +91,10 @@ def run_ytdlp(cmd: list[str], progress_cb: Callable[[float], None] | None = None
             time.sleep(min(30, 2 ** attempt))
     if _is_retryable(last_stderr):
         raise RetryableError(last_err or f"{step} failed after retries")
-    raise RuntimeError(last_err or f"{step} failed after retries")
+    err_line = _stderr_error_line(last_stderr)
+    raise YtdlpDownloadError(
+        last_err or f"{step} failed after retries",
+        exit_code=proc.returncode if proc else None,
+        stderr_tail=last_stderr,
+        reason=err_line or last_err or "download_failed",
+    )

@@ -1,3 +1,7 @@
+import {
+  pickLiveTwitchArchive,
+  TWITCH_LIVE_ARCHIVE_MATCH_MS,
+} from '@/lib/server/streamer/twitch-live-archive'
 import { twitchAppAccessToken, twitchClientId } from '@/lib/server/streamer/twitch'
 
 export type TwitchArchiveMatch = {
@@ -40,10 +44,15 @@ export async function matchTwitchArchiveVod(
     const byStream = rows.find((v) => String(v.stream_id || '') === String(streamSessionId))
     if (byStream) return normalizeHelixVideo(byStream)
   }
+  const livePick = pickLiveTwitchArchive(rows, {
+    liveStreamId: streamSessionId,
+    streamStartedAt: streamedAt.toISOString(),
+  })
+  if (livePick) return normalizeHelixVideo(livePick.video)
   const target = streamedAt.getTime()
   for (const v of rows) {
     const created = Date.parse(v.created_at)
-    if (!Number.isNaN(created) && Math.abs(created - target) <= 15 * 60 * 1000) {
+    if (!Number.isNaN(created) && Math.abs(created - target) <= TWITCH_LIVE_ARCHIVE_MATCH_MS) {
       return normalizeHelixVideo(v)
     }
   }

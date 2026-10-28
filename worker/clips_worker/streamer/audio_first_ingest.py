@@ -223,6 +223,8 @@ def ingest_vod_audio(
         staged.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(audio_path, staged)
         metrics.bytes_downloaded = max(metrics.bytes_downloaded, staged.stat().st_size)
+        if staged.stat().st_size <= 0:
+            raise RuntimeError("audio download produced 0 bytes (no media in range or VOD not ready)")
     log_ingest_summary(metrics)
     return staged, metrics
 

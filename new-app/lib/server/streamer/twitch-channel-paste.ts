@@ -1,5 +1,10 @@
 import 'server-only'
 
+import {
+  logArchiveResolveDecision,
+  pickLiveTwitchArchive,
+  TWITCH_NO_LIVE_ARCHIVE_MSG,
+} from '@/lib/server/streamer/twitch-live-archive'
 import { parseTwitchDuration } from '@/lib/server/streamer/twitch-growing'
 import { twitchAppAccessToken, twitchClientId } from '@/lib/server/streamer/twitch'
 
@@ -45,7 +50,7 @@ export async function resolveTwitchChannelPaste(
   const user = users.data?.[0]
   if (!user) return { error: 'Channel not found on Twitch.' }
 
-  let streams: { data?: { id: string }[] }
+  let streams: { data?: { id: string; started_at?: string }[] }
   try {
     streams = await helixGet(`/streams?user_id=${encodeURIComponent(user.id)}`)
   } catch {
@@ -54,9 +59,17 @@ export async function resolveTwitchChannelPaste(
   const liveStream = streams.data?.[0]
   const isLive = Boolean(liveStream)
   const liveStreamId = liveStream ? String(liveStream.id) : undefined
+  const streamStartedAt = liveStream?.started_at
 
   let videos: {
-    data?: { id: string; url: string; title: string; duration: string; stream_id?: string }[]
+    data?: {
+      id: string
+      url: string
+      title: string
+      duration: string
+      created_at: string
+      stream_id?: string
+    }[]
   }
   try {
     videos = await helixGet(
@@ -74,9 +87,21 @@ export async function resolveTwitchChannelPaste(
   }
 
   let pick = rows[0]
-  if (isLive && liveStreamId) {
-    const matched = rows.find((v) => String(v.stream_id || '') === liveStreamId)
-    if (matched) pick = matched
+  if (isLive) {
+    const livePick = pickLiveTwitchArchive(rows, {
+      liveStreamId,
+      streamStartedAt,
+    })
+    logArchiveResolveDecision({
+      stream_started_at: streamStartedAt ?? null,
+      candidates: rows,
+      picked: livePick?.video.id ?? null,
+      reason: livePick?.reason ?? 'no_matching_archive',
+    })
+    if (!livePick) {
+      return { error: TWITCH_NO_LIVE_ARCHIVE_MSG }
+    }
+    pick = livePick.video
   }
 
   const durationSec = parseTwitchDuration(pick.duration || '')
