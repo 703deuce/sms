@@ -95,14 +95,7 @@ export async function resolveEditorWords(
     const projectWords = loadSourceWords(projectTranscript)
     const sliced = wordsInRange(projectWords, clip.startMs, clip.endMs)
     if (sliced.length) return sliced
-    const padMs = 1500
-    const loose = wordsInRange(
-      projectWords,
-      Math.max(0, clip.startMs - padMs),
-      clip.endMs + padMs,
-    )
-    if (loose.length) return loose
-    return projectWords
+    return []
   }
 
   return []
