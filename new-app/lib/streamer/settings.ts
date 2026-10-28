@@ -18,8 +18,8 @@ export const streamerSettingsSchema = z.object({
   marathonDailyRecapUtcHour: z.number().int().min(0).max(23).default(0),
   /** Rolling live auto-pull: minutes per ingest window (3–60). */
   rollingChunkMin: z.number().int().min(3).max(60).optional(),
-  /** Wall-clock cap on a rolling session (hours). 0 / omit = no cap. */
-  rollingMaxSessionHours: z.number().int().min(0).max(168).optional().nullable(),
+  /** Wall-clock cap on rolling auto-pull (hours). Omit = worker env default (6h). */
+  rollingMaxSessionHours: z.number().int().min(1).max(168).optional().nullable(),
   clipCount: z.number().int().min(1).max(30).default(12),
   /** Default clip length for auto-imported VODs (copied to project settings). */
   clipLenMode: z.enum(['auto', 'target']).default('auto'),

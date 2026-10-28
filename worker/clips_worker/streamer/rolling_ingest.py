@@ -77,10 +77,10 @@ def rolling_max_window_ms() -> int:
     return _int("STREAMER_ROLLING_MAX_WINDOW_MS", 15 * 60 * 1000)
 
 
-def resolve_rolling_max_session_hours(state: dict | None) -> tuple[int | None, str]:
+def resolve_rolling_max_session_hours(state: dict | None) -> tuple[int, str]:
     """
-    Optional cap on rolling auto-pull wall-clock session length.
-    None = no cap (default). Sources: state.rolling.maxSessionHours, env.
+    Wall-clock cap for this rolling auto-pull session.
+    Channel settings (copied to state.rolling.maxSessionHours) override env default (6h).
     """
     st = state if isinstance(state, dict) else {}
     rolling = st.get("rolling") if isinstance(st.get("rolling"), dict) else {}
@@ -89,19 +89,9 @@ def resolve_rolling_max_session_hours(state: dict | None) -> tuple[int | None, s
             v = int(rolling.get("maxSessionHours") or 0)
         except (TypeError, ValueError):
             v = 0
-        if v <= 0:
-            return None, "rolling_state"
-        return min(168, v), "rolling_state"
-    env_raw = os.environ.get("STREAMER_ROLLING_MAX_SESSION_HOURS", "0").strip()
-    if env_raw:
-        try:
-            v = int(env_raw)
-        except ValueError:
-            v = 0
-        if v <= 0:
-            return None, "env"
-        return min(168, v), "env"
-    return None, "default_no_cap"
+        if v > 0:
+            return min(168, v), "channel_settings"
+    return _int("STREAMER_ROLLING_MAX_SESSION_HOURS", 6), "env_default"
 
 
 def rolling_limits_snapshot(state: dict | None) -> dict[str, Any]:
@@ -123,8 +113,7 @@ def rolling_limits_snapshot(state: dict | None) -> dict[str, Any]:
     }
 
 
-def rolling_max_session_hours(state: dict | None = None) -> int | None:
-    """Backward-compatible helper; prefer resolve_rolling_max_session_hours."""
+def rolling_max_session_hours(state: dict | None = None) -> int:
     cap, _ = resolve_rolling_max_session_hours(state)
     return cap
 
@@ -133,59 +122,69 @@ def rolling_min_new_ms() -> int:
     return _int("STREAMER_ROLLING_MIN_NEW_MS", 45_000)
 
 
-def ensure_rolling_session_started_at(rolling: dict) -> tuple[dict, str, bool]:
+def anchor_rolling_session_started_at(rolling: dict, *, seed: bool) -> tuple[dict, str | None, bool]:
     """
-    Ensure rolling.sessionStartedAt exists (wall clock for max session cap).
-    Returns (rolling, source_field, mutated).
+    Session cap clock uses ONLY rolling.sessionStartedAt (first pull of this session).
+    Never infer from stream start, archive offset, or lastPull* timestamps.
     """
     r = dict(rolling or {})
-    if r.get("sessionStartedAt"):
-        return r, "sessionStartedAt", False
-    if r.get("lastPullCompletedAt"):
-        r["sessionStartedAt"] = r["lastPullCompletedAt"]
-        return r, "lastPullCompletedAt", True
-    if r.get("lastPullAt"):
-        r["sessionStartedAt"] = r["lastPullAt"]
-        return r, "lastPullAt", True
+    existing = r.get("sessionStartedAt")
+    if existing:
+        return r, str(existing), False
+    if not seed:
+        return r, None, False
     now = datetime.now(timezone.utc).isoformat()
     r["sessionStartedAt"] = now
-    return r, "sessionStartedAt_seeded_now", True
+    return r, now, True
 
 
-def log_rolling_session_check(
-    *,
-    vod_id: str | None,
+def rolling_session_elapsed_hours(
     rolling: dict,
-    source_field: str,
-    elapsed_h: float,
-    state: dict | None = None,
-) -> None:
-    from clips_worker.decision_log import decision_log
-
-    cap_h, cap_src = resolve_rolling_max_session_hours(state or {"rolling": rolling})
-    decision_log(
-        "stream_import",
-        "rolling_session_check",
-        vodId=vod_id or "",
-        elapsed_h=round(elapsed_h, 4),
-        source_field=source_field,
-        cap_h=cap_h,
-        cap_source=cap_src,
+    *,
+    seed_if_missing: bool = False,
+) -> tuple[float, str | None, dict, bool]:
+    rolling, session_started_at, mutated = anchor_rolling_session_started_at(
+        rolling,
+        seed=seed_if_missing,
     )
-
-
-def rolling_session_elapsed_hours(rolling: dict) -> tuple[float, str, dict, bool]:
-    """Returns elapsed_h, source_field, rolling (possibly updated), mutated."""
-    rolling, source_field, mutated = ensure_rolling_session_started_at(rolling)
-    started_raw = rolling.get("sessionStartedAt")
+    if not session_started_at:
+        return 0.0, None, rolling, mutated
     try:
-        started = datetime.fromisoformat(str(started_raw).replace("Z", "+00:00"))
+        started = datetime.fromisoformat(str(session_started_at).replace("Z", "+00:00"))
         if started.tzinfo is None:
             started = started.replace(tzinfo=timezone.utc)
         elapsed_h = (datetime.now(timezone.utc) - started).total_seconds() / 3600.0
     except (TypeError, ValueError):
         elapsed_h = 0.0
-    return elapsed_h, source_field, rolling, mutated
+    return elapsed_h, session_started_at, rolling, mutated
+
+
+def emit_rolling_session_check(
+    *,
+    vod_id: str | None,
+    state: dict | None,
+    seed_if_missing: bool = False,
+) -> tuple[float, int, dict, bool]:
+    """Log rolling_session_check; optionally seed sessionStartedAt (first pull only)."""
+    from clips_worker.decision_log import decision_log
+
+    st = state if isinstance(state, dict) else {}
+    rolling = dict(st.get("rolling") if isinstance(st.get("rolling"), dict) else {})
+    elapsed_h, session_started_at, rolling, mutated = rolling_session_elapsed_hours(
+        rolling,
+        seed_if_missing=seed_if_missing,
+    )
+    cap_h, cap_src = resolve_rolling_max_session_hours({**st, "rolling": rolling})
+    decision_log(
+        "stream_import",
+        "rolling_session_check",
+        vodId=vod_id or "",
+        elapsed_h=round(elapsed_h, 4),
+        cap_h=cap_h,
+        cap_source=cap_src,
+        sessionStartedAt=session_started_at or "",
+    )
+    return elapsed_h, cap_h, rolling, mutated
 
 
 def plan_rolling_window_ms(
@@ -225,19 +224,14 @@ def plan_rolling_window_ms(
     if end_ms - start_ms > max_window:
         start_ms = end_ms - max_window
 
-    rolling, source_field, session_mutated = ensure_rolling_session_started_at(rolling)
+    elapsed_h, cap_h, rolling, session_mutated = emit_rolling_session_check(
+        vod_id=vod_id,
+        state=state,
+        seed_if_missing=True,
+    )
     if session_mutated:
         state["rolling"] = {**(state.get("rolling") if isinstance(state.get("rolling"), dict) else {}), **rolling}
-    elapsed_h, source_field, rolling, _ = rolling_session_elapsed_hours(rolling)
-    log_rolling_session_check(
-        vod_id=vod_id,
-        rolling=rolling,
-        source_field=source_field,
-        elapsed_h=elapsed_h,
-        state=state,
-    )
-    cap_h, _ = resolve_rolling_max_session_hours(state)
-    if cap_h is not None and elapsed_h > cap_h:
+    if elapsed_h > cap_h:
         return "stop_session"
 
     return start_ms, end_ms
@@ -274,10 +268,6 @@ def apply_rolling_pull_plan(
     state = vod.get("state") or {}
     if isinstance(state, str):
         state = json.loads(state)
-    rolling = dict(state.get("rolling") or {})
-    rolling, _, session_mutated = ensure_rolling_session_started_at(rolling)
-    if session_mutated:
-        state = {**state, "rolling": rolling}
     plan = plan_rolling_window_ms(
         total_vod_ms=total_vod_ms,
         state=state,
@@ -285,13 +275,12 @@ def apply_rolling_pull_plan(
         vod_id=str(vod.get("id") or ""),
     )
     if plan is None or plan == "stop_session":
-        if session_mutated or isinstance(state.get("rolling"), dict):
-            with conn.cursor() as cur:
-                cur.execute(
-                    'UPDATE stream_vods SET state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
-                    (json.dumps(state), vod["id"]),
-                )
-            conn.commit()
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE stream_vods SET state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
+                (json.dumps(state), vod["id"]),
+            )
+        conn.commit()
         return plan
     start_ms, end_ms = plan
     rolling = dict(state.get("rolling") or {})
@@ -374,6 +363,7 @@ def log_rolling_tick_decision(
         source=source,
         **limits,
     )
+    emit_rolling_session_check(vod_id=vod_id, state=state, seed_if_missing=False)
 
 
 def cancel_queued_rolling_import_ticks(
@@ -462,18 +452,7 @@ def stop_rolling_session(conn, vod_id: str, *, reason: str, project_id: str | No
         cancelled_job_ids=cancelled,
     )
     rolling = dict(state.get("rolling") or {})
-    elapsed_h, source_field, _, _ = rolling_session_elapsed_hours(rolling)
-    cap_h, cap_src = resolve_rolling_max_session_hours(state)
-    decision_log(
-        "stream_import",
-        "rolling_session_check",
-        vodId=vod_id,
-        elapsed_h=round(elapsed_h, 4),
-        source_field=source_field,
-        cap_h=cap_h,
-        cap_source=cap_src,
-        context="rolling_stopped",
-    )
+    emit_rolling_session_check(vod_id=vod_id, state=state, seed_if_missing=False)
     print(
         f"[clipper:autopull] rolling_stopped vodId={vod_id} reason={reason[:80]} "
         f"cancelledJobs={','.join(cancelled) if cancelled else 'none'}",

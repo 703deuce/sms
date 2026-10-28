@@ -7,7 +7,7 @@ from clips_worker.streamer.rolling_ingest import plan_rolling_window_ms
 
 def test_long_archive_offset_does_not_trigger_max_session():
     recent = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
-    state = {"rolling": {"lastPulledMs": 180_000, "lastPullCompletedAt": recent}}
+    state = {"rolling": {"lastPulledMs": 180_000, "sessionStartedAt": recent}}
     plan = plan_rolling_window_ms(
         total_vod_ms=37_700_000,
         state=state,
@@ -16,6 +16,25 @@ def test_long_archive_offset_does_not_trigger_max_session():
     )
     assert plan != "stop_session"
     assert isinstance(plan, tuple)
+
+
+def test_session_cap_from_session_started_at_only():
+    old_pull = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
+    session = (datetime.now(timezone.utc) - timedelta(hours=7)).isoformat()
+    state = {
+        "rolling": {
+            "lastPulledMs": 0,
+            "lastPullCompletedAt": old_pull,
+            "sessionStartedAt": session,
+        }
+    }
+    plan = plan_rolling_window_ms(
+        total_vod_ms=600_000,
+        state=state,
+        finalize=False,
+        vod_id="svod_cap",
+    )
+    assert plan == "stop_session"
 
 
 def test_gemini_replaces_overlap_candidate():

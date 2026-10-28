@@ -160,8 +160,7 @@ export async function beginTwitchRollingSession(
           rolling: {
             live: true,
             chunkMin,
-            sessionStartedAt: startedAt.toISOString(),
-            ...(maxSessionHours != null ? { maxSessionHours } : {}),
+            ...(maxSessionHours != null && maxSessionHours > 0 ? { maxSessionHours } : {}),
           },
         },
       },
