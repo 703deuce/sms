@@ -10,7 +10,6 @@ import psycopg2
 from clips_worker.job_reliability import (
     JOB_LOCK_HEARTBEAT_SECONDS,
     JOB_LOCK_STALE_SECONDS,
-    JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL,
     stale_lock_interval_sql,
 )
 from clips_worker.streamer.lanes import lane_types_sql_in
@@ -47,52 +46,42 @@ def touch_job_lock_dsn(dsn: str, job_id: str, instance_id: str) -> None:
 
 
 def requeue_stale_running_jobs(conn, stale_seconds: int = JOB_LOCK_STALE_SECONDS) -> int:
-    """Idempotent: fail or requeue RUNNING lane jobs with no recent lock heartbeat."""
+    """Requeue or fail RUNNING lane jobs with no recent lock heartbeat (all job types)."""
     interval = stale_lock_interval_sql(stale_seconds)
     with conn.cursor() as cur:
         cur.execute(
             f"""
             UPDATE clip_jobs
-            SET status = 'FAILED',
-                "lockedBy" = NULL,
-                "lockedAt" = NULL,
-                error = LEFT(
-                  COALESCE(error, '') || ' Stale lock exceeded max attempts',
-                  500
-                ),
-                "finishedAt" = NOW()
-            WHERE status = 'RUNNING'
-              AND type IN ({lane_types_sql_in()})
-              AND type LIKE 'STREAM\\_%%'
-              AND attempts >= %s
-              AND ("lockedAt" IS NULL OR "lockedAt" < NOW() - {interval})
-            """,
-            (JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL,),
-        )
-        failed = int(cur.rowcount or 0)
-        cur.execute(
-            f"""
-            UPDATE clip_jobs
-            SET status = 'QUEUED',
+            SET status = CASE
+                  WHEN attempts + 1 >= COALESCE("maxAttempts", 3) THEN 'FAILED'
+                  ELSE 'QUEUED'
+                END,
+                attempts = attempts + 1,
                 "lockedBy" = NULL,
                 "lockedAt" = NULL,
                 "runAfter" = NOW(),
                 error = LEFT(
-                  COALESCE(error, '') || ' Stale lock requeued (no heartbeat)',
+                  COALESCE(error, '') ||
+                  CASE WHEN attempts + 1 >= COALESCE("maxAttempts", 3)
+                    THEN ' Stale lock; attempts exhausted'
+                    ELSE ' Stale lock requeued (no heartbeat)'
+                  END,
                   500
-                )
+                ),
+                "finishedAt" = CASE
+                  WHEN attempts + 1 >= COALESCE("maxAttempts", 3) THEN NOW()
+                  ELSE "finishedAt"
+                END
             WHERE status = 'RUNNING'
               AND type IN ({lane_types_sql_in()})
               AND ("lockedAt" IS NULL OR "lockedAt" < NOW() - {interval})
-            """,
+            """
         )
         n = int(cur.rowcount or 0)
     conn.commit()
-    if failed:
-        _log(f"stale lock recovery: failed {failed} RUNNING job(s) (attempts>={JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL})")
     if n:
-        _log(f"stale lock recovery: requeued {n} RUNNING job(s)")
-    return n + failed
+        _log(f"stale lock recovery: updated {n} RUNNING job(s)")
+    return n
 
 
 def requeue_running_not_owned_by_instance(conn, instance_id: str) -> int:
@@ -156,7 +145,16 @@ class JobLockHeartbeat:
             self._thread.join(timeout=self._every_s + 2)
 
 
-def run_job_with_lock_heartbeat(dsn: str, conn, job: dict, handler: Callable[[object, dict], None]) -> None:
+def run_job_with_lock_heartbeat(
+    dsn: str,
+    conn,
+    job: dict,
+    handler: Callable[[object, dict], None],
+    *,
+    post_progress_fn: Callable | None = None,
+) -> None:
+    from clips_worker.job_contract import run_job
+
     instance = worker_instance_id()
     with JobLockHeartbeat(dsn, job["id"], instance):
-        handler(conn, job)
+        run_job(conn, job, handler, post_progress_fn=post_progress_fn, on_success_mark_done=False)

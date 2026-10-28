@@ -9635,6 +9635,7 @@ model ClipJob {
   status     String    @default("QUEUED")
   payload    Json      @default("{}")
   attempts   Int       @default(0)
+  maxAttempts Int      @default(3) @map("maxAttempts")
   lockedBy   String?
   lockedAt   DateTime?
   runAfter   DateTime  @default(now())

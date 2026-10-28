@@ -112,7 +112,22 @@ done
 
 echo "[deploy-worker] docker build"
 cd "\${REMOTE_SRC}"
-docker build -f worker/Dockerfile --build-arg GIT_COMMIT="${GIT_COMMIT}" -t clips-worker:latest .
+
+echo "[deploy-worker] deploy gate (compile + import + dry poll)"
+docker build -f worker/Dockerfile --build-arg GIT_COMMIT="${GIT_COMMIT}" -t clips-worker:gate .
+docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -m compileall -q /app/clips_worker
+docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -c 'import clips_worker.main'
+docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -c '
+import os, psycopg2
+from clips_worker.job_contract import dry_poll_iteration
+conn = psycopg2.connect(os.environ["DATABASE_URL"])
+try:
+    dry_poll_iteration(conn)
+finally:
+    conn.close()
+print("deploy_gate_ok")
+'
+docker tag clips-worker:gate clips-worker:latest
 
 # Stable public URL — Coolify renames web containers on every deploy; container-name callbacks go stale.
 WORKER_CALLBACK_URL="\${WORKER_CALLBACK_URL:-https://transovo.ai}"

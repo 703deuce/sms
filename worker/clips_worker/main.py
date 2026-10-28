@@ -215,9 +215,13 @@ def post_progress_terminal(job_id: str, payload: dict) -> None:
 
 
 def release_job_claim(conn, job_id: str) -> None:
-    from clips_worker.worker_drain import requeue_job_after_interrupt
+    from clips_worker.job_contract import requeue_job_immediate
 
-    requeue_job_after_interrupt(conn, job_id, note="Drain release")
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute('SELECT * FROM clip_jobs WHERE id=%s', (job_id,))
+        row = cur.fetchone()
+    if row:
+        requeue_job_immediate(conn, dict(row), note="Drain release")
 
 
 def claim_job(conn) -> dict | None:
@@ -630,6 +634,8 @@ def main() -> None:
         sys.exit(1)
 
     idle_polls = 0
+    poll_error_streak = 0
+    last_poll_error: str | None = None
     while True:
         try:
             if drain_requested():
@@ -639,6 +645,8 @@ def main() -> None:
                 from clips_worker.job_lock import requeue_stale_running_jobs, run_job_with_lock_heartbeat
 
                 requeue_stale_running_jobs(conn)
+                poll_error_streak = 0
+                last_poll_error = None
                 if drain_requested():
                     log("[clipper:worker] drain complete — exiting")
                     return
@@ -673,241 +681,45 @@ def main() -> None:
                     continue
                 idle_polls = 0
                 log(f"claimed job={job['id']}")
+                from clips_worker.t2v.feature_gate import T2V_JOB_TYPES, ai_video_enabled
+
+                job_type = job.get("type") or ""
+                if job_type in T2V_JOB_TYPES and not ai_video_enabled():
+                    from clips_worker.job_contract import fail_job
+
+                    msg = "ai_video_disabled"
+                    log(f"[t2v:feature-gate] refusing job id={job['id']} type={job_type}")
+                    fail_job(conn, job, msg, post_progress_fn=post_progress)
+                    continue
+                handler = DISPATCH.get(job_type)
+                if not handler:
+                    from clips_worker.job_contract import fail_job
+
+                    fail_job(conn, job, f"unknown job type {job_type}", post_progress_fn=post_progress)
+                    continue
                 try:
-                    from clips_worker.worker_drain import WorkerDrainExit
-
-                    from clips_worker.t2v.feature_gate import T2V_JOB_TYPES, ai_video_enabled
-
-                    job_type = job.get("type") or ""
-                    if job_type in T2V_JOB_TYPES and not ai_video_enabled():
-                        msg = "ai_video_disabled"
-                        log(f"[t2v:feature-gate] refusing job id={job['id']} type={job_type}")
-                        mark_generation_failed(conn, job, msg)
-                        continue
-                    handler = DISPATCH.get(job_type)
-                    if not handler:
-                        raise RuntimeError(f"unknown job type {job_type}")
-                    run_job_with_lock_heartbeat(dsn, conn, job, handler)  # type: ignore[arg-type]
-                except WorkerDrainExit as drain_exc:
+                    run_job_with_lock_heartbeat(dsn, conn, job, handler, post_progress_fn=post_progress)
+                except Exception as drain_exc:
+                    if type(drain_exc).__name__ != "WorkerDrainExit":
+                        raise
                     log(f"job {job['id']} paused for drain: {drain_exc}")
-                    from clips_worker.worker_drain import requeue_job_after_interrupt
+                    from clips_worker.job_contract import requeue_job_immediate
 
-                    payload = job.get("payload") or {}
-                    if isinstance(payload, str):
-                        payload = json.loads(payload)
-                    if job.get("type") == "RENDER_CLIP":
-                        rid = payload.get("renderId")
-                        if rid:
-                            with conn.cursor() as cur:
-                                cur.execute(
-                                    """
-                                    UPDATE clip_renders
-                                    SET status = 'QUEUED', error = NULL, "updatedAt" = NOW()
-                                    WHERE id = %s
-                                    """,
-                                    (rid,),
-                                )
-                            conn.commit()
-                    requeue_job_after_interrupt(conn, job["id"], note="Drain release")
+                    requeue_job_immediate(conn, job, note="Drain release")
                     log("[clipper:worker] drain complete — exiting")
                     return
-                except Exception as exc:
-                    try:
-                        msg = format_subprocess_error(exc)
-                    except BaseException as fmt_exc:
-                        msg = str(exc)[:4000]
-                        log(f"format_subprocess_error failed job={job['id']}: {fmt_exc}")
-                    log(f"job {job['id']} failed: {msg}")
-                    job_type = job.get("type") or ""
-                    attempts = int(job.get("attempts") or 0)
-                    from clips_worker.job_reliability import JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL
-
-                    def _mark_stream_job_failed() -> None:
-                        payload = job.get("payload") or {}
-                        if isinstance(payload, str):
-                            payload = json.loads(payload)
-                        vod_id = payload.get("vodId")
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
-                                ("FAILED", msg[:4000], job["id"]),
-                            )
-                            if vod_id:
-                                cur.execute(
-                                    'UPDATE stream_vods SET error=%s, "updatedAt"=NOW() WHERE id=%s',
-                                    (msg[:4000], vod_id),
-                                )
-                                cur.execute(
-                                    """
-                                    UPDATE clip_projects SET status='FAILED', stage='failed', progress=0,
-                                      error=%s, "updatedAt"=NOW()
-                                    WHERE id = (SELECT "projectId" FROM stream_vods WHERE id=%s)
-                                    """,
-                                    (msg[:500], vod_id),
-                                )
-                        conn.commit()
-                        post_progress(
-                            job["id"],
-                            terminal_failure_progress_payload(job_type, msg),
-                        )
-
-                    if job_type == "PROCESS_PROJECT":
-                        print(
-                            f"[clipper:job] failed job={job['id']} project={job.get('projectId')} "
-                            f"error={msg[:240]}",
-                            flush=True,
-                        )
-                    traceback.print_exc()
-                    from clips_worker.streamer.errors import RetryableError
-
-                    if isinstance(exc, RetryableError) and (job.get("type") or "").startswith("STREAM_"):
-                        if attempts >= JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL:
-                            _mark_stream_job_failed()
-                            continue
-                        delay_s = min(300, 15 * max(1, attempts))
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                """
-                                UPDATE clip_jobs
-                                SET status='QUEUED', "lockedBy"=NULL, "lockedAt"=NULL,
-                                    "runAfter"=NOW() + (%s || ' seconds')::interval,
-                                    error=%s
-                                WHERE id=%s
-                                """,
-                                (str(delay_s), msg[:500], job["id"]),
-                            )
-                        conn.commit()
-                        from clips_worker.streamer.stream_pipeline import user_retry_progress_payload
-
-                        post_progress(
-                            job["id"],
-                            user_retry_progress_payload(delay_s, msg),
-                        )
-                        continue
-                    if job.get("type") in (
-                        "RENDER_CLIP",
-                        "RENDER_SCRIPT_COMPOSITION",
-                        "T2V_ASSEMBLE",
-                        "T2V_EXTRACT_DECK",
-                        "T2V_VOICE_CLONE",
-                        "T2V_SCENE_AI_IMAGE",
-                        "T2V_SCENE_AI_VIDEO",
-                        "MUSIC",
-                        "THUMBNAIL",
-                        "DUB",
-                    ):
-                        if job.get("type") == "DUB":
-                            payload = job.get("payload") or {}
-                            if isinstance(payload, str):
-                                payload = json.loads(payload)
-                            dub_track_id = payload.get("dubTrackId")
-                            if dub_track_id:
-                                with conn.cursor() as cur:
-                                    cur.execute(
-                                        'UPDATE dub_tracks SET status=%s, error=%s WHERE id=%s',
-                                        ("FAILED", msg[:4000], dub_track_id),
-                                    )
-                                conn.commit()
-                        if job.get("type") == "RENDER_CLIP":
-                            payload = job.get("payload") or {}
-                            if isinstance(payload, str):
-                                payload = json.loads(payload)
-                            rid = payload.get("renderId")
-                            if rid:
-                                with conn.cursor() as cur:
-                                    cur.execute(
-                                        'UPDATE clip_renders SET status = %s, error = %s, "updatedAt" = NOW() WHERE id = %s',
-                                        ("FAILED", msg[:4000], rid),
-                                    )
-                                conn.commit()
-                        if job.get("type") == "RENDER_SCRIPT_COMPOSITION":
-                            payload = job.get("payload") or {}
-                            if isinstance(payload, str):
-                                payload = json.loads(payload)
-                            rid = payload.get("renderId")
-                            if rid:
-                                with conn.cursor() as cur:
-                                    cur.execute(
-                                        """
-                                        UPDATE script_composition_renders
-                                        SET status = %s, error = %s, "updatedAt" = NOW()
-                                        WHERE id = %s
-                                        """,
-                                        ("FAILED", msg[:4000], rid),
-                                    )
-                                conn.commit()
-                        mark_generation_failed(conn, job, msg)
-                    elif (job.get("type") or "") in (
-                        "STREAM_IMPORT",
-                        "STREAM_ANALYZE",
-                        "STREAM_RENDER",
-                        "STREAM_AUTOPULL",
-                    ):
-                        if attempts >= JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL:
-                            _mark_stream_job_failed()
-                            continue
-                        payload = job.get("payload") or {}
-                        if isinstance(payload, str):
-                            payload = json.loads(payload)
-                        vod_id = payload.get("vodId")
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
-                                ("FAILED", msg[:4000], job["id"]),
-                            )
-                            if vod_id:
-                                cur.execute(
-                                    'UPDATE stream_vods SET error=%s, "updatedAt"=NOW() WHERE id=%s',
-                                    (msg[:4000], vod_id),
-                                )
-                                cur.execute(
-                                    """
-                                    UPDATE clip_projects SET status='FAILED', stage='failed', progress=0, "updatedAt"=NOW()
-                                    WHERE id = (SELECT "projectId" FROM stream_vods WHERE id=%s)
-                                    """,
-                                    (vod_id,),
-                                )
-                                cur.execute(
-                                    'SELECT "projectId" FROM stream_vods WHERE id=%s',
-                                    (vod_id,),
-                                )
-                                prow = cur.fetchone()
-                        conn.commit()
-                        if vod_id and prow:
-                            try:
-                                from clips_worker.streamer.storage_cleanup import enqueue_stream_cleanup_job
-
-                                enqueue_stream_cleanup_job(
-                                    conn,
-                                    str(prow[0]),
-                                    vod_id,
-                                    delay_hours=0,
-                                )
-                            except Exception as cleanup_exc:
-                                log(f"[clipper:stream] failure_cleanup_enqueue_failed vodId={vod_id}: {cleanup_exc}")
-                        post_progress(
-                            job["id"],
-                            terminal_failure_progress_payload(job.get("type") or "", msg),
-                        )
-                    elif (job.get("type") or "").startswith("STREAM_"):
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
-                                ("FAILED", msg[:4000], job["id"]),
-                            )
-                        conn.commit()
-                        post_progress(
-                            job["id"],
-                            terminal_failure_progress_payload(job.get("type") or "", msg),
-                        )
-                    else:
-                        post_progress(
-                            job["id"],
-                            terminal_failure_progress_payload(job.get("type") or "", msg),
-                        )
         except Exception as exc:
+            msg = str(exc)
             log(f"worker loop error: {exc}")
             traceback.print_exc()
+            if msg == last_poll_error:
+                poll_error_streak += 1
+            else:
+                poll_error_streak = 1
+                last_poll_error = msg
+            if poll_error_streak >= 5:
+                log(f"FATAL: poll loop failed {poll_error_streak} times with same error: {msg}")
+                sys.exit(1)
             time.sleep(5)
 
 
