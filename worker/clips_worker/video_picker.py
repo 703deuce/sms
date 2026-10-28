@@ -1728,6 +1728,7 @@ def watch_video_file(
                         user_text = (
                             user_text_base
                             + f"\n\nRETRY: You returned {len(moments)} moments but need at least {min_need}. "
+                            f"The video is exactly {float(duration_s):.1f} seconds — every timestamp must be >= 0 and < {float(duration_s):.1f}. "
                             f"Add strong moments covering these uncovered sections (do not duplicate existing beats): "
                             + "; ".join(gap[:8])
                         )

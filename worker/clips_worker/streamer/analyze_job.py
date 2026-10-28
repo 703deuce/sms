@@ -430,10 +430,15 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             clip_rows = []
             for pick in picks:
                 clip_id = f"clip_{uuid.uuid4().hex}"
+                from clips_worker.picker.public_copy import headline_text_from_pick
+
+                headline = headline_text_from_pick(
+                    {"title": pick.title, "hook": pick.hook, "pass1_why": getattr(pick, "pass1_why", None)}
+                )
                 init_edits = streamer_initial_clip_edits(
                     settings,
                     vod,
-                    suggested_headline=(pick.title or pick.hook or "")[:120],
+                    suggested_headline=headline or (pick.title or "")[:120],
                     clip_start_ms=pick.start_ms,
                     clip_end_ms=pick.end_ms,
                 )

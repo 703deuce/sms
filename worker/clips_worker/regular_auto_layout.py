@@ -64,6 +64,8 @@ def apply_regular_auto_layout(
         return edits
     layout = edits.get("layout") or {}
     mode = str(layout.get("mode") or "speaker_follow")
+    if mode in ("fit_blur", "fit_top", "full_frame"):
+        return edits
     if mode not in ("speaker_follow", "subject_follow", "auto"):
         return edits
     if has_face_and_speech(video, words):

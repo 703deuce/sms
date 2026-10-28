@@ -87,11 +87,20 @@ class ModalProvider:
             }
             for r in reqs
         ]
-        with ModalInflight():
-            import modal
+        timeout_s = max(30.0, float(os.environ.get("MODAL_RENDER_TIMEOUT_SEC", "120")))
+        import modal
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
-            Cls = modal.Cls.from_name(APP_NAME, "Renderer")
-            raws = Cls().render_batch.remote(items)
+        Cls = modal.Cls.from_name(APP_NAME, "Renderer")
+        with ModalInflight():
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(lambda: Cls().render_batch.remote(items))
+                try:
+                    raws = fut.result(timeout=timeout_s)
+                except FuturesTimeoutError as exc:
+                    raise TimeoutError(
+                        f"modal render_batch exceeded {timeout_s:.0f}s ({len(items)} items)"
+                    ) from exc
         out: list[RenderRes] = []
         for req, raw in zip(reqs, raws, strict=True):
             out.append(

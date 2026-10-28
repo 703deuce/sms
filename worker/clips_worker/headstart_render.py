@@ -135,6 +135,7 @@ def prune_headstart_to_planned(
     persisted_spans: set[tuple[int, int]] | None,
     span_lock: threading.Lock,
     project_id: str,
+    conn=None,
 ) -> None:
     from clips_worker.clip_segments import spans_same_segment
     from clips_worker.storage import delete_object
@@ -162,20 +163,45 @@ def prune_headstart_to_planned(
 
     for sk in drop:
         row = by_span.pop(sk, None)
-        clip_ids.pop(sk, None)
+        clip_id = clip_ids.pop(sk, None)
         with span_lock:
             rendered_spans.discard(sk)
             if persisted_spans is not None:
                 persisted_spans.discard(sk)
         if not row:
             continue
+        if clip_id and conn is not None:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        'DELETE FROM clips WHERE id = %s AND "projectId" = %s',
+                        (clip_id, project_id),
+                    )
+                conn.commit()
+                decision_log(
+                    "headstart",
+                    "deleted_db_row",
+                    project_id=project_id,
+                    clip_id=clip_id,
+                    span_start_ms=int(row.get("startMs") or sk[0]),
+                    span_end_ms=int(row.get("endMs") or sk[1]),
+                )
+            except Exception as exc:
+                decision_log(
+                    "headstart",
+                    "delete_db_row_failed",
+                    project_id=project_id,
+                    clip_id=clip_id,
+                    error=str(exc)[:160],
+                )
         decision_log(
             "headstart",
-            "pruned",
+            "pruned_unplanned",
             project_id=project_id,
             span_start_ms=int(row.get("startMs") or sk[0]),
             span_end_ms=int(row.get("endMs") or sk[1]),
             storage_deleted=True,
+            clip_id=clip_id,
         )
         for key_name in ("previewKey", "posterKey", "wordsKey", "cropKey"):
             storage_key = row.get(key_name)

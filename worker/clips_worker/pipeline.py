@@ -300,6 +300,20 @@ def initial_clip_edits(settings: dict) -> dict:
     return edits
 
 
+def _regular_initial_edits(settings: dict, pick: dict, clip_words: list[dict]) -> dict:
+    from clips_worker.picker.public_copy import headline_text_from_pick
+
+    edits = initial_clip_edits(settings)
+    edits["v"] = 2
+    headline = headline_text_from_pick(pick)
+    if headline:
+        edits["exportTemplate"] = {
+            "headlineBar": {"enabled": False, "text": headline},
+            "suggestedHeadline": headline,
+        }
+    return edits
+
+
 def streamer_initial_clip_edits(
     settings: dict,
     vod: dict | None = None,
@@ -337,8 +351,16 @@ def streamer_initial_clip_edits(
 
     headline_text = format_headline_for_export(suggested_headline or "")
     headline_on = bool(headline_text)
-    layout_mode = "fit_top" if headline_on else "fit_blur"
-    edits["layout"] = {"mode": layout_mode, "shotOverrides": []}
+    from clips_worker.clip_layout_policy import apply_content_layout_to_edits
+
+    edits = apply_content_layout_to_edits(
+        edits,
+        archetype="gaming_stream",
+        headline_on=headline_on,
+    )
+    layout = dict(edits.get("layout") or {})
+    layout.setdefault("shotOverrides", [])
+    edits["layout"] = layout
 
     streamer_cfg = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
     chat_cfg = streamer_cfg.get("chatOverlay") if isinstance(streamer_cfg.get("chatOverlay"), dict) else {}
@@ -368,9 +390,15 @@ def _finalize_regular_clip_edits(
     clip_words: list[dict],
     settings: dict,
     mode: str,
+    *,
+    pick: dict | None = None,
 ) -> dict:
     if mode == "anything" or settings.get("streamer"):
         return edits
+    from clips_worker.clip_layout_policy import apply_content_layout_to_edits
+
+    archetype = str((pick or {}).get("archetype") or "")
+    edits = apply_content_layout_to_edits(edits, archetype=archetype, headline_on=False)
     from clips_worker.regular_auto_layout import apply_regular_auto_layout
 
     return apply_regular_auto_layout(
@@ -714,7 +742,7 @@ def run_m4_pipeline(
                         "cropKey": crop_key,
                         "edits": _finalize_regular_clip_edits(
                             apply_clip_polish_initial(
-                                initial_clip_edits(settings),
+                                _regular_initial_edits(settings, pick, clip_words),
                                 pick,
                                 clip_words,
                                 settings,
@@ -723,6 +751,7 @@ def run_m4_pipeline(
                             clip_words,
                             settings,
                             mode,
+                            pick=pick,
                         ),
                         "aiMeta": ai_meta_out,
                     }
@@ -836,15 +865,6 @@ def run_m4_pipeline(
                     prune_headstart_to_planned,
                 )
 
-                prune_headstart_to_planned(
-                    head_render_state,
-                    picks,
-                    span_key=_span_key,
-                    rendered_spans=rendered_spans,
-                    persisted_spans=persisted_spans,
-                    span_lock=span_lock,
-                    project_id=project_id,
-                )
                 with stage_span("headstart_render", heartbeat=True):
                     await_headstart_render(
                         head_executor,
@@ -857,6 +877,16 @@ def run_m4_pipeline(
                         headstart_pick=headstart_pick,
                         project_id=project_id,
                     )
+                prune_headstart_to_planned(
+                    head_render_state,
+                    picks,
+                    span_key=_span_key,
+                    rendered_spans=rendered_spans,
+                    persisted_spans=persisted_spans,
+                    span_lock=span_lock,
+                    project_id=project_id,
+                    conn=conn,
+                )
                 print(
                     f"[clipper:speed] project={project_id} phase=pick_ms="
                     f"{int((time.monotonic() - pick0) * 1000)} picks={len(picks)}",
@@ -1085,7 +1115,7 @@ def run_m4_pipeline(
                         "cropKey": crop_key,
                         "edits": _finalize_regular_clip_edits(
                             apply_clip_polish_initial(
-                                initial_clip_edits(settings),
+                                _regular_initial_edits(settings, pick, clip_words),
                                 pick,
                                 clip_words,
                                 settings,
@@ -1094,6 +1124,7 @@ def run_m4_pipeline(
                             clip_words,
                             settings,
                             mode,
+                            pick=pick,
                         ),
                         "aiMeta": ai_meta_out,
                     }

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -167,6 +168,40 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
     if not render_id:
         raise RuntimeError("missing renderId")
 
+    from clips_worker.decision_log import bind_decision_log, decision_log, flush_decision_log, unbind_decision_log
+
+    bind_decision_log(conn, job["id"])
+    try:
+        _run_render_clip_job_body(
+            conn,
+            job,
+            post_progress,
+            render_id=render_id,
+            payload=payload,
+            t_job=t_job,
+            _check_drain=_check_drain,
+        )
+    finally:
+        flush_decision_log(force=True)
+        unbind_decision_log()
+
+
+def _export_decision(render_id: str, event: str, **fields: object) -> None:
+    from clips_worker.decision_log import decision_log
+
+    decision_log("export", event, renderId=render_id, **fields)
+
+
+def _run_render_clip_job_body(
+    conn,
+    job: dict,
+    post_progress,
+    *,
+    render_id: str,
+    payload: dict,
+    t_job: float,
+    _check_drain,
+) -> None:
     ctx = load_render_context(conn, render_id)
     _export_stage_log(render_id, "load_context", t_job)
     _check_drain("load_context")
@@ -202,6 +237,29 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
     settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}
     if aspect == "16:9":
         settings = {**settings, "layout": "fit"}
+
+    from clips_worker.edits_render import keep_segments, output_duration_ms
+
+    segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    expected_ms = output_duration_ms(edits)
+    layout_mode = (edits.get("layout") or {}).get("mode")
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    _export_decision(
+        render_id,
+        "inputs",
+        clip_start_ms=clip_start,
+        clip_end_ms=clip_end,
+        trim_in=int(edits["trim"]["in"]),
+        trim_out=int(edits["trim"]["out"]),
+        cut_count=len(edits.get("cutRanges") or []),
+        keep_segments=len(segs),
+        expected_duration_s=round(expected_ms / 1000.0, 3),
+        layout_mode=str(layout_mode or ""),
+        captions_enabled=bool((edits.get("captions") or {}).get("enabled")),
+        headline_enabled=bool((tpl.get("headlineBar") or {}).get("enabled")),
+        aspect=aspect,
+        resolution=resolution,
+    )
 
     preview_key = ctx["previewKey"]
     if preview_key and can_reuse_clip_preview_for_render(aspect, resolution, edits, clip_start, clip_end):
@@ -289,31 +347,52 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             )
         else:
             post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 90})
+            _export_decision(render_id, "render_start", path="full_edits_render")
             t_render = time.perf_counter()
-            _, _edited_words, srt_body = render_edited_clip(
-                clip_file,
-                out_mp4,
-                source_words,
-                edits,
-                cut_start,
-                cut_end,
-                settings,
-                td_path,
-                broll_specs=broll_specs or None,
-                audio_assets=audio_assets,
-                render_id=render_id,
-                render_meta=render_meta,
-                conn=conn,
-                workspace_id=workspace_id,
-                project_id=project_id,
-                clip_id=clip_id,
-                preview_crop_track=preview_crop_track,
-            )
-            _export_stage_log(
+            progress_stop = threading.Event()
+
+            def _render_progress_heartbeat() -> None:
+                for p in (58, 62, 66, 70, 74):
+                    if progress_stop.wait(12):
+                        return
+                    post_progress(
+                        job["id"],
+                        {"jobStatus": "RUNNING", "stage": "render_clip", "progress": p, "etaSeconds": max(15, 90 - p)},
+                    )
+
+            hb = threading.Thread(target=_render_progress_heartbeat, daemon=True)
+            hb.start()
+            try:
+                _, _edited_words, srt_body = render_edited_clip(
+                    clip_file,
+                    out_mp4,
+                    source_words,
+                    edits,
+                    cut_start,
+                    cut_end,
+                    settings,
+                    td_path,
+                    broll_specs=broll_specs or None,
+                    audio_assets=audio_assets,
+                    render_id=render_id,
+                    render_meta=render_meta,
+                    conn=conn,
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    clip_id=clip_id,
+                    preview_crop_track=preview_crop_track,
+                )
+            finally:
+                progress_stop.set()
+                hb.join(timeout=1.0)
+            post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 78, "etaSeconds": 45})
+            _export_decision(
                 render_id,
-                "render_edited_clip",
-                t_job,
-                {"renderSec": round(time.perf_counter() - t_render, 3), "fitFallback": bool(render_meta.get("fit_fallback"))},
+                "render_done",
+                render_sec=round(time.perf_counter() - t_render, 3),
+                gpu_provider=str(render_meta.get("gpu_provider") or render_meta.get("provider") or ""),
+                fit_fallback=bool(render_meta.get("fit_fallback")),
+                speakercrop_tail=str(render_meta.get("speakercrop_tail") or "")[:120],
             )
 
         brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
@@ -347,9 +426,12 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
 
         expected_s = output_duration_ms(edits) / 1000.0
         actual_s = _probe_duration_sec(out_mp4)
-        print(
-            f"[clipper:export] expected_s={expected_s:.2f} actual_s={actual_s:.2f} renderId={render_id}",
-            flush=True,
+        _export_decision(
+            render_id,
+            "duration_check",
+            expected_s=round(expected_s, 3),
+            actual_s=round(actual_s, 3),
+            delta_s=round(actual_s - expected_s, 3),
         )
         mark_render(conn, render_id, "READY", out_key, size, None, srt_key)
         if render_meta.get("fit_fallback"):

@@ -176,10 +176,17 @@ def ensure_short_source_hook(clip: dict, words: list[dict], source_ms: int) -> N
 
 
 def ensure_clip_title(clip: dict, words: list[dict], genre: str, *, source_ms: int | None = None) -> None:
+    from clips_worker.picker.public_copy import is_internal_picker_note
+
     title = trim_title(str(clip.get("title") or ""))
-    why = strip_internal_sentence_refs(str(clip.get("pass1_why") or clip.get("reason") or ""))
+    why = strip_internal_sentence_refs(str(clip.get("pass1_why") or ""))
+    reason = strip_internal_sentence_refs(str(clip.get("reason") or ""))
     if why and title and (title in why or why.startswith(title)):
         title = ""
+    if is_internal_picker_note(title):
+        title = ""
+    if is_internal_picker_note(reason) and not clip.get("hook"):
+        clip.pop("reason", None)
     s, e = int(clip["start_ms"]), int(clip["end_ms"])
     excerpt = _clip_word_excerpt(words, s, e)
     if source_ms is not None and source_ms <= SHORT_SOURCE_MAX_MS and excerpt:

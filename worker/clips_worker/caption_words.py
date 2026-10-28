@@ -1,21 +1,7 @@
 """Line-for-line equivalent of new-app/lib/clips/caption-words.ts."""
 from __future__ import annotations
 
-
-def keep_segments(trim_in: int, trim_out: int, cut_ranges: list) -> list[tuple[int, int]]:
-    segs: list[tuple[int, int]] = []
-    t = trim_in
-    for s, e in sorted(cut_ranges, key=lambda x: x[0]):
-        s, e = max(int(s), trim_in), min(int(e), trim_out)
-        if e <= t:
-            continue
-        if s > t:
-            segs.append((t, s))
-        t = max(t, e)
-    if t < trim_out:
-        segs.append((t, trim_out))
-    return [(a, b) for a, b in segs if b - a >= 80]
-
+from clips_worker.clip_keep_segments import keep_segments
 
 def remap_time_ms(t_ms: int, segs: list[tuple[int, int]]) -> int | None:
     acc = 0
@@ -41,9 +27,16 @@ def word_mid_ms(w: dict) -> float:
     return (float(w["s"]) + float(w["e"])) * 500.0
 
 
-def is_word_cut_by_ranges(w: dict, cut_ranges: list) -> bool:
+def is_word_cut_by_ranges(w: dict, cut_ranges: list, *, trim_in: int, trim_out: int) -> bool:
     mid = word_mid_ms(w)
     for a, b in cut_ranges:
+        a, b = int(a), int(b)
+        if b <= trim_in or a >= trim_out:
+            continue
+        a = max(a, trim_in)
+        b = min(b, trim_out)
+        if b <= a:
+            continue
         if mid >= a and mid < b:
             return True
     return False
@@ -57,7 +50,7 @@ def build_caption_words(words: list[dict], edits: dict) -> list[dict]:
     segs = keep_segments(trim_in, trim_out, cut_ranges)
     out: list[dict] = []
     for w in words:
-        if is_word_cut_by_ranges(w, cut_ranges):
+        if is_word_cut_by_ranges(w, cut_ranges, trim_in=trim_in, trim_out=trim_out):
             continue
         s_ms = int(float(w["s"]) * 1000)
         e_ms = int(float(w["e"]) * 1000)

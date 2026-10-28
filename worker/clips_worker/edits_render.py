@@ -126,20 +126,7 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
     )
 
 
-def keep_segments(trim_in: int, trim_out: int, cut_ranges: list) -> list[tuple[int, int]]:
-    segs: list[tuple[int, int]] = []
-    t = trim_in
-    for s, e in sorted(cut_ranges, key=lambda x: x[0]):
-        s, e = max(int(s), trim_in), min(int(e), trim_out)
-        if e <= t:
-            continue
-        if s > t:
-            segs.append((t, s))
-        t = max(t, e)
-    if t < trim_out:
-        segs.append((t, trim_out))
-    return [(a, b) for a, b in segs if b - a >= 80]
-
+from clips_worker.clip_keep_segments import keep_segments
 
 def output_duration_ms(edits: dict) -> int:
     segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
