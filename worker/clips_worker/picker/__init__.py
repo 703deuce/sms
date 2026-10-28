@@ -5,6 +5,12 @@ from collections.abc import Callable
 from typing import Any
 
 from clips_worker.picker.cleanup import finalize_picks
+from clips_worker.content_detection import (
+    layout_genre_hint,
+    log_ignored_legacy_content_settings,
+    normalize_content_genre,
+    normalize_content_mode,
+)
 from clips_worker.picker.config import PICKER_LLM_GENRE
 from clips_worker.job_telemetry import record_video_picker_stats
 from clips_worker.target_clip_len import resolve_clip_length_policy
@@ -51,11 +57,14 @@ def pick_talking_clips(
             None,
         )
 
-    layout_genre = settings.get("genre", "podcast")
+    layout_genre = layout_genre_hint(settings)
     picker_genre = PICKER_LLM_GENRE
     prompt = (settings.get("prompt") or "").strip()
-    if settings.get("mode") and settings.get("mode") != "talking":
-        picker_info("picker_ui_mode_ignored", mode=settings.get("mode"))
+    content_mode = normalize_content_mode(settings.get("mode"))
+    content_genre = normalize_content_genre(settings.get("genre"))
+    legacy = log_ignored_legacy_content_settings(settings)
+    if legacy:
+        picker_info("picker_legacy_content_settings_ignored", **legacy)
     source_ms = max(1, range_end_ms - range_start_ms)
     clip_length = settings.get("clipLength") or settings.get("clip_length") or "auto"
     length_policy = resolve_clip_length_policy(settings)
@@ -67,6 +76,8 @@ def pick_talking_clips(
         range_end_ms=range_end_ms,
         source_duration_ms=source_ms,
         genre=picker_genre,
+        content_mode=content_mode,
+        content_genre=content_genre,
         layout_genre=layout_genre,
         clip_length=clip_length,
         target_clip_len_s=length_policy.target_s,
@@ -238,7 +249,7 @@ def pick_talking_clips(
             picker_info("pass1_fallback_span", end_sentence=moments[0]["end_sentence"])
 
         source_duration_s = source_ms / 1000.0
-        if on_headstart_picks and settings.get("mode") not in ("captions", "anything"):
+        if on_headstart_picks and content_mode not in ("captions",):
             try:
                 heuristic = pass1_heuristic_candidates(
                     moments[:5],

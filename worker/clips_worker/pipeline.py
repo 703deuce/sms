@@ -334,8 +334,6 @@ def run_m4_pipeline(
     settings = project.get("settings") or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
-    if settings.get("streamer"):
-        settings = {**settings, "genre": "gaming_stream"}
     job_payload = {}
     if job:
         job_payload = job.get("payload") or {}
@@ -346,7 +344,9 @@ def run_m4_pipeline(
     range_start = int(project.get("rangeStartMs") or 0)
     range_end = int(project.get("rangeEndMs") or 0)
 
-    mode = settings.get("mode") or "talking"
+    from clips_worker.content_detection import normalize_content_mode
+
+    mode = normalize_content_mode(settings.get("mode"))
     source_duration_ms = max(1, range_end - range_start) if range_end > range_start else 0
     from clips_worker.target_clip_len import enrich_settings_with_clip_length
 

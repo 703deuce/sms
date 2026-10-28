@@ -16,7 +16,7 @@ def _cache_key(settings: dict[str, Any], range_start_ms: int, range_end_ms: int)
         else resolve_target_clip_len_s(None, settings)
     )
     return {
-        "genre": settings.get("genre", "podcast"),
+        "genre": settings.get("genre") or "auto",
         "prompt": (settings.get("prompt") or "").strip(),
         "clipLength": settings.get("clipLength") or settings.get("clip_length") or "auto",
         "clipLenMode": settings.get("clipLenMode") or settings.get("clip_len_mode"),

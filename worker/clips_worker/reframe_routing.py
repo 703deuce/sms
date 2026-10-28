@@ -50,7 +50,9 @@ def _v3_probe(video: Path) -> PersonCountSummary:
 
 
 def _layout_eligible_for_probe(settings: dict, layout: str) -> bool:
-    if (settings.get("mode") or "talking") != "talking":
+    from clips_worker.content_detection import normalize_content_mode
+
+    if normalize_content_mode(settings.get("mode")) not in ("auto", "talking"):
         return False
     return layout in _AUTO_ROUTE_LAYOUTS
 

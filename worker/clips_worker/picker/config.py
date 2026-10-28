@@ -41,6 +41,8 @@ def load_cut_rules() -> str:
 def resolve_genre_key(genre: str) -> str:
     cfg = genres_config()
     g = (genre or "podcast").strip().lower()
+    if g in ("auto", ""):
+        return PICKER_LLM_GENRE
     if g == PICKER_LLM_GENRE:
         return PICKER_LLM_GENRE
     ui_map = cfg.get("ui_genre_map") or {}
