@@ -177,6 +177,16 @@ def guard_twitch_growing_archive_url(vod: dict, url: str, *, allow_growing: bool
     videos = list(videos_payload.get("data") or [])
 
     url_vid = _twitch_video_id_from_url(url)
+    if not url_vid:
+        # Live channel URL ingest (Helix archive list empty or not published yet).
+        log_archive_resolve_decision(
+            stream_started_at=stream_started_at or None,
+            candidates=[_candidate_summary(v) for v in videos],
+            picked=stream_id or login,
+            reason="live_channel_url",
+        )
+        return
+
     ytdlp_live_status: str | None = None
     if url_vid:
         try:

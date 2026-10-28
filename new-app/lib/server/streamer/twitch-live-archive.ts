@@ -5,6 +5,9 @@ export const TWITCH_LIVE_ARCHIVE_MATCH_MS = 10 * 60 * 1000
 export const TWITCH_NO_LIVE_ARCHIVE_MSG =
   "This live stream doesn't have a saved broadcast yet (Twitch may not have published it). Try again in a few minutes."
 
+export const TWITCH_NO_PAST_BROADCASTS_MSG =
+  'No past broadcasts found. The creator must enable “Store past broadcasts” on Twitch, or wait until an archive exists.'
+
 export type TwitchArchiveCandidate = {
   id: string
   created_at: string
@@ -57,11 +60,20 @@ export function pickLiveTwitchArchive(
   return null
 }
 
+export function liveStreamDurationSec(streamStartedAt: string | undefined): number {
+  if (!streamStartedAt) return 3600
+  const t = Date.parse(streamStartedAt)
+  if (Number.isNaN(t)) return 3600
+  return Math.max(60, Math.floor((Date.now() - t) / 1000))
+}
+
 export function logArchiveResolveDecision(fields: {
+  login: string
+  live: boolean
   stream_started_at?: string | null
   candidates: TwitchArchiveCandidate[]
   picked?: string | null
-  reason?: string | null
+  reason: string
 }) {
   const candidates = fields.candidates.map((c) => ({
     id: c.id,
@@ -72,12 +84,14 @@ export function logArchiveResolveDecision(fields: {
   }))
   const rec = {
     ts: Date.now() / 1000,
-    stage: 'stream_import',
+    stage: 'streamer_paste',
     event: 'archive_resolve',
+    login: fields.login,
+    live: fields.live,
     stream_started_at: fields.stream_started_at ?? null,
     candidates,
     picked: fields.picked ?? null,
-    reason: fields.reason ?? null,
+    reason: fields.reason,
   }
-  console.info(`[clipper:decision] ${JSON.stringify(rec)}`)
+  console.info(`[streamer:decision] ${JSON.stringify(rec)}`)
 }
