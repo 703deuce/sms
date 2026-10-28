@@ -1152,10 +1152,8 @@ def watch_video_file(
                     chunk_offset_s=0.0,
                     max_span_s=max_span,
                 )
-                raw_count = len(moments)
+                moments_before_dedupe = len(moments)
                 moments = dedupe_overlapping_video_picker_moments(moments)
-                if raw_count != len(moments):
-                    meta["moments_deduped"] = {"before": raw_count, "after": len(moments)}
                 if not moments:
                     model_failed_reason = "no_valid_moments_after_normalize"
                     parsed_ok = None
@@ -1175,6 +1173,13 @@ def watch_video_file(
                         target_clip_len_s=target_clip_len_s,
                         chunk_label=chunk_label,
                     )
+                before_final_dedupe = len(moments)
+                moments = dedupe_overlapping_video_picker_moments(moments)
+                meta["moments_deduped"] = {
+                    "before": moments_before_dedupe,
+                    "after": len(moments),
+                    "after_reassess": before_final_dedupe,
+                }
                 _log_min_moments_shortfall(duration_s, len(moments), chunk_label)
                 meta["min_moments_met"] = len(moments) >= int(meta.get("min_moments") or 0)
                 meta["ok"] = True

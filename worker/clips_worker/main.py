@@ -612,9 +612,12 @@ def main() -> None:
     host = db_host_label(dsn)
     from clips_worker.worker_identity import worker_instance_id
 
+    from clips_worker.build_info import clips_worker_git_sha_short
+
     log(
         f"clips-worker starting worker_id={os.environ.get('WORKER_ID', 'worker-1')} "
-        f"instance={worker_instance_id()} lane={worker_lane()} db={host}"
+        f"instance={worker_instance_id()} lane={worker_lane()} "
+        f"git_sha={clips_worker_git_sha_short(12)} db={host}"
     )
     log_models()
     log_export_sfx_assets()

@@ -8,6 +8,65 @@ from clips_worker.picker.snap_bounds import snap_bounds
 from clips_worker.target_clip_len import ABS_MIN_MS, ClipLengthPolicy, resolve_clip_length_policy
 
 
+def _clamp_boundary_payoff_to_payoff_sentence(pick: dict, sentences) -> None:
+    """Stop LLM/visual payoff hints from stretching a clip to EOF."""
+    try:
+        pi = int(pick.get("payoff_id", pick.get("end_sentence", 0)))
+    except (TypeError, ValueError):
+        return
+    if pi < 0 or pi >= len(sentences):
+        return
+    payoff_end = int(sentences[pi].end_ms)
+    bp = pick.get("boundary_payoff_ms")
+    if bp is None:
+        return
+    try:
+        bp_i = int(bp)
+    except (TypeError, ValueError):
+        return
+    if bp_i > payoff_end + 8_000:
+        picker_info(
+            "boundary_payoff_clamp",
+            title=str(pick.get("title", ""))[:60],
+            before=bp_i,
+            after=payoff_end,
+            payoff_id=pi,
+        )
+        pick["boundary_payoff_ms"] = payoff_end
+
+
+def _tighten_overspan_sentences(pick: dict, sentences, *, max_ms: int) -> None:
+    """Shrink wide pass1 spans toward payoff_id (e.g. meow beat vs whole monologue block)."""
+    ss = int(pick["start_sentence"])
+    es = int(pick["end_sentence"])
+    if ss < 0 or es >= len(sentences) or ss > es:
+        return
+    try:
+        pi = int(pick.get("payoff_id", es))
+    except (TypeError, ValueError):
+        pi = es
+    pi = max(ss, min(pi, es))
+    span_ms = int(sentences[es].end_ms) - int(sentences[ss].start_ms)
+    if span_ms <= max_ms:
+        return
+    end_ms = int(sentences[pi].end_ms)
+    start_idx = pi
+    while start_idx > ss and (end_ms - int(sentences[start_idx - 1].start_ms)) > max_ms:
+        start_idx -= 1
+    pick["start_sentence"] = start_idx
+    pick["end_sentence"] = max(start_idx, pi)
+    picker_info(
+        "tighten_overspan",
+        title=str(pick.get("title", ""))[:60],
+        before_ss=ss,
+        before_es=es,
+        after_ss=start_idx,
+        after_es=pick["end_sentence"],
+        max_ms=max_ms,
+        span_ms_before=span_ms,
+    )
+
+
 def min_pick_duration_ms(
     range_start_ms: int,
     range_end_ms: int,
@@ -65,14 +124,22 @@ def finalize_picks(
         if ss < 0 or es >= len(sentences) or ss > es:
             dropped_bounds += 1
             continue
+        pick_row = {**row}
+        max_ms = int(
+            pick_row.get("length_max_ms")
+            or length_policy.effective_max_duration_ms(pick_row, range_end_ms)
+        )
+        _tighten_overspan_sentences(pick_row, sentences, max_ms=max_ms)
+        ss, es = pick_row["start_sentence"], pick_row["end_sentence"]
         start_ms = max(range_start_ms, sentences[ss].start_ms)
         end_ms = min(range_end_ms, sentences[es].end_ms)
         if gkey == "comedy_standup" and laugh_tail:
             lo, hi = float(laugh_tail[0]), float(laugh_tail[1])
             end_ms += int(((lo + hi) / 2) * 1000)
-        pick = {**row, "start_ms": start_ms, "end_ms": end_ms}
+        pick = {**pick_row, "start_ms": start_ms, "end_ms": end_ms}
         if not pick.get("length_max_ms"):
             pick["length_max_ms"] = length_policy.effective_max_duration_ms(pick, range_end_ms)
+        _clamp_boundary_payoff_to_payoff_sentence(pick, sentences)
         if visual_moments and not pick.get("boundary_setup_ms") and not pick.get("boundary_payoff_ms"):
             try:
                 from clips_worker.visual_boundaries import infer_boundaries_from_moments, visual_boundaries_enabled

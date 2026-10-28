@@ -30,7 +30,13 @@ def probe_callback_health(base_url: str, timeout_sec: float = 15.0) -> tuple[boo
                 return False, f"health ok=false from {url}"
         except json.JSONDecodeError:
             return False, f"non-JSON health from {url}"
-        return True, f"ok {url} commitSha={json.loads(body).get('commitSha', '?')[:12]}"
+        from clips_worker.build_info import clips_worker_git_sha_short
+
+        web_sha = json.loads(body).get("commitSha", "?")
+        worker_sha = clips_worker_git_sha_short(12)
+        return True, (
+            f"ok {url} web_commitSha={str(web_sha)[:12]} worker_git_sha={worker_sha}"
+        )
     except Exception as exc:
         return False, f"{url} failed: {exc!r}"
 

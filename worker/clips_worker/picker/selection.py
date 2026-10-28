@@ -1,4 +1,4 @@
-"""Playbook §7 step 5: greedy selection with archetype diversity."""
+"""Playbook §7 step 5: ship all scored picks; merge only >50% timeline overlap."""
 from __future__ import annotations
 
 import re
@@ -8,7 +8,7 @@ from clips_worker.picker.config import selection_settings
 from clips_worker.picker.log_util import picker_info
 
 
-def _overlap(a: tuple[int, int], b: tuple[int, int]) -> float:
+def _overlap_fraction(a: tuple[int, int], b: tuple[int, int]) -> float:
     lo = max(a[0], b[0])
     hi = min(a[1], b[1])
     if hi <= lo:
@@ -33,18 +33,10 @@ def _clip_score(p: dict) -> float:
 
 
 def _r10_near_duplicate(a: dict, b: dict) -> bool:
-    """R10: >50% overlap on shorter span, or starts within 3s (post-snap)."""
-    if abs(int(a["start_ms"]) - int(b["start_ms"])) < 3000:
-        return True
+    """>50% overlap on shorter span (no start-within-3s rule)."""
     span_a = (int(a["start_ms"]), int(a["end_ms"]))
     span_b = (int(b["start_ms"]), int(b["end_ms"]))
-    lo = max(span_a[0], span_b[0])
-    hi = min(span_a[1], span_b[1])
-    if hi <= lo:
-        return False
-    overlap_ms = hi - lo
-    shorter = min(span_a[1] - span_a[0], span_b[1] - span_b[0])
-    return overlap_ms / max(shorter, 1) > 0.5
+    return _overlap_fraction(span_a, span_b) > 0.5
 
 
 def dedupe_r10(picks: list[dict]) -> list[dict]:
@@ -59,78 +51,63 @@ def dedupe_r10(picks: list[dict]) -> list[dict]:
     return kept
 
 
+def _duplicate_of_kept(p: dict, kept: list[dict]) -> dict | None:
+    span = (int(p["start_ms"]), int(p["end_ms"]))
+    for k in kept:
+        if _overlap_fraction(span, (int(k["start_ms"]), int(k["end_ms"]))) > 0.5:
+            return k
+    return None
+
+
 def select_clips(
     picks: list[dict],
     source_duration_ms: int,
     *,
     force_best: bool = False,
 ) -> list[dict]:
+    """Keep every candidate unless it >50% overlaps a higher-scored pick (same span rule as R10)."""
+    del force_best  # legacy kwarg; behavior is always rank-and-ship
     cfg = selection_settings()
-    min_final = cfg["min_final"]
-    max_clips = cfg["max_clips"]
-    per_min = cfg["clips_per_minute"]
-    min_arch = cfg["min_archetypes_per_hour"]
-    max_share = cfg["max_same_archetype_share"]
-    jac_thr = cfg["near_duplicate_jaccard"]
-    overlap_drop = cfg["overlap_drop"]
-
-    from clips_worker.video_picker_prompt import min_moments_for_video
-
-    minutes = max(1, source_duration_ms / 60_000)
-    cap = min(max_clips, max(1, int(round(minutes * per_min))))
-    if source_duration_ms <= 360_000:
-        short_floor = min(3, max(2, int(round(minutes * 0.55))))
-        cap = max(cap, short_floor)
-    min_floor = min_moments_for_video(max(1, int(source_duration_ms / 1000)))
-    if min_floor > cap:
-        picker_info("selection_cap_raise_min_moments", cap_before=cap, cap_after=min_floor)
-        cap = min(max_clips, min_floor)
+    max_clips = int(cfg["max_clips"])
 
     ranked = sorted(picks, key=lambda x: -_clip_score(x))
     kept: list[dict] = []
-    archetypes: dict[str, int] = {}
-
     for p in ranked:
-        final = _clip_score(p)
-        if final < min_final:
+        dup = _duplicate_of_kept(p, kept)
+        if dup is not None:
+            picker_info(
+                "selection_drop",
+                reason="overlap_duplicate",
+                title=str(p.get("title", ""))[:80],
+                start_ms=int(p["start_ms"]),
+                end_ms=int(p["end_ms"]),
+                score=_clip_score(p),
+                kept_title=str(dup.get("title", ""))[:80],
+                kept_start_ms=int(dup["start_ms"]),
+                kept_score=_clip_score(dup),
+            )
             continue
-        span = (p["start_ms"], p["end_ms"])
-        if any(_overlap(span, (k["start_ms"], k["end_ms"])) > overlap_drop for k in kept):
-            continue
-        text = p.get("title", "") + " " + p.get("reason", "")
-        if any(jaccard(text, k.get("title", "") + " " + k.get("reason", "")) >= jac_thr for k in kept):
-            continue
-        arch = p.get("archetype") or "unknown"
-        if kept and len(kept) >= 2:
-            if archetypes.get(arch, 0) / len(kept) >= max_share:
-                continue
         kept.append(p)
-        archetypes[arch] = archetypes.get(arch, 0) + 1
-        if len(kept) >= cap:
-            break
 
-    hours = source_duration_ms / 3_600_000
-    need_arch = max(0, int(min_arch * hours)) if hours >= 0.5 else 0
-    if need_arch and len({p.get("archetype") for p in kept}) < min(need_arch, 2) and len(ranked) > len(kept):
-        for p in ranked:
-            if p in kept:
-                continue
-            arch = p.get("archetype")
-            if arch and arch not in {k.get("archetype") for k in kept}:
-                kept.append(p)
-                break
+    if len(kept) > max_clips:
+        overflow = kept[max_clips:]
+        kept = kept[:max_clips]
+        for p in overflow:
+            picker_info(
+                "selection_drop",
+                reason="max_clips_cap",
+                cap=max_clips,
+                title=str(p.get("title", ""))[:80],
+                start_ms=int(p["start_ms"]),
+                end_ms=int(p["end_ms"]),
+                score=_clip_score(p),
+            )
 
-    if not kept and ranked:
-        for p in ranked:
-            if _clip_score(p) < min_final:
-                continue
-            kept.append(p)
-            if len(kept) >= cap:
-                break
-
-    if not kept and ranked and force_best:
-        kept = dedupe_r10(ranked[:cap])
-        picker_info("selection_force_best", count=len(kept), cap=cap)
-
-    kept = dedupe_r10(kept)
-    return kept[:cap]
+    picker_info(
+        "selection",
+        candidates=len(picks),
+        selected=len(kept),
+        source_duration_ms=int(source_duration_ms),
+        max_clips=max_clips,
+    )
+    return kept

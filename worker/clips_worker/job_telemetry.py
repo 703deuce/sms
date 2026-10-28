@@ -72,6 +72,7 @@ def record_video_picker_stats(
         "sections": sections or meta.get("sections") or [],
         "min_moments": meta.get("min_moments"),
         "min_moments_met": meta.get("min_moments_met"),
+        "moments_deduped": meta.get("moments_deduped"),
         "ok": bool(meta.get("ok")),
         "error": (meta.get("error") or "")[:300] or None,
         "status": meta.get("status"),
