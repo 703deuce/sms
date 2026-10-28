@@ -10,6 +10,7 @@ import psycopg2
 from clips_worker.job_reliability import (
     JOB_LOCK_HEARTBEAT_SECONDS,
     JOB_LOCK_STALE_SECONDS,
+    JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL,
     stale_lock_interval_sql,
 )
 from clips_worker.streamer.lanes import lane_types_sql_in
@@ -46,9 +47,29 @@ def touch_job_lock_dsn(dsn: str, job_id: str, instance_id: str) -> None:
 
 
 def requeue_stale_running_jobs(conn, stale_seconds: int = JOB_LOCK_STALE_SECONDS) -> int:
-    """Idempotent: requeue RUNNING lane jobs with no recent lock heartbeat."""
+    """Idempotent: fail or requeue RUNNING lane jobs with no recent lock heartbeat."""
     interval = stale_lock_interval_sql(stale_seconds)
     with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            UPDATE clip_jobs
+            SET status = 'FAILED',
+                "lockedBy" = NULL,
+                "lockedAt" = NULL,
+                error = LEFT(
+                  COALESCE(error, '') || ' Stale lock exceeded max attempts',
+                  500
+                ),
+                "finishedAt" = NOW()
+            WHERE status = 'RUNNING'
+              AND type IN ({lane_types_sql_in()})
+              AND type LIKE 'STREAM_%'
+              AND attempts >= %s
+              AND ("lockedAt" IS NULL OR "lockedAt" < NOW() - {interval})
+            """,
+            (JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL,),
+        )
+        failed = int(cur.rowcount or 0)
         cur.execute(
             f"""
             UPDATE clip_jobs
@@ -67,9 +88,11 @@ def requeue_stale_running_jobs(conn, stale_seconds: int = JOB_LOCK_STALE_SECONDS
         )
         n = int(cur.rowcount or 0)
     conn.commit()
+    if failed:
+        _log(f"stale lock recovery: failed {failed} RUNNING job(s) (attempts>={JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL})")
     if n:
         _log(f"stale lock recovery: requeued {n} RUNNING job(s)")
-    return n
+    return n + failed
 
 
 def requeue_running_not_owned_by_instance(conn, instance_id: str) -> int:

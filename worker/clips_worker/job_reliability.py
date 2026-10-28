@@ -4,6 +4,8 @@ from __future__ import annotations
 # Match new-app/lib/server/clips/job-reliability.ts JOB_HEARTBEAT_STALE_MS
 JOB_LOCK_STALE_SECONDS = 3 * 60
 JOB_LOCK_HEARTBEAT_SECONDS = 30
+# Stream analyze/import: fail after this many claims (includes stale requeues).
+JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL = 3
 
 
 def stale_lock_interval_sql(seconds: int = JOB_LOCK_STALE_SECONDS) -> str:

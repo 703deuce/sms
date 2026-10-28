@@ -71,6 +71,59 @@ def _tighten_overspan_sentences(pick: dict, sentences, *, max_ms: int) -> None:
     )
 
 
+def _apply_peak_hook_window(
+    pick: dict,
+    sentences,
+    visual_moments: list[dict] | None,
+    range_start_ms: int,
+) -> None:
+    """Shrink wide spans toward visual peak/hook (e.g. meow beat vs 53s monologue tail)."""
+    before = (int(pick["start_ms"]), int(pick["end_ms"]))
+    payoff_end = int(pick["end_ms"])
+    try:
+        pi = int(pick.get("payoff_id", pick.get("end_sentence", 0)))
+        if 0 <= pi < len(sentences):
+            payoff_end = int(sentences[pi].end_ms)
+    except (TypeError, ValueError):
+        pass
+    bp = pick.get("boundary_payoff_ms")
+    if bp is not None:
+        try:
+            payoff_end = min(payoff_end, int(bp))
+        except (TypeError, ValueError):
+            pass
+    peak_ms: int | None = None
+    hook_ms: int | None = None
+    if visual_moments:
+        for vm in visual_moments:
+            try:
+                ps = float(vm.get("peak_s") if vm.get("peak_s") is not None else vm.get("t_s") or 0)
+                hs = float(vm.get("hook_s") if vm.get("hook_s") is not None else vm.get("start_s") or ps)
+            except (TypeError, ValueError):
+                continue
+            abs_peak = int(ps * 1000) + int(range_start_ms)
+            abs_hook = int(hs * 1000) + int(range_start_ms)
+            if before[0] - 2000 <= abs_peak <= before[1] + 2000:
+                peak_ms = abs_peak
+                hook_ms = abs_hook
+                break
+    if peak_ms is None:
+        return
+    hook_ms = hook_ms if hook_ms is not None else peak_ms
+    new_start = max(before[0], hook_ms - 3000)
+    new_end = min(before[1], payoff_end + 700)
+    if new_end - new_start < MIN_SHIPPED_CLIP_MS:
+        return
+    pick["start_ms"] = new_start
+    pick["end_ms"] = new_end
+    if (new_start, new_end) != before:
+        print(
+            f"[clipper:bounds] before={before[0]}-{before[1]} after={new_start}-{new_end} "
+            f"reason=peak_hook title={str(pick.get('title', ''))[:50]}",
+            flush=True,
+        )
+
+
 def min_pick_duration_ms(
     range_start_ms: int,
     range_end_ms: int,
@@ -187,6 +240,7 @@ def finalize_picks(
             except Exception:
                 pass
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
+        _apply_peak_hook_window(pick, sentences, visual_moments, range_start_ms)
         extend_pick_to_min_duration(
             pick,
             sentences,
@@ -224,6 +278,9 @@ def finalize_picks(
         settings=settings if isinstance(settings, dict) else {},
         source_duration_ms=duration_ms,
     )
+    from clips_worker.clip_span_resolve import resolve_overlaps
+
+    selected = resolve_overlaps(selected, min_clip_ms=MIN_SHIPPED_CLIP_MS)
     picker_info(
         "finalize_done",
         pass2_in=len(scored),

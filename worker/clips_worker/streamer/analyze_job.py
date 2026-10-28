@@ -335,7 +335,12 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             if video_picker_enabled():
                 from clips_worker.video_picker import resolve_video_picker_stream_ranges
 
-                plan_ranges = resolve_video_picker_stream_ranges(duration_ms)
+                analysed_ms = max(1, int(duration_ms))
+                rs = int(vod.get("rangeStartMs") or 0)
+                re = int(vod.get("rangeEndMs") or 0)
+                if re > rs:
+                    analysed_ms = re - rs
+                plan_ranges = resolve_video_picker_stream_ranges(analysed_ms)
                 with stage_span("video_picker", heartbeat=True, chunks=len(plan_ranges)):
                     from clips_worker.picker.sentences import build_sentences
                     from clips_worker.video_picker import format_timestamped_transcript
@@ -373,13 +378,17 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             from clips_worker.picker.pick_quota import compute_pick_want, ensure_stream_picks, log_pick_stage
 
             want = compute_pick_want(settings, duration_ms)
-            picks = ensure_stream_picks(
-                picks,
-                want=want,
-                duration_ms=duration_ms,
-                signals_payload=signals_payload,
-                words=words,
-            )
+            try:
+                picks = ensure_stream_picks(
+                    picks,
+                    want=want,
+                    duration_ms=duration_ms,
+                    signals_payload=signals_payload,
+                    words=words,
+                    audio_path=audio_path,
+                )
+            except Exception as exc:
+                print(f"[clipper:pick] backfill_error={str(exc)[:240]}", flush=True)
             log_pick_stage(
                 "stream",
                 want=want,

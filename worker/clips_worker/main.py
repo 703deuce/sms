@@ -704,9 +704,45 @@ def main() -> None:
                     log("[clipper:worker] drain complete — exiting")
                     return
                 except Exception as exc:
-                    msg = format_subprocess_error(exc)
+                    try:
+                        msg = format_subprocess_error(exc)
+                    except BaseException as fmt_exc:
+                        msg = str(exc)[:4000]
+                        log(f"format_subprocess_error failed job={job['id']}: {fmt_exc}")
                     log(f"job {job['id']} failed: {msg}")
                     job_type = job.get("type") or ""
+                    attempts = int(job.get("attempts") or 0)
+                    from clips_worker.job_reliability import JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL
+
+                    def _mark_stream_job_failed() -> None:
+                        payload = job.get("payload") or {}
+                        if isinstance(payload, str):
+                            payload = json.loads(payload)
+                        vod_id = payload.get("vodId")
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                'UPDATE clip_jobs SET status=%s, error=%s, "finishedAt"=NOW() WHERE id=%s',
+                                ("FAILED", msg[:4000], job["id"]),
+                            )
+                            if vod_id:
+                                cur.execute(
+                                    'UPDATE stream_vods SET error=%s, "updatedAt"=NOW() WHERE id=%s',
+                                    (msg[:4000], vod_id),
+                                )
+                                cur.execute(
+                                    """
+                                    UPDATE clip_projects SET status='FAILED', stage='failed', progress=0,
+                                      error=%s, "updatedAt"=NOW()
+                                    WHERE id = (SELECT "projectId" FROM stream_vods WHERE id=%s)
+                                    """,
+                                    (msg[:500], vod_id),
+                                )
+                        conn.commit()
+                        post_progress(
+                            job["id"],
+                            terminal_failure_progress_payload(job_type, msg),
+                        )
+
                     if job_type == "PROCESS_PROJECT":
                         print(
                             f"[clipper:job] failed job={job['id']} project={job.get('projectId')} "
@@ -717,7 +753,10 @@ def main() -> None:
                     from clips_worker.streamer.errors import RetryableError
 
                     if isinstance(exc, RetryableError) and (job.get("type") or "").startswith("STREAM_"):
-                        delay_s = min(300, 15 * max(1, int(job.get("attempts") or 1)))
+                        if attempts >= JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL:
+                            _mark_stream_job_failed()
+                            continue
+                        delay_s = min(300, 15 * max(1, attempts))
                         with conn.cursor() as cur:
                             cur.execute(
                                 """
@@ -796,6 +835,9 @@ def main() -> None:
                         "STREAM_RENDER",
                         "STREAM_AUTOPULL",
                     ):
+                        if attempts >= JOB_MAX_STREAM_ATTEMPTS_BEFORE_FAIL:
+                            _mark_stream_job_failed()
+                            continue
                         payload = job.get("payload") or {}
                         if isinstance(payload, str):
                             payload = json.loads(payload)

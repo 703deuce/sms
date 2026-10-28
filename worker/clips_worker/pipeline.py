@@ -189,6 +189,21 @@ def reframe_clip_preview(
 
     render_meta: dict = {}
 
+    layout_cfg = settings.get("layout") if isinstance(settings.get("layout"), dict) else {}
+    layout_mode = str(layout_cfg.get("mode") or "speaker_follow").lower()
+    needs_speaker_reframe = motion_subject or bool(settings.get("autoZoom"))
+    if layout_mode in ("fit_blur", "fit_top", "fit", "center_crop", "full_frame", "fill"):
+        needs_speaker_reframe = False
+
+    if not needs_speaker_reframe:
+        from clips_worker.render_clip import aspect_size, ffmpeg_fit_export
+
+        aspect = str(settings.get("aspectRatio") or "9:16")
+        w, h = aspect_size(aspect, "720p")
+        ffmpeg_fit_export(clip_file, out_mp4, w, h)
+        write_fit_blur_crop_track(clip_file, crop_track_path, clip_start_ms)
+        return out_mp4, "fit_blur", reframe_settings
+
     if has_face_and_speech(clip_file, clip_words):
         rendered = run_speakercrop(
             clip_file,
@@ -890,9 +905,9 @@ def run_m4_pipeline(
                 flush=True,
             )
 
-            from clips_worker.clip_span_resolve import resolve_picks_for_render
+            from clips_worker.clip_span_resolve import resolve_overlaps
 
-            picks = resolve_picks_for_render(picks)
+            picks = resolve_overlaps(picks)
 
             if not picks:
                 empty_msg = picker_message or "No complete, self-contained moments found."
@@ -1104,6 +1119,11 @@ def run_m4_pipeline(
         print(
             f"[clipper:speed] project={project_id} phase=pipeline_total_ms="
             f"{int((time.monotonic() - pipeline_t0) * 1000)}",
+            flush=True,
+        )
+        print(
+            f"[clipper:speed] project={project_id} stage=summary "
+            f"total_ms={int((time.monotonic() - pipeline_t0) * 1000)}",
             flush=True,
         )
         log_project_vision_stats(project_id)

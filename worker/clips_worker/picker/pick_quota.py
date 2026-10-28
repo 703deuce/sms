@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+from pathlib import Path
 from typing import Any
 
 from clips_worker.picker.config import selection_settings
@@ -61,6 +62,16 @@ def finalize_regular_picks_with_quota(
     want = compute_pick_want(settings, source_duration_ms)
     after_overlap = len(selected)
     topped = top_up_selected_picks(selected, pool, min_n=want)
+    if len(topped) < want and pool:
+        seen = {(_int_ms(p, "start_ms"), _int_ms(p, "end_ms")) for p in topped}
+        for row in sorted(pool, key=lambda p: -float(p.get("final", p.get("score", 0) or 0))):
+            if len(topped) >= want:
+                break
+            key = (_int_ms(row, "start_ms"), _int_ms(row, "end_ms"))
+            if key in seen:
+                continue
+            seen.add(key)
+            topped.append(row)
     log_pick_stage(
         "regular",
         want=want,
@@ -68,7 +79,14 @@ def finalize_regular_picks_with_quota(
         after_threshold=len(topped),
         final=len(topped),
     )
-    return topped
+    return topped[:want]
+
+
+def _int_ms(p: dict, key: str) -> int:
+    try:
+        return int(p.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _fusion_from_candidate(row: dict, *, tier: str = "backfill") -> FusionPick:
@@ -97,18 +115,15 @@ def _fusion_from_candidate(row: dict, *, tier: str = "backfill") -> FusionPick:
     )
 
 
-def ensure_stream_picks(
-    picks: list[FusionPick],
+def _backfill_stream_picks(
+    out: list[FusionPick],
     *,
     want: int,
     duration_ms: int,
     signals_payload: dict | None,
-    words: list[dict] | None = None,
+    words: list[dict] | None,
+    audio_path: str | Path | None,
 ) -> list[FusionPick]:
-    """Backfill after dedupe; keep top `want` with render=True."""
-    out = list(picks)
-    got = len(out)
-
     cands = list((signals_payload or {}).get("candidates") or [])
     cands.sort(key=lambda c: -int(c.get("score") or 0))
     for row in cands:
@@ -119,18 +134,29 @@ def ensure_stream_picks(
             continue
         out.append(fp)
 
+    audio_ok = bool(audio_path) and Path(str(audio_path)).is_file()
+    if not audio_ok and len(out) < want:
+        print(
+            f"[clipper:pick] backfill_skip_audio reason="
+            f"{'missing_path' if not audio_path else 'file_missing'}",
+            flush=True,
+        )
+
     if len(out) < want and words:
         from clips_worker.streamer.signals import transcript_signal_per_second
         from clips_worker.picker.fallback import pass1_heuristic_candidates
         from clips_worker.picker.sentences import build_sentences
-        from clips_worker.picker.signals import compute_signals
 
         dur_s = max(1, duration_ms // 1000)
         sents = build_sentences(words, 0, duration_ms)
         if sents:
-            sigs = compute_signals(sents, "", sents)
-            sig_by = {s.sentence_idx: s for s in sigs}
-            curve = transcript_signal_per_second(words, dur_s)
+            sig_by: dict = {}
+            if audio_ok:
+                from clips_worker.picker.signals import compute_signals
+
+                sigs = compute_signals(sents, str(audio_path), sents)
+                sig_by = {s.sentence_idx: s for s in sigs}
+            transcript_signal_per_second(words, dur_s)
             step = max(1, dur_s // max(want, 6))
             moments = []
             for i in range(0, dur_s, step):
@@ -144,7 +170,8 @@ def ensure_stream_picks(
                         "archetype": "story",
                     }
                 )
-            back = pass1_heuristic_candidates(moments, sents, sig_by, "gaming", float(dur_s))
+            genre = "gaming"
+            back = pass1_heuristic_candidates(moments, sents, sig_by, genre, float(dur_s))
             for row in back:
                 if len(out) >= want:
                     break
@@ -171,6 +198,31 @@ def ensure_stream_picks(
                 if any(_iou(fp.start_ms, fp.end_ms, p.start_ms, p.end_ms) > 0.5 for p in out):
                     continue
                 out.append(fp)
+    return out
+
+
+def ensure_stream_picks(
+    picks: list[FusionPick],
+    *,
+    want: int,
+    duration_ms: int,
+    signals_payload: dict | None,
+    words: list[dict] | None = None,
+    audio_path: str | Path | None = None,
+) -> list[FusionPick]:
+    """Backfill after dedupe; keep top `want` with render=True. Never raises."""
+    out = list(picks)
+    try:
+        out = _backfill_stream_picks(
+            out,
+            want=want,
+            duration_ms=duration_ms,
+            signals_payload=signals_payload,
+            words=words,
+            audio_path=audio_path,
+        )
+    except Exception as exc:
+        print(f"[clipper:pick] backfill_error={str(exc)[:240]}", flush=True)
 
     out.sort(key=lambda p: p.score, reverse=True)
     final: list[FusionPick] = []

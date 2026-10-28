@@ -240,7 +240,7 @@ def _picker_timecode_font() -> str:
 
 
 def _watch_proxy_video_filter() -> str:
-    scale = "scale=480:-2:flags=fast_bilinear"
+    scale = "scale=360:-2:flags=fast_bilinear"
     if not video_picker_burn_timecode():
         return scale
     font = _picker_timecode_font().replace(":", "\\:")
@@ -694,6 +694,10 @@ def merge_stream_moments(moments: list[dict], overlap_s: float) -> list[dict]:
 
 
 def resolve_video_picker_stream_ranges(duration_ms: int) -> list[tuple[int, int]]:
+    """One picker call per analyzed slice (no overlap chunking for short VODs)."""
+    dur = max(1, int(duration_ms))
+    if dur <= 20 * 60_000:
+        return [(0, dur)]
     from clips_worker.streamer.chunking import plan_chunks
 
     try:
@@ -702,7 +706,7 @@ def resolve_video_picker_stream_ranges(duration_ms: int) -> list[tuple[int, int]
         chunk_min = 15
     chunk_ms = chunk_min * 60_000
     overlap_ms = int(video_picker_stream_overlap_s() * 1000)
-    return plan_chunks(max(1, duration_ms), chunk_ms, overlap_ms)
+    return plan_chunks(dur, chunk_ms, overlap_ms)
 
 
 def _gemini_transient_status(status: int) -> bool:
@@ -919,11 +923,13 @@ def _gemini_watch_payload(
     part_order: str | None = None,
     model: str = "",
     scratch: Path | None = None,
+    use_labeled_frames: bool | None = None,
 ) -> dict[str, Any]:
     use_fps = fps if fps is not None else video_picker_fps()
     order = part_order or video_picker_user_part_order()
     work = scratch or video_path.parent
-    if video_picker_labeled_frames():
+    labeled = video_picker_labeled_frames() if use_labeled_frames is None else use_labeled_frames
+    if labeled:
         user_parts = _labeled_frame_user_parts(
             video_path,
             work,
@@ -1062,6 +1068,7 @@ def watch_video_file(
     media_resolution_override: str | None = None,
     user_part_order: str | None = None,
     fail_open: bool = True,
+    use_labeled_frames: bool | None = None,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Gemini Flash video watch. Fail-open after retries unless fail_open=False."""
     meta: dict[str, Any] = {
@@ -1176,8 +1183,11 @@ def watch_video_file(
                     part_order=meta["user_part_order"],
                     model=active_model,
                     scratch=scratch or video_path.parent,
+                    use_labeled_frames=use_labeled_frames,
                 )
+                upload_t0 = time.time()
                 res, last_err, last_status = _gemini_post_watch(active_model, payload)
+                meta["gen_ms"] = int((time.time() - upload_t0) * 1000)
 
                 if res is None or not res.ok:
                     model_failed_reason = f"api_error status={last_status} err={last_err[:120]}"
@@ -1299,6 +1309,11 @@ def watch_video_file(
                 meta["model"] = active_model
                 meta["model_used"] = active_model
                 meta["model_fallback"] = active_model != primary_model
+                print(
+                    f"[clipper:vp] calls=1 model={active_model} upload_ms={meta.get('upload_ms', 0)} "
+                    f"gen_ms={meta.get('gen_ms', 0)} chunk={chunk_label} moments={len(moments)}",
+                    flush=True,
+                )
                 stage_end(
                     "video_picker",
                     t0,

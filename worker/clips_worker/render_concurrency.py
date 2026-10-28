@@ -5,7 +5,7 @@ import os
 
 
 def clips_render_concurrency() -> int:
-    raw = (os.environ.get("CLIPS_RENDER_CONCURRENCY") or "2").strip()
+    raw = (os.environ.get("CLIPS_RENDER_CONCURRENCY") or "3").strip()
     try:
         n = int(raw)
     except ValueError:

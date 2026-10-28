@@ -4,7 +4,9 @@ from __future__ import annotations
 import subprocess
 
 
-def stderr_tail(text: str, lines: int = 20) -> str:
+def stderr_tail(text: str | bytes | None, lines: int = 20) -> str:
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", "replace")
     parts = [ln for ln in (text or "").strip().splitlines() if ln.strip()]
     return "\n".join(parts[-lines:])
 

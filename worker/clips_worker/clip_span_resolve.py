@@ -17,76 +17,60 @@ def _overlap_ratio(a: dict, b: dict) -> float:
     )
 
 
-def resolve_picks_for_render(picks: list[dict], *, min_clip_ms: int = 15_000) -> list[dict]:
-    """Merge same-moment overlaps or trim boundaries so all picks can render."""
+def resolve_overlaps(picks: list[dict], *, min_clip_ms: int = 15_000) -> list[dict]:
+    """Trim overlapping spans at overlap midpoint; drop clips shorter than min_clip_ms."""
     if len(picks) <= 1:
         return picks
-    ranked = sorted(picks, key=lambda p: -_pick_score(p))
-    out: list[dict] = []
-    for p in ranked:
-        cur = dict(p)
-        merged = False
-        for i, kept in enumerate(out):
-            ratio = _overlap_ratio(cur, kept)
-            if ratio < 0.35:
+    out = sorted([dict(p) for p in picks], key=lambda p: int(p["start_ms"]))
+    merged = 0
+    trimmed = 0
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(out) - 1):
+            a, b = out[i], out[i + 1]
+            as_ms, ae = int(a["start_ms"]), int(a["end_ms"])
+            bs_ms, be = int(b["start_ms"]), int(b["end_ms"])
+            if ae <= bs_ms:
                 continue
+            overlap_start = max(as_ms, bs_ms)
+            overlap_end = min(ae, be)
+            if overlap_end <= overlap_start:
+                continue
+            ratio = _overlap_ratio(a, b)
             if ratio >= 0.5:
-                if _pick_score(cur) > _pick_score(kept):
-                    print(
-                        f"[clipper:overlap] merge_render_span action=replace "
-                        f"kept={kept.get('start_ms')}-{kept.get('end_ms')} "
-                        f"with={cur.get('start_ms')}-{cur.get('end_ms')} overlap={ratio:.2f}",
-                        flush=True,
-                    )
-                    out[i] = cur
+                if _pick_score(a) >= _pick_score(b):
+                    out.pop(i + 1)
                 else:
-                    print(
-                        f"[clipper:overlap] merge_render_span action=drop_duplicate "
-                        f"drop={cur.get('start_ms')}-{cur.get('end_ms')} "
-                        f"kept={kept.get('start_ms')}-{kept.get('end_ms')} overlap={ratio:.2f}",
-                        flush=True,
-                    )
-                merged = True
+                    out.pop(i)
+                merged += 1
+                changed = True
                 break
-            ks, ke = int(kept["start_ms"]), int(kept["end_ms"])
-            cs, ce = int(cur["start_ms"]), int(cur["end_ms"])
-            if cs < ks:
-                new_start, new_end, edge = ke, ce, "start"
-            else:
-                new_start, new_end, edge = cs, ks, "end"
-            if new_end - new_start >= min_clip_ms:
-                cur["start_ms"] = new_start
-                cur["end_ms"] = new_end
-                print(
-                    f"[clipper:overlap] trim_render_span edge={edge} "
-                    f"after={new_start}-{new_end} overlap={ratio:.2f} "
-                    f"title={str(cur.get('title', ''))[:50]}",
-                    flush=True,
-                )
-                if _overlap_ratio(cur, kept) < 0.35:
-                    out.append(cur)
-                merged = True
-                break
-            if _pick_score(cur) > _pick_score(kept) and ce - ks >= min_clip_ms:
-                kept["start_ms"] = ce
-                print(
-                    f"[clipper:overlap] trim_render_span edge=kept_start "
-                    f"kept_after={kept['start_ms']}-{kept['end_ms']} overlap={ratio:.2f}",
-                    flush=True,
-                )
-                out.append(cur)
-                merged = True
-                break
-            if ke - cs >= min_clip_ms:
-                kept["end_ms"] = cs
-                print(
-                    f"[clipper:overlap] trim_render_span edge=kept_end "
-                    f"kept_after={kept['start_ms']}-{kept['end_ms']} overlap={ratio:.2f}",
-                    flush=True,
-                )
-                merged = True
-                break
-        if not merged:
-            out.append(cur)
-    out.sort(key=lambda p: -_pick_score(p))
-    return out
+            mid = (overlap_start + overlap_end) // 2
+            before_a = (as_ms, ae)
+            before_b = (bs_ms, be)
+            a["end_ms"] = min(ae, mid)
+            b["start_ms"] = max(bs_ms, mid)
+            trimmed += 1
+            changed = True
+            print(
+                f"[clipper:bounds] before={before_a[0]}-{before_a[1]} "
+                f"after={int(a['start_ms'])}-{int(a['end_ms'])} reason=overlap_mid "
+                f"title={str(a.get('title', ''))[:40]}",
+                flush=True,
+            )
+            print(
+                f"[clipper:bounds] before={before_b[0]}-{before_b[1]} "
+                f"after={int(b['start_ms'])}-{int(b['end_ms'])} reason=overlap_mid "
+                f"title={str(b.get('title', ''))[:40]}",
+                flush=True,
+            )
+            break
+    kept = [p for p in out if int(p["end_ms"]) - int(p["start_ms"]) >= min_clip_ms]
+    print(f"[clipper:overlap] merged={merged} trimmed={trimmed} final={len(kept)}", flush=True)
+    return kept
+
+
+def resolve_picks_for_render(picks: list[dict], *, min_clip_ms: int = 15_000) -> list[dict]:
+    """Merge same-moment overlaps or trim boundaries so all picks can render."""
+    return resolve_overlaps(picks, min_clip_ms=min_clip_ms)
