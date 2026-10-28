@@ -253,7 +253,7 @@ def main() -> None:
     winner = pick_default_model(results)
     summary = {
         "recommended_VIDEO_PICKER_MODEL": winner,
-        "models": {MODEL_38, MODEL_LITE, MODEL_25},
+        "models": [MODEL_38, MODEL_LITE, MODEL_25],
     }
     print(f"[bench] summary {json.dumps(summary)}", flush=True)
 
