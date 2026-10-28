@@ -5,7 +5,8 @@ from collections.abc import Callable
 from typing import Any
 
 from clips_worker.picker.cleanup import finalize_picks
-from clips_worker.picker.config import length_bucket
+from clips_worker.job_telemetry import record_video_picker_stats
+from clips_worker.target_clip_len import resolve_clip_length_policy
 from clips_worker.picker.log_util import picker_info
 from clips_worker.picker.fallback import pass1_heuristic_candidates
 from clips_worker.picker.pass1 import find_moments
@@ -53,10 +54,7 @@ def pick_talking_clips(
     prompt = (settings.get("prompt") or "").strip()
     source_ms = max(1, range_end_ms - range_start_ms)
     clip_length = settings.get("clipLength") or settings.get("clip_length") or "auto"
-    bucket = length_bucket(clip_length, genre)
-    bucket_max = int(bucket.get("max_ms", 60_000))
-    if clip_length == "auto" or clip_length == "Auto":
-        bucket_max = min(bucket_max, source_ms)
+    length_policy = resolve_clip_length_policy(settings)
 
     picker_info(
         "picker_start",
@@ -66,7 +64,9 @@ def pick_talking_clips(
         source_duration_ms=source_ms,
         genre=genre,
         clip_length=clip_length,
-        length_max_ms=bucket_max,
+        target_clip_len_s=length_policy.target_s,
+        length_max_ms=length_policy.max_ms,
+        length_mode=length_policy.mode,
     )
 
     range_words = _slice_words(words, range_start_ms, range_end_ms)
@@ -112,6 +112,7 @@ def pick_talking_clips(
                 range_end_ms=range_end_ms,
                 scratch=scratch_vp,
             )
+            record_video_picker_stats(vp_meta, vm or [], range_start_ms=range_start_ms)
             if vp_meta.get("ok") and vm:
                 visual_moments = vm
                 video_context = format_moments_for_llm(
@@ -161,6 +162,7 @@ def pick_talking_clips(
                     prompt,
                     visual_moments=visual_moments or None,
                     range_start_ms=range_start_ms,
+                    length_policy=length_policy,
                 )
             sparse_visual = len(visual_moments) < 3
             if not visual_moments or sparse_visual:
@@ -176,6 +178,7 @@ def pick_talking_clips(
                     range_start_ms=range_start_ms,
                     range_end_ms=range_end_ms,
                     genre=genre,
+                    max_window_ms=length_policy.max_ms,
                 )
                 gap_moments = propose_silence_gap_moments(
                     sentences,
@@ -221,6 +224,7 @@ def pick_talking_clips(
                         range_start_ms,
                         range_end_ms,
                         genre,
+                        length_policy=length_policy,
                     )
                     if early:
                         picker_info("headstart_picks", count=len(early))
@@ -239,6 +243,8 @@ def pick_talking_clips(
                 video_context=video_context or None,
                 range_start_ms=range_start_ms,
                 visual_moments=visual_moments or None,
+                length_policy=length_policy,
+                range_end_ms=range_end_ms,
             )
         if on_picker_checkpoint:
             on_picker_checkpoint(moments, scored)
@@ -262,6 +268,7 @@ def pick_talking_clips(
             range_end_ms,
             genre,
             visual_moments=visual_moments or None,
+            length_policy=length_policy,
         )
     if not picks and scored:
         picks = finalize_picks(
@@ -274,6 +281,7 @@ def pick_talking_clips(
             genre,
             relax_duration=True,
             visual_moments=visual_moments or None,
+            length_policy=length_policy,
         )
         if picks:
             picker_info("finalize_relaxed_duration", count=len(picks))
@@ -301,6 +309,7 @@ def pick_talking_clips(
             genre,
             relax_duration=True,
             visual_moments=visual_moments or None,
+            length_policy=length_policy,
         )
         if picks:
             picker_info("span_fallback_picks", count=len(picks))

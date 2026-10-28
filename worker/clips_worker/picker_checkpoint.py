@@ -8,10 +8,14 @@ import psycopg2
 
 
 def _cache_key(settings: dict[str, Any], range_start_ms: int, range_end_ms: int) -> dict[str, Any]:
+    from clips_worker.target_clip_len import parse_target_clip_len_s
+
+    target = parse_target_clip_len_s(settings)
     return {
         "genre": settings.get("genre", "podcast"),
         "prompt": (settings.get("prompt") or "").strip(),
         "clipLength": settings.get("clipLength") or settings.get("clip_length") or "auto",
+        "target_clip_len_s": target,
         "rangeStartMs": int(range_start_ms),
         "rangeEndMs": int(range_end_ms),
     }
@@ -55,13 +59,22 @@ def save_picker_cache(
     *,
     moments: list[dict] | None = None,
     scored: list[dict] | None = None,
+    video_picker: dict[str, Any] | None = None,
+    render_stats: list[dict] | None = None,
 ) -> dict[str, Any]:
+    from clips_worker.target_clip_len import resolve_clip_length_policy
+
     cache = dict(payload.get("pickerCache") or {})
     cache["key"] = _cache_key(settings, range_start_ms, range_end_ms)
+    cache["lengthPolicy"] = resolve_clip_length_policy(settings).to_cache_dict()
     if moments is not None:
         cache["pass1Moments"] = moments
     if scored is not None:
         cache["pass2Scored"] = scored
+    if video_picker is not None:
+        cache["videoPicker"] = video_picker
+    if render_stats is not None:
+        cache["renderStats"] = render_stats
     return merge_job_payload(
         conn,
         job_id,

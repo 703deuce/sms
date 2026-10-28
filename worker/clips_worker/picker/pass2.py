@@ -19,6 +19,7 @@ from clips_worker.picker_stats import (
 from clips_worker.picker.titles import SHORT_SOURCE_MAX_MS, strip_internal_sentence_refs, trim_title
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
+from clips_worker.target_clip_len import ClipLengthPolicy
 
 
 def _pass2_clip_item_schema(*, boundary_fields: bool, batched: bool = False) -> dict[str, Any]:
@@ -101,7 +102,7 @@ def _context_lines(sentences, sig_by, center_lo: int, center_hi: int, ctx_s: flo
     return "\n".join(lines)
 
 
-def _pass2_system(genre: str, *, batched: bool = False) -> str:
+def _pass2_system(genre: str, *, batched: bool = False, length_policy: ClipLengthPolicy | None = None) -> str:
     ex = load_examples()
     moment_rule = (
         "Return exactly one clip object in clips[] per moment in the user payload; "
@@ -109,8 +110,8 @@ def _pass2_system(genre: str, *, batched: bool = False) -> str:
         if batched
         else "Return exactly one clip object in clips[] for the single moment in the user payload."
     )
-    return "\n\n".join(
-        [
+    length_line = length_policy.pass2_length_hint() if length_policy else ""
+    parts = [
             "Return PASS 2 JSON only. Score and tighten each moment; cite sentence ids.",
             moment_rule,
             "For each clip set setup_start_s and payoff_end_s as ABSOLUTE seconds from the start of the "
@@ -122,8 +123,10 @@ def _pass2_system(genre: str, *, batched: bool = False) -> str:
             load_core_rubric(),
             load_genre_prompt(genre),
             "FEW-SHOT EXAMPLES:\n" + (ex[:12000] if ex else ""),
-        ]
-    )
+    ]
+    if length_line:
+        parts.insert(2, length_line)
+    return "\n\n".join(parts)
 
 
 def _clip_row_from_llm(
@@ -136,6 +139,8 @@ def _clip_row_from_llm(
     *,
     range_start_ms: int = 0,
     visual_moments: list[dict] | None = None,
+    length_policy: ClipLengthPolicy | None = None,
+    range_end_ms: int | None = None,
 ) -> dict[str, Any] | None:
     reason = str(row.get("reject_reason") or "")
     hard = bool(row.get("reject")) and is_hard_llm_reject(reason)
@@ -167,6 +172,8 @@ def _clip_row_from_llm(
         teaser=(row.get("archetype") == "teaser"),
         llm_reject=False,
         source_duration_s=source_duration_s,
+        length_min_s=length_policy.scoring_min_s if length_policy else None,
+        length_max_s=length_policy.scoring_max_s if length_policy else None,
     )
     base = {
         "start_sentence": ss,
@@ -225,6 +232,8 @@ def _clip_row_from_llm(
                 base["boundary_payoff_ms"] = payoff_ms
     except Exception:
         pass
+    if length_policy is not None and range_end_ms is not None:
+        base["length_max_ms"] = length_policy.effective_max_duration_ms(base, range_end_ms)
     return base
 
 
@@ -261,6 +270,8 @@ def _score_moments_batched(
     video_context: str | None = None,
     range_start_ms: int = 0,
     visual_moments: list[dict] | None = None,
+    length_policy: ClipLengthPolicy | None = None,
+    range_end_ms: int | None = None,
 ) -> tuple[list[dict], list[dict]]:
     blocks: list[dict] = []
     for mi, m in enumerate(moments):
@@ -286,7 +297,7 @@ def _score_moments_batched(
             f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user_body}"
         )
     data = chat_json(
-        _pass2_system(genre, batched=True),
+        _pass2_system(genre, batched=True, length_policy=length_policy),
         user_body,
         _pass2_batch_schema(boundary_fields=True),
         "moments_pass2_batch",
@@ -325,6 +336,8 @@ def _score_moments_batched(
             source_duration_s,
             range_start_ms=range_start_ms,
             visual_moments=visual_moments,
+            length_policy=length_policy,
+            range_end_ms=range_end_ms,
         )
         if not parsed:
             continue
@@ -356,6 +369,8 @@ def score_moments(
     video_context: str | None = None,
     range_start_ms: int = 0,
     visual_moments: list[dict] | None = None,
+    length_policy: ClipLengthPolicy | None = None,
+    range_end_ms: int | None = None,
 ) -> tuple[list[dict], list[dict]]:
     if not moments:
         return [], []
@@ -384,6 +399,8 @@ def score_moments(
             video_context=video_context,
             range_start_ms=range_start_ms,
             visual_moments=visual_moments,
+            length_policy=length_policy,
+            range_end_ms=range_end_ms,
         )
         if tail_moments:
             tail_scored, tail_audit = _score_moments_batched(
@@ -397,6 +414,8 @@ def score_moments(
                 video_context=video_context,
                 range_start_ms=range_start_ms,
                 visual_moments=visual_moments,
+                length_policy=length_policy,
+                range_end_ms=range_end_ms,
             )
             batched = batched + tail_scored
             audit = audit + tail_audit
@@ -431,7 +450,12 @@ def score_moments(
                 "from visual watch.\n"
                 f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user}"
             )
-        data = chat_json(_pass2_system(genre), user, PASS2_SCHEMA, "moments_pass2")
+        data = chat_json(
+            _pass2_system(genre, length_policy=length_policy),
+            user,
+            PASS2_SCHEMA,
+            "moments_pass2",
+        )
         picker_info("pass2_raw", moment_index=mi, raw=json_snippet(data))
         clips = data.get("clips") or []
         if not clips:
@@ -456,6 +480,8 @@ def score_moments(
             source_duration_s,
             range_start_ms=range_start_ms,
             visual_moments=visual_moments,
+            length_policy=length_policy,
+            range_end_ms=range_end_ms,
         )
         if not parsed:
             continue

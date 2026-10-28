@@ -12,6 +12,7 @@ def snap_fusion_pick(
     *,
     range_start_ms: int = 0,
     range_end_ms: int,
+    length_max_ms: int | None = None,
 ) -> FusionPick:
     if not words:
         return pick
@@ -19,7 +20,9 @@ def snap_fusion_pick(
     clip = {
         "start_ms": pick.start_ms,
         "end_ms": pick.end_ms,
-        "length_max_ms": pick.end_ms - pick.start_ms + 15_000,
+        "length_max_ms": length_max_ms
+        if length_max_ms is not None
+        else min(90_000, pick.end_ms - pick.start_ms + 15_000),
     }
     meta = pick.ai_meta or {}
     if meta.get("boundary_setup_ms") is not None:

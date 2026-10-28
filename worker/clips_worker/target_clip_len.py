@@ -1,0 +1,124 @@
+"""Clip duration targets from job payload `target_clip_len_s` (15/30/60/90 or auto)."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+ABS_MAX_MS = 90_000
+ABS_MIN_MS = 15_000
+ALLOWED_TARGET_S = frozenset({15, 30, 60, 90})
+FIXED_TOLERANCE = 0.25
+
+_LEGACY_CLIP_LENGTH_TO_S = {
+    "lt30": 30,
+    "30_60": 60,
+    "60_90": 90,
+}
+
+
+def parse_target_clip_len_s(container: dict[str, Any] | None) -> int | None:
+    """Return fixed target seconds, or None for auto (default when missing)."""
+    if not container:
+        return None
+    raw = container.get("target_clip_len_s")
+    if raw is None:
+        raw = container.get("targetClipLenS")
+    if raw in (None, "", "auto", "Auto"):
+        legacy = (container.get("clipLength") or container.get("clip_length") or "").strip()
+        if legacy in _LEGACY_CLIP_LENGTH_TO_S:
+            return _LEGACY_CLIP_LENGTH_TO_S[legacy]
+        if legacy and legacy not in ("auto", "Auto"):
+            return None
+        return None
+    try:
+        v = int(float(raw))
+    except (TypeError, ValueError):
+        return None
+    if v in ALLOWED_TARGET_S:
+        return v
+    return None
+
+
+@dataclass(frozen=True)
+class ClipLengthPolicy:
+    mode: str  # "auto" | "fixed"
+    target_s: int | None
+    min_ms: int
+    max_ms: int
+    prefer_min_ms: int
+    prefer_max_ms: int
+    scoring_min_s: float
+    scoring_max_s: float
+
+    def effective_max_duration_ms(self, pick: dict[str, Any], range_end_ms: int) -> int:
+        """Max clip duration (ms) for snap_bounds length_max_ms."""
+        cap = self.max_ms
+        if self.mode == "auto":
+            setup = pick.get("boundary_setup_ms")
+            payoff = pick.get("boundary_payoff_ms")
+            if setup is not None and payoff is not None:
+                try:
+                    span = int(payoff) - int(setup) + 2_500
+                    cap = max(cap, min(ABS_MAX_MS, span))
+                except (TypeError, ValueError):
+                    pass
+        start = int(pick.get("start_ms") or 0)
+        room = max(ABS_MIN_MS, range_end_ms - start)
+        return min(cap, room, ABS_MAX_MS)
+
+    def pass1_length_hint(self) -> str:
+        if self.mode == "auto":
+            return (
+                "Clip length: AUTO — each moment may use up to 90s when needed so full setup + visual "
+                "payoff fit; prefer the shortest span that still feels complete (often 20–60s for gaming)."
+            )
+        t = self.target_s or 30
+        lo = int(t * (1 - FIXED_TOLERANCE))
+        hi = int(t * (1 + FIXED_TOLERANCE))
+        return (
+            f"Clip length: target ~{t}s (acceptable {lo}–{hi}s). Shorter only if the moment is already "
+            "complete; do not cut payoff early to hit the target."
+        )
+
+    def pass2_length_hint(self) -> str:
+        return self.pass1_length_hint()
+
+    def to_cache_dict(self) -> dict[str, Any]:
+        return {
+            "mode": self.mode,
+            "target_clip_len_s": self.target_s,
+            "min_ms": self.min_ms,
+            "max_ms": self.max_ms,
+        }
+
+
+def clip_length_policy(target_s: int | None) -> ClipLengthPolicy:
+    if target_s is None:
+        return ClipLengthPolicy(
+            mode="auto",
+            target_s=None,
+            min_ms=ABS_MIN_MS,
+            max_ms=ABS_MAX_MS,
+            prefer_min_ms=ABS_MIN_MS,
+            prefer_max_ms=ABS_MAX_MS,
+            scoring_min_s=ABS_MIN_MS / 1000.0,
+            scoring_max_s=ABS_MAX_MS / 1000.0,
+        )
+    target_ms = int(target_s) * 1000
+    lo = max(ABS_MIN_MS, int(target_ms * (1 - FIXED_TOLERANCE)))
+    hi = min(ABS_MAX_MS, int(target_ms * (1 + FIXED_TOLERANCE)))
+    return ClipLengthPolicy(
+        mode="fixed",
+        target_s=int(target_s),
+        min_ms=lo,
+        max_ms=hi,
+        prefer_min_ms=lo,
+        prefer_max_ms=hi,
+        scoring_min_s=lo / 1000.0,
+        scoring_max_s=hi / 1000.0,
+    )
+
+
+def resolve_clip_length_policy(settings: dict[str, Any]) -> ClipLengthPolicy:
+    target = parse_target_clip_len_s(settings)
+    return clip_length_policy(target)

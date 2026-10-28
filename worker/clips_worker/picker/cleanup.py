@@ -5,9 +5,16 @@ from clips_worker.picker.config import genre_meta, resolve_genre_key, snap_setti
 from clips_worker.picker.log_util import picker_info
 from clips_worker.picker.selection import select_clips
 from clips_worker.picker.snap_bounds import snap_bounds
+from clips_worker.target_clip_len import ABS_MIN_MS, ClipLengthPolicy, resolve_clip_length_policy
 
 
-def min_pick_duration_ms(range_start_ms: int, range_end_ms: int, *, relax: bool = False) -> int:
+def min_pick_duration_ms(
+    range_start_ms: int,
+    range_end_ms: int,
+    *,
+    relax: bool = False,
+    length_policy: ClipLengthPolicy | None = None,
+) -> int:
     """Target minimum clip length; relax for short sources so at least one clip can land."""
     span = max(0, int(range_end_ms) - int(range_start_ms))
     if relax:
@@ -20,7 +27,8 @@ def min_pick_duration_ms(range_start_ms: int, range_end_ms: int, *, relax: bool 
         return min(15_000, max(5_000, span))
     if span <= 120_000:
         return min(15_000, max(8_000, span // 4))
-    return 15_000
+    floor = length_policy.min_ms if length_policy else ABS_MIN_MS
+    return min(floor, max(8_000, ABS_MIN_MS))
 
 
 def finalize_picks(
@@ -34,14 +42,19 @@ def finalize_picks(
     *,
     relax_duration: bool = False,
     visual_moments: list[dict] | None = None,
+    length_policy: ClipLengthPolicy | None = None,
 ) -> list[dict]:
+    if length_policy is None:
+        length_policy = resolve_clip_length_policy({"clipLength": "auto"})
     gkey = resolve_genre_key(genre)
     gmeta = genre_meta(genre)
     snap = snap_settings()
     laugh_tail = gmeta.get("preferences", {}).get("end_after_laugh_s") or snap.get("comedy_laugh_tail_s")
 
     span_ms = max(1, range_end_ms - range_start_ms)
-    min_ms = min_pick_duration_ms(range_start_ms, range_end_ms, relax=relax_duration)
+    min_ms = min_pick_duration_ms(
+        range_start_ms, range_end_ms, relax=relax_duration, length_policy=length_policy
+    )
     picks = []
     short_pool: list[dict] = []
     dropped_short = 0
@@ -57,6 +70,8 @@ def finalize_picks(
             lo, hi = float(laugh_tail[0]), float(laugh_tail[1])
             end_ms += int(((lo + hi) / 2) * 1000)
         pick = {**row, "start_ms": start_ms, "end_ms": end_ms}
+        if not pick.get("length_max_ms"):
+            pick["length_max_ms"] = length_policy.effective_max_duration_ms(pick, range_end_ms)
         if visual_moments and not pick.get("boundary_setup_ms") and not pick.get("boundary_payoff_ms"):
             try:
                 from clips_worker.visual_boundaries import infer_boundaries_from_moments, visual_boundaries_enabled

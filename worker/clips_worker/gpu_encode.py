@@ -25,6 +25,14 @@ _modal_render_warm = False
 
 def _gpu_render_print(payload: dict) -> None:
     print(f"[clipper:gpu_render] {json.dumps(payload)}", flush=True)
+    clip_id = payload.get("clipId")
+    if clip_id and payload.get("provider"):
+        try:
+            from clips_worker.job_telemetry import record_render_stats
+
+            record_render_stats(str(clip_id), payload)
+        except Exception:
+            pass
 
 
 def _gpu_render_warn(msg: str) -> None:

@@ -79,7 +79,8 @@ def length_bucket(clip_length: str, genre: str, platform: str = "tiktok") -> dic
     plat = g_lengths.get(platform) or g_lengths.get("youtube_shorts") or {}
     if plat:
         bucket.setdefault("min_ms", int(plat.get("min_s", 15) * 1000))
-        bucket.setdefault("max_ms", int(plat.get("max_s", 90) * 1000))
+        genre_max_ms = int(plat.get("max_s", 90) * 1000)
+        bucket.setdefault("max_ms", min(90_000, genre_max_ms))
         spot = plat.get("sweet_spot_s") or []
         if len(spot) == 2:
             bucket.setdefault("prefer_min_ms", int(spot[0] * 1000))

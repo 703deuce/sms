@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from clips_worker.picker.config import cleanup_settings, length_bucket
 from clips_worker.picker.sentences import Sentence
+from clips_worker.target_clip_len import ClipLengthPolicy, resolve_clip_length_policy
 
 
 @dataclass
@@ -21,12 +22,19 @@ def build_candidates(
     range_start_ms: int,
     range_end_ms: int,
     genre: str = "podcast",
+    length_policy: ClipLengthPolicy | None = None,
 ) -> list[CandidateWindow]:
-    bucket = length_bucket(clip_length, genre)
-    lo = int(bucket.get("min_ms", 15_000))
-    hi = int(bucket.get("max_ms", 60_000))
-    prefer_lo = int(bucket.get("prefer_min_ms", 25_000))
-    prefer_hi = int(bucket.get("prefer_max_ms", 45_000))
+    if length_policy is None:
+        bucket = length_bucket(clip_length, genre)
+        lo = int(bucket.get("min_ms", 15_000))
+        hi = int(bucket.get("max_ms", 60_000))
+        prefer_lo = int(bucket.get("prefer_min_ms", 25_000))
+        prefer_hi = int(bucket.get("prefer_max_ms", 45_000))
+    else:
+        lo = length_policy.min_ms
+        hi = length_policy.max_ms
+        prefer_lo = length_policy.prefer_min_ms
+        prefer_hi = length_policy.prefer_max_ms
     max_windows = cleanup_settings()["max_windows"]
     windows: list[CandidateWindow] = []
 
@@ -48,7 +56,8 @@ def build_candidates(
     if not windows:
         return windows
 
-    if clip_length == "auto" and prefer_lo and prefer_hi:
+    auto_mode = length_policy.mode == "auto" if length_policy else clip_length in ("auto", "Auto")
+    if auto_mode and prefer_lo and prefer_hi and prefer_hi < hi:
         preferred = [w for w in windows if prefer_lo <= (w.end_ms - w.start_ms) <= prefer_hi]
         if preferred:
             windows = preferred

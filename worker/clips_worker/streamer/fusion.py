@@ -113,10 +113,13 @@ def fuse_moments(
         "speakerChange": 0.02,
     }
     default_w.update(weights)
+    from clips_worker.target_clip_len import resolve_clip_length_policy
+
     streamer = (settings.get("streamer") or {}) if isinstance(settings, dict) else {}
     clip_count = int(streamer.get("clipCount") or settings.get("clipCount") or 12)
-    min_clip_s = int(streamer.get("minClipS") or 15)
-    max_clip_s = int(streamer.get("maxClipS") or 60)
+    length_policy = resolve_clip_length_policy(settings if isinstance(settings, dict) else {})
+    min_clip_s = int(streamer.get("minClipS") or max(15, length_policy.min_ms // 1000))
+    max_clip_s = int(streamer.get("maxClipS") or length_policy.max_ms // 1000)
     lead_s = int(settings.get("leadS") or 20)
     tail_s = int(settings.get("tailS") or 10)
     llm_blend = float(settings.get("llmBlend") or 0.4)

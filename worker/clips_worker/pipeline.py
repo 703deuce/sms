@@ -348,13 +348,22 @@ def run_m4_pipeline(
 
     mode = settings.get("mode") or "talking"
     source_duration_ms = max(1, range_end - range_start) if range_end > range_start else 0
-    settings = {**settings, "projectId": project_id}
+    from clips_worker.target_clip_len import parse_target_clip_len_s
+
+    target_clip_len_s = parse_target_clip_len_s(job_payload) or parse_target_clip_len_s(settings)
+    settings = {**settings, "projectId": project_id, "target_clip_len_s": target_clip_len_s}
     if source_duration_ms > 0:
         settings = {**settings, "sourceDurationMs": source_duration_ms}
     pipeline_t0 = time.monotonic()
     from clips_worker.stage_log import bind_stage_context, stage_span
 
     bind_stage_context(project_id=project_id, job_id=job_id)
+    from clips_worker.job_telemetry import bind_job_telemetry, make_picker_cache_telemetry_sink
+
+    job_pl_state: dict = dict(job_payload) if job else {}
+    bind_job_telemetry(
+        make_picker_cache_telemetry_sink(conn, job_id, job_pl_state) if job_id else None
+    )
     from clips_worker.clip_segments import load_project_segment_spans, load_project_segments_with_preview
 
     existing_segments = load_project_segment_spans(conn, project_id)
@@ -666,17 +675,16 @@ def run_m4_pipeline(
                 from clips_worker.picker_checkpoint import load_picker_cache, save_picker_cache
                 from clips_worker.process_helpers import job_payload as _job_payload
 
-                job_pl = _job_payload(job) if job else {}
-                picker_cache = load_picker_cache(job_pl, settings, range_start, range_end)
+                picker_cache = load_picker_cache(job_pl_state, settings, range_start, range_end)
 
                 def _checkpoint_picker(moments: list[dict] | None, scored: list[dict] | None) -> None:
-                    nonlocal job_pl
+                    nonlocal job_pl_state
                     if not job:
                         return
-                    job_pl = save_picker_cache(
+                    job_pl_state = save_picker_cache(
                         conn,
                         job_id,
-                        job_pl,
+                        job_pl_state,
                         settings,
                         range_start,
                         range_end,
@@ -1006,6 +1014,7 @@ def run_m4_pipeline(
                 {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE", "error": None},
             )
     finally:
+        bind_job_telemetry(None)
         from clips_worker.vision_layout import log_project_vision_stats
 
         print(

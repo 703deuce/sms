@@ -8,6 +8,7 @@ from clips_worker.picker.llm import chat_json
 from clips_worker.picker.log_util import json_snippet, picker_info
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
+from clips_worker.target_clip_len import ClipLengthPolicy
 
 PASS1_SCHEMA = {
     "type": "object",
@@ -63,6 +64,7 @@ def find_moments(
     *,
     visual_moments: list[dict] | None = None,
     range_start_ms: int = 0,
+    length_policy: ClipLengthPolicy | None = None,
 ) -> list[dict]:
     if not sentences:
         return []
@@ -106,10 +108,12 @@ def find_moments(
                     "just because the transcript is quiet in that window:\n"
                     f"{slice_txt}\n"
                 )
+        length_hint = f"\n{length_policy.pass1_length_hint()}\n" if length_policy else ""
         user = (
             f"User focus: {user_prompt or '(none)'}\n"
             "Return PASS 1 JSON. Find up to 3 candidates per 3 min of transcript; overgenerate.\n"
-            "Use transcript AND visual notes together; visual-only beats count.\n\n"
+            "Use transcript AND visual notes together; visual-only beats count.\n"
+            f"{length_hint}\n"
             f"Transcript chunk ({lo_ms}-{hi_ms} ms):\n{transcript}"
             f"{visual_block}"
         )

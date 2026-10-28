@@ -93,6 +93,8 @@ def score_clip(
     llm_reject: bool = False,
     source_duration_s: float | None = None,
     relax_ending: bool = False,
+    length_min_s: float | None = None,
+    length_max_s: float | None = None,
 ) -> dict[str, Any]:
     g = global_config()
     G = genre_meta(genre)
@@ -126,8 +128,8 @@ def score_clip(
     pen += float(G.get("crosstalk_penalty_multiplier", 1.0)) * max(0.0, xt - xt_thr) * xt_unit
 
     lengths = (G.get("lengths") or {}).get(platform) or (G.get("lengths") or {}).get("tiktok") or {}
-    min_s = float(lengths.get("min_s", 10))
-    max_s = float(lengths.get("max_s", 90))
+    min_s = float(length_min_s if length_min_s is not None else lengths.get("min_s", 10))
+    max_s = float(length_max_s if length_max_s is not None else lengths.get("max_s", 90))
     if source_duration_s and source_duration_s > 0:
         max_s = min(max_s, float(source_duration_s))
         min_s = min(min_s, max_s)

@@ -67,7 +67,7 @@ def propose_signal_action_moments(
     genre: str = "",
     max_moments: int = 4,
     min_window_ms: int = 20_000,
-    max_window_ms: int = 75_000,
+    max_window_ms: int = 90_000,
 ) -> list[dict]:
     """High-energy / sparse-talk windows (gameplay fights, clutch stretches)."""
     if len(sentences) < 4:

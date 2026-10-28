@@ -128,6 +128,18 @@ def rank_moments(
         cue_events=cue_events,
         video_moments=video_moments,
     )
+    from clips_worker.target_clip_len import resolve_clip_length_policy
+
     range_end = duration_ms
-    snapped = [snap_fusion_pick(p, words, range_start_ms=0, range_end_ms=range_end) for p in picks]
+    length_max_ms = resolve_clip_length_policy(settings).max_ms
+    snapped = [
+        snap_fusion_pick(
+            p,
+            words,
+            range_start_ms=0,
+            range_end_ms=range_end,
+            length_max_ms=length_max_ms,
+        )
+        for p in picks
+    ]
     return snapped, payload

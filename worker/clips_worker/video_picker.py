@@ -252,6 +252,7 @@ def watch_video_file(
             raw = slim.read_bytes()
         b64 = base64.b64encode(raw).decode("ascii")
         fps = video_picker_fps()
+        meta["fps"] = fps
         meta["frames_est"] = max(1, int(duration_s * fps))
         part: dict[str, Any] = {
             "inline_data": {"mime_type": "video/mp4", "data": b64},
