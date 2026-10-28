@@ -618,6 +618,8 @@ def _gemini_post_watch(
     payload: dict[str, Any],
 ) -> tuple[requests.Response | None, str, int | None]:
     """POST with transient backoff; returns (response, last_err, last_status)."""
+    from clips_worker.picker.picker_errors import gemini_error_log_fields
+
     last_err = "unknown"
     last_status: int | None = None
     res: requests.Response | None = None
