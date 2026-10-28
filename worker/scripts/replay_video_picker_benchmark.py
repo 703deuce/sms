@@ -145,7 +145,6 @@ def main() -> None:
         ("c_fps_1_0", {"VIDEO_PICKER_FPS": "1.0"}, None),
         ("d_transcript_first", {"VIDEO_PICKER_USER_PART_ORDER": "transcript_first"}, None),
         ("d_video_first", {"VIDEO_PICKER_USER_PART_ORDER": "video_first"}, None),
-        ("e_flash", {}, "gemini-2.5-flash"),
         ("e_pro", {}, "gemini-2.5-pro"),
     ]
     results: list[dict] = []
