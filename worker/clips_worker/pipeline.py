@@ -14,7 +14,6 @@ from pathlib import Path
 import psycopg2
 
 from clips_worker.clip_progress import reframe_progress_payload
-from clips_worker.plan_clips import plan_clips
 
 from clips_worker.anything_picker import pick_anything_clips
 from clips_worker.picker import pick_talking_clips
@@ -444,6 +443,10 @@ def run_m4_pipeline(
     bind_job_telemetry(
         make_picker_cache_telemetry_sink(conn, job_id, job_pl_state) if job_id else None
     )
+    from clips_worker.decision_log import bind_decision_log, decision_log, flush_decision_log, unbind_decision_log
+
+    bind_decision_log(conn, job_id)
+    decision_log("pipeline", "start", mode=mode, project_id=project_id)
     from clips_worker.clip_segments import load_project_segment_spans, load_project_segments_with_preview
 
     existing_segments = load_project_segment_spans(conn, project_id)
@@ -740,6 +743,13 @@ def run_m4_pipeline(
                     sk = _span_key(int(top["start_ms"]), int(top["end_ms"]))
                     if sk not in head_render_state.setdefault("clip_id_by_span", {}):
                         head_render_state["clip_id_by_span"][sk] = f"clip_{uuid.uuid4().hex}"
+                    decision_log(
+                        "headstart",
+                        "render_early",
+                        start_ms=int(top.get("start_ms") or 0),
+                        end_ms=int(top.get("end_ms") or 0),
+                        title=str(top.get("title") or "")[:80],
+                    )
                     print(
                         f"[clipper:speed] project={project_id} phase=headstart_render_begin "
                         f"startMs={top.get('start_ms')} endMs={top.get('end_ms')}",
@@ -794,21 +804,20 @@ def run_m4_pipeline(
                             "videoPickerFallbackReason": vp_cache.get("fallback_reason"),
                         },
                     )
-                picks = plan_clips(picks) if picks else []
-                if not picks:
-                    empty_msg = picker_message or "No complete, self-contained moments found."
-                    mark_project_ready(conn, project_id, error=empty_msg)
-                    post_progress(
-                        job_id,
-                        {
-                            "projectStatus": "READY",
-                            "stage": "ready",
-                            "progress": 100,
-                            "jobStatus": "DONE",
-                            "error": empty_msg,
-                        },
-                    )
+                from clips_worker.pipeline_plan import plan_or_finish_empty
+
+                planned = plan_or_finish_empty(
+                    conn,
+                    project_id,
+                    job_id,
+                    post_progress,
+                    picks,
+                    picker_message,
+                    mark_project_ready=mark_project_ready,
+                )
+                if planned is None:
                     return
+                picks = planned
 
                 from clips_worker.headstart_render import (
                     await_headstart_render,
@@ -887,10 +896,13 @@ def run_m4_pipeline(
                         if cached is not None:
                             return cached
                         if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                            print(
-                                f"[clipper:overlap] ERROR project={project_id} skip_render idx={idx} "
-                                f"startMs={pick.get('start_ms')} endMs={pick.get('end_ms')}",
-                                flush=True,
+                            decision_log(
+                                "render",
+                                "skip",
+                                reason="overlap_existing_span",
+                                idx=idx,
+                                start_ms=int(pick.get("start_ms") or 0),
+                                end_ms=int(pick.get("end_ms") or 0),
                             )
                             return None
                         sk = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
@@ -913,6 +925,22 @@ def run_m4_pipeline(
                 else:
                     talking_clip_rows = []
                 talking_render_done = True
+
+            if not talking_render_done:
+                from clips_worker.pipeline_plan import plan_or_finish_empty
+
+                planned = plan_or_finish_empty(
+                    conn,
+                    project_id,
+                    job_id,
+                    post_progress,
+                    picks,
+                    picker_message,
+                    mark_project_ready=mark_project_ready,
+                )
+                if planned is None:
+                    return
+                picks = planned
 
             print(
                 f"[clipper:picker] project={project_id} mode={mode} picks={len(picks)} "
@@ -1104,11 +1132,33 @@ def run_m4_pipeline(
                         )
                     conn.commit()
             mark_project_ready(conn, project_id)
+            shipped = [
+                {
+                    "id": r.get("id"),
+                    "startMs": r.get("startMs"),
+                    "endMs": r.get("endMs"),
+                    "title": (r.get("title") or "")[:80],
+                }
+                for r in (clip_rows or [])
+            ]
+            decision_log(
+                "render",
+                "shipped",
+                count=len(shipped),
+                clips=shipped[:40],
+            )
+            flush_decision_log(force=True)
             post_progress(
                 job_id,
                 {"projectStatus": "READY", "stage": "ready", "progress": 100, "jobStatus": "DONE", "error": None},
             )
     finally:
+        try:
+            from clips_worker.decision_log import unbind_decision_log
+
+            unbind_decision_log()
+        except Exception:
+            pass
         bind_job_telemetry(None)
         from clips_worker.vision_layout import log_project_vision_stats
 

@@ -26,13 +26,36 @@ def dedupe_picks_within_run(
     iou_threshold: float = 0.35,
 ) -> list[FusionPick]:
     """Stricter than fusion IoU dedupe — rolling overlap often repeats the same moment."""
+    from clips_worker.decision_log import decision_log
+
     ordered = sorted(picks, key=lambda p: p.score, reverse=True)
     kept: list[FusionPick] = []
     for p in ordered:
         peak = _peak_ms(p)
-        if any(abs(peak - _peak_ms(k)) < min_peak_sep_ms for k in kept):
+        sep_hit = next((k for k in kept if abs(peak - _peak_ms(k)) < min_peak_sep_ms), None)
+        if sep_hit is not None:
+            decision_log(
+                "stream_dedupe",
+                "drop",
+                reason="peak_too_close",
+                peak_ms=peak,
+                kept_peak_ms=_peak_ms(sep_hit),
+                min_peak_sep_ms=min_peak_sep_ms,
+            )
             continue
-        if any(_iou_ms(p.start_ms, p.end_ms, k.start_ms, k.end_ms) > iou_threshold for k in kept):
+        iou_hit = next(
+            (k for k in kept if _iou_ms(p.start_ms, p.end_ms, k.start_ms, k.end_ms) > iou_threshold),
+            None,
+        )
+        if iou_hit is not None:
+            decision_log(
+                "stream_dedupe",
+                "drop",
+                reason="iou_overlap",
+                iou=round(_iou_ms(p.start_ms, p.end_ms, iou_hit.start_ms, iou_hit.end_ms), 4),
+                dropped_start_ms=p.start_ms,
+                kept_start_ms=iou_hit.start_ms,
+            )
             continue
         kept.append(p)
     kept.sort(key=lambda p: p.score, reverse=True)

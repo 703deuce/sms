@@ -148,6 +148,16 @@ def _clip_row_from_llm(
     reason = str(row.get("reject_reason") or "")
     hard = bool(row.get("reject")) and is_hard_llm_reject(reason)
     if row.get("reject"):
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "pass2",
+            "reject",
+            reason=reason or "llm_reject",
+            hard=hard,
+            start_sentence=int(moment.get("start_sentence", 0)),
+            end_sentence=int(moment.get("end_sentence", 0)),
+        )
         return {
             "hard_reject": hard,
             "reject_reason": reason,
@@ -207,6 +217,16 @@ def _clip_row_from_llm(
         "reject_reason": scored.get("reject_reason") if scored.get("reject") else "",
     }
     if scored.get("reject"):
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "pass2",
+            "reject",
+            reason=str(scored.get("reject_reason") or "gate"),
+            score=scored.get("score_0_100"),
+            final=scored.get("final"),
+            title=str(row.get("title") or "")[:60],
+        )
         base["gate_reject"] = True
         base["final"] = scored.get("final")
         base["score"] = scored.get("score_0_100")
@@ -220,6 +240,17 @@ def _clip_row_from_llm(
             "scoring": scored,
             "gate_reject": False,
         }
+    )
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "pass2",
+        "keep",
+        score=scored["score_0_100"],
+        final=scored["final"],
+        title=str(base.get("title") or "")[:60],
+        start_sentence=ss,
+        end_sentence=es,
     )
     try:
         from clips_worker.visual_boundaries import (

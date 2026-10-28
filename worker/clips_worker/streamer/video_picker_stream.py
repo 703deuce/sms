@@ -187,10 +187,15 @@ def stream_chunk_video_signals(
         "vp_calls": vp_calls,
         "gen_ms": total_gen_ms,
     }
-    print(
-        f"[clipper:vp] calls={vp_calls} model=stream chunks={len(ranges)} "
-        f"gen_ms={total_gen_ms} ok={ok_chunks}",
-        flush=True,
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "stream_video_picker",
+        "chunks_summary",
+        vp_calls=vp_calls,
+        chunks=len(ranges),
+        gen_ms=total_gen_ms,
+        ok_chunks=ok_chunks,
     )
     if ok_chunks == 0:
         from clips_worker.picker.picker_errors import log_picker_error

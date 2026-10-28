@@ -139,6 +139,8 @@ def prune_headstart_to_planned(
     from clips_worker.clip_segments import spans_same_segment
     from clips_worker.storage import delete_object
 
+    from clips_worker.decision_log import decision_log
+
     def _matches_planned(start_ms: int, end_ms: int) -> bool:
         for p in planned_picks:
             if spans_same_segment(
@@ -167,6 +169,14 @@ def prune_headstart_to_planned(
                 persisted_spans.discard(sk)
         if not row:
             continue
+        decision_log(
+            "headstart",
+            "pruned",
+            project_id=project_id,
+            span_start_ms=int(row.get("startMs") or sk[0]),
+            span_end_ms=int(row.get("endMs") or sk[1]),
+            storage_deleted=True,
+        )
         for key_name in ("previewKey", "posterKey", "wordsKey", "cropKey"):
             storage_key = row.get(key_name)
             if storage_key:
@@ -174,9 +184,14 @@ def prune_headstart_to_planned(
                     delete_object(str(storage_key))
                 except Exception:
                     pass
-        print(
-            f"[clipper:headstart] project={project_id} discarded_unplanned span={sk}",
-            flush=True,
+
+    for p in planned_picks:
+        decision_log(
+            "headstart",
+            "kept_planned",
+            project_id=project_id,
+            start_ms=int(p["start_ms"]),
+            end_ms=int(p["end_ms"]),
         )
 
     head_render_state["by_span"] = by_span

@@ -106,6 +106,25 @@ def select_clips(
     for p in ranked:
         dup = _duplicate_of_kept(p, kept)
         if dup is not None:
+            from clips_worker.decision_log import decision_log
+
+            frac = _overlap_fraction(
+                (int(p["start_ms"]), int(p["end_ms"])),
+                (int(dup["start_ms"]), int(dup["end_ms"])),
+            )
+            decision_log(
+                "dedupe_r10",
+                "drop",
+                reason="overlap_duplicate",
+                overlap_fraction=round(frac, 4),
+                title=str(p.get("title", ""))[:80],
+                start_ms=int(p["start_ms"]),
+                end_ms=int(p["end_ms"]),
+                score=_clip_score(p),
+                kept_title=str(dup.get("title", ""))[:80],
+                kept_start_ms=int(dup["start_ms"]),
+                kept_score=_clip_score(dup),
+            )
             picker_info(
                 "selection_drop",
                 reason="overlap_duplicate",
@@ -134,6 +153,16 @@ def select_clips(
                 score=_clip_score(p),
             )
 
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "pass2",
+        "selection",
+        candidates=len(picks),
+        selected=len(kept),
+        max_clips=max_clips,
+        cut_threshold="overlap_0.5_and_max_clips",
+    )
     picker_info(
         "selection",
         candidates=len(picks),

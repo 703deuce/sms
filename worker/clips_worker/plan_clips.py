@@ -28,6 +28,8 @@ def _plan_overlap_pass(
     min_clip_ms: int,
     merge_ratio: float,
 ) -> list[dict]:
+    from clips_worker.decision_log import decision_log
+
     if len(picks) <= 1:
         return picks
     out = sorted([dict(p) for p in picks], key=lambda p: int(p["start_ms"]))
@@ -49,25 +51,72 @@ def _plan_overlap_pass(
             ratio = _overlap_ratio(a, b)
             if ratio >= merge_ratio:
                 if _pick_score(a) >= _pick_score(b):
+                    kept, dropped = a, b
                     out.pop(i + 1)
                 else:
+                    kept, dropped = b, a
                     out.pop(i)
+                decision_log(
+                    "plan_clips",
+                    "merge",
+                    overlap_ratio=round(ratio, 4),
+                    kept_start_ms=int(kept["start_ms"]),
+                    kept_end_ms=int(kept["end_ms"]),
+                    kept_score=_pick_score(kept),
+                    dropped_start_ms=int(dropped["start_ms"]),
+                    dropped_end_ms=int(dropped["end_ms"]),
+                    dropped_score=_pick_score(dropped),
+                )
                 merged += 1
                 changed = True
                 break
             mid = (overlap_start + overlap_end) // 2
+            old_a_end, old_b_start = ae, bs_ms
             a["end_ms"] = min(ae, mid)
             b["start_ms"] = max(bs_ms, mid)
+            decision_log(
+                "plan_clips",
+                "trim",
+                overlap_ratio=round(ratio, 4),
+                a_start_ms=as_ms,
+                a_end_ms_old=old_a_end,
+                a_end_ms_new=int(a["end_ms"]),
+                b_start_ms_old=old_b_start,
+                b_start_ms_new=int(b["start_ms"]),
+                b_end_ms=be,
+            )
             trimmed += 1
             changed = True
             break
-    kept = [p for p in out if int(p["end_ms"]) - int(p["start_ms"]) >= min_clip_ms]
-    print(f"[clipper:overlap] merged={merged} trimmed={trimmed} final={len(kept)}", flush=True)
+    kept: list[dict] = []
+    for p in out:
+        span = int(p["end_ms"]) - int(p["start_ms"])
+        if span >= min_clip_ms:
+            kept.append(p)
+        else:
+            decision_log(
+                "plan_clips",
+                "min_length_drop",
+                start_ms=int(p["start_ms"]),
+                end_ms=int(p["end_ms"]),
+                span_ms=span,
+                min_clip_ms=min_clip_ms,
+                score=_pick_score(p),
+            )
+    decision_log(
+        "plan_clips",
+        "overlap_pass_summary",
+        merged=merged,
+        trimmed=trimmed,
+        final=len(kept),
+    )
     return kept
 
 
 def clamp_extends_to_neighbors(picks: list[dict]) -> None:
     """Prevent extend-to-min from growing starts into the previous pick (R2)."""
+    from clips_worker.decision_log import decision_log
+
     if len(picks) <= 1:
         return
     ordered = sorted(picks, key=lambda p: int(p.get("start_ms") or 0))
@@ -77,6 +126,14 @@ def clamp_extends_to_neighbors(picks: list[dict]) -> None:
         prev_end = int(prev.get("end_ms") or 0)
         cur_start = int(cur.get("start_ms") or 0)
         if cur_start < prev_end:
+            decision_log(
+                "plan_clips",
+                "clamp_extends",
+                index=i,
+                prev_end_ms=prev_end,
+                start_ms_before=cur_start,
+                start_ms_after=prev_end,
+            )
             cur["start_ms"] = prev_end
 
 

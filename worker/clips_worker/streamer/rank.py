@@ -143,4 +143,12 @@ def rank_moments(
         )
         for p in picks
     ]
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "stream_rank",
+        "finish",
+        pick_count=len(snapped),
+        duration_ms=duration_ms,
+    )
     return snapped, payload

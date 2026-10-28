@@ -250,9 +250,28 @@ def fuse_moments(
         )
 
     picks.sort(key=lambda p: p.score, reverse=True)
+    from clips_worker.decision_log import decision_log
+
     deduped: list[FusionPick] = []
     for p in picks:
-        if any(_iou(p.start_ms, p.end_ms, d.start_ms, d.end_ms) > 0.3 for d in deduped):
+        beat = next(
+            (d for d in deduped if _iou(p.start_ms, p.end_ms, d.start_ms, d.end_ms) > 0.3),
+            None,
+        )
+        if beat is not None:
+            decision_log(
+                "stream_fusion",
+                "rank_dedupe_drop",
+                overlap_iou=round(
+                    _iou(p.start_ms, p.end_ms, beat.start_ms, beat.end_ms),
+                    4,
+                ),
+                dropped_start_ms=p.start_ms,
+                dropped_end_ms=p.end_ms,
+                dropped_score=p.score,
+                kept_start_ms=beat.start_ms,
+                kept_score=beat.score,
+            )
             continue
         deduped.append(p)
         if len(deduped) >= wide_cap:
@@ -295,6 +314,16 @@ def fuse_moments(
         )
         if tier in ("primary", "more"):
             visible.append(p)
+        decision_log(
+            "stream_fusion",
+            "tier",
+            rank_index=i,
+            tier=tier,
+            start_ms=p.start_ms,
+            end_ms=p.end_ms,
+            score=p.score,
+            render=tier == "primary",
+        )
 
     payload = {
         "v": 2,

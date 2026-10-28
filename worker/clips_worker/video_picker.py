@@ -85,6 +85,8 @@ def _coerce_moment_row(row: Any, duration_s: float) -> dict | None:
 
 def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dict], dict[str, int]]:
     """Clamp/drop out-of-range model times instead of rejecting the whole response."""
+    from clips_worker.decision_log import decision_log
+
     dur = max(1.0, float(duration_s))
     kept = clamped = dropped = 0
     valid: list[dict] = []
@@ -92,6 +94,12 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
         coerced = _coerce_moment_row(row, dur)
         if coerced is None:
             dropped += 1
+            decision_log(
+                "sanitize",
+                "reject",
+                reason="coerce_failed",
+                input=_sanitize_moment_preview(row),
+            )
             continue
         row = coerced
         try:
@@ -101,9 +109,17 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
             hook = float(row.get("hook_s", start))
         except (TypeError, ValueError):
             dropped += 1
+            decision_log("sanitize", "reject", reason="time_parse", input=_sanitize_moment_preview(row))
             continue
         if start >= dur - 3:
             dropped += 1
+            decision_log(
+                "sanitize",
+                "reject",
+                reason="start_near_eof",
+                start_s=start,
+                duration_s=dur,
+            )
             continue
         orig = (start, end, peak, hook)
         start = max(0.0, start)
@@ -114,6 +130,7 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
             start = max(0.0, end - _MIN_MOMENT_S)
         if end - start < _MIN_MOMENT_S:
             dropped += 1
+            decision_log("sanitize", "reject", reason="span_too_short", start_s=start, end_s=end)
             continue
         if (round(start, 3), round(end, 3), round(peak, 3), round(hook, 3)) != (
             round(orig[0], 3),
@@ -122,6 +139,14 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
             round(orig[3], 3),
         ):
             clamped += 1
+            decision_log(
+                "sanitize",
+                "clamp",
+                start_s_before=orig[0],
+                end_s_before=orig[1],
+                start_s_after=start,
+                end_s_after=end,
+            )
         valid.append(
             {
                 **row,
@@ -132,12 +157,28 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
             }
         )
         kept += 1
+        decision_log(
+            "sanitize",
+            "keep",
+            start_s=start,
+            end_s=end,
+            peak_s=peak,
+            hook_s=hook,
+            score=row.get("score"),
+        )
     stats = {"kept": kept, "clamped": clamped, "dropped": dropped}
-    print(
-        f"[clipper:vp] sanitized kept={kept} clamped={clamped} dropped={dropped} dur={dur:.1f}",
-        flush=True,
-    )
+    decision_log("sanitize", "summary", **stats, duration_s=dur)
     return valid, stats
+
+
+def _sanitize_moment_preview(row: Any) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return {"type": type(row).__name__}
+    return {
+        k: row.get(k)
+        for k in ("start_s", "end_s", "peak_s", "hook_s", "score", "what_happened")
+        if k in row
+    }
 
 
 _CATEGORY_ITEM = {"type": "string"}
@@ -430,15 +471,44 @@ def dedupe_overlapping_video_picker_moments(
     moments: list[dict],
     *,
     overlap_threshold: float = 0.5,
+    stage: str = "dedupe",
 ) -> list[dict]:
     """Drop >50% overlapping spans; keep higher score (counts as one beat toward min_moments)."""
+    from clips_worker.decision_log import decision_log
+
     ranked = sorted(moments, key=lambda m: -float(m.get("score") or 0))
     kept: list[dict] = []
     for m in ranked:
         span = _moment_span_s(m)
-        if any(_span_overlap_fraction(span, _moment_span_s(k)) > overlap_threshold for k in kept):
+        beat: dict | None = None
+        beat_frac = 0.0
+        for k in kept:
+            frac = _span_overlap_fraction(span, _moment_span_s(k))
+            if frac > overlap_threshold:
+                beat = k
+                beat_frac = frac
+                break
+        if beat is not None:
+            decision_log(
+                stage,
+                "drop",
+                overlap_fraction=round(beat_frac, 4),
+                dropped_start_s=span[0],
+                dropped_end_s=span[1],
+                dropped_score=float(m.get("score") or 0),
+                kept_start_s=float(beat.get("start_s", 0)),
+                kept_end_s=float(beat.get("end_s", 0)),
+                kept_score=float(beat.get("score") or 0),
+            )
             continue
         kept.append(m)
+        decision_log(
+            stage,
+            "keep",
+            start_s=span[0],
+            end_s=span[1],
+            score=float(m.get("score") or 0),
+        )
     kept.sort(key=lambda x: -float(x.get("score") or 0))
     return kept
 
@@ -451,6 +521,8 @@ def validate_and_normalize_moments(
     max_span_s: float | None = None,
 ) -> tuple[list[dict], dict[str, int]]:
     """Clamp times, enforce ordering, drop spans <5s; add legacy t_s/reason fields."""
+    from clips_worker.decision_log import decision_log
+
     dur = max(1.0, float(duration_s))
     out: list[dict] = []
     rejects: dict[str, int] = {}
@@ -458,6 +530,7 @@ def validate_and_normalize_moments(
         coerced = _coerce_moment_row(row, dur)
         if coerced is None:
             rejects["coerce_failed"] = rejects.get("coerce_failed", 0) + 1
+            decision_log("normalize", "reject", reason="coerce_failed", input=_sanitize_moment_preview(row))
             continue
         row = coerced
         try:
@@ -467,9 +540,17 @@ def validate_and_normalize_moments(
             hook = float(row.get("hook_s", start))
         except (TypeError, ValueError):
             rejects["time_parse"] = rejects.get("time_parse", 0) + 1
+            decision_log("normalize", "reject", reason="time_parse", input=_sanitize_moment_preview(row))
             continue
         if end <= start or (end - start) < _MIN_MOMENT_S:
             rejects["span_too_short"] = rejects.get("span_too_short", 0) + 1
+            decision_log(
+                "normalize",
+                "reject",
+                reason="span_too_short",
+                start_s=start,
+                end_s=end,
+            )
             continue
         peak = _clamp(peak, 0.0, dur - 0.001)
         hook = _clamp(hook, 0.0, dur)
@@ -481,10 +562,32 @@ def validate_and_normalize_moments(
             if not (start <= hook <= peak < end):
                 peak = _clamp((start + end) / 2, start + 0.001, end - 0.001)
                 hook = _clamp(start + 0.5 * (peak - start), start, peak)
+        trim_applied = False
         if max_span_s is not None and max_span_s > 0:
+            ns, ne, np, nh = start, end, peak, hook
             start, end, peak, hook = _apply_max_span(start, end, peak, hook, max_span_s)
+            if (ns, ne) != (start, end):
+                trim_applied = True
+                decision_log(
+                    "normalize",
+                    "max_span_trim",
+                    start_s_before=ns,
+                    end_s_before=ne,
+                    start_s_after=start,
+                    end_s_after=end,
+                    max_span_s=max_span_s,
+                )
         if not (start <= hook <= peak < end):
             rejects["hook_peak_order"] = rejects.get("hook_peak_order", 0) + 1
+            decision_log(
+                "normalize",
+                "reject",
+                reason="hook_peak_order",
+                start_s=start,
+                end_s=end,
+                hook_s=hook,
+                peak_s=peak,
+            )
             continue
         score = max(0.0, min(1.0, float(row.get("score") or 0)))
         edge = str(row.get("touches_edge") or "none").lower()
@@ -513,6 +616,16 @@ def validate_and_normalize_moments(
             "reason": (what or why)[:200],
         }
         out.append(m)
+        decision_log(
+            "normalize",
+            "keep",
+            start_s=m["start_s"],
+            end_s=m["end_s"],
+            peak_s=m["peak_s"],
+            hook_s=m["hook_s"],
+            score=m["score"],
+            max_span_trim=trim_applied,
+        )
     out.sort(key=lambda x: -float(x.get("score") or 0))
     return out, rejects
 
@@ -1023,6 +1136,8 @@ def reassess_edge_moments(
         return moments
     pad = 55.0
     max_span = max_span_seconds(target_clip_len_s)
+    from clips_worker.decision_log import decision_log
+
     out: list[dict] = []
     for m in moments:
         edge = str(m.get("touches_edge") or "none")
@@ -1079,12 +1194,52 @@ def reassess_edge_moments(
                 max_span_s=max_span,
             )
             if normed:
+                decision_log(
+                    "reassess_edge",
+                    "changed",
+                    chunk=chunk_label,
+                    edge=edge,
+                    before_start_s=rs,
+                    before_end_s=re,
+                    after_start_s=normed[0].get("start_s"),
+                    after_end_s=normed[0].get("end_s"),
+                )
                 out.append(normed[0])
             elif float(m.get("confidence") or 0) >= 0.35:
+                decision_log(
+                    "reassess_edge",
+                    "keep_original",
+                    chunk=chunk_label,
+                    edge=edge,
+                    reason="reassess_empty_confident",
+                )
                 out.append(m)
+            else:
+                decision_log(
+                    "reassess_edge",
+                    "drop",
+                    chunk=chunk_label,
+                    edge=edge,
+                    reason="reassess_empty_low_confidence",
+                )
             continue
         if float(m.get("confidence") or 0) >= 0.35:
+            decision_log(
+                "reassess_edge",
+                "keep_original",
+                chunk=chunk_label,
+                edge=edge,
+                reason="reassess_no_result",
+            )
             out.append(m)
+        else:
+            decision_log(
+                "reassess_edge",
+                "drop",
+                chunk=chunk_label,
+                edge=edge,
+                reason="reassess_no_result_low_confidence",
+            )
     return out or moments
 
 
@@ -1192,6 +1347,8 @@ def watch_video_file(
             meta["pricing_usd_per_1m"] = {"input": in_p, "output": out_p}
             meta["est_usd"] = round(estimate_gemini_usd(pt, ot, used_model), 6)
 
+        from clips_worker.decision_log import decision_log, sanitize_model_json
+
         for model_idx, active_model in enumerate(models_chain):
             if model_idx > 0:
                 meta["fallback_reason"] = last_fallback_reason
@@ -1241,9 +1398,15 @@ def watch_video_file(
                     if last_status == 429 or "quota exceeded" in (last_err or "").lower():
                         meta["rate_limited"] = True
                         meta["status"] = last_status or 429
-                        print(
-                            f"[clipper:video_picker] ERROR {json.dumps({'event': 'gemini_rate_limited', 'chunk': chunk_label, 'model': active_model, 'status': last_status, 'quota': quota})}",
-                            flush=True,
+                        decision_log(
+                            "video_picker",
+                            "model_attempt",
+                            model=active_model,
+                            chunk=chunk_label,
+                            status=last_status or 429,
+                            ok=False,
+                            retry_reason="rate_limited",
+                            quota=quota,
                         )
                         if (
                             active_model == primary_model
@@ -1251,15 +1414,28 @@ def watch_video_file(
                         ):
                             delay = parse_retry_delay_seconds(quota.get("retryDelay"))
                             if delay is not None and delay <= 60:
-                                print(
-                                    f"[clipper:video_picker] quota_retry model={active_model} "
-                                    f"sleep_s={delay:.1f} quotaMetric={quota.get('quotaMetric', '')} "
-                                    f"quotaId={quota.get('quotaId', '')}",
-                                    flush=True,
+                                decision_log(
+                                    "video_picker",
+                                    "retry",
+                                    model=active_model,
+                                    chunk=chunk_label,
+                                    retry_reason="429_retryDelay",
+                                    sleep_s=round(delay, 2),
+                                    quotaMetric=quota.get("quotaMetric"),
+                                    quotaId=quota.get("quotaId"),
                                 )
                                 time.sleep(delay)
                                 meta["primary_429_retried"] = True
                                 continue
+                    decision_log(
+                        "video_picker",
+                        "model_attempt",
+                        model=active_model,
+                        chunk=chunk_label,
+                        status=last_status,
+                        ok=False,
+                        error=model_failed_reason[:200],
+                    )
                     break
 
                 try:
@@ -1274,6 +1450,18 @@ def watch_video_file(
 
                 raw_sections = list(parsed_ok.get("sections") or [])
                 raw_moments = list(parsed_ok.get("moments") or [])
+                decision_log(
+                    "video_picker",
+                    "model_response",
+                    model=active_model,
+                    chunk=chunk_label,
+                    status=200,
+                    prompt_tokens=meta.get("prompt_tokens"),
+                    output_tokens=meta.get("output_tokens"),
+                    rawModelJson=sanitize_model_json(
+                        {"sections": raw_sections, "moments": raw_moments}
+                    ),
+                )
                 meta["raw_moments_count"] = len(raw_moments)
                 if not raw_sections and not raw_moments:
                     model_failed_reason = "empty_sections_and_moments"
@@ -1282,6 +1470,13 @@ def watch_video_file(
 
                 if raw_sections and not raw_moments and sections_moment_retries > 0:
                     sections_moment_retries -= 1
+                    decision_log(
+                        "video_picker",
+                        "retry",
+                        model=active_model,
+                        chunk=chunk_label,
+                        retry_reason="sections_without_moments",
+                    )
                     user_text = (
                         user_text_base
                         + "\n\nRETRY: You returned sections but moments[] was empty. "
@@ -1295,6 +1490,13 @@ def watch_video_file(
                 meta["sanitize_stats"] = sanitize_stats
                 if raw_sections and not raw_moments and sections_moment_retries > 0:
                     sections_moment_retries -= 1
+                    decision_log(
+                        "video_picker",
+                        "retry",
+                        model=active_model,
+                        chunk=chunk_label,
+                        retry_reason="sections_without_moments_after_sanitize",
+                    )
                     user_text = (
                         user_text_base
                         + "\n\nRETRY: moments were missing or invalid after parse. "
@@ -1307,14 +1509,24 @@ def watch_video_file(
                 if violations:
                     meta["time_violations"] = violations[:12]
                     meta["time_invalid"] = True
-                    print(
-                        f"[clipper:video_picker] {json.dumps({'event': 'time_invalid', 'chunk': chunk_label, 'model': active_model, 'violations': violations[:8]})}",
-                        flush=True,
+                    decision_log(
+                        "video_picker",
+                        "time_invalid",
+                        model=active_model,
+                        chunk=chunk_label,
+                        violations=violations[:8],
                     )
                     if time_invalid_retries > 0 and len(raw_moments) < int(
                         meta.get("min_moments") or min_moments_for_video(int(duration_s))
                     ):
                         time_invalid_retries -= 1
+                        decision_log(
+                            "video_picker",
+                            "retry",
+                            model=active_model,
+                            chunk=chunk_label,
+                            retry_reason="time_invalid",
+                        )
                         user_text = (
                             user_text_base
                             + f"\n\nRETRY: The video is {duration_s:.0f}s long; all times must be < {duration_s:.0f}. "
@@ -1337,7 +1549,7 @@ def watch_video_file(
                 )
                 meta["normalize_rejects"] = normalize_rejects
                 moments_before_dedupe = len(moments)
-                moments = dedupe_overlapping_video_picker_moments(moments)
+                moments = dedupe_overlapping_video_picker_moments(moments, stage="dedupe")
                 if not moments:
                     model_failed_reason = "no_valid_moments_after_normalize"
                     meta["normalize_rejects"] = normalize_rejects
@@ -1359,7 +1571,7 @@ def watch_video_file(
                         chunk_label=chunk_label,
                     )
                 before_final_dedupe = len(moments)
-                moments = dedupe_overlapping_video_picker_moments(moments)
+                moments = dedupe_overlapping_video_picker_moments(moments, stage="dedupe_reassess")
                 meta["moments_deduped"] = {
                     "before": moments_before_dedupe,
                     "after": len(moments),
@@ -1369,10 +1581,19 @@ def watch_video_file(
                 meta["model"] = active_model
                 meta["model_used"] = active_model
                 meta["model_fallback"] = active_model != primary_model
-                print(
-                    f"[clipper:vp] calls=1 model={active_model} upload_ms={meta.get('upload_ms', 0)} "
-                    f"gen_ms={meta.get('gen_ms', 0)} chunk={chunk_label} moments={len(moments)}",
-                    flush=True,
+                decision_log(
+                    "video_picker",
+                    "model_attempt",
+                    model=active_model,
+                    chunk=chunk_label,
+                    status=200,
+                    ok=True,
+                    prompt_tokens=meta.get("prompt_tokens"),
+                    output_tokens=meta.get("output_tokens"),
+                    gen_ms=meta.get("gen_ms"),
+                    moments=len(moments),
+                    sanitize_stats=meta.get("sanitize_stats"),
+                    normalize_rejects=meta.get("normalize_rejects"),
                 )
                 stage_end(
                     "video_picker",
