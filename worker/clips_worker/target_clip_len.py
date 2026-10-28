@@ -1,4 +1,4 @@
-"""Clip duration targets from job payload `target_clip_len_s` (15/30/60/90 or auto)."""
+"""Clip duration targets from job payload + project settings (B clipLenMode / targetClipLenS)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,19 +16,9 @@ _LEGACY_CLIP_LENGTH_TO_S = {
 }
 
 
-def parse_target_clip_len_s(container: dict[str, Any] | None) -> int | None:
-    """Return fixed target seconds, or None for auto (default when missing)."""
-    if not container:
-        return None
-    raw = container.get("target_clip_len_s")
-    if raw is None:
-        raw = container.get("targetClipLenS")
-    if raw in (None, "", "auto", "Auto"):
-        legacy = (container.get("clipLength") or container.get("clip_length") or "").strip()
-        if legacy in _LEGACY_CLIP_LENGTH_TO_S:
-            return _LEGACY_CLIP_LENGTH_TO_S[legacy]
-        if legacy and legacy not in ("auto", "Auto"):
-            return None
+def coerce_target_clip_len_s(raw: Any) -> int | None:
+    """Parse 15/30/60/90; None/empty/auto → auto (null)."""
+    if raw is None or raw == "" or raw in ("auto", "Auto"):
         return None
     try:
         v = int(float(raw))
@@ -37,6 +27,57 @@ def parse_target_clip_len_s(container: dict[str, Any] | None) -> int | None:
     if v in ALLOWED_TARGET_S:
         return v
     return None
+
+
+def target_from_project_settings(settings: dict[str, Any] | None) -> int | None:
+    """Settings-only resolution (streamer imports, legacy projects). Mirrors web targetClipLenSForJobPayload."""
+    if not settings:
+        return None
+    mode = settings.get("clipLenMode") or settings.get("clip_len_mode")
+    if mode == "auto":
+        return None
+    if mode == "target":
+        raw = settings.get("targetClipLenS")
+        if raw is None:
+            raw = settings.get("target_clip_len_s")
+        return coerce_target_clip_len_s(raw)
+    legacy = (settings.get("clipLength") or settings.get("clip_length") or "").strip()
+    if legacy in _LEGACY_CLIP_LENGTH_TO_S:
+        return _LEGACY_CLIP_LENGTH_TO_S[legacy]
+    raw = settings.get("targetClipLenS") or settings.get("target_clip_len_s")
+    return coerce_target_clip_len_s(raw)
+
+
+def resolve_target_clip_len_s(
+    job_payload: dict[str, Any] | None = None,
+    settings: dict[str, Any] | None = None,
+) -> int | None:
+    """
+    Priority: PROCESS_PROJECT payload target_clip_len_s (key present, null=auto)
+    → project settings (clipLenMode / targetClipLenS) → legacy clipLength → auto.
+    """
+    if job_payload is not None and "target_clip_len_s" in job_payload:
+        return coerce_target_clip_len_s(job_payload.get("target_clip_len_s"))
+    return target_from_project_settings(settings)
+
+
+def enrich_settings_with_clip_length(
+    settings: dict[str, Any],
+    job_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    target = resolve_target_clip_len_s(job_payload, settings)
+    return {**settings, "target_clip_len_s": target}
+
+
+def parse_target_clip_len_s(container: dict[str, Any] | None) -> int | None:
+    """Backward-compatible single-dict parse (settings or payload with merged fields)."""
+    if not container:
+        return None
+    if "target_clip_len_s" in container and (
+        "clipLenMode" not in container and "targetClipLenS" not in container
+    ):
+        return coerce_target_clip_len_s(container.get("target_clip_len_s"))
+    return resolve_target_clip_len_s(None, container)
 
 
 @dataclass(frozen=True)
@@ -120,5 +161,8 @@ def clip_length_policy(target_s: int | None) -> ClipLengthPolicy:
 
 
 def resolve_clip_length_policy(settings: dict[str, Any]) -> ClipLengthPolicy:
-    target = parse_target_clip_len_s(settings)
+    if "target_clip_len_s" in settings:
+        target = coerce_target_clip_len_s(settings.get("target_clip_len_s"))
+    else:
+        target = resolve_target_clip_len_s(None, settings)
     return clip_length_policy(target)

@@ -128,8 +128,9 @@ def rank_moments(
         cue_events=cue_events,
         video_moments=video_moments,
     )
-    from clips_worker.target_clip_len import resolve_clip_length_policy
+    from clips_worker.target_clip_len import enrich_settings_with_clip_length, resolve_clip_length_policy
 
+    settings = enrich_settings_with_clip_length(settings)
     range_end = duration_ms
     length_max_ms = resolve_clip_length_policy(settings).max_ms
     snapped = [

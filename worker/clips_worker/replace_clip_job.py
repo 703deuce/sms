@@ -104,6 +104,9 @@ def run_replace_clip_job(conn, job: dict, post_progress) -> None:
     settings = project.get("settings") or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
+    from clips_worker.target_clip_len import enrich_settings_with_clip_length
+
+    settings = enrich_settings_with_clip_length(settings, payload)
     words = resolve_transcript_for_job(project, {})
     range_start = int(project.get("rangeStartMs") or 0)
     range_end = int(project.get("rangeEndMs") or 0) or int(project.get("durationMs") or 0)

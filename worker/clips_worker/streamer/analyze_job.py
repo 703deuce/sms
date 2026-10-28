@@ -89,6 +89,9 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
     settings = vod.get("settings") or {}
     if isinstance(settings, str):
         settings = json.loads(settings)
+    from clips_worker.target_clip_len import enrich_settings_with_clip_length
+
+    settings = enrich_settings_with_clip_length(settings, payload)
 
     audio_key = state.get("audioKey") or stream_audio_key(workspace_id, vod_id)
     duration_ms = int(vod.get("durationMs") or 0)

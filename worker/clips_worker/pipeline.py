@@ -348,10 +348,12 @@ def run_m4_pipeline(
 
     mode = settings.get("mode") or "talking"
     source_duration_ms = max(1, range_end - range_start) if range_end > range_start else 0
-    from clips_worker.target_clip_len import parse_target_clip_len_s
+    from clips_worker.target_clip_len import enrich_settings_with_clip_length
 
-    target_clip_len_s = parse_target_clip_len_s(job_payload) or parse_target_clip_len_s(settings)
-    settings = {**settings, "projectId": project_id, "target_clip_len_s": target_clip_len_s}
+    settings = enrich_settings_with_clip_length(
+        {**settings, "projectId": project_id},
+        job_payload,
+    )
     if source_duration_ms > 0:
         settings = {**settings, "sourceDurationMs": source_duration_ms}
     pipeline_t0 = time.monotonic()
