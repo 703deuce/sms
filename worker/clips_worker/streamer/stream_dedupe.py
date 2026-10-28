@@ -137,6 +137,16 @@ def dedupe_picks_against_channel_history(
                 break
         if duplicate:
             dropped += 1
+            from clips_worker.decision_log import decision_log
+
+            decision_log(
+                "stream_dedupe",
+                "drop",
+                reason="channel_history_duplicate",
+                start_ms=p.start_ms,
+                end_ms=p.end_ms,
+                peak_ms=peak,
+            )
             continue
         kept.append(p)
     return kept, dropped

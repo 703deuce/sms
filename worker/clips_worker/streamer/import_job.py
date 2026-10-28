@@ -127,17 +127,9 @@ def _has_pending_stream_import(conn, project_id: str, vod_id: str, *, exclude_jo
 
 
 def _has_pending_stream_analyze(conn, project_id: str, vod_id: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT 1 FROM clip_jobs
-            WHERE "projectId"=%s AND type='STREAM_ANALYZE' AND status IN ('QUEUED','RUNNING')
-              AND payload->>'vodId'=%s
-            LIMIT 1
-            """,
-            (project_id, vod_id),
-        )
-        return cur.fetchone() is not None
+    from clips_worker.streamer.analyze_enqueue import has_pending_stream_analyze
+
+    return has_pending_stream_analyze(conn, project_id, vod_id)
 
 
 def _rolling_import_idle_done(
@@ -156,7 +148,13 @@ def _rolling_import_idle_done(
     rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
     if rolling.get("live") and not rolling.get("finalize"):
         chunk_min = rolling_chunk_min(state)
-        _schedule_rolling_import_tick(conn, project_id=project_id, vod_id=vod_id, chunk_min=chunk_min)
+        _schedule_rolling_import_tick(
+            conn,
+            project_id=project_id,
+            vod_id=vod_id,
+            chunk_min=chunk_min,
+            exclude_job_id=str(job["id"]),
+        )
     print(
         f"[clipper:autopull] rolling_import_deferred vodId={vod_id} projectId={project_id} "
         f"jobId={job['id']} reason={reason}",
@@ -261,18 +259,20 @@ def _complete_rolling_window_import(
     post_progress,
     hb,
 ) -> None:
-    from clips_worker.streamer.rolling_ingest import (
-        mark_rolling_pull_complete,
-        rolling_chunk_min,
-        stop_rolling_session,
-    )
+    from clips_worker.streamer.rolling_ingest import rolling_chunk_min, stop_rolling_session
+    from clips_worker.streamer.project_cancel import load_project_operator_cancelled
+    from datetime import datetime, timezone
 
     end_ms = int(vod.get("rangeEndMs") or 0)
-    mark_rolling_pull_complete(conn, vod_id, end_ms)
     prior = _vod_state_dict(vod)
-    merged_state = {**prior, **state, "processMode": "rolling"}
+    rolling = dict(prior.get("rolling") or {})
+    rolling["lastPulledMs"] = int(end_ms)
+    rolling["lastPullCompletedAt"] = datetime.now(timezone.utc).isoformat()
+    merged_state = {**prior, **state, "processMode": "rolling", "rolling": rolling}
+    from clips_worker.decision_log import decision_log
+
     pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "auto")
-    analyze_id = f"job_{uuid.uuid4().hex}"
+    analyze_id: str | None = None
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -297,18 +297,47 @@ def _complete_rolling_window_import(
                 vod_id,
             ),
         )
-        cur.execute(
-            """
-            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
-            VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
-            """,
-            (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
-        )
+        if load_project_operator_cancelled(conn, project_id):
+            decision_log(
+                "stream_import",
+                "analyze_enqueue_skipped",
+                project_id=project_id,
+                vod_id=vod_id,
+                reason="operator_cancelled",
+                source="rolling_window_complete",
+            )
+        elif _has_pending_stream_analyze(conn, project_id, vod_id):
+            decision_log(
+                "stream_import",
+                "analyze_enqueue_skipped",
+                project_id=project_id,
+                vod_id=vod_id,
+                reason="analyze_already_pending",
+                source="rolling_window_complete",
+            )
+        else:
+            analyze_id = f"job_{uuid.uuid4().hex}"
+            cur.execute(
+                """
+                INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
+                VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
+                """,
+                (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
+            )
     conn.commit()
+    if analyze_id:
+        decision_log(
+            "stream_import",
+            "analyze_enqueued",
+            id=analyze_id,
+            project_id=project_id,
+            vod_id=vod_id,
+            source="rolling_window_complete",
+        )
     rolling_finalize = bool(payload.get("rollingFinalize"))
-    rolling = prior.get("rolling") if isinstance(prior.get("rolling"), dict) else {}
-    live = bool(rolling.get("live")) and not rolling_finalize
-    finalize = rolling_finalize or bool(rolling.get("finalize"))
+    rolling_live = prior.get("rolling") if isinstance(prior.get("rolling"), dict) else {}
+    live = bool(rolling_live.get("live")) and not rolling_finalize
+    finalize = rolling_finalize or bool(rolling_live.get("finalize"))
     chunk_min = rolling_chunk_min(prior)
     if live and not finalize:
         _schedule_rolling_import_tick(
@@ -316,6 +345,7 @@ def _complete_rolling_window_import(
             project_id=project_id,
             vod_id=vod_id,
             chunk_min=chunk_min,
+            exclude_job_id=str(job["id"]),
         )
     elif finalize:
         stop_rolling_session(conn, vod_id, reason="stream_offline")
@@ -338,10 +368,22 @@ def _schedule_rolling_import_tick(
     project_id: str,
     vod_id: str,
     chunk_min: int,
+    exclude_job_id: str | None = None,
 ) -> None:
-    if _has_pending_stream_import(conn, project_id, vod_id):
+    from clips_worker.decision_log import decision_log
+
+    if _has_pending_stream_import(conn, project_id, vod_id, exclude_job_id=exclude_job_id):
+        decision_log(
+            "stream_import",
+            "rolling_import_deduped",
+            project_id=project_id,
+            vod_id=vod_id,
+            exclude_job_id=exclude_job_id,
+            reason="pending_stream_import",
+        )
         print(
-            f"[clipper:stream] rolling_import_deduped vodId={vod_id} projectId={project_id}",
+            f"[clipper:stream] rolling_import_deduped vodId={vod_id} projectId={project_id} "
+            f"excludeJobId={exclude_job_id or ''}",
             flush=True,
         )
         return
@@ -355,8 +397,17 @@ def _schedule_rolling_import_tick(
             (new_id, project_id, json.dumps({"vodId": vod_id, "rollingTick": True}), str(chunk_min)),
         )
     conn.commit()
+    decision_log(
+        "stream_import",
+        "rolling_import_scheduled",
+        job_id=new_id,
+        project_id=project_id,
+        vod_id=vod_id,
+        delay_min=chunk_min,
+    )
     print(
-        f"[clipper:stream] rolling_import_scheduled vodId={vod_id} projectId={project_id} delayMin={chunk_min}",
+        f"[clipper:stream] rolling_import_scheduled vodId={vod_id} projectId={project_id} "
+        f"jobId={new_id} delayMin={chunk_min}",
         flush=True,
     )
 
@@ -430,6 +481,17 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
     if not vod_id:
         raise RuntimeError("missing vodId")
 
+    from clips_worker.decision_log import bind_decision_log, flush_decision_log, unbind_decision_log
+
+    bind_decision_log(conn, str(job.get("id") or ""))
+    try:
+        _run_stream_import_job_inner(conn, job, post_progress, payload, vod_id)
+    finally:
+        flush_decision_log(force=True)
+        unbind_decision_log()
+
+
+def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, vod_id: str) -> None:
     from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
 
     schedule_modal_warmup_background()
@@ -681,6 +743,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                         project_id=project_id,
                         vod_id=vod_id,
                         chunk_min=chunk_min,
+                        exclude_job_id=str(job["id"]),
                     )
                 cleanup_vod_import_dir(vod_id)
                 post_progress(

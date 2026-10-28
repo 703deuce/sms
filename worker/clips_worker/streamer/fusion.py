@@ -89,6 +89,114 @@ def _iou(a0: int, a1: int, b0: int, b1: int) -> float:
     return inter / union if union > 0 else 0.0
 
 
+def _inject_video_picker_candidates(
+    candidates: list[dict],
+    video_moments: list[dict] | None,
+    *,
+    duration_s: int,
+    min_clip_s: int,
+    max_clip_s: int,
+) -> list[dict]:
+    from clips_worker.decision_log import decision_log
+
+    if not video_moments:
+        decision_log("stream_fusion", "video_picker_skip", reason="no_video_moments")
+        return candidates
+    out = list(candidates)
+    dur_ms = duration_s * 1000
+    injected = 0
+    for idx, vm in enumerate(video_moments):
+        try:
+            if vm.get("start_ms") is not None and vm.get("end_ms") is not None and "start_s" not in vm:
+                start_ms = int(vm["start_ms"])
+                end_ms = int(vm["end_ms"])
+                peak_ms = int(vm.get("peak_ms") or (start_ms + end_ms) // 2)
+            else:
+                start_ms = int(float(vm.get("start_s", 0)) * 1000)
+                end_ms = int(float(vm.get("end_s", vm.get("start_s", 0))) * 1000)
+                peak_ms = int(float(vm.get("peak_s", (start_ms + end_ms) / 2000)) * 1000)
+        except (TypeError, ValueError):
+            decision_log(
+                "stream_fusion",
+                "video_picker_drop",
+                reason="time_parse",
+                index=idx,
+            )
+            continue
+        if end_ms <= start_ms:
+            decision_log(
+                "stream_fusion",
+                "video_picker_drop",
+                reason="invalid_span",
+                start_ms=start_ms,
+                end_ms=end_ms,
+            )
+            continue
+        if start_ms >= dur_ms - 500:
+            decision_log(
+                "stream_fusion",
+                "video_picker_drop",
+                reason="start_near_eof",
+                start_ms=start_ms,
+                duration_ms=dur_ms,
+            )
+            continue
+        start_ms = max(0, start_ms)
+        end_ms = min(dur_ms, end_ms)
+        if end_ms - start_ms < min_clip_s * 1000:
+            end_ms = min(dur_ms, start_ms + min_clip_s * 1000)
+        if end_ms - start_ms > max_clip_s * 1000:
+            end_ms = start_ms + max_clip_s * 1000
+        dup = next(
+            (
+                c
+                for c in out
+                if _iou(start_ms, end_ms, int(c["start_ms"]), int(c["end_ms"])) > 0.28
+            ),
+            None,
+        )
+        if dup is not None:
+            decision_log(
+                "stream_fusion",
+                "video_picker_drop",
+                reason="overlap_existing_candidate",
+                start_ms=start_ms,
+                end_ms=end_ms,
+                kept_start_ms=int(dup["start_ms"]),
+            )
+            continue
+        cid = f"vp_{idx}"
+        score = float(vm.get("score") or vm.get("gemini_score") or 0.55)
+        out.append(
+            {
+                "id": cid,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "peak_ms": min(dur_ms - 1, max(start_ms, peak_ms)),
+                "signal_peak": score,
+                "video_picker": True,
+            }
+        )
+        injected += 1
+        decision_log(
+            "stream_fusion",
+            "video_picker_inject",
+            candidate_id=cid,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            peak_ms=peak_ms,
+            score=score,
+        )
+    decision_log(
+        "stream_fusion",
+        "video_picker_summary",
+        input_moments=len(video_moments),
+        injected=injected,
+        candidates_total=len(out),
+    )
+    return out
+
+
 def _weighted_signal_score(
     cand: dict,
     signals: dict[str, list[float] | None],
@@ -172,6 +280,14 @@ def fuse_moments(
             }
         )
 
+    candidates = _inject_video_picker_candidates(
+        candidates,
+        video_moments,
+        duration_s=duration_s,
+        min_clip_s=min_clip_s,
+        max_clip_s=max_clip_s,
+    )
+
     llm_rows: list[dict] = []
     if llm_ranker and candidates:
         llm_rows = llm_ranker(candidates, words, signals)
@@ -182,6 +298,16 @@ def fuse_moments(
         lid = cand["id"]
         llm = by_id.get(lid) or {}
         if llm.get("keep") is False:
+            from clips_worker.decision_log import decision_log
+
+            decision_log(
+                "stream_fusion",
+                "llm_drop",
+                candidate_id=lid,
+                start_ms=int(cand["start_ms"]),
+                end_ms=int(cand["end_ms"]),
+                reason=str(llm.get("reason") or "keep_false")[:120],
+            )
             continue
         component_scores = {
             "audio": _peak_in_window(signals.get("audio"), cand["start_ms"], cand["end_ms"]),
@@ -314,6 +440,18 @@ def fuse_moments(
         )
         if tier in ("primary", "more"):
             visible.append(p)
+        else:
+            from clips_worker.decision_log import decision_log
+
+            decision_log(
+                "stream_fusion",
+                "tier_archive_skip",
+                rank_index=i,
+                tier=tier,
+                start_ms=p.start_ms,
+                end_ms=p.end_ms,
+                score=p.score,
+            )
         decision_log(
             "stream_fusion",
             "tier",

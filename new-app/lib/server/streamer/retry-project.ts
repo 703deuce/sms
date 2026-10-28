@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
+import { streamerProjectOperatorCancelled } from '@/lib/server/streamer/operator-cancel'
 
 /** True when STREAM_ANALYZE finished (rank/enqueue render) even if zero clip rows. */
 export function streamAnalyzePhaseComplete(state: Record<string, unknown>): boolean {
@@ -22,6 +23,11 @@ export async function retryStreamerProject(workspaceId: string, projectId: strin
   const prisma = getPrisma()
   const vod = await prisma.streamVod.findFirst({ where: { projectId, workspaceId } })
   if (!vod) throw new Error('Not a streamer project')
+
+  const project = await prisma.clipProject.findUnique({ where: { id: projectId } })
+  if (project && streamerProjectOperatorCancelled(project)) {
+    throw new Error('Project cancelled by operator')
+  }
 
   const state =
     vod.state && typeof vod.state === 'object' && !Array.isArray(vod.state)

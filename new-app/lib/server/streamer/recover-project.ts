@@ -2,6 +2,7 @@ import type { ClipProjectStatus } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { pickStreamerRetryJobType, streamAnalyzePhaseComplete } from '@/lib/server/streamer/retry-project'
+import { streamerProjectOperatorCancelled } from '@/lib/server/streamer/operator-cancel'
 
 const NON_TERMINAL: ClipProjectStatus[] = [
   'QUEUED',
@@ -29,6 +30,7 @@ export async function enqueueStreamerRecoveryJob(projectId: string, reason: stri
 
   const project = await prisma.clipProject.findUnique({ where: { id: projectId } })
   if (!project || !streamerProjectNeedsRecovery(project.status)) return null
+  if (streamerProjectOperatorCancelled(project)) return null
 
   const active = await prisma.clipJob.findFirst({
     where: { projectId, status: { in: ['QUEUED', 'RUNNING'] } },
