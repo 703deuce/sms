@@ -26,6 +26,63 @@ from clips_worker.video_picker_prompt import (
 )
 
 _MIN_MOMENT_S = 5.0
+_TIME_EPS_S = 0.35
+
+
+def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dict], dict[str, int]]:
+    """Clamp/drop out-of-range model times instead of rejecting the whole response."""
+    dur = max(1.0, float(duration_s))
+    kept = clamped = dropped = 0
+    valid: list[dict] = []
+    for row in raw_moments:
+        if not isinstance(row, dict):
+            dropped += 1
+            continue
+        try:
+            start = float(row.get("start_s", 0))
+            end = float(row.get("end_s", start))
+            peak = float(row.get("peak_s", (start + end) / 2))
+            hook = float(row.get("hook_s", start))
+        except (TypeError, ValueError):
+            dropped += 1
+            continue
+        if start >= dur - 3:
+            dropped += 1
+            continue
+        orig = (start, end, peak, hook)
+        start = max(0.0, start)
+        end = min(end, dur)
+        peak = _clamp(peak, start, max(start, end - 0.001))
+        hook = _clamp(hook, start, max(start, peak))
+        if end - start < _MIN_MOMENT_S:
+            start = max(0.0, end - _MIN_MOMENT_S)
+        if end - start < _MIN_MOMENT_S:
+            dropped += 1
+            continue
+        if (round(start, 3), round(end, 3), round(peak, 3), round(hook, 3)) != (
+            round(orig[0], 3),
+            round(min(orig[1], dur), 3),
+            round(orig[2], 3),
+            round(orig[3], 3),
+        ):
+            clamped += 1
+        valid.append(
+            {
+                **row,
+                "start_s": start,
+                "end_s": end,
+                "peak_s": peak,
+                "hook_s": hook,
+            }
+        )
+        kept += 1
+    stats = {"kept": kept, "clamped": clamped, "dropped": dropped}
+    print(
+        f"[clipper:vp] sanitized kept={kept} clamped={clamped} dropped={dropped} dur={dur:.1f}",
+        flush=True,
+    )
+    return valid, stats
+
 
 _CATEGORY_ITEM = {"type": "string"}
 
@@ -421,9 +478,6 @@ def validate_and_normalize_moments(
         out.append(m)
     out.sort(key=lambda x: -float(x.get("score") or 0))
     return out
-
-
-_TIME_EPS_S = 0.35
 
 
 def collect_time_violations(
@@ -1066,6 +1120,7 @@ def watch_video_file(
         meta["min_moments"] = min_moments_for_video(int(duration_s))
         system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
         user_text_base = (
+            f"The video is exactly {duration_s:.1f} seconds. Every timestamp must be between 0 and {duration_s:.1f}.\n\n"
             "Use the labeled frame timeline ([t=…] before each image), original audio, "
             "burned-in HH:MM:SS on each frame, and the timestamped transcript together.\n\n"
             f"TIMESTAMPED TRANSCRIPT:\n{transcript_text[:16000] if transcript_text else '(none)'}\n\n"
@@ -1157,6 +1212,7 @@ def watch_video_file(
                     parsed_ok = None
                     break
 
+                raw_moments, _sanitize_stats = sanitize_raw_moments(raw_moments, float(duration_s))
                 violations = collect_time_violations(raw_sections, raw_moments, float(duration_s))
                 if violations:
                     meta["time_violations"] = violations[:12]
@@ -1165,22 +1221,21 @@ def watch_video_file(
                         f"[clipper:video_picker] {json.dumps({'event': 'time_invalid', 'chunk': chunk_label, 'model': active_model, 'violations': violations[:8]})}",
                         flush=True,
                     )
-                    if time_invalid_retries > 0:
+                    if time_invalid_retries > 0 and len(raw_moments) < int(
+                        meta.get("min_moments") or min_moments_for_video(int(duration_s))
+                    ):
                         time_invalid_retries -= 1
                         user_text = (
                             user_text_base
-                            + "\n\nRETRY: Your prior JSON had invalid timestamps "
-                            f"(must be 0..{duration_s}s, read from [t=…] labels): "
+                            + f"\n\nRETRY: The video is {duration_s:.0f}s long; all times must be < {duration_s:.0f}. "
+                            "Fix invalid timestamps (read from [t=…] labels): "
                             + "; ".join(violations[:6])
-                            + ". Fix all section and moment times before returning."
                         )
                         parsed_ok = None
                         continue
-                    model_failed_reason = "time_invalid_after_retry"
-                    parsed_ok = None
-                    break
+                else:
+                    meta["time_invalid"] = False
 
-                meta["time_invalid"] = False
                 meta["sections"] = normalize_sections(raw_sections, float(duration_s))[:24]
                 meta["sections_count"] = len(meta["sections"])
                 max_span = max_span_seconds(target_clip_len_s)
@@ -1279,6 +1334,17 @@ def watch_video_file(
             error=(last_fallback_reason or last_err)[:180],
             fail_open=False,
         )
+        need = int(meta.get("min_moments") or min_moments_for_video(int(duration_s)))
+        from clips_worker.video_picker_transcript_fallback import transcript_picker_moments
+
+        transcript_moments = transcript_picker_moments(transcript_text, float(duration_s), need)
+        if transcript_moments:
+            meta["ok"] = True
+            meta["fallback"] = "transcript_picker"
+            meta["model_used"] = meta.get("model_used") or "transcript_picker"
+            meta["error"] = (last_fallback_reason or last_err)[:200]
+            stage_end("video_picker", t0, chunk=chunk_label, moments=len(transcript_moments), fallback="transcript")
+            return transcript_moments, meta
         if not fail_open:
             raise RuntimeError(last_fallback_reason or last_err)
         return _fail_open(last_fallback_reason or last_err, last_status, None)
@@ -1317,9 +1383,8 @@ def watch_upload_range(
         scratch=scratch,
         trim_start_s=start_s,
         trim_end_s=end_s,
-        fail_open=False,
+        fail_open=True,
     )
-    attach_absolute_ms(moments, range_start_ms)
     curve = moments_to_per_second(
         [
             {

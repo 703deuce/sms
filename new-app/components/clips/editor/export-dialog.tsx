@@ -57,6 +57,7 @@ export function ExportDialog({
   onLayoutModeChange,
   platform,
   defaultChannelUrl,
+  chatAvailable = false,
 }: {
   clipId: string
   title: string
@@ -69,6 +70,7 @@ export function ExportDialog({
   onLayoutModeChange?: (mode: ClipEditsV2['layout']['mode']) => void
   platform?: 'twitch' | 'kick'
   defaultChannelUrl?: string
+  chatAvailable?: boolean
   open: boolean
   onClose: () => void
 }) {
@@ -501,7 +503,7 @@ export function ExportDialog({
               })
             }
           }}
-          chatAvailable={platform === 'twitch' || platform === 'kick'}
+          chatAvailable={chatAvailable}
           savedChannels={savedChannels}
           onChannelsRefresh={refreshChannels}
         />

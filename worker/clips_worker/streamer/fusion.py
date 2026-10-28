@@ -270,7 +270,10 @@ def fuse_moments(
             clip_count=max(clip_count, PRIMARY_TIER_MAX),
         )
 
-    primary_n = min(PRIMARY_TIER_MAX, max(PRIMARY_TIER_MIN, clip_count))
+    from clips_worker.picker.pick_quota import compute_pick_want
+
+    want = compute_pick_want(settings, int(duration_s * 1000))
+    primary_n = min(PRIMARY_TIER_MAX, max(want, PRIMARY_TIER_MIN, clip_count))
     candidate_archive: list[dict] = []
     visible: list[FusionPick] = []
     for i, p in enumerate(deduped):

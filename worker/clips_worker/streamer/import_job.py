@@ -624,6 +624,13 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 "audioKey": audio_key,
                 "importMeta": {"tags": meta.get("tags") or []},
             }
+            from clips_worker.streamer.channel_resolve import resolve_vod_channel_fields
+
+            ch_fields = resolve_vod_channel_fields(vod, meta, url)
+            if ch_fields.get("login"):
+                state["channelLogin"] = ch_fields["login"]
+            if ch_fields.get("display"):
+                state["channelDisplayName"] = ch_fields["display"]
             growing = bool(meta_raw.get("growing_vod"))
             rolling = prior_state.get("rolling") if isinstance(prior_state.get("rolling"), dict) else {}
             chunk_min = int(rolling.get("chunkMin") or 12)

@@ -18,6 +18,7 @@ import { cancelClipUpload, fetchUploadLimits, uploadClipFile, type UploadProgres
 import { Loader2 } from 'lucide-react'
 import {
   LIVE_CLIP_LAST_MINUTE_PRESETS,
+  formatVodRangeLabel,
   resolveVodImportRangeMs,
   type VodImportRangeMode,
 } from '@/lib/streamer/vod-import-range'
@@ -83,6 +84,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [rangeMode, setRangeMode] = useState<VodImportRangeMode>('first_minutes')
   const [firstMinutes, setFirstMinutes] = useState('15')
   const [lastMinutesPreset, setLastMinutesPreset] = useState<string>('5')
+  const [lastMinutesCustom, setLastMinutesCustom] = useState('15')
   const [rangeStart, setRangeStart] = useState('0:00')
   const [rangeEnd, setRangeEnd] = useState('15:00')
   const [clipLength, setClipLength] = useState<ClipLengthChoiceValue>('auto')
@@ -214,9 +216,10 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
             kind: data.pastedAs === 'channel' ? 'channel' : data.kind,
             title: data.title ?? undefined,
           })
-          if (data.isLive) {
+          if (data.isLive || data.pastedAs === 'channel') {
             setRangeMode('last_minutes')
-            setLastMinutesPreset('5')
+            setLastMinutesPreset(data.isLive ? '5' : '15')
+            if (!data.isLive) setLastMinutesCustom('15')
           } else {
             setRangeMode((m) => (m === 'last_minutes' ? 'first_minutes' : m))
           }
@@ -259,19 +262,48 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
 
   const buildRangePayload = (durationOverrideMs?: number) => {
     const mins = parseInt(firstMinutes, 10)
-    const lastMins = parseInt(lastMinutesPreset, 10)
+    const lastFromPreset = parseInt(lastMinutesPreset, 10)
+    const lastCustom = parseInt(lastMinutesCustom, 10)
+    const lastMins =
+      lastMinutesPreset === 'custom'
+        ? Number.isFinite(lastCustom)
+          ? lastCustom
+          : 15
+        : Number.isFinite(lastFromPreset)
+          ? lastFromPreset
+          : 5
     const durationMs = durationOverrideMs ?? vodDurationMs
     return resolveVodImportRangeMs(
       {
         mode: rangeMode,
         firstMinutes: Number.isFinite(mins) ? mins : 15,
-        lastMinutes: Number.isFinite(lastMins) ? lastMins : 5,
+        lastMinutes: lastMins,
         start: rangeStart,
         end: rangeEnd,
       },
-      { vodDurationMs: durationMs },
+      { vodDurationMs: durationMs, isLive: Boolean(resolveMeta?.isLive) },
     )
   }
+
+  const resolvedRangePreview = (() => {
+    if (rangeMode === 'full' || !vodDurationMs) return null
+    const r = buildRangePayload()
+    if ('error' in r) return null
+    if (rangeMode === 'last_minutes') {
+      const lastFromPreset = parseInt(lastMinutesPreset, 10)
+      const lastCustom = parseInt(lastMinutesCustom, 10)
+      const lastMins =
+        lastMinutesPreset === 'custom'
+          ? Number.isFinite(lastCustom)
+            ? lastCustom
+            : 15
+          : Number.isFinite(lastFromPreset)
+            ? lastFromPreset
+            : 5
+      return formatVodRangeLabel(r.rangeStartMs, r.rangeEndMs, lastMins)
+    }
+    return formatVodRangeLabel(r.rangeStartMs, r.rangeEndMs)
+  })()
 
   const submitUrl = async () => {
     if (!attest) {
@@ -397,9 +429,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="full">Full VOD</SelectItem>
-            {resolveMeta?.isLive ? (
-              <SelectItem value="last_minutes">Last N minutes (live tail)</SelectItem>
-            ) : null}
+            <SelectItem value="last_minutes">Last N minutes</SelectItem>
             <SelectItem value="first_minutes">First N minutes</SelectItem>
             <SelectItem value="start_end">Start → end time</SelectItem>
           </SelectContent>
@@ -417,13 +447,34 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
                     Last {m} minutes
                   </SelectItem>
                 ))}
+                <SelectItem value="custom">Custom…</SelectItem>
               </SelectContent>
             </Select>
-            {vodDurationMs ? (
+            {lastMinutesPreset === 'custom' ? (
+              <div className="flex items-center gap-2">
+                <Label htmlFor="streamer-last-min-custom" className="shrink-0 text-xs">
+                  Minutes
+                </Label>
+                <Input
+                  id="streamer-last-min-custom"
+                  type="number"
+                  min={1}
+                  max={720}
+                  className="h-9 w-24"
+                  value={lastMinutesCustom}
+                  onChange={(e) => setLastMinutesCustom(e.target.value)}
+                />
+              </div>
+            ) : null}
+            {resolvedRangePreview ? (
+              <p className="text-xs text-muted-foreground tabular-nums">{resolvedRangePreview}</p>
+            ) : vodDurationMs ? (
               <p className="text-xs text-muted-foreground tabular-nums">
                 VOD length now {formatDurationClock(vodDurationMs / 1000)} — we fetch only the tail you pick.
               </p>
-            ) : null}
+            ) : (
+              <p className="text-xs text-muted-foreground">Resolve the VOD first to preview the tail range.</p>
+            )}
           </div>
         ) : null}
         {rangeMode === 'first_minutes' ? (

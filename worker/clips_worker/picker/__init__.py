@@ -137,13 +137,12 @@ def pick_talking_clips(
                 sections=vp_meta.get("sections"),
             )
             if not vp_meta.get("ok"):
-                raise RuntimeError(
-                    f"video_picker failed (requested={vp_meta.get('model_requested')!r} "
-                    f"used={vp_meta.get('model_used')!r} "
-                    f"fallback={vp_meta.get('model_fallback')!r} "
-                    f"reason={vp_meta.get('fallback_reason') or vp_meta.get('error')!r})"
+                picker_info(
+                    "video_picker_regular_fail_open",
+                    reason=str(vp_meta.get("error") or vp_meta.get("fallback_reason") or "video_picker failed")[:200],
+                    status=vp_meta.get("status"),
                 )
-            if vp_meta.get("ok") and vm:
+            elif vp_meta.get("ok") and vm:
                 visual_moments = vm
                 video_context = format_moments_for_llm(
                     [
@@ -320,6 +319,7 @@ def pick_talking_clips(
             visual_moments=visual_moments or None,
             length_policy=length_policy,
             source_duration_ms=source_ms,
+            settings=settings,
         )
     if not picks and scored:
         picks = finalize_picks(
@@ -334,6 +334,7 @@ def pick_talking_clips(
             visual_moments=visual_moments or None,
             length_policy=length_policy,
             source_duration_ms=source_ms,
+            settings=settings,
         )
         if picks:
             picker_info("finalize_relaxed_duration", count=len(picks))
@@ -363,6 +364,7 @@ def pick_talking_clips(
             visual_moments=visual_moments or None,
             length_policy=length_policy,
             source_duration_ms=source_ms,
+            settings=settings,
         )
         if picks:
             picker_info("span_fallback_picks", count=len(picks))

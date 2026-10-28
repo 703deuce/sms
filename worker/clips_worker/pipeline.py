@@ -304,7 +304,16 @@ def streamer_initial_clip_edits(
     platform = str((vod or {}).get("platform") or "twitch").lower()
     if platform not in ("twitch", "kick"):
         platform = "twitch"
-    login = str((vod or {}).get("channelLogin") or "").strip().lower()
+    vod_state = (vod or {}).get("state") or {}
+    if isinstance(vod_state, str):
+        import json as _json
+
+        vod_state = _json.loads(vod_state) if vod_state else {}
+    login = str(
+        (vod or {}).get("channelLogin")
+        or (vod_state.get("channelLogin") if isinstance(vod_state, dict) else "")
+        or ""
+    ).strip().lower()
     channel_url = (vod or {}).get("url") or ""
     if login:
         channel_url = f"https://kick.com/{login}" if platform == "kick" else f"https://twitch.tv/{login}"

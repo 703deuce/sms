@@ -99,6 +99,7 @@ def finalize_picks(
     visual_moments: list[dict] | None = None,
     length_policy: ClipLengthPolicy | None = None,
     source_duration_ms: int | None = None,
+    settings: dict | None = None,
 ) -> list[dict]:
     if length_policy is None:
         length_policy = resolve_clip_length_policy({"clipLength": "auto"})
@@ -215,7 +216,14 @@ def finalize_picks(
 
     duration_ms = int(source_duration_ms or span_ms)
     selected = select_clips(picks, duration_ms)
-    selected = top_up_selected_picks(selected, picks)
+    from clips_worker.picker.pick_quota import finalize_regular_picks_with_quota
+
+    selected = finalize_regular_picks_with_quota(
+        selected,
+        picks,
+        settings=settings if isinstance(settings, dict) else {},
+        source_duration_ms=duration_ms,
+    )
     picker_info(
         "finalize_done",
         pass2_in=len(scored),

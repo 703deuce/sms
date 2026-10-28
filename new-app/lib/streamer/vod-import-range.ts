@@ -39,9 +39,29 @@ export function parseClockToMs(raw: string): number | null {
   return Math.round((h * 3600 + m * 60 + s) * 1000)
 }
 
+export function formatVodRangeLabel(
+  rangeStartMs: number,
+  rangeEndMs: number,
+  lastMinutes?: number,
+): string {
+  if (lastMinutes && rangeEndMs > rangeStartMs) {
+    return `Last ${lastMinutes} min (${formatClock(rangeStartMs)} → ${formatClock(rangeEndMs)})`
+  }
+  return `${formatClock(rangeStartMs)} → ${formatClock(rangeEndMs)}`
+}
+
+function formatClock(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (h) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+  return `${m}:${String(sec).padStart(2, '0')}`
+}
+
 export function resolveVodImportRangeMs(
   input: VodImportRangeInput,
-  opts?: { maxSpanMinutes?: number; vodDurationMs?: number },
+  opts?: { maxSpanMinutes?: number; vodDurationMs?: number; isLive?: boolean },
 ): { rangeStartMs: number; rangeEndMs: number } | { error: string } {
   const maxSpan = (opts?.maxSpanMinutes ?? 12 * 60) * 60_000
   if (input.mode === 'full') {
@@ -57,7 +77,8 @@ export function resolveVodImportRangeMs(
       return { error: 'Choose between 1 and 720 minutes for the live tail slice.' }
     }
     const span = Math.round(mins * 60_000)
-    const end = durationMs
+    const liveMargin = opts?.isLive ? 30_000 : 0
+    const end = Math.max(1000, durationMs - liveMargin)
     const start = Math.max(0, end - span)
     return { rangeStartMs: start, rangeEndMs: end }
   }

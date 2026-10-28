@@ -123,12 +123,16 @@ def log_clipper_chat(
     message_count: int,
     metrics: ChatBinMetrics | None,
     used: bool,
+    available: bool | None = None,
+    fetch_ms: int | None = None,
 ) -> None:
     bins = metrics.bin_count if metrics else 0
     spikes = metrics.spike_count if metrics else 0
+    avail = available if available is not None else message_count > 0
+    extra = f" fetch_ms={fetch_ms}" if fetch_ms is not None else ""
     print(
-        f"[clipper:chat] vod_id={vod_id} platform={platform} messages={message_count} "
-        f"bins={bins} spikes={spikes} used={'true' if used else 'false'}",
+        f"[clipper:chat] vod={vod_id} available={str(avail).lower()} total={message_count} "
+        f"platform={platform} bins={bins} spikes={spikes} used={'true' if used else 'false'}{extra}",
         flush=True,
     )
 

@@ -415,12 +415,20 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     ai_meta = clip.get("aiMeta") or {}
                     if isinstance(ai_meta, str):
                         ai_meta = json.loads(ai_meta)
-                    clip_layout = (ai_meta.get("streamer") or {}).get("layout") or layout_state or {}
-                    use_stack = (
-                        isinstance(clip_layout, dict)
-                        and clip_layout.get("layout") == "stack"
-                        and clip_layout.get("facecam")
+                    edits_layout_mode = str((clip_edits.get("layout") or {}).get("mode") or "fit_top")
+                    facecam_layout = layout_state if isinstance(layout_state, dict) else {}
+                    clip_layout = (ai_meta.get("streamer") or {}).get("layout") or {}
+                    use_stack = edits_layout_mode == "stack" and bool(
+                        isinstance(facecam_layout, dict)
+                        and facecam_layout.get("layout") == "stack"
+                        and facecam_layout.get("facecam")
                     )
+                    if not use_stack:
+                        clip_layout = {
+                            "layout": edits_layout_mode,
+                            "mode": edits_layout_mode,
+                            "editorMode": edits_layout_mode,
+                        }
                     pending_work.append(
                         _StreamClipWork(
                             clip_id=clip_id,
@@ -469,8 +477,12 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             )
                             rendered = work.out_mp4
                     ai_streamer = dict((work.ai_meta.get("streamer") or {}))
-                    if work.clip_layout:
-                        ai_streamer["layout"] = work.clip_layout
+                    edits_mode = str((work.clip_edits.get("layout") or {}).get("mode") or "fit_top")
+                    ai_streamer["layout"] = {
+                        "layout": edits_mode,
+                        "mode": edits_mode,
+                        "editorMode": edits_mode,
+                    }
                     poster = td_path / f"poster_{work.clip_id}.jpg"
                     poster_jpg(rendered, poster)
                     keys = clip_keys(workspace_id, project_id, work.clip_id)

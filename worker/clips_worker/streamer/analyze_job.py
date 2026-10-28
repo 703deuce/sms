@@ -84,6 +84,13 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
     from clips_worker.stage_log import bind_stage_context, stage_span
 
     vod = _load_vod(conn, vod_id)
+    from clips_worker.streamer.channel_resolve import resolve_vod_channel_fields
+
+    ch = resolve_vod_channel_fields(vod, None, vod.get("url"))
+    if ch.get("login"):
+        vod["channelLogin"] = ch["login"]
+    if ch.get("display"):
+        vod["channelDisplayName"] = ch["display"]
     workspace_id = vod["workspaceId"]
     project_id = vod["project_id"]
     bind_stage_context(project_id=str(project_id), job_id=str(job["id"]))
@@ -264,11 +271,27 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             chapters = vod.get("chapters")
             if isinstance(chapters, str):
                 chapters = json.loads(chapters)
+            chat_fetch_ms = 0
             try:
                 with stage_span("chat_resolve", heartbeat=True):
+                    chat_t0 = time.time()
                     chat_messages, chat_source, state = resolve_chat_after_transcribe(chat_future, state)
+                    chat_fetch_ms = int((time.time() - chat_t0) * 1000)
             finally:
                 chat_executor.shutdown(wait=False)
+            chat_total = len(chat_messages) if chat_messages else 0
+            chat_meta = {
+                "available": chat_total > 0,
+                "messageCount": chat_total,
+                "source": chat_source or "none",
+                "error": state.get("chatError"),
+            }
+            state = {**state, "chatMeta": chat_meta}
+            print(
+                f"[clipper:chat] vod={vod_id} available={str(chat_meta['available']).lower()} "
+                f"total={chat_total} fetch_ms={chat_fetch_ms}",
+                flush=True,
+            )
             if state.get("chatError"):
                 _save_state(conn, vod_id, state)
             if chat_messages:
@@ -296,9 +319,11 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             log_clipper_chat(
                 vod_id=vod_id,
                 platform=platform,
-                message_count=len(chat_messages) if chat_messages else 0,
+                message_count=chat_total,
                 metrics=chat_metrics,
                 used=chat_used,
+                available=chat_meta["available"],
+                fetch_ms=chat_fetch_ms,
             )
             viewer_clips = fetch_viewer_clips_for_vod(vod, conn)
             vod_signal_curves = merge_chunk_signal_curves(chunk_signal_payloads, duration_s)
@@ -342,7 +367,26 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                     video_signal=video_signal,
                     video_moments=video_moments,
                 )
+            got = len(picks)
             picks = dedupe_stream_picks(conn, vod, picks)
+            after_dedupe = len(picks)
+            from clips_worker.picker.pick_quota import compute_pick_want, ensure_stream_picks, log_pick_stage
+
+            want = compute_pick_want(settings, duration_ms)
+            picks = ensure_stream_picks(
+                picks,
+                want=want,
+                duration_ms=duration_ms,
+                signals_payload=signals_payload,
+                words=words,
+            )
+            log_pick_stage(
+                "stream",
+                want=want,
+                got=got,
+                after_dedupe=after_dedupe,
+                final=len(picks),
+            )
             signals_payload["chunkedSignals"] = True
             signals_payload["chunkCount"] = len(chunk_signal_payloads)
             sig_key = stream_signals_key(workspace_id, vod_id)
@@ -370,12 +414,24 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             clip_rows = []
             for pick in picks:
                 clip_id = f"clip_{uuid.uuid4().hex}"
+                init_edits = streamer_initial_clip_edits(
+                    settings,
+                    vod,
+                    suggested_headline=(pick.title or pick.hook or "")[:120],
+                    clip_start_ms=pick.start_ms,
+                    clip_end_ms=pick.end_ms,
+                )
+                layout_mode = str((init_edits.get("layout") or {}).get("mode") or "fit_top")
                 ai_meta = enrich_streamer_meta(
                     pick.ai_meta,
                     vod=vod,
                     peak_ms=pick.peak_ms,
                     clip_start_ms=pick.start_ms,
+                    clip_end_ms=pick.end_ms,
                     chapters=chapters if isinstance(chapters, list) else None,
+                    chat_meta=chat_meta,
+                    chat_messages=chat_messages or [],
+                    layout_mode=layout_mode,
                 )
                 clip_rows.append(
                     {
@@ -392,13 +448,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                         "posterKey": None,
                         "wordsKey": None,
                         "cropKey": None,
-                        "edits": streamer_initial_clip_edits(
-                            settings,
-                            vod,
-                            suggested_headline=(pick.title or pick.hook or "")[:120],
-                            clip_start_ms=pick.start_ms,
-                            clip_end_ms=pick.end_ms,
-                        ),
+                        "edits": init_edits,
                         "aiMeta": ai_meta,
                     }
                 )

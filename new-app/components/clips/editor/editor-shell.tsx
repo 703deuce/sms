@@ -369,6 +369,20 @@ export function EditorShell({
           : '9 / 16'
   const pickerWhy = clipWhySummary(aiMeta as ClipAiMeta | null)
   const detectedLayout = clipLayoutChip(aiMeta as ClipAiMeta | null)
+  const streamerSide = (
+    aiMeta as {
+      streamer?: {
+        login?: string
+        platform?: string
+        meta?: { channel?: string | null; platform?: string }
+        chat?: { available?: boolean; messageCount?: number }
+      }
+    } | null
+  )?.streamer
+  const streamChannelDisplay = streamerSide?.meta?.channel ?? null
+  const streamChatAvailable = Boolean(
+    streamerSide?.chat?.available && (streamerSide?.chat?.messageCount ?? 0) > 0,
+  )
 
   const panelBody = (
     <>
@@ -528,6 +542,8 @@ export function EditorShell({
               brollMedia={initialBrollMedia}
               videoRef={videoRef}
               onTick={onTick}
+              channelDisplay={streamChannelDisplay}
+              chatPreviewEnabled={streamChatAvailable}
             />
             {studioPreviewLoading ? (
               <div
@@ -650,14 +666,14 @@ export function EditorShell({
         }
         defaultChannelUrl={
           (() => {
-            const s = (aiMeta as { streamer?: { platform?: string; login?: string; meta?: { channel?: string; platform?: string } } } | null)
-              ?.streamer
+            const s = streamerSide
             const login = s?.login || s?.meta?.channel
             const platform = s?.platform || s?.meta?.platform
             if (!login || !platform) return undefined
             return platform === 'kick' ? `https://kick.com/${login}` : `https://twitch.tv/${login}`
           })()
         }
+        chatAvailable={streamChatAvailable}
         onAudioTrack={(track) => setEdits({ ...edits, audioTrack: track })}
         open={exportOpen}
         onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}

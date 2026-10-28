@@ -246,6 +246,7 @@ export function ExportTemplateSection({
         <Switch
           checked={Boolean(edits.chatOverlay?.enabled)}
           disabled={!chatAvailable}
+          title={!chatAvailable ? 'No chat for this clip' : undefined}
           onCheckedChange={(on) =>
             onPatchEdits?.({
               chatOverlay: {
@@ -259,7 +260,9 @@ export function ExportTemplateSection({
         />
       </div>
       {!chatAvailable ? (
-        <p className="text-xs text-muted-foreground">No chat log for this VOD — chat overlay unavailable.</p>
+        <p className="text-xs text-muted-foreground" title="No chat for this clip">
+          No chat for this clip — chat overlay unavailable.
+        </p>
       ) : null}
 
       <div className="flex items-center justify-between gap-2">

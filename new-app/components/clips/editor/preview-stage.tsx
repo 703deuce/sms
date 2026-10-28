@@ -64,6 +64,8 @@ export function PreviewStage({
   brollMedia = [],
   videoRef,
   onTick,
+  channelDisplay,
+  chatPreviewEnabled = false,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -75,6 +77,8 @@ export function PreviewStage({
   brollMedia?: BrollMediaRow[]
   videoRef: React.RefObject<HTMLVideoElement | null>
   onTick: (tick: { sourceMs: number; outputMs: number; playing: boolean }) => void
+  channelDisplay?: string | null
+  chatPreviewEnabled?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -368,7 +372,13 @@ export function PreviewStage({
             outputDurationSec={outputDurationFromEdits(edits) / 1000}
           />
         )}
-        <ExportTemplateOverlay edits={edits as ClipEditsV2} boxWidth={box.w} boxHeight={box.h} />
+        <ExportTemplateOverlay
+          edits={edits as ClipEditsV2}
+          boxWidth={box.w}
+          boxHeight={box.h}
+          channelDisplay={channelDisplay}
+          chatPreviewEnabled={chatPreviewEnabled}
+        />
       </div>
     </div>
   )
