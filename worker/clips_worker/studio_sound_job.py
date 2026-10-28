@@ -77,6 +77,44 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
         params = json.loads(params)
     params = params or {}
     source_key = params.get("sourceKey")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT c.id, c."sourceSegKey", c."sourceSegStartMs", c."previewKey", c."startMs",
+                   p."workspaceId", u.key AS upload_key
+            FROM clips c
+            JOIN clip_projects p ON p.id = c."projectId"
+            LEFT JOIN clip_uploads u ON u.id = p."uploadId"
+            WHERE c.id = %s AND c."projectId" = %s
+            """,
+            (clip_id, project_id),
+        )
+        crow = cur.fetchone()
+    if crow:
+        from clips_worker.clip_source_media import resolve_clip_export_source
+
+        ctx = {
+            "clipId": crow[0],
+            "sourceSegKey": crow[1],
+            "sourceSegStartMs": crow[2],
+            "previewKey": crow[3],
+            "startMs": crow[4],
+            "workspaceId": crow[5],
+            "projectId": project_id,
+            "source_key": crow[6],
+        }
+        resolved, _, reason = resolve_clip_export_source(ctx)
+        if resolved:
+            source_key = resolved
+            from clips_worker.decision_log import decision_log
+
+            decision_log(
+                "editor",
+                "studio_sound_source_resolved",
+                clipId=clip_id,
+                jobId=str(job.get("id") or ""),
+                reason=reason,
+            )
     if not source_key:
         with conn.cursor() as cur:
             cur.execute(

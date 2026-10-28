@@ -6,6 +6,7 @@ import { DEFAULT_STUDIO_SOUND_MIX, normalizeAudioEdits } from '@/lib/clips/audio
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
+import { resolveClipSourceMediaKey } from '@/lib/server/clips/clip-source-media'
 import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -34,8 +35,25 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       where: { id: clip.projectId, workspaceId },
       include: { upload: true },
     })
-    const sourceKey = project?.upload?.key
-    if (!sourceKey) return NextResponse.json({ error: 'No source upload' }, { status: 400 })
+    const sourceKey = resolveClipSourceMediaKey(
+      {
+        id: clip.id,
+        projectId: clip.projectId,
+        workspaceId,
+        sourceSegKey: clip.sourceSegKey,
+        previewKey: clip.previewKey,
+      },
+      project?.upload?.key,
+    )
+    if (!sourceKey) return NextResponse.json({ error: 'No source media for this clip' }, { status: 400 })
+
+    console.info(
+      `[editor:decision] ${JSON.stringify({
+        event: 'studio_sound_enqueue',
+        clipId,
+        sourceKind: clip.sourceSegKey ? 'sourceSegKey' : clip.previewKey ? 'previewKey' : 'segment_or_upload',
+      })}`,
+    )
 
     const gen = await prisma.aiGeneration.create({
       data: {

@@ -297,17 +297,10 @@ export function ExportDialog({
     }
   }
 
-  const plannedDurationMs = useMemo(() => {
-    if (removeDeadAir && words.length) {
-      return editorPreviewDurationMs(
-        { ...edits, silenceTrim: { ...edits.silenceTrim, enabled: true } },
-        words,
-      )
-    }
+  const editedDurationMs = useMemo(() => {
+    if (words.length) return editorPreviewDurationMs(edits, words)
     return outputDurationMs(edits)
-  }, [edits, removeDeadAir, words])
-
-  const editedDurationMs = plannedDurationMs
+  }, [edits, words])
   const platformWarn =
     exportPlatform !== 'none' ? exportPlatformDurationWarning(exportPlatform, editedDurationMs) : null
   const polishLintWarnings = useMemo(() => {

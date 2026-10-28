@@ -23,4 +23,4 @@ def test_collect_bulky_keys_keeps_signals_only_in_chunk_meta():
     assert f"ws/{ws}/streams/{vod}/chunks/0.opus" in keys
     assert state["chunks"]["0"]["wordsKey"] in keys
     assert state["chunks"]["0"]["signalsKey"] not in keys
-    assert "source_seg.mp4" in keys[-1]
+    assert "source_seg.mp4" not in " ".join(keys)

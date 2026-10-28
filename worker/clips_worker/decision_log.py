@@ -112,7 +112,13 @@ def decision_log(stage: str, event: str, **fields: Any) -> None:
             rec[str(k)] = _sanitize_value(v)
         rec = _truncate_record(rec)
         line = json.dumps(rec, default=str, ensure_ascii=False)
-        tag = "[streamer:decision]" if rec.get("stage") == "streamer" else "[clipper:decision]"
+        stage = rec.get("stage")
+        if stage == "streamer":
+            tag = "[streamer:decision]"
+        elif stage == "editor":
+            tag = "[editor:decision]"
+        else:
+            tag = "[clipper:decision]"
         print(f"{tag} {line}", flush=True)
 
         with _ctx_lock:

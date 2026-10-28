@@ -213,16 +213,26 @@ def _run_render_clip_job_body(
 
     clip_start = int(ctx["startMs"])
     clip_end = int(ctx["endMs"])
-    source_offset_ms = 0
-    if ctx.get("sourceSegKey"):
-        source_key = ctx["sourceSegKey"]
-        source_offset_ms = int(ctx.get("sourceSegStartMs") or 0)
+    from clips_worker.clip_source_media import resolve_clip_export_source
+
+    source_key, source_offset_ms, source_reason = resolve_clip_export_source(
+        {**ctx, "clipId": ctx.get("clipId")}
+    )
+    if source_key and source_reason in ("sourceSegKey", "canonical_source_seg"):
         clip_start = max(clip_start, source_offset_ms)
         seg_end = ctx.get("sourceSegEndMs")
         if seg_end is not None:
             clip_end = min(clip_end, int(seg_end))
-    else:
-        source_key = ctx["source_key"]
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "editor",
+        "export_source_resolved",
+        renderId=render_id,
+        clipId=ctx.get("clipId"),
+        reason=source_reason,
+        hasSource=bool(source_key),
+    )
     edits = normalize_edits(ctx["edits"], clip_start, clip_end)
     settings = ctx["settings"] or {}
     if isinstance(settings, str):

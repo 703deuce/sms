@@ -96,14 +96,19 @@ def purge_stream_bulky_storage(conn, vod_id: str, *, reason: str = "success") ->
         state.pop("chunks", None)
     state["bulkyStoragePurged"] = True
 
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "streamer",
+        "bulky_storage_purged",
+        vodId=vod_id,
+        projectId=str(project_id),
+        keysDeleted=len(keys),
+        keptClipSourceSegments=True,
+        reason=reason[:80],
+    )
+
     with conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE clips SET "sourceSegKey" = NULL, "updatedAt" = NOW()
-            WHERE "projectId" = %s AND "sourceSegKey" IS NOT NULL
-            """,
-            (project_id,),
-        )
         cur.execute(
             """
             UPDATE stream_vods
@@ -144,6 +149,14 @@ def delete_clip_source_segment(
     *,
     vod_id: str,
 ) -> None:
-    if not seg_key:
-        return
-    delete_storage_keys([seg_key], vod_id=vod_id, reason=f"segment_done clipId={clip_id}")
+    """No-op: source segments must survive STREAM_CLEANUP for editor export."""
+    from clips_worker.decision_log import decision_log
+
+    if seg_key:
+        decision_log(
+            "streamer",
+            "source_segment_retained",
+            vodId=vod_id,
+            clipId=clip_id,
+            segKey=str(seg_key)[:120],
+        )

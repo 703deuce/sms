@@ -262,47 +262,48 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
             with stage_span("source_download", heartbeat=True):
                 download_object(audio_key, audio_path)
 
-            layout_video: Path | None = None
-            if vod.get("platform") == "upload":
-                up = td_path / "full.mp4"
-                local_key = state.get("localUploadKey")
-                if local_key:
-                    download_object(str(local_key), up)
-                    local_upload = up
-                elif vod.get("uploadId"):
-                    with conn.cursor() as cur:
-                        cur.execute('SELECT key FROM clip_uploads WHERE id = %s', (vod["uploadId"],))
-                        row = cur.fetchone()
-                    if row:
-                        download_object(row[0], up)
+            with stage_span("render_prepare", heartbeat=True):
+                layout_video: Path | None = None
+                if vod.get("platform") == "upload":
+                    up = td_path / "full.mp4"
+                    local_key = state.get("localUploadKey")
+                    if local_key:
+                        download_object(str(local_key), up)
                         local_upload = up
-                proxy_key = state.get("analysisProxyKey")
-                if proxy_key:
-                    proxy_path = td_path / "analysis_proxy.mp4"
-                    download_object(str(proxy_key), proxy_path)
-                    layout_video = proxy_path
-                else:
-                    layout_video = local_upload
+                    elif vod.get("uploadId"):
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT key FROM clip_uploads WHERE id = %s', (vod["uploadId"],))
+                            row = cur.fetchone()
+                        if row:
+                            download_object(row[0], up)
+                            local_upload = up
+                    proxy_key = state.get("analysisProxyKey")
+                    if proxy_key:
+                        proxy_path = td_path / "analysis_proxy.mp4"
+                        download_object(str(proxy_key), proxy_path)
+                        layout_video = proxy_path
+                    else:
+                        layout_video = local_upload
 
-            layout_state = state.get("layout") or _load_channel_preset_layout(conn, vod.get("channelId"))
-            if layout_state and not state.get("layout"):
-                state["layout"] = layout_state
-                _save_state(conn, vod_id, state)
-            if not layout_state and clips:
-                sample = td_path / "layout_sample.mp4"
-                first = clips[0]
-                abs_fs, _, wbase = clip_absolute_span_ms(first, vod_range_start_ms)
-                fs = max(0.0, (abs_fs - wbase) / 1000.0 - 2)
-                fe = fs + 30
-                seg_src = layout_video or local_upload
-                if seg_src:
-                    cut_local_segment(seg_src, sample, fs, fe)
-                elif url:
-                    download_segment(url, sample, fs, fe)
-                if sample.exists():
-                    layout_state = detect_facecam_layout(sample, td_path)
+                layout_state = state.get("layout") or _load_channel_preset_layout(conn, vod.get("channelId"))
+                if layout_state and not state.get("layout"):
                     state["layout"] = layout_state
                     _save_state(conn, vod_id, state)
+                if not layout_state and clips:
+                    sample = td_path / "layout_sample.mp4"
+                    first = clips[0]
+                    abs_fs, _, wbase = clip_absolute_span_ms(first, vod_range_start_ms)
+                    fs = max(0.0, (abs_fs - wbase) / 1000.0 - 2)
+                    fe = fs + 30
+                    seg_src = layout_video or local_upload
+                    if seg_src:
+                        cut_local_segment(seg_src, sample, fs, fe)
+                    elif url:
+                        download_segment(url, sample, fs, fe)
+                    if sample.exists():
+                        layout_state = detect_facecam_layout(sample, td_path)
+                        state["layout"] = layout_state
+                        _save_state(conn, vod_id, state)
 
             transcript_key = vod.get("transcriptKey")
             capture_cache: dict[str, Path] = {}
@@ -318,7 +319,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 if k in capture_cache:
                     return capture_cache[k]
                 dest = td_path / f"window_capture_{len(capture_cache)}.mp4"
-                download_object(k, dest)
+                with stage_span("window_capture_download", heartbeat=True, captureKey=k[:80]):
+                    download_object(k, dest)
                 capture_cache[k] = dest
                 return dest
 

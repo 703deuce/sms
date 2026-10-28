@@ -93,21 +93,60 @@ def _sentence_at_ms(sentences: list[Sentence], ms: int) -> Sentence | None:
     return best
 
 
-def _word_index_at_ms(words: list[dict], ms: int, edge: str = "start") -> int:
+SNAP_WORD_WINDOW_MS = 3000
+SNAP_MIN_OVERLAP_RATIO = 0.5
+SNAP_MIN_SPAN_MS = 15_000
+
+
+def _word_index_at_ms(
+    words: list[dict],
+    ms: int,
+    edge: str = "start",
+    *,
+    window_lo_ms: int | None = None,
+    window_hi_ms: int | None = None,
+) -> int:
+    lo_s = (window_lo_ms / 1000.0) if window_lo_ms is not None else None
+    hi_s = (window_hi_ms / 1000.0) if window_hi_ms is not None else None
     t = ms / 1000.0
     if edge == "start":
         for i, w in enumerate(words):
+            if lo_s is not None and w["e"] < lo_s:
+                continue
+            if hi_s is not None and w["s"] > hi_s:
+                break
             if w["e"] >= t:
                 return i
+        if window_lo_ms is not None or window_hi_ms is not None:
+            return -1
         return max(0, len(words) - 1)
     for i in range(len(words) - 1, -1, -1):
         w = words[i]
+        if lo_s is not None and w["e"] < lo_s:
+            continue
+        if hi_s is not None and w["s"] > hi_s:
+            continue
         if w["s"] <= t <= w["e"] + 1e-6:
             return i
     for i in range(len(words) - 1, -1, -1):
-        if words[i]["e"] <= t + 1e-6:
+        w = words[i]
+        if lo_s is not None and w["e"] < lo_s:
+            continue
+        if hi_s is not None and w["s"] > hi_s:
+            continue
+        if w["e"] <= t + 1e-6:
             return i
+    if window_lo_ms is not None or window_hi_ms is not None:
+        return -1
     return 0
+
+
+def _span_overlap_ratio(a0: int, a1: int, b0: int, b1: int) -> float:
+    lo = max(a0, b0)
+    hi = min(a1, b1)
+    if hi <= lo:
+        return 0.0
+    return (hi - lo) / max(1, b1 - b0)
 
 
 def _is_sentence_final_word(words: list[dict], idx: int) -> bool:
@@ -262,7 +301,19 @@ def snap_bounds(
         clip["start_ms"], clip["end_ms"] = start_ms, end_ms
         return clip
 
-    wi = _word_index_at_ms(words, start_ms, "start")
+    snap_lo = max(range_start_ms, before[0] - SNAP_WORD_WINDOW_MS)
+    snap_hi = min(range_end_ms, before[1] + SNAP_WORD_WINDOW_MS)
+
+    wi = _word_index_at_ms(words, start_ms, "start", window_lo_ms=snap_lo, window_hi_ms=snap_hi)
+    if wi < 0:
+        clip["start_ms"], clip["end_ms"] = before[0], before[1]
+        picker_info(
+            "snap_reverted",
+            reason="no_words_near_start",
+            before_start=before[0],
+            before_end=before[1],
+        )
+        return clip
     while wi < len(words) and _is_filler_token(words[wi]["w"]):
         wi += 1
     substantive_wi = wi
@@ -270,7 +321,16 @@ def snap_bounds(
         start_ms = int(words[wi]["s"] * 1000)
 
     length_limit = _length_limit_ms(clip, range_end_ms)
-    we = _word_index_at_ms(words, picked_end_ms, "end")
+    we = _word_index_at_ms(words, picked_end_ms, "end", window_lo_ms=snap_lo, window_hi_ms=snap_hi)
+    if we < 0:
+        clip["start_ms"], clip["end_ms"] = before[0], before[1]
+        picker_info(
+            "snap_reverted",
+            reason="no_words_near_end",
+            before_start=before[0],
+            before_end=before[1],
+        )
+        return clip
     while we > wi and _is_filler_token(words[we]["w"]):
         we -= 1
 
@@ -337,6 +397,21 @@ def snap_bounds(
 
     clip["start_ms"] = start_ms
     clip["end_ms"] = end_ms
+
+    overlap = _span_overlap_ratio(start_ms, end_ms, before[0], before[1])
+    if overlap < SNAP_MIN_OVERLAP_RATIO or (end_ms - start_ms) < SNAP_MIN_SPAN_MS:
+        clip["start_ms"], clip["end_ms"] = before[0], before[1]
+        picker_info(
+            "snap_reverted",
+            reason="low_overlap_or_short",
+            before_start=before[0],
+            before_end=before[1],
+            after_start=start_ms,
+            after_end=end_ms,
+            overlap=round(overlap, 3),
+        )
+        return clip
+
     picker_info(
         "snap_bounds",
         title=str(clip.get("title", ""))[:40],

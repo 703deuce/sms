@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Iterable
 
 from clips_worker.streamer.keys import (
-    clip_segment_key,
     stream_audio_key,
     stream_chunk_key,
     stream_frame_key,
@@ -62,14 +61,5 @@ def collect_bulky_stream_keys(
                 keys.append(stream_frame_key(workspace_id, vod_id, int(idx)))
             except (TypeError, ValueError):
                 continue
-
-    for clip in clip_rows:
-        seg = clip.get("sourceSegKey")
-        if seg:
-            keys.append(str(seg))
-        cid = clip.get("id")
-        pid = clip.get("projectId")
-        if cid and workspace_id and pid:
-            keys.append(clip_segment_key(workspace_id, str(pid), str(cid)))
 
     return _unique_keys(keys)
