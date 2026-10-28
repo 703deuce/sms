@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 from clips_worker.picker.config import genre_meta, resolve_genre_key, snap_settings
+from clips_worker.picker.extend_setup import extend_pick_to_min_duration
 from clips_worker.picker.log_util import picker_info
 from clips_worker.picker.selection import select_clips
 from clips_worker.picker.snap_bounds import snap_bounds
 from clips_worker.target_clip_len import ABS_MIN_MS, ClipLengthPolicy, resolve_clip_length_policy
 
-# Hard floor: shorter clips are not publishable after snap/extend.
-SHIP_MIN_MS = 2_500
-# Try to extend setup toward this duration; do not drop pass2 rows that stay shorter.
-EXTEND_TARGET_MIN_MS = 8_000
+# Shortest shipped clip (Opus parity).
+MIN_SHIPPED_CLIP_MS = ABS_MIN_MS
 
 
 def _clamp_boundary_payoff_to_payoff_sentence(pick: dict, sentences) -> None:
@@ -79,21 +78,12 @@ def min_pick_duration_ms(
     relax: bool = False,
     length_policy: ClipLengthPolicy | None = None,
 ) -> int:
-    """Target for extend_setup only — not a drop threshold (see SHIP_MIN_MS)."""
+    """Minimum shipped clip length after extend + snap."""
+    del length_policy
     span = max(0, int(range_end_ms) - int(range_start_ms))
-    if length_policy and length_policy.mode == "fixed":
-        return min(EXTEND_TARGET_MIN_MS, max(SHIP_MIN_MS, length_policy.min_ms // 2))
-    if relax:
-        if span < 5_000:
-            return max(SHIP_MIN_MS, span)
-        return min(EXTEND_TARGET_MIN_MS, max(3_000, span // 8))
-    if span < 30_000:
-        if span < 5_000:
-            return max(SHIP_MIN_MS, span)
-        return min(EXTEND_TARGET_MIN_MS, max(5_000, span))
-    if span <= 120_000:
-        return min(EXTEND_TARGET_MIN_MS, max(5_000, span // 4))
-    return EXTEND_TARGET_MIN_MS
+    if relax and span < MIN_SHIPPED_CLIP_MS:
+        return max(1_000, span)
+    return MIN_SHIPPED_CLIP_MS
 
 
 def finalize_picks(
@@ -121,9 +111,11 @@ def finalize_picks(
     min_ms = min_pick_duration_ms(
         range_start_ms, range_end_ms, relax=relax_duration, length_policy=length_policy
     )
+    source_fits_min = span_ms >= MIN_SHIPPED_CLIP_MS
+
     picks: list[dict] = []
     dropped_bounds = 0
-    dropped_below_ship_min = 0
+    dropped_cannot_min = 0
     for row in scored:
         ss, es = row["start_sentence"], row["end_sentence"]
         if ss < 0 or es >= len(sentences) or ss > es:
@@ -137,11 +129,33 @@ def finalize_picks(
                 score=row.get("final", row.get("score")),
             )
             continue
+        if not source_fits_min:
+            dropped_cannot_min += 1
+            picker_info(
+                "finalize_drop",
+                reason="source_span_below_min_clip_ms",
+                title=str(row.get("title", ""))[:80],
+                source_span_ms=span_ms,
+                min_clip_ms=MIN_SHIPPED_CLIP_MS,
+                score=row.get("final", row.get("score")),
+            )
+            continue
         pick_row = {**row}
         max_ms = int(
             pick_row.get("length_max_ms")
             or length_policy.effective_max_duration_ms(pick_row, range_end_ms)
         )
+        if max_ms < MIN_SHIPPED_CLIP_MS:
+            dropped_cannot_min += 1
+            picker_info(
+                "finalize_drop",
+                reason="length_max_below_min_clip_ms",
+                title=str(row.get("title", ""))[:80],
+                length_max_ms=max_ms,
+                min_clip_ms=MIN_SHIPPED_CLIP_MS,
+                score=row.get("final", row.get("score")),
+            )
+            continue
         _tighten_overspan_sentences(pick_row, sentences, max_ms=max_ms)
         ss, es = pick_row["start_sentence"], pick_row["end_sentence"]
         start_ms = max(range_start_ms, sentences[ss].start_ms)
@@ -152,6 +166,7 @@ def finalize_picks(
         pick = {**pick_row, "start_ms": start_ms, "end_ms": end_ms}
         if not pick.get("length_max_ms"):
             pick["length_max_ms"] = length_policy.effective_max_duration_ms(pick, range_end_ms)
+        max_ms = int(pick.get("length_max_ms") or max_ms)
         _clamp_boundary_payoff_to_payoff_sentence(pick, sentences)
         if visual_moments and not pick.get("boundary_setup_ms") and not pick.get("boundary_payoff_ms"):
             try:
@@ -171,30 +186,28 @@ def finalize_picks(
             except Exception:
                 pass
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
-        dur = pick["end_ms"] - pick["start_ms"]
-        if dur < min_ms:
-            from clips_worker.picker.extend_setup import extend_short_pick_backward
-
-            extend_short_pick_backward(
-                pick,
-                sentences,
-                signals_by_idx,
-                words,
-                range_start_ms,
-                range_end_ms,
-                min_ms,
-            )
-            dur = pick["end_ms"] - pick["start_ms"]
-        if dur < SHIP_MIN_MS:
-            dropped_below_ship_min += 1
+        extend_pick_to_min_duration(
+            pick,
+            sentences,
+            signals_by_idx,
+            words,
+            range_start_ms,
+            range_end_ms,
+            min_ms=min_ms,
+            max_ms=max_ms,
+        )
+        dur = int(pick["end_ms"]) - int(pick["start_ms"])
+        if dur < MIN_SHIPPED_CLIP_MS:
+            dropped_cannot_min += 1
             picker_info(
                 "finalize_drop",
-                reason="below_ship_min_ms",
+                reason="cannot_extend_to_min_clip_ms",
                 title=str(pick.get("title", ""))[:80],
                 start_ms=int(pick["start_ms"]),
                 end_ms=int(pick["end_ms"]),
                 duration_ms=dur,
-                ship_min_ms=SHIP_MIN_MS,
+                min_clip_ms=MIN_SHIPPED_CLIP_MS,
+                length_max_ms=max_ms,
                 score=pick.get("final", pick.get("score")),
             )
             continue
@@ -208,9 +221,8 @@ def finalize_picks(
         candidates=len(picks),
         selected=len(selected),
         dropped_bounds=dropped_bounds,
-        dropped_below_ship_min=dropped_below_ship_min,
+        dropped_cannot_min=dropped_cannot_min,
         relax_duration=relax_duration,
-        extend_target_ms=min_ms,
-        ship_min_ms=SHIP_MIN_MS,
+        min_shipped_clip_ms=MIN_SHIPPED_CLIP_MS,
     )
     return selected
