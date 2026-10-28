@@ -114,15 +114,23 @@ def _load_transcript(duration_s: float) -> str:
     )
 
 
-def _loud_rate_limit(row: dict) -> None:
+def _quota_or_429(row: dict) -> bool:
     if row.get("rate_limited") or row.get("status") == 429:
-        print(
-            f"\n[bench] *** GEMINI 429 RATE LIMIT on {VIDEO_PICKER_MODEL} — "
-            f"no model fallback; fix quota or retry later ***\n"
-            f"error={row.get('error')}\n",
-            flush=True,
-        )
-        sys.exit(2)
+        return True
+    err = (row.get("error") or "").lower()
+    return "429" in err or "quota exceeded" in err or "rate limit" in err or "rate-limit" in err
+
+
+def _loud_rate_limit(row: dict) -> None:
+    if not _quota_or_429(row):
+        return
+    print(
+        f"\n[bench] *** GEMINI 429 / QUOTA on {VIDEO_PICKER_MODEL} — "
+        f"NO model fallback (Rick); fix billing or retry later ***\n"
+        f"error={row.get('error')}\n",
+        flush=True,
+    )
+    sys.exit(2)
 
 
 def run_variant(
