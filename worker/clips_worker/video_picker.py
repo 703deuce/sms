@@ -114,6 +114,20 @@ def video_picker_user_part_order() -> str:
     return "video_first"
 
 
+def video_picker_burn_timecode() -> bool:
+    raw = (os.environ.get("VIDEO_PICKER_BURN_TIMECODE") or "true").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
+def video_picker_fallback_model() -> str:
+    from clips_worker.gemini_vision import DEFAULT_VIDEO_PICKER_FALLBACK_MODEL
+
+    return (
+        (os.environ.get("VIDEO_PICKER_FALLBACK_MODEL") or DEFAULT_VIDEO_PICKER_FALLBACK_MODEL).strip()
+        or DEFAULT_VIDEO_PICKER_FALLBACK_MODEL
+    )
+
+
 def video_picker_keep_audio() -> bool:
     """Picker proxies always keep audio for Gemini (original audio + transcript)."""
     raw = (os.environ.get("VIDEO_PICKER_KEEP_AUDIO") or "true").strip().lower()
@@ -152,6 +166,30 @@ def _gemini_omits_legacy_sampling(model: str) -> bool:
     return m.startswith("gemini-3.") or m.startswith("gemini-4.")
 
 
+def _picker_timecode_font() -> str:
+    candidates = [
+        "/usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ]
+    for path in candidates:
+        if Path(path).is_file():
+            return path
+    return candidates[0]
+
+
+def _watch_proxy_video_filter() -> str:
+    scale = "scale=480:-2:flags=fast_bilinear"
+    if not video_picker_burn_timecode():
+        return scale
+    font = _picker_timecode_font().replace(":", "\\:")
+    # pts:hms = HH:MM:SS from first frame of this proxy (matches start_s/end_s).
+    tc = (
+        f"drawtext=fontfile={font}:text='%{{pts\\:hms}}':fontsize=22:fontcolor=white:"
+        f"box=1:boxcolor=black@0.62:boxborderw=8:x=12:y=12"
+    )
+    return f"{scale},{tc}"
+
+
 def make_watch_proxy(
     src: Path,
     dest: Path,
@@ -165,7 +203,7 @@ def make_watch_proxy(
     cmd.extend(["-i", str(src)])
     if end_s is not None and end_s > start_s:
         cmd.extend(["-t", f"{end_s - start_s:.3f}"])
-    vf = "scale=480:-2:flags=fast_bilinear"
+    vf = _watch_proxy_video_filter()
     if video_picker_keep_audio():
         cmd.extend(
             [
@@ -310,6 +348,76 @@ def validate_and_normalize_moments(
         }
         out.append(m)
     out.sort(key=lambda x: -float(x.get("score") or 0))
+    return out
+
+
+_TIME_EPS_S = 0.35
+
+
+def collect_time_violations(
+    raw_sections: list[dict],
+    raw_moments: list[dict],
+    duration_s: float,
+) -> list[str]:
+    """Detect model times past video duration or inverted spans (before clamping)."""
+    dur = max(1.0, float(duration_s))
+    violations: list[str] = []
+
+    def _check(label: str, key: str, raw_val: Any) -> None:
+        try:
+            v = float(raw_val)
+        except (TypeError, ValueError):
+            violations.append(f"{label}.{key}=non_numeric")
+            return
+        if v > dur + _TIME_EPS_S:
+            violations.append(f"{label}.{key}={v:.3f}>{dur:.3f}")
+        if v < -_TIME_EPS_S:
+            violations.append(f"{label}.{key}={v:.3f}<0")
+
+    for i, sec in enumerate(raw_sections):
+        if not isinstance(sec, dict):
+            continue
+        _check(f"section[{i}]", "start_s", sec.get("start_s", 0))
+        _check(f"section[{i}]", "end_s", sec.get("end_s", sec.get("start_s", 0)))
+        try:
+            a = float(sec.get("start_s", 0))
+            b = float(sec.get("end_s", a))
+            if b < a - _TIME_EPS_S:
+                violations.append(f"section[{i}] inverted {a:.3f}-{b:.3f}")
+        except (TypeError, ValueError):
+            pass
+
+    for i, row in enumerate(raw_moments):
+        if not isinstance(row, dict):
+            continue
+        for key in ("start_s", "end_s", "peak_s", "hook_s"):
+            if key in row and row.get(key) is not None:
+                _check(f"moment[{i}]", key, row.get(key))
+    return violations
+
+
+def normalize_sections(raw: list[dict], duration_s: float) -> list[dict]:
+    dur = max(1.0, float(duration_s))
+    out: list[dict] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        try:
+            start = _clamp(float(row.get("start_s", 0)), 0.0, dur)
+            end = _clamp(float(row.get("end_s", start)), 0.0, dur)
+        except (TypeError, ValueError):
+            continue
+        if end <= start + 0.01:
+            continue
+        activity = str(row.get("activity") or "").strip()[:240]
+        out.append(
+            {
+                "start_s": round(start, 3),
+                "end_s": round(end, 3),
+                "activity": activity,
+            }
+        )
+    out.sort(key=lambda s: float(s["start_s"]))
     return out
 
 
@@ -472,7 +580,10 @@ def resolve_video_picker_stream_ranges(duration_ms: int) -> list[tuple[int, int]
 
 
 def _gemini_transient_status(status: int) -> bool:
-    return status == 429 or status >= 500
+    return status in (429, 503, 502, 504) or status >= 500
+
+
+_GEMINI_TRANSIENT_BACKOFF_S = (2.0, 5.0, 12.0, 25.0)
 
 
 def _gemini_transient_exc(exc: Exception) -> bool:
@@ -510,9 +621,14 @@ def _gemini_watch_payload(
         raw_bytes = slim.read_bytes()
     b64 = base64.b64encode(raw_bytes).decode("ascii")
     use_fps = fps if fps is not None else video_picker_fps()
+    vmeta: dict[str, Any] = {
+        "fps": use_fps,
+        "startOffset": "0s",
+        "endOffset": f"{max(1, int(duration_s))}s",
+    }
     part: dict[str, Any] = {
         "inline_data": {"mime_type": "video/mp4", "data": b64},
-        "video_metadata": {"fps": use_fps},
+        "video_metadata": vmeta,
     }
     text_part = {"text": user_text}
     order = part_order or video_picker_user_part_order()
@@ -681,102 +797,168 @@ def watch_video_file(
         meta["frames_est"] = max(1, int(duration_s * fps))
         meta["min_moments"] = min_moments_for_video(int(duration_s))
         system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
-        user_text = (
-            "Use the attached video (original audio) and the timestamped transcript below together.\n\n"
+        user_text_base = (
+            "Use the attached video (original audio), the burned-in top-left HH:MM:SS clock, "
+            "and the timestamped transcript below together.\n\n"
             f"TIMESTAMPED TRANSCRIPT:\n{transcript_text[:16000] if transcript_text else '(none)'}\n\n"
-            "Return sections and moments JSON for this video only."
+            f"Return sections and moments JSON for this video only ({duration_s}s max; times from the on-screen clock)."
         )
-        payload = _gemini_watch_payload(
-            video_path,
-            duration_s,
-            system=system,
-            user_text=user_text,
-            fps=fps,
-            media_resolution=meta["media_resolution"],
-            part_order=meta["user_part_order"],
-            model=model,
-        )
+        primary_model = model
+        fallback_model = video_picker_fallback_model()
+        meta["burn_timecode"] = video_picker_burn_timecode()
+        meta["fallback_model"] = fallback_model
         last_err = "unknown"
         last_status: int | None = None
-        for attempt in range(3):
-            try:
-                res = requests.post(
-                    f"{GEMINI_BASE}/models/{model}:generateContent",
-                    params={"key": _key()},
-                    json=payload,
-                    timeout=video_picker_timeout_s(),
+        time_invalid_retries = 1
+        user_text = user_text_base
+
+        while True:
+            active_models: list[str] = [primary_model]
+            parsed_ok: dict[str, Any] | None = None
+            used_model = primary_model
+
+            for active_model in active_models:
+                meta["model"] = active_model
+                payload = _gemini_watch_payload(
+                    video_path,
+                    duration_s,
+                    system=system,
+                    user_text=user_text,
+                    fps=fps,
+                    media_resolution=meta["media_resolution"],
+                    part_order=meta["user_part_order"],
+                    model=active_model,
                 )
-                last_status = res.status_code
-                if _gemini_transient_status(res.status_code) and attempt < 2:
-                    time.sleep(2**attempt)
-                    continue
-                if not res.ok:
-                    err_body = res.text or res.reason or "error"
+                res = None
+                for attempt, backoff_s in enumerate(_GEMINI_TRANSIENT_BACKOFF_S):
+                    try:
+                        res = requests.post(
+                            f"{GEMINI_BASE}/models/{active_model}:generateContent",
+                            params={"key": _key()},
+                            json=payload,
+                            timeout=video_picker_timeout_s(),
+                        )
+                        last_status = res.status_code
+                        if res.ok:
+                            break
+                        if _gemini_transient_status(res.status_code):
+                            err_body = res.text or res.reason or "error"
+                            summary, _quota = gemini_error_log_fields(err_body)
+                            last_err = summary or err_body[:300]
+                            time.sleep(backoff_s)
+                            continue
+                        break
+                    except Exception as exc:
+                        last_err = str(exc)[:300]
+                        if _gemini_transient_exc(exc):
+                            time.sleep(backoff_s)
+                            continue
+                        if not fail_open:
+                            raise
+                        return _fail_open(last_err, last_status, None)
+
+                if res is None or not res.ok:
+                    transient_exhausted = res is not None and _gemini_transient_status(res.status_code)
+                    if (
+                        active_model == primary_model
+                        and fallback_model
+                        and fallback_model != primary_model
+                        and transient_exhausted
+                        and len(active_models) == 1
+                    ):
+                        print(
+                            f"[clipper:video_picker] {json.dumps({'event': 'model_fallback', 'from': primary_model, 'to': fallback_model, 'status': last_status})}",
+                            flush=True,
+                        )
+                        active_models.append(fallback_model)
+                        continue
+                    err_body = (res.text if res is not None else "") or last_err
                     summary, quota = gemini_error_log_fields(err_body)
                     last_err = summary or err_body[:300]
-                    last_status = res.status_code
                     if not fail_open:
                         raise RuntimeError(last_err)
-                    return _fail_open(last_err, res.status_code, quota or None)
+                    return _fail_open(last_err, last_status, quota or None)
+
+                used_model = active_model
                 data = res.json()
                 usage = data.get("usageMetadata") or {}
                 pt = int(usage.get("promptTokenCount") or 0)
                 ot = int(usage.get("candidatesTokenCount") or 0)
                 meta["prompt_tokens"] = pt
                 meta["output_tokens"] = ot
-                in_p, out_p = gemini_token_pricing_usd(model)
+                in_p, out_p = gemini_token_pricing_usd(used_model)
                 meta["pricing_usd_per_1m"] = {"input": in_p, "output": out_p}
-                meta["est_usd"] = round(estimate_gemini_usd(pt, ot, model), 6)
+                meta["est_usd"] = round(estimate_gemini_usd(pt, ot, used_model), 6)
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
-                parsed = json.loads(text)
-                meta["sections"] = list(parsed.get("sections") or [])[:24]
-                meta["sections_count"] = len(meta["sections"])
-                max_span = max_span_seconds(target_clip_len_s)
-                moments = validate_and_normalize_moments(
-                    list(parsed.get("moments") or []),
-                    float(duration_s),
-                    chunk_offset_s=0.0,
-                    max_span_s=max_span,
-                )
-                meta["moments_raw"] = moments
-                if not skip_edge_reassess and source_video is not None and scratch is not None:
-                    t_end = trim_end_s if trim_end_s is not None else trim_start_s + float(duration_s)
-                    moments = reassess_edge_moments(
-                        moments,
-                        rel_duration_s=float(duration_s),
-                        trim_start_s=trim_start_s,
-                        trim_end_s=t_end,
-                        src_video=source_video,
-                        scratch=scratch,
-                        transcript_text=transcript_text,
-                        target_clip_len_s=target_clip_len_s,
-                        chunk_label=chunk_label,
-                    )
-                _log_min_moments_shortfall(duration_s, len(moments), chunk_label)
-                meta["min_moments_met"] = len(moments) >= int(meta.get("min_moments") or 0)
-                meta["ok"] = True
-                stage_end(
-                    "video_picker",
-                    t0,
-                    chunk=chunk_label,
-                    frames=meta["frames_est"],
-                    prompt_tokens=pt,
-                    output_tokens=ot,
-                    est_usd=meta["est_usd"],
-                    moments=len(moments),
-                )
-                return moments, meta
-            except Exception as exc:
-                last_err = str(exc)[:300]
-                if _gemini_transient_exc(exc) and attempt < 2:
-                    time.sleep(2**attempt)
-                    continue
+                parsed_ok = json.loads(text)
+                break
+
+            if parsed_ok is None:
                 if not fail_open:
-                    raise
+                    raise RuntimeError(last_err)
                 return _fail_open(last_err, last_status, None)
-        if not fail_open:
-            raise RuntimeError(last_err)
-        return _fail_open(last_err, last_status, None)
+
+            raw_sections = list(parsed_ok.get("sections") or [])
+            raw_moments = list(parsed_ok.get("moments") or [])
+            violations = collect_time_violations(raw_sections, raw_moments, float(duration_s))
+            if violations:
+                meta["time_violations"] = violations[:12]
+                meta["time_invalid"] = True
+                print(
+                    f"[clipper:video_picker] {json.dumps({'event': 'time_invalid', 'chunk': chunk_label, 'violations': violations[:8]})}",
+                    flush=True,
+                )
+                if time_invalid_retries > 0:
+                    time_invalid_retries -= 1
+                    user_text = (
+                        user_text_base
+                        + "\n\nRETRY: Your prior JSON had invalid timestamps "
+                        f"(must be 0..{duration_s}s, read from the burned-in clock): "
+                        + "; ".join(violations[:6])
+                        + ". Fix all section and moment times before returning."
+                    )
+                    continue
+            else:
+                meta["time_invalid"] = False
+
+            meta["sections"] = normalize_sections(raw_sections, float(duration_s))[:24]
+            meta["sections_count"] = len(meta["sections"])
+            max_span = max_span_seconds(target_clip_len_s)
+            moments = validate_and_normalize_moments(
+                raw_moments,
+                float(duration_s),
+                chunk_offset_s=0.0,
+                max_span_s=max_span,
+            )
+            meta["moments_raw"] = moments
+            if not skip_edge_reassess and source_video is not None and scratch is not None:
+                t_end = trim_end_s if trim_end_s is not None else trim_start_s + float(duration_s)
+                moments = reassess_edge_moments(
+                    moments,
+                    rel_duration_s=float(duration_s),
+                    trim_start_s=trim_start_s,
+                    trim_end_s=t_end,
+                    src_video=source_video,
+                    scratch=scratch,
+                    transcript_text=transcript_text,
+                    target_clip_len_s=target_clip_len_s,
+                    chunk_label=chunk_label,
+                )
+            _log_min_moments_shortfall(duration_s, len(moments), chunk_label)
+            meta["min_moments_met"] = len(moments) >= int(meta.get("min_moments") or 0)
+            meta["ok"] = True
+            meta["model"] = used_model
+            stage_end(
+                "video_picker",
+                t0,
+                chunk=chunk_label,
+                frames=meta["frames_est"],
+                prompt_tokens=meta["prompt_tokens"],
+                output_tokens=meta["output_tokens"],
+                est_usd=meta["est_usd"],
+                moments=len(moments),
+            )
+            return moments, meta
     except Exception as exc:
         if not fail_open:
             raise

@@ -14,6 +14,7 @@ DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 # Video-watch default (mixed_4min bake-off: prefer 3.8 Flash when quality ties).
 DEFAULT_VIDEO_PICKER_MODEL = "gemini-3.8-flash"
+DEFAULT_VIDEO_PICKER_FALLBACK_MODEL = "gemini-3.5-flash-lite"
 
 # Paid list prices (USD per 1M tokens) for cost logging — see ai.google.dev/pricing.
 GEMINI_USD_PER_1M_TOKENS: dict[str, tuple[float, float]] = {

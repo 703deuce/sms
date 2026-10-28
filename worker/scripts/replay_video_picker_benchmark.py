@@ -213,6 +213,7 @@ def pick_default_model(results: list[dict]) -> str | None:
 
 def main() -> None:
     sleep_s = float(os.environ.get("BENCH_SLEEP_S", "25"))
+    only = (os.environ.get("BENCH_ONLY") or "").strip()
     duration_s = 226
     root = Path(tempfile.mkdtemp(prefix="vp_bench_shared_"))
     shared_src = _shared_download(root)
@@ -220,6 +221,10 @@ def main() -> None:
     print(f"[bench] shared source={shared_src} transcript_chars={len(transcript)}", flush=True)
 
     variants = build_variant_list()
+    if only:
+        variants = [v for v in variants if v[0] == only or v[0].endswith(only)]
+        if not variants:
+            raise SystemExit(f"BENCH_ONLY={only!r} matched no variants")
     results: list[dict] = []
     for i, (name, patch, model) in enumerate(variants):
         print(f"[bench] === {name} model={model} ===", flush=True)

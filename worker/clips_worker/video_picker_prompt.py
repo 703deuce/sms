@@ -14,7 +14,10 @@ EVIDENCE
 Judge every moment on all three inputs together. Listen to the actual audio, not only the words: gunfire, impacts, explosions, music, crowd noise, screams, laughter and sudden silence are signals on their own. Keep what you directly saw or heard separate from what you infer. If something essential cannot be verified (a tiny HUD number, an off-screen event, a muffled line), say so and lower confidence, but do not invent it.
 
 INPUTS
-Video length is about {video_len_s} seconds. The clip length setting is given in LENGTH below. All times are seconds from the start of this video. The video may be a full upload or one 15-minute chunk of a longer stream, so earlier context may be missing.
+Video length is exactly {video_len_s} seconds. The clip length setting is given in LENGTH below. All times are seconds from the start of this video (0.0 at the first frame, {video_len_s} at the end). The video may be a full upload or one 15-minute chunk of a longer stream, so earlier context may be missing.
+
+TIMECODE (mandatory)
+Every frame has a burned-in HH:MM:SS clock in a box at the top-left, counting from 00:00:00 at the first frame of this video. Read all start_s, end_s, peak_s, hook_s and section boundaries from that on-screen clock and the transcript timestamps — never from playback position or guesswork. No timestamp may exceed {video_len_s} seconds. Sections must partition 0 through {video_len_s} without gaps past the end (for example no section ending at 250 when the video is {video_len_s} seconds).
 
 STEP 1: SEGMENT BY ACTIVITY
 Split the video into sections by what is actually happening: gaming, talking, reaction, irl, creative. Start a new section whenever the activity changes (the match ends and they talk to chat, they play a video, walk outside, pick up a guitar) and re-apply the matching criteria. Never judge talking by gameplay standards or the reverse. A section can carry more than one label.
