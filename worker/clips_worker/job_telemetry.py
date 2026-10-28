@@ -59,6 +59,7 @@ def record_video_picker_stats(
         "model_requested": meta.get("model_requested") or meta.get("model") or "",
         "model_used": meta.get("model_used") or meta.get("model") or "",
         "model_fallback": bool(meta.get("model_fallback")),
+        "fallback_reason": meta.get("fallback_reason"),
         "input_mode": meta.get("input_mode"),
         "fps": meta.get("fps"),
         "frames_est": meta.get("frames_est"),

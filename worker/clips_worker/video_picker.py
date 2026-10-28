@@ -599,6 +599,58 @@ def _gemini_transient_status(status: int) -> bool:
 _GEMINI_TRANSIENT_BACKOFF_S = (2.0, 5.0, 12.0, 25.0)
 
 
+def _log_video_picker_model_fallback(
+    *,
+    chunk_label: str,
+    from_model: str,
+    to_model: str,
+    reason: str,
+    status: int | None = None,
+) -> None:
+    print(
+        f"[clipper:video_picker] WARNING {json.dumps({'event': 'model_fallback', 'chunk': chunk_label, 'from': from_model, 'to': to_model, 'reason': reason, 'status': status})}",
+        flush=True,
+    )
+
+
+def _gemini_post_watch(
+    active_model: str,
+    payload: dict[str, Any],
+) -> tuple[requests.Response | None, str, int | None]:
+    """POST with transient backoff; returns (response, last_err, last_status)."""
+    last_err = "unknown"
+    last_status: int | None = None
+    res: requests.Response | None = None
+    for _attempt, backoff_s in enumerate(_GEMINI_TRANSIENT_BACKOFF_S):
+        try:
+            res = requests.post(
+                f"{GEMINI_BASE}/models/{active_model}:generateContent",
+                params={"key": _key()},
+                json=payload,
+                timeout=video_picker_timeout_s(),
+            )
+            last_status = res.status_code
+            if res.ok:
+                return res, last_err, last_status
+            if _gemini_transient_status(res.status_code):
+                err_body = res.text or res.reason or "error"
+                summary, _quota = gemini_error_log_fields(err_body)
+                last_err = summary or err_body[:300]
+                time.sleep(backoff_s)
+                continue
+            err_body = res.text or res.reason or "error"
+            summary, _quota = gemini_error_log_fields(err_body)
+            last_err = summary or err_body[:300]
+            return res, last_err, last_status
+        except Exception as exc:
+            last_err = str(exc)[:300]
+            if _gemini_transient_exc(exc):
+                time.sleep(backoff_s)
+                continue
+            return None, last_err, last_status
+    return res, last_err, last_status
+
+
 def _gemini_transient_exc(exc: Exception) -> bool:
     if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
         return True
@@ -961,18 +1013,42 @@ def watch_video_file(
         fallback_model = video_picker_fallback_model()
         meta["burn_timecode"] = video_picker_burn_timecode()
         meta["fallback_model"] = fallback_model
+        models_chain: list[str] = [primary_model]
+        if fallback_model and fallback_model != primary_model:
+            models_chain.append(fallback_model)
+
         last_err = "unknown"
         last_status: int | None = None
-        time_invalid_retries = 1
-        user_text = user_text_base
+        last_fallback_reason = ""
 
-        while True:
-            active_models: list[str] = [primary_model]
+        def _apply_usage(used_model: str, data: dict[str, Any]) -> None:
+            usage = data.get("usageMetadata") or {}
+            pt = int(usage.get("promptTokenCount") or 0)
+            ot = int(usage.get("candidatesTokenCount") or 0)
+            meta["prompt_tokens"] = pt
+            meta["output_tokens"] = ot
+            in_p, out_p = gemini_token_pricing_usd(used_model)
+            meta["pricing_usd_per_1m"] = {"input": in_p, "output": out_p}
+            meta["est_usd"] = round(estimate_gemini_usd(pt, ot, used_model), 6)
+
+        for model_idx, active_model in enumerate(models_chain):
+            if model_idx > 0:
+                meta["fallback_reason"] = last_fallback_reason
+                _log_video_picker_model_fallback(
+                    chunk_label=chunk_label,
+                    from_model=primary_model,
+                    to_model=active_model,
+                    reason=last_fallback_reason,
+                    status=last_status,
+                )
+
+            meta["model"] = active_model
+            user_text = user_text_base
+            time_invalid_retries = 1
             parsed_ok: dict[str, Any] | None = None
-            used_model = primary_model
+            model_failed_reason = ""
 
-            for active_model in active_models:
-                meta["model"] = active_model
+            while parsed_ok is None:
                 payload = _gemini_watch_payload(
                     video_path,
                     duration_s,
@@ -984,153 +1060,128 @@ def watch_video_file(
                     model=active_model,
                     scratch=scratch or video_path.parent,
                 )
-                res = None
-                for attempt, backoff_s in enumerate(_GEMINI_TRANSIENT_BACKOFF_S):
-                    try:
-                        res = requests.post(
-                            f"{GEMINI_BASE}/models/{active_model}:generateContent",
-                            params={"key": _key()},
-                            json=payload,
-                            timeout=video_picker_timeout_s(),
-                        )
-                        last_status = res.status_code
-                        if res.ok:
-                            break
-                        if _gemini_transient_status(res.status_code):
-                            err_body = res.text or res.reason or "error"
-                            summary, _quota = gemini_error_log_fields(err_body)
-                            last_err = summary or err_body[:300]
-                            time.sleep(backoff_s)
-                            continue
-                        break
-                    except Exception as exc:
-                        last_err = str(exc)[:300]
-                        if _gemini_transient_exc(exc):
-                            time.sleep(backoff_s)
-                            continue
-                        if not fail_open:
-                            raise
-                        return _fail_open(last_err, last_status, None)
+                res, last_err, last_status = _gemini_post_watch(active_model, payload)
 
                 if res is None or not res.ok:
-                    hard_client = res is not None and res.status_code in (400, 401, 403, 404)
-                    if (
-                        not hard_client
-                        and active_model == primary_model
-                        and fallback_model
-                        and fallback_model != primary_model
-                        and len(active_models) == 1
-                    ):
-                        print(
-                            f"[clipper:video_picker] {json.dumps({'event': 'model_fallback', 'from': primary_model, 'to': fallback_model, 'status': last_status})}",
-                            flush=True,
-                        )
-                        active_models.append(fallback_model)
-                        continue
-                    err_body = (res.text if res is not None else "") or last_err
-                    summary, quota = gemini_error_log_fields(err_body)
-                    last_err = summary or err_body[:300]
+                    model_failed_reason = f"api_error status={last_status} err={last_err[:120]}"
                     if last_status == 429 or "quota exceeded" in last_err.lower():
                         meta["rate_limited"] = True
                         meta["status"] = last_status or 429
-                        print(
-                            f"[clipper:video_picker] ERROR GEMINI_RATE_LIMIT model={active_model} "
-                            f"status={last_status} chunk={chunk_label} err={last_err[:200]}",
-                            flush=True,
-                        )
-                    if active_model == fallback_model or not fallback_model:
-                        print(
-                            f"[clipper:video_picker] ERROR video_picker_failed "
-                            f"models_tried={[primary_model, fallback_model]} chunk={chunk_label} "
-                            f"status={last_status} err={last_err[:220]}",
-                            flush=True,
-                        )
-                    if not fail_open:
-                        raise RuntimeError(last_err)
-                    return _fail_open(last_err, last_status, quota or None)
+                    break
 
-                used_model = active_model
-                data = res.json()
-                usage = data.get("usageMetadata") or {}
-                pt = int(usage.get("promptTokenCount") or 0)
-                ot = int(usage.get("candidatesTokenCount") or 0)
-                meta["prompt_tokens"] = pt
-                meta["output_tokens"] = ot
-                in_p, out_p = gemini_token_pricing_usd(used_model)
-                meta["pricing_usd_per_1m"] = {"input": in_p, "output": out_p}
-                meta["est_usd"] = round(estimate_gemini_usd(pt, ot, used_model), 6)
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                parsed_ok = json.loads(text)
+                try:
+                    data = res.json()
+                    _apply_usage(active_model, data)
+                    text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    parsed_ok = json.loads(text)
+                except (KeyError, IndexError, json.JSONDecodeError, TypeError) as exc:
+                    model_failed_reason = f"unparseable_output {type(exc).__name__}"
+                    parsed_ok = None
+                    break
+
+                raw_sections = list(parsed_ok.get("sections") or [])
+                raw_moments = list(parsed_ok.get("moments") or [])
+                if not raw_sections and not raw_moments:
+                    model_failed_reason = "empty_sections_and_moments"
+                    parsed_ok = None
+                    break
+
+                violations = collect_time_violations(raw_sections, raw_moments, float(duration_s))
+                if violations:
+                    meta["time_violations"] = violations[:12]
+                    meta["time_invalid"] = True
+                    print(
+                        f"[clipper:video_picker] {json.dumps({'event': 'time_invalid', 'chunk': chunk_label, 'model': active_model, 'violations': violations[:8]})}",
+                        flush=True,
+                    )
+                    if time_invalid_retries > 0:
+                        time_invalid_retries -= 1
+                        user_text = (
+                            user_text_base
+                            + "\n\nRETRY: Your prior JSON had invalid timestamps "
+                            f"(must be 0..{duration_s}s, read from [t=…] labels): "
+                            + "; ".join(violations[:6])
+                            + ". Fix all section and moment times before returning."
+                        )
+                        parsed_ok = None
+                        continue
+                    model_failed_reason = "time_invalid_after_retry"
+                    parsed_ok = None
+                    break
+
+                meta["time_invalid"] = False
+                meta["sections"] = normalize_sections(raw_sections, float(duration_s))[:24]
+                meta["sections_count"] = len(meta["sections"])
+                max_span = max_span_seconds(target_clip_len_s)
+                moments = validate_and_normalize_moments(
+                    raw_moments,
+                    float(duration_s),
+                    chunk_offset_s=0.0,
+                    max_span_s=max_span,
+                )
+                if not moments:
+                    model_failed_reason = "no_valid_moments_after_normalize"
+                    parsed_ok = None
+                    break
+
+                meta["moments_raw"] = moments
+                if not skip_edge_reassess and source_video is not None and scratch is not None:
+                    t_end = trim_end_s if trim_end_s is not None else trim_start_s + float(duration_s)
+                    moments = reassess_edge_moments(
+                        moments,
+                        rel_duration_s=float(duration_s),
+                        trim_start_s=trim_start_s,
+                        trim_end_s=t_end,
+                        src_video=source_video,
+                        scratch=scratch,
+                        transcript_text=transcript_text,
+                        target_clip_len_s=target_clip_len_s,
+                        chunk_label=chunk_label,
+                    )
+                _log_min_moments_shortfall(duration_s, len(moments), chunk_label)
+                meta["min_moments_met"] = len(moments) >= int(meta.get("min_moments") or 0)
+                meta["ok"] = True
+                meta["model"] = active_model
+                meta["model_used"] = active_model
+                meta["model_fallback"] = active_model != primary_model
+                stage_end(
+                    "video_picker",
+                    t0,
+                    chunk=chunk_label,
+                    frames=meta["frames_est"],
+                    prompt_tokens=meta["prompt_tokens"],
+                    output_tokens=meta["output_tokens"],
+                    est_usd=meta["est_usd"],
+                    moments=len(moments),
+                    model_used=active_model,
+                    model_fallback=meta["model_fallback"],
+                )
+                return moments, meta
+
+            last_fallback_reason = model_failed_reason or last_err[:160]
+            if model_idx + 1 >= len(models_chain):
                 break
 
-            if parsed_ok is None:
-                if not fail_open:
-                    raise RuntimeError(last_err)
-                return _fail_open(last_err, last_status, None)
-
-            raw_sections = list(parsed_ok.get("sections") or [])
-            raw_moments = list(parsed_ok.get("moments") or [])
-            violations = collect_time_violations(raw_sections, raw_moments, float(duration_s))
-            if violations:
-                meta["time_violations"] = violations[:12]
-                meta["time_invalid"] = True
-                print(
-                    f"[clipper:video_picker] {json.dumps({'event': 'time_invalid', 'chunk': chunk_label, 'violations': violations[:8]})}",
-                    flush=True,
-                )
-                if time_invalid_retries > 0:
-                    time_invalid_retries -= 1
-                    user_text = (
-                        user_text_base
-                        + "\n\nRETRY: Your prior JSON had invalid timestamps "
-                        f"(must be 0..{duration_s}s, read from the burned-in clock): "
-                        + "; ".join(violations[:6])
-                        + ". Fix all section and moment times before returning."
-                    )
-                    continue
-            else:
-                meta["time_invalid"] = False
-
-            meta["sections"] = normalize_sections(raw_sections, float(duration_s))[:24]
-            meta["sections_count"] = len(meta["sections"])
-            max_span = max_span_seconds(target_clip_len_s)
-            moments = validate_and_normalize_moments(
-                raw_moments,
-                float(duration_s),
-                chunk_offset_s=0.0,
-                max_span_s=max_span,
-            )
-            meta["moments_raw"] = moments
-            if not skip_edge_reassess and source_video is not None and scratch is not None:
-                t_end = trim_end_s if trim_end_s is not None else trim_start_s + float(duration_s)
-                moments = reassess_edge_moments(
-                    moments,
-                    rel_duration_s=float(duration_s),
-                    trim_start_s=trim_start_s,
-                    trim_end_s=t_end,
-                    src_video=source_video,
-                    scratch=scratch,
-                    transcript_text=transcript_text,
-                    target_clip_len_s=target_clip_len_s,
-                    chunk_label=chunk_label,
-                )
-            _log_min_moments_shortfall(duration_s, len(moments), chunk_label)
-            meta["min_moments_met"] = len(moments) >= int(meta.get("min_moments") or 0)
-            meta["ok"] = True
-            meta["model"] = used_model
-            meta["model_used"] = used_model
-            meta["model_fallback"] = used_model != primary_model
-            stage_end(
-                "video_picker",
-                t0,
-                chunk=chunk_label,
-                frames=meta["frames_est"],
-                prompt_tokens=meta["prompt_tokens"],
-                output_tokens=meta["output_tokens"],
-                est_usd=meta["est_usd"],
-                moments=len(moments),
-            )
-            return moments, meta
+        meta["ok"] = False
+        meta["model_used"] = models_chain[-1] if models_chain else primary_model
+        meta["error"] = last_fallback_reason or last_err
+        meta["status"] = last_status
+        print(
+            f"[clipper:video_picker] ERROR video_picker_failed "
+            f"models_tried={models_chain} chunk={chunk_label} "
+            f"status={last_status} err={(last_fallback_reason or last_err)[:240]}",
+            flush=True,
+        )
+        stage_end(
+            "video_picker",
+            t0,
+            chunk=chunk_label,
+            error=(last_fallback_reason or last_err)[:180],
+            fail_open=False,
+        )
+        if not fail_open:
+            raise RuntimeError(last_fallback_reason or last_err)
+        return _fail_open(last_fallback_reason or last_err, last_status, None)
     except Exception as exc:
         if not fail_open:
             raise
@@ -1166,6 +1217,7 @@ def watch_upload_range(
         scratch=scratch,
         trim_start_s=start_s,
         trim_end_s=end_s,
+        fail_open=False,
     )
     attach_absolute_ms(moments, range_start_ms)
     curve = moments_to_per_second(

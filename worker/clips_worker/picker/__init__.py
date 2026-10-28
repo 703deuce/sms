@@ -136,6 +136,13 @@ def pick_talking_clips(
                 range_start_ms=range_start_ms,
                 sections=vp_meta.get("sections"),
             )
+            if not vp_meta.get("ok"):
+                raise RuntimeError(
+                    f"video_picker failed (requested={vp_meta.get('model_requested')!r} "
+                    f"used={vp_meta.get('model_used')!r} "
+                    f"fallback={vp_meta.get('model_fallback')!r} "
+                    f"reason={vp_meta.get('fallback_reason') or vp_meta.get('error')!r})"
+                )
             if vp_meta.get("ok") and vm:
                 visual_moments = vm
                 video_context = format_moments_for_llm(
