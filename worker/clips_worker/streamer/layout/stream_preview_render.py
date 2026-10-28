@@ -7,6 +7,7 @@ from pathlib import Path
 from clips_worker.layout_router import editor_mode_uses_stream_frame
 from clips_worker.render_clip import aspect_size
 from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
+from clips_worker.chat_overlay_apply import try_apply_chat_overlay
 
 
 def resolve_stream_layout_mode(edits: dict) -> str:
@@ -66,40 +67,18 @@ def render_stream_clip_preview(
 
     shutil.copy(caption_src, out_mp4)
 
-    if conn and project_id:
-        from clips_worker.streamer.chat_overlay_render import (
-            apply_chat_overlay_safe,
-            chat_lines_for_clip,
-            chat_overlay_enabled,
-            load_vod_chat_messages,
-            load_vod_for_project,
-        )
-
-        if chat_overlay_enabled(edits):
-            vod = load_vod_for_project(conn, project_id)
-            if vod:
-                msgs = load_vod_chat_messages(conn, vod)
-                abs_start = int(edits.get("trim", {}).get("in") or clip_start_ms)
-                abs_end = int(edits.get("trim", {}).get("out") or clip_end_ms)
-                lines = chat_lines_for_clip(
-                    msgs,
-                    clip_start_abs_ms=abs_start,
-                    clip_end_abs_ms=abs_end,
-                    clip_start_rel_ms=clip_start_ms,
-                    clip_end_rel_ms=clip_end_ms,
-                )
-                chat_out = work_dir / "chat_overlay.mp4"
-                apply_chat_overlay_safe(
-                    out_mp4,
-                    chat_out,
-                    edits=edits,
-                    chat_lines=lines,
-                    layout_mode=layout_mode,
-                    play_w=play_w,
-                    play_h=play_h,
-                    clip_id=str(clip_id or ""),
-                    vod_id=str(vod_id or vod.get("id") or ""),
-                )
-                shutil.copy(chat_out, out_mp4)
+    try_apply_chat_overlay(
+        out_mp4,
+        work_dir,
+        conn=conn,
+        project_id=project_id or "",
+        edits=edits,
+        clip_start_ms=clip_start_ms,
+        clip_end_ms=clip_end_ms,
+        layout_mode=layout_mode,
+        clip_id=clip_id,
+        play_w=play_w,
+        play_h=play_h,
+    )
 
     return out_mp4

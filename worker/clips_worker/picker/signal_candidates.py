@@ -70,6 +70,7 @@ def propose_signal_action_moments(
     max_moments: int = 4,
     min_window_ms: int = 20_000,
     max_window_ms: int = 90_000,
+    video_picker_ran: bool = False,
 ) -> list[dict]:
     """High-energy / sparse-talk windows (gameplay fights, clutch stretches)."""
     if len(sentences) < 4:
@@ -125,7 +126,11 @@ def propose_signal_action_moments(
                 ),
                 "why": (
                     f"Signal-driven gameplay/action candidate (mean_loud_z≈{score:.1f}); "
-                    "video picker unavailable — pass 2 should judge payoff."
+                    + (
+                        "Gemini video watch ran but did not seed this window — pass 2 should judge payoff."
+                        if video_picker_ran
+                        else "Audio/scene signals only — pass 2 should judge payoff."
+                    )
                 ),
             }
         )

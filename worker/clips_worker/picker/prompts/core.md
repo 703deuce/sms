@@ -84,3 +84,6 @@ CUT-POINT RULES (append to the pass-2 prompt; code enforces the ones marked [cod
 ---
 
 Reject codes: R1 laugh-without-joke · R2 dangling start · R3 ends mid-thought/before qualifier · R4 setup without payoff · R5 callback · R6 ads/housekeeping/prayer/CTA · R7 invisible visual · R8 unexplained prerequisite · R9 meaning-changing edit · R10 near-duplicate · R11 unfollowable crosstalk/dead air · R12 length-amputated.
+
+VISUAL PAYOFF (Gemini watch + gameplay/reaction)
+When Gemini or visual notes mark a moment as gameplay, clutch, reaction, or visual payoff, pass 2 may tighten bounds but must NOT hard-reject on dialogue-only grounds (R4/R8 channel chatter) if the visual beat is self-contained on screen. Weight Gemini confidence in final ranking; prefer the clip that includes the full on-screen payoff through landing, not an early cut before the visual punchline.

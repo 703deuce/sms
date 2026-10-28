@@ -1,11 +1,11 @@
 """Single pick→render planning: neighbor clamp → overlap resolve (one constant) → freeze."""
 from __future__ import annotations
 
-from clips_worker.clip_segments import span_overlap_ratio
+from clips_worker.overlap_policy import PICK_OVERLAP_RATIO, pick_spans_duplicate, span_overlap_ratio
 from clips_worker.streamer.fusion import FusionPick
 
 # One overlap policy for regular + stream + re-render (R2 systemic #3).
-PICK_OVERLAP_MERGE_RATIO = 0.35
+PICK_OVERLAP_MERGE_RATIO = PICK_OVERLAP_RATIO
 DEFAULT_MIN_CLIP_MS = 15_000
 
 

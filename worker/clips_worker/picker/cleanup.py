@@ -12,6 +12,25 @@ from clips_worker.target_clip_len import ABS_MIN_MS, ClipLengthPolicy, resolve_c
 MIN_SHIPPED_CLIP_MS = ABS_MIN_MS
 
 
+def _gemini_score_for_pick(pick: dict, visual_moments: list[dict], range_start_ms: int) -> float | None:
+    from clips_worker.video_picker import moment_abs_span_ms
+
+    lo, hi = int(pick["start_ms"]), int(pick["end_ms"])
+    best: float | None = None
+    for m in visual_moments:
+        s_ms, e_ms = moment_abs_span_ms(m, range_start_ms)
+        overlap = max(0, min(hi, e_ms) - max(lo, s_ms))
+        if overlap <= 0:
+            continue
+        try:
+            sc = float(m.get("score") or 0)
+        except (TypeError, ValueError):
+            sc = 0.0
+        if best is None or sc > best:
+            best = sc
+    return best
+
+
 def _clamp_boundary_payoff_to_payoff_sentence(pick: dict, sentences) -> None:
     """Stop LLM/visual payoff hints from stretching a clip to EOF."""
     try:
@@ -167,6 +186,14 @@ def finalize_picks(
             lo, hi = float(laugh_tail[0]), float(laugh_tail[1])
             end_ms += int(((lo + hi) / 2) * 1000)
         pick = {**pick_row, "start_ms": start_ms, "end_ms": end_ms}
+        if visual_moments:
+            gs = _gemini_score_for_pick(pick, visual_moments, range_start_ms)
+            if gs is not None:
+                pick["gemini_score"] = gs
+                pick["from_visual"] = gs >= 0.45
+                base_final = float(pick.get("final") or pick.get("score", 0) / 10)
+                pick["final"] = round(min(10.0, base_final * 0.6 + gs * 4.0), 2)
+                pick["score"] = int(round(float(pick["final"]) * 10))
         if not pick.get("length_max_ms"):
             pick["length_max_ms"] = length_policy.effective_max_duration_ms(pick, range_end_ms)
         max_ms = int(pick.get("length_max_ms") or max_ms)
@@ -219,10 +246,8 @@ def finalize_picks(
     duration_ms = int(source_duration_ms or span_ms)
     selected = select_clips(picks, duration_ms)
     from clips_worker.picker.pick_quota import compute_pick_want, log_pick_stage
-    from clips_worker.plan_clips import plan_clips
 
     want = compute_pick_want(settings if isinstance(settings, dict) else {}, duration_ms)
-    selected = plan_clips(selected, min_clip_ms=MIN_SHIPPED_CLIP_MS)
     log_pick_stage("regular", want=want, final=len(selected))
     picker_info(
         "finalize_done",

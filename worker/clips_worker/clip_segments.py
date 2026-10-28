@@ -3,21 +3,31 @@ from __future__ import annotations
 
 from typing import Any
 
+from clips_worker.overlap_policy import (
+    HEADSTART_SPAN_MATCH_MS,
+    span_overlap_ratio,
+    spans_match_planned_render,
+)
+
+
 
 def clip_segment_key(start_ms: int, end_ms: int) -> str:
     return f"{int(start_ms)}:{int(end_ms)}"
 
 
-def span_overlap_ratio(a0: int, a1: int, b0: int, b1: int) -> float:
-    overlap = max(0, min(a1, b1) - max(a0, b0))
-    span = max(1, min(a1 - a0, b1 - b0))
-    return overlap / span
-
-
-def spans_same_segment(a0: int, a1: int, b0: int, b1: int, *, near_match_ratio: float = 0.85) -> bool:
-    """Same persisted segment identity, or near-identical span after snap drift."""
+def spans_same_segment(
+    a0: int,
+    a1: int,
+    b0: int,
+    b1: int,
+    *,
+    near_match_ratio: float | None = None,
+) -> bool:
+    """Exact segment key, or near-identical span (legacy snap drift only)."""
     if clip_segment_key(a0, a1) == clip_segment_key(b0, b1):
         return True
+    if near_match_ratio is None:
+        return spans_match_planned_render(a0, a1, b0, b1, tol_ms=HEADSTART_SPAN_MATCH_MS)
     return span_overlap_ratio(a0, a1, b0, b1) >= near_match_ratio
 
 

@@ -174,16 +174,26 @@ def _clip_row_from_llm(
     m_es = max(m_ss, min(int(moment["end_sentence"]), len(sentences) - 1))
     overlap = max(0, min(es, m_es) - max(ss, m_ss) + 1)
     moment_len = max(1, m_es - m_ss + 1)
-    if overlap < moment_len * 0.35:
-        picker_info(
-            "pass2_span_mismatch",
+    from clips_worker.overlap_policy import PICK_OVERLAP_RATIO
+
+    if overlap < moment_len * PICK_OVERLAP_RATIO:
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "pass2",
+            "span_mismatch",
             expected=(m_ss, m_es),
             got=(ss, es),
             overlap=overlap,
             moment_len=moment_len,
+            action="use_model_span",
         )
-        ss, es = m_ss, m_es
-        payoff_id = max(ss, min(int(moment.get("anchor_id", m_ss)), es))
+        # Keep model span when it still overlaps the moment anchor window.
+        if overlap >= max(1, moment_len * 0.15):
+            pass
+        else:
+            ss, es = m_ss, m_es
+            payoff_id = max(ss, min(int(moment.get("anchor_id", m_ss)), es))
     sc = row["scores"]
     sent_rows = []
     for k in range(ss, es + 1):
@@ -202,6 +212,7 @@ def _clip_row_from_llm(
         length_min_s=length_policy.scoring_min_s if length_policy else None,
         length_max_s=length_policy.scoring_max_s if length_policy else None,
         skip_length_penalty=bool(length_policy),
+        visual_payoff_moment=bool(moment.get("visual_origin") or moment.get("from_visual")),
     )
     base = {
         "start_sentence": ss,

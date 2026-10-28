@@ -14,6 +14,7 @@ from pathlib import Path
 import psycopg2
 
 from clips_worker.clip_progress import reframe_progress_payload
+from clips_worker.overlap_policy import PICK_OVERLAP_RATIO
 
 from clips_worker.anything_picker import pick_anything_clips
 from clips_worker.picker import pick_talking_clips
@@ -564,21 +565,32 @@ def run_m4_pipeline(
                 from clips_worker.clip_segments import spans_same_segment
 
                 def _headstart_row_for_pick(pick: dict) -> dict | None:
+                    from clips_worker.overlap_policy import spans_match_planned_render
+
                     sk = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
                     by_span = head_render_state.get("by_span") or {}
                     row = by_span.get(sk)
                     if row is not None:
+                        decision_log(
+                            "headstart",
+                            "reuse_exact",
+                            planned_start_ms=int(pick["start_ms"]),
+                            planned_end_ms=int(pick["end_ms"]),
+                        )
                         return row
                     s0, e0 = int(pick["start_ms"]), int(pick["end_ms"])
                     for cached in by_span.values():
                         rs, re = int(cached["startMs"]), int(cached["endMs"])
-                        if spans_same_segment(rs, re, s0, e0):
+                        if spans_match_planned_render(s0, e0, rs, re):
+                            decision_log(
+                                "headstart",
+                                "reuse_exact",
+                                planned_start_ms=s0,
+                                planned_end_ms=e0,
+                                cached_start_ms=rs,
+                                cached_end_ms=re,
+                            )
                             return cached
-                    if headstart_pick is not None:
-                        hs = int(headstart_pick["start_ms"])
-                        he = int(headstart_pick["end_ms"])
-                        if spans_same_segment(hs, he, s0, e0):
-                            return by_span.get(_span_key(hs, he))
                     return None
 
                 def _overlap_existing_locked(start_ms: int, end_ms: int) -> bool:
@@ -588,7 +600,7 @@ def run_m4_pipeline(
                             continue
                         overlap = max(0, min(a1, end_ms) - max(a0, start_ms))
                         span = max(1, min(a1 - a0, end_ms - start_ms))
-                        if overlap / span >= 0.35:
+                        if overlap / span >= PICK_OVERLAP_RATIO:
                             return True
                     return False
 

@@ -470,11 +470,15 @@ def _span_overlap_fraction(a: tuple[float, float], b: tuple[float, float]) -> fl
 def dedupe_overlapping_video_picker_moments(
     moments: list[dict],
     *,
-    overlap_threshold: float = 0.5,
+    overlap_threshold: float | None = None,
     stage: str = "dedupe",
 ) -> list[dict]:
-    """Drop >50% overlapping spans; keep higher score (counts as one beat toward min_moments)."""
+    """Drop overlapping spans; keep higher score (counts as one beat toward min_moments)."""
     from clips_worker.decision_log import decision_log
+    from clips_worker.overlap_policy import PICK_OVERLAP_RATIO
+
+    if overlap_threshold is None:
+        overlap_threshold = PICK_OVERLAP_RATIO
 
     ranked = sorted(moments, key=lambda m: -float(m.get("score") or 0))
     kept: list[dict] = []
@@ -1120,6 +1124,81 @@ def _gemini_watch_payload(
     }
 
 
+_gemini_daily_quota_exhausted: set[str] = set()
+
+
+def _uncovered_section_labels(sections: list[dict], moments: list[dict], duration_s: float) -> list[str]:
+    if not sections:
+        return ["(no sections returned)"]
+    covered: list[bool] = [False] * len(sections)
+    for m in moments:
+        try:
+            ms = float(m.get("start_s", 0))
+            me = float(m.get("end_s", ms))
+        except (TypeError, ValueError):
+            continue
+        mid = (ms + me) / 2.0
+        for i, sec in enumerate(sections):
+            try:
+                a = float(sec.get("start_s", 0))
+                b = float(sec.get("end_s", a))
+            except (TypeError, ValueError):
+                continue
+            if a <= mid <= b:
+                covered[i] = True
+    out: list[str] = []
+    for i, sec in enumerate(sections):
+        if covered[i]:
+            continue
+        act = str(sec.get("activity") or "section")[:80]
+        out.append(f"{sec.get('start_s', 0):.0f}-{sec.get('end_s', 0):.0f}s {act}")
+    return out
+
+
+def remember_gemini_daily_quota(model: str, quota: dict | None) -> None:
+    if not quota:
+        return
+    qid = str(quota.get("quotaId") or "")
+    if "PerDay" in qid or "per_day" in qid.lower() or "PerDay" in str(quota.get("quotaMetric") or ""):
+        _gemini_daily_quota_exhausted.add(model)
+
+
+def gemini_model_skipped_daily_quota(model: str) -> bool:
+    return model in _gemini_daily_quota_exhausted
+
+
+def _transcript_slice_for_window(transcript_text: str, lo_s: float, hi_s: float) -> str:
+    """Keep lines whose [t=…] falls in [lo_s, hi_s], re-based to 0..(hi-lo)."""
+    if not transcript_text:
+        return ""
+    out: list[str] = []
+    for line in transcript_text.splitlines():
+        m = re.search(r"\[t=([\d.]+)\]", line)
+        if not m:
+            continue
+        t = float(m.group(1))
+        if t < lo_s - 0.05 or t > hi_s + 0.05:
+            continue
+        rel = t - lo_s
+        out.append(re.sub(r"\[t=[\d.]+\]", f"[t={rel:.3f}]", line, count=1))
+    return "\n".join(out) if out else transcript_text[:8000]
+
+
+def _moment_overlaps_prior(candidate: dict, orig_start_s: float, orig_end_s: float, *, min_frac: float) -> bool:
+    try:
+        ns = float(candidate["start_s"])
+        ne = float(candidate["end_s"])
+    except (TypeError, ValueError, KeyError):
+        return False
+    lo = max(ns, orig_start_s)
+    hi = min(ne, orig_end_s)
+    if hi <= lo:
+        return False
+    overlap = hi - lo
+    shorter = min(ne - ns, orig_end_s - orig_start_s)
+    return overlap / max(shorter, 0.001) >= min_frac
+
+
 def reassess_edge_moments(
     moments: list[dict],
     *,
@@ -1131,6 +1210,7 @@ def reassess_edge_moments(
     transcript_text: str,
     target_clip_len_s: int | None,
     chunk_label: str,
+    is_single_chunk: bool = False,
 ) -> list[dict]:
     if not moments or src_video is None or scratch is None or not src_video.is_file():
         return moments
@@ -1150,34 +1230,53 @@ def reassess_edge_moments(
         except (TypeError, ValueError, KeyError):
             out.append(m)
             continue
+        at_source_start = is_single_chunk and rs <= 1.5
+        at_source_end = is_single_chunk and re >= rel_duration_s - 1.5
+        if at_source_start or at_source_end:
+            decision_log(
+                "reassess_edge",
+                "skip",
+                chunk=chunk_label,
+                edge=edge,
+                reason="single_chunk_source_boundary",
+            )
+            out.append(m)
+            continue
         abs_start = trim_start_s + rs
         abs_end = trim_start_s + re
-        ext_lo = max(0.0, abs_start - pad)
-        ext_hi = abs_end + pad
-        if edge in ("start", "both") and rs <= 1.5:
-            ext_lo = max(0.0, trim_start_s - pad)
-        if edge in ("end", "both") and re >= rel_duration_s - 1.5:
-            ext_hi = max(ext_hi, trim_end_s + pad)
+        chunk_lo = float(trim_start_s)
+        chunk_hi = float(trim_end_s)
+        ext_lo = max(chunk_lo, abs_start - pad)
+        ext_hi = min(chunk_hi, abs_end + pad)
+        if edge in ("start", "both") and rs <= 1.5 and not is_single_chunk:
+            ext_lo = max(0.0, chunk_lo - pad)
+        if edge in ("end", "both") and re >= rel_duration_s - 1.5 and not is_single_chunk:
+            ext_hi = min(chunk_hi + pad, chunk_hi + pad)
+        ext_lo = max(0.0, min(ext_lo, chunk_hi))
+        ext_hi = max(ext_lo + 1.0, min(ext_hi, chunk_hi))
         proxy = scratch / f"edge_reassess_{chunk_label}_{len(out)}.mp4"
         make_watch_proxy(src_video, proxy, ext_lo, ext_hi)
         ext_dur = max(1, int(ext_hi - ext_lo))
+        rel_transcript = _transcript_slice_for_window(transcript_text, ext_lo, ext_hi)
         edge_user = (
-            "Reassess this chunk-edge moment using the expanded video and transcript. "
-            "Return moments[] with zero or one updated moment. Do not lower score because of edge; "
-            "update boundaries if neighbor context completes the clip. Drop only if confidence would "
-            "stay below 0.35 and the moment cannot stand alone.\n"
+            f"The video is exactly {float(ext_dur):.1f} seconds. Every timestamp must be between 0 and {float(ext_dur):.1f}.\n"
+            "Reassess ONLY the prior moment below — adjust start_s/end_s/peak_s/hook_s at the edges if needed. "
+            "Do NOT replace it with an unrelated beat. The updated moment MUST overlap the prior span on this timeline "
+            f"(prior start_s={rs:.3f} end_s={re:.3f}). Return moments[] with zero or one entry.\n"
             f"Prior moment JSON:\n{json.dumps(m, default=str)[:4000]}\n\n"
-            f"Timestamped transcript:\n{transcript_text[:12000]}"
+            f"TIMESTAMPED TRANSCRIPT (seconds relative to t=0 of this {float(ext_dur):.1f}s proxy, "
+            f"source offset {ext_lo:.3f}s):\n{rel_transcript[:12000]}"
         )
         reassessed, _meta = watch_video_file(
             proxy,
             duration_s=ext_dur,
             chunk_label=f"{chunk_label}_edge",
             target_clip_len_s=target_clip_len_s,
-            transcript_text=transcript_text,
+            transcript_text=rel_transcript,
             skip_edge_reassess=True,
             trim_start_s=ext_lo,
             trim_end_s=ext_hi,
+            user_text_override=edge_user,
         )
         if reassessed:
             best = dict(reassessed[0])
@@ -1187,6 +1286,16 @@ def reassess_edge_moments(
                     best[key] = round(float(best[key]) + shift, 3)
                 except (TypeError, ValueError, KeyError):
                     pass
+            if not _moment_overlaps_prior(best, rs, re, min_frac=0.25):
+                decision_log(
+                    "reassess_edge",
+                    "keep_original",
+                    chunk=chunk_label,
+                    edge=edge,
+                    reason="reassess_no_overlap",
+                )
+                out.append(m)
+                continue
             normed, _rej = validate_and_normalize_moments(
                 [best],
                 rel_duration_s,
@@ -1261,6 +1370,8 @@ def watch_video_file(
     user_part_order: str | None = None,
     fail_open: bool = True,
     use_labeled_frames: bool | None = None,
+    user_text_override: str | None = None,
+    is_single_chunk: bool = False,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Gemini Flash video watch. Fail-open after retries unless fail_open=False."""
     meta: dict[str, Any] = {
@@ -1326,6 +1437,8 @@ def watch_video_file(
             f"Return sections and moments JSON for this video only ({duration_s}s max; "
             "all times must match [t=…] labels and transcript)."
         )
+        if user_text_override:
+            user_text_base = user_text_override
         fallback_model = video_picker_fallback_model()
         meta["burn_timecode"] = video_picker_burn_timecode()
         meta["fallback_model"] = fallback_model
@@ -1350,6 +1463,15 @@ def watch_video_file(
         from clips_worker.decision_log import decision_log, sanitize_model_json
 
         for model_idx, active_model in enumerate(models_chain):
+            if gemini_model_skipped_daily_quota(active_model):
+                last_fallback_reason = "daily_quota_exhausted"
+                decision_log(
+                    "video_picker",
+                    "model_skipped",
+                    model=active_model,
+                    reason="daily_quota",
+                )
+                continue
             if model_idx > 0:
                 meta["fallback_reason"] = last_fallback_reason
                 _log_video_picker_model_fallback(
@@ -1395,6 +1517,7 @@ def watch_video_file(
                     _summary, quota = gemini_error_log_fields(err_body)
                     if quota:
                         meta["quota"] = quota
+                        remember_gemini_daily_quota(active_model, quota)
                     if last_status == 429 or "quota exceeded" in (last_err or "").lower():
                         meta["rate_limited"] = True
                         meta["status"] = last_status or 429
@@ -1559,6 +1682,9 @@ def watch_video_file(
                 meta["moments_raw"] = moments
                 if not skip_edge_reassess and source_video is not None and scratch is not None:
                     t_end = trim_end_s if trim_end_s is not None else trim_start_s + float(duration_s)
+                    single_chunk = abs(
+                        float(t_end) - float(trim_start_s) - float(duration_s)
+                    ) < 2.0 and float(trim_start_s) <= 0.5
                     moments = reassess_edge_moments(
                         moments,
                         rel_duration_s=float(duration_s),
@@ -1569,9 +1695,33 @@ def watch_video_file(
                         transcript_text=transcript_text,
                         target_clip_len_s=target_clip_len_s,
                         chunk_label=chunk_label,
+                        is_single_chunk=single_chunk,
                     )
                 before_final_dedupe = len(moments)
                 moments = dedupe_overlapping_video_picker_moments(moments, stage="dedupe_reassess")
+                min_need = int(meta.get("min_moments") or min_moments_for_video(int(duration_s)))
+                if len(moments) < min_need and sections_moment_retries >= 0:
+                    gap = _uncovered_section_labels(meta.get("sections") or [], moments, float(duration_s))
+                    if gap:
+                        sections_moment_retries = -1
+                        decision_log(
+                            "video_picker",
+                            "retry",
+                            model=active_model,
+                            chunk=chunk_label,
+                            retry_reason="shortfall_vs_min_moments",
+                            have=len(moments),
+                            need=min_need,
+                            uncovered=gap[:6],
+                        )
+                        user_text = (
+                            user_text_base
+                            + f"\n\nRETRY: You returned {len(moments)} moments but need at least {min_need}. "
+                            f"Add strong moments covering these uncovered sections (do not duplicate existing beats): "
+                            + "; ".join(gap[:8])
+                        )
+                        parsed_ok = None
+                        continue
                 meta["moments_deduped"] = {
                     "before": moments_before_dedupe,
                     "after": len(moments),

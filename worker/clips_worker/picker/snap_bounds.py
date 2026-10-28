@@ -232,7 +232,6 @@ def _apply_visual_boundary_anchors(
                     else:
                         end_ms = min(range_end_ms, int(words[we]["e"] * 1000))
             end_ms = max(end_ms, min(range_end_ms, payoff_i))
-            end_ms = min(end_ms, target_end)
         if end_ms <= start_ms:
             return before_start, before_end
     except Exception:

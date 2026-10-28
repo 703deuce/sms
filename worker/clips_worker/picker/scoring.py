@@ -96,6 +96,7 @@ def score_clip(
     length_min_s: float | None = None,
     length_max_s: float | None = None,
     skip_length_penalty: bool = False,
+    visual_payoff_moment: bool = False,
 ) -> dict[str, Any]:
     g = global_config()
     G = genre_meta(genre)
@@ -105,15 +106,20 @@ def score_clip(
 
     if llm_reject:
         return {"reject": True, "reject_reason": "llm_reject"}
-    if scores["self_contained"] < sc_min:
+    if scores["self_contained"] < sc_min and not visual_payoff_moment:
         return {"reject": True, "reject_reason": "self_contained below gate"}
-    if scores["payoff"] < pay_min and not teaser:
+    if scores["payoff"] < pay_min and not teaser and not visual_payoff_moment:
         return {"reject": True, "reject_reason": "payoff below gate"}
-    if scores["payoff"] < 4 and not teaser:
+    if scores["payoff"] < 4 and not teaser and not visual_payoff_moment:
         return {"reject": True, "reject_reason": "payoff below global gate"}
 
     last = sents[-1]
-    if not relax_ending and last["pause_after"] < 0.2 and last["text"].rstrip()[-1:] not in ".?!":
+    if (
+        not relax_ending
+        and not visual_payoff_moment
+        and last["pause_after"] < 0.2
+        and last["text"].rstrip()[-1:] not in ".?!"
+    ):
         return {"reject": True, "reject_reason": "ends mid-thought"}
 
     f, xt, dur = features(sents, payoff_id)

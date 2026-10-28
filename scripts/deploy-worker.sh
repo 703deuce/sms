@@ -117,6 +117,8 @@ echo "[deploy-worker] deploy gate (compile + import + dry poll)"
 docker build -f worker/Dockerfile --build-arg GIT_COMMIT="${GIT_COMMIT}" -t clips-worker:gate .
 docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -m compileall -q /app/clips_worker
 docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -c 'import clips_worker.main'
+docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 scripts/run_worker_lint.py
+docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 scripts/deploy_smoke.py
 docker run --rm --env-file "\${REMOTE_ENV}" --network coolify clips-worker:gate python3 -c '
 import os, psycopg2
 from clips_worker.job_contract import dry_poll_iteration

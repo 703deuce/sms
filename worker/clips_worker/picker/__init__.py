@@ -231,6 +231,7 @@ def pick_talking_clips(
                     range_end_ms=range_end_ms,
                     genre=picker_genre,
                     max_window_ms=length_policy.max_ms,
+                    video_picker_ran=bool(visual_moments),
                 )
                 gap_moments = propose_silence_gap_moments(
                     sentences,
@@ -251,15 +252,10 @@ def pick_talking_clips(
             if drain_requested():
                 raise WorkerDrainExit("picker_pass1_checkpointed")
         if not moments:
-            moments = [
-                {
-                    "start_sentence": 0,
-                    "end_sentence": min(len(sentences) - 1, max(3, len(sentences) // 2)),
-                    "why": "fallback_full_span",
-                    "archetype": "story",
-                }
-            ]
-            picker_info("pass1_fallback_span", end_sentence=moments[0]["end_sentence"])
+            from clips_worker.picker.picker_errors import log_picker_error
+
+            log_picker_error("openai", "pass1 returned no moments", None)
+            raise RuntimeError("pass1 returned no moments")
 
         source_duration_s = source_ms / 1000.0
         if on_headstart_picks and content_mode not in ("captions",):
@@ -345,57 +341,8 @@ def pick_talking_clips(
         )
         if picks:
             picker_info("finalize_relaxed_duration", count=len(picks))
-    if not picks and sentences:
-        span_fallback = [
-            {
-                "start_sentence": 0,
-                "end_sentence": len(sentences) - 1,
-                "title": "Highlight",
-                "hook": "",
-                "reason": "Short-source span fallback",
-                "archetype": "story",
-                "final": 6.0,
-                "score": 60,
-                "low_confidence": True,
-            }
-        ]
-        picks = finalize_picks(
-            span_fallback,
-            sentences,
-            sig_by,
-            range_words,
-            range_start_ms,
-            range_end_ms,
-            picker_genre,
-            relax_duration=True,
-            visual_moments=visual_moments or None,
-            length_policy=length_policy,
-            source_duration_ms=source_ms,
-            settings=settings,
-        )
-        if picks:
-            picker_info("span_fallback_picks", count=len(picks))
 
     picker_info("after_finalize", count=len(picks))
-
-    if not picks and source_ms <= SHORT_SOURCE_MAX_MS and sentences:
-        s0 = max(range_start_ms, int(sentences[0].start_ms))
-        e0 = min(range_end_ms, int(sentences[-1].end_ms))
-        if e0 - s0 >= 800:
-            picks = [
-                {
-                    "start_ms": s0,
-                    "end_ms": e0,
-                    "title": "Highlight",
-                    "hook": "",
-                    "reason": "short_source_emergency",
-                    "archetype": "story",
-                    "score": 55,
-                    "low_confidence": True,
-                    "scores": {"hook": "C", "flow": "C", "value": "C", "trend": "C"},
-                }
-            ]
-            picker_info("short_source_emergency_pick", start_ms=s0, end_ms=e0)
 
     if not picks:
         msg = "No complete, self-contained moments found in this segment."
