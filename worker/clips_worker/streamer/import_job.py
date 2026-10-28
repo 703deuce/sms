@@ -98,6 +98,19 @@ def _rolling_import_mode(vod: dict) -> bool:
     return mode == "rolling" and str(vod.get("platform") or "").lower() == "twitch"
 
 
+def _allow_twitch_growing_vod(vod: dict) -> bool:
+    """In-progress Twitch archive VOD: rolling mode, or a bounded trim range (latest N minutes)."""
+    if _rolling_import_mode(vod):
+        return True
+    if str(vod.get("platform") or "").lower() != "twitch":
+        return False
+    start = int(vod.get("rangeStartMs") or 0)
+    end = vod.get("rangeEndMs")
+    if end is None:
+        return False
+    return int(end) > start
+
+
 def _has_pending_stream_import(conn, project_id: str, vod_id: str) -> bool:
     with conn.cursor() as cur:
         cur.execute(
@@ -279,7 +292,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 analyze_id = f"job_{uuid.uuid4().hex}"
                 with conn.cursor() as cur:
                     cur.execute(
-                        'UPDATE stream_vods SET durationMs=%s, state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
+                        'UPDATE stream_vods SET "durationMs"=%s, state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
                         (duration_ms, json.dumps(state), vod_id),
                     )
                     cur.execute(
@@ -305,7 +318,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             job["id"],
             {"projectStatus": "PREPARING", "stage": "Downloading", "progress": 5, "jobStatus": "RUNNING"},
         )
-        allow_growing = _rolling_import_mode(vod)
+        allow_growing = _allow_twitch_growing_vod(vod)
         rolling_finalize = bool(payload.get("rollingFinalize"))
         meta_raw = metadata(url, allow_twitch_growing_vod=allow_growing)
         meta = parse_metadata(meta_raw)
@@ -402,7 +415,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                     cur.execute(
                         """
                         UPDATE stream_vods
-                        SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
+                        SET title=%s, category=%s, "durationMs"=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
                         WHERE id=%s
                         """,
                         (
@@ -447,7 +460,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
                 cur.execute(
                     """
                     UPDATE stream_vods
-                    SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
+                    SET title=%s, category=%s, "durationMs"=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
                     WHERE id=%s
                     """,
                     (
@@ -549,7 +562,7 @@ def run_stream_import_job(conn, job: dict, post_progress) -> None:
             )
             cur.execute(
                 """
-                UPDATE stream_vods SET title=%s, category=%s, durationMs=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
+                UPDATE stream_vods SET title=%s, category=%s, "durationMs"=%s, chapters=%s::jsonb, state=%s::jsonb, "updatedAt"=NOW()
                 WHERE id=%s
                 """,
                 (
