@@ -9,8 +9,32 @@ import requests
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
-# Stable default for clipper text/vision/rank/video-watch (free-tier friendly).
+# Stable default for clipper text/vision/rank (thumbnails, LLM rank).
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+# Video-watch default (mixed_4min bake-off: prefer 3.8 Flash when quality ties).
+DEFAULT_VIDEO_PICKER_MODEL = "gemini-3.8-flash"
+
+# Paid list prices (USD per 1M tokens) for cost logging — see ai.google.dev/pricing.
+GEMINI_USD_PER_1M_TOKENS: dict[str, tuple[float, float]] = {
+    "gemini-2.5-flash": (0.10, 0.40),
+    "gemini-3.8-flash": (0.75, 3.75),  # intro through 2026-12-31; then 1.50 / 7.50
+    "gemini-3.5-flash-lite": (0.30, 2.50),
+}
+
+
+def gemini_token_pricing_usd(model: str) -> tuple[float, float]:
+    """Return (input_usd_per_1m, output_usd_per_1m) for a model id."""
+    low = (model or "").lower()
+    for key, prices in GEMINI_USD_PER_1M_TOKENS.items():
+        if key in low or low in key:
+            return prices
+    try:
+        in_per_m = float(os.environ.get("VIDEO_PICKER_USD_PER_1M_INPUT", "0.10"))
+        out_per_m = float(os.environ.get("VIDEO_PICKER_USD_PER_1M_OUTPUT", "0.40"))
+    except ValueError:
+        in_per_m, out_per_m = 0.10, 0.40
+    return in_per_m, out_per_m
 
 _GEMINI_MODEL_BLOCKLIST = ("preview", "omni", "tts", "image", "imagen", "experimental", "-exp")
 
@@ -69,7 +93,7 @@ def discover_video_picker_model() -> str:
     """Gemini video-watch for regular/stream picker."""
     return resolve_gemini_model(
         env_var="VIDEO_PICKER_MODEL",
-        default=DEFAULT_GEMINI_MODEL,
+        default=DEFAULT_VIDEO_PICKER_MODEL,
     )
 
 

@@ -11,7 +11,12 @@ from typing import Any
 
 import requests
 
-from clips_worker.gemini_vision import GEMINI_BASE, _key, discover_video_picker_model
+from clips_worker.gemini_vision import (
+    GEMINI_BASE,
+    _key,
+    discover_video_picker_model,
+    gemini_token_pricing_usd,
+)
 from clips_worker.stage_log import stage_begin, stage_end
 from clips_worker.video_picker_prompt import (
     VISUAL_WATCH_PASS1_HINT,
@@ -136,13 +141,15 @@ def video_picker_stream_overlap_s() -> float:
     return max(30.0, min(60.0, v))
 
 
-def estimate_gemini_usd(prompt_tokens: int, output_tokens: int) -> float:
-    try:
-        in_per_m = float(os.environ.get("VIDEO_PICKER_USD_PER_1M_INPUT", "0.10"))
-        out_per_m = float(os.environ.get("VIDEO_PICKER_USD_PER_1M_OUTPUT", "0.40"))
-    except ValueError:
-        in_per_m, out_per_m = 0.10, 0.40
+def estimate_gemini_usd(prompt_tokens: int, output_tokens: int, model: str = "") -> float:
+    in_per_m, out_per_m = gemini_token_pricing_usd(model)
     return (prompt_tokens / 1_000_000) * in_per_m + (output_tokens / 1_000_000) * out_per_m
+
+
+def _gemini_omits_legacy_sampling(model: str) -> bool:
+    """Gemini 3+ generateContent rejects legacy temperature/top_p on some models."""
+    m = (model or "").lower()
+    return m.startswith("gemini-3.") or m.startswith("gemini-4.")
 
 
 def make_watch_proxy(
@@ -494,6 +501,7 @@ def _gemini_watch_payload(
     fps: float | None = None,
     media_resolution: str | None = None,
     part_order: str | None = None,
+    model: str = "",
 ) -> dict[str, Any]:
     raw_bytes = video_path.read_bytes()
     if len(raw_bytes) > 18 * 1024 * 1024:
@@ -509,15 +517,20 @@ def _gemini_watch_payload(
     text_part = {"text": user_text}
     order = part_order or video_picker_user_part_order()
     user_parts = [text_part, part] if order == "transcript_first" else [part, text_part]
+    gen_cfg: dict[str, Any] = {
+        "responseMimeType": "application/json",
+        "responseSchema": WATCH_RESPONSE_SCHEMA,
+        "mediaResolution": media_resolution or video_picker_media_resolution(),
+    }
+    if not _gemini_omits_legacy_sampling(model):
+        gen_cfg["temperature"] = 0.35
+    elif "3.8-flash" in (model or "").lower():
+        # Faster/cheaper watch pass; medium is default on 3.8 but heavy for long video.
+        gen_cfg["thinkingConfig"] = {"thinkingLevel": "low"}
     return {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": user_parts}],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": WATCH_RESPONSE_SCHEMA,
-            "temperature": 0.35,
-            "mediaResolution": media_resolution or video_picker_media_resolution(),
-        },
+        "generationConfig": gen_cfg,
     }
 
 
@@ -681,6 +694,7 @@ def watch_video_file(
             fps=fps,
             media_resolution=meta["media_resolution"],
             part_order=meta["user_part_order"],
+            model=model,
         )
         last_err = "unknown"
         last_status: int | None = None
@@ -710,7 +724,9 @@ def watch_video_file(
                 ot = int(usage.get("candidatesTokenCount") or 0)
                 meta["prompt_tokens"] = pt
                 meta["output_tokens"] = ot
-                meta["est_usd"] = round(estimate_gemini_usd(pt, ot), 6)
+                in_p, out_p = gemini_token_pricing_usd(model)
+                meta["pricing_usd_per_1m"] = {"input": in_p, "output": out_p}
+                meta["est_usd"] = round(estimate_gemini_usd(pt, ot, model), 6)
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 parsed = json.loads(text)
                 meta["sections"] = list(parsed.get("sections") or [])[:24]
