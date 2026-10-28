@@ -333,6 +333,7 @@ def pick_talking_clips(
             relax_duration=True,
             visual_moments=visual_moments or None,
             length_policy=length_policy,
+            source_duration_ms=source_ms,
         )
         if picks:
             picker_info("finalize_relaxed_duration", count=len(picks))

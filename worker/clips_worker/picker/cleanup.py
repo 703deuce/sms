@@ -113,27 +113,14 @@ def finalize_picks(
         picks.append(pick)
 
     # select_clips runs after snap_bounds; includes R10 near-duplicate dedupe on final ms spans
-    selected = select_clips(
-        picks,
-        span_ms,
-        source_duration_ms=source_duration_ms or span_ms,
-    )
+    duration_ms = int(source_duration_ms or span_ms)
+    selected = select_clips(picks, duration_ms)
     if not selected and short_pool:
-        selected = select_clips(
-            short_pool,
-            span_ms,
-            force_best=True,
-            source_duration_ms=source_duration_ms or span_ms,
-        )
+        selected = select_clips(short_pool, duration_ms, force_best=True)
         if selected:
             picker_info("selection_short_pool_fallback", count=len(selected))
     if not selected and picks:
-        selected = select_clips(
-            picks,
-            span_ms,
-            force_best=True,
-            source_duration_ms=source_duration_ms or span_ms,
-        )
+        selected = select_clips(picks, duration_ms, force_best=True)
         if selected:
             picker_info("selection_force_best_fallback", count=len(selected))
     picker_info(
