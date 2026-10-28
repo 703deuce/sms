@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adaptive Gemini 3.8 video-picker replay on mixed_4min (no edge reassess, no render)."""
+"""Gemini 3.8 video-picker replay on mixed_4min (labeled frames, no edge reassess)."""
 from __future__ import annotations
 
 import json
@@ -9,8 +9,6 @@ import time
 import tempfile
 from pathlib import Path
 
-# PYTHONPATH=/app python3 scripts/replay_video_picker_benchmark.py
-
 PROJECT_ID = os.environ.get("BENCH_PROJECT_ID", "proj_3edeaf9309b74bbfa8ce5313b0e346c3")
 UPLOAD_KEY = os.environ.get(
     "BENCH_SOURCE_KEY",
@@ -19,15 +17,22 @@ UPLOAD_KEY = os.environ.get(
 
 VIDEO_PICKER_MODEL = "gemini-3.8-flash"
 
-# Current prod defaults (cheapest).
 CURRENT_SETTINGS: dict = {}
 
-# Only if current misses apex or meow (cheapest → pricier).
 ESCALATIONS: list[tuple[str, dict]] = [
     ("medium_res", {"VIDEO_PICKER_MEDIA_RES": "MEDIA_RESOLUTION_MEDIUM"}),
     ("fps_1_0", {"VIDEO_PICKER_FPS": "1.0"}),
     ("transcript_after_video", {"VIDEO_PICKER_USER_PART_ORDER": "video_first"}),
 ]
+
+# Rick truth (seconds)
+TRUTH = {
+    "talk_pre": (0.0, 80.4),
+    "apex_gameplay": (80.4, 170.4),
+    "talk_meow": (170.4, 226.0),
+    "champion_banner": 168.0,
+    "firefight": (118.0, 145.0),
+}
 
 
 def _span_overlaps(lo: float, hi: float, a: float, b: float) -> bool:
@@ -69,8 +74,6 @@ def moment_rows(moments: list[dict]) -> list[dict]:
                 "peak_s": m.get("peak_s"),
                 "category": m.get("category"),
                 "score": m.get("score"),
-                "confidence": m.get("confidence"),
-                "touches_edge": m.get("touches_edge"),
                 "what": (m.get("what_happened") or "")[:120],
             }
         )
@@ -118,19 +121,14 @@ def _quota_or_429(row: dict) -> bool:
     if row.get("rate_limited") or row.get("status") == 429:
         return True
     err = (row.get("error") or "").lower()
-    return "429" in err or "quota exceeded" in err or "rate limit" in err or "rate-limit" in err
+    return "429" in err or "quota exceeded" in err
 
 
-def _loud_rate_limit(row: dict) -> None:
-    if not _quota_or_429(row):
-        return
-    print(
-        f"\n[bench] *** GEMINI 429 / QUOTA on {VIDEO_PICKER_MODEL} — "
-        f"NO model fallback (Rick); fix billing or retry later ***\n"
-        f"error={row.get('error')}\n",
-        flush=True,
-    )
-    sys.exit(2)
+def _is_503(row: dict) -> bool:
+    if row.get("status") == 503:
+        return True
+    err = (row.get("error") or "").lower()
+    return "503" in err or "high demand" in err
 
 
 def run_variant(
@@ -147,11 +145,9 @@ def run_variant(
     proxy = scratch / "watch.mp4"
     make_watch_proxy(shared_src, proxy, 0.0, float(duration_s))
 
-    patch = {
-        **env_patch,
-        "VIDEO_PICKER_MODEL": VIDEO_PICKER_MODEL,
-        "VIDEO_PICKER_FALLBACK_MODEL": "",
-    }
+    patch = {**env_patch, "VIDEO_PICKER_MODEL": VIDEO_PICKER_MODEL}
+    if os.environ.get("BENCH_NO_FALLBACK", "1").strip().lower() in ("1", "true", "yes"):
+        patch["VIDEO_PICKER_FALLBACK_MODEL"] = ""
     saved = {k: os.environ.get(k) for k in patch}
     os.environ.update({k: str(v) for k, v in patch.items()})
     try:
@@ -177,10 +173,12 @@ def run_variant(
     cov = score_coverage(moments, float(duration_s))
     status = meta.get("status")
     err = meta.get("error")
-    rate_limited = bool(meta.get("rate_limited")) or status == 429 or (err and "429" in str(err))
     return {
         "variant": name,
-        "model": meta.get("model") or VIDEO_PICKER_MODEL,
+        "model_requested": meta.get("model_requested"),
+        "model_used": meta.get("model_used") or meta.get("model"),
+        "model_fallback": meta.get("model_fallback"),
+        "input_mode": meta.get("input_mode"),
         "fps": meta.get("fps"),
         "media_resolution": meta.get("media_resolution"),
         "user_part_order": meta.get("user_part_order"),
@@ -193,70 +191,90 @@ def run_variant(
         "coverage": cov,
         "ok": meta.get("ok"),
         "status": status,
-        "rate_limited": rate_limited,
+        "rate_limited": _quota_or_429({"error": err, "status": status}),
         "error": err,
         "time_invalid": meta.get("time_invalid"),
     }
 
 
+def run_with_503_retries(name: str, patch: dict, **kwargs) -> dict:
+    wait_s = float(os.environ.get("BENCH_503_WAIT_S", "120"))
+    max_tries = int(os.environ.get("BENCH_503_TRIES", "4"))
+    last: dict = {}
+    for attempt in range(max_tries):
+        if attempt:
+            print(f"[bench] 503/wait retry {attempt + 1}/{max_tries} after {wait_s}s", flush=True)
+            time.sleep(wait_s)
+        last = run_variant(name, patch, **kwargs)
+        if last.get("ok"):
+            return last
+        if _quota_or_429(last):
+            print(
+                f"\n[bench] *** GEMINI 429/QUOTA on {VIDEO_PICKER_MODEL} — abort (no lite in bench) ***\n",
+                flush=True,
+            )
+            sys.exit(2)
+        if last.get("model_fallback"):
+            print("[bench] ERROR: lite fallback ran during bench (BENCH_NO_FALLBACK=1)", flush=True)
+            sys.exit(3)
+        if not _is_503(last):
+            break
+    return last
+
+
 def main() -> None:
-    sleep_s = float(os.environ.get("BENCH_SLEEP_S", "20"))
+    sleep_s = float(os.environ.get("BENCH_SLEEP_S", "18"))
+    only = (os.environ.get("BENCH_ONLY") or "").strip()
     duration_s = 226
     root = Path(tempfile.mkdtemp(prefix="vp_bench_shared_"))
     shared_src = _shared_download(root)
     transcript = _load_transcript(float(duration_s))
     print(
-        f"[bench] model={VIDEO_PICKER_MODEL} source={shared_src} transcript_chars={len(transcript)}",
+        f"[bench] model={VIDEO_PICKER_MODEL} labeled_frames=true truth={json.dumps(TRUTH)}",
         flush=True,
     )
 
     results: list[dict] = []
-    plan: list[tuple[str, dict]] = [("current_settings", CURRENT_SETTINGS)]
 
     def _run(name: str, patch: dict) -> dict:
         print(f"[bench] === {name} ===", flush=True)
         try:
-            row = run_variant(name, patch, shared_src=shared_src, transcript=transcript, duration_s=duration_s)
+            row = run_with_503_retries(
+                name,
+                patch,
+                shared_src=shared_src,
+                transcript=transcript,
+                duration_s=duration_s,
+            )
         except Exception as exc:
+            msg = str(exc)[:400]
             row = {
                 "variant": name,
                 "model": VIDEO_PICKER_MODEL,
                 "ok": False,
-                "error": str(exc)[:400],
-                "rate_limited": "429" in str(exc),
+                "error": msg,
+                "rate_limited": _quota_or_429({"error": msg}),
             }
         results.append(row)
         print(json.dumps(row, indent=2), flush=True)
-        _loud_rate_limit(row)
         return row
 
-    first = _run(plan[0][0], plan[0][1])
-    winner: dict | None = first if first.get("ok") and coverage_ok(first.get("coverage") or {}) else None
-
-    if winner is None and first.get("ok"):
-        for name, patch in ESCALATIONS:
-            if sleep_s > 0:
-                time.sleep(sleep_s)
-            row = _run(name, patch)
-            if row.get("ok") and coverage_ok(row.get("coverage") or {}):
-                winner = row
-                break
-
-    if winner is None and results:
-        ok_runs = [r for r in results if r.get("ok")]
-        if ok_runs:
-            winner = min(ok_runs, key=lambda r: float(r.get("est_usd") or 999))
-
-    summary = {
-        "VIDEO_PICKER_MODEL": VIDEO_PICKER_MODEL,
-        "winning_variant": (winner or {}).get("variant"),
-        "coverage": (winner or {}).get("coverage"),
-        "est_usd": (winner or {}).get("est_usd"),
-    }
-    print(f"[bench] summary {json.dumps(summary)}", flush=True)
+    if only in ("38_a_baseline", "a_baseline", "current_settings"):
+        _run("38_a_baseline", CURRENT_SETTINGS)
+    else:
+        first = _run("current_settings", CURRENT_SETTINGS)
+        winner = first if first.get("ok") and coverage_ok(first.get("coverage") or {}) else None
+        if winner is None and first.get("ok"):
+            for ename, patch in ESCALATIONS:
+                if sleep_s > 0:
+                    time.sleep(sleep_s)
+                row = _run(ename, patch)
+                if row.get("ok") and coverage_ok(row.get("coverage") or {}):
+                    winner = row
+                    break
 
     out = Path(os.environ.get("BENCH_OUT", "/tmp/video_picker_benchmark_mixed_4min.json"))
-    out.write_text(json.dumps({"summary": summary, "results": results}, indent=2), encoding="utf-8")
+    out.write_text(json.dumps({"truth": TRUTH, "results": results}, indent=2), encoding="utf-8")
     print(f"[bench] wrote {out}", flush=True)
 
 

@@ -120,8 +120,17 @@ def video_picker_burn_timecode() -> bool:
 
 
 def video_picker_fallback_model() -> str:
-    """Optional override only — no default fallback (Rick: stay on VIDEO_PICKER_MODEL)."""
-    return (os.environ.get("VIDEO_PICKER_FALLBACK_MODEL") or "").strip()
+    from clips_worker.gemini_vision import DEFAULT_VIDEO_PICKER_FALLBACK_MODEL
+
+    raw = os.environ.get("VIDEO_PICKER_FALLBACK_MODEL")
+    if raw is not None and str(raw).strip().lower() in ("", "0", "false", "none", "off"):
+        return ""
+    return (raw or DEFAULT_VIDEO_PICKER_FALLBACK_MODEL).strip()
+
+
+def video_picker_labeled_frames() -> bool:
+    raw = (os.environ.get("VIDEO_PICKER_LABELED_FRAMES") or "true").strip().lower()
+    return raw not in ("0", "false", "no", "off")
 
 
 def video_picker_keep_audio() -> bool:
@@ -599,6 +608,130 @@ def _log_min_moments_shortfall(duration_s: int, count: int, chunk_label: str) ->
         )
 
 
+def _extract_watch_audio_b64(video_path: Path, scratch: Path) -> tuple[str, str]:
+    """Return (mime_type, base64) for audio muxed from the watch proxy."""
+    out = scratch / "watch_audio.m4a"
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video_path),
+            "-vn",
+            "-acodec",
+            "copy",
+            str(out),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    raw = out.read_bytes()
+    if len(raw) < 64:
+        wav = scratch / "watch_audio.wav"
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(video_path),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                str(wav),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        raw = wav.read_bytes()
+        return "audio/wav", base64.b64encode(raw).decode("ascii")
+    return "audio/mp4", base64.b64encode(raw).decode("ascii")
+
+
+def _extract_labeled_frames(
+    video_path: Path,
+    scratch: Path,
+    *,
+    duration_s: float,
+    fps: float,
+) -> list[tuple[float, bytes]]:
+    out_dir = scratch / "vp_frames"
+    if out_dir.is_dir():
+        for old in out_dir.glob("f_*.jpg"):
+            old.unlink(missing_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pattern = str(out_dir / "f_%05d.jpg")
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video_path),
+            "-vf",
+            f"fps={fps}",
+            "-q:v",
+            "8",
+            pattern,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    frames: list[tuple[float, bytes]] = []
+    dur = max(1.0, float(duration_s))
+    for i, path in enumerate(sorted(out_dir.glob("f_*.jpg"))):
+        t = round(i / fps, 3)
+        if t > dur + (1.0 / fps):
+            break
+        frames.append((t, path.read_bytes()))
+    return frames
+
+
+def _labeled_frame_user_parts(
+    video_path: Path,
+    scratch: Path,
+    *,
+    duration_s: int,
+    user_text: str,
+    fps: float,
+    part_order: str,
+) -> list[dict[str, Any]]:
+    frames = _extract_labeled_frames(video_path, scratch, duration_s=float(duration_s), fps=fps)
+    if not frames:
+        raise RuntimeError("video_picker labeled_frames: no frames extracted")
+    audio_mime, audio_b64 = _extract_watch_audio_b64(video_path, scratch)
+    frame_parts: list[dict[str, Any]] = [
+        {
+            "text": (
+                f"Visual timeline: {len(frames)} frames at {fps} fps (LOW). "
+                "Each [t=…] label is the exact second for the following image.\n"
+            ),
+        },
+    ]
+    for t, jpeg in frames:
+        frame_parts.append({"text": f"[t={t:.1f}s]"})
+        frame_parts.append(
+            {
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": base64.b64encode(jpeg).decode("ascii"),
+                },
+            }
+        )
+    frame_parts.append({"text": "Original audio for the same timeline (use with transcript):"})
+    frame_parts.append({"inline_data": {"mime_type": audio_mime, "data": audio_b64}})
+    text_part = {"text": user_text}
+    if part_order == "transcript_first":
+        return [text_part, *frame_parts]
+    return [*frame_parts, text_part]
+
+
 def _gemini_watch_payload(
     video_path: Path,
     duration_s: int,
@@ -609,26 +742,38 @@ def _gemini_watch_payload(
     media_resolution: str | None = None,
     part_order: str | None = None,
     model: str = "",
+    scratch: Path | None = None,
 ) -> dict[str, Any]:
-    raw_bytes = video_path.read_bytes()
-    if len(raw_bytes) > 18 * 1024 * 1024:
-        slim = video_path.parent / f"{video_path.stem}_slim.mp4"
-        make_watch_proxy(video_path, slim, 0.0, float(duration_s))
-        raw_bytes = slim.read_bytes()
-    b64 = base64.b64encode(raw_bytes).decode("ascii")
     use_fps = fps if fps is not None else video_picker_fps()
-    vmeta: dict[str, Any] = {
-        "fps": use_fps,
-        "startOffset": "0s",
-        "endOffset": f"{max(1, int(duration_s))}s",
-    }
-    part: dict[str, Any] = {
-        "inline_data": {"mime_type": "video/mp4", "data": b64},
-        "video_metadata": vmeta,
-    }
-    text_part = {"text": user_text}
     order = part_order or video_picker_user_part_order()
-    user_parts = [text_part, part] if order == "transcript_first" else [part, text_part]
+    work = scratch or video_path.parent
+    if video_picker_labeled_frames():
+        user_parts = _labeled_frame_user_parts(
+            video_path,
+            work,
+            duration_s=duration_s,
+            user_text=user_text,
+            fps=use_fps,
+            part_order=order,
+        )
+    else:
+        raw_bytes = video_path.read_bytes()
+        if len(raw_bytes) > 18 * 1024 * 1024:
+            slim = video_path.parent / f"{video_path.stem}_slim.mp4"
+            make_watch_proxy(video_path, slim, 0.0, float(duration_s))
+            raw_bytes = slim.read_bytes()
+        b64 = base64.b64encode(raw_bytes).decode("ascii")
+        vmeta: dict[str, Any] = {
+            "fps": use_fps,
+            "startOffset": "0s",
+            "endOffset": f"{max(1, int(duration_s))}s",
+        }
+        part: dict[str, Any] = {
+            "inline_data": {"mime_type": "video/mp4", "data": b64},
+            "video_metadata": vmeta,
+        }
+        text_part = {"text": user_text}
+        user_parts = [text_part, part] if order == "transcript_first" else [part, text_part]
     gen_cfg: dict[str, Any] = {
         "responseMimeType": "application/json",
         "responseSchema": WATCH_RESPONSE_SCHEMA,
@@ -785,21 +930,25 @@ def watch_video_file(
 
     try:
         model = model_override or discover_video_picker_model()
+        primary_model = model
         meta["model"] = model
+        meta["model_requested"] = primary_model
+        meta["input_mode"] = "labeled_frames" if video_picker_labeled_frames() else "video_mp4"
         fps = fps_override if fps_override is not None else video_picker_fps()
         meta["fps"] = fps
         meta["media_resolution"] = media_resolution_override or video_picker_media_resolution()
         meta["user_part_order"] = user_part_order or video_picker_user_part_order()
         meta["frames_est"] = max(1, int(duration_s * fps))
+        meta["frames_sent"] = meta["frames_est"] if video_picker_labeled_frames() else None
         meta["min_moments"] = min_moments_for_video(int(duration_s))
         system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
         user_text_base = (
-            "Use the attached video (original audio), the burned-in top-left HH:MM:SS clock, "
-            "and the timestamped transcript below together.\n\n"
+            "Use the labeled frame timeline ([t=…] before each image), original audio, "
+            "burned-in HH:MM:SS on each frame, and the timestamped transcript together.\n\n"
             f"TIMESTAMPED TRANSCRIPT:\n{transcript_text[:16000] if transcript_text else '(none)'}\n\n"
-            f"Return sections and moments JSON for this video only ({duration_s}s max; times from the on-screen clock)."
+            f"Return sections and moments JSON for this video only ({duration_s}s max; "
+            "all times must match [t=…] labels and transcript)."
         )
-        primary_model = model
         fallback_model = video_picker_fallback_model()
         meta["burn_timecode"] = video_picker_burn_timecode()
         meta["fallback_model"] = fallback_model
@@ -824,6 +973,7 @@ def watch_video_file(
                     media_resolution=meta["media_resolution"],
                     part_order=meta["user_part_order"],
                     model=active_model,
+                    scratch=scratch or video_path.parent,
                 )
                 res = None
                 for attempt, backoff_s in enumerate(_GEMINI_TRANSIENT_BACKOFF_S):
@@ -854,12 +1004,12 @@ def watch_video_file(
                         return _fail_open(last_err, last_status, None)
 
                 if res is None or not res.ok:
-                    transient_exhausted = res is not None and _gemini_transient_status(res.status_code)
+                    hard_client = res is not None and res.status_code in (400, 401, 403, 404)
                     if (
-                        active_model == primary_model
+                        not hard_client
+                        and active_model == primary_model
                         and fallback_model
                         and fallback_model != primary_model
-                        and transient_exhausted
                         and len(active_models) == 1
                     ):
                         print(
@@ -871,11 +1021,19 @@ def watch_video_file(
                     err_body = (res.text if res is not None else "") or last_err
                     summary, quota = gemini_error_log_fields(err_body)
                     last_err = summary or err_body[:300]
-                    if last_status == 429:
+                    if last_status == 429 or "quota exceeded" in last_err.lower():
                         meta["rate_limited"] = True
+                        meta["status"] = last_status or 429
                         print(
                             f"[clipper:video_picker] ERROR GEMINI_RATE_LIMIT model={active_model} "
-                            f"status=429 chunk={chunk_label} err={last_err[:200]}",
+                            f"status={last_status} chunk={chunk_label} err={last_err[:200]}",
+                            flush=True,
+                        )
+                    if active_model == fallback_model or not fallback_model:
+                        print(
+                            f"[clipper:video_picker] ERROR video_picker_failed "
+                            f"models_tried={[primary_model, fallback_model]} chunk={chunk_label} "
+                            f"status={last_status} err={last_err[:220]}",
                             flush=True,
                         )
                     if not fail_open:
@@ -951,6 +1109,8 @@ def watch_video_file(
             meta["min_moments_met"] = len(moments) >= int(meta.get("min_moments") or 0)
             meta["ok"] = True
             meta["model"] = used_model
+            meta["model_used"] = used_model
+            meta["model_fallback"] = used_model != primary_model
             stage_end(
                 "video_picker",
                 t0,
