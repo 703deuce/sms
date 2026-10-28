@@ -7,6 +7,11 @@ from clips_worker.picker.selection import select_clips
 from clips_worker.picker.snap_bounds import snap_bounds
 from clips_worker.target_clip_len import ABS_MIN_MS, ClipLengthPolicy, resolve_clip_length_policy
 
+# Hard floor: shorter clips are not publishable after snap/extend.
+SHIP_MIN_MS = 2_500
+# Try to extend setup toward this duration; do not drop pass2 rows that stay shorter.
+EXTEND_TARGET_MIN_MS = 8_000
+
 
 def _clamp_boundary_payoff_to_payoff_sentence(pick: dict, sentences) -> None:
     """Stop LLM/visual payoff hints from stretching a clip to EOF."""
@@ -74,20 +79,21 @@ def min_pick_duration_ms(
     relax: bool = False,
     length_policy: ClipLengthPolicy | None = None,
 ) -> int:
-    """Target minimum clip length; relax for short sources so at least one clip can land."""
+    """Target for extend_setup only — not a drop threshold (see SHIP_MIN_MS)."""
     span = max(0, int(range_end_ms) - int(range_start_ms))
+    if length_policy and length_policy.mode == "fixed":
+        return min(EXTEND_TARGET_MIN_MS, max(SHIP_MIN_MS, length_policy.min_ms // 2))
     if relax:
         if span < 5_000:
-            return max(1_000, span)
-        return min(8_000, max(3_000, span // 8))
+            return max(SHIP_MIN_MS, span)
+        return min(EXTEND_TARGET_MIN_MS, max(3_000, span // 8))
     if span < 30_000:
         if span < 5_000:
-            return max(1_000, span)
-        return min(15_000, max(5_000, span))
+            return max(SHIP_MIN_MS, span)
+        return min(EXTEND_TARGET_MIN_MS, max(5_000, span))
     if span <= 120_000:
-        return min(15_000, max(8_000, span // 4))
-    floor = length_policy.min_ms if length_policy else ABS_MIN_MS
-    return min(floor, max(8_000, ABS_MIN_MS))
+        return min(EXTEND_TARGET_MIN_MS, max(5_000, span // 4))
+    return EXTEND_TARGET_MIN_MS
 
 
 def finalize_picks(
@@ -115,14 +121,21 @@ def finalize_picks(
     min_ms = min_pick_duration_ms(
         range_start_ms, range_end_ms, relax=relax_duration, length_policy=length_policy
     )
-    picks = []
-    short_pool: list[dict] = []
-    dropped_short = 0
+    picks: list[dict] = []
     dropped_bounds = 0
+    dropped_below_ship_min = 0
     for row in scored:
         ss, es = row["start_sentence"], row["end_sentence"]
         if ss < 0 or es >= len(sentences) or ss > es:
             dropped_bounds += 1
+            picker_info(
+                "finalize_drop",
+                reason="invalid_sentence_bounds",
+                title=str(row.get("title", ""))[:80],
+                start_sentence=ss,
+                end_sentence=es,
+                score=row.get("final", row.get("score")),
+            )
             continue
         pick_row = {**row}
         max_ms = int(
@@ -172,31 +185,32 @@ def finalize_picks(
                 min_ms,
             )
             dur = pick["end_ms"] - pick["start_ms"]
-        if dur < min_ms:
-            dropped_short += 1
-            if dur >= 2_500:
-                short_pool.append(pick)
+        if dur < SHIP_MIN_MS:
+            dropped_below_ship_min += 1
+            picker_info(
+                "finalize_drop",
+                reason="below_ship_min_ms",
+                title=str(pick.get("title", ""))[:80],
+                start_ms=int(pick["start_ms"]),
+                end_ms=int(pick["end_ms"]),
+                duration_ms=dur,
+                ship_min_ms=SHIP_MIN_MS,
+                score=pick.get("final", pick.get("score")),
+            )
             continue
         picks.append(pick)
 
-    # select_clips runs after snap_bounds; includes R10 near-duplicate dedupe on final ms spans
     duration_ms = int(source_duration_ms or span_ms)
     selected = select_clips(picks, duration_ms)
-    if not selected and short_pool:
-        selected = select_clips(short_pool, duration_ms, force_best=True)
-        if selected:
-            picker_info("selection_short_pool_fallback", count=len(selected))
-    if not selected and picks:
-        selected = select_clips(picks, duration_ms, force_best=True)
-        if selected:
-            picker_info("selection_force_best_fallback", count=len(selected))
     picker_info(
-        "selection",
+        "finalize_done",
+        pass2_in=len(scored),
         candidates=len(picks),
         selected=len(selected),
-        dropped_short=dropped_short,
         dropped_bounds=dropped_bounds,
+        dropped_below_ship_min=dropped_below_ship_min,
         relax_duration=relax_duration,
-        min_ms=min_ms,
+        extend_target_ms=min_ms,
+        ship_min_ms=SHIP_MIN_MS,
     )
     return selected
