@@ -1,5 +1,5 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { keepSegments, remapTime } from '@/lib/clips/edits'
+import { keepSegments, outputDurationMs, remapTime } from '@/lib/clips/edits'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 export type CropTransform = { scale: number; translateX: number; translateY: number }
@@ -18,14 +18,13 @@ export function applyPlaybackTime(
     if (sourceMs >= s && sourceMs < e) return { sourceMs: e, outputMs: remapTime(e, keepSegments(trimIn, trimOut, edits.cutRanges)) ?? 0, atEnd: false }
   }
   if (sourceMs < trimIn) return { sourceMs: trimIn, outputMs: 0, atEnd: false }
-  if (sourceMs >= trimOut) return { sourceMs: trimOut, outputMs: outputDurationFromEdits(edits), atEnd: true }
+  if (sourceMs >= trimOut) return { sourceMs: trimOut, outputMs: outputDurationMs(edits), atEnd: true }
   const out = remapTime(sourceMs, keepSegments(trimIn, trimOut, edits.cutRanges))
   return { sourceMs, outputMs: out ?? 0, atEnd: false }
 }
 
 export function outputDurationFromEdits(edits: ClipEditsV2): number {
-  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
-  return segs.reduce((a, [s, e]) => a + (e - s), 0)
+  return outputDurationMs(edits)
 }
 
 /** Map output timeline ms → source ms (for playhead layout edits). */

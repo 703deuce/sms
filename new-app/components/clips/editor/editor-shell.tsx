@@ -104,10 +104,6 @@ export function EditorShell({
   } | null
   projectStatus?: string | null
 }) {
-  useEffect(() => {
-    void fetch('/api/clips/gpu/render-warmup', { method: 'POST' }).catch(() => {})
-  }, [clipId])
-
   const [title, setTitle] = useState(initialTitle)
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)

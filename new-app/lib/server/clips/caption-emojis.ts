@@ -4,6 +4,7 @@ import { EMOJI_WHITELIST_SET } from '@/lib/clips/emoji-whitelist'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { getPrisma } from '@/lib/server/db'
+import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 import { getClipStorage } from '@/lib/storage'
 import { openAiJsonWithGeminiFallback } from '@/lib/server/ai/openai-json'
 
@@ -53,7 +54,7 @@ export async function suggestCaptionEmojisForClip(
   const maxPicks = Math.max(1, Math.floor(durationS / 3))
   const excerpt = inSpan
     .slice(0, 160)
-    .map((w, i) => `${w.i ?? i}:${w.w}`)
+    .map((w) => `${w.i}:${w.w}`)
     .join(' ')
     .slice(0, 4000)
 
@@ -82,9 +83,10 @@ export async function suggestCaptionEmojisForClip(
   const map: Record<string, string> = {}
   for (const p of (raw.picks || []).filter((x) => EMOJI_WHITELIST_SET.has(x.emoji)).slice(0, maxPicks)) {
     const idx = Number(p.wordIndex)
-    const byPos = words[idx]
-    const key = String(byPos?.i ?? idx)
-    map[key] = p.emoji
+    if (!Number.isFinite(idx)) continue
+    const match = inSpan.find((w) => w.i === idx)
+    if (!match) continue
+    map[String(idx)] = p.emoji
   }
   return map
 }
@@ -106,15 +108,10 @@ export async function applyProjectAutoEmojis(workspaceId: string, projectId: str
     if (edits.captions.autoEmojis && Object.keys(edits.captions.emojiByWord || {}).length) continue
     const emojiByWord = await suggestCaptionEmojisForClip(workspaceId, clip.id)
     if (!Object.keys(emojiByWord).length) continue
-    await prisma.clip.update({
-      where: { id: clip.id },
-      data: {
-        edits: {
-          ...edits,
-          captions: { ...edits.captions, autoEmojis: true, emojiByWord },
-        } as object,
-      },
-    })
+    await writeClipEditsOrThrow(clip.id, bounds, clip.editsSaveVersion, (cur) => ({
+      ...cur,
+      captions: { ...cur.captions, autoEmojis: true, emojiByWord },
+    }))
     clipsUpdated += 1
   }
   return { clipsUpdated }

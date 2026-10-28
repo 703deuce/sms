@@ -1,6 +1,7 @@
 """Preset-driven ASS caption generator (PlayRes matches output)."""
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -256,7 +257,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 )
             events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
             emo = emoji_by_word.get(str(wi)) or emoji_by_word.get(wi)
-            if emo:
+            if emo and not os.environ.get("CAPTION_EMOJI_PNG_EXPORT"):
                 cx = play_w // 2
                 y_base = {"bottom": int(play_h * 0.88), "middle": play_h // 2, "top": int(play_h * 0.12)}.get(
                     position, int(play_h * 0.88)
