@@ -49,13 +49,10 @@ for e in envs:
 api("PATCH", "/envs/bulk", {"data": [{"key": k, "value": v, "is_preview": False} for k, v in keys.items()]})
 print("coolify_streamer_autopull_ok")
 
-if os.path.exists(envfile):
-    if os.access(envfile, os.R_OK):
-        worker_text = Path(envfile).read_text()
-    else:
-        worker_text = subprocess.check_output(["sudo", "cat", envfile], text=True)
-else:
-    worker_text = ""
+try:
+    worker_text = subprocess.check_output(["sudo", "cat", envfile], text=True)
+except (FileNotFoundError, subprocess.CalledProcessError):
+    worker_text = Path(envfile).read_text() if os.path.exists(envfile) and os.access(envfile, os.R_OK) else ""
 lines = worker_text.splitlines()
 out: list[str] = []
 for ln in lines:
