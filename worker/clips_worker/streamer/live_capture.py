@@ -314,6 +314,7 @@ def ingest_live_capture_window(
 ) -> tuple[Path, Path, int, int]:
     """Record live HLS window as ~720p mp4 + opus sidecar (no per-clip Twitch re-download)."""
     from clips_worker.decision_log import decision_log
+    from clips_worker.streamer.ytdlp import metadata
 
     duration_s = max(3, min(int(duration_s), 60 * 60))
     decision_log(
