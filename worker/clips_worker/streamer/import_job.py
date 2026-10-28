@@ -672,14 +672,17 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
         triggeredBy=vod.get("triggeredBy"),
         allowGrowing=_allow_twitch_growing_vod(vod),
     )
-    decision_log(
-        "stream_import",
-        "range_plan",
-        vod_id=vod_id,
-        rangeStartMs=int(vod.get("rangeStartMs") or 0),
-        rangeEndMs=vod.get("rangeEndMs"),
-        section=_section_from_range(int(vod.get("rangeStartMs") or 0), vod.get("rangeEndMs")),
-    )
+
+    def _log_range_plan(v: dict) -> None:
+        decision_log(
+            "streamer",
+            "range_plan",
+            vod_id=vod_id,
+            job_id=str(job.get("id") or ""),
+            rangeStartMs=int(v.get("rangeStartMs") or 0),
+            rangeEndMs=int(v.get("rangeEndMs") or 0),
+            section=_section_from_range(int(v.get("rangeStartMs") or 0), v.get("rangeEndMs")),
+        )
 
     rolling_tick = payload.get("rollingTick") is not None
     if rolling_tick or _rolling_import_mode(vod):
@@ -800,6 +803,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
         ):
             cleanup_vod_import_dir(vod_id)
             return vod
+        _log_range_plan(vod)
         effective_ms = _effective_duration_ms(vod, dur_s)
         _enforce_paste_vod_duration_cap(vod, effective_ms)
         cap_err = check_cap(conn, workspace_id, effective_ms // 1000)
@@ -878,6 +882,15 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                     capture_path.unlink(missing_ok=True)
                 except OSError:
                     pass
+                from clips_worker.streamer.rolling_ingest import mark_rolling_pull_complete
+
+                mark_rolling_pull_complete(
+                    conn,
+                    vod_id,
+                    window_end,
+                    start_ms=window_start,
+                    job_id=str(job["id"]),
+                )
                 state = {
                     **prior_state,
                     "audioKey": audio_key,

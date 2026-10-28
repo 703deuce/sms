@@ -145,6 +145,7 @@ def transcribe_vod_chunks(
     settings: dict,
     save_state: Callable[[dict], None],
     on_chunk_progress: Callable[[int, int, dict], None] | None = None,
+    window_tag: str | None = None,
 ) -> tuple[list[list[dict] | None], list[dict], ChunkTranscribeMetrics]:
     """Transcribe all chunks with overlap; resume from state['chunks']; optional concurrency."""
     done = {int(k) for k, v in chunks_state.items() if v.get("wordsKey")}
@@ -154,23 +155,37 @@ def transcribe_vod_chunks(
     transcribe_started = time.monotonic()
     total_gpu_seconds = 0.0
 
+    def _chunk_key(idx: int, ext: str) -> str:
+        return stream_chunk_key(workspace_id, vod_id, idx, ext, window_tag=window_tag)
+
     def _load_done(idx: int) -> None:
         wkey = chunks_state[str(idx)]["wordsKey"]
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "streamer",
+            "transcribe_chunk_cache",
+            provider="cache",
+            key=wkey,
+            chunk_index=idx,
+            windowTag=window_tag,
+        )
         wp = scratch / f"words_{idx}.json"
         download_object(wkey, wp)
-        all_word_chunks[idx] = json.loads(wp.read_text())
+        words = json.loads(wp.read_text())
+        all_word_chunks[idx] = words
         chunk_path = scratch / f"chunk_{idx}.opus"
         if not chunk_path.exists():
             ffmpeg_slice_opus(audio_path, chunk_path, ranges[idx][0], ranges[idx][1])
         skey_existing = (chunks_state.get(str(idx)) or {}).get("signalsKey")
 
         def _upload_sig(p: Path, _idx=idx) -> None:
-            sk = stream_chunk_key(workspace_id, vod_id, _idx, "signals.json")
+            sk = _chunk_key(_idx, "signals.json")
             upload_file(sk, p, "application/json")
 
         payload = ensure_chunk_signals_stored(
             chunk_audio=chunk_path,
-            words=all_word_chunks[idx] or [],
+            words=words,
             vod_start_ms=ranges[idx][0],
             vod_end_ms=ranges[idx][1],
             signals_key=skey_existing,
@@ -180,11 +195,28 @@ def transcribe_vod_chunks(
         )
         chunk_signal_payloads[idx] = payload
         if not skey_existing:
-            sk = stream_chunk_key(workspace_id, vod_id, idx, "signals.json")
+            sk = _chunk_key(idx, "signals.json")
             with state_lock:
                 chunks_state[str(idx)] = {**(chunks_state.get(str(idx)) or {}), "signalsKey": sk}
+                if window_tag:
+                    windows = dict(state.get("analyzeWindows") or {})
+                    windows[window_tag] = chunks_state
+                    state["analyzeWindows"] = windows
                 state["chunks"] = chunks_state
                 save_state(state)
+        if on_chunk_progress:
+            from clips_worker.gpu.base import TranscribeRes
+
+            cached_res = TranscribeRes(
+                words=words,
+                language="en",
+                duration_s=max(0.1, (ranges[idx][1] - ranges[idx][0]) / 1000.0),
+                gpu_seconds=0.0,
+                provider="cache",
+                transcription_engine="cache",
+            )
+            done_n = len([k for k, v in chunks_state.items() if v.get("wordsKey")])
+            on_chunk_progress(done_n, len(ranges), cached_res)
 
     for idx in sorted(done):
         _load_done(idx)
@@ -194,7 +226,7 @@ def transcribe_vod_chunks(
         start_ms, end_ms = ranges[idx]
         chunk_path = scratch / f"chunk_{idx}.opus"
         ffmpeg_slice_opus(audio_path, chunk_path, start_ms, end_ms)
-        ck = stream_chunk_key(workspace_id, vod_id, idx, "opus")
+        ck = _chunk_key(idx, "opus")
         upload_file(ck, chunk_path, "audio/opus")
         req = TranscribeReq(
             audio_path=str(chunk_path),
@@ -214,7 +246,7 @@ def transcribe_vod_chunks(
         )
         if vod_transcribe_provider.startswith("modal") and getattr(res, "gpu_seconds", 0):
             total_gpu_seconds += float(res.gpu_seconds)
-        wkey = stream_chunk_key(workspace_id, vod_id, idx, "words.json")
+        wkey = _chunk_key(idx, "words.json")
         put_json(wkey, res.words)
         with state_lock:
             chunks_state[str(idx)] = {
@@ -223,14 +255,19 @@ def transcribe_vod_chunks(
                 "endMs": end_ms,
                 "attempts": prior + 1,
                 "done": True,
+                "windowTag": window_tag,
             }
+            if window_tag:
+                windows = dict(state.get("analyzeWindows") or {})
+                windows[window_tag] = chunks_state
+                state["analyzeWindows"] = windows
             state["chunks"] = chunks_state
             state["analyzeStartedAt"] = state.get("analyzeStartedAt") or time.time()
             save_state(state)
         all_word_chunks[idx] = res.words
 
         def _upload_sig_fresh(p: Path, _idx=idx) -> None:
-            sk = stream_chunk_key(workspace_id, vod_id, _idx, "signals.json")
+            sk = _chunk_key(_idx, "signals.json")
             upload_file(sk, p, "application/json")
 
         sig_payload = ensure_chunk_signals_stored(
@@ -244,9 +281,13 @@ def transcribe_vod_chunks(
             upload_fn=_upload_sig_fresh,
         )
         chunk_signal_payloads[idx] = sig_payload
-        sk = stream_chunk_key(workspace_id, vod_id, idx, "signals.json")
+        sk = _chunk_key(idx, "signals.json")
         with state_lock:
             chunks_state[str(idx)]["signalsKey"] = sk
+            if window_tag:
+                windows = dict(state.get("analyzeWindows") or {})
+                windows[window_tag] = chunks_state
+                state["analyzeWindows"] = windows
             state["chunks"] = chunks_state
             save_state(state)
         if on_chunk_progress:

@@ -10,7 +10,9 @@ def stream_window_audio_key(workspace_id: str, vod_id: str, window_end_ms: int) 
     return f"ws/{workspace_id}/streams/{vod_id}/windows/{int(window_end_ms)}.opus"
 
 
-def stream_chunk_key(workspace_id: str, vod_id: str, index: int, ext: str) -> str:
+def stream_chunk_key(workspace_id: str, vod_id: str, index: int, ext: str, *, window_tag: str | None = None) -> str:
+    if window_tag:
+        return f"ws/{workspace_id}/streams/{vod_id}/windows/{window_tag}/chunk_{index}.{ext}"
     return f"ws/{workspace_id}/streams/{vod_id}/chunks/{index}.{ext}"
 
 

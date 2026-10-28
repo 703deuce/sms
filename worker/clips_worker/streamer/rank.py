@@ -140,22 +140,47 @@ def rank_moments(
     settings = enrich_settings_with_clip_length(settings)
     range_end = duration_ms
     length_max_ms = resolve_clip_length_policy(settings).max_ms
-    snapped = [
-        snap_fusion_pick(
+    min_ms = resolve_clip_length_policy(settings).min_ms
+    enforced: list[FusionPick] = []
+    for p in picks:
+        snapped = snap_fusion_pick(
             p,
             words,
             range_start_ms=0,
             range_end_ms=range_end,
             length_max_ms=length_max_ms,
         )
-        for p in picks
-    ]
+        from clips_worker.streamer.min_clip_length import enforce_min_length_after_snap
+
+        kept = enforce_min_length_after_snap(
+            snapped,
+            words,
+            range_start_ms=0,
+            range_end_ms=range_end,
+            settings=settings,
+            min_ms=min_ms,
+        )
+        if kept is None:
+            from clips_worker.decision_log import decision_log
+
+            decision_log(
+                "streamer",
+                "min_length_drop",
+                start_ms=int(snapped.start_ms),
+                end_ms=int(snapped.end_ms),
+                duration_ms=int(snapped.end_ms) - int(snapped.start_ms),
+                min_ms=min_ms,
+                title=str(snapped.title or "")[:80],
+            )
+            continue
+        enforced.append(kept)
     from clips_worker.decision_log import decision_log
 
     decision_log(
-        "stream_rank",
-        "finish",
-        pick_count=len(snapped),
+        "streamer",
+        "rank_finish",
+        pick_count=len(enforced),
         duration_ms=duration_ms,
+        dropped_min_length=len(picks) - len(enforced),
     )
-    return snapped, payload
+    return enforced, payload

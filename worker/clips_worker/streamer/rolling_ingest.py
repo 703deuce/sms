@@ -443,25 +443,56 @@ def cancel_queued_rolling_import_ticks(
     return [str(r[0]) for r in rows]
 
 
-def mark_rolling_pull_complete(conn, vod_id: str, end_ms: int) -> None:
+def mark_rolling_pull_complete(
+    conn,
+    vod_id: str,
+    end_ms: int,
+    *,
+    start_ms: int | None = None,
+    job_id: str | None = None,
+) -> None:
+    from clips_worker.decision_log import decision_log
+
+    now_iso = datetime.now(timezone.utc).isoformat()
     with conn.cursor() as cur:
-        cur.execute('SELECT state FROM stream_vods WHERE id=%s', (vod_id,))
-        row = cur.fetchone()
-    if not row:
-        return
-    state = row[0] or {}
-    if isinstance(state, str):
-        state = json.loads(state)
-    rolling = dict(state.get("rolling") or {})
-    rolling["lastPulledMs"] = int(end_ms)
-    rolling["lastPullCompletedAt"] = datetime.now(timezone.utc).isoformat()
-    state = {**state, "rolling": rolling}
-    with conn.cursor() as cur:
-        cur.execute(
-            'UPDATE stream_vods SET state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
-            (json.dumps(state), vod_id),
-        )
+        if start_ms is not None:
+            cur.execute(
+                """
+                UPDATE stream_vods
+                SET state = jsonb_set(
+                      jsonb_set(COALESCE(state, '{}'::jsonb), '{rolling,lastPulledMs}', to_jsonb(%s::bigint), true),
+                      '{rolling,lastPullCompletedAt}', to_jsonb(%s::text), true
+                    ),
+                    "rangeStartMs"=%s,
+                    "rangeEndMs"=%s,
+                    "updatedAt"=NOW()
+                WHERE id=%s
+                """,
+                (int(end_ms), now_iso, int(start_ms), int(end_ms), vod_id),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE stream_vods
+                SET state = jsonb_set(
+                      jsonb_set(COALESCE(state, '{}'::jsonb), '{rolling,lastPulledMs}', to_jsonb(%s::bigint), true),
+                      '{rolling,lastPullCompletedAt}', to_jsonb(%s::text), true
+                    ),
+                    "updatedAt"=NOW()
+                WHERE id=%s
+                """,
+                (int(end_ms), now_iso, vod_id),
+            )
     conn.commit()
+    decision_log(
+        "streamer",
+        "last_pulled_ms_committed",
+        vodId=vod_id,
+        jobId=job_id,
+        lastPulledMs=int(end_ms),
+        rangeStartMs=int(start_ms) if start_ms is not None else None,
+        rangeEndMs=int(end_ms),
+    )
 
 
 def stop_rolling_session(conn, vod_id: str, *, reason: str, project_id: str | None = None) -> None:

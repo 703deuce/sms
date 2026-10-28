@@ -123,6 +123,16 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
     )
     audio_key = str(payload.get("audioKey") or state.get("audioKey") or stream_audio_key(workspace_id, vod_id))
     duration_ms = max(1, window_end_ms - window_start_ms)
+    window_only = bool(payload.get("windowOnly"))
+    window_tag: str | None = None
+    if window_only:
+        from clips_worker.streamer.analyze_window import analyze_window_tag
+
+        window_tag = analyze_window_tag(
+            range_start_ms=window_start_ms,
+            range_end_ms=window_end_ms,
+            audio_key=audio_key,
+        )
     vod = {
         **vod,
         "rangeStartMs": window_start_ms,
@@ -135,6 +145,20 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
     if cap_err:
         raise RuntimeError(cap_err)
     clear_stream_vod_error(conn, vod_id)
+
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "streamer",
+        "analyze_window",
+        vod_id=vod_id,
+        job_id=str(job.get("id") or ""),
+        rangeStartMs=window_start_ms,
+        rangeEndMs=window_end_ms,
+        audioKey=audio_key,
+        windowTag=window_tag,
+        windowOnly=window_only,
+    )
 
     SCRATCH.mkdir(parents=True, exist_ok=True)
     scratch = (SCRATCH / f"analyze_{vod_id}").resolve()
@@ -161,7 +185,12 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 f"chunkMin={chunk_min} overlapS={overlap_ms // 1000}",
                 flush=True,
             )
-            chunks_state = state.get("chunks") or {}
+            chunks_state: dict
+            if window_tag:
+                windows = state.get("analyzeWindows") if isinstance(state.get("analyzeWindows"), dict) else {}
+                chunks_state = dict(windows.get(window_tag) or {})
+            else:
+                chunks_state = dict(state.get("chunks") or {})
 
             scratch.mkdir(parents=True, exist_ok=True)
             audio_path = scratch / "audio.opus"
@@ -260,6 +289,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     settings=settings,
                     save_state=_persist_state,
                     on_chunk_progress=_on_chunk,
+                    window_tag=window_tag,
                 )
 
             words = merge_words([c for c in all_word_chunks if c], ranges)
@@ -391,6 +421,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                         job_id=str(job["id"]),
                         target_clip_len_s=settings.get("target_clip_len_s"),
                         transcript_text=vp_transcript,
+                        cache_scope=window_tag or "",
                     )
                     vp_sections = vp_agg.get("sections") if isinstance(vp_agg, dict) else None
                     if isinstance(vp_sections, list) and vp_sections:

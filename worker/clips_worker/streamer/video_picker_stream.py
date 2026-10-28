@@ -49,6 +49,7 @@ def stream_chunk_video_signals(
     job_id: str,
     target_clip_len_s: int | None = None,
     transcript_text: str = "",
+    cache_scope: str = "",
 ) -> tuple[list[float] | None, list[dict], dict[str, Any]]:
     """Returns slice-relative 1Hz video curve, flat moments (vod-relative ms), aggregate cost meta."""
     empty_meta: dict[str, Any] = {"chunks": 0, "ok_chunks": 0, "est_usd": 0.0, "vp_calls": 0}
@@ -69,7 +70,7 @@ def stream_chunk_video_signals(
 
     def _one(idx: int, start_ms: int, end_ms: int) -> tuple[int, list[dict], list[float], dict]:
         nonlocal vp_calls
-        cached = load_video_picker_cache(workspace_id, vod_id, start_ms, end_ms)
+        cached = load_video_picker_cache(workspace_id, vod_id, start_ms, end_ms, scope=cache_scope)
         if cached:
             moments = list(cached.get("moments") or [])
             curve = list(cached.get("curve") or [])
@@ -148,6 +149,7 @@ def stream_chunk_video_signals(
                 moments=moments,
                 curve=curve,
                 meta=meta,
+                scope=cache_scope,
             )
         return idx, moments, curve, meta
 

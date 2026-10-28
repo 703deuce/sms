@@ -1,13 +1,14 @@
 """Y3: live rolling forward capture, analyze lane split, clip titles, modal circuit."""
 from __future__ import annotations
 
+import json
 import time
 from unittest.mock import patch
 
 from clips_worker.streamer.clip_titles import is_placeholder_stream_clip_title, resolve_stream_clip_title
 from clips_worker.streamer.lanes import lane_types
 from clips_worker.streamer.live_capture import plan_live_capture_window_ms
-from clips_worker.streamer.modal_transcribe import (
+from clips_worker.streamer.modal_circuit_store import (
     modal_transcribe_circuit_open,
     record_modal_transcribe_timeout,
 )
@@ -36,14 +37,17 @@ def test_live_capture_plans_forward_from_last_pulled_without_min_new():
     assert plan == (180_000, 200_000)
 
 
-def test_modal_circuit_breaker_opens_for_ten_minutes():
-    import clips_worker.streamer.modal_transcribe as mt
+def test_modal_circuit_breaker_opens_for_ten_minutes(tmp_path, monkeypatch):
+    import clips_worker.streamer.modal_circuit_store as store
 
-    mt._modal_circuit_open_until = 0.0
+    path = tmp_path / "modal_transcribe_circuit.json"
+    monkeypatch.setattr(store, "_cache_path", lambda: path)
+    store._MODULE_UNTIL = 0.0
     assert not modal_transcribe_circuit_open()
     record_modal_transcribe_timeout()
     assert modal_transcribe_circuit_open()
-    mt._modal_circuit_open_until = time.time() + 0.05
+    store._MODULE_UNTIL = time.time() + 0.05
+    path.write_text(json.dumps({"open_until": time.time() + 0.05}), encoding="utf-8")
     assert modal_transcribe_circuit_open()
     time.sleep(0.06)
     assert not modal_transcribe_circuit_open()

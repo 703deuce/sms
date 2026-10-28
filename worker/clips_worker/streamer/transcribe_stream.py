@@ -11,10 +11,10 @@ from clips_worker.deepgram_transcribe import (
     deepgram_api_key,
 )
 from clips_worker.gpu.base import TranscribeReq, TranscribeRes
+from clips_worker.streamer.modal_circuit_store import modal_circuit_remaining_s, modal_transcribe_circuit_open
 from clips_worker.streamer.modal_transcribe import (
     StreamModalTranscribeError,
     estimate_modal_cost_usd,
-    modal_transcribe_circuit_open,
     transcribe_stream_modal_with_meta,
 )
 from clips_worker.transcribe_logging import (
@@ -137,7 +137,7 @@ def transcribe_stream_audio_request(
     if modal_transcribe_circuit_open():
         from clips_worker.decision_log import decision_log
 
-        decision_log("streamer", "modal_transcribe_skipped", reason="circuit_open")
+        decision_log("streamer", "modal_transcribe_skipped", reason="circuit_open", remaining_s=round(modal_circuit_remaining_s(), 1))
         if deepgram_api_key():
             return _deepgram_fallback(
                 conn,
