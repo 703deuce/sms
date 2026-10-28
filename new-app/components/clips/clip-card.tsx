@@ -26,6 +26,7 @@ import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { ClipPostCopy } from '@/components/clips/clip-post-copy'
 import { exportClipDownload } from '@/lib/clips/export-download-client'
 import { CLIP_PREVIEW_EXPORT_ASPECT } from '@/lib/clips/export-preview-reuse'
+import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { ThumbsDown, EyeOff } from 'lucide-react'
 
 export function ClipCard({
@@ -57,6 +58,10 @@ export function ClipCard({
   const people = clipPersonCount(aiMeta)
   const fallbackLabel = clipFallbackPickLabel(aiMeta, clip.reason)
   const displayTitle = clipDisplayTitle(clip)
+  const previewEdits: ClipEditsV2 | undefined =
+    isStreamer && clip.edits
+      ? normalizeEdits(clip.edits, { clipStartMs: clip.startMs, clipEndMs: clip.endMs })
+      : undefined
 
   const editorHref = `/app/clips/${projectId}/edit/${clip.id}`
 
@@ -168,7 +173,12 @@ export function ClipCard({
           </label>
         ) : null}
         {clip.previewUrl || clip.posterUrl ? (
-          <ClipCardVideo clipId={clip.id} previewUrl={clip.previewUrl} posterUrl={clip.posterUrl} />
+          <ClipCardVideo
+            clipId={clip.id}
+            previewUrl={clip.previewUrl}
+            posterUrl={clip.posterUrl}
+            previewEdits={previewEdits}
+          />
         ) : null}
         <div className="absolute left-2 top-2" title={why ?? undefined}>
           <ScoreRing score={clip.score} display={showClipperDims ? 'letter' : 'numeric'} />

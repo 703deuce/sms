@@ -42,11 +42,12 @@ export function burnSafeExportTemplate(existing?: ClipExportTemplate): ClipExpor
   }
 }
 
-/** Align edits with pipeline preview (9:16 layout, no export overlays) for grid / default download. */
+/** Align edits with pipeline preview (9:16 layout); keep exportTemplate for HTML overlay in player. */
 export function coerceEditsForPreviewExport(
   edits: ClipEditsV2,
   aiMeta: unknown,
   bounds: ClipBounds,
+  opts?: { streamer?: boolean },
 ): ClipEditsV2 {
   const base = normalizeEdits(edits, bounds)
   const d = defaultEdits(bounds)
@@ -58,16 +59,16 @@ export function coerceEditsForPreviewExport(
     (base.layout.layoutSegments?.length ?? 0) === 0
 
   let next = base
-  if (fromMeta && layoutDefault) {
-    next = mergeEditsPatch(next, { layout: { mode: fromMeta, shotOverrides: [] } }, bounds)
+  const streamer = Boolean(opts?.streamer)
+  if (layoutDefault) {
+    if (streamer && (!fromMeta || fromMeta === 'speaker_follow' || fromMeta === 'split')) {
+      next = mergeEditsPatch(next, { layout: { mode: 'fit_blur', shotOverrides: [] } }, bounds)
+    } else if (fromMeta) {
+      next = mergeEditsPatch(next, { layout: { mode: fromMeta, shotOverrides: [] } }, bounds)
+    } else if (streamer) {
+      next = mergeEditsPatch(next, { layout: { mode: 'fit_blur', shotOverrides: [] } }, bounds)
+    }
   }
-  next = mergeEditsPatch(
-    next,
-    {
-      aspectRatio: CLIP_PREVIEW_EXPORT_ASPECT,
-      exportTemplate: burnSafeExportTemplate(next.exportTemplate),
-    },
-    bounds,
-  )
+  next = mergeEditsPatch(next, { aspectRatio: CLIP_PREVIEW_EXPORT_ASPECT }, bounds)
   return normalizeEdits(next, bounds)
 }

@@ -50,10 +50,16 @@ def extend_pick_to_min_duration(
         if sig and sig.rms_z < -0.2 and dur >= min_ms:
             break
 
-    # Follow-through after payoff.
+    payoff_ms = pick.get("boundary_payoff_ms")
+    try:
+        payoff_cap = int(payoff_ms) + 2_000 if payoff_ms is not None else range_end_ms
+    except (TypeError, ValueError):
+        payoff_cap = range_end_ms
+
+    # Follow-through after payoff (do not extend past visual payoff).
     while dur < min_ms and es < len(sentences) - 1:
         trial_es = es + 1
-        trial_end = min(range_end_ms, int(sentences[trial_es].end_ms))
+        trial_end = min(range_end_ms, payoff_cap, int(sentences[trial_es].end_ms))
         trial_start = int(pick["start_ms"])
         if trial_end - trial_start > max_ms:
             break

@@ -1,21 +1,38 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { playWithSound, pauseVideo } from '@/lib/clips/video-playback'
+import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 export function ClipCardVideo({
   clipId,
   previewUrl,
   posterUrl,
+  previewEdits,
 }: {
   clipId: string
   previewUrl: string | null
   posterUrl: string | null
+  previewEdits?: ClipEditsV2
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState({ w: 0, h: 0 })
   const ref = useRef<HTMLVideoElement>(null)
+
+  useLayoutEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => {
+      const { width, height } = e.contentRect
+      setBox({ w: Math.floor(width), h: Math.floor(height) })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(true)
   const [needsUnmute, setNeedsUnmute] = useState(false)
@@ -110,7 +127,7 @@ export function ClipCardVideo({
   if (!previewUrl) return null
 
   return (
-    <div className="relative size-full">
+    <div ref={wrapRef} className="relative size-full">
       <video
         ref={ref}
         className="size-full cursor-pointer object-cover"
@@ -124,6 +141,9 @@ export function ClipCardVideo({
         onMouseEnter={() => void hoverPreview()}
         onMouseLeave={hoverLeave}
       />
+      {previewEdits ? (
+        <ExportTemplateOverlay edits={previewEdits} boxWidth={box.w} boxHeight={box.h} />
+      ) : null}
       <div
         className={
           playing || controlsRevealed

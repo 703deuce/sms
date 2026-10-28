@@ -59,6 +59,37 @@ def _duplicate_of_kept(p: dict, kept: list[dict]) -> dict | None:
     return None
 
 
+MIN_DISTINCT_SHIPPED = 6
+
+
+def top_up_selected_picks(selected: list[dict], pool: list[dict], *, min_n: int = MIN_DISTINCT_SHIPPED) -> list[dict]:
+    """After overlap dedupe, ship at least min_n distinct moments when the pool allows."""
+    if len(selected) >= min_n or len(pool) <= len(selected):
+        return selected
+    ranked = sorted(pool, key=lambda x: -_clip_score(x))
+    out = list(selected)
+    for p in ranked:
+        if len(out) >= min_n:
+            break
+        if any(
+            int(p["start_ms"]) == int(k["start_ms"]) and int(p["end_ms"]) == int(k["end_ms"]) for k in out
+        ):
+            continue
+        if _duplicate_of_kept(p, out) is not None:
+            continue
+        picker_info(
+            "selection_top_up",
+            title=str(p.get("title", ""))[:80],
+            start_ms=int(p["start_ms"]),
+            end_ms=int(p["end_ms"]),
+            score=_clip_score(p),
+            selected=len(out) + 1,
+            target=min_n,
+        )
+        out.append(p)
+    return out
+
+
 def select_clips(
     picks: list[dict],
     source_duration_ms: int,

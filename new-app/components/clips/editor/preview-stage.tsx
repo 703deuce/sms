@@ -16,6 +16,7 @@ import {
   layoutUsesLetterboxBlurPreview,
 } from '@/lib/clips/layout-preview'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
+import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
 import { applyPlaybackTime, outputDurationFromEdits } from '@/lib/clips/editor-playback'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 
@@ -366,6 +367,7 @@ export function PreviewStage({
             outputDurationSec={outputDurationFromEdits(edits) / 1000}
           />
         )}
+        <ExportTemplateOverlay edits={edits as ClipEditsV2} boxWidth={box.w} boxHeight={box.h} />
       </div>
     </div>
   )

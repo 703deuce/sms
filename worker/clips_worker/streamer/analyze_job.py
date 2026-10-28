@@ -12,7 +12,7 @@ from psycopg2.extras import RealDictCursor
 
 from clips_worker.streamer.progress import analyze_progress_payload, worker_progress_transcription_engine
 from clips_worker.heartbeat import Heartbeat
-from clips_worker.pipeline import insert_clips_batch
+from clips_worker.pipeline import insert_clips_batch, streamer_initial_clip_edits
 from clips_worker.storage import download_object, put_json, upload_file
 from clips_worker.streamer.chunking import merge_words
 from clips_worker.streamer.config import SCRATCH, stream_chat_signal_enabled
@@ -388,7 +388,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                         "posterKey": None,
                         "wordsKey": None,
                         "cropKey": None,
-                        "edits": {},
+                        "edits": streamer_initial_clip_edits(settings, vod),
                         "aiMeta": ai_meta,
                     }
                 )

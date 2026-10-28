@@ -89,6 +89,27 @@ def _iou(a0: int, a1: int, b0: int, b1: int) -> float:
     return inter / union if union > 0 else 0.0
 
 
+def _weighted_signal_score(
+    cand: dict,
+    signals: dict[str, list[float] | None],
+    weights: dict[str, float],
+) -> int:
+    """Renormalize signal weights over present channels (missing → excluded, not zero)."""
+    keys = ("audio", "transcript", "chat", "viewerClips", "video", "clipCues", "markers", "speakerChange")
+    peaks: dict[str, int] = {}
+    for key in keys:
+        peak = _peak_in_window(signals.get(key), cand["start_ms"], cand["end_ms"])
+        if peak is not None:
+            peaks[key] = peak
+    if not peaks:
+        return int(round(float(cand.get("signal_peak") or 0) * 100))
+    wsum = sum(weights.get(k, 0.0) for k in peaks)
+    if wsum <= 0:
+        return int(round(sum(peaks.values()) / len(peaks)))
+    total = sum(weights.get(k, 0.0) / wsum * v for k, v in peaks.items())
+    return int(round(total))
+
+
 def fuse_moments(
     *,
     duration_s: int,
@@ -162,8 +183,17 @@ def fuse_moments(
         llm = by_id.get(lid) or {}
         if llm.get("keep") is False:
             continue
-        signal_score = int(round(cand["signal_peak"] * 100))
+        component_scores = {
+            "audio": _peak_in_window(signals.get("audio"), cand["start_ms"], cand["end_ms"]),
+            "transcript": _peak_in_window(signals.get("transcript"), cand["start_ms"], cand["end_ms"]),
+            "chat": _peak_in_window(signals.get("chat"), cand["start_ms"], cand["end_ms"]),
+            "viewerClips": _peak_in_window(signals.get("viewerClips"), cand["start_ms"], cand["end_ms"]),
+            "video": _peak_in_window(signals.get("video"), cand["start_ms"], cand["end_ms"]),
+            "llm": None,
+        }
+        signal_score = _weighted_signal_score(cand, signals, default_w)
         llm_score = int(llm.get("score") or signal_score)
+        component_scores["llm"] = llm_score
         total = int(round((1 - llm_blend) * signal_score + llm_blend * llm_score))
         reasons = _reasons_for(cand, signals, llm)
         category = llm.get("category") or "other"
@@ -195,11 +225,7 @@ def fuse_moments(
                 score=total,
                 scores={
                     "total": total,
-                    "audio": _peak_in_window(signals.get("audio"), cand["start_ms"], cand["end_ms"]),
-                    "transcript": _peak_in_window(signals.get("transcript"), cand["start_ms"], cand["end_ms"]),
-                    "chat": _peak_in_window(signals.get("chat"), cand["start_ms"], cand["end_ms"]),
-                    "viewerClips": _peak_in_window(signals.get("viewerClips"), cand["start_ms"], cand["end_ms"]),
-                    "video": _peak_in_window(signals.get("video"), cand["start_ms"], cand["end_ms"]),
+                    **{k: v for k, v in component_scores.items() if k != "llm"},
                     "llm": llm_score,
                 },
                 ai_meta={

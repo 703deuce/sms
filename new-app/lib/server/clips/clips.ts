@@ -36,6 +36,7 @@ export async function listProjectClips(
       previewUrl: c.previewKey ? await createCachedSignedDownloadUrl(storage, c.previewKey) : null,
       posterUrl: c.posterKey ? await createCachedSignedDownloadUrl(storage, c.posterKey) : null,
       aiMeta: c.aiMeta,
+      edits: c.edits,
     })),
   )
 }

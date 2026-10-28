@@ -393,7 +393,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                         pass
                     out_mp4 = td_path / f"out_{clip_id}.mp4"
                     crop_track = td_path / f"crop_{clip_id}.json"
-                    streamer_layout = (settings.get("streamer") or {}).get("layout", "stack")
+                    streamer_layout = (settings.get("streamer") or {}).get("layout", "fit_blur")
                     ai_meta = clip.get("aiMeta") or {}
                     if isinstance(ai_meta, str):
                         ai_meta = json.loads(ai_meta)

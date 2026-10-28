@@ -232,6 +232,7 @@ def _apply_visual_boundary_anchors(
                     else:
                         end_ms = min(range_end_ms, int(words[we]["e"] * 1000))
             end_ms = max(end_ms, min(range_end_ms, payoff_i))
+            end_ms = min(end_ms, target_end)
         if end_ms <= start_ms:
             return before_start, before_end
     except Exception:
@@ -347,6 +348,19 @@ def snap_bounds(
 
     clip["start_ms"] = start_ms
     clip["end_ms"] = end_ms
+    payoff = clip.get("boundary_payoff_ms")
+    if payoff is not None:
+        cap = int(payoff) + pad_end_ms
+        if end_ms > cap + 200:
+            picker_info(
+                "payoff_tail_trim",
+                title=str(clip.get("title", ""))[:40],
+                before_end=end_ms,
+                after_end=cap,
+                payoff_ms=int(payoff),
+            )
+            end_ms = max(start_ms + 1, min(end_ms, cap))
+            clip["end_ms"] = end_ms
     picker_info(
         "snap_bounds",
         title=str(clip.get("title", ""))[:40],

@@ -4,7 +4,7 @@ from __future__ import annotations
 from clips_worker.picker.config import genre_meta, resolve_genre_key, snap_settings
 from clips_worker.picker.extend_setup import extend_pick_to_min_duration
 from clips_worker.picker.log_util import picker_info
-from clips_worker.picker.selection import select_clips
+from clips_worker.picker.selection import select_clips, top_up_selected_picks
 from clips_worker.picker.snap_bounds import snap_bounds
 from clips_worker.target_clip_len import ABS_MIN_MS, ClipLengthPolicy, resolve_clip_length_policy
 
@@ -215,6 +215,7 @@ def finalize_picks(
 
     duration_ms = int(source_duration_ms or span_ms)
     selected = select_clips(picks, duration_ms)
+    selected = top_up_selected_picks(selected, picks)
     picker_info(
         "finalize_done",
         pass2_in=len(scored),
