@@ -58,6 +58,7 @@ export function ExportDialog({
   platform,
   defaultChannelUrl,
   chatAvailable = false,
+  chatToggleHint,
 }: {
   clipId: string
   title: string
@@ -71,6 +72,7 @@ export function ExportDialog({
   platform?: 'twitch' | 'kick'
   defaultChannelUrl?: string
   chatAvailable?: boolean
+  chatToggleHint?: string
   open: boolean
   onClose: () => void
 }) {
@@ -504,6 +506,7 @@ export function ExportDialog({
             }
           }}
           chatAvailable={chatAvailable}
+          chatToggleHint={chatToggleHint}
           savedChannels={savedChannels}
           onChannelsRefresh={refreshChannels}
         />

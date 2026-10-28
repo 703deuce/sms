@@ -47,6 +47,11 @@ import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
+import {
+  vodChatOverlayEnabled,
+  vodChatToggleHint,
+  type VodChatMeta,
+} from '@/lib/streamer/vod-chat-status'
 
 function isEditableTarget(t: EventTarget | null) {
   if (!t || !(t instanceof HTMLElement)) return false
@@ -71,6 +76,8 @@ export function EditorShell({
   aiMeta,
   brollMedia: initialBrollMedia = [],
   reframeV2Enabled = false,
+  vodChat = null,
+  projectStatus = null,
 }: {
   projectId: string
   projectTitle?: string
@@ -88,6 +95,14 @@ export function EditorShell({
   aiMeta?: { brollIdeas?: string[] } | null
   brollMedia?: BrollMediaRow[]
   reframeV2Enabled?: boolean
+  vodChat?: {
+    chatSource?: string | null
+    chatMessages?: number | null
+    sourceType?: string | null
+    chatError?: string | null
+    chatMeta?: VodChatMeta | null
+  } | null
+  projectStatus?: string | null
 }) {
   useEffect(() => {
     void fetch('/api/clips/gpu/render-warmup', { method: 'POST' }).catch(() => {})
@@ -412,9 +427,19 @@ export function EditorShell({
     } | null
   )?.streamer
   const streamChannelDisplay = streamerSide?.meta?.channel ?? null
-  const streamChatAvailable = Boolean(
-    streamerSide?.chat?.available && (streamerSide?.chat?.messageCount ?? 0) > 0,
+  const vodChatResolveInput = useMemo(
+    () => ({
+      sourceType: vodChat?.sourceType,
+      chatSource: vodChat?.chatSource,
+      chatMessages: vodChat?.chatMessages,
+      chatError: vodChat?.chatError,
+      chatMeta: vodChat?.chatMeta,
+      projectStatus,
+    }),
+    [vodChat, projectStatus],
   )
+  const streamChatAvailable = vodChatOverlayEnabled(vodChatResolveInput)
+  const streamChatToggleHint = vodChatToggleHint(vodChatResolveInput)
 
   const panelBody = (
     <>
@@ -706,6 +731,7 @@ export function EditorShell({
           })()
         }
         chatAvailable={streamChatAvailable}
+        chatToggleHint={streamChatToggleHint}
         onAudioTrack={(track) => setEdits({ ...edits, audioTrack: track })}
         open={exportOpen}
         onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}

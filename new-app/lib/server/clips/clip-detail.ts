@@ -108,6 +108,24 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const brollMedia = edits.broll?.length ? await resolveBrollMedia(edits.broll) : []
   const aiMeta = (clip.aiMeta || null) as { brollIdeas?: string[] } | null
 
+  const streamVod = await prisma.streamVod.findUnique({
+    where: { projectId: project.id },
+    select: { chatSource: true, chatMessages: true, sourceType: true, state: true },
+  })
+  const vodState =
+    streamVod?.state && typeof streamVod.state === 'object' && !Array.isArray(streamVod.state)
+      ? (streamVod.state as Record<string, unknown>)
+      : null
+  const vodChatMeta =
+    vodState?.chatMeta && typeof vodState.chatMeta === 'object' && !Array.isArray(vodState.chatMeta)
+      ? (vodState.chatMeta as {
+          available?: boolean
+          messageCount?: number
+          source?: string | null
+          error?: string | null
+        })
+      : null
+
   return {
     clip: {
       id: clip.id,
@@ -131,7 +149,16 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       source: sourceKey ? await createCachedSignedDownloadUrl(storage, sourceKey) : null,
       cropTrack: cropTrack ? await createCachedSignedDownloadUrl(storage, cropTrackKey) : null,
     },
-    project: { id: project.id, title: project.title, settings: project.settings },
+    project: { id: project.id, title: project.title, settings: project.settings, status: project.status },
+    vodChat: streamVod
+      ? {
+          chatSource: streamVod.chatSource,
+          chatMessages: streamVod.chatMessages,
+          sourceType: streamVod.sourceType,
+          chatError: typeof vodState?.chatError === 'string' ? vodState.chatError : null,
+          chatMeta: vodChatMeta,
+        }
+      : null,
     capabilities: clipperCapabilities(),
     aiMeta,
     brollMedia,

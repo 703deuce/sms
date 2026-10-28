@@ -34,6 +34,7 @@ export function ExportTemplateSection({
   onChange,
   onPatchEdits,
   chatAvailable = true,
+  chatToggleHint,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -47,6 +48,7 @@ export function ExportTemplateSection({
   onPatchEdits?: (patch: Partial<ClipEditsV2>) => void
   /** False when VOD has no chat log — toggle disabled with note. */
   chatAvailable?: boolean
+  chatToggleHint?: string
 }) {
   const tpl = edits.exportTemplate || {}
   const headlineAllowed = headlineBarAllowedForLayout(layoutMode)
@@ -248,7 +250,7 @@ export function ExportTemplateSection({
         <Switch
           checked={Boolean(edits.chatOverlay?.enabled)}
           disabled={!chatAvailable}
-          title={!chatAvailable ? 'No chat for this clip' : undefined}
+          title={chatToggleHint ?? (!chatAvailable ? 'No chat for this clip' : undefined)}
           onCheckedChange={(on) =>
             onPatchEdits?.({
               chatOverlay: {
@@ -262,8 +264,8 @@ export function ExportTemplateSection({
         />
       </div>
       {!chatAvailable ? (
-        <p className="text-xs text-muted-foreground" title="No chat for this clip">
-          No chat for this clip — chat overlay unavailable.
+        <p className="text-xs text-muted-foreground" title={chatToggleHint ?? 'No chat for this clip'}>
+          {chatToggleHint ?? 'No chat for this clip — chat overlay unavailable.'}
         </p>
       ) : null}
 

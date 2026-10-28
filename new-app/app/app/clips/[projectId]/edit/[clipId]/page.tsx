@@ -38,6 +38,8 @@ export default async function ClipEditorPage({
         aiMeta={data.aiMeta}
         brollMedia={data.brollMedia}
         reframeV2Enabled={data.capabilities.reframeV2Enabled}
+        vodChat={data.vodChat}
+        projectStatus={data.project.status}
       />
     </ClipperSurfaceErrorBoundary>
   )

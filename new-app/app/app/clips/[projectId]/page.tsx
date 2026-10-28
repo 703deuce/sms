@@ -45,6 +45,15 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
       ? (streamVod.state as Record<string, unknown>)
       : null
   const vodLayout = (vodState?.layout as Record<string, unknown> | undefined) ?? null
+  const vodChatMeta =
+    vodState?.chatMeta && typeof vodState.chatMeta === 'object' && !Array.isArray(vodState.chatMeta)
+      ? (vodState.chatMeta as {
+          available?: boolean
+          messageCount?: number
+          source?: string | null
+          error?: string | null
+        })
+      : null
 
   return (
     <Page>
@@ -58,6 +67,8 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
             chatSource={streamVod.chatSource}
             chatMessages={streamVod.chatMessages}
             chatError={typeof vodState?.chatError === 'string' ? vodState.chatError : null}
+            chatMeta={vodChatMeta}
+            projectStatus={project.status}
             sourceType={streamVod.sourceType}
           />
           <StreamerProjectChrome
