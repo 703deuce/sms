@@ -107,8 +107,8 @@ def video_picker_fps() -> float:
 
 
 def video_picker_user_part_order() -> str:
-    # mixed_4min benchmark: transcript before video part finds Apex + meow at LOW res (~$0.0023/watch).
-    raw = (os.environ.get("VIDEO_PICKER_USER_PART_ORDER") or "transcript_first").strip().lower()
+    # Google video-understanding: place text after the video/frames part (video_first).
+    raw = (os.environ.get("VIDEO_PICKER_USER_PART_ORDER") or "video_first").strip().lower()
     if raw in ("transcript_first", "text_first", "transcript_before_video"):
         return "transcript_first"
     return "video_first"
@@ -257,6 +257,13 @@ def max_span_seconds(target_clip_len_s: int | None) -> float:
     return 90.0 if target_clip_len_s is None else float(target_clip_len_s)
 
 
+def _format_mmss(seconds: float) -> str:
+    sec = max(0.0, float(seconds))
+    m = int(sec // 60)
+    s = sec % 60.0
+    return f"{m}:{s:04.1f}"
+
+
 def format_timestamped_transcript(
     sentences: list[Any],
     range_start_ms: int,
@@ -269,9 +276,10 @@ def format_timestamped_transcript(
         if end_ms < range_start_ms or start_ms > range_end_ms:
             continue
         t = (start_ms - range_start_ms) / 1000.0
+        end_t = (end_ms - range_start_ms) / 1000.0
         text = str(getattr(s, "text", "") or "").strip()
         if text:
-            lines.append(f"[{t:.2f}s] {text}")
+            lines.append(f"[{_format_mmss(t)} | {t:.2f}s–{end_t:.2f}s] {text}")
     return "\n".join(lines) if lines else "(no transcript lines in this range)"
 
 
@@ -763,11 +771,8 @@ def _gemini_watch_payload(
             make_watch_proxy(video_path, slim, 0.0, float(duration_s))
             raw_bytes = slim.read_bytes()
         b64 = base64.b64encode(raw_bytes).decode("ascii")
-        vmeta: dict[str, Any] = {
-            "fps": use_fps,
-            "startOffset": "0s",
-            "endOffset": f"{max(1, int(duration_s))}s",
-        }
+        # Full-span proxy already trimmed to duration_s — omit start/end offsets (avoid double timeline).
+        vmeta: dict[str, Any] = {"fps": use_fps}
         part: dict[str, Any] = {
             "inline_data": {"mime_type": "video/mp4", "data": b64},
             "video_metadata": vmeta,
@@ -938,6 +943,10 @@ def watch_video_file(
         meta["fps"] = fps
         meta["media_resolution"] = media_resolution_override or video_picker_media_resolution()
         meta["user_part_order"] = user_part_order or video_picker_user_part_order()
+        print(
+            f"[clipper:video_picker] {json.dumps({'event': 'video_picker_input', 'chunk': chunk_label, 'input_mode': meta['input_mode'], 'part_order': meta['user_part_order'], 'model_requested': primary_model, 'fps': fps})}",
+            flush=True,
+        )
         meta["frames_est"] = max(1, int(duration_s * fps))
         meta["frames_sent"] = meta["frames_est"] if video_picker_labeled_frames() else None
         meta["min_moments"] = min_moments_for_video(int(duration_s))

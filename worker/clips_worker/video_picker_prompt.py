@@ -87,7 +87,7 @@ OUTPUT
 Return JSON only, no prose. The top-level object has two keys.
 sections: array of objects with start_s, end_s, activity (gaming, talking, reaction, irl, creative; may be more than one, joined with a plus sign).
 moments: array of objects, sorted by score descending, each with:
-- start_s: number, clip start.
+- start_s: number, clip start in seconds from 0 (you may also think in MM:SS; must match [t=…] labels and transcript).
 - end_s: number, clip end.
 - peak_s: number, the single highest point (kill, punchline, scare, reveal).
 - hook_s: number, the strongest opening second.
