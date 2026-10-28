@@ -40,7 +40,8 @@ export default async function StreamerChannelPage({ params }: { params: Promise<
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="text-sm font-semibold">Connection</h2>
           <p className="text-xs text-muted-foreground">
-            We only process your own channel&apos;s finished VODs. We never record your live stream.
+            We clip from your Twitch archive VODs (including the in-progress archive while you are live). Kick replays
+            are processed after the stream ends.
           </p>
           <div className="flex flex-wrap gap-2">
             {flags.twitchOAuth && channel.platform === 'twitch' && channel.status !== 'CONNECTED' ? (

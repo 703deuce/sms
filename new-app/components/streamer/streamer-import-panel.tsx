@@ -17,6 +17,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import { cancelClipUpload, fetchUploadLimits, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { Loader2 } from 'lucide-react'
 import {
+  LIVE_CLIP_LAST_MINUTE_PRESETS,
   resolveVodImportRangeMs,
   type VodImportRangeMode,
 } from '@/lib/streamer/vod-import-range'
@@ -41,12 +42,35 @@ function fileMatchesResume(file: File, saved: PendingUploadMeta) {
   return true
 }
 
+type StreamerResolveView = {
+  platform: string
+  kind: string
+  title?: string | null
+  durationS?: number | null
+  isLive?: boolean
+  vodSource?: 'live_archive' | 'latest_vod' | null
+  resolvedVodUrl?: string | null
+  pastedAs?: string
+  channelLogin?: string | null
+  id?: string
+}
+
+function formatDurationClock(totalSec: number) {
+  const s = Math.max(0, Math.floor(totalSec))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
+  return `${m}:${sec.toString().padStart(2, '0')}`
+}
+
 export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsageView | null }) {
   const router = useRouter()
   const resumeInputRef = useRef<HTMLInputElement>(null)
   const [url, setUrl] = useState('')
   const [attest, setAttest] = useState(false)
   const [preview, setPreview] = useState<{ title?: string; platform: string; kind: string } | null>(null)
+  const [resolveMeta, setResolveMeta] = useState<StreamerResolveView | null>(null)
   const [resolveError, setResolveError] = useState<string | null>(null)
   const [vodCheck, setVodCheck] = useState<VodAvailabilityView | null>(null)
   const [vodCheckBusy, setVodCheckBusy] = useState(false)
@@ -58,6 +82,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [maxUploadLabel, setMaxUploadLabel] = useState<string | null>(null)
   const [rangeMode, setRangeMode] = useState<VodImportRangeMode>('first_minutes')
   const [firstMinutes, setFirstMinutes] = useState('15')
+  const [lastMinutesPreset, setLastMinutesPreset] = useState<string>('5')
   const [rangeStart, setRangeStart] = useState('0:00')
   const [rangeEnd, setRangeEnd] = useState('15:00')
   const [clipLength, setClipLength] = useState<ClipLengthChoiceValue>('auto')
@@ -172,17 +197,29 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
     const trimmed = url.trim()
     if (trimmed.length < 12) {
       setPreview(null)
+      setResolveMeta(null)
       setResolveError(null)
       setVodCheck(null)
       return
     }
     const t = setTimeout(() => {
-      void clipsFetch<{ platform: string; kind: string; title?: string }>('/api/streamer/resolve', {
+      void clipsFetch<StreamerResolveView>('/api/streamer/resolve', {
         method: 'POST',
         body: JSON.stringify({ url: trimmed }),
       })
         .then((data) => {
-          setPreview({ platform: data.platform, kind: data.kind, title: data.title ?? undefined })
+          setResolveMeta(data)
+          setPreview({
+            platform: data.platform,
+            kind: data.pastedAs === 'channel' ? 'channel' : data.kind,
+            title: data.title ?? undefined,
+          })
+          if (data.isLive) {
+            setRangeMode('last_minutes')
+            setLastMinutesPreset('5')
+          } else {
+            setRangeMode((m) => (m === 'last_minutes' ? 'first_minutes' : m))
+          }
           setResolveError(null)
           setVodCheckBusy(true)
           void clipsFetch<VodAvailabilityView>('/api/streamer/vod-check', {
@@ -195,6 +232,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
         })
         .catch((e) => {
           setPreview(null)
+          setResolveMeta(null)
           setVodCheck(null)
           setResolveError(e instanceof Error ? e.message : 'Could not parse link')
         })
@@ -214,14 +252,25 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       .finally(() => setVodCheckBusy(false))
   }
 
-  const buildRangePayload = () => {
+  const vodDurationMs =
+    resolveMeta?.durationS != null && resolveMeta.durationS > 0
+      ? Math.round(resolveMeta.durationS * 1000)
+      : undefined
+
+  const buildRangePayload = (durationOverrideMs?: number) => {
     const mins = parseInt(firstMinutes, 10)
-    return resolveVodImportRangeMs({
-      mode: rangeMode,
-      firstMinutes: Number.isFinite(mins) ? mins : 15,
-      start: rangeStart,
-      end: rangeEnd,
-    })
+    const lastMins = parseInt(lastMinutesPreset, 10)
+    const durationMs = durationOverrideMs ?? vodDurationMs
+    return resolveVodImportRangeMs(
+      {
+        mode: rangeMode,
+        firstMinutes: Number.isFinite(mins) ? mins : 15,
+        lastMinutes: Number.isFinite(lastMins) ? lastMins : 5,
+        start: rangeStart,
+        end: rangeEnd,
+      },
+      { vodDurationMs: durationMs },
+    )
   }
 
   const submitUrl = async () => {
@@ -229,13 +278,20 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       toast.error('Confirm permission to import')
       return
     }
-    const range = buildRangePayload()
-    if ('error' in range) {
-      toast.error(range.error)
-      return
-    }
     setSubmitting(true)
     try {
+      const fresh = await clipsFetch<StreamerResolveView>('/api/streamer/resolve', {
+        method: 'POST',
+        body: JSON.stringify({ url: url.trim() }),
+      })
+      setResolveMeta(fresh)
+      const durationMs =
+        fresh.durationS != null && fresh.durationS > 0 ? Math.round(fresh.durationS * 1000) : undefined
+      const range = buildRangePayload(durationMs)
+      if ('error' in range) {
+        toast.error(range.error)
+        return
+      }
       const data = await clipsFetch<{ projectId: string }>('/api/streamer/imports', {
         method: 'POST',
         body: JSON.stringify({
@@ -290,21 +346,38 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
     <div className="flex flex-col gap-4">
       {usageInitial ? null : <StreamerUsageMeter />}
       <p className="text-xs text-muted-foreground">
-        Long VODs (over ~20 min): we fetch audio first, then only the clip ranges (up to 12 h).
+        Long VODs: we fetch audio first, then only the clip ranges you choose (up to 12 h). Live Twitch channels use
+        the in-progress archive VOD — we do not pull the raw live HLS feed.
       </p>
       <div className="flex flex-col gap-2">
         <Label htmlFor="streamer-url">Twitch or Kick link</Label>
         <Input
           id="streamer-url"
-          placeholder="https://twitch.tv/videos/… or kick.com/…/videos/…"
+          placeholder="https://twitch.tv/yourchannel or twitch.tv/videos/…"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
         {resolveError ? <p className="text-xs text-destructive">{resolveError}</p> : null}
         {preview ? (
           <p className="text-xs text-muted-foreground">
-            {preview.platform} · {preview.kind}
+            {preview.platform} · {preview.kind === 'channel' ? 'channel' : preview.kind}
             {preview.title ? ` · ${preview.title}` : ''}
+            {resolveMeta?.durationS ? ` · ${formatDurationClock(resolveMeta.durationS)} on VOD` : ''}
+          </p>
+        ) : null}
+        {resolveMeta?.isLive ? (
+          <p className="text-xs text-primary">
+            Live now — clipping from the in-progress Twitch archive VOD. Pick how many recent minutes to analyze.
+          </p>
+        ) : null}
+        {resolveMeta?.vodSource === 'latest_vod' && preview?.kind === 'channel' ? (
+          <p className="text-xs text-muted-foreground">
+            Channel is offline — using their latest finished broadcast.
+          </p>
+        ) : null}
+        {resolveMeta?.resolvedVodUrl ? (
+          <p className="text-xs text-muted-foreground truncate" title={resolveMeta.resolvedVodUrl}>
+            VOD: {resolveMeta.resolvedVodUrl.replace(/^https?:\/\//, '')}
           </p>
         ) : null}
         <VodUrlCheckBanner view={vodCheck} onRecheck={recheckVod} rechecking={vodCheckBusy} />
@@ -315,7 +388,8 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
         <p className="text-xs font-medium">VOD range (optional)</p>
         <p className="text-xs text-muted-foreground">
-          Limit download, transcribe, and clip finding to part of the VOD — useful for 10–15 minute tests.
+          Limit download and clip finding to part of the VOD. When the channel is live, default to the last few minutes
+          of the archive.
         </p>
         <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as VodImportRangeMode)}>
           <SelectTrigger className="h-9">
@@ -323,10 +397,35 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="full">Full VOD</SelectItem>
+            {resolveMeta?.isLive ? (
+              <SelectItem value="last_minutes">Last N minutes (live tail)</SelectItem>
+            ) : null}
             <SelectItem value="first_minutes">First N minutes</SelectItem>
             <SelectItem value="start_end">Start → end time</SelectItem>
           </SelectContent>
         </Select>
+        {rangeMode === 'last_minutes' ? (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Last minutes (from current VOD length)</Label>
+            <Select value={lastMinutesPreset} onValueChange={setLastMinutesPreset}>
+              <SelectTrigger className="h-9 w-full max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LIVE_CLIP_LAST_MINUTE_PRESETS.map((m) => (
+                  <SelectItem key={m} value={String(m)}>
+                    Last {m} minutes
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {vodDurationMs ? (
+              <p className="text-xs text-muted-foreground tabular-nums">
+                VOD length now {formatDurationClock(vodDurationMs / 1000)} — we fetch only the tail you pick.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {rangeMode === 'first_minutes' ? (
           <div className="flex items-center gap-2">
             <Label htmlFor="streamer-first-min" className="shrink-0 text-xs">Minutes</Label>

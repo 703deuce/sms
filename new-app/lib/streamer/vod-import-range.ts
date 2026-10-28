@@ -1,11 +1,15 @@
 /** Paste-a-VOD test slice: limit analyze/render to part of a long VOD. */
 
-export type VodImportRangeMode = 'full' | 'first_minutes' | 'start_end'
+export type VodImportRangeMode = 'full' | 'first_minutes' | 'last_minutes' | 'start_end'
+
+export const LIVE_CLIP_LAST_MINUTE_PRESETS = [5, 15, 30, 60] as const
 
 export type VodImportRangeInput = {
   mode: VodImportRangeMode
   /** Used when mode === 'first_minutes' */
   firstMinutes?: number
+  /** Used when mode === 'last_minutes' (tail of VOD at resolve time) */
+  lastMinutes?: number
   /** HH:MM:SS, MM:SS, or seconds — used when mode === 'start_end' */
   start?: string
   end?: string
@@ -37,11 +41,25 @@ export function parseClockToMs(raw: string): number | null {
 
 export function resolveVodImportRangeMs(
   input: VodImportRangeInput,
-  opts?: { maxSpanMinutes?: number },
+  opts?: { maxSpanMinutes?: number; vodDurationMs?: number },
 ): { rangeStartMs: number; rangeEndMs: number } | { error: string } {
   const maxSpan = (opts?.maxSpanMinutes ?? 12 * 60) * 60_000
   if (input.mode === 'full') {
     return { rangeStartMs: 0, rangeEndMs: 0 }
+  }
+  if (input.mode === 'last_minutes') {
+    const durationMs = opts?.vodDurationMs
+    if (durationMs == null || durationMs <= 0) {
+      return { error: 'Resolve the channel or VOD first to set a live tail range.' }
+    }
+    const mins = input.lastMinutes ?? 5
+    if (!Number.isFinite(mins) || mins <= 0 || mins > 12 * 60) {
+      return { error: 'Choose between 1 and 720 minutes for the live tail slice.' }
+    }
+    const span = Math.round(mins * 60_000)
+    const end = durationMs
+    const start = Math.max(0, end - span)
+    return { rangeStartMs: start, rangeEndMs: end }
   }
   if (input.mode === 'first_minutes') {
     const mins = input.firstMinutes ?? 15

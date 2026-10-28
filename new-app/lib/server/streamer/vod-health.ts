@@ -6,6 +6,7 @@ import {
   type VodAvailabilityCode,
   type VodAvailabilityView,
 } from '@/lib/streamer/vod-availability'
+import { resolveTwitchChannelPaste } from '@/lib/server/streamer/twitch-channel-paste'
 import { twitchAppAccessToken, twitchClientId } from '@/lib/server/streamer/twitch'
 import { getPrisma } from '@/lib/server/db'
 import { mergePlatformState } from '@/lib/server/streamer/platform-state'
@@ -109,6 +110,19 @@ export async function checkStreamUrlVodHealth(url: string): Promise<VodAvailabil
   }
   if (parsed.platform === 'twitch' && parsed.kind === 'vod') {
     return checkTwitchVodUrl(parsed.id, parsed.channel)
+  }
+  if (parsed.platform === 'twitch' && parsed.kind === 'channel') {
+    const resolved = await resolveTwitchChannelPaste(parsed.channel ?? parsed.id)
+    if ('error' in resolved) {
+      return {
+        platform: 'twitch',
+        code: 'vod_unavailable',
+        status: 'blocked',
+        message: resolved.error,
+        checkedAt: new Date().toISOString(),
+      }
+    }
+    return checkTwitchVodUrl(resolved.vodId, resolved.channelLogin)
   }
   if (parsed.platform === 'kick' && parsed.kind === 'vod') {
     return buildVodAvailabilityView('kick', 'ok', parsed.channel)

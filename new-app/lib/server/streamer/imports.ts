@@ -2,6 +2,7 @@ import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import { defaultClipSettings, clipProjectSettingsSchema } from '@/lib/clips/settings'
 import { defaultStreamerSettings, streamerSettingsSchema } from '@/lib/streamer/settings'
 import { parseStreamUrl } from '@/lib/streamer/url'
+import { resolveTwitchChannelPaste } from '@/lib/server/streamer/twitch-channel-paste'
 import { projectWordsKey } from '@/lib/storage'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
@@ -36,24 +37,42 @@ export async function createStreamerImport(
   let url = input.url?.trim() || null
   let title = 'Streamer upload'
 
-  const rangeStart = input.rangeStartMs ?? 0
-  const rangeEnd = input.rangeEndMs ?? 0
-  if (rangeEnd > rangeStart) {
-    const rangeH = (rangeEnd - rangeStart) / 3_600_000
+  let rangeStartMs = input.rangeStartMs ?? 0
+  let rangeEndMs = input.rangeEndMs ?? 0
+  if (rangeEndMs > rangeStartMs) {
+    const rangeH = (rangeEndMs - rangeStartMs) / 3_600_000
     if (rangeH > STREAMER_MAX_VOD_HOURS) {
       throw new Error(`Range exceeds ${STREAMER_MAX_VOD_HOURS} hour limit`)
     }
-    await assertStreamCap(workspaceId, Math.floor((rangeEnd - rangeStart) / 1000))
+    await assertStreamCap(workspaceId, Math.floor((rangeEndMs - rangeStartMs) / 1000))
   }
 
   if (url) {
     const parsed = parseStreamUrl(url)
     if ('error' in parsed) throw new Error(parsed.error)
-    platform = parsed.platform
-    sourceType = parsed.kind
-    externalId = parsed.id
-    channelLogin = parsed.channel ?? null
-    title = `${parsed.platform === 'twitch' ? 'Twitch' : 'Kick'} ${parsed.kind} ${parsed.id}`
+
+    if (parsed.platform === 'twitch' && parsed.kind === 'channel') {
+      const login = parsed.channel ?? parsed.id
+      const resolved = await resolveTwitchChannelPaste(login)
+      if ('error' in resolved) throw new Error(resolved.error)
+      url = resolved.vodUrl
+      platform = 'twitch'
+      sourceType = 'vod'
+      externalId = resolved.vodId
+      channelLogin = resolved.channelLogin
+      title = resolved.title
+      const durationMs = resolved.durationSec * 1000
+      if (rangeEndMs > rangeStartMs) {
+        rangeEndMs = Math.min(rangeEndMs, durationMs)
+        rangeStartMs = Math.max(0, Math.min(rangeStartMs, Math.max(0, rangeEndMs - 1000)))
+      }
+    } else {
+      platform = parsed.platform
+      sourceType = parsed.kind
+      externalId = parsed.id
+      channelLogin = parsed.channel ?? null
+      title = `${parsed.platform === 'twitch' ? 'Twitch' : 'Kick'} ${parsed.kind} ${parsed.id}`
+    }
   }
 
   const merged = withAutoContentDetection(
@@ -63,8 +82,8 @@ export async function createStreamerImport(
       clipLenMode: streamer.clipLenMode,
       targetClipLenS: streamer.targetClipLenS,
       streamer,
-      rangeStartMs: input.rangeStartMs ?? 0,
-      rangeEndMs: input.rangeEndMs ?? 0,
+      rangeStartMs,
+      rangeEndMs,
     }),
   )
 
@@ -105,8 +124,8 @@ export async function createStreamerImport(
         uploadId: input.uploadId ?? null,
         sourceUrl: url,
         settings: JSON.parse(JSON.stringify(merged)),
-        rangeStartMs: input.rangeStartMs ?? 0,
-        rangeEndMs: merged.rangeEndMs,
+        rangeStartMs,
+        rangeEndMs: merged.rangeEndMs || rangeEndMs,
         status: 'QUEUED',
         stage: url ? 'importing' : 'queued',
         progress: 0,
@@ -124,8 +143,8 @@ export async function createStreamerImport(
         externalId,
         url,
         title,
-        rangeStartMs: input.rangeStartMs ?? 0,
-        rangeEndMs: input.rangeEndMs ?? null,
+        rangeStartMs,
+        rangeEndMs: rangeEndMs > rangeStartMs ? rangeEndMs : null,
         triggeredBy: input.uploadId ? 'upload' : 'paste',
         attestedAt: input.attest ? new Date() : null,
         priority: 10,

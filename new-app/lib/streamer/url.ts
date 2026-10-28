@@ -1,5 +1,5 @@
 export type StreamPlatform = 'twitch' | 'kick'
-export type StreamKind = 'vod' | 'highlight' | 'clip'
+export type StreamKind = 'vod' | 'highlight' | 'clip' | 'channel'
 
 export type ParsedStreamUrl =
   | {
@@ -11,8 +11,24 @@ export type ParsedStreamUrl =
     }
   | { error: string }
 
-const BARE_CHANNEL_MSG =
-  "That's a channel page. Paste a VOD, highlight or clip link. We never record live streams."
+const KICK_BARE_CHANNEL_MSG =
+  "That's a channel page. Paste a Kick replay (…/videos/…) or clip link."
+
+const TWITCH_RESERVED = new Set([
+  'directory',
+  'downloads',
+  'settings',
+  'moderator',
+  'inventory',
+  'prime',
+  'turbo',
+  'friends',
+  'bits',
+  'subs',
+  'support',
+  'p',
+  'popout',
+])
 
 function normalizeRaw(raw: string): URL | null {
   const trimmed = raw.trim()
@@ -62,8 +78,8 @@ export function parseStreamUrl(raw: string): ParsedStreamUrl {
     if (parts.length === 3 && parts[1] === 'clip' && parts[2]) {
       return { platform: 'twitch', kind: 'clip', id: parts[2], channel: parts[0], startHintS }
     }
-    if (parts.length === 1 && parts[0] && !['directory', 'downloads'].includes(parts[0])) {
-      return { error: BARE_CHANNEL_MSG }
+    if (parts.length === 1 && parts[0] && !TWITCH_RESERVED.has(parts[0].toLowerCase())) {
+      return { platform: 'twitch', kind: 'channel', id: parts[0].toLowerCase(), channel: parts[0].toLowerCase() }
     }
   }
 
@@ -83,7 +99,7 @@ export function parseStreamUrl(raw: string): ParsedStreamUrl {
       return { platform: 'kick', kind: 'vod', id: parts[1], startHintS }
     }
     if (parts.length === 1 && parts[0]) {
-      return { error: BARE_CHANNEL_MSG }
+      return { error: KICK_BARE_CHANNEL_MSG }
     }
   }
 

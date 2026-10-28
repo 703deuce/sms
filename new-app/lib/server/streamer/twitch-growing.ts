@@ -50,7 +50,7 @@ export async function matchTwitchArchiveVod(
   return null
 }
 
-function parseTwitchDuration(raw: string): number {
+export function parseTwitchDuration(raw: string): number {
   const m = raw.match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/i)
   if (!m) return 0
   const h = Number(m[1] || 0)
