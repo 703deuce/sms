@@ -375,20 +375,13 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             got = len(picks)
             picks = dedupe_stream_picks(conn, vod, picks)
             after_dedupe = len(picks)
-            from clips_worker.picker.pick_quota import compute_pick_want, ensure_stream_picks, log_pick_stage
+            from clips_worker.picker.pick_quota import compute_pick_want, log_pick_stage
+            from clips_worker.plan_clips import fusion_pick_as_plan_dict, fusion_picks_from_planned, plan_clips
 
             want = compute_pick_want(settings, duration_ms)
-            try:
-                picks = ensure_stream_picks(
-                    picks,
-                    want=want,
-                    duration_ms=duration_ms,
-                    signals_payload=signals_payload,
-                    words=words,
-                    audio_path=audio_path,
-                )
-            except Exception as exc:
-                print(f"[clipper:pick] backfill_error={str(exc)[:240]}", flush=True)
+            picks = sorted(picks, key=lambda p: p.score, reverse=True)[:want]
+            planned = plan_clips([fusion_pick_as_plan_dict(p) for p in picks])
+            picks = fusion_picks_from_planned(planned)
             log_pick_stage(
                 "stream",
                 want=want,

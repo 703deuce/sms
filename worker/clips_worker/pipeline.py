@@ -14,7 +14,7 @@ from pathlib import Path
 import psycopg2
 
 from clips_worker.clip_progress import reframe_progress_payload
-from clips_worker.clip_span_resolve import resolve_picks_for_render
+from clips_worker.plan_clips import plan_clips
 
 from clips_worker.anything_picker import pick_anything_clips
 from clips_worker.picker import pick_talking_clips
@@ -714,13 +714,8 @@ def run_m4_pipeline(
 
                 def _render_pick_async(pick: dict, clip_index: int, clips_total_hint: int) -> None:
                     if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                        resolved = resolve_picks_for_render([dict(pick)], min_clip_ms=15_000)
-                        if resolved:
-                            pick["start_ms"] = int(resolved[0]["start_ms"])
-                            pick["end_ms"] = int(resolved[0]["end_ms"])
-                        if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                            with span_lock:
-                                rendered_spans.add(_span_key(int(pick["start_ms"]), int(pick["end_ms"])))
+                        with span_lock:
+                            rendered_spans.add(_span_key(int(pick["start_ms"]), int(pick["end_ms"])))
                     sk = _span_key(pick["start_ms"], pick["end_ms"])
                     try:
                         cid = head_render_state.get("clip_id_by_span", {}).get(sk)
@@ -866,18 +861,13 @@ def run_m4_pipeline(
                         if cached is not None:
                             return cached
                         if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                            resolved = resolve_picks_for_render([dict(pick)], min_clip_ms=15_000)
-                            if resolved:
-                                pick["start_ms"] = int(resolved[0]["start_ms"])
-                                pick["end_ms"] = int(resolved[0]["end_ms"])
-                            if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                                print(
-                                    f"[clipper:overlap] project={project_id} force_render idx={idx} "
-                                    f"startMs={pick.get('start_ms')} endMs={pick.get('end_ms')}",
-                                    flush=True,
-                                )
-                                with span_lock:
-                                    rendered_spans.add(_span_key(int(pick["start_ms"]), int(pick["end_ms"])))
+                            print(
+                                f"[clipper:overlap] project={project_id} force_render idx={idx} "
+                                f"startMs={pick.get('start_ms')} endMs={pick.get('end_ms')}",
+                                flush=True,
+                            )
+                            with span_lock:
+                                rendered_spans.add(_span_key(int(pick["start_ms"]), int(pick["end_ms"])))
                         sk = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
                         cid = head_render_state.get("clip_id_by_span", {}).get(sk)
                         return build_clip_row_from_pick(pick, idx, clip_id=cid)
@@ -905,9 +895,7 @@ def run_m4_pipeline(
                 flush=True,
             )
 
-            from clips_worker.clip_span_resolve import resolve_overlaps
-
-            picks = resolve_overlaps(picks)
+            picks = plan_clips(picks)
 
             if not picks:
                 empty_msg = picker_message or "No complete, self-contained moments found."
