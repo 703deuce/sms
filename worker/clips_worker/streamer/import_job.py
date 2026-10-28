@@ -397,6 +397,32 @@ def _schedule_rolling_import_tick(
             (new_id, project_id, json.dumps({"vodId": vod_id, "rollingTick": True}), str(chunk_min)),
         )
     conn.commit()
+    next_run_after: str | None = None
+    range_start: int | None = None
+    range_end: int | None = None
+    with conn.cursor() as cur:
+        cur.execute('SELECT "runAfter" FROM clip_jobs WHERE id=%s', (new_id,))
+        ra = cur.fetchone()
+        if ra and ra[0]:
+            next_run_after = ra[0].isoformat() if hasattr(ra[0], "isoformat") else str(ra[0])
+        cur.execute(
+            'SELECT "rangeStartMs", "rangeEndMs", state FROM stream_vods WHERE id=%s',
+            (vod_id,),
+        )
+        vr = cur.fetchone()
+        if vr:
+            range_start = int(vr[0] or 0)
+            range_end = int(vr[1] or 0)
+    from clips_worker.streamer.rolling_ingest import log_rolling_tick_decision
+
+    log_rolling_tick_decision(
+        vod_id=vod_id,
+        range_start_ms=range_start,
+        range_end_ms=range_end,
+        chunk_min=chunk_min,
+        next_run_after=next_run_after,
+        source="schedule_tick",
+    )
     decision_log(
         "stream_import",
         "rolling_import_scheduled",

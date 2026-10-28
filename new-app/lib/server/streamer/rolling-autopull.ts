@@ -8,7 +8,77 @@ import { matchTwitchArchiveVod } from '@/lib/server/streamer/twitch-growing'
 import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 import { streamerTwitchRollingEnabled } from '@/lib/server/streamer/env'
 
-const DEFAULT_CHUNK_MIN = Number(process.env.STREAMER_ROLLING_CHUNK_MIN || 12)
+const DEFAULT_CHUNK_MIN = Math.min(
+  60,
+  Math.max(3, Number(process.env.STREAMER_ROLLING_CHUNK_MIN || 12)),
+)
+
+function resolveRollingChunkMin(channelSettings: unknown): number {
+  const parsed = streamerSettingsSchema.safeParse(
+    typeof channelSettings === 'object' && channelSettings ? channelSettings : {},
+  )
+  const fromSettings = parsed.success ? parsed.data.rollingChunkMin : undefined
+  return Math.min(60, Math.max(3, fromSettings ?? DEFAULT_CHUNK_MIN))
+}
+
+/** Cancel queued rolling ticks and mark live sessions stopped (auto-pull off). */
+export async function stopChannelRollingAutopull(channelId: string, reason: string) {
+  const prisma = getPrisma()
+  const vods = await prisma.streamVod.findMany({
+    where: {
+      channelId,
+      triggeredBy: 'auto',
+      state: { path: ['rolling', 'live'], equals: true },
+    },
+    select: { id: true, projectId: true, state: true },
+  })
+  const cancelledAll: string[] = []
+  for (const vod of vods) {
+    const state = (vod.state as Record<string, unknown>) || {}
+    const rolling = (state.rolling as Record<string, unknown>) || {}
+    const pending = await prisma.clipJob.findMany({
+      where: {
+        projectId: vod.projectId,
+        type: 'STREAM_IMPORT',
+        status: 'QUEUED',
+      },
+      select: { id: true, payload: true },
+    })
+    for (const job of pending) {
+      const payload = job.payload as Record<string, unknown> | null
+      if (payload?.vodId !== vod.id || payload?.rollingTick == null) continue
+      await prisma.clipJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'FAILED',
+          error: 'Cancelled by operator (auto-pull off)',
+          finishedAt: new Date(),
+          lockedBy: null,
+          lockedAt: null,
+        },
+      })
+      cancelledAll.push(job.id)
+    }
+    await prisma.streamVod.update({
+      where: { id: vod.id },
+      data: {
+        state: {
+          ...state,
+          rolling: {
+            ...rolling,
+            live: false,
+            stoppedReason: reason,
+            stoppedAt: new Date().toISOString(),
+          },
+        },
+      },
+    })
+    console.info(
+      `[clipper:autopull] rolling_stopped channelId=${channelId} vodId=${vod.id} reason=${reason} cancelledJobs=${cancelledAll.join(',') || 'none'}`,
+    )
+  }
+  return { stoppedVods: vods.length, cancelledJobIds: cancelledAll }
+}
 
 /** Start a growing-VOD rolling session when Twitch goes live (stage 2). */
 export async function beginTwitchRollingSession(
@@ -47,6 +117,7 @@ export async function beginTwitchRollingSession(
       streamer,
     }),
   )
+  const chunkMin = resolveRollingChunkMin(channel.settings)
   const projectId = createId('proj')
   const vodId = createId('svod')
   const title = archive?.title || `Live stream ${startedAt.toISOString().slice(0, 16)}`
@@ -82,7 +153,11 @@ export async function beginTwitchRollingSession(
         state: {
           processMode: 'rolling',
           streamSessionId: streamSessionId || archive?.streamId || undefined,
-          rolling: { live: true, chunkMin: DEFAULT_CHUNK_MIN, sessionStartedAt: startedAt.toISOString() },
+          rolling: {
+            live: true,
+            chunkMin,
+            sessionStartedAt: startedAt.toISOString(),
+          },
         },
       },
     })
@@ -94,7 +169,7 @@ export async function beginTwitchRollingSession(
         status: 'QUEUED',
         priority: 15,
         payload: { vodId, rollingTick: 1 },
-        runAfter: new Date(Date.now() + 2 * 60 * 1000),
+        runAfter: new Date(Date.now() + chunkMin * 60 * 1000),
       },
     })
   })

@@ -1,5 +1,6 @@
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
+import { stopChannelRollingAutopull } from '@/lib/server/streamer/rolling-autopull'
 import { streamerSettingsSchema } from '@/lib/streamer/settings'
 
 const LOGIN_RE = /^[a-z0-9_]{2,25}$/i
@@ -74,6 +75,9 @@ export async function patchStreamerChannel(
           ...streamerSettingsSchema.partial().parse(patch.settings),
         }
       : undefined
+  if (patch.autoProcess === false) {
+    await stopChannelRollingAutopull(channelId, 'auto_process_off')
+  }
   return prisma.streamChannel.update({
     where: { id: channelId },
     data: {

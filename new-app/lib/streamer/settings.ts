@@ -16,6 +16,8 @@ export const streamerSettingsSchema = z.object({
   marathonBatchHours: z.number().min(1).max(24).default(6),
   /** UTC hour 0–23 for daily recap clip batch during long streams. */
   marathonDailyRecapUtcHour: z.number().int().min(0).max(23).default(0),
+  /** Rolling live auto-pull: minutes per ingest window (3–60). */
+  rollingChunkMin: z.number().int().min(3).max(60).optional(),
   clipCount: z.number().int().min(1).max(30).default(12),
   /** Default clip length for auto-imported VODs (copied to project settings). */
   clipLenMode: z.enum(['auto', 'target']).default('auto'),

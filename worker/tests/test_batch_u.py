@@ -15,6 +15,17 @@ def test_rolling_tick_excludes_running_import():
     assert "exclude_job_id" in src
 
 
+def test_rolling_window_three_minute_increments():
+    from clips_worker.streamer.rolling_ingest import plan_rolling_window_ms
+
+    state = {"rolling": {"chunkMin": 3, "lastPulledMs": 0}}
+    first = plan_rolling_window_ms(total_vod_ms=180_000, state=state, finalize=False)
+    assert first == (0, 180_000)
+    state["rolling"]["lastPulledMs"] = 180_000
+    second = plan_rolling_window_ms(total_vod_ms=360_000, state=state, finalize=False)
+    assert second == (180_000, 360_000)
+
+
 def test_video_picker_inject_adds_candidates():
     base = [
         {

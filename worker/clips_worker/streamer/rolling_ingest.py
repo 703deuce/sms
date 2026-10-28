@@ -11,7 +11,19 @@ from clips_worker.streamer.config import _int
 
 def rolling_chunk_min(state: dict) -> int:
     rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
-    return int(rolling.get("chunkMin") or _int("STREAMER_ROLLING_CHUNK_MIN", 8))
+    raw = int(rolling.get("chunkMin") or _int("STREAMER_ROLLING_CHUNK_MIN", 8))
+    return max(3, min(60, raw))
+
+
+def rolling_pull_overlap_ms() -> int:
+    """Max overlap between consecutive rolling windows (analyze continuity)."""
+    return min(30_000, max(0, _int("STREAMER_ROLLING_OVERLAP_MS", 30_000)))
+
+
+def rolling_min_new_ms_for_state(state: dict) -> int:
+    chunk_ms = rolling_chunk_min(state) * 60_000
+    default = _int("STREAMER_ROLLING_MIN_NEW_MS", 45_000)
+    return min(default, max(15_000, chunk_ms // 6))
 
 
 def rolling_max_window_ms() -> int:
@@ -42,15 +54,20 @@ def plan_rolling_window_ms(
     last_pulled = int(rolling.get("lastPulledMs") or 0)
     chunk_ms = rolling_chunk_min(state) * 60_000
     max_window = rolling_max_window_ms()
+    overlap_ms = rolling_pull_overlap_ms()
+    min_new_ms = rolling_min_new_ms_for_state(state)
 
     if finalize:
         start_ms = last_pulled
         end_ms = total_vod_ms
     else:
         end_ms = total_vod_ms
-        if end_ms <= last_pulled + rolling_min_new_ms():
+        if end_ms <= last_pulled + min_new_ms:
             return None
-        start_ms = max(last_pulled, end_ms - chunk_ms)
+        # Live edge chunk: from previous pull end (≤30s overlap) through current archive end.
+        start_ms = max(0, last_pulled - overlap_ms, end_ms - chunk_ms)
+        if end_ms - start_ms > chunk_ms + overlap_ms:
+            start_ms = max(0, end_ms - chunk_ms)
 
     if start_ms >= end_ms:
         return None
@@ -153,7 +170,65 @@ def apply_rolling_pull_plan(
         end_ms=end_ms,
         finalize=finalize,
     )
+    log_rolling_tick_decision(
+        vod_id=vod_id,
+        range_start_ms=start_ms,
+        range_end_ms=end_ms,
+        chunk_min=rolling_chunk_min(state),
+        next_run_after=None,
+        source="pull_plan",
+    )
     return start_ms, end_ms
+
+
+def log_rolling_tick_decision(
+    *,
+    vod_id: str,
+    range_start_ms: int | None,
+    range_end_ms: int | None,
+    chunk_min: int,
+    next_run_after: str | None,
+    source: str,
+) -> None:
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "stream_import",
+        "rolling_tick",
+        vodId=vod_id,
+        rangeStartMs=range_start_ms,
+        rangeEndMs=range_end_ms,
+        chunkMin=chunk_min,
+        nextRunAfter=next_run_after,
+        source=source,
+    )
+
+
+def cancel_queued_rolling_import_ticks(
+    conn,
+    *,
+    project_id: str,
+    vod_id: str,
+) -> list[str]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE clip_jobs
+            SET status='FAILED',
+                error=LEFT(COALESCE(error, '') || ' Cancelled: rolling_stopped', 480),
+                "finishedAt"=NOW(),
+                "lockedBy"=NULL,
+                "lockedAt"=NULL
+            WHERE "projectId"=%s AND type='STREAM_IMPORT' AND status='QUEUED'
+              AND payload->>'vodId'=%s
+              AND payload ? 'rollingTick'
+            RETURNING id
+            """,
+            (project_id, vod_id),
+        )
+        rows = cur.fetchall() or []
+    conn.commit()
+    return [str(r[0]) for r in rows]
 
 
 def mark_rolling_pull_complete(conn, vod_id: str, end_ms: int) -> None:
@@ -177,13 +252,17 @@ def mark_rolling_pull_complete(conn, vod_id: str, end_ms: int) -> None:
     conn.commit()
 
 
-def stop_rolling_session(conn, vod_id: str, *, reason: str) -> None:
+def stop_rolling_session(conn, vod_id: str, *, reason: str, project_id: str | None = None) -> None:
     with conn.cursor() as cur:
-        cur.execute('SELECT state FROM stream_vods WHERE id=%s', (vod_id,))
+        cur.execute(
+            'SELECT state, "projectId" FROM stream_vods WHERE id=%s',
+            (vod_id,),
+        )
         row = cur.fetchone()
     if not row:
         return
     state = row[0] or {}
+    pid = project_id or str(row[1] or "")
     if isinstance(state, str):
         state = json.loads(state)
     rolling = dict(state.get("rolling") or {})
@@ -191,10 +270,27 @@ def stop_rolling_session(conn, vod_id: str, *, reason: str) -> None:
     rolling["stoppedReason"] = reason[:120]
     rolling["stoppedAt"] = datetime.now(timezone.utc).isoformat()
     state = {**state, "rolling": rolling}
+    cancelled: list[str] = []
+    if pid:
+        cancelled = cancel_queued_rolling_import_ticks(conn, project_id=pid, vod_id=vod_id)
     with conn.cursor() as cur:
         cur.execute(
             'UPDATE stream_vods SET state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
             (json.dumps(state), vod_id),
         )
     conn.commit()
-    print(f"[clipper:autopull] rolling_stopped vodId={vod_id} reason={reason[:80]}", flush=True)
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "stream_import",
+        "rolling_stopped",
+        vodId=vod_id,
+        projectId=pid,
+        reason=reason[:120],
+        cancelled_job_ids=cancelled,
+    )
+    print(
+        f"[clipper:autopull] rolling_stopped vodId={vod_id} reason={reason[:80]} "
+        f"cancelledJobs={','.join(cancelled) if cancelled else 'none'}",
+        flush=True,
+    )
