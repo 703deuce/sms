@@ -466,9 +466,15 @@ def _schedule_rolling_import_tick(
             (vod_id,),
         )
         vr = cur.fetchone()
+        tick_state: dict | None = None
         if vr:
             range_start = int(vr[0] or 0)
             range_end = int(vr[1] or 0)
+            st = vr[2] or {}
+            if isinstance(st, str):
+                tick_state = json.loads(st) if st else {}
+            elif isinstance(st, dict):
+                tick_state = st
     from clips_worker.streamer.rolling_ingest import log_rolling_tick_decision
 
     log_rolling_tick_decision(
@@ -478,6 +484,7 @@ def _schedule_rolling_import_tick(
         chunk_min=chunk_min,
         next_run_after=next_run_after,
         source="schedule_tick",
+        state=tick_state,
     )
     decision_log(
         "stream_import",

@@ -3,18 +3,23 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 
 from clips_worker.deepgram_transcribe import (
     DeepgramTranscribeError,
     TranscribeMeta,
     deepgram_api_key,
-    transcribe_deepgram,
 )
 from clips_worker.gpu.base import TranscribeReq, TranscribeRes
 from clips_worker.streamer.modal_transcribe import (
     StreamModalTranscribeError,
     estimate_modal_cost_usd,
     transcribe_stream_modal_with_meta,
+)
+from clips_worker.transcribe_logging import (
+    log_transcribe_end,
+    log_transcribe_fallback,
+    transcribe_deepgram_with_logs,
 )
 
 STREAM_CHUNK_MAX_BYTES = int(os.environ.get("STREAMER_CHUNK_MAX_BYTES", str(100 * 1024 * 1024)))
@@ -80,19 +85,30 @@ def _deepgram_fallback(
     workspace_id: str,
     project_id: str,
     reason: str,
+    *,
+    modal_elapsed_ms: int = 0,
 ) -> tuple[TranscribeRes, TranscribeMeta]:
     if not deepgram_api_key():
         raise StreamModalTranscribeError(reason)
+    log_transcribe_fallback(
+        from_provider="modal",
+        to_provider="deepgram",
+        reason=reason,
+        elapsed_ms=modal_elapsed_ms,
+    )
     print(
         f"[clipper:stream] transcribe_chunk modal_failed reason={reason} falling_back=deepgram",
         file=sys.stderr,
         flush=True,
     )
-    res = transcribe_deepgram(req)
+    t0 = time.perf_counter()
+    try:
+        res = transcribe_deepgram_with_logs(req, context="stream_vod")
+    except DeepgramTranscribeError as exc:
+        raise StreamModalTranscribeError(f"deepgram_{exc.reason}") from exc
     meta = TranscribeMeta(transcription_engine="deepgram", fallback_reason=f"modal_{reason}")
-    res.transcription_engine = meta.transcription_engine
     res.fallback_reason = meta.fallback_reason
-    res.provider = "deepgram"
+    _ = t0  # transcribe_deepgram_with_logs already logs transcribe_end
     return res, meta
 
 
@@ -108,7 +124,7 @@ def transcribe_stream_audio_request(
     provider = (vod_provider or resolve_stream_transcribe_provider()).strip().lower()
     if provider == "deepgram":
         try:
-            res = transcribe_deepgram(req)
+            res = transcribe_deepgram_with_logs(req, context="stream_vod_primary")
             meta = TranscribeMeta(transcription_engine="deepgram")
             res.transcription_engine = meta.transcription_engine
             return res, meta
@@ -125,15 +141,33 @@ def transcribe_stream_audio_request(
         initial_prompt=req.initial_prompt,
         model=stream_whisper_model(),
     )
+    modal_t0 = time.perf_counter()
     try:
         res, telemetry = transcribe_stream_modal_with_meta(req_with_model, diarize=diarize)
+        modal_ms = int((time.perf_counter() - modal_t0) * 1000)
+        log_transcribe_end(
+            provider=modal_provider,
+            elapsed_ms=modal_ms,
+            gpu_seconds=float(getattr(res, "gpu_seconds", 0) or 0),
+        )
         meta = TranscribeMeta(transcription_engine=modal_provider, telemetry=telemetry)
         res.transcription_engine = meta.transcription_engine
         return res, meta
-    except StreamModalTranscribeError as exc:
+    except (StreamModalTranscribeError, Exception) as exc:
+        modal_ms = int((time.perf_counter() - modal_t0) * 1000)
+        reason = getattr(exc, "reason", None) or type(exc).__name__
         if deepgram_api_key():
-            return _deepgram_fallback(conn, req, workspace_id, project_id, exc.reason)
-        raise
+            return _deepgram_fallback(
+                conn,
+                req,
+                workspace_id,
+                project_id,
+                str(reason),
+                modal_elapsed_ms=modal_ms,
+            )
+        if isinstance(exc, StreamModalTranscribeError):
+            raise
+        raise StreamModalTranscribeError(str(reason)) from exc
 
 
 def transcribe_clip_caption(req: TranscribeReq) -> TranscribeRes:
@@ -141,4 +175,4 @@ def transcribe_clip_caption(req: TranscribeReq) -> TranscribeRes:
     model = deepgram_caption_model()
     if not deepgram_api_key():
         raise DeepgramTranscribeError("no_api_key")
-    return transcribe_deepgram(req, model=model)
+    return transcribe_deepgram_with_logs(req, model=model, context="clip_caption")

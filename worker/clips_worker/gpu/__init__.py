@@ -41,7 +41,9 @@ def transcribe_with_fallback(
     workspace_id: str,
     project_id: str,
 ) -> TranscribeRes:
-    """Transcribe using configured provider; optional local fallback."""
+    """Transcribe using configured provider; Deepgram then optional local fallback."""
+    import time
+
     fallback = os.environ.get("GPU_FALLBACK_LOCAL", "1") != "0"
     name = _provider_name("transcribe")
     if name == "modal" and not budget_allow(conn):
@@ -50,7 +52,11 @@ def transcribe_with_fallback(
     if name == "local":
         res = LocalProvider().transcribe(req)
         res.transcription_engine = "local_whisper"
+        from clips_worker.transcribe_logging import log_transcribe_end
+
+        log_transcribe_end(provider="local_whisper", elapsed_ms=0, context="clipper")
         return res
+    modal_t0 = time.perf_counter()
     try:
         provider = get_provider("transcribe", conn)
         res = provider.transcribe(req)
@@ -58,14 +64,44 @@ def transcribe_with_fallback(
             from clips_worker.gpu.usage import record_modal_transcribe
 
             record_modal_transcribe(conn, workspace_id, project_id, res.gpu_seconds)
+        from clips_worker.transcribe_logging import log_transcribe_end
+
+        log_transcribe_end(
+            provider=str(res.provider or name),
+            elapsed_ms=int((time.perf_counter() - modal_t0) * 1000),
+            context="clipper",
+        )
         return res
     except Exception as exc:
+        modal_ms = int((time.perf_counter() - modal_t0) * 1000)
+        from clips_worker.deepgram_transcribe import deepgram_api_key
+        from clips_worker.transcribe_logging import (
+            log_transcribe_fallback,
+            transcribe_deepgram_with_logs,
+        )
+
+        if name == "modal" and deepgram_api_key():
+            log_transcribe_fallback(
+                from_provider="modal",
+                to_provider="deepgram",
+                reason=str(exc)[:200],
+                elapsed_ms=modal_ms,
+            )
+            try:
+                res = transcribe_deepgram_with_logs(req, context="clipper")
+                res.fallback_reason = str(exc)[:200]
+                return res
+            except Exception as dg_exc:
+                log.warning("gpu.fallback op=transcribe deepgram_failed reason=%s", dg_exc)
         if not fallback:
             raise
         log.warning("gpu.fallback op=transcribe reason=%s", exc)
         res = LocalProvider().transcribe(req)
         res.transcription_engine = "local_whisper"
         res.fallback_reason = str(exc)
+        from clips_worker.transcribe_logging import log_transcribe_end
+
+        log_transcribe_end(provider="local_whisper", elapsed_ms=0, context="clipper_fallback")
         return res
 
 

@@ -77,8 +77,56 @@ def rolling_max_window_ms() -> int:
     return _int("STREAMER_ROLLING_MAX_WINDOW_MS", 15 * 60 * 1000)
 
 
-def rolling_max_session_hours() -> int:
-    return _int("STREAMER_ROLLING_MAX_SESSION_HOURS", 8)
+def resolve_rolling_max_session_hours(state: dict | None) -> tuple[int | None, str]:
+    """
+    Optional cap on rolling auto-pull wall-clock session length.
+    None = no cap (default). Sources: state.rolling.maxSessionHours, env.
+    """
+    st = state if isinstance(state, dict) else {}
+    rolling = st.get("rolling") if isinstance(st.get("rolling"), dict) else {}
+    if "maxSessionHours" in rolling and rolling.get("maxSessionHours") is not None:
+        try:
+            v = int(rolling.get("maxSessionHours") or 0)
+        except (TypeError, ValueError):
+            v = 0
+        if v <= 0:
+            return None, "rolling_state"
+        return min(168, v), "rolling_state"
+    env_raw = os.environ.get("STREAMER_ROLLING_MAX_SESSION_HOURS", "0").strip()
+    if env_raw:
+        try:
+            v = int(env_raw)
+        except ValueError:
+            v = 0
+        if v <= 0:
+            return None, "env"
+        return min(168, v), "env"
+    return None, "default_no_cap"
+
+
+def rolling_limits_snapshot(state: dict | None) -> dict[str, Any]:
+    st = state if isinstance(state, dict) else {}
+    rolling = st.get("rolling") if isinstance(st.get("rolling"), dict) else {}
+    cap_h, cap_src = resolve_rolling_max_session_hours(st)
+    chunk_min = rolling_chunk_min(st)
+    return {
+        "chunkMin": chunk_min,
+        "chunkMinSource": str(rolling.get("chunkMinSource") or "env_or_default"),
+        "overlapMs": rolling_pull_overlap_ms(),
+        "overlapSource": "env_STREAMER_ROLLING_OVERLAP_MS",
+        "minNewMs": rolling_min_new_ms_for_state(st),
+        "minNewSource": "env_STREAMER_ROLLING_MIN_NEW_MS_scaled",
+        "maxWindowMs": rolling_max_window_ms(),
+        "maxWindowSource": "env_STREAMER_ROLLING_MAX_WINDOW_MS",
+        "maxSessionHours": cap_h,
+        "maxSessionHoursSource": cap_src,
+    }
+
+
+def rolling_max_session_hours(state: dict | None = None) -> int | None:
+    """Backward-compatible helper; prefer resolve_rolling_max_session_hours."""
+    cap, _ = resolve_rolling_max_session_hours(state)
+    return cap
 
 
 def rolling_min_new_ms() -> int:
@@ -110,10 +158,11 @@ def log_rolling_session_check(
     rolling: dict,
     source_field: str,
     elapsed_h: float,
+    state: dict | None = None,
 ) -> None:
     from clips_worker.decision_log import decision_log
 
-    cap_h = rolling_max_session_hours()
+    cap_h, cap_src = resolve_rolling_max_session_hours(state or {"rolling": rolling})
     decision_log(
         "stream_import",
         "rolling_session_check",
@@ -121,6 +170,7 @@ def log_rolling_session_check(
         elapsed_h=round(elapsed_h, 4),
         source_field=source_field,
         cap_h=cap_h,
+        cap_source=cap_src,
     )
 
 
@@ -184,8 +234,10 @@ def plan_rolling_window_ms(
         rolling=rolling,
         source_field=source_field,
         elapsed_h=elapsed_h,
+        state=state,
     )
-    if elapsed_h > rolling_max_session_hours():
+    cap_h, _ = resolve_rolling_max_session_hours(state)
+    if cap_h is not None and elapsed_h > cap_h:
         return "stop_session"
 
     return start_ms, end_ms
@@ -293,6 +345,7 @@ def apply_rolling_pull_plan(
         chunk_min=rolling_chunk_min(state),
         next_run_after=None,
         source="pull_plan",
+        state=state,
     )
     return start_ms, end_ms
 
@@ -305,9 +358,11 @@ def log_rolling_tick_decision(
     chunk_min: int,
     next_run_after: str | None,
     source: str,
+    state: dict | None = None,
 ) -> None:
     from clips_worker.decision_log import decision_log
 
+    limits = rolling_limits_snapshot(state)
     decision_log(
         "stream_import",
         "rolling_tick",
@@ -317,6 +372,7 @@ def log_rolling_tick_decision(
         chunkMin=chunk_min,
         nextRunAfter=next_run_after,
         source=source,
+        **limits,
     )
 
 
@@ -407,13 +463,15 @@ def stop_rolling_session(conn, vod_id: str, *, reason: str, project_id: str | No
     )
     rolling = dict(state.get("rolling") or {})
     elapsed_h, source_field, _, _ = rolling_session_elapsed_hours(rolling)
+    cap_h, cap_src = resolve_rolling_max_session_hours(state)
     decision_log(
         "stream_import",
         "rolling_session_check",
         vodId=vod_id,
         elapsed_h=round(elapsed_h, 4),
         source_field=source_field,
-        cap_h=rolling_max_session_hours(),
+        cap_h=cap_h,
+        cap_source=cap_src,
         context="rolling_stopped",
     )
     print(

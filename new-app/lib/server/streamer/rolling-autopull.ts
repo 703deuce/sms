@@ -118,6 +118,10 @@ export async function beginTwitchRollingSession(
     }),
   )
   const chunkMin = resolveRollingChunkMin(channel.settings)
+  const parsedSettings = streamerSettingsSchema.safeParse(
+    typeof channel.settings === 'object' && channel.settings ? channel.settings : {},
+  )
+  const maxSessionHours = parsedSettings.success ? parsedSettings.data.rollingMaxSessionHours : undefined
   const projectId = createId('proj')
   const vodId = createId('svod')
   const title = archive?.title || `Live stream ${startedAt.toISOString().slice(0, 16)}`
@@ -157,6 +161,7 @@ export async function beginTwitchRollingSession(
             live: true,
             chunkMin,
             sessionStartedAt: startedAt.toISOString(),
+            ...(maxSessionHours != null ? { maxSessionHours } : {}),
           },
         },
       },

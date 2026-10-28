@@ -147,6 +147,12 @@ export async function createStreamerImport(
       chunkMin: rollingSeed.chunkMin,
       chunkMinSource: rollingSeed.chunkMinSource,
     }
+    const parsedCh = streamerSettingsSchema.safeParse(
+      typeof channelSettings === 'object' && channelSettings ? channelSettings : {},
+    )
+    if (parsedCh.success && parsedCh.data.rollingMaxSessionHours != null) {
+      ;(vodState.rolling as Record<string, unknown>).maxSessionHours = parsedCh.data.rollingMaxSessionHours
+    }
   }
 
   await prisma.$transaction(async (tx) => {

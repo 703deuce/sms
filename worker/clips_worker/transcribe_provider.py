@@ -9,7 +9,6 @@ from clips_worker.deepgram_transcribe import (
     TranscribeMeta,
     deepgram_api_key,
     resolve_transcribe_provider,
-    transcribe_deepgram,
 )
 from clips_worker.gpu import transcribe_with_fallback
 from clips_worker.gpu.base import TranscribeReq, TranscribeRes
@@ -31,7 +30,9 @@ def transcribe_audio_request(
 ) -> tuple[TranscribeRes, TranscribeMeta]:
     if resolve_transcribe_provider() == "deepgram":
         try:
-            res = transcribe_deepgram(req)
+            from clips_worker.transcribe_logging import transcribe_deepgram_with_logs
+
+            res = transcribe_deepgram_with_logs(req, context="clipper_primary")
             meta = TranscribeMeta(transcription_engine="deepgram")
             res.transcription_engine = meta.transcription_engine
             return res, meta
