@@ -20,6 +20,8 @@ import {
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
 import { outputDurationMs } from '@/lib/clips/edits'
+import { editorPreviewDurationMs } from '@/lib/clips/editor-preview-edits'
+import type { SourceWord } from '@/lib/clips/source-words'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
 import {
   defaultStreamHeadlineExportTemplate,
@@ -59,6 +61,9 @@ export function ExportDialog({
   defaultChannelUrl,
   chatAvailable = false,
   chatToggleHint,
+  words = [],
+  onPatchEdits,
+  onSilenceTrimChange,
 }: {
   clipId: string
   title: string
@@ -73,6 +78,9 @@ export function ExportDialog({
   defaultChannelUrl?: string
   chatAvailable?: boolean
   chatToggleHint?: string
+  words?: SourceWord[]
+  onPatchEdits?: (patch: Partial<ClipEditsV2>) => void
+  onSilenceTrimChange?: (enabled: boolean) => void
   open: boolean
   onClose: () => void
 }) {
@@ -111,7 +119,7 @@ export function ExportDialog({
     if (!open) return
     refreshChannels()
     void loadMergedExportDialogPreferences().then((prefs) => {
-      setRemoveDeadAir(prefs.removeDeadAir)
+      setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
       setAlsoSrt(prefs.alsoSrt)
       setExportSfx(prefs.exportSfx)
       setAspect(prefs.defaultAspect ?? edits.aspectRatio ?? '9:16')
@@ -135,7 +143,12 @@ export function ExportDialog({
       }
       setExportTemplate(edits.exportTemplate)
     })
-  }, [open, edits.exportTemplate, edits.aspectRatio, platform, defaultChannelUrl])
+  }, [open, edits.exportTemplate, edits.aspectRatio, edits.silenceTrim?.enabled, platform, defaultChannelUrl])
+
+  useEffect(() => {
+    if (!open) return
+    setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
+  }, [open, edits.silenceTrim?.enabled])
 
   useEffect(() => {
     if (!open) {
@@ -220,6 +233,12 @@ export function ExportDialog({
         : tpl
       const exportEdits = {
         ...edits,
+        silenceTrim: {
+          ...edits.silenceTrim,
+          enabled: removeDeadAir,
+          minGapMs: edits.silenceTrim?.minGapMs ?? 350,
+          keepMs: edits.silenceTrim?.keepMs ?? 120,
+        },
         exportTemplate: formattedTpl
           ? {
               ...formattedTpl,
@@ -260,7 +279,17 @@ export function ExportDialog({
     }
   }
 
-  const editedDurationMs = outputDurationMs(edits)
+  const plannedDurationMs = useMemo(() => {
+    if (removeDeadAir && words.length) {
+      return editorPreviewDurationMs(
+        { ...edits, silenceTrim: { ...edits.silenceTrim, enabled: true } },
+        words,
+      )
+    }
+    return outputDurationMs(edits)
+  }, [edits, removeDeadAir, words])
+
+  const editedDurationMs = plannedDurationMs
   const platformWarn =
     exportPlatform !== 'none' ? exportPlatformDurationWarning(exportPlatform, editedDurationMs) : null
   const polishLintWarnings = useMemo(() => {
@@ -454,6 +483,7 @@ export function ExportDialog({
             onCheckedChange={(c) => {
               const on = Boolean(c)
               setRemoveDeadAir(on)
+              onSilenceTrimChange?.(on)
               persistExportDialogPreferences({ removeDeadAir: on })
             }}
           />
@@ -490,6 +520,7 @@ export function ExportDialog({
           exportPlatformId={exportPlatform !== 'none' ? exportPlatform : undefined}
           onChange={(tpl) => {
             setExportTemplate(tpl)
+            onPatchEdits?.({ exportTemplate: tpl })
             persistExportDialogPreferences({
               headlineBarEnabled: Boolean(tpl.headlineBar?.enabled),
               platformBadgeEnabled: Boolean(tpl.platformBadge?.enabled),
@@ -507,6 +538,7 @@ export function ExportDialog({
           }}
           chatAvailable={chatAvailable}
           chatToggleHint={chatToggleHint}
+          hideHeadlineControls
           savedChannels={savedChannels}
           onChannelsRefresh={refreshChannels}
         />
@@ -520,7 +552,7 @@ export function ExportDialog({
                 }${renderEtaSec != null && renderEtaSec > 0 ? ` · ~${renderEtaSec}s left` : ''}`}
           </p>
         )}
-        {durationMs != null && durationMs > 0 && (
+        {renderId && durationMs != null && durationMs > 0 && (
           <p className="mt-1 text-xs text-muted-foreground">
             Clip length: {Math.round(editedDurationMs / 1000)}s
             {Math.abs(editedDurationMs - durationMs) > 500
@@ -528,6 +560,11 @@ export function ExportDialog({
               : ''}
           </p>
         )}
+        {!renderId ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Clip length: {Math.round(editedDurationMs / 1000)}s
+          </p>
+        ) : null}
         {status === 'FAILED' && errorDetail && (
           <pre className="mt-3 max-h-40 overflow-auto rounded border border-destructive/30 bg-destructive/5 p-2 text-xs whitespace-pre-wrap text-destructive">
             {errorDetail}

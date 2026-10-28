@@ -33,7 +33,7 @@ describe('caption preview overlay', () => {
       autoEmojis: true,
       emojiByWord: { '0': '🔥' },
     }
-    const words: ClipWord[] = [{ w: 'hello', s: 0, e: 1, idx: 0 }]
+    const words: ClipWord[] = [{ w: 'hello', s: 0, e: 1, i: 0, idx: 0 }]
     render(
       <CaptionOverlay
         words={words}
@@ -43,6 +43,6 @@ describe('caption preview overlay', () => {
         outputDurationSec={5}
       />,
     )
-    expect(screen.getByTestId('caption-word-emoji').textContent).toContain('🔥')
+    expect(screen.getByTestId('caption-floating-emoji').textContent).toContain('🔥')
   })
 })

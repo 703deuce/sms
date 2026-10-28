@@ -13,7 +13,7 @@ export function layoutUsesStreamFitTopPreview(mode: ClipEditsV2['layout']['mode'
 
 /** Preview + export template: reserve top band for headline bar. */
 export function layoutReservesHeadlineBand(mode: ClipEditsV2['layout']['mode'] | string): boolean {
-  return mode === 'full_frame'
+  return mode === 'full_frame' || mode === 'fit_top'
 }
 
 export const LAYOUT_HEADLINE_PREVIEW_FRAC = STREAM_HEADLINE_BAR_FRAC

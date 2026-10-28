@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BrollItem } from '@/lib/clips/broll'
 import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { keepSegments, outputDurationMs, wordDisplayText } from '@/lib/clips/edits'
 import { clampTrimToExtendedBounds, extendedTrimLimits } from '@/lib/clips/trim-bounds'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
+import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { layoutModeAtSourceMs } from '@/lib/clips/layout-segments'
@@ -45,25 +46,34 @@ export function Timeline({
   onCutSection?: () => void
   onSetLayoutMode?: (mode: ClipEditsV2['layout']['mode']) => void
 }) {
-  const span = Math.max(1, edits.trim.out - edits.trim.in)
+  const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
+  const span = Math.max(1, previewEdits.trim.out - previewEdits.trim.in)
   const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs)
   const clampTrim = (next: { in: number; out: number }) =>
     clampTrimToExtendedBounds(clipStartMs, clipEndMs, next)
-  const aiInPct = ((clipStartMs - edits.trim.in) / span) * 100
-  const aiOutPct = ((clipEndMs - edits.trim.in) / span) * 100
-  const outDur = outputDurationMs(edits)
+  const aiInPct = ((clipStartMs - previewEdits.trim.in) / span) * 100
+  const aiOutPct = ((clipEndMs - previewEdits.trim.in) / span) * 100
+  const outDur = outputDurationMs(previewEdits)
   const widthPx = Math.max(640, Math.round(span / 20))
-  const captionByI = new Map(buildCaptionWords(words, edits).map((c) => [c.i, c]))
+  const captionByI = new Map(buildCaptionWords(words, previewEdits).map((c) => [c.i, c]))
 
   const outputToSource = (outMs: number) => {
-    const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+    const segs = keepSegments(previewEdits.trim.in, previewEdits.trim.out, previewEdits.cutRanges)
     let acc = 0
     for (const [a, b] of segs) {
       const len = b - a
       if (acc + len >= outMs) return a + (outMs - acc)
       acc += len
     }
-    return edits.trim.out
+    return previewEdits.trim.out
+  }
+
+  const seekTimelineAtClientX = (clientX: number, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0) return
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    const sourceMs = previewEdits.trim.in + pct * span
+    onSeekOutput(remapSourceToOutput(sourceMs, previewEdits))
   }
 
   const broll = edits.broll || []
@@ -120,8 +130,13 @@ export function Timeline({
           ))}
         </div>
         <div
-          className="relative h-[9.5rem] shrink-0"
+          className="relative h-[9.5rem] shrink-0 cursor-pointer"
           style={{ width: widthPx }}
+          role="presentation"
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest('button')) return
+            seekTimelineAtClientX(e.clientX, e.currentTarget)
+          }}
           onContextMenu={(e) => {
             if (!onSplitLayout) return
             e.preventDefault()
@@ -140,8 +155,8 @@ export function Timeline({
         <div className="absolute inset-x-0 top-8 h-8 rounded bg-muted" role="group" aria-label="Transcript timeline">
           {words.map((w) => {
             const { startMs, endMs } = wordSourceMs(w)
-            if (endMs < edits.trim.in || startMs > edits.trim.out) return null
-            const left = ((startMs - edits.trim.in) / span) * 100
+            if (endMs < previewEdits.trim.in || startMs > previewEdits.trim.out) return null
+            const left = ((startMs - previewEdits.trim.in) / span) * 100
             const wPct = ((endMs - startMs) / span) * 100
             const shotI = shotIndexAt(shots, (startMs + endMs) / 2)
             const bg = shotI % 2 === 0 ? 'bg-sky-500/70' : 'bg-violet-500/70'
@@ -151,7 +166,10 @@ export function Timeline({
                 type="button"
                 className={`absolute top-1 h-6 truncate rounded px-0.5 text-[9px] text-white ${bg}`}
                 style={{ left: `${left}%`, width: `${Math.max(wPct, 0.4)}%` }}
-                onClick={() => onSeekOutput(remapSourceToOutput(startMs, edits))}
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  onSeekOutput(remapSourceToOutput(startMs, previewEdits))
+                }}
                 title={wordDisplayText(w, edits.wordFixes)}
               >
                 {captionByI.get(w.i)?.text ?? wordDisplayText(w, edits.wordFixes)}

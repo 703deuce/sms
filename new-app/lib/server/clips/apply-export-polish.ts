@@ -23,7 +23,7 @@ export function applyExportPolishEdits(
     streamClip: opts.streamClip,
     words,
     hookText: opts.hookText,
-    applySilenceCuts: opts.removeDeadAir !== false,
+    applySilenceCuts: opts.removeDeadAir === true,
   })
   if (opts.exportSfx) {
     next = { ...next, exportSfx: normalizeExportSfxMode(opts.exportSfx) }

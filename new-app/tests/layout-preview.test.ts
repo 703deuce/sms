@@ -12,6 +12,10 @@ describe('layout preview helpers', () => {
     expect(headlineBarAllowedForLayout('full_frame')).toBe(true)
   })
 
+  it('fit_top reserves headline band', () => {
+    expect(layoutReservesHeadlineBand('fit_top')).toBe(true)
+  })
+
   it('split layouts block headline bar', () => {
     expect(headlineBarAllowedForLayout('split')).toBe(false)
     expect(headlineBarAllowedForLayout('grid3')).toBe(false)

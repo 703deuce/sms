@@ -14,7 +14,8 @@ import type { CropShot } from '@/lib/server/clips/clip-detail'
 import type { CropTrack } from '@/lib/clips/crop-track'
 import { requestClipReframe } from '@/lib/clips-api'
 import { patchClip } from '@/lib/clips-api'
-import { outputDurationFromEdits } from '@/lib/clips/editor-playback'
+import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
+import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
@@ -136,6 +137,7 @@ export function EditorShell({
   const [playerVolume, setPlayerVolume] = useState(100)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const selectionRef = useRef<TranscriptSelection | null>(null)
+  const seededExportTemplateRef = useRef(false)
   const {
     edits,
     undo,
@@ -164,6 +166,24 @@ export function EditorShell({
     flushSave,
     syncServerUpdatedAt,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, editsSaveVersion, words })
+
+  useEffect(() => {
+    if (seededExportTemplateRef.current) return
+    seededExportTemplateRef.current = true
+    const s = (aiMeta as { streamer?: { login?: string; platform?: string } } | null)?.streamer
+    const platform =
+      s?.platform === 'kick' ? 'kick' : s?.platform === 'twitch' ? 'twitch' : undefined
+    const login = s?.login
+    const channelUrl =
+      login && platform
+        ? platform === 'kick'
+          ? `https://kick.com/${login}`
+          : `https://twitch.tv/${login}`
+        : undefined
+    const next = seedEditorExportTemplate(edits, aiMeta, { platform, channelUrl })
+    if (next.exportTemplate !== edits.exportTemplate) setEdits(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on open
+  }, [])
 
   const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
 
@@ -235,7 +255,7 @@ export function EditorShell({
   }, [enqueueStudioSound])
 
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
-  const outDur = outputDurationFromEdits(edits)
+  const outDur = editorPreviewDurationMs(edits, editorWords)
   useAudioMix({
     videoRef,
     edits,
@@ -320,9 +340,9 @@ export function EditorShell({
   const seekOutput = useCallback(
     (ms: number) => {
       const v = videoRef.current
-      if (v) seekToOutputMs(v, edits, ms)
+      if (v) seekToOutputMs(v, editorPreviewEdits(edits, editorWords), ms)
     },
-    [edits],
+    [edits, editorWords],
   )
 
   const togglePlay = async () => {
@@ -373,8 +393,9 @@ export function EditorShell({
         e.preventDefault()
         togglePlay()
       }
-      if (e.code === 'ArrowLeft' && v) seekToOutputMs(v, edits, Math.max(0, outputMs - 1000))
-      if (e.code === 'ArrowRight' && v) seekToOutputMs(v, edits, Math.min(outDur, outputMs + 1000))
+      const playbackEdits = editorPreviewEdits(edits, editorWords)
+      if (e.code === 'ArrowLeft' && v) seekToOutputMs(v, playbackEdits, Math.max(0, outputMs - 1000))
+      if (e.code === 'ArrowRight' && v) seekToOutputMs(v, playbackEdits, Math.min(outDur, outputMs + 1000))
       if (e.code === 'Backspace' || e.code === 'Delete') {
         e.preventDefault()
         deleteSelection()
@@ -486,6 +507,13 @@ export function EditorShell({
           onSeekSource={seekSource}
           onOpenGapReview={() => setGapReviewOpen(true)}
           onOpenFillerReview={() => setFillerReviewOpen(true)}
+          headlinePlatform={
+            streamerSide?.platform === 'kick'
+              ? 'kick'
+              : streamerSide?.platform === 'twitch'
+                ? 'twitch'
+                : undefined
+          }
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -734,6 +762,19 @@ export function EditorShell({
         open={exportOpen}
         onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
         onBeforeExport={() => flushSave()}
+        words={editorWords}
+        onPatchEdits={(patch) => setEdits({ ...edits, ...patch })}
+        onSilenceTrimChange={(enabled) =>
+          setEdits({
+            ...edits,
+            silenceTrim: {
+              ...edits.silenceTrim,
+              enabled,
+              minGapMs: edits.silenceTrim?.minGapMs ?? 350,
+              keepMs: edits.silenceTrim?.keepMs ?? 120,
+            },
+          })
+        }
         onClose={() => setExportOpen(false)}
       />
       </ClipperSurfaceErrorBoundary>

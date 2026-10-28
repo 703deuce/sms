@@ -17,6 +17,7 @@ import {
   type ClipGapToolSettings,
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
+import { EditorHeadlineField } from '@/components/clips/editor/editor-headline-field'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
   { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
@@ -66,6 +67,7 @@ export function LayoutPanel({
   onSeekSource,
   onOpenGapReview,
   onOpenFillerReview,
+  headlinePlatform,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -88,6 +90,7 @@ export function LayoutPanel({
   onSetCutRanges?: (ranges: [number, number][]) => void
   onSeekSource?: (sourceMs: number) => void
   onOpenGapReview?: () => void
+  headlinePlatform?: 'twitch' | 'kick'
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -139,6 +142,14 @@ export function LayoutPanel({
           <p className="text-xs text-muted-foreground">Updates the preview and export framing.</p>
         </div>
       )}
+      {clipId && onEdits ? (
+        <EditorHeadlineField
+          clipId={clipId}
+          edits={edits}
+          onEdits={onEdits}
+          platform={headlinePlatform}
+        />
+      ) : null}
       {onOpenFillerReview ? (
         <Button type="button" size="sm" variant="outline" className="w-full gap-1.5" onClick={onOpenFillerReview}>
           <Scissors className="size-3.5" aria-hidden />

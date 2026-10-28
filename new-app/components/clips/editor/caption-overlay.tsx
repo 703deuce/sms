@@ -5,6 +5,7 @@ import './caption-anim.css'
 import { useMemo } from 'react'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { wordKey } from '@/lib/clips/edits'
+import { activeCaptionWordIndex, captionEmojiForWord } from '@/lib/clips/caption-overlay-active'
 import { resolvePreset, type CaptionPreset } from '@/lib/clips/caption-presets'
 import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 
@@ -45,7 +46,7 @@ export function CaptionOverlay({
   const colors = cap.colors
   const emphasis = new Set(cap.emphasis ?? [])
 
-  const activeIdx = words.findIndex((w) => w.s <= currentTimeSec && currentTimeSec < w.e)
+  const activeIdx = activeCaptionWordIndex(words, currentTimeSec)
   const lineStart = activeIdx >= 0 ? Math.floor(activeIdx / wpl) * wpl : 0
   const lineWords = useMemo(
     () => words.slice(lineStart, lineStart + wpl),
@@ -88,9 +89,9 @@ export function CaptionOverlay({
       )}
       {hasEmojiMap
         ? words.map((w, globalIdx) => {
-            const idx = wordKey(w) ?? w.idx ?? globalIdx
-            const emoji = emojiMap[String(idx)] ?? emojiMap[String(w.idx ?? globalIdx)]
+            const emoji = captionEmojiForWord(w, globalIdx, emojiMap)
             if (!emoji) return null
+            const idx = wordKey(w) ?? w.idx ?? globalIdx
             if (currentTimeSec < w.s || currentTimeSec >= w.e) return null
             return (
               <div
@@ -119,9 +120,7 @@ export function CaptionOverlay({
             : colors?.b || preset.activeB
         const isEmph = emphasis.has(w.idx ?? globalIdx)
         const idx = wordKey(w) ?? globalIdx
-        const emoji = showEmojis
-          ? emojiMap[String(idx)] ?? emojiMap[String(globalIdx)]
-          : undefined
+        const emoji = showEmojis ? captionEmojiForWord(w, globalIdx, emojiMap) : undefined
         const prevWord = i > 0 ? lineWords[i - 1]?.w : words[lineStart - 1]?.w
         const sentenceStart = caseMode === 'sentence' && isSentenceBoundary(prevWord)
         const text = formatCaptionWord(w.w, caseMode, sentenceStart) + (emoji && !hasEmojiMap ? ` ${emoji}` : '')

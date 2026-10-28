@@ -35,6 +35,7 @@ export function ExportTemplateSection({
   onPatchEdits,
   chatAvailable = true,
   chatToggleHint,
+  hideHeadlineControls = false,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -49,6 +50,8 @@ export function ExportTemplateSection({
   /** False when VOD has no chat log — toggle disabled with note. */
   chatAvailable?: boolean
   chatToggleHint?: string
+  /** Headline text lives in Layout panel (single source of truth). */
+  hideHeadlineControls?: boolean
 }) {
   const tpl = edits.exportTemplate || {}
   const headlineAllowed = headlineBarAllowedForLayout(layoutMode)
@@ -135,9 +138,13 @@ export function ExportTemplateSection({
     <div className="mt-4 space-y-3 rounded-lg border border-border p-3">
       <p className="text-xs font-medium">Stream headline template</p>
       <p className="text-xs text-muted-foreground">
-        fit_top layout: white headline band, full-width video, blur footer. Toggle headline off for fit_blur.
+        {hideHeadlineControls
+          ? 'Headline is edited in the Layout panel. Badge, channel, and chat apply here.'
+          : 'fit_top layout: white headline band, full-width video, blur footer. Toggle headline off for fit_blur.'}
       </p>
 
+      {!hideHeadlineControls ? (
+        <>
       <div className="flex items-center justify-between gap-2">
         <Label className="text-sm">Headline bar</Label>
         <Switch
@@ -189,6 +196,12 @@ export function ExportTemplateSection({
           </div>
         </>
       )}
+        </>
+      ) : headlineText ? (
+        <p className="text-xs text-muted-foreground">
+          Headline: {effectiveHeadlineText({ ...tpl, headlineBar: { enabled: true, text: headlineText } })}
+        </p>
+      ) : null}
 
       <div className="flex items-center justify-between gap-2">
         <div>

@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { keepSegments } from '@/lib/clips/edits'
-import { buildCaptionWords, captionWordsToClipWords } from '@/lib/clips/caption-words'
+import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { shotAt } from '@/lib/clips/crop-track'
@@ -104,6 +104,8 @@ export function PreviewStage({
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
+  const wordsRef = useRef(words)
+  wordsRef.current = words
   onTickRef.current = onTick
   boxSizeRef.current = box
 
@@ -150,6 +152,7 @@ export function PreviewStage({
       const v = videoRefInner.current
       const blur = blurRef.current
       const e = editsRef.current
+      const playbackEdits = editorPreviewEdits(e, wordsRef.current)
       const track = trackRef.current
       const letterbox = layoutUsesLetterboxBlurPreview(e.layout?.mode ?? 'speaker_follow')
       let src = e.trim.in
@@ -159,7 +162,7 @@ export function PreviewStage({
           blur.currentTime = v.currentTime
         }
         if (!v.paused) {
-          const stepped = applyPlaybackTime(src, e)
+          const stepped = applyPlaybackTime(src, playbackEdits)
           if (Math.abs(stepped.sourceMs - src) > 5) {
             v.currentTime = stepped.sourceMs / 1000
             if (blur) blur.currentTime = stepped.sourceMs / 1000
@@ -171,7 +174,7 @@ export function PreviewStage({
           }
         }
       }
-      const out = applyPlaybackTime(src, e).outputMs
+      const out = applyPlaybackTime(src, playbackEdits).outputMs
       const outSec = out / 1000
       if (Math.abs(captionTimeRef.current - outSec) >= 0.02) {
         captionTimeRef.current = outSec
@@ -234,12 +237,13 @@ export function PreviewStage({
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const captionWords = useMemo(() => {
-    const raw = previewWords ?? captionWordsToClipWords(buildCaptionWords(words, edits))
-    return raw.map((w) => ({
+    if (previewWords?.length) return previewWords.map((w) => ({
       ...w,
       w: typeof w.w === 'string' ? w.w : String(w.w ?? ''),
     }))
+    return editorPreviewCaptionClipWords(words, edits)
   }, [previewWords, words, edits])
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'
@@ -369,7 +373,7 @@ export function PreviewStage({
             currentTimeSec={captionTimeSec}
             edits={edits as ClipEditsV2}
             boxHeightPx={box.h}
-            outputDurationSec={outputDurationFromEdits(edits) / 1000}
+            outputDurationSec={outputDurationFromEdits(previewEdits) / 1000}
           />
         )}
         <ExportTemplateOverlay
