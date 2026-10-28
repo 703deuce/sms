@@ -63,7 +63,7 @@ def requeue_stale_running_jobs(conn, stale_seconds: int = JOB_LOCK_STALE_SECONDS
                 "finishedAt" = NOW()
             WHERE status = 'RUNNING'
               AND type IN ({lane_types_sql_in()})
-              AND type LIKE 'STREAM_%'
+              AND type LIKE 'STREAM\\_%%'
               AND attempts >= %s
               AND ("lockedAt" IS NULL OR "lockedAt" < NOW() - {interval})
             """,
