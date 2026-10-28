@@ -5,6 +5,7 @@ import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { keepSegments } from '@/lib/clips/edits'
 import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
+import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { shotAt } from '@/lib/clips/crop-track'
@@ -12,9 +13,9 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
 import {
   LAYOUT_HEADLINE_PREVIEW_FRAC,
-  layoutReservesHeadlineBand,
   layoutUsesLetterboxBlurPreview,
 } from '@/lib/clips/layout-preview'
+import { editorHeadlineBandAllowed } from '@/lib/clips/export-template'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
 import { applyPlaybackTime, outputDurationFromEdits } from '@/lib/clips/editor-playback'
@@ -88,7 +89,7 @@ export function PreviewStage({
   const aspect = edits.aspectRatio ?? '9:16'
   const layoutMode = edits.layout?.mode ?? 'speaker_follow'
   const letterboxPreview = layoutUsesLetterboxBlurPreview(layoutMode)
-  const headlineBandPreview = layoutReservesHeadlineBand(layoutMode)
+  const headlineBandPreview = editorHeadlineBandAllowed(layoutMode)
   const headlineBandPct = headlineBandPreview ? LAYOUT_HEADLINE_PREVIEW_FRAC * 100 : 0
   const normalizedTrack = cropTrack ? normalizeCropTrack(cropTrack) : null
   const cropPreview = Boolean(
@@ -245,6 +246,15 @@ export function PreviewStage({
     }))
     return editorPreviewCaptionClipWords(words, edits)
   }, [previewWords, words, edits])
+
+  useEffect(() => {
+    logEditorDecision('caption_timeline', {
+      wordCount: captionWords.length,
+      silenceTrimEnabled: Boolean(edits.silenceTrim?.enabled),
+      previewWordSource: previewWords?.length ? 'dub' : 'editor_preview',
+    })
+  }, [captionWords.length, edits.silenceTrim?.enabled, previewWords?.length])
+
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'
 

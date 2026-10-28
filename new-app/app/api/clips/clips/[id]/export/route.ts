@@ -10,7 +10,7 @@ import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
 import { coerceEditsForPreviewExport } from '@/lib/clips/export-edits-coerce'
 import { previewExportMatchesDefault } from '@/lib/clips/export-edits-match'
 import { CLIP_PREVIEW_EXPORT_ASPECT, CLIP_PREVIEW_EXPORT_RESOLUTION } from '@/lib/clips/export-preview-reuse'
-import { normalizeEdits, outputDurationMs } from '@/lib/clips/edits'
+import { normalizeEdits, outputDurationMs, sanitizeCutRangesForTrim } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
@@ -23,6 +23,7 @@ import { getClipEditorWords } from '@/lib/server/clips/clip-detail'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { getPrisma } from '@/lib/server/db'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 
 const resolutionSchema = z.preprocess((v) => {
   if (v === 720 || v === '720') return '720p'
@@ -115,6 +116,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       resolution = CLIP_PREVIEW_EXPORT_RESOLUTION
     }
     const editedDurationMs = outputDurationMs(edits)
+    logEditorDecision('export_request', {
+      clipId,
+      workspaceId,
+      resolution,
+      aspect,
+      exportPlatform: exportPlatform ?? null,
+      watermark,
+      durationMs: editedDurationMs,
+      sourceSpanMs: clip.endMs - clip.startMs,
+      exportSfx,
+      removeDeadAir,
+      previewWysiwyg,
+      cutCount: edits.cutRanges.length,
+    })
     console.info('[clipper:export] request', {
       clipId,
       workspaceId,
@@ -130,6 +145,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const prisma = getPrisma()
     if (!skipPolishForPreviewReuse) {
+      edits = {
+        ...edits,
+        cutRanges: sanitizeCutRangesForTrim(edits.cutRanges, edits.trim.in, edits.trim.out),
+      }
       await prisma.clip.update({
         where: { id: clipId },
         data: { edits: toPrismaJson(edits) },

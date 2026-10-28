@@ -217,7 +217,6 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
   if (!raw || typeof raw !== 'object') return base
   const migrated = migrateLegacyEdits(raw as Record<string, unknown>, bounds)
   const o = migrated
-  const trim = (o.trim as { in?: number; out?: number }) || {}
   const layoutRaw = (o.layout as { mode?: string; shotOverrides?: unknown; layoutSegments?: unknown }) || {}
   const mode = LAYOUT_MODES.includes(layoutRaw.mode as ClipEditsV2['layout']['mode'])
     ? (layoutRaw.mode as ClipEditsV2['layout']['mode'])
@@ -239,26 +238,29 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
         })
         .filter(Boolean) as ClipEditsV2['layout']['shotOverrides']
     : []
+  const trimRaw = (o.trim as { in?: number; out?: number }) || {}
+  const trim = clampTrimToExtendedBounds(bounds.clipStartMs, bounds.clipEndMs, {
+    in: Number(trimRaw.in ?? base.trim.in),
+    out: Number(trimRaw.out ?? base.trim.out),
+  })
+  const rawCuts = Array.isArray(o.cutRanges)
+    ? (o.cutRanges as CutRange[]).filter(
+        (r) => Array.isArray(r) && r.length === 2 && Number.isFinite(r[0]) && Number.isFinite(r[1]),
+      )
+    : []
   return {
     ...base,
     ...o,
     v: 2,
-    trim: clampTrimToExtendedBounds(bounds.clipStartMs, bounds.clipEndMs, {
-      in: Number(trim.in ?? base.trim.in),
-      out: Number(trim.out ?? base.trim.out),
-    }),
-    cutRanges: Array.isArray(o.cutRanges)
-      ? (o.cutRanges as CutRange[]).filter(
-          (r) => Array.isArray(r) && r.length === 2 && Number.isFinite(r[0]) && Number.isFinite(r[1]),
-        )
-      : [],
+    trim,
+    cutRanges: sanitizeCutRangesForTrim(rawCuts, trim.in, trim.out),
     wordFixes: (o.wordFixes as Record<string, string>) || {},
     captions: normalizeCaptions(o.captions, base.captions),
     layout: {
       ...base.layout,
       mode,
       shotOverrides,
-      layoutSegments: normalizeLayoutSegments(layoutRaw.layoutSegments, Number(trim.in ?? base.trim.in), Number(trim.out ?? base.trim.out), mode),
+      layoutSegments: normalizeLayoutSegments(layoutRaw.layoutSegments, trim.in, trim.out, mode),
     },
     aspectRatio,
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
@@ -332,18 +334,42 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
   )
 }
 
+const MIN_SEGMENT_MS = 80
+
+/** Drop or clamp cuts that fall outside the active trim window. */
+export function sanitizeCutRangesForTrim(
+  cutRanges: CutRange[],
+  trimIn: number,
+  trimOut: number,
+): CutRange[] {
+  const out: CutRange[] = []
+  for (const [s, e] of cutRanges) {
+    const a = Math.min(s, e)
+    const b = Math.max(s, e)
+    if (b <= trimIn || a >= trimOut) continue
+    const cs = Math.max(a, trimIn)
+    const ce = Math.min(b, trimOut)
+    if (ce - cs >= MIN_SEGMENT_MS) out.push([cs, ce])
+  }
+  return mergeCutRanges(out)
+}
+
 export function keepSegments(trimIn: number, trimOut: number, cutRanges: CutRange[]): [number, number][] {
   const segs: [number, number][] = []
   let t = trimIn
-  for (const [s, e] of [...cutRanges].sort((a, b) => a[0] - b[0])) {
+  for (const [s, e] of sanitizeCutRangesForTrim(cutRanges, trimIn, trimOut)) {
     const cs = Math.max(s, trimIn)
     const ce = Math.min(e, trimOut)
     if (ce <= t) continue
-    if (cs > t) segs.push([t, cs])
+    if (cs > t) {
+      const segEnd = Math.min(cs, trimOut)
+      if (segEnd > t) segs.push([t, segEnd])
+    }
     t = Math.max(t, ce)
+    if (t >= trimOut) break
   }
   if (t < trimOut) segs.push([t, trimOut])
-  return segs.filter(([a, b]) => b - a >= 80)
+  return segs.filter(([a, b]) => b - a >= MIN_SEGMENT_MS)
 }
 
 export function remapTime(tMs: number, segs: [number, number][]): number | null {

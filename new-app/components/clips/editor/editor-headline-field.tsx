@@ -7,9 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
   EXPORT_HEADLINE_MAX_REGENERATIONS,
+  editorHeadlineBandAllowed,
   effectiveHeadlineText,
   formatHeadlineForExport,
-  headlineBarAllowedForLayout,
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -32,7 +32,7 @@ export function EditorHeadlineField({
 }) {
   const tpl = edits.exportTemplate ?? {}
   const layoutMode = edits.layout.mode
-  const allowed = headlineBarAllowedForLayout(layoutMode)
+  const allowed = editorHeadlineBandAllowed(layoutMode)
   const enabled = Boolean(tpl.headlineBar?.enabled)
   const displayText = tpl.headlineBar?.text?.trim() || tpl.suggestedHeadline?.trim() || ''
   const gens = tpl.headlineGenerations ?? 0

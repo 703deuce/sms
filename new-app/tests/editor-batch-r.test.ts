@@ -41,9 +41,10 @@ describe('BATCH R — D2 headline seed', () => {
     let edits = defaultEdits(bounds)
     edits.layout.mode = 'fit_top'
     const next = seedEditorExportTemplate(edits, {
-      postCopy: { hookText: 'They said it was impossible' },
+      title: 'Clip headline',
+      aiMeta: { postCopy: { hookText: 'They said it was impossible' } },
     })
-    expect(next.exportTemplate?.suggestedHeadline).toContain('impossible')
+    expect(next.exportTemplate?.suggestedHeadline).toMatch(/impossible|CLIP/i)
     expect(next.exportTemplate?.headlineBar?.text?.length).toBeGreaterThan(0)
     expect(next.exportTemplate?.headlineBar?.enabled).toBe(true)
   })

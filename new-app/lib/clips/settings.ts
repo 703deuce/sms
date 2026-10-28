@@ -68,11 +68,14 @@ export const clipProjectSettingsSchema = z.object({
   prompt: z.string().max(2000).optional(),
   layout: z.enum(clipLayoutModes).default('speaker_follow'),
   aspectRatio: z.enum(clipAspectRatios).default('9:16'),
-  captions: z.object({
-    enabled: z.boolean().default(true),
-    presetId: z.string().default('bold_pop'),
-    language: z.string().default('en'),
-  }),
+  captions: z
+    .object({
+      enabled: z.boolean().default(true),
+      presetId: z.string().default('bold_pop'),
+      language: z.string().default('en'),
+    })
+    .optional()
+    .default({ enabled: true, presetId: 'bold_pop', language: 'en' }),
   brandTemplateId: z.string().nullable().optional(),
   brand: z.record(z.unknown()).optional(),
   autoStockBroll: z.boolean().default(false),
