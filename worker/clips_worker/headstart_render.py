@@ -5,7 +5,8 @@ import os
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
-from typing import Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def headstart_render_timeout_sec() -> float:
@@ -123,3 +124,60 @@ def _release_headstart_span(
         head_render_state.get("by_span", {}).pop(sk, None)
         if persisted_spans is not None:
             persisted_spans.discard(sk)
+
+
+def prune_headstart_to_planned(
+    head_render_state: dict[str, Any],
+    planned_picks: list[dict],
+    *,
+    span_key: Callable[[int, int], tuple[int, int]],
+    rendered_spans: set[tuple[int, int]],
+    persisted_spans: set[tuple[int, int]] | None,
+    span_lock: threading.Lock,
+    project_id: str,
+) -> None:
+    from clips_worker.clip_segments import spans_same_segment
+    from clips_worker.storage import delete_object
+
+    def _matches_planned(start_ms: int, end_ms: int) -> bool:
+        for p in planned_picks:
+            if spans_same_segment(
+                int(p["start_ms"]),
+                int(p["end_ms"]),
+                start_ms,
+                end_ms,
+            ):
+                return True
+        return False
+
+    by_span: dict[tuple[int, int], dict] = dict(head_render_state.get("by_span") or {})
+    clip_ids = dict(head_render_state.get("clip_id_by_span") or {})
+    drop: list[tuple[int, int]] = []
+    for sk, row in by_span.items():
+        s, e = int(row["startMs"]), int(row["endMs"])
+        if not _matches_planned(s, e):
+            drop.append(sk)
+
+    for sk in drop:
+        row = by_span.pop(sk, None)
+        clip_ids.pop(sk, None)
+        with span_lock:
+            rendered_spans.discard(sk)
+            if persisted_spans is not None:
+                persisted_spans.discard(sk)
+        if not row:
+            continue
+        for key_name in ("previewKey", "posterKey", "wordsKey", "cropKey"):
+            storage_key = row.get(key_name)
+            if storage_key:
+                try:
+                    delete_object(str(storage_key))
+                except Exception:
+                    pass
+        print(
+            f"[clipper:headstart] project={project_id} discarded_unplanned span={sk}",
+            flush=True,
+        )
+
+    head_render_state["by_span"] = by_span
+    head_render_state["clip_id_by_span"] = clip_ids

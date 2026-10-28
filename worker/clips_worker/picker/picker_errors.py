@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
+
+from clips_worker.streamer.errors import RetryableError
 
 
 def _sanitize_log_text(text: str, limit: int = 320) -> str:
@@ -74,3 +77,34 @@ def log_picker_error(
         if parts:
             extra = " " + " ".join(parts)
     print(f"[clipper:picker_error] provider={provider} status={st} message={msg}{extra}", flush=True)
+
+
+def parse_retry_delay_seconds(retry_delay: str | None) -> float | None:
+    """Parse google.rpc.RetryInfo retryDelay (e.g. '34s' or '34.500s')."""
+    if not retry_delay:
+        return None
+    m = re.match(r"^([\d.]+)s?$", str(retry_delay).strip(), re.I)
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
+    except ValueError:
+        return None
+
+
+class VideoPickerRetryableError(RetryableError):
+    """Gemini video watch failed; job should requeue with backoff (no synthetic moments)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        user_message: str | None = None,
+        delay_seconds: int = 90,
+    ) -> None:
+        super().__init__(message)
+        self.user_message = (
+            user_message
+            or "Video clip discovery is temporarily unavailable. We'll retry automatically."
+        )
+        self.delay_seconds = max(1, min(600, int(delay_seconds)))

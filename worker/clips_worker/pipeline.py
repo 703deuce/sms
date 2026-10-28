@@ -714,14 +714,12 @@ def run_m4_pipeline(
 
                 def _render_pick_async(pick: dict, clip_index: int, clips_total_hint: int) -> None:
                     if not _mark_span(pick["start_ms"], pick["end_ms"]):
-                        with span_lock:
-                            rendered_spans.add(_span_key(int(pick["start_ms"]), int(pick["end_ms"])))
+                        return
                     sk = _span_key(pick["start_ms"], pick["end_ms"])
                     try:
                         cid = head_render_state.get("clip_id_by_span", {}).get(sk)
                         row = build_clip_row_from_pick(pick, clip_index, clip_id=cid)
                         head_render_state["by_span"][sk] = row
-                        _persist_clip_row(row, clip_index, clips_total_hint)
                     except Exception as exc:
                         with span_lock:
                             rendered_spans.discard(sk)
@@ -796,8 +794,36 @@ def run_m4_pipeline(
                             "videoPickerFallbackReason": vp_cache.get("fallback_reason"),
                         },
                     )
-                from clips_worker.headstart_render import await_headstart_render
+                picks = plan_clips(picks) if picks else []
+                if not picks:
+                    empty_msg = picker_message or "No complete, self-contained moments found."
+                    mark_project_ready(conn, project_id, error=empty_msg)
+                    post_progress(
+                        job_id,
+                        {
+                            "projectStatus": "READY",
+                            "stage": "ready",
+                            "progress": 100,
+                            "jobStatus": "DONE",
+                            "error": empty_msg,
+                        },
+                    )
+                    return
 
+                from clips_worker.headstart_render import (
+                    await_headstart_render,
+                    prune_headstart_to_planned,
+                )
+
+                prune_headstart_to_planned(
+                    head_render_state,
+                    picks,
+                    span_key=_span_key,
+                    rendered_spans=rendered_spans,
+                    persisted_spans=persisted_spans,
+                    span_lock=span_lock,
+                    project_id=project_id,
+                )
                 with stage_span("headstart_render", heartbeat=True):
                     await_headstart_render(
                         head_executor,
@@ -862,12 +888,11 @@ def run_m4_pipeline(
                             return cached
                         if not _mark_span(pick["start_ms"], pick["end_ms"]):
                             print(
-                                f"[clipper:overlap] project={project_id} force_render idx={idx} "
+                                f"[clipper:overlap] ERROR project={project_id} skip_render idx={idx} "
                                 f"startMs={pick.get('start_ms')} endMs={pick.get('end_ms')}",
                                 flush=True,
                             )
-                            with span_lock:
-                                rendered_spans.add(_span_key(int(pick["start_ms"]), int(pick["end_ms"])))
+                            return None
                         sk = _span_key(int(pick["start_ms"]), int(pick["end_ms"]))
                         cid = head_render_state.get("clip_id_by_span", {}).get(sk)
                         return build_clip_row_from_pick(pick, idx, clip_id=cid)
@@ -894,23 +919,6 @@ def run_m4_pipeline(
                 f"message={picker_message!r}",
                 flush=True,
             )
-
-            picks = plan_clips(picks)
-
-            if not picks:
-                empty_msg = picker_message or "No complete, self-contained moments found."
-                mark_project_ready(conn, project_id, error=empty_msg)
-                post_progress(
-                    job_id,
-                    {
-                        "projectStatus": "READY",
-                        "stage": "ready",
-                        "progress": 100,
-                        "jobStatus": "DONE",
-                        "error": empty_msg,
-                    },
-                )
-                return
 
             total = max(1, len(picks))
             if talking_render_done:

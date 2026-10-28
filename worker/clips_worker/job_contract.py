@@ -89,6 +89,55 @@ def requeue_job_immediate(conn, job: dict, *, note: str = "requeued") -> None:
     conn.commit()
 
 
+def requeue_job_retryable(
+    conn,
+    job: dict,
+    exc: BaseException,
+    *,
+    post_progress_fn: Callable | None = None,
+) -> None:
+    """Requeue with delay for RetryableError (respect maxAttempts)."""
+    from clips_worker.streamer.errors import RetryableError
+
+    if not isinstance(exc, RetryableError):
+        raise TypeError("expected RetryableError")
+    job_id = job["id"]
+    attempts = int(job.get("attempts") or 0)
+    max_attempts = int(job.get("maxAttempts") or job.get("max_attempts") or default_max_attempts())
+    delay_s = int(getattr(exc, "delay_seconds", 60) or 60)
+    user_msg = user_facing_job_error(getattr(exc, "user_message", None) or str(exc))
+    if attempts + 1 >= max_attempts:
+        fail_job(conn, job, user_msg, post_progress_fn=post_progress_fn)
+        return
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE clip_jobs
+            SET status = 'QUEUED',
+                "lockedBy" = NULL,
+                "lockedAt" = NULL,
+                "runAfter" = NOW() + (%s || ' seconds')::interval,
+                attempts = attempts + 1,
+                error = LEFT(COALESCE(error, '') || %s, 500)
+            WHERE id = %s
+            """,
+            (str(delay_s), f" retryable: {user_msg[:200]}", job_id),
+        )
+    conn.commit()
+    if post_progress_fn:
+        post_progress_fn(
+            job_id,
+            {
+                "jobStatus": "QUEUED",
+                "projectStatus": "FINDING_CLIPS",
+                "stage": "picker_retry",
+                "progress": 50,
+                "error": user_msg,
+            },
+        )
+    _log(f"[clipper:job] requeued job={job_id} delay_s={delay_s} attempts={attempts + 1} msg={user_msg[:120]}")
+
+
 def fail_job(conn, job: dict, message: str, *, post_progress_fn: Callable | None = None) -> None:
     from clips_worker.streamer.job_failure import terminal_failure_progress_payload
 
@@ -160,9 +209,13 @@ def run_job(
         handler(conn, job)
     except BaseException as exc:
         from clips_worker.worker_drain import WorkerDrainExit
+        from clips_worker.streamer.errors import RetryableError
 
         if isinstance(exc, WorkerDrainExit):
             raise
+        if isinstance(exc, RetryableError):
+            requeue_job_retryable(conn, job, exc, post_progress_fn=post_progress_fn)
+            return
         fail_job(conn, job, readable_job_error(exc), post_progress_fn=post_progress_fn)
     finally:
         release_job_lock(conn, job_id)

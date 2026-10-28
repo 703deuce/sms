@@ -117,6 +117,7 @@ def stream_chunk_video_signals(
             trim_start_s=trim_lo_s,
             trim_end_s=trim_hi_s,
             use_labeled_frames=False,
+            fail_open=False,
         )
         meta["upload_ms"] = upload_ms
         for m in moments:

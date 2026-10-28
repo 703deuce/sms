@@ -93,7 +93,8 @@ def test_headstart_failure_releases_span_for_main_pass(words_60s=None):
     assert _mark_span(0, 20_000) is True
 
 
-def test_headstart_timeout_releases_span_for_main_pass():
+def test_headstart_timeout_keeps_span_for_async_reframe():
+    """Timeout does not discard span — main reframe may await the same future."""
     rendered_spans: set[tuple[int, int]] = {(0, 20_000)}
     head_render_state: dict = {"by_span": {}}
     span_lock = threading.Lock()
@@ -104,7 +105,7 @@ def test_headstart_timeout_releases_span_for_main_pass():
 
     ex = ThreadPoolExecutor(max_workers=1)
     fut: Future = ex.submit(slow)
-    persisted: set[tuple[int, int]] = {(0, 20_000)}
+    persisted: set[tuple[int, int]] = set()
     await_headstart_render(
         ex,
         fut,
@@ -117,5 +118,4 @@ def test_headstart_timeout_releases_span_for_main_pass():
         project_id="proj_test",
         timeout_sec=0.05,
     )
-    assert (0, 20_000) not in rendered_spans
-    assert (0, 20_000) not in persisted
+    assert (0, 20_000) in rendered_spans

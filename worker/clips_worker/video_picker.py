@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -27,6 +28,59 @@ from clips_worker.video_picker_prompt import (
 
 _MIN_MOMENT_S = 5.0
 _TIME_EPS_S = 0.35
+_TIME_RE = re.compile(r"^(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:\.\d+)?)$|^(\d+(?:\.\d+)?)s?$")
+
+
+def _time_field_to_seconds(val: Any, *, duration_s: float) -> float | None:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        s = val.strip().lower().rstrip("s")
+        if not s:
+            return None
+        mm = re.match(r"^(\d+):(\d{1,2}(?:\.\d+)?)$", s)
+        if mm:
+            return int(mm.group(1)) * 60 + float(mm.group(2))
+        m = _TIME_RE.match(s)
+        if not m:
+            try:
+                return float(s)
+            except ValueError:
+                return None
+        if m.group(4) is not None:
+            return float(m.group(4))
+        h = int(m.group(1) or 0)
+        mi = int(m.group(2))
+        sec = float(m.group(3))
+        return h * 3600 + mi * 60 + sec
+    return None
+
+
+def _coerce_moment_row(row: Any, duration_s: float) -> dict | None:
+    if not isinstance(row, dict):
+        return None
+    r = dict(row)
+    for src, dst in (("start", "start_s"), ("end", "end_s"), ("peak", "peak_s"), ("hook", "hook_s")):
+        if dst not in r and src in r:
+            r[dst] = r[src]
+    dur = max(1.0, float(duration_s))
+    start = _time_field_to_seconds(r.get("start_s"), duration_s=dur)
+    end = _time_field_to_seconds(r.get("end_s"), duration_s=dur)
+    if start is None or end is None:
+        return None
+    peak = _time_field_to_seconds(r.get("peak_s"), duration_s=dur)
+    hook = _time_field_to_seconds(r.get("hook_s"), duration_s=dur)
+    if peak is None:
+        peak = (start + end) / 2
+    if hook is None:
+        hook = start
+    r["start_s"] = start
+    r["end_s"] = end
+    r["peak_s"] = peak
+    r["hook_s"] = hook
+    return r
 
 
 def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dict], dict[str, int]]:
@@ -35,9 +89,11 @@ def sanitize_raw_moments(raw_moments: list, duration_s: float) -> tuple[list[dic
     kept = clamped = dropped = 0
     valid: list[dict] = []
     for row in raw_moments:
-        if not isinstance(row, dict):
+        coerced = _coerce_moment_row(row, dur)
+        if coerced is None:
             dropped += 1
             continue
+        row = coerced
         try:
             start = float(row.get("start_s", 0))
             end = float(row.get("end_s", start))
@@ -393,19 +449,27 @@ def validate_and_normalize_moments(
     *,
     chunk_offset_s: float = 0.0,
     max_span_s: float | None = None,
-) -> list[dict]:
+) -> tuple[list[dict], dict[str, int]]:
     """Clamp times, enforce ordering, drop spans <5s; add legacy t_s/reason fields."""
     dur = max(1.0, float(duration_s))
     out: list[dict] = []
+    rejects: dict[str, int] = {}
     for row in raw:
+        coerced = _coerce_moment_row(row, dur)
+        if coerced is None:
+            rejects["coerce_failed"] = rejects.get("coerce_failed", 0) + 1
+            continue
+        row = coerced
         try:
             start = _clamp(float(row.get("start_s", 0)), 0.0, dur)
             end = _clamp(float(row.get("end_s", start)), 0.0, dur)
             peak = float(row.get("peak_s", (start + end) / 2))
             hook = float(row.get("hook_s", start))
         except (TypeError, ValueError):
+            rejects["time_parse"] = rejects.get("time_parse", 0) + 1
             continue
         if end <= start or (end - start) < _MIN_MOMENT_S:
+            rejects["span_too_short"] = rejects.get("span_too_short", 0) + 1
             continue
         peak = _clamp(peak, 0.0, dur - 0.001)
         hook = _clamp(hook, 0.0, dur)
@@ -420,6 +484,7 @@ def validate_and_normalize_moments(
         if max_span_s is not None and max_span_s > 0:
             start, end, peak, hook = _apply_max_span(start, end, peak, hook, max_span_s)
         if not (start <= hook <= peak < end):
+            rejects["hook_peak_order"] = rejects.get("hook_peak_order", 0) + 1
             continue
         score = max(0.0, min(1.0, float(row.get("score") or 0)))
         edge = str(row.get("touches_edge") or "none").lower()
@@ -449,7 +514,7 @@ def validate_and_normalize_moments(
         }
         out.append(m)
     out.sort(key=lambda x: -float(x.get("score") or 0))
-    return out
+    return out, rejects
 
 
 def collect_time_violations(
@@ -1007,7 +1072,7 @@ def reassess_edge_moments(
                     best[key] = round(float(best[key]) + shift, 3)
                 except (TypeError, ValueError, KeyError):
                     pass
-            normed = validate_and_normalize_moments(
+            normed, _rej = validate_and_normalize_moments(
                 [best],
                 rel_duration_s,
                 chunk_offset_s=0.0,
@@ -1141,6 +1206,7 @@ def watch_video_file(
             meta["model"] = active_model
             user_text = user_text_base
             time_invalid_retries = 1
+            sections_moment_retries = 1
             parsed_ok: dict[str, Any] | None = None
             model_failed_reason = ""
 
@@ -1163,18 +1229,37 @@ def watch_video_file(
 
                 if res is None or not res.ok:
                     model_failed_reason = f"api_error status={last_status} err={last_err[:120]}"
-                    if last_status == 429 or "quota exceeded" in last_err.lower():
+                    err_body = (res.text if res is not None else last_err) or last_err
+                    from clips_worker.picker.picker_errors import (
+                        gemini_error_log_fields,
+                        parse_retry_delay_seconds,
+                    )
+
+                    _summary, quota = gemini_error_log_fields(err_body)
+                    if quota:
+                        meta["quota"] = quota
+                    if last_status == 429 or "quota exceeded" in (last_err or "").lower():
                         meta["rate_limited"] = True
                         meta["status"] = last_status or 429
-                        from clips_worker.picker.picker_errors import gemini_error_log_fields
-
-                        _summary, quota = gemini_error_log_fields(last_err)
-                        if quota:
-                            meta["quota"] = quota
                         print(
                             f"[clipper:video_picker] ERROR {json.dumps({'event': 'gemini_rate_limited', 'chunk': chunk_label, 'model': active_model, 'status': last_status, 'quota': quota})}",
                             flush=True,
                         )
+                        if (
+                            active_model == primary_model
+                            and not meta.get("primary_429_retried")
+                        ):
+                            delay = parse_retry_delay_seconds(quota.get("retryDelay"))
+                            if delay is not None and delay <= 60:
+                                print(
+                                    f"[clipper:video_picker] quota_retry model={active_model} "
+                                    f"sleep_s={delay:.1f} quotaMetric={quota.get('quotaMetric', '')} "
+                                    f"quotaId={quota.get('quotaId', '')}",
+                                    flush=True,
+                                )
+                                time.sleep(delay)
+                                meta["primary_429_retried"] = True
+                                continue
                     break
 
                 try:
@@ -1189,12 +1274,35 @@ def watch_video_file(
 
                 raw_sections = list(parsed_ok.get("sections") or [])
                 raw_moments = list(parsed_ok.get("moments") or [])
+                meta["raw_moments_count"] = len(raw_moments)
                 if not raw_sections and not raw_moments:
                     model_failed_reason = "empty_sections_and_moments"
                     parsed_ok = None
                     break
 
-                raw_moments, _sanitize_stats = sanitize_raw_moments(raw_moments, float(duration_s))
+                if raw_sections and not raw_moments and sections_moment_retries > 0:
+                    sections_moment_retries -= 1
+                    user_text = (
+                        user_text_base
+                        + "\n\nRETRY: You returned sections but moments[] was empty. "
+                        "For every non-trivial section, add at least one moment with numeric "
+                        "start_s, end_s, peak_s, hook_s (seconds), score, what_happened, why_it_works."
+                    )
+                    parsed_ok = None
+                    continue
+
+                raw_moments, sanitize_stats = sanitize_raw_moments(raw_moments, float(duration_s))
+                meta["sanitize_stats"] = sanitize_stats
+                if raw_sections and not raw_moments and sections_moment_retries > 0:
+                    sections_moment_retries -= 1
+                    user_text = (
+                        user_text_base
+                        + "\n\nRETRY: moments were missing or invalid after parse. "
+                        "Return at least one valid moment per major section (numeric start_s/end_s)."
+                    )
+                    parsed_ok = None
+                    continue
+
                 violations = collect_time_violations(raw_sections, raw_moments, float(duration_s))
                 if violations:
                     meta["time_violations"] = violations[:12]
@@ -1221,16 +1329,18 @@ def watch_video_file(
                 meta["sections"] = normalize_sections(raw_sections, float(duration_s))[:24]
                 meta["sections_count"] = len(meta["sections"])
                 max_span = max_span_seconds(target_clip_len_s)
-                moments = validate_and_normalize_moments(
+                moments, normalize_rejects = validate_and_normalize_moments(
                     raw_moments,
                     float(duration_s),
                     chunk_offset_s=0.0,
                     max_span_s=max_span,
                 )
+                meta["normalize_rejects"] = normalize_rejects
                 moments_before_dedupe = len(moments)
                 moments = dedupe_overlapping_video_picker_moments(moments)
                 if not moments:
                     model_failed_reason = "no_valid_moments_after_normalize"
+                    meta["normalize_rejects"] = normalize_rejects
                     parsed_ok = None
                     break
 
@@ -1299,19 +1409,20 @@ def watch_video_file(
             error=(last_fallback_reason or last_err)[:180],
             fail_open=False,
         )
-        need = int(meta.get("min_moments") or min_moments_for_video(int(duration_s)))
-        from clips_worker.video_picker_transcript_fallback import transcript_picker_moments
+        from clips_worker.picker.picker_errors import VideoPickerRetryableError
 
-        transcript_moments = transcript_picker_moments(transcript_text, float(duration_s), need)
-        if transcript_moments:
-            meta["ok"] = True
-            meta["fallback"] = "transcript_picker"
-            meta["model_used"] = meta.get("model_used") or "transcript_picker"
-            meta["error"] = (last_fallback_reason or last_err)[:200]
-            stage_end("video_picker", t0, chunk=chunk_label, moments=len(transcript_moments), fallback="transcript")
-            return transcript_moments, meta
+        delay = 90
+        if meta.get("rate_limited") and isinstance(meta.get("quota"), dict):
+            from clips_worker.picker.picker_errors import parse_retry_delay_seconds
+
+            rd = parse_retry_delay_seconds(meta["quota"].get("retryDelay"))
+            if rd is not None:
+                delay = int(min(600, max(30, rd + 5)))
         if not fail_open:
-            raise RuntimeError(last_fallback_reason or last_err)
+            raise VideoPickerRetryableError(
+                last_fallback_reason or last_err,
+                delay_seconds=delay,
+            )
         return _fail_open(last_fallback_reason or last_err, last_status, None)
     except Exception as exc:
         if not fail_open:
@@ -1348,7 +1459,7 @@ def watch_upload_range(
         scratch=scratch,
         trim_start_s=start_s,
         trim_end_s=end_s,
-        fail_open=True,
+        fail_open=False,
     )
     curve = moments_to_per_second(
         [

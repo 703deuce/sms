@@ -137,12 +137,20 @@ def pick_talking_clips(
                 sections=vp_meta.get("sections"),
             )
             if not vp_meta.get("ok"):
-                picker_info(
-                    "video_picker_regular_fail_open",
-                    reason=str(vp_meta.get("error") or vp_meta.get("fallback_reason") or "video_picker failed")[:200],
-                    status=vp_meta.get("status"),
+                from clips_worker.picker.picker_errors import VideoPickerRetryableError
+
+                delay = 90
+                if isinstance(vp_meta.get("quota"), dict):
+                    from clips_worker.picker.picker_errors import parse_retry_delay_seconds
+
+                    rd = parse_retry_delay_seconds(vp_meta["quota"].get("retryDelay"))
+                    if rd is not None:
+                        delay = int(min(600, max(30, rd + 5)))
+                raise VideoPickerRetryableError(
+                    str(vp_meta.get("error") or "video_picker failed")[:400],
+                    delay_seconds=delay,
                 )
-            elif vp_meta.get("ok") and vm:
+            if vm:
                 visual_moments = vm
                 video_context = format_moments_for_llm(
                     [
@@ -162,10 +170,9 @@ def pick_talking_clips(
                     output_tokens=vp_meta.get("output_tokens"),
                 )
             else:
-                picker_info(
-                    "video_picker_regular_fail_open",
-                    error=str(vp_meta.get("error") or "video_picker failed")[:200],
-                    status=vp_meta.get("status"),
+                raise VideoPickerRetryableError(
+                    "video_picker returned ok without moments",
+                    delay_seconds=90,
                 )
 
     cache = picker_cache or {}
