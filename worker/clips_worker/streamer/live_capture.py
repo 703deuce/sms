@@ -12,7 +12,6 @@ from clips_worker.streamer.config import SCRATCH
 from clips_worker.streamer.rolling_ingest import (
     emit_rolling_session_check,
     log_rolling_pull,
-    log_rolling_tick_decision,
     rolling_chunk_min,
     rolling_min_new_ms_for_state,
 )
@@ -154,14 +153,20 @@ def apply_live_capture_pull_plan(
         end_ms=end_ms,
         finalize=finalize,
     )
-    log_rolling_tick_decision(
-        vod_id=vod_id,
-        range_start_ms=start_ms,
-        range_end_ms=end_ms,
-        chunk_min=rolling_chunk_min(state),
-        next_run_after=None,
-        source="live_capture_plan",
-        state=state,
+    from clips_worker.decision_log import decision_log
+
+    chunk_min = rolling_chunk_min(state)
+    decision_log(
+        "stream_import",
+        "live_capture_plan",
+        login=_channel_login(vod, state),
+        chunkMin=chunk_min,
+        offset_ms=int(start_ms),
+        rangeEndMs=int(end_ms),
+        duration_s=max(1, (end_ms - start_ms) // 1000),
+        archiveResolveReason=str(state.get("archiveResolveReason") or "")[:120],
+        vodId=vod_id,
+        jobId=job_id,
     )
     return start_ms, end_ms
 

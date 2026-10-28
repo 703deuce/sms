@@ -349,20 +349,18 @@ def log_rolling_tick_decision(
     source: str,
     state: dict | None = None,
 ) -> None:
-    from clips_worker.decision_log import decision_log
+    from clips_worker.decision_log import decision_log, merge_decision_fields
 
-    limits = rolling_limits_snapshot(state)
-    decision_log(
-        "stream_import",
-        "rolling_tick",
+    limits = merge_decision_fields(
+        rolling_limits_snapshot(state),
+        chunkMin=chunk_min,
         vodId=vod_id,
         rangeStartMs=range_start_ms,
         rangeEndMs=range_end_ms,
-        chunkMin=chunk_min,
         nextRunAfter=next_run_after,
         source=source,
-        **limits,
     )
+    decision_log("stream_import", "rolling_tick", **limits)
     emit_rolling_session_check(vod_id=vod_id, state=state, seed_if_missing=False)
 
 

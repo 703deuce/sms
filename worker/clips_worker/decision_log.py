@@ -100,26 +100,38 @@ def sanitize_model_json(data: Any) -> str:
 
 
 def decision_log(stage: str, event: str, **fields: Any) -> None:
-    rec: dict[str, Any] = {
-        "ts": round(time.time(), 3),
-        "stage": str(stage),
-        "event": str(event),
-    }
-    for k, v in fields.items():
-        if v is None:
-            continue
-        rec[str(k)] = _sanitize_value(v)
-    rec = _truncate_record(rec)
-    line = json.dumps(rec, default=str, ensure_ascii=False)
-    print(f"[clipper:decision] {line}", flush=True)
+    try:
+        rec: dict[str, Any] = {
+            "ts": round(time.time(), 3),
+            "stage": str(stage),
+            "event": str(event),
+        }
+        for k, v in fields.items():
+            if v is None:
+                continue
+            rec[str(k)] = _sanitize_value(v)
+        rec = _truncate_record(rec)
+        line = json.dumps(rec, default=str, ensure_ascii=False)
+        print(f"[clipper:decision] {line}", flush=True)
 
-    with _ctx_lock:
-        _buffer.append(rec)
-        if len(_buffer) > MAX_DECISION_LOG_ENTRIES:
-            _buffer[:] = _buffer[-MAX_DECISION_LOG_ENTRIES:]
-        global _since_persist
-        _since_persist += 1
-        _maybe_persist_locked()
+        with _ctx_lock:
+            _buffer.append(rec)
+            if len(_buffer) > MAX_DECISION_LOG_ENTRIES:
+                _buffer[:] = _buffer[-MAX_DECISION_LOG_ENTRIES:]
+            global _since_persist
+            _since_persist += 1
+            _maybe_persist_locked()
+    except Exception as exc:
+        print(
+            f"[clipper:decision] logging_failed stage={stage} event={event} error={type(exc).__name__}: {exc}",
+            flush=True,
+        )
+
+
+def merge_decision_fields(base: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    """Merge decision kwargs; later keys win (avoids duplicate keyword errors at call sites)."""
+    merged = {**base, **overrides}
+    return {k: v for k, v in merged.items() if v is not None}
 
 
 def _maybe_persist_locked(force: bool = False) -> None:
