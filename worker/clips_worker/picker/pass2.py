@@ -450,7 +450,7 @@ def score_moments(
 
     picker_info("pass2_start", moments_in=len(moments))
 
-    for mi, m in enumerate(moments):
+    def _score_one(mi: int, m: dict) -> tuple[list[dict], list[dict]]:
         ss = max(0, min(int(m["start_sentence"]), len(sentences) - 1))
         es = max(ss, min(int(m["end_sentence"]), len(sentences) - 1))
         block = {
@@ -475,9 +475,11 @@ def score_moments(
         )
         picker_info("pass2_raw", moment_index=mi, raw=json_snippet(data))
         clips = data.get("clips") or []
+        local_out: list[dict] = []
+        local_audit: list[dict] = []
         if not clips:
             reject_counts["empty_clips"] += 1
-            audit.append(
+            local_audit.append(
                 {
                     "hard_reject": False,
                     "llm_reject": True,
@@ -486,7 +488,7 @@ def score_moments(
                     "end_sentence": es,
                 }
             )
-            continue
+            return local_out, local_audit
         row = clips[0]
         parsed = _clip_row_from_llm(
             row,
@@ -501,16 +503,33 @@ def score_moments(
             range_end_ms=range_end_ms,
         )
         if not parsed:
-            continue
-        audit.append(parsed)
+            return local_out, local_audit
+        local_audit.append(parsed)
         if parsed.get("llm_reject"):
             code = (parsed.get("reject_reason") or "llm_reject").split(":")[0].strip()
             reject_counts[code] += 1
-            continue
+            return local_out, local_audit
         if parsed.get("gate_reject"):
             reject_counts[parsed.get("reject_reason") or "gate"] += 1
-            continue
-        out.append({k: v for k, v in parsed.items() if k not in ("hard_reject", "llm_reject", "gate_reject")})
+            return local_out, local_audit
+        local_out.append({k: v for k, v in parsed.items() if k not in ("hard_reject", "llm_reject", "gate_reject")})
+        return local_out, local_audit
+
+    workers = min(4, max(1, len(moments)))
+    if len(moments) > 1 and workers > 1:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [pool.submit(_score_one, mi, m) for mi, m in enumerate(moments)]
+            for fut in as_completed(futs):
+                scored, aud = fut.result()
+                out.extend(scored)
+                audit.extend(aud)
+    else:
+        for mi, m in enumerate(moments):
+            scored, aud = _score_one(mi, m)
+            out.extend(scored)
+            audit.extend(aud)
 
     picker_info(
         "pass2_done",
