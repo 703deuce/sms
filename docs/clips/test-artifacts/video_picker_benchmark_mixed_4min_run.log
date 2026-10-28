@@ -1,0 +1,258 @@
+[bench] === a_baseline ===
+[clipper:stage] event=begin stage=download project=- job=- key=object:ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4
+[clipper:stage] event=end stage=download project=- job=- elapsed_ms=697
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+[clipper:stage] event=begin stage=video_picker project=- job=- chunk=bench_a_baseline
+[clipper:video_picker] WARNING min_moments_required=3 moments_returned=2 chunk=bench_a_baseline (keeping model output; no filler)
+[clipper:stage] event=end stage=video_picker project=- job=- elapsed_ms=23551 chunk=bench_a_baseline frames=113 prompt_tokens=19153 output_tokens=965 est_usd=0.002301 moments=2
+{
+  "variant": "a_baseline",
+  "model": "gemini-2.5-flash",
+  "fps": 0.5,
+  "media_resolution": "MEDIA_RESOLUTION_LOW",
+  "user_part_order": "video_first",
+  "prompt_tokens": 19153,
+  "output_tokens": 965,
+  "est_usd": 0.002301,
+  "sections": [
+    {
+      "start_s": 0.0,
+      "end_s": 80.0,
+      "activity": "talking"
+    },
+    {
+      "start_s": 80.0,
+      "end_s": 249.99,
+      "activity": "gaming"
+    },
+    {
+      "start_s": 249.99,
+      "end_s": 347.0,
+      "activity": "talking"
+    }
+  ],
+  "moments": [
+    {
+      "start_s": 38.8,
+      "end_s": 65.75,
+      "peak_s": 65.749,
+      "category": [
+        "talking"
+      ],
+      "score": 0.8,
+      "confidence": 1.0,
+      "touches_edge": "none",
+      "what": "The streamer explains that talking to people is scary but encourages viewers to \"extend your tendrils to as far and wide"
+    },
+    {
+      "start_s": 220.0,
+      "end_s": 226.0,
+      "peak_s": 225.999,
+      "category": [
+        "gaming"
+      ],
+      "score": 0.75,
+      "confidence": 0.9,
+      "touches_edge": "none",
+      "what": "The streamer and their teammate engage in a close-quarters fight during the final ring. The streamer gets a kill, their "
+    }
+  ],
+  "coverage": {
+    "apex": false,
+    "meow": true
+  },
+  "ok": true,
+  "error": null
+}
+[bench] === b_medium_res ===
+[clipper:stage] event=begin stage=download project=- job=- key=object:ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+[clipper:stage] event=end stage=download project=- job=- elapsed_ms=377
+[clipper:stage] event=begin stage=video_picker project=- job=- chunk=bench_b_medium_res
+[clipper:video_picker] WARNING min_moments_required=3 moments_returned=2 chunk=bench_b_medium_res (keeping model output; no filler)
+[clipper:stage] event=end stage=video_picker project=- job=- elapsed_ms=24458 chunk=bench_b_medium_res frames=113 prompt_tokens=41041 output_tokens=823 est_usd=0.004433 moments=2
+{
+  "variant": "b_medium_res",
+  "model": "gemini-2.5-flash",
+  "fps": 0.5,
+  "media_resolution": "MEDIA_RESOLUTION_MEDIUM",
+  "user_part_order": "video_first",
+  "prompt_tokens": 41041,
+  "output_tokens": 823,
+  "est_usd": 0.004433,
+  "sections": [
+    {
+      "start_s": 0.0,
+      "end_s": 120.0,
+      "activity": "talking"
+    },
+    {
+      "start_s": 120.0,
+      "end_s": 250.0,
+      "activity": "gaming"
+    },
+    {
+      "start_s": 250.0,
+      "end_s": 286.0,
+      "activity": "talking"
+    }
+  ],
+  "moments": [
+    {
+      "start_s": 120.98,
+      "end_s": 210.98,
+      "peak_s": 210.97,
+      "category": [
+        "gaming"
+      ],
+      "score": 0.9,
+      "confidence": 1.0,
+      "touches_edge": "none",
+      "what": "The streamer, playing Apex Legends, is in a close-quarters fight. They take damage, heal, then push an enemy, knocking t"
+    },
+    {
+      "start_s": 0.0,
+      "end_s": 78.25,
+      "peak_s": 65.35,
+      "category": [
+        "talking"
+      ],
+      "score": 0.75,
+      "confidence": 1.0,
+      "touches_edge": "none",
+      "what": "The streamer advises viewers to go out and do new things to become more interesting and meet people. She emphasizes talk"
+    }
+  ],
+  "coverage": {
+    "apex": true,
+    "meow": true
+  },
+  "ok": true,
+  "error": null
+}
+[bench] === c_fps_1_0 ===
+[clipper:stage] event=begin stage=download project=- job=- key=object:ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+[clipper:stage] event=end stage=download project=- job=- elapsed_ms=380
+[clipper:stage] event=begin stage=video_picker project=- job=- chunk=bench_c_fps_1_0
+{
+  "variant": "c_fps_1_0",
+  "ok": false,
+  "error": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+}
+[bench] === d_transcript_first ===
+[clipper:stage] event=begin stage=download project=- job=- key=object:ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4
+[clipper:stage] event=end stage=download project=- job=- elapsed_ms=373
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+[clipper:stage] event=begin stage=video_picker project=- job=- chunk=bench_d_transcript_first
+[clipper:stage] event=end stage=video_picker project=- job=- elapsed_ms=37228 chunk=bench_d_transcript_first frames=113 prompt_tokens=19153 output_tokens=992 est_usd=0.002312 moments=3
+{
+  "variant": "d_transcript_first",
+  "model": "gemini-2.5-flash",
+  "fps": 0.5,
+  "media_resolution": "MEDIA_RESOLUTION_LOW",
+  "user_part_order": "transcript_first",
+  "prompt_tokens": 19153,
+  "output_tokens": 992,
+  "est_usd": 0.002312,
+  "sections": [
+    {
+      "start_s": 0.0,
+      "end_s": 81.22,
+      "activity": "talking"
+    },
+    {
+      "start_s": 81.22,
+      "end_s": 170.41,
+      "activity": "gaming+talking"
+    },
+    {
+      "start_s": 170.41,
+      "end_s": 226.0,
+      "activity": "talking"
+    }
+  ],
+  "moments": [
+    {
+      "start_s": 170.41,
+      "end_s": 225.31,
+      "peak_s": 223.47,
+      "category": [
+        "talking"
+      ],
+      "score": 0.9,
+      "confidence": 1.0,
+      "touches_edge": "end",
+      "what": "Wearing cat ears, the streamer proposes a theory: society should adopt meowing as a normal social interaction, comparing"
+    },
+    {
+      "start_s": 219.0,
+      "end_s": 226.0,
+      "peak_s": 225.999,
+      "category": [
+        "gaming",
+        "talking"
+      ],
+      "score": 0.8,
+      "confidence": 0.9,
+      "touches_edge": "none",
+      "what": "The streamer, playing Apex Legends as Bloodhound, engages and eliminates multiple enemies in a close-quarters fight, sec"
+    },
+    {
+      "start_s": 38.8,
+      "end_s": 66.0,
+      "peak_s": 65.75,
+      "category": [
+        "talking"
+      ],
+      "score": 0.75,
+      "confidence": 1.0,
+      "touches_edge": "none",
+      "what": "The streamer shares their philosophy on making friends, advising to 'extend your tendrils' and try often, even with a lo"
+    }
+  ],
+  "coverage": {
+    "apex": true,
+    "meow": true
+  },
+  "ok": true,
+  "error": null
+}
+[bench] === d_video_first ===
+[clipper:stage] event=begin stage=download project=- job=- key=object:ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4
+[clipper:stage] event=end stage=download project=- job=- elapsed_ms=444
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+[clipper:stage] event=begin stage=video_picker project=- job=- chunk=bench_d_video_first
+{
+  "variant": "d_video_first",
+  "ok": false,
+  "error": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+}
+[bench] === e_flash ===
+[clipper:stage] event=begin stage=download project=- job=- key=object:ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+[clipper:stage] event=end stage=download project=- job=- elapsed_ms=455
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+[clipper:stage] event=begin stage=video_picker project=- job=- chunk=bench_e_flash
+{
+  "variant": "e_flash",
+  "ok": false,
+  "error": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+}
+[bench] === e_pro ===
+[clipper:stage] event=begin stage=download project=- job=- key=object:ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=True egress_bytes=0
+[clipper:stage] event=end stage=download project=- job=- elapsed_ms=393
+[clipper:stage] event=begin stage=video_picker project=- job=- chunk=bench_e_pro
+{
+  "variant": "e_pro",
+  "ok": false,
+  "error": "This model models/gemini-2.5-pro is no longer available to new users. Please update your code to use models/gemini-3.1-pro-preview for the latest features and improvements. We recommend you to use the Interactions API (https://ai.google.dev/gemini-api/docs/get-started)."
+}
+[bench] wrote /tmp/video_picker_benchmark_mixed_4min.json

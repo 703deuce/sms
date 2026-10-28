@@ -102,7 +102,8 @@ def video_picker_fps() -> float:
 
 
 def video_picker_user_part_order() -> str:
-    raw = (os.environ.get("VIDEO_PICKER_USER_PART_ORDER") or "video_first").strip().lower()
+    # mixed_4min benchmark: transcript before video part finds Apex + meow at LOW res (~$0.0023/watch).
+    raw = (os.environ.get("VIDEO_PICKER_USER_PART_ORDER") or "transcript_first").strip().lower()
     if raw in ("transcript_first", "text_first", "transcript_before_video"):
         return "transcript_first"
     return "video_first"
