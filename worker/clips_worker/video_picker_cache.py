@@ -31,7 +31,15 @@ def load_video_picker_cache(
         download_object(key, tpath)
         raw = json.loads(tpath.read_text())
         tpath.unlink(missing_ok=True)
-    except Exception:
+    except Exception as exc:
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "video_picker_cache",
+            "miss",
+            key=key[-48:],
+            reason=type(exc).__name__,
+        )
         return None
     if not isinstance(raw, dict) or raw.get("v") != VP_CACHE_SCHEMA:
         return None

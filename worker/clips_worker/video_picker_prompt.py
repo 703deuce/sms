@@ -115,9 +115,20 @@ _MIN_MOMENTS_PER_CHUNK_CAP = 24
 
 
 def min_moments_for_video(video_len_s: int) -> int:
-    """Legacy telemetry / fallback spacing hint — not a ship or filler floor."""
+    """Shortfall floor: ~1 per 45–60s (min 2); long streams keep 6+."""
     video_len_s = max(1, int(video_len_s))
-    return max(1, min(_MIN_MOMENTS_PER_CHUNK_CAP, int(round(video_len_s / 50.0))))
+    if video_len_s >= 20 * 60:
+        return max(6, min(_MIN_MOMENTS_PER_CHUNK_CAP, int(round(video_len_s / 50.0))))
+    per_minute = max(2, int((video_len_s + 52) // 53))
+    return min(_MIN_MOMENTS_PER_CHUNK_CAP, per_minute)
+
+
+def min_moments_rule_description(video_len_s: int) -> str:
+    video_len_s = max(1, int(video_len_s))
+    need = min_moments_for_video(video_len_s)
+    if video_len_s >= 20 * 60:
+        return f"long_stream duration_s={video_len_s} need>={need} (~1/50s, floor 6)"
+    return f"duration_s={video_len_s} need>={need} (~1/53s, min 2)"
 
 
 def discovery_density_guidance(video_len_s: int) -> str:

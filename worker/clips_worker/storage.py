@@ -161,6 +161,12 @@ def _download_object_inner(object_key: str, dest: Path) -> None:
             if _s3_missing_key(exc):
                 if object_key.startswith("stock/"):
                     raise RuntimeError(f"storage_object_missing:{object_key}") from exc
+                if object_key.startswith("clips/stream/"):
+                    print(
+                        f'[clipper:decision] {{"stage":"storage","event":"s3_cache_miss","key":"{object_key[:120]}"}}',
+                        flush=True,
+                    )
+                    raise RuntimeError(f"storage_object_missing:{object_key}") from exc
                 log.warning(
                     "[clips:storage] s3 head/download missing key=%s, trying supabase fallback",
                     object_key,

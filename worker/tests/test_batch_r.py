@@ -11,9 +11,9 @@ from clips_worker.overlap_policy import (
     pick_spans_duplicate,
     spans_match_planned_render,
 )
+from clips_worker.video_picker_coverage import compute_uncovered_spans, uncovered_labels_for_prompt
 from clips_worker.video_picker import (
     _moment_overlaps_prior,
-    _uncovered_section_labels,
     gemini_model_skipped_daily_quota,
     remember_gemini_daily_quota,
 )
@@ -54,7 +54,8 @@ def test_c1_reassess_overlap_guard():
 def test_c8_uncovered_sections_labels():
     sections = [{"start_s": 79, "end_s": 169, "activity": "gaming"}]
     moments = [{"start_s": 0, "end_s": 50, "peak_s": 25, "hook_s": 0}]
-    gap = _uncovered_section_labels(sections, moments, 200.0)
+    spans = compute_uncovered_spans(sections, moments, 200.0)
+    gap = uncovered_labels_for_prompt(spans)
     assert gap and "79" in gap[0]
 
 

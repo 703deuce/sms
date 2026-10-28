@@ -77,6 +77,17 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
     if not vod_id:
         raise RuntimeError("missing vodId")
 
+    from clips_worker.decision_log import bind_decision_log, flush_decision_log, unbind_decision_log
+
+    bind_decision_log(conn, str(job.get("id") or ""))
+    try:
+        _run_stream_analyze_job_inner(conn, job, post_progress, payload, vod_id)
+    finally:
+        flush_decision_log(force=True)
+        unbind_decision_log()
+
+
+def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict, vod_id: str) -> None:
     from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
 
     schedule_modal_warmup_background()

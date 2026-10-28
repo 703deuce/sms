@@ -65,14 +65,32 @@ def warm_modal_renderer_if_needed(conn) -> None:
         Cls = modal.Cls.from_name(APP_NAME, "Renderer")
         raw = Cls().ping.remote()
         ms = (time.perf_counter() - t0) * 1000.0
+        cold = bool(raw.get("cold_start"))
         payload = {
             "event": "warmup",
             "provider": "modal",
             "ok": bool(raw.get("ok")),
             "renderMs": round(ms, 1),
-            "coldStart": bool(raw.get("cold_start")),
+            "coldStart": cold,
         }
+        if ms > 120_000:
+            payload["investigation"] = (
+                "modal_renderer_cold_start: first ping.remote() after idle spins up GPU container "
+                "(image pull + CUDA init); not an export render — background warmup only"
+            )
         print(f"[clipper:gpu_render] {json.dumps(payload)}", flush=True)
+        try:
+            from clips_worker.decision_log import decision_log
+
+            decision_log(
+                "gpu_render",
+                "warmup",
+                renderMs=payload["renderMs"],
+                coldStart=cold,
+                investigation=payload.get("investigation"),
+            )
+        except Exception:
+            pass
         with _warm_lock:
             _warm_until_mono = time.monotonic() + modal_keep_warm_sec()
     except Exception as exc:

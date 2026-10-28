@@ -24,6 +24,11 @@ from clips_worker.video_picker_prompt import (
     VISUAL_WATCH_PASS2_HINT,
     build_video_picker_system_prompt,
     min_moments_for_video,
+    min_moments_rule_description,
+)
+from clips_worker.video_picker_coverage import (
+    compute_uncovered_spans,
+    uncovered_labels_for_prompt,
 )
 
 _MIN_MOMENT_S = 5.0
@@ -248,9 +253,23 @@ def video_picker_enabled() -> bool:
 
 def video_picker_timeout_s() -> float:
     try:
-        return max(15.0, float(os.environ.get("VIDEO_PICKER_TIMEOUT_S", "90")))
+        return max(15.0, min(120.0, float(os.environ.get("VIDEO_PICKER_TIMEOUT_S", "90"))))
     except ValueError:
         return 90.0
+
+
+def video_picker_max_wall_s() -> float:
+    try:
+        return max(60.0, float(os.environ.get("VIDEO_PICKER_MAX_WALL_S", "240")))
+    except ValueError:
+        return 240.0
+
+
+def video_picker_max_model_attempts() -> int:
+    try:
+        return max(2, min(12, int(os.environ.get("VIDEO_PICKER_MAX_MODEL_ATTEMPTS", "6"))))
+    except ValueError:
+        return 6
 
 
 def video_picker_fps() -> float:
@@ -885,43 +904,128 @@ def _log_video_picker_model_fallback(
     )
 
 
+def _quota_is_daily(quota: dict[str, str] | None) -> bool:
+    if not quota:
+        return False
+    qid = str(quota.get("quotaId") or "")
+    qmet = str(quota.get("quotaMetric") or "")
+    return "PerDay" in qid or "per_day" in qid.lower() or "PerDay" in qmet
+
+
 def _gemini_post_watch(
     active_model: str,
     payload: dict[str, Any],
+    *,
+    chunk_label: str = "",
 ) -> tuple[requests.Response | None, str, int | None]:
-    """POST with transient backoff; returns (response, last_err, last_status)."""
+    """POST with transient backoff; hard read timeout; no daily-quota sleep."""
     from clips_worker.picker.picker_errors import gemini_error_log_fields
+    from clips_worker.decision_log import decision_log
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
     last_err = "unknown"
     last_status: int | None = None
     res: requests.Response | None = None
-    for _attempt, backoff_s in enumerate(_GEMINI_TRANSIENT_BACKOFF_S):
+    timeout_s = video_picker_timeout_s()
+    max_rounds = min(len(_GEMINI_TRANSIENT_BACKOFF_S), 3)
+
+    for round_idx, backoff_s in enumerate(_GEMINI_TRANSIENT_BACKOFF_S[:max_rounds]):
+        attempt_t0 = time.time()
+        decision_log(
+            "video_picker",
+            "model_attempt_begin",
+            model=active_model,
+            chunk=chunk_label,
+            round=round_idx,
+            timeout_s=timeout_s,
+        )
         try:
-            res = requests.post(
-                f"{GEMINI_BASE}/models/{active_model}:generateContent",
-                params={"key": _key()},
-                json=payload,
-                timeout=video_picker_timeout_s(),
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(
+                    requests.post,
+                    f"{GEMINI_BASE}/models/{active_model}:generateContent",
+                    params={"key": _key()},
+                    json=payload,
+                    timeout=timeout_s,
+                )
+                res = fut.result(timeout=timeout_s + 5.0)
+        except FuturesTimeout:
+            last_err = f"hard_timeout>{timeout_s}s"
+            last_status = 408
+            decision_log(
+                "video_picker",
+                "model_attempt_end",
+                model=active_model,
+                chunk=chunk_label,
+                ok=False,
+                status=408,
+                elapsed_ms=int((time.time() - attempt_t0) * 1000),
+                error=last_err,
             )
-            last_status = res.status_code
-            if res.ok:
-                return res, last_err, last_status
-            if _gemini_transient_status(res.status_code):
-                err_body = res.text or res.reason or "error"
-                summary, _quota = gemini_error_log_fields(err_body)
-                last_err = summary or err_body[:300]
-                time.sleep(backoff_s)
-                continue
-            err_body = res.text or res.reason or "error"
-            summary, _quota = gemini_error_log_fields(err_body)
-            last_err = summary or err_body[:300]
-            return res, last_err, last_status
+            return None, last_err, last_status
         except Exception as exc:
             last_err = str(exc)[:300]
+            decision_log(
+                "video_picker",
+                "model_attempt_end",
+                model=active_model,
+                chunk=chunk_label,
+                ok=False,
+                elapsed_ms=int((time.time() - attempt_t0) * 1000),
+                error=last_err[:180],
+            )
             if _gemini_transient_exc(exc):
-                time.sleep(backoff_s)
+                time.sleep(min(backoff_s, 8.0))
                 continue
             return None, last_err, last_status
+
+        elapsed_ms = int((time.time() - attempt_t0) * 1000)
+        last_status = res.status_code if res is not None else None
+        if res is not None and res.ok:
+            decision_log(
+                "video_picker",
+                "model_attempt_end",
+                model=active_model,
+                chunk=chunk_label,
+                ok=True,
+                status=last_status,
+                elapsed_ms=elapsed_ms,
+            )
+            return res, last_err, last_status
+
+        err_body = (res.text if res is not None else last_err) or last_err
+        summary, quota = gemini_error_log_fields(err_body)
+        last_err = summary or err_body[:300]
+        if res is not None and (res.status_code == 429 or "quota exceeded" in last_err.lower()):
+            if quota:
+                remember_gemini_daily_quota(active_model, quota)
+            decision_log(
+                "video_picker",
+                "model_attempt_end",
+                model=active_model,
+                chunk=chunk_label,
+                ok=False,
+                status=last_status,
+                elapsed_ms=elapsed_ms,
+                retry_reason="rate_limited_no_sleep",
+                daily_quota=_quota_is_daily(quota),
+            )
+            return res, last_err, last_status
+
+        decision_log(
+            "video_picker",
+            "model_attempt_end",
+            model=active_model,
+            chunk=chunk_label,
+            ok=False,
+            status=last_status,
+            elapsed_ms=elapsed_ms,
+            error=last_err[:180],
+        )
+        if res is not None and _gemini_transient_status(res.status_code):
+            time.sleep(min(backoff_s, 8.0))
+            continue
+        return res, last_err, last_status
     return res, last_err, last_status
 
 
@@ -1019,12 +1123,85 @@ def _extract_labeled_frames(
     )
     frames: list[tuple[float, bytes]] = []
     dur = max(1.0, float(duration_s))
-    for i, path in enumerate(sorted(out_dir.glob("f_*.jpg"))):
-        t = round(i / fps, 3)
-        if t > dur + (1.0 / fps):
+    paths = sorted(out_dir.glob("f_*.jpg"))
+    n = len(paths)
+    for i, path in enumerate(paths):
+        if n <= 1:
+            t = 0.0
+        else:
+            t = round(i * dur / (n - 1), 3)
+        if t > dur + 0.05:
             break
+        t = min(t, dur)
         frames.append((t, path.read_bytes()))
     return frames
+
+
+def _remap_labeled_frame_moment_times(
+    raw_moments: list[dict],
+    *,
+    duration_s: float,
+    fps: float,
+    trim_start_s: float,
+    frame_times: list[float] | None,
+) -> list[dict]:
+    """Correct lite/label timeline drift (extrapolated frame labels vs clip duration)."""
+    from clips_worker.decision_log import decision_log
+
+    dur = max(1.0, float(duration_s))
+    max_label = max(frame_times) if frame_times else dur
+    raw_peaks: list[float] = []
+    for row in raw_moments:
+        if not isinstance(row, dict):
+            continue
+        for key in ("start_s", "end_s", "peak_s", "hook_s"):
+            try:
+                raw_peaks.append(float(row.get(key)))
+            except (TypeError, ValueError):
+                pass
+    max_raw = max(raw_peaks) if raw_peaks else 0.0
+    scale = (dur / max_raw) if max_raw > dur + 1.0 else 1.0
+    if scale == 1.0 and max_label <= dur + 1.5 and trim_start_s < 0.5:
+        return raw_moments
+    out: list[dict] = []
+    for row in raw_moments:
+        if not isinstance(row, dict):
+            continue
+        mapped = dict(row)
+        for key in ("start_s", "end_s", "peak_s", "hook_s", "t_s"):
+            if key not in mapped and key != "t_s":
+                continue
+            raw_val = mapped.get(key)
+            if raw_val is None:
+                continue
+            try:
+                val = float(raw_val)
+            except (TypeError, ValueError):
+                continue
+            new_val = val
+            if val > dur + 1.0:
+                if trim_start_s >= 1.0 and val - trim_start_s <= dur + 1.0:
+                    new_val = val - trim_start_s
+                elif frame_times:
+                    idx = max(0, min(len(frame_times) - 1, round(val * fps)))
+                    new_val = frame_times[idx]
+                elif scale < 1.0:
+                    new_val = val * scale
+            if abs(new_val - val) > 0.05:
+                decision_log(
+                    "video_picker",
+                    "labeled_frame_time_remap",
+                    field=key,
+                    raw_s=round(val, 3),
+                    mapped_s=round(new_val, 3),
+                    duration_s=dur,
+                    trim_start_s=round(trim_start_s, 3),
+                    max_frame_label_s=round(max_label, 3),
+                    scale=round(scale, 4),
+                )
+            mapped[key] = new_val
+        out.append(mapped)
+    return out or raw_moments
 
 
 def _labeled_frame_user_parts(
@@ -1125,34 +1302,6 @@ def _gemini_watch_payload(
 
 
 _gemini_daily_quota_exhausted: set[str] = set()
-
-
-def _uncovered_section_labels(sections: list[dict], moments: list[dict], duration_s: float) -> list[str]:
-    if not sections:
-        return ["(no sections returned)"]
-    covered: list[bool] = [False] * len(sections)
-    for m in moments:
-        try:
-            ms = float(m.get("start_s", 0))
-            me = float(m.get("end_s", ms))
-        except (TypeError, ValueError):
-            continue
-        mid = (ms + me) / 2.0
-        for i, sec in enumerate(sections):
-            try:
-                a = float(sec.get("start_s", 0))
-                b = float(sec.get("end_s", a))
-            except (TypeError, ValueError):
-                continue
-            if a <= mid <= b:
-                covered[i] = True
-    out: list[str] = []
-    for i, sec in enumerate(sections):
-        if covered[i]:
-            continue
-        act = str(sec.get("activity") or "section")[:80]
-        out.append(f"{sec.get('start_s', 0):.0f}-{sec.get('end_s', 0):.0f}s {act}")
-    return out
 
 
 def remember_gemini_daily_quota(model: str, quota: dict | None) -> None:
@@ -1422,6 +1571,8 @@ def watch_video_file(
         return [], meta
 
     try:
+        from clips_worker.decision_log import decision_log, sanitize_model_json
+
         model = model_override or discover_video_picker_model()
         primary_model = model
         meta["model"] = model
@@ -1437,12 +1588,32 @@ def watch_video_file(
         )
         meta["frames_est"] = max(1, int(duration_s * fps))
         meta["frames_sent"] = meta["frames_est"] if video_picker_labeled_frames() else None
-        meta["min_moments"] = min_moments_for_video(int(duration_s))
+        min_need = min_moments_for_video(int(duration_s))
+        meta["min_moments"] = min_need
+        meta["min_moments_rule"] = min_moments_rule_description(int(duration_s))
+        decision_log(
+            "video_picker",
+            "min_moments_rule",
+            chunk=chunk_label,
+            rule=meta["min_moments_rule"],
+            need=min_need,
+        )
+        labeled_mode = (
+            video_picker_labeled_frames() if use_labeled_frames is None else bool(use_labeled_frames)
+        )
+        time_hint = (
+            "Use the labeled frame timeline ([t=…] before each image), original audio, "
+            "and the timestamped transcript together."
+        )
+        if not labeled_mode and meta.get("burn_timecode"):
+            time_hint = (
+                "Use burned-in HH:MM:SS on each frame, original audio, "
+                "and the timestamped transcript together."
+            )
         system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
         user_text_base = (
             f"The video is exactly {duration_s:.1f} seconds. Every timestamp must be between 0 and {duration_s:.1f}.\n\n"
-            "Use the labeled frame timeline ([t=…] before each image), original audio, "
-            "burned-in HH:MM:SS on each frame, and the timestamped transcript together.\n\n"
+            f"{time_hint}\n\n"
             f"TIMESTAMPED TRANSCRIPT:\n{transcript_text[:16000] if transcript_text else '(none)'}\n\n"
             f"Return sections and moments JSON for this video only ({duration_s}s max; "
             "all times must match [t=…] labels and transcript)."
@@ -1459,6 +1630,40 @@ def watch_video_file(
         last_err = "unknown"
         last_status: int | None = None
         last_fallback_reason = ""
+        wall_start = time.monotonic()
+        max_wall_s = video_picker_max_wall_s()
+        max_attempts = video_picker_max_model_attempts()
+        model_attempts = 0
+        moments_before_shortfall: list[dict] | None = None
+
+        def _wall_exceeded() -> bool:
+            return time.monotonic() - wall_start > max_wall_s
+
+        def _accept_shortfall(moments: list[dict], reason: str) -> tuple[list[dict], dict[str, Any]]:
+            decision_log(
+                "video_picker",
+                "shortfall_accepted",
+                chunk=chunk_label,
+                reason=reason,
+                have=len(moments),
+                need=min_need,
+            )
+            meta["ok"] = True
+            meta["shortfall_accepted"] = reason
+            meta["moments_deduped"] = meta.get("moments_deduped") or {
+                "before": len(moments),
+                "after": len(moments),
+            }
+            stage_end(
+                "video_picker",
+                t0,
+                chunk=chunk_label,
+                frames=meta["frames_est"],
+                moments=len(moments),
+                model_used=meta.get("model") or active_model,
+                shortfall=True,
+            )
+            return moments, meta
 
         def _apply_usage(used_model: str, data: dict[str, Any]) -> None:
             usage = data.get("usageMetadata") or {}
@@ -1469,8 +1674,6 @@ def watch_video_file(
             in_p, out_p = gemini_token_pricing_usd(used_model)
             meta["pricing_usd_per_1m"] = {"input": in_p, "output": out_p}
             meta["est_usd"] = round(estimate_gemini_usd(pt, ot, used_model), 6)
-
-        from clips_worker.decision_log import decision_log, sanitize_model_json
 
         for model_idx, active_model in enumerate(models_chain):
             if gemini_model_skipped_daily_quota(active_model):
@@ -1501,6 +1704,17 @@ def watch_video_file(
             model_failed_reason = ""
 
             while parsed_ok is None:
+                if _wall_exceeded():
+                    if moments_before_shortfall:
+                        return _accept_shortfall(moments_before_shortfall, "wall_clock_exceeded")
+                    model_failed_reason = "wall_clock_exceeded"
+                    break
+                if model_attempts >= max_attempts:
+                    if moments_before_shortfall:
+                        return _accept_shortfall(moments_before_shortfall, "max_model_attempts")
+                    model_failed_reason = "max_model_attempts"
+                    break
+                model_attempts += 1
                 payload = _gemini_watch_payload(
                     video_path,
                     duration_s,
@@ -1514,7 +1728,11 @@ def watch_video_file(
                     use_labeled_frames=use_labeled_frames,
                 )
                 upload_t0 = time.time()
-                res, last_err, last_status = _gemini_post_watch(active_model, payload)
+                res, last_err, last_status = _gemini_post_watch(
+                    active_model,
+                    payload,
+                    chunk_label=chunk_label,
+                )
                 meta["gen_ms"] = int((time.time() - upload_t0) * 1000)
 
                 if res is None or not res.ok:
@@ -1528,7 +1746,8 @@ def watch_video_file(
                     _summary, quota = gemini_error_log_fields(err_body)
                     if quota:
                         meta["quota"] = quota
-                        remember_gemini_daily_quota(active_model, quota)
+                        if _quota_is_daily(quota):
+                            remember_gemini_daily_quota(active_model, quota)
                     if last_status == 429 or "quota exceeded" in (last_err or "").lower():
                         meta["rate_limited"] = True
                         meta["status"] = last_status or 429
@@ -1541,26 +1760,10 @@ def watch_video_file(
                             ok=False,
                             retry_reason="rate_limited",
                             quota=quota,
+                            daily_quota=_quota_is_daily(quota),
                         )
-                        if (
-                            active_model == primary_model
-                            and not meta.get("primary_429_retried")
-                        ):
-                            delay = parse_retry_delay_seconds(quota.get("retryDelay"))
-                            if delay is not None and delay <= 60:
-                                decision_log(
-                                    "video_picker",
-                                    "retry",
-                                    model=active_model,
-                                    chunk=chunk_label,
-                                    retry_reason="429_retryDelay",
-                                    sleep_s=round(delay, 2),
-                                    quotaMetric=quota.get("quotaMetric"),
-                                    quotaId=quota.get("quotaId"),
-                                )
-                                time.sleep(delay)
-                                meta["primary_429_retried"] = True
-                                continue
+                    if last_status == 408 and moments_before_shortfall:
+                        return _accept_shortfall(moments_before_shortfall, "model_timeout")
                     decision_log(
                         "video_picker",
                         "model_attempt",
@@ -1584,6 +1787,14 @@ def watch_video_file(
 
                 raw_sections = list(parsed_ok.get("sections") or [])
                 raw_moments = list(parsed_ok.get("moments") or [])
+                if labeled_mode:
+                    raw_moments = _remap_labeled_frame_moment_times(
+                        raw_moments,
+                        duration_s=float(duration_s),
+                        fps=fps,
+                        trim_start_s=float(trim_start_s),
+                        frame_times=None,
+                    )
                 decision_log(
                     "video_picker",
                     "model_response",
@@ -1712,8 +1923,24 @@ def watch_video_file(
                 moments = dedupe_overlapping_video_picker_moments(moments, stage="dedupe_reassess")
                 min_need = int(meta.get("min_moments") or min_moments_for_video(int(duration_s)))
                 if len(moments) < min_need and shortfall_retries > 0:
-                    gap = _uncovered_section_labels(meta.get("sections") or [], moments, float(duration_s))
+                    uncovered_spans = compute_uncovered_spans(
+                        meta.get("sections") or [],
+                        moments,
+                        float(duration_s),
+                    )
+                    gap = uncovered_labels_for_prompt(uncovered_spans)
+                    decision_log(
+                        "video_picker",
+                        "uncovered_spans",
+                        chunk=chunk_label,
+                        have=len(moments),
+                        need=min_need,
+                        spans=uncovered_spans[:10],
+                    )
                     if gap:
+                        moments_before_shortfall = list(moments)
+                        if _wall_exceeded():
+                            return _accept_shortfall(moments, "wall_clock_before_shortfall_retry")
                         shortfall_retries -= 1
                         decision_log(
                             "video_picker",
@@ -1734,6 +1961,8 @@ def watch_video_file(
                         )
                         parsed_ok = None
                         continue
+                    elif len(moments) < min_need:
+                        return _accept_shortfall(moments, "no_uncovered_spans")
                 meta["moments_deduped"] = {
                     "before": moments_before_dedupe,
                     "after": len(moments),
@@ -1771,6 +2000,9 @@ def watch_video_file(
                 )
                 return moments, meta
 
+            if parsed_ok is None and moments_before_shortfall:
+                return _accept_shortfall(moments_before_shortfall, "shortfall_retry_failed")
+
             last_fallback_reason = model_failed_reason or last_err[:160]
             if model_idx + 1 >= len(models_chain):
                 break
@@ -1798,9 +2030,10 @@ def watch_video_file(
         if meta.get("rate_limited") and isinstance(meta.get("quota"), dict):
             from clips_worker.picker.picker_errors import parse_retry_delay_seconds
 
-            rd = parse_retry_delay_seconds(meta["quota"].get("retryDelay"))
-            if rd is not None:
-                delay = int(min(600, max(30, rd + 5)))
+            if not _quota_is_daily(meta["quota"]):
+                rd = parse_retry_delay_seconds(meta["quota"].get("retryDelay"))
+                if rd is not None:
+                    delay = int(min(120, max(30, rd + 5)))
         if not fail_open:
             raise VideoPickerRetryableError(
                 last_fallback_reason or last_err,

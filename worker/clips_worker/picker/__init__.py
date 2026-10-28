@@ -142,10 +142,12 @@ def pick_talking_clips(
                 delay = 90
                 if isinstance(vp_meta.get("quota"), dict):
                     from clips_worker.picker.picker_errors import parse_retry_delay_seconds
+                    from clips_worker.video_picker import _quota_is_daily
 
-                    rd = parse_retry_delay_seconds(vp_meta["quota"].get("retryDelay"))
-                    if rd is not None:
-                        delay = int(min(600, max(30, rd + 5)))
+                    if not _quota_is_daily(vp_meta["quota"]):
+                        rd = parse_retry_delay_seconds(vp_meta["quota"].get("retryDelay"))
+                        if rd is not None:
+                            delay = int(min(120, max(30, rd + 5)))
                 raise VideoPickerRetryableError(
                     str(vp_meta.get("error") or "video_picker failed")[:400],
                     delay_seconds=delay,
