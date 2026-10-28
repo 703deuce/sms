@@ -622,6 +622,11 @@ def main() -> None:
     log_models()
     log_export_sfx_assets()
     log_picker_config()
+    if worker_lane() == "stream":
+        from clips_worker.streamer.disk_guard import ensure_streamer_scratch_dir
+
+        scratch_path = ensure_streamer_scratch_dir()
+        log(f"streamer scratch ready path={scratch_path}")
     try:
         with psycopg2.connect(dsn) as conn:
             from clips_worker.boot_recovery import requeue_running_lane_jobs_on_boot
@@ -651,7 +656,12 @@ def main() -> None:
                 if job and (job.get("type") or "").startswith("STREAM_"):
                     from clips_worker.streamer.disk_guard import disk_guard_blocks_new_stream_work
 
-                    if disk_guard_blocks_new_stream_work():
+                    try:
+                        blocked = disk_guard_blocks_new_stream_work()
+                    except Exception as guard_exc:
+                        log(f"disk_guard check failed (continuing): {guard_exc}")
+                        blocked = False
+                    if blocked:
                         release_job_claim(conn, job["id"])
                         job = None
                 if not job:
