@@ -6,7 +6,7 @@ import statistics
 from dataclasses import dataclass
 
 CHAT_BIN_S = 5
-CHAT_SPIKE_Z_THRESHOLD = 0.5
+CHAT_SPIKE_Z_THRESHOLD = 2.5 / 8.0  # raw z ≥ 2.5 on 0–8 scale (S4)
 
 CHAT_HYPE_TOKENS = (
     "kekw",

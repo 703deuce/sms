@@ -387,34 +387,6 @@ def dedupe_overlapping_video_picker_moments(
     return kept
 
 
-def _top_up_distinct_moments(
-    kept: list[dict],
-    pool: list[dict],
-    need: int,
-    *,
-    overlap_threshold: float = 0.5,
-) -> list[dict]:
-    """Fill toward min_moments from next-best candidates that are distinct from kept spans."""
-    out = list(kept)
-    if len(out) >= need:
-        return out
-    ranked = sorted(pool, key=lambda m: -float(m.get("score") or 0))
-    for m in ranked:
-        if len(out) >= need:
-            break
-        span = _moment_span_s(m)
-        if any(_span_overlap_fraction(span, _moment_span_s(k)) > overlap_threshold for k in out):
-            continue
-        out.append(m)
-        print(
-            f"[clipper:video_picker] min_moments_top_up score={m.get('score')} "
-            f"span={span[0]:.1f}-{span[1]:.1f}s distinct={len(out)}/{need}",
-            flush=True,
-        )
-    out.sort(key=lambda x: -float(x.get("score") or 0))
-    return out
-
-
 def validate_and_normalize_moments(
     raw: list[dict],
     duration_s: float,
@@ -1278,33 +1250,11 @@ def watch_video_file(
                     )
                 before_final_dedupe = len(moments)
                 moments = dedupe_overlapping_video_picker_moments(moments)
-                need = int(meta.get("min_moments") or min_moments_for_video(int(duration_s)))
-                if len(moments) < need:
-                    pool = dedupe_overlapping_video_picker_moments(
-                        validate_and_normalize_moments(
-                            raw_moments,
-                            float(duration_s),
-                            chunk_offset_s=0.0,
-                            max_span_s=max_span,
-                        )
-                    )
-                    moments = _top_up_distinct_moments(moments, pool, need)
-                if len(moments) < need and time_invalid_retries > 0:
-                    time_invalid_retries -= 1
-                    user_text = (
-                        user_text_base
-                        + f"\n\nRETRY: Return at least {need} distinct moments (after dedupe). "
-                        f"You returned {len(moments)}. Add more honestly ranked moments; no duplicate beats."
-                    )
-                    parsed_ok = None
-                    continue
                 meta["moments_deduped"] = {
                     "before": moments_before_dedupe,
                     "after": len(moments),
                     "after_reassess": before_final_dedupe,
                 }
-                _log_min_moments_shortfall(duration_s, len(moments), chunk_label)
-                meta["min_moments_met"] = len(moments) >= int(meta.get("min_moments") or 0)
                 meta["ok"] = True
                 meta["model"] = active_model
                 meta["model_used"] = active_model

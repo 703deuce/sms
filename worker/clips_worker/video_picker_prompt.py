@@ -8,7 +8,7 @@ _LENGTH_RULE_AUTO = """Auto: the user did not pick a length. Use the shortest du
 _LENGTH_RULE_FIXED = """The user picked a maximum of {target_len_s} seconds. Every clip must be {target_len_s} seconds or shorter. Use the shortest duration that keeps the complete moment; do not stretch a short moment to fill the limit. If a moment is longer than the limit, return the tightest complete part that fits (for example the final fight through the outcome) and describe what was left out in unverified. If no complete version fits, skip it."""
 
 _PROMPT_V3 = """ROLE
-You are the clip editor for Transovo. You get video frames, the original audio and a timestamped transcript, either a stream chunk or a short upload, and find moments that work as standalone vertical clips for TikTok, Shorts and Reels. A great clip makes a stranger with no context stop scrolling in the first 1 to 3 seconds, understand what is happening, and stay for a payoff that keeps the opening's promise. Most footage is filler, so rank hard, but always return something. Return at least {min_moments} distinct moments for this video — that number is a floor, not a cap: include every other moment that also works as a standalone clip, anywhere on the timeline. Each moment must be a complete clip, never fragments. Do not return the same beat twice (no duplicate payoffs; if two spans overlap more than half, keep only the stronger one). Weak footage gets honest low scores, not filler duplicates.
+You are the clip editor for Transovo. You get video frames, the original audio and a timestamped transcript, either a stream chunk or a short upload, and find moments that work as standalone vertical clips for TikTok, Shorts and Reels. A great clip makes a stranger with no context stop scrolling in the first 1 to 3 seconds, understand what is happening, and stay for a payoff that keeps the opening's promise. Most footage is filler, so rank hard. Return every distinct moment that works as a standalone clip — fewer clips is fine; do not invent filler to hit a count. Each moment must be a complete clip, never fragments. Do not return the same beat twice (no duplicate payoffs; if two spans overlap more than half, keep only the stronger one). Weak footage gets honest low scores, not filler duplicates.
 
 EVIDENCE
 Judge every moment on all three inputs together. Listen to the actual audio, not only the words: gunfire, impacts, explosions, music, crowd noise, screams, laughter and sudden silence are signals on their own. Keep what you directly saw or heard separate from what you infer. If something essential cannot be verified (a tiny HUD number, an off-screen event, a muffled line), say so and lower confidence, but do not invent it.
@@ -80,7 +80,7 @@ SCORING (0.0 to 1.0, be strict, most moments are below 0.7)
 - About 0.7: clearly good and complete but smaller. A clean multi-kill with a happy reaction. A funny take that needs one line of setup. A solid fail with a laugh.
 - 0.9 can also be silent: a 1v3 squad wipe at low health with no commentary, or a flawless performance passage.
 - About 0.5: interesting to fans, weak for strangers. An ordinary play with no clear stakes. A mildly funny chat exchange. A process step with no reveal.
-- Below 0.4: weak. Routine gameplay, needs outside context, payoff clearly missing (not just past the chunk edge), inside jokes, loud but meaningless shouting. Return these only to reach the minimum count, and score them honestly so they rank last.
+- Below 0.4: weak. Routine gameplay, needs outside context, payoff clearly missing (not just past the chunk edge), inside jokes, loud but meaningless shouting. Skip these — do not pad the list.
 Lower the score when the setup drags, the payoff is unclear, or the audio is unintelligible. Put doubts about what you could verify in confidence, not in score.
 
 OUTPUT
@@ -114,14 +114,9 @@ _MIN_MOMENTS_PER_CHUNK_CAP = 24
 
 
 def min_moments_for_video(video_len_s: int) -> int:
-    """Minimum distinct moments to ask Gemini for (floor only — model may return more)."""
+    """Soft target for discovery (~1 per 50s) — not a filler floor."""
     video_len_s = max(1, int(video_len_s))
-    minutes = video_len_s / 60.0
-    if video_len_s < 300:
-        need = 6
-    else:
-        need = max(6, math.ceil(minutes * 0.75))
-    return min(need, _MIN_MOMENTS_PER_CHUNK_CAP)
+    return max(1, min(_MIN_MOMENTS_PER_CHUNK_CAP, int(round(video_len_s / 50.0))))
 
 
 def length_rule_text(target_clip_len_s: int | None) -> str:

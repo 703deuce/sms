@@ -1,4 +1,4 @@
-"""Clip title normalization and LLM backfill."""
+"""Clip title normalization and LLM polish."""
 from __future__ import annotations
 
 import re
