@@ -373,7 +373,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                         0,
                         duration_ms,
                     )
-                    video_signal, video_moments, _vp_cost = stream_chunk_video_signals(
+                    video_signal, video_moments, vp_agg = stream_chunk_video_signals(
                         vod=vod,
                         state=state,
                         ranges=plan_ranges,
@@ -382,9 +382,24 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                         target_clip_len_s=settings.get("target_clip_len_s"),
                         transcript_text=vp_transcript,
                     )
+                    vp_sections = vp_agg.get("sections") if isinstance(vp_agg, dict) else None
+                    if isinstance(vp_sections, list) and vp_sections:
+                        state = {**state, "videoPickerSections": vp_sections[:48]}
+                        _save_state(conn, vod_id, state)
                     from clips_worker.video_picker import dedupe_overlapping_video_picker_moments
 
                     video_moments = dedupe_overlapping_video_picker_moments(video_moments)
+            transcript_ok = len(words) >= 5
+            if not transcript_ok:
+                from clips_worker.decision_log import decision_log
+
+                decision_log(
+                    "stream_analyze",
+                    "rescorer_skipped_no_transcript",
+                    vod_id=vod_id,
+                    word_count=len(words),
+                    transcribe_fallback=transcribe_fallback or "",
+                )
             with stage_span("rank_moments", heartbeat=True):
                 picks, signals_payload = rank_moments(
                     audio_path=audio_path,
@@ -397,6 +412,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     vod_signal_curves=vod_signal_curves,
                     video_signal=video_signal,
                     video_moments=video_moments,
+                    transcript_ok=transcript_ok,
                 )
             got = len(picks)
             picks = dedupe_stream_picks(conn, vod, picks)

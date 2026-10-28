@@ -124,6 +124,16 @@ def transcribe_stream_modal_with_meta(req: TranscribeReq, *, diarize: bool) -> t
                 elapsed_ms=int((time.perf_counter() - t0) * 1000),
                 error=str(last_exc)[:180],
             )
+            if attempts < 2 and isinstance(exc, RuntimeError):
+                decision_log(
+                    "modal_transcribe",
+                    "transcribe_retry",
+                    attempt=attempts + 1,
+                    reason=str(exc)[:120],
+                )
+                stop.set()
+                hb.join(timeout=1.0)
+                continue
             stop.set()
             hb.join(timeout=1.0)
             raise last_exc from exc

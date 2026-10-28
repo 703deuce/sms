@@ -153,6 +153,7 @@ def stream_chunk_video_signals(
 
     merged = [0.0] * duration_s
     all_moments: list[dict] = []
+    all_sections: list[dict] = []
     total_usd = 0.0
     ok_chunks = 0
     total_gen_ms = 0
@@ -170,6 +171,9 @@ def stream_chunk_video_signals(
                 ok_chunks += 1
             total_usd += float(meta.get("est_usd") or 0)
             total_gen_ms += int(meta.get("gen_ms") or 0)
+            for sec in meta.get("sections") or []:
+                if isinstance(sec, dict):
+                    all_sections.append(sec)
             start_ms = ranges[idx][0]
             off = start_ms // 1000
             all_moments.extend(moments)
@@ -186,6 +190,7 @@ def stream_chunk_video_signals(
         "est_usd": round(total_usd, 6),
         "vp_calls": vp_calls,
         "gen_ms": total_gen_ms,
+        "sections": all_sections[:48],
     }
     from clips_worker.decision_log import decision_log
 

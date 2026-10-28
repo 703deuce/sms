@@ -9,6 +9,29 @@ import { getPrisma } from '@/lib/server/db'
 import { STREAMER_MAX_VOD_HOURS } from '@/lib/server/streamer/limits'
 import { assertStreamCap } from '@/lib/server/streamer/usage'
 
+function resolveImportRollingChunkMin(
+  rangeStartMs: number,
+  rangeEndMs: number,
+  channelSettings: unknown,
+): { chunkMin: number; chunkMinSource: string } | null {
+  if (rangeEndMs <= rangeStartMs) return null
+  const parsed = streamerSettingsSchema.safeParse(
+    typeof channelSettings === 'object' && channelSettings ? channelSettings : {},
+  )
+  const fromChannel = parsed.success ? parsed.data.rollingChunkMin : undefined
+  if (fromChannel != null) {
+    return {
+      chunkMin: Math.min(60, Math.max(3, fromChannel)),
+      chunkMinSource: 'channel_settings',
+    }
+  }
+  const spanMin = Math.ceil((rangeEndMs - rangeStartMs) / 60_000)
+  return {
+    chunkMin: Math.min(60, Math.max(3, spanMin)),
+    chunkMinSource: 'paste_range_span',
+  }
+}
+
 export async function createStreamerImport(
   workspaceId: string,
   input: {
@@ -100,6 +123,7 @@ export async function createStreamerImport(
   }
 
   let channelId: string | null = null
+  let channelSettings: unknown = null
   if (channelLogin && platform !== 'upload') {
     const ch = await prisma.streamChannel.upsert({
       where: { workspaceId_platform_login: { workspaceId, platform, login: channelLogin.toLowerCase() } },
@@ -113,6 +137,16 @@ export async function createStreamerImport(
       update: { updatedAt: new Date() },
     })
     channelId = ch.id
+    channelSettings = ch.settings
+  }
+
+  const rollingSeed = resolveImportRollingChunkMin(rangeStartMs, rangeEndMs, channelSettings)
+  const vodState: Record<string, unknown> = {}
+  if (rollingSeed) {
+    vodState.rolling = {
+      chunkMin: rollingSeed.chunkMin,
+      chunkMinSource: rollingSeed.chunkMinSource,
+    }
   }
 
   await prisma.$transaction(async (tx) => {
@@ -148,6 +182,7 @@ export async function createStreamerImport(
         triggeredBy: input.uploadId ? 'upload' : 'paste',
         attestedAt: input.attest ? new Date() : null,
         priority: 10,
+        state: Object.keys(vodState).length ? vodState : undefined,
       },
     })
     if (url) {

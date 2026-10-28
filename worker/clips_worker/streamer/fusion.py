@@ -147,21 +147,37 @@ def _inject_video_picker_candidates(
             end_ms = min(dur_ms, start_ms + min_clip_s * 1000)
         if end_ms - start_ms > max_clip_s * 1000:
             end_ms = start_ms + max_clip_s * 1000
-        dup = next(
+        dup_idx = next(
             (
-                c
-                for c in out
+                i
+                for i, c in enumerate(out)
                 if _iou(start_ms, end_ms, int(c["start_ms"]), int(c["end_ms"])) > 0.28
             ),
             None,
         )
-        if dup is not None:
+        if dup_idx is not None:
+            dup = out[dup_idx]
+            score = float(vm.get("score") or vm.get("gemini_score") or 0.55)
+            cid = f"vp_{idx}"
+            replacement = {
+                "id": cid,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "peak_ms": min(dur_ms - 1, max(start_ms, peak_ms)),
+                "signal_peak": score,
+                "video_picker": True,
+                "gemini_sourced": True,
+            }
+            out[dup_idx] = replacement
+            injected += 1
             decision_log(
                 "stream_fusion",
-                "video_picker_drop",
-                reason="overlap_existing_candidate",
+                "gemini_pick_preserved",
+                reason="replace_overlap_existing_candidate",
+                candidate_id=cid,
                 start_ms=start_ms,
                 end_ms=end_ms,
+                replaced_id=str(dup.get("id") or ""),
                 kept_start_ms=int(dup["start_ms"]),
             )
             continue
@@ -175,6 +191,7 @@ def _inject_video_picker_candidates(
                 "peak_ms": min(dur_ms - 1, max(start_ms, peak_ms)),
                 "signal_peak": score,
                 "video_picker": True,
+                "gemini_sourced": True,
             }
         )
         injected += 1
@@ -228,6 +245,7 @@ def fuse_moments(
     llm_ranker=None,
     cue_events: list[dict] | None = None,
     video_moments: list[dict] | None = None,
+    transcript_ok: bool = True,
 ) -> tuple[list[FusionPick], dict]:
     """Return ranked clip candidates and signals.json payload."""
     weights = (settings.get("signalWeights") or {}) if isinstance(settings, dict) else {}
@@ -242,6 +260,9 @@ def fuse_moments(
         "speakerChange": 0.02,
     }
     default_w.update(weights)
+    if not transcript_ok:
+        default_w["video"] = 1.5
+        default_w["transcript"] = 0.0
     from clips_worker.target_clip_len import enrich_settings_with_clip_length, resolve_clip_length_policy
 
     settings = enrich_settings_with_clip_length(settings if isinstance(settings, dict) else {})
@@ -289,15 +310,23 @@ def fuse_moments(
     )
 
     llm_rows: list[dict] = []
-    if llm_ranker and candidates:
+    if llm_ranker and candidates and transcript_ok:
         llm_rows = llm_ranker(candidates, words, signals)
+    elif llm_ranker and candidates and not transcript_ok:
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "stream_fusion",
+            "rescorer_skipped_no_transcript",
+            candidate_count=len(candidates),
+        )
 
     by_id = {r.get("id"): r for r in llm_rows if r.get("id")}
     picks: list[FusionPick] = []
     for cand in candidates:
         lid = cand["id"]
         llm = by_id.get(lid) or {}
-        if llm.get("keep") is False:
+        if llm.get("keep") is False and not cand.get("gemini_sourced") and not cand.get("video_picker"):
             from clips_worker.decision_log import decision_log
 
             decision_log(
@@ -309,6 +338,18 @@ def fuse_moments(
                 reason=str(llm.get("reason") or "keep_false")[:120],
             )
             continue
+        if llm.get("keep") is False and (cand.get("gemini_sourced") or cand.get("video_picker")):
+            from clips_worker.decision_log import decision_log
+
+            decision_log(
+                "stream_fusion",
+                "gemini_pick_preserved",
+                reason="llm_keep_false_overridden",
+                candidate_id=lid,
+                start_ms=int(cand["start_ms"]),
+                end_ms=int(cand["end_ms"]),
+            )
+            llm = {**llm, "keep": True}
         component_scores = {
             "audio": _peak_in_window(signals.get("audio"), cand["start_ms"], cand["end_ms"]),
             "transcript": _peak_in_window(signals.get("transcript"), cand["start_ms"], cand["end_ms"]),

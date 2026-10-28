@@ -352,11 +352,14 @@ def streamer_initial_clip_edits(
     headline_text = format_headline_for_export(suggested_headline or "")
     headline_on = bool(headline_text)
     from clips_worker.clip_layout_policy import apply_content_layout_to_edits
+    from clips_worker.streamer.content_archetype import resolve_streamer_layout_archetype
 
+    layout_archetype, archetype_source = resolve_streamer_layout_archetype(vod=vod, state=vod_state)
     edits = apply_content_layout_to_edits(
         edits,
-        archetype="gaming_stream",
+        archetype=layout_archetype,
         headline_on=headline_on,
+        archetype_source=archetype_source,
     )
     layout = dict(edits.get("layout") or {})
     layout.setdefault("shotOverrides", [])

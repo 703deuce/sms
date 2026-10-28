@@ -272,8 +272,10 @@ def _complete_rolling_window_import(
     schedule_growing_tick: bool = False,
 ) -> None:
     from clips_worker.streamer.rolling_ingest import (
+        ensure_rolling_session_started_at,
         rolling_chunk_min,
         rolling_pull_overlap_ms,
+        seed_rolling_chunk_min,
         stop_rolling_session,
     )
     from clips_worker.streamer.project_cancel import load_project_operator_cancelled
@@ -285,6 +287,18 @@ def _complete_rolling_window_import(
     overlap_ms = rolling_pull_overlap_ms()
     prior = _vod_state_dict(vod)
     rolling = dict(prior.get("rolling") or {})
+    rolling, _, session_mutated = ensure_rolling_session_started_at(rolling)
+    rs = int(vod.get("rangeStartMs") or window_start_ms)
+    re = int(vod.get("rangeEndMs") or window_end_ms)
+    merged_prior = seed_rolling_chunk_min(
+        prior,
+        vod_id=vod_id,
+        range_start_ms=rs,
+        range_end_ms=re,
+        channel_chunk_min=None,
+    )
+    rolling = dict(merged_prior.get("rolling") or rolling)
+    prior = merged_prior
     rolling["lastPulledMs"] = int(end_ms)
     rolling["lastPullCompletedAt"] = datetime.now(timezone.utc).isoformat()
     process_mode = str(prior.get("processMode") or "").lower()

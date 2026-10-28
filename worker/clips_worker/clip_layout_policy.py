@@ -45,6 +45,7 @@ def apply_content_layout_to_edits(
     archetype: str | None,
     headline_on: bool = False,
     log: bool = True,
+    archetype_source: str | None = None,
 ) -> dict:
     mode, reason = resolve_content_layout_mode(archetype=archetype, headline_on=headline_on)
     layout = dict(edits.get("layout") or {})
@@ -57,6 +58,7 @@ def apply_content_layout_to_edits(
             "layout",
             "content_policy",
             archetype=str(archetype or "")[:40],
+            archetype_source=str(archetype_source or "unknown")[:80],
             layout_mode=mode,
             reason=reason,
             headline_on=bool(headline_on),

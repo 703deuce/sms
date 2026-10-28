@@ -33,6 +33,7 @@ def rank_moments(
     vod_signal_curves: dict[str, list[float]] | None = None,
     video_signal: list[float] | None = None,
     video_moments: list[dict] | None = None,
+    transcript_ok: bool = True,
 ) -> tuple[list[FusionPick], dict]:
     duration_s = max(1, int(duration_ms / 1000))
     chat_sig: list[float] | None = None
@@ -107,7 +108,7 @@ def rank_moments(
         "video": video_sig,
     }
     ranker = llm_ranker
-    if ranker is None and use_llm:
+    if ranker is None and use_llm and transcript_ok:
         from clips_worker.streamer.llm_rank import make_llm_ranker
 
         ranker = make_llm_ranker(
@@ -118,6 +119,11 @@ def rank_moments(
             cue_events=cue_events,
             range_start_ms=0,
         )
+    elif ranker is None and use_llm and not transcript_ok:
+        from clips_worker.decision_log import decision_log
+
+        decision_log("stream_rank", "rescorer_skipped_no_transcript", word_count=len(words))
+        ranker = None
     picks, payload = fuse_moments(
         duration_s=duration_s,
         signals=signals,
@@ -127,6 +133,7 @@ def rank_moments(
         llm_ranker=ranker,
         cue_events=cue_events,
         video_moments=video_moments,
+        transcript_ok=transcript_ok,
     )
     from clips_worker.target_clip_len import enrich_settings_with_clip_length, resolve_clip_length_policy
 

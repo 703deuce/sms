@@ -15,6 +15,53 @@ def rolling_chunk_min(state: dict) -> int:
     return max(3, min(60, raw))
 
 
+def log_chunk_min_source(*, vod_id: str, chunk_min: int, source: str) -> None:
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "stream_import",
+        "chunk_min_source",
+        vodId=vod_id,
+        chunkMin=chunk_min,
+        source=source[:80],
+    )
+
+
+def seed_rolling_chunk_min(
+    state: dict,
+    *,
+    vod_id: str,
+    range_start_ms: int,
+    range_end_ms: int,
+    channel_chunk_min: int | None = None,
+) -> dict:
+    """Seed state.rolling.chunkMin from paste range unless channel override."""
+    rolling = dict(state.get("rolling") if isinstance(state.get("rolling"), dict) else {})
+    if channel_chunk_min is not None:
+        rolling["chunkMin"] = max(3, min(60, int(channel_chunk_min)))
+        rolling["chunkMinSource"] = "channel_settings"
+        state = {**state, "rolling": rolling}
+        log_chunk_min_source(
+            vod_id=vod_id,
+            chunk_min=int(rolling["chunkMin"]),
+            source="channel_settings",
+        )
+        return state
+    elif rolling.get("chunkMin") is None and range_end_ms > range_start_ms:
+        span_ms = range_end_ms - range_start_ms
+        rolling["chunkMin"] = max(3, min(60, int((span_ms + 59_999) // 60_000)))
+        rolling["chunkMinSource"] = str(rolling.get("chunkMinSource") or "paste_range_span")
+        state = {**state, "rolling": rolling}
+        log_chunk_min_source(
+            vod_id=vod_id,
+            chunk_min=int(rolling["chunkMin"]),
+            source=str(rolling.get("chunkMinSource") or "unknown"),
+        )
+        return state
+    state = {**state, "rolling": rolling}
+    return state
+
+
 def rolling_pull_overlap_ms() -> int:
     """Max overlap between consecutive rolling windows (analyze continuity)."""
     return min(30_000, max(0, _int("STREAMER_ROLLING_OVERLAP_MS", 30_000)))
@@ -38,11 +85,65 @@ def rolling_min_new_ms() -> int:
     return _int("STREAMER_ROLLING_MIN_NEW_MS", 45_000)
 
 
+def ensure_rolling_session_started_at(rolling: dict) -> tuple[dict, str, bool]:
+    """
+    Ensure rolling.sessionStartedAt exists (wall clock for max session cap).
+    Returns (rolling, source_field, mutated).
+    """
+    r = dict(rolling or {})
+    if r.get("sessionStartedAt"):
+        return r, "sessionStartedAt", False
+    if r.get("lastPullCompletedAt"):
+        r["sessionStartedAt"] = r["lastPullCompletedAt"]
+        return r, "lastPullCompletedAt", True
+    if r.get("lastPullAt"):
+        r["sessionStartedAt"] = r["lastPullAt"]
+        return r, "lastPullAt", True
+    now = datetime.now(timezone.utc).isoformat()
+    r["sessionStartedAt"] = now
+    return r, "sessionStartedAt_seeded_now", True
+
+
+def log_rolling_session_check(
+    *,
+    vod_id: str | None,
+    rolling: dict,
+    source_field: str,
+    elapsed_h: float,
+) -> None:
+    from clips_worker.decision_log import decision_log
+
+    cap_h = rolling_max_session_hours()
+    decision_log(
+        "stream_import",
+        "rolling_session_check",
+        vodId=vod_id or "",
+        elapsed_h=round(elapsed_h, 4),
+        source_field=source_field,
+        cap_h=cap_h,
+    )
+
+
+def rolling_session_elapsed_hours(rolling: dict) -> tuple[float, str, dict, bool]:
+    """Returns elapsed_h, source_field, rolling (possibly updated), mutated."""
+    rolling, source_field, mutated = ensure_rolling_session_started_at(rolling)
+    started_raw = rolling.get("sessionStartedAt")
+    try:
+        started = datetime.fromisoformat(str(started_raw).replace("Z", "+00:00"))
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        elapsed_h = (datetime.now(timezone.utc) - started).total_seconds() / 3600.0
+    except (TypeError, ValueError):
+        elapsed_h = 0.0
+    return elapsed_h, source_field, rolling, mutated
+
+
 def plan_rolling_window_ms(
     *,
     total_vod_ms: int,
     state: dict,
     finalize: bool,
+    vod_id: str | None = None,
 ) -> tuple[int, int] | None | str:
     """
     Return (start_ms, end_ms) absolute offsets in the archive VOD,
@@ -74,18 +175,17 @@ def plan_rolling_window_ms(
     if end_ms - start_ms > max_window:
         start_ms = end_ms - max_window
 
-    started_raw = rolling.get("sessionStartedAt") or rolling.get("lastPullAt")
-    if started_raw:
-        try:
-            started = datetime.fromisoformat(str(started_raw).replace("Z", "+00:00"))
-            if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
-            elapsed_h = (datetime.now(timezone.utc) - started).total_seconds() / 3600.0
-            if elapsed_h > rolling_max_session_hours():
-                return "stop_session"
-        except (TypeError, ValueError):
-            pass
-    elif end_ms > rolling_max_session_hours() * 3600_000:
+    rolling, source_field, session_mutated = ensure_rolling_session_started_at(rolling)
+    if session_mutated:
+        state["rolling"] = {**(state.get("rolling") if isinstance(state.get("rolling"), dict) else {}), **rolling}
+    elapsed_h, source_field, rolling, _ = rolling_session_elapsed_hours(rolling)
+    log_rolling_session_check(
+        vod_id=vod_id,
+        rolling=rolling,
+        source_field=source_field,
+        elapsed_h=elapsed_h,
+    )
+    if elapsed_h > rolling_max_session_hours():
         return "stop_session"
 
     return start_ms, end_ms
@@ -122,8 +222,24 @@ def apply_rolling_pull_plan(
     state = vod.get("state") or {}
     if isinstance(state, str):
         state = json.loads(state)
-    plan = plan_rolling_window_ms(total_vod_ms=total_vod_ms, state=state, finalize=finalize)
+    rolling = dict(state.get("rolling") or {})
+    rolling, _, session_mutated = ensure_rolling_session_started_at(rolling)
+    if session_mutated:
+        state = {**state, "rolling": rolling}
+    plan = plan_rolling_window_ms(
+        total_vod_ms=total_vod_ms,
+        state=state,
+        finalize=finalize,
+        vod_id=str(vod.get("id") or ""),
+    )
     if plan is None or plan == "stop_session":
+        if session_mutated or isinstance(state.get("rolling"), dict):
+            with conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE stream_vods SET state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
+                    (json.dumps(state), vod["id"]),
+                )
+            conn.commit()
         return plan
     start_ms, end_ms = plan
     rolling = dict(state.get("rolling") or {})
@@ -288,6 +404,17 @@ def stop_rolling_session(conn, vod_id: str, *, reason: str, project_id: str | No
         projectId=pid,
         reason=reason[:120],
         cancelled_job_ids=cancelled,
+    )
+    rolling = dict(state.get("rolling") or {})
+    elapsed_h, source_field, _, _ = rolling_session_elapsed_hours(rolling)
+    decision_log(
+        "stream_import",
+        "rolling_session_check",
+        vodId=vod_id,
+        elapsed_h=round(elapsed_h, 4),
+        source_field=source_field,
+        cap_h=rolling_max_session_hours(),
+        context="rolling_stopped",
     )
     print(
         f"[clipper:autopull] rolling_stopped vodId={vod_id} reason={reason[:80]} "
