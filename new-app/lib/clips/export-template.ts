@@ -4,7 +4,7 @@ import {
   EXPORT_PLATFORM_PRESETS,
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
-import { isInternalClipReasoningText } from '@/lib/clips/clip-results-chips'
+import { clipDisplayTitle, isInternalClipReasoningText } from '@/lib/clips/clip-results-chips'
 
 export const EXPORT_HEADLINE_MAX_REGENERATIONS = 5
 
@@ -90,18 +90,17 @@ export function exportTemplateOverlaysActive(tpl: ClipExportTemplate | undefined
   return false
 }
 
-export function clipTitleForExport(clip: { title: string; aiMeta?: unknown }): string {
+export function clipTitleForExport(clip: {
+  title: string
+  reason?: string | null
+  aiMeta?: unknown
+}): string {
   const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<string, unknown>
   const post = meta.postCopy as { hookText?: string } | undefined
   if (post?.hookText?.trim() && !isInternalClipReasoningText(post.hookText)) {
     return post.hookText.trim().slice(0, 120)
   }
-  if (typeof meta.hook === 'string' && meta.hook.trim() && !isInternalClipReasoningText(meta.hook)) {
-    return meta.hook.trim().slice(0, 120)
-  }
-  const title = clip.title.trim()
-  if (title && !isInternalClipReasoningText(title)) return title.slice(0, 120)
-  return 'Clip'
+  return clipDisplayTitle(clip)
 }
 
 export function cheapSuggestedHeadline(clip: {

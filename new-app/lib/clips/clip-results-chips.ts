@@ -54,6 +54,18 @@ const LAYOUT_LABELS: Record<string, string> = {
 
 const SENTENCE_REF_RE = /\(\s*s\d+(?:\s*-\s*s\d+)?\s*\)/gi
 
+/** Worker/debug titles like `00:30.0–01:20.6; hook text…` — not for card headlines. */
+const CLIP_TITLE_TIMESTAMP_PREFIX_RE =
+  /^\d{1,2}:\d{2}(?:\.\d+)?\s*[–—-]\s*\d{1,2}:\d{2}(?:\.\d+)?\s*(?:[;,]\s*)?/i
+
+export function stripClipTitleTimestampPrefix(text: string): string {
+  return text.trim().replace(CLIP_TITLE_TIMESTAMP_PREFIX_RE, '').trim()
+}
+
+export function isTimestampPrefixedClipTitle(text: string): boolean {
+  return CLIP_TITLE_TIMESTAMP_PREFIX_RE.test(text.trim())
+}
+
 function stripInternalSentenceRefs(text: string): string {
   return text.replace(SENTENCE_REF_RE, '').replace(/\s{2,}/g, ' ').trim()
 }
@@ -72,6 +84,7 @@ function isHedgeOrDebugSummary(text: string): boolean {
 export function isInternalClipReasoningText(text: string): boolean {
   const raw = text.trim()
   if (!raw) return true
+  if (isTimestampPrefixedClipTitle(raw)) return true
   if (SENTENCE_REF_RE.test(raw)) return true
   const trimmed = stripInternalSentenceRefs(raw)
   if (!trimmed || isHedgeOrDebugSummary(trimmed)) return true
@@ -82,6 +95,41 @@ export function isInternalClipReasoningText(text: string): boolean {
     t.includes('excited delivery at') ||
     (/\bat s\d+/i.test(raw) && (t.includes(' and ') || t.includes(' may ')))
   )
+}
+
+/** Customer-facing title for grids/cards — never raw timestamp-prefixed picker strings. */
+export function clipDisplayTitle(clip: {
+  title: string
+  reason?: string | null
+  aiMeta?: unknown
+}): string {
+  const meta = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as ClipAiMeta
+  const rawTitle = clip.title.trim()
+
+  if (rawTitle && !isTimestampPrefixedClipTitle(rawTitle) && !isInternalClipReasoningText(rawTitle)) {
+    return rawTitle
+  }
+
+  const titleAfterStrip = stripClipTitleTimestampPrefix(rawTitle)
+  if (titleAfterStrip && !isInternalClipReasoningText(titleAfterStrip)) {
+    return titleAfterStrip.slice(0, 120)
+  }
+
+  const why = clipWhySummary(meta)
+  if (why) return why.slice(0, 120)
+
+  const reason = clip.reason?.trim()
+  if (reason && !FALLBACK_REASON_RE.test(reason)) {
+    const cleaned = stripClipTitleTimestampPrefix(reason)
+    if (cleaned && !isInternalClipReasoningText(cleaned)) return cleaned.slice(0, 120)
+  }
+
+  if (typeof meta.hook === 'string') {
+    const hook = stripClipTitleTimestampPrefix(meta.hook.trim())
+    if (hook && !isInternalClipReasoningText(hook)) return hook.slice(0, 120)
+  }
+
+  return 'Clip'
 }
 
 export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | null {

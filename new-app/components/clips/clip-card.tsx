@@ -16,6 +16,7 @@ import { ClipCardVideo } from '@/components/clips/clip-card-video'
 import {
   clipLayoutChip,
   clipPersonCount,
+  clipDisplayTitle,
   clipFallbackPickLabel,
   clipWhySummary,
   type ClipAiMeta,
@@ -55,6 +56,7 @@ export function ClipCard({
   const layoutChip = clipLayoutChip(aiMeta)
   const people = clipPersonCount(aiMeta)
   const fallbackLabel = clipFallbackPickLabel(aiMeta, clip.reason)
+  const displayTitle = clipDisplayTitle(clip)
 
   const editorHref = `/app/clips/${projectId}/edit/${clip.id}`
 
@@ -137,7 +139,7 @@ export function ClipCard({
         className={`relative cursor-pointer bg-muted ${clipCardAspectClass(cardAspect)}`}
         role="link"
         tabIndex={0}
-        aria-label={`Open ${clip.title} in editor`}
+        aria-label={`Open ${displayTitle} in editor`}
         onClick={(e) => {
           const t = e.target as HTMLElement
           if (t.closest('button, label, input, a, [data-slot="button"]')) return
@@ -160,7 +162,7 @@ export function ClipCard({
               checked={selected}
               onChange={onToggleSelect}
               className="size-3.5 accent-primary"
-              aria-label={`Select ${clip.title}`}
+              aria-label={`Select ${displayTitle}`}
             />
             Select
           </label>
@@ -192,7 +194,7 @@ export function ClipCard({
             className="text-left hover:text-primary hover:underline"
             onClick={(e) => e.stopPropagation()}
           >
-            {clip.title}
+            {displayTitle}
           </Link>
         </h3>
         <p className="text-xs text-muted-foreground tabular-nums">
