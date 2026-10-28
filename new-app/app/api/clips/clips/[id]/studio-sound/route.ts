@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { normalizeEdits, outputDurationMs } from '@/lib/clips/edits'
+import { DEFAULT_STUDIO_SOUND_MIX, normalizeAudioEdits } from '@/lib/clips/audio'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
+import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -18,6 +20,16 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     const lengthMs = Math.max(3000, Math.min(300_000, outputDurationMs(edits)))
 
     const prisma = getPrisma()
+    const existing = await prisma.aiGeneration.findFirst({
+      where: { clipId, kind: 'STUDIO_SOUND', status: { in: ['PENDING', 'RUNNING'] } },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (existing) {
+      return NextResponse.json({
+        data: { generationId: existing.id, jobId: null, status: existing.status, reused: true },
+      })
+    }
+
     const project = await prisma.clipProject.findFirst({
       where: { id: clip.projectId, workspaceId },
       include: { upload: true },
@@ -49,7 +61,29 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       },
     })
 
-    return NextResponse.json({ data: { generationId: gen.id, jobId, status: 'PENDING' } })
+    const saved = await writeClipEditsOrThrow(clipId, bounds, clip.editsSaveVersion, (cur) => {
+      const audio = normalizeAudioEdits(cur.audio)
+      return {
+        ...cur,
+        audio: {
+          ...audio,
+          studioSound: {
+            enabled: true,
+            generationId: gen.id,
+            mix: audio.studioSound?.mix ?? DEFAULT_STUDIO_SOUND_MIX,
+          },
+        },
+      }
+    })
+
+    return NextResponse.json({
+      data: {
+        generationId: gen.id,
+        jobId,
+        status: 'PENDING',
+        editsSaveVersion: saved.editsSaveVersion,
+      },
+    })
   } catch (err) {
     return jsonError(err, 400)
   }

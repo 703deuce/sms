@@ -20,6 +20,10 @@ export function useGeneration(generationId: string | null, pollIntervalMs = 2000
     setStatus(res.status)
     setDownloadUrl(res.downloadUrl)
     setError(res.error)
+    if (res.status === 'READY' || res.status === 'FAILED') {
+      return true
+    }
+    return false
     if (res.status === 'FAILED' && failedToastRef.current !== generationId) {
       failedToastRef.current = generationId
       toast.error(res.error || 'Generation failed', {
@@ -42,7 +46,11 @@ export function useGeneration(generationId: string | null, pollIntervalMs = 2000
     }
     failedToastRef.current = null
     const tick = () => {
-      void poll().catch(() => {})
+      void poll()
+        .then((done) => {
+          if (done) clearInterval(t)
+        })
+        .catch(() => {})
     }
     const t = setInterval(tick, pollIntervalMs)
     tick()

@@ -17,7 +17,7 @@ import { getPrisma } from '@/lib/server/db'
 import { loadClipSourceWords } from '@/lib/server/clips/transcript'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
-import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import { writeClipEditsOrThrow } from '@/lib/server/clips/write-clip-edits'
 
 export type StreamExportTemplateContext = {
   platform?: 'twitch' | 'kick'
@@ -214,15 +214,21 @@ export async function persistExportTemplate(
   bounds: { clipStartMs: number; clipEndMs: number },
   patch: Partial<ClipExportTemplate>,
   currentEdits: unknown,
+  baseVersion?: number,
 ) {
   const prisma = getPrisma()
-  const base = normalizeEdits(currentEdits, bounds)
+  const clip = await prisma.clip.findUniqueOrThrow({ where: { id: clipId } })
+  const base = normalizeEdits(currentEdits ?? clip.edits, bounds)
   const merged = mergeEditsPatch(
     base,
     { exportTemplate: { ...(base.exportTemplate || {}), ...patch } },
     bounds,
   )
-  const edits = normalizeEdits(merged, bounds)
-  await prisma.clip.update({ where: { id: clipId }, data: { edits: toPrismaJson(edits) } })
-  return edits
+  const res = await writeClipEditsOrThrow(
+    clipId,
+    bounds,
+    baseVersion ?? clip.editsSaveVersion,
+    () => normalizeEdits(merged, bounds),
+  )
+  return res.edits
 }

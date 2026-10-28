@@ -219,15 +219,28 @@ export function useEditorState(
     })
   }, [])
 
+  const addCutRanges = useCallback(
+    (ranges: CutRange[]) => {
+      if (!ranges.length) return
+      const spans = wordSpans()
+      let cuts = [...editsRef.current.cutRanges]
+      for (const range of ranges) {
+        const snapped = spans.length ? snapCutRangeToWordGaps(range, spans) ?? range : range
+        const nextRange = spans.length
+          ? sanitizeCutRangesForWords([snapped], spans)[0] ?? snapped
+          : snapped
+        cuts = mergeCutRanges([...cuts, nextRange])
+      }
+      setEdits({ ...editsRef.current, cutRanges: cuts })
+    },
+    [setEdits, wordSpans],
+  )
+
   const addCutRange = useCallback(
     (range: CutRange) => {
-      const spans = wordSpans()
-      const snapped = spans.length ? snapCutRangeToWordGaps(range, spans) ?? range : range
-      const nextRange = spans.length ? sanitizeCutRangesForWords([snapped], spans)[0] ?? snapped : snapped
-      const cuts = mergeCutRanges([...state.edits.cutRanges, nextRange])
-      setEdits({ ...state.edits, cutRanges: cuts })
+      addCutRanges([range])
     },
-    [setEdits, state.edits, wordSpans],
+    [addCutRanges],
   )
 
   const setWordFix = useCallback(
@@ -496,11 +509,11 @@ export function useEditorState(
             baseVersion: serverVersionRef.current,
             expectedUpdatedAt: serverUpdatedAtRef.current,
           })
+          if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
+          if (typeof res.editsSaveVersion === 'number') serverVersionRef.current = res.editsSaveVersion
           if (revisionAtSend !== localRevisionRef.current) {
             continue
           }
-          if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
-          if (typeof res.editsSaveVersion === 'number') serverVersionRef.current = res.editsSaveVersion
           clearEditorAutosaveDraft(clipId)
           savedRevisionRef.current = revisionAtSend
           lastSavedEditsRef.current = editsRef.current
@@ -583,6 +596,7 @@ export function useEditorState(
     producerStrip: state.producerStrip,
     clearProducerStrip,
     addCutRange,
+    addCutRanges,
     setWordFix,
     restoreWord,
     restoreCutRange,
