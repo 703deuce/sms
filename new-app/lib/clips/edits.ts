@@ -194,6 +194,16 @@ function normalizeHookOverlay(raw: unknown): ClipEditsV2['hookOverlay'] | undefi
   }
 }
 
+export function mergeEditsPatch(
+  current: ClipEditsV2,
+  patch: unknown,
+  bounds: ClipBounds,
+): ClipEditsV2 {
+  const base = normalizeEdits(current, bounds)
+  if (!patch || typeof patch !== 'object') return base
+  return normalizeEdits({ ...base, ...(patch as object) }, bounds)
+}
+
 export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
   const base = defaultEdits(bounds)
   if (!raw || typeof raw !== 'object') return base

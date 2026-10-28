@@ -1,0 +1,151 @@
+clips-worker callback health OK (ok https://transovo.ai/api/health commitSha=e60257e020c9)
+clips-worker starting worker_id=clips-worker-1 instance=clips-worker-1:ab82d94b lane=default db=aws-0-us-east-1.pooler.supabase.com:5432/postgres
+models yunet=True face_landmarker=True sface=True poppins=True v3_dir=True
+[clipper:worker] export_sfx_dir=/app/assets/sfx bundled=True
+picker config loaded core_rubric=True playbook_genres=business_marketing,comedy_standup,gaming_stream,howto_tutorial,motivational_sermon,news_commentary,podcast_interview,solo_educational,sports_tv ui_genres=business,comedy,education,gaming,howto,interview,motivational,news,other,podcast,sports,talk,vlog
+connected to db host=aws-0-us-east-1.pooler.supabase.com:5432/postgres queued_jobs=0
+poll idle queued_jobs=0
+poll idle queued_jobs=0
+claimed job=job_4743a84ab2c24110924ec979bfe8be89
+processing job=job_4743a84ab2c24110924ec979bfe8be89 project=proj_3edeaf9309b74bbfa8ce5313b0e346c3
+[clipper:stage] event=begin stage=source_download project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=begin stage=download project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=False egress_bytes=53216124
+[clipper:stage] event=end stage=download project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=2152
+WARN storage.b2_get object_key=ws/ws_1/uploads/upl_6e0b931f3b8b4d7b9f7d905682d70b7c/source.mp4 cache_hit=False egress_bytes=53216124
+[clipper:stage] event=end stage=source_download project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=2153
+[clipper:stage] event=begin stage=transcribe project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 model=small.en
+[clipper:stage] event=end stage=transcribe project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=4017
+[clipper:transcribe] project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 words=521 engine=deepgram
+[clipper:gpu_render] {"event": "warmup", "provider": "modal", "ok": true, "renderMs": 422685.5, "coldStart": true}
+[clipper:stage] event=begin stage=picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+{"picker": "picker_start", "words_in": 521, "range_start_ms": 0, "range_end_ms": 226000, "source_duration_ms": 226000, "genre": "podcast", "clip_length": "auto", "target_clip_len_s": null, "length_max_ms": 90000, "length_mode": "auto"}
+{"picker": "sentences_built", "count": 66}
+[clipper:stage] event=begin stage=scene_scan_signals project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=end stage=scene_scan_signals project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=24098
+[clipper:stage] event=heartbeat stage=picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=begin stage=video_picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 chunk=regular
+[clipper:stage] event=heartbeat stage=picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=begin stage=video_picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 chunk=regular_edge
+[clipper:stage] event=heartbeat stage=picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:video_picker] WARNING min_moments_required=3 moments_returned=2 chunk=regular_edge (keeping model output; no filler)
+[clipper:stage] event=end stage=video_picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=18607 chunk=regular_edge frames=54 prompt_tokens=11204 output_tokens=779 est_usd=0.001432 moments=2
+[clipper:stage] event=begin stage=video_picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 chunk=regular_edge
+[clipper:stage] event=heartbeat stage=picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:video_picker] WARNING min_moments_required=3 moments_returned=2 chunk=regular_edge (keeping model output; no filler)
+[clipper:stage] event=end stage=video_picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=16796 chunk=regular_edge frames=100 prompt_tokens=17320 output_tokens=826 est_usd=0.002062 moments=2
+[clipper:stage] event=end stage=video_picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=85122 chunk=regular frames=113 prompt_tokens=19153 output_tokens=795 est_usd=0.002233 moments=3
+[clipper:stage] event=begin stage=picker_pass1 project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+{"picker": "video_picker_regular", "moments": 3, "ok": true, "est_usd": 0.002233, "prompt_tokens": 19153, "output_tokens": 795}
+{"picker": "pass1_start", "sentences": 66, "candidate_windows": 1, "genre": "podcast"}
+{"picker": "pass1_chunk", "lo_ms": 0, "hi_ms": 1200000, "sentences_in_chunk": 66, "transcript_chars": 11704}
+[clipper:stage] event=begin stage=picker_llm project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=end stage=picker_llm project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=5742
+{"picker": "pass1_raw", "lo_ms": 0, "hi_ms": 1200000, "raw": "{\"moments\": [{\"anchor_id\": 16, \"approx_start_id\": 14, \"approx_end_id\": 17, \"archetype\": \"stat / practical advice\", \"locator\": \"00:58.1\\u201301:06.6; the 1% success-rate example resolves with \\u201cYou got a friend.\\u201d\", \"read_ahead_needed\": false, \"why\": \"The specific 1%-to-100 example gives a clear, self-contained payoff and encourages persistence.\"}, {\"anchor_id\": 8, \"approx_start_id\": 6, \"approx_end_id\": 20, \"archetype\": \"lesson / personal philosophy\", \"locator\": \"00:30.0\\u201301:20.6; talking to people and trying new things, with \\u201cextend your tendrils\\u201d as a memorable phrase.\", \"read_ahead_needed\": false, \"why\": \"This develops the advice that meeting people takes attempts, then lands on the idea that trying new things is how you find blessings.\"}, {\"anchor_id\": 64, \"approx_start_id\": 54, \"approx_end_id\": 64, \"archetype\": \"comic hot take\", \"locator\": \"02:50.4\\u201303:45.3; proposes meowing as a normal social interaction and imagines doing it at a grocery store.\", \"read_ahead_needed\": false, \"why\": \"The unusual proposal is explained with a relatable small-talk premise and culminates in the grocery-store scenario.\"}]}"}
+{"picker": "pass1_done", "moments": 3}
+[clipper:stage] event=end stage=picker_pass1 project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=5746
+{"picker": "snap_bounds", "title": "00:30.0\u201301:20.6; talking to people and t", "before_start": 30000, "before_end": 80575, "after_start": 29280, "after_end": 80575, "first_word": "yes,", "last_word": "things."}
+{"picker": "snap_bounds", "title": "00:58.1\u201301:06.6; the 1% success-rate exa", "before_start": 58070, "before_end": 66630, "after_start": 58070, "after_end": 66630, "first_word": "I", "last_word": "friend."}
+{"picker": "snap_bounds", "title": "00:58.1\u201301:06.6; the 1% success-rate exa", "before_start": 52535, "before_end": 72735, "after_start": 52535, "after_end": 72735, "first_word": "the", "last_word": "I'm"}
+{"picker": "extend_short_setup", "title": "00:58.1\u201301:06.6; the 1% success-rate exa", "before_start": 58070, "before_end": 66630, "after_start": 52535, "after_end": 72735, "min_ms": 15000}
+[clipper:speed] project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 phase=headstart_render_begin startMs=29280 endMs=80575
+{"picker": "dedupe_r10", "before": 2, "after": 1}
+{"picker": "selection_force_best", "count": 1, "cap": 2}
+{"picker": "selection_force_best_fallback", "count": 1}
+{"picker": "selection", "candidates": 2, "selected": 1, "dropped_short": 0, "dropped_bounds": 0, "relax_duration": false, "min_ms": 15000}
+{"picker": "headstart_picks", "count": 1}
+[clipper:stage] event=begin stage=clip_ffmpeg_cut project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 clip_index=0
+[clipper:stage] event=ffmpeg_start stage=clip_ffmpeg_cut project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 clip_index=0[clipper:stage] event=begin stage=picker_pass2 project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+
+{"picker": "pass2_start", "moments_in": 3}
+[clipper:stage] event=begin stage=picker_llm project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=end stage=picker_llm project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=4644
+{"picker": "pass2_raw", "moment_index": 0, "raw": "{\"clips\": [{\"start_id\": 14, \"end_id\": 17, \"payoff_id\": 17, \"archetype\": \"stat / practical advice\", \"scores\": {\"hook\": 7, \"self_contained\": 9, \"payoff\": 8, \"energy\": 6, \"value\": 7}, \"reject\": false, \"reject_reason\": \"\", \"title\": \"Talk to 100 people and you\\u2019ll get a friend\", \"why_care\": \"A memorable 1% example makes persistence in meeting people feel achievable.\", \"setup_start_s\": 58.1, \"payoff_end_s\": 66.6}]}"}
+[clipper:stage] event=begin stage=picker_llm project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=ffmpeg_exit stage=clip_ffmpeg_cut project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 exit_code=0 elapsed_ms=5562 clip_index=0
+[clipper:stage] event=end stage=clip_ffmpeg_cut project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=5563 exit_code=0 clip_index=0
+[clipper:stage] event=end stage=picker_llm project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=10145
+{"picker": "pass2_raw", "moment_index": 1, "raw": "{\"clips\": [{\"start_id\": 14, \"end_id\": 17, \"payoff_id\": 17, \"archetype\": \"lesson / personal philosophy\", \"scores\": {\"hook\": 7, \"self_contained\": 8, \"payoff\": 8, \"energy\": 6, \"value\": 7}, \"reject\": false, \"reject_reason\": \"\", \"title\": \"Talk to 100 people and you\\u2019ll find a friend\", \"why_care\": \"A simple, memorable way to think about the odds of making friends: keep trying, and one connection can be enough.\", \"setup_start_s\": 58.1, \"payoff_end_s\": 66.6}]}"}
+[clipper:stage] event=begin stage=picker_llm project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=end stage=picker_llm project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=6297
+{"picker": "pass2_raw", "moment_index": 2, "raw": "{\"clips\": [{\"start_id\": 14, \"end_id\": 17, \"payoff_id\": 17, \"archetype\": \"advice\", \"scores\": {\"hook\": 7, \"self_contained\": 8, \"payoff\": 8, \"energy\": 6, \"value\": 7}, \"reject\": false, \"reject_reason\": \"\", \"title\": \"Talk to 100 people, get a friend\", \"why_care\": \"A memorable 1% success-rate example makes the case for continuing to meet people (s14\\u2013s17).\", \"setup_start_s\": 58.1, \"payoff_end_s\": 66.6}]}"}
+{"picker": "pass2_done", "scored": 3, "audited": 3, "rejected": {}}
+[clipper:stage] event=end stage=picker_pass2 project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=21096
+[clipper:stage] event=begin stage=selection project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+{"picker": "snap_bounds", "title": "Talk to 100 people and you\u2019ll get a frie", "before_start": 58070, "before_end": 66630, "after_start": 58070, "after_end": 66630, "first_word": "I", "last_word": "friend."}
+{"picker": "snap_bounds", "title": "Talk to 100 people and you\u2019ll get a frie", "before_start": 52535, "before_end": 72735, "after_start": 52535, "after_end": 72735, "first_word": "the", "last_word": "I'm"}
+{"picker": "extend_short_setup", "title": "Talk to 100 people and you\u2019ll get a frie", "before_start": 58070, "before_end": 66630, "after_start": 52535, "after_end": 72735, "min_ms": 15000}
+{"picker": "snap_bounds", "title": "Talk to 100 people and you\u2019ll find a fri", "before_start": 58070, "before_end": 66630, "after_start": 58070, "after_end": 66630, "first_word": "I", "last_word": "friend."}
+{"picker": "snap_bounds", "title": "Talk to 100 people and you\u2019ll find a fri", "before_start": 52535, "before_end": 72735, "after_start": 52535, "after_end": 72735, "first_word": "the", "last_word": "I'm"}
+{"picker": "extend_short_setup", "title": "Talk to 100 people and you\u2019ll find a fri", "before_start": 58070, "before_end": 66630, "after_start": 52535, "after_end": 72735, "min_ms": 15000}
+{"picker": "snap_bounds", "title": "Talk to 100 people, get a friend", "before_start": 58070, "before_end": 66630, "after_start": 58070, "after_end": 66630, "first_word": "I", "last_word": "friend."}
+{"picker": "snap_bounds", "title": "Talk to 100 people, get a friend", "before_start": 52535, "before_end": 72735, "after_start": 52535, "after_end": 72735, "first_word": "the", "last_word": "I'm"}
+{"picker": "extend_short_setup", "title": "Talk to 100 people, get a friend", "before_start": 58070, "before_end": 66630, "after_start": 52535, "after_end": 72735, "min_ms": 15000}
+{"picker": "selection", "candidates": 3, "selected": 1, "dropped_short": 0, "dropped_bounds": 0, "relax_duration": false, "min_ms": 15000}
+{"picker": "after_finalize", "count": 1}
+[clipper:stage] event=end stage=selection project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=1
+{"picker": "picker_done", "selected": 1}
+[clipper:stage] event=end stage=picker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=147994
+[clipper:stage] event=begin stage=headstart_render project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=begin stage=headstart_render project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:…e346c3/scratch/render/clip_cfbfe8f38b6a4b439a8a99903715e9eb/src_0b7090c9eae6.mp4 bytes=6248745
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=2010
+[clipper:stage] event=heartbeat stage=headstart_render project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=heartbeat stage=headstart_render project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=end stage=headstart_render project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=45000
+[clipper:speed] project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 phase=headstart_render_timeout after_sec=45 continuing_async=1
+[clipper:stage] event=end stage=headstart_render project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=45001
+[clipper:speed] project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 phase=pick_ms=618239 picks=1
+gpu.fallback op=render reason=<urlopen error EOF occurred in violation of protocol (_ssl.c:2427)> clips=1
+[clipper:progress] job=job_4743a84ab2c24110924ec979bfe8be89 project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 event=reframe_start clips_total=1
+[clipper:stage] event=begin stage=reframe project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 clips=1
+[clipper:gpu_render] {"clipId": "clip_cfbfe8f38b6a4b439a8a99903715e9eb", "projectId": "proj_3edeaf9309b74bbfa8ce5313b0e346c3", "provider": "local", "ok": true, "renderMs": 19524.8, "gpuSeconds": 0.0, "sizeBytes": 7032507, "filterComplex": true, "coldStart": false}
+[clipper:stage] event=begin stage=download project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:…e346c3/scratch/render/clip_cfbfe8f38b6a4b439a8a99903715e9eb/out_2524c93eff22.mp4
+WARN storage.b2_get object_key=ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/scratch/render/clip_cfbfe8f38b6a4b439a8a99903715e9eb/out_2524c93eff22.mp4 cache_hit=False egress_bytes=7032507
+WARN storage.b2_get object_key=ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/scratch/render/clip_cfbfe8f38b6a4b439a8a99903715e9eb/out_2524c93eff22.mp4 cache_hit=False egress_bytes=7032507
+[clipper:stage] event=end stage=download project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=1570
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/clips/clip_cfbfe8f38b6a4b439a8a99903715e9eb/preview.mp4 bytes=7032507
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=1343
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/clips/clip_cfbfe8f38b6a4b439a8a99903715e9eb/poster.jpg bytes=26106
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=357
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/clips/clip_cfbfe8f38b6a4b439a8a99903715e9eb/words.json bytes=10765
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=1018
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/clips/clip_cfbfe8f38b6a4b439a8a99903715e9eb/crop_track.json bytes=18705
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=1209
+[clipper:stage] event=begin stage=db_write_clips project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 count=1
+[clipper:stage] event=end stage=db_write_clips project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=295
+[clipper:progress] job=job_4743a84ab2c24110924ec979bfe8be89 project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 event=clip_ready clip_index=1 clips_ready=1 clips_total=1
+[clipper:speed] project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 phase=first_clip_card_ms=653720
+[clipper:stage] event=begin stage=clip_ffmpeg_cut project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 clip_index=0
+[clipper:stage] event=ffmpeg_start stage=clip_ffmpeg_cut project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 clip_index=0
+[clipper:stage] event=ffmpeg_exit stage=clip_ffmpeg_cut project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 exit_code=0 elapsed_ms=2465 clip_index=0
+[clipper:stage] event=end stage=clip_ffmpeg_cut project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=2465 exit_code=0 clip_index=0
+[clipper:stage] event=heartbeat stage=reframe project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:…e346c3/scratch/render/clip_df0f104da5d746288c43c5aa04b33955/src_a311b33c8e7a.mp4 bytes=2398463
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=2274
+gpu.fallback op=render reason=<urlopen error EOF occurred in violation of protocol (_ssl.c:2427)> clips=1
+[clipper:stage] event=heartbeat stage=reframe project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:gpu_render] {"clipId": "clip_df0f104da5d746288c43c5aa04b33955", "projectId": "proj_3edeaf9309b74bbfa8ce5313b0e346c3", "provider": "local", "ok": true, "renderMs": 10522.1, "gpuSeconds": 0.0, "sizeBytes": 2717465, "filterComplex": true, "coldStart": false}
+[clipper:stage] event=begin stage=download project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:…e346c3/scratch/render/clip_df0f104da5d746288c43c5aa04b33955/out_2e3427829f7b.mp4
+WARN storage.b2_get object_key=ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/scratch/render/clip_df0f104da5d746288c43c5aa04b33955/out_2e3427829f7b.mp4 cache_hit=False egress_bytes=2717465
+WARN storage.b2_get object_key=ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/scratch/render/clip_df0f104da5d746288c43c5aa04b33955/out_2e3427829f7b.mp4 cache_hit=False egress_bytes=2717465
+[clipper:stage] event=end stage=download project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=1355
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/clips/clip_df0f104da5d746288c43c5aa04b33955/preview.mp4 bytes=2717465
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=1647
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/clips/clip_df0f104da5d746288c43c5aa04b33955/poster.jpg bytes=26950
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=377
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/clips/clip_df0f104da5d746288c43c5aa04b33955/words.json bytes=4158
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=806
+[clipper:stage] event=begin stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 key=object:ws/ws_1/projects/proj_3edeaf9309b74bbfa8ce5313b0e346c3/clips/clip_df0f104da5d746288c43c5aa04b33955/crop_track.json bytes=7509
+[clipper:stage] event=end stage=upload project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=529
+[clipper:stage] event=begin stage=reframe_pool_worker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89
+[clipper:stage] event=end stage=reframe_pool_worker project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=0
+[clipper:stage] event=begin stage=db_write_clips project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 count=1
+[clipper:stage] event=end stage=db_write_clips project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=279
+[clipper:progress] job=job_4743a84ab2c24110924ec979bfe8be89 project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 event=clip_ready clip_index=1 clips_ready=2 clips_total=1
+[clipper:stage] event=end stage=reframe project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 job=job_4743a84ab2c24110924ec979bfe8be89 elapsed_ms=72185
+[clipper:picker] project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 mode=talking picks=1 message=None
+[clipper:speed] project=proj_3edeaf9309b74bbfa8ce5313b0e346c3 phase=pipeline_total_ms=704530
+finished job=job_4743a84ab2c24110924ec979bfe8be89
+poll idle queued_jobs=0
+poll idle queued_jobs=0

@@ -690,7 +690,8 @@ def watch_video_file(
                 meta["est_usd"] = round(estimate_gemini_usd(pt, ot), 6)
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 parsed = json.loads(text)
-                meta["sections_count"] = len(parsed.get("sections") or [])
+                meta["sections"] = list(parsed.get("sections") or [])[:24]
+                meta["sections_count"] = len(meta["sections"])
                 max_span = max_span_seconds(target_clip_len_s)
                 moments = validate_and_normalize_moments(
                     list(parsed.get("moments") or []),

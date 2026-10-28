@@ -59,7 +59,12 @@ def dedupe_r10(picks: list[dict]) -> list[dict]:
     return kept
 
 
-def select_clips(picks: list[dict], source_duration_ms: int, *, force_best: bool = False) -> list[dict]:
+def select_clips(
+    picks: list[dict],
+    source_duration_ms: int,
+    *,
+    force_best: bool = False,
+) -> list[dict]:
     cfg = selection_settings()
     min_final = cfg["min_final"]
     max_clips = cfg["max_clips"]
@@ -69,11 +74,17 @@ def select_clips(picks: list[dict], source_duration_ms: int, *, force_best: bool
     jac_thr = cfg["near_duplicate_jaccard"]
     overlap_drop = cfg["overlap_drop"]
 
+    from clips_worker.video_picker_prompt import min_moments_for_video
+
     minutes = max(1, source_duration_ms / 60_000)
     cap = min(max_clips, max(1, int(round(minutes * per_min))))
     if source_duration_ms <= 360_000:
         short_floor = min(3, max(2, int(round(minutes * 0.55))))
         cap = max(cap, short_floor)
+    min_floor = min_moments_for_video(max(1, int(source_duration_ms / 1000)))
+    if min_floor > cap:
+        picker_info("selection_cap_raise_min_moments", cap_before=cap, cap_after=min_floor)
+        cap = min(max_clips, min_floor)
 
     ranked = sorted(picks, key=lambda x: -_clip_score(x))
     kept: list[dict] = []

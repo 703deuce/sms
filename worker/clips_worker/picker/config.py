@@ -8,6 +8,9 @@ from typing import Any
 
 PICKER_ROOT = Path(__file__).resolve().parent
 
+# Pass1/pass2/scoring use this — not the upload form genre (layout-only).
+PICKER_LLM_GENRE = "unified"
+
 
 @lru_cache(maxsize=1)
 def genres_config() -> dict[str, Any]:
@@ -38,6 +41,8 @@ def load_cut_rules() -> str:
 def resolve_genre_key(genre: str) -> str:
     cfg = genres_config()
     g = (genre or "podcast").strip().lower()
+    if g == PICKER_LLM_GENRE:
+        return PICKER_LLM_GENRE
     ui_map = cfg.get("ui_genre_map") or {}
     if g in ui_map:
         return ui_map[g]
@@ -55,12 +60,19 @@ def genre_meta(genre: str) -> dict[str, Any]:
     key = resolve_genre_key(genre)
     cfg = genres_config()
     genres = cfg.get("genres") or {}
+    if key == PICKER_LLM_GENRE:
+        # Balanced scoring — do not apply podcast-only gates to gameplay windows.
+        base = genres.get("gaming_stream") or genres.get(cfg.get("default_genre", "podcast_interview")) or {}
+        return {"key": key, **base}
     base = genres.get(key) or genres.get(cfg.get("default_genre", "podcast_interview")) or {}
     return {"key": key, **base}
 
 
 def load_genre_prompt(genre: str) -> str:
     key = resolve_genre_key(genre)
+    if key == PICKER_LLM_GENRE:
+        path = PICKER_ROOT / "prompts" / "genres" / "unified.md"
+        return path.read_text(encoding="utf-8").strip()
     path = PICKER_ROOT / "prompts" / "genres" / f"{key}.md"
     if not path.is_file():
         path = PICKER_ROOT / "prompts" / "genres" / "podcast_interview.md"

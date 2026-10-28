@@ -43,6 +43,7 @@ def finalize_picks(
     relax_duration: bool = False,
     visual_moments: list[dict] | None = None,
     length_policy: ClipLengthPolicy | None = None,
+    source_duration_ms: int | None = None,
 ) -> list[dict]:
     if length_policy is None:
         length_policy = resolve_clip_length_policy({"clipLength": "auto"})
@@ -112,13 +113,27 @@ def finalize_picks(
         picks.append(pick)
 
     # select_clips runs after snap_bounds; includes R10 near-duplicate dedupe on final ms spans
-    selected = select_clips(picks, span_ms)
+    selected = select_clips(
+        picks,
+        span_ms,
+        source_duration_ms=source_duration_ms or span_ms,
+    )
     if not selected and short_pool:
-        selected = select_clips(short_pool, span_ms, force_best=True)
+        selected = select_clips(
+            short_pool,
+            span_ms,
+            force_best=True,
+            source_duration_ms=source_duration_ms or span_ms,
+        )
         if selected:
             picker_info("selection_short_pool_fallback", count=len(selected))
     if not selected and picks:
-        selected = select_clips(picks, span_ms, force_best=True)
+        selected = select_clips(
+            picks,
+            span_ms,
+            force_best=True,
+            source_duration_ms=source_duration_ms or span_ms,
+        )
         if selected:
             picker_info("selection_force_best_fallback", count=len(selected))
     picker_info(

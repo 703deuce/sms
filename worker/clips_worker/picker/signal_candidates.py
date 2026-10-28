@@ -12,6 +12,8 @@ def _overlap(a0: int, a1: int, b0: int, b1: int) -> bool:
 
 def _gaming_genre(genre: str) -> bool:
     g = (genre or "").lower()
+    if g == "unified":
+        return True
     return "gaming" in g or "stream" in g or "just_chat" in g
 
 

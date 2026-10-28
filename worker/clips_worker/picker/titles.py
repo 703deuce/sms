@@ -6,6 +6,7 @@ import re
 from clips_worker.picker.llm import chat_json
 
 BAD_TITLE_RE = re.compile(r"^[a-z_]+$")
+LOCATOR_TITLE_RE = re.compile(r"^\d{1,2}:\d{2}(?:\.\d)?\s*[\u2013\-]")
 INTERNAL_TITLES = {"coverage_span", "fallback_full_span", "clip", "story"}
 SHORT_SOURCE_MAX_MS = 120_000
 OPENING_HOOK_WINDOW_MS = 3000
@@ -42,6 +43,8 @@ def trim_title(title: str, max_len: int = 60) -> str:
 
 def needs_title(title: str | None) -> bool:
     t = (title or "").strip()
+    if LOCATOR_TITLE_RE.match(t):
+        return True
     if not t or len(t) < 3:
         return True
     if t.lower() in INTERNAL_TITLES:

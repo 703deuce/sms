@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 from clips_worker.picker.cleanup import finalize_picks
+from clips_worker.picker.config import PICKER_LLM_GENRE
 from clips_worker.job_telemetry import record_video_picker_stats
 from clips_worker.target_clip_len import resolve_clip_length_policy
 from clips_worker.picker.log_util import picker_info
@@ -50,8 +51,11 @@ def pick_talking_clips(
             None,
         )
 
-    genre = settings.get("genre", "podcast")
+    layout_genre = settings.get("genre", "podcast")
+    picker_genre = PICKER_LLM_GENRE
     prompt = (settings.get("prompt") or "").strip()
+    if settings.get("mode") and settings.get("mode") != "talking":
+        picker_info("picker_ui_mode_ignored", mode=settings.get("mode"))
     source_ms = max(1, range_end_ms - range_start_ms)
     clip_length = settings.get("clipLength") or settings.get("clip_length") or "auto"
     length_policy = resolve_clip_length_policy(settings)
@@ -62,7 +66,8 @@ def pick_talking_clips(
         range_start_ms=range_start_ms,
         range_end_ms=range_end_ms,
         source_duration_ms=source_ms,
-        genre=genre,
+        genre=picker_genre,
+        layout_genre=layout_genre,
         clip_length=clip_length,
         target_clip_len_s=length_policy.target_s,
         length_max_ms=length_policy.max_ms,
@@ -114,7 +119,12 @@ def pick_talking_clips(
                 target_clip_len_s=settings.get("target_clip_len_s"),
                 sentences=sentences,
             )
-            record_video_picker_stats(vp_meta, vm or [], range_start_ms=range_start_ms)
+            record_video_picker_stats(
+                vp_meta,
+                vm or [],
+                range_start_ms=range_start_ms,
+                sections=vp_meta.get("sections"),
+            )
             if vp_meta.get("ok") and vm:
                 visual_moments = vm
                 video_context = format_moments_for_llm(
@@ -160,26 +170,42 @@ def pick_talking_clips(
                 moments = find_moments(
                     sentences,
                     signals,
-                    genre,
+                    picker_genre,
                     prompt,
                     visual_moments=visual_moments or None,
                     range_start_ms=range_start_ms,
                     length_policy=length_policy,
                 )
-            sparse_visual = len(visual_moments) < 3
-            if not visual_moments or sparse_visual:
-                from clips_worker.picker.signal_candidates import (
-                    merge_pass1_moments,
-                    propose_signal_action_moments,
-                    propose_silence_gap_moments,
-                )
+            from clips_worker.picker.signal_candidates import (
+                merge_pass1_moments,
+                propose_signal_action_moments,
+                propose_silence_gap_moments,
+            )
+            from clips_worker.picker.visual_moment_seeds import (
+                pass1_moments_from_visual,
+                visual_moments_need_supplement,
+            )
 
+            visual_seeds = pass1_moments_from_visual(
+                visual_moments,
+                sentences,
+                range_start_ms=range_start_ms,
+            )
+            if visual_seeds:
+                moments = merge_pass1_moments(moments, visual_seeds)
+
+            need_signal = visual_moments_need_supplement(
+                visual_moments,
+                range_start_ms=range_start_ms,
+                range_end_ms=range_end_ms,
+            )
+            if need_signal:
                 signal_moments = propose_signal_action_moments(
                     sentences,
                     signals,
                     range_start_ms=range_start_ms,
                     range_end_ms=range_end_ms,
-                    genre=genre,
+                    genre=picker_genre,
                     max_window_ms=length_policy.max_ms,
                 )
                 gap_moments = propose_silence_gap_moments(
@@ -191,7 +217,7 @@ def pick_talking_clips(
                 if extra:
                     picker_info(
                         "pass1_signal_supplement",
-                        sparse_visual=sparse_visual,
+                        need_signal=need_signal,
                         visual_moments=len(visual_moments),
                         added=len(extra),
                     )
@@ -215,7 +241,11 @@ def pick_talking_clips(
         if on_headstart_picks and settings.get("mode") not in ("captions", "anything"):
             try:
                 heuristic = pass1_heuristic_candidates(
-                    moments[:5], sentences, sig_by, genre, source_duration_s=source_duration_s
+                    moments[:5],
+                    sentences,
+                    sig_by,
+                    picker_genre,
+                    source_duration_s=source_duration_s,
                 )
                 if heuristic:
                     early = finalize_picks(
@@ -225,7 +255,7 @@ def pick_talking_clips(
                         range_words,
                         range_start_ms,
                         range_end_ms,
-                        genre,
+                        picker_genre,
                         length_policy=length_policy,
                     )
                     if early:
@@ -239,7 +269,7 @@ def pick_talking_clips(
                 moments,
                 sentences,
                 signals,
-                genre,
+                picker_genre,
                 source_duration_s=source_duration_s,
                 project_id=str(settings.get("projectId") or settings.get("project_id") or "").strip() or None,
                 video_context=video_context or None,
@@ -268,9 +298,10 @@ def pick_talking_clips(
             range_words,
             range_start_ms,
             range_end_ms,
-            genre,
+            picker_genre,
             visual_moments=visual_moments or None,
             length_policy=length_policy,
+            source_duration_ms=source_ms,
         )
     if not picks and scored:
         picks = finalize_picks(
@@ -280,7 +311,7 @@ def pick_talking_clips(
             range_words,
             range_start_ms,
             range_end_ms,
-            genre,
+            picker_genre,
             relax_duration=True,
             visual_moments=visual_moments or None,
             length_policy=length_policy,
@@ -308,10 +339,11 @@ def pick_talking_clips(
             range_words,
             range_start_ms,
             range_end_ms,
-            genre,
+            picker_genre,
             relax_duration=True,
             visual_moments=visual_moments or None,
             length_policy=length_policy,
+            source_duration_ms=source_ms,
         )
         if picks:
             picker_info("span_fallback_picks", count=len(picks))
@@ -343,7 +375,7 @@ def pick_talking_clips(
         return [], msg
 
     for p in picks:
-        ensure_clip_title(p, words, genre, source_ms=source_ms)
+        ensure_clip_title(p, words, layout_genre, source_ms=source_ms)
         ss, es = p["start_sentence"], p["end_sentence"]
         p["aiMeta"] = {
             "hook": p.get("hook"),

@@ -107,9 +107,11 @@ def _pass2_system(genre: str, *, batched: bool = False, length_policy: ClipLengt
     ex = load_examples()
     moment_rule = (
         "Return exactly one clip object in clips[] per moment in the user payload; "
-        "each clip must include moment_index matching the payload."
+        "each clip must include moment_index matching the payload. "
+        "start_id/end_id must lie within that moment's approx_start_id..approx_end_id."
         if batched
-        else "Return exactly one clip object in clips[] for the single moment in the user payload."
+        else "Return exactly one clip object in clips[] for the single moment in the user payload. "
+        "start_id/end_id must lie within approx_start_id..approx_end_id."
     )
     length_line = length_policy.pass2_length_hint() if length_policy else ""
     parts = [
@@ -158,6 +160,20 @@ def _clip_row_from_llm(
     payoff_id = int(row["payoff_id"])
     ss = max(0, min(ss, len(sentences) - 1))
     es = max(ss, min(es, len(sentences) - 1))
+    m_ss = max(0, min(int(moment["start_sentence"]), len(sentences) - 1))
+    m_es = max(m_ss, min(int(moment["end_sentence"]), len(sentences) - 1))
+    overlap = max(0, min(es, m_es) - max(ss, m_ss) + 1)
+    moment_len = max(1, m_es - m_ss + 1)
+    if overlap < moment_len * 0.35:
+        picker_info(
+            "pass2_span_mismatch",
+            expected=(m_ss, m_es),
+            got=(ss, es),
+            overlap=overlap,
+            moment_len=moment_len,
+        )
+        ss, es = m_ss, m_es
+        payoff_id = max(ss, min(int(moment.get("anchor_id", m_ss)), es))
     sc = row["scores"]
     sent_rows = []
     for k in range(ss, es + 1):
@@ -181,7 +197,7 @@ def _clip_row_from_llm(
         "start_sentence": ss,
         "end_sentence": es,
         "payoff_id": payoff_id,
-        "title": trim_title(str(row.get("title") or moment.get("locator") or "")),
+        "title": trim_title(str(row.get("title") or moment.get("why") or "")),
         "hook": strip_internal_sentence_refs(str(row.get("why_care", "")))[:300],
         "reason": strip_internal_sentence_refs(str(row.get("why_care", "")))[:500],
         "archetype": row.get("archetype") or moment.get("archetype"),

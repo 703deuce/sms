@@ -30,14 +30,28 @@ def record_video_picker_stats(
     moments: list[dict],
     *,
     range_start_ms: int = 0,
+    sections: list[dict] | None = None,
 ) -> None:
     ts: list[float] = []
+    summaries: list[dict[str, Any]] = []
     for m in moments[:48]:
         try:
             peak = float(m.get("peak_s") or m.get("t_s") or 0)
             if m.get("peak_ms") is not None:
                 peak = (int(m["peak_ms"]) - range_start_ms) / 1000.0
             ts.append(round(peak, 2))
+            summaries.append(
+                {
+                    "start_s": m.get("start_s"),
+                    "end_s": m.get("end_s"),
+                    "peak_s": m.get("peak_s"),
+                    "category": m.get("category"),
+                    "score": m.get("score"),
+                    "confidence": m.get("confidence"),
+                    "touches_edge": m.get("touches_edge"),
+                    "what_happened": (str(m.get("what_happened") or "")[:240]),
+                }
+            )
         except (TypeError, ValueError):
             continue
     payload = {
@@ -49,6 +63,10 @@ def record_video_picker_stats(
         "est_usd": meta.get("est_usd"),
         "moments_count": len(moments),
         "moments_ts_s": ts,
+        "moments": summaries,
+        "sections": sections or meta.get("sections") or [],
+        "min_moments": meta.get("min_moments"),
+        "min_moments_met": meta.get("min_moments_met"),
         "ok": bool(meta.get("ok")),
         "error": (meta.get("error") or "")[:300] or None,
         "status": meta.get("status"),

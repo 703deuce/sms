@@ -58,7 +58,7 @@ def pass1_heuristic_candidates(
                 "start_sentence": ss,
                 "end_sentence": es,
                 "payoff_id": sent_rows[-1]["idx"],
-                "title": (m.get("locator") or m.get("why") or "Clip")[:60],
+                "title": (m.get("why") or "Clip moment")[:60],
                 "hook": str(m.get("why", ""))[:300],
                 "reason": str(m.get("why", ""))[:500],
                 "archetype": m.get("archetype") or "story",
