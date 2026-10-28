@@ -5,7 +5,7 @@ import { normalizeEdits } from '@/lib/clips/edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
-import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
+import { openAiJsonWithGeminiFallback } from '@/lib/server/ai/openai-json'
 
 const SYSTEM = `Pick caption emojis for a short video. Return JSON {"picks":[{"wordIndex":number,"emoji":string}]}.
 Rules:
@@ -39,20 +39,44 @@ export async function suggestCaptionEmojisForClip(
     /* project transcript */
   }
 
-  const durationS = Math.max(1, (clip.endMs - clip.startMs) / 1000)
+  const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
+  const edits = normalizeEdits(clip.edits, bounds)
+  const segs = edits.cutRanges
+  const trimIn = edits.trim.in
+  const trimOut = edits.trim.out
+  const inSpan = words.filter((w) => {
+    const mid = ((w.s + w.e) / 2) * 1000
+    if (mid < trimIn || mid >= trimOut) return false
+    return !segs.some(([a, b]) => mid >= a && mid < b)
+  })
+  const durationS = Math.max(1, (trimOut - trimIn) / 1000)
   const maxPicks = Math.max(1, Math.floor(durationS / 3))
-  const excerpt = words
-    .slice(0, 120)
+  const excerpt = inSpan
+    .slice(0, 160)
     .map((w, i) => `${w.i ?? i}:${w.w}`)
     .join(' ')
+    .slice(0, 4000)
 
-  const raw = await openAiJsonResponse<{ picks?: { wordIndex: number; emoji: string }[] }>(
+  const raw = await openAiJsonWithGeminiFallback<{ picks?: { wordIndex: number; emoji: string }[] }>(
+    'caption_emojis',
     SYSTEM,
     JSON.stringify({
       allowed: [...EMOJI_WHITELIST_SET].slice(0, 150),
       maxPicks,
       words: excerpt,
     }),
+    {
+      type: 'object',
+      properties: {
+        picks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { wordIndex: { type: 'number' }, emoji: { type: 'string' } },
+          },
+        },
+      },
+    },
   )
 
   const map: Record<string, string> = {}

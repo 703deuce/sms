@@ -6,7 +6,7 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
 import { editorWordsForClipFillerReview } from '@/lib/clips/editor/filler-review-words'
-import { gapShortenCutRange, listClipGapHits } from '@/lib/clips/gap-shorten'
+import { gapShortenCutRange, listClipGapHits, shortenAllClipGaps } from '@/lib/clips/gap-shorten'
 import type { GapFilterMode, GapHit } from '@/lib/clips/script-editor/gap-hits'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -27,6 +27,7 @@ export function ClipShortenGapsPanel({
   settings,
   onSettingsChange,
   onAddCut,
+  onSetCutRanges,
   onSeek,
   onOpenReview,
 }: {
@@ -38,6 +39,7 @@ export function ClipShortenGapsPanel({
   settings: ClipGapToolSettings
   onSettingsChange: (patch: Partial<ClipGapToolSettings>) => void
   onAddCut: (range: [number, number]) => void
+  onSetCutRanges?: (ranges: [number, number][]) => void
   onSeek: (sourceMs: number) => void
   onOpenReview: () => void
 }) {
@@ -116,15 +118,36 @@ export function ClipShortenGapsPanel({
         setCursor((c) => Math.min(c, Math.max(0, gapHits.length - 2)))
       }}
       onShortenAll={() => {
-        let n = 0
-        for (const hit of gapHits) {
-          const range = gapShortenCutRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs, wordSpans)
-          if (range) {
-            onAddCut(range)
-            n += 1
+        const { cutRanges: next, count } = shortenAllClipGaps(orderedWords, cutRanges, {
+          mode: settings.mode,
+          minGapMs: Math.round(settings.minGapSec * 1000),
+          maxGapMs: settings.mode === 'between' ? Math.round(settings.maxGapSec * 1000) : undefined,
+          targetGapMs,
+          maxPlausibleGapMs,
+          wordSpans,
+        })
+        if (!count) {
+          toast.message('No pauses match these settings')
+          return
+        }
+        if (onSetCutRanges) onSetCutRanges(next)
+        else {
+          for (const r of next) {
+            if (!cutRanges.some(([a, b]) => a === r[0] && b === r[1])) onAddCut(r)
           }
         }
-        if (n) toast.success(`Shortened ${n} pause(s). Undo`)
+        const remaining = listClipGapHits(orderedWords, next, {
+          mode: settings.mode,
+          minGapMs: Math.round(settings.minGapSec * 1000),
+          maxGapMs: settings.mode === 'between' ? Math.round(settings.maxGapSec * 1000) : undefined,
+          targetGapMs,
+          maxPlausibleGapMs,
+        }).length
+        toast.success(
+          remaining === 0
+            ? `Shortened ${count} pause(s). All matching gaps cleared. Undo`
+            : `Shortened ${count} pause(s). Undo`,
+        )
       }}
       onOpenReview={onOpenReview}
     />

@@ -28,6 +28,7 @@ import { AudioPanel } from '@/components/clips/editor/audio-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useGeneration } from '@/components/clips/editor/use-generation'
+import { useStudioSoundPreview } from '@/components/clips/editor/use-studio-sound-preview'
 import { TranscriptPanel, type TranscriptSelection } from '@/components/clips/editor/transcript-panel'
 import { ClipFillerReview } from '@/components/clips/editor/clip-filler-review'
 import { ClipGapReview } from '@/components/clips/editor/clip-gap-review'
@@ -59,6 +60,7 @@ export function EditorShell({
   clipId,
   initialTitle,
   serverUpdatedAt,
+  editsSaveVersion,
   bounds,
   initialEdits,
   words,
@@ -75,6 +77,7 @@ export function EditorShell({
   clipId: string
   initialTitle: string
   serverUpdatedAt?: string
+  editsSaveVersion?: number
   bounds: ClipBounds
   initialEdits: ClipEditsV2
   words: SourceWord[]
@@ -86,6 +89,10 @@ export function EditorShell({
   brollMedia?: BrollMediaRow[]
   reframeV2Enabled?: boolean
 }) {
+  useEffect(() => {
+    void fetch('/api/clips/gpu/render-warmup', { method: 'POST' }).catch(() => {})
+  }, [clipId])
+
   const [title, setTitle] = useState(initialTitle)
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
@@ -144,7 +151,7 @@ export function EditorShell({
     patchStudioSound,
     flushSave,
     syncServerUpdatedAt,
-  } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, words })
+  } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, editsSaveVersion, words })
 
   const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
 
@@ -163,11 +170,14 @@ export function EditorShell({
   const studioGenId = studioSound?.enabled && studioSound.generationId ? studioSound.generationId : null
   const studioGen = useGeneration(studioGenId, 1500)
 
+  const [studioJobId, setStudioJobId] = useState<string | null>(null)
+
   const enqueueStudioSound = useCallback(async () => {
-    const { generationId } = await clipsFetch<{ generationId: string }>(
+    const { generationId, jobId } = await clipsFetch<{ generationId: string; jobId: string }>(
       `/api/clips/clips/${clipId}/studio-sound`,
       { method: 'POST', body: '{}' },
     )
+    setStudioJobId(jobId)
     patchStudioSound({
       enabled: true,
       generationId,
@@ -175,21 +185,43 @@ export function EditorShell({
     })
   }, [clipId, patchStudioSound, studioSound?.mix])
 
+  const disableStudioSound = useCallback(() => {
+    patchStudioSound({
+      enabled: false,
+      generationId: studioSound?.generationId ?? '',
+      mix: studioSound?.mix ?? DEFAULT_STUDIO_SOUND_MIX,
+    })
+    setStudioJobId(null)
+  }, [patchStudioSound, studioSound?.generationId, studioSound?.mix])
+
+  const studioPreviewActive = Boolean(
+    studioSound?.enabled && studioGen.status === 'READY' && studioGen.downloadUrl && !useDubAudio,
+  )
+
+  const { loading: studioPollLoading } = useStudioSoundPreview({
+    clipId,
+    generationId: studioGenId,
+    jobId: studioJobId,
+    enabled: Boolean(studioSound?.enabled && !useDubAudio && !studioPreviewActive),
+    onReady: () => {
+      setStudioJobId(null)
+      void studioGen.refresh()
+    },
+    onFailed: () => {
+      disableStudioSound()
+    },
+  })
+
+  const studioPreviewLoading = Boolean(
+    studioSound?.enabled && !useDubAudio && !studioPreviewActive && (studioPollLoading || studioGen.running),
+  )
+
   const startStudioSoundPreview = useCallback(() => {
     void enqueueStudioSound().catch(() => {
       toast.error('Could not start Studio Sound')
     })
   }, [enqueueStudioSound])
 
-  const studioPreviewActive = Boolean(
-    studioSound?.enabled && studioGen.status === 'READY' && studioGen.downloadUrl && !useDubAudio,
-  )
-  const studioPreviewLoading = Boolean(
-    studioSound?.enabled &&
-      !useDubAudio &&
-      !studioPreviewActive &&
-      studioGen.running,
-  )
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const outDur = outputDurationFromEdits(edits)
   useAudioMix({

@@ -49,7 +49,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       },
     })
 
-    return NextResponse.json({ data: { generationId: gen.id, status: 'PENDING' } })
+    return NextResponse.json({ data: { generationId: gen.id, jobId, status: 'PENDING' } })
   } catch (err) {
     return jsonError(err, 400)
   }

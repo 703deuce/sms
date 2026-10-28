@@ -43,6 +43,10 @@ def schedule_modal_warmup_background() -> None:
     )
 
 
+def modal_renderer_is_warm() -> bool:
+    return time.monotonic() < _warm_until_mono
+
+
 def warm_modal_renderer_if_needed(conn) -> None:
     from clips_worker.gpu_encode import render_provider_enabled
 

@@ -139,6 +139,11 @@ def keep_segments(trim_in: int, trim_out: int, cut_ranges: list) -> list[tuple[i
     return [(a, b) for a, b in segs if b - a >= 80]
 
 
+def output_duration_ms(edits: dict) -> int:
+    segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    return sum(b - a for a, b in segs)
+
+
 def remap_time_ms(t_ms: int, segs: list[tuple[int, int]]) -> int | None:
     acc = 0
     for a, b in segs:

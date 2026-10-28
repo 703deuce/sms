@@ -9666,6 +9666,7 @@ model Clip {
   posterKey      String?
   storageDriver  String?
   edits          Json      @default("{}")
+  editsSaveVersion Int     @default(0)
   aiMeta      Json?
   favorite    Boolean   @default(false)
   sourceSegKey     String?

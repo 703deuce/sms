@@ -56,6 +56,7 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
         payload = json.loads(payload)
     generation_id = payload.get("generationId")
     project_id = job.get("projectId")
+    clip_id = payload.get("clipId")
     if not generation_id or not project_id:
         raise RuntimeError("missing generationId/projectId")
 
@@ -142,4 +143,17 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
             ),
         )
     conn.commit()
+    if clip_id:
+        from clips_worker.clip_edits_patch import patch_clip_edits_json_path
+
+        patch_clip_edits_json_path(
+            conn,
+            str(clip_id),
+            ["audio", "studioSound"],
+            {
+                "enabled": True,
+                "generationId": generation_id,
+                "studioSoundKey": storage_key,
+            },
+        )
     post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})

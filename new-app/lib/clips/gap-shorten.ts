@@ -1,4 +1,5 @@
-import type { CutRange } from '@/lib/clips/edits'
+import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
+import { mergeCutRanges } from '@/lib/clips/edits'
 import { wordSourceMs, type SourceWord } from '@/lib/clips/source-words'
 import { symmetricGapTrimMs } from '@/lib/clips/script-edl/word-adjust'
 import { snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
@@ -97,4 +98,41 @@ export function listClipGapHits(
   return hits.filter(
     (h) => h.gapMs <= plausible && !gapHitAlreadyCut(h, cutRanges, opts.targetGapMs),
   )
+}
+
+export function shortenAllClipGaps(
+  orderedWords: EditorWord[],
+  cutRanges: CutRange[],
+  opts: {
+    mode: GapFilterMode
+    minGapMs: number
+    maxGapMs?: number
+    targetGapMs: number
+    maxPlausibleGapMs?: number
+    wordSpans?: { s: number; e: number }[]
+  },
+): { cutRanges: CutRange[]; count: number } {
+  let ranges = [...cutRanges]
+  let total = 0
+  for (let pass = 0; pass < 48; pass++) {
+    const hits = listClipGapHits(orderedWords, ranges, opts)
+    if (!hits.length) break
+    let added = 0
+    for (const hit of hits) {
+      const range = gapShortenCutRange(
+        hit.prevWord.t1Ms,
+        hit.word.t0Ms,
+        hit.gapMs,
+        opts.targetGapMs,
+        opts.wordSpans,
+      )
+      if (range) {
+        ranges = mergeCutRanges([...ranges, range])
+        added += 1
+      }
+    }
+    if (!added) break
+    total += added
+  }
+  return { cutRanges: ranges, count: total }
 }

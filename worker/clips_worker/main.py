@@ -215,19 +215,9 @@ def post_progress_terminal(job_id: str, payload: dict) -> None:
 
 
 def release_job_claim(conn, job_id: str) -> None:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            UPDATE clip_jobs
-            SET status = 'QUEUED',
-                "lockedBy" = NULL,
-                "lockedAt" = NULL,
-                attempts = GREATEST(0, attempts - 1)
-            WHERE id = %s
-            """,
-            (job_id,),
-        )
-    conn.commit()
+    from clips_worker.worker_drain import requeue_job_after_interrupt
+
+    requeue_job_after_interrupt(conn, job_id, note="Drain release")
 
 
 def claim_job(conn) -> dict | None:
@@ -700,7 +690,25 @@ def main() -> None:
                     run_job_with_lock_heartbeat(dsn, conn, job, handler)  # type: ignore[arg-type]
                 except WorkerDrainExit as drain_exc:
                     log(f"job {job['id']} paused for drain: {drain_exc}")
-                    release_job_claim(conn, job["id"])
+                    from clips_worker.worker_drain import requeue_job_after_interrupt
+
+                    payload = job.get("payload") or {}
+                    if isinstance(payload, str):
+                        payload = json.loads(payload)
+                    if job.get("type") == "RENDER_CLIP":
+                        rid = payload.get("renderId")
+                        if rid:
+                            with conn.cursor() as cur:
+                                cur.execute(
+                                    """
+                                    UPDATE clip_renders
+                                    SET status = 'QUEUED', error = NULL, "updatedAt" = NOW()
+                                    WHERE id = %s
+                                    """,
+                                    (rid,),
+                                )
+                            conn.commit()
+                    requeue_job_after_interrupt(conn, job["id"], note="Drain release")
                     log("[clipper:worker] drain complete — exiting")
                     return
                 except Exception as exc:

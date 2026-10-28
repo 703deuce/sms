@@ -8,21 +8,16 @@ import {
   normalizeChannelUrl,
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
-import { getClipsLlmModelId } from '@/lib/server/ai/clips-llm'
-import { gpt6ChatCompletionExtras, isGpt6FamilyModel } from '@/lib/server/ai/gpt-6-luna-chat'
+import {
+  clipsEditorJsonWithGeminiFallback,
+  clipsEditorLlmCostMicros,
+} from '@/lib/server/ai/clips-editor-llm'
 import { recordAiUsage } from '@/lib/server/clips/ai-usage'
 import { getPrisma } from '@/lib/server/db'
 import { loadClipSourceWords } from '@/lib/server/clips/transcript'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
-
-const LUNA_INPUT_MICROS_PER_TOKEN = 100_000
-const LUNA_OUTPUT_MICROS_PER_TOKEN = 500_000
-
-function lunaCost(prompt: number, completion: number) {
-  return Math.round(prompt * LUNA_INPUT_MICROS_PER_TOKEN + completion * LUNA_OUTPUT_MICROS_PER_TOKEN)
-}
 
 export type StreamExportTemplateContext = {
   platform?: 'twitch' | 'kick'
@@ -147,9 +142,6 @@ export async function generateExportHeadline(opts: {
 
   const chat = await loadChatSnippet(opts.projectId, opts.startMs, opts.endMs)
 
-  const apiKey = process.env.OPENAI_API_KEY?.trim()
-  if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
-  const model = getClipsLlmModelId()
   const streamer = (opts.aiMeta as { streamer?: { displayName?: string; login?: string } } | null)?.streamer
   const streamerName = streamer?.displayName || streamer?.login || 'the streamer'
   const system =
@@ -158,41 +150,31 @@ export async function generateExportHeadline(opts: {
     `Use the streamer's name (${streamerName}) when natural. End with 1-2 relevant emoji. JSON only: {"headline":"..."}`
   const user = `Streamer: ${streamerName}\nClip title: ${opts.title}\nTranscript:\n${transcript}\n${chat ? `Chat highlights:\n${chat}` : ''}`
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-      max_tokens: isGpt6FamilyModel(model) ? 120 : 80,
-      ...gpt6ChatCompletionExtras(model),
-    }),
-    signal: AbortSignal.timeout(45_000),
+  const llm = await clipsEditorJsonWithGeminiFallback<{ headline?: string }>({
+    context: 'export_headline',
+    system,
+    user,
+    maxOutputTokens: 120,
+    responseSchema: {
+      type: 'object',
+      properties: { headline: { type: 'string' } },
+      required: ['headline'],
+    },
   })
-  if (!res.ok) throw new Error(`OpenAI ${res.status}`)
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
-    usage?: { prompt_tokens?: number; completion_tokens?: number }
-  }
-  const content = json.choices?.[0]?.message?.content
-  if (!content) throw new Error('Empty LLM response')
-  const parsed = JSON.parse(content) as { headline?: string }
-  const headline = formatHeadlineForExport(String(parsed.headline || '').trim())
+  const headline = formatHeadlineForExport(String(llm.data.headline || '').trim())
   if (!headline) throw new Error('Model returned empty headline')
 
-  const promptTokens = json.usage?.prompt_tokens ?? 0
-  const completionTokens = json.usage?.completion_tokens ?? 0
+  const costUsdMicros = clipsEditorLlmCostMicros(llm.provider, llm.promptTokens, llm.completionTokens)
   await recordAiUsage({
     workspaceId: opts.workspaceId,
     clipId: opts.clipId,
     projectId: opts.projectId,
     usage: {
-      provider: 'openai',
-      model,
-      units: promptTokens + completionTokens,
+      provider: llm.provider,
+      model: llm.model,
+      units: llm.promptTokens + llm.completionTokens,
       unitType: 'tokens',
-      costUsdMicros: lunaCost(promptTokens, completionTokens),
+      costUsdMicros,
     },
   })
 

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
-import { isWordCut, wordDisplayText } from '@/lib/clips/edits'
+import { FILLER_RE, isWordCut, wordDisplayText } from '@/lib/clips/edits'
 import { gapCutBetweenSourceWords } from '@/lib/clips/gap-shorten'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
@@ -149,10 +149,24 @@ export function TranscriptPanel({
     )
   }
 
+  const wordCutRange = (w: SourceWord): CutRange | null => {
+    const { startMs, endMs } = wordSourceMs(w)
+    for (const [s, e] of edits.cutRanges) {
+      if (startMs < e && endMs > s) {
+        const lo = Math.max(s, startMs)
+        const hi = Math.min(e, endMs)
+        if (hi - lo >= 20) return [lo, hi]
+      }
+    }
+    return null
+  }
+
   const renderWord = (w: SourceWord) => {
     const { startMs, endMs, midMs } = wordSourceMs(w)
-    const cut = isWordCut(w, edits.cutRanges)
+    const cutRange = wordCutRange(w)
+    const cut = Boolean(cutRange) || isWordCut(w, edits.cutRanges)
     const display = wordDisplayText(w, edits.wordFixes)
+    const isFiller = FILLER_RE.test(display.trim())
     const highlight = search.trim().length > 1 && display.toLowerCase().includes(search.trim().toLowerCase())
     const muted = !inTrim(w)
     const selected =
@@ -188,7 +202,11 @@ export function TranscriptPanel({
           type="button"
           disabled={muted}
           className={`rounded px-0.5 transition hover:bg-accent cursor-text ${
-            cut ? 'text-muted-foreground/60 line-through decoration-destructive/70 decoration-2 bg-destructive/5' : ''
+            cut
+              ? `text-muted-foreground/60 line-through decoration-destructive/70 decoration-2 bg-destructive/5 ${
+                  isFiller ? 'decoration-muted-foreground/80' : ''
+                }`
+              : ''
           } ${selected ? 'bg-primary/30 ring-1 ring-primary/50' : ''} ${
             edits.captions?.emphasis?.includes(w.i) ? 'underline decoration-dotted decoration-lane-ai' : ''
           }`}
@@ -221,7 +239,14 @@ export function TranscriptPanel({
           )}
         </button>
         {cut ? (
-          <button type="button" className="ml-0.5 text-[10px] text-primary" onClick={() => onRestoreWord(w)}>
+          <button
+            type="button"
+            className="ml-0.5 text-[10px] font-medium text-primary"
+            onClick={() => {
+              if (cutRange && onRestoreCutRange) onRestoreCutRange(cutRange)
+              else onRestoreWord(w)
+            }}
+          >
             Restore
           </button>
         ) : null}

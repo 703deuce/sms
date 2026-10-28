@@ -10,7 +10,7 @@ import { canReuseClipPreviewForExport } from '@/lib/clips/export-preview-reuse'
 import { coerceEditsForPreviewExport } from '@/lib/clips/export-edits-coerce'
 import { previewExportMatchesDefault } from '@/lib/clips/export-edits-match'
 import { CLIP_PREVIEW_EXPORT_ASPECT, CLIP_PREVIEW_EXPORT_RESOLUTION } from '@/lib/clips/export-preview-reuse'
-import { normalizeEdits } from '@/lib/clips/edits'
+import { normalizeEdits, outputDurationMs } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
@@ -114,6 +114,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (previewWysiwyg && !exportPlatform) {
       resolution = CLIP_PREVIEW_EXPORT_RESOLUTION
     }
+    const editedDurationMs = outputDurationMs(edits)
     console.info('[clipper:export] request', {
       clipId,
       workspaceId,
@@ -121,7 +122,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       aspect,
       exportPlatform: exportPlatform ?? null,
       watermark,
-      durationMs: clip.endMs - clip.startMs,
+      durationMs: editedDurationMs,
+      sourceSpanMs: clip.endMs - clip.startMs,
       exportSfx,
       skipPolishForPreviewReuse,
     })
@@ -160,7 +162,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         clipId,
         renderId: ready.renderId,
         filename: ready.filename,
-        durationMs: clip.endMs - clip.startMs,
+        durationMs: editedDurationMs,
       })
       return NextResponse.json({
         data: {
@@ -172,6 +174,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           sizeBytes: ready.sizeBytes,
           projectId: clip.projectId,
           status: 'READY',
+          durationMs: editedDurationMs,
         },
       })
     }
@@ -222,7 +225,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         projectId: clip.projectId,
         status: 'QUEUED',
         jobId: result.jobId,
-        durationMs: clip.endMs - clip.startMs,
+        durationMs: editedDurationMs,
       },
     })
   } catch (err) {

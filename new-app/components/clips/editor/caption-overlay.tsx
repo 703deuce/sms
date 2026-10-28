@@ -57,9 +57,20 @@ export function CaptionOverlay({
   const showEmojis = Boolean(cap.autoEmojis)
   const progressPct = showProgress ? Math.min(100, (currentTimeSec / outputDurationSec) * 100) : 0
 
-  if (activeIdx < 0 && !showProgress && !showEmojis) return null
-
   const position = (cap.position || preset.position) as string
+
+  const emojiMap = cap.emojiByWord ?? {}
+  const hasEmojiMap = showEmojis && Object.keys(emojiMap).length > 0
+
+  if (activeIdx < 0 && !showProgress && !hasEmojiMap) return null
+
+  const captionPosClass = positionClass(position)
+  const emojiPosClass =
+    position === 'top'
+      ? 'top-[14%]'
+      : position === 'middle'
+        ? 'top-[42%]'
+        : 'bottom-[18%]'
 
   return (
     <>
@@ -75,9 +86,27 @@ export function CaptionOverlay({
           />
         </div>
       )}
+      {hasEmojiMap
+        ? words.map((w, globalIdx) => {
+            const idx = wordKey(w) ?? w.idx ?? globalIdx
+            const emoji = emojiMap[String(idx)] ?? emojiMap[String(w.idx ?? globalIdx)]
+            if (!emoji) return null
+            if (currentTimeSec < w.s || currentTimeSec >= w.e) return null
+            return (
+              <div
+                key={`cap-emoji-${idx}-${w.s}`}
+                data-testid="caption-floating-emoji"
+                className={`pointer-events-none absolute inset-x-0 z-[26] flex justify-center ${emojiPosClass}`}
+                style={{ fontSize: Math.max(18, fontSize * 1.2), lineHeight: 1 }}
+              >
+                {emoji}
+              </div>
+            )
+          })
+        : null}
       {activeIdx >= 0 && lineWords.length ? (
     <div
-      className={`pointer-events-none absolute inset-x-2 z-[25] flex flex-wrap justify-center gap-1 text-center ${positionClass(position)}`}
+      className={`pointer-events-none absolute inset-x-2 z-[25] flex flex-wrap justify-center gap-1 text-center ${captionPosClass}`}
       style={{ fontFamily: preset.font, fontWeight: preset.weight }}
     >
       {lineWords.map((w, i) => {
@@ -91,11 +120,11 @@ export function CaptionOverlay({
         const isEmph = emphasis.has(w.idx ?? globalIdx)
         const idx = wordKey(w) ?? globalIdx
         const emoji = showEmojis
-          ? cap.emojiByWord?.[String(idx)] ?? cap.emojiByWord?.[String(globalIdx)]
+          ? emojiMap[String(idx)] ?? emojiMap[String(globalIdx)]
           : undefined
         const prevWord = i > 0 ? lineWords[i - 1]?.w : words[lineStart - 1]?.w
         const sentenceStart = caseMode === 'sentence' && isSentenceBoundary(prevWord)
-        const text = formatCaptionWord(w.w, caseMode, sentenceStart) + (emoji ? ` ${emoji}` : '')
+        const text = formatCaptionWord(w.w, caseMode, sentenceStart) + (emoji && !hasEmojiMap ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
         const inactiveColor = preset.slug === 'boxed' ? '#FFFFFF' : preset.primary
         const style: React.CSSProperties = {

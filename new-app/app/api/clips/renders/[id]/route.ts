@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { normalizeEdits, outputDurationMs } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { exportFilename } from '@/lib/server/clips/clips'
 import { getRenderForWorkspace } from '@/lib/server/clips/renders'
@@ -30,7 +31,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     } | null
     const wd = jobPayload?.clipperWatchdog
     const filename = render.filename || exportFilename(clip?.title || 'clip')
-    const durationMs = clip ? clip.endMs - clip.startMs : null
+    const durationMs = clip ? outputDurationMs(normalizeEdits(clip.edits, { clipStartMs: clip.startMs, clipEndMs: clip.endMs })) : null
     let downloadUrl: string | null = null
     if (render.status === 'READY' && render.outputKey) {
       downloadUrl = await createCachedSignedDownloadUrl(storage, render.outputKey, { downloadFilename: filename })

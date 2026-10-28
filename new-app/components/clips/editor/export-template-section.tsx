@@ -114,7 +114,9 @@ export function ExportTemplateSection({
         },
       })
       onChange(next)
-      await patchClip(clipId, { edits: { exportTemplate: next } })
+      if (onPatchEdits) {
+        onPatchEdits({ exportTemplate: next })
+      }
       toast.success('Headline saved for export')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not generate headline')

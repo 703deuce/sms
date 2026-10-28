@@ -36,5 +36,23 @@ def drain_timeout_sec() -> int:
     return max(30, int(os.environ.get("WORKER_DRAIN_TIMEOUT_SEC", "600")))
 
 
+def requeue_job_after_interrupt(conn, job_id: str, *, note: str = "Worker interrupted") -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE clip_jobs
+            SET status = 'QUEUED',
+                "lockedBy" = NULL,
+                "lockedAt" = NULL,
+                "runAfter" = NOW(),
+                attempts = attempts + 1,
+                error = LEFT(COALESCE(error, '') || %s, 500)
+            WHERE id = %s
+            """,
+            (f" {note}", job_id),
+        )
+    conn.commit()
+
+
 class WorkerDrainExit(Exception):
     """Raised when a safe picker checkpoint exists and the worker must exit for deploy."""

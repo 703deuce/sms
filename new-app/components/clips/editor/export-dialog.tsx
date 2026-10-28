@@ -519,7 +519,10 @@ export function ExportDialog({
         )}
         {durationMs != null && durationMs > 0 && (
           <p className="mt-1 text-xs text-muted-foreground">
-            Clip length: {Math.round(durationMs / 1000)}s
+            Clip length: {Math.round(editedDurationMs / 1000)}s
+            {Math.abs(editedDurationMs - durationMs) > 500
+              ? ` (render ${Math.round(durationMs / 1000)}s)`
+              : ''}
           </p>
         )}
         {status === 'FAILED' && errorDetail && (

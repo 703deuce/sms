@@ -20,6 +20,25 @@ from clips_worker.render_clip import ffmpeg_cut
 from clips_worker.storage import download_object, upload_file
 
 
+def _probe_duration_sec(path: Path) -> float:
+    import subprocess
+
+    out = subprocess.check_output(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
+        text=True,
+    ).strip()
+    return max(0.0, float(out or "0"))
+
+
 def load_render_context(conn, render_id: str) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -119,6 +138,27 @@ def _export_stage_log(render_id: str, stage: str, t0: float, extra: dict | None 
 
 
 def run_render_clip_job(conn, job: dict, post_progress) -> None:
+    from clips_worker.worker_drain import WorkerDrainExit, drain_requested
+
+    def _check_drain(stage: str) -> None:
+        if drain_requested():
+            payload = job.get("payload") or {}
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            rid = payload.get("renderId")
+            if rid:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE clip_renders
+                        SET status = 'QUEUED', error = NULL, "updatedAt" = NOW()
+                        WHERE id = %s
+                        """,
+                        (rid,),
+                    )
+                conn.commit()
+            raise WorkerDrainExit(f"render_clip_drain_{stage}")
+
     t_job = time.perf_counter()
     payload = job.get("payload") or {}
     if isinstance(payload, str):
@@ -129,11 +169,12 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
 
     ctx = load_render_context(conn, render_id)
     _export_stage_log(render_id, "load_context", t_job)
+    _check_drain("load_context")
     mark_render(conn, render_id, "RENDERING")
     post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 10, "etaSeconds": 180})
-    from clips_worker.gpu.render_warmup import warm_modal_renderer_if_needed
+    from clips_worker.gpu.render_warmup import schedule_modal_warmup_background
 
-    warm_modal_renderer_if_needed(conn)
+    schedule_modal_warmup_background()
 
     clip_start = int(ctx["startMs"])
     clip_end = int(ctx["endMs"])
@@ -302,6 +343,14 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         upload_file(out_key, out_mp4, "video/mp4")
         upload_text(srt_key, srt_body, "text/plain; charset=utf-8")
         size = out_mp4.stat().st_size
+        from clips_worker.edits_render import output_duration_ms
+
+        expected_s = output_duration_ms(edits) / 1000.0
+        actual_s = _probe_duration_sec(out_mp4)
+        print(
+            f"[clipper:export] expected_s={expected_s:.2f} actual_s={actual_s:.2f} renderId={render_id}",
+            flush=True,
+        )
         mark_render(conn, render_id, "READY", out_key, size, None, srt_key)
         if render_meta.get("fit_fallback"):
             merge_job_fit_fallback_payload(conn, job["id"], str(render_meta.get("speakercrop_tail") or ""))

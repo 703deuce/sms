@@ -27,6 +27,7 @@ export default async function ClipEditorPage({
         clipId={clipId}
         initialTitle={data.clip.title}
         serverUpdatedAt={data.clip.updatedAt}
+        editsSaveVersion={data.clip.editsSaveVersion}
         bounds={data.bounds}
         initialEdits={data.edits}
         words={data.words}

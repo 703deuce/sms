@@ -154,6 +154,7 @@ export function LayoutPanel({
             settings={gapToolSettings}
             onSettingsChange={onGapToolSettingsChange}
             onAddCut={onAddCut}
+            onSetCutRanges={(ranges) => onEdits?.({ ...edits, cutRanges: ranges })}
             onSeek={onSeekSource}
             onOpenReview={onOpenGapReview}
           />

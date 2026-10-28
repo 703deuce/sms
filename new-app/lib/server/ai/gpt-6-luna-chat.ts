@@ -19,6 +19,5 @@ export function gpt6ChatCompletionExtras(model: string): Record<string, unknown>
   }
   return {
     reasoning_effort: lunaReasoningEffort(),
-    max_completion_tokens: 4096,
   }
 }

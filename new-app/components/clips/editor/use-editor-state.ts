@@ -41,6 +41,7 @@ import {
 import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
+import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
 import { toast } from 'sonner'
 
 const MAX_UNDO = 100
@@ -138,7 +139,7 @@ export function useEditorState(
   clipId: string,
   bounds: ClipBounds,
   initialEdits: ClipEditsV2,
-  opts?: { serverUpdatedAt?: string; words?: SourceWord[] },
+  opts?: { serverUpdatedAt?: string; editsSaveVersion?: number; words?: SourceWord[] },
 ) {
   const safeInitial = normalizeEdits(initialEdits, bounds)
   let draft = readEditorAutosaveDraft(clipId)
@@ -166,6 +167,9 @@ export function useEditorState(
   const saveInFlightRef = useRef(false)
   const savePendingRef = useRef(false)
   const serverUpdatedAtRef = useRef(opts?.serverUpdatedAt)
+  const serverVersionRef = useRef(opts?.editsSaveVersion ?? 0)
+  const saveBaseEditsRef = useRef<ClipEditsV2>(restored)
+  const lastSavedEditsRef = useRef<ClipEditsV2>(restored)
   const wordsRef = useRef(opts?.words ?? [])
   wordsRef.current = opts?.words ?? wordsRef.current
   const editsRef = useRef(state.edits)
@@ -480,6 +484,7 @@ export function useEditorState(
     try {
       while (savedRevisionRef.current < localRevisionRef.current) {
         const revisionAtSend = localRevisionRef.current
+        saveBaseEditsRef.current = lastSavedEditsRef.current
         writeEditorAutosaveDraft(clipId, {
           edits: editsRef.current,
           savedAt: new Date().toISOString(),
@@ -488,27 +493,41 @@ export function useEditorState(
         try {
           const res = await patchClip(clipId, {
             edits: editsRef.current,
+            baseVersion: serverVersionRef.current,
             expectedUpdatedAt: serverUpdatedAtRef.current,
           })
           if (revisionAtSend !== localRevisionRef.current) {
             continue
           }
           if (res.updatedAt) serverUpdatedAtRef.current = res.updatedAt
+          if (typeof res.editsSaveVersion === 'number') serverVersionRef.current = res.editsSaveVersion
           clearEditorAutosaveDraft(clipId)
           savedRevisionRef.current = revisionAtSend
+          lastSavedEditsRef.current = editsRef.current
           break
         } catch (err) {
           if (err instanceof FetchJsonError && err.status === 409 && err.conflictData) {
-            const data = err.conflictData as { edits?: ClipEditsV2; updatedAt?: string }
+            const data = err.conflictData as {
+              edits?: ClipEditsV2
+              updatedAt?: string
+              editsSaveVersion?: number
+              externalChange?: boolean
+              merged?: boolean
+            }
             if (data.updatedAt) serverUpdatedAtRef.current = data.updatedAt
+            if (typeof data.editsSaveVersion === 'number') serverVersionRef.current = data.editsSaveVersion
             if (data.edits && revisionAtSend === localRevisionRef.current) {
-              dispatch({
-                type: 'serverSync',
-                edits: normalizeEdits(data.edits, bounds),
-              })
+              const base = saveBaseEditsRef.current
+              const local = editsRef.current
+              const server = normalizeEdits(data.edits, bounds)
+              const { merged, externalChange } = mergeEditsThreeWay(base, local, server, bounds)
+              dispatch({ type: 'serverSync', edits: merged })
+              editsRef.current = merged
               savedRevisionRef.current = revisionAtSend
-              toast.error('Edits were updated elsewhere — loaded the latest saved version')
-              break
+              if (externalChange) {
+                toast.error('Edits were updated elsewhere — kept your changes where possible')
+              }
+              continue
             }
             continue
           }
@@ -592,6 +611,9 @@ export function useEditorState(
     applyProducerPatch,
     syncServerUpdatedAt: (iso: string) => {
       serverUpdatedAtRef.current = iso
+    },
+    syncEditsSaveVersion: (v: number) => {
+      serverVersionRef.current = v
     },
     flushSave: () => {
       if (savedRevisionRef.current >= localRevisionRef.current) {

@@ -3,6 +3,7 @@ import 'server-only'
 import { discoverVisionFlashLiteModel, geminiGenerateJson, geminiVisionTokenCostMicros } from '@/lib/server/ai/gemini-flash-lite'
 import { getClipsLlmModelId } from '@/lib/server/ai/clips-llm'
 import { gpt6ChatCompletionExtras, isGpt6FamilyModel } from '@/lib/server/ai/gpt-6-luna-chat'
+import { logOpenAiErrorResponse } from '@/lib/server/ai/clips-editor-llm'
 import { recordAiUsage } from '@/lib/server/clips/ai-usage'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { EXPORT_PLATFORM_PRESETS } from '@/lib/clips/export-platform-presets'
@@ -42,6 +43,9 @@ async function openAiClipsJson(system: string, user: string): Promise<{ data: Ll
   const apiKey = process.env.OPENAI_API_KEY?.trim()
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured')
   const model = getClipsLlmModelId()
+  const tokenField = isGpt6FamilyModel(model)
+    ? { max_completion_tokens: 900 }
+    : { max_tokens: 900 }
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -55,12 +59,16 @@ async function openAiClipsJson(system: string, user: string): Promise<{ data: Ll
         { role: 'system', content: system },
         { role: 'user', content: user },
       ],
+      ...tokenField,
       ...gpt6ChatCompletionExtras(model),
     }),
     signal: AbortSignal.timeout(90_000),
   })
   const errText = res.ok ? '' : await res.text()
-  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${errText.slice(0, 240)}`)
+  if (!res.ok) {
+    await logOpenAiErrorResponse('post_copy', res.status, errText)
+    throw new Error(`Could not complete AI request (${res.status})`)
+  }
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>
     usage?: { prompt_tokens?: number; completion_tokens?: number }

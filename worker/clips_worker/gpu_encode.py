@@ -274,6 +274,19 @@ def render_one_via_provider(
         )
         return _render_local_ffmpeg(prep)
 
+    from clips_worker.gpu.render_warmup import modal_renderer_is_warm
+
+    if not modal_renderer_is_warm():
+        _gpu_render_print(
+            {
+                "clipId": prep.clip_id,
+                "projectId": prep.project_id,
+                "provider": "local",
+                "reason": "modal_cold",
+            }
+        )
+        return _render_local_ffmpeg(prep)
+
     modal_req: RenderReq | None = None
     try:
         modal_req = _prepare_modal_render_req(prep)

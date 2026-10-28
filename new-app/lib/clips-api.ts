@@ -194,9 +194,15 @@ export function getClipEditor(clipId: string) {
 
 export function patchClip(
   clipId: string,
-  body: { title?: string; edits?: unknown; expectedUpdatedAt?: string },
+  body: { title?: string; edits?: unknown; expectedUpdatedAt?: string; baseVersion?: number },
 ) {
-  return clipsFetch<{ id: string; title: string; edits: unknown; updatedAt?: string }>(
+  return clipsFetch<{
+    id: string
+    title: string
+    edits: unknown
+    updatedAt?: string
+    editsSaveVersion?: number
+  }>(
     `/api/clips/clips/${clipId}`,
     {
       method: 'PATCH',
