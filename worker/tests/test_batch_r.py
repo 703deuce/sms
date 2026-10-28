@@ -110,3 +110,128 @@ def test_c6_picker_no_synthetic_fallback_spans():
     assert "fallback_full_span" not in src
     assert "short_source_emergency" not in src
     assert "span_fallback" not in src
+
+
+def test_c7_hard_r_codes_never_hard_for_gemini_provenance():
+    from clips_worker.picker.rejects import is_hard_llm_reject, llm_dialogue_reject_blocks_moment
+
+    moment = {"from_visual_watch": True, "gemini_score": 0.85}
+    for code in ("R4 setup without payoff", "R7 invisible visual", "R8 unexplained prerequisite"):
+        assert is_hard_llm_reject(code, moment=moment) is False
+        assert llm_dialogue_reject_blocks_moment({"reject": True, "reject_reason": code}, moment) is False
+    assert is_hard_llm_reject("R4 x", moment={"start_sentence": 0}) is True
+
+
+def test_c7_pass2_hard_r8_gemini_moment_ships():
+    from clips_worker.picker.pass2 import _clip_row_from_llm
+    from clips_worker.picker.sentences import Sentence
+    from clips_worker.picker.signals import SentenceSignals
+
+    sentences = [
+        Sentence(
+            idx=0,
+            start_ms=139_300,
+            end_ms=163_200,
+            speaker="A",
+            text="We clutched the win.",
+            word_start=0,
+            word_end=3,
+        )
+    ]
+    sig = SentenceSignals(
+        sentence_idx=0,
+        words_per_sec=2.0,
+        rms_z=0.5,
+        pitch_z=0.0,
+        pause_before_ms=400,
+        pause_after_ms=500,
+        laugh=False,
+        overlap=False,
+        question=False,
+        has_entity=False,
+    )
+    moment = {
+        "start_sentence": 0,
+        "end_sentence": 0,
+        "anchor_id": 0,
+        "from_visual_watch": True,
+        "gemini_score": 0.85,
+        "why": "Apex win on screen",
+    }
+    row = {
+        "reject": True,
+        "reject_reason": "R8: unexplained prerequisite",
+        "start_id": 0,
+        "end_id": 0,
+        "payoff_id": 0,
+        "scores": {
+            "hook": 2.0,
+            "self_contained": 2.0,
+            "payoff": 2.0,
+            "energy": 6.0,
+            "value": 5.0,
+        },
+        "title": "wrong",
+        "why_care": "wrong",
+        "archetype": "gaming",
+        "setup_start_s": None,
+        "payoff_end_s": None,
+    }
+    out = _clip_row_from_llm(
+        row,
+        moment,
+        sentences,
+        {0: sig},
+        "gaming",
+        200.0,
+        range_start_ms=0,
+    )
+    assert out is not None
+    assert not out.get("llm_reject")
+    assert not out.get("hard_reject")
+    assert out.get("gemini_score") == pytest.approx(0.85)
+    assert "Apex" in str(out.get("title") or out.get("hook") or "")
+
+
+def test_c3_unrelated_setup_hint_ignored():
+    from clips_worker.visual_boundaries import merge_window_with_boundaries
+
+    s, e = merge_window_with_boundaries(
+        139_300,
+        163_200,
+        boundary_setup_ms=121_000,
+        boundary_payoff_ms=133_000,
+        range_start_ms=0,
+    )
+    assert s == 139_300 and e == 163_200
+
+
+def test_c3_payoff_hint_does_not_shorten_meow():
+    from clips_worker.visual_boundaries import merge_window_with_boundaries
+
+    s, e = merge_window_with_boundaries(
+        170_400,
+        225_300,
+        boundary_setup_ms=None,
+        boundary_payoff_ms=219_600,
+        range_start_ms=0,
+    )
+    assert s == 170_400
+    assert e >= 225_300
+
+
+def test_c8_shortfall_retry_uses_dedicated_counter():
+    import clips_worker.video_picker as vp
+
+    src = Path(vp.__file__).read_text(encoding="utf-8")
+    assert "shortfall_retries = 1" in src
+    assert "shortfall_retries -= 1" in src
+    assert "sections_moment_retries = -1" not in src
+
+
+def test_core_md_gemini_combined_rubric_not_contradictory_tail():
+    core_path = Path(__file__).resolve().parents[1] / "clips_worker" / "picker" / "prompts" / "core.md"
+    core = core_path.read_text(encoding="utf-8")
+    assert "two sources together" in core
+    assert "dialogue-only r-codes" in core.lower()
+    assert core.count("VISUAL PAYOFF (Gemini watch") == 0

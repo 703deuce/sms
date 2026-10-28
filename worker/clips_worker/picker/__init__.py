@@ -285,6 +285,14 @@ def pick_talking_clips(
                 picker_info("headstart_failed", error=str(exc)[:200])
 
         with stage_span("picker_pass2", heartbeat=True):
+            from clips_worker.picker.final_score import inherit_gemini_scores_on_pass1_moments
+
+            inherit_gemini_scores_on_pass1_moments(
+                moments,
+                visual_moments or None,
+                sentences,
+                range_start_ms=range_start_ms,
+            )
             scored, pass2_audit = score_moments(
                 moments,
                 sentences,

@@ -192,7 +192,7 @@ def _apply_visual_boundary_anchors(
     before_end: int,
 ) -> tuple[int, int]:
     try:
-        from clips_worker.visual_boundaries import visual_boundaries_enabled
+        from clips_worker.visual_boundaries import merge_window_with_boundaries, visual_boundaries_enabled
     except Exception:
         return start_ms, end_ms
     if not visual_boundaries_enabled():
@@ -202,36 +202,26 @@ def _apply_visual_boundary_anchors(
     if setup is None and payoff is None:
         return start_ms, end_ms
     try:
+        start_ms, end_ms = merge_window_with_boundaries(
+            start_ms,
+            end_ms,
+            boundary_setup_ms=int(setup) if setup is not None else None,
+            boundary_payoff_ms=int(payoff) if payoff is not None else None,
+            range_start_ms=range_start_ms,
+            range_end_ms=range_end_ms,
+        )
         if setup is not None:
-            setup_i = int(setup)
-            if start_ms > setup_i + 250:
-                start_ms = setup_i
-                if words:
-                    start_ms = _clamp_ms_to_words(start_ms, words, "start")
-                else:
-                    start_ms = max(range_start_ms, setup_i)
-            elif start_ms < setup_i:
-                start_ms = max(range_start_ms, start_ms)
+            s_sent = _sentence_at_ms(sentences, int(setup))
+            if s_sent is not None:
+                start_ms = min(start_ms, int(s_sent.start_ms))
         if payoff is not None:
-            payoff_i = int(payoff)
-            target_end = payoff_i + int(PAD_END_S * 1000)
-            if end_ms < target_end - 150:
-                end_ms = target_end
-                end_ms = min(range_end_ms, end_ms)
-                if words:
-                    we = _word_index_at_ms(words, end_ms, "end")
-                    extend_limit = min(range_end_ms, target_end + int(SENTENCE_EXTEND_MAX_S * 1000))
-                    if not _is_sentence_final_word(words, we):
-                        for j in range(we + 1, len(words)):
-                            if int(words[j]["e"] * 1000) > extend_limit:
-                                break
-                            if _is_sentence_final_word(words, j):
-                                we = j
-                                end_ms = min(range_end_ms, int(words[we]["e"] * 1000))
-                                break
-                    else:
-                        end_ms = min(range_end_ms, int(words[we]["e"] * 1000))
-            end_ms = max(end_ms, min(range_end_ms, payoff_i))
+            p_sent = _sentence_at_ms(sentences, int(payoff))
+            if p_sent is not None:
+                end_ms = max(end_ms, int(p_sent.end_ms))
+            else:
+                end_ms = max(end_ms, int(payoff))
+        end_ms = min(range_end_ms, end_ms)
+        start_ms = max(range_start_ms, start_ms)
         if end_ms <= start_ms:
             return before_start, before_end
     except Exception:
@@ -347,19 +337,6 @@ def snap_bounds(
 
     clip["start_ms"] = start_ms
     clip["end_ms"] = end_ms
-    payoff = clip.get("boundary_payoff_ms")
-    if payoff is not None:
-        cap = int(payoff) + pad_end_ms
-        if end_ms > cap + 200:
-            picker_info(
-                "payoff_tail_trim",
-                title=str(clip.get("title", ""))[:40],
-                before_end=end_ms,
-                after_end=cap,
-                payoff_ms=int(payoff),
-            )
-            end_ms = max(start_ms + 1, min(end_ms, cap))
-            clip["end_ms"] = end_ms
     picker_info(
         "snap_bounds",
         title=str(clip.get("title", ""))[:40],

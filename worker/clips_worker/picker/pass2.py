@@ -10,7 +10,7 @@ from clips_worker.picker.config import genres_config, load_core_rubric, load_exa
 from clips_worker.picker.formatting import format_sentence_line
 from clips_worker.picker.llm import chat_json
 from clips_worker.picker.log_util import json_snippet, picker_info
-from clips_worker.picker.rejects import is_hard_llm_reject
+from clips_worker.picker.rejects import is_hard_llm_reject, llm_dialogue_reject_blocks_moment
 from clips_worker.picker.final_score import (
     apply_combined_scores,
     gemini_score_from_record,
@@ -27,6 +27,33 @@ from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
 from clips_worker.target_clip_len import ClipLengthPolicy
 from clips_worker.video_picker import VISUAL_WATCH_PASS2_HINT
+
+
+def _pass2_visual_block_for_moment(
+    moment: dict,
+    sentences: list[Sentence],
+    visual_moments: list[dict] | None,
+    *,
+    range_start_ms: int,
+) -> str:
+    if not visual_moments:
+        return "(none overlapping this moment)"
+    from clips_worker.visual_boundaries import (
+        format_visual_moments_for_pass2,
+        visual_moments_overlapping_window,
+    )
+
+    ss = max(0, min(int(moment["start_sentence"]), len(sentences) - 1))
+    es = max(ss, min(int(moment["end_sentence"]), len(sentences) - 1))
+    lo = int(sentences[ss].start_ms)
+    hi = int(sentences[es].end_ms)
+    ovs = visual_moments_overlapping_window(
+        visual_moments,
+        window_start_ms=lo,
+        window_end_ms=hi,
+        range_start_ms=range_start_ms,
+    )
+    return format_visual_moments_for_pass2(ovs, range_start_ms=range_start_ms)
 
 
 def _pass2_clip_item_schema(*, boundary_fields: bool, batched: bool = False) -> dict[str, Any]:
@@ -153,10 +180,13 @@ def _clip_row_from_llm(
 ) -> dict[str, Any] | None:
     gemini_moment = moment_has_gemini_provenance(moment)
     reason = str(row.get("reject_reason") or "")
-    hard = bool(row.get("reject")) and is_hard_llm_reject(reason)
-    if row.get("reject") and not (gemini_moment and not hard):
+    gemini_llm_override = False
+    if llm_dialogue_reject_blocks_moment(row, moment, gemini_provenance=gemini_moment):
         from clips_worker.decision_log import decision_log
 
+        hard = llm_dialogue_reject_blocks_moment(row, moment) and is_hard_llm_reject(
+            reason, moment=moment
+        )
         decision_log(
             "pass2",
             "reject",
@@ -175,10 +205,12 @@ def _clip_row_from_llm(
     if row.get("reject") and gemini_moment:
         from clips_worker.decision_log import decision_log
 
+        gemini_llm_override = True
         decision_log(
             "pass2",
             "gemini_override_llm_reject",
             reason=reason[:120],
+            hard=False,
             gemini_score=gemini_score_from_record(moment),
         )
         row = {**row, "reject": False, "reject_reason": ""}
@@ -193,7 +225,10 @@ def _clip_row_from_llm(
     moment_len = max(1, m_es - m_ss + 1)
     from clips_worker.overlap_policy import PICK_OVERLAP_RATIO
 
-    if overlap < moment_len * PICK_OVERLAP_RATIO:
+    use_model_span = overlap >= moment_len * PICK_OVERLAP_RATIO
+    span_revert = not use_model_span
+    use_moment_copy = span_revert or gemini_llm_override
+    if span_revert:
         from clips_worker.decision_log import decision_log
 
         decision_log(
@@ -203,15 +238,18 @@ def _clip_row_from_llm(
             got=(ss, es),
             overlap=overlap,
             moment_len=moment_len,
-            action="use_model_span",
+            action="revert_pass1_rescore",
         )
-        # Keep model span when it still overlaps the moment anchor window.
-        if overlap >= max(1, moment_len * 0.15):
-            pass
-        else:
-            ss, es = m_ss, m_es
-            payoff_id = max(ss, min(int(moment.get("anchor_id", m_ss)), es))
-    sc = row["scores"]
+        ss, es = m_ss, m_es
+        payoff_id = max(ss, min(int(moment.get("anchor_id", m_ss)), es))
+    _neutral_scores = {
+        "hook": 5.0,
+        "self_contained": 5.0,
+        "payoff": 5.0,
+        "energy": 5.0,
+        "value": 5.0,
+    }
+    sc = _neutral_scores if use_moment_copy else row["scores"]
     sent_rows = []
     for k in range(ss, es + 1):
         s = sentences[k]
@@ -232,13 +270,21 @@ def _clip_row_from_llm(
         visual_payoff_moment=gemini_moment or bool(moment.get("visual_origin") or moment.get("from_visual")),
     )
     g_carry = gemini_score_from_record(moment)
+    if use_moment_copy:
+        title = trim_title(str(moment.get("title") or moment.get("why") or ""))
+        hook = strip_internal_sentence_refs(str(moment.get("why") or ""))[:300]
+        reason_txt = strip_internal_sentence_refs(str(moment.get("why") or ""))[:500]
+    else:
+        title = trim_title(str(row.get("title") or moment.get("why") or ""))
+        hook = strip_internal_sentence_refs(str(row.get("why_care", "")))[:300]
+        reason_txt = strip_internal_sentence_refs(str(row.get("why_care", "")))[:500]
     base = {
         "start_sentence": ss,
         "end_sentence": es,
         "payoff_id": payoff_id,
-        "title": trim_title(str(row.get("title") or moment.get("why") or "")),
-        "hook": strip_internal_sentence_refs(str(row.get("why_care", "")))[:300],
-        "reason": strip_internal_sentence_refs(str(row.get("why_care", "")))[:500],
+        "title": title,
+        "hook": hook,
+        "reason": reason_txt,
         "archetype": row.get("archetype") or moment.get("archetype"),
         "pass1_why": strip_internal_sentence_refs(str(moment.get("why", ""))),
         "llm_reject": False,
@@ -294,17 +340,29 @@ def _clip_row_from_llm(
             anchor_idx = int(moment.get("anchor_id", moment.get("start_sentence", ss)))
             anchor_idx = max(ss, min(anchor_idx, es))
             anchor_ms = int(sentences[anchor_idx].start_ms)
+            clip_lo = int(sentences[ss].start_ms)
+            clip_hi = int(sentences[es].end_ms)
             setup_ms, payoff_ms = boundary_fields_from_llm_row(
                 row,
                 range_start_ms=range_start_ms,
                 anchor_ms=anchor_ms,
-                range_end_ms=int(sentences[es].end_ms),
+                range_end_ms=range_end_ms if range_end_ms is not None else clip_hi,
+                clip_start_ms=clip_lo,
+                clip_end_ms=clip_hi,
             )
             if setup_ms is None and payoff_ms is None and visual_moments:
                 lo = int(sentences[ss].start_ms)
                 hi = int(sentences[es].end_ms)
+                from clips_worker.visual_boundaries import visual_moments_overlapping_window
+
+                overlap_vms = visual_moments_overlapping_window(
+                    visual_moments,
+                    window_start_ms=lo,
+                    window_end_ms=hi,
+                    range_start_ms=range_start_ms,
+                )
                 setup_ms, payoff_ms = infer_boundaries_from_moments(
-                    lo, hi, visual_moments, range_start_ms=range_start_ms
+                    lo, hi, overlap_vms or None, range_start_ms=range_start_ms
                 )
             if setup_ms is not None:
                 base["boundary_setup_ms"] = setup_ms
@@ -357,19 +415,30 @@ def _score_moments_batched(
     for mi, m in enumerate(moments):
         ss = max(0, min(int(m["start_sentence"]), len(sentences) - 1))
         es = max(ss, min(int(m["end_sentence"]), len(sentences) - 1))
-        blocks.append(
-            {
-                "moment_index": mi,
-                "pass1_why": m.get("why", ""),
-                "archetype": m.get("archetype"),
-                "approx_start_id": ss,
-                "approx_end_id": es,
-                "context_transcript": _context_lines(sentences, sig_by, ss, es, ctx_s),
-            }
-        )
+        block = {
+            "moment_index": mi,
+            "pass1_why": m.get("why", ""),
+            "archetype": m.get("archetype"),
+            "approx_start_id": ss,
+            "approx_end_id": es,
+            "context_transcript": _context_lines(sentences, sig_by, ss, es, ctx_s),
+            "overlapping_gemini_spans": _pass2_visual_block_for_moment(
+                m, sentences, visual_moments, range_start_ms=range_start_ms
+            ),
+        }
+        blocks.append(block)
     timeout_s = float(os.environ.get("CLIP_PASS2_BATCH_TIMEOUT_S", "45"))
     user_body = json.dumps(blocks, indent=0)
-    if video_context:
+    if visual_moments:
+        user_body = (
+            f"{VISUAL_WATCH_PASS2_HINT}\n"
+            "Each moment block includes overlapping_gemini_spans — use ONLY that block's spans "
+            "for setup_start_s/payoff_end_s (do not copy from other moments).\n"
+            "Set setup_start_s and payoff_end_s per clip (absolute seconds from source start; "
+            "match transcript timestamps).\n\n"
+            f"{user_body}"
+        )
+    elif video_context:
         user_body = (
             f"{VISUAL_WATCH_PASS2_HINT}\n"
             "Set setup_start_s and payoff_end_s per clip (absolute seconds from source start; "
@@ -407,6 +476,25 @@ def _score_moments_batched(
             )
             reject_counts["missing_batch_row"] += 1
             continue
+        overlap_vms = None
+        if visual_moments:
+            from clips_worker.visual_boundaries import visual_moments_overlapping_window
+
+            lo = int(sentences[max(0, min(int(m["start_sentence"]), len(sentences) - 1))].start_ms)
+            hi = int(
+                sentences[
+                    max(
+                        0,
+                        min(int(m["end_sentence"]), len(sentences) - 1),
+                    )
+                ].end_ms
+            )
+            overlap_vms = visual_moments_overlapping_window(
+                visual_moments,
+                window_start_ms=lo,
+                window_end_ms=hi,
+                range_start_ms=range_start_ms,
+            )
         parsed = _clip_row_from_llm(
             row,
             m,
@@ -415,7 +503,7 @@ def _score_moments_batched(
             genre,
             source_duration_s,
             range_start_ms=range_start_ms,
-            visual_moments=visual_moments,
+            visual_moments=overlap_vms,
             length_policy=length_policy,
             range_end_ms=range_end_ms,
         )
@@ -523,9 +611,18 @@ def score_moments(
             "approx_start_id": ss,
             "approx_end_id": es,
             "context_transcript": _context_lines(sentences, sig_by, ss, es, ctx_s),
+            "overlapping_gemini_spans": _pass2_visual_block_for_moment(
+                m, sentences, visual_moments, range_start_ms=range_start_ms
+            ),
         }
         user = json.dumps([block], indent=0)
-        if video_context:
+        if visual_moments:
+            user = (
+                f"{VISUAL_WATCH_PASS2_HINT}\n"
+                "Use ONLY overlapping_gemini_spans in this block for setup/payoff hints.\n\n"
+                f"{user}"
+            )
+        elif video_context:
             user = (
                 f"{VISUAL_WATCH_PASS2_HINT}\n"
                 f"Visual moments (Gemini spans):\n{video_context}\n\n{user}"
@@ -553,6 +650,18 @@ def score_moments(
             )
             return local_out, local_audit, local_rejects
         row = clips[0]
+        overlap_vms = None
+        if visual_moments:
+            from clips_worker.visual_boundaries import visual_moments_overlapping_window
+
+            lo = int(sentences[ss].start_ms)
+            hi = int(sentences[es].end_ms)
+            overlap_vms = visual_moments_overlapping_window(
+                visual_moments,
+                window_start_ms=lo,
+                window_end_ms=hi,
+                range_start_ms=range_start_ms,
+            )
         parsed = _clip_row_from_llm(
             row,
             m,
@@ -561,7 +670,7 @@ def score_moments(
             genre,
             source_duration_s,
             range_start_ms=range_start_ms,
-            visual_moments=visual_moments,
+            visual_moments=overlap_vms,
             length_policy=length_policy,
             range_end_ms=range_end_ms,
         )

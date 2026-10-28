@@ -46,6 +46,46 @@ def gemini_score_from_record(record: dict[str, Any]) -> float | None:
     return None
 
 
+def inherit_gemini_scores_on_pass1_moments(
+    moments: list[dict],
+    visual_moments: list[dict] | None,
+    sentences: list,
+    *,
+    range_start_ms: int,
+) -> None:
+    """Gap/transcript candidates overlapping a Gemini span inherit its score."""
+    if not visual_moments or not moments:
+        return
+    from clips_worker.video_picker import moment_abs_span_ms
+
+    for m in moments:
+        if gemini_score_from_record(m) is not None:
+            continue
+        try:
+            ss = int(m["start_sentence"])
+            es = int(m["end_sentence"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if ss < 0 or es >= len(sentences) or ss > es:
+            continue
+        lo = int(sentences[ss].start_ms)
+        hi = int(sentences[es].end_ms)
+        best: float | None = None
+        for vm in visual_moments:
+            s_ms, e_ms = moment_abs_span_ms(vm, range_start_ms)
+            overlap = max(0, min(hi, e_ms) - max(lo, s_ms))
+            if overlap <= 0:
+                continue
+            g = normalize_gemini_score(vm.get("score"))
+            if g is None:
+                continue
+            if best is None or g > best:
+                best = g
+        if best is not None:
+            m["gemini_score"] = best
+            m["from_visual"] = True
+
+
 def moment_has_gemini_provenance(moment: dict[str, Any]) -> bool:
     if moment.get("from_visual_watch") or moment.get("from_visual") or moment.get("visual_origin"):
         return True

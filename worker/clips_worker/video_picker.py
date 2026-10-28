@@ -1303,6 +1303,16 @@ def reassess_edge_moments(
                 max_span_s=max_span,
             )
             if normed:
+                merged = dict(normed[0])
+                for key in (
+                    "gemini_score",
+                    "visual_score",
+                    "from_visual_watch",
+                    "from_visual",
+                    "visual_origin",
+                ):
+                    if m.get(key) is not None and merged.get(key) is None:
+                        merged[key] = m[key]
                 decision_log(
                     "reassess_edge",
                     "changed",
@@ -1310,10 +1320,10 @@ def reassess_edge_moments(
                     edge=edge,
                     before_start_s=rs,
                     before_end_s=re,
-                    after_start_s=normed[0].get("start_s"),
-                    after_end_s=normed[0].get("end_s"),
+                    after_start_s=merged.get("start_s"),
+                    after_end_s=merged.get("end_s"),
                 )
-                out.append(normed[0])
+                out.append(merged)
             elif float(m.get("confidence") or 0) >= 0.35:
                 decision_log(
                     "reassess_edge",
@@ -1486,6 +1496,7 @@ def watch_video_file(
             user_text = user_text_base
             time_invalid_retries = 1
             sections_moment_retries = 1
+            shortfall_retries = 1
             parsed_ok: dict[str, Any] | None = None
             model_failed_reason = ""
 
@@ -1700,10 +1711,10 @@ def watch_video_file(
                 before_final_dedupe = len(moments)
                 moments = dedupe_overlapping_video_picker_moments(moments, stage="dedupe_reassess")
                 min_need = int(meta.get("min_moments") or min_moments_for_video(int(duration_s)))
-                if len(moments) < min_need and sections_moment_retries >= 0:
+                if len(moments) < min_need and shortfall_retries > 0:
                     gap = _uncovered_section_labels(meta.get("sections") or [], moments, float(duration_s))
                     if gap:
-                        sections_moment_retries = -1
+                        shortfall_retries -= 1
                         decision_log(
                             "video_picker",
                             "retry",

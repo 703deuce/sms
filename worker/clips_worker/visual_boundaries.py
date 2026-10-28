@@ -1,4 +1,4 @@
-"""Visual / LLM clip boundary hints (setup through payoff). Fail-open."""
+"""Visual / LLM clip boundary hints (setup through payoff). Fail-open; extend-only."""
 from __future__ import annotations
 
 import os
@@ -34,7 +34,11 @@ def _coerce_boundary_ms(
     range_start_ms: int,
     anchor_ms: int | None,
     range_end_ms: int | None,
+    clip_start_ms: int,
+    clip_end_ms: int,
+    for_setup: bool,
 ) -> int | None:
+    """Return absolute ms hint, or None if invalid for this clip window."""
     if val is None or val == "":
         return None
     try:
@@ -44,7 +48,6 @@ def _coerce_boundary_ms(
     if sec <= 0:
         return None
     candidates: list[int] = [int(sec * 1000)]
-    # Legacy trim-relative hints (pre absolute-second prompt).
     if range_start_ms:
         candidates.append(range_start_ms + int(sec * 1000))
     hi = range_end_ms if range_end_ms is not None else candidates[0] + 120_000
@@ -54,8 +57,51 @@ def _coerce_boundary_ms(
             continue
         if anchor_ms is not None and abs(abs_ms - anchor_ms) > BOUNDARY_ANCHOR_TOLERANCE_MS:
             continue
+        lead_ms, tail_ms = _lead_tail_ms()
+        if for_setup:
+            if abs_ms > clip_end_ms:
+                continue
+            if abs_ms < clip_start_ms - lead_ms:
+                continue
+        else:
+            if abs_ms < clip_start_ms:
+                continue
+            if abs_ms > clip_end_ms + tail_ms:
+                continue
         return abs_ms
     return None
+
+
+def boundary_fields_from_llm_row(
+    row: dict[str, Any],
+    *,
+    range_start_ms: int = 0,
+    anchor_ms: int | None = None,
+    range_end_ms: int | None = None,
+    clip_start_ms: int | None = None,
+    clip_end_ms: int | None = None,
+) -> tuple[int | None, int | None]:
+    cs = int(clip_start_ms if clip_start_ms is not None else (anchor_ms or range_start_ms))
+    ce = int(clip_end_ms if clip_end_ms is not None else (range_end_ms or cs + 120_000))
+    setup = _coerce_boundary_ms(
+        row.get("setup_start_s"),
+        range_start_ms=range_start_ms,
+        anchor_ms=anchor_ms,
+        range_end_ms=range_end_ms,
+        clip_start_ms=cs,
+        clip_end_ms=ce,
+        for_setup=True,
+    )
+    payoff = _coerce_boundary_ms(
+        row.get("payoff_end_s"),
+        range_start_ms=range_start_ms,
+        anchor_ms=anchor_ms,
+        range_end_ms=range_end_ms,
+        clip_start_ms=cs,
+        clip_end_ms=ce,
+        for_setup=False,
+    )
+    return setup, payoff
 
 
 def infer_boundaries_from_moments(
@@ -83,33 +129,21 @@ def infer_boundaries_from_moments(
             else:
                 hits.append(absolute_moment_ms(m, range_start_ms))
     if span_lo is not None and span_hi is not None:
-        return max(range_start_ms, span_lo), span_hi + tail_ms
+        setup = max(range_start_ms, span_lo)
+        payoff = span_hi + tail_ms
+        if setup > end_ms:
+            setup = None
+        if payoff < start_ms:
+            payoff = None
+        return setup, payoff
     if not hits:
         return None, None
     setup = max(range_start_ms, min(hits) - lead_ms)
     payoff = max(hits) + tail_ms
-    return setup, payoff
-
-
-def boundary_fields_from_llm_row(
-    row: dict[str, Any],
-    *,
-    range_start_ms: int = 0,
-    anchor_ms: int | None = None,
-    range_end_ms: int | None = None,
-) -> tuple[int | None, int | None]:
-    setup = _coerce_boundary_ms(
-        row.get("setup_start_s"),
-        range_start_ms=range_start_ms,
-        anchor_ms=anchor_ms,
-        range_end_ms=range_end_ms,
-    )
-    payoff = _coerce_boundary_ms(
-        row.get("payoff_end_s"),
-        range_start_ms=range_start_ms,
-        anchor_ms=anchor_ms,
-        range_end_ms=range_end_ms,
-    )
+    if setup > end_ms:
+        setup = None
+    if payoff < start_ms:
+        payoff = None
     return setup, payoff
 
 
@@ -122,16 +156,21 @@ def merge_window_with_boundaries(
     range_start_ms: int = 0,
     range_end_ms: int | None = None,
 ) -> tuple[int, int]:
-    """Expand/adjust span to honor visual boundaries; never raises."""
+    """Expand span only (never shrink). Invalid hints ignored."""
     if not visual_boundaries_enabled():
         return start_ms, end_ms
     hi = range_end_ms if range_end_ms is not None else end_ms + 120_000
+    lead_ms, _tail_ms = _lead_tail_ms()
     s, e = int(start_ms), int(end_ms)
     if boundary_setup_ms is not None:
-        s = min(s, int(boundary_setup_ms))
-        s = max(range_start_ms, s)
+        setup_i = int(boundary_setup_ms)
+        if setup_i <= s and (s - setup_i) <= lead_ms:
+            s = min(s, setup_i)
+            s = max(range_start_ms, s)
     if boundary_payoff_ms is not None:
-        e = max(e, int(boundary_payoff_ms))
+        payoff_i = int(boundary_payoff_ms)
+        if payoff_i >= s:
+            e = max(e, payoff_i)
     e = min(hi, e)
     if e <= s:
         return start_ms, end_ms
@@ -148,7 +187,6 @@ def resolve_boundaries_for_window(
     range_end_ms: int | None = None,
     anchor_ms: int | None = None,
 ) -> tuple[int, int, int | None, int | None]:
-    """Return (start_ms, end_ms, setup_ms, payoff_ms) for snapping metadata."""
     setup, payoff = None, None
     if llm_row:
         setup, payoff = boundary_fields_from_llm_row(
@@ -156,6 +194,8 @@ def resolve_boundaries_for_window(
             range_start_ms=range_start_ms,
             anchor_ms=anchor_ms,
             range_end_ms=range_end_ms,
+            clip_start_ms=start_ms,
+            clip_end_ms=end_ms,
         )
     if setup is None and payoff is None and video_moments:
         setup, payoff = infer_boundaries_from_moments(
@@ -170,3 +210,41 @@ def resolve_boundaries_for_window(
         range_end_ms=range_end_ms,
     )
     return ns, ne, setup, payoff
+
+
+def visual_moments_overlapping_window(
+    visual_moments: list[dict] | None,
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+    range_start_ms: int = 0,
+    pad_ms: int = 0,
+) -> list[dict]:
+    if not visual_moments:
+        return []
+    from clips_worker.video_picker import moment_abs_span_ms
+
+    out: list[dict] = []
+    lo = window_start_ms - pad_ms
+    hi = window_end_ms + pad_ms
+    for m in visual_moments:
+        s_ms, e_ms = moment_abs_span_ms(m, range_start_ms)
+        if max(0, min(e_ms, hi) - max(s_ms, lo)) > 0:
+            out.append(m)
+    return out
+
+
+def format_visual_moments_for_pass2(moments: list[dict], *, range_start_ms: int = 0) -> str:
+    if not moments:
+        return "(none overlapping this moment)"
+    lines: list[str] = []
+    for m in moments[:8]:
+        try:
+            s = float(m.get("start_s", 0)) + range_start_ms / 1000.0
+            e = float(m.get("end_s", s)) + range_start_ms / 1000.0
+            sc = float(m.get("score") or 0)
+            what = str(m.get("what_happened") or m.get("reason") or "")[:120]
+            lines.append(f"- {s:.1f}-{e:.1f}s score={sc:.2f} {what}")
+        except (TypeError, ValueError):
+            continue
+    return "\n".join(lines)

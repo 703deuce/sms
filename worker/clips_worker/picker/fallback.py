@@ -1,7 +1,6 @@
 """Low-confidence fallbacks when strict pass-2 / selection yields nothing."""
 from __future__ import annotations
 
-from clips_worker.picker.rejects import is_hard_llm_reject
 from clips_worker.picker.scoring import score_clip, _sent_dict
 
 
