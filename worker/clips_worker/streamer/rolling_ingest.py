@@ -139,6 +139,35 @@ def rolling_autopull_stop_reason(conn, vod: dict[str, Any]) -> str | None:
         state = json.loads(state) if state else {}
     rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
     if not rolling.get("live"):
+        if state.get("autoProcess") is not False and not state.get("liveCapture"):
+            login = str(
+                vod.get("channelLogin")
+                or vod.get("channel_login")
+                or state.get("channelLogin")
+                or ""
+            ).strip()
+            if str(vod.get("platform") or "").lower() == "twitch" and login:
+                from clips_worker.streamer.twitch_archive_resolve import twitch_channel_is_live
+
+                if twitch_channel_is_live(login):
+                    from clips_worker.decision_log import decision_log
+
+                    decision_log(
+                        "streamer",
+                        "archive_rolling_live_revalidated",
+                        vodId=vod_id,
+                        channelLogin=login[:40],
+                        priorReason="rolling_not_live",
+                    )
+                    rolling["live"] = True
+                    state = {**state, "rolling": rolling}
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            'UPDATE stream_vods SET state=%s::jsonb, "updatedAt"=NOW() WHERE id=%s',
+                            (json.dumps(state), vod_id),
+                        )
+                    conn.commit()
+                    return None
         return "rolling_not_live"
     if state.get("autoProcess") is False:
         return "auto_process_off"

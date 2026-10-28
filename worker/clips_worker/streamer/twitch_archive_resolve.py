@@ -11,7 +11,20 @@ NO_LIVE_ARCHIVE_MSG = (
 )
 
 
-def _parse_iso(ts: str) -> float | None:
+def twitch_channel_is_live(login: str) -> bool:
+    """Helix /streams — authoritative when yt-dlp live_status is null."""
+    login = (login or "").strip().lower()
+    if not login:
+        return False
+    import urllib.parse
+
+    users = _helix_json(f"/users?login={urllib.parse.quote(login)}")
+    user = (users.get("data") or [None])[0]
+    if not user:
+        return False
+    user_id = str(user.get("id") or "")
+    streams = _helix_json(f"/streams?user_id={urllib.parse.quote(user_id)}")
+    return bool((streams.get("data") or []))
     try:
         return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
     except (TypeError, ValueError):

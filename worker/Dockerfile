@@ -27,6 +27,10 @@ RUN set -eux; \
     curl -fsSL -o /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf \
       'https://github.com/JulietaUla/Montserrat/raw/master/fonts/ttf/Montserrat-Black.ttf'; \
     cp /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf /app/v3/fonts/Montserrat-Black.ttf; \
+    mkdir -p /usr/share/fonts/truetype/anton; \
+    curl -fsSL -o /usr/share/fonts/truetype/anton/Anton-Regular.ttf \
+      'https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf'; \
+    cp /usr/share/fonts/truetype/anton/Anton-Regular.ttf /app/v3/fonts/Anton-Regular.ttf; \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
     test -s /app/v3/fonts/Montserrat-Black.ttf

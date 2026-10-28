@@ -31,6 +31,7 @@ from clips_worker.streamer.segments import cut_local_segment, download_segment
 
 
 from clips_worker.streamer.clip_timeline import clip_absolute_span_ms, clip_vod_range_start_ms
+from clips_worker.streamer.segment_fetch import plan_segment_download_times, resolve_clip_window_media
 
 
 def _clip_vod_range_start_ms(clip: dict, vod_default: int) -> int:
@@ -51,11 +52,12 @@ def _fetch_segment_mp4(
     state: dict,
     *,
     seg_path: Path,
-    local_upload: Path | None,
-    window_capture: Path | None = None,
+    local_media: Path | None,
     url: str | None,
-    seg_start_s: float,
-    seg_end_s: float,
+    segment_kind: str,
+    window_base_ms: int,
+    rel_start_s: float,
+    rel_end_s: float,
     workspace_id: str,
     project_id: str,
     job_id: str = "",
@@ -63,26 +65,30 @@ def _fetch_segment_mp4(
 ) -> None:
     from clips_worker.decision_log import decision_log
 
+    base_s, start_s, end_s = plan_segment_download_times(
+        kind=segment_kind,
+        window_base_ms=window_base_ms,
+        rel_start_s=rel_start_s,
+        rel_end_s=rel_end_s,
+    )
+    decision_log(
+        "streamer",
+        "segment_source",
+        vodId=vod_id,
+        clipId=str(clip.get("id") or ""),
+        jobId=job_id,
+        kind=segment_kind,
+        base_s=round(base_s, 3),
+        start_s=round(start_s, 3),
+        end_s=round(end_s, 3),
+        windowBaseMs=int(window_base_ms),
+    )
+
     if clip.get("sourceSegKey"):
         download_object(str(clip["sourceSegKey"]), seg_path)
         return
-    ai_meta = clip.get("aiMeta") or {}
-    if isinstance(ai_meta, str):
-        ai_meta = json.loads(ai_meta) if ai_meta else {}
-    cap_key = (ai_meta.get("streamer") or {}).get("captureVideoKey") or state.get("windowCaptureVideoKey")
-    if window_capture and window_capture.is_file():
-        cut_local_segment(window_capture, seg_path, seg_start_s, seg_end_s)
-        decision_log(
-            "streamer",
-            "segment_from_window_capture",
-            vodId=vod_id,
-            clipId=str(clip.get("id") or ""),
-            jobId=job_id,
-            captureKey=str(cap_key or state.get("windowCaptureVideoKey") or ""),
-        )
-        return
-    if local_upload and local_upload.is_file():
-        cut_local_segment(local_upload, seg_path, seg_start_s, seg_end_s)
+    if segment_kind in ("window_capture", "proxy", "upload") and local_media and local_media.is_file():
+        cut_local_segment(local_media, seg_path, rel_start_s, rel_end_s)
         return
     if not url:
         raise RuntimeError("no url or upload for segment fetch")
@@ -92,8 +98,8 @@ def _fetch_segment_mp4(
         download_segment(
             url,
             seg_path,
-            seg_start_s,
-            seg_end_s,
+            start_s,
+            end_s,
             job_id=job_id,
             vod_id=vod_id,
             clip_id=str(clip.get("id") or ""),
@@ -296,10 +302,19 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     fs = max(0.0, (abs_fs - wbase) / 1000.0 - 2)
                     fe = fs + 30
                     seg_src = layout_video or local_upload
+                    layout_kind = "full_vod_url"
                     if seg_src:
+                        if layout_video and layout_video.is_file():
+                            layout_kind = "proxy" if state.get("analysisProxyKey") else "upload"
                         cut_local_segment(seg_src, sample, fs, fe)
                     elif url:
-                        download_segment(url, sample, fs, fe)
+                        _, fs_dl, fe_dl = plan_segment_download_times(
+                            kind="full_vod_url",
+                            window_base_ms=wbase,
+                            rel_start_s=fs,
+                            rel_end_s=fe,
+                        )
+                        download_segment(url, sample, fs_dl, fe_dl)
                     if sample.exists():
                         layout_state = detect_facecam_layout(sample, td_path)
                         state["layout"] = layout_state
@@ -308,20 +323,20 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
             transcript_key = vod.get("transcriptKey")
             capture_cache: dict[str, Path] = {}
 
-            def _local_window_capture(clip_row: dict) -> Path | None:
+            def _explicit_capture_key(clip_row: dict) -> str | None:
                 ai = clip_row.get("aiMeta") or {}
                 if isinstance(ai, str):
                     ai = json.loads(ai) if ai else {}
                 key = (ai.get("streamer") or {}).get("captureVideoKey") or state.get("windowCaptureVideoKey")
-                if not key:
-                    return layout_video if layout_video and layout_video.is_file() else local_upload
-                k = str(key)
-                if k in capture_cache:
-                    return capture_cache[k]
+                return str(key).strip() if key else None
+
+            def _capture_path_for_key(key: str) -> Path:
+                if key in capture_cache:
+                    return capture_cache[key]
                 dest = td_path / f"window_capture_{len(capture_cache)}.mp4"
-                with stage_span("window_capture_download", heartbeat=True, captureKey=k[:80]):
-                    download_object(k, dest)
-                capture_cache[k] = dest
+                with stage_span("window_capture_download", heartbeat=True, captureKey=key[:80]):
+                    download_object(key, dest)
+                capture_cache[key] = dest
                 return dest
 
             for idx, clip in enumerate(clips):
@@ -343,7 +358,16 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 video_seg_start_s = audio_seg_start_s
                 video_seg_end_s = audio_seg_end_s
                 seg_path = td_path / f"seg_{clip_id}.mp4"
-                window_capture = _local_window_capture(clip)
+                cap_key = _explicit_capture_key(clip)
+                media_path, segment_kind = resolve_clip_window_media(
+                    clip,
+                    state,
+                    layout_video=layout_video,
+                    local_upload=local_upload,
+                )
+                local_media: Path | None = media_path
+                if segment_kind == "window_capture" and cap_key:
+                    local_media = _capture_path_for_key(cap_key)
 
                 with stage_span("clip_render", heartbeat=True, clip_index=idx, clip_id=clip_id):
                     with stage_span("segment_download", heartbeat=True):
@@ -351,11 +375,12 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             clip,
                             state,
                             seg_path=seg_path,
-                            local_upload=local_upload,
-                            window_capture=window_capture,
+                            local_media=local_media,
                             url=url,
-                            seg_start_s=video_seg_start_s,
-                            seg_end_s=video_seg_end_s,
+                            segment_kind=segment_kind,
+                            window_base_ms=window_base,
+                            rel_start_s=video_seg_start_s,
+                            rel_end_s=video_seg_end_s,
                             workspace_id=workspace_id,
                             project_id=project_id,
                             job_id=str(job.get("id") or ""),

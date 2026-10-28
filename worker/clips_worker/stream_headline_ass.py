@@ -17,6 +17,7 @@ def _font_dirs() -> list[Path]:
     dirs: list[Path] = []
     for p in (
         "/usr/share/fonts/truetype/montserrat",
+        "/usr/share/fonts/truetype/anton",
         "/app/v3/fonts",
         "/usr/share/fonts/truetype/noto",
         "/usr/share/fonts/noto",
@@ -89,6 +90,7 @@ def _headline_fonts_dir() -> Path | None:
     """Directory passed to ffmpeg ass= filter (emoji + Montserrat siblings)."""
     for candidate in (
         Path("/usr/share/fonts/truetype/montserrat"),
+        Path("/usr/share/fonts/truetype/anton"),
         Path("/app/v3/fonts"),
         Path("/usr/share/fonts/truetype/noto"),
         Path("/usr/share/fonts/noto"),
@@ -111,12 +113,17 @@ def headline_ass_content(
 ) -> str:
     display = prepare_headline_display(headline)
     if fit_top:
-        fontsize = max(56, min(92, int(bar_h * 0.18)))
+        line_count = max(1, display.count(r"\N") + 1)
+        fontsize = max(36, min(92, int((bar_h * 0.52) / line_count)))
         font = _HEADLINE_FONT_FIT_TOP
+        for d in _font_dirs():
+            if list(d.glob("*nton*.ttf")) or list(d.glob("*Anton*.ttf")):
+                font = "Anton"
+                break
     else:
         fontsize = max(28, min(50, int(bar_h * 0.20)))
         font = _HEADLINE_FONT
-    y_center = bar_y + int(bar_h * 0.52)
+    y_center = bar_y + bar_h // 2
     cs = max(1, duration_ms) // 10
     h_part, rem = divmod(cs, 360000)
     m_part, rem = divmod(rem, 6000)
@@ -136,12 +143,12 @@ ScaledBorderAndShadow: yes
 {fonts_lines}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Headline,{font},{fontsize},&H00000000,&H00000000,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,8,20,20,{max(8, bar_h // 12)},1
+Style: Headline,{font},{fontsize},&H00000000,&H00000000,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,5,20,20,{max(8, bar_h // 12)},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-    tag = rf"{{\an8\pos({play_w // 2},{y_center})}}"
+    tag = rf"{{\an5\pos({play_w // 2},{y_center})}}"
     return header + f"Dialogue: 0,0:00:00.00,{end_ts},Headline,,0,0,0,,{tag}{display}\n"
 
 
@@ -171,6 +178,16 @@ def burn_stream_headline(
         encoding="utf-8",
     )
     fontsdir = _headline_fonts_dir()
+    resolved_font = _HEADLINE_FONT_FIT_TOP if fit_top else _HEADLINE_FONT
+    if fit_top and fontsdir:
+        anton = list(fontsdir.glob("*nton*.ttf")) + list(fontsdir.glob("*Anton*.ttf"))
+        if anton:
+            resolved_font = "Anton"
+    print(
+        f"[editor:decision] headline_font font={resolved_font} fit_top={fit_top} "
+        f"fontsdir={fontsdir or 'none'}",
+        flush=True,
+    )
     vf = f"ass={ass}"
     if fontsdir:
         vf = f"ass={ass}:fontsdir={fontsdir}"

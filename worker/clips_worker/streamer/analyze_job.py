@@ -554,9 +554,12 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 )
                 sm = dict((ai_meta.get("streamer") or {}))
                 cap_key = state.get("windowCaptureVideoKey")
+                if payload.get("windowOnly"):
+                    sm["clipTimesAbsolute"] = True
                 if cap_key:
                     sm["captureVideoKey"] = str(cap_key)
                     sm["captureWindowStartMs"] = int(window_start_ms if payload.get("windowOnly") else vod.get("rangeStartMs") or 0)
+                    sm["clipTimesAbsolute"] = bool(payload.get("windowOnly"))
                     ai_meta = {**ai_meta, "streamer": sm}
                 clip_rows.append(
                     {

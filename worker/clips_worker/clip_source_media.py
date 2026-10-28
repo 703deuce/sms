@@ -23,7 +23,17 @@ def resolve_clip_export_source(ctx: dict) -> tuple[str | None, int, str]:
     """
     seg = ctx.get("sourceSegKey")
     if seg:
-        return str(seg), int(ctx.get("sourceSegStartMs") or 0), "sourceSegKey"
+        if _object_exists(str(seg)):
+            return str(seg), int(ctx.get("sourceSegStartMs") or 0), "sourceSegKey"
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "editor",
+            "storage_object_missing",
+            clipId=str(ctx.get("clipId") or ""),
+            keyKind="sourceSegKey",
+            storageKey=str(seg)[:120],
+        )
 
     workspace_id = str(ctx.get("workspaceId") or "")
     project_id = str(ctx.get("projectId") or "")
