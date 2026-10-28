@@ -20,3 +20,30 @@ def compute_pick_want(settings: dict, duration_ms: int) -> int:
 
 
 def log_pick_stage(
+    path: str,
+    *,
+    want: int,
+    round_n: int | None = None,
+    got: int | None = None,
+    after_dedupe: int | None = None,
+    after_overlap: int | None = None,
+    after_threshold: int | None = None,
+    final: int | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    parts = [f"path={path}", f"want={want}"]
+    if round_n is not None:
+        parts.append(f"round={round_n}")
+    if got is not None:
+        parts.append(f"got={got}")
+    if after_dedupe is not None:
+        parts.append(f"after_dedupe={after_dedupe}")
+    if after_overlap is not None:
+        parts.append(f"after_overlap={after_overlap}")
+    if after_threshold is not None:
+        parts.append(f"after_threshold={after_threshold}")
+    if final is not None:
+        parts.append(f"final={final}")
+    if extra:
+        parts.append(json.dumps(extra, separators=(",", ":")))
+    print(f"[clipper:pick] {' '.join(parts)}", flush=True)
