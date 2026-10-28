@@ -1,6 +1,7 @@
 import type { ClipProjectStatus } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
+import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { shouldResumeClipperFromTranscript } from '@/lib/server/clips/project-retry'
 
 const NON_TERMINAL: ClipProjectStatus[] = [
@@ -57,7 +58,10 @@ export async function enqueueClipperRecoveryJob(projectId: string, reason: strin
         projectId,
         type: 'PROCESS_PROJECT',
         status: 'QUEUED',
-        payload: resume ? { resume: true, recovery: reason } : { recovery: reason },
+        payload: buildProcessProjectJobPayload(project.settings, {
+          ...(resume ? { resume: true } : {}),
+          recovery: reason,
+        }),
         priority: 50,
       },
     }),

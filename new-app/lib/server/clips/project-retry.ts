@@ -1,4 +1,5 @@
 import type { ClipProjectStatus } from '@prisma/client'
+import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { isTranscriptReadyOrphan } from '@/lib/server/clips/recover-project'
 
 export function transcriptWordCount(transcriptWords: unknown): number {
@@ -34,6 +35,6 @@ export function clipperRetryProjectPatch(project: {
   }
 }
 
-export function clipperRetryJobPayload(resume: boolean): Record<string, unknown> {
-  return resume ? { resume: true, retry: true } : { retry: true }
+export function clipperRetryJobPayload(resume: boolean, settings?: unknown): Record<string, unknown> {
+  return buildProcessProjectJobPayload(settings, resume ? { resume: true, retry: true } : { retry: true })
 }

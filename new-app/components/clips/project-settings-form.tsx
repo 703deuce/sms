@@ -12,10 +12,11 @@ import {
   clipGenreLabels,
   clipGenres,
   clipLayoutModes,
-  clipLengthBuckets,
   clipModes,
   type ClipProjectSettings,
 } from '@/lib/clips/settings'
+import { applyClipLengthChoice, clipLengthChoiceFromSettings } from '@/lib/clips/clip-length'
+import { ClipLengthChoice as ClipLengthChoiceControl } from '@/components/clips/clip-length-choice'
 import { cn } from '@/lib/utils'
 
 const MODE_LABELS: Record<string, string> = {
@@ -108,21 +109,10 @@ export function ProjectSettingsForm({
 
       <Panel title="Clip length & range">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
-            {clipLengthBuckets.map((b) => (
-              <button
-                key={b}
-                type="button"
-                onClick={() => onChange({ ...settings, clipLength: b })}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium',
-                  settings.clipLength === b ? 'border-primary bg-accent' : 'border-border',
-                )}
-              >
-                {b === 'auto' ? 'Auto (15–90s)' : b === 'lt30' ? '<30s' : b === '30_60' ? '30–60s' : '60–90s'}
-              </button>
-            ))}
-          </div>
+          <ClipLengthChoiceControl
+            value={clipLengthChoiceFromSettings(settings)}
+            onChange={(choice) => onChange(applyClipLengthChoice(settings, choice))}
+          />
           <div className="flex min-h-[7.5rem] flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <Label>Processing range</Label>

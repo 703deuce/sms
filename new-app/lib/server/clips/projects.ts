@@ -3,6 +3,7 @@ import { createId } from '@/lib/supabase/id'
 import { isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { getPrisma } from '@/lib/server/db'
 import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
+import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { projectWordsKey } from '@/lib/storage'
 import type { ClipBrandTemplate } from '@prisma/client'
 
@@ -107,7 +108,7 @@ export async function createClipProject(
       projectId: project.id,
       type: 'PROCESS_PROJECT',
       status: 'QUEUED',
-      payload: {},
+      payload: buildProcessProjectJobPayload(settings),
     },
   })
   return project
@@ -240,7 +241,7 @@ export async function attachUploadToClipProject(
       projectId,
       type: 'PROCESS_PROJECT',
       status: 'QUEUED',
-      payload: {},
+      payload: buildProcessProjectJobPayload(nextSettings),
     },
   })
 

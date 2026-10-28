@@ -17,6 +17,12 @@ export const streamerSettingsSchema = z.object({
   /** UTC hour 0–23 for daily recap clip batch during long streams. */
   marathonDailyRecapUtcHour: z.number().int().min(0).max(23).default(0),
   clipCount: z.number().int().min(1).max(30).default(12),
+  /** Default clip length for auto-imported VODs (copied to project settings). */
+  clipLenMode: z.enum(['auto', 'target']).default('auto'),
+  targetClipLenS: z
+    .union([z.literal(15), z.literal(30), z.literal(60), z.literal(90)])
+    .nullable()
+    .default(null),
   minClipS: z.number().min(10).max(120).default(15),
   maxClipS: z.number().min(15).max(180).default(60),
   language: z.string().nullable().default(null),

@@ -56,6 +56,11 @@ export const clipProjectSettingsSchema = z.object({
   mode: z.enum(clipModes).default('talking'),
   genre: z.enum(clipGenres).default('podcast'),
   clipLength: z.enum(clipLengthBuckets).default('auto'),
+  clipLenMode: z.enum(['auto', 'target']).default('auto'),
+  targetClipLenS: z
+    .union([z.literal(15), z.literal(30), z.literal(60), z.literal(90)])
+    .nullable()
+    .default(null),
   rangeStartMs: z.number().int().min(0).default(0),
   rangeEndMs: z.number().int().min(0).default(0),
   prompt: z.string().max(2000).optional(),
@@ -88,6 +93,8 @@ export function defaultClipSettings(overrides?: Partial<ClipProjectSettings>): C
     mode: 'talking',
     genre: 'podcast',
     clipLength: 'auto',
+    clipLenMode: 'auto',
+    targetClipLenS: null,
     rangeStartMs: 0,
     rangeEndMs: 0,
     layout: 'speaker_follow',
@@ -115,5 +122,10 @@ export const TOOL_PRESET_MAP: Record<string, Partial<ClipProjectSettings>> = {
   'add-captions-to-video': { mode: 'captions' },
   'tiktok-captions': { mode: 'captions', captions: { enabled: true, presetId: 'bold_pop', language: 'en' } },
   'interview-clips': { mode: 'talking', genre: 'interview' },
-  'long-video-to-short-video': { mode: 'talking', clipLength: '30_60' },
+  'long-video-to-short-video': {
+    mode: 'talking',
+    clipLength: '30_60',
+    clipLenMode: 'target',
+    targetClipLenS: 60,
+  },
 }

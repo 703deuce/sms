@@ -4,6 +4,7 @@ import { Page, PageHeader } from '@/components/app/page-primitives'
 import { ObsFallbackDocs } from '@/components/streamer/obs-fallback-docs'
 import { Button } from '@/components/ui/button'
 import { ChannelAutoProcessToggle } from '@/components/streamer/channel-auto-process'
+import { ChannelClipLengthSettings } from '@/components/streamer/channel-clip-length-settings'
 import { VodSavingAlert } from '@/components/streamer/vod-saving-alert'
 import type { VodAvailabilityView } from '@/lib/streamer/vod-availability'
 import { StreamerLiveComingSoon } from '@/components/streamer/streamer-live-coming-soon'
@@ -61,6 +62,7 @@ export default async function StreamerChannelPage({ params }: { params: Promise<
             connected={channel.status === 'CONNECTED'}
             initial={channel.autoProcess}
           />
+          <ChannelClipLengthSettings channelId={channel.id} initialSettings={channel.settings} />
           <VodSavingAlert initial={vodSaving} channelId={channel.id} />
         </section>
         {skippedStreams.length ? (

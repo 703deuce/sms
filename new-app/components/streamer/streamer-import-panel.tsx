@@ -27,6 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ClipLengthChoice } from '@/components/clips/clip-length-choice'
+import { streamerClipLengthFields, type ClipLengthChoice as ClipLengthChoiceValue } from '@/lib/clips/clip-length'
 
 const PENDING_UPLOAD_KEY = 'streamer-upload-resume-v1'
 
@@ -58,6 +60,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
   const [firstMinutes, setFirstMinutes] = useState('15')
   const [rangeStart, setRangeStart] = useState('0:00')
   const [rangeEnd, setRangeEnd] = useState('15:00')
+  const [clipLength, setClipLength] = useState<ClipLengthChoiceValue>('auto')
 
   useEffect(() => {
     void fetchUploadLimits()
@@ -238,6 +241,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
         body: JSON.stringify({
           url: url.trim(),
           attest: true,
+          settings: streamerClipLengthFields(clipLength),
           ...(range.rangeEndMs > 0
             ? { rangeStartMs: range.rangeStartMs, rangeEndMs: range.rangeEndMs }
             : {}),
@@ -265,6 +269,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
         body: JSON.stringify({
           uploadId,
           attest: true,
+          settings: streamerClipLengthFields(clipLength),
           ...(range.rangeEndMs > 0
             ? { rangeStartMs: range.rangeStartMs, rangeEndMs: range.rangeEndMs }
             : {}),
@@ -303,6 +308,9 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           </p>
         ) : null}
         <VodUrlCheckBanner view={vodCheck} onRecheck={recheckVod} rechecking={vodCheckBusy} />
+      </div>
+      <div className="rounded-lg border border-border bg-muted/30 p-3">
+        <ClipLengthChoice value={clipLength} onChange={setClipLength} />
       </div>
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
         <p className="text-xs font-medium">VOD range (optional)</p>

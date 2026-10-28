@@ -41,6 +41,8 @@ export async function beginTwitchRollingSession(
     ...clipProjectSettingsSchema.parse(defaultClipSettings()),
     aspectRatio: '9:16',
     genre: 'gaming',
+    clipLenMode: streamer.clipLenMode,
+    targetClipLenS: streamer.targetClipLenS,
     streamer,
   })
   const projectId = createId('proj')

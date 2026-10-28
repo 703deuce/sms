@@ -60,6 +60,8 @@ export async function createStreamerImport(
     ...baseSettings,
     aspectRatio: '9:16',
     genre: 'gaming',
+    clipLenMode: streamer.clipLenMode,
+    targetClipLenS: streamer.targetClipLenS,
     streamer,
     rangeStartMs: input.rangeStartMs ?? 0,
     rangeEndMs: input.rangeEndMs ?? 0,

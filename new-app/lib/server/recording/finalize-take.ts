@@ -3,6 +3,7 @@ import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, storageDriverName } from '@/lib/storage'
 import { clipProjectSettingsSchema, defaultClipSettings } from '@/lib/clips/settings'
+import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { projectWordsKey } from '@/lib/storage'
 import { ensureFullComposition } from '@/lib/server/clips/script-composition'
 import { resolveTracksForImport } from '@/lib/server/recording/resolve-import-tracks'
@@ -96,7 +97,7 @@ export async function finalizeRecordingTakeToProject(
       projectId,
       type: 'PROCESS_PROJECT',
       status: 'QUEUED',
-      payload: {
+      payload: buildProcessProjectJobPayload(settings, {
         recordingTakeId: takeId,
         multitrack: true,
         tracks: uploaded.map((t) => ({
@@ -110,7 +111,7 @@ export async function finalizeRecordingTakeToProject(
           sampleRate: t.sampleRate,
           qualitySource: t.qualitySource,
         })),
-      },
+      }),
     },
   })
 

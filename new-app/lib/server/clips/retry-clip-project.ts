@@ -37,7 +37,7 @@ export async function retryClipProject(workspaceId: string, projectId: string) {
         projectId,
         type: 'PROCESS_PROJECT',
         status: 'QUEUED',
-        payload: clipperRetryJobPayload(patch.resume) as Prisma.InputJsonValue,
+        payload: clipperRetryJobPayload(patch.resume, project.settings) as Prisma.InputJsonValue,
       },
     })
   })
