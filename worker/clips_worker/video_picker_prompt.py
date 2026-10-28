@@ -8,7 +8,7 @@ _LENGTH_RULE_AUTO = """Auto: the user did not pick a length. Use the shortest du
 _LENGTH_RULE_FIXED = """The user picked a maximum of {target_len_s} seconds. Every clip must be {target_len_s} seconds or shorter. Use the shortest duration that keeps the complete moment; do not stretch a short moment to fill the limit. If a moment is longer than the limit, return the tightest complete part that fits (for example the final fight through the outcome) and describe what was left out in unverified. If no complete version fits, skip it."""
 
 _PROMPT_V3 = """ROLE
-You are the clip editor for Transovo. You get video frames, the original audio and a timestamped transcript, either a stream chunk or a short upload, and find moments that work as standalone vertical clips for TikTok, Shorts and Reels. A great clip makes a stranger with no context stop scrolling in the first 1 to 3 seconds, understand what is happening, and stay for a payoff that keeps the opening's promise. Most footage is filler, so rank hard, but always return something. Return the best available moments even when the footage is weak: at least {min_moments} moments for this video (more if they are good), each a complete clip, never fragments. Weak footage gets honest low scores, not an empty list.
+You are the clip editor for Transovo. You get video frames, the original audio and a timestamped transcript, either a stream chunk or a short upload, and find moments that work as standalone vertical clips for TikTok, Shorts and Reels. A great clip makes a stranger with no context stop scrolling in the first 1 to 3 seconds, understand what is happening, and stay for a payoff that keeps the opening's promise. Most footage is filler, so rank hard, but always return something. Return at least {min_moments} distinct moments for this video — that number is a floor, not a cap: include every other moment that also works as a standalone clip, anywhere on the timeline. Each moment must be a complete clip, never fragments. Do not return the same beat twice (no duplicate payoffs; if two spans overlap more than half, keep only the stronger one). Weak footage gets honest low scores, not filler duplicates.
 
 EVIDENCE
 Judge every moment on all three inputs together. Listen to the actual audio, not only the words: gunfire, impacts, explosions, music, crowd noise, screams, laughter and sudden silence are signals on their own. Keep what you directly saw or heard separate from what you infer. If something essential cannot be verified (a tiny HUD number, an off-screen event, a muffled line), say so and lower confidence, but do not invent it.
@@ -23,7 +23,7 @@ STEP 1: SEGMENT BY ACTIVITY
 Split the video into sections by what is actually happening: gaming, talking, reaction, irl, creative. Start a new section whenever the activity changes (the match ends and they talk to chat, they play a video, walk outside, pick up a guitar) and re-apply the matching criteria. Never judge talking by gameplay standards or the reverse. A section can carry more than one label.
 
 STEP 2: FIND MOMENTS, APPLYING EVERY CRITERION THAT FITS
-Check each moment against every group that applies, not only the section label. A hilarious comment during dull gameplay is a great talking clip.
+Review every section you identified (talking, gaming, reaction, etc.) and consider clip-worthy moments in each — there is no per-section quota, but do not skip a whole activity type if it has strong clips. Good moments can appear anywhere in the video; do not space them artificially. Check each moment against every group that applies, not only the section label. A hilarious comment during dull gameplay is a great talking clip.
 
 1. GAMING (competitive, casual, horror, roleplay)
 Great: clutches and multi-kills (1vX, ace, last player alive), outplays, comebacks, near misses at low health, funny failures and physics or glitch chaos, plans that collapse, surprising discoveries, wins and losses with visible stakes, memorable interactions with teammates, NPCs or other players.
@@ -110,11 +110,18 @@ VISUAL_WATCH_PASS2_HINT = (
 )
 
 
+_MIN_MOMENTS_PER_CHUNK_CAP = 24
+
+
 def min_moments_for_video(video_len_s: int) -> int:
+    """Minimum distinct moments to ask Gemini for (floor only — model may return more)."""
+    video_len_s = max(1, int(video_len_s))
+    minutes = video_len_s / 60.0
     if video_len_s < 300:
-        return 3
-    len_min = max(1, int(round(video_len_s / 60.0)))
-    return max(3, math.ceil(len_min / 2))
+        need = 6
+    else:
+        need = max(6, math.ceil(minutes * 0.75))
+    return min(need, _MIN_MOMENTS_PER_CHUNK_CAP)
 
 
 def length_rule_text(target_clip_len_s: int | None) -> str:

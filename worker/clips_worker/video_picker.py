@@ -299,6 +299,37 @@ def _apply_max_span(
     return start, end, peak, hook
 
 
+def _moment_span_s(moment: dict) -> tuple[float, float]:
+    return float(moment["start_s"]), float(moment["end_s"])
+
+
+def _span_overlap_fraction(a: tuple[float, float], b: tuple[float, float]) -> float:
+    lo = max(a[0], b[0])
+    hi = min(a[1], b[1])
+    if hi <= lo:
+        return 0.0
+    overlap = hi - lo
+    shorter = min(a[1] - a[0], b[1] - b[0])
+    return overlap / max(shorter, 0.001)
+
+
+def dedupe_overlapping_video_picker_moments(
+    moments: list[dict],
+    *,
+    overlap_threshold: float = 0.5,
+) -> list[dict]:
+    """Drop >50% overlapping spans; keep higher score (counts as one beat toward min_moments)."""
+    ranked = sorted(moments, key=lambda m: -float(m.get("score") or 0))
+    kept: list[dict] = []
+    for m in ranked:
+        span = _moment_span_s(m)
+        if any(_span_overlap_fraction(span, _moment_span_s(k)) > overlap_threshold for k in kept):
+            continue
+        kept.append(m)
+    kept.sort(key=lambda x: -float(x.get("score") or 0))
+    return kept
+
+
 def validate_and_normalize_moments(
     raw: list[dict],
     duration_s: float,
@@ -1121,6 +1152,10 @@ def watch_video_file(
                     chunk_offset_s=0.0,
                     max_span_s=max_span,
                 )
+                raw_count = len(moments)
+                moments = dedupe_overlapping_video_picker_moments(moments)
+                if raw_count != len(moments):
+                    meta["moments_deduped"] = {"before": raw_count, "after": len(moments)}
                 if not moments:
                     model_failed_reason = "no_valid_moments_after_normalize"
                     parsed_ok = None
