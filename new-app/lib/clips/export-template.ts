@@ -5,6 +5,7 @@ import {
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
 import { clipDisplayTitle, isInternalClipReasoningText } from '@/lib/clips/clip-results-chips'
+import { layoutReservesHeadlineBand } from '@/lib/clips/layout-preview'
 
 export const EXPORT_HEADLINE_MAX_REGENERATIONS = 5
 
@@ -68,6 +69,11 @@ const SPLIT_LAYOUT_MODES = new Set([
   'grid',
   'two_up',
 ])
+
+/** Editor + preview: headline band is allowed and reserved for this layout. */
+export function editorHeadlineBandAllowed(mode: ClipEditsV2['layout']['mode'] | string): boolean {
+  return headlineBarAllowedForLayout(mode) && layoutReservesHeadlineBand(mode)
+}
 
 /** Headline bar only on single-view layouts (export-time rule). */
 export function headlineBarAllowedForLayout(mode: ClipEditsV2['layout']['mode'] | string): boolean {

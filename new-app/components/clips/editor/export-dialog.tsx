@@ -36,6 +36,7 @@ import {
 } from '@/lib/clips/export-preferences-sync'
 import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
 import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
+import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import {
   exportSfxBundledAssetsAvailable,
   normalizeExportSfxMode,
@@ -190,6 +191,14 @@ export function ExportDialog({
           if (typeof r.progress === 'number') setRenderProgress(r.progress)
           if (r.phase) setRenderPhase(r.phase)
           if (typeof r.etaSec === 'number') setRenderEtaSec(r.etaSec)
+          logEditorDecision('export_progress', {
+            clipId,
+            renderId,
+            status: r.status,
+            progress: r.progress ?? null,
+            phase: r.phase ?? null,
+            etaSec: r.etaSec ?? null,
+          })
           if (r.status === 'FAILED') {
             const msg = r.error || 'Export failed'
             setErrorDetail(msg)
@@ -248,6 +257,15 @@ export function ExportDialog({
           : formattedTpl,
       }
       await patchClip(clipId, { edits: { exportTemplate: exportEdits.exportTemplate } })
+      logEditorDecision('export_request', {
+        clipId,
+        resolution: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].resolution : resolution,
+        aspect: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].aspect : aspect,
+        exportPlatform: exportPlatform !== 'none' ? exportPlatform : null,
+        removeDeadAir,
+        exportSfx,
+        durationMs: outputDurationMs(exportEdits),
+      })
       const data = await exportClipWithOptions(clipId, {
         resolution: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].resolution : resolution,
         aspect: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].aspect : aspect,

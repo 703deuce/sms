@@ -1,31 +1,34 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { isInternalClipReasoningText } from '@/lib/clips/clip-results-chips'
 import {
   cheapSuggestedHeadline,
+  editorHeadlineBandAllowed,
   formatHeadlineForExport,
   headlineBarAllowedForLayout,
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
-import { layoutReservesHeadlineBand } from '@/lib/clips/layout-preview'
+import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 
-function headlineLayoutMode(mode: ClipEditsV2['layout']['mode']): boolean {
-  return layoutReservesHeadlineBand(mode) || mode === 'fit_top'
-}
-
-/** Prefill exportTemplate headline from aiMeta hook once; never overwrites user text. */
+/** Prefill exportTemplate headline from clip title + aiMeta once; never overwrites valid user text. */
 export function seedEditorExportTemplate(
   edits: ClipEditsV2,
-  aiMeta: unknown,
+  clip: { title: string; aiMeta?: unknown },
   opts?: { platform?: 'twitch' | 'kick'; channelUrl?: string | null },
 ): ClipEditsV2 {
-  const hook = cheapSuggestedHeadline({ title: '', aiMeta }).trim()
+  const hook = cheapSuggestedHeadline(clip).trim()
   if (!hook) return edits
 
   const cur = edits.exportTemplate
-  const suggested = cur?.suggestedHeadline?.trim() || hook
+  const storedSuggested = cur?.suggestedHeadline?.trim()
+  const suggested =
+    storedSuggested && !isInternalClipReasoningText(storedSuggested) ? storedSuggested : hook
   const existingText = cur?.headlineBar?.text?.trim()
-  const text = existingText || formatHeadlineForExport(suggested)
+  const text =
+    existingText && !isInternalClipReasoningText(existingText)
+      ? formatHeadlineForExport(existingText)
+      : formatHeadlineForExport(suggested)
   const layoutOk = headlineBarAllowedForLayout(edits.layout.mode)
-  const showBand = layoutOk && headlineLayoutMode(edits.layout.mode)
+  const showBand = editorHeadlineBandAllowed(edits.layout.mode)
   const enabled =
     cur?.headlineBar?.enabled === true
       ? true
@@ -55,6 +58,14 @@ export function seedEditorExportTemplate(
   ) {
     return edits
   }
+
+  logEditorDecision('headline_seed', {
+    clipTitle: clip.title,
+    source: storedSuggested && !isInternalClipReasoningText(storedSuggested) ? 'stored' : 'clip_meta',
+    suggestedHeadline: suggested,
+    layoutMode: edits.layout.mode,
+    showBand,
+  })
 
   return { ...edits, exportTemplate: nextTpl }
 }

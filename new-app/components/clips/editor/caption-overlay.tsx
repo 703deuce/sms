@@ -2,10 +2,11 @@
 
 import './caption-anim.css'
 
-import { useMemo } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { wordKey } from '@/lib/clips/edits'
 import { activeCaptionWordIndex, captionEmojiForWord } from '@/lib/clips/caption-overlay-active'
+import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { resolvePreset, type CaptionPreset } from '@/lib/clips/caption-presets'
 import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 
@@ -47,6 +48,17 @@ export function CaptionOverlay({
   const emphasis = new Set(cap.emphasis ?? [])
 
   const activeIdx = activeCaptionWordIndex(words, currentTimeSec)
+  const lastMissLog = useRef(0)
+  useEffect(() => {
+    if (activeIdx >= 0 || words.length === 0 || currentTimeSec <= 0.05) return
+    const tMs = Math.round(currentTimeSec * 1000)
+    const inRange = words.some((w) => w.s * 1000 <= tMs && w.e * 1000 >= tMs)
+    if (!inRange) return
+    const now = Date.now()
+    if (now - lastMissLog.current < 2000) return
+    lastMissLog.current = now
+    logEditorDecision('caption_active_miss', { timeMs: tMs, wordCount: words.length })
+  }, [activeIdx, currentTimeSec, words])
   const lineStart = activeIdx >= 0 ? Math.floor(activeIdx / wpl) * wpl : 0
   const lineWords = useMemo(
     () => words.slice(lineStart, lineStart + wpl),
