@@ -9,9 +9,12 @@ from typing import Any
 from clips_worker.storage import download_object
 from clips_worker.streamer.audio_first_ingest import ingest_clip_section_video
 from clips_worker.video_picker import (
+    attach_absolute_ms,
     make_watch_proxy,
+    merge_stream_moments,
     moments_to_per_second,
     video_picker_enabled,
+    video_picker_stream_overlap_s,
     watch_video_file,
 )
 
@@ -42,8 +45,9 @@ def stream_chunk_video_signals(
     ranges: list[tuple[int, int]],
     scratch: Path,
     job_id: str,
+    target_clip_len_s: int | None = None,
 ) -> tuple[list[float] | None, list[dict], dict[str, Any]]:
-    """Returns slice-relative 1Hz video curve, flat moments (ms), aggregate cost meta."""
+    """Returns slice-relative 1Hz video curve, flat moments (vod-relative ms), aggregate cost meta."""
     empty_meta: dict[str, Any] = {"chunks": 0, "ok_chunks": 0, "est_usd": 0.0}
     if not video_picker_enabled() or not ranges:
         return None, [], empty_meta
@@ -56,6 +60,7 @@ def stream_chunk_video_signals(
     workers = max(1, min(4, int(os.environ.get("VIDEO_PICKER_CHUNK_CONCURRENCY", "3"))))
     chunk_dir = scratch / "video_picker_chunks"
     chunk_dir.mkdir(parents=True, exist_ok=True)
+    overlap_s = video_picker_stream_overlap_s()
 
     def _one(idx: int, start_ms: int, end_ms: int) -> tuple[int, list[dict], list[float], dict]:
         rel_start_s = start_ms / 1000.0
@@ -81,14 +86,29 @@ def stream_chunk_video_signals(
             )
         else:
             return idx, [], [0.0], {"ok": False, "error": "no_video_source"}
-        moments, meta = watch_video_file(proxy, duration_s=chunk_s, chunk_label=f"stream_{idx}")
+        moments, meta = watch_video_file(
+            proxy,
+            duration_s=chunk_s,
+            chunk_label=f"stream_{idx}",
+            target_clip_len_s=target_clip_len_s,
+        )
         for m in moments:
-            try:
-                m["t_s"] = float(m.get("t_s") or 0) + rel_start_s
-            except (TypeError, ValueError):
-                pass
+            for key in ("start_s", "end_s", "peak_s", "hook_s", "t_s"):
+                try:
+                    m[key] = float(m.get(key) or 0) + rel_start_s
+                except (TypeError, ValueError):
+                    pass
         curve = moments_to_per_second(
-            [{"t_s": float(m.get("t_s") or 0) - rel_start_s, "score": m.get("score")} for m in moments],
+            [
+                {
+                    **m,
+                    "start_s": float(m.get("start_s", 0)) - rel_start_s,
+                    "end_s": float(m.get("end_s", 0)) - rel_start_s,
+                    "peak_s": float(m.get("peak_s", 0)) - rel_start_s,
+                    "score": m.get("score"),
+                }
+                for m in moments
+            ],
             chunk_s,
         )
         return idx, moments, curve, meta
@@ -112,22 +132,14 @@ def stream_chunk_video_signals(
             total_usd += float(meta.get("est_usd") or 0)
             start_ms = ranges[idx][0]
             off = start_ms // 1000
-            for m in moments:
-                try:
-                    t_s = float(m.get("t_s") or 0)
-                except (TypeError, ValueError):
-                    continue
-                all_moments.append(
-                    {
-                        "t_ms": int(round(t_s * 1000)),
-                        "reason": str(m.get("reason") or "")[:200],
-                        "score": float(m.get("score") or 0),
-                    }
-                )
+            all_moments.extend(moments)
             for i, val in enumerate(curve):
                 ti = off + i
                 if 0 <= ti < duration_s:
                     merged[ti] = max(merged[ti], float(val))
+    all_moments = merge_stream_moments(all_moments, overlap_s)
+    vod_range_start_ms = vod_start_ms
+    attach_absolute_ms(all_moments, vod_range_start_ms)
     agg = {"chunks": len(ranges), "ok_chunks": ok_chunks, "est_usd": round(total_usd, 6)}
     if ok_chunks == 0:
         from clips_worker.picker.picker_errors import log_picker_error

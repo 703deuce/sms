@@ -20,6 +20,7 @@ from clips_worker.picker.titles import SHORT_SOURCE_MAX_MS, strip_internal_sente
 from clips_worker.picker.sentences import Sentence
 from clips_worker.picker.signals import SentenceSignals
 from clips_worker.target_clip_len import ClipLengthPolicy
+from clips_worker.video_picker import VISUAL_WATCH_PASS2_HINT
 
 
 def _pass2_clip_item_schema(*, boundary_fields: bool, batched: bool = False) -> dict[str, Any]:
@@ -291,10 +292,10 @@ def _score_moments_batched(
     user_body = json.dumps(blocks, indent=0)
     if video_context:
         user_body = (
-            "Full judge context: score each moment using transcript + visual watch together. "
+            f"{VISUAL_WATCH_PASS2_HINT}\n"
             "Set setup_start_s and payoff_end_s per clip (absolute seconds from source start; "
             "match transcript timestamps).\n"
-            f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user_body}"
+            f"Visual moments (Gemini spans):\n{video_context}\n\n{user_body}"
         )
     data = chat_json(
         _pass2_system(genre, batched=True, length_policy=length_policy),
@@ -446,9 +447,8 @@ def score_moments(
         user = json.dumps([block], indent=0)
         if video_context:
             user = (
-                "Full judge context: include setup_start_s and payoff_end_s (absolute source seconds) "
-                "from visual watch.\n"
-                f"Visual moments (Gemini, timestamped):\n{video_context}\n\n{user}"
+                f"{VISUAL_WATCH_PASS2_HINT}\n"
+                f"Visual moments (Gemini spans):\n{video_context}\n\n{user}"
             )
         data = chat_json(
             _pass2_system(genre, length_policy=length_policy),

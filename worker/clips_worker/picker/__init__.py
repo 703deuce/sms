@@ -111,6 +111,7 @@ def pick_talking_clips(
                 range_start_ms=range_start_ms,
                 range_end_ms=range_end_ms,
                 scratch=scratch_vp,
+                target_clip_len_s=settings.get("target_clip_len_s"),
             )
             record_video_picker_stats(vp_meta, vm or [], range_start_ms=range_start_ms)
             if vp_meta.get("ok") and vm:

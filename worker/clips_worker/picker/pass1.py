@@ -91,7 +91,7 @@ def find_moments(
             sentences_in_chunk=len(chunk),
             transcript_chars=len(transcript),
         )
-        from clips_worker.video_picker import format_moments_for_window
+        from clips_worker.video_picker import VISUAL_WATCH_PASS1_HINT, format_moments_for_window
 
         visual_block = ""
         if visual_moments:
@@ -103,9 +103,7 @@ def find_moments(
             )
             if slice_txt:
                 visual_block = (
-                    "\n\nVisual watch (Gemini; t_s seconds from source range start). "
-                    "Propose visual-only and low-speech gameplay moments; do not skip fights "
-                    "just because the transcript is quiet in that window:\n"
+                    f"\n\n{VISUAL_WATCH_PASS1_HINT}\n"
                     f"{slice_txt}\n"
                 )
         length_hint = f"\n{length_policy.pass1_length_hint()}\n" if length_policy else ""

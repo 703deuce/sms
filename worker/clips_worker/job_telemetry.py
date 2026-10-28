@@ -34,10 +34,10 @@ def record_video_picker_stats(
     ts: list[float] = []
     for m in moments[:48]:
         try:
-            if m.get("t_ms") is not None:
-                ts.append(round((int(m["t_ms"]) - range_start_ms) / 1000.0, 2))
-            else:
-                ts.append(round(float(m.get("t_s") or 0), 2))
+            peak = float(m.get("peak_s") or m.get("t_s") or 0)
+            if m.get("peak_ms") is not None:
+                peak = (int(m["peak_ms"]) - range_start_ms) / 1000.0
+            ts.append(round(peak, 2))
         except (TypeError, ValueError):
             continue
     payload = {

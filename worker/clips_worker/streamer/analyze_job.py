@@ -302,12 +302,9 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
             from clips_worker.streamer.video_picker_stream import stream_chunk_video_signals
 
             if video_picker_enabled():
-                plan_ranges = [
-                    (int(r["startMs"]), int(r["endMs"]))
-                    for r in (state.get("chunkPlan") or {}).get("ranges") or []
-                ]
-                if not plan_ranges:
-                    plan_ranges = [(0, duration_ms)]
+                from clips_worker.video_picker import resolve_video_picker_stream_ranges
+
+                plan_ranges = resolve_video_picker_stream_ranges(duration_ms)
                 with stage_span("video_picker", heartbeat=True, chunks=len(plan_ranges)):
                     video_signal, video_moments, _vp_cost = stream_chunk_video_signals(
                         vod=vod,
@@ -315,6 +312,7 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
                         ranges=plan_ranges,
                         scratch=scratch,
                         job_id=str(job["id"]),
+                        target_clip_len_s=settings.get("target_clip_len_s"),
                     )
             with stage_span("rank_moments", heartbeat=True):
                 picks, signals_payload = rank_moments(

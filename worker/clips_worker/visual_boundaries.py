@@ -68,12 +68,22 @@ def infer_boundaries_from_moments(
 ) -> tuple[int | None, int | None]:
     if not video_moments:
         return None, None
+    from clips_worker.video_picker import moment_abs_span_ms
+
     lead_ms, tail_ms = _lead_tail_ms()
+    span_lo: int | None = None
+    span_hi: int | None = None
     hits: list[int] = []
     for m in video_moments:
-        t_ms = absolute_moment_ms(m, range_start_ms)
-        if start_ms - pad_ms <= t_ms <= end_ms + pad_ms:
-            hits.append(t_ms)
+        s_ms, e_ms = moment_abs_span_ms(m, range_start_ms)
+        if e_ms >= start_ms - pad_ms and s_ms <= end_ms + pad_ms:
+            if e_ms > s_ms + 2000:
+                span_lo = s_ms if span_lo is None else min(span_lo, s_ms)
+                span_hi = e_ms if span_hi is None else max(span_hi, e_ms)
+            else:
+                hits.append(absolute_moment_ms(m, range_start_ms))
+    if span_lo is not None and span_hi is not None:
+        return max(range_start_ms, span_lo), span_hi + tail_ms
     if not hits:
         return None, None
     setup = max(range_start_ms, min(hits) - lead_ms)

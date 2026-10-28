@@ -13,32 +13,68 @@ import requests
 
 from clips_worker.gemini_vision import GEMINI_BASE, _key, discover_video_picker_model
 from clips_worker.stage_log import stage_begin, stage_end
+from clips_worker.video_picker_prompt import (
+    VISUAL_WATCH_PASS1_HINT,
+    VISUAL_WATCH_PASS2_HINT,
+    build_video_picker_system_prompt,
+)
 
-MOMENTS_SCHEMA: dict[str, Any] = {
+_MIN_MOMENT_S = 5.0
+
+_CATEGORY_ITEM = {"type": "string"}
+
+WATCH_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
+        "sections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "start_s": {"type": "number"},
+                    "end_s": {"type": "number"},
+                    "activity": {"type": "string"},
+                },
+                "required": ["start_s", "end_s", "activity"],
+            },
+        },
         "moments": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "t_s": {"type": "number"},
-                    "reason": {"type": "string"},
+                    "start_s": {"type": "number"},
+                    "end_s": {"type": "number"},
+                    "peak_s": {"type": "number"},
+                    "hook_s": {"type": "number"},
+                    "category": {"type": "array", "items": _CATEGORY_ITEM},
+                    "what_happened": {"type": "string"},
+                    "why_it_works": {"type": "string"},
+                    "touches_edge": {
+                        "type": "string",
+                        "enum": ["none", "start", "end"],
+                    },
                     "score": {"type": "number"},
                 },
-                "required": ["t_s", "reason", "score"],
+                "required": [
+                    "start_s",
+                    "end_s",
+                    "peak_s",
+                    "hook_s",
+                    "category",
+                    "what_happened",
+                    "why_it_works",
+                    "touches_edge",
+                    "score",
+                ],
             },
-        }
+        },
     },
-    "required": ["moments"],
+    "required": ["sections", "moments"],
 }
 
-_SYSTEM = (
-    "You watch short-form video for stream/game highlights. "
-    "Find visually or emotionally notable moments (gameplay plays, reactions, jump scares, "
-    "alerts, face reactions, chat on screen) even when nobody is talking. "
-    "Return JSON only. score is 0.0-1.0. t_s is seconds from the start of this clip."
-)
+# Back-compat alias
+MOMENTS_SCHEMA = WATCH_RESPONSE_SCHEMA
 
 
 def video_picker_enabled() -> bool:
@@ -54,7 +90,6 @@ def video_picker_timeout_s() -> float:
 
 
 def video_picker_fps() -> float:
-    """Gemini video_metadata.fps — higher samples fast gameplay beats (default 0.5, cap 1.0)."""
     try:
         return min(1.0, max(0.1, float(os.environ.get("VIDEO_PICKER_FPS", "0.5"))))
     except ValueError:
@@ -64,6 +99,25 @@ def video_picker_fps() -> float:
 def video_picker_keep_audio() -> bool:
     raw = (os.environ.get("VIDEO_PICKER_KEEP_AUDIO") or "true").strip().lower()
     return raw not in ("0", "false", "no", "off")
+
+
+def video_picker_media_resolution() -> str:
+    raw = (os.environ.get("VIDEO_PICKER_MEDIA_RES") or "MEDIA_RESOLUTION_LOW").strip().upper()
+    if raw in ("LOW", "MEDIA_RESOLUTION_LOW"):
+        return "MEDIA_RESOLUTION_LOW"
+    if raw in ("MEDIUM", "MEDIA_RESOLUTION_MEDIUM"):
+        return "MEDIA_RESOLUTION_MEDIUM"
+    if raw in ("HIGH", "MEDIA_RESOLUTION_HIGH"):
+        return "MEDIA_RESOLUTION_HIGH"
+    return raw if raw.startswith("MEDIA_RESOLUTION_") else "MEDIA_RESOLUTION_LOW"
+
+
+def video_picker_stream_overlap_s() -> float:
+    try:
+        v = float(os.environ.get("VIDEO_PICKER_STREAM_OVERLAP_S", "45"))
+    except ValueError:
+        v = 45.0
+    return max(30.0, min(60.0, v))
 
 
 def estimate_gemini_usd(prompt_tokens: int, output_tokens: int) -> float:
@@ -129,29 +183,119 @@ def make_watch_proxy(
     subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+def validate_and_normalize_moments(
+    raw: list[dict],
+    duration_s: float,
+    *,
+    chunk_offset_s: float = 0.0,
+) -> list[dict]:
+    """Clamp times, enforce ordering, drop spans <5s; add legacy t_s/reason fields."""
+    dur = max(1.0, float(duration_s))
+    out: list[dict] = []
+    for row in raw:
+        try:
+            start = _clamp(float(row.get("start_s", 0)), 0.0, dur)
+            end = _clamp(float(row.get("end_s", start)), 0.0, dur)
+            peak = float(row.get("peak_s", (start + end) / 2))
+            hook = float(row.get("hook_s", start))
+        except (TypeError, ValueError):
+            continue
+        if end <= start or (end - start) < _MIN_MOMENT_S:
+            continue
+        peak = _clamp(peak, 0.0, dur - 0.001)
+        hook = _clamp(hook, 0.0, dur)
+        start = _clamp(start, 0.0, dur)
+        end = _clamp(end, 0.0, dur)
+        if not (start <= hook <= peak < end):
+            hook = _clamp(hook, start, end - 0.001)
+            peak = _clamp(peak, hook, end - 0.001)
+            if not (start <= hook <= peak < end):
+                peak = _clamp((start + end) / 2, start + 0.001, end - 0.001)
+                hook = _clamp(start + 0.5 * (peak - start), start, peak)
+        if not (start <= hook <= peak < end):
+            continue
+        score = max(0.0, min(1.0, float(row.get("score") or 0)))
+        edge = str(row.get("touches_edge") or "none").lower()
+        if edge not in ("none", "start", "end"):
+            edge = "none"
+        cats = row.get("category") or []
+        if isinstance(cats, str):
+            cats = [c.strip() for c in cats.split("+") if c.strip()]
+        what = str(row.get("what_happened") or "").strip()
+        why = str(row.get("why_it_works") or "").strip()
+        m = {
+            "start_s": round(start + chunk_offset_s, 3),
+            "end_s": round(end + chunk_offset_s, 3),
+            "peak_s": round(peak + chunk_offset_s, 3),
+            "hook_s": round(hook + chunk_offset_s, 3),
+            "category": list(cats)[:6],
+            "what_happened": what[:1200],
+            "why_it_works": why[:600],
+            "touches_edge": edge,
+            "score": round(score, 3),
+            "t_s": round(peak + chunk_offset_s, 3),
+            "reason": (what or why)[:200],
+        }
+        out.append(m)
+    out.sort(key=lambda x: -float(x.get("score") or 0))
+    return out
+
+
+def attach_absolute_ms(moments: list[dict], range_start_ms: int) -> None:
+    for m in moments:
+        try:
+            m["start_ms"] = range_start_ms + int(float(m["start_s"]) * 1000)
+            m["end_ms"] = range_start_ms + int(float(m["end_s"]) * 1000)
+            m["peak_ms"] = range_start_ms + int(float(m["peak_s"]) * 1000)
+            m["hook_ms"] = range_start_ms + int(float(m["hook_s"]) * 1000)
+            m["t_ms"] = m["peak_ms"]
+        except (TypeError, ValueError):
+            pass
+
+
+def moment_abs_span_ms(moment: dict, range_start_ms: int = 0) -> tuple[int, int]:
+    if moment.get("start_ms") is not None and moment.get("end_ms") is not None:
+        return int(moment["start_ms"]), int(moment["end_ms"])
+    try:
+        lo = range_start_ms + int(float(moment.get("start_s", moment.get("t_s", 0))) * 1000)
+        hi = range_start_ms + int(float(moment.get("end_s", moment.get("t_s", 0))) * 1000)
+        if hi > lo:
+            return lo, hi
+    except (TypeError, ValueError):
+        pass
+    t = absolute_moment_ms(moment, range_start_ms)
+    return t, t + 1000
+
+
 def moments_to_per_second(moments: list[dict], duration_s: int) -> list[float]:
     n = max(1, duration_s)
     curve = [0.0] * n
     for m in moments:
         try:
-            t = int(float(m.get("t_s") or 0))
             sc = float(m.get("score") or 0)
+            peak = int(float(m.get("peak_s") or m.get("t_s") or 0))
+            start = int(float(m.get("start_s") or peak))
+            end = int(float(m.get("end_s") or peak + 1))
         except (TypeError, ValueError):
             continue
         sc = max(0.0, min(1.0, sc))
-        for dt in range(-2, 3):
-            ti = t + dt
-            if 0 <= ti < n:
-                decay = 1.0 - abs(dt) * 0.2
-                curve[ti] = max(curve[ti], sc * decay)
+        for ti in range(max(0, start), min(n, end + 1)):
+            decay = 1.0 if ti == peak else 0.65
+            curve[ti] = max(curve[ti], sc * decay)
     return curve
 
 
 def absolute_moment_ms(moment: dict, range_start_ms: int = 0) -> int:
+    if moment.get("peak_ms") is not None:
+        return int(moment["peak_ms"])
     if moment.get("t_ms") is not None:
         return int(moment["t_ms"])
     try:
-        return range_start_ms + int(float(moment.get("t_s") or 0) * 1000)
+        return range_start_ms + int(float(moment.get("peak_s") or moment.get("t_s") or 0) * 1000)
     except (TypeError, ValueError):
         return range_start_ms
 
@@ -160,13 +304,22 @@ def format_moments_for_llm(moments: list[dict], limit: int = 40) -> str:
     lines: list[str] = []
     for m in moments[:limit]:
         try:
-            t = float(m.get("t_s") or 0)
+            ss = float(m.get("start_s", 0))
+            es = float(m.get("end_s", ss))
+            peak = float(m.get("peak_s") or m.get("t_s") or ss)
+            hook = float(m.get("hook_s") or ss)
             sc = float(m.get("score") or 0)
         except (TypeError, ValueError):
             continue
-        reason = str(m.get("reason") or "").strip()[:160]
-        if reason:
-            lines.append(f"- {t:.1f}s score={sc:.2f}: {reason}")
+        cats = m.get("category") or []
+        cat_s = ",".join(cats) if isinstance(cats, list) else str(cats)
+        what = str(m.get("what_happened") or m.get("reason") or "").strip()[:220]
+        edge = m.get("touches_edge") or "none"
+        if what:
+            lines.append(
+                f"- {ss:.1f}-{es:.1f}s peak={peak:.1f} hook={hook:.1f} score={sc:.2f} "
+                f"[{cat_s}] edge={edge}: {what}"
+            )
     return "\n".join(lines)
 
 
@@ -176,16 +329,76 @@ def format_moments_for_window(
     hi_ms: int,
     *,
     range_start_ms: int = 0,
-    pad_ms: int = 8000,
+    pad_ms: int = 0,
     limit: int = 24,
 ) -> str:
-    """Timestamped visual notes for a transcript chunk (absolute ms on source)."""
+    """Moments whose span overlaps the transcript chunk (not point-in-pad)."""
     picked: list[dict] = []
     for m in moments:
-        t_ms = absolute_moment_ms(m, range_start_ms)
-        if lo_ms - pad_ms <= t_ms <= hi_ms + pad_ms:
-            picked.append({**m, "t_s": (t_ms - range_start_ms) / 1000.0})
+        s_ms, e_ms = moment_abs_span_ms(m, range_start_ms)
+        if e_ms < lo_ms - pad_ms or s_ms > hi_ms + pad_ms:
+            continue
+        rel = dict(m)
+        rel["start_s"] = (s_ms - range_start_ms) / 1000.0
+        rel["end_s"] = (e_ms - range_start_ms) / 1000.0
+        picked.append(rel)
     return format_moments_for_llm(picked, limit=limit)
+
+
+def merge_stream_moments(moments: list[dict], overlap_s: float) -> list[dict]:
+    """Dedupe by peak_s within overlap; stitch touches_edge pairs when adjacent."""
+    if not moments:
+        return []
+    ranked = sorted(moments, key=lambda m: -float(m.get("score") or 0))
+    kept: list[dict] = []
+    for m in ranked:
+        try:
+            peak = float(m.get("peak_s"))
+        except (TypeError, ValueError):
+            continue
+        if any(abs(peak - float(k.get("peak_s") or 0)) < overlap_s for k in kept):
+            continue
+        kept.append(dict(m))
+    kept.sort(key=lambda m: float(m.get("start_s") or 0))
+    stitched: list[dict] = []
+    i = 0
+    while i < len(kept):
+        cur = dict(kept[i])
+        if i + 1 < len(kept):
+            nxt = kept[i + 1]
+            if cur.get("touches_edge") == "end" and nxt.get("touches_edge") == "start":
+                try:
+                    if float(nxt.get("start_s")) - float(cur.get("end_s")) < overlap_s * 2:
+                        merged = dict(cur)
+                        merged["end_s"] = max(float(cur["end_s"]), float(nxt["end_s"]))
+                        merged["peak_s"] = max(float(cur["peak_s"]), float(nxt["peak_s"]))
+                        merged["score"] = max(float(cur.get("score") or 0), float(nxt.get("score") or 0)) * 0.95
+                        merged["touches_edge"] = "none"
+                        merged["what_happened"] = (
+                            f"{cur.get('what_happened', '')} | {nxt.get('what_happened', '')}"
+                        )[:1200]
+                        merged["t_s"] = merged["peak_s"]
+                        merged["reason"] = str(merged.get("what_happened") or "")[:200]
+                        stitched.append(merged)
+                        i += 2
+                        continue
+                except (TypeError, ValueError):
+                    pass
+        stitched.append(cur)
+        i += 1
+    return stitched
+
+
+def resolve_video_picker_stream_ranges(duration_ms: int) -> list[tuple[int, int]]:
+    from clips_worker.streamer.chunking import plan_chunks
+
+    try:
+        chunk_min = max(5, int(os.environ.get("VIDEO_PICKER_STREAM_CHUNK_MIN", "15")))
+    except ValueError:
+        chunk_min = 15
+    chunk_ms = chunk_min * 60_000
+    overlap_ms = int(video_picker_stream_overlap_s() * 1000)
+    return plan_chunks(max(1, duration_ms), chunk_ms, overlap_ms)
 
 
 def _gemini_transient_status(status: int) -> bool:
@@ -204,6 +417,7 @@ def watch_video_file(
     *,
     duration_s: int,
     chunk_label: str = "upload",
+    target_clip_len_s: int | None = None,
 ) -> tuple[list[dict], dict[str, Any]]:
     """Gemini Flash video watch. Fail-open after retries: log error, return empty moments."""
     meta: dict[str, Any] = {
@@ -214,6 +428,7 @@ def watch_video_file(
         "est_usd": 0.0,
         "model": "",
         "ok": False,
+        "target_clip_len_s": target_clip_len_s,
     }
     if not video_picker_enabled():
         return [], meta
@@ -245,12 +460,12 @@ def watch_video_file(
     try:
         model = discover_video_picker_model()
         meta["model"] = model
-        raw = video_path.read_bytes()
-        if len(raw) > 18 * 1024 * 1024:
+        raw_bytes = video_path.read_bytes()
+        if len(raw_bytes) > 18 * 1024 * 1024:
             slim = video_path.parent / f"{video_path.stem}_slim.mp4"
             make_watch_proxy(video_path, slim, 0.0, float(duration_s))
-            raw = slim.read_bytes()
-        b64 = base64.b64encode(raw).decode("ascii")
+            raw_bytes = slim.read_bytes()
+        b64 = base64.b64encode(raw_bytes).decode("ascii")
         fps = video_picker_fps()
         meta["fps"] = fps
         meta["frames_est"] = max(1, int(duration_s * fps))
@@ -258,14 +473,15 @@ def watch_video_file(
             "inline_data": {"mime_type": "video/mp4", "data": b64},
             "video_metadata": {"fps": fps},
         }
+        system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
         generation_config: dict[str, Any] = {
             "responseMimeType": "application/json",
-            "responseSchema": MOMENTS_SCHEMA,
+            "responseSchema": WATCH_RESPONSE_SCHEMA,
             "temperature": 0.35,
-            "mediaResolution": "MEDIA_RESOLUTION_LOW",
+            "mediaResolution": video_picker_media_resolution(),
         }
         payload = {
-            "systemInstruction": {"parts": [{"text": _SYSTEM}]},
+            "systemInstruction": {"parts": [{"text": system}]},
             "contents": [
                 {
                     "role": "user",
@@ -273,9 +489,8 @@ def watch_video_file(
                         part,
                         {
                             "text": (
-                                f"Video length about {duration_s}s. "
-                                "List notable visual moments with t_s in seconds from the start of this clip. "
-                                "Include quiet gameplay (fights, clutches, wipes) even when speech is sparse."
+                                "Watch the attached video and transcript cues in the frames. "
+                                "Return sections and moments JSON for this clip only."
                             ),
                         },
                     ],
@@ -298,9 +513,9 @@ def watch_video_file(
                     time.sleep(2**attempt)
                     continue
                 if not res.ok:
-                    raw = res.text or res.reason or "error"
-                    summary, quota = gemini_error_log_fields(raw)
-                    last_err = summary or raw[:300]
+                    err_body = res.text or res.reason or "error"
+                    summary, quota = gemini_error_log_fields(err_body)
+                    last_err = summary or err_body[:300]
                     last_status = res.status_code
                     return _fail_open(last_err, res.status_code, quota or None)
                 data = res.json()
@@ -312,7 +527,12 @@ def watch_video_file(
                 meta["est_usd"] = round(estimate_gemini_usd(pt, ot), 6)
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
                 parsed = json.loads(text)
-                moments = list(parsed.get("moments") or [])
+                meta["sections_count"] = len(parsed.get("sections") or [])
+                moments = validate_and_normalize_moments(
+                    list(parsed.get("moments") or []),
+                    float(duration_s),
+                    chunk_offset_s=0.0,
+                )
                 meta["ok"] = True
                 stage_end(
                     "video_picker",
@@ -342,17 +562,30 @@ def watch_upload_range(
     range_start_ms: int,
     range_end_ms: int,
     scratch: Path,
+    target_clip_len_s: int | None = None,
 ) -> tuple[list[dict], list[float], dict[str, Any]]:
     start_s = max(0.0, range_start_ms / 1000.0)
     end_s = range_end_ms / 1000.0 if range_end_ms > range_start_ms else start_s + 60.0
     duration_s = max(1, int(end_s - start_s))
     proxy = scratch / "video_picker_upload.mp4"
     make_watch_proxy(src_video, proxy, start_s, end_s)
-    moments, meta = watch_video_file(proxy, duration_s=duration_s, chunk_label="regular")
-    for m in moments:
-        try:
-            m["t_ms"] = range_start_ms + int(float(m.get("t_s") or 0) * 1000)
-        except (TypeError, ValueError):
-            pass
-    curve = moments_to_per_second(moments, duration_s)
+    moments, meta = watch_video_file(
+        proxy,
+        duration_s=duration_s,
+        chunk_label="regular",
+        target_clip_len_s=target_clip_len_s,
+    )
+    attach_absolute_ms(moments, range_start_ms)
+    curve = moments_to_per_second(
+        [
+            {
+                **m,
+                "start_s": float(m["start_s"]) - start_s,
+                "end_s": float(m["end_s"]) - start_s,
+                "peak_s": float(m["peak_s"]) - start_s,
+            }
+            for m in moments
+        ],
+        duration_s,
+    )
     return moments, curve, meta
