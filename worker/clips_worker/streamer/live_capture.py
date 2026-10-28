@@ -13,7 +13,6 @@ from clips_worker.streamer.rolling_ingest import (
     emit_rolling_session_check,
     log_rolling_pull,
     rolling_chunk_min,
-    rolling_min_new_ms_for_state,
 )
 
 
@@ -69,15 +68,11 @@ def plan_live_capture_window_ms(
             return None
         return last_pulled, elapsed
 
-    min_new = rolling_min_new_ms_for_state(state)
-    if last_pulled > 0 and elapsed < last_pulled + min_new:
-        return None
-
     if last_pulled <= 0:
-        start_ms = elapsed
+        start_ms = max(0, elapsed - chunk_ms)
     else:
         start_ms = last_pulled
-    end_ms = start_ms + chunk_ms
+    end_ms = min(elapsed, start_ms + chunk_ms)
     if end_ms <= start_ms:
         return None
 

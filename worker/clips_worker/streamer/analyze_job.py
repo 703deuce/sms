@@ -115,12 +115,22 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
 
     settings = enrich_settings_with_clip_length(settings, payload)
 
-    audio_key = state.get("audioKey") or stream_audio_key(workspace_id, vod_id)
-    duration_ms = int(vod.get("durationMs") or 0)
-    if not duration_ms:
-        raise RuntimeError("missing durationMs on vod")
+    window_start_ms = int(payload.get("rangeStartMs") if payload.get("rangeStartMs") is not None else (vod.get("rangeStartMs") or 0))
+    window_end_ms = int(
+        payload.get("rangeEndMs")
+        if payload.get("rangeEndMs") is not None
+        else (vod.get("rangeEndMs") or vod.get("durationMs") or 0)
+    )
+    audio_key = str(payload.get("audioKey") or state.get("audioKey") or stream_audio_key(workspace_id, vod_id))
+    duration_ms = max(1, window_end_ms - window_start_ms)
+    vod = {
+        **vod,
+        "rangeStartMs": window_start_ms,
+        "rangeEndMs": window_end_ms,
+        "durationMs": duration_ms,
+    }
 
-    analysed_s = int((vod.get("rangeEndMs") or duration_ms) - (vod.get("rangeStartMs") or 0)) // 1000
+    analysed_s = duration_ms // 1000
     cap_err = check_cap(conn, workspace_id, analysed_s)
     if cap_err:
         raise RuntimeError(cap_err)
@@ -455,27 +465,56 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
             conn.commit()
 
             clip_rows = []
+            time_offset_ms = window_start_ms if payload.get("windowOnly") else 0
+            streamer_settings = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
+            genre = str(streamer_settings.get("genre") or "stream")
             for pick in picks:
+                clip_start = int(pick.start_ms) + time_offset_ms
+                clip_end = int(pick.end_ms) + time_offset_ms
+                peak_ms = int(pick.peak_ms) + time_offset_ms
+                from clips_worker.streamer.clip_titles import resolve_stream_clip_title
+
+                resolved_title = resolve_stream_clip_title(
+                    title=pick.title,
+                    hook=pick.hook,
+                    words=words,
+                    start_ms=int(pick.start_ms),
+                    end_ms=int(pick.end_ms),
+                    genre=genre,
+                )
+                if not resolved_title:
+                    from clips_worker.decision_log import decision_log
+
+                    decision_log(
+                        "streamer",
+                        "clip_rejected",
+                        vod_id=vod_id,
+                        reason="placeholder_title",
+                        raw_title=str(pick.title or "")[:80],
+                        start_ms=clip_start,
+                        end_ms=clip_end,
+                    )
+                    continue
                 clip_id = f"clip_{uuid.uuid4().hex}"
                 from clips_worker.picker.public_copy import headline_text_from_pick
 
                 headline = headline_text_from_pick(
-                    {"title": pick.title, "hook": pick.hook, "pass1_why": getattr(pick, "pass1_why", None)}
+                    {"title": resolved_title, "hook": pick.hook, "pass1_why": getattr(pick, "pass1_why", None)}
                 )
                 init_edits = streamer_initial_clip_edits(
                     settings,
                     vod,
-                    suggested_headline=headline or (pick.title or "")[:120],
-                    clip_start_ms=pick.start_ms,
-                    clip_end_ms=pick.end_ms,
+                    suggested_headline=headline or resolved_title[:120],
+                    clip_start_ms=clip_start,
+                    clip_end_ms=clip_end,
                 )
                 layout_mode = str((init_edits.get("layout") or {}).get("mode") or "fit_top")
                 ai_meta = enrich_streamer_meta(
                     pick.ai_meta,
                     vod=vod,
-                    peak_ms=pick.peak_ms,
-                    clip_start_ms=pick.start_ms,
-                    clip_end_ms=pick.end_ms,
+                    peak_ms=peak_ms,
+                    clip_start_ms=clip_start,
+                    clip_end_ms=clip_end,
                     chapters=chapters if isinstance(chapters, list) else None,
                     chat_meta=chat_meta,
                     chat_messages=chat_messages or [],
@@ -486,10 +525,10 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                         "id": clip_id,
                         "projectId": project_id,
                         "workspaceId": workspace_id,
-                        "title": pick.title,
+                        "title": resolved_title,
                         "reason": pick.hook,
-                        "startMs": pick.start_ms,
-                        "endMs": pick.end_ms,
+                        "startMs": clip_start,
+                        "endMs": clip_end,
                         "score": pick.score,
                         "scores": pick.scores,
                         "previewKey": None,

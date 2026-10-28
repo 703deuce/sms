@@ -680,7 +680,7 @@ def main() -> None:
                     time.sleep(2)
                     continue
                 idle_polls = 0
-                log(f"claimed job={job['id']}")
+                log(f"claimed job={job['id']} type={job.get('type')} lane={worker_lane()}")
                 from clips_worker.t2v.feature_gate import T2V_JOB_TYPES, ai_video_enabled
 
                 job_type = job.get("type") or ""

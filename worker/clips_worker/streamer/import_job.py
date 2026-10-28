@@ -160,7 +160,7 @@ def _rolling_import_idle_done(
     from clips_worker.decision_log import decision_log
 
     decision_log(
-        "stream_import",
+        "streamer",
         "rolling_import_deferred",
         vod_id=vod_id,
         project_id=project_id,
@@ -198,7 +198,9 @@ def _rolling_preflight_after_meta(
         stop_rolling_session,
     )
 
-    if _has_pending_stream_analyze(conn, project_id, vod_id):
+    state = _vod_state_dict(vod)
+    live_capture = bool(state.get("liveCapture"))
+    if not live_capture and _has_pending_stream_analyze(conn, project_id, vod_id):
         _rolling_import_idle_done(
             conn,
             job=job,
@@ -209,7 +211,9 @@ def _rolling_preflight_after_meta(
             reason="analyze_pending",
         )
         return True
-    if _has_pending_stream_import(conn, project_id, vod_id, exclude_job_id=str(job["id"])):
+    if not live_capture and _has_pending_stream_import(
+        conn, project_id, vod_id, exclude_job_id=str(job["id"])
+    ):
         _rolling_import_idle_done(
             conn,
             job=job,
@@ -222,7 +226,6 @@ def _rolling_preflight_after_meta(
         return True
 
     rolling_finalize = bool(payload.get("rollingFinalize"))
-    state = _vod_state_dict(vod)
     rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
     finalize = rolling_finalize or bool(rolling.get("finalize"))
     if state.get("liveCapture"):
@@ -253,6 +256,16 @@ def _rolling_preflight_after_meta(
     if plan_out is None:
         if finalize:
             stop_rolling_session(conn, vod_id, reason="stream_offline")
+        elif live_capture:
+            _rolling_import_idle_done(
+                conn,
+                job=job,
+                vod=vod,
+                project_id=project_id,
+                vod_id=vod_id,
+                post_progress=post_progress,
+                reason="live_capture_not_ready",
+            )
         else:
             _rolling_import_idle_done(
                 conn,
@@ -320,8 +333,9 @@ def _complete_rolling_window_import(
     }
     from clips_worker.decision_log import decision_log
 
-    pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "auto")
     analyze_id: str | None = None
+    live_capture = bool(prior.get("liveCapture"))
+    window_audio_key = str(state.get("audioKey") or "")
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -346,53 +360,36 @@ def _complete_rolling_window_import(
                 vod_id,
             ),
         )
-        if load_project_operator_cancelled(conn, project_id):
-            decision_log(
-                "stream_import",
-                "analyze_enqueue_skipped",
-                project_id=project_id,
-                vod_id=vod_id,
-                reason="operator_cancelled",
-                source=analyze_source,
-                rangeStartMs=window_start_ms,
-                rangeEndMs=window_end_ms,
-                overlapMs=overlap_ms,
-            )
-        elif _has_pending_stream_analyze(conn, project_id, vod_id):
-            decision_log(
-                "stream_import",
-                "analyze_enqueue_skipped",
-                project_id=project_id,
-                vod_id=vod_id,
-                reason="analyze_already_pending",
-                source=analyze_source,
-                rangeStartMs=window_start_ms,
-                rangeEndMs=window_end_ms,
-                overlapMs=overlap_ms,
-            )
-        else:
-            analyze_id = f"job_{uuid.uuid4().hex}"
-            cur.execute(
-                """
-                INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
-                VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
-                """,
-                (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
-            )
-    conn.commit()
-    if analyze_id:
+    if load_project_operator_cancelled(conn, project_id):
         decision_log(
-            "stream_import",
-            "analyze_enqueued",
-            id=analyze_id,
+            "streamer",
+            "analyze_enqueue_skipped",
             project_id=project_id,
             vod_id=vod_id,
+            reason="operator_cancelled",
             source=analyze_source,
             rangeStartMs=window_start_ms,
             rangeEndMs=window_end_ms,
             overlapMs=overlap_ms,
-            windowOnly=True,
         )
+    else:
+        from clips_worker.streamer.analyze_enqueue import enqueue_stream_analyze
+
+        analyze_id = enqueue_stream_analyze(
+            conn,
+            project_id=project_id,
+            vod_id=vod_id,
+            workspace_id=str(vod.get("workspaceId") or ""),
+            triggered_by=str(vod.get("triggeredBy") or "auto"),
+            source=analyze_source,
+            commit=False,
+            range_start_ms=window_start_ms,
+            range_end_ms=window_end_ms,
+            audio_key=window_audio_key or None,
+            allow_queue_behind_pending=live_capture,
+        )
+    conn.commit()
+    if analyze_id:
         print(
             f"[clipper:stream] analyze_enqueued vodId={vod_id} projectId={project_id} jobId={analyze_id} "
             f"windowStartMs={window_start_ms} windowEndMs={window_end_ms} overlapMs={overlap_ms} "
@@ -873,7 +870,9 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                     progress_cb=on_pct,
                 )
                 duration_ms = audio_ms or max(1, window_end - window_start)
-                audio_key = stream_audio_key(workspace_id, vod_id)
+                from clips_worker.streamer.keys import stream_window_audio_key
+
+                audio_key = stream_window_audio_key(workspace_id, vod_id, window_end)
                 upload_file(audio_key, capture_path, "audio/opus")
                 try:
                     capture_path.unlink(missing_ok=True)

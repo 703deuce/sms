@@ -31,12 +31,16 @@ def enqueue_stream_analyze(
     triggered_by: str = "auto",
     source: str = "import",
     commit: bool = True,
+    range_start_ms: int | None = None,
+    range_end_ms: int | None = None,
+    audio_key: str | None = None,
+    allow_queue_behind_pending: bool = False,
 ) -> str | None:
     from clips_worker.decision_log import decision_log
 
     if load_project_operator_cancelled(conn, project_id):
         decision_log(
-            "stream_import",
+            "streamer",
             "analyze_enqueue_skipped",
             project_id=project_id,
             vod_id=vod_id,
@@ -44,9 +48,9 @@ def enqueue_stream_analyze(
             source=source,
         )
         return None
-    if has_pending_stream_analyze(conn, project_id, vod_id):
+    if not allow_queue_behind_pending and has_pending_stream_analyze(conn, project_id, vod_id):
         decision_log(
-            "stream_import",
+            "streamer",
             "analyze_enqueue_skipped",
             project_id=project_id,
             vod_id=vod_id,
@@ -56,22 +60,33 @@ def enqueue_stream_analyze(
         return None
     pri = job_priority(conn, workspace_id, triggered_by)
     analyze_id = f"job_{uuid.uuid4().hex}"
+    body: dict = {"vodId": vod_id}
+    if range_start_ms is not None and range_end_ms is not None:
+        body["rangeStartMs"] = int(range_start_ms)
+        body["rangeEndMs"] = int(range_end_ms)
+        body["windowOnly"] = True
+    if audio_key:
+        body["audioKey"] = str(audio_key)
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
             VALUES (%s,%s,'STREAM_ANALYZE','QUEUED',%s::jsonb,%s,NOW())
             """,
-            (analyze_id, project_id, json.dumps({"vodId": vod_id}), pri),
+            (analyze_id, project_id, json.dumps(body), pri),
         )
     if commit:
         conn.commit()
     decision_log(
-        "stream_import",
+        "streamer",
         "analyze_enqueued",
         id=analyze_id,
         project_id=project_id,
         vod_id=vod_id,
         source=source,
+        rangeStartMs=range_start_ms,
+        rangeEndMs=range_end_ms,
+        audioKey=audio_key,
+        queuedBehindPending=allow_queue_behind_pending,
     )
     return analyze_id

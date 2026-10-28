@@ -5,6 +5,11 @@ def stream_audio_key(workspace_id: str, vod_id: str) -> str:
     return f"ws/{workspace_id}/streams/{vod_id}/audio.opus"
 
 
+def stream_window_audio_key(workspace_id: str, vod_id: str, window_end_ms: int) -> str:
+    """Rolling live-capture window audio (avoids overwriting while analyze is queued)."""
+    return f"ws/{workspace_id}/streams/{vod_id}/windows/{int(window_end_ms)}.opus"
+
+
 def stream_chunk_key(workspace_id: str, vod_id: str, index: int, ext: str) -> str:
     return f"ws/{workspace_id}/streams/{vod_id}/chunks/{index}.{ext}"
 

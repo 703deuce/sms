@@ -8,7 +8,6 @@ from clips_worker.job_types import JOB_TYPES
 _STREAM_TYPES = frozenset(
     {
         "STREAM_IMPORT",
-        "STREAM_ANALYZE",
         "STREAM_RENDER",
         "STREAM_RELAYOUT",
         "STREAM_CLEANUP",

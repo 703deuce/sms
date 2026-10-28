@@ -59,6 +59,27 @@ def _remote_transcribe(req: TranscribeReq, *, diarize: bool, model: str) -> dict
     )
 
 
+_modal_circuit_open_until: float = 0.0
+_MODAL_CIRCUIT_S = 600.0
+
+
+def modal_transcribe_circuit_open() -> bool:
+    return time.time() < _modal_circuit_open_until
+
+
+def record_modal_transcribe_timeout() -> None:
+    global _modal_circuit_open_until
+    _modal_circuit_open_until = time.time() + _MODAL_CIRCUIT_S
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "streamer",
+        "modal_transcribe_circuit",
+        open_until_s=round(_modal_circuit_open_until, 3),
+        cooldown_s=int(_MODAL_CIRCUIT_S),
+    )
+
+
 def transcribe_stream_modal_with_meta(req: TranscribeReq, *, diarize: bool) -> tuple[TranscribeRes, dict]:
     """Returns TranscribeRes plus modal telemetry (cold_start_s, whisper_model)."""
     from clips_worker.decision_log import decision_log
@@ -100,6 +121,7 @@ def transcribe_stream_modal_with_meta(req: TranscribeReq, *, diarize: bool) -> t
                 raw = fut.result(timeout=timeout_s)
             except FuturesTimeout as exc:
                 fut.cancel()
+                record_modal_transcribe_timeout()
                 last_exc = StreamModalTranscribeError(f"hard_timeout_{int(timeout_s)}s")
                 decision_log(
                     "transcribe",
