@@ -20,6 +20,8 @@ export type TwitchChannelPasteResolution = {
   title: string
   durationSec: number
   source: 'live_archive' | 'live_channel' | 'latest_vod'
+  streamStartedAt?: string
+  archiveResolveReason?: string
 }
 
 async function helixGet<T>(path: string): Promise<T> {
@@ -135,6 +137,8 @@ export async function resolveTwitchChannelPaste(
         title: liveStream?.title || `${user.login} (live)`,
         durationSec,
         source: 'live_channel',
+        streamStartedAt,
+        archiveResolveReason: 'helix_no_archives_live_channel_url',
       }
     }
     logArchiveResolveDecision({

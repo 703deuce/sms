@@ -59,6 +59,9 @@ export async function createStreamerImport(
   let channelLogin: string | null = null
   let url = input.url?.trim() || null
   let title = 'Streamer upload'
+  let liveCaptureImport = false
+  let streamStartedAtIso: string | undefined
+  let archiveResolveReason: string | undefined
 
   let rangeStartMs = input.rangeStartMs ?? 0
   let rangeEndMs = input.rangeEndMs ?? 0
@@ -84,10 +87,23 @@ export async function createStreamerImport(
       externalId = resolved.vodId
       channelLogin = resolved.channelLogin
       title = resolved.title
+      if (resolved.source === 'live_channel') {
+        liveCaptureImport = true
+        streamStartedAtIso = resolved.streamStartedAt
+        archiveResolveReason = resolved.archiveResolveReason
+      }
       const durationMs = resolved.durationSec * 1000
       if (rangeEndMs > rangeStartMs) {
-        rangeEndMs = Math.min(rangeEndMs, durationMs)
-        rangeStartMs = Math.max(0, Math.min(rangeStartMs, Math.max(0, rangeEndMs - 1000)))
+        if (liveCaptureImport) {
+          // Range is chunk seed only (next N minutes forward); do not clamp to virtual VOD tail.
+        } else {
+          rangeEndMs = Math.min(rangeEndMs, durationMs)
+          rangeStartMs = Math.max(0, Math.min(rangeStartMs, Math.max(0, rangeEndMs - 1000)))
+        }
+      } else if (liveCaptureImport) {
+        const chunkMin = 5
+        rangeStartMs = 0
+        rangeEndMs = chunkMin * 60_000
       }
     } else {
       platform = parsed.platform
@@ -153,6 +169,14 @@ export async function createStreamerImport(
     if (parsedCh.success && parsedCh.data.rollingMaxSessionHours != null) {
       ;(vodState.rolling as Record<string, unknown>).maxSessionHours = parsedCh.data.rollingMaxSessionHours
     }
+  }
+  if (liveCaptureImport) {
+    vodState.liveCapture = true
+    if (streamStartedAtIso) vodState.streamStartedAt = streamStartedAtIso
+    if (archiveResolveReason) vodState.archiveResolveReason = archiveResolveReason
+    vodState.processMode = 'rolling'
+    const rolling = (vodState.rolling as Record<string, unknown>) || {}
+    vodState.rolling = { ...rolling, live: true }
   }
 
   await prisma.$transaction(async (tx) => {

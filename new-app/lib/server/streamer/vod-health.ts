@@ -122,6 +122,9 @@ export async function checkStreamUrlVodHealth(url: string): Promise<VodAvailabil
         checkedAt: new Date().toISOString(),
       }
     }
+    if (resolved.source === 'live_channel') {
+      return buildVodAvailabilityView('twitch', 'ok', resolved.channelLogin)
+    }
     return checkTwitchVodUrl(resolved.vodId, resolved.channelLogin)
   }
   if (parsed.platform === 'kick' && parsed.kind === 'vod') {

@@ -43,7 +43,11 @@ export function formatVodRangeLabel(
   rangeStartMs: number,
   rangeEndMs: number,
   lastMinutes?: number,
+  opts?: { liveCapture?: boolean },
 ): string {
+  if (opts?.liveCapture && lastMinutes && rangeEndMs > rangeStartMs) {
+    return `Live capture: next ${lastMinutes} min`
+  }
   if (lastMinutes && rangeEndMs > rangeStartMs) {
     return `Last ${lastMinutes} min (${formatClock(rangeStartMs)} → ${formatClock(rangeEndMs)})`
   }
@@ -61,22 +65,25 @@ function formatClock(ms: number): string {
 
 export function resolveVodImportRangeMs(
   input: VodImportRangeInput,
-  opts?: { maxSpanMinutes?: number; vodDurationMs?: number; isLive?: boolean },
+  opts?: { maxSpanMinutes?: number; vodDurationMs?: number; isLive?: boolean; liveCapture?: boolean },
 ): { rangeStartMs: number; rangeEndMs: number } | { error: string } {
   const maxSpan = (opts?.maxSpanMinutes ?? 12 * 60) * 60_000
   if (input.mode === 'full') {
     return { rangeStartMs: 0, rangeEndMs: 0 }
   }
   if (input.mode === 'last_minutes') {
-    const durationMs = opts?.vodDurationMs
-    if (durationMs == null || durationMs <= 0) {
-      return { error: 'Resolve the channel or VOD first to set a live tail range.' }
-    }
     const mins = input.lastMinutes ?? 5
     if (!Number.isFinite(mins) || mins <= 0 || mins > 12 * 60) {
       return { error: 'Choose between 1 and 720 minutes for the live tail slice.' }
     }
     const span = Math.round(mins * 60_000)
+    if (opts?.liveCapture) {
+      return { rangeStartMs: 0, rangeEndMs: span }
+    }
+    const durationMs = opts?.vodDurationMs
+    if (durationMs == null || durationMs <= 0) {
+      return { error: 'Resolve the channel or VOD first to set a live tail range.' }
+    }
     const liveMargin = opts?.isLive ? 30_000 : 0
     const end = Math.max(1000, durationMs - liveMargin)
     const start = Math.max(0, end - span)

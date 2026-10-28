@@ -49,7 +49,7 @@ type StreamerResolveView = {
   title?: string | null
   durationS?: number | null
   isLive?: boolean
-  vodSource?: 'live_archive' | 'latest_vod' | null
+  vodSource?: 'live_archive' | 'live_channel' | 'latest_vod' | null
   resolvedVodUrl?: string | null
   pastedAs?: string
   channelLogin?: string | null
@@ -260,6 +260,8 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       ? Math.round(resolveMeta.durationS * 1000)
       : undefined
 
+  const isLiveCapture = resolveMeta?.vodSource === 'live_channel' && Boolean(resolveMeta?.isLive)
+
   const buildRangePayload = (durationOverrideMs?: number) => {
     const mins = parseInt(firstMinutes, 10)
     const lastFromPreset = parseInt(lastMinutesPreset, 10)
@@ -281,12 +283,12 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
         start: rangeStart,
         end: rangeEnd,
       },
-      { vodDurationMs: durationMs, isLive: Boolean(resolveMeta?.isLive) },
+      { vodDurationMs: durationMs, isLive: Boolean(resolveMeta?.isLive), liveCapture: isLiveCapture },
     )
   }
 
   const resolvedRangePreview = (() => {
-    if (rangeMode === 'full' || !vodDurationMs) return null
+    if (rangeMode === 'full' || (!vodDurationMs && !isLiveCapture)) return null
     const r = buildRangePayload()
     if ('error' in r) return null
     if (rangeMode === 'last_minutes') {
@@ -300,7 +302,9 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           : Number.isFinite(lastFromPreset)
             ? lastFromPreset
             : 5
-      return formatVodRangeLabel(r.rangeStartMs, r.rangeEndMs, lastMins)
+      return formatVodRangeLabel(r.rangeStartMs, r.rangeEndMs, lastMins, {
+        liveCapture: isLiveCapture,
+      })
     }
     return formatVodRangeLabel(r.rangeStartMs, r.rangeEndMs)
   })()
@@ -378,8 +382,8 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
     <div className="flex flex-col gap-4">
       {usageInitial ? null : <StreamerUsageMeter />}
       <p className="text-xs text-muted-foreground">
-        Long VODs: we fetch audio first, then only the clip ranges you choose (up to 12 h). Live Twitch channels use
-        the in-progress archive VOD — we do not pull the raw live HLS feed.
+        Long VODs: we fetch audio first, then only the clip ranges you choose (up to 12 h). Live channels without a
+        Twitch archive use forward live capture in N-minute chunks (rolling).
       </p>
       <div className="flex flex-col gap-2">
         <Label htmlFor="streamer-url">Twitch or Kick link</Label>
@@ -399,7 +403,9 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
         ) : null}
         {resolveMeta?.isLive ? (
           <p className="text-xs text-primary">
-            Live now — clipping from the in-progress Twitch archive VOD. Pick how many recent minutes to analyze.
+            {isLiveCapture
+              ? 'Live now — no Twitch archive yet. We capture the next N minutes from the live feed, then keep rolling forward.'
+              : 'Live now — clipping from the in-progress Twitch archive VOD. Pick how many recent minutes to analyze.'}
           </p>
         ) : null}
         {resolveMeta?.vodSource === 'latest_vod' && preview?.kind === 'channel' ? (
@@ -412,7 +418,11 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
             VOD: {resolveMeta.resolvedVodUrl.replace(/^https?:\/\//, '')}
           </p>
         ) : null}
-        <VodUrlCheckBanner view={vodCheck} onRecheck={recheckVod} rechecking={vodCheckBusy} />
+        <VodUrlCheckBanner
+          view={isLiveCapture ? null : vodCheck}
+          onRecheck={recheckVod}
+          rechecking={vodCheckBusy}
+        />
       </div>
       <div className="rounded-lg border border-border bg-muted/30 p-3">
         <ClipLengthChoice value={clipLength} onChange={setClipLength} />
@@ -420,8 +430,9 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
         <p className="text-xs font-medium">VOD range (optional)</p>
         <p className="text-xs text-muted-foreground">
-          Limit download and clip finding to part of the VOD. When the channel is live, default to the last few minutes
-          of the archive.
+          {isLiveCapture
+            ? 'When the channel is live without a saved broadcast, choose how many minutes to capture on the first pull; rolling continues forward.'
+            : 'Limit download and clip finding to part of the VOD. When the channel is live, default to the last few minutes of the archive.'}
         </p>
         <Select value={rangeMode} onValueChange={(v) => setRangeMode(v as VodImportRangeMode)}>
           <SelectTrigger className="h-9">
@@ -436,7 +447,9 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
         </Select>
         {rangeMode === 'last_minutes' ? (
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Last minutes (from current VOD length)</Label>
+            <Label className="text-xs">
+              {isLiveCapture ? 'Minutes to capture on first pull' : 'Last minutes (from current VOD length)'}
+            </Label>
             <Select value={lastMinutesPreset} onValueChange={setLastMinutesPreset}>
               <SelectTrigger className="h-9 w-full max-w-xs">
                 <SelectValue />
@@ -528,7 +541,7 @@ export function StreamerImportPanel({ usageInitial }: { usageInitial?: StreamUsa
           !attest ||
           !!resolveError ||
           submitting ||
-          vodCheck?.status === 'blocked'
+          (vodCheck?.status === 'blocked' && !isLiveCapture)
         }
         onClick={() => void submitUrl()}
       >

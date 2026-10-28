@@ -104,6 +104,8 @@ export async function beginTwitchRollingSession(
   const archive = channel.externalId
     ? await matchTwitchArchiveVod(channel.externalId, startedAt, streamSessionId)
     : null
+  const channelUrl = channel.login ? `https://www.twitch.tv/${channel.login.toLowerCase()}` : null
+  const liveCapture = !archive?.url && Boolean(channelUrl)
   const streamer = streamerSettingsSchema.parse({
     ...defaultStreamerSettings(),
     ...(typeof channel.settings === 'object' && channel.settings ? channel.settings : {}),
@@ -125,6 +127,7 @@ export async function beginTwitchRollingSession(
   const projectId = createId('proj')
   const vodId = createId('svod')
   const title = archive?.title || `Live stream ${startedAt.toISOString().slice(0, 16)}`
+  const vodUrl = archive?.url ?? channelUrl
 
   await prisma.$transaction(async (tx) => {
     await tx.clipProject.create({
@@ -148,7 +151,7 @@ export async function beginTwitchRollingSession(
         platform: 'twitch',
         sourceType: 'vod',
         externalId: archive?.id ?? channel.externalId,
-        url: archive?.url ?? null,
+        url: vodUrl,
         title,
         triggeredBy: 'auto',
         attestedAt: new Date(),
@@ -157,6 +160,13 @@ export async function beginTwitchRollingSession(
         state: {
           processMode: 'rolling',
           streamSessionId: streamSessionId || archive?.streamId || undefined,
+          ...(liveCapture
+            ? {
+                liveCapture: true,
+                streamStartedAt: startedAt.toISOString(),
+                archiveResolveReason: 'helix_no_archives_live_channel_url',
+              }
+            : {}),
           rolling: {
             live: true,
             chunkMin,
@@ -172,8 +182,8 @@ export async function beginTwitchRollingSession(
         type: 'STREAM_IMPORT',
         status: 'QUEUED',
         priority: 15,
-        payload: { vodId, rollingTick: 1 },
-        runAfter: new Date(Date.now() + chunkMin * 60 * 1000),
+        payload: liveCapture ? { vodId } : { vodId, rollingTick: 1 },
+        runAfter: liveCapture ? new Date() : new Date(Date.now() + chunkMin * 60 * 1000),
       },
     })
   })

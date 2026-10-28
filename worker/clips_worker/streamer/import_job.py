@@ -94,6 +94,8 @@ def _rolling_import_mode(vod: dict) -> bool:
     if not streamer_twitch_rolling_enabled():
         return False
     state = _vod_state_dict(vod)
+    if state.get("liveCapture") and str(vod.get("platform") or "").lower() == "twitch":
+        return True
     mode = str(state.get("processMode") or "").lower()
     return mode == "rolling" and str(vod.get("platform") or "").lower() == "twitch"
 
@@ -223,14 +225,24 @@ def _rolling_preflight_after_meta(
     state = _vod_state_dict(vod)
     rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
     finalize = rolling_finalize or bool(rolling.get("finalize"))
-    total_ms = int(max(0.0, meta_dur_s) * 1000)
-    plan_out = apply_rolling_pull_plan(
-        conn,
-        vod,
-        total_vod_ms=total_ms,
-        finalize=finalize,
-        job_id=str(job["id"]),
-    )
+    if state.get("liveCapture"):
+        from clips_worker.streamer.live_capture import apply_live_capture_pull_plan
+
+        plan_out = apply_live_capture_pull_plan(
+            conn,
+            vod,
+            finalize=finalize,
+            job_id=str(job["id"]),
+        )
+    else:
+        total_ms = int(max(0.0, meta_dur_s) * 1000)
+        plan_out = apply_rolling_pull_plan(
+            conn,
+            vod,
+            total_vod_ms=total_ms,
+            finalize=finalize,
+            job_id=str(job["id"]),
+        )
     if plan_out == "stop_session":
         stop_rolling_session(conn, vod_id, reason="max_session_hours")
         post_progress(
@@ -818,6 +830,62 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                 ingest_vod_audio,
                 stream_audio_first_ingest_enabled,
             )
+            from clips_worker.streamer.live_capture import ingest_live_capture_audio, is_twitch_live_capture
+            from clips_worker.streamer.rolling_ingest import rolling_chunk_min
+
+            prior_state = _vod_state_dict(vod)
+            if is_twitch_live_capture(vod):
+                window_start = int(vod.get("rangeStartMs") or 0)
+                window_end = int(vod.get("rangeEndMs") or 0)
+                chunk_s = max(3, (window_end - window_start) // 1000)
+                login = str(
+                    prior_state.get("channelLogin") or vod.get("channelLogin") or vod.get("channel_login") or ""
+                )
+                capture_path, _, audio_ms = ingest_live_capture_audio(
+                    url,
+                    duration_s=chunk_s,
+                    job_id=str(job["id"]),
+                    vod_id=vod_id,
+                    login=login,
+                    offset_ms=window_start,
+                    chunk_min=rolling_chunk_min(prior_state),
+                    archive_resolve_reason=str(prior_state.get("archiveResolveReason") or ""),
+                    progress_cb=on_pct,
+                )
+                duration_ms = audio_ms or max(1, window_end - window_start)
+                audio_key = stream_audio_key(workspace_id, vod_id)
+                upload_file(audio_key, capture_path, "audio/opus")
+                try:
+                    capture_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                state = {
+                    **prior_state,
+                    "audioKey": audio_key,
+                    "importMeta": {"tags": meta.get("tags") or [], "liveCapture": True},
+                }
+                from clips_worker.streamer.channel_resolve import resolve_vod_channel_fields
+
+                ch_fields = resolve_vod_channel_fields(vod, meta, url)
+                if ch_fields.get("login"):
+                    state["channelLogin"] = ch_fields["login"]
+                if ch_fields.get("display"):
+                    state["channelDisplayName"] = ch_fields["display"]
+                _complete_rolling_window_import(
+                    conn,
+                    job=job,
+                    vod=vod,
+                    project_id=project_id,
+                    vod_id=vod_id,
+                    payload=payload,
+                    state=state,
+                    meta=meta,
+                    duration_ms=duration_ms,
+                    post_progress=post_progress,
+                    hb=hb,
+                    analyze_source="live_capture_window",
+                )
+                return vod
 
             staged_audio: Path | None = None
             if stream_audio_first_ingest_enabled():
