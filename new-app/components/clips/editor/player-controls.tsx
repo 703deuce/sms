@@ -21,6 +21,7 @@ export function PlayerControls({
   volume,
   onMuteToggle,
   onVolumeChange,
+  showScrubber = true,
 }: {
   playing: boolean
   outputMs: number
@@ -31,6 +32,8 @@ export function PlayerControls({
   volume?: number
   onMuteToggle?: () => void
   onVolumeChange?: (pct: number) => void
+  /** When false, timeline owns seek (avoids duplicate scrubber). */
+  showScrubber?: boolean
 }) {
   const max = Math.max(1, outputDurationMs)
   const pct = outputDurationMs > 0 ? Math.min(100, (outputMs / outputDurationMs) * 100) : 0
@@ -48,15 +51,18 @@ export function PlayerControls({
         </Button>
       ) : null}
       {onVolumeChange ? (
-        <Slider
-          className="hidden w-20 shrink-0 sm:flex sm:w-24"
-          min={0}
-          max={100}
-          value={[volume ?? 100]}
-          onValueChange={(v) => onVolumeChange(Array.isArray(v) ? v[0] ?? 100 : 100)}
-          aria-label="Volume"
-        />
+        <div className="hidden w-24 shrink-0 sm:block">
+          <Slider
+            className="w-full"
+            min={0}
+            max={100}
+            value={[volume ?? 100]}
+            onValueChange={(v) => onVolumeChange(Array.isArray(v) ? v[0] ?? 100 : 100)}
+            aria-label="Volume"
+          />
+        </div>
       ) : null}
+      {showScrubber ? (
       <div className="flex min-w-0 flex-1 basis-0 items-center gap-2 overflow-hidden">
         <Slider
           className="min-w-0 flex-1 [&_[data-slot=slider-track]]:overflow-hidden"
@@ -74,6 +80,7 @@ export function PlayerControls({
           {Math.round(pct)}%
         </span>
       </div>
+      ) : null}
     </div>
   )
 }

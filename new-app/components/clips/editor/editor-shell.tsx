@@ -16,6 +16,8 @@ import { requestClipReframe } from '@/lib/clips-api'
 import { patchClip } from '@/lib/clips-api'
 import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
+import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
+import { keepSegments, outputDurationMs } from '@/lib/clips/edits'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
@@ -24,7 +26,9 @@ import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { clipLayoutChip, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
+import { Timeline } from '@/components/clips/editor/timeline'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
+import { sourceMsAtOutput } from '@/lib/clips/editor-playback'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
@@ -152,7 +156,7 @@ export function EditorShell({
     restoreCutRange,
     setLayoutMode,
     setShotOverride,
-    setTrim,
+    setTrim: setTrimRaw,
     setCaptions,
     toggleEmphasis,
     attachMusicGeneration,
@@ -165,7 +169,36 @@ export function EditorShell({
     patchStudioSound,
     flushSave,
     syncServerUpdatedAt,
+    splitLayoutAtSource,
+    cutSectionAtSource,
+    setLayoutModeAtSource,
+    updateBrollItem,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, editsSaveVersion, words })
+
+  const setTrim = useCallback(
+    (trim: { in: number; out: number }) => {
+      logEditorDecision('timeline_trim', {
+        clipId,
+        trimIn: trim.in,
+        trimOut: trim.out,
+        clipStartMs: bounds.clipStartMs,
+        clipEndMs: bounds.clipEndMs,
+      })
+      setTrimRaw(trim)
+    },
+    [bounds.clipEndMs, bounds.clipStartMs, clipId, setTrimRaw],
+  )
+
+  useEffect(() => {
+    logEditorDecision('clip_load', {
+      clipId,
+      startMs: bounds.clipStartMs,
+      endMs: bounds.clipEndMs,
+      durationMs: bounds.clipEndMs - bounds.clipStartMs,
+      sourceHost: hostOnlyFromUrl(videoUrl),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount
+  }, [])
 
   useEffect(() => {
     if (seededExportTemplateRef.current) return
@@ -180,7 +213,7 @@ export function EditorShell({
           ? `https://kick.com/${login}`
           : `https://twitch.tv/${login}`
         : undefined
-    const next = seedEditorExportTemplate(edits, aiMeta, { platform, channelUrl })
+    const next = seedEditorExportTemplate(edits, { title, aiMeta }, { platform, channelUrl })
     if (next.exportTemplate !== edits.exportTemplate) setEdits(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on open
   }, [])
@@ -197,6 +230,44 @@ export function EditorShell({
     edits,
     editorWords,
     { enabled: aiExtras },
+  )
+
+  useEffect(() => {
+    const previewEdits = editorPreviewEdits(edits, editorWords)
+    const segs = keepSegments(previewEdits.trim.in, previewEdits.trim.out, previewEdits.cutRanges)
+    logEditorDecision('edits_cuts', {
+      clipId,
+      trimIn: previewEdits.trim.in,
+      trimOut: previewEdits.trim.out,
+      cutCount: previewEdits.cutRanges.length,
+      segmentCount: segs.length,
+      outputDurationMs: outputDurationMs(previewEdits),
+    })
+  }, [clipId, edits, editorWords])
+
+  useEffect(() => {
+    logEditorDecision('preview_source', {
+      clipId,
+      source: useDubAudio ? 'dub' : 'source',
+      dubTrackId: useDubAudio ? edits.audioTrack : null,
+    })
+  }, [clipId, edits.audioTrack, useDubAudio])
+
+  const previewEditsForTimeline = useMemo(
+    () => editorPreviewEdits(edits, editorWords),
+    [edits, editorWords],
+  )
+  const playheadSourceMs = useMemo(
+    () => sourceMsAtOutput(previewEditsForTimeline, outputMs),
+    [previewEditsForTimeline, outputMs],
+  )
+
+  const onLayoutMode = useCallback(
+    (mode: ClipEditsV2['layout']['mode']) => {
+      logEditorDecision('layout', { clipId, mode, reason: 'layout_panel' })
+      setLayoutMode(mode)
+    },
+    [clipId, setLayoutMode],
   )
 
   const studioGenId = studioSound?.enabled && studioSound.generationId ? studioSound.generationId : null
@@ -489,7 +560,7 @@ export function EditorShell({
         <LayoutPanel
           edits={edits}
           shots={cropShots}
-          onMode={setLayoutMode}
+          onMode={onLayoutMode}
           onShotFocus={setShotOverride}
           onRerunReframe={() => void requestClipReframe(clipId)}
           onApplyBrand={() => void applyBrand()}
@@ -661,13 +732,33 @@ export function EditorShell({
               ) : null}
             </div>
           ) : null}
-          <div className="min-w-0 w-full">
+          <div className="min-w-0 w-full space-y-2">
+          <Timeline
+            edits={edits}
+            words={editorWords}
+            shots={cropShots}
+            outputMs={outputMs}
+            clipOutputDurationMs={outDur}
+            videoUrl={videoUrl}
+            onSeekOutput={seekOutput}
+            onTrimChange={setTrim}
+            clipStartMs={bounds.clipStartMs}
+            clipEndMs={bounds.clipEndMs}
+            onSplitLayout={() => splitLayoutAtSource(playheadSourceMs)}
+            onCutSection={() => cutSectionAtSource(playheadSourceMs)}
+            onSetLayoutMode={(mode) => {
+              logEditorDecision('layout', { clipId, mode, reason: 'timeline_segment' })
+              setLayoutModeAtSource(playheadSourceMs, mode)
+            }}
+            onBrollChange={(id, patch) => updateBrollItem(id, patch)}
+          />
           <PlayerControls
             playing={playing}
             outputMs={outputMs}
             outputDurationMs={outDur}
             onToggle={() => void togglePlay()}
             onScrub={seekOutput}
+            showScrubber={false}
             muted={playerMuted}
             volume={playerVolume}
             onMuteToggle={() => {
@@ -739,7 +830,7 @@ export function EditorShell({
         edits={edits}
         dubs={dubs}
         layoutMode={edits.layout.mode}
-        onLayoutModeChange={setLayoutMode}
+        onLayoutModeChange={onLayoutMode}
         platform={
           (aiMeta as { streamer?: { platform?: string } } | null)?.streamer?.platform === 'kick'
             ? 'kick'
