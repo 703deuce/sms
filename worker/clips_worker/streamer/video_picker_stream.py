@@ -93,6 +93,7 @@ def stream_chunk_video_signals(
             ingest_clip_section_video(
                 str(url),
                 proxy,
+                purpose="analysis",
                 job_id=job_id,
                 vod_id=vod_id,
                 clip_id=f"vp_{idx}",

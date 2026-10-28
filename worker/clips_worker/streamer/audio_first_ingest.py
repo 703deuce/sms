@@ -8,6 +8,7 @@ Public entry points for STREAM_IMPORT / STREAM_RENDER and Agent A autopull:
 from __future__ import annotations
 
 import json
+from typing import Literal
 import os
 import shutil
 import subprocess
@@ -226,14 +227,18 @@ def ingest_vod_audio(
     return staged, metrics
 
 
-def _section_marker(work_dir: Path, clip_id: str) -> Path:
-    return work_dir / f".section_{clip_id}.done"
+SectionIngestPurpose = Literal["analysis", "render"]
+
+
+def _section_marker(work_dir: Path, clip_id: str, purpose: SectionIngestPurpose) -> Path:
+    return work_dir / f".section_{purpose}_{clip_id}.done"
 
 
 def ingest_clip_section_video(
     url: str,
     dest: Path,
     *,
+    purpose: SectionIngestPurpose,
     job_id: str,
     vod_id: str,
     clip_id: str,
@@ -252,7 +257,7 @@ def ingest_clip_section_video(
     )
     wd = work_dir or (SCRATCH / "ingest_sections" / vod_id)
     wd.mkdir(parents=True, exist_ok=True)
-    marker = _section_marker(wd, clip_id)
+    marker = _section_marker(wd, clip_id, purpose)
     if marker.is_file() and dest.is_file() and dest.stat().st_size > 0:
         metrics.bytes_downloaded = dest.stat().st_size
         metrics.peak_disk_mb = dest.stat().st_size / (1024 * 1024)
@@ -263,7 +268,7 @@ def ingest_clip_section_video(
     from clips_worker.streamer.upload_proxy import ytdlp_section_format
 
     section = _section_spec(start_s, end_s)
-    partial = wd / f"section_{clip_id}.%(ext)s"
+    partial = wd / f"section_{purpose}_{clip_id}.%(ext)s"
     cmd = [
         "yt-dlp",
         "--retries",
@@ -272,7 +277,7 @@ def ingest_clip_section_video(
         "12",
         "--continue",
         "-f",
-        ytdlp_section_format(),
+        ytdlp_section_format(purpose),
         "--merge-output-format",
         "mp4",
         "--download-sections",
@@ -287,14 +292,21 @@ def ingest_clip_section_video(
     ]
     run_ytdlp(cmd, progress_cb, step="Downloading section")
     # yt-dlp may emit section_<id>.mp4 or section_<id>.f*.mp4 — pick newest mp4 for clip_id prefix.
-    candidates = sorted(wd.glob(f"section_{clip_id}*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
+    candidates = sorted(
+        wd.glob(f"section_{purpose}_{clip_id}*.mp4"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     if not candidates:
         raise RuntimeError("section download produced no mp4")
     shutil.move(str(candidates[0]), str(dest))
     if dest.is_file():
         metrics.bytes_downloaded = dest.stat().st_size
         metrics.peak_disk_mb = dest.stat().st_size / (1024 * 1024)
-    marker.write_text(json.dumps({"dest": str(dest), "ts": time.time()}), encoding="utf-8")
+    marker.write_text(
+        json.dumps({"dest": str(dest), "purpose": purpose, "ts": time.time()}),
+        encoding="utf-8",
+    )
     log_ingest_summary(metrics)
     return metrics
 

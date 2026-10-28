@@ -13,6 +13,7 @@ from clips_worker.streamer.config import SCRATCH
 UPLOAD_PROXY_MIN_BYTES = 200 * 1024 * 1024
 
 YTDLP_ANALYSIS_FORMAT = "bv*[height<=480][fps<=30]+ba/b[height<=480]/b"
+YTDLP_RENDER_SECTION_FORMAT = "bv*[height<=1080][fps<=60]+ba/b[height<=1080]/b"
 
 
 def should_build_upload_proxy(master_bytes: int) -> bool:
@@ -136,5 +137,9 @@ def ensure_vod_analysis_proxy(
     return {**state, "analysisProxyKey": key}
 
 
-def ytdlp_section_format() -> str:
+def ytdlp_section_format(purpose: str) -> str:
+    if purpose == "render":
+        return YTDLP_RENDER_SECTION_FORMAT
+    if purpose != "analysis":
+        raise ValueError(f"unknown section ingest purpose: {purpose!r}")
     return YTDLP_ANALYSIS_FORMAT

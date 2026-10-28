@@ -24,6 +24,7 @@ def download_segment(
         ingest_clip_section_video(
             url,
             dest,
+            purpose="render",
             job_id=job_id,
             vod_id=vod_id,
             clip_id=clip_id,

@@ -43,7 +43,7 @@ def test_section_resume_skips_ytdlp(tmp_path: Path, monkeypatch):
     dest.write_bytes(b"mp4")
     wd = tmp_path / "wd"
     wd.mkdir()
-    marker = wd / ".section_c1.done"
+    marker = wd / ".section_render_c1.done"
     marker.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(
         "clips_worker.streamer.audio_first_ingest.assert_scratch_headroom",
@@ -59,6 +59,7 @@ def test_section_resume_skips_ytdlp(tmp_path: Path, monkeypatch):
     metrics = ingest_clip_section_video(
         "https://www.twitch.tv/videos/1",
         dest,
+        purpose="render",
         job_id="job1",
         vod_id="vod1",
         clip_id="c1",
