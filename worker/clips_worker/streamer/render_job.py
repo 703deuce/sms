@@ -52,7 +52,7 @@ def _fetch_segment_mp4(
     *,
     seg_path: Path,
     local_upload: Path | None,
-    window_capture: Path | None,
+    window_capture: Path | None = None,
     url: str | None,
     seg_start_s: float,
     seg_end_s: float,
