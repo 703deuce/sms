@@ -1,3 +1,4 @@
+import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import { defaultClipSettings, clipProjectSettingsSchema } from '@/lib/clips/settings'
 import { defaultStreamerSettings, streamerSettingsSchema } from '@/lib/streamer/settings'
 import { parseStreamUrl } from '@/lib/streamer/url'
@@ -55,17 +56,17 @@ export async function createStreamerImport(
     title = `${parsed.platform === 'twitch' ? 'Twitch' : 'Kick'} ${parsed.kind} ${parsed.id}`
   }
 
-  const baseSettings = clipProjectSettingsSchema.parse(defaultClipSettings())
-  const merged = clipProjectSettingsSchema.parse({
-    ...baseSettings,
-    aspectRatio: '9:16',
-    genre: 'gaming',
-    clipLenMode: streamer.clipLenMode,
-    targetClipLenS: streamer.targetClipLenS,
-    streamer,
-    rangeStartMs: input.rangeStartMs ?? 0,
-    rangeEndMs: input.rangeEndMs ?? 0,
-  })
+  const merged = withAutoContentDetection(
+    clipProjectSettingsSchema.parse({
+      ...defaultClipSettings(),
+      aspectRatio: '9:16',
+      clipLenMode: streamer.clipLenMode,
+      targetClipLenS: streamer.targetClipLenS,
+      streamer,
+      rangeStartMs: input.rangeStartMs ?? 0,
+      rangeEndMs: input.rangeEndMs ?? 0,
+    }),
+  )
 
   const projectId = createId('proj')
   const vodId = createId('svod')

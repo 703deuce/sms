@@ -2,6 +2,7 @@ import type { ClipProjectStatus } from '@prisma/client'
 import { createId } from '@/lib/supabase/id'
 import { isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { getPrisma } from '@/lib/server/db'
+import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { projectWordsKey } from '@/lib/storage'
@@ -81,8 +82,12 @@ export async function createClipProject(
   const brandRow = await prisma.clipBrandTemplate.findFirst({
     where: { workspaceId, isDefault: true },
   })
-  const baseSettings = clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings())
-  const settings = brandRow ? mergeDefaultBrandSettings(baseSettings, brandRow) : baseSettings
+  const baseSettings = withAutoContentDetection(
+    clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings()),
+  )
+  const settings = brandRow
+    ? withAutoContentDetection(mergeDefaultBrandSettings(baseSettings, brandRow))
+    : baseSettings
   const rangeEnd = settings.rangeEndMs || upload.durationMs || 0
   const projectId = createId('proj')
   const title = input.title?.trim() || upload.filename.replace(/\.[^.]+$/, '')
@@ -126,8 +131,12 @@ export async function createClipProjectFromImportUrl(
   const brandRow = await prisma.clipBrandTemplate.findFirst({
     where: { workspaceId, isDefault: true },
   })
-  const baseSettings = clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings())
-  const settings = brandRow ? mergeDefaultBrandSettings(baseSettings, brandRow) : baseSettings
+  const baseSettings = withAutoContentDetection(
+    clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings()),
+  )
+  const settings = brandRow
+    ? withAutoContentDetection(mergeDefaultBrandSettings(baseSettings, brandRow))
+    : baseSettings
 
   const projectId = createId('proj')
   const defaultTitles: Record<string, string> = {
@@ -168,7 +177,7 @@ export async function createClipProjectFromImportUrl(
 }
 
 export function parseSettings(raw: unknown): ClipProjectSettings {
-  return clipProjectSettingsSchema.parse(raw)
+  return withAutoContentDetection(clipProjectSettingsSchema.parse(raw))
 }
 
 export async function createClipProjectFromPrompt(
@@ -179,10 +188,12 @@ export async function createClipProjectFromPrompt(
   if (!prompt) throw new Error('Describe what you want to make')
 
   const prisma = getPrisma()
-  const baseSettings = clipProjectSettingsSchema.parse({
-    ...(input.settings ?? defaultClipSettings()),
-    prompt,
-  })
+  const baseSettings = withAutoContentDetection(
+    clipProjectSettingsSchema.parse({
+      ...(input.settings ?? defaultClipSettings()),
+      prompt,
+    }),
+  )
   const projectId = createId('proj')
   const title = input.title?.trim() || prompt.slice(0, 80) || 'Untitled project'
 

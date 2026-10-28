@@ -62,7 +62,8 @@ export async function POST(request: Request) {
       projectId: project.id,
       workspaceId,
       status: project.status,
-      mode: String(settings.mode ?? 'talking'),
+      mode: String(settings.mode ?? 'auto'),
+      genre: String(settings.genre ?? 'auto'),
       source: 'prompt' in body ? 'prompt' : 'sourceUrl' in body ? 'import' : 'upload',
     })
     return NextResponse.json({ data: serializeProject(project) })

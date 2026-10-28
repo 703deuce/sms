@@ -1,3 +1,4 @@
+import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import { defaultClipSettings, clipProjectSettingsSchema } from '@/lib/clips/settings'
 import { defaultStreamerSettings, streamerSettingsSchema } from '@/lib/streamer/settings'
 import { projectWordsKey } from '@/lib/storage'
@@ -37,14 +38,15 @@ export async function beginTwitchRollingSession(
     ...defaultStreamerSettings(),
     ...(typeof channel.settings === 'object' && channel.settings ? channel.settings : {}),
   })
-  const merged = clipProjectSettingsSchema.parse({
-    ...clipProjectSettingsSchema.parse(defaultClipSettings()),
-    aspectRatio: '9:16',
-    genre: 'gaming',
-    clipLenMode: streamer.clipLenMode,
-    targetClipLenS: streamer.targetClipLenS,
-    streamer,
-  })
+  const merged = withAutoContentDetection(
+    clipProjectSettingsSchema.parse({
+      ...defaultClipSettings(),
+      aspectRatio: '9:16',
+      clipLenMode: streamer.clipLenMode,
+      targetClipLenS: streamer.targetClipLenS,
+      streamer,
+    }),
+  )
   const projectId = createId('proj')
   const vodId = createId('svod')
   const title = archive?.title || `Live stream ${startedAt.toISOString().slice(0, 16)}`

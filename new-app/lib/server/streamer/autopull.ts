@@ -1,3 +1,4 @@
+import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import { defaultClipSettings, clipProjectSettingsSchema } from '@/lib/clips/settings'
 import { defaultStreamerSettings, streamerSettingsSchema } from '@/lib/streamer/settings'
 import { projectWordsKey } from '@/lib/storage'
@@ -92,15 +93,15 @@ export async function enqueueStreamAutopull(
     ...defaultStreamerSettings(),
     ...(typeof channel.settings === 'object' && channel.settings ? channel.settings : {}),
   })
-  const baseSettings = clipProjectSettingsSchema.parse(defaultClipSettings())
-  const merged = clipProjectSettingsSchema.parse({
-    ...baseSettings,
-    aspectRatio: '9:16',
-    genre: 'gaming',
-    clipLenMode: streamer.clipLenMode,
-    targetClipLenS: streamer.targetClipLenS,
-    streamer,
-  })
+  const merged = withAutoContentDetection(
+    clipProjectSettingsSchema.parse({
+      ...defaultClipSettings(),
+      aspectRatio: '9:16',
+      clipLenMode: streamer.clipLenMode,
+      targetClipLenS: streamer.targetClipLenS,
+      streamer,
+    }),
+  )
   const projectId = createId('proj')
   const vodId = createId('svod')
   const title = opts?.title || `Stream ${streamedAt.toISOString().slice(0, 10)}`

@@ -7,23 +7,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Panel } from '@/components/app/page-primitives'
 import { CaptionPresetPicker } from '@/components/clips/caption-preset-picker'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
-import {
-  clipAspectRatios,
-  clipGenreLabels,
-  clipGenres,
-  clipLayoutModes,
-  clipModes,
-  type ClipProjectSettings,
-} from '@/lib/clips/settings'
+import { clipAspectRatios, clipLayoutModes, type ClipProjectSettings } from '@/lib/clips/settings'
 import { applyClipLengthChoice, clipLengthChoiceFromSettings } from '@/lib/clips/clip-length'
 import { ClipLengthChoice as ClipLengthChoiceControl } from '@/components/clips/clip-length-choice'
 import { cn } from '@/lib/utils'
-
-const MODE_LABELS: Record<string, string> = {
-  talking: 'Talking (podcast, interview)',
-  anything: 'ClipAnything (any footage)',
-  captions: 'Captions & reframe only',
-}
 
 const LAYOUT_LABELS: Record<string, string> = {
   auto: 'Auto variety',
@@ -68,45 +55,6 @@ export function ProjectSettingsForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title="Mode & genre">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label>Clip mode</Label>
-            <div className="flex flex-col gap-2">
-              {clipModes.map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => onChange({ ...settings, mode })}
-                  className={cn(
-                    'rounded-lg border px-3 py-2 text-left text-sm surface',
-                    settings.mode === mode ? 'border-primary' : 'border-border',
-                  )}
-                >
-                  {MODE_LABELS[mode]}
-                </button>
-              ))}
-            </div>
-            {settings.mode === 'anything' && (
-              <p className="text-xs text-muted-foreground">Vision scan · about $0.07 per hour of video</p>
-            )}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Genre</Label>
-            <Select value={settings.genre} onValueChange={(v) => v && onChange({ ...settings, genre: v as ClipProjectSettings['genre'] })}>
-              <SelectTrigger className="w-full">
-                <SelectValue>{clipGenreLabels[settings.genre]}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {clipGenres.map((g) => (
-                  <SelectItem key={g} value={g}>{clipGenreLabels[g]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </Panel>
-
       <Panel title="Clip length & range">
         <div className="flex flex-col gap-3">
           <ClipLengthChoiceControl
@@ -269,11 +217,7 @@ export function ProjectSettingsForm({
 
       <Panel title="Prompt">
         <Textarea
-          placeholder={
-            settings.mode === 'anything'
-              ? 'What moments? e.g. goals, funny reactions'
-              : 'Optional: moments about pricing, product launch, etc.'
-          }
+          placeholder="Optional: what moments to favor (e.g. goals, pricing, product launch)"
           value={settings.prompt || ''}
           onChange={(e) => onChange({ ...settings, prompt: e.target.value })}
           rows={3}
