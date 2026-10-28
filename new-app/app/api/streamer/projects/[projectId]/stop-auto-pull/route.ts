@@ -20,6 +20,16 @@ export async function POST(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
     const result = await stopProjectRollingAutopull(projectId, 'operator_stop')
+    console.info(
+      `[editor:decision] ${JSON.stringify({
+        ts: Date.now() / 1000,
+        stage: 'editor',
+        event: 'stop_auto_pull',
+        projectId,
+        stopped: result.stopped,
+        cancelledJobIds: result.cancelledJobIds,
+      })}`,
+    )
     return NextResponse.json({ data: result })
   } catch (err) {
     return jsonError(err, 400)

@@ -309,7 +309,19 @@ def _complete_rolling_window_import(
     window_start_ms = int(vod.get("rangeStartMs") or 0)
     window_end_ms = int(vod.get("rangeEndMs") or end_ms)
     overlap_ms = rolling_pull_overlap_ms()
-    prior = _vod_state_dict(vod)
+    from clips_worker.streamer.rolling_state import (
+        merge_rolling_last_pulled_ms,
+        read_rolling_last_pulled_ms,
+        reload_vod_state_dict,
+    )
+    from clips_worker.decision_log import decision_log
+
+    committed_last = read_rolling_last_pulled_ms(conn, vod_id)
+    merged_last = merge_rolling_last_pulled_ms(
+        committed_ms=committed_last,
+        window_end_ms=window_end_ms,
+    )
+    prior = reload_vod_state_dict(conn, vod_id) or _vod_state_dict(vod)
     rolling = dict(prior.get("rolling") or {})
     rs = int(vod.get("rangeStartMs") or window_start_ms)
     re = int(vod.get("rangeEndMs") or window_end_ms)
@@ -322,8 +334,18 @@ def _complete_rolling_window_import(
     )
     rolling = dict(merged_prior.get("rolling") or rolling)
     prior = merged_prior
-    rolling["lastPulledMs"] = int(end_ms)
+    rolling["lastPulledMs"] = merged_last
     rolling["lastPullCompletedAt"] = datetime.now(timezone.utc).isoformat()
+    if merged_last > window_end_ms:
+        decision_log(
+            "streamer",
+            "last_pulled_ms_preserved",
+            vodId=vod_id,
+            jobId=str(job.get("id") or ""),
+            committedLastMs=committed_last,
+            windowEndMs=window_end_ms,
+            lastPulledMs=merged_last,
+        )
     process_mode = str(prior.get("processMode") or "").lower()
     merged_state = {
         **prior,
@@ -331,7 +353,6 @@ def _complete_rolling_window_import(
         "processMode": "rolling" if process_mode == "rolling" or schedule_growing_tick else prior.get("processMode"),
         "rolling": rolling,
     }
-    from clips_worker.decision_log import decision_log
 
     analyze_id: str | None = None
     live_capture = bool(prior.get("liveCapture"))
@@ -851,7 +872,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                 ingest_vod_audio,
                 stream_audio_first_ingest_enabled,
             )
-            from clips_worker.streamer.live_capture import ingest_live_capture_audio, is_twitch_live_capture
+            from clips_worker.streamer.live_capture import ingest_live_capture_window, is_twitch_live_capture
             from clips_worker.streamer.rolling_ingest import rolling_chunk_min
 
             prior_state = _vod_state_dict(vod)
@@ -862,7 +883,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                 login = str(
                     prior_state.get("channelLogin") or vod.get("channelLogin") or vod.get("channel_login") or ""
                 )
-                capture_path, _, audio_ms = ingest_live_capture_audio(
+                capture_video, capture_audio, _, audio_ms = ingest_live_capture_window(
                     url,
                     duration_s=chunk_s,
                     job_id=str(job["id"]),
@@ -874,12 +895,15 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                     progress_cb=on_pct,
                 )
                 duration_ms = audio_ms or max(1, window_end - window_start)
-                from clips_worker.streamer.keys import stream_window_audio_key
+                from clips_worker.streamer.keys import stream_window_audio_key, stream_window_capture_video_key
 
                 audio_key = stream_window_audio_key(workspace_id, vod_id, window_end)
-                upload_file(audio_key, capture_path, "audio/opus")
+                video_key = stream_window_capture_video_key(workspace_id, vod_id, window_end)
+                upload_file(audio_key, capture_audio, "audio/opus")
+                upload_file(video_key, capture_video, "video/mp4")
                 try:
-                    capture_path.unlink(missing_ok=True)
+                    capture_audio.unlink(missing_ok=True)
+                    capture_video.unlink(missing_ok=True)
                 except OSError:
                     pass
                 from clips_worker.streamer.rolling_ingest import mark_rolling_pull_complete
@@ -894,6 +918,8 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                 state = {
                     **prior_state,
                     "audioKey": audio_key,
+                    "windowCaptureVideoKey": video_key,
+                    "windowCaptureEndMs": window_end,
                     "importMeta": {"tags": meta.get("tags") or [], "liveCapture": True},
                 }
                 from clips_worker.streamer.channel_resolve import resolve_vod_channel_fields

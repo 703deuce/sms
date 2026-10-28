@@ -298,3 +298,142 @@ def ingest_live_capture_audio(
         ok=True,
     )
     return out, bytes_dl, audio_ms
+
+
+def ingest_live_capture_window(
+    url: str,
+    *,
+    duration_s: int,
+    job_id: str,
+    vod_id: str,
+    login: str,
+    offset_ms: int,
+    chunk_min: int,
+    archive_resolve_reason: str | None,
+    progress_cb: Callable[[float], None] | None = None,
+) -> tuple[Path, Path, int, int]:
+    """Record live HLS window as ~720p mp4 + opus sidecar (no per-clip Twitch re-download)."""
+    from clips_worker.decision_log import decision_log
+
+    duration_s = max(3, min(int(duration_s), 60 * 60))
+    decision_log(
+        "streamer",
+        "live_capture_window_begin",
+        login=login,
+        chunkMin=chunk_min,
+        offset_ms=int(offset_ms),
+        duration_s=duration_s,
+        archiveResolveReason=(archive_resolve_reason or "")[:120],
+        vodId=vod_id,
+        jobId=job_id,
+    )
+
+    meta = metadata(url, timeout_s=90, allow_twitch_growing_vod=True)
+    stream_url = str(meta.get("url") or url)
+    work = SCRATCH / "live_capture" / vod_id
+    work.mkdir(parents=True, exist_ok=True)
+    stamp = int(time.time())
+    video_out = work / f"capture_{stamp}.mp4"
+    audio_out = work / f"capture_{stamp}.opus"
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-loglevel",
+        "error",
+        "-i",
+        stream_url,
+        "-t",
+        str(duration_s),
+        "-vf",
+        "scale=-2:720",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "28",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-movflags",
+        "+faststart",
+        str(video_out),
+    ]
+    try:
+        subprocess.run(cmd, check=True, timeout=max(120, duration_s + 90))
+    except subprocess.CalledProcessError as exc:
+        decision_log(
+            "streamer",
+            "live_capture_window_end",
+            login=login,
+            ok=False,
+            exit_code=exc.returncode,
+            vodId=vod_id,
+            jobId=job_id,
+        )
+        raise RuntimeError(f"Live capture failed (ffmpeg exit {exc.returncode})") from exc
+    except subprocess.TimeoutExpired as exc:
+        decision_log(
+            "streamer",
+            "live_capture_window_end",
+            login=login,
+            ok=False,
+            reason="ffmpeg_timeout",
+            vodId=vod_id,
+            jobId=job_id,
+        )
+        raise RuntimeError("Live capture timed out") from exc
+
+    audio_ms = _probe_audio_ms(video_out)
+    bytes_dl = video_out.stat().st_size if video_out.is_file() else 0
+    if bytes_dl <= 0 or audio_ms <= 0:
+        decision_log(
+            "streamer",
+            "live_capture_window_end",
+            login=login,
+            ok=False,
+            reason="empty_capture",
+            bytes=bytes_dl,
+            duration_ms=audio_ms,
+            vodId=vod_id,
+            jobId=job_id,
+        )
+        raise RuntimeError("Live capture produced no media (stream may not be ready)")
+
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-i",
+            str(video_out),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "24k",
+            str(audio_out),
+        ],
+        check=True,
+        timeout=max(60, duration_s + 30),
+    )
+
+    if progress_cb:
+        progress_cb(100.0)
+    decision_log(
+        "streamer",
+        "live_capture_window_end",
+        login=login,
+        ok=True,
+        bytes=bytes_dl,
+        duration_ms=audio_ms,
+        vodId=vod_id,
+        jobId=job_id,
+    )
+    return video_out, audio_out, bytes_dl, audio_ms

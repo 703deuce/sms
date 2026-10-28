@@ -166,6 +166,16 @@ def abort_rolling_autopull_if_stopped(
     reason = rolling_autopull_stop_reason(conn, vod)
     if not reason:
         return False
+    from clips_worker.decision_log import decision_log
+
+    decision_log(
+        "streamer",
+        "rolling_tick_skipped",
+        vodId=vod_id,
+        projectId=project_id,
+        jobId=str(job.get("id") or ""),
+        reason=reason[:120],
+    )
     stop_rolling_session(conn, vod_id, reason=reason, project_id=project_id)
     post_progress(
         job["id"],
@@ -525,7 +535,7 @@ def stop_rolling_session(conn, vod_id: str, *, reason: str, project_id: str | No
     from clips_worker.decision_log import decision_log
 
     decision_log(
-        "stream_import",
+        "streamer",
         "rolling_stopped",
         vodId=vod_id,
         projectId=pid,

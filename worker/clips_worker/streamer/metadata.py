@@ -61,9 +61,18 @@ def enrich_streamer_meta(
     if channel and str(channel).lower() == "null":
         channel = None
     vod_base_ms = int(vod.get("rangeStartMs") or 0)
-    abs_clip_start = vod_base_ms + int(clip_start_ms)
-    abs_peak = vod_base_ms + int(peak_ms)
-    end_rel = int(clip_end_ms if clip_end_ms is not None else clip_start_ms + 30_000)
+    clip_start = int(clip_start_ms)
+    peak = int(peak_ms)
+    if clip_start >= vod_base_ms:
+        abs_clip_start = clip_start
+        abs_peak = peak
+        rel_for_chat_start = clip_start - vod_base_ms
+        rel_for_chat_end = int(clip_end_ms if clip_end_ms is not None else clip_start + 30_000) - vod_base_ms
+    else:
+        abs_clip_start = vod_base_ms + clip_start
+        abs_peak = vod_base_ms + peak
+        rel_for_chat_start = clip_start
+        rel_for_chat_end = int(clip_end_ms if clip_end_ms is not None else clip_start + 30_000)
     meta = {
         "game": game,
         "vodTitle": vod.get("title"),
@@ -82,12 +91,18 @@ def enrich_streamer_meta(
     cm = chat_meta or {}
     msg_count = 0
     if chat_messages and cm.get("available"):
+        if clip_start >= vod_base_ms:
+            chat_lo = clip_start
+            chat_hi = int(clip_end_ms if clip_end_ms is not None else clip_start + 30_000)
+        else:
+            chat_lo = rel_for_chat_start
+            chat_hi = rel_for_chat_end
         for msg in chat_messages:
             try:
                 t_ms = int(msg.get("tMs") or msg.get("timestamp_ms") or 0)
             except (TypeError, ValueError):
                 continue
-            if int(clip_start_ms) <= t_ms <= int(end_rel):
+            if int(chat_lo) <= t_ms <= int(chat_hi):
                 msg_count += 1
     streamer["chat"] = {
         "available": bool(cm.get("available")) and msg_count > 0,

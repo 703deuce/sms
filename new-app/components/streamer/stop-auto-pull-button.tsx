@@ -16,7 +16,13 @@ export function StopAutoPullButton({
   const [live, setLive] = useState(initialLive)
   const [busy, setBusy] = useState(false)
 
-  if (!live) return null
+  if (!live) {
+    return (
+      <span className="inline-flex h-9 items-center rounded-md border border-border/60 px-3 text-sm text-muted-foreground">
+        Auto-pull off
+      </span>
+    )
+  }
 
   return (
     <PrimaryButton
@@ -30,12 +36,11 @@ export function StopAutoPullButton({
           method: 'POST',
         })
           .then((data) => {
+            setLive(false)
             if (data.stopped) {
-              setLive(false)
               toast.success('Live auto-pull stopped')
             } else {
-              toast.message('Auto-pull was already stopped')
-              setLive(false)
+              toast.message('Auto-pull was already off')
             }
           })
           .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not stop auto-pull'))

@@ -30,15 +30,11 @@ from clips_worker.streamer.progress import eta_seconds
 from clips_worker.streamer.segments import cut_local_segment, download_segment
 
 
-def _clip_vod_range_start_ms(clip: dict, vod_default: int) -> int:
-    meta = clip.get("aiMeta") or {}
-    if isinstance(meta, str):
-        meta = json.loads(meta) if meta else {}
-    sm = (meta.get("streamer") or {}) if isinstance(meta, dict) else {}
-    if sm.get("vodRangeStartMs") is not None:
-        return int(sm["vodRangeStartMs"])
-    return vod_default
+from clips_worker.streamer.clip_timeline import clip_absolute_span_ms, clip_vod_range_start_ms
 
+
+def _clip_vod_range_start_ms(clip: dict, vod_default: int) -> int:
+    return clip_vod_range_start_ms(clip, vod_default)
 
 
 def _checkpoint_segment_key(conn, vod_id: str, state: dict, clip_id: str, seg_key: str) -> dict:
@@ -56,6 +52,7 @@ def _fetch_segment_mp4(
     *,
     seg_path: Path,
     local_upload: Path | None,
+    window_capture: Path | None,
     url: str | None,
     seg_start_s: float,
     seg_end_s: float,
@@ -64,23 +61,43 @@ def _fetch_segment_mp4(
     job_id: str = "",
     vod_id: str = "",
 ) -> None:
+    from clips_worker.decision_log import decision_log
+
     if clip.get("sourceSegKey"):
         download_object(str(clip["sourceSegKey"]), seg_path)
+        return
+    ai_meta = clip.get("aiMeta") or {}
+    if isinstance(ai_meta, str):
+        ai_meta = json.loads(ai_meta) if ai_meta else {}
+    cap_key = (ai_meta.get("streamer") or {}).get("captureVideoKey") or state.get("windowCaptureVideoKey")
+    if window_capture and window_capture.is_file():
+        cut_local_segment(window_capture, seg_path, seg_start_s, seg_end_s)
+        decision_log(
+            "streamer",
+            "segment_from_window_capture",
+            vodId=vod_id,
+            clipId=str(clip.get("id") or ""),
+            jobId=job_id,
+            captureKey=str(cap_key or state.get("windowCaptureVideoKey") or ""),
+        )
         return
     if local_upload and local_upload.is_file():
         cut_local_segment(local_upload, seg_path, seg_start_s, seg_end_s)
         return
     if not url:
         raise RuntimeError("no url or upload for segment fetch")
-    download_segment(
-        url,
-        seg_path,
-        seg_start_s,
-        seg_end_s,
-        job_id=job_id,
-        vod_id=vod_id,
-        clip_id=str(clip.get("id") or ""),
-    )
+    from clips_worker.stage_log import stage_span
+
+    with stage_span("segment_ytdlp", heartbeat=True, clipId=str(clip.get("id") or "")):
+        download_segment(
+            url,
+            seg_path,
+            seg_start_s,
+            seg_end_s,
+            job_id=job_id,
+            vod_id=vod_id,
+            clip_id=str(clip.get("id") or ""),
+        )
 
 
 def _load_vod(conn, vod_id: str) -> dict:
@@ -274,7 +291,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
             if not layout_state and clips:
                 sample = td_path / "layout_sample.mp4"
                 first = clips[0]
-                fs = max(0.0, (_clip_vod_range_start_ms(first, vod_range_start_ms) + int(first["startMs"])) / 1000.0 - 2)
+                abs_fs, _, wbase = clip_absolute_span_ms(first, vod_range_start_ms)
+                fs = max(0.0, (abs_fs - wbase) / 1000.0 - 2)
                 fe = fs + 30
                 seg_src = layout_video or local_upload
                 if seg_src:
@@ -287,7 +305,22 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     _save_state(conn, vod_id, state)
 
             transcript_key = vod.get("transcriptKey")
-            pending_work: list[_StreamClipWork] = []
+            capture_cache: dict[str, Path] = {}
+
+            def _local_window_capture(clip_row: dict) -> Path | None:
+                ai = clip_row.get("aiMeta") or {}
+                if isinstance(ai, str):
+                    ai = json.loads(ai) if ai else {}
+                key = (ai.get("streamer") or {}).get("captureVideoKey") or state.get("windowCaptureVideoKey")
+                if not key:
+                    return layout_video if layout_video and layout_video.is_file() else local_upload
+                k = str(key)
+                if k in capture_cache:
+                    return capture_cache[k]
+                dest = td_path / f"window_capture_{len(capture_cache)}.mp4"
+                download_object(k, dest)
+                capture_cache[k] = dest
+                return dest
 
             for idx, clip in enumerate(clips):
                 if clip.get("previewKey"):
@@ -299,16 +332,16 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                 if streamer_tier == "more" or (ai_meta_row.get("streamer") or {}).get("render") is False:
                     continue
                 clip_id = clip["id"]
-                start_ms = int(clip["startMs"])
-                end_ms = int(clip["endMs"])
+                abs_start, abs_end, window_base = clip_absolute_span_ms(clip, vod_range_start_ms)
                 pad = SEGMENT_PAD_S
-                # Clip times are relative to the analyzed slice; video fetch uses absolute VOD time.
-                audio_seg_start_s = max(0.0, start_ms / 1000.0 - pad)
-                audio_seg_end_s = end_ms / 1000.0 + pad
-                clip_vod_start = _clip_vod_range_start_ms(clip, vod_range_start_ms)
-                video_seg_start_s = max(0.0, (clip_vod_start + start_ms) / 1000.0 - pad)
-                video_seg_end_s = (clip_vod_start + end_ms) / 1000.0 + pad
+                win_start_ms = abs_start - window_base
+                win_end_ms = abs_end - window_base
+                audio_seg_start_s = max(0.0, win_start_ms / 1000.0 - pad)
+                audio_seg_end_s = win_end_ms / 1000.0 + pad
+                video_seg_start_s = audio_seg_start_s
+                video_seg_end_s = audio_seg_end_s
                 seg_path = td_path / f"seg_{clip_id}.mp4"
+                window_capture = _local_window_capture(clip)
 
                 with stage_span("clip_render", heartbeat=True, clip_index=idx, clip_id=clip_id):
                     with stage_span("segment_download", heartbeat=True):
@@ -317,6 +350,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             state,
                             seg_path=seg_path,
                             local_upload=local_upload,
+                            window_capture=window_capture,
                             url=url,
                             seg_start_s=video_seg_start_s,
                             seg_end_s=video_seg_end_s,
@@ -333,18 +367,17 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                         audio_seg_end_s,
                         log_context={"vodId": vod_id, "clipId": clip_id},
                     )
+                    true_start_abs_ms = window_base + int(true_start_ms)
                     true_end_ms = int(
-                        clip_vod_start + end_ms + (true_start_ms - int(audio_seg_start_s * 1000))
+                        abs_end + (true_start_ms - int(audio_seg_start_s * 1000))
                     )
-                    true_start_abs_ms = clip_vod_start + true_start_ms
 
                     seg_key = clip_segment_key(workspace_id, project_id, clip_id)
                     upload_file(seg_key, seg_path, "video/mp4")
                     state = _checkpoint_segment_key(conn, vod_id, state, clip_id, seg_key)
 
-                    offset_ms = true_start_ms
-                    rel_start = max(0, start_ms - offset_ms)
-                    rel_end = max(rel_start + 100, end_ms - offset_ms)
+                    rel_start = max(0, abs_start - true_start_abs_ms)
+                    rel_end = max(rel_start + 100, abs_end - true_start_abs_ms)
 
                     words_path = td_path / f"words_{clip_id}.json"
                     clip_words: list[dict]
@@ -376,8 +409,8 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                         language=(settings.get("streamer") or {}).get("language"),
                                     )
                                 )
-                                clip_words = slice_words(cap.words, start_ms, end_ms)
-                                cap_min = max(0.0, (end_ms - start_ms) / 60000.0)
+                                clip_words = slice_words(cap.words, win_start_ms, win_end_ms)
+                                cap_min = max(0.0, (win_end_ms - win_start_ms) / 60000.0)
                                 print(
                                     f"[clipper:stream] caption_clip clipId={clip_id} vodId={vod_id} "
                                     f"model={deepgram_caption_model()} clipMinutes={cap_min:.2f}",
@@ -390,14 +423,14 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                     raise RuntimeError("missing transcriptKey")
                                 download_object(transcript_key, transcript_path)
                                 all_words = json.loads(transcript_path.read_text())
-                                clip_words = slice_words(all_words, start_ms, end_ms)
+                                clip_words = slice_words(all_words, win_start_ms, win_end_ms)
                         else:
                             transcript_path = td_path / "transcript.json"
                             if not transcript_key:
                                 raise RuntimeError("missing transcriptKey")
                             download_object(transcript_key, transcript_path)
                             all_words = json.loads(transcript_path.read_text())
-                            clip_words = slice_words(all_words, start_ms, end_ms)
+                            clip_words = slice_words(all_words, win_start_ms, win_end_ms)
                     words_path.write_text(json.dumps(clip_words))
 
                     clip_file = td_path / f"clip_{clip_id}.mp4"
@@ -411,7 +444,7 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     raw_edits = clip.get("edits") or {}
                     if isinstance(raw_edits, str):
                         raw_edits = json.loads(raw_edits) if raw_edits else {}
-                    clip_edits = normalize_edits(raw_edits, start_ms, end_ms)
+                    clip_edits = normalize_edits(raw_edits, abs_start, abs_end)
                     ai_meta = clip.get("aiMeta") or {}
                     if isinstance(ai_meta, str):
                         ai_meta = json.loads(ai_meta)
@@ -429,75 +462,52 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                             "mode": edits_layout_mode,
                             "editorMode": edits_layout_mode,
                         }
-                    pending_work.append(
-                        _StreamClipWork(
-                            clip_id=clip_id,
-                            idx=idx,
-                            start_ms=start_ms,
-                            clip_words=clip_words,
-                            words_path=words_path,
-                            clip_file=clip_file,
-                            out_mp4=out_mp4,
-                            crop_track=crop_track,
-                            use_stack=use_stack,
-                            clip_layout=clip_layout if isinstance(clip_layout, dict) else {},
-                            ai_meta=ai_meta,
-                            seg_key=seg_key,
-                            true_start_abs_ms=true_start_abs_ms,
-                            true_end_ms=true_end_ms,
-                            clip_edits=clip_edits,
-                            end_ms=end_ms,
-                        )
-                    )
 
-            for work in pending_work:
-                with stage_span("clip_render", heartbeat=True, clip_index=work.idx, clip_id=work.clip_id):
-                    with stage_span("reframe", heartbeat=True, clip_index=work.idx):
-                        if work.use_stack:
-                            render_stack_mp4(work.clip_file, work.out_mp4, work.clip_layout)
-                            rendered = work.out_mp4
+                    with stage_span("reframe", heartbeat=True, clip_index=idx):
+                        if use_stack:
+                            render_stack_mp4(clip_file, out_mp4, clip_layout)
+                            rendered = out_mp4
                         else:
                             from clips_worker.streamer.layout.stream_preview_render import (
                                 render_stream_clip_preview,
                             )
 
                             render_stream_clip_preview(
-                                work.clip_file,
-                                work.out_mp4,
-                                edits=work.clip_edits,
+                                clip_file,
+                                out_mp4,
+                                edits=clip_edits,
                                 settings=settings,
-                                clip_words=work.clip_words,
-                                work_dir=td_path / f"render_{work.clip_id}",
-                                clip_start_ms=work.start_ms,
-                                clip_end_ms=work.end_ms,
+                                clip_words=clip_words,
+                                work_dir=td_path / f"render_{clip_id}",
+                                clip_start_ms=abs_start,
+                                clip_end_ms=abs_end,
                                 conn=conn,
                                 project_id=project_id,
-                                clip_id=work.clip_id,
+                                clip_id=clip_id,
                                 vod_id=vod_id,
                             )
-                            rendered = work.out_mp4
-                    ai_streamer = dict((work.ai_meta.get("streamer") or {}))
-                    edits_mode = str((work.clip_edits.get("layout") or {}).get("mode") or "fit_top")
+                            rendered = out_mp4
+                    ai_streamer = dict((ai_meta.get("streamer") or {}))
+                    edits_mode = str((clip_edits.get("layout") or {}).get("mode") or "fit_top")
                     ai_streamer["layout"] = {
                         "layout": edits_mode,
                         "mode": edits_mode,
                         "editorMode": edits_mode,
                     }
-                    poster = td_path / f"poster_{work.clip_id}.jpg"
+                    poster = td_path / f"poster_{clip_id}.jpg"
                     poster_jpg(rendered, poster)
-                    keys = clip_keys(workspace_id, project_id, work.clip_id)
+                    keys = clip_keys(workspace_id, project_id, clip_id)
                     upload_file(keys["preview"], rendered, "video/mp4")
                     upload_file(keys["poster"], poster, "image/jpeg")
-                    put_json(keys["words"], work.clip_words)
+                    put_json(keys["words"], clip_words)
                     crop_key = None
-                    if work.crop_track.exists():
-                        upload_file(keys["crop_track"], work.crop_track, "application/json")
+                    if crop_track.exists():
+                        upload_file(keys["crop_track"], crop_track, "application/json")
                         crop_key = keys["crop_track"]
 
-                    ai_meta = work.ai_meta
                     if ai_streamer:
                         ai_meta = {**ai_meta, "streamer": ai_streamer}
-                    with stage_span("db_write_clip", clip_id=work.clip_id):
+                    with stage_span("db_write_clip", clip_id=clip_id):
                         with conn.cursor() as cur:
                             cur.execute(
                                 """
@@ -513,12 +523,12 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                                     keys["poster"],
                                     keys["words"],
                                     crop_key,
-                                    work.seg_key,
-                                    work.true_start_abs_ms,
-                                    work.true_end_ms,
+                                    seg_key,
+                                    true_start_abs_ms,
+                                    true_end_ms,
                                     json.dumps(ai_meta),
-                                    json.dumps(work.clip_edits),
-                                    work.clip_id,
+                                    json.dumps(clip_edits),
+                                    clip_id,
                                 ),
                             )
                         conn.commit()
@@ -526,13 +536,15 @@ def run_stream_render_job(conn, job: dict, post_progress) -> None:
                     delete_clip_source_segment(
                         workspace_id,
                         project_id,
-                        work.clip_id,
-                        work.seg_key,
+                        clip_id,
+                        seg_key,
                         vod_id=vod_id,
                     )
 
-                clips_ready += 1
-                _render_progress(clips_ready)
+                    clips_ready += 1
+                    _render_progress(clips_ready)
+
+            # end clip loop
 
     mark_project_ready(conn, project_id)
     enqueue_stream_cleanup_job(

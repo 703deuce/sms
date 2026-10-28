@@ -495,6 +495,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 )
             conn.commit()
 
+            render_id: str | None = None
             clip_rows = []
             time_offset_ms = window_start_ms if payload.get("windowOnly") else 0
             streamer_settings = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
@@ -551,6 +552,12 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     chat_messages=chat_messages or [],
                     layout_mode=layout_mode,
                 )
+                sm = dict((ai_meta.get("streamer") or {}))
+                cap_key = state.get("windowCaptureVideoKey")
+                if cap_key:
+                    sm["captureVideoKey"] = str(cap_key)
+                    sm["captureWindowStartMs"] = int(window_start_ms if payload.get("windowOnly") else vod.get("rangeStartMs") or 0)
+                    ai_meta = {**ai_meta, "streamer": sm}
                 clip_rows.append(
                     {
                         "id": clip_id,
@@ -580,21 +587,72 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 clips_out=inserted if inserted else len(clip_rows),
             )
 
+            from clips_worker.decision_log import decision_log
+
+            new_clip_count = inserted if inserted else len(clip_rows)
             pri = job_priority(conn, str(vod.get("workspaceId") or ""), vod.get("triggeredBy") or "paste")
-            render_id = f"job_{uuid.uuid4().hex}"
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
-                    VALUES (%s,%s,'STREAM_RENDER','QUEUED',%s::jsonb,%s,NOW())
-                    """,
-                    (render_id, project_id, json.dumps({"vodId": vod_id}), pri),
+            render_id: str | None = None
+            if new_clip_count <= 0:
+                decision_log(
+                    "streamer",
+                    "stream_render_skipped",
+                    vodId=vod_id,
+                    projectId=project_id,
+                    reason="zero_new_clips",
+                    jobId=str(job.get("id") or ""),
                 )
+            else:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id FROM clip_jobs
+                        WHERE "projectId"=%s AND type='STREAM_RENDER'
+                          AND status IN ('QUEUED','RUNNING')
+                          AND payload->>'vodId'=%s
+                        LIMIT 1
+                        """,
+                        (project_id, vod_id),
+                    )
+                    existing = cur.fetchone()
+                if existing:
+                    decision_log(
+                        "streamer",
+                        "stream_render_skipped",
+                        vodId=vod_id,
+                        projectId=project_id,
+                        reason="render_already_active",
+                        existingJobId=str(existing[0]),
+                        jobId=str(job.get("id") or ""),
+                    )
+                else:
+                    render_id = f"job_{uuid.uuid4().hex}"
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO clip_jobs (id, "projectId", type, status, payload, priority, "createdAt")
+                            VALUES (%s,%s,'STREAM_RENDER','QUEUED',%s::jsonb,%s,NOW())
+                            """,
+                            (render_id, project_id, json.dumps({"vodId": vod_id}), pri),
+                        )
+                    decision_log(
+                        "streamer",
+                        "stream_render_enqueued",
+                        vodId=vod_id,
+                        projectId=project_id,
+                        renderJobId=render_id,
+                        newClips=new_clip_count,
+                        jobId=str(job.get("id") or ""),
+                    )
             conn.commit()
 
         post_progress(
             job["id"],
-            {"projectStatus": "RENDERING", "stage": "Rendering clips", "progress": 65, "jobStatus": "DONE"},
+            {
+                "projectStatus": "RENDERING" if render_id else "READY",
+                "stage": "Rendering clips" if render_id else "ready",
+                "progress": 65 if render_id else 100,
+                "jobStatus": "DONE",
+            },
         )
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

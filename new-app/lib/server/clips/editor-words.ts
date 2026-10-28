@@ -81,12 +81,15 @@ export async function resolveEditorWords(
     const clipLoaded = loadSourceWords(absolute)
     if (projectTranscript.length) {
       const projectLoaded = loadSourceWords(projectTranscript)
-      return mergeClipWordsWithProjectTranscript(
-        clipLoaded,
-        projectLoaded,
-        clip.startMs,
-        clip.endMs,
-      )
+      const sliced = wordsInRange(projectLoaded, clip.startMs, clip.endMs)
+      if (sliced.length) {
+        return mergeClipWordsWithProjectTranscript(
+          clipLoaded,
+          projectLoaded,
+          clip.startMs,
+          clip.endMs,
+        )
+      }
     }
     return clipLoaded
   }

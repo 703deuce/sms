@@ -113,8 +113,22 @@ def ensure_vod_analysis_proxy(
     job_id: str,
 ) -> dict:
     """Ensure state['analysisProxyKey'] points at a stored ~480p proxy for this VOD range."""
+    from clips_worker.decision_log import decision_log
+    from clips_worker.stage_log import stage_span
+
     if state.get("analysisProxyKey"):
         return state
+    capture_key = state.get("windowCaptureVideoKey")
+    if capture_key:
+        with stage_span("analysis_proxy_local", heartbeat=True, source="window_capture"):
+            decision_log(
+                "streamer",
+                "analysis_proxy_from_capture",
+                vodId=vod_id,
+                jobId=job_id,
+                captureKey=str(capture_key),
+            )
+        return {**state, "analysisProxyKey": str(capture_key)}
     url = vod.get("url")
     if not url:
         return state
@@ -122,14 +136,15 @@ def ensure_vod_analysis_proxy(
     end_ms = vod.get("rangeEndMs")
     end_i = int(end_ms) if end_ms is not None else None
     dest = scratch / "analysis_proxy_upload.mp4"
-    download_vod_analysis_proxy(
-        str(url),
-        dest,
-        range_start_ms=start_ms,
-        range_end_ms=end_i,
-        job_id=job_id,
-        vod_id=vod_id,
-    )
+    with stage_span("analysis_proxy_download", heartbeat=True, source="ytdlp"):
+        download_vod_analysis_proxy(
+            str(url),
+            dest,
+            range_start_ms=start_ms,
+            range_end_ms=end_i,
+            job_id=job_id,
+            vod_id=vod_id,
+        )
     key = stream_analysis_proxy_key(workspace_id, vod_id)
     upload_file(key, dest, "video/mp4")
     marker = scratch / ".analysis_proxy_key"
