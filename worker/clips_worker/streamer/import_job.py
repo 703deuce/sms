@@ -1043,3 +1043,4 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
         job["id"],
         {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
     )
+    return vod

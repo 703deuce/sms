@@ -72,6 +72,7 @@ def _is_retryable(stderr: str) -> bool:
 def run_ytdlp(cmd: list[str], progress_cb: Callable[[float], None] | None = None, step: str = "Download") -> None:
     last_err = ""
     last_stderr = ""
+    proc: subprocess.Popen[str] | None = None
     for attempt in range(1, 6):
         lines: list[str] = []
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
