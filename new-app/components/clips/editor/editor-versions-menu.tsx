@@ -62,6 +62,11 @@ class VersionsMenuErrorBoundary extends Component<{ children: ReactNode }, { fai
   }
 }
 
+function defaultVersionName(): string {
+  const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return `Version ${stamp}`
+}
+
 function SaveVersionDialog({
   open,
   onOpenChange,
@@ -71,19 +76,23 @@ function SaveVersionDialog({
   onOpenChange: (open: boolean) => void
   onSave: (name: string) => void
 }) {
-  const [saveName, setSaveName] = useState('My version')
+  const [saveName, setSaveName] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
-    setSaveName('My version')
-    const t = window.setTimeout(() => inputRef.current?.focus(), 0)
+    setSaveName('')
+    const t = window.setTimeout(() => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus()
+      el.select()
+    }, 0)
     return () => window.clearTimeout(t)
   }, [open])
 
   const submit = () => {
-    const name = saveName.trim()
-    if (!name) return
+    const name = saveName.trim() || defaultVersionName()
     onSave(name)
     onOpenChange(false)
   }
@@ -98,6 +107,7 @@ function SaveVersionDialog({
         <Input
           ref={inputRef}
           aria-label="Version name"
+          placeholder="Version name"
           value={saveName}
           onChange={(e) => setSaveName(e.target.value)}
           onKeyDown={(e) => {
@@ -111,7 +121,7 @@ function SaveVersionDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" disabled={!saveName.trim()} onClick={submit} data-testid="versions-save-submit">
+          <Button type="button" onClick={submit} data-testid="versions-save-submit">
             Save
           </Button>
         </DialogFooter>
@@ -119,6 +129,12 @@ function SaveVersionDialog({
     </Dialog>
   )
 }
+
+function isAutoVersion(v: EditVersionRow): boolean {
+  return v.kind === 'auto' || v.name.startsWith('Before restore')
+}
+
+const AUTO_VERSION_CAP = 5
 
 function EditorVersionsMenuInner({
   enabled,
@@ -137,7 +153,51 @@ function EditorVersionsMenuInner({
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const [autoOpen, setAutoOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<EditVersionRow | null>(null)
   if (!enabled) return null
+
+  const manual = versions.filter((v) => !isAutoVersion(v))
+  const auto = versions.filter(isAutoVersion).slice(0, AUTO_VERSION_CAP)
+
+  const versionRow = (v: EditVersionRow) => (
+    <DropdownMenuItem
+      key={v.id}
+      className="flex flex-col items-start gap-1 py-2"
+      onClick={(e) => e.preventDefault()}
+      data-testid={`versions-row-${v.id}`}
+    >
+      <span className="text-sm font-medium">{v.name}</span>
+      <span className="text-[10px] text-muted-foreground">{relativeTime(v.createdAt)}</span>
+      <span className="mt-1 flex gap-1">
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="h-7 text-xs"
+          onClick={() => {
+            setMenuOpen(false)
+            onRestoreVersion(v.id)
+          }}
+        >
+          Restore
+        </Button>
+        {v.kind !== 'original' ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs text-destructive"
+            onClick={() => setPendingDelete(v)}
+          >
+            <Trash2 className="mr-1 size-3" aria-hidden />
+            Delete
+          </Button>
+        ) : null}
+      </span>
+    </DropdownMenuItem>
+  )
+
   return (
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -167,49 +227,28 @@ function EditorVersionsMenuInner({
             Save version…
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          {versions.length === 0 ? (
+          {manual.length === 0 && auto.length === 0 ? (
             <DropdownMenuItem disabled data-testid="versions-empty-item">
               No saved versions yet
             </DropdownMenuItem>
           ) : (
-            versions.map((v) => (
-              <DropdownMenuItem
-                key={v.id}
-                className="flex flex-col items-start gap-1 py-2"
-                onClick={(e) => e.preventDefault()}
-                data-testid={`versions-row-${v.id}`}
-              >
-                <span className="text-sm font-medium">{v.name}</span>
-                <span className="text-[10px] text-muted-foreground">{relativeTime(v.createdAt)}</span>
-                <span className="mt-1 flex gap-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="h-7 text-xs"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      onRestoreVersion(v.id)
-                    }}
-                  >
-                    Restore
-                  </Button>
-                  {v.kind !== 'original' ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-xs text-destructive"
-                      onClick={() => onDeleteVersion(v.id)}
-                    >
-                      <Trash2 className="mr-1 size-3" aria-hidden />
-                      Delete
-                    </Button>
-                  ) : null}
-                </span>
-              </DropdownMenuItem>
-            ))
+            manual.map((v) => versionRow(v))
           )}
+          {auto.length > 0 ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  setAutoOpen((o) => !o)
+                }}
+                data-testid="versions-auto-toggle"
+              >
+                Auto backups ({auto.length})
+              </DropdownMenuItem>
+              {autoOpen ? auto.map((v) => versionRow(v)) : null}
+            </>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => {
@@ -227,6 +266,33 @@ function EditorVersionsMenuInner({
         onOpenChange={setSaveDialogOpen}
         onSave={onSaveVersion}
       />
+      <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="sm:max-w-md" data-testid="versions-delete-dialog">
+          <DialogHeader>
+            <DialogTitle>Delete version?</DialogTitle>
+            <DialogDescription>
+              {pendingDelete ? `"${pendingDelete.name}" will be removed permanently.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              data-testid="versions-delete-confirm"
+              onClick={() => {
+                if (pendingDelete) onDeleteVersion(pendingDelete.id)
+                setPendingDelete(null)
+                setMenuOpen(false)
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

@@ -79,7 +79,7 @@ export function parseStreamUrl(raw: string): ParsedStreamUrl {
       return { platform: 'twitch', kind: 'clip', id: parts[2], channel: parts[0], startHintS }
     }
     if (parts.length === 1 && parts[0] && !TWITCH_RESERVED.has(parts[0].toLowerCase())) {
-      return { platform: 'twitch', kind: 'channel', id: parts[0].toLowerCase(), channel: parts[0].toLowerCase() }
+      return { error: "That's a channel page. Paste a Twitch VOD (…/videos/…) or clip link." }
     }
   }
 

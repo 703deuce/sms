@@ -12,6 +12,7 @@ import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 import { EditorHeadlineField } from '@/components/clips/editor/editor-headline-field'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
 import { Slider } from '@/components/ui/slider'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const HEADLINE_PRESETS: HeadlineLayer['style']['preset'][] = [
   'stream_white_box',
@@ -243,20 +244,24 @@ export function LayersPanel({
           </label>
           <label className="block space-y-1 text-xs">
             Font
-            <select
-              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+            <Select
               value={headline.style.font ?? 'Anton'}
-              onChange={(e) =>
+              onValueChange={(font) =>
                 setLayers(
                   patchLayer(layers, 'headline', {
-                    style: { ...headline.style, font: e.target.value },
+                    style: { ...headline.style, font },
                   }),
                 )
               }
             >
-              <option value="Anton">Anton</option>
-              <option value="Montserrat Black">Montserrat Black</option>
-            </select>
+              <SelectTrigger className="mt-1 h-8 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Anton">Anton</SelectItem>
+                <SelectItem value="Montserrat Black">Montserrat Black</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
         </div>
       ) : null}

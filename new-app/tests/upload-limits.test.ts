@@ -18,7 +18,7 @@ describe('upload limits', () => {
     const prevS = process.env.STREAMER_UPLOAD_MAX_BYTES
     delete process.env.CLIPS_UPLOAD_MAX_BYTES
     delete process.env.STREAMER_UPLOAD_MAX_BYTES
-    expect(clipUploadMaxBytes()).toBe(20 * 1024 * 1024 * 1024)
+    expect(clipUploadMaxBytes()).toBe(3 * 1024 * 1024 * 1024)
     if (prev !== undefined) process.env.CLIPS_UPLOAD_MAX_BYTES = prev
     if (prevS !== undefined) process.env.STREAMER_UPLOAD_MAX_BYTES = prevS
   })

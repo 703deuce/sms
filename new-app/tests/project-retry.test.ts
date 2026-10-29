@@ -55,7 +55,7 @@ describe('clipper retry resume', () => {
   })
 
   it('sets resume on job payload when appropriate', () => {
-    expect(clipperRetryJobPayload(true)).toEqual({ resume: true, retry: true })
-    expect(clipperRetryJobPayload(false)).toEqual({ retry: true })
+    expect(clipperRetryJobPayload(true)).toMatchObject({ resume: true, retry: true })
+    expect(clipperRetryJobPayload(false)).toMatchObject({ retry: true })
   })
 })

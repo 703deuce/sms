@@ -260,9 +260,10 @@ function nonNullConfigValue(v: unknown): boolean {
 /** Merge preset JSON with edits.captions.presetConfig (same rule as worker build_ass). */
 export function resolveCaptionPreset(cap: ClipEditsV2['captions'] | undefined): CaptionPreset {
   const preset = resolvePreset(cap?.presetId)
+  let base = cap?.font?.trim() ? { ...preset, font: cap.font.trim() } : preset
   const cfg = cap?.presetConfig
-  if (!cfg || typeof cfg !== 'object') return preset
-  const merged = { ...preset } as Record<string, unknown>
+  if (!cfg || typeof cfg !== 'object') return base
+  const merged = { ...base } as Record<string, unknown>
   for (const [k, v] of Object.entries(cfg as Record<string, unknown>)) {
     if (nonNullConfigValue(v)) merged[k] = v
   }

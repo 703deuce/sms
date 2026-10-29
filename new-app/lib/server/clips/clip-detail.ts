@@ -9,7 +9,7 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
-import { layersFromLegacy, resolveLayers } from '@/lib/clips/layers'
+import { resolveLayers } from '@/lib/clips/layers'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 
 export type FacecamLayoutState = {
@@ -93,45 +93,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const storage = project.transcriptKey
     ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
     : getClipStorage(driverHint)
-  const bounds = await clipBoundsForPatch({
-    startMs: clip.startMs,
-    endMs: clip.endMs,
-    projectId: clip.projectId,
-    sourceSegKey: clip.sourceSegKey,
-    sourceSegStartMs: clip.sourceSegStartMs,
-    sourceSegEndMs: clip.sourceSegEndMs,
-    previewKey: clip.previewKey,
-  })
-  const edits = normalizeEdits(clip.edits, bounds)
-
-  const projectTranscript = await loadProjectTranscript(storage, project)
-  const words: SourceWord[] = await resolveEditorWords(storage, workspaceId, clip, projectTranscript)
 
   const cropTrackKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clip.id}/crop_track.json`
-  let cropTrack: CropTrack | null = null
-  try {
-    const rawTrack = await storage.getJson<unknown>(cropTrackKey)
-    cropTrack = normalizeCropTrack(rawTrack)
-  } catch {
-    cropTrack = null
-  }
-
-  let cropRaw: unknown = null
-  if (clip.cropKey) {
-    try {
-      cropRaw = await storage.getJson(clip.cropKey)
-    } catch {
-      cropRaw = null
-    }
-  }
-  let shots: CropShot[] = cropTrack?.shots?.length
-    ? shotsToCropShots(cropTrack)
-    : shotsFromCropJson(cropRaw as { shots?: CropShot[] }, clip.startMs, clip.endMs)
-  if (shots.length <= 1) {
-    const inferred = inferShotsFromWords(words, clip.startMs, clip.endMs)
-    if (inferred.length > 1) shots = inferred
-  }
-
   const proxyKey = project.proxyKey
   const sourceKey = project.upload?.key
   const previewKey = clip.previewKey
@@ -139,35 +102,77 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const sourceSegStartMs = clip.sourceSegStartMs
   const sourceSegEndMs = clip.sourceSegEndMs
 
+  const [
+    bounds,
+    projectTranscript,
+    cropTrackResult,
+    cropRawResult,
+    segmentSize,
+    streamVod,
+    signedPreview,
+    signedPoster,
+    signedProxy,
+    signedSource,
+  ] = await Promise.all([
+    clipBoundsForPatch({
+      startMs: clip.startMs,
+      endMs: clip.endMs,
+      projectId: clip.projectId,
+      sourceSegKey: clip.sourceSegKey,
+      sourceSegStartMs: clip.sourceSegStartMs,
+      sourceSegEndMs: clip.sourceSegEndMs,
+      previewKey: clip.previewKey,
+    }),
+    loadProjectTranscript(storage, project),
+    storage.getJson<unknown>(cropTrackKey).catch(() => null),
+    clip.cropKey ? storage.getJson(clip.cropKey).catch(() => null) : Promise.resolve(null),
+    sourceSegKey ? storage.getObjectSizeBytes(sourceSegKey).catch(() => null) : Promise.resolve(null),
+    prisma.streamVod.findUnique({
+      where: { projectId: project.id },
+      select: { chatSource: true, chatMessages: true, sourceType: true, state: true },
+    }),
+    previewKey ? createCachedSignedDownloadUrl(storage, previewKey).catch(() => null) : Promise.resolve(null),
+    clip.posterKey ? createCachedSignedDownloadUrl(storage, clip.posterKey).catch(() => null) : Promise.resolve(null),
+    proxyKey ? createCachedSignedDownloadUrl(storage, proxyKey).catch(() => null) : Promise.resolve(null),
+    sourceKey ? createCachedSignedDownloadUrl(storage, sourceKey).catch(() => null) : Promise.resolve(null),
+  ])
+
+  const edits = normalizeEdits(clip.edits, bounds)
+  const words: SourceWord[] = await resolveEditorWords(storage, workspaceId, clip, projectTranscript)
+
+  let cropTrack: CropTrack | null = null
+  if (cropTrackResult) {
+    cropTrack = normalizeCropTrack(cropTrackResult)
+  }
+
+  let shots: CropShot[] = cropTrack?.shots?.length
+    ? shotsToCropShots(cropTrack)
+    : shotsFromCropJson(cropRawResult as { shots?: CropShot[] }, clip.startMs, clip.endMs)
+  if (shots.length <= 1) {
+    const inferred = inferShotsFromWords(words, clip.startMs, clip.endMs)
+    if (inferred.length > 1) shots = inferred
+  }
+
   const segmentExists =
-    Boolean(sourceSegKey) &&
-    sourceSegStartMs != null &&
-    (await storage.getObjectSizeBytes(sourceSegKey)) != null
+    Boolean(sourceSegKey) && sourceSegStartMs != null && segmentSize != null
 
   let media: EditorMedia | null = null
-  if (proxyKey) {
-    media = {
-      url: await createCachedSignedDownloadUrl(storage, proxyKey),
-      kind: 'proxy',
-      offsetMs: 0,
-    }
-  } else if (sourceKey) {
-    media = {
-      url: await createCachedSignedDownloadUrl(storage, sourceKey),
-      kind: 'source',
-      offsetMs: 0,
-    }
+  if (proxyKey && signedProxy) {
+    media = { url: signedProxy, kind: 'proxy', offsetMs: 0 }
+  } else if (sourceKey && signedSource) {
+    media = { url: signedSource, kind: 'source', offsetMs: 0 }
   } else if (segmentExists && sourceSegKey) {
+    const segUrl = await createCachedSignedDownloadUrl(storage, sourceSegKey)
     media = {
-      url: await createCachedSignedDownloadUrl(storage, sourceSegKey),
+      url: segUrl,
       kind: 'segment',
       offsetMs: sourceSegStartMs,
       minMs: sourceSegStartMs,
       maxMs: sourceSegEndMs ?? undefined,
     }
-  } else if (previewKey) {
+  } else if (previewKey && signedPreview) {
     media = {
-      url: await createCachedSignedDownloadUrl(storage, previewKey),
+      url: signedPreview,
       kind: 'composite',
       offsetMs: clip.startMs,
       minMs: clip.startMs,
@@ -175,13 +180,13 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     }
   }
 
+  const signedCropTrack = cropTrack
+    ? await createCachedSignedDownloadUrl(storage, cropTrackKey).catch(() => null)
+    : null
+
   const brollMedia = edits.broll?.length ? await resolveBrollMedia(edits.broll) : []
   const aiMeta = (clip.aiMeta || null) as { brollIdeas?: string[] } | null
 
-  const streamVod = await prisma.streamVod.findUnique({
-    where: { projectId: project.id },
-    select: { chatSource: true, chatMessages: true, sourceType: true, state: true },
-  })
   const vodState =
     streamVod?.state && typeof streamVod.state === 'object' && !Array.isArray(streamVod.state)
       ? (streamVod.state as Record<string, unknown>)
@@ -221,11 +226,11 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     words,
     crop: { shots, track: cropTrack },
     mediaUrls: {
-      preview: previewKey ? await createCachedSignedDownloadUrl(storage, previewKey) : null,
-      poster: clip.posterKey ? await createCachedSignedDownloadUrl(storage, clip.posterKey) : null,
-      proxy: proxyKey ? await createCachedSignedDownloadUrl(storage, proxyKey) : null,
-      source: sourceKey ? await createCachedSignedDownloadUrl(storage, sourceKey) : null,
-      cropTrack: cropTrack ? await createCachedSignedDownloadUrl(storage, cropTrackKey) : null,
+      preview: signedPreview,
+      poster: signedPoster,
+      proxy: signedProxy,
+      source: signedSource,
+      cropTrack: signedCropTrack,
     },
     media,
     project: { id: project.id, title: project.title, settings: project.settings, status: project.status },

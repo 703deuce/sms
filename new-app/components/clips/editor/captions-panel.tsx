@@ -30,6 +30,54 @@ import {
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { previewCaptionBottomPct } from '@/lib/clips/caption-safe-area'
 
+const CAPTION_FONTS = ['Poppins', 'Anton', 'Montserrat Black'] as const
+
+function CaptionHexInput({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string
+  value: string
+  onCommit: (hex: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+  const commit = () => {
+    const v = draft.trim()
+    if (/^#[0-9A-Fa-f]{6}$/.test(v)) onCommit(v)
+    else setDraft(value)
+  }
+  return (
+    <label className="text-xs">
+      {label}
+      <div className="mt-1 flex gap-1">
+        <input
+          type="color"
+          className="h-8 w-10 shrink-0 cursor-pointer rounded border border-border"
+          value={/^#[0-9A-Fa-f]{6}$/.test(value) ? value : '#ffffff'}
+          onChange={(e) => onCommit(e.target.value)}
+          aria-label={`${label} picker`}
+        />
+        <Input
+          className="h-8 font-mono text-xs"
+          value={draft}
+          aria-label={`${label} hex`}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commit()
+            }
+          }}
+        />
+      </div>
+    </label>
+  )
+}
 const HIGHLIGHT_SWATCHES = ['#FDE047', '#FACC15', '#22C55E', '#38BDF8', '#F472B6', '#FFFFFF'] as const
 const ANIMATIONS = ['none', 'pop', 'bounce', 'slideup', 'typewriter', 'karaoke', 'glow'] as const
 
@@ -521,25 +569,34 @@ export function CaptionsPanel({
         ))}
       </div>
 
+      <label className="text-xs font-medium text-muted-foreground">Font</label>
+      <Select
+        value={cap.font ?? preset.font ?? 'Poppins'}
+        onValueChange={(font) => patch({ font })}
+      >
+        <SelectTrigger className="h-9">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {CAPTION_FONTS.map((f) => (
+            <SelectItem key={f} value={f}>
+              {f}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
       <div className="grid grid-cols-2 gap-3">
-        <label className="text-xs">
-          Speaker 1 active
-          <input
-            type="color"
-            className="mt-1 block h-8 w-full"
-            value={cap.colors?.a || preset.active}
-            onChange={(e) => patch({ colors: { ...cap.colors, a: e.target.value } })}
-          />
-        </label>
-        <label className="text-xs">
-          Speaker 2 active
-          <input
-            type="color"
-            className="mt-1 block h-8 w-full"
-            value={cap.colors?.b || preset.activeB}
-            onChange={(e) => patch({ colors: { ...cap.colors, b: e.target.value } })}
-          />
-        </label>
+        <CaptionHexInput
+          label="Speaker 1 active"
+          value={cap.colors?.a || preset.active}
+          onCommit={(a) => patch({ colors: { ...cap.colors, a } })}
+        />
+        <CaptionHexInput
+          label="Speaker 2 active"
+          value={cap.colors?.b || preset.activeB}
+          onCommit={(b) => patch({ colors: { ...cap.colors, b } })}
+        />
       </div>
 
       <div className="flex flex-wrap gap-2">

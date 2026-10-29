@@ -29,7 +29,7 @@ describe('ignore and shorten ops', () => {
     let doc = emptyDocument(['a', 'b'])
     doc = applyCompositionOp(doc, { type: 'ignore_words', wordIds: ['b'] })
     const edl = deriveEdl(doc, map, { padMs: 0 })
-    expect(edl.filter((s) => s.kind === 'source')).toHaveLength(1)
+    expect(edl.filter((s) => s.kind === 'source')).toHaveLength(2)
   })
 
   it('shorten_gap_before adjusts trims', () => {

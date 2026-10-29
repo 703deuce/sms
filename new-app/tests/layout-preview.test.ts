@@ -6,9 +6,9 @@ import {
 import { headlineBarAllowedForLayout } from '@/lib/clips/export-template'
 
 describe('layout preview helpers', () => {
-  it('full_frame uses letterbox blur and headline band', () => {
+  it('full_frame uses letterbox blur without top headline band in preview', () => {
     expect(layoutUsesLetterboxBlurPreview('full_frame')).toBe(true)
-    expect(layoutReservesHeadlineBand('full_frame')).toBe(true)
+    expect(layoutReservesHeadlineBand('full_frame')).toBe(false)
     expect(headlineBarAllowedForLayout('full_frame')).toBe(true)
   })
 

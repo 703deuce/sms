@@ -45,12 +45,19 @@ export function clampTrimWithMediaBounds(
   trim: { in: number; out: number },
   mediaMinMs?: number,
   mediaMaxMs?: number,
+  limits?: { minMs?: number; maxMs?: number },
 ): { in: number; out: number } {
-  let next = clampTrimToExtendedBounds(clipStartMs, clipEndMs, trim)
+  const mergedLimits =
+    limits?.minMs != null && limits?.maxMs != null
+      ? limits
+      : mediaMinMs != null && mediaMaxMs != null
+        ? { minMs: mediaMinMs, maxMs: mediaMaxMs }
+        : undefined
+  let next = clampTrimToExtendedBounds(clipStartMs, clipEndMs, trim, mergedLimits)
   if (mediaMinMs != null) next = { ...next, in: Math.max(next.in, mediaMinMs) }
   if (mediaMaxMs != null) next = { ...next, out: Math.min(next.out, mediaMaxMs) }
   if (next.out - next.in < 500) {
-    return clampTrimToExtendedBounds(clipStartMs, clipEndMs, trim)
+    return clampTrimToExtendedBounds(clipStartMs, clipEndMs, trim, mergedLimits)
   }
   return next
 }

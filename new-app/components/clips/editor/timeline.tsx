@@ -29,6 +29,8 @@ export function Timeline({
   clipEndMs,
   mediaMinMs,
   mediaMaxMs,
+  trimMinMs,
+  trimMaxMs,
   onSplitLayout,
   onCutSection,
   onSetLayoutMode,
@@ -46,15 +48,23 @@ export function Timeline({
   clipEndMs: number
   mediaMinMs?: number
   mediaMaxMs?: number
+  trimMinMs?: number
+  trimMaxMs?: number
   onSplitLayout?: () => void
   onCutSection?: () => void
   onSetLayoutMode?: (mode: ClipEditsV2['layout']['mode']) => void
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const span = Math.max(1, previewEdits.trim.out - previewEdits.trim.in)
-  const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs)
+  const trimLimits = useMemo(() => {
+    const min = trimMinMs ?? mediaMinMs
+    const max = trimMaxMs ?? mediaMaxMs
+    if (min != null && max != null) return { minMs: min, maxMs: max }
+    return undefined
+  }, [mediaMaxMs, mediaMinMs, trimMaxMs, trimMinMs])
+  const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs, trimLimits)
   const clampTrim = (next: { in: number; out: number }) =>
-    clampTrimWithMediaBounds(clipStartMs, clipEndMs, next, mediaMinMs, mediaMaxMs)
+    clampTrimWithMediaBounds(clipStartMs, clipEndMs, next, mediaMinMs, mediaMaxMs, trimLimits)
   const aiInPct = ((clipStartMs - previewEdits.trim.in) / span) * 100
   const aiOutPct = ((clipEndMs - previewEdits.trim.in) / span) * 100
   const outDur = outputDurationMs(previewEdits)

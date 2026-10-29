@@ -209,6 +209,7 @@ export function EditorShell({
     cutSectionAtSource,
     setLayoutModeAtSource,
     updateBrollItem,
+    applyRestoredEdits,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, editsSaveVersion, words })
 
   const onApplyCleanupProposal = useCallback(
@@ -397,6 +398,13 @@ export function EditorShell({
         })
         if (!res?.id) throw new Error('Save failed')
         logEditorDecision('version_save', { kind: 'manual' })
+        const row: EditVersionRow = {
+          id: res.id,
+          name: trimmed,
+          kind: 'manual',
+          createdAt: new Date().toISOString(),
+        }
+        setEditVersions((prev) => [row, ...prev])
         await refreshVersions()
         toast.success('Version saved')
       } catch (e) {
@@ -423,7 +431,7 @@ export function EditorShell({
       }
       try {
         const row = await clipsFetch<{ edits: ClipEditsV2 }>(`/api/clips/clips/${clipId}/versions/${versionId}`)
-        setEdits(normalizeEdits(row.edits, bounds))
+        applyRestoredEdits(normalizeEdits(row.edits, bounds))
         logEditorDecision('version_restore', { kind: 'manual' })
         toast.success('Version restored')
         await refreshVersions()
@@ -431,19 +439,39 @@ export function EditorShell({
         toast.error(e instanceof Error ? e.message : 'Restore failed')
       }
     },
-    [bounds, clipId, edits, refreshVersions, setEdits],
+    [applyRestoredEdits, bounds, clipId, edits, refreshVersions],
   )
 
   const deleteEditVersion = useCallback(
     async (versionId: string) => {
+      const removed = editVersions.find((v) => v.id === versionId)
+      setEditVersions((prev) => prev.filter((v) => v.id !== versionId))
       try {
         await clipsFetch(`/api/clips/clips/${clipId}/versions/${versionId}`, { method: 'DELETE' })
+        toast.success('Version deleted', {
+          action: removed
+            ? {
+                label: 'Undo',
+                onClick: () => {
+                  void clipsFetch(`/api/clips/clips/${clipId}/versions`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      name: removed.name,
+                      kind: removed.kind,
+                      edits,
+                    }),
+                  }).then(() => refreshVersions())
+                },
+              }
+            : undefined,
+        })
         await refreshVersions()
       } catch (e) {
+        await refreshVersions()
         toast.error(e instanceof Error ? e.message : 'Delete failed')
       }
     },
-    [clipId, refreshVersions],
+    [clipId, editVersions, edits, refreshVersions],
   )
 
   const restoreOriginalEdits = useCallback(async () => {
@@ -1213,6 +1241,8 @@ export function EditorShell({
             clipEndMs={bounds.clipEndMs}
             mediaMinMs={editorMedia?.minMs}
             mediaMaxMs={editorMedia?.maxMs}
+            trimMinMs={bounds.trimMinMs}
+            trimMaxMs={bounds.trimMaxMs}
             onSplitLayout={() => splitLayoutAtSource(playheadSourceMs)}
             onCutSection={() => cutSectionAtSource(playheadSourceMs)}
             onSetLayoutMode={(mode) => {

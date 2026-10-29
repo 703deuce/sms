@@ -31,6 +31,7 @@ export type ClipEditsV2 = {
   captions: {
     enabled?: boolean
     presetId?: string
+    font?: string
     animation?: string
     size?: number
     position?: string

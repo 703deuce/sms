@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Slider } from '@/components/ui/slider'
 import type { ClipBounds, ClipEditsV2 } from '@/lib/clips/edits'
 import { extendedTrimLimits } from '@/lib/clips/trim-bounds'
 import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
@@ -95,14 +97,16 @@ function TrimEdgeRow({
       <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={`Nudge ${label} earlier`} onClick={() => onNudge(-NUDGE_MS)}>
         <ChevronLeft className="size-4" />
       </Button>
-      <input
-        type="range"
+      <Slider
         className="min-w-0 flex-1"
         min={minMs}
         max={maxMs}
-        value={ms}
+        value={[ms]}
         aria-label={`${label} trim`}
-        onChange={(e) => onDragCommit(Number(e.target.value))}
+        onValueChange={(v) => {
+          const next = v[0]
+          if (next != null) onDragCommit(next)
+        }}
       />
       <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={`Nudge ${label} later`} onClick={() => onNudge(NUDGE_MS)}>
         <ChevronRight className="size-4" />

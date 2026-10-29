@@ -18,6 +18,7 @@ export function cutIntersectsWordInterior([cutStart, cutEnd]: CutRange, words: W
   if (b - a < WORD_CUT_MIN_MS) return false
   for (const w of words) {
     const [ws, we] = wordSpanMs(w)
+    if (Math.abs(ws - a) <= 2 && Math.abs(we - b) <= 2) continue
     const mid = (ws + we) / 2
     if (mid > a && mid < b) return true
   }

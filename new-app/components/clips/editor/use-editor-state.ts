@@ -78,6 +78,7 @@ type Action =
   | { type: 'serverSync'; edits: ClipEditsV2 }
   | { type: 'needsSave' }
   | { type: 'saveFailed' }
+  | { type: 'replaceRestore'; edits: ClipEditsV2 }
 
 function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
   return canonicalEditsJson(a) === canonicalEditsJson(b)
@@ -148,6 +149,11 @@ export function editorEditsReducer(state: State, action: Action): State {
       return { ...state, saveState: 'dirty' }
     case 'saveFailed':
       return { ...state, saveState: 'error' }
+    case 'replaceRestore': {
+      if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'dirty' }
+      const past = [...state.past, state.edits].slice(-MAX_UNDO)
+      return { ...state, edits: action.edits, past, future: [], saveState: 'dirty' }
+    }
     default:
       return state
   }
@@ -676,6 +682,26 @@ export function useEditorState(
     return () => clearTimeout(t)
   }, [state.producerStrip])
 
+  const cancelPendingAutosave = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+  }, [])
+
+  const applyRestoredEdits = useCallback(
+    (restored: ClipEditsV2) => {
+      cancelPendingAutosave()
+      bumpLocalRevision()
+      const normalized = normalizeEdits(restored, bounds)
+      editsRef.current = normalized
+      saveBaseEditsRef.current = normalized
+      dispatch({ type: 'replaceRestore', edits: normalized })
+      void processSaveQueue()
+    },
+    [bounds, bumpLocalRevision, cancelPendingAutosave, processSaveQueue],
+  )
+
   const setLayers = useCallback(
     (layers: Layer[]) => {
       const merged = legacyFromLayers(layers, editsRef.current)
@@ -726,6 +752,7 @@ export function useEditorState(
     cutSectionAtSource,
     resetEdits: () => setEdits(defaultEdits(bounds), false),
     applyProducerPatch,
+    applyRestoredEdits,
     syncServerUpdatedAt: (iso: string) => {
       serverUpdatedAtRef.current = iso
     },
