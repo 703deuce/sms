@@ -38,7 +38,10 @@ A badge or victory screen points back to the fight. A closing line points back t
 A viewer clip or a chat !clip marks the PAYOFF or the reaction; the setup is usually 5-30 s earlier.
 
 HOW TO READ THE MODALITIES TOGETHER
-1. Find the PAYOFF from the transcript and visuals first. Then use audio and chat only to confirm and to time the reaction.
+1. VIDEO IS PRIMARY EVIDENCE, at least as important as the transcript. Find the PAYOFF from what is shown and what is
+   said, together. A payoff can be purely visual with no words: something happening in frame, a face, a person or
+   object appearing, a fall, a play. Score it as fully as a spoken punchline. Then use audio and chat only to confirm
+   and to time the reaction.
 2. Chat reacts late. Locate the event from what was said or shown, never from the chat spike time.
 3. A loud stretch with no identifiable payoff in the transcript or visuals is NOT a clip (shouting, music, street noise,
    hype with no cause, a raid/sub/gift alert, reading chat aloud with no comeback).

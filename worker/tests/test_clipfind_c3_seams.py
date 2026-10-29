@@ -250,4 +250,5 @@ def test_dense_fps_clamped(monkeypatch):
     bind_clipfind(workspace_id="ws_test", job_type="STREAM_ANALYZE", project_id="proj_x")
     from clips_worker.clipfind import dense as D
 
-    assert D.dense_frame_interval_s() >= 2.0
+    assert D.dense_frame_interval_s() >= 1.0
+    assert D.dense_fps() <= 1.0

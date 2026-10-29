@@ -13,7 +13,7 @@ from typing import Any, Callable
 from clips_worker.clipfind.judge import JUDGE_PROMPT_VERSION, judge_beats_ms, parse_judge_item
 from clips_worker.clipfind.refine import ClipBeats, fit_max, snap_end_to_word, snap_start_to_word
 
-DEFAULT_INTERVAL_S = 2.5
+DEFAULT_INTERVAL_S = 1.0
 MAX_WINDOW_S = 120.0
 PAD_S = 10.0
 LOW_TOKENS_PER_FRAME = 66      # Gemini MEDIA_RESOLUTION_LOW
@@ -29,14 +29,15 @@ def _envf(name: str, default: float) -> float:
 
 
 def dense_frame_interval_s(raw: str | float | None = None) -> float:
-    """CLIPFIND_DENSE_FRAME_INTERVAL_S, default 2.5, clamped to [2, 4] => 0.25-0.5 fps."""
+    """CLIPFIND_DENSE_FRAME_INTERVAL_S, default 1.0, clamped to [1, 3] => 0.33-1 fps. The close look is MORE detailed
+    than the whole-stream pass (1 frame / 2 s, LOW): denser frames at MEDIUM resolution."""
     if raw is None:
         raw = os.environ.get("CLIPFIND_DENSE_FRAME_INTERVAL_S", "")
     try:
         v = float(raw) if str(raw).strip() else DEFAULT_INTERVAL_S
     except ValueError:
         v = DEFAULT_INTERVAL_S
-    return max(2.0, min(4.0, v))
+    return max(1.0, min(3.0, v))
 
 
 def dense_fps(raw: str | float | None = None) -> float:
@@ -46,9 +47,9 @@ def dense_fps(raw: str | float | None = None) -> float:
 
 
 def budget_cap_usd(stream_hours: float) -> float:
-    """min(per-job cap, max(floor, per-hour x hours)). Defaults: 0.20/h, floor 0.10, job 0.50."""
-    per_h = _envf("CLIPFIND_DENSE_MAX_USD_PER_STREAM_HOUR", 0.20)
-    per_job = _envf("CLIPFIND_DENSE_MAX_USD_PER_JOB", 0.50)
+    """min(per-job cap, max(floor, per-hour x hours)). Defaults: 0.30/h, floor 0.10, job 0.75."""
+    per_h = _envf("CLIPFIND_DENSE_MAX_USD_PER_STREAM_HOUR", 0.30)
+    per_job = _envf("CLIPFIND_DENSE_MAX_USD_PER_JOB", 0.75)
     return round(min(per_job, max(0.10, per_h * max(0.0, stream_hours))), 4)
 
 
@@ -88,11 +89,13 @@ def dense_window(start_ms: int, end_ms: int, duration_ms: int, beats: dict | Non
 
 
 def select_candidates(items: list[dict], k: int | None = None) -> list[int]:
-    """items: [{"tier","rank"}] in fusion order. Top-k primary then more, by rank. Default k=12."""
-    k = int(k if k is not None else _envf("CLIPFIND_DENSE_MAX_CANDIDATES", 12))
+    """items: [{"tier","rank","id"}] in fusion order. Video-found candidates (id starts with "vp_") go first so
+    every on-screen moment gets a frame-by-frame look, then primary, then more, by rank. Default k=30."""
+    k = int(k if k is not None else _envf("CLIPFIND_DENSE_MAX_CANDIDATES", 30))
     order = sorted(
         (i for i, it in enumerate(items) if it.get("tier") in ("primary", "more")),
-        key=lambda i: (0 if items[i].get("tier") == "primary" else 1, int(items[i].get("rank") or i)),
+        key=lambda i: (0 if str(items[i].get("id") or "").startswith("vp_") else 1,
+                       0 if items[i].get("tier") == "primary" else 1, int(items[i].get("rank") or i)),
     )
     return order[: max(0, k)]
 
@@ -180,12 +183,29 @@ def run_dense(cands: list[dict], *, call_fn: Callable[[dict], tuple[dict | None,
     return out
 
 
+def _final_score(it: dict) -> float | None:
+    """The dense (frames+audio+transcript+chat) score wins; else the text judge; vp_ items keep a floor of their
+    pre-judge score (0-10) unless risk-blocked (gaming floor)."""
+    j = it.get("judge") or {}
+    sc = j.get("score")
+    if sc is None:
+        return None
+    sc = float(sc)
+    if str(it.get("id") or "").startswith("vp_") and it.get("old_score") is not None \
+            and j.get("risk_action", "none") != "block":
+        sc = max(sc, float(it["old_score"]))
+    return sc
+
+
 def retier(items: list[dict]) -> list[int]:
-    """Judge-aware re-tier that NEVER drops. items: [{"tier","judge"|None}] in current order.
+    """Judge-aware re-tier that NEVER drops and keeps the primary COUNT constant.
+    items: [{"tier","judge"|None,"id","old_score"(0-10)|None}] in current order. "judge" is the dense judgement when the
+    dense look ran for that item, else the text judgement.
     - risk_action block -> tier more, render False (never primary)
-    - verdict demote or risk demote from primary -> more
-    - freed primary slots are filled by the best remaining 'more' items that are not demoted/blocked
-    Mutates each item's "tier"/"render"/"demote_reason"; returns the new order (indices)."""
+    - verdict demote or risk demote -> not eligible for primary
+    - the primary slots go to the eligible primary+more items with the highest final score (_final_score);
+      items with no score keep their old relative position after scored ones of the same old tier.
+    Mutates each item's "tier"/"render"/"demote_reason"/"final_score"; returns the new order (indices)."""
     n_primary = sum(1 for it in items if it.get("tier") == "primary")
     for it in items:
         j = it.get("judge") or {}
@@ -194,13 +214,24 @@ def retier(items: list[dict]) -> list[int]:
             it["demote_reason"] = "risk_block:" + ",".join(j.get("risk_flags") or [])
         elif j.get("verdict") == "demote" or ra == "demote":
             it["demote_reason"] = "judge_demote" if j.get("verdict") == "demote" else "risk:" + ",".join(j.get("risk_flags") or [])
-        if it.get("demote_reason") and it.get("tier") == "primary":
-            it["tier"] = "more"
-    eligible = [i for i, it in enumerate(items) if it.get("tier") == "more" and not it.get("demote_reason")]
-    have = sum(1 for it in items if it.get("tier") == "primary")
-    for i in eligible[: max(0, n_primary - have)]:
-        items[i]["tier"] = "primary"
+        it["final_score"] = _final_score(it)
+    pool = [i for i, it in enumerate(items) if it.get("tier") in ("primary", "more")]
+    old_rank = {"primary": 0, "more": 1}
+
+    def key(i: int):
+        it = items[i]
+        fs = it["final_score"]
+        return (1 if it.get("demote_reason") else 0,
+                0 if fs is not None else 1,
+                -(fs or 0.0),
+                old_rank.get(it.get("tier"), 2),
+                i)
+
+    ordered = sorted(pool, key=key)
+    primary = set(i for i in ordered[:n_primary] if not items[i].get("demote_reason"))
+    for i in pool:
+        items[i]["tier"] = "primary" if i in primary else "more"
     for it in items:
         it["render"] = it.get("tier") == "primary"
-    rank = {"primary": 0, "more": 1}
-    return sorted(range(len(items)), key=lambda i: (rank.get(items[i].get("tier"), 2), i))
+    rest = [i for i in range(len(items)) if i not in pool]
+    return [i for i in ordered if i in primary] + [i for i in ordered if i not in primary] + rest

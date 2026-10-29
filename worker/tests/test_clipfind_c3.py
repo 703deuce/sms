@@ -121,17 +121,17 @@ def test_payoff_cue_events():
 
 
 # ---------------------------------------------------------------- dense
-@pytest.mark.parametrize("raw,want", [(None, 2.5), ("", 2.5), ("1", 2.0), ("0.5", 2.0), ("10", 4.0), ("abc", 2.5), ("3", 3.0)])
+@pytest.mark.parametrize("raw,want", [(None, 1.0), ("", 1.0), ("1", 1.0), ("0.5", 1.0), ("10", 3.0), ("abc", 1.0), ("2", 2.0)])
 def test_interval_clamp_never_above_1fps(raw, want, monkeypatch):
     monkeypatch.delenv("CLIPFIND_DENSE_FRAME_INTERVAL_S", raising=False)
     assert D.dense_frame_interval_s(raw) == want
-    assert D.dense_fps(raw) <= 0.5
+    assert D.dense_fps(raw) <= 1.0
 
 
 def test_budget_cap(monkeypatch):
     for k in ("CLIPFIND_DENSE_MAX_USD_PER_STREAM_HOUR", "CLIPFIND_DENSE_MAX_USD_PER_JOB"):
         monkeypatch.delenv(k, raising=False)
-    assert D.budget_cap_usd(1.0) == 0.20 and D.budget_cap_usd(1 / 6) == 0.10 and D.budget_cap_usd(8) == 0.50
+    assert D.budget_cap_usd(1.0) == 0.30 and D.budget_cap_usd(1 / 6) == 0.10 and D.budget_cap_usd(8) == 0.75
 
 
 def test_window_caps_at_120s_keeping_the_end():
@@ -252,3 +252,50 @@ def test_label_template_shape():
     data = json.loads(p.read_text())
     assert len(data["cases"]) == 5
     assert all(E.score_case(c, [])["status"] == "unlabeled" for c in data["cases"])
+
+
+# ---- video-first amendment (John, Oct 29) ----
+def test_select_puts_video_found_first_default_30():
+    items = [{"tier": "primary", "rank": i, "id": f"c{i}"} for i in range(40)]
+    items[35]["id"] = "vp_7"; items[35]["tier"] = "more"
+    sel = D.select_candidates(items)
+    assert len(sel) == 30 and sel[0] == 35
+
+
+def test_retier_dense_visual_payoff_promotes_quiet_transcript_clip():
+    items = [
+        {"tier": "primary", "id": "c0", "judge": {"score": 4.5, "verdict": "keep"}},
+        {"tier": "primary", "id": "c1", "judge": {"score": 7.0, "verdict": "keep"}},
+        {"tier": "more", "id": "c2", "judge": {"score": 9.0, "verdict": "keep"}},  # visual-only payoff seen in frames
+    ]
+    order = D.retier(items)
+    assert [it["tier"] for it in items] == ["more", "primary", "primary"]
+    assert order[:2] == [2, 1]
+
+
+def test_retier_keeps_primary_count_and_never_drops():
+    items = [{"tier": "primary", "id": "a", "judge": {"score": 2, "verdict": "demote"}},
+             {"tier": "more", "id": "b", "judge": None},
+             {"tier": "more", "id": "c", "judge": {"score": 6}}]
+    order = D.retier(items)
+    assert sorted(order) == [0, 1, 2]
+    assert sum(it["tier"] == "primary" for it in items) == 1 and items[2]["tier"] == "primary"
+
+
+def test_retier_gaming_floor_for_video_found():
+    items = [{"tier": "primary", "id": "vp_1", "old_score": 8.5, "judge": {"score": 5.0, "verdict": "keep"}},
+             {"tier": "more", "id": "c1", "judge": {"score": 7.0, "verdict": "keep"}}]
+    D.retier(items)
+    assert items[0]["tier"] == "primary" and items[0]["final_score"] == 8.5
+
+
+def test_retier_risk_block_beats_floor():
+    items = [{"tier": "primary", "id": "vp_1", "old_score": 9.5,
+              "judge": {"score": 9.0, "risk_action": "block", "risk_flags": ["minor"]}},
+             {"tier": "more", "id": "c1", "judge": {"score": 6.0}}]
+    D.retier(items)
+    assert items[0]["tier"] == "more" and items[0]["render"] is False and items[1]["tier"] == "primary"
+
+
+def test_prompt_says_video_is_primary():
+    assert "VIDEO IS PRIMARY EVIDENCE" in J.JUDGE_SYSTEM_DENSE and "purely visual" in J.JUDGE_SYSTEM_BATCH

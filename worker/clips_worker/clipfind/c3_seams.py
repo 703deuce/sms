@@ -3,6 +3,7 @@ clipfind_fallback at its call site; with flags off each one is a no-op that retu
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -70,6 +71,7 @@ def judge_total(llm: dict, total: int, meta_cf: dict) -> int:
                                               "observation_confidence", "quiet_moment", "standalone_ok", "why",
                                               "setup_start_s", "payoff_s", "reaction_end_s", "hook_s", "prompt_version")}
     meta_cf["judge"]["source"] = "text"
+    meta_cf["pre_judge_total"] = int(total)
     if float(j.get("observation_confidence") or 0) >= 0.4:
         scaled = int(round(float(j["score"]) * 10))
         cid = str((llm or {}).get("id") or j.get("id") or "")
@@ -149,6 +151,20 @@ def refine_cue_picks(picks, *, video_moments, words, signals, raw_channels, dura
     return picks
 
 
+def _pick_candidate_id(p) -> str:
+    """Video-found ids are vp_* on fusion candidates (fusion.py scores.candidate_id), not streamer.candidateId."""
+    sm = (p.ai_meta or {}).get("streamer") or {}
+    if sm.get("candidateId"):
+        return str(sm["candidateId"])
+    sc = p.scores or {}
+    if sc.get("candidate_id"):
+        return str(sc["candidate_id"])
+    cf = (p.ai_meta or {}).get("clipfind") or {}
+    if cf.get("cf_id"):
+        return str(cf["cf_id"])
+    return ""
+
+
 # ------------------------------------------------------------------ 3. dense look + re-tier
 def _price(model: str):
     from clips_worker.video_picker import estimate_gemini_usd
@@ -178,7 +194,7 @@ def gemini_dense_call(c: dict, *, base: Path, base_absolute: bool, time_offset_m
     ])
     parts = _labeled_frame_user_parts(proxy, work, duration_s=int(hi_s - lo_s), user_text=user,
                                       fps=1.0 / interval_s, part_order="frames_first")
-    gen = {"responseMimeType": "application/json", "mediaResolution": "MEDIA_RESOLUTION_LOW", "maxOutputTokens": 2048}
+    gen = {"responseMimeType": "application/json", "mediaResolution": os.environ.get("CLIPFIND_DENSE_MEDIA_RES", "MEDIA_RESOLUTION_MEDIUM"), "maxOutputTokens": 2048}
     if "3.8-flash" in model.lower():
         gen["thinkingConfig"] = {"thinkingLevel": "low"}
     payload = {"systemInstruction": {"parts": [{"text": JUDGE_SYSTEM_DENSE}]},
@@ -215,7 +231,8 @@ def post_rank_stream(picks, *, words, signals_payload, duration_ms, settings, sc
             model = discover_video_picker_model()
             interval = D.dense_frame_interval_s()
             items = [{"tier": (p.ai_meta.get("streamer") or {}).get("tier"),
-                      "rank": (p.ai_meta.get("streamer") or {}).get("rankIndex", i)} for i, p in enumerate(picks)]
+                      "rank": (p.ai_meta.get("streamer") or {}).get("rankIndex", i),
+                      "id": _pick_candidate_id(p)} for i, p in enumerate(picks)]
             cands = []
             for i in D.select_candidates(items):
                 cf = picks[i].ai_meta.get("clipfind") or {}
@@ -247,7 +264,12 @@ def post_rank_stream(picks, *, words, signals_payload, duration_ms, settings, sc
                         cf["reaction_end_ms"] = int(beats["reaction_end_ms"])
                 if float(j.get("observation_confidence") or 0) >= 0.4:
                     picks[i].score = int(round(float(j["score"]) * 10))
+    def _old10(p):
+        v = (p.ai_meta.get("clipfind") or {}).get("pre_judge_total")
+        return None if v is None else float(v) / 10.0
     items = [{"tier": (p.ai_meta.get("streamer") or {}).get("tier"),
+              "id": _pick_candidate_id(p),
+              "old_score": _old10(p),
               "judge": (p.ai_meta.get("clipfind") or {}).get("judge")} for p in picks]
     from clips_worker.clipfind.dense import retier
     order = retier(items)
