@@ -199,6 +199,7 @@ export function EditorShell({
     updateSfx,
     removeSfx,
     setEdits,
+    hydrateEdits,
     layers,
     setLayers,
     patchStudioSound,
@@ -327,7 +328,7 @@ export function EditorShell({
           : `https://twitch.tv/${login}`
         : undefined
     const next = seedEditorExportTemplate(edits, { title, aiMeta }, { platform, channelUrl })
-    if (next.exportTemplate !== edits.exportTemplate) setEdits(next)
+    if (next.exportTemplate !== edits.exportTemplate) hydrateEdits(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once on open
   }, [])
 

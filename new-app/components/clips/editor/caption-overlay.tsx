@@ -91,7 +91,7 @@ export function CaptionOverlay({
   const posStyle = positionStyle(position, marginVPct)
   const captionPosClass = positionClass(position)
   const playW = exportPixelSize(edits.aspectRatio ?? '9:16', '720p').width
-  const inlinePad = `${Math.max((56 / playW) * 100, 8)}%`
+  const inlinePad = `${Math.max((72 / playW) * 100, 10)}%`
   const emojiPosClass =
     position === 'top'
       ? 'top-[14%]'
@@ -140,12 +140,13 @@ export function CaptionOverlay({
         : null}
       {activeIdx >= 0 && lineWords.length ? (
     <div
-      className={`pointer-events-none absolute inset-x-0 z-[25] flex flex-nowrap justify-center gap-1 text-center ${captionPosClass}`}
+      className={`pointer-events-none absolute inset-x-0 z-[25] flex max-w-full flex-wrap justify-center gap-x-1 gap-y-0.5 text-center ${captionPosClass}`}
       style={{
         fontFamily: captionFontStack(captionFont),
         fontWeight: captionFontWeight(captionFont, preset.weight),
         paddingInline: inlinePad,
-        whiteSpace: 'nowrap',
+        maxWidth: `${100 - parseFloat(inlinePad) * 2}%`,
+        marginInline: 'auto',
         ...posStyle,
       }}
     >
@@ -169,7 +170,8 @@ export function CaptionOverlay({
         const useFill =
           activeStyle === 'fill' || (activeStyle === 'color' && animation === 'karaoke' && active)
         const useHighlight = activeStyle === 'highlight' && active
-        const contrast = captionHighlightContrastText(highlightColor)
+        const highlightBg = activeColor || highlightColor
+        const contrast = captionHighlightContrastText(highlightBg)
         const style: React.CSSProperties = {
           fontSize,
           color: useHighlight
@@ -190,7 +192,7 @@ export function CaptionOverlay({
           ['--cap-glow-color' as string]: preset.outline,
           transform: isEmph ? `scale(${preset.emphasisScale})` : undefined,
           background: useHighlight
-            ? highlightColor
+            ? highlightBg
             : useFill && active
               ? `linear-gradient(90deg, ${activeColor} ${Math.min(100, ((currentTimeSec - w.s) / (w.e - w.s)) * 100)}%, ${preset.primary} 0)`
               : preset.box && (active || isEmph) && activeStyle === 'color'

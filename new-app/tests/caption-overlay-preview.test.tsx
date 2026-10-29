@@ -46,22 +46,21 @@ describe('caption preview overlay', () => {
     expect(screen.getByTestId('caption-floating-emoji').textContent).toContain('🔥')
   })
 
-  it('renders highlight style on active word', () => {
+  it('uses speaker active color for highlight box background', () => {
     const edits = defaultEdits(bounds)
     edits.captions = {
       ...edits.captions,
       activeStyle: 'highlight',
+      colors: { a: '#00ff00' },
       highlightColor: '#FDE047',
     }
-    const words: ClipWord[] = [
-      { w: 'one', s: 0, e: 0.5, idx: 0 },
-      { w: 'two', s: 0.5, e: 1, idx: 1 },
-    ]
+    const words: ClipWord[] = [{ w: 'hello', s: 0, e: 1, idx: 0 }]
     const { container } = render(
-      <CaptionOverlay words={words} currentTimeSec={0.6} edits={edits} boxHeightPx={320} outputDurationSec={5} />,
+      <CaptionOverlay words={words} currentTimeSec={0.2} edits={edits} boxHeightPx={320} outputDurationSec={5} />,
     )
-    const active = container.querySelector('span[style*="background"]')
-    expect(active).toBeTruthy()
+    const active = container.querySelector('span[style*="background"]') as HTMLElement | null
+    const style = active?.getAttribute('style') ?? ''
+    expect(style.toLowerCase()).toMatch(/#00ff00|rgb\(0,\s*255,\s*0\)/)
   })
 
   it('applies speaker-1 hex at t=0 while paused before first word', () => {

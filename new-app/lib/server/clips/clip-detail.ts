@@ -61,7 +61,11 @@ async function loadProjectTranscript(
   return []
 }
 
-export async function getClipEditorWords(workspaceId: string, clipId: string) {
+export async function getClipEditorWords(
+  workspaceId: string,
+  clipId: string,
+  opts?: { trimInMs?: number; trimOutMs?: number },
+) {
   const clip = await getClipForWorkspace(workspaceId, clipId)
   if (!clip) return null
   const prisma = getPrisma()
@@ -75,7 +79,10 @@ export async function getClipEditorWords(workspaceId: string, clipId: string) {
     ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
     : getClipStorage(driverHint)
   const projectTranscript = await loadProjectTranscript(storage, project)
-  const words = await resolveEditorWords(storage, workspaceId, clip, projectTranscript)
+  const words = await resolveEditorWords(storage, workspaceId, clip, projectTranscript, {
+    trimInMs: opts?.trimInMs,
+    trimOutMs: opts?.trimOutMs,
+  })
   return { words, bounds: { clipStartMs: clip.startMs, clipEndMs: clip.endMs } }
 }
 

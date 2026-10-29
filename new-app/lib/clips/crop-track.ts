@@ -68,6 +68,8 @@ export function shotAt(track: CropTrack, srcMs: number): { i: number; shot: Crop
   if (!shots.length) return { i: 0, shot: null }
   const i = shots.findIndex((s) => srcMs >= s.start_ms && srcMs < s.end_ms)
   if (i >= 0) return { i, shot: shots[i] }
+  const first = shots[0]
+  if (first && srcMs < first.start_ms) return { i: 0, shot: first }
   const last = shots[shots.length - 1]
   return { i: Math.max(0, shots.length - 1), shot: last ?? null }
 }

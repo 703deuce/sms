@@ -1,6 +1,9 @@
 export type ExportAspect = '9:16' | '4:5' | '1:1' | '16:9'
 export type ExportResolution = '720p' | '1080p'
 
+/** Bump when export compositor / burn-in behavior changes (invalidates READY render reuse). */
+export const CLIP_RENDER_PIPELINE_REV = 't45-v1'
+
 /** Output pixel size for export / ASS PlayRes. */
 export function exportPixelSize(aspect: ExportAspect, resolution: ExportResolution): { width: number; height: number } {
   if (resolution === '1080p') {
@@ -16,5 +19,5 @@ export function exportPixelSize(aspect: ExportAspect, resolution: ExportResoluti
 }
 
 export function renderVersionHash(editsHash: string, aspect: ExportAspect, resolution: ExportResolution): string {
-  return `${editsHash}:${aspect}:${resolution}`
+  return `${CLIP_RENDER_PIPELINE_REV}:${editsHash}:${aspect}:${resolution}`
 }
