@@ -31,6 +31,14 @@ def _esc_ass(text: str) -> str:
     return text.replace("\\", "\\\\").replace("{", "(").replace("}", ")").replace("\n", "\\N")
 
 
+def _ass_color(hex_color: str) -> str:
+    c = (hex_color or "").strip().lstrip("#")
+    if len(c) >= 6:
+        r, g, b = c[0:2], c[2:4], c[4:6]
+        return f"&H00{b}{g}{r}".upper()
+    return "&H00000000"
+
+
 def _split_emoji_runs(text: str) -> str:
     out: list[str] = []
     for ch in text:
@@ -110,7 +118,14 @@ def headline_ass_content(
     duration_ms: int,
     bar_y: int = 0,
     fit_top: bool = False,
+    text_color: str | None = None,
+    box_color: str | None = None,
 ) -> str:
+    from clips_worker.overlay_geometry import headline_style_for_preset
+
+    preset_style = headline_style_for_preset("stream_white_box" if fit_top else "export_bar")
+    primary = _ass_color(text_color or preset_style.get("textColor") or "#000000")
+    _ = box_color or preset_style.get("boxColor")
     display = prepare_headline_display(headline)
     if fit_top:
         line_count = max(1, display.count(r"\N") + 1)
@@ -143,7 +158,7 @@ ScaledBorderAndShadow: yes
 {fonts_lines}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Headline,{font},{fontsize},&H00000000,&H00000000,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,5,20,20,{max(8, bar_h // 12)},1
+Style: Headline,{font},{fontsize},{primary},{primary},&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,5,20,20,{max(8, bar_h // 12)},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -163,6 +178,8 @@ def burn_stream_headline(
     duration_ms: int,
     bar_y: int = 0,
     fit_top: bool = False,
+    text_color: str | None = None,
+    box_color: str | None = None,
 ) -> Path:
     ass = video.parent / "stream_headline.ass"
     ass.write_text(
@@ -174,6 +191,8 @@ def burn_stream_headline(
             duration_ms=duration_ms,
             bar_y=bar_y,
             fit_top=fit_top,
+            text_color=text_color,
+            box_color=box_color,
         ),
         encoding="utf-8",
     )

@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from clips_worker.clip_export_template import _esc_drawtext, _platform_label
+from clips_worker.clip_export_template import _esc_drawtext, _platform_label, _headline_style_from_edits
 from clips_worker.filtergraph import fit_blur_overlay_filter
 from clips_worker.stream_headline_ass import burn_stream_headline, format_headline_for_export
 from clips_worker.streamer.layout.stream_overlay_layout import (
@@ -154,6 +154,7 @@ def _fit_top_band_layers(
 ) -> None:
     if lines:
         hl = dest.parent / "fit_top_headline.mp4"
+        style = _headline_style_from_edits(edits)
         burn_stream_headline(
             current,
             hl,
@@ -166,6 +167,8 @@ def _fit_top_band_layers(
             duration_ms=int(dur * 1000),
             bar_y=lay["headline_top"],
             fit_top=True,
+            text_color=str(style.get("textColor") or "#000000"),
+            box_color=str(style.get("boxColor") or "#FFFFFF"),
         )
         current = hl
     if badge_on or channel:

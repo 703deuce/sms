@@ -5,7 +5,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from clips_worker.overlay_geometry import GEOM
+from clips_worker.overlay_geometry import GEOM, headline_style_for_preset
 from clips_worker.stream_headline_ass import burn_stream_headline, format_headline_for_export
 
 _eb = GEOM["exportBar"]
@@ -89,6 +89,21 @@ def _hex_to_drawtext(color: str) -> str:
     if c.startswith("0x"):
         return c
     return "0x9146FF"
+
+
+def _headline_style_from_edits(edits: dict) -> dict:
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    raw = tpl.get("headlineStyle") if isinstance(tpl.get("headlineStyle"), dict) else {}
+    if raw:
+        return raw
+    from clips_worker.layers_spec import _layer_by_id, resolve_layers
+
+    hl = _layer_by_id(resolve_layers(edits), "headline")
+    if hl and isinstance(hl.get("style"), dict):
+        preset = str(hl["style"].get("preset") or "export_bar")
+        base = headline_style_for_preset(preset)
+        return {**base, **hl["style"]}
+    return headline_style_for_preset("export_bar")
 
 
 def _platform_label(platform: str) -> tuple[str, str]:
@@ -215,6 +230,7 @@ def apply_export_template(
     current = stage
     if headline_on and headline:
         hl_out = video.parent / "export_tpl_headline.mp4"
+        style = _headline_style_from_edits(edits)
         burn_stream_headline(
             current,
             hl_out,
@@ -223,6 +239,8 @@ def apply_export_template(
             play_h=play_h,
             bar_h=bar_h,
             duration_ms=duration_ms,
+            text_color=str(style.get("textColor") or "#000000"),
+            box_color=str(style.get("boxColor") or "#FFFFFF"),
         )
         current = hl_out
 

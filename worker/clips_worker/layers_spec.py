@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from typing import Any
 from urllib.parse import urlparse
 
 from clips_worker.layout_router import editor_mode_uses_stream_frame
+
+_V3_EXTRA_LAYER_TYPES = frozenset({"sticker"})
 
 
 def _layout_mode(edits: dict) -> str:
@@ -277,7 +280,48 @@ def _validate(layers_raw: list) -> list[dict] | None:
     return parsed if parsed else None
 
 
+def _legacy_layers_fingerprint(edits: dict) -> str:
+    body = json.dumps(mapped_subset(edits), separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(body.encode()).hexdigest()[:16]
+
+
+def sync_layers_from_legacy(edits: dict) -> dict:
+    """Refresh stored v3 layers when mapped legacy fields drift; preserve sticker extras."""
+    if edits.get("layersV") != 3:
+        return edits
+    fp = _legacy_layers_fingerprint(edits)
+    stored_fp = edits.get("layersLegacyFp")
+    layers_raw = edits.get("layers")
+    if stored_fp == fp and isinstance(layers_raw, list) and _validate(layers_raw):
+        return edits
+    fresh = layers_from_legacy(edits)
+    extras = [
+        layer
+        for layer in (layers_raw or [])
+        if isinstance(layer, dict) and layer.get("type") in _V3_EXTRA_LAYER_TYPES
+    ]
+    merged = fresh + extras
+    merged.sort(key=lambda x: int(x.get("z") or 0))
+    print(
+        f"[clipper:layers] sync_from_legacy stale={stored_fp != fp} extras={len(extras)}",
+        flush=True,
+    )
+    return {**edits, "layers": merged, "layersLegacyFp": fp}
+
+
+def v3_has_extras(layers: list[dict]) -> bool:
+    for layer in layers:
+        if not isinstance(layer, dict) or not layer.get("enabled"):
+            continue
+        if layer.get("type") in _V3_EXTRA_LAYER_TYPES:
+            return True
+        if layer.get("type") == "badge" and layer.get("showLogo"):
+            return True
+    return False
+
+
 def resolve_layers(edits: dict) -> list[dict]:
+    edits = sync_layers_from_legacy(edits)
     if edits.get("layersV") == 3 and isinstance(edits.get("layers"), list):
         parsed = _validate(edits["layers"])
         if parsed is not None:
@@ -320,6 +364,9 @@ def _stage_plan(edits: dict) -> list[str]:
     chat = edits.get("chatOverlay") if isinstance(edits.get("chatOverlay"), dict) else {}
     if chat.get("enabled"):
         executed.append("chat")
+    layers_raw = edits.get("layers") if edits.get("layersV") == 3 and isinstance(edits.get("layers"), list) else None
+    if layers_raw and v3_has_extras(layers_raw):
+        executed.append("sprites")
     return executed
 
 
@@ -329,3 +376,24 @@ def mapped_subset(edits: dict) -> dict:
         if key in edits:
             out[key] = copy.deepcopy(edits[key])
     return out
+
+
+def badge_rect(
+    placement: str,
+    play_w: int,
+    play_h: int,
+    *,
+    video_y: int = 0,
+    video_h: int = 0,
+    badge_y: int | None = None,
+) -> dict[str, int]:
+    from clips_worker.overlay_geometry import badge_rect as _badge_rect
+
+    return _badge_rect(
+        placement,
+        play_w,
+        play_h,
+        video_y=video_y,
+        video_h=video_h,
+        badge_y=badge_y,
+    )

@@ -189,7 +189,10 @@ docker exec clips-worker python3 -m pytest -q \\
   /app/tests/test_audio_mix.py \\
   /app/tests/test_captions_ass_render.py \\
   /app/tests/test_frame_sampler.py \\
-  /app/tests/test_layers_spec.py
+  /app/tests/test_layers_spec.py \\
+  /app/tests/test_composite_export_edits.py \\
+  /app/tests/test_layer_sprites.py \\
+  /app/tests/test_render_stack_pip.py
 
 echo "[deploy-worker] prune old clips-worker images (keep latest tag for docker run)"
 PREV_ID=\$(docker images clips-worker:latest --format '{{.ID}}' | head -1)

@@ -33,6 +33,35 @@
     "fontFitTop": "Anton",
     "fontBar": "Montserrat"
   },
+  "headlineStyles": {
+    "stream_white_box": {
+      "textColor": "#000000",
+      "boxColor": "#FFFFFF",
+      "radiusPx": 0
+    },
+    "export_bar": {
+      "textColor": "#000000",
+      "boxColor": "#FFFFFF",
+      "radiusPx": 0
+    }
+  },
+  "badgeRect": {
+    "fitTopBand": {
+      "widthPx": 200,
+      "heightPx": 32,
+      "logoSizePx": 28,
+      "padPx": 8,
+      "centerX": true
+    },
+    "exportBar": {
+      "widthPx": 108,
+      "heightPx": 36,
+      "logoSizePx": 24,
+      "padLeftPx": 10,
+      "linkGapPx": 12,
+      "insetLeftPx": 16
+    }
+  },
   "platforms": {
     "twitch": { "label": "TWITCH", "color": "#9146FF" },
     "kick": { "label": "KICK", "color": "#53FC18" },
