@@ -452,13 +452,6 @@ def run_m4_pipeline(
     from clips_worker.clipfind.context import bind_clipfind, unbind_clipfind
     from clips_worker.clipfind.flags import log_resolved_flags
 
-    bind_clipfind(
-        workspace_id=str(workspace_id),
-        job_type=str(mode),
-        job_id=str(job_id),
-        project_id=str(project_id),
-    )
-    log_resolved_flags()
     project_id = project["id"]
     range_start = int(project.get("rangeStartMs") or 0)
     range_end = int(project.get("rangeEndMs") or 0)
@@ -466,6 +459,13 @@ def run_m4_pipeline(
     from clips_worker.content_detection import normalize_content_mode
 
     mode = normalize_content_mode(settings.get("mode"))
+    bind_clipfind(
+        workspace_id=str(workspace_id),
+        job_type="PROCESS_PROJECT",
+        job_id=str(job_id),
+        project_id=str(project_id),
+    )
+    log_resolved_flags()
     source_duration_ms = max(1, range_end - range_start) if range_end > range_start else 0
     from clips_worker.target_clip_len import enrich_settings_with_clip_length
 
