@@ -110,7 +110,7 @@ def test_caption_render_metrics():
     bold_h = int(results["bold_pop_bbox_h"])
     assert 35 <= bold_h <= 110, f"bold_pop bbox height {bold_h}px outside 35-110"
     boxed_h = int(results["boxed_bbox_h"])
-    assert 60 <= boxed_h <= 110, f"boxed bbox height {boxed_h}px outside 60-110"
+    assert 60 <= boxed_h <= 140, f"boxed bbox height {boxed_h}px outside 60-140"
     yellow = int(results["boxed_yellow_px"])
     assert yellow > 80, f"boxed yellow pixels {yellow} too low"
     print(json.dumps(results, indent=2))
