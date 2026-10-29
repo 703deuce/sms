@@ -69,6 +69,28 @@ def editor_mode_uses_stream_frame(mode: str) -> bool:
     return (mode or "").strip() in ("fit_blur", "fit_top", "full_frame")
 
 
+def export_stream_headline_compose_active(edits: dict) -> bool:
+    """Editor parity: stream headline bar on speakercrop uses fit_top compose (blur footer), not exportBar stack."""
+    mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow").strip()
+    if editor_mode_uses_stream_frame(mode):
+        return True
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
+    if not tpl:
+        return False
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    if not hb.get("enabled"):
+        return False
+    text = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip()
+    return bool(text)
+
+
+def stream_compose_layout_mode(edits: dict) -> str:
+    mode = str((edits.get("layout") or {}).get("mode") or "fit_blur").strip()
+    if mode in ("fit_blur", "fit_top", "full_frame"):
+        return mode
+    return "fit_top"
+
+
 def editor_layout_to_worker(mode: str) -> str:
     """Map clip editor layout.mode → worker speakercrop layout id (parity with new-app layout-mode-map.ts)."""
     m = (mode or "speaker_follow").strip()

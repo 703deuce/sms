@@ -102,7 +102,14 @@ def _headline_style_from_edits(edits: dict) -> dict:
     if hl and isinstance(hl.get("style"), dict):
         preset = str(hl["style"].get("preset") or "export_bar")
         base = headline_style_for_preset(preset)
-        return {**base, **hl["style"]}
+        merged = {**base, **hl["style"]}
+        if not merged.get("font"):
+            merged["font"] = "Anton" if preset in ("stream_yellow", "stream_white_box") else merged.get("font")
+        return merged
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    if hb.get("enabled"):
+        base = headline_style_for_preset("stream_yellow")
+        return {**base, **raw, "font": raw.get("font") or "Anton"}
     return headline_style_for_preset("export_bar")
 
 
@@ -297,6 +304,7 @@ def apply_export_template(
             text_color=str(style.get("textColor") or "#000000"),
             box_color=str(style.get("boxColor") or "#FFFFFF"),
             headline_style=style,
+            fit_top=layout_mode == "fit_top" or headline_on,
         )
         current = hl_out
 

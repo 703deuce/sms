@@ -17,10 +17,12 @@ from clips_worker.caption_words import build_caption_words, caption_words_to_ren
 from clips_worker.layout_router import (
     editor_mode_uses_static_fit_blur,
     editor_mode_uses_stream_frame,
+    export_stream_headline_compose_active,
     needs_per_segment_layout_export,
     normalize_layout_segments,
     speakercrop_settings_for_layout_mode,
     speakercrop_settings_from_edits,
+    stream_compose_layout_mode,
 )
 from clips_worker.render_clip import run_speakercrop
 from clips_worker.chat_overlay_apply import try_apply_chat_overlay
@@ -561,12 +563,15 @@ def _legacy_compose(
     clip_end_ms = ctx["clip_end_ms"]
 
     layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
-    if editor_mode_uses_stream_frame(layout_mode):
+    stream_frame_applied = False
+    if export_stream_headline_compose_active(edits):
         from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
 
         layout_mp4 = work_dir / "stream_layout.mp4"
-        render_stream_clip_layout(caption_src, layout_mp4, edits, layout_mode, play_w=play_w, play_h=play_h)
+        compose_mode = stream_compose_layout_mode(edits)
+        render_stream_clip_layout(caption_src, layout_mp4, edits, compose_mode, play_w=play_w, play_h=play_h)
         caption_src = layout_mp4
+        stream_frame_applied = True
 
     tpl_censor = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
     if tpl_censor and tpl_censor.get("profanityCensor"):
@@ -576,7 +581,7 @@ def _legacy_compose(
 
     final = work_dir / "final.mp4"
     cap_edits = edits.get("captions") or {}
-    if layout_mode == "fit_top" and isinstance(cap_edits, dict):
+    if (layout_mode == "fit_top" or stream_frame_applied) and isinstance(cap_edits, dict):
         cap_edits = {**cap_edits, "marginVPct": 6, "position": "bottom"}
     if int(cap_edits.get("enabled", True)):
         burn_captions(caption_src, caption_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
@@ -638,7 +643,7 @@ def _legacy_compose(
         shutil.copy(zoomed, out_mp4)
 
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
-    if tpl and not editor_mode_uses_stream_frame(layout_mode):
+    if tpl and not stream_frame_applied and not editor_mode_uses_stream_frame(layout_mode):
         from clips_worker.clip_export_template import apply_export_template
 
         templated = work_dir / "export_template.mp4"
