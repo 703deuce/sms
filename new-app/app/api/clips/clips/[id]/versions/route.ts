@@ -18,7 +18,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
     if (!result.ok) {
       return NextResponse.json({ code: result.code }, { status: 503 })
     }
-    return NextResponse.json({ items: result.items })
+    return NextResponse.json({ data: { items: result.items } })
   } catch (err) {
     return jsonError(err, 500)
   }
@@ -47,7 +47,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       }
       return NextResponse.json({ error: 'Failed' }, { status: 500 })
     }
-    return NextResponse.json({ id: result.id })
+    return NextResponse.json({ data: { id: result.id } })
   } catch (err) {
     return jsonError(err, 400)
   }

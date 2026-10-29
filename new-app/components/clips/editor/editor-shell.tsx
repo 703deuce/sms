@@ -386,21 +386,25 @@ export function EditorShell({
     }
   }, [clipId, versionsEnabled])
 
-  const saveEditVersion = useCallback(async () => {
-    const name = window.prompt('Version name', 'My version')?.trim()
-    if (!name) return
-    try {
-      await clipsFetch(`/api/clips/clips/${clipId}/versions`, {
-        method: 'POST',
-        body: JSON.stringify({ name, kind: 'manual', edits }),
-      })
-      logEditorDecision('version_save', { kind: 'manual' })
-      await refreshVersions()
-      toast.success('Version saved')
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not save version')
-    }
-  }, [clipId, edits, refreshVersions])
+  const saveEditVersion = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      try {
+        const res = await clipsFetch<{ id: string }>(`/api/clips/clips/${clipId}/versions`, {
+          method: 'POST',
+          body: JSON.stringify({ name: trimmed, kind: 'manual', edits }),
+        })
+        if (!res?.id) throw new Error('Save failed')
+        logEditorDecision('version_save', { kind: 'manual' })
+        await refreshVersions()
+        toast.success('Version saved')
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not save version')
+      }
+    },
+    [clipId, edits, refreshVersions],
+  )
 
   const restoreEditVersion = useCallback(
     async (versionId: string) => {
@@ -1067,7 +1071,7 @@ export function EditorShell({
             <EditorVersionsMenu
               enabled={versionsEnabled}
               versions={editVersions}
-              onSaveVersion={() => void saveEditVersion()}
+              onSaveVersion={(name) => void saveEditVersion(name)}
               onRestoreVersion={(id) => void restoreEditVersion(id)}
               onDeleteVersion={(id) => void deleteEditVersion(id)}
               onRestoreOriginal={() => void restoreOriginalEdits()}

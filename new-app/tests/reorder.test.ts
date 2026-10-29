@@ -57,6 +57,24 @@ describe('reorder fixture parity', () => {
 })
 
 describe('moveSelection', () => {
+  it('moves a sentence within a single keep block', () => {
+    const bounds = { clipStartMs: 0, clipEndMs: 20_000 }
+    const edits = normalizeEdits(
+      {
+        ...defaultEdits(bounds),
+        trim: { in: 0, out: 10_000 },
+      },
+      bounds,
+    )
+    const words = [
+      { startMs: 2000, endMs: 3000 },
+      { startMs: 4000, endMs: 5000 },
+    ]
+    const next = moveSelection(edits, [4000, 5000], 'up', words)
+    expect(next).not.toBeNull()
+    expect(next!.length).toBeGreaterThan(0)
+  })
+
   it('returns null when selection spans blocks', () => {
     const bounds = { clipStartMs: 0, clipEndMs: 10000 }
     const edits = normalizeEdits(defaultEdits(bounds), bounds)
@@ -68,6 +86,6 @@ describe('moveSelection', () => {
       { startMs: 100, endMs: 900 },
       { startMs: 5100, endMs: 5900 },
     ]
-    expect(moveSelection(withOrder, [4000, 6000], 'up', words)).toBeNull()
+    expect(moveSelection(withOrder, [100, 5900], 'up', words)).toBeNull()
   })
 })

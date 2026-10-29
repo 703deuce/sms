@@ -128,6 +128,7 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and not (edits.get("layout") or {}).get("shotOverrides")
         and not normalize_section_order(edits.get("sectionOrder"), trim_in, trim_out)
         and edits.get("loudnessLufs") is None
+        and edits.get("speechLevelingEnabled") is not True
         and edits.get("speed") in (None, 1, 1.0)
     )
 
@@ -1240,7 +1241,7 @@ def render_edited_clip(
         caption_src = mixed
 
     loud_lufs = edits.get("loudnessLufs")
-    if loud_lufs is not None:
+    if edits.get("speechLevelingEnabled") is True and loud_lufs is not None:
         try:
             from clips_worker.audio_render import apply_loudnorm
 

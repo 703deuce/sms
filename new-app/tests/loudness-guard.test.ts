@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
 import { previewExportMatchesDefault } from '@/lib/clips/export-edits-match'
+import { speechLevelingPatch } from '@/lib/clips/speech-leveling'
 
 describe('loudness preview reuse guard', () => {
   const bounds = { clipStartMs: 0, clipEndMs: 60000 }
 
-  it('returns false when loudnessLufs is set', () => {
-    const edits = normalizeEdits({ ...defaultEdits(bounds), loudnessLufs: -14 }, bounds)
+  it('returns false when speech leveling is enabled', () => {
+    const edits = normalizeEdits({ ...defaultEdits(bounds), ...speechLevelingPatch(true) }, bounds)
     expect(previewExportMatchesDefault(edits, bounds)).toBe(false)
   })
 

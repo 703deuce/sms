@@ -11,7 +11,7 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures/reorder_cases.json"
 @pytest.mark.parametrize(
     "field,payload",
     [
-        ("loudnessLufs", {"loudnessLufs": -14}),
+        ("speechLevelingEnabled", {"speechLevelingEnabled": True, "loudnessLufs": -14}),
         ("speed", {"speed": 1.25}),
         ("sectionOrder", {"sectionOrder": [[5000, 10000], [0, 5000]]}),
     ],

@@ -14,6 +14,7 @@ import {
   SFX_PRESETS,
   type ClipStudioSound,
 } from '@/lib/clips/audio'
+import { isSpeechLevelingEnabled, speechLevelingPatch } from '@/lib/clips/speech-leveling'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
@@ -52,7 +53,7 @@ export function AudioPanel({
   onStartStudioSound?: () => void
   studioSlow?: boolean
   onRetryStudioPoll?: () => void
-  onPatchExportAudio?: (patch: Pick<ClipEditsV2, 'loudnessLufs' | 'speed'>) => void
+  onPatchExportAudio?: (patch: Pick<ClipEditsV2, 'loudnessLufs' | 'speed' | 'speechLevelingEnabled'>) => void
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -161,14 +162,14 @@ export function AudioPanel({
             </p>
           </div>
           <Switch
-            checked={edits.loudnessLufs === -14}
+            checked={isSpeechLevelingEnabled(edits)}
             onCheckedChange={(on) => {
-              onPatchExportAudio?.({ loudnessLufs: on ? -14 : undefined })
+              onPatchExportAudio?.(speechLevelingPatch(on))
             }}
             aria-label="Level speech volume"
           />
         </div>
-        {edits.loudnessLufs === -14 ? (
+        {isSpeechLevelingEnabled(edits) ? (
           <p className="text-xs text-muted-foreground">Applied on export</p>
         ) : null}
         <div className="space-y-1">

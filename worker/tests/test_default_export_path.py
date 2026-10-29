@@ -66,7 +66,15 @@ def test_preview_export_matches_new_fields():
         },
     }
     base = preview_export_matches(edits, 0, 10000)
-    assert preview_export_matches({**edits, "loudnessLufs": -14}, 0, 10000) is False
+    assert preview_export_matches({**edits, "loudnessLufs": -14}, 0, 10000) is base
+    assert (
+        preview_export_matches(
+            {**edits, "speechLevelingEnabled": True, "loudnessLufs": -14},
+            0,
+            10000,
+        )
+        is False
+    )
     assert preview_export_matches({**edits, "speed": 1.25}, 0, 10000) is False
     assert preview_export_matches({**edits, "sectionOrder": [[5000, 10000], [0, 5000]]}, 0, 10000) is False
     assert base in (True, False)

@@ -46,7 +46,10 @@ describe('default export path pin (TS)', () => {
           ? normalizeEdits(defaultEdits(bounds), bounds)
           : normalizeEdits(raw, bounds)
       const base = previewExportMatchesDefault(edits, bounds)
-      expect(previewExportMatchesDefault({ ...edits, loudnessLufs: -14 }, bounds)).toBe(false)
+      expect(previewExportMatchesDefault({ ...edits, loudnessLufs: -14 }, bounds)).toBe(base)
+      expect(
+        previewExportMatchesDefault({ ...edits, speechLevelingEnabled: true, loudnessLufs: -14 }, bounds),
+      ).toBe(false)
       expect(previewExportMatchesDefault({ ...edits, speed: 1.25 }, bounds)).toBe(false)
       expect(
         previewExportMatchesDefault(

@@ -1,5 +1,5 @@
 import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
-import { normalizeSectionOrder } from '@/lib/clips/edits'
+import { normalizeSectionOrder, orderedKeepSegments } from '@/lib/clips/edits'
 
 export type WordSpan = { startMs: number; endMs: number }
 
@@ -31,6 +31,8 @@ export function wordGapBoundaries(words: WordSpan[], trimIn: number, trimOut: nu
 export function sectionBlocksForEdits(edits: ClipEditsV2): CutRange[] {
   const norm = normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out)
   if (norm?.length) return norm
+  const segs = orderedKeepSegments(edits)
+  if (segs.length) return segs
   return [[edits.trim.in, edits.trim.out]]
 }
 
@@ -51,9 +53,25 @@ function blockContaining(blocks: CutRange[], s: number, e: number): number | nul
   const b = Math.max(s, e)
   for (let i = 0; i < blocks.length; i++) {
     const [bs, be] = blocks[i]!
-    if (a >= bs && b <= be) return i
+    if (a >= bs - 1 && b <= be + 1) return i
   }
   return null
+}
+
+function snapRangeToWords(
+  s: number,
+  e: number,
+  wordSpans: WordSpan[],
+  trimIn: number,
+  trimOut: number,
+): [number, number] | null {
+  const a = Math.min(s, e)
+  const b = Math.max(s, e)
+  const hit = wordSpans.filter((w) => w.endMs > a && w.startMs < b)
+  if (!hit.length) return null
+  const ns = Math.max(trimIn, Math.min(...hit.map((w) => w.startMs)))
+  const ne = Math.min(trimOut, Math.max(...hit.map((w) => w.endMs)))
+  return ne > ns ? [Math.round(ns), Math.round(ne)] : null
 }
 
 /** Move selected source range up/down in output block order; returns new sectionOrder or null. */
@@ -63,18 +81,14 @@ export function moveSelection(
   dir: 'up' | 'down',
   wordSpans: WordSpan[],
 ): CutRange[] | null {
-  const gaps = wordGapBoundaries(wordSpans, edits.trim.in, edits.trim.out)
-  let [s, e] = range
-  s = snapMs(s, edits.trim.in, edits.trim.out, gaps)
-  e = snapMs(e, edits.trim.in, edits.trim.out, gaps)
+  const aligned = snapRangeToWords(range[0], range[1], wordSpans, edits.trim.in, edits.trim.out)
+  if (!aligned) return null
+  const [s, e] = aligned
   if (e <= s) return null
 
   const blocks = sectionBlocksForEdits(edits)
   const bi = blockContaining(blocks, s, e)
   if (bi === null) return null
-
-  const neighborOut = dir === 'up' ? bi - 1 : bi + 1
-  if (neighborOut < 0 || neighborOut >= blocks.length) return null
 
   const [bs, be] = blocks[bi]!
   const pieces: CutRange[] = []
@@ -88,7 +102,7 @@ export function moveSelection(
     if (e < be) pieces.push([e, be])
   }
 
-  const selIdx = pieces.findIndex(([a, b]) => a === s && b === e)
+  const selIdx = pieces.findIndex(([a, b]) => s >= a && e <= b)
   if (selIdx < 0) return null
   const swapWith = dir === 'up' ? selIdx - 1 : selIdx + 1
   if (swapWith < 0 || swapWith >= pieces.length) return null
@@ -100,5 +114,11 @@ export function moveSelection(
 
   const merged = mergeContiguous(swapped.filter(([a, b]) => b - a >= 300))
   const normalized = normalizeSectionOrder(merged, edits.trim.in, edits.trim.out)
-  return normalized ?? merged
+  if (normalized?.length) return normalized
+  const sorted = [...merged].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const sameOrder =
+    merged.length === sorted.length &&
+    merged.every((r, i) => r[0] === sorted[i]![0] && r[1] === sorted[i]![1])
+  if (!sameOrder && merged.length > 1) return merged
+  return null
 }

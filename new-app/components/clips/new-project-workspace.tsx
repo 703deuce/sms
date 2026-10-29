@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { PrimaryButton } from '@/components/app/primary-button'
@@ -45,8 +45,10 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   const [estimate, setEstimate] = useState<{ credits: number; providerCostUsd?: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
+  const byoAutoStartedRef = useRef(false)
 
   const onFile = (file: File, resumeUploadId?: string) => {
+    byoAutoStartedRef.current = false
     setPendingFile(file)
     if (!resumeUploadId) setUploadId(null)
     void probeDuration(file)
@@ -108,7 +110,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
       })
   }
 
-  const submitUpload = async () => {
+  const submitUpload = useCallback(async () => {
     if (!uploadId) {
       toast.error('Wait for the upload to finish')
       return
@@ -128,7 +130,15 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
     } finally {
       setSubmitting(false)
     }
-  }
+  }, [durationMs, projectIntent, router, settings, uploadId])
+
+  useEffect(() => {
+    if (projectIntent !== 'byo') return
+    if (upload?.state !== 'complete' || !uploadId || submitting) return
+    if (byoAutoStartedRef.current) return
+    byoAutoStartedRef.current = true
+    void submitUpload()
+  }, [projectIntent, upload?.state, uploadId, submitting, submitUpload])
 
   const submitLink = async () => {
     const check = validateImportUrlForSubmit(linkUrl)
@@ -367,7 +377,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                   Creating project…
                 </>
               ) : projectIntent === 'byo' ? (
-                'Open in editor'
+                'Start'
               ) : (
                 'Get clips'
               )}

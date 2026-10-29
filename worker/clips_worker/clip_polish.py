@@ -91,8 +91,8 @@ def apply_clip_polish_initial(
     if polish_feature_enabled("SILENCE"):
         out["silenceTrim"] = _silence_preset(stream)
 
-    if polish_feature_enabled("AUDIO"):
-        out["loudnessLufs"] = -14
+    if (polish_feature_enabled("AUDIO")):
+        pass  # speech leveling is user opt-in only (speechLevelingEnabled on edits)
 
     if polish_feature_enabled("HOOK"):
         hook = str(pick.get("hook") or "").strip()

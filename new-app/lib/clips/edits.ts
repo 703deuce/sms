@@ -7,6 +7,7 @@ import { clampZoomIntensity } from '@/lib/clips/zoom-keyframes'
 import type { SilenceTrimSettings } from '@/lib/clips/silence-trim'
 import { normalizeLayoutSegments, type LayoutSegment } from '@/lib/clips/layout-segments'
 import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/export-template'
+import { isSpeechLevelingEnabled } from '@/lib/clips/speech-leveling'
 
 export type CutRange = [number, number]
 
@@ -91,6 +92,8 @@ export type ClipEditsV2 = {
   silenceTrim?: SilenceTrimSettings
   /** Integrated loudness target (LUFS) for export loudnorm. */
   loudnessLufs?: -14 | -16 | -18 | -23 | -24
+  /** Explicit opt-in for speech leveling (toggle); loudnessLufs alone is not enough. */
+  speechLevelingEnabled?: boolean
   /** Source-ms blocks in output order (transcript rearrange). */
   sectionOrder?: CutRange[]
   /** Export playback speed (post-step); preview uses playbackRate. */
@@ -415,6 +418,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       o.loudnessLufs === -24
         ? (o.loudnessLufs as ClipEditsV2['loudnessLufs'])
         : undefined,
+    speechLevelingEnabled: o.speechLevelingEnabled === true ? true : undefined,
     sectionOrder: normalizeSectionOrder(o.sectionOrder, trim.in, trim.out),
     speed: normalizeEditSpeed(o.speed),
   }
@@ -461,7 +465,7 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     Object.keys(edits.wordFixes).length === 0 &&
     (edits.layout.shotOverrides?.length ?? 0) === 0 &&
     !normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out) &&
-    edits.loudnessLufs === undefined &&
+    !isSpeechLevelingEnabled(edits) &&
     normalizeEditSpeed(edits.speed) === undefined
   )
 }

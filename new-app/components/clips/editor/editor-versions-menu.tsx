@@ -1,8 +1,9 @@
 'use client'
 
-import { Component, type ReactNode } from 'react'
+import { Component, type ReactNode, useState } from 'react'
 import { ChevronDown, History, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,11 +64,13 @@ function EditorVersionsMenuInner({
 }: {
   enabled: boolean
   versions: EditVersionRow[]
-  onSaveVersion: () => void
+  onSaveVersion: (name: string) => void
   onRestoreVersion: (id: string) => void
   onDeleteVersion: (id: string) => void
   onRestoreOriginal: () => void
 }) {
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [saveName, setSaveName] = useState('My version')
   if (!enabled) return null
   return (
     <DropdownMenu>
@@ -86,9 +89,45 @@ function EditorVersionsMenuInner({
             Edit versions
           </DropdownMenuLabel>
         </DropdownMenuGroup>
-        <DropdownMenuItem onClick={onSaveVersion} data-testid="versions-save-item">
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.preventDefault()
+            setSaveOpen((v) => !v)
+          }}
+          data-testid="versions-save-item"
+        >
           Save version…
         </DropdownMenuItem>
+        {saveOpen ? (
+          <div className="flex flex-col gap-2 px-2 py-2" data-testid="versions-save-form">
+            <Input
+              aria-label="Version name"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const name = saveName.trim()
+                  if (!name) return
+                  onSaveVersion(name)
+                  setSaveOpen(false)
+                }
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={!saveName.trim()}
+              onClick={() => {
+                const name = saveName.trim()
+                if (!name) return
+                onSaveVersion(name)
+                setSaveOpen(false)
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        ) : null}
         <DropdownMenuSeparator />
         {versions.length === 0 ? (
           <DropdownMenuItem disabled data-testid="versions-empty-item">
@@ -142,7 +181,7 @@ function EditorVersionsMenuInner({
 export function EditorVersionsMenu(props: {
   enabled: boolean
   versions: EditVersionRow[]
-  onSaveVersion: () => void
+  onSaveVersion: (name: string) => void
   onRestoreVersion: (id: string) => void
   onDeleteVersion: (id: string) => void
   onRestoreOriginal: () => void

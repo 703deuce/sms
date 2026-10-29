@@ -13,7 +13,7 @@ def preview_export_matches(edits: dict, clip_start_ms: int, clip_end_ms: int) ->
     trim_out = int(edits["trim"]["out"])
     if normalize_section_order(edits.get("sectionOrder"), trim_in, trim_out):
         return False
-    if edits.get("loudnessLufs") is not None:
+    if edits.get("speechLevelingEnabled") is True:
         return False
     raw_speed = edits.get("speed")
     if raw_speed is not None and float(raw_speed) not in (1, 1.0):

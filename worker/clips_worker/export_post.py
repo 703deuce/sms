@@ -105,7 +105,7 @@ def apply_export_post(
     """Speed re-encode + optional composite loudnorm; updates render_meta duration fields."""
     speed = _edit_speed(edits)
     loud_lufs = edits.get("loudnessLufs")
-    need_loud = loud_lufs is not None and not render_meta.get("loudnorm_applied")
+    need_loud = edits.get("speechLevelingEnabled") is True and loud_lufs is not None and not render_meta.get("loudnorm_applied")
     if speed == 1.0 and not need_loud:
         return out_mp4, srt_body
 

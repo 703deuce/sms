@@ -129,7 +129,6 @@ export function applyClipPolishToEdits(
   }
 
   if (clipPolishFeatureEnabled('AUDIO')) {
-    next = { ...next, loudnessLufs: -14 }
     if (next.audio?.music) {
       next = {
         ...next,

@@ -22,12 +22,14 @@ export async function GET(
     }
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json({
-      id: row.id,
-      name: row.name,
-      kind: row.kind,
-      createdAt: row.createdAt.toISOString(),
-      edits: row.edits,
-      editsSaveVersion: row.editsSaveVersion,
+      data: {
+        id: row.id,
+        name: row.name,
+        kind: row.kind,
+        createdAt: row.createdAt.toISOString(),
+        edits: row.edits,
+        editsSaveVersion: row.editsSaveVersion,
+      },
     })
   } catch (err) {
     return jsonError(err, 500)
@@ -53,7 +55,7 @@ export async function DELETE(
       }
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ data: { ok: true } })
   } catch (err) {
     return jsonError(err, 500)
   }

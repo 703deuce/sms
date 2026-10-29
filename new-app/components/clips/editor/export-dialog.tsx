@@ -634,9 +634,13 @@ export function ExportDialog({
         {renderId && durationMs != null && durationMs > 0 && (
           <p className="mt-1 text-xs text-muted-foreground">
             Clip length: {Math.round(editedDurationMs / 1000)}s
-            {Math.abs(editedDurationMs - durationMs) > 500
-              ? ` (render ${Math.round(durationMs / 1000)}s)`
-              : ''}
+            {(() => {
+              const speed = normalizeEditSpeed(edits.speed) ?? 1
+              const renderDisplayMs = Math.round(durationMs / speed)
+              return Math.abs(editedDurationMs - renderDisplayMs) > 500
+                ? ` (render ${Math.round(renderDisplayMs / 1000)}s)`
+                : ''
+            })()}
           </p>
         )}
         {!renderId ? (

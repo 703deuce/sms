@@ -5,6 +5,7 @@ import type { ClipWord } from '@/lib/clips/edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { applyLoopFriendlyTrimToEdits, loopFriendlyEndDefault } from '@/lib/clips/loop-friendly-trim'
 import { normalizeExportSfxMode } from '@/lib/clips/export-sfx'
+import { exportLoudnessLufs } from '@/lib/clips/speech-leveling'
 
 export function applyExportPolishEdits(
   edits: ClipEditsV2,
@@ -35,6 +36,13 @@ export function applyExportPolishEdits(
     next = applyLoopFriendlyTrimToEdits(next, words, {
       exportPlatform: opts.exportPlatform ?? null,
     })
+  }
+  const lufs = exportLoudnessLufs(edits)
+  if (lufs !== undefined) {
+    next = { ...next, loudnessLufs: lufs }
+  } else if ('loudnessLufs' in next) {
+    const { loudnessLufs: _drop, ...rest } = next
+    next = rest as ClipEditsV2
   }
   return next
 }

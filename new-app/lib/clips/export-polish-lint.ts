@@ -1,6 +1,7 @@
 import { EXPORT_PLATFORM_PRESETS, type ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { outputDurationMs, type ClipEditsV2 } from '@/lib/clips/edits'
 import { countPolishOverlays } from '@/lib/clips/overlay-safe-zone'
+import { isSpeechLevelingEnabled } from '@/lib/clips/speech-leveling'
 
 export type ExportPolishLintItem = {
   id: string
@@ -56,13 +57,15 @@ export function exportPolishLint(
   }
 
   const lufs = edits.loudnessLufs
+  const levelingOn = isSpeechLevelingEnabled(edits)
   items.push({
     id: 'audio',
-    ok: lufs === -14 || lufs === undefined,
-    message:
-      lufs === -14 || lufs === undefined
-        ? 'Loudness normalized to about −14 LUFS on export'
-        : `Custom loudness ${lufs} LUFS — −14 LUFS is recommended for shorts`,
+    ok: levelingOn || lufs === undefined,
+    message: levelingOn
+      ? 'Loudness normalized to about −14 LUFS on export'
+      : lufs === undefined
+        ? 'Speech leveling off — export matches source loudness'
+        : `Custom loudness ${lufs} LUFS — enable Level speech volume for −14 LUFS`,
   })
 
   const overlayCount = countPolishOverlays({

@@ -216,6 +216,11 @@ export function ProjectClipsView({
     }
   }, [initialStatus, readyHydrated, hydrateReady])
 
+  useEffect(() => {
+    if (!byoProject || !readyHydrated || clips.length !== 1) return
+    router.replace(`/app/clips/${projectId}/edit/${clips[0]!.id}`)
+  }, [byoProject, readyHydrated, clips, projectId, router])
+
   const terminalRef = useRef(readyFromServer || ['READY', 'FAILED', 'CANCELED'].includes(initialStatus))
   const pollSnapshotRef = useRef({
     status: initialStatus,
