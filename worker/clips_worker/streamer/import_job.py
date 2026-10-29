@@ -423,17 +423,6 @@ def _complete_rolling_window_import(
     finalize = rolling_finalize or bool(rolling_live.get("finalize"))
     chunk_min = rolling_chunk_min(prior)
     schedule_tick = (live and not finalize) or (schedule_growing_tick and not rolling_finalize)
-    from clips_worker.streamer.config import streamer_twitch_rolling_enabled
-
-    if schedule_tick and not streamer_twitch_rolling_enabled():
-        decision_log(
-            "streamer",
-            "rolling_tick_not_scheduled",
-            vodId=vod_id,
-            projectId=project_id,
-            reason="flag_off",
-        )
-        schedule_tick = False
     if schedule_tick:
         from clips_worker.streamer.rolling_ingest import rolling_autopull_stop_reason
 
