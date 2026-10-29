@@ -37,7 +37,6 @@ def _coerce_boundary_ms(
     clip_start_ms: int,
     clip_end_ms: int,
     for_setup: bool,
-    evidence_backed: bool = False,
 ) -> int | None:
     """Return absolute ms hint, or None if invalid for this clip window."""
     if val is None or val == "":
@@ -60,13 +59,6 @@ def _coerce_boundary_ms(
             continue
         lead_ms, tail_ms = _lead_tail_ms()
         if for_setup:
-            evidence = evidence_backed
-            try:
-                from clips_worker.clipfind.c2_boundaries import setup_lead_ms_for_coerce
-
-                lead_ms = setup_lead_ms_for_coerce(evidence_backed=evidence, default_lead_ms=lead_ms)
-            except Exception:
-                pass
             if abs_ms > clip_end_ms:
                 continue
             if abs_ms < clip_start_ms - lead_ms:
@@ -99,7 +91,6 @@ def boundary_fields_from_llm_row(
         clip_start_ms=cs,
         clip_end_ms=ce,
         for_setup=True,
-        evidence_backed=row.get("setup_start_s") not in (None, ""),
     )
     payoff = _coerce_boundary_ms(
         row.get("payoff_end_s"),
@@ -218,40 +209,6 @@ def resolve_boundaries_for_window(
         range_start_ms=range_start_ms,
         range_end_ms=range_end_ms,
     )
-    try:
-        from clips_worker.clipfind.c2_boundaries import compute_and_shadow_beats, merge_window_with_beats
-
-        gm = None
-        visual_curve = None
-        if video_moments:
-            for m in video_moments:
-                if m.get("_curve"):
-                    visual_curve = m.get("_curve")
-                if m.get("peak_s") is not None or m.get("what_happened"):
-                    gm = m
-                    break
-        cf_id = f"{ns}_{ne}"
-        beats = compute_and_shadow_beats(
-            cf_id=cf_id,
-            start_ms=ns,
-            end_ms=ne,
-            range_start_ms=range_start_ms,
-            range_end_ms=range_end_ms,
-            llm_row=llm_row,
-            gemini_moment=gm,
-            visual_curve=visual_curve,
-        )
-        ns, ne = merge_window_with_beats(
-            ns,
-            ne,
-            boundary_setup_ms=setup,
-            boundary_payoff_ms=payoff,
-            range_start_ms=range_start_ms,
-            range_end_ms=range_end_ms,
-            beats=beats,
-        )
-    except Exception:
-        pass
     return ns, ne, setup, payoff
 
 

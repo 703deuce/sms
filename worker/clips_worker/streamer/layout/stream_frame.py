@@ -104,38 +104,6 @@ def _compose_layout(
     return overlay_layout(max(2, headline_line_count or 2), play_w=play_w, play_h=play_h)
 
 
-def fit_top_headline_band_filters(
-    *,
-    lay: dict[str, int],
-    play_w: int,
-    h_box: int,
-    box_color: str,
-    headline_style: dict | None,
-    work_dir: Path,
-) -> str:
-    """Headline band step: drawbox or rounded PNG overlay (export parity with clip_export_template)."""
-    from clips_worker.clip_export_template import _headline_uses_styled_box
-    from clips_worker.overlay_geometry import _hex_ffmpeg_color
-
-    fill = _hex_ffmpeg_color(box_color, fallback="white")
-    y = int(lay["headline_top"])
-    style = headline_style if isinstance(headline_style, dict) else {}
-    if _headline_uses_styled_box(style):
-        from clips_worker.layer_sprites import headline_box_overlay_x, render_headline_box_png
-
-        width_pct = int(style.get("widthPct") or 100)
-        box_w = max(2, round(play_w * width_pct / 100.0))
-        box_x = headline_box_overlay_x(play_w, width_pct)
-        hl_png = work_dir / "fit_top_headline_box.png"
-        render_headline_box_png(box_w, h_box, str(style.get("boxColor") or box_color), int(style.get("radiusPx") or 0), hl_png)
-        hl_path = str(hl_png).replace("\\", "/").replace(":", "\\:")
-        return (
-            f"movie={hl_path}:loop=0,setpts=N/FRAME_RATE/TB[hlbox];"
-            f"[bg0][hlbox]overlay=x={box_x}:y={y}:shortest=1[bg1]"
-        )
-    return f"[bg0]drawbox=x=0:y={y}:w={play_w}:h={h_box}:color={fill}:t=fill[bg1]"
-
-
 def _fit_top_base(
     src: Path,
     stage: Path,
@@ -147,23 +115,17 @@ def _fit_top_base(
     vid_y: int,
     h_box: int,
     box_color: str = "white",
-    headline_style: dict | None = None,
 ) -> None:
-    band = fit_top_headline_band_filters(
-        lay=lay,
-        play_w=play_w,
-        h_box=h_box,
-        box_color=box_color,
-        headline_style=headline_style,
-        work_dir=stage.parent,
-    )
+    from clips_worker.overlay_geometry import _hex_ffmpeg_color
+
+    fill = _hex_ffmpeg_color(box_color, fallback="white")
     fc = (
         f"[0:v]scale={play_w}:{play_h}:force_original_aspect_ratio=increase,"
         f"crop={play_w}:{play_h},boxblur=20:2,eq=brightness=-0.08[bgfull];"
         f"[0:v]scale={play_w}:-2[fg];"
         f"color=c=black:s={play_w}x{play_h}:d={dur:.3f}[base];"
         f"[base][bgfull]overlay=0:0[bg0];"
-        f"{band};"
+        f"[bg0]drawbox=x=0:y={lay['headline_top']}:w={play_w}:h={h_box}:color={fill}:t=fill[bg1];"
         f"[bg1][fg]overlay=0:{vid_y}[v1]"
     )
     subprocess.check_call(
@@ -325,7 +287,6 @@ def render_fit_top_stream(
         vid_y=vid_y,
         h_box=h_box,
         box_color=box_color,
-        headline_style=style,
     )
     current = stage
     _fit_top_band_layers(
