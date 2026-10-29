@@ -214,6 +214,23 @@ def finalize_picks(
                         pick["boundary_payoff_ms"] = payoff_ms
             except Exception:
                 pass
+        try:
+            from clips_worker.clipfind.c2_seams import refine_upload_pick
+
+            refine_upload_pick(
+                pick,
+                words=words,
+                sentences=sentences,
+                signals_by_idx=signals_by_idx,
+                visual_moments=visual_moments,
+                range_start_ms=range_start_ms,
+                range_end_ms=range_end_ms,
+                max_ms=max_ms,
+            )
+        except Exception as exc:
+            from clips_worker.clipfind.flags import clipfind_fallback
+
+            clipfind_fallback("finalize_refine", type(exc).__name__)
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
         extend_pick_to_min_duration(
             pick,

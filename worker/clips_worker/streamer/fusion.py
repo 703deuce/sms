@@ -421,6 +421,28 @@ def fuse_moments(
         if demote_ids and str(lid) in demote_ids:
             meta_cf["llm_keep"] = False
             meta_cf["demote_tier"] = "more"
+        try:
+            from clips_worker.clipfind.c2_seams import refine_stream_candidate
+
+            start_ms, end_ms = refine_stream_candidate(
+                cand=cand,
+                llm=llm,
+                title=title,
+                hook=hook,
+                start_ms=start_ms,
+                end_ms=end_ms,
+                video_moments=video_moments,
+                words=words,
+                signals=signals,
+                raw_channels=raw_channels,
+                duration_s=duration_s,
+                max_clip_s=max_clip_s,
+                meta_cf=meta_cf,
+            )
+        except Exception as exc:
+            from clips_worker.clipfind.flags import clipfind_fallback
+
+            clipfind_fallback("fusion_refine", type(exc).__name__)
         picks.append(
             FusionPick(
                 start_ms=start_ms,

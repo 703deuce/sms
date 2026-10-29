@@ -1,0 +1,95 @@
+[
+  {
+    "ai_meta": {
+      "boundary_payoff_ms": 611500,
+      "boundary_setup_ms": 568000,
+      "clipfind": {},
+      "hook": "Moment at 568s",
+      "streamer": {
+        "category": "other",
+        "peakMs": 598000,
+        "rankIndex": 0,
+        "reasons": [
+          {
+            "kind": "audio",
+            "label": "Loudness spike",
+            "value": "+5.3\u03c3"
+          },
+          {
+            "kind": "video",
+            "label": "Visual moment",
+            "value": "high"
+          }
+        ],
+        "render": true,
+        "signalPeak": 0.55,
+        "tier": "primary"
+      }
+    },
+    "end_ms": 611500,
+    "score": 85,
+    "start_ms": 568000
+  },
+  {
+    "ai_meta": {
+      "boundary_payoff_ms": 156500,
+      "boundary_setup_ms": 120000,
+      "clipfind": {},
+      "hook": "Moment at 120s",
+      "streamer": {
+        "category": "other",
+        "peakMs": 130000,
+        "rankIndex": 1,
+        "reasons": [
+          {
+            "kind": "audio",
+            "label": "Loudness spike",
+            "value": "+5.1\u03c3"
+          },
+          {
+            "kind": "video",
+            "label": "Visual moment",
+            "value": "high"
+          }
+        ],
+        "render": true,
+        "signalPeak": 0.55,
+        "tier": "primary"
+      }
+    },
+    "end_ms": 156500,
+    "score": 79,
+    "start_ms": 120000
+  },
+  {
+    "ai_meta": {
+      "boundary_payoff_ms": 336500,
+      "boundary_setup_ms": 300000,
+      "clipfind": {},
+      "hook": "Moment at 300s",
+      "streamer": {
+        "category": "other",
+        "peakMs": 310000,
+        "rankIndex": 2,
+        "reasons": [
+          {
+            "kind": "audio",
+            "label": "Loudness spike",
+            "value": "+5.1\u03c3"
+          },
+          {
+            "kind": "video",
+            "label": "Visual moment",
+            "value": "high"
+          }
+        ],
+        "render": true,
+        "signalPeak": 0.55,
+        "tier": "primary"
+      }
+    },
+    "end_ms": 336500,
+    "score": 79,
+    "start_ms": 300000
+  }
+]

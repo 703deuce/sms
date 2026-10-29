@@ -395,6 +395,22 @@ def snap_bounds(
         before_end=before[1],
     )
 
+    rend = clip.get("clipfind_reaction_end_ms")
+    if rend is not None:
+        try:
+            from clips_worker.clipfind.flags import clipfind_flag
+
+            if clipfind_flag("CLIPFIND_REACTION_TAIL"):
+                cap = min(range_end_ms, start_ms + _length_limit_ms(clip, range_end_ms))
+                new_end = max(end_ms, min(cap, int(rend)))
+                if new_end != end_ms:
+                    picker_info("clipfind_reaction_tail", before_end=end_ms, after_end=new_end)
+                end_ms = new_end
+        except Exception as exc:
+            from clips_worker.clipfind.flags import clipfind_fallback
+
+            clipfind_fallback("snap_reaction_tail", type(exc).__name__)
+
     clip["start_ms"] = start_ms
     clip["end_ms"] = end_ms
 

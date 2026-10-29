@@ -872,6 +872,16 @@ def run_m4_pipeline(
                 if planned is None:
                     return
                 picks = planned
+                try:
+                    from clips_worker.clipfind.c2_seams import validate_frozen_upload_picks
+                    from clips_worker.target_clip_len import resolve_clip_length_policy
+
+                    _max_ms = resolve_clip_length_policy(settings).max_ms
+                    picks = validate_frozen_upload_picks(picks, max_ms=_max_ms)
+                except Exception as exc:
+                    from clips_worker.clipfind.flags import clipfind_fallback
+
+                    clipfind_fallback("upload_validate", type(exc).__name__)
 
                 from clips_worker.headstart_render import (
                     await_headstart_render,
@@ -996,6 +1006,16 @@ def run_m4_pipeline(
                 if planned is None:
                     return
                 picks = planned
+                try:
+                    from clips_worker.clipfind.c2_seams import validate_frozen_upload_picks
+                    from clips_worker.target_clip_len import resolve_clip_length_policy
+
+                    _max_ms = resolve_clip_length_policy(settings).max_ms
+                    picks = validate_frozen_upload_picks(picks, max_ms=_max_ms)
+                except Exception as exc:
+                    from clips_worker.clipfind.flags import clipfind_fallback
+
+                    clipfind_fallback("upload_validate", type(exc).__name__)
 
             print(
                 f"[clipper:picker] project={project_id} mode={mode} picks={len(picks)} "

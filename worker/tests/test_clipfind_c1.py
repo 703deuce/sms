@@ -43,6 +43,7 @@ def test_flag_precedence_all_off(monkeypatch):
     bind_clipfind(workspace_id="ws_test", job_type="PROCESS_PROJECT")
     assert clipfind_flag("CLIPFIND_DROP_LEDGER") is False
     assert clipfind_flag("CLIPFIND_NEVER_EMPTY") is False
+    assert clipfind_flag("CLIPFIND_BEATS_SHADOW") is False
 
 
 def test_workspace_override_behavior_only(monkeypatch):

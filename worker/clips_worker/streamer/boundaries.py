@@ -29,6 +29,9 @@ def snap_fusion_pick(
         clip["boundary_setup_ms"] = meta["boundary_setup_ms"]
     if meta.get("boundary_payoff_ms") is not None:
         clip["boundary_payoff_ms"] = meta["boundary_payoff_ms"]
+    cf = meta.get("clipfind") if isinstance(meta.get("clipfind"), dict) else {}
+    if cf.get("reaction_end_ms") is not None:
+        clip["clipfind_reaction_end_ms"] = int(cf["reaction_end_ms"])
     snap_bounds(clip, words, sentences, range_start_ms, range_end_ms)
     pick.start_ms = int(clip["start_ms"])
     pick.end_ms = int(clip["end_ms"])

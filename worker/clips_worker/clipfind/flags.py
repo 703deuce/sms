@@ -8,7 +8,9 @@ from clips_worker.clipfind.context import JobCtx, get_job_ctx
 from clips_worker.decision_log import decision_log
 
 # Logging-only defaults ON
-_DEFAULT_ON = frozenset({"CLIPFIND_DROP_LEDGER", "CLIPFIND_SHADOW_RANK"})
+_DEFAULT_ON = frozenset(
+    {"CLIPFIND_DROP_LEDGER", "CLIPFIND_SHADOW_RANK", "CLIPFIND_BEATS_SHADOW"}
+)
 
 _BEHAVIOR_FLAGS = (
     "CLIPFIND_MINLEN_KEEP",
@@ -21,6 +23,10 @@ _BEHAVIOR_FLAGS = (
     "CLIPFIND_FAIR_RANK",
     "CLIPFIND_UPLOAD_FAIR_RANK",
     "CLIPFIND_NEVER_EMPTY",
+    "CLIPFIND_SETUP_LOOKBACK",
+    "CLIPFIND_REACTION_TAIL",
+    "CLIPFIND_VARIANTS",
+    "CLIPFIND_VALIDATE_WINDOW",
 )
 
 _ALL_FLAGS = tuple(_DEFAULT_ON) + _BEHAVIOR_FLAGS

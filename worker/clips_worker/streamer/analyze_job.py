@@ -494,6 +494,14 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 want=want,
             )
             picks = fusion_picks_from_planned(planned)
+            try:
+                from clips_worker.clipfind.c2_seams import validate_frozen_stream_picks
+
+                picks = validate_frozen_stream_picks(picks, settings)
+            except Exception as exc:
+                from clips_worker.clipfind.flags import clipfind_fallback
+
+                clipfind_fallback("stream_validate", type(exc).__name__)
             log_pick_stage(
                 "stream",
                 want=want,
@@ -594,6 +602,16 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     chat_messages=chat_messages or [],
                     layout_mode=layout_mode,
                 )
+                cfm = ai_meta.get("clipfind") if isinstance(ai_meta.get("clipfind"), dict) else None
+                if cfm and isinstance(cfm.get("variants"), dict):
+                    cfm["variants"] = {
+                        k: {
+                            **v,
+                            "startMs": int(v["startMs"]) + time_offset_ms,
+                            "endMs": int(v["endMs"]) + time_offset_ms,
+                        }
+                        for k, v in cfm["variants"].items()
+                    }
                 sm = dict((ai_meta.get("streamer") or {}))
                 cap_key = state.get("windowCaptureVideoKey")
                 win_video = None
