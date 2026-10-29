@@ -37,6 +37,10 @@ def preview_export_matches(edits: dict, clip_start_ms: int, clip_end_ms: int) ->
 
     if needs_per_segment_layout_export(edits):
         return False
+    from clips_worker.layers_spec import resolve_layers, v3_has_extras
+
+    if v3_has_extras(resolve_layers(edits)):
+        return False
     aspect = edits.get("aspectRatio")
     if aspect and aspect != "9:16":
         return False

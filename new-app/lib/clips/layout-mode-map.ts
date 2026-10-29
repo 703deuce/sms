@@ -9,6 +9,11 @@ export function editorLayoutToWorker(mode: string): ClipProjectSettings['layout'
       return 'fit'
     case 'center_crop':
       return 'fill'
+    case 'facecam_stack':
+      return 'stack' as ClipProjectSettings['layout']
+    case 'facecam_pip':
+    case 'screen_pip':
+      return 'screen_pip' as ClipProjectSettings['layout']
     case 'split':
     case 'grid3':
     case 'grid4':

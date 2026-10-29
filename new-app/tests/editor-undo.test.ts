@@ -28,6 +28,22 @@ describe('editor undo', () => {
     expect(undone.edits.captions?.size).toBe(1)
   })
 
+  })
+
+  it('saved action respects clean flag', () => {
+    const base = defaultEdits(bounds)
+    const dirty = editorEditsReducer(
+      { edits: base, past: [], future: [], saveState: 'dirty', producerStrip: null },
+      { type: 'saved', clean: false },
+    )
+    expect(dirty.saveState).toBe('dirty')
+    const saved = editorEditsReducer(
+      { edits: base, past: [], future: [], saveState: 'saving', producerStrip: null },
+      { type: 'saved', clean: true },
+    )
+    expect(saved.saveState).toBe('saved')
+  })
+
   it('BATCH pushes undo even when edits are unchanged', () => {
     const base = defaultEdits(bounds)
     const initial = {

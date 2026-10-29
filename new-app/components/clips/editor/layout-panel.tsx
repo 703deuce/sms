@@ -18,6 +18,8 @@ import {
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { EditorHeadlineField } from '@/components/clips/editor/editor-headline-field'
+import { LayersPanel } from '@/components/clips/editor/layers-panel'
+import type { Layer } from '@/lib/clips/layers'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
   { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
@@ -35,7 +37,17 @@ const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string;
   {
     id: 'full_frame',
     title: 'Full frame',
-    desc: 'Whole 16:9 stream shot, blur fill, headline room on export (no face tracking).',
+    desc: 'Whole 16:9 shot with blurred fill (no headline band).',
+  },
+  {
+    id: 'facecam_stack',
+    title: 'Facecam stack',
+    desc: 'Streamer layout: facecam panel over gameplay (uses detected facecam box when available).',
+  },
+  {
+    id: 'facecam_pip',
+    title: 'Facecam PiP',
+    desc: 'Gameplay full frame with facecam picture-in-picture (corner from layout.facecam).',
   },
   { id: 'center_crop', title: 'Fill', desc: 'Full-frame crop fill.' },
   {
@@ -68,6 +80,8 @@ export function LayoutPanel({
   onOpenGapReview,
   onOpenFillerReview,
   headlinePlatform,
+  layers,
+  setLayers,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -91,6 +105,8 @@ export function LayoutPanel({
   onSeekSource?: (sourceMs: number) => void
   onOpenGapReview?: () => void
   headlinePlatform?: 'twitch' | 'kick'
+  layers?: Layer[]
+  setLayers?: (layers: Layer[]) => void
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -142,7 +158,16 @@ export function LayoutPanel({
           <p className="text-xs text-muted-foreground">Updates the preview and export framing.</p>
         </div>
       )}
-      {clipId && onEdits ? (
+      {clipId && onEdits && setLayers && layers ? (
+        <LayersPanel
+          clipId={clipId}
+          edits={edits}
+          layers={layers}
+          setLayers={setLayers}
+          onEdits={onEdits}
+          platform={headlinePlatform}
+        />
+      ) : clipId && onEdits ? (
         <EditorHeadlineField
           clipId={clipId}
           edits={edits}

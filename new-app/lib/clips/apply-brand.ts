@@ -4,6 +4,8 @@ import {
   type ClipBrandEdits,
 } from '@/lib/clips/brand'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { applyTemplateV3ToEdits } from '@/lib/clips/layers-template'
+import { parseTemplateV3 } from '@/lib/clips/layers'
 
 export type BrandTemplatePayload = {
   id?: string
@@ -18,6 +20,10 @@ export function applyBrandTemplateToEdits(
   template: BrandTemplatePayload,
 ): ClipEditsV2 {
   const settings = brandTemplateSettingsSchema.parse(template.settings)
+  const t3 = settings.templateV3 ?? parseTemplateV3(settings)
+  if (t3) {
+    return applyTemplateV3ToEdits(edits, t3)
+  }
   const brand: ClipBrandEdits = {
     templateId: template.id,
     logoKey: template.logoKey ?? undefined,

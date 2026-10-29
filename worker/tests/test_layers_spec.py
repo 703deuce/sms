@@ -10,10 +10,13 @@ from clips_worker.clip_export_template import _platform_label, headline_layout, 
 from clips_worker.edits_render import compose_export, default_edits, render_edited_clip
 from clips_worker.layers_spec import (
     _stage_plan,
+    badge_rect,
     legacy_from_layers,
     layers_from_legacy,
     mapped_subset,
     resolve_layers,
+    sync_layers_from_legacy,
+    v3_has_extras,
 )
 from clips_worker.streamer.layout.stream_overlay_layout import overlay_layout
 
@@ -181,3 +184,57 @@ def test_compose_export_fallback(monkeypatch, tmp_path) -> None:
         lw.mkdir(exist_ok=True)
         fake_legacy(src, [], out, edits, {**ctx, "work_dir": lw})
     assert calls == ["legacy"]
+
+
+def test_sync_layers_from_legacy_refreshes_stale_fp() -> None:
+    e = default_edits(0, 10_000)
+    e["layersV"] = 3
+    e["layersLegacyFp"] = "deadbeef00000000"
+    e["layers"] = [
+        {
+            "id": "sticker1",
+            "type": "sticker",
+            "enabled": True,
+            "z": 50,
+            "kind": "follow_cta",
+            "text": "FOLLOW",
+            "x": 0.7,
+            "y": 0.1,
+        }
+    ]
+    e["exportTemplate"] = {"headlineBar": {"enabled": True, "text": "NEW"}}
+    synced = sync_layers_from_legacy(e)
+    assert synced["layersLegacyFp"] != "deadbeef00000000"
+    ids = [layer["id"] for layer in synced["layers"]]
+    assert "sticker1" in ids
+    assert any(layer.get("id") == "headline" for layer in synced["layers"])
+
+
+def test_v3_has_extras_sticker() -> None:
+    assert v3_has_extras([{"type": "sticker", "enabled": True}])
+    assert not v3_has_extras([{"type": "captions", "enabled": True}])
+
+
+def test_badge_rect_export_bar() -> None:
+    rect = badge_rect("export_bar", 1080, 1920, video_y=384, video_h=998)
+    assert rect["w"] > 0 and rect["h"] > 0
+    assert rect["x"] >= 0 and rect["y"] > 0
+
+
+def test_stage_plan_includes_sprites() -> None:
+    e = default_edits(0, 10_000)
+    e["layersV"] = 3
+    e["layers"] = [
+        {
+            "id": "sticker1",
+            "type": "sticker",
+            "enabled": True,
+            "z": 50,
+            "kind": "follow_cta",
+            "text": "FOLLOW",
+            "x": 0.7,
+            "y": 0.1,
+        }
+    ]
+    plan = _stage_plan(e)
+    assert "sprites" in plan

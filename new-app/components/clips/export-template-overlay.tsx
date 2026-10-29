@@ -7,7 +7,10 @@ import {
   wrapHeadlineDisplayLines,
 } from '@/lib/clips/export-template'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { resolveLayers, type BadgeLayer, type StickerLayer } from '@/lib/clips/layers'
 import { overlayLayout, STREAM_HEADLINE_TOP } from '@/lib/clips/stream-overlay-layout'
+import { PlatformBadgePreview } from '@/components/clips/editor/platform-badge'
+import { FollowStickerPreview } from '@/components/clips/editor/follow-sticker'
 
 function ChatPreviewBox({
   lay,
@@ -66,7 +69,12 @@ export function ExportTemplateOverlay({
   if (!overlaysActive && !chatOn) return null
 
   const layoutMode = edits.layout?.mode ?? 'speaker_follow'
-  const useFitTop = layoutMode === 'fit_top' || layoutMode === 'full_frame'
+  const layers = resolveLayers(edits)
+  const badgeLayer = layers.find((l): l is BadgeLayer => l.id === 'badge' && l.type === 'badge' && l.enabled)
+  const stickerLayer = layers.find(
+    (l): l is StickerLayer => l.type === 'sticker' && l.kind === 'follow_cta' && l.enabled,
+  )
+  const useFitTop = layoutMode === 'fit_top'
   const headlineOn = Boolean(
     tpl?.headlineBar?.enabled && (tpl.headlineBar.text?.trim() || tpl.suggestedHeadline),
   )
@@ -74,7 +82,8 @@ export function ExportTemplateOverlay({
     tpl?.headlineBar?.text?.trim() || tpl?.suggestedHeadline?.trim() || '',
   )
   const lines = headline ? wrapHeadlineDisplayLines(headline) : []
-  const badgeOn = Boolean(tpl?.platformBadge?.enabled)
+  const badgeOn = Boolean(tpl?.platformBadge?.enabled || badgeLayer?.showLabel)
+  const badgeLogo = Boolean(badgeLayer?.showLogo)
   const channelOn = Boolean(
     tpl?.channelLink?.enabled && (channelDisplay?.trim() || tpl?.channelLink.url?.trim()),
   )
@@ -87,10 +96,8 @@ export function ExportTemplateOverlay({
       .pop() ||
     ''
   ).toUpperCase()
-  const showChannelName = Boolean(channelLabel && channelLabel !== 'NULL')
 
   const platform = tpl?.platform ?? 'twitch'
-  const badgeColor = platform === 'kick' ? '#53FC18' : '#9146FF'
   const chatOpacity = edits.chatOverlay?.opacity ?? 0.6
   const scaleY = boxHeight / 1920
   const scaleX = boxWidth / 1080
@@ -120,28 +127,29 @@ export function ExportTemplateOverlay({
             </div>
           </div>
         ) : null}
-        {badgeOn || channelOn ? (
-          <div
-            className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1"
-            style={{
-              top: lay.badgeY * sy,
-              fontSize: Math.max(8, Math.round(28 * sy)),
-            }}
-          >
-            {badgeOn ? (
-              <span
-                className="shrink-0 rounded px-1.5 py-0.5 font-bold text-white"
-                style={{ backgroundColor: badgeColor }}
-              >
-                {platform === 'kick' ? 'KICK' : 'TWITCH'}
-              </span>
-            ) : null}
-            {channelOn && showChannelName ? (
-              <span className="max-w-[140px] truncate font-bold uppercase text-white drop-shadow">
-                {channelLabel}
-              </span>
-            ) : null}
-          </div>
+        {badgeOn || badgeLogo || channelOn ? (
+          <PlatformBadgePreview
+            platform={(badgeLayer?.platform ?? platform) as 'twitch' | 'kick' | 'none'}
+            showLabel={badgeOn}
+            showLogo={badgeLogo}
+            handle={channelLabel || badgeLayer?.handle}
+            placement="fit_top_band"
+            boxWidth={boxWidth}
+            boxHeight={boxHeight}
+            videoY={lay.videoY * sy}
+            videoH={lay.videoH * sy}
+            badgeY={lay.badgeY * sy}
+          />
+        ) : null}
+        {stickerLayer ? (
+          <FollowStickerPreview
+            text={stickerLayer.text}
+            platform={stickerLayer.platform}
+            x={stickerLayer.x}
+            y={stickerLayer.y}
+            boxWidth={boxWidth}
+            boxHeight={boxHeight}
+          />
         ) : null}
         {chatOn ? <ChatPreviewBox lay={lay} sy={sy} opacity={chatOpacity} /> : null}
       </div>
@@ -151,7 +159,6 @@ export function ExportTemplateOverlay({
   const headlineTop = STREAM_HEADLINE_TOP * scaleY
   const barH = Math.round(boxHeight * 0.2)
   const videoH = Math.round(boxHeight * 0.52)
-  const badgeBottom = headlineTop + barH + videoH - 10 * scaleY
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
@@ -167,23 +174,28 @@ export function ExportTemplateOverlay({
           </div>
         </div>
       ) : null}
-      {badgeOn || channelOn ? (
-        <div
-          className="absolute inset-x-2 flex items-center gap-1"
-          style={{ top: badgeBottom, fontSize: Math.max(8, 10 * scaleX) }}
-        >
-          {badgeOn ? (
-            <span
-              className="shrink-0 rounded px-1 py-0 font-bold text-white"
-              style={{ backgroundColor: badgeColor }}
-            >
-              {platform.toUpperCase()}
-            </span>
-          ) : null}
-          {channelOn && showChannelName ? (
-            <span className="truncate font-bold uppercase text-white/95">{channelLabel}</span>
-          ) : null}
-        </div>
+      {badgeOn || badgeLogo || channelOn ? (
+        <PlatformBadgePreview
+          platform={(badgeLayer?.platform ?? platform) as 'twitch' | 'kick' | 'none'}
+          showLabel={badgeOn}
+          showLogo={badgeLogo}
+          handle={channelLabel || badgeLayer?.handle}
+          placement="export_bar"
+          boxWidth={boxWidth}
+          boxHeight={boxHeight}
+          videoY={headlineTop}
+          videoH={videoH}
+        />
+      ) : null}
+      {stickerLayer ? (
+        <FollowStickerPreview
+          text={stickerLayer.text}
+          platform={stickerLayer.platform}
+          x={stickerLayer.x}
+          y={stickerLayer.y}
+          boxWidth={boxWidth}
+          boxHeight={boxHeight}
+        />
       ) : null}
     </div>
   )

@@ -1,5 +1,8 @@
+import { createHash } from 'crypto'
 import { z } from 'zod'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { headlineLayerPlacement } from '@/lib/clips/headline-band-layout'
+import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 
 const layerBaseSchema = z.object({
   id: z.string(),
@@ -15,7 +18,7 @@ const headlineLayerSchema = layerBaseSchema.extend({
   suggested: z.string().optional(),
   placement: z.enum(['fit_top_band', 'export_bar']),
   style: z.object({
-    preset: z.enum(['stream_white_box', 'export_bar']),
+    preset: z.enum(['stream_white_box', 'export_bar', 'stream_yellow', 'export_bar_dark']),
     font: z.string().optional(),
     textColor: z.string(),
     boxColor: z.string(),
@@ -32,7 +35,7 @@ const badgeLayerSchema = layerBaseSchema.extend({
   url: z.string().optional(),
   showLabel: z.boolean(),
   showLink: z.boolean(),
-  showLogo: z.literal(false),
+  showLogo: z.boolean().default(false),
   placement: z.enum(['fit_top_band', 'export_bar']),
 })
 
@@ -43,6 +46,9 @@ const stickerLayerSchema = layerBaseSchema.extend({
   platform: z.enum(['twitch', 'kick']).optional(),
   x: z.number(),
   y: z.number(),
+  anchor: z.enum(['TL', 'TR', 'BL', 'BR']).optional(),
+  timing: z.enum(['always', 'intro', 'outro']).optional(),
+  durationMs: z.number().int().min(500).max(30_000).optional(),
 })
 
 const captionsLayerSchema = layerBaseSchema.extend({
@@ -96,6 +102,8 @@ export const templateV3Schema = z.object({
   name: z.string().optional(),
   layout: z.object({
     mode: z.string(),
+    facecamPosition: z.enum(['top', 'bottom']).optional(),
+    pipCorner: z.enum(['TL', 'TR', 'BL', 'BR']).optional(),
   }),
   layers: layersSchema,
 })
@@ -116,10 +124,10 @@ function layoutMode(edits: ClipEditsV2): string {
 }
 
 function placement(edits: ClipEditsV2): 'fit_top_band' | 'export_bar' {
-  return layoutMode(edits) === 'fit_top' ? 'fit_top_band' : 'export_bar'
+  return headlineLayerPlacement(layoutMode(edits))
 }
 
-function handleFromUrl(url: string): string | undefined {
+export function handleFromUrl(url: string): string | undefined {
   const u = url.trim()
   if (!u) return undefined
   try {
@@ -146,14 +154,18 @@ export function layersFromLegacy(edits: ClipEditsV2): Layer[] {
     text: String(hb?.text ?? ''),
     suggested: tpl?.suggestedHeadline ? String(tpl.suggestedHeadline) : undefined,
     placement: place,
-    style: {
-      preset: place === 'fit_top_band' ? 'stream_white_box' : 'export_bar',
-      textColor: '#000000',
-      boxColor: '#FFFFFF',
-      radiusPx: 0,
-      widthPct: 100,
-      maxLines: place === 'fit_top_band' ? 4 : 3,
-    },
+    style: (() => {
+      const preset = place === 'fit_top_band' ? 'stream_white_box' : 'export_bar'
+      const colors = headlineStyleForPreset(preset)
+      return {
+        preset,
+        textColor: colors.textColor,
+        boxColor: colors.boxColor,
+        radiusPx: colors.radiusPx,
+        widthPct: 100,
+        maxLines: place === 'fit_top_band' ? 4 : 3,
+      }
+    })(),
   })
 
   const badgeOn = Boolean(tpl?.platformBadge?.enabled)
@@ -244,6 +256,55 @@ export function layersFromLegacy(edits: ClipEditsV2): Layer[] {
 
 const MAPPED_KEYS = ['exportTemplate', 'captions', 'brand', 'hookOverlay', 'chatOverlay'] as const
 
+const V3_EXTRA_LAYER_TYPES = new Set(['sticker'])
+
+function sortJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortJson)
+  if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const k of Object.keys(o).sort()) out[k] = sortJson(o[k])
+    return out
+  }
+  return value
+}
+
+export function canonicalLayersJSON(layers: Layer[]): string {
+  return JSON.stringify(sortJson(layers))
+}
+
+export function legacyLayersFingerprint(edits: Pick<ClipEditsV2, (typeof MAPPED_KEYS)[number]>): string {
+  const body = JSON.stringify(sortJson(mappedEditsSubset(edits as ClipEditsV2)))
+  return createHash('sha256').update(body).digest('hex').slice(0, 16)
+}
+
+export function v3HasExtras(layers: Layer[]): boolean {
+  for (const layer of layers) {
+    if (!layer.enabled) continue
+    if (layer.type === 'sticker') return true
+    if (layer.type === 'badge' && layer.showLogo) return true
+  }
+  return false
+}
+
+export function syncLayersFromLegacy(
+  edits: ClipEditsV2 & { layersV?: number; layers?: unknown; layersLegacyFp?: string },
+): ClipEditsV2 & { layersV?: number; layers?: unknown; layersLegacyFp?: string } {
+  if (edits.layersV !== 3) return edits
+  const fp = legacyLayersFingerprint(edits)
+  const storedFp = edits.layersLegacyFp
+  const layersRaw = edits.layers
+  const parsed = Array.isArray(layersRaw) ? validateLayers(layersRaw) : null
+  if (storedFp === fp && parsed) return edits
+  const fresh = layersFromLegacy(edits)
+  const extras = (Array.isArray(layersRaw) ? layersRaw : []).filter(
+    (layer): layer is Layer =>
+      Boolean(layer && typeof layer === 'object' && V3_EXTRA_LAYER_TYPES.has(String((layer as Layer).type))),
+  )
+  const merged = [...fresh, ...extras].sort((a, b) => a.z - b.z)
+  return { ...edits, layers: merged, layersLegacyFp: fp }
+}
+
 function layerById(layers: Layer[], id: string): Layer | undefined {
   return layers.find((l) => l.id === id)
 }
@@ -331,11 +392,12 @@ function validateLayers(raw: unknown): Layer[] | null {
 }
 
 export function resolveLayers(edits: ClipEditsV2 & { layersV?: number; layers?: unknown }): Layer[] {
-  if (edits.layersV === 3 && Array.isArray(edits.layers)) {
-    const parsed = validateLayers(edits.layers)
+  const synced = syncLayersFromLegacy(edits)
+  if (synced.layersV === 3 && Array.isArray(synced.layers)) {
+    const parsed = validateLayers(synced.layers)
     if (parsed) return parsed
   }
-  return layersFromLegacy(edits)
+  return layersFromLegacy(synced)
 }
 
 export function parseTemplateV3(settings: unknown): TemplateV3 | null {

@@ -9,7 +9,17 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
-import { layersFromLegacy } from '@/lib/clips/layers'
+import { layersFromLegacy, resolveLayers } from '@/lib/clips/layers'
+
+export type FacecamLayoutState = {
+  layout?: string
+  facecam?: { x: number; y: number; w: number; h: number } | null
+  gameplay?: { x: number; y: number; w: number; h: number } | null
+  split?: number
+  facecamPosition?: 'top' | 'bottom'
+  confidence?: number
+  source?: string
+}
 
 export type CropShot = {
   startMs: number
@@ -176,6 +186,12 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
         })
       : null
 
+  const vodLayoutRaw = vodState?.layout
+  const facecamLayout: FacecamLayoutState | null =
+    vodLayoutRaw && typeof vodLayoutRaw === 'object' && !Array.isArray(vodLayoutRaw)
+      ? (vodLayoutRaw as FacecamLayoutState)
+      : null
+
   return {
     clip: {
       id: clip.id,
@@ -190,7 +206,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     },
     bounds,
     edits,
-    layers: layersFromLegacy(edits),
+    layers: resolveLayers(edits),
+    facecamLayout,
     words,
     crop: { shots, track: cropTrack },
     mediaUrls: {

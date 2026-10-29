@@ -720,6 +720,154 @@ def _legacy_compose(
     return out_mp4, caption_words
 
 
+def _merge_headline_style_burn(burn_edits: dict, layers: list[dict]) -> dict:
+    from clips_worker.layers_spec import _layer_by_id
+
+    hl = _layer_by_id(layers, "headline")
+    if not hl or not isinstance(hl.get("style"), dict):
+        return burn_edits
+    out = {**burn_edits}
+    tpl = out.get("exportTemplate") if isinstance(out.get("exportTemplate"), dict) else {}
+    out["exportTemplate"] = {**tpl, "headlineStyle": hl["style"]}
+    return out
+
+
+def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
+    work_dir = ctx["work_dir"]
+    play_w = int(ctx["play_w"])
+    play_h = int(ctx["play_h"])
+    edits = ctx.get("edits") or {}
+    layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+    from clips_worker.clip_export_template import stream_headline_frame_layout
+    from clips_worker.layers_spec import _layer_by_id
+    from clips_worker.layer_sprites import render_badge_png, render_sticker_png
+    from clips_worker.streamer.layout.stream_overlay_layout import overlay_layout
+
+    frame = stream_headline_frame_layout(play_w, play_h)
+    video_y = frame["video_y"]
+    video_h = frame["video_h"]
+    hl = _layer_by_id(layers, "headline")
+    line_count = 2
+    if hl and str(hl.get("text") or "").strip():
+        line_count = max(2, min(4, len(str(hl.get("text")).split()) // 3 + 1))
+    lay = overlay_layout(line_count, play_w=play_w, play_h=play_h)
+
+    sprites: list[dict] = []
+    for layer in layers:
+        if not layer.get("enabled"):
+            continue
+        ltype = layer.get("type")
+        if ltype == "sticker":
+            dest = work_dir / f"sprite_{layer.get('id', 'sticker')}.png"
+            render_sticker_png(layer, dest, play_w=play_w, play_h=play_h)
+            x_pct = float(layer.get("x") if layer.get("x") is not None else 0.72)
+            y_pct = float(layer.get("y") if layer.get("y") is not None else 0.08)
+            sprites.append(
+                {
+                    "path": dest,
+                    "x": int(x_pct * play_w),
+                    "y": int(y_pct * play_h),
+                }
+            )
+        elif ltype == "badge" and layer.get("showLogo"):
+            placement = str(layer.get("placement") or "export_bar")
+            dest = work_dir / f"sprite_{layer.get('id', 'badge')}.png"
+            render_badge_png(
+                layer,
+                dest,
+                play_w=play_w,
+                play_h=play_h,
+                placement=placement,
+                video_y=lay["video_y"] if placement == "fit_top_band" else video_y,
+                video_h=lay["video_h"] if placement == "fit_top_band" else video_h,
+                badge_y=lay.get("badge_y"),
+            )
+            from clips_worker.overlay_geometry import badge_rect
+
+            rect = badge_rect(
+                placement,
+                play_w,
+                play_h,
+                video_y=lay["video_y"] if placement == "fit_top_band" else video_y,
+                video_h=lay["video_h"] if placement == "fit_top_band" else video_h,
+                badge_y=lay.get("badge_y"),
+            )
+            sprites.append({"path": dest, "x": rect["x"], "y": rect["y"]})
+    if sprites:
+        print(
+            f"[clipper:compositor] v3_sprites count={len(sprites)} layout={layout_mode}",
+            flush=True,
+        )
+    return sprites
+
+
+def apply_v3_sprite_overlays(video: Path, out: Path, sprites: list[dict], work_dir: Path) -> None:
+    if not sprites:
+        shutil.copy(video, out)
+        return
+    parts: list[str] = []
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
+    last = "[0:v]"
+    for i, sp in enumerate(sprites):
+        cmd.extend(["-i", str(sp["path"])])
+        label = f"[v{i}]"
+        parts.append(f"{last}[{i + 1}:v]overlay={sp['x']}:{sp['y']}:format=auto{label}")
+        last = label
+    fc = ";".join(parts)
+    cmd.extend(
+        [
+            "-filter_complex",
+            fc,
+            "-map",
+            last,
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "20",
+            "-c:a",
+            "copy",
+            str(out),
+        ]
+    )
+    subprocess.check_call(cmd)
+
+
+def _apply_facecam_or_pip_layout(
+    clip_src: Path,
+    work_dir: Path,
+    edits: dict,
+    settings: dict,
+    *,
+    play_w: int,
+    play_h: int,
+) -> Path:
+    layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+    ai = settings.get("aiMeta") if isinstance(settings.get("aiMeta"), dict) else {}
+    streamer = ai.get("streamer") if isinstance(ai.get("streamer"), dict) else {}
+    stream_layout = streamer.get("layout") if isinstance(streamer.get("layout"), dict) else {}
+    if layout_mode in ("stack", "facecam_stack") and stream_layout.get("facecam"):
+        from clips_worker.streamer.layout.render_stack import render_stack_mp4
+
+        stacked = work_dir / "facecam_stack.mp4"
+        render_stack_mp4(clip_src, stacked, stream_layout, out_w=play_w, out_h=play_h)
+        return stacked
+    if layout_mode in ("screen_pip", "facecam_pip"):
+        from clips_worker.streamer.layout.render_stack import render_pip_mp4
+
+        layout = stream_layout if stream_layout.get("facecam") else (edits.get("layout") or {})
+        pip_out = work_dir / "screen_pip_layout.mp4"
+        try:
+            render_pip_mp4(clip_src, pip_out, layout if isinstance(layout, dict) else {}, out_w=play_w, out_h=play_h)
+            return pip_out
+        except Exception as e:
+            print(f"[clipper:pip] fallback err={type(e).__name__}:{str(e)[:120]}", flush=True)
+    return clip_src
+
+
 def compose_export(
     caption_src: Path,
     caption_words: list[dict],
@@ -727,10 +875,11 @@ def compose_export(
     edits: dict,
     ctx: dict,
 ) -> tuple[Path, list[dict]]:
-    from clips_worker.layers_spec import _stage_plan, legacy_from_layers, resolve_layers
+    from clips_worker.layers_spec import _stage_plan, legacy_from_layers, resolve_layers, v3_has_extras
 
     layers = resolve_layers(edits)
     burn_edits = legacy_from_layers(layers, edits)
+    burn_edits = _merge_headline_style_burn(burn_edits, layers)
     plan = _stage_plan(burn_edits)
     source = "v3" if edits.get("layersV") == 3 and isinstance(edits.get("layers"), list) else "derived"
     layer_types = [{"type": l.get("type"), "enabled": l.get("enabled")} for l in layers if l.get("enabled")]
@@ -739,7 +888,14 @@ def compose_export(
         f"[clipper:compositor] {json.dumps({'renderId': rid, 'v': 3, 'plan': plan, 'layers': layer_types, 'source': source})}",
         flush=True,
     )
-    return _legacy_compose(caption_src, caption_words, out_mp4, burn_edits, ctx)
+    out_mp4, caption_words = _legacy_compose(caption_src, caption_words, out_mp4, burn_edits, ctx)
+    if "sprites" in plan or v3_has_extras(layers):
+        sprites = build_v3_extras(layers, {**ctx, "edits": burn_edits})
+        if sprites:
+            spr_out = ctx["work_dir"] / "v3_sprite_overlay.mp4"
+            apply_v3_sprite_overlays(out_mp4, spr_out, sprites, ctx["work_dir"])
+            shutil.copy(spr_out, out_mp4)
+    return out_mp4, caption_words
 
 
 def render_edited_clip(
@@ -840,6 +996,20 @@ def render_edited_clip(
     w_reframe = words_for_reframe(source_words, edits, clip_start_ms, clip_end_ms)
     wpath = work_dir / "words_reframe.json"
     wpath.write_text(json.dumps(w_reframe))
+
+    from clips_worker.render_clip import aspect_size
+
+    aspect = settings.get("aspectRatio", "9:16")
+    resolution = settings.get("exportResolution", "720p")
+    play_w, play_h = aspect_size(aspect, resolution)
+    clip_src = _apply_facecam_or_pip_layout(
+        clip_src,
+        work_dir,
+        edits,
+        settings,
+        play_w=play_w,
+        play_h=play_h,
+    )
 
     full_render = work_dir / "full_render.mp4"
     settings_nc = json.loads(json.dumps(sc_settings))

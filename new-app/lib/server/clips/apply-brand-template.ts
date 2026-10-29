@@ -1,5 +1,7 @@
 import { applyBrandTemplateToEdits, type BrandTemplatePayload } from '@/lib/clips/apply-brand'
 import { brandTemplateSettingsSchema } from '@/lib/clips/brand'
+import { parseTemplateV3 } from '@/lib/clips/layers'
+import { applyTemplateV3ToEdits } from '@/lib/clips/layers-template'
 import { normalizeEdits } from '@/lib/clips/edits'
 import { getPrisma } from '@/lib/server/db'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
@@ -31,7 +33,24 @@ export async function applyBrandTemplateToClipIds(
   for (const clip of clips) {
     const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
     const edits = normalizeEdits(clip.edits, bounds)
-    const next = applyBrandTemplateToEdits(edits, payload)
+    let next = edits
+    try {
+      const settings = brandTemplateSettingsSchema.parse(payload.settings)
+      const t3 = settings.templateV3 ?? parseTemplateV3(settings)
+      if (t3) {
+        next = applyTemplateV3ToEdits(edits, t3)
+      } else {
+        next = applyBrandTemplateToEdits(edits, payload)
+      }
+    } catch (err) {
+      console.warn('[clipper:template] v3_apply_fallback', {
+        workspaceId,
+        templateId,
+        clipId: clip.id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      next = applyBrandTemplateToEdits(edits, payload)
+    }
     await prisma.clip.update({ where: { id: clip.id }, data: { edits: toPrismaJson(next) } })
     updated += 1
   }

@@ -168,6 +168,8 @@ export function EditorShell({
     updateSfx,
     removeSfx,
     setEdits,
+    layers,
+    setLayers,
     patchStudioSound,
     flushSave,
     syncServerUpdatedAt,
@@ -592,6 +594,8 @@ export function EditorShell({
                 ? 'twitch'
                 : undefined
           }
+          layers={layers}
+          setLayers={setLayers}
         />
         </EditorPanelErrorBoundary>
       </div>

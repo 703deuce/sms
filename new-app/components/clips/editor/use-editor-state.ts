@@ -42,6 +42,13 @@ import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/w
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
+import {
+  legacyFromLayers,
+  legacyLayersFingerprint,
+  mappedEditsSubset,
+  resolveLayers,
+  type Layer,
+} from '@/lib/clips/layers'
 import { toast } from 'sonner'
 
 const MAX_UNDO = 100
@@ -65,7 +72,7 @@ type Action =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'clearProducerStrip' }
-  | { type: 'saved' }
+  | { type: 'saved'; clean: boolean }
   | { type: 'saving' }
   | { type: 'serverSync'; edits: ClipEditsV2 }
   | { type: 'needsSave' }
@@ -127,7 +134,7 @@ export function editorEditsReducer(state: State, action: Action): State {
       }
     }
     case 'saved':
-      return { ...state, saveState: state.saveState === 'dirty' ? 'dirty' : 'saved' }
+      return { ...state, saveState: action.clean ? 'saved' : 'dirty' }
     case 'saving':
       return { ...state, saveState: 'saving' }
     case 'serverSync':
@@ -510,7 +517,7 @@ export function useEditorState(
       return
     }
     if (savedRevisionRef.current >= localRevisionRef.current) {
-      dispatch({ type: 'saved' })
+      dispatch({ type: 'saved', clean: true })
       return
     }
 
@@ -575,7 +582,10 @@ export function useEditorState(
       saveInFlightRef.current = false
       const pending = savePendingRef.current
       savePendingRef.current = false
-      dispatch({ type: 'saved' })
+      dispatch({
+        type: 'saved',
+        clean: savedRevisionRef.current >= localRevisionRef.current,
+      })
       if (savedRevisionRef.current < localRevisionRef.current) {
         dispatch({ type: 'needsSave' })
       }
@@ -607,8 +617,19 @@ export function useEditorState(
     return () => clearTimeout(t)
   }, [state.producerStrip])
 
+  const setLayers = useCallback(
+    (layers: Layer[]) => {
+      const merged = legacyFromLayers(layers, editsRef.current)
+      const fp = legacyLayersFingerprint(mappedEditsSubset(merged))
+      setEdits({ ...merged, layersV: 3, layers, layersLegacyFp: fp })
+    },
+    [setEdits],
+  )
+
   return {
     edits: state.edits,
+    layers: resolveLayers(state.edits),
+    setLayers,
     setEdits,
     undo,
     redo,

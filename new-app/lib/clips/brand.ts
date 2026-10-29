@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
+import { templateV3Schema } from '@/lib/clips/layers'
 
 const LAYOUT_MODE_IDS = [
   'speaker_follow',
@@ -17,6 +18,8 @@ const LAYOUT_MODE_IDS = [
   'dynamic',
   'auto',
   'screen_pip',
+  'facecam_stack',
+  'facecam_pip',
 ] as const
 
 export const brandTemplateSettingsSchema = z.object({
@@ -38,6 +41,7 @@ export const brandTemplateSettingsSchema = z.object({
     .default({}),
   defaultLayoutMode: z.enum(LAYOUT_MODE_IDS).default('speaker_follow'),
   defaultAspectRatio: z.enum(['9:16', '4:5', '1:1', '16:9']).optional(),
+  templateV3: templateV3Schema.optional(),
 })
 
 export type BrandTemplateSettings = z.infer<typeof brandTemplateSettingsSchema>

@@ -14,8 +14,8 @@ import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video
 import {
   LAYOUT_HEADLINE_PREVIEW_FRAC,
   layoutUsesLetterboxBlurPreview,
+  layoutReservesHeadlineBand,
 } from '@/lib/clips/layout-preview'
-import { editorHeadlineBandAllowed } from '@/lib/clips/export-template'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
 import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
@@ -35,7 +35,9 @@ function usesSpeakerCropPreview(edits: ClipEditsV2, track: CropTrack | null): bo
     mode === 'fit' ||
     mode === 'fit_blur' ||
     mode === 'fit_top' ||
-    mode === 'full_frame'
+    mode === 'full_frame' ||
+    mode === 'facecam_stack' ||
+    mode === 'facecam_pip'
   ) {
     return false
   }
@@ -94,7 +96,7 @@ export function PreviewStage({
   const mediaOffsetMs = media?.offsetMs ?? 0
   const compositePreview = media?.kind === 'composite'
   const letterboxPreview = !compositePreview && layoutUsesLetterboxBlurPreview(layoutMode)
-  const headlineBandPreview = !compositePreview && editorHeadlineBandAllowed(layoutMode)
+  const headlineBandPreview = !compositePreview && layoutReservesHeadlineBand(layoutMode)
   const headlineBandPct = headlineBandPreview ? LAYOUT_HEADLINE_PREVIEW_FRAC * 100 : 0
   const normalizedTrack = cropTrack ? normalizeCropTrack(cropTrack) : null
   const cropPreview = Boolean(

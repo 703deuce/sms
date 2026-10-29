@@ -7,15 +7,17 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
   EXPORT_HEADLINE_MAX_REGENERATIONS,
-  editorHeadlineBandAllowed,
   effectiveHeadlineText,
   formatHeadlineForExport,
   type ClipExportTemplate,
 } from '@/lib/clips/export-template'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { headlinePlacementNote } from '@/lib/clips/headline-band-layout'
 import { patchEditorExportTemplateHeadline } from '@/lib/clips/editor-export-template-seed'
 import { clipsFetch } from '@/lib/clips-api'
 import { ExportHeadlinePreview } from '@/components/clips/editor/export-headline-preview'
+import type { HeadlineLayer, Layer } from '@/lib/clips/layers'
+import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 import { toast } from 'sonner'
 import { useState } from 'react'
 
@@ -24,15 +26,18 @@ export function EditorHeadlineField({
   edits,
   onEdits,
   platform,
+  layers,
+  setLayers,
 }: {
   clipId: string
   edits: ClipEditsV2
   onEdits: (edits: ClipEditsV2) => void
   platform?: 'twitch' | 'kick'
+  layers?: Layer[]
+  setLayers?: (layers: Layer[]) => void
 }) {
   const tpl = edits.exportTemplate ?? {}
   const layoutMode = edits.layout.mode
-  const allowed = editorHeadlineBandAllowed(layoutMode)
   const enabled = Boolean(tpl.headlineBar?.enabled)
   const displayText = tpl.headlineBar?.text?.trim() || tpl.suggestedHeadline?.trim() || ''
   const gens = tpl.headlineGenerations ?? 0
@@ -43,7 +48,6 @@ export function EditorHeadlineField({
   }
 
   const generate = async () => {
-    if (!allowed) return
     if (gens >= EXPORT_HEADLINE_MAX_REGENERATIONS) {
       toast.error(`Max ${EXPORT_HEADLINE_MAX_REGENERATIONS} AI headlines per clip`)
       return
@@ -70,80 +74,93 @@ export function EditorHeadlineField({
     }
   }
 
+  const applyHeadlineLayerStyle = (preset: HeadlineLayer['style']['preset']) => {
+    if (!layers || !setLayers) return
+    const hl = layers.find((l): l is HeadlineLayer => l.id === 'headline' && l.type === 'headline')
+    if (!hl) return
+    const colors = headlineStyleForPreset(preset)
+    setLayers(
+      layers.map((l) =>
+        l.id === 'headline' && l.type === 'headline'
+          ? { ...hl, style: { ...hl.style, preset, ...colors } }
+          : l,
+      ),
+    )
+  }
+
   return (
     <div className="space-y-3 rounded-lg border border-border p-3">
       <div>
         <p className="text-xs font-medium">Headline</p>
-        <p className="text-xs text-muted-foreground">
-          Shown on Headline + video and Full frame layouts; saved with your clip and used on export.
-        </p>
+        <p className="text-xs text-muted-foreground">{headlinePlacementNote(layoutMode)}</p>
       </div>
-      {!allowed ? (
-        <p className="text-xs text-muted-foreground">
-          Switch to Headline + video or Full frame to show a headline band.
-        </p>
-      ) : (
-        <>
-          <div className="flex items-center justify-between gap-2">
-            <Label className="text-xs font-medium">Show headline</Label>
-            <Switch
-              checked={enabled}
-              aria-label="Show headline"
-              onCheckedChange={(on) =>
-                onEdits(
-                  patchEditorExportTemplateHeadline(edits, {
-                    enabled: on,
-                    text: displayText || tpl.suggestedHeadline || '',
-                  }),
-                )
-              }
-            />
-          </div>
-          <Input
-            value={tpl.headlineBar?.text ?? tpl.suggestedHeadline ?? ''}
-            maxLength={120}
-            disabled={!enabled}
-            onChange={(e) =>
-              onEdits(
-                patchEditorExportTemplateHeadline(edits, {
-                  enabled: true,
-                  text: e.target.value,
-                }),
-              )
-            }
-            onBlur={(e) =>
-              onEdits(
-                patchEditorExportTemplateHeadline(edits, {
-                  enabled: enabled || Boolean(e.target.value.trim()),
-                  text: formatHeadlineForExport(e.target.value),
-                }),
-              )
-            }
-            placeholder={tpl.suggestedHeadline?.trim() || 'ALL CAPS HEADLINE 🔥'}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={displayText ? 'outline' : 'default'}
-              disabled={genBusy || gens >= EXPORT_HEADLINE_MAX_REGENERATIONS}
-              onClick={() => void generate()}
-            >
-              <Sparkles className="mr-1 size-3.5" />
-              {genBusy ? 'Generating…' : 'Generate headline'}
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-xs font-medium">Show headline</Label>
+        <Switch
+          checked={enabled}
+          aria-label="Show headline"
+          onCheckedChange={(on) =>
+            onEdits(
+              patchEditorExportTemplateHeadline(edits, {
+                enabled: on,
+                text: displayText || tpl.suggestedHeadline || '',
+              }),
+            )
+          }
+        />
+      </div>
+      <Input
+        value={tpl.headlineBar?.text ?? tpl.suggestedHeadline ?? ''}
+        maxLength={120}
+        disabled={!enabled}
+        onChange={(e) =>
+          onEdits(
+            patchEditorExportTemplateHeadline(edits, {
+              enabled: true,
+              text: e.target.value,
+            }),
+          )
+        }
+        onBlur={(e) =>
+          onEdits(
+            patchEditorExportTemplateHeadline(edits, {
+              enabled: enabled || Boolean(e.target.value.trim()),
+              text: formatHeadlineForExport(e.target.value),
+            }),
+          )
+        }
+        placeholder={tpl.suggestedHeadline?.trim() || 'ALL CAPS HEADLINE 🔥'}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={displayText ? 'outline' : 'default'}
+          disabled={genBusy || gens >= EXPORT_HEADLINE_MAX_REGENERATIONS}
+          onClick={() => void generate()}
+        >
+          <Sparkles className="mr-1 size-3.5" />
+          {genBusy ? 'Generating…' : 'Generate headline'}
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          {gens}/{EXPORT_HEADLINE_MAX_REGENERATIONS} AI generations
+        </span>
+      </div>
+      {setLayers && layers ? (
+        <div className="flex flex-wrap gap-2">
+          {(['stream_white_box', 'export_bar'] as const).map((preset) => (
+            <Button key={preset} type="button" size="sm" variant="outline" onClick={() => applyHeadlineLayerStyle(preset)}>
+              {preset === 'stream_white_box' ? 'White box' : 'Export bar'}
             </Button>
-            <span className="text-xs text-muted-foreground">
-              {gens}/{EXPORT_HEADLINE_MAX_REGENERATIONS} AI generations
-            </span>
-          </div>
-          <ExportHeadlinePreview
-            headline={enabled ? effectiveHeadlineText(tpl) : ''}
-            showBadge={false}
-            platform={platform ?? tpl.platform}
-            exportPlatformId={tpl.exportPlatformId ?? 'tiktok'}
-          />
-        </>
-      )}
+          ))}
+        </div>
+      ) : null}
+      <ExportHeadlinePreview
+        headline={enabled ? effectiveHeadlineText(tpl) : ''}
+        showBadge={false}
+        platform={platform ?? tpl.platform}
+        exportPlatformId={tpl.exportPlatformId ?? 'tiktok'}
+      />
     </div>
   )
 }

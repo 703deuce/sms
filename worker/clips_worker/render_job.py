@@ -40,6 +40,89 @@ def _probe_duration_sec(path: Path) -> float:
     return max(0.0, float(out or "0"))
 
 
+def _concat_accurate(src: Path, dest: Path, segs_sec: list[tuple[float, float]]) -> None:
+    """Frame-accurate segment concat (re-encode) for composite preview exports."""
+    import subprocess
+
+    from clips_worker.edits_render import ffmpeg_concat_segments
+
+    if not segs_sec:
+        raise RuntimeError("no segments")
+    if len(segs_sec) == 1:
+        a, b = segs_sec[0]
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-ss",
+                f"{a:.3f}",
+                "-to",
+                f"{b:.3f}",
+                "-i",
+                str(src),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "20",
+                "-c:a",
+                "aac",
+                "-movflags",
+                "+faststart",
+                str(dest),
+            ],
+        )
+        return
+    ffmpeg_concat_segments(src, dest, segs_sec)
+
+
+def apply_composite_edits(
+    clip_file: Path,
+    td_path: Path,
+    edits: dict,
+    cut_start: int,
+    clip_start: int,
+    clip_end: int,
+    render_id: str,
+) -> Path:
+    from clips_worker.edits_render import keep_segments, output_duration_ms
+
+    clip_len_s = max(0.001, (clip_end - clip_start) / 1000.0)
+    segs_ms = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    segs_sec: list[tuple[float, float]] = []
+    for a, b in segs_ms:
+        ra = (max(a, clip_start) - clip_start) / 1000.0
+        rb = (min(b, clip_end) - clip_start) / 1000.0
+        if rb - ra >= 0.08:
+            segs_sec.append((ra, rb))
+    if not segs_sec:
+        segs_sec = [(0.0, clip_len_s)]
+
+    edited = td_path / "composite_edited.mp4"
+    full_span = (
+        len(segs_sec) == 1
+        and segs_sec[0][0] <= 0.01
+        and abs(segs_sec[0][1] - clip_len_s) < 0.15
+    )
+    if full_span:
+        import shutil
+
+        shutil.copy(clip_file, edited)
+    else:
+        _concat_accurate(clip_file, edited, segs_sec)
+
+    expected_s = output_duration_ms(edits) / 1000.0
+    actual_s = _probe_duration_sec(edited)
+    print(
+        f"[clipper:composite_edits] {json.dumps({'renderId': render_id, 'segments': len(segs_sec), 'expected_s': round(expected_s, 3), 'actual_s': round(actual_s, 3), 'full_span': full_span})}",
+        flush=True,
+    )
+    return edited
+
+
 def load_render_context(conn, render_id: str) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -348,8 +431,26 @@ def _run_render_clip_job_body(
             import shutil
             import subprocess
 
+            edited = clip_file
+            try:
+                edited = apply_composite_edits(
+                    clip_file,
+                    td_path,
+                    edits,
+                    cut_start,
+                    clip_start,
+                    clip_end,
+                    render_id,
+                )
+            except Exception as e:
+                _log.warning("composite_edits_fallback renderId=%s err=%s", render_id, e)
+                print(
+                    f"[clipper:composite_edits] fallback err={type(e).__name__}:{str(e)[:120]}",
+                    flush=True,
+                )
+
             if resolution in (CLIP_PREVIEW_RESOLUTION, 720, "720", "720p"):
-                shutil.copy(clip_file, out_mp4)
+                shutil.copy(edited, out_mp4)
             else:
                 res = "1080p" if resolution in (1080, "1080") else resolution
                 w, h = aspect_size(aspect, res)
@@ -360,7 +461,7 @@ def _run_render_clip_job_body(
                         "-v",
                         "error",
                         "-i",
-                        str(clip_file),
+                        str(edited),
                         "-vf",
                         f"scale={w}:{h}:flags=lanczos",
                         "-c:v",

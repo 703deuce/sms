@@ -10,6 +10,16 @@ import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/ex
 
 export type CutRange = [number, number]
 
+export type FacecamBox = { x: number; y: number; w: number; h: number }
+
+export type ClipLayoutFacecam = {
+  box?: FacecamBox
+  gameplay?: FacecamBox | null
+  split?: number
+  position?: 'top' | 'bottom'
+  pipCorner?: 'TL' | 'TR' | 'BL' | 'BR'
+}
+
 export type ClipEditsV2 = {
   v: 2
   trim: { in: number; out: number }
@@ -61,8 +71,11 @@ export type ClipEditsV2 = {
       | 'dynamic'
       | 'auto'
       | 'screen_pip'
+      | 'facecam_stack'
+      | 'facecam_pip'
     shotOverrides: { i: number; focus: 'auto' | 'A' | 'B' | 'both' }[]
     layoutSegments?: LayoutSegment[]
+    facecam?: ClipLayoutFacecam
   }
   broll?: BrollItem[]
   audio?: ClipEditsAudio
@@ -89,6 +102,9 @@ export type ClipEditsV2 = {
   }
   /** Trim end for loop-friendly Shorts/TikTok (default on for those presets). */
   loopFriendlyEnd?: boolean
+  layersV?: number
+  layers?: unknown
+  layersLegacyFp?: string
 }
 
 export type ClipBounds = { clipStartMs: number; clipEndMs: number }
@@ -144,6 +160,8 @@ const LAYOUT_MODES: ClipEditsV2['layout']['mode'][] = [
   'dynamic',
   'auto',
   'screen_pip',
+  'facecam_stack',
+  'facecam_pip',
 ]
 
 const EXPORT_ASPECTS: ExportAspect[] = ['9:16', '4:5', '1:1', '16:9']
@@ -202,6 +220,37 @@ function normalizeHookOverlay(raw: unknown): ClipEditsV2['hookOverlay'] | undefi
   }
 }
 
+function normalizeFacecam(raw: unknown): ClipLayoutFacecam | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const o = raw as Record<string, unknown>
+  const boxRaw = o.box
+  const parseBox = (b: unknown): FacecamBox | undefined => {
+    if (!b || typeof b !== 'object') return undefined
+    const r = b as Record<string, unknown>
+    const x = Number(r.x)
+    const y = Number(r.y)
+    const w = Number(r.w)
+    const h = Number(r.h)
+    if (![x, y, w, h].every(Number.isFinite)) return undefined
+    return { x, y, w, h }
+  }
+  const split = Number(o.split)
+  const pipCorner = o.pipCorner
+  const position = o.position
+  const out: ClipLayoutFacecam = {
+    box: parseBox(boxRaw),
+    gameplay: o.gameplay === null ? null : parseBox(o.gameplay),
+    split: Number.isFinite(split) ? Math.min(0.5, Math.max(0.25, split)) : undefined,
+    position: position === 'bottom' ? 'bottom' : position === 'top' ? 'top' : undefined,
+    pipCorner:
+      pipCorner === 'TL' || pipCorner === 'TR' || pipCorner === 'BL' || pipCorner === 'BR'
+        ? pipCorner
+        : undefined,
+  }
+  if (!out.box && !out.gameplay && out.split == null && !out.position && !out.pipCorner) return undefined
+  return out
+}
+
 export function mergeEditsPatch(
   current: ClipEditsV2,
   patch: unknown,
@@ -217,7 +266,12 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
   if (!raw || typeof raw !== 'object') return base
   const migrated = migrateLegacyEdits(raw as Record<string, unknown>, bounds)
   const o = migrated
-  const layoutRaw = (o.layout as { mode?: string; shotOverrides?: unknown; layoutSegments?: unknown }) || {}
+  const layoutRaw = (o.layout as {
+    mode?: string
+    shotOverrides?: unknown
+    layoutSegments?: unknown
+    facecam?: unknown
+  }) || {}
   const mode = LAYOUT_MODES.includes(layoutRaw.mode as ClipEditsV2['layout']['mode'])
     ? (layoutRaw.mode as ClipEditsV2['layout']['mode'])
     : base.layout.mode
@@ -261,6 +315,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       mode,
       shotOverrides,
       layoutSegments: normalizeLayoutSegments(layoutRaw.layoutSegments, trim.in, trim.out, mode),
+      facecam: normalizeFacecam(layoutRaw.facecam) ?? base.layout.facecam,
     },
     aspectRatio,
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
@@ -288,6 +343,9 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     hookOverlay: normalizeHookOverlay(o.hookOverlay),
     exportTemplate: normalizeExportTemplate(o.exportTemplate),
     chatOverlay: normalizeChatOverlay(o.chatOverlay),
+    layersV: typeof o.layersV === 'number' ? o.layersV : undefined,
+    layers: o.layers,
+    layersLegacyFp: typeof o.layersLegacyFp === 'string' ? o.layersLegacyFp : undefined,
   }
 }
 
