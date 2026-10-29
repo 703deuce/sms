@@ -33,8 +33,12 @@
     "fontFitTop": "Anton",
     "fontBar": "Montserrat"
   },
-    "headlineStyles": {
-    "bold_news": {"textColor": "#000000", "boxColor": "#FFFFFF", "radiusPx": 0},
+  "headlineStyles": {
+    "bold_news": {
+      "textColor": "#000000",
+      "boxColor": "#FFFFFF",
+      "radiusPx": 0
+    },
     "stream_white_box": {
       "textColor": "#000000",
       "boxColor": "#FFFFFF",
