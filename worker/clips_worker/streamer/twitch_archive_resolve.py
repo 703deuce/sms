@@ -225,6 +225,18 @@ def guard_twitch_growing_archive_url(vod: dict, url: str, *, allow_growing: bool
         by_id = _helix_json(f"/videos?id={urllib.parse.quote(str(url_vid))}")
         current_video = (by_id.get("data") or [None])[0]
 
+    # Explicit /videos/{id} URL with a published Helix archive — not the current live session.
+    if current_video and url_vid and str(current_video.get("id") or "") == str(url_vid):
+        dur = str(current_video.get("duration") or "")
+        if dur and dur not in ("0s", "0"):
+            log_archive_resolve_decision(
+                stream_started_at=stream_started_at or None,
+                candidates=candidates,
+                picked=str(url_vid),
+                reason="explicit_archive_vod_id",
+            )
+            return
+
     ok = False
     match_reason = "no_match"
     if current_video and stream_id:

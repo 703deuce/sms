@@ -68,6 +68,9 @@ def metadata(url: str, timeout_s: int = 60, *, allow_twitch_growing_vod: bool = 
             return data
         raise RuntimeError(LIVE_MSG)
     if allow_twitch_growing_vod and platform == "twitch" and live_status == "was_live":
+        duration = float(data.get("duration") or 0)
+        if duration > 60:
+            return data
         raise RuntimeError(
             "This live stream doesn't have a saved broadcast yet (Twitch may not have published it). "
             "Try again in a few minutes."

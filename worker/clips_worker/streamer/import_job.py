@@ -100,16 +100,13 @@ def _rolling_import_mode(vod: dict, payload: dict | None = None) -> bool:
 
 
 def _allow_twitch_growing_vod(vod: dict) -> bool:
-    """In-progress Twitch archive VOD: rolling mode, or a bounded trim range (latest N minutes)."""
+    """In-progress Twitch archive only: rolling ingest or live-channel capture — not trim on a finished VOD."""
     if _rolling_import_mode(vod):
         return True
-    if str(vod.get("platform") or "").lower() != "twitch":
-        return False
-    start = int(vod.get("rangeStartMs") or 0)
-    end = vod.get("rangeEndMs")
-    if end is None:
-        return False
-    return int(end) > start
+    state = _vod_state_dict(vod)
+    if state.get("liveCapture") and str(vod.get("platform") or "").lower() == "twitch":
+        return True
+    return False
 
 
 def _has_pending_stream_import(conn, project_id: str, vod_id: str, *, exclude_job_id: str | None = None) -> bool:
@@ -765,6 +762,29 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
             (vod_id,),
         )
         vod = dict(cur.fetchone())
+    if not vod:
+        raise RuntimeError("vod not found")
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            'SELECT "rangeStartMs", "rangeEndMs" FROM clip_projects WHERE id=%s',
+            (vod["project_id"],),
+        )
+        prow = cur.fetchone()
+    if prow:
+        prs = int(prow.get("rangeStartMs") or 0)
+        pre = int(prow.get("rangeEndMs") or 0)
+        if pre > prs:
+            vrs = int(vod.get("rangeStartMs") or 0)
+            vre = int(vod.get("rangeEndMs") or 0)
+            if vre <= vrs or (vrs == 0 and prs > 0):
+                vod["rangeStartMs"] = prs
+                vod["rangeEndMs"] = pre
+                with conn.cursor() as cur:
+                    cur.execute(
+                        'UPDATE stream_vods SET "rangeStartMs"=%s, "rangeEndMs"=%s, "updatedAt"=NOW() WHERE id=%s',
+                        (prs, pre, vod_id),
+                    )
+                conn.commit()
     if vod.get("channel_login") and not vod.get("channelLogin"):
         vod["channelLogin"] = vod["channel_login"]
 
