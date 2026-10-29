@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { createProject, createProjectFromLink, estimateCredits } from '@/lib/clips-api'
 import { validateImportUrlForSubmit, YOUTUBE_UNSUPPORTED_MSG } from '@/lib/clips/import-url'
 import { defaultClipSettings, TOOL_PRESET_MAP, type ClipProjectSettings } from '@/lib/clips/settings'
+import { BYO_DURATION_ERROR } from '@/lib/clips/byo-project'
 import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
 import { StreamerImportPanel } from '@/components/streamer/streamer-import-panel'
@@ -35,6 +36,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   const [tab, setTab] = useState<'upload' | 'link' | 'streamer'>(
     tabParam === 'streamer' ? 'streamer' : tabParam === 'link' ? 'link' : 'upload',
   )
+  const [projectIntent, setProjectIntent] = useState<'find' | 'byo'>('find')
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
   const [upload, setUpload] = useState<UploadProgress | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
@@ -47,32 +49,63 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   const onFile = (file: File, resumeUploadId?: string) => {
     setPendingFile(file)
     if (!resumeUploadId) setUploadId(null)
-    setUpload({
-      filename: file.name,
-      bytes: file.size,
-      loaded: 0,
-      percent: 0,
-      state: 'uploading',
-    })
-    void uploadClipFile(
-      file,
-      (p) => {
-      setUpload(p)
-      if (p.durationMs && p.durationMs > 0) {
-        setDurationMs(p.durationMs)
-        setSettings((s) => ({ ...s, rangeEndMs: p.durationMs! }))
-      }
-      if (p.state === 'complete' && p.uploadId) {
-        setUploadId(p.uploadId)
-        const ms = p.durationMs ?? 0
-        if (ms > 0) {
-          void estimateCredits({ durationMs: ms, rangeStartMs: 0, rangeEndMs: ms, settings }).then(setEstimate).catch(() => {})
+    void probeDuration(file)
+      .then((ms) => {
+        if (projectIntent === 'byo' && ms > 180_000) {
+          toast.error(BYO_DURATION_ERROR)
+          setUpload(null)
+          setPendingFile(null)
+          return
         }
-      }
-      if (p.state === 'error' && p.error) toast.error(p.error)
-    },
-      resumeUploadId ? { resumeUploadId } : undefined,
-    ).catch(() => {})
+        setUpload({
+          filename: file.name,
+          bytes: file.size,
+          loaded: 0,
+          percent: 0,
+          state: 'uploading',
+        })
+        return uploadClipFile(
+          file,
+          (p) => {
+            setUpload(p)
+            if (p.durationMs && p.durationMs > 0) {
+              setDurationMs(p.durationMs)
+              setSettings((s) => ({
+                ...s,
+                rangeEndMs: p.durationMs!,
+                ...(projectIntent === 'byo' ? { byo: true as const, rangeStartMs: 0 } : {}),
+              }))
+            }
+            if (p.state === 'complete' && p.uploadId) {
+              setUploadId(p.uploadId)
+              const ms = p.durationMs ?? 0
+              if (ms > 0 && projectIntent !== 'byo') {
+                void estimateCredits({ durationMs: ms, rangeStartMs: 0, rangeEndMs: ms, settings }).then(setEstimate).catch(() => {})
+              }
+            }
+            if (p.state === 'error' && p.error) toast.error(p.error)
+          },
+          resumeUploadId ? { resumeUploadId } : undefined,
+        )
+      })
+      .catch(() => {
+        setUpload({
+          filename: file.name,
+          bytes: file.size,
+          loaded: 0,
+          percent: 0,
+          state: 'uploading',
+        })
+        void uploadClipFile(
+          file,
+          (p) => {
+            setUpload(p)
+            if (p.state === 'complete' && p.uploadId) setUploadId(p.uploadId)
+            if (p.state === 'error' && p.error) toast.error(p.error)
+          },
+          resumeUploadId ? { resumeUploadId } : undefined,
+        ).catch(() => {})
+      })
   }
 
   const submitUpload = async () => {
@@ -82,7 +115,13 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
     }
     setSubmitting(true)
     try {
-      const project = await createProject({ uploadId, settings })
+      const payloadSettings =
+        projectIntent === 'byo' ? defaultClipSettings({ ...settings, byo: true }) : settings
+      if (projectIntent === 'byo' && durationMs > 180_000) {
+        toast.error(BYO_DURATION_ERROR)
+        return
+      }
+      const project = await createProject({ uploadId, settings: payloadSettings })
       router.push(`/app/clips/${project.id}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not create project')
@@ -123,6 +162,46 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           {isT2vFeatureEnabled() ? ', or start an AI Video project' : ''}.
         </p>
       </header>
+      {tab === 'upload' ? (
+        <fieldset className="mb-6 flex flex-col gap-2 border-0 p-0 sm:flex-row" data-testid="new-project-intent">
+          <legend className="sr-only">Project type</legend>
+          {(
+            [
+              { id: 'find' as const, label: 'Find clips in a long video', hint: 'AI picks highlights from your upload' },
+              { id: 'byo' as const, label: 'Edit a finished clip (up to 3 min)', hint: 'Transcribe and open the editor' },
+            ] as const
+          ).map((opt) => (
+            <label
+              key={opt.id}
+              className={cn(
+                'flex flex-1 cursor-pointer flex-col gap-1 rounded-xl border p-3 transition hover:border-primary/40',
+                projectIntent === opt.id && 'border-primary bg-primary/8 ring-1 ring-primary/40',
+              )}
+            >
+              <input
+                type="radio"
+                name="project-intent"
+                value={opt.id}
+                checked={projectIntent === opt.id}
+                onChange={() => {
+                  setProjectIntent(opt.id)
+                  if (opt.id === 'byo') {
+                    setSettings(defaultClipSettings({ byo: true, rangeStartMs: 0, rangeEndMs: durationMs || 0 }))
+                  } else {
+                    setSettings((s) => {
+                      const { byo: _b, ...rest } = s
+                      return defaultClipSettings({ ...rest, byo: undefined })
+                    })
+                  }
+                }}
+                className="sr-only"
+              />
+              <span className="text-sm font-semibold">{opt.label}</span>
+              <span className="text-xs text-muted-foreground">{opt.hint}</span>
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {(
           [
@@ -268,8 +347,9 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
             durationMs={durationMs}
             uploadState={upload?.state}
             reframeV2Enabled={reframeV2Enabled}
+            byoMode={projectIntent === 'byo'}
           />
-          {estimate && tab === 'upload' && (
+          {estimate && tab === 'upload' && projectIntent === 'find' && (
             <p className="text-xs text-muted-foreground">
               {testMode
                 ? `Test mode · est. provider cost $${(estimate.providerCostUsd ?? 0).toFixed(3)}`
@@ -286,6 +366,8 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                   <Loader2 className="size-4 animate-spin" aria-hidden />
                   Creating project…
                 </>
+              ) : projectIntent === 'byo' ? (
+                'Open in editor'
               ) : (
                 'Get clips'
               )}

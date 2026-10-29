@@ -108,4 +108,24 @@ describe('EditorShell render smoke', () => {
     expect(getByTestId('layout-quick-picker')).toBeTruthy()
     expect(getByTestId('versions-menu')).toBeTruthy()
   })
+
+  it('mounts BYO clip fixture (source media, no crop track, no preview)', () => {
+    const edits = loadFixture('byo_clip.json')
+    expect(() =>
+      render(
+        <EditorShell
+          projectId="proj_byo"
+          clipId="clip_byo"
+          initialTitle="BYO short"
+          bounds={{ clipStartMs: 0, clipEndMs: 28000, trimMinMs: 0, trimMaxMs: 28000 }}
+          initialEdits={edits}
+          words={[{ i: 0, w: 'hello', s: 0, e: 500 }]}
+          cropShots={[]}
+          cropTrack={null}
+          videoUrl="https://example.com/source.mp4"
+          editorMedia={{ kind: 'source', url: 'https://example.com/source.mp4', offsetMs: 0 }}
+        />,
+      ),
+    ).not.toThrow()
+  })
 })

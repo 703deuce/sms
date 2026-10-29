@@ -4,6 +4,7 @@ import { isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import { getPrisma } from '@/lib/server/db'
 import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
+import { assertByoUploadDuration } from '@/lib/clips/byo-project'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { projectWordsKey } from '@/lib/storage'
 import type { ClipBrandTemplate } from '@prisma/client'
@@ -85,10 +86,20 @@ export async function createClipProject(
   const baseSettings = withAutoContentDetection(
     clipProjectSettingsSchema.parse(input.settings ?? defaultClipSettings()),
   )
-  const settings = brandRow
+  let settings = brandRow
     ? withAutoContentDetection(mergeDefaultBrandSettings(baseSettings, brandRow))
     : baseSettings
-  const rangeEnd = settings.rangeEndMs || upload.durationMs || 0
+  if (settings.byo) {
+    assertByoUploadDuration(upload.durationMs)
+    settings = {
+      ...settings,
+      rangeStartMs: 0,
+      rangeEndMs: upload.durationMs || 0,
+    }
+  }
+  const rangeEnd = settings.byo
+    ? settings.rangeEndMs
+    : settings.rangeEndMs || upload.durationMs || 0
   const projectId = createId('proj')
   const title = input.title?.trim() || upload.filename.replace(/\.[^.]+$/, '')
   const project = await prisma.clipProject.create({

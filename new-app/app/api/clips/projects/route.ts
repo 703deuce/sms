@@ -64,7 +64,14 @@ export async function POST(request: Request) {
       status: project.status,
       mode: String(settings.mode ?? 'auto'),
       genre: String(settings.genre ?? 'auto'),
-      source: 'prompt' in body ? 'prompt' : 'sourceUrl' in body ? 'import' : 'upload',
+      source:
+        settings.byo === true
+          ? 'byo'
+          : 'prompt' in body
+            ? 'prompt'
+            : 'sourceUrl' in body
+              ? 'import'
+              : 'upload',
     })
     return NextResponse.json({ data: serializeProject(project) })
   } catch (err) {

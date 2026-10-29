@@ -39,12 +39,14 @@ export function ProjectSettingsForm({
   durationMs,
   uploadState,
   reframeV2Enabled = false,
+  byoMode = false,
 }: {
   settings: ClipProjectSettings
   onChange: (s: ClipProjectSettings) => void
   durationMs: number
   uploadState?: 'idle' | 'uploading' | 'finalizing' | 'complete' | 'error' | 'canceled'
   reframeV2Enabled?: boolean
+  byoMode?: boolean
 }) {
   const durationKnown = durationMs > 0
   const sourceMs = durationKnown ? durationMs : 0
@@ -55,6 +57,7 @@ export function ProjectSettingsForm({
 
   return (
     <div className="flex flex-col gap-4">
+      {!byoMode ? (
       <Panel title="Clip length & range">
         <div className="flex flex-col gap-3">
           <ClipLengthChoiceControl
@@ -113,9 +116,11 @@ export function ProjectSettingsForm({
           </div>
         </div>
       </Panel>
+      ) : null}
 
-      <Panel title="Layout & aspect">
+      <Panel title={byoMode ? 'Aspect ratio' : 'Layout & aspect'}>
         <div className="flex flex-col gap-3">
+          {!byoMode ? (
           <div className="grid grid-cols-2 gap-2">
             {clipLayoutModes.map((layout) => {
               const beta = isClipLayoutBeta(layout)
@@ -138,6 +143,7 @@ export function ProjectSettingsForm({
               )
             })}
           </div>
+          ) : null}
           <div className="flex flex-col gap-1.5">
             <Label>Aspect ratio</Label>
             <Select
@@ -155,6 +161,7 @@ export function ProjectSettingsForm({
         </div>
       </Panel>
 
+      {!byoMode ? (
       <Panel title="AI enhance">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-2">
@@ -181,6 +188,7 @@ export function ProjectSettingsForm({
           </div>
         </div>
       </Panel>
+      ) : null}
 
       <Panel title="Captions">
         <div className="flex flex-col gap-3">
@@ -201,6 +209,8 @@ export function ProjectSettingsForm({
         </div>
       </Panel>
 
+      {!byoMode ? (
+      <>
       <Panel title="Motion">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -223,6 +233,8 @@ export function ProjectSettingsForm({
           rows={3}
         />
       </Panel>
+      </>
+      ) : null}
     </div>
   )
 }

@@ -35,11 +35,17 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
   }
 
   const projectSettings = parseSettings(project.settings)
+  const streamVod = await prisma.streamVod.findUnique({ where: { projectId: project.id } })
+  if (projectSettings.byo && project.status === 'READY' && !streamVod) {
+    const readyClips = await listProjectClips(workspaceId, project.id, 'score')
+    if (readyClips.length === 1) {
+      redirect(`/app/clips/${project.id}/edit/${readyClips[0]!.id}`)
+    }
+  }
   const initialClips =
     project.status === 'READY' ? await listProjectClips(workspaceId, project.id, 'score') : null
   const liveStatus =
     project.status !== 'READY' ? await getProjectStatus(workspaceId, project.id) : null
-  const streamVod = await prisma.streamVod.findUnique({ where: { projectId: project.id } })
   const vodState =
     streamVod?.state && typeof streamVod.state === 'object' && !Array.isArray(streamVod.state)
       ? (streamVod.state as Record<string, unknown>)
@@ -103,6 +109,7 @@ export default async function ClipProjectPage({ params }: { params: Promise<{ pr
         initialEtaSec={liveStatus?.etaSec ?? 0}
         exportAspect={projectSettings.aspectRatio}
         scriptEditorEnabled={isScriptEditorFeatureEnabled()}
+        byoProject={Boolean(projectSettings.byo)}
       />
     </Page>
   )

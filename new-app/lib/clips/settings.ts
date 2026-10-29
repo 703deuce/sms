@@ -88,6 +88,7 @@ export const clipProjectSettingsSchema = z.object({
       dubLang: z.string().nullable().optional(),
     })
     .default({ music: false, thumbnails: false, dubLang: null }),
+  byo: z.boolean().optional(),
 })
 
 export type ClipProjectSettings = z.infer<typeof clipProjectSettingsSchema>

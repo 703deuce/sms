@@ -1,5 +1,15 @@
 """Map internal failures to safe user-visible job/project errors."""
 
+
+class ClipUserError(ValueError):
+    """Validation failure safe to show on the project (not retried as infra)."""
+
+
+BYO_MAX_DURATION_MS = 180_000
+BYO_DURATION_MESSAGE = (
+    "Bring-your-own clips can be up to 3 minutes. Use Find clips for longer videos."
+)
+
 _INTERNAL_MARKERS = (
     "on conflict",
     "unique or exclusion constraint",

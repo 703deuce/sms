@@ -331,22 +331,21 @@ def process_job(conn, job: dict) -> None:
         _ = probe_duration(src)
         audio_wav = td_path / "audio.wav"
         extract_wav_for_picker(src, audio_wav)
+        byo_job = payload.get("byo") is True
         if words:
             log(f"resume: skipping transcribe ({len(words)} words on project)")
             print(
                 f"[clipper:transcribe] project={project['id']} skipped=true words={len(words)}",
                 flush=True,
             )
-            post_progress(
-                job["id"],
-                {
-                    "projectStatus": "FINDING_CLIPS",
-                    "stage": "finding_clips",
-                    "progress": 45,
-                    "transcriptWords": words,
-                    "jobStatus": "RUNNING",
-                },
-            )
+            resume_progress = {
+                "projectStatus": "TRANSCRIBING" if byo_job else "FINDING_CLIPS",
+                "stage": "transcribing" if byo_job else "finding_clips",
+                "progress": 45,
+                "transcriptWords": words,
+                "jobStatus": "RUNNING",
+            }
+            post_progress(job["id"], resume_progress)
         else:
             post_progress(
                 job["id"],
@@ -373,6 +372,13 @@ def process_job(conn, job: dict) -> None:
                     **tx_meta.as_progress_fields(),
                 },
             )
+
+        if byo_job:
+            from clips_worker.byo_clip_job import finalize_byo_clip
+
+            finalize_byo_clip(conn, job, project, words, src, post_progress)
+            log(f"finished byo job={job['id']}")
+            return
 
         run_m4_pipeline(
             conn,

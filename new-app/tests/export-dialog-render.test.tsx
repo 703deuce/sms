@@ -51,7 +51,7 @@ describe('ExportDialog render', () => {
     vi.clearAllMocks()
   })
 
-  const cases = ['regular.json', 'stream_v3_clipB.json', 'no_layers.json', 'malformed_layers.json'] as const
+  const cases = ['regular.json', 'stream_v3_clipB.json', 'no_layers.json', 'malformed_layers.json', 'byo_clip.json'] as const
 
   for (const file of cases) {
     it(`does not throw for ${file}`, () => {

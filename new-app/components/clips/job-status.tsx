@@ -33,8 +33,21 @@ import type { ClipProjectStatusUi } from '@/components/app/status'
 
 const STEPS_UPLOAD = ['Upload', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
 const STEPS_IMPORT = ['Importing', 'Transcribe', 'Scan scenes', 'Find clips', 'Reframe & caption', 'Ready']
+const STEPS_BYO = ['Uploading', 'Transcribing', 'Ready']
 
-function stepIndex(status: string, mode?: string, stage?: string | null, fromLink?: boolean) {
+function stepIndex(
+  status: string,
+  mode?: string,
+  stage?: string | null,
+  fromLink?: boolean,
+  byo?: boolean,
+) {
+  if (byo) {
+    if (status === 'UPLOADING' || status === 'DRAFT' || status === 'QUEUED' || status === 'PREPARING') return 0
+    if (status === 'TRANSCRIBING' || stage === 'transcribing') return 1
+    if (status === 'READY') return 2
+    return 1
+  }
   const anything = mode === 'anything'
   const importing = fromLink && (stage === 'importing' || (status === 'QUEUED' && stage !== 'queued'))
   if (importing) return 0
@@ -55,6 +68,7 @@ export function JobStatus({
   initialEtaSec = 0,
   mode,
   fromLink,
+  byo = false,
 }: {
   projectId: string
   initialStatus?: string
@@ -63,6 +77,7 @@ export function JobStatus({
   initialEtaSec?: number
   mode?: 'talking' | 'anything' | 'captions'
   fromLink?: boolean
+  byo?: boolean
 }) {
   const [status, setStatus] = useState(initialStatus || 'QUEUED')
   const [progress, setProgress] = useState(initialProgress)
@@ -256,8 +271,8 @@ export function JobStatus({
               ) : null}
             </div>
             <ProcessingStepRail
-              steps={fromLink ? STEPS_IMPORT : STEPS_UPLOAD}
-              current={stepIndex(status, mode, stage, fromLink)}
+              steps={byo ? STEPS_BYO : fromLink ? STEPS_IMPORT : STEPS_UPLOAD}
+              current={stepIndex(status, mode, stage, fromLink, byo)}
             />
             <Progress
               value={isClipWaitingForWorker(status, stage, progress, waitingForWorker) ? 0 : progress}

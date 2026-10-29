@@ -15,10 +15,14 @@ export function buildProcessProjectJobPayload(
   const parsed = clipProjectSettingsSchema.safeParse(settings)
   const mode = parsed.success ? contentModeForJobPayload(parsed.data) : CLIP_CONTENT_MODE_AUTO
   const genre = CLIP_CONTENT_GENRE_AUTO
-  return {
+  const base = {
     ...(extra ?? {}),
     target_clip_len_s,
     mode,
     genre,
   }
+  if (parsed.success && parsed.data.byo === true) {
+    return { ...base, byo: true }
+  }
+  return base
 }

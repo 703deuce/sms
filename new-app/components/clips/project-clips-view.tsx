@@ -97,6 +97,7 @@ export function ProjectClipsView({
   initialEtaSec = 0,
   exportAspect = '9:16' as ClipProjectSettings['aspectRatio'],
   scriptEditorEnabled = false,
+  byoProject = false,
 }: {
   projectId: string
   projectTitle: string
@@ -112,6 +113,7 @@ export function ProjectClipsView({
   initialEtaSec?: number
   exportAspect?: ClipProjectSettings['aspectRatio']
   scriptEditorEnabled?: boolean
+  byoProject?: boolean
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
   const router = useRouter()
@@ -384,6 +386,7 @@ export function ProjectClipsView({
               initialStage={initialStage}
               initialEtaSec={initialEtaSec}
               fromLink={fromLink}
+              byo={byoProject}
             />
           ) : null}
           {showProgressiveClips ? (
