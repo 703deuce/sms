@@ -223,6 +223,9 @@ def _run_render_clip_job_body(
         seg_end = ctx.get("sourceSegEndMs")
         if seg_end is not None:
             clip_end = min(clip_end, int(seg_end))
+    elif source_reason == "previewKey_composite":
+        clip_start = max(clip_start, int(ctx["startMs"]))
+        clip_end = min(clip_end, int(ctx["endMs"]))
     from clips_worker.decision_log import decision_log
 
     decision_log(
@@ -303,6 +306,9 @@ def _run_render_clip_job_body(
         rel_end = cut_end - source_offset_ms
         ffmpeg_cut(src, clip_file, rel_start, rel_end)
         _export_stage_log(render_id, "ffmpeg_cut", t_job)
+        cut_dur = _probe_duration_sec(clip_file)
+        if cut_dur < 0.1:
+            raise RuntimeError(f"empty_source_cut reason={source_reason} rel_start={rel_start}")
         source_words = load_source_words(ctx, td_path)
         _export_stage_log(render_id, "load_words", t_job, {"wordCount": len(source_words)})
 
@@ -332,7 +338,51 @@ def _run_render_clip_job_body(
             except Exception:
                 preview_crop_track = None
 
-        if preview_key and export_edits_allow_preview_reuse(aspect, edits, clip_start, clip_end):
+        if source_reason == "previewKey_composite":
+            post_progress(
+                job["id"],
+                {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 45},
+            )
+            from clips_worker.preview_reuse import CLIP_PREVIEW_RESOLUTION
+            from clips_worker.render_clip import aspect_size
+            import shutil
+            import subprocess
+
+            if resolution in (CLIP_PREVIEW_RESOLUTION, 720, "720", "720p"):
+                shutil.copy(clip_file, out_mp4)
+            else:
+                res = "1080p" if resolution in (1080, "1080") else resolution
+                w, h = aspect_size(aspect, res)
+                subprocess.run(
+                    [
+                        "ffmpeg",
+                        "-y",
+                        "-v",
+                        "error",
+                        "-i",
+                        str(clip_file),
+                        "-vf",
+                        f"scale={w}:{h}:flags=lanczos",
+                        "-c:v",
+                        "libx264",
+                        "-crf",
+                        "20",
+                        "-preset",
+                        "veryfast",
+                        "-c:a",
+                        "aac",
+                        "-movflags",
+                        "+faststart",
+                        str(out_mp4),
+                    ],
+                    check=True,
+                )
+            from clips_worker.edits_render import build_srt, ensure_word_i, words_after_edits
+
+            remapped, _ = words_after_edits(ensure_word_i(source_words), edits)
+            srt_body = build_srt(remapped)
+            _export_stage_log(render_id, "preview_composite_cut", t_job, {"resolution": resolution})
+        elif preview_key and export_edits_allow_preview_reuse(aspect, edits, clip_start, clip_end):
             post_progress(
                 job["id"],
                 {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 45},

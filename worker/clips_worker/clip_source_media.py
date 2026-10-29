@@ -46,12 +46,12 @@ def resolve_clip_export_source(ctx: dict) -> tuple[str | None, int, str]:
             off = int(ctx.get("sourceSegStartMs") or ctx.get("startMs") or 0)
             return canonical, off, "canonical_source_seg"
 
-    preview = ctx.get("previewKey")
-    if preview:
-        return str(preview), 0, "previewKey"
-
     upload = ctx.get("source_key")
-    if upload:
-        return str(upload), 0, "project_upload"
+    if upload and _object_exists(str(upload)):
+        return str(upload), 0, "upload"
+
+    preview = ctx.get("previewKey")
+    if preview and _object_exists(str(preview)):
+        return str(preview), int(ctx.get("startMs") or 0), "previewKey_composite"
 
     return None, 0, "missing"

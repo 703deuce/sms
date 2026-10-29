@@ -119,6 +119,11 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const sourceSegStartMs = clip.sourceSegStartMs
   const sourceSegEndMs = clip.sourceSegEndMs
 
+  const segmentExists =
+    Boolean(sourceSegKey) &&
+    sourceSegStartMs != null &&
+    (await storage.getObjectSizeBytes(sourceSegKey)) != null
+
   let media: EditorMedia | null = null
   if (proxyKey) {
     media = {
@@ -132,7 +137,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       kind: 'source',
       offsetMs: 0,
     }
-  } else if (sourceSegKey && sourceSegStartMs != null) {
+  } else if (segmentExists && sourceSegKey) {
     media = {
       url: await createCachedSignedDownloadUrl(storage, sourceSegKey),
       kind: 'segment',
