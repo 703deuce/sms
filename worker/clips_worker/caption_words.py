@@ -42,11 +42,40 @@ def is_word_cut_by_ranges(w: dict, cut_ranges: list, *, trim_in: int, trim_out: 
     return False
 
 
-def build_caption_words(words: list[dict], edits: dict) -> list[dict]:
+def _resolve_word_text(w: dict, fixes: dict, fix_meta: dict, *, words_fallback: bool) -> str:
+    wi = int(w["i"])
+    key = str(wi)
+    if not words_fallback or not fix_meta:
+        return fixes.get(key, w["w"])
+    if key in fixes:
+        return fixes[key]
+    ws = float(w["s"])
+    best_key: str | None = None
+    best_dt = 0.06
+    for fk, meta in fix_meta.items():
+        if not isinstance(meta, dict):
+            continue
+        try:
+            ms = float(meta.get("s", -1))
+        except (TypeError, ValueError):
+            continue
+        dt = abs(ms - ws)
+        if dt < best_dt:
+            best_dt = dt
+            best_key = str(fk)
+    if best_key and best_key in fixes:
+        return fixes[best_key]
+    return w["w"]
+
+
+def build_caption_words(words: list[dict], edits: dict, *, words_fallback: bool = False) -> list[dict]:
     cut_ranges = edits.get("cutRanges") or []
     trim_in = int(edits["trim"]["in"])
     trim_out = int(edits["trim"]["out"])
     fixes = edits.get("wordFixes") or {}
+    fix_meta = edits.get("wordFixMeta") or {}
+    if words_fallback or edits.get("_wordsFallback"):
+        words_fallback = True
     segs = keep_segments(trim_in, trim_out, cut_ranges)
     out: list[dict] = []
     for w in words:
@@ -68,7 +97,7 @@ def build_caption_words(words: list[dict], edits: dict) -> list[dict]:
         if out_s is None or out_e is None or out_e <= out_s:
             continue
         wi = int(w["i"])
-        text = fixes.get(str(wi), w["w"])
+        text = _resolve_word_text({**w, "i": wi}, fixes, fix_meta, words_fallback=words_fallback)
         if not str(text or "").strip():
             continue
         row = {"i": wi, "text": text, "s_ms": out_s, "e_ms": out_e}

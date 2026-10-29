@@ -169,6 +169,109 @@ def apply_studio_sound_mix(video: Path, isolated: Path, out_video: Path, mix: fl
     )
 
 
+def align_isolated_to_segments(
+    isolated: Path,
+    dest: Path,
+    segs_sec: list[tuple[float, float]],
+    *,
+    track_start_sec: float = 0.0,
+) -> bool:
+    """Cut/concat isolated audio to match export segment list (clip-relative seconds)."""
+    if not isolated.is_file() or not segs_sec:
+        return False
+    segs_sec = [(a, b) for a, b in segs_sec if b - a >= 0.05]
+    if not segs_sec:
+        return False
+
+    if len(segs_sec) == 1:
+        a, b = segs_sec[0]
+        ss = max(0.0, track_start_sec + a)
+        dur = b - a
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-ss",
+                f"{ss:.3f}",
+                "-t",
+                f"{dur:.3f}",
+                "-i",
+                str(isolated),
+                "-acodec",
+                "libmp3lame",
+                "-q:a",
+                "2",
+                str(dest),
+            ],
+        )
+        return True
+
+    parts: list[str] = []
+    labels: list[str] = []
+    for i, (a, b) in enumerate(segs_sec):
+        ss = max(0.0, track_start_sec + a)
+        dur = max(0.05, b - a)
+        parts.append(
+            f"[0:a]atrim=start={ss:.3f}:end={ss + dur:.3f},asetpts=PTS-STARTPTS[a{i}]"
+        )
+        labels.append(f"[a{i}]")
+    parts.append(f"{''.join(labels)}concat=n={len(labels)}:v=0:a=1[aout]")
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(isolated),
+            "-filter_complex",
+            ";".join(parts),
+            "-map",
+            "[aout]",
+            "-acodec",
+            "libmp3lame",
+            "-q:a",
+            "2",
+            str(dest),
+        ],
+    )
+    return True
+
+
+def apply_studio_sound_mix_aligned(
+    video: Path,
+    isolated: Path,
+    out_video: Path,
+    mix: float,
+    segs_sec: list[tuple[float, float]],
+    *,
+    track_start_sec: float = 0.0,
+    work_dir: Path | None = None,
+) -> None:
+    """Align isolated track to edited segments when possible, then blend with program audio."""
+    aligned = isolated
+    tmp: Path | None = None
+    if segs_sec and work_dir is not None:
+        tmp = work_dir / "_studio_aligned.mp3"
+        try:
+            if align_isolated_to_segments(isolated, tmp, segs_sec, track_start_sec=track_start_sec):
+                aligned = tmp
+                print(
+                    f"[clipper:studio_sound] aligned segments={len(segs_sec)} track_start_s={round(track_start_sec, 3)}",
+                    flush=True,
+                )
+            else:
+                print("[clipper:studio_sound] align_fallback reason=align_failed", flush=True)
+        except Exception as exc:
+            print(
+                f"[clipper:studio_sound] align_fallback reason={type(exc).__name__}:{str(exc)[:80]}",
+                flush=True,
+            )
+    apply_studio_sound_mix(video, aligned, out_video, mix)
+
+
 def apply_dub_speech_mix(
     video: Path,
     dub_audio: Path,

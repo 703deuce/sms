@@ -1,6 +1,7 @@
 """Load music/SFX local files for export from edits.audio."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from clips_worker.storage import download_object
@@ -43,16 +44,29 @@ def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
 
     studio_path = None
     studio_mix = None
+    studio_source_offset_ms = None
+    studio_source_key = None
     studio = audio.get("studioSound") or {}
     if studio.get("enabled") and studio.get("generationId"):
         gid = studio["generationId"]
         with conn.cursor() as cur:
-            cur.execute('SELECT "storageKey", status FROM ai_generations WHERE id=%s', (gid,))
+            cur.execute('SELECT "storageKey", status, params FROM ai_generations WHERE id=%s', (gid,))
             row = cur.fetchone()
         if row and row[0] and row[1] == "READY":
             studio_path = work_dir / "studio_isolated.mp3"
             download_object(row[0], studio_path)
-            studio_mix = float(studio.get("mix", 0.8))
+            studio_mix = float(studio.get("mix", 0.35))
+            params = row[2]
+            if isinstance(params, str):
+                try:
+                    params = json.loads(params)
+                except json.JSONDecodeError:
+                    params = {}
+            if isinstance(params, dict):
+                if params.get("sourceOffsetMs") is not None:
+                    studio_source_offset_ms = int(params["sourceOffsetMs"])
+                if params.get("sourceKey"):
+                    studio_source_key = str(params["sourceKey"])
 
     return {
         "music_path": music_path,
@@ -60,4 +74,6 @@ def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
         "sfx_paths": sfx_paths,
         "studio_path": studio_path,
         "studio_mix": studio_mix,
+        "studio_source_offset_ms": studio_source_offset_ms,
+        "studio_source_key": studio_source_key,
     }

@@ -84,7 +84,7 @@ def run_dub_job(conn, job: dict, post_progress) -> None:
         download_object(source_key, src)
         clip_file = td_path / "clip.mp4"
         ffmpeg_cut(src, clip_file, clip_start, clip_end)
-        words = load_source_words(
+        words, _ = load_source_words(
             {
                 "clipId": clip_id,
                 "workspaceId": workspace_id,

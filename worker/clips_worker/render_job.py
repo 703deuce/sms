@@ -123,6 +123,55 @@ def apply_composite_edits(
     return edited
 
 
+def _studio_segs_sec(edits: dict, clip_start: int, clip_end: int) -> list[tuple[float, float]]:
+    from clips_worker.edits_render import keep_segments
+
+    segs_ms = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    segs_sec: list[tuple[float, float]] = []
+    for a, b in segs_ms:
+        ra = (max(a, clip_start) - clip_start) / 1000.0
+        rb = (min(b, clip_end) - clip_start) / 1000.0
+        if rb - ra >= 0.08:
+            segs_sec.append((ra, rb))
+    if not segs_sec:
+        segs_sec = [(0.0, max(0.08, (clip_end - clip_start) / 1000.0))]
+    return segs_sec
+
+
+def _apply_studio_sound_to_mp4(
+    out_mp4: Path,
+    td_path: Path,
+    edits: dict,
+    audio_assets: dict,
+    *,
+    clip_start: int,
+    clip_end: int,
+    cut_start: int,
+) -> Path:
+    studio_path = (audio_assets or {}).get("studio_path")
+    studio_mix = (audio_assets or {}).get("studio_mix")
+    if not studio_path or studio_mix is None or not Path(studio_path).is_file():
+        return out_mp4
+    offset_ms = audio_assets.get("studio_source_offset_ms")
+    if offset_ms is None:
+        offset_ms = 0
+    track_start = max(0.0, (cut_start - int(offset_ms)) / 1000.0)
+    segs_sec = _studio_segs_sec(edits, clip_start, clip_end)
+    from clips_worker.audio_render import apply_studio_sound_mix_aligned
+
+    mixed = td_path / "studio_composite.mp4"
+    apply_studio_sound_mix_aligned(
+        out_mp4,
+        Path(studio_path),
+        mixed,
+        float(studio_mix),
+        segs_sec,
+        track_start_sec=track_start,
+        work_dir=td_path,
+    )
+    return mixed
+
+
 def load_render_context(conn, render_id: str) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -183,9 +232,10 @@ def upload_text(object_key: str, body: str, content_type: str = "text/plain") ->
         tmp.unlink(missing_ok=True)
 
 
-def load_source_words(ctx: dict, work_dir: Path) -> list[dict]:
+def load_source_words(ctx: dict, work_dir: Path) -> tuple[list[dict], bool]:
     start_ms = int(ctx.get("startMs") or 0)
     end_ms = int(ctx.get("endMs") or start_ms)
+    words_fallback = False
 
     def _overlaps_clip(words: list[dict]) -> bool:
         start_s = start_ms / 1000.0
@@ -226,12 +276,13 @@ def load_source_words(ctx: dict, work_dir: Path) -> list[dict]:
         clip_words = json.loads(p.read_text())
         start = int(ctx["startMs"])
         words = [{**w, "s": w["s"] + start / 1000.0, "e": w["e"] + start / 1000.0} for w in clip_words]
+        words_fallback = True
         print("[clipper:words] words_fallback source=clip_words", flush=True)
     out = []
     for pos, w in enumerate(words):
         wi = w.get("i", w.get("idx", pos))
         out.append({**w, "i": int(wi)})
-    return out
+    return out, words_fallback
 
 
 def _export_stage_log(render_id: str, stage: str, t0: float, extra: dict | None = None) -> None:
@@ -404,7 +455,11 @@ def _run_render_clip_job_body(
         _export_stage_log(render_id, "download_source", t_job)
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 28, "etaSeconds": 120})
         clip_file = td_path / "clip.mp4"
-        cut_start, cut_end = expanded_source_cut_ms(clip_start, clip_end, edits)
+        cut_start, cut_end, lo_ms, hi_ms = expanded_source_cut_ms(clip_start, clip_end, edits)
+        print(
+            f"[clipper:trim_window] {json.dumps({'renderId': render_id, 'lo_ms': lo_ms, 'hi_ms': hi_ms, 'cut_start_ms': cut_start, 'cut_end_ms': cut_end})}",
+            flush=True,
+        )
         rel_start = cut_start - source_offset_ms
         rel_end = cut_end - source_offset_ms
         ffmpeg_cut(src, clip_file, rel_start, rel_end)
@@ -412,8 +467,10 @@ def _run_render_clip_job_body(
         cut_dur = _probe_duration_sec(clip_file)
         if cut_dur < 0.1:
             raise RuntimeError(f"empty_source_cut reason={source_reason} rel_start={rel_start}")
-        source_words = load_source_words(ctx, td_path)
-        _export_stage_log(render_id, "load_words", t_job, {"wordCount": len(source_words)})
+        source_words, words_fallback = load_source_words(ctx, td_path)
+        if words_fallback:
+            edits = {**edits, "_wordsFallback": True}
+        _export_stage_log(render_id, "load_words", t_job, {"wordCount": len(source_words), "wordsFallback": words_fallback})
 
         from clips_worker.broll_render import load_broll_specs
 
@@ -422,6 +479,12 @@ def _run_render_clip_job_body(
         from clips_worker.audio_assets import load_audio_assets
 
         audio_assets = load_audio_assets(conn, edits, td_path)
+        if audio_assets is None:
+            audio_assets = {}
+        if audio_assets.get("studio_source_offset_ms") is None:
+            audio_assets["studio_source_offset_ms"] = source_offset_ms
+        if not audio_assets.get("studio_source_key") and source_key:
+            audio_assets["studio_source_key"] = source_key
         from clips_worker.dub_assets import load_dub_assets
 
         dub = load_dub_assets(conn, edits, td_path)
@@ -498,6 +561,15 @@ def _run_render_clip_job_body(
                     ],
                     check=True,
                 )
+            out_mp4 = _apply_studio_sound_to_mp4(
+                out_mp4,
+                td_path,
+                edits,
+                audio_assets or {},
+                clip_start=clip_start,
+                clip_end=clip_end,
+                cut_start=cut_start,
+            )
             from clips_worker.edits_render import build_srt, ensure_word_i, words_after_edits
 
             remapped, _ = words_after_edits(ensure_word_i(source_words), edits)
@@ -577,6 +649,13 @@ def _run_render_clip_job_body(
             )
 
         brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
+        if not render_meta.get("effective_edits_ms"):
+            from clips_worker.edits_render import output_duration_ms
+
+            render_meta["expected_editor_ms"] = int(
+                render_meta.get("expected_editor_ms") or output_duration_ms(edits)
+            )
+            render_meta["effective_edits_ms"] = output_duration_ms(edits)
         intro_key = brand.get("introVideoKey") if brand.get("useIntro", True) else None
         outro_key = brand.get("outroVideoKey") if brand.get("useOutro", True) else None
         if intro_key or outro_key:
@@ -605,14 +684,25 @@ def _run_render_clip_job_body(
         size = out_mp4.stat().st_size
         from clips_worker.edits_render import output_duration_ms
 
-        expected_s = output_duration_ms(edits) / 1000.0
+        expected_editor_ms = int(render_meta.get("expected_editor_ms") or output_duration_ms(edits))
+        expected_effective_ms = int(render_meta.get("effective_edits_ms") or expected_editor_ms)
+        expected_editor_s = expected_editor_ms / 1000.0
+        expected_effective_s = expected_effective_ms / 1000.0
         actual_s = _probe_duration_sec(out_mp4)
+        length_mismatch = abs(actual_s - expected_effective_s) > 0.35
+        print(
+            f"[clipper:duration] {json.dumps({'renderId': render_id, 'expected_editor_s': round(expected_editor_s, 3), 'expected_effective_s': round(expected_effective_s, 3), 'actual_s': round(actual_s, 3), 'length_mismatch': length_mismatch})}",
+            flush=True,
+        )
         _export_decision(
             render_id,
             "duration_check",
-            expected_s=round(expected_s, 3),
+            expected_editor_s=round(expected_editor_s, 3),
+            expected_effective_s=round(expected_effective_s, 3),
+            expected_s=round(expected_effective_s, 3),
             actual_s=round(actual_s, 3),
-            delta_s=round(actual_s - expected_s, 3),
+            delta_s=round(actual_s - expected_effective_s, 3),
+            length_mismatch=length_mismatch,
         )
         mark_render(conn, render_id, "READY", out_key, size, None, srt_key)
         if render_meta.get("fit_fallback"):

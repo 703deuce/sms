@@ -306,9 +306,10 @@ def test_load_source_words_fallback_on_no_overlap(monkeypatch, tmp_path) -> None
         "workspaceId": "w1",
         "projectId": "p1",
     }
-    words = load_source_words(ctx, tmp_path)
+    words, words_fallback = load_source_words(ctx, tmp_path)
     assert len(words) == 1
     assert words[0]["w"] == "hi"
+    assert words_fallback is True
     assert any("words.json" in c for c in calls)
 
 

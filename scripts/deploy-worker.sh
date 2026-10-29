@@ -26,6 +26,9 @@ REQUIRED_ENV_KEYS=(
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 bash "${REPO_ROOT}/scripts/check-overlay-geometry.sh"
+cmp "${REPO_ROOT}/new-app/public/brand/twitch_white_128.png" "${REPO_ROOT}/worker/assets/brand/twitch_white_128.png"
+cmp "${REPO_ROOT}/new-app/public/brand/kick_black_128.png" "${REPO_ROOT}/worker/assets/brand/kick_black_128.png"
+cmp "${REPO_ROOT}/new-app/tests/fixtures/loop_trim_cases.json" "${REPO_ROOT}/worker/tests/fixtures/loop_trim_cases.json"
 GIT_COMMIT="$(git rev-parse "${REF}^{commit}" 2>/dev/null || echo "${REF}")"
 
 echo "[deploy-worker] archiving worker/ @ ${REF} (${GIT_COMMIT})"

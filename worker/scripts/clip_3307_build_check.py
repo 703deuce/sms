@@ -52,7 +52,7 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
-        words = load_source_words(
+        words, _ = load_source_words(
             {
                 "clipId": CLIP_ID,
                 "workspaceId": clip["workspaceId"],

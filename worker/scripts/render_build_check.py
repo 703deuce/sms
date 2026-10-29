@@ -53,7 +53,7 @@ def main() -> int:
             "transcriptKey": clip.get("transcriptKey"),
             "transcriptWords": clip.get("transcriptWords"),
         }
-        words = load_source_words(ctx, td_path)
+        words, _ = load_source_words(ctx, td_path)
         in_clip = [w for w in words if clip_start <= word_mid(w) < clip_end]
         if len(in_clip) < 4:
             print("not enough words in clip")

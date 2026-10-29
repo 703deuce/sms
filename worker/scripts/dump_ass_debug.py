@@ -50,7 +50,7 @@ def main() -> None:
         ctx = dict(row)
         ctx["clipId"] = clip_id
         ctx["workspaceId"] = ""
-        words = load_source_words(ctx, Path(td))
+        words, _ = load_source_words(ctx, Path(td))
 
     remapped, _ = words_after_edits(words, edits)
     build_ass(remapped, cap, out_path, play_w=720, play_h=1280)
