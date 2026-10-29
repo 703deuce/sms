@@ -442,7 +442,7 @@ def fuse_moments(
         except Exception as exc:
             from clips_worker.clipfind.flags import clipfind_fallback
 
-            clipfind_fallback("fusion_refine", type(exc).__name__)
+            clipfind_fallback("fusion_refine", type(exc).__name__, exc=exc)
         picks.append(
             FusionPick(
                 start_ms=start_ms,

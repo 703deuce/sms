@@ -289,6 +289,9 @@ def refine_window(inp: RefineInputs) -> RefineResult:
         if ce > cs and (best_key is None or key > best_key):
             best, best_key = (name, cs, ce), key
     name, cs, ce = best
+    # C2.1 never shrink: the refiner only moves the start EARLIER (setup) and the end LATER
+    # (reaction). It may only cut below the original window when over max, via fit_max.
+    cs, ce = fit_max(min(cs, s0), max(ce, e0), b, inp.max_ms)
     if not (cs <= (inp.peak_ms if inp.peak_ms is not None else payoff) <= ce):
         unchanged.reason = "refined_drops_peak"
         return unchanged

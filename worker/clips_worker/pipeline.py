@@ -881,7 +881,7 @@ def run_m4_pipeline(
                 except Exception as exc:
                     from clips_worker.clipfind.flags import clipfind_fallback
 
-                    clipfind_fallback("upload_validate", type(exc).__name__)
+                    clipfind_fallback("upload_validate", type(exc).__name__, exc=exc)
 
                 from clips_worker.headstart_render import (
                     await_headstart_render,
@@ -1015,7 +1015,7 @@ def run_m4_pipeline(
                 except Exception as exc:
                     from clips_worker.clipfind.flags import clipfind_fallback
 
-                    clipfind_fallback("upload_validate", type(exc).__name__)
+                    clipfind_fallback("upload_validate", type(exc).__name__, exc=exc)
 
             print(
                 f"[clipper:picker] project={project_id} mode={mode} picks={len(picks)} "
@@ -1243,7 +1243,7 @@ def run_m4_pipeline(
         except Exception as exc:
             from clips_worker.clipfind.flags import clipfind_fallback
 
-            clipfind_fallback("pipeline_upload_artifacts", type(exc).__name__)
+            clipfind_fallback("pipeline_upload_artifacts", type(exc).__name__, exc=exc)
         try:
             from clips_worker.clipfind.context import unbind_clipfind
 

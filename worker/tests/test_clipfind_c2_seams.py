@@ -198,3 +198,66 @@ def test_validate_demotes_without_dropping_pick(monkeypatch):
     assert len(out) == 1
     assert out[0].ai_meta["clipfind"]["validation"] == "aftermath_only"
     assert out[0].ai_meta["streamer"]["render"] is False
+
+
+def test_refine_upload_pick_no_fallback_with_visual_moment(monkeypatch):
+    from clips_worker.clipfind.c2_seams import refine_upload_pick
+    from clips_worker.picker.signals import SentenceSignals
+
+    monkeypatch.setenv("CLIPFIND_ON_PROJECTS", "proj_x")
+    bind_clipfind(workspace_id="ws_test", job_type="PROCESS_PROJECT", project_id="proj_x")
+
+    def _boom_fallback(*_a, **_k):
+        raise AssertionError("clipfind_fallback should not be called")
+
+    monkeypatch.setattr("clips_worker.clipfind.flags.clipfind_fallback", _boom_fallback)
+
+    pick = {
+        "start_ms": 7120,
+        "end_ms": 28235,
+        "title": "Moment",
+        "boundary_payoff_ms": 20_000,
+    }
+    sentences = [Sentence(0, 0, 30_000, "A", "words here.", 0, 1)]
+    words = [{"w": "hello", "s": 7.0, "e": 7.5}]
+    signals_by_idx = {
+        0: SentenceSignals(0, 1.0, 0.1, 0.1, 0, 0, False, False, False, False),
+    }
+    visual_moments = [
+        {
+            "start_s": 5.0,
+            "end_s": 25.0,
+            "peak_s": 20.0,
+            "what_happened": "great answer to the question",
+            "why_it_works": "talk moment",
+        }
+    ]
+    refine_upload_pick(
+        pick,
+        words=words,
+        sentences=sentences,
+        signals_by_idx=signals_by_idx,
+        visual_moments=visual_moments,
+        range_start_ms=0,
+        range_end_ms=120_000,
+        max_ms=60_000,
+    )
+
+
+def test_ledger_dropped_does_not_emit_ledger_fallback(monkeypatch):
+    from clips_worker.clipfind.ledger import CandidateLedger, cf_id_for
+
+    bind_decision_log(None, None)
+    led = CandidateLedger()
+    cf_id = cf_id_for(source="upload", start_ms=0, end_ms=5000, peak_ms=2500)
+    led.register(cf_id, provenance="upload", start_ms=0, end_ms=5000)
+    led.dropped(cf_id, stage="dedupe_r10", reason="overlap_duplicate")
+    snap = decision_log_snapshot()
+    ledger_fb = [
+        e
+        for e in snap
+        if e.get("stage") == "clipfind" and e.get("event") == "fallback" and e.get("site") == "ledger"
+    ]
+    assert not ledger_fb
+    ledger_ev = [e for e in snap if e.get("stage") == "clipfind_ledger" and e.get("event") == "dropped"]
+    assert ledger_ev and ledger_ev[0].get("ledger_stage") == "dedupe_r10"

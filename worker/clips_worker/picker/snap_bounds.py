@@ -409,7 +409,7 @@ def snap_bounds(
         except Exception as exc:
             from clips_worker.clipfind.flags import clipfind_fallback
 
-            clipfind_fallback("snap_reaction_tail", type(exc).__name__)
+            clipfind_fallback("snap_reaction_tail", type(exc).__name__, exc=exc)
 
     clip["start_ms"] = start_ms
     clip["end_ms"] = end_ms

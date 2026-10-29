@@ -501,7 +501,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
             except Exception as exc:
                 from clips_worker.clipfind.flags import clipfind_fallback
 
-                clipfind_fallback("stream_validate", type(exc).__name__)
+                clipfind_fallback("stream_validate", type(exc).__name__, exc=exc)
             log_pick_stage(
                 "stream",
                 want=want,

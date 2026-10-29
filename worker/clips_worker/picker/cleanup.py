@@ -230,7 +230,7 @@ def finalize_picks(
         except Exception as exc:
             from clips_worker.clipfind.flags import clipfind_fallback
 
-            clipfind_fallback("finalize_refine", type(exc).__name__)
+            clipfind_fallback("finalize_refine", type(exc).__name__, exc=exc)
         snap_bounds(pick, words, sentences, range_start_ms, range_end_ms)
         extend_pick_to_min_duration(
             pick,

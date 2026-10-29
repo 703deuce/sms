@@ -102,3 +102,16 @@ def test_respects_padding_clamp():
     for t in range(560, 601): vis[t] = 0.9
     r = refine_window(inp(start_ms=590_000, end_ms=610_000, peak_ms=598_000, visual=vis, text="ace", pad_lo_ms=580_000))
     assert r.start_ms >= 580_000
+
+
+# C2.1: never shrink (prod shadow showed 0-24.5s -> 0-10s on "talk", 7.1-28.2s -> 15.9-22.7s)
+def test_talk_never_shrinks_window():
+    words = W("so what do you think about that? honestly I think it is great and here is why it matters a lot", 100.0, step=0.5)
+    r = refine_window(inp(start_ms=95_000, end_ms=125_000, peak_ms=108_000, text="great answer to the question", words=words))
+    assert r.start_ms <= 95_000 and r.end_ms >= 125_000
+
+def test_laugh_never_shrinks_window():
+    words = W("he said the thing and then everyone lost it completely haha", 50.0, step=0.4)
+    r = refine_window(inp(start_ms=40_000, end_ms=61_000, peak_ms=53_000, text="funny joke everyone laughs",
+                          words=words, laugh_spans=[(54_000, 56_000)]))
+    assert r.start_ms <= 40_000 and r.end_ms >= 61_000

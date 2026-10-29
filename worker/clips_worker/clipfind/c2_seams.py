@@ -166,8 +166,8 @@ def refine_upload_pick(
     if visual_moments:
         ovs = visual_moments_overlapping_window(
             visual_moments,
-            start_ms,
-            end_ms,
+            window_start_ms=start_ms,
+            window_end_ms=end_ms,
             range_start_ms=range_start_ms,
             pad_ms=5000,
         )

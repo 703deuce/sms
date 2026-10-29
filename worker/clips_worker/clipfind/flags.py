@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import traceback
 from typing import Any
 
 from clips_worker.clipfind.context import JobCtx, get_job_ctx
@@ -93,8 +94,15 @@ def log_resolved_flags(job_ctx: JobCtx | None = None) -> None:
         decision_log("clipfind", "fallback", site="log_resolved_flags", reason=type(exc).__name__)
 
 
-def clipfind_fallback(site: str, reason: str, **extra: Any) -> None:
+def clipfind_fallback(site: str, reason: str, *, exc: BaseException | None = None, **extra: Any) -> None:
     try:
-        decision_log("clipfind", "fallback", site=site, reason=str(reason)[:200], **extra)
+        payload: dict[str, Any] = dict(extra)
+        if exc is not None:
+            payload["msg"] = str(exc)[:200]
+            tb = traceback.extract_tb(exc.__traceback__)
+            if tb:
+                fr = tb[-1]
+                payload["frame"] = f"{fr.filename}:{fr.lineno} {fr.name}"
+        decision_log("clipfind", "fallback", site=site, reason=str(reason)[:200], **payload)
     except Exception:
         pass

@@ -165,7 +165,10 @@ class CandidateLedger:
             ev = {"event": event, **{k: v for k, v in fields.items() if v is not None}}
             row["events"].append(ev)
         try:
-            decision_log("clipfind_ledger", event, cf_id=cf_id, **fields)
+            log_fields = {k: v for k, v in fields.items() if k != "stage"}
+            if "stage" in fields:
+                log_fields["ledger_stage"] = fields["stage"]
+            decision_log("clipfind_ledger", event, cf_id=cf_id, **log_fields)
         except Exception as exc:
             self._log_once(exc)
 
@@ -174,7 +177,9 @@ class CandidateLedger:
             return
         self._logged_error = True
         try:
-            decision_log("clipfind", "fallback", site="ledger", reason=type(exc).__name__)
+            from clips_worker.clipfind.flags import clipfind_fallback
+
+            clipfind_fallback("ledger", type(exc).__name__, exc=exc)
         except Exception:
             pass
 
