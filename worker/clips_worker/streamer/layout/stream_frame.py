@@ -86,29 +86,17 @@ def render_fit_blur_stream(src: Path, dest: Path, *, play_w: int = PLAY_W, play_
     )
 
 
-def render_fit_top_stream(
+def _fit_top_base(
     src: Path,
-    dest: Path,
-    edits: dict,
+    stage: Path,
     *,
-    play_w: int = PLAY_W,
-    play_h: int = PLAY_H,
+    lay: dict[str, int],
+    dur: float,
+    play_w: int,
+    play_h: int,
+    vid_y: int,
+    h_box: int,
 ) -> None:
-    lines = _headline_lines_from_edits(edits)
-    lay = overlay_layout(max(2, len(lines) or 2), play_w=play_w, play_h=play_h)
-    dur = _probe_duration_s(src)
-    vid_y = lay["video_y"]
-    vid_h = lay["video_h"]
-    h_box = lay["headline_h"]
-    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
-    platform = str(tpl.get("platform") or "twitch")
-    badge_on = bool((tpl.get("platformBadge") or {}).get("enabled"))
-    link_on = bool((tpl.get("channelLink") or {}).get("enabled"))
-    channel = ""
-    if link_on:
-        url = str((tpl.get("channelLink") or {}).get("url") or "")
-        channel = url.rstrip("/").split("/")[-1].upper()[:32] if url else ""
-
     fc = (
         f"[0:v]scale={play_w}:{play_h}:force_original_aspect_ratio=increase,"
         f"crop={play_w}:{play_h},boxblur=20:2,eq=brightness=-0.08[bgfull];"
@@ -118,7 +106,6 @@ def render_fit_top_stream(
         f"[bg0]drawbox=x=0:y={lay['headline_top']}:w={play_w}:h={h_box}:color=white:t=fill[bg1];"
         f"[bg1][fg]overlay=0:{vid_y}[v1]"
     )
-    stage = dest.parent / "fit_top_stage.mp4"
     subprocess.check_call(
         [
             "ffmpeg",
@@ -146,7 +133,25 @@ def render_fit_top_stream(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    current = stage
+
+
+def _fit_top_band_layers(
+    current: Path,
+    dest: Path,
+    edits: dict,
+    *,
+    lay: dict[str, int],
+    dur: float,
+    lines: list[str],
+    play_w: int,
+    play_h: int,
+    h_box: int,
+    tpl: dict,
+    platform: str,
+    badge_on: bool,
+    link_on: bool,
+    channel: str,
+) -> None:
     if lines:
         hl = dest.parent / "fit_top_headline.mp4"
         burn_stream_headline(
@@ -206,6 +211,50 @@ def render_fit_top_stream(
         ["ffmpeg", "-y", "-v", "error", "-i", str(current), "-c", "copy", "-movflags", "+faststart", str(dest)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+    )
+
+
+def render_fit_top_stream(
+    src: Path,
+    dest: Path,
+    edits: dict,
+    *,
+    play_w: int = PLAY_W,
+    play_h: int = PLAY_H,
+) -> None:
+    lines = _headline_lines_from_edits(edits)
+    lay = overlay_layout(max(2, len(lines) or 2), play_w=play_w, play_h=play_h)
+    dur = _probe_duration_s(src)
+    vid_y = lay["video_y"]
+    vid_h = lay["video_h"]
+    h_box = lay["headline_h"]
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    platform = str(tpl.get("platform") or "twitch")
+    badge_on = bool((tpl.get("platformBadge") or {}).get("enabled"))
+    link_on = bool((tpl.get("channelLink") or {}).get("enabled"))
+    channel = ""
+    if link_on:
+        url = str((tpl.get("channelLink") or {}).get("url") or "")
+        channel = url.rstrip("/").split("/")[-1].upper()[:32] if url else ""
+
+    stage = dest.parent / "fit_top_stage.mp4"
+    _fit_top_base(src, stage, lay=lay, dur=dur, play_w=play_w, play_h=play_h, vid_y=vid_y, h_box=h_box)
+    current = stage
+    _fit_top_band_layers(
+        current,
+        dest,
+        edits,
+        lay=lay,
+        dur=dur,
+        lines=lines,
+        play_w=play_w,
+        play_h=play_h,
+        h_box=h_box,
+        tpl=tpl,
+        platform=platform,
+        badge_on=badge_on,
+        link_on=link_on,
+        channel=channel,
     )
 
 

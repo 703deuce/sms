@@ -16,7 +16,7 @@ export default async function ClipEditorPage({
   const data = await getClipEditorPayload(workspaceId, clipId)
   if (!data || data.clip.projectId !== projectId) notFound()
 
-  const videoUrl = data.mediaUrls.proxy || data.mediaUrls.source || data.mediaUrls.preview
+  const videoUrl = data.media?.url ?? data.mediaUrls.proxy ?? data.mediaUrls.source ?? data.mediaUrls.preview
   const posterUrl = data.mediaUrls.poster || data.mediaUrls.preview
 
   return (
@@ -34,6 +34,7 @@ export default async function ClipEditorPage({
         cropShots={data.crop.shots}
         cropTrack={data.crop.track}
         videoUrl={videoUrl}
+        editorMedia={data.media}
         posterUrl={posterUrl}
         aiMeta={data.aiMeta}
         brollMedia={data.brollMedia}

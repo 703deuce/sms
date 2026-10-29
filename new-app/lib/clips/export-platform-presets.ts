@@ -3,6 +3,9 @@ import { PLATFORM_SAFE_ZONE_1080x1920 } from '@/lib/clips/overlay-safe-zone'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { outputDurationMs } from '@/lib/clips/edits'
+import geom from '@/lib/clips/overlay-geometry.json'
+
+const headlineMinY = geom.exportBar.headlineTextMinY
 
 /** Social export targets (download-only — no account connections). */
 export const EXPORT_PLATFORM_IDS = ['tiktok', 'youtube_shorts', 'instagram_reels'] as const
@@ -36,7 +39,7 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     recommendedMaxSec: 35,
     captionSafeMarginVPct: 18,
     captionPosition: 'bottom',
-    headlineTextMinYPx: 260,
+    headlineTextMinYPx: headlineMinY.tiktok,
   },
   youtube_shorts: {
     id: 'youtube_shorts',
@@ -48,7 +51,7 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     recommendedMaxSec: 30,
     captionSafeMarginVPct: 14,
     captionPosition: 'bottom',
-    headlineTextMinYPx: 380,
+    headlineTextMinYPx: headlineMinY.youtube_shorts,
   },
   instagram_reels: {
     id: 'instagram_reels',
@@ -60,7 +63,7 @@ export const EXPORT_PLATFORM_PRESETS: Record<ExportPlatformId, ExportPlatformPre
     recommendedMaxSec: 30,
     captionSafeMarginVPct: 16,
     captionPosition: 'bottom',
-    headlineTextMinYPx: 250,
+    headlineTextMinYPx: headlineMinY.instagram_reels,
   },
 }
 

@@ -1,15 +1,19 @@
 /** Rick fit_top geometry — parity with worker stream_overlay_layout.py */
 
+import geom from '@/lib/clips/overlay-geometry.json'
+
+const fitTop = geom.fitTop
+
 export const STREAM_PLAY_W = 1080
 export const STREAM_PLAY_H = 1920
-export const STREAM_HEADLINE_TOP = 150
+export const STREAM_HEADLINE_TOP = fitTop.headlineTop
 
 export function headlineBoxHeightPx(lineCount: number, playH = STREAM_PLAY_H): number {
-  const lines = Math.max(2, Math.min(4, lineCount || 2))
-  const scale = playH / 1920
-  const perLine = Math.round(110 * scale)
-  const pad = Math.round(40 * scale)
-  return Math.max(Math.round(320 * scale), lines * perLine + pad)
+  const lines = Math.max(fitTop.minLines, Math.min(fitTop.maxLines, lineCount || 2))
+  const scale = playH / geom.baseH
+  const perLine = Math.round(fitTop.perLinePx * scale)
+  const pad = Math.round(fitTop.padPx * scale)
+  return Math.max(Math.round(fitTop.minBoxPx * scale), lines * perLine + pad)
 }
 
 export function streamVideoBandHeightPx(playW = STREAM_PLAY_W): number {
@@ -38,11 +42,11 @@ export function overlayLayout(headlineLineCount: number, playW = STREAM_PLAY_W, 
   const videoY = STREAM_HEADLINE_TOP + headlineH
   let videoH = streamVideoBandHeightPx(playW)
   if (videoY + videoH > playH) {
-    videoH = Math.max(2, playH - videoY - Math.round((80 * playH) / 1920))
+    videoH = Math.max(2, playH - videoY - Math.round((fitTop.videoBottomReservePx * playH) / geom.baseH))
   }
   const bottomY = videoY + videoH
   const bottomH = Math.max(0, playH - bottomY)
-  const badgeY = bottomY - Math.round((40 * playH) / 1920)
+  const badgeY = bottomY - Math.round((fitTop.badgeOffsetPx * playH) / geom.baseH)
   return {
     playW,
     playH,

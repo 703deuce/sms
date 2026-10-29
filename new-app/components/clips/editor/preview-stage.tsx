@@ -18,7 +18,8 @@ import {
 import { editorHeadlineBandAllowed } from '@/lib/clips/export-template'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
-import { applyPlaybackTime, outputDurationFromEdits } from '@/lib/clips/editor-playback'
+import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
+import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 
 function clamp(n: number, lo: number, hi: number) {
@@ -67,6 +68,7 @@ export function PreviewStage({
   onTick,
   channelDisplay,
   chatPreviewEnabled = false,
+  media = null,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -80,6 +82,7 @@ export function PreviewStage({
   onTick: (tick: { sourceMs: number; outputMs: number; playing: boolean }) => void
   channelDisplay?: string | null
   chatPreviewEnabled?: boolean
+  media?: EditorMedia | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -88,12 +91,18 @@ export function PreviewStage({
   const trackRef = useRef(cropTrack)
   const aspect = edits.aspectRatio ?? '9:16'
   const layoutMode = edits.layout?.mode ?? 'speaker_follow'
-  const letterboxPreview = layoutUsesLetterboxBlurPreview(layoutMode)
-  const headlineBandPreview = editorHeadlineBandAllowed(layoutMode)
+  const mediaOffsetMs = media?.offsetMs ?? 0
+  const compositePreview = media?.kind === 'composite'
+  const letterboxPreview = !compositePreview && layoutUsesLetterboxBlurPreview(layoutMode)
+  const headlineBandPreview = !compositePreview && editorHeadlineBandAllowed(layoutMode)
   const headlineBandPct = headlineBandPreview ? LAYOUT_HEADLINE_PREVIEW_FRAC * 100 : 0
   const normalizedTrack = cropTrack ? normalizeCropTrack(cropTrack) : null
   const cropPreview = Boolean(
-    videoUrl && normalizedTrack && usesSpeakerCropPreview(edits, normalizedTrack) && !letterboxPreview,
+    videoUrl &&
+      !compositePreview &&
+      normalizedTrack &&
+      usesSpeakerCropPreview(edits, normalizedTrack) &&
+      !letterboxPreview,
   )
   editsRef.current = edits
   trackRef.current = normalizedTrack
@@ -144,8 +153,8 @@ export function PreviewStage({
     setCanPlay(false)
     v.src = videoUrl
     if (b && (cropPreview || letterboxPreview)) b.src = videoUrl
-    v.currentTime = edits.trim.in / 1000
-  }, [videoUrl, edits.trim.in, cropPreview, letterboxPreview])
+    v.currentTime = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
+  }, [videoUrl, edits.trim.in, cropPreview, letterboxPreview, mediaOffsetMs])
 
   useEffect(() => {
     let raf = 0
@@ -158,15 +167,16 @@ export function PreviewStage({
       const letterbox = layoutUsesLetterboxBlurPreview(e.layout?.mode ?? 'speaker_follow')
       let src = e.trim.in
       if (v) {
-        src = v.currentTime * 1000
+        src = sourceMsFromVideo(v.currentTime, mediaOffsetMs)
         if (blur && Math.abs(blur.currentTime - v.currentTime) > 0.05) {
           blur.currentTime = v.currentTime
         }
         if (!v.paused) {
           const stepped = applyPlaybackTime(src, playbackEdits)
           if (Math.abs(stepped.sourceMs - src) > 5) {
-            v.currentTime = stepped.sourceMs / 1000
-            if (blur) blur.currentTime = stepped.sourceMs / 1000
+            const t = videoTimeFromSourceMs(stepped.sourceMs, mediaOffsetMs)
+            v.currentTime = t
+            if (blur) blur.currentTime = t
             src = stepped.sourceMs
           }
           if (stepped.atEnd) {
@@ -259,7 +269,12 @@ export function PreviewStage({
   const pos = brand.logoPosition ?? 'TR'
 
   return (
-    <div ref={wrapRef} className="absolute inset-0 flex items-center justify-center">
+    <div ref={wrapRef} className="absolute inset-0 flex flex-col items-center justify-center">
+      {compositePreview ? (
+        <p className="mb-2 max-w-md px-3 text-center text-xs text-muted-foreground">
+          This older clip&apos;s preview has captions and headline baked in. Edits apply on export.
+        </p>
+      ) : null}
       <div style={{ width: box.w || undefined, height: box.h || undefined }} className="relative overflow-hidden rounded-xl bg-black">
         {posterUrl && !canPlay ? (
           <img
@@ -347,7 +362,7 @@ export function PreviewStage({
         ) : (
           <div className="flex size-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">No video</div>
         )}
-        {(edits.broll || []).map((item) => {
+        {!compositePreview && (edits.broll || []).map((item) => {
           const media = brollMedia.find((m) => m.id === item.id)
           if (!media?.url) return null
           return (
@@ -362,7 +377,7 @@ export function PreviewStage({
             />
           )
         })}
-        {brandLogoUrl && brand.logoKey && (
+        {!compositePreview && brandLogoUrl && brand.logoKey && (
           <img
             src={brandLogoUrl}
             alt=""
@@ -377,7 +392,7 @@ export function PreviewStage({
             }}
           />
         )}
-        {edits.captions?.enabled !== false && (
+        {!compositePreview && edits.captions?.enabled !== false && (
           <CaptionOverlay
             words={captionWords}
             currentTimeSec={captionTimeSec}
@@ -386,6 +401,7 @@ export function PreviewStage({
             outputDurationSec={outputDurationFromEdits(previewEdits) / 1000}
           />
         )}
+        {!compositePreview ? (
         <ExportTemplateOverlay
           edits={edits as ClipEditsV2}
           boxWidth={box.w}
@@ -393,12 +409,18 @@ export function PreviewStage({
           channelDisplay={channelDisplay}
           chatPreviewEnabled={chatPreviewEnabled}
         />
+        ) : null}
       </div>
     </div>
   )
 }
 
-export function seekToOutputMs(video: HTMLVideoElement, edits: ClipEditsV2, outputMs: number) {
+export function seekToOutputMs(
+  video: HTMLVideoElement,
+  edits: ClipEditsV2,
+  outputMs: number,
+  mediaOffsetMs = 0,
+) {
   const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
   let acc = 0
   let target = edits.trim.in
@@ -410,5 +432,5 @@ export function seekToOutputMs(video: HTMLVideoElement, edits: ClipEditsV2, outp
     }
     acc += len
   }
-  video.currentTime = target / 1000
+  video.currentTime = videoTimeFromSourceMs(target, mediaOffsetMs)
 }

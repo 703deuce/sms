@@ -1,7 +1,9 @@
 /** Headline band layout constants + helpers (leaf — no export-template / layout-preview imports). */
 
-export const STREAM_HEADLINE_BAR_FRAC = 0.2
-export const STREAM_HEADLINE_FOOTER_FRAC = 0.28
+import geom from '@/lib/clips/overlay-geometry.json'
+
+export const STREAM_HEADLINE_BAR_FRAC = geom.exportBar.barFrac
+export const STREAM_HEADLINE_FOOTER_FRAC = geom.exportBar.footerFrac
 
 export const LAYOUT_HEADLINE_PREVIEW_FRAC = STREAM_HEADLINE_BAR_FRAC
 

@@ -25,6 +25,7 @@ REQUIRED_ENV_KEYS=(
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
+bash "${REPO_ROOT}/scripts/check-overlay-geometry.sh"
 GIT_COMMIT="$(git rev-parse "${REF}^{commit}" 2>/dev/null || echo "${REF}")"
 
 echo "[deploy-worker] archiving worker/ @ ${REF} (${GIT_COMMIT})"
@@ -187,7 +188,8 @@ docker exec clips-worker python3 -m pytest -q \\
   /app/tests/test_broll_ffmpeg.py \\
   /app/tests/test_audio_mix.py \\
   /app/tests/test_captions_ass_render.py \\
-  /app/tests/test_frame_sampler.py
+  /app/tests/test_frame_sampler.py \\
+  /app/tests/test_layers_spec.py
 
 echo "[deploy-worker] prune old clips-worker images (keep latest tag for docker run)"
 PREV_ID=\$(docker images clips-worker:latest --format '{{.ID}}' | head -1)

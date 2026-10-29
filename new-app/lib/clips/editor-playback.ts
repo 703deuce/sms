@@ -4,8 +4,12 @@ import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 export type CropTransform = { scale: number; translateX: number; translateY: number }
 
-export function sourceMsFromVideo(videoTimeSec: number): number {
-  return videoTimeSec * 1000
+export function sourceMsFromVideo(videoTimeSec: number, mediaOffsetMs = 0): number {
+  return videoTimeSec * 1000 + mediaOffsetMs
+}
+
+export function videoTimeFromSourceMs(sourceMs: number, mediaOffsetMs = 0): number {
+  return Math.max(0, (sourceMs - mediaOffsetMs) / 1000)
 }
 
 export function applyPlaybackTime(

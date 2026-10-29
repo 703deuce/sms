@@ -30,6 +30,23 @@ export function clampTrimToExtendedBounds(
   return { in: Math.round(tin), out: Math.round(tout) }
 }
 
+/** Also clamp trim handles to clean segment / composite media bounds when set. */
+export function clampTrimWithMediaBounds(
+  clipStartMs: number,
+  clipEndMs: number,
+  trim: { in: number; out: number },
+  mediaMinMs?: number,
+  mediaMaxMs?: number,
+): { in: number; out: number } {
+  let next = clampTrimToExtendedBounds(clipStartMs, clipEndMs, trim)
+  if (mediaMinMs != null) next = { ...next, in: Math.max(next.in, mediaMinMs) }
+  if (mediaMaxMs != null) next = { ...next, out: Math.min(next.out, mediaMaxMs) }
+  if (next.out - next.in < 500) {
+    return clampTrimToExtendedBounds(clipStartMs, clipEndMs, trim)
+  }
+  return next
+}
+
 export function expandedSourceCutMs(
   clipStartMs: number,
   clipEndMs: number,

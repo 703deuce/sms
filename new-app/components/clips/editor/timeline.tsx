@@ -5,7 +5,7 @@ import type { BrollItem } from '@/lib/clips/broll'
 import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { keepSegments, outputDurationMs, wordDisplayText } from '@/lib/clips/edits'
-import { clampTrimToExtendedBounds, extendedTrimLimits } from '@/lib/clips/trim-bounds'
+import { clampTrimToExtendedBounds, clampTrimWithMediaBounds, extendedTrimLimits } from '@/lib/clips/trim-bounds'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import type { SourceWord } from '@/lib/clips/source-words'
@@ -27,6 +27,8 @@ export function Timeline({
   onBrollChange,
   clipStartMs,
   clipEndMs,
+  mediaMinMs,
+  mediaMaxMs,
   onSplitLayout,
   onCutSection,
   onSetLayoutMode,
@@ -42,6 +44,8 @@ export function Timeline({
   onBrollChange?: (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => void
   clipStartMs: number
   clipEndMs: number
+  mediaMinMs?: number
+  mediaMaxMs?: number
   onSplitLayout?: () => void
   onCutSection?: () => void
   onSetLayoutMode?: (mode: ClipEditsV2['layout']['mode']) => void
@@ -50,7 +54,7 @@ export function Timeline({
   const span = Math.max(1, previewEdits.trim.out - previewEdits.trim.in)
   const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs)
   const clampTrim = (next: { in: number; out: number }) =>
-    clampTrimToExtendedBounds(clipStartMs, clipEndMs, next)
+    clampTrimWithMediaBounds(clipStartMs, clipEndMs, next, mediaMinMs, mediaMaxMs)
   const aiInPct = ((clipStartMs - previewEdits.trim.in) / span) * 100
   const aiOutPct = ((clipEndMs - previewEdits.trim.in) / span) * 100
   const outDur = outputDurationMs(previewEdits)

@@ -535,6 +535,213 @@ def burn_captions(
         )
 
 
+def _legacy_compose(
+    caption_src: Path,
+    caption_words: list[dict],
+    out_mp4: Path,
+    edits: dict,
+    ctx: dict,
+) -> tuple[Path, list[dict]]:
+    work_dir = ctx["work_dir"]
+    play_w = ctx["play_w"]
+    play_h = ctx["play_h"]
+    length_s = ctx["length_s"]
+    conn = ctx.get("conn")
+    project_id = ctx.get("project_id")
+    clip_id = ctx.get("clip_id")
+    clip_start_ms = ctx["clip_start_ms"]
+    clip_end_ms = ctx["clip_end_ms"]
+
+    layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+    if editor_mode_uses_stream_frame(layout_mode):
+        from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
+
+        layout_mp4 = work_dir / "stream_layout.mp4"
+        render_stream_clip_layout(caption_src, layout_mp4, edits, layout_mode, play_w=play_w, play_h=play_h)
+        caption_src = layout_mp4
+
+    tpl_censor = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
+    if tpl_censor and tpl_censor.get("profanityCensor"):
+        from clips_worker.profanity_censor import censor_clip_words_and_audio
+
+        caption_words, caption_src = censor_clip_words_and_audio(caption_src, caption_words, work_dir)
+
+    final = work_dir / "final.mp4"
+    cap_edits = edits.get("captions") or {}
+    if layout_mode == "fit_top" and isinstance(cap_edits, dict):
+        cap_edits = {**cap_edits, "marginVPct": 6, "position": "bottom"}
+    if int(cap_edits.get("enabled", True)):
+        burn_captions(caption_src, caption_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
+        caption_src = final
+    branded = work_dir / "branded.mp4"
+    brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else None
+    logo_key = brand.get("logoKey") if brand else None
+    if logo_key:
+        from clips_worker.brand_render import apply_brand_logo
+
+        apply_brand_logo(caption_src, branded, logo_key, brand, work_dir)
+        shutil.copy(branded, out_mp4)
+    elif int(cap_edits.get("enabled", True)):
+        shutil.copy(final, out_mp4)
+    else:
+        shutil.copy(caption_src, out_mp4)
+
+    ho = edits.get("hookOverlay") if isinstance(edits.get("hookOverlay"), dict) else None
+    if ho and ho.get("enabled") and str(ho.get("text") or "").strip():
+        from clips_worker.hook_overlay import apply_hook_overlay
+
+        hooked = work_dir / "hooked.mp4"
+        apply_hook_overlay(out_mp4, hooked, edits, play_w=play_w, play_h=play_h)
+        shutil.copy(hooked, out_mp4)
+
+    zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
+    if zoom_cfg.get("enabled"):
+        from clips_worker.zoom_render import (
+            apply_zoom,
+            build_zoom_keyframes,
+            clamp_zoom_intensity,
+            layout_switch_times_from_words,
+        )
+
+        emphasis = (
+            emphasis_indexes_for_zoom(caption_words, cap_edits)
+            if isinstance(cap_edits, dict)
+            else []
+        )
+        intensity = clamp_zoom_intensity(zoom_cfg.get("intensity"))
+        layout_switches = layout_switch_times_from_words(caption_words)
+        kf = build_zoom_keyframes(
+            caption_words,
+            list(emphasis or []),
+            length_s,
+            intensity,
+            layout_switches=layout_switches,
+        )
+        zoomed = work_dir / "zoomed.mp4"
+        apply_zoom(
+            out_mp4,
+            zoomed,
+            kf,
+            length_s,
+            play_w,
+            play_h,
+            facecam_only=bool(zoom_cfg.get("facecamOnly")),
+        )
+        shutil.copy(zoomed, out_mp4)
+
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
+    if tpl and not editor_mode_uses_stream_frame(layout_mode):
+        from clips_worker.clip_export_template import apply_export_template
+
+        templated = work_dir / "export_template.mp4"
+        apply_export_template(
+            out_mp4,
+            templated,
+            edits,
+            play_w=play_w,
+            play_h=play_h,
+            layout_mode=layout_mode,
+        )
+        shutil.copy(templated, out_mp4)
+
+    pb = cap_edits.get("progressBar") if isinstance(cap_edits.get("progressBar"), dict) else None
+    if pb and pb.get("enabled"):
+        from clips_worker.progress_bar import apply_progress_bar
+
+        pb_out = work_dir / "with_progress.mp4"
+        apply_progress_bar(
+            out_mp4,
+            pb_out,
+            str(pb.get("color") or "#FFFFFF"),
+            str(pb.get("position") or "bottom"),
+            int(pb.get("thickness") or 8),
+            play_w,
+            play_h,
+        )
+        shutil.copy(pb_out, out_mp4)
+
+    export_sfx_mode = str(edits.get("exportSfx") or "off")
+    if export_sfx_mode in ("subtle", "meme"):
+        from clips_worker.export_sfx import (
+            apply_export_sfx_mix,
+            build_export_sfx_events,
+            bundled_sfx_available,
+        )
+
+        if bundled_sfx_available():
+            zoom_kf: list[tuple[float, float]] = [(0.0, 1.0), (length_s, 1.0)]
+            emph: list[int] = []
+            if zoom_cfg.get("enabled"):
+                emph = (
+                    emphasis_indexes_for_zoom(caption_words, cap_edits)
+                    if isinstance(cap_edits, dict)
+                    else []
+                )
+                from clips_worker.zoom_render import (
+                    build_zoom_keyframes,
+                    clamp_zoom_intensity,
+                    layout_switch_times_from_words,
+                )
+
+                zoom_kf = build_zoom_keyframes(
+                    caption_words,
+                    list(emph or []),
+                    length_s,
+                    clamp_zoom_intensity(zoom_cfg.get("intensity")),
+                    layout_switches=layout_switch_times_from_words(caption_words),
+                )
+            elif isinstance(cap_edits, dict):
+                emph = emphasis_indexes_for_zoom(caption_words, cap_edits)
+            events = build_export_sfx_events(
+                export_sfx_mode,
+                duration_s=length_s,
+                zoom_keyframes=zoom_kf,
+                caption_words=caption_words,
+                emphasis=emph,
+            )
+            if events:
+                sfx_out = work_dir / "export_sfx.mp4"
+                apply_export_sfx_mix(out_mp4, sfx_out, events)
+                shutil.copy(sfx_out, out_mp4)
+
+    try_apply_chat_overlay(
+        out_mp4,
+        work_dir,
+        conn=conn,
+        project_id=project_id or "",
+        edits=edits,
+        clip_start_ms=clip_start_ms,
+        clip_end_ms=clip_end_ms,
+        layout_mode=layout_mode,
+        clip_id=clip_id,
+        play_w=play_w,
+        play_h=play_h,
+    )
+    return out_mp4, caption_words
+
+
+def compose_export(
+    caption_src: Path,
+    caption_words: list[dict],
+    out_mp4: Path,
+    edits: dict,
+    ctx: dict,
+) -> tuple[Path, list[dict]]:
+    from clips_worker.layers_spec import _stage_plan, legacy_from_layers, resolve_layers
+
+    layers = resolve_layers(edits)
+    burn_edits = legacy_from_layers(layers, edits)
+    plan = _stage_plan(burn_edits)
+    source = "v3" if edits.get("layersV") == 3 and isinstance(edits.get("layers"), list) else "derived"
+    layer_types = [{"type": l.get("type"), "enabled": l.get("enabled")} for l in layers if l.get("enabled")]
+    rid = ctx.get("render_id") or "unknown"
+    print(
+        f"[clipper:compositor] {json.dumps({'renderId': rid, 'v': 3, 'plan': plan, 'layers': layer_types, 'source': source})}",
+        flush=True,
+    )
+    return _legacy_compose(caption_src, caption_words, out_mp4, burn_edits, ctx)
+
+
 def render_edited_clip(
     clip_src: Path,
     out_mp4: Path,
@@ -753,171 +960,32 @@ def render_edited_clip(
     resolution = settings.get("exportResolution", "720p")
     play_w, play_h = aspect_size(aspect, resolution)
 
-    layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
-    if editor_mode_uses_stream_frame(layout_mode):
-        from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
-
-        layout_mp4 = work_dir / "stream_layout.mp4"
-        render_stream_clip_layout(caption_src, layout_mp4, edits, layout_mode, play_w=play_w, play_h=play_h)
-        caption_src = layout_mp4
-
-    tpl_censor = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
-    if tpl_censor and tpl_censor.get("profanityCensor"):
-        from clips_worker.profanity_censor import censor_clip_words_and_audio
-
-        caption_words, caption_src = censor_clip_words_and_audio(caption_src, caption_words, work_dir)
-
-    final = work_dir / "final.mp4"
-    cap_edits = edits.get("captions") or {}
-    if layout_mode == "fit_top" and isinstance(cap_edits, dict):
-        cap_edits = {**cap_edits, "marginVPct": 6, "position": "bottom"}
-    if int(cap_edits.get("enabled", True)):
-        burn_captions(caption_src, caption_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
-        caption_src = final
-    branded = work_dir / "branded.mp4"
-    brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else None
-    logo_key = brand.get("logoKey") if brand else None
-    if logo_key:
-        from clips_worker.brand_render import apply_brand_logo
-
-        apply_brand_logo(caption_src, branded, logo_key, brand, work_dir)
-        shutil.copy(branded, out_mp4)
-    elif int(cap_edits.get("enabled", True)):
-        shutil.copy(final, out_mp4)
+    ctx = {
+        "work_dir": work_dir,
+        "play_w": play_w,
+        "play_h": play_h,
+        "length_s": length_s,
+        "settings": settings,
+        "conn": conn,
+        "project_id": project_id,
+        "clip_id": clip_id,
+        "clip_start_ms": clip_start_ms,
+        "clip_end_ms": clip_end_ms,
+        "render_id": rid,
+        "stage": stage,
+    }
+    compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
+    if compositor_off:
+        out_mp4, caption_words = _legacy_compose(caption_src, caption_words, out_mp4, edits, ctx)
     else:
-        shutil.copy(caption_src, out_mp4)
-
-    ho = edits.get("hookOverlay") if isinstance(edits.get("hookOverlay"), dict) else None
-    if ho and ho.get("enabled") and str(ho.get("text") or "").strip():
-        from clips_worker.hook_overlay import apply_hook_overlay
-
-        hooked = work_dir / "hooked.mp4"
-        apply_hook_overlay(out_mp4, hooked, edits, play_w=play_w, play_h=play_h)
-        shutil.copy(hooked, out_mp4)
-
-    zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
-    if zoom_cfg.get("enabled"):
-        from clips_worker.zoom_render import (
-            apply_zoom,
-            build_zoom_keyframes,
-            clamp_zoom_intensity,
-            layout_switch_times_from_words,
-        )
-
-        emphasis = (
-            emphasis_indexes_for_zoom(caption_words, cap_edits)
-            if isinstance(cap_edits, dict)
-            else []
-        )
-        intensity = clamp_zoom_intensity(zoom_cfg.get("intensity"))
-        layout_switches = layout_switch_times_from_words(caption_words)
-        kf = build_zoom_keyframes(
-            caption_words,
-            list(emphasis or []),
-            length_s,
-            intensity,
-            layout_switches=layout_switches,
-        )
-        zoomed = work_dir / "zoomed.mp4"
-        apply_zoom(
-            out_mp4,
-            zoomed,
-            kf,
-            length_s,
-            play_w,
-            play_h,
-            facecam_only=bool(zoom_cfg.get("facecamOnly")),
-        )
-        shutil.copy(zoomed, out_mp4)
-
-    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
-    if tpl and not editor_mode_uses_stream_frame(layout_mode):
-        from clips_worker.clip_export_template import apply_export_template
-
-        templated = work_dir / "export_template.mp4"
-        apply_export_template(
-            out_mp4,
-            templated,
-            edits,
-            play_w=play_w,
-            play_h=play_h,
-            layout_mode=layout_mode,
-        )
-        shutil.copy(templated, out_mp4)
-
-    pb = cap_edits.get("progressBar") if isinstance(cap_edits.get("progressBar"), dict) else None
-    if pb and pb.get("enabled"):
-        from clips_worker.progress_bar import apply_progress_bar
-
-        pb_out = work_dir / "with_progress.mp4"
-        apply_progress_bar(
-            out_mp4,
-            pb_out,
-            str(pb.get("color") or "#FFFFFF"),
-            str(pb.get("position") or "bottom"),
-            int(pb.get("thickness") or 8),
-            play_w,
-            play_h,
-        )
-        shutil.copy(pb_out, out_mp4)
-
-    export_sfx_mode = str(edits.get("exportSfx") or "off")
-    if export_sfx_mode in ("subtle", "meme"):
-        from clips_worker.export_sfx import (
-            apply_export_sfx_mix,
-            build_export_sfx_events,
-            bundled_sfx_available,
-        )
-
-        if bundled_sfx_available():
-            zoom_kf: list[tuple[float, float]] = [(0.0, 1.0), (length_s, 1.0)]
-            emph: list[int] = []
-            if zoom_cfg.get("enabled"):
-                emph = (
-                    emphasis_indexes_for_zoom(caption_words, cap_edits)
-                    if isinstance(cap_edits, dict)
-                    else []
-                )
-                from clips_worker.zoom_render import (
-                    build_zoom_keyframes,
-                    clamp_zoom_intensity,
-                    layout_switch_times_from_words,
-                )
-
-                zoom_kf = build_zoom_keyframes(
-                    caption_words,
-                    list(emph or []),
-                    length_s,
-                    clamp_zoom_intensity(zoom_cfg.get("intensity")),
-                    layout_switches=layout_switch_times_from_words(caption_words),
-                )
-            elif isinstance(cap_edits, dict):
-                emph = emphasis_indexes_for_zoom(caption_words, cap_edits)
-            events = build_export_sfx_events(
-                export_sfx_mode,
-                duration_s=length_s,
-                zoom_keyframes=zoom_kf,
-                caption_words=caption_words,
-                emphasis=emph,
-            )
-            if events:
-                sfx_out = work_dir / "export_sfx.mp4"
-                apply_export_sfx_mix(out_mp4, sfx_out, events)
-                shutil.copy(sfx_out, out_mp4)
-
-    try_apply_chat_overlay(
-        out_mp4,
-        work_dir,
-        conn=conn,
-        project_id=project_id or "",
-        edits=edits,
-        clip_start_ms=clip_start_ms,
-        clip_end_ms=clip_end_ms,
-        layout_mode=layout_mode,
-        clip_id=clip_id,
-        play_w=play_w,
-        play_h=play_h,
-    )
+        try:
+            out_mp4, caption_words = compose_export(caption_src, caption_words, out_mp4, edits, ctx)
+        except Exception as e:
+            print(f"[clipper:compositor] fallback err={type(e).__name__}:{str(e)[:160]}", flush=True)
+            lw = work_dir / "legacy"
+            lw.mkdir(exist_ok=True)
+            legacy_ctx = {**ctx, "work_dir": lw}
+            out_mp4, caption_words = _legacy_compose(caption_src, caption_words, out_mp4, edits, legacy_ctx)
 
     stage("full_pipeline_done")
     return out_mp4, caption_words, build_srt(caption_words)

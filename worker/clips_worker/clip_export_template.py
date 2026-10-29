@@ -5,20 +5,21 @@ import json
 import subprocess
 from pathlib import Path
 
+from clips_worker.overlay_geometry import GEOM
 from clips_worker.stream_headline_ass import burn_stream_headline, format_headline_for_export
 
+_eb = GEOM["exportBar"]
+_plats = GEOM["platforms"]
 # Parity with new-app/lib/clips/export-template.ts
-_HEADLINE_TEXT_MIN_Y = {
-    "tiktok": 260,
-    "youtube_shorts": 380,
-    "instagram_reels": 250,
-}
-_BAR_FRAC = 0.20
-_FOOTER_FRAC = 0.28
-_SOURCE_INSET_Y = 12
-_FONT_LINK = 22
-_BADGE_W = 108
-_BADGE_H = 36
+_HEADLINE_TEXT_MIN_Y = dict(_eb.get("headlineTextMinY") or {})
+_BAR_FRAC = float(_eb["barFrac"])
+_FOOTER_FRAC = float(_eb["footerFrac"])
+_SOURCE_INSET_Y = int(_eb["sourceInsetY"])
+_FONT_LINK = int(_eb["fontLink"])
+_BADGE_W = int(_eb["badgeW"])
+_BADGE_H = int(_eb["badgeH"])
+_text_anchor_frac = float(_eb.get("textAnchorFrac") or 0.55)
+_text_min_pad_px = int(_eb.get("textMinPadPx") or 48)
 
 
 def _esc_drawtext(s: str) -> str:
@@ -65,8 +66,8 @@ def headline_layout(platform_id: str | None, play_w: int, play_h: int) -> tuple[
     lay = stream_headline_frame_layout(play_w, play_h)
     pid = (platform_id or "tiktok").strip()
     text_min = _scale_y(_HEADLINE_TEXT_MIN_Y.get(pid, 260), play_h)
-    bar_h = max(lay["bar_h"], text_min + _scale_y(48, play_h))
-    text_y = int(bar_h * 0.55)
+    bar_h = max(lay["bar_h"], text_min + _scale_y(_text_min_pad_px, play_h))
+    text_y = int(bar_h * _text_anchor_frac)
     return bar_h, text_y
 
 
@@ -81,13 +82,25 @@ def fit_16x9_rect(play_w: int, play_h: int) -> tuple[int, int, int, int]:
     return fg_x, fg_y, fg_w, fg_h
 
 
+def _hex_to_drawtext(color: str) -> str:
+    c = (color or "").strip()
+    if c.startswith("#") and len(c) >= 7:
+        return "0x" + c[1:7].upper()
+    if c.startswith("0x"):
+        return c
+    return "0x9146FF"
+
+
 def _platform_label(platform: str) -> tuple[str, str]:
     p = (platform or "").lower()
     if p == "kick":
-        return "KICK", "0x53FC18"
+        meta = _plats.get("kick") or {}
+        return str(meta.get("label") or "KICK"), _hex_to_drawtext(str(meta.get("color") or "#53FC18"))
     if p == "twitch":
-        return "TWITCH", "0x9146FF"
-    return "LIVE", "0x9146FF"
+        meta = _plats.get("twitch") or {}
+        return str(meta.get("label") or "TWITCH"), _hex_to_drawtext(str(meta.get("color") or "#9146FF"))
+    meta = _plats.get("default") or {}
+    return str(meta.get("label") or "LIVE"), _hex_to_drawtext(str(meta.get("color") or "#9146FF"))
 
 
 def export_template_overlays_active(tpl: dict | None) -> bool:

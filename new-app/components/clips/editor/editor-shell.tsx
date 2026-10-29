@@ -10,7 +10,7 @@ import { Loader2, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
-import type { CropShot } from '@/lib/server/clips/clip-detail'
+import type { CropShot, EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { CropTrack } from '@/lib/clips/crop-track'
 import { requestClipReframe } from '@/lib/clips-api'
 import { patchClip } from '@/lib/clips-api'
@@ -28,7 +28,7 @@ import { clipLayoutChip, clipWhySummary, type ClipAiMeta } from '@/lib/clips/cli
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { Timeline } from '@/components/clips/editor/timeline'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
-import { sourceMsAtOutput } from '@/lib/clips/editor-playback'
+import { sourceMsAtOutput, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
@@ -77,6 +77,7 @@ export function EditorShell({
   cropShots,
   cropTrack,
   videoUrl,
+  editorMedia = null,
   posterUrl = null,
   aiMeta,
   brollMedia: initialBrollMedia = [],
@@ -96,6 +97,7 @@ export function EditorShell({
   cropShots: CropShot[]
   cropTrack: CropTrack | null
   videoUrl: string | null
+  editorMedia?: EditorMedia | null
   posterUrl?: string | null
   aiMeta?: { brollIdeas?: string[] } | null
   brollMedia?: BrollMediaRow[]
@@ -403,17 +405,22 @@ export function EditorShell({
     setPlaying(tick.playing)
   }, [])
 
-  const seekSource = useCallback((sourceMs: number) => {
-    const v = videoRef.current
-    if (v) v.currentTime = sourceMs / 1000
-  }, [])
+  const mediaOffsetMs = editorMedia?.offsetMs ?? 0
+
+  const seekSource = useCallback(
+    (sourceMs: number) => {
+      const v = videoRef.current
+      if (v) v.currentTime = videoTimeFromSourceMs(sourceMs, mediaOffsetMs)
+    },
+    [mediaOffsetMs],
+  )
 
   const seekOutput = useCallback(
     (ms: number) => {
       const v = videoRef.current
-      if (v) seekToOutputMs(v, editorPreviewEdits(edits, editorWords), ms)
+      if (v) seekToOutputMs(v, editorPreviewEdits(edits, editorWords), ms, mediaOffsetMs)
     },
-    [edits, editorWords],
+    [edits, editorWords, mediaOffsetMs],
   )
 
   const togglePlay = async () => {
@@ -698,6 +705,7 @@ export function EditorShell({
               onTick={onTick}
               channelDisplay={streamChannelDisplay}
               chatPreviewEnabled={streamChatAvailable}
+              media={editorMedia}
             />
             {studioPreviewLoading ? (
               <div
@@ -744,6 +752,8 @@ export function EditorShell({
             onTrimChange={setTrim}
             clipStartMs={bounds.clipStartMs}
             clipEndMs={bounds.clipEndMs}
+            mediaMinMs={editorMedia?.minMs}
+            mediaMaxMs={editorMedia?.maxMs}
             onSplitLayout={() => splitLayoutAtSource(playheadSourceMs)}
             onCutSection={() => cutSectionAtSource(playheadSourceMs)}
             onSetLayoutMode={(mode) => {

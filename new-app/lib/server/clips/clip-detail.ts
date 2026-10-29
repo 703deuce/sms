@@ -9,6 +9,7 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
+import { layersFromLegacy } from '@/lib/clips/layers'
 
 export type CropShot = {
   startMs: number
@@ -19,6 +20,14 @@ export type CropShot = {
   w: number
   h: number
   scale?: number
+}
+
+export type EditorMedia = {
+  url: string
+  kind: 'proxy' | 'source' | 'segment' | 'composite'
+  offsetMs: number
+  minMs?: number
+  maxMs?: number
 }
 
 async function loadProjectTranscript(
@@ -105,6 +114,42 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
 
   const proxyKey = project.proxyKey
   const sourceKey = project.upload?.key
+  const previewKey = clip.previewKey
+  const sourceSegKey = clip.sourceSegKey
+  const sourceSegStartMs = clip.sourceSegStartMs
+  const sourceSegEndMs = clip.sourceSegEndMs
+
+  let media: EditorMedia | null = null
+  if (proxyKey) {
+    media = {
+      url: await createCachedSignedDownloadUrl(storage, proxyKey),
+      kind: 'proxy',
+      offsetMs: 0,
+    }
+  } else if (sourceKey) {
+    media = {
+      url: await createCachedSignedDownloadUrl(storage, sourceKey),
+      kind: 'source',
+      offsetMs: 0,
+    }
+  } else if (sourceSegKey && sourceSegStartMs != null) {
+    media = {
+      url: await createCachedSignedDownloadUrl(storage, sourceSegKey),
+      kind: 'segment',
+      offsetMs: sourceSegStartMs,
+      minMs: sourceSegStartMs,
+      maxMs: sourceSegEndMs ?? undefined,
+    }
+  } else if (previewKey) {
+    media = {
+      url: await createCachedSignedDownloadUrl(storage, previewKey),
+      kind: 'composite',
+      offsetMs: clip.startMs,
+      minMs: clip.startMs,
+      maxMs: clip.endMs,
+    }
+  }
+
   const brollMedia = edits.broll?.length ? await resolveBrollMedia(edits.broll) : []
   const aiMeta = (clip.aiMeta || null) as { brollIdeas?: string[] } | null
 
@@ -140,15 +185,17 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     },
     bounds,
     edits,
+    layers: layersFromLegacy(edits),
     words,
     crop: { shots, track: cropTrack },
     mediaUrls: {
-      preview: clip.previewKey ? await createCachedSignedDownloadUrl(storage, clip.previewKey) : null,
+      preview: previewKey ? await createCachedSignedDownloadUrl(storage, previewKey) : null,
       poster: clip.posterKey ? await createCachedSignedDownloadUrl(storage, clip.posterKey) : null,
       proxy: proxyKey ? await createCachedSignedDownloadUrl(storage, proxyKey) : null,
       source: sourceKey ? await createCachedSignedDownloadUrl(storage, sourceKey) : null,
       cropTrack: cropTrack ? await createCachedSignedDownloadUrl(storage, cropTrackKey) : null,
     },
+    media,
     project: { id: project.id, title: project.title, settings: project.settings, status: project.status },
     vodChat: streamVod
       ? {
