@@ -12,6 +12,29 @@ POP_TAG = r"\fscx85\fscy85\t(0,80,\fscx112\fscy112)\t(80,160,\fscx100\fscy100)"
 BOUNCE_TAG = r"\fscy70\t(0,90,\fscy118)\t(90,180,\fscy100)"
 GLOW_TAG = r"{\blur4\t(0,200,\blur9)\t(200,400,\blur4)}"
 
+_V3_FONTS = Path(__file__).resolve().parent.parent / "v3" / "fonts"
+_ASS_FONT_FILES: dict[str, Path] = {
+    "Poppins ExtraBold": _V3_FONTS / "Poppins-ExtraBold.ttf",
+    "Anton": _V3_FONTS / "Anton-Regular.ttf",
+    "Montserrat Black": _V3_FONTS / "Montserrat-Black.ttf",
+}
+_ASS_FONT_ALIASES: dict[str, str] = {
+    "Poppins": "Poppins ExtraBold",
+    "Anton": "Anton",
+    "Montserrat Black": "Montserrat Black",
+    "Montserrat": "Montserrat Black",
+}
+
+
+def resolve_ass_font_name(edits_captions: dict, preset: dict) -> str:
+    raw = str(edits_captions.get("font") or preset.get("font") or "Poppins").strip()
+    canonical = _ASS_FONT_ALIASES.get(raw, raw)
+    path = _ASS_FONT_FILES.get(canonical)
+    if path and path.is_file():
+        return canonical
+    print(f"[captions] font_fallback requested={raw!r} using=Poppins ExtraBold")
+    return "Poppins ExtraBold"
+
 
 def hex_to_ass(hex_color: str) -> str:
     h = hex_color.lstrip("#")
@@ -294,6 +317,8 @@ def build_ass(
         for k, v in inline.items():
             if v is not None:
                 preset[k] = v
+    if edits_captions.get("font"):
+        preset["font"] = edits_captions.get("font")
     emoji_by_word = edits_captions.get("emojiByWord") if isinstance(edits_captions.get("emojiByWord"), dict) else {}
     anim = (edits_captions.get("animation") or preset["animation"] or "none").lower()
     wpl = int(edits_captions.get("wordsPerLine") or preset["wordsPerLine"] or 2)
@@ -317,8 +342,7 @@ def build_ass(
     box_outline = hex_to_ass(box["color"]) if box else cap_out
     box_pad = int(box.get("padX", 8)) if box else cap_ow
 
-    font_base = str(preset.get("font") or "Poppins")
-    font_name = f"{font_base} ExtraBold" if " " not in font_base else font_base
+    font_name = resolve_ass_font_name(edits_captions, preset)
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {play_w}

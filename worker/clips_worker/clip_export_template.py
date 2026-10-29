@@ -106,6 +106,12 @@ def _headline_style_from_edits(edits: dict) -> dict:
     return headline_style_for_preset("export_bar")
 
 
+def _headline_uses_styled_box(style: dict) -> bool:
+    radius = int(style.get("radiusPx") or 0)
+    width_pct = int(style.get("widthPct") or 100)
+    return radius > 0 or width_pct < 100
+
+
 def _platform_label(platform: str) -> tuple[str, str]:
     p = (platform or "").lower()
     if p == "kick":
@@ -207,7 +213,20 @@ def apply_export_template(
     if headline_on and headline:
         style = _headline_style_from_edits(edits)
         box_fill = str(style.get("boxColor") or "#FFFFFF")
-        fc += f"{v1_label}drawbox=x=0:y=0:w={play_w}:h={bar_h}:color={box_fill}@1:t=fill[vout]"
+        if _headline_uses_styled_box(style):
+            from clips_worker.layer_sprites import headline_box_overlay_x, render_headline_box_png
+
+            width_pct = int(style.get("widthPct") or 100)
+            box_w = max(2, round(play_w * width_pct / 100.0))
+            box_x = headline_box_overlay_x(play_w, width_pct)
+            hl_png = video.parent / "export_headline_box.png"
+            render_headline_box_png(box_w, bar_h, box_fill, int(style.get("radiusPx") or 0), hl_png)
+            fc += (
+                f"movie={hl_png}:loop=0,setpts=N/FRAME_RATE/TB[hlbox];"
+                f"{v1_label}[hlbox]overlay=x={box_x}:y=0:shortest=1[vout]"
+            )
+        else:
+            fc += f"{v1_label}drawbox=x=0:y=0:w={play_w}:h={bar_h}:color={box_fill}@1:t=fill[vout]"
         vmap = "[vout]"
     else:
         vmap = v1_label
