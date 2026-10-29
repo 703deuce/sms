@@ -1,10 +1,12 @@
 'use client'
 
+import { Component, type ReactNode } from 'react'
 import { ChevronDown, History, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -28,7 +30,30 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
-export function EditorVersionsMenu({
+class VersionsMenuErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('[clipper:versions] menu_error', error)
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <Button type="button" size="sm" variant="outline" disabled data-testid="versions-menu-failed">
+          Versions unavailable
+        </Button>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function EditorVersionsMenuInner({
   enabled,
   versions,
   onSaveVersion,
@@ -55,20 +80,27 @@ export function EditorVersionsMenu({
         }
       />
       <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel className="flex items-center gap-2">
-          <History className="size-4" aria-hidden />
-          Edit versions
-        </DropdownMenuLabel>
-        <DropdownMenuItem onClick={onSaveVersion}>Save version…</DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="flex items-center gap-2">
+            <History className="size-4" aria-hidden />
+            Edit versions
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuItem onClick={onSaveVersion} data-testid="versions-save-item">
+          Save version…
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         {versions.length === 0 ? (
-          <DropdownMenuItem disabled>No saved versions yet</DropdownMenuItem>
+          <DropdownMenuItem disabled data-testid="versions-empty-item">
+            No saved versions yet
+          </DropdownMenuItem>
         ) : (
           versions.map((v) => (
             <DropdownMenuItem
               key={v.id}
               className="flex flex-col items-start gap-1 py-2"
               onClick={(e) => e.preventDefault()}
+              data-testid={`versions-row-${v.id}`}
             >
               <span className="text-sm font-medium">{v.name}</span>
               <span className="text-[10px] text-muted-foreground">{relativeTime(v.createdAt)}</span>
@@ -99,9 +131,26 @@ export function EditorVersionsMenu({
           ))
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onRestoreOriginal}>Restore original</DropdownMenuItem>
+        <DropdownMenuItem onClick={onRestoreOriginal} data-testid="versions-restore-original">
+          Restore original
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+export function EditorVersionsMenu(props: {
+  enabled: boolean
+  versions: EditVersionRow[]
+  onSaveVersion: () => void
+  onRestoreVersion: (id: string) => void
+  onDeleteVersion: (id: string) => void
+  onRestoreOriginal: () => void
+}) {
+  return (
+    <VersionsMenuErrorBoundary>
+      <EditorVersionsMenuInner {...props} />
+    </VersionsMenuErrorBoundary>
   )
 }
 

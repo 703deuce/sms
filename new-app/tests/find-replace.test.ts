@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { findMatches, replacementFixes } from '@/lib/clips/editor/find-replace'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
+import { editorPreviewCaptionClipWords } from '@/lib/clips/editor-preview-edits'
 import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 
@@ -25,5 +26,8 @@ describe('find-replace', () => {
     expect(merged.wordFixMeta?.['1']).toEqual({ s: 400, w: 'world.' })
     const caps = buildCaptionWords(words, merged)
     expect(caps.some((c) => c.text.includes('world'))).toBe(false)
+    const previewCaps = editorPreviewCaptionClipWords(words, merged)
+    expect(previewCaps.some((c) => String(c.w).includes('world'))).toBe(false)
+    expect(previewCaps.some((c) => String(c.w).includes('hi'))).toBe(true)
   })
 })

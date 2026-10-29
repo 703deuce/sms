@@ -153,7 +153,37 @@ export function PreviewStage({
     const el = videoRefInner.current
     if (!el) return
     ;(videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
-  }, [videoRef, cropPreview, letterboxPreview, aspect, videoUrl])
+  }, [videoRef, cropPreview, letterboxPreview, aspect, videoUrl, layoutMode])
+
+  useLayoutEffect(() => {
+    const v = videoRefInner.current
+    const b = blurRef.current
+    if (!v) return
+    if (centerCropPreview || letterboxPreview || fitTopPreview || speakerApproxPreview) {
+      if (!cropPreview) {
+        v.style.height = ''
+        v.style.width = ''
+        v.style.left = ''
+        v.style.top = ''
+        v.style.transform = ''
+      }
+    }
+    if (b && !cropPreview && !letterboxPreview && !fitTopPreview) {
+      b.style.display = 'none'
+      b.style.height = ''
+      b.style.width = ''
+      b.style.transform = ''
+      b.style.filter = ''
+    }
+  }, [
+    layoutMode,
+    centerCropPreview,
+    cropPreview,
+    letterboxPreview,
+    fitTopPreview,
+    speakerApproxPreview,
+    videoUrl,
+  ])
 
   useLayoutEffect(() => {
     if (testBoxSize && testBoxSize.w > 0 && testBoxSize.h > 0) {
@@ -187,7 +217,13 @@ export function PreviewStage({
     }
     setCanPlay(false)
     v.src = videoUrl
-    if (b && (cropPreview || letterboxPreview || fitTopPreview)) b.src = videoUrl
+    if (b) {
+      if (cropPreview || letterboxPreview || fitTopPreview) b.src = videoUrl
+      else {
+        b.removeAttribute('src')
+        b.load()
+      }
+    }
     wrapRef.current?.querySelectorAll('video').forEach((el) => {
       if (el !== v && el !== b) {
         el.src = videoUrl
@@ -422,6 +458,7 @@ export function PreviewStage({
                   aria-hidden
                 />
                 <video
+                  key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
                   data-testid="fit-top-main-video"
                   className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
@@ -545,6 +582,7 @@ export function PreviewStage({
           </>
         ) : centerCropPreview ? (
           <video
+            key={`preview-main-${layoutMode}`}
             ref={videoRefInner}
             data-testid="center-crop-video"
             className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
