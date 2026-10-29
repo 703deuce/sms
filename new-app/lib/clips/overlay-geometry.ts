@@ -1,6 +1,8 @@
 /** Shared overlay geometry — parity with worker/clips_worker/overlay_geometry.py */
 import geom from '@/lib/clips/overlay-geometry.json'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { headlineLayerPlacement } from '@/lib/clips/headline-band-layout'
+import { usesStreamHeadlineBandOverlay } from '@/lib/clips/stream-compose-layout'
 
 type BadgeGeom = {
   hPx?: number
@@ -35,7 +37,8 @@ export function headlineStyleForPreset(preset: string) {
   return styles[preset] ?? styles.stream_white_box ?? { textColor: '#000000', boxColor: '#FFFFFF', radiusPx: 0 }
 }
 
-export function badgePlacementForLayout(layoutMode: string): 'fit_top_band' | 'export_bar' {
+export function badgePlacementForLayout(layoutMode: string, edits?: ClipEditsV2): 'fit_top_band' | 'export_bar' {
+  if (edits && usesStreamHeadlineBandOverlay(edits)) return 'fit_top_band'
   return headlineLayerPlacement(layoutMode)
 }
 
@@ -50,6 +53,7 @@ export function badgeRect(
     videoY?: number
     videoH?: number
     badgeY?: number | null
+    anchorTopGap?: boolean
   },
 ): { x: number; y: number; w: number; h: number } {
   const badge = DEFAULTS.badge ?? {}
@@ -69,12 +73,16 @@ export function badgeRect(
   const videoY = opts?.videoY ?? 0
   const videoH = opts?.videoH ?? 0
   const badgeY = opts?.badgeY
+  const anchorTop = Boolean(opts?.anchorTopGap)
   let y: number
   if (placement === 'fit_top_band') {
-    y =
-      badgeY != null
-        ? badgeY
-        : Math.max(0, videoY + videoH - scalePx(40, playH) - h)
+    if (anchorTop) {
+      y = scalePx(Number(badge.overlayYPx ?? 24), playH)
+    } else if (badgeY != null) {
+      y = badgeY
+    } else {
+      y = Math.max(0, videoY + videoH - scalePx(40, playH) - h)
+    }
   } else {
     const insetY = scalePx(DEFAULTS.exportBar?.sourceInsetY ?? 12, playH)
     y = videoH ? videoY + videoH - h - insetY : playH - h - insetY

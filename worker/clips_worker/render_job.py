@@ -202,6 +202,23 @@ def load_render_context(conn, render_id: str) -> dict:
     return dict(row)
 
 
+def _clear_stale_project_render_error(conn, project_id: str) -> None:
+    if not project_id:
+        return
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE clip_projects
+            SET error = NULL,
+                status = CASE WHEN status = 'FAILED' THEN 'READY' ELSE status END,
+                "updatedAt" = NOW()
+            WHERE id = %s AND error IS NOT NULL
+            """,
+            (project_id,),
+        )
+    conn.commit()
+
+
 def mark_render(
     conn,
     render_id: str,
@@ -717,6 +734,7 @@ def _run_render_clip_job_body(
             length_mismatch=length_mismatch,
         )
         mark_render(conn, render_id, "READY", out_key, size, None, srt_key)
+        _clear_stale_project_render_error(conn, str(ctx.get("projectId") or ""))
         if render_meta.get("fit_fallback"):
             merge_job_fit_fallback_payload(conn, job["id"], str(render_meta.get("speakercrop_tail") or ""))
         post_progress(job["id"], {"jobStatus": "DONE", "stage": "ready", "progress": 100})

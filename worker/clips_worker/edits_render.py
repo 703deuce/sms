@@ -824,6 +824,7 @@ def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
                 video_y=lay["video_y"] if placement == "fit_top_band" else video_y,
                 video_h=lay["video_h"] if placement == "fit_top_band" else video_h,
                 badge_y=lay.get("badge_y"),
+                anchor_top_gap=placement == "fit_top_band",
             )
             sprites.append({"path": dest, "x": rect["x"], "y": rect["y"]})
     if sprites:

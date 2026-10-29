@@ -9,8 +9,9 @@ import {
 } from '@/lib/clips/export-template'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { resolveLayers, type BadgeLayer, type HeadlineLayer, type StickerLayer } from '@/lib/clips/layers'
-import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
+import { headlineStyleForPreset, badgePlacementForLayout } from '@/lib/clips/overlay-geometry'
 import { overlayLayout, STREAM_HEADLINE_TOP } from '@/lib/clips/stream-overlay-layout'
+import { usesStreamHeadlineBandOverlay, resolveStreamOverlayLayout } from '@/lib/clips/stream-compose-layout'
 import { PlatformBadgePreview } from '@/components/clips/editor/platform-badge'
 import { FollowStickerPreview } from '@/components/clips/editor/follow-sticker'
 import { headlinePreviewBoxMetrics,
@@ -83,6 +84,7 @@ export function ExportTemplateOverlay({
   if (!overlaysActive && !chatOn) return null
 
   const layoutMode = edits.layout?.mode ?? 'speaker_follow'
+  const streamOverlay = usesStreamHeadlineBandOverlay(edits)
   let layers: ReturnType<typeof resolveLayers> = []
   try {
     layers = resolveLayers(edits)
@@ -93,9 +95,9 @@ export function ExportTemplateOverlay({
   const stickerLayer = layers.find(
     (l): l is StickerLayer => l.type === 'sticker' && l.kind === 'follow_cta' && l.enabled,
   )
-  const useFitTop = layoutMode === 'fit_top'
+  const useFitTop = layoutMode === 'fit_top' || streamOverlay
   const headlineLayer = layers.find((l): l is HeadlineLayer => l.id === 'headline' && l.type === 'headline')
-  const headlineStyle = headlineLayer?.style ?? headlineStyleForPreset(useFitTop ? 'stream_white_box' : 'export_bar')
+  const headlineStyle = headlineLayer?.style ?? headlineStyleForPreset(useFitTop ? 'bold_news' : 'export_bar')
   const headlineOn = Boolean(
     tpl?.headlineBar?.enabled && (tpl.headlineBar.text?.trim() || tpl.suggestedHeadline),
   )
@@ -122,8 +124,8 @@ export function ExportTemplateOverlay({
   const chatOpacity = edits.chatOverlay?.opacity ?? 0.6
   const scaleY = boxHeight / 1920
 
-  if (useFitTop && (headlineOn || chatOn)) {
-    const lay = overlayLayout(Math.max(2, lines.length || 2))
+  if (useFitTop && (headlineOn || chatOn || badgeOn || badgeLogo || channelOn)) {
+    const lay = resolveStreamOverlayLayout(edits, Math.max(2, lines.length || 2))
     const sy = boxHeight / 1920
     const boxMetrics = headlinePreviewBoxMetrics(boxWidth, boxHeight, headlineStyle)
     const headlineText = formatHeadlineForExport(
@@ -167,13 +169,13 @@ export function ExportTemplateOverlay({
             showLabel={badgeOn}
             showLogo={badgeLogo}
             handle={channelLabel || badgeLayer?.handle}
-            placement="fit_top_band"
+            placement={badgePlacementForLayout(layoutMode, edits)}
+            layoutMode={layoutMode}
             boxWidth={boxWidth}
             boxHeight={boxHeight}
             videoY={lay.videoY}
             videoH={lay.videoH}
-            badgeY={lay.badgeY}
-            layoutMode={layoutMode}
+            badgeAnchorTopGap
           />
         ) : null}
         {stickerLayer ? (

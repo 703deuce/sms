@@ -6,17 +6,14 @@ import json
 from typing import Any
 from urllib.parse import urlparse
 
-from clips_worker.layout_router import editor_mode_uses_stream_frame
-
-_V3_EXTRA_LAYER_TYPES = frozenset({"sticker"})
-
-
-def _layout_mode(edits: dict) -> str:
-    return str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+from clips_worker.layout_router import editor_mode_uses_stream_frame, export_stream_headline_compose_active
 
 
 def _placement(edits: dict) -> str:
-    return "fit_top_band" if _layout_mode(edits) == "fit_top" else "export_bar"
+    mode = _layout_mode(edits)
+    if mode == "fit_top" or export_stream_headline_compose_active(edits):
+        return "fit_top_band"
+    return "export_bar"
 
 
 def _handle_from_url(url: str) -> str | None:
@@ -46,7 +43,8 @@ def _headline_layer(edits: dict) -> dict | None:
         "suggested": str(tpl.get("suggestedHeadline") or "") or None,
         "placement": placement,
         "style": {
-            "preset": "stream_white_box" if placement == "fit_top_band" else "export_bar",
+            "preset": "bold_news" if placement == "fit_top_band" else "export_bar",
+            "font": "Anton" if placement == "fit_top_band" else "Montserrat Black",
             "textColor": "#000000",
             "boxColor": "#FFFFFF",
             "radiusPx": 0,

@@ -175,7 +175,9 @@ function EditorVersionsMenuInner({
           size="sm"
           variant="secondary"
           className="h-7 text-xs"
-          onClick={() => {
+          onPointerDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
             setMenuOpen(false)
             onRestoreVersion(v.id)
           }}

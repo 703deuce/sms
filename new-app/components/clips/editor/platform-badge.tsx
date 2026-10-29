@@ -14,6 +14,7 @@ export function PlatformBadgePreview({
   videoY = 0,
   videoH = 0,
   badgeY,
+  badgeAnchorTopGap,
 }: {
   platform: 'twitch' | 'kick' | 'none'
   showLabel: boolean
@@ -26,6 +27,7 @@ export function PlatformBadgePreview({
   videoY?: number
   videoH?: number
   badgeY?: number
+  badgeAnchorTopGap?: boolean
 }) {
   if (platform === 'none' || (!showLabel && !showLogo)) return null
   const playW = 1080
@@ -39,6 +41,7 @@ export function PlatformBadgePreview({
     videoY,
     videoH,
     badgeY: badgeY ?? null,
+    anchorTopGap: badgeAnchorTopGap,
   })
   const sx = boxWidth / playW
   const sy = boxHeight / playH

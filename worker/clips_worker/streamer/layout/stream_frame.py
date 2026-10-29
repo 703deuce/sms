@@ -11,7 +11,6 @@ from clips_worker.stream_headline_ass import burn_stream_headline, format_headli
 from clips_worker.streamer.layout.stream_overlay_layout import (
     PLAY_H,
     PLAY_W,
-    _badge_offset_px,
     headline_box_height,
     overlay_layout,
 )
@@ -94,32 +93,15 @@ def _compose_layout(
     play_w: int = PLAY_W,
     play_h: int = PLAY_H,
 ) -> dict[str, int]:
-    """Rick fit_top overlay, or export-bar stack (editor preview for speaker_follow + headline)."""
+    """Rick fit_top overlay for stream compose (editor + export parity)."""
     mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow").strip()
     if mode == "fit_top":
         return overlay_layout(headline_line_count, play_w=play_w, play_h=play_h)
-    from clips_worker.clip_export_template import stream_headline_frame_layout
+    from clips_worker.layout_router import export_stream_headline_compose_active
 
-    frame = stream_headline_frame_layout(play_w, play_h)
-    bar_h = frame["bar_h"]
-    video_y = frame["video_y"]
-    video_h = frame["video_h"]
-    bottom_y = video_y + video_h
-    badge_y = bottom_y - int(round(_badge_offset_px * play_h / 1920))
-    return {
-        "play_w": play_w,
-        "play_h": play_h,
-        "top_blur_h": 0,
-        "headline_top": 0,
-        "headline_h": bar_h,
-        "video_y": video_y,
-        "video_h": video_h,
-        "bottom_y": bottom_y,
-        "bottom_h": max(0, play_h - bottom_y),
-        "chat_top": bottom_y,
-        "chat_h": max(0, play_h - bottom_y),
-        "badge_y": badge_y,
-    }
+    if export_stream_headline_compose_active(edits):
+        return overlay_layout(headline_line_count, play_w=play_w, play_h=play_h)
+    return overlay_layout(max(2, headline_line_count or 2), play_w=play_w, play_h=play_h)
 
 
 def _fit_top_base(

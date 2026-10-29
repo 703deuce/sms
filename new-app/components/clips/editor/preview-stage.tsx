@@ -14,6 +14,7 @@ import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video
 import {
   layoutUsesLetterboxBlurPreview,
 } from '@/lib/clips/layout-preview'
+import { usesStreamHeadlineBandOverlay, resolveStreamOverlayLayout } from '@/lib/clips/stream-compose-layout'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
 import { PreviewSafeZoneOverlay } from '@/components/clips/editor/preview-safe-zone'
@@ -111,7 +112,11 @@ export function PreviewStage({
   const mediaOffsetMs = media?.offsetMs ?? 0
   const compositePreview = media?.kind === 'composite'
   const letterboxPreview = !compositePreview && layoutUsesLetterboxBlurPreview(layoutMode)
-  const fitTopPreview = Boolean(!compositePreview && layoutMode === 'fit_top' && videoUrl)
+  const fitTopPreview = Boolean(
+    !compositePreview &&
+      videoUrl &&
+      (layoutMode === 'fit_top' || usesStreamHeadlineBandOverlay(edits as ClipEditsV2)),
+  )
   const centerCropPreview =
     Boolean(!compositePreview && videoUrl && (layoutMode === 'center_crop' || layoutMode === 'fill'))
   const normalizedTrack = cropTrack ? normalizeCropTrack(cropTrack) : null
@@ -130,7 +135,8 @@ export function PreviewStage({
       !compositePreview &&
       normalizedTrack &&
       usesSpeakerCropPreview(edits, normalizedTrack) &&
-      !letterboxPreview,
+      !letterboxPreview &&
+      !fitTopPreview,
   )
   editsRef.current = edits
   trackRef.current = normalizedTrack
@@ -385,7 +391,7 @@ export function PreviewStage({
     if (!fitTopPreview) return null
     try {
       const lines = fitTopHeadlineLines(edits)
-      return overlayLayout(Math.max(2, lines.length || 2))
+      return resolveStreamOverlayLayout(edits as ClipEditsV2, Math.max(2, lines.length || 2))
     } catch (err) {
       console.warn('[clipper:preview] fit_top_fallback', err)
       return null

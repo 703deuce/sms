@@ -101,8 +101,8 @@ def test_compose_layout_export_bar_has_no_top_gap():
     from clips_worker.streamer.layout.stream_frame import _compose_layout
 
     lay = _compose_layout(_stream_headline_edits(), 3, play_w=1080, play_h=1920)
-    assert lay["headline_top"] == 0
-    assert lay["video_y"] == lay["headline_h"]
+    assert lay["headline_top"] == 150
+    assert lay["video_y"] == lay["headline_top"] + lay["headline_h"]
 
 
 def test_fit_top_band_single_badge_when_v3_sprite(monkeypatch, tmp_path):

@@ -45,43 +45,44 @@ function ellipsizeLine(line: string, maxChars: number): string {
 /** Estimate max chars per line from box width and font size (Anton-ish width factor). */
 export function headlineCharsPerLineForBox(boxWidthPx: number, fontPx: number): number {
   const charW = Math.max(8, fontPx * 0.52)
-  return Math.max(MIN_CHARS_PER_LINE, Math.floor((boxWidthPx * 0.92) / charW))
+  return Math.max(MIN_CHARS_PER_LINE, Math.floor((boxWidthPx * 0.94) / charW))
 }
 
-/** Fit headline into box: shrink font / tighten wrap before ellipsis on the last line only. */
+/** Fit headline into box: shrink font / tighten wrap — never truncate words. */
 export function fitHeadlineDisplayForBox(
   formatted: string,
   boxWidthPx: number,
   boxHeightPx: number,
+  opts?: { maxBarFrac?: number },
 ): { lines: string[]; fontPx: number } {
   const trimmed = formatted.trim()
   if (!trimmed || boxWidthPx <= 0 || boxHeightPx <= 0) {
     return { lines: [], fontPx: 12 }
   }
+  const maxBarFrac = opts?.maxBarFrac ?? 0.24
   const emojiTail = (trimmed.match(/(\p{Extended_Pictographic}+)$/u) || [])[0] || ''
   const body = trimmed.slice(0, trimmed.length - emojiTail.length).trim()
   const emojis = [...emojiTail].slice(0, 2).join('')
 
   let fontPx = Math.max(
-    10,
-    Math.min((boxHeightPx * 0.52) / 3, boxHeightPx * 0.45),
+    12,
+    Math.min(boxHeightPx * 0.45, (boxHeightPx * 0.52) / 3),
   )
+  const maxBarH = boxHeightPx * maxBarFrac
   let lines: string[] = []
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
     const cpl = headlineCharsPerLineForBox(boxWidthPx, fontPx)
     lines = wrapHeadlineLinesFull(body, cpl, MAX_LINES)
+    const lineH = fontPx * 1.05
+    const totalH = lineH * Math.max(1, lines.length)
     const longest = Math.max(0, ...lines.map((l) => l.length))
-    if (longest <= cpl + 1 || fontPx <= 11) break
-    fontPx = Math.max(10, fontPx * 0.88)
+    if (totalH <= maxBarH && longest <= cpl + 1) break
+    fontPx = Math.max(12, fontPx * 0.9)
   }
-  const cplFinal = headlineCharsPerLineForBox(boxWidthPx, fontPx)
-  lines = lines.map((l, i) =>
-    i === lines.length - 1 ? ellipsizeLine(l, cplFinal + 2) : ellipsizeLine(l, cplFinal + 1),
-  )
   if (emojis && lines.length) {
     lines[lines.length - 1] = `${lines[lines.length - 1]} ${emojis}`.trim()
   }
-  return { lines, fontPx }
+  return { lines, fontPx: Math.round(fontPx) }
 }
 
 /** Fixed-scale preview when box metrics unknown (export dialog thumbnail). */

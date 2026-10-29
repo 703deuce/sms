@@ -119,6 +119,7 @@ def badge_rect(
     video_y: int = 0,
     video_h: int = 0,
     badge_y: int | None = None,
+    anchor_top_gap: bool = False,
 ) -> dict[str, int]:
     """Pixel rect {x,y,w,h} for platform badge overlay (parity with overlay-geometry.ts)."""
     badge = GEOM.get("badge") or _DEFAULTS.get("badge") or {}
@@ -138,11 +139,13 @@ def badge_rect(
     x = (play_w - w) // 2
     inset_y = _scale_px(int((GEOM.get("exportBar") or _DEFAULTS["exportBar"]).get("sourceInsetY") or 12), play_h)
     if placement == "fit_top_band":
-        y = (
-            badge_y
-            if badge_y is not None
-            else max(0, video_y + video_h - _scale_px(40, play_h) - h)
-        )
+        if anchor_top_gap:
+            overlay_y = int(badge.get("overlayYPx") or 24)
+            y = _scale_px(overlay_y, play_h)
+        elif badge_y is not None:
+            y = badge_y
+        else:
+            y = max(0, video_y + video_h - _scale_px(40, play_h) - h)
     else:
         y = video_y + video_h - h - inset_y if video_h else play_h - h - inset_y
     return {"x": x, "y": y, "w": w, "h": h}
