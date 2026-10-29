@@ -11,6 +11,7 @@ from clips_worker.stream_headline_ass import burn_stream_headline, format_headli
 from clips_worker.streamer.layout.stream_overlay_layout import (
     PLAY_H,
     PLAY_W,
+    _badge_offset_px,
     headline_box_height,
     overlay_layout,
 )
@@ -84,6 +85,41 @@ def render_fit_blur_stream(src: Path, dest: Path, *, play_w: int = PLAY_W, play_
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+
+def _compose_layout(
+    edits: dict,
+    headline_line_count: int,
+    *,
+    play_w: int = PLAY_W,
+    play_h: int = PLAY_H,
+) -> dict[str, int]:
+    """Rick fit_top overlay, or export-bar stack (editor preview for speaker_follow + headline)."""
+    mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow").strip()
+    if mode == "fit_top":
+        return overlay_layout(headline_line_count, play_w=play_w, play_h=play_h)
+    from clips_worker.clip_export_template import stream_headline_frame_layout
+
+    frame = stream_headline_frame_layout(play_w, play_h)
+    bar_h = frame["bar_h"]
+    video_y = frame["video_y"]
+    video_h = frame["video_h"]
+    bottom_y = video_y + video_h
+    badge_y = bottom_y - int(round(_badge_offset_px * play_h / 1920))
+    return {
+        "play_w": play_w,
+        "play_h": play_h,
+        "top_blur_h": 0,
+        "headline_top": 0,
+        "headline_h": bar_h,
+        "video_y": video_y,
+        "video_h": video_h,
+        "bottom_y": bottom_y,
+        "bottom_h": max(0, play_h - bottom_y),
+        "chat_top": bottom_y,
+        "chat_h": max(0, play_h - bottom_y),
+        "badge_y": badge_y,
+    }
 
 
 def _fit_top_base(
@@ -173,8 +209,14 @@ def _fit_top_band_layers(
             fit_top=True,
             text_color=str(style.get("textColor") or "#000000"),
             box_color=str(style.get("boxColor") or "#FFFFFF"),
+            headline_style=style,
         )
         current = hl
+    from clips_worker.clip_export_template import _v3_badge_sprite_will_render
+
+    if _v3_badge_sprite_will_render(edits):
+        badge_on = False
+        channel = ""
     if badge_on or channel:
         label, color = _platform_label(platform)
         badge_y = lay["badge_y"]
@@ -230,7 +272,7 @@ def render_fit_top_stream(
     play_h: int = PLAY_H,
 ) -> None:
     lines = _headline_lines_from_edits(edits)
-    lay = overlay_layout(max(2, len(lines) or 2), play_w=play_w, play_h=play_h)
+    lay = _compose_layout(edits, max(2, len(lines) or 2), play_w=play_w, play_h=play_h)
     dur = _probe_duration_s(src)
     vid_y = lay["video_y"]
     vid_h = lay["video_h"]
@@ -243,6 +285,12 @@ def render_fit_top_stream(
     if link_on:
         url = str((tpl.get("channelLink") or {}).get("url") or "")
         channel = url.rstrip("/").split("/")[-1].upper()[:32] if url else ""
+
+    from clips_worker.clip_export_template import _v3_badge_sprite_will_render
+
+    if _v3_badge_sprite_will_render(edits):
+        badge_on = False
+        channel = ""
 
     stage = dest.parent / "fit_top_stage.mp4"
     style = _headline_style_from_edits(edits)

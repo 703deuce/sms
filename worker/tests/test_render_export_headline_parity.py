@@ -95,3 +95,49 @@ def test_headline_ass_uses_anton_for_stream_yellow_style():
     assert "Style: Headline,Anton," in ass
     style_line = [ln for ln in ass.splitlines() if ln.startswith("Style: Headline,")][0]
     assert "Montserrat" not in style_line.split(",")[1]
+
+
+def test_compose_layout_export_bar_has_no_top_gap():
+    from clips_worker.streamer.layout.stream_frame import _compose_layout
+
+    lay = _compose_layout(_stream_headline_edits(), 3, play_w=1080, play_h=1920)
+    assert lay["headline_top"] == 0
+    assert lay["video_y"] == lay["headline_h"]
+
+
+def test_fit_top_band_single_badge_when_v3_sprite(monkeypatch, tmp_path):
+    from clips_worker.streamer.layout import stream_frame as sf
+
+    src = tmp_path / "in.mp4"
+    src.write_bytes(b"\x00")
+    dest = tmp_path / "out.mp4"
+    edits = _stream_headline_edits()
+    edits["layersV"] = 3
+    edits["layers"] = [
+        {
+            "id": "badge",
+            "type": "badge",
+            "enabled": True,
+            "platform": "twitch",
+            "showLabel": True,
+            "showLogo": True,
+        }
+    ]
+    legacy_drawtext: list[str] = []
+
+    def fake_check_call(cmd, *args, **kwargs):
+        joined = " ".join(str(x) for x in cmd)
+        if "drawtext" in joined and "TWITCH" in joined.upper():
+            legacy_drawtext.append(joined)
+
+    monkeypatch.setattr(sf.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(sf, "_fit_top_base", lambda *a, **k: dest.parent.joinpath("stage.mp4").write_bytes(b"x"))
+    monkeypatch.setattr(sf, "_probe_duration_s", lambda _v: 6.0)
+    monkeypatch.setattr(
+        sf,
+        "burn_stream_headline",
+        lambda video, out, *a, **k: out.write_bytes(b"x") or out,
+    )
+
+    sf.render_fit_top_stream(src, dest, edits, play_w=1080, play_h=1920)
+    assert legacy_drawtext == []
