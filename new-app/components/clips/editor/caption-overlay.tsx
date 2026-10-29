@@ -7,19 +7,20 @@ import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { wordKey } from '@/lib/clips/edits'
 import { activeCaptionWordIndex, captionEmojiForWord } from '@/lib/clips/caption-overlay-active'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
-import { resolvePreset, type CaptionPreset } from '@/lib/clips/caption-presets'
+import { resolveCaptionPreset, type CaptionPreset } from '@/lib/clips/caption-presets'
 import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 import { captionHighlightContrastText } from '@/lib/clips/caption-active-style'
-import { previewCaptionBottomPct } from '@/lib/clips/caption-safe-area'
+import { previewCaptionBottomPct, previewCaptionTopPct } from '@/lib/clips/caption-safe-area'
+import { captionFontStack, captionFontWeight, cssEmPerAssFontsize, previewCaptionStrokePx } from '@/lib/clips/caption-fonts'
+import { exportPixelSize } from '@/lib/clips/export-aspect'
 
 function positionStyle(position: string, marginVPct: number): React.CSSProperties | undefined {
-  if (position === 'top') return undefined
+  if (position === 'top') return { top: `${marginVPct}%` }
   if (position === 'middle') return undefined
   return { bottom: `${marginVPct}%` }
 }
 
 function positionClass(position: string) {
-  if (position === 'top') return 'top-[8%]'
   if (position === 'middle') return 'top-1/2 -translate-y-1/2'
   return ''
 }
@@ -46,12 +47,15 @@ export function CaptionOverlay({
   outputDurationSec?: number
 }) {
   const cap = edits.captions ?? {}
-  const preset = resolvePreset(cap.presetId)
+  const preset = resolveCaptionPreset(cap)
   const animation = (cap.animation || preset.animation) as string
   const wpl = cap.wordsPerLine ?? preset.wordsPerLine
   const caseMode = (cap.case || preset.case) as string
   const sizePct = cap.size ?? preset.sizePct
-  const fontSize = Math.max(12, (boxHeightPx * sizePct) / 100)
+  const exportPlayH = exportPixelSize(edits.aspectRatio ?? '9:16', '720p').height
+  const assScale = boxHeightPx > 0 ? boxHeightPx / exportPlayH : 1
+  const emRatio = cssEmPerAssFontsize(preset.font)
+  const fontSize = Math.max(12, (boxHeightPx * sizePct) / 100 * emRatio)
   const colors = cap.colors
   const emphasis = new Set(cap.emphasis ?? [])
 
@@ -79,9 +83,14 @@ export function CaptionOverlay({
   const progressPct = showProgress ? Math.min(100, (currentTimeSec / outputDurationSec) * 100) : 0
 
   const position = (cap.position || preset.position) as string
-  const marginVPct = previewCaptionBottomPct(cap, boxHeightPx)
-  const bottomStyle = positionStyle(position, marginVPct)
+  const marginVPct =
+    position === 'top'
+      ? previewCaptionTopPct(cap, exportPlayH)
+      : previewCaptionBottomPct(cap, exportPlayH)
+  const posStyle = positionStyle(position, marginVPct)
   const captionPosClass = positionClass(position)
+  const playW = exportPixelSize(edits.aspectRatio ?? '9:16', '720p').width
+  const inlinePad = `${Math.max((56 / playW) * 100, 8)}%`
   const emojiPosClass =
     position === 'top'
       ? 'top-[14%]'
@@ -130,11 +139,13 @@ export function CaptionOverlay({
         : null}
       {activeIdx >= 0 && lineWords.length ? (
     <div
-      className={`pointer-events-none absolute inset-x-2 z-[25] flex flex-wrap justify-center gap-1 text-center ${captionPosClass}`}
+      className={`pointer-events-none absolute inset-x-0 z-[25] flex flex-nowrap justify-center gap-1 text-center ${captionPosClass}`}
       style={{
-        fontFamily: preset.font,
-        fontWeight: preset.weight,
-        ...bottomStyle,
+        fontFamily: captionFontStack(preset.font),
+        fontWeight: captionFontWeight(preset.font, preset.weight),
+        paddingInline: inlinePad,
+        whiteSpace: 'nowrap',
+        ...posStyle,
       }}
     >
       {lineWords.map((w, i) => {
@@ -152,6 +163,7 @@ export function CaptionOverlay({
         const sentenceStart = caseMode === 'sentence' && isSentenceBoundary(prevWord)
         const text = formatCaptionWord(w.w, caseMode, sentenceStart) + (emoji && !hasEmojiMap ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
+        const scaledStroke = previewCaptionStrokePx(strokeW, boxHeightPx, exportPlayH)
         const inactiveColor = preset.slug === 'boxed' ? '#FFFFFF' : preset.primary
         const useFill =
           activeStyle === 'fill' || (activeStyle === 'color' && animation === 'karaoke' && active)
@@ -167,7 +179,11 @@ export function CaptionOverlay({
                 : activeColor
               : inactiveColor,
           WebkitTextStroke:
-            useHighlight && active ? undefined : strokeW ? `${strokeW}px ${preset.outline}` : undefined,
+            useHighlight && active ? undefined : scaledStroke ? `${scaledStroke}px ${preset.outline}` : undefined,
+          WebkitTextStrokeWidth:
+            useHighlight && active ? undefined : scaledStroke ? `${scaledStroke}px` : undefined,
+          WebkitTextStrokeColor:
+            useHighlight && active ? undefined : scaledStroke ? preset.outline : undefined,
           paintOrder: 'stroke fill',
           textShadow: preset.shadow ? `0 2px ${preset.shadow * 4}px rgba(0,0,0,.45)` : undefined,
           ['--cap-glow-color' as string]: preset.outline,
@@ -184,7 +200,7 @@ export function CaptionOverlay({
           padding: useHighlight
             ? '0.08em 0.25em'
             : preset.box && (active || isEmph) && activeStyle === 'color'
-              ? `${preset.box.padY}px ${preset.box.padX}px`
+              ? `${(preset.box.padY * assScale).toFixed(2)}px ${(preset.box.padX * assScale).toFixed(2)}px`
               : undefined,
           borderRadius: useHighlight ? '0.18em' : preset.box?.radius,
         }

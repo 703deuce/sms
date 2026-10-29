@@ -1,0 +1,107 @@
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
+import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
+
+export type LayoutOptionId = ClipEditsV2['layout']['mode']
+
+export type LayoutOption = {
+  id: LayoutOptionId
+  title: string
+  hint: string
+  needsFacecam?: boolean
+  beta?: boolean
+  exportPicker?: boolean
+  disabled?: boolean
+}
+
+export const LAYOUT_OPTIONS: LayoutOption[] = [
+  { id: 'auto', title: 'Auto variety', hint: 'Rotate layouts per clip rank.' },
+  { id: 'speaker_follow', title: 'Speaker follow', hint: 'Single active speaker.', exportPicker: true },
+  { id: 'dynamic', title: 'Dynamic', hint: 'Director picks per scene.' },
+  { id: 'split', title: 'Split (2-up)', hint: 'Stacked two-person layout.' },
+  { id: 'grid3', title: 'Grid 3-up', hint: 'Three speakers visible.' },
+  { id: 'grid4', title: 'Grid 4-up', hint: 'Four speakers visible.' },
+  {
+    id: 'fit_blur',
+    title: 'Fit with blur',
+    hint: 'Whole shot letterboxed with blurred fill (no headline band).',
+    exportPicker: true,
+  },
+  {
+    id: 'fit_top',
+    title: 'Headline + video',
+    hint: 'CLIPZ-style: white headline band, full-width 16:9 video, blur footer.',
+    exportPicker: true,
+  },
+  {
+    id: 'full_frame',
+    title: 'Full frame',
+    hint: 'Whole 16:9 shot with blurred fill (no headline band).',
+    exportPicker: true,
+  },
+  {
+    id: 'facecam_stack',
+    title: 'Facecam stack',
+    hint: 'Streamer layout: facecam panel over gameplay.',
+    needsFacecam: true,
+    exportPicker: true,
+  },
+  {
+    id: 'facecam_pip',
+    title: 'Facecam PiP',
+    hint: 'Gameplay full frame with facecam picture-in-picture.',
+    needsFacecam: true,
+    exportPicker: true,
+  },
+  { id: 'center_crop', title: 'Fill', hint: 'Full-frame crop fill.', exportPicker: true },
+  {
+    id: 'screen_pip',
+    title: 'Screen + camera',
+    hint: 'Screen share full frame with speaker PiP (when detected).',
+  },
+  { id: 'subject_follow', title: 'Subject follow', hint: 'ClipAnything — later', disabled: true },
+]
+
+export const EXPORT_LAYOUT_OPTIONS = LAYOUT_OPTIONS.filter((o) => o.exportPicker)
+
+export function layoutOptionDisabled(
+  opt: LayoutOption,
+  ctx: { facecamLayout: FacecamLayoutState | null; reframeV2Enabled: boolean; aiExtras: boolean },
+): boolean {
+  if (opt.disabled) return !ctx.aiExtras
+  if (isClipLayoutBeta(opt.id) && !ctx.reframeV2Enabled) return !ctx.aiExtras
+  if (opt.needsFacecam && !ctx.facecamLayout?.facecam) return true
+  return false
+}
+
+export function layoutPickPayload(
+  mode: LayoutOptionId,
+  facecamLayout: FacecamLayoutState | null,
+  edits: ClipEditsV2,
+): { mode: LayoutOptionId; facecam?: ClipEditsV2['layout']['facecam'] } {
+  const needsFacecamPick = mode === 'facecam_stack' || mode === 'facecam_pip'
+  if (needsFacecamPick && facecamLayout?.facecam) {
+    return {
+      mode,
+      facecam: {
+        box: facecamLayout.facecam,
+        gameplay: facecamLayout.gameplay ?? undefined,
+        split: facecamLayout.split ?? 0.4,
+        position: facecamLayout.facecamPosition ?? 'top',
+        pipCorner: edits.layout.facecam?.pipCorner ?? 'BR',
+      },
+    }
+  }
+  return { mode }
+}
+
+export function visibleLayoutOptions(ctx: {
+  reframeV2Enabled: boolean
+  aiExtras: boolean
+}): LayoutOption[] {
+  return LAYOUT_OPTIONS.filter((l) => {
+    if (l.disabled) return ctx.aiExtras
+    if (isClipLayoutBeta(l.id) && !ctx.reframeV2Enabled) return ctx.aiExtras
+    return true
+  })
+}

@@ -15,8 +15,9 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
-import { CAPTION_PRESETS, presetSlugToId, resolvePreset } from '@/lib/clips/caption-presets'
+import { CAPTION_PRESETS, presetSlugToId, resolveCaptionPreset, resolvePreset } from '@/lib/clips/caption-presets'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import { wordDisplayText } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { clipsFetch } from '@/lib/clips-api'
@@ -56,8 +57,12 @@ export function CaptionsPanel({
   const cap = edits.captions ?? {}
   const [editingWordI, setEditingWordI] = useState<number | null>(null)
   const presetId = cap.presetId || 'bold_pop'
-  const preset = resolvePreset(presetId)
+  const preset = resolveCaptionPreset(cap)
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>([])
+  const [vocabulary, setVocabulary] = useState<VocabEntry[]>([])
+  const [vocabAutoApply, setVocabAutoApply] = useState(true)
+  const [vocabFrom, setVocabFrom] = useState('')
+  const [vocabTo, setVocabTo] = useState('')
   const [saveOpen, setSaveOpen] = useState(false)
   const [saveName, setSaveName] = useState('')
 
@@ -72,7 +77,27 @@ export function CaptionsPanel({
 
   useEffect(() => {
     void loadCustom()
+    void clipsFetch<{ data: { vocabulary?: VocabEntry[]; vocabAutoApply?: boolean } }>(
+      '/api/clips/export-user-preferences',
+    )
+      .then((res) => {
+        setVocabulary(res.data?.vocabulary ?? [])
+        setVocabAutoApply(res.data?.vocabAutoApply !== false)
+      })
+      .catch(() => {})
   }, [loadCustom])
+
+  const persistVocab = async (next: VocabEntry[], autoApply = vocabAutoApply) => {
+    setVocabulary(next)
+    try {
+      await clipsFetch('/api/clips/export-user-preferences', {
+        method: 'PATCH',
+        body: JSON.stringify({ vocabulary: next, vocabAutoApply: autoApply }),
+      })
+    } catch {
+      toast.error('Could not save vocabulary')
+    }
+  }
 
   const patch = (partial: Partial<ClipEditsV2['captions']>) => onChange({ ...cap, ...partial })
   const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
@@ -179,6 +204,60 @@ export function CaptionsPanel({
           </div>
         </div>
       ) : null}
+
+      <div className="space-y-2 rounded-lg border border-border p-3" data-testid="caption-vocabulary">
+        <p className="text-xs font-medium text-muted-foreground">My vocabulary</p>
+        <ul className="space-y-1 text-sm">
+          {vocabulary.map((row) => (
+            <li key={row.from.toLowerCase()} className="flex items-center justify-between gap-2">
+              <span>
+                {row.from} → {row.to}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2"
+                onClick={() => void persistVocab(vocabulary.filter((v) => v.from !== row.from))}
+              >
+                ✕
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <div className="flex flex-wrap gap-2">
+          <Input className="h-8 flex-1" placeholder="From" value={vocabFrom} onChange={(e) => setVocabFrom(e.target.value)} />
+          <Input className="h-8 flex-1" placeholder="To" value={vocabTo} onChange={(e) => setVocabTo(e.target.value)} />
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              const from = vocabFrom.trim()
+              const to = vocabTo.trim()
+              if (!from || !to) return
+              void persistVocab([
+                ...vocabulary.filter((v) => v.from.toLowerCase() !== from.toLowerCase()),
+                { from, to },
+              ])
+              setVocabFrom('')
+              setVocabTo('')
+            }}
+          >
+            Add
+          </Button>
+        </div>
+        <label className="flex items-center gap-2 text-xs">
+          <Switch
+            checked={vocabAutoApply}
+            onCheckedChange={(v) => {
+              setVocabAutoApply(v)
+              void persistVocab(vocabulary, v)
+            }}
+          />
+          Auto-fix new clips with my vocabulary
+        </label>
+      </div>
 
       {customPresets?.length ? (
         <div className="space-y-2" data-testid="caption-custom-presets">

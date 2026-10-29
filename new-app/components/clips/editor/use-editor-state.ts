@@ -292,6 +292,27 @@ export function useEditorState(
     [setEdits, state.edits],
   )
 
+  const applyWordFixesBatch = useCallback(
+    (
+      fixes: Record<string, string>,
+      meta: Record<string, { s: number; w: string }>,
+      opts?: { vocabApplied?: string },
+    ) => {
+      const mergedFixes = { ...state.edits.wordFixes, ...fixes }
+      const mergedMeta = { ...(state.edits.wordFixMeta ?? {}), ...meta }
+      for (const k of Object.keys(mergedMeta)) {
+        if (!(k in mergedFixes)) delete mergedMeta[k]
+      }
+      setEdits({
+        ...state.edits,
+        wordFixes: mergedFixes,
+        wordFixMeta: Object.keys(mergedMeta).length ? mergedMeta : undefined,
+        ...(opts?.vocabApplied ? { vocabApplied: opts.vocabApplied } : {}),
+      })
+    },
+    [setEdits, state.edits],
+  )
+
   const restoreWord = useCallback(
     (word: SourceWord) => {
       const { startMs, endMs } = wordSourceMs(word)
@@ -678,6 +699,7 @@ export function useEditorState(
     applyCleanupCuts,
     setCutRanges,
     setWordFix,
+    applyWordFixesBatch,
     restoreWord,
     restoreCutRange,
     setLayoutMode,

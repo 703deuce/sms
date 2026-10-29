@@ -93,6 +93,8 @@ export type ClipEditsV2 = {
   loudnessLufs?: -14 | -16 | -18 | -23 | -24
   /** Loop quiet room tone under EDL gap segments on export. */
   roomTone?: boolean
+  /** Fingerprint of last auto-applied vocabulary (sha1 hex). */
+  vocabApplied?: string
   /** Editor / export preview aspect (defaults to 9:16). */
   aspectRatio?: ExportAspect
   /** Export-only overlays (headline bar, badge, channel link) — not burned into preview.mp4. */
@@ -186,7 +188,7 @@ function normalizeWordFixMeta(
   const o = raw as Record<string, unknown>
   const out: Record<string, WordFixMetaEntry> = {}
   for (const [k, v] of Object.entries(o)) {
-    if (!fixes[k]) continue
+    if (!(k in fixes)) continue
     if (!v || typeof v !== 'object') continue
     const row = v as { s?: unknown; w?: unknown }
     const s = Number(row.s)
@@ -242,6 +244,10 @@ function normalizeCaptions(
       typeof o.highlightColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.highlightColor)
         ? o.highlightColor
         : base.highlightColor,
+    presetConfig:
+      o.presetConfig && typeof o.presetConfig === 'object'
+        ? (o.presetConfig as Record<string, unknown>)
+        : base.presetConfig,
   }
 }
 
@@ -395,6 +401,8 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     layersV: typeof o.layersV === 'number' ? o.layersV : undefined,
     layers: o.layers,
     layersLegacyFp: typeof o.layersLegacyFp === 'string' ? o.layersLegacyFp : undefined,
+    vocabApplied:
+      typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
   }
 }
 
@@ -568,6 +576,7 @@ export function wordsAfterEdits(
       w.idx !== undefined && edits.wordFixes[String(w.idx)] !== undefined
         ? edits.wordFixes[String(w.idx)]
         : w.w
+    if (!String(text ?? '').trim()) continue
     out.push({
       w: text,
       s: outS / 1000,

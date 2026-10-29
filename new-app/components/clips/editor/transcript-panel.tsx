@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Scissors, Search, Undo2, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,9 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { speakerLabelForWord } from '@/lib/clips/crop-shots'
+import { findMatches, replacementFixes } from '@/lib/clips/editor/find-replace'
+import { clipsFetch } from '@/lib/clips-api'
+import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 export type TranscriptSelection = {
@@ -48,6 +51,8 @@ export function TranscriptPanel({
   selectionRef,
   clipStartMs,
   clipEndMs,
+  applyWordFixesBatch,
+  panelActive = true,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -64,11 +69,20 @@ export function TranscriptPanel({
   onRestoreCutRange?: (range: CutRange) => void
   onSaveAsNewClip?: (trimIn: number, trimOut: number) => void | Promise<void>
   selectionRef: React.MutableRefObject<TranscriptSelection | null>
+  applyWordFixesBatch?: (
+    fixes: Record<string, string>,
+    meta: Record<string, { s: number; w: string }>,
+  ) => void
+  panelActive?: boolean
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
   const [editingI, setEditingI] = useState<number | null>(null)
   const [search, setSearch] = useState('')
+  const [replace, setReplace] = useState('')
+  const [matchIndex, setMatchIndex] = useState(0)
+  const [addToVocab, setAddToVocab] = useState(false)
+  const findInputRef = useRef<HTMLInputElement>(null)
   const visible = useMemo(() => {
     if (!words.length) return []
     const bounds =
@@ -89,6 +103,55 @@ export function TranscriptPanel({
   }, [words, edits.trim.in, edits.trim.out, clipStartMs, clipEndMs])
   const spkOrder = useMemo(() => speakerOrder(visible, shots), [visible, shots])
   const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
+
+  const phraseMatches = useMemo(
+    () => (search.trim() ? findMatches(visible, edits, search) : []),
+    [visible, edits, search],
+  )
+  const safeMatchIndex = phraseMatches.length ? matchIndex % phraseMatches.length : 0
+  const activeMatch = phraseMatches[safeMatchIndex]
+
+  useEffect(() => {
+    setMatchIndex(0)
+  }, [search])
+
+  useEffect(() => {
+    if (!panelActive) return
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        findInputRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [panelActive])
+
+  const applyReplaceCurrent = () => {
+    if (!activeMatch || !applyWordFixesBatch) return
+    const { fixes, meta } = replacementFixes(visible, activeMatch, replace)
+    applyWordFixesBatch(fixes, meta)
+    if (addToVocab && search.trim() && replace.trim()) {
+      void clipsFetch('/api/clips/export-user-preferences', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          vocabulary: [{ from: search.trim(), to: replace.trim() }],
+        }),
+      }).catch(() => {})
+    }
+  }
+
+  const applyReplaceAll = () => {
+    if (!phraseMatches.length || !applyWordFixesBatch) return
+    let fixes: Record<string, string> = {}
+    let meta: Record<string, { s: number; w: string }> = {}
+    for (const m of phraseMatches) {
+      const rep = replacementFixes(visible, m, replace)
+      fixes = { ...fixes, ...rep.fixes }
+      meta = { ...meta, ...rep.meta }
+    }
+    applyWordFixesBatch(fixes, meta)
+  }
 
   useEffect(() => {
     selectionRef.current = {
@@ -168,8 +231,12 @@ export function TranscriptPanel({
     const cutRange = wordCutRange(w)
     const cut = Boolean(cutRange) || isWordCut(w, edits.cutRanges)
     const display = wordDisplayText(w, edits.wordFixes)
+    const hidden = String(w.i) in edits.wordFixes && edits.wordFixes[String(w.i)] === ''
     const isFiller = FILLER_RE.test(display.trim())
-    const highlight = search.trim().length > 1 && display.toLowerCase().includes(search.trim().toLowerCase())
+    const inPhraseMatch =
+      activeMatch?.wordIdx.includes(w.i) &&
+      phraseMatches.some((m) => m.wordIdx.includes(w.i))
+    const highlight = inPhraseMatch && search.trim().length > 0
     const muted = !inTrim(w)
     const selected =
       selStart !== null && selEnd !== null && startMs >= Math.min(selStart, selEnd) && endMs <= Math.max(selStart, selEnd)
@@ -231,10 +298,18 @@ export function TranscriptPanel({
           onDoubleClick={(e) => {
             e.preventDefault()
             if (muted) return
+            if (hidden) {
+              onWordFix(w.i, '')
+              return
+            }
             setEditingI(w.i)
           }}
         >
-          {highlight ? (
+          {hidden ? (
+            <span className="text-muted-foreground/40" title="Merged into previous word — double-click to restore">
+              ·
+            </span>
+          ) : highlight ? (
             <mark className="rounded bg-lane-caption/30 text-foreground">{display}</mark>
           ) : (
             display
@@ -263,17 +338,75 @@ export function TranscriptPanel({
       {wordsLoading ? (
         <p className="text-xs text-muted-foreground" role="status">Updating transcript for extended trim…</p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[140px] flex-1">
-          <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+      <div className="flex flex-col gap-2" data-testid="transcript-find-replace">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[120px] flex-1">
+            <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              ref={findInputRef}
+              className="h-8 pl-8"
+              placeholder="Find…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Find in transcript"
+            />
+          </div>
           <Input
-            className="h-8 pl-8"
-            placeholder="Search transcript…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 min-w-[120px] flex-1"
+            placeholder="Replace…"
+            value={replace}
+            onChange={(e) => setReplace(e.target.value)}
+            aria-label="Replace with"
           />
         </div>
-        <Badge variant="secondary" className="h-7 tabular-nums">{cutCount} cuts</Badge>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="tabular-nums text-muted-foreground">{phraseMatches.length} matches</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7"
+            disabled={!phraseMatches.length}
+            onClick={() => {
+              if (!phraseMatches.length) return
+              const next = (safeMatchIndex - 1 + phraseMatches.length) % phraseMatches.length
+              setMatchIndex(next)
+              onSeek(phraseMatches[next]!.startMs)
+            }}
+          >
+            ◀
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7"
+            disabled={!phraseMatches.length}
+            onClick={() => {
+              if (!phraseMatches.length) return
+              const next = (safeMatchIndex + 1) % phraseMatches.length
+              setMatchIndex(next)
+              onSeek(phraseMatches[next]!.startMs)
+            }}
+          >
+            ▶
+          </Button>
+          <Button type="button" size="sm" variant="secondary" className="h-7" disabled={!activeMatch} onClick={applyReplaceCurrent}>
+            Replace
+          </Button>
+          <Button type="button" size="sm" variant="secondary" className="h-7" disabled={!phraseMatches.length} onClick={applyReplaceAll}>
+            Replace all
+          </Button>
+          <label className="ml-auto flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={addToVocab}
+              onChange={(e) => setAddToVocab(e.target.checked)}
+            />
+            Add to my vocabulary
+          </label>
+        </div>
+        <Badge variant="secondary" className="h-7 w-fit tabular-nums">{cutCount} cuts</Badge>
       </div>
       {selStart !== null && selEnd !== null && (
         <div className="flex w-fit gap-1 rounded-lg border border-border bg-popover p-1 shadow-md">

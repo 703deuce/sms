@@ -9,6 +9,7 @@ import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edit
 vi.mock('next/font/google', () => ({
   Anton: () => ({ variable: '--font-clip-anton' }),
   Montserrat: () => ({ variable: '--font-clip-montserrat' }),
+  Poppins: () => ({ variable: '--font-poppins' }),
 }))
 
 vi.mock('@/components/shell/breadcrumb-context', () => ({
@@ -16,7 +17,15 @@ vi.mock('@/components/shell/breadcrumb-context', () => ({
 }))
 
 vi.mock('@/lib/clips-api', () => ({
-  clipsFetch: vi.fn(() => Promise.resolve({ channels: [] })),
+  clipsFetch: vi.fn((url: string) => {
+    if (String(url).includes('/versions')) {
+      return Promise.resolve({ items: [] })
+    }
+    if (String(url).includes('export-user-preferences')) {
+      return Promise.resolve({ data: {} })
+    }
+    return Promise.resolve({ channels: [] })
+  }),
   patchClip: vi.fn(() => Promise.resolve({})),
   deriveClipFromEditor: vi.fn(),
   requestClipReframe: vi.fn(),
@@ -83,20 +92,20 @@ describe('EditorShell render smoke', () => {
 
   it('mounts with regular fixture edits (useEditorState + shell imports resolve)', () => {
     const edits = loadFixture('regular.json')
-    expect(() =>
-      render(
-        <EditorShell
-          projectId="proj_test"
-          clipId="clip_test"
-          initialTitle="Test clip"
-          bounds={bounds}
-          initialEdits={edits}
-          words={[{ i: 0, w: 'hello', s: 0, e: 500 }]}
-          cropShots={[]}
-          cropTrack={null}
-          videoUrl={null}
-        />,
-      ),
-    ).not.toThrow()
+    const { getByTestId } = render(
+      <EditorShell
+        projectId="proj_test"
+        clipId="clip_test"
+        initialTitle="Test clip"
+        bounds={bounds}
+        initialEdits={edits}
+        words={[{ i: 0, w: 'hello', s: 0, e: 500 }]}
+        cropShots={[]}
+        cropTrack={null}
+        videoUrl={null}
+      />,
+    )
+    expect(getByTestId('layout-quick-picker')).toBeTruthy()
+    expect(getByTestId('versions-menu')).toBeTruthy()
   })
 })

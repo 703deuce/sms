@@ -9,6 +9,11 @@ import { Switch } from '@/components/ui/switch'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import {
+  layoutOptionDisabled,
+  layoutPickPayload,
+  visibleLayoutOptions,
+} from '@/lib/clips/layout-options'
 import { clipAspectRatios } from '@/lib/clips/settings'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import type { CropShot, FacecamLayoutState } from '@/lib/server/clips/clip-detail'
@@ -17,43 +22,6 @@ import {
   type ClipGapToolSettings,
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
-
-const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
-  { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
-  { id: 'speaker_follow', title: 'Speaker follow', desc: 'Single active speaker.' },
-  { id: 'dynamic', title: 'Dynamic', desc: 'Director picks per scene.' },
-  { id: 'split', title: 'Split (2-up)', desc: 'Stacked two-person layout.' },
-  { id: 'grid3', title: 'Grid 3-up', desc: 'Three speakers visible.' },
-  { id: 'grid4', title: 'Grid 4-up', desc: 'Four speakers visible.' },
-  { id: 'fit_blur', title: 'Fit with blur', desc: 'Whole shot letterboxed with blurred fill (no headline band).' },
-  {
-    id: 'fit_top',
-    title: 'Headline + video',
-    desc: 'CLIPZ-style: white headline band, full-width 16:9 video, blur footer.',
-  },
-  {
-    id: 'full_frame',
-    title: 'Full frame',
-    desc: 'Whole 16:9 shot with blurred fill (no headline band).',
-  },
-  {
-    id: 'facecam_stack',
-    title: 'Facecam stack',
-    desc: 'Streamer layout: facecam panel over gameplay (uses detected facecam box when available).',
-  },
-  {
-    id: 'facecam_pip',
-    title: 'Facecam PiP',
-    desc: 'Gameplay full frame with facecam picture-in-picture (corner from layout.facecam).',
-  },
-  { id: 'center_crop', title: 'Fill', desc: 'Full-frame crop fill.' },
-  {
-    id: 'screen_pip',
-    title: 'Screen + camera',
-    desc: 'Screen share full frame with speaker PiP (when detected).',
-  },
-  { id: 'subject_follow', title: 'Subject follow', desc: 'ClipAnything — later', disabled: true },
-]
 
 export function LayoutPanel({
   edits,
@@ -111,11 +79,7 @@ export function LayoutPanel({
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
   const aiExtras = clipEditorAiExtrasEnabled()
-  const layoutOptions = LAYOUTS.filter((l) => {
-    if (l.disabled) return aiExtras
-    if (isClipLayoutBeta(l.id) && !reframeV2Enabled) return aiExtras
-    return true
-  })
+  const layoutOptions = visibleLayoutOptions({ reframeV2Enabled, aiExtras })
   return (
     <div className="flex flex-col gap-4">
       {appliedLayoutLabel ? (
@@ -284,9 +248,7 @@ export function LayoutPanel({
       <div className="grid gap-2 sm:grid-cols-2">
         {layoutOptions.map((l) => {
           const beta = isClipLayoutBeta(l.id)
-          const needsFacecam = l.id === 'facecam_stack' || l.id === 'facecam_pip'
-          const disabled =
-            l.disabled || (beta && !reframeV2Enabled) || (needsFacecam && !facecamLayout?.facecam)
+          const disabled = layoutOptionDisabled(l, { facecamLayout, reframeV2Enabled, aiExtras })
           const selected = edits.layout.mode === l.id && !disabled
           return (
           <button
@@ -295,18 +257,8 @@ export function LayoutPanel({
             disabled={disabled}
             onClick={() => {
               if (disabled) return
-              const needsFacecamPick = l.id === 'facecam_stack' || l.id === 'facecam_pip'
-              if (needsFacecamPick && facecamLayout?.facecam) {
-                onMode(l.id, {
-                  box: facecamLayout.facecam,
-                  gameplay: facecamLayout.gameplay ?? undefined,
-                  split: facecamLayout.split ?? 0.4,
-                  position: facecamLayout.facecamPosition ?? 'top',
-                  pipCorner: edits.layout.facecam?.pipCorner ?? 'BR',
-                })
-              } else {
-                onMode(l.id)
-              }
+              const payload = layoutPickPayload(l.id, facecamLayout, edits)
+              onMode(payload.mode, payload.facecam)
             }}
             className={`rounded-lg border p-3 text-left ${
               selected ? 'border-primary ring-1 ring-primary' : 'border-border'
@@ -316,7 +268,7 @@ export function LayoutPanel({
               {l.title}
               {beta ? <span className="ml-1 text-xs font-normal text-muted-foreground">(beta)</span> : null}
             </p>
-            <p className="text-xs text-muted-foreground">{l.desc}</p>
+            <p className="text-xs text-muted-foreground">{l.hint}</p>
           </button>
           )
         })}

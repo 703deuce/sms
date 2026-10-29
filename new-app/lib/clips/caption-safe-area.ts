@@ -62,3 +62,11 @@ export function previewCaptionBottomPct(
 ): number {
   return clampCaptionExportStyle(captions, playH).marginVPct
 }
+
+/** Preview top offset % for alignment 8 — same clamped marginVPct as export. */
+export function previewCaptionTopPct(
+  captions: ClipEditsV2['captions'] | undefined,
+  playH = 1920,
+): number {
+  return clampCaptionExportStyle(captions, playH).marginVPct
+}

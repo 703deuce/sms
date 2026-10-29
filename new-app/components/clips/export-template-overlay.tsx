@@ -12,11 +12,11 @@ import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 import { overlayLayout, STREAM_HEADLINE_TOP } from '@/lib/clips/stream-overlay-layout'
 import { PlatformBadgePreview } from '@/components/clips/editor/platform-badge'
 import { FollowStickerPreview } from '@/components/clips/editor/follow-sticker'
-import {
-  headlinePreviewBoxMetrics,
+import { headlinePreviewBoxMetrics,
   headlinePreviewFontFamily,
   headlinePreviewFontWeight,
 } from '@/lib/clips/headline-preview-style'
+import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
 
 function ChatPreviewBox({
   lay,
@@ -100,7 +100,7 @@ export function ExportTemplateOverlay({
   const headline = formatHeadlineForExport(
     tpl?.headlineBar?.text?.trim() || tpl?.suggestedHeadline?.trim() || '',
   )
-  const lines = headline ? wrapHeadlineDisplayLines(headline) : []
+  const lines = useFitTop ? fitTopHeadlineLines(edits) : headline ? wrapHeadlineDisplayLines(headline) : []
   const badgeOn = Boolean(tpl?.platformBadge?.enabled || badgeLayer?.showLabel)
   const badgeLogo = Boolean(badgeLayer?.showLogo)
   const channelOn = Boolean(

@@ -1,6 +1,6 @@
 'use client'
 
-import { Anton, Montserrat } from 'next/font/google'
+import { Anton, Montserrat, Poppins } from 'next/font/google'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
@@ -56,10 +56,16 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
 import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
+import { EditorVersionsMenu, EditorLayoutMenu, type EditVersionRow } from '@/components/clips/editor/editor-versions-menu'
+import { normalizeEdits } from '@/lib/clips/edits'
+import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
 import type { StickerLayer } from '@/lib/clips/layers'
-
-const clipEditorAnton = Anton({ subsets: ['latin'], weight: '400', variable: '--font-clip-anton' })
-const clipEditorMontserrat = Montserrat({ subsets: ['latin'], weight: ['900'], variable: '--font-clip-montserrat' })
+import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
+import {
+  shouldApplyVocabulary,
+  vocabularyBatchFixes,
+  vocabularyFingerprint,
+} from '@/lib/clips/editor/vocab-apply'
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
@@ -70,6 +76,10 @@ import {
   vodChatToggleHint,
   type VodChatMeta,
 } from '@/lib/streamer/vod-chat-status'
+
+const clipEditorAnton = Anton({ subsets: ['latin'], weight: '400', variable: '--font-clip-anton' })
+const clipEditorMontserrat = Montserrat({ subsets: ['latin'], weight: ['900'], variable: '--font-clip-montserrat' })
+const clipEditorPoppins = Poppins({ subsets: ['latin'], weight: ['800'], variable: '--font-poppins' })
 
 function isEditableTarget(t: EventTarget | null) {
   if (!t || !(t instanceof HTMLElement)) return false
@@ -174,6 +184,7 @@ export function EditorShell({
     applyCleanupCuts,
     setCutRanges,
     setWordFix,
+    applyWordFixesBatch,
     restoreWord,
     restoreCutRange,
     setLayoutMode,
@@ -320,6 +331,138 @@ export function EditorShell({
   }, [])
 
   const { words: editorWords, wordsLoading } = useEditorWords(clipId, words, bounds, edits.trim)
+  const [versionsEnabled, setVersionsEnabled] = useState(true)
+  const [editVersions, setEditVersions] = useState<EditVersionRow[]>([])
+  const vocabMountRef = useRef(false)
+
+  useEffect(() => {
+    void clipsFetch<{ items: EditVersionRow[] } | { code: string }>(`/api/clips/clips/${clipId}/versions`)
+      .then((data) => {
+        if (data && 'code' in data && data.code === 'VERSIONS_UNAVAILABLE') {
+          setVersionsEnabled(false)
+          return
+        }
+        if (data && 'items' in data) setEditVersions(data.items)
+      })
+      .catch(() => setVersionsEnabled(false))
+  }, [clipId])
+
+  useEffect(() => {
+    if (vocabMountRef.current || !editorWords.length) return
+    vocabMountRef.current = true
+    void (async () => {
+      try {
+        const res = await clipsFetch<{ data: { vocabulary?: VocabEntry[]; vocabAutoApply?: boolean } }>(
+          '/api/clips/export-user-preferences',
+        )
+        const vocabulary = res.data?.vocabulary ?? []
+        if (!vocabulary.length) return
+        const fp = vocabularyFingerprint(vocabulary)
+        if (!shouldApplyVocabulary(res.data?.vocabAutoApply, edits.vocabApplied, fp)) return
+        const batch = vocabularyBatchFixes(editorWords, edits, vocabulary)
+        if (!batch.count) {
+          applyWordFixesBatch({}, {}, { vocabApplied: fp })
+          return
+        }
+        const prevEdits = edits
+        applyWordFixesBatch(batch.fixes, batch.meta, { vocabApplied: fp })
+        logEditorDecision('vocab_apply', { n: batch.count })
+        toast.success(`Applied ${batch.count} vocabulary fix${batch.count === 1 ? '' : 'es'}`, {
+          action: { label: 'Undo', onClick: () => setEdits(prevEdits) },
+        })
+      } catch {
+        console.warn('[clipper:vocab] prefs_fail')
+      }
+    })()
+  }, [applyWordFixesBatch, clipId, editorWords, edits, setEdits])
+
+  const refreshVersions = useCallback(async () => {
+    if (!versionsEnabled) return
+    try {
+      const data = await clipsFetch<{ items: EditVersionRow[] }>(`/api/clips/clips/${clipId}/versions`)
+      setEditVersions(data.items)
+    } catch {
+      /* ignore */
+    }
+  }, [clipId, versionsEnabled])
+
+  const saveEditVersion = useCallback(async () => {
+    const name = window.prompt('Version name', 'My version')?.trim()
+    if (!name) return
+    try {
+      await clipsFetch(`/api/clips/clips/${clipId}/versions`, {
+        method: 'POST',
+        body: JSON.stringify({ name, kind: 'manual', edits }),
+      })
+      logEditorDecision('version_save', { kind: 'manual' })
+      await refreshVersions()
+      toast.success('Version saved')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save version')
+    }
+  }, [clipId, edits, refreshVersions])
+
+  const restoreEditVersion = useCallback(
+    async (versionId: string) => {
+      const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      try {
+        await clipsFetch(`/api/clips/clips/${clipId}/versions`, {
+          method: 'POST',
+          body: JSON.stringify({
+            name: `Before restore · ${stamp}`,
+            kind: 'auto',
+            edits,
+          }),
+        })
+      } catch {
+        toast.message("Couldn't save a backup first — use Undo to go back")
+      }
+      try {
+        const row = await clipsFetch<{ edits: ClipEditsV2 }>(`/api/clips/clips/${clipId}/versions/${versionId}`)
+        setEdits(normalizeEdits(row.edits, bounds))
+        logEditorDecision('version_restore', { kind: 'manual' })
+        toast.success('Version restored')
+        await refreshVersions()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Restore failed')
+      }
+    },
+    [bounds, clipId, edits, refreshVersions, setEdits],
+  )
+
+  const deleteEditVersion = useCallback(
+    async (versionId: string) => {
+      try {
+        await clipsFetch(`/api/clips/clips/${clipId}/versions/${versionId}`, { method: 'DELETE' })
+        await refreshVersions()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed')
+      }
+    },
+    [clipId, refreshVersions],
+  )
+
+  const restoreOriginalEdits = useCallback(async () => {
+    const original = editVersions.find((v) => v.kind === 'original')
+    if (original) {
+      await restoreEditVersion(original.id)
+      logEditorDecision('version_restore', { kind: 'original' })
+      return
+    }
+    setEdits(
+      normalizeEdits(
+        {
+          ...edits,
+          trim: { in: bounds.clipStartMs, out: bounds.clipEndMs },
+          cutRanges: [],
+          wordFixes: {},
+          wordFixMeta: undefined,
+        },
+        bounds,
+      ),
+    )
+    toast.message('Original was not saved for this clip; reset cuts and trim only')
+  }, [bounds, editVersions, edits, restoreEditVersion, setEdits])
 
   const audioNorm = useMemo(() => normalizeAudioEdits(edits.audio), [edits.audio])
   const studioSound = audioNorm.studioSound
@@ -364,11 +507,26 @@ export function EditorShell({
   )
 
   const onLayoutMode = useCallback(
-    (mode: ClipEditsV2['layout']['mode'], facecam?: ClipEditsV2['layout']['facecam']) => {
-      logEditorDecision('layout', { clipId, mode, reason: 'layout_panel' })
+    (
+      mode: ClipEditsV2['layout']['mode'],
+      facecam?: ClipEditsV2['layout']['facecam'],
+      opts?: { reason?: 'layout_panel' | 'quick_picker' | 'export' },
+    ) => {
+      logEditorDecision('layout', {
+        clipId,
+        mode,
+        reason: opts?.reason ?? 'layout_panel',
+      })
       setLayoutMode(mode, facecam)
     },
     [clipId, setLayoutMode],
+  )
+
+  const onLayoutPick = useCallback(
+    (mode: ClipEditsV2['layout']['mode'], facecam?: ClipEditsV2['layout']['facecam']) => {
+      onLayoutMode(mode, facecam, { reason: 'quick_picker' })
+    },
+    [onLayoutMode],
   )
 
   const studioGenId = studioSound?.enabled && studioSound.generationId ? studioSound.generationId : null
@@ -726,6 +884,7 @@ export function EditorShell({
           onAddCut={applyCutRange}
           onSaveAsNewClip={handleDeriveClip}
           onWordFix={setWordFix}
+          applyWordFixesBatch={applyWordFixesBatch}
           onRestoreWord={restoreWord}
           onRestoreCutRange={restoreCutRange}
           onExtendTrim={(ms) => {
@@ -790,6 +949,14 @@ export function EditorShell({
       </div>
       <div className={panel === 'layers' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layers'}>
         <EditorPanelErrorBoundary label="Layers">
+          <LayoutQuickPicker
+            value={edits.layout.mode}
+            edits={edits}
+            facecamLayout={facecamLayout}
+            reframeV2Enabled={reframeV2Enabled}
+            onPick={onLayoutPick}
+            className="mb-4"
+          />
           <LayersPanel
             clipId={clipId}
             edits={edits}
@@ -856,6 +1023,7 @@ export function EditorShell({
         'flex h-[calc(100dvh-3.5rem)] max-w-[100vw] flex-col overflow-x-hidden bg-background',
         clipEditorAnton.variable,
         clipEditorMontserrat.variable,
+        clipEditorPoppins.variable,
       )}
     >
       <EditorTopBar
@@ -872,6 +1040,27 @@ export function EditorShell({
           onRetrySave={() => {
             void flushSave()
           }}
+          layoutSlot={
+            <EditorLayoutMenu>
+              <LayoutQuickPicker
+                value={edits.layout.mode}
+                edits={edits}
+                facecamLayout={facecamLayout}
+                reframeV2Enabled={reframeV2Enabled}
+                onPick={onLayoutPick}
+              />
+            </EditorLayoutMenu>
+          }
+          versionsSlot={
+            <EditorVersionsMenu
+              enabled={versionsEnabled}
+              versions={editVersions}
+              onSaveVersion={() => void saveEditVersion()}
+              onRestoreVersion={(id) => void restoreEditVersion(id)}
+              onDeleteVersion={(id) => void deleteEditVersion(id)}
+              onRestoreOriginal={() => void restoreOriginalEdits()}
+            />
+          }
         />
       <ClipFillerReview
         clipId={clipId}
@@ -1088,7 +1277,14 @@ export function EditorShell({
         edits={edits}
         dubs={dubs}
         layoutMode={edits.layout.mode}
-        onLayoutModeChange={onLayoutMode}
+        onLayoutModeChange={(mode, facecam) => onLayoutMode(mode, facecam, { reason: 'export' })}
+        facecamLayout={facecamLayout}
+        reframeV2Enabled={reframeV2Enabled}
+        exportSurfaceClassName={cn(
+          clipEditorAnton.variable,
+          clipEditorMontserrat.variable,
+          clipEditorPoppins.variable,
+        )}
         platform={
           (aiMeta as { streamer?: { platform?: string } } | null)?.streamer?.platform === 'kick'
             ? 'kick'

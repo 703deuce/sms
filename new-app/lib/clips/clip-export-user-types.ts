@@ -1,9 +1,13 @@
 import type { ExportDialogPreferences } from '@/lib/clips/export-preferences'
 import { defaultExportDialogPreferences } from '@/lib/clips/export-preferences'
 
+export type VocabEntry = { from: string; to: string }
+
 export type ClipExportUserPreferences = ExportDialogPreferences & {
   defaultAspect?: '9:16' | '4:5' | '1:1' | '16:9'
   defaultResolution?: '720p' | '1080p'
+  vocabulary?: VocabEntry[]
+  vocabAutoApply?: boolean
 }
 
 export type ClipUserStreamerChannelRow = {
@@ -11,6 +15,24 @@ export type ClipUserStreamerChannelRow = {
   platform: 'twitch' | 'kick'
   label: string | null
   url: string
+}
+
+export function mergeVocabulary(raw: unknown): VocabEntry[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const seen = new Set<string>()
+  const out: VocabEntry[] = []
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue
+    const from = String((row as { from?: unknown }).from ?? '').trim()
+    const to = String((row as { to?: unknown }).to ?? '').trim()
+    if (from.length < 1 || from.length > 60 || to.length < 1 || to.length > 60) continue
+    const key = from.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ from, to })
+    if (out.length >= 200) break
+  }
+  return out.length ? out : undefined
 }
 
 export function mergeClipExportUserPrefs(raw: unknown): ClipExportUserPreferences {
@@ -31,5 +53,7 @@ export function mergeClipExportUserPrefs(raw: unknown): ClipExportUserPreference
     defaultAspect:
       aspect === '9:16' || aspect === '4:5' || aspect === '1:1' || aspect === '16:9' ? aspect : undefined,
     defaultResolution: res === '720p' || res === '1080p' ? res : undefined,
+    vocabulary: mergeVocabulary(o.vocabulary) ?? base.vocabulary,
+    vocabAutoApply: typeof o.vocabAutoApply === 'boolean' ? o.vocabAutoApply : base.vocabAutoApply ?? true,
   }
 }

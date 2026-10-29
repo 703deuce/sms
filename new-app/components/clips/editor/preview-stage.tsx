@@ -12,9 +12,7 @@ import { shotAt } from '@/lib/clips/crop-track'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
 import {
-  LAYOUT_HEADLINE_PREVIEW_FRAC,
   layoutUsesLetterboxBlurPreview,
-  layoutReservesHeadlineBand,
 } from '@/lib/clips/layout-preview'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
@@ -25,6 +23,8 @@ import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTim
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
+import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
+import { overlayLayout } from '@/lib/clips/stream-overlay-layout'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
@@ -79,6 +79,7 @@ export function PreviewStage({
   safeZoneVisible = false,
   onStickerMove,
   onPipCornerChange,
+  testBoxSize,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -97,6 +98,8 @@ export function PreviewStage({
   safeZoneVisible?: boolean
   onStickerMove?: (x: number, y: number) => void
   onPipCornerChange?: (corner: 'TL' | 'TR' | 'BL' | 'BR') => void
+  /** Test-only fixed preview box (production never passes). */
+  testBoxSize?: { w: number; h: number }
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -108,9 +111,20 @@ export function PreviewStage({
   const mediaOffsetMs = media?.offsetMs ?? 0
   const compositePreview = media?.kind === 'composite'
   const letterboxPreview = !compositePreview && layoutUsesLetterboxBlurPreview(layoutMode)
-  const headlineBandPreview = !compositePreview && layoutReservesHeadlineBand(layoutMode)
-  const headlineBandPct = headlineBandPreview ? LAYOUT_HEADLINE_PREVIEW_FRAC * 100 : 0
+  const fitTopPreview = Boolean(!compositePreview && layoutMode === 'fit_top' && videoUrl)
+  const centerCropPreview =
+    Boolean(!compositePreview && videoUrl && (layoutMode === 'center_crop' || layoutMode === 'fill'))
   const normalizedTrack = cropTrack ? normalizeCropTrack(cropTrack) : null
+  const speakerApproxPreview = Boolean(
+    videoUrl &&
+      !compositePreview &&
+      !letterboxPreview &&
+      !fitTopPreview &&
+      !centerCropPreview &&
+      !normalizedTrack &&
+      (layoutMode === 'speaker_follow' || layoutMode === 'auto'),
+  )
+  const previewFallbackLogged = useRef(false)
   const cropPreview = Boolean(
     videoUrl &&
       !compositePreview &&
@@ -142,6 +156,11 @@ export function PreviewStage({
   }, [videoRef, cropPreview, letterboxPreview, aspect, videoUrl])
 
   useLayoutEffect(() => {
+    if (testBoxSize && testBoxSize.w > 0 && testBoxSize.h > 0) {
+      boxSizeRef.current = testBoxSize
+      setBox(testBoxSize)
+      return
+    }
     const el = wrapRef.current
     if (!el) return
     const ro = new ResizeObserver(([e]) => {
@@ -157,7 +176,7 @@ export function PreviewStage({
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [aspect])
+  }, [aspect, testBoxSize?.w, testBoxSize?.h])
 
   useEffect(() => {
     const v = videoRefInner.current
@@ -168,7 +187,7 @@ export function PreviewStage({
     }
     setCanPlay(false)
     v.src = videoUrl
-    if (b && (cropPreview || letterboxPreview)) b.src = videoUrl
+    if (b && (cropPreview || letterboxPreview || fitTopPreview)) b.src = videoUrl
     wrapRef.current?.querySelectorAll('video').forEach((el) => {
       if (el !== v && el !== b) {
         el.src = videoUrl
@@ -176,7 +195,7 @@ export function PreviewStage({
       }
     })
     v.currentTime = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
-  }, [videoUrl, edits.trim.in, cropPreview, letterboxPreview, mediaOffsetMs])
+  }, [videoUrl, edits.trim.in, cropPreview, letterboxPreview, fitTopPreview, mediaOffsetMs])
 
   useEffect(() => {
     let raf = 0
@@ -309,6 +328,23 @@ export function PreviewStage({
     })
   }, [captionWords.length, edits.silenceTrim?.enabled, previewWords?.length])
 
+  useEffect(() => {
+    if (!speakerApproxPreview || previewFallbackLogged.current) return
+    previewFallbackLogged.current = true
+    logEditorDecision('preview_fallback', { reason: 'no_crop_track' })
+  }, [speakerApproxPreview])
+
+  const fitTopLayout = useMemo(() => {
+    if (!fitTopPreview) return null
+    try {
+      const lines = fitTopHeadlineLines(edits)
+      return overlayLayout(Math.max(2, lines.length || 2))
+    } catch (err) {
+      console.warn('[clipper:preview] fit_top_fallback', err)
+      return null
+    }
+  }, [fitTopPreview, edits])
+
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'
 
@@ -335,27 +371,18 @@ export function PreviewStage({
         ) : null}
         {letterboxPreview ? (
           <>
-            {headlineBandPreview ? (
-              <div
-                className="absolute inset-x-0 top-0 z-[2] border-b border-white/20 bg-white/95"
-                style={{ height: `${headlineBandPct}%` }}
-                aria-hidden
-              />
-            ) : null}
             <video
               ref={blurRef}
               className="absolute inset-0 size-full max-w-none scale-110 object-cover blur-2xl"
+              style={{ filter: 'blur(20px) brightness(0.92)' }}
               muted
               playsInline
               aria-hidden
             />
             <video
               ref={videoRefInner}
-              className={`absolute inset-x-0 z-[1] max-h-none max-w-none object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
-              style={{
-                top: `${headlineBandPct}%`,
-                height: `${100 - headlineBandPct}%`,
-              }}
+              className={`absolute inset-x-0 bottom-0 z-[1] max-h-none max-w-none object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+              style={{ top: 0, height: '100%' }}
               playsInline
               poster={posterUrl ?? undefined}
               onLoadedMetadata={() => {
@@ -368,6 +395,50 @@ export function PreviewStage({
               onPause={() => setPlaying(false)}
             />
           </>
+        ) : fitTopPreview && fitTopLayout && box.h > 0 ? (
+          (() => {
+            const sy = box.h / fitTopLayout.playH
+            const videoTop = fitTopLayout.videoY * sy
+            const videoH = fitTopLayout.videoH * sy
+            return (
+              <>
+                <video
+                  ref={blurRef}
+                  className="absolute inset-0 size-full max-w-none object-cover"
+                  style={{ filter: 'blur(20px) brightness(0.92)' }}
+                  muted
+                  playsInline
+                  aria-hidden
+                />
+                <video
+                  ref={videoRefInner}
+                  data-testid="fit-top-main-video"
+                  className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                  style={{ top: videoTop, height: videoH, width: '100%' }}
+                  playsInline
+                  poster={posterUrl ?? undefined}
+                  onLoadedMetadata={() => {
+                    const v = videoRefInner.current
+                    const b = blurRef.current
+                    if (v && b) b.currentTime = v.currentTime
+                  }}
+                  onCanPlay={() => setCanPlay(true)}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                />
+              </>
+            )
+          })()
+        ) : fitTopPreview && videoUrl ? (
+          <video
+            ref={videoRefInner}
+            className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+            playsInline
+            poster={posterUrl ?? undefined}
+            onCanPlay={() => setCanPlay(true)}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+          />
         ) : facecamStackPreview && facecamBox ? (
           (() => {
             const split = edits.layout.facecam?.split ?? 0.4
@@ -460,6 +531,32 @@ export function PreviewStage({
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
             />
+          </>
+        ) : centerCropPreview ? (
+          <video
+            ref={videoRefInner}
+            data-testid="center-crop-video"
+            className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+            playsInline
+            poster={posterUrl ?? undefined}
+            onCanPlay={() => setCanPlay(true)}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+          />
+        ) : speakerApproxPreview ? (
+          <>
+            <video
+              ref={videoRefInner}
+              className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+              playsInline
+              poster={posterUrl ?? undefined}
+              onCanPlay={() => setCanPlay(true)}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+            />
+            <p className="pointer-events-none absolute bottom-2 inset-x-2 z-[30] rounded bg-black/55 px-2 py-1 text-center text-[10px] text-white/90">
+              Framing preview is approximate until auto-reframe runs
+            </p>
           </>
         ) : videoUrl ? (
           <video

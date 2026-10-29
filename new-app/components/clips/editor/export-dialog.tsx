@@ -37,6 +37,7 @@ import {
 import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
 import { exportPolishLint, exportPolishLintWarnings } from '@/lib/clips/export-polish-lint'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
+import { cn } from '@/lib/utils'
 import {
   exportSfxBundledAssetsAvailable,
   normalizeExportSfxMode,
@@ -59,6 +60,9 @@ export function ExportDialog({
   onBeforeExport,
   layoutMode = 'speaker_follow',
   onLayoutModeChange,
+  facecamLayout = null,
+  reframeV2Enabled = false,
+  exportSurfaceClassName,
   platform,
   defaultChannelUrl,
   chatAvailable = false,
@@ -76,7 +80,10 @@ export function ExportDialog({
   onAspectChange?: (aspect: ClipProjectSettings['aspectRatio']) => void
   onBeforeExport?: () => Promise<void>
   layoutMode?: ClipEditsV2['layout']['mode']
-  onLayoutModeChange?: (mode: ClipEditsV2['layout']['mode']) => void
+  onLayoutModeChange?: (mode: ClipEditsV2['layout']['mode'], facecam?: ClipEditsV2['layout']['facecam']) => void
+  facecamLayout?: import('@/lib/server/clips/clip-detail').FacecamLayoutState | null
+  reframeV2Enabled?: boolean
+  exportSurfaceClassName?: string
   platform?: 'twitch' | 'kick'
   defaultChannelUrl?: string
   chatAvailable?: boolean
@@ -344,7 +351,10 @@ export function ExportDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-dialog-title"
-        className="max-h-[min(90dvh,100%)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-xl border border-border bg-background p-4 shadow-lg focus:outline-none sm:max-h-[90dvh] sm:rounded-xl"
+        className={cn(
+          'max-h-[min(90dvh,100%)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-xl border border-border bg-background p-4 shadow-lg focus:outline-none sm:max-h-[90dvh] sm:rounded-xl',
+          exportSurfaceClassName,
+        )}
       >
         <div className="flex items-start gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-lg tile-primary">
@@ -424,7 +434,13 @@ export function ExportDialog({
           </div>
         </div>
         {onLayoutModeChange ? (
-          <ExportLayoutPicker value={layoutMode} onChange={onLayoutModeChange} />
+          <ExportLayoutPicker
+            value={layoutMode}
+            edits={edits}
+            facecamLayout={facecamLayout}
+            reframeV2Enabled={reframeV2Enabled}
+            onChange={onLayoutModeChange}
+          />
         ) : null}
         <div className="mt-3">
           <p className="text-xs font-medium">Aspect ratio</p>

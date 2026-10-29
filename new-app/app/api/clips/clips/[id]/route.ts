@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
+import { insertOriginalClipEditSnapshot } from '@/lib/server/clips/clip-edit-versions'
 import { getClipEditorPayload, mergeEditsPatch } from '@/lib/server/clips/clip-detail'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
@@ -94,6 +95,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     load: null,
     write: null,
     cas: null,
+    orig: null,
   }
   try {
     const { id } = await ctx.params
@@ -153,6 +155,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (body.edits !== undefined) {
       const mergedEdits = mergeEditsPatch(serverEdits, body.edits, bounds)
       const versionForCas = baseVersion ?? clip.editsSaveVersion
+      if (clip.editsSaveVersion === 0) {
+        const orig0 = Date.now()
+        await insertOriginalClipEditSnapshot(prisma, clip)
+        stageLog.orig = Date.now() - orig0
+      }
       const write0 = Date.now()
       const result = await casUpdateEdits(prisma, id, mergedEdits, versionForCas)
       stageLog.write = Date.now() - write0
@@ -241,6 +248,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         load: stageLog.load,
         write: stageLog.write,
         cas: stageLog.cas,
+        orig: stageLog.orig,
       })
     }
   }

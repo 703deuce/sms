@@ -9682,10 +9682,30 @@ model Clip {
   events  ClipEvent[]
   dubTracks DubTrack[]
   scriptCompositions ScriptComposition[]
+  versions ClipEditVersion[]
 
   @@index([projectId])
   @@index([projectId, segmentKey])
   @@map("clips")
+}
+
+model ClipEditVersion {
+  id               String   @id
+  clipId           String
+  workspaceId      String
+  name             String
+  kind             String   @default("manual")
+  edits            Json
+  editsSaveVersion Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  clip Clip @relation(fields: [clipId], references: [id], onDelete: Cascade)
+
+  /// Partial unique index `clip_edit_versions_one_original` on ("clipId") WHERE kind = 'original' — see migration
+  /// `20261029130000_clip_edit_versions`. Prisma migrate dev will not emit this; do not drop manually.
+
+  @@index([clipId, createdAt])
+  @@map("clip_edit_versions")
 }
 
 model DubTrack {

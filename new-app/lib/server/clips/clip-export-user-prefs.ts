@@ -1,9 +1,5 @@
 import type { Prisma } from '@prisma/client'
-import {
-  mergeClipExportUserPrefs,
-  type ClipExportUserPreferences,
-  type ClipUserStreamerChannelRow,
-} from '@/lib/clips/clip-export-user-types'
+import { mergeClipExportUserPrefs, mergeVocabulary, type ClipExportUserPreferences, type ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
@@ -26,6 +22,9 @@ export async function saveClipExportUserPrefs(
   const prisma = getPrisma()
   const current = await getClipExportUserPrefs(workspaceId, userId)
   const next = { ...current, ...patch }
+  if (patch.vocabulary?.length) {
+    next.vocabulary = mergeVocabulary([...(current.vocabulary ?? []), ...patch.vocabulary])
+  }
   await prisma.clipExportUserPrefs.upsert({
     where: { workspaceId_userId: { workspaceId, userId } },
     create: {

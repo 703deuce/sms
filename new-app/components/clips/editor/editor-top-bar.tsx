@@ -36,6 +36,8 @@ export function EditorTopBar({
   producerOpen = false,
   producerStrip,
   pendingPaidCount = 0,
+  layoutSlot,
+  versionsSlot,
 }: {
   backHref: string
   title: string
@@ -52,6 +54,8 @@ export function EditorTopBar({
   producerOpen?: boolean
   producerStrip?: { changeCount: number; onUndo: () => void } | null
   pendingPaidCount?: number
+  layoutSlot?: React.ReactNode
+  versionsSlot?: React.ReactNode
 }) {
   const saveTone =
     saveState === 'error'
@@ -161,6 +165,8 @@ export function EditorTopBar({
             )}
           </Button>
         ) : null}
+        {layoutSlot}
+        {versionsSlot}
         <PrimaryButton type="button" size="sm" className="gap-1.5" onClick={onExport}>
           <Download className="size-4" aria-hidden />
           Export

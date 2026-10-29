@@ -65,7 +65,8 @@ describe('ExportDialog render', () => {
             open
             onClose={() => {}}
             layoutMode={edits.layout.mode}
-            onLayoutModeChange={() => {}}
+            facecamLayout={null}
+            reframeV2Enabled={false}
             platform="twitch"
             defaultChannelUrl="https://twitch.tv/test"
           />,

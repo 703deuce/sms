@@ -15,8 +15,15 @@ function mergeWorkerOwnedField<K extends keyof ClipEditsV2>(
   local: ClipEditsV2,
   server: ClipEditsV2,
 ): ClipEditsV2[K] {
-  if (shallowEqualJson(base[key], local)) return server[key]
-  if (shallowEqualJson(base[key], server)) return local[key]
+  if (shallowEqualJson(base[key], local[key])) {
+    console.info('[clipper:autosave] merge_field', { key, winner: 'server' })
+    return server[key]
+  }
+  if (shallowEqualJson(base[key], server[key])) {
+    console.info('[clipper:autosave] merge_field', { key, winner: 'local' })
+    return local[key]
+  }
+  console.info('[clipper:autosave] merge_field', { key, winner: 'server' })
   return server[key]
 }
 

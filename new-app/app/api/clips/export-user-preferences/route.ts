@@ -8,6 +8,11 @@ import {
 import { resolveInternalUserId } from '@/lib/server/internal-user'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
+const vocabEntrySchema = z.object({
+  from: z.string().trim().min(1).max(60),
+  to: z.string().trim().min(1).max(60),
+})
+
 const patchSchema = z.object({
   removeDeadAir: z.boolean().optional(),
   alsoSrt: z.boolean().optional(),
@@ -18,6 +23,8 @@ const patchSchema = z.object({
   profanityCensor: z.boolean().optional(),
   defaultAspect: z.enum(['9:16', '4:5', '1:1', '16:9']).optional(),
   defaultResolution: z.enum(['720p', '1080p']).optional(),
+  vocabulary: z.array(vocabEntrySchema).max(200).optional(),
+  vocabAutoApply: z.boolean().optional(),
 })
 
 export async function GET() {
