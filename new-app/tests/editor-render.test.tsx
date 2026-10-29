@@ -8,6 +8,7 @@ import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { TrimRangeBar } from '@/components/clips/editor/trim-range-bar'
 import { TranscriptPanel } from '@/components/clips/editor/transcript-panel'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
+import { AudioPanel } from '@/components/clips/editor/audio-panel'
 import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 
 vi.mock('@/lib/clips-api', () => ({
@@ -111,20 +112,70 @@ describe('editor render smoke', () => {
     }
   })
 
-  it('TranscriptPanel with selection', () => {
-    const edits = loadFixture('regular.json')
+  it('TranscriptPanel with selection and reorder', () => {
+    const base = loadFixture('regular.json')
+    const edits = normalizeEdits(
+      { ...base, sectionOrder: [[30000, 60000], [0, 30000]] as [number, number][] },
+      bounds,
+    )
+    const selectionRef = { current: null }
     expect(() =>
       render(
         <TranscriptPanel
-          words={[{ i: 0, w: 'hello', s: 0, e: 1 }]}
-          wordsLoading={false}
+          words={[
+            { i: 0, w: 'a', s: 0, e: 1 },
+            { i: 1, w: 'b', s: 30, e: 31 },
+          ]}
           clipStartMs={0}
           clipEndMs={60000}
           shots={[]}
           edits={edits}
           onSeek={() => {}}
           onAddCut={() => {}}
-          selectionRef={{ current: { from: 0, to: 0 } }}
+          selectionRef={selectionRef}
+          onPatchSectionOrder={() => {}}
+        />,
+      ),
+    ).not.toThrow()
+  })
+
+  it('AudioPanel level and speed', () => {
+    const edits = normalizeEdits(
+      { ...loadFixture('regular.json'), loudnessLufs: -14, speed: 1.25 },
+      bounds,
+    )
+    expect(() =>
+      render(
+        <AudioPanel
+          clipId="clip_test"
+          edits={edits}
+          outputDurationMs={8000}
+          playheadMs={0}
+          onSuggestMusic={() => {}}
+          onAttachMusic={() => {}}
+          onPatchMusic={() => {}}
+          onRemoveMusic={() => {}}
+          onAddSfx={() => {}}
+          onUpdateSfx={() => {}}
+          onRemoveSfx={() => {}}
+          onPatchStudioSound={() => {}}
+          onPatchExportAudio={() => {}}
+        />,
+      ),
+    ).not.toThrow()
+  })
+
+  it('ExportDialog scaled duration with speed', () => {
+    const edits = normalizeEdits({ ...loadFixture('regular.json'), speed: 1.25 }, bounds)
+    expect(() =>
+      render(
+        <ExportDialog
+          clipId="clip_test"
+          title="Test"
+          edits={edits}
+          open
+          onClose={() => {}}
+          layoutMode={edits.layout.mode}
         />,
       ),
     ).not.toThrow()

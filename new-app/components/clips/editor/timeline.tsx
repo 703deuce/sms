@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BrollItem } from '@/lib/clips/broll'
 import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { keepSegments, outputDurationMs, wordDisplayText } from '@/lib/clips/edits'
+import { keepSegments, normalizeSectionOrder, outputDurationMs, wordDisplayText } from '@/lib/clips/edits'
 import { clampTrimToExtendedBounds, clampTrimWithMediaBounds, extendedTrimLimits } from '@/lib/clips/trim-bounds'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
@@ -81,6 +81,10 @@ export function Timeline({
   }
 
   const broll = edits.broll || []
+  const reorderNote = Boolean(
+    (edits.broll?.length ?? 0) > 0 &&
+      normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out),
+  )
   const audio = edits.audio
   const outSpan = Math.max(1, clipOutputDurationMs)
 
@@ -120,6 +124,12 @@ export function Timeline({
   ] as const
 
   return (
+    <div className="min-w-0 space-y-2">
+      {reorderNote ? (
+        <p className="text-xs text-muted-foreground">
+          Section reorder is active — B-roll clips stay at their output times and may not match moved speech.
+        </p>
+      ) : null}
     <div className="min-w-0 overflow-x-auto rounded-lg border border-border bg-card/30 p-2">
       <div className="flex" style={{ width: widthPx + 56 }}>
         <div className="relative w-14 shrink-0 text-[10px] font-medium text-muted-foreground">
@@ -346,6 +356,7 @@ export function Timeline({
           </button>
         </div>
       ) : null}
+    </div>
     </div>
   )
 }

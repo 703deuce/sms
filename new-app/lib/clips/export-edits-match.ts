@@ -1,9 +1,12 @@
 import type { ClipBounds, ClipEditsV2 } from '@/lib/clips/edits'
-import { defaultEdits, isDefaultEdits } from '@/lib/clips/edits'
+import { defaultEdits, isDefaultEdits, normalizeEditSpeed, normalizeSectionOrder } from '@/lib/clips/edits'
 import { exportTemplateOverlaysActive } from '@/lib/clips/export-template'
 
 /** True when pipeline preview.mp4 (9:16 @ 720p, default speakercrop + default captions) matches export. */
 export function previewExportMatchesDefault(edits: ClipEditsV2, bounds: ClipBounds): boolean {
+  if (normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out)) return false
+  if (edits.loudnessLufs !== undefined) return false
+  if (normalizeEditSpeed(edits.speed) !== undefined) return false
   if (exportTemplateOverlaysActive(edits.exportTemplate)) return false
   if (!isDefaultEdits(edits, bounds)) return false
   const d = defaultEdits(bounds)

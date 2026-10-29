@@ -1,12 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Scissors, Search, Undo2, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
-import { FILLER_RE, isWordCut, wordDisplayText } from '@/lib/clips/edits'
+import { FILLER_RE, isWordCut, normalizeSectionOrder, wordDisplayText } from '@/lib/clips/edits'
+import { moveSelection, sectionBlocksForEdits } from '@/lib/clips/editor/reorder'
+import { logEditorDecision } from '@/lib/clips/editor-decision-log'
+import { toast } from 'sonner'
 import { gapCutBetweenSourceWords } from '@/lib/clips/gap-shorten'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
@@ -53,6 +56,8 @@ export function TranscriptPanel({
   clipEndMs,
   applyWordFixesBatch,
   panelActive = true,
+  onPatchSectionOrder,
+  mediaKind,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -74,6 +79,8 @@ export function TranscriptPanel({
     meta: Record<string, { s: number; w: string }>,
   ) => void
   panelActive?: boolean
+  onPatchSectionOrder?: (order: CutRange[] | undefined) => void
+  mediaKind?: string
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -103,6 +110,32 @@ export function TranscriptPanel({
   }, [words, edits.trim.in, edits.trim.out, clipStartMs, clipEndMs])
   const spkOrder = useMemo(() => speakerOrder(visible, shots), [visible, shots])
   const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
+  const reorderActive = Boolean(
+    normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out),
+  )
+  const outputBlocks = useMemo(
+    () => sectionBlocksForEdits(edits),
+    [edits.sectionOrder, edits.trim.in, edits.trim.out],
+  )
+  const wordSpans = useMemo(
+    () =>
+      visible.map((w) => {
+        const { startMs, endMs } = wordSourceMs(w)
+        return { startMs, endMs }
+      }),
+    [visible],
+  )
+
+  const moveSection = (dir: 'up' | 'down') => {
+    if (selStart === null || selEnd === null) return
+    const next = moveSelection(edits, [selStart, selEnd], dir, wordSpans)
+    if (!next?.length) {
+      toast.message('Select within one section')
+      return
+    }
+    onPatchSectionOrder?.(next)
+    logEditorDecision('reorder', { dir, blocks: next.length })
+  }
 
   const phraseMatches = useMemo(
     () => (search.trim() ? findMatches(visible, edits, search) : []),
@@ -430,6 +463,35 @@ export function TranscriptPanel({
       )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>
+        {onPatchSectionOrder && mediaKind !== 'composite' ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selStart === null}
+              onClick={() => moveSection('up')}
+            >
+              Move up
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selStart === null}
+              onClick={() => moveSection('down')}
+            >
+              Move down
+            </Button>
+          </>
+        ) : null}
+        {reorderActive && onPatchSectionOrder ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onPatchSectionOrder(undefined)}
+          >
+            Reset order
+          </Button>
+        ) : null}
         {onSaveAsNewClip ? (
           <Button
             size="sm"
@@ -456,7 +518,32 @@ export function TranscriptPanel({
             No transcript words for this clip yet. They appear after processing finishes.
           </p>
         ) : null}
-        {blocks.map((block, bi) => {
+        {reorderActive ? (
+          <div className="inline">
+            {outputBlocks.flatMap((range, blockIndex) => {
+              const blockWords = visible
+                .filter((w) => {
+                  const { midMs } = wordSourceMs(w)
+                  return midMs >= range[0] && midMs < range[1]
+                })
+                .sort((a, b) => a.s - b.s || a.i - b.i)
+              const nodes: ReactNode[] = []
+              if (blockIndex > 0) {
+                nodes.push(
+                  <div
+                    key={`divider-${blockIndex}`}
+                    className="my-2 block w-full border-t border-dashed border-muted-foreground/40 pt-2 text-[10px] uppercase tracking-wide text-muted-foreground"
+                  >
+                    Moved section
+                  </div>,
+                )
+              }
+              for (const w of blockWords) nodes.push(renderWord(w))
+              return nodes
+            })}
+          </div>
+        ) : (
+        blocks.map((block, bi) => {
           const dot = SPEAKER_DOT[(block.speakerNum - 1) % SPEAKER_DOT.length]
           const prevBlockLast =
             bi > 0 ? blocks[bi - 1].words[blocks[bi - 1].words.length - 1] : null
@@ -484,7 +571,8 @@ export function TranscriptPanel({
               </div>
             </div>
           )
-        })}
+        })
+        )}
       </div>
     </div>
   )

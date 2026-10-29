@@ -91,6 +91,10 @@ export type ClipEditsV2 = {
   silenceTrim?: SilenceTrimSettings
   /** Integrated loudness target (LUFS) for export loudnorm. */
   loudnessLufs?: -14 | -16 | -18 | -23 | -24
+  /** Source-ms blocks in output order (transcript rearrange). */
+  sectionOrder?: CutRange[]
+  /** Export playback speed (post-step); preview uses playbackRate. */
+  speed?: 1.1 | 1.25 | 1.5
   /** Loop quiet room tone under EDL gap segments on export. */
   roomTone?: boolean
   /** Fingerprint of last auto-applied vocabulary (sha1 hex). */
@@ -403,6 +407,16 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     layersLegacyFp: typeof o.layersLegacyFp === 'string' ? o.layersLegacyFp : undefined,
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
+    loudnessLufs:
+      o.loudnessLufs === -14 ||
+      o.loudnessLufs === -16 ||
+      o.loudnessLufs === -18 ||
+      o.loudnessLufs === -23 ||
+      o.loudnessLufs === -24
+        ? (o.loudnessLufs as ClipEditsV2['loudnessLufs'])
+        : undefined,
+    sectionOrder: normalizeSectionOrder(o.sectionOrder, trim.in, trim.out),
+    speed: normalizeEditSpeed(o.speed),
   }
 }
 
@@ -445,8 +459,115 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     edits.trim.out === d.trim.out &&
     edits.cutRanges.length === 0 &&
     Object.keys(edits.wordFixes).length === 0 &&
-    (edits.layout.shotOverrides?.length ?? 0) === 0
+    (edits.layout.shotOverrides?.length ?? 0) === 0 &&
+    !normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out) &&
+    edits.loudnessLufs === undefined &&
+    normalizeEditSpeed(edits.speed) === undefined
   )
+}
+
+const SPEED_WHITELIST = new Set([1.1, 1.25, 1.5])
+
+export function normalizeEditSpeed(raw: unknown): 1.1 | 1.25 | 1.5 | undefined {
+  const n = Number(raw)
+  if (n === 1 || !Number.isFinite(n)) return undefined
+  if (SPEED_WHITELIST.has(n as 1.1)) return n as 1.1 | 1.25 | 1.5
+  return undefined
+}
+
+export function normalizeSectionOrder(
+  raw: unknown,
+  trimIn: number,
+  trimOut: number,
+): CutRange[] | undefined {
+  if (!raw || !Array.isArray(raw) || !raw.length) return undefined
+  if (raw.length > 12) {
+    console.warn('[clipper:reorder] invalid_dropped')
+    return undefined
+  }
+  const blocks: CutRange[] = []
+  for (const row of raw) {
+    if (!Array.isArray(row) || row.length !== 2) {
+      console.warn('[clipper:reorder] invalid_dropped')
+      return undefined
+    }
+    const s = Math.round(Number(row[0]))
+    const e = Math.round(Number(row[1]))
+    if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) {
+      console.warn('[clipper:reorder] invalid_dropped')
+      return undefined
+    }
+    const cs = Math.max(s, trimIn)
+    const ce = Math.min(e, trimOut)
+    if (ce - cs < 300) continue
+    blocks.push([cs, ce])
+  }
+  if (!blocks.length) {
+    console.warn('[clipper:reorder] invalid_dropped')
+    return undefined
+  }
+
+  let earliest = 0
+  let latest = 0
+  for (let i = 1; i < blocks.length; i++) {
+    if (blocks[i]![0] < blocks[earliest]![0]) earliest = i
+    if (blocks[i]![1] > blocks[latest]![1]) latest = i
+  }
+  blocks[earliest] = [trimIn, blocks[earliest]![1]]
+  blocks[latest] = [blocks[latest]![0], trimOut]
+
+  const clipped = blocks
+    .map(([s, e]) => [Math.max(s, trimIn), Math.min(e, trimOut)] as CutRange)
+    .filter(([s, e]) => e - s >= 300)
+  if (!clipped.length) {
+    console.warn('[clipper:reorder] invalid_dropped')
+    return undefined
+  }
+
+  const sorted = [...clipped].sort((a, b) => a[0] - b[0])
+  if (sorted[0]![0] > trimIn + 1 || sorted[sorted.length - 1]![1] < trimOut - 1) {
+    console.warn('[clipper:reorder] invalid_dropped')
+    return undefined
+  }
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i]![0] - sorted[i - 1]![1] > 1) {
+      console.warn('[clipper:reorder] invalid_dropped')
+      return undefined
+    }
+  }
+
+  let natural = true
+  for (let i = 1; i < clipped.length; i++) {
+    if (clipped[i]![0] < clipped[i - 1]![0]) {
+      natural = false
+      break
+    }
+  }
+  if (natural && clipped.length === 1 && clipped[0]![0] === trimIn && clipped[0]![1] === trimOut) {
+    return undefined
+  }
+  if (natural) return undefined
+
+  return clipped
+}
+
+export function orderedKeepSegments(edits: ClipEditsV2): [number, number][] {
+  const blocks = normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out)
+  if (!blocks?.length) {
+    return keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  }
+  const out: [number, number][] = []
+  for (const [bs, be] of blocks) {
+    for (const seg of keepSegments(bs, be, edits.cutRanges)) {
+      if (seg[1] - seg[0] >= MIN_SEGMENT_MS) out.push(seg)
+    }
+  }
+  return out
+}
+
+export function displayDurationMs(edits: ClipEditsV2): number {
+  const speed = normalizeEditSpeed(edits.speed) ?? 1
+  return Math.round(outputDurationMs(edits) / speed)
 }
 
 const MIN_SEGMENT_MS = 80
@@ -557,7 +678,7 @@ export function wordsAfterEdits(
   words: ClipWord[],
   edits: ClipEditsV2,
 ): { words: ClipWord[]; segs: [number, number][] } {
-  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  const segs = orderedKeepSegments(edits)
   const out: ClipWord[] = []
   for (const w of words) {
     const sMs = w.s * 1000

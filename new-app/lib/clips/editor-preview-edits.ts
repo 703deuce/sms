@@ -1,7 +1,8 @@
 import type { CaptionSourceWord } from '@/lib/clips/caption-words'
 import { buildCaptionWords, captionWordsToClipWords } from '@/lib/clips/caption-words'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
-import { outputDurationMs } from '@/lib/clips/edits'
+import { normalizeSectionOrder, outputDurationMs } from '@/lib/clips/edits'
+import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { applyLoopFriendlyTrimToEdits } from '@/lib/clips/loop-friendly-trim'
 import { applySilenceTrimToEdits } from '@/lib/clips/silence-trim'
 
@@ -16,7 +17,11 @@ export function editorPreviewEdits(edits: ClipEditsV2, words: CaptionSourceWord[
     next = applySilenceTrimToEdits(next, toClipWords(words), { ...edits.silenceTrim, enabled: true })
   }
   if (words.length && next.loopFriendlyEnd !== false) {
-    next = applyLoopFriendlyTrimToEdits(next, words, {})
+    if (normalizeSectionOrder(next.sectionOrder, next.trim.in, next.trim.out)) {
+      logEditorDecision('loop_trim_skipped', { reason: 'reorder' })
+    } else {
+      next = applyLoopFriendlyTrimToEdits(next, words, {})
+    }
   }
   return next
 }

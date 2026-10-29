@@ -88,7 +88,13 @@ def apply_composite_edits(
     clip_end: int,
     render_id: str,
 ) -> Path:
-    from clips_worker.edits_render import keep_segments, output_duration_ms
+    from clips_worker.clip_keep_segments import keep_segments, normalize_section_order
+    from clips_worker.edits_render import output_duration_ms
+
+    if normalize_section_order(
+        edits.get("sectionOrder"), int(edits["trim"]["in"]), int(edits["trim"]["out"])
+    ):
+        print("[clipper:reorder] ignored reason=composite", flush=True)
 
     clip_len_s = max(0.001, (clip_end - clip_start) / 1000.0)
     segs_ms = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
@@ -647,6 +653,12 @@ def _run_render_clip_job_body(
                 fit_fallback=bool(render_meta.get("fit_fallback")),
                 speakercrop_tail=str(render_meta.get("speakercrop_tail") or "")[:120],
             )
+
+        from clips_worker.export_post import apply_export_post
+
+        out_mp4, srt_body = apply_export_post(
+            out_mp4, td_path, edits, render_meta, srt_body=srt_body
+        )
 
         brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else {}
         if not render_meta.get("effective_edits_ms"):

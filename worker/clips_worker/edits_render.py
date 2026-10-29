@@ -118,16 +118,21 @@ def normalize_edits(raw, clip_start_ms: int, clip_end_ms: int) -> dict:
 
 def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
     d = default_edits(clip_start_ms, clip_end_ms)
+    trim_in = int(edits["trim"]["in"])
+    trim_out = int(edits["trim"]["out"])
     return (
         edits["trim"]["in"] == d["trim"]["in"]
         and edits["trim"]["out"] == d["trim"]["out"]
         and not edits["cutRanges"]
         and not edits["wordFixes"]
         and not (edits.get("layout") or {}).get("shotOverrides")
+        and not normalize_section_order(edits.get("sectionOrder"), trim_in, trim_out)
+        and edits.get("loudnessLufs") is None
+        and edits.get("speed") in (None, 1, 1.0)
     )
 
 
-from clips_worker.clip_keep_segments import keep_segments
+from clips_worker.clip_keep_segments import keep_segments, normalize_section_order, ordered_keep_segments
 
 def output_duration_ms(edits: dict) -> int:
     segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
@@ -158,7 +163,7 @@ def ensure_word_i(words: list[dict]) -> list[dict]:
 
 
 def words_after_edits(words: list[dict], edits: dict) -> tuple[list[dict], list[tuple[int, int]]]:
-    segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    segs = ordered_keep_segments(edits)
     words_fallback = bool(edits.get("_wordsFallback"))
     capped = build_caption_words(ensure_word_i(words), edits, words_fallback=words_fallback)
     remapped = caption_words_to_render(capped)
@@ -1022,7 +1027,12 @@ def render_edited_clip(
     tpl = edits.get("exportTemplate")
     if isinstance(tpl, dict) and tpl.get("exportPlatformId"):
         plat = str(tpl.get("exportPlatformId"))
-    edits = apply_loop_friendly_trim(edits, source_words, export_platform=plat)
+    if normalize_section_order(
+        edits.get("sectionOrder"), int(edits["trim"]["in"]), int(edits["trim"]["out"])
+    ):
+        print("[clipper:reorder] loop_trim_skipped", flush=True)
+    else:
+        edits = apply_loop_friendly_trim(edits, source_words, export_platform=plat)
     if render_meta is not None:
         render_meta["effective_edits_ms"] = output_duration_ms(edits)
     shot_overrides = (edits.get("layout") or {}).get("shotOverrides") or []
@@ -1072,7 +1082,7 @@ def render_edited_clip(
             render_meta["effective_edits_ms"] = output_duration_ms(edits)
         return out_mp4, remapped, build_srt(remapped)
 
-    segs_ms = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    segs_ms = ordered_keep_segments(edits)
     segs_sec = [
         ((max(a, clip_start_ms) - clip_start_ms) / 1000.0, (min(b, clip_end_ms) - clip_start_ms) / 1000.0)
         for a, b in segs_ms
@@ -1170,7 +1180,7 @@ def render_edited_clip(
         apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h)
         caption_src = broll_out
 
-    segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
+    segs = ordered_keep_segments(edits)
     length_s = sum((b - a) for a, b in segs) / 1000.0
     meta = (audio_assets or {}).get("music_meta") or {}
     music_path = (audio_assets or {}).get("music_path") if audio_assets else None
@@ -1237,8 +1247,11 @@ def render_edited_clip(
             ln_out = work_dir / "loudnorm.mp4"
             apply_loudnorm(caption_src, ln_out, int(loud_lufs))
             caption_src = ln_out
-        except Exception:
-            pass
+            if render_meta is not None:
+                render_meta["loudnorm_applied"] = True
+            print(f"[clipper:loudnorm] applied lufs={int(loud_lufs)}", flush=True)
+        except Exception as e:
+            print(f"[clipper:loudnorm] skipped reason={type(e).__name__}", flush=True)
 
     from clips_worker.render_clip import aspect_size
 

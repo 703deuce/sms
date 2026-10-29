@@ -19,7 +19,7 @@ import { patchClip } from '@/lib/clips-api'
 import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
-import { keepSegments, outputDurationMs } from '@/lib/clips/edits'
+import { keepSegments, outputDurationMs, displayDurationMs } from '@/lib/clips/edits'
 import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
@@ -587,6 +587,10 @@ export function EditorShell({
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const [brandTemplates, setBrandTemplates] = useState<{ id: string; name: string; settings: unknown }[]>([])
   const outDur = editorPreviewDurationMs(edits, editorWords)
+  const displayDur = useMemo(
+    () => displayDurationMs({ ...editorPreviewEdits(edits, editorWords), speed: edits.speed }),
+    [edits, editorWords],
+  )
 
   useEffect(() => {
     void clipsFetch<{ items: { id: string; name: string; settings: unknown }[] }>('/api/clips/brand/templates')
@@ -893,6 +897,13 @@ export function EditorShell({
           }}
           onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
           selectionRef={selectionRef}
+          onPatchSectionOrder={(order) =>
+            setEdits({
+              ...edits,
+              sectionOrder: order,
+            })
+          }
+          mediaKind={editorMedia?.kind}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -1011,6 +1022,7 @@ export function EditorShell({
           onStartStudioSound={startStudioSoundPreview}
           studioSlow={studioSlow}
           onRetryStudioPoll={retryPoll}
+          onPatchExportAudio={(patch) => setEdits({ ...edits, ...patch })}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -1202,7 +1214,7 @@ export function EditorShell({
           <PlayerControls
             playing={playing}
             outputMs={outputMs}
-            outputDurationMs={outDur}
+            outputDurationMs={displayDur}
             onToggle={() => void togglePlay()}
             onScrub={seekOutput}
             showScrubber={false}

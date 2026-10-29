@@ -31,6 +31,9 @@ RUN set -eux; \
     curl -fsSL -o /usr/share/fonts/truetype/anton/Anton-Regular.ttf \
       'https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf'; \
     cp /usr/share/fonts/truetype/anton/Anton-Regular.ttf /app/v3/fonts/Anton-Regular.ttf; \
+    mkdir -p /usr/share/fonts/truetype/poppins; \
+    cp /app/v3/fonts/Poppins-ExtraBold.ttf /usr/share/fonts/truetype/poppins/; \
+    test -s /usr/share/fonts/truetype/poppins/Poppins-ExtraBold.ttf; \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
     test -s /app/v3/fonts/Montserrat-Black.ttf

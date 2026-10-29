@@ -1,0 +1,45 @@
+{
+  "cases": [
+    {
+      "name": "natural",
+      "trimIn": 0,
+      "trimOut": 10000,
+      "cutRanges": [],
+      "sectionOrder": null,
+      "expectSegments": [[0, 10000]],
+      "expectNormalizeUndefined": true
+    },
+    {
+      "name": "swap_two",
+      "trimIn": 0,
+      "trimOut": 10000,
+      "cutRanges": [],
+      "sectionOrder": [[5000, 10000], [0, 5000]],
+      "expectSegments": [[5000, 10000], [0, 5000]]
+    },
+    {
+      "name": "three_block_cuts",
+      "trimIn": 0,
+      "trimOut": 9000,
+      "cutRanges": [[3500, 3700]],
+      "sectionOrder": [[0, 3000], [6000, 9000], [3000, 6000]],
+      "expectSegments": [[0, 3000], [6000, 9000], [3000, 3500], [3700, 6000]]
+    },
+    {
+      "name": "extended_trim",
+      "trimIn": 0,
+      "trimOut": 12000,
+      "cutRanges": [],
+      "sectionOrder": [[5000, 12000], [0, 5000]],
+      "expectSegments": [[5000, 12000], [0, 5000]]
+    },
+    {
+      "name": "invalid_gap",
+      "trimIn": 0,
+      "trimOut": 10000,
+      "cutRanges": [],
+      "sectionOrder": [[0, 4000], [6000, 10000]],
+      "expectInvalid": true
+    }
+  ]
+}

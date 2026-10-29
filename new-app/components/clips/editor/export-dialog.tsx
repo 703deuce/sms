@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { outputDurationMs, normalizeEditSpeed, type ClipEditsV2 } from '@/lib/clips/edits'
+import { editorPreviewDurationMs } from '@/lib/clips/editor-preview-edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { can } from '@/lib/billing/entitlements'
 import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
@@ -19,8 +20,6 @@ import {
   exportPlatformLabel,
   type ExportPlatformId,
 } from '@/lib/clips/export-platform-presets'
-import { outputDurationMs } from '@/lib/clips/edits'
-import { editorPreviewDurationMs } from '@/lib/clips/editor-preview-edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { clipAspectRatios, type ClipProjectSettings } from '@/lib/clips/settings'
 import {
@@ -320,8 +319,9 @@ export function ExportDialog({
   }
 
   const editedDurationMs = useMemo(() => {
-    if (words.length) return editorPreviewDurationMs(edits, words)
-    return outputDurationMs(edits)
+    const outMs = words.length ? editorPreviewDurationMs(edits, words) : outputDurationMs(edits)
+    const speed = normalizeEditSpeed(edits.speed) ?? 1
+    return Math.round(outMs / speed)
   }, [edits, words])
   const platformWarn =
     exportPlatform !== 'none' ? exportPlatformDurationWarning(exportPlatform, editedDurationMs) : null

@@ -35,6 +35,7 @@ export function AudioPanel({
   onStartStudioSound,
   studioSlow,
   onRetryStudioPoll,
+  onPatchExportAudio,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -51,6 +52,7 @@ export function AudioPanel({
   onStartStudioSound?: () => void
   studioSlow?: boolean
   onRetryStudioPoll?: () => void
+  onPatchExportAudio?: (patch: Pick<ClipEditsV2, 'loudnessLufs' | 'speed'>) => void
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -149,6 +151,50 @@ export function AudioPanel({
 
   return (
     <div className="space-y-4 p-3 text-sm" data-testid="clip-audio-panel">
+      <section className="space-y-2 rounded-md border border-border p-3" data-testid="clip-export-audio">
+        <h3 className="font-medium">Export audio</h3>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm">Level speech volume</p>
+            <p className="text-xs text-muted-foreground">
+              Evens out loud and quiet parts (−14 LUFS, TikTok/Shorts standard)
+            </p>
+          </div>
+          <Switch
+            checked={edits.loudnessLufs === -14}
+            onCheckedChange={(on) => {
+              onPatchExportAudio?.({ loudnessLufs: on ? -14 : undefined })
+            }}
+            aria-label="Level speech volume"
+          />
+        </div>
+        {edits.loudnessLufs === -14 ? (
+          <p className="text-xs text-muted-foreground">Applied on export</p>
+        ) : null}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Speed</p>
+          <div className="flex flex-wrap gap-1">
+            {([1, 1.1, 1.25, 1.5] as const).map((s) => {
+              const active =
+                s === 1 ? edits.speed == null : edits.speed === s
+              return (
+                <Button
+                  key={s}
+                  type="button"
+                  size="sm"
+                  variant={active ? 'default' : 'outline'}
+                  className="h-7 min-w-[3rem] px-2"
+                  onClick={() =>
+                    onPatchExportAudio?.({ speed: s === 1 ? undefined : s })
+                  }
+                >
+                  {s === 1 ? '1×' : `${s}×`}
+                </Button>
+              )
+            })}
+          </div>
+        </div>
+      </section>
       <StudioSoundControls
         studio={
           studio

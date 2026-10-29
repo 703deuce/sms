@@ -1,0 +1,63 @@
+{
+  "v": 2,
+  "layersV": 3,
+  "layersLegacyFp": "stale-fingerprint-should-be-ignored",
+  "trim": { "in": 5000, "out": 35000 },
+  "cutRanges": [],
+  "wordFixes": {},
+  "captions": { "enabled": true, "presetId": "bold_pop", "animation": "pop", "size": 6.5, "position": "bottom", "case": "sentence", "wordsPerLine": 2 },
+  "layout": {
+    "mode": "fit_top",
+    "shotOverrides": [],
+    "layoutSegments": [{ "startMs": 5000, "endMs": 35000, "mode": "fit_top" }]
+  },
+  "silenceTrim": { "enabled": false, "minGapMs": 350, "keepMs": 120 },
+  "layers": [
+    { "id": "captions", "type": "captions", "enabled": true, "z": 50 },
+    {
+      "id": "follow_sticker",
+      "type": "sticker",
+      "kind": "follow_cta",
+      "enabled": true,
+      "z": 55,
+      "text": "FOLLOW",
+      "platform": "twitch",
+      "x": 0.82,
+      "y": 0.12,
+      "anchor": "TR",
+      "timing": "always",
+      "durationMs": 4000
+    },
+    {
+      "id": "headline",
+      "type": "headline",
+      "enabled": true,
+      "z": 70,
+      "text": "THE WAIT STRUGGLE",
+      "placement": "export_bar",
+      "style": {
+        "preset": "stream_yellow",
+        "textColor": "#000000",
+        "boxColor": "#FACC15",
+        "radiusPx": 0
+      }
+    },
+    {
+      "id": "badge",
+      "type": "badge",
+      "enabled": true,
+      "z": 71,
+      "platform": "twitch",
+      "handle": "2xrakai",
+      "showLabel": true,
+      "showLink": false,
+      "showLogo": true,
+      "placement": "export_bar"
+    }
+  ],
+  "exportTemplate": {
+    "headlineBar": { "enabled": true, "text": "THE WAIT STRUGGLE" },
+    "platformBadge": { "enabled": true },
+    "channelLink": { "enabled": false, "url": "https://twitch.tv/2xrakai" }
+  }
+}

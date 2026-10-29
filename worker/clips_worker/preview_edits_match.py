@@ -7,6 +7,21 @@ from clips_worker.edits_render import default_edits, is_default_edits
 
 
 def preview_export_matches(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
+    from clips_worker.clip_keep_segments import normalize_section_order
+
+    trim_in = int(edits["trim"]["in"])
+    trim_out = int(edits["trim"]["out"])
+    if normalize_section_order(edits.get("sectionOrder"), trim_in, trim_out):
+        return False
+    if edits.get("loudnessLufs") is not None:
+        return False
+    raw_speed = edits.get("speed")
+    if raw_speed is not None and float(raw_speed) not in (1, 1.0):
+        try:
+            if float(raw_speed) in (1.1, 1.25, 1.5):
+                return False
+        except (TypeError, ValueError):
+            return False
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
     if export_template_overlays_active(tpl):
         return False

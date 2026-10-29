@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ClipBrandEdits } from '@/lib/clips/brand'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
-import { keepSegments } from '@/lib/clips/edits'
+import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
 import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
@@ -196,6 +196,17 @@ export function PreviewStage({
     })
     v.currentTime = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
   }, [videoUrl, edits.trim.in, cropPreview, letterboxPreview, fitTopPreview, mediaOffsetMs])
+
+  useEffect(() => {
+    const rate = normalizeEditSpeed(edits.speed) ?? 1
+    const applyRate = (el: HTMLVideoElement | null) => {
+      if (el) el.playbackRate = rate
+    }
+    applyRate(videoRefInner.current)
+    applyRate(blurRef.current)
+    wrapRef.current?.querySelectorAll('video').forEach((el) => applyRate(el))
+    Object.values(brollRefs.current).forEach((el) => applyRate(el))
+  }, [edits.speed, videoUrl, canPlay])
 
   useEffect(() => {
     let raf = 0
@@ -640,12 +651,12 @@ export function seekToOutputMs(
   outputMs: number,
   mediaOffsetMs = 0,
 ) {
-  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  const segs = orderedKeepSegments(edits)
   let acc = 0
   let target = edits.trim.in
   for (const [a, b] of segs) {
     const len = b - a
-    if (acc + len >= outputMs) {
+    if (outputMs < acc + len) {
       target = a + (outputMs - acc)
       break
     }

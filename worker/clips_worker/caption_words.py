@@ -1,7 +1,7 @@
 """Line-for-line equivalent of new-app/lib/clips/caption-words.ts."""
 from __future__ import annotations
 
-from clips_worker.clip_keep_segments import keep_segments
+from clips_worker.clip_keep_segments import keep_segments, ordered_keep_segments
 
 def remap_time_ms(t_ms: int, segs: list[tuple[int, int]]) -> int | None:
     acc = 0
@@ -76,7 +76,7 @@ def build_caption_words(words: list[dict], edits: dict, *, words_fallback: bool 
     fix_meta = edits.get("wordFixMeta") or {}
     if words_fallback or edits.get("_wordsFallback"):
         words_fallback = True
-    segs = keep_segments(trim_in, trim_out, cut_ranges)
+    segs = ordered_keep_segments(edits)
     out: list[dict] = []
     for w in words:
         if is_word_cut_by_ranges(w, cut_ranges, trim_in=trim_in, trim_out=trim_out):

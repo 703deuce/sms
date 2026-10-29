@@ -1,5 +1,11 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { keepSegments, outputDurationMs, remapTime } from '@/lib/clips/edits'
+import {
+  normalizeEditSpeed,
+  normalizeSectionOrder,
+  orderedKeepSegments,
+  outputDurationMs,
+  remapTime,
+} from '@/lib/clips/edits'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
 
 export type CropTransform = { scale: number; translateX: number; translateY: number }
@@ -18,12 +24,36 @@ export function applyPlaybackTime(
 ): { sourceMs: number; outputMs: number; atEnd: boolean } {
   const trimIn = edits.trim.in
   const trimOut = edits.trim.out
-  for (const [s, e] of edits.cutRanges) {
-    if (sourceMs >= s && sourceMs < e) return { sourceMs: e, outputMs: remapTime(e, keepSegments(trimIn, trimOut, edits.cutRanges)) ?? 0, atEnd: false }
+  const segs = orderedKeepSegments(edits)
+  const inCut = edits.cutRanges.some(([s, e]) => sourceMs >= s && sourceMs < e)
+  if (inCut) {
+    const cut = edits.cutRanges.find(([s, e]) => sourceMs >= s && sourceMs < e)!
+    const cutEnd = cut[1]
+    const nextSeg = segs.find(([a, b]) => a >= cutEnd && b - a >= 80)
+    if (!nextSeg) {
+      return { sourceMs: trimOut, outputMs: outputDurationMs(edits), atEnd: true }
+    }
+    return {
+      sourceMs: nextSeg[0],
+      outputMs: remapTime(nextSeg[0], segs) ?? 0,
+      atEnd: false,
+    }
   }
   if (sourceMs < trimIn) return { sourceMs: trimIn, outputMs: 0, atEnd: false }
-  if (sourceMs >= trimOut) return { sourceMs: trimOut, outputMs: outputDurationMs(edits), atEnd: true }
-  const out = remapTime(sourceMs, keepSegments(trimIn, trimOut, edits.cutRanges))
+  const segIdx = segs.findIndex(([a, b]) => a <= sourceMs && sourceMs < b)
+  if (segIdx < 0) {
+    if (sourceMs >= trimOut) return { sourceMs: trimOut, outputMs: outputDurationMs(edits), atEnd: true }
+    return { sourceMs: trimIn, outputMs: 0, atEnd: false }
+  }
+  const [, segEnd] = segs[segIdx]!
+  if (sourceMs >= segEnd - 1 && segIdx < segs.length - 1) {
+    const nextStart = segs[segIdx + 1]![0]
+    return { sourceMs: nextStart, outputMs: remapTime(nextStart, segs) ?? 0, atEnd: false }
+  }
+  if (sourceMs >= trimOut || (segIdx === segs.length - 1 && sourceMs >= segEnd - 1)) {
+    return { sourceMs: trimOut, outputMs: outputDurationMs(edits), atEnd: true }
+  }
+  const out = remapTime(sourceMs, segs)
   return { sourceMs, outputMs: out ?? 0, atEnd: false }
 }
 
@@ -33,11 +63,11 @@ export function outputDurationFromEdits(edits: ClipEditsV2): number {
 
 /** Map output timeline ms → source ms (for playhead layout edits). */
 export function sourceMsAtOutput(edits: ClipEditsV2, outputMs: number): number {
-  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
+  const segs = orderedKeepSegments(edits)
   let acc = 0
   for (const [a, b] of segs) {
     const len = b - a
-    if (acc + len >= outputMs) return a + (outputMs - acc)
+    if (outputMs < acc + len) return a + (outputMs - acc)
     acc += len
   }
   return edits.trim.out

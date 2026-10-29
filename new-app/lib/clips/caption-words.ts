@@ -1,4 +1,4 @@
-import { keepSegments, remapTime, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
+import { orderedKeepSegments, remapTime, type ClipEditsV2, type CutRange } from '@/lib/clips/edits'
 
 function remapTimeEnd(tMs: number, segs: [number, number][]): number | null {
   let acc = 0
@@ -38,7 +38,7 @@ export function isWordCutByRanges(w: { s: number; e: number }, cutRanges: CutRan
 /** Output-timeline caption words; shared contract with worker/clips_worker/caption_words.py */
 export function buildCaptionWords(words: CaptionSourceWord[], edits: ClipEditsV2): CaptionWord[] {
   const cutRanges = edits.cutRanges
-  const segs = keepSegments(edits.trim.in, edits.trim.out, cutRanges)
+  const segs = orderedKeepSegments(edits)
   const out: CaptionWord[] = []
   for (const w of words) {
     if (isWordCutByRanges(w, cutRanges)) continue
@@ -65,6 +65,7 @@ export function buildCaptionWords(words: CaptionSourceWord[], edits: ClipEditsV2
       spk: w.spk,
     })
   }
+  out.sort((a, b) => a.s_ms - b.s_ms || a.i - b.i)
   return out
 }
 
