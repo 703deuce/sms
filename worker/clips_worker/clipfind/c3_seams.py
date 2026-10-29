@@ -157,7 +157,7 @@ def _price(model: str):
 
 def gemini_dense_call(c: dict, *, base: Path, base_absolute: bool, time_offset_ms: int, scratch: Path,
                       words, chat_messages, interval_s: float, model: str) -> tuple[dict | None, float]:
-    from clips_worker.clipfind.judge import JUDGE_SYSTEM_DENSE, chat_summary, transcript_lines
+    from clips_worker.clipfind.judge import JUDGE_SYSTEM_DENSE, audio_summary, chat_summary, transcript_lines
     from clips_worker.streamer.signals.chat import STREAMER_CHAT_LAG_S
     from clips_worker.video_picker import (_gemini_post_watch, _labeled_frame_user_parts, estimate_gemini_usd,
                                            make_watch_proxy)
@@ -170,6 +170,7 @@ def gemini_dense_call(c: dict, *, base: Path, base_absolute: bool, time_offset_m
     make_watch_proxy(base, proxy, lo_s + off, hi_s + off)
     user = "\n".join([
         "TRANSCRIPT:", transcript_lines(words, lo_s, hi_s, rel_to=lo_s),
+        f"AUDIO LOUDNESS: {audio_summary(c.get('audio'), lo_s, hi_s, rel_to=lo_s)}",
         "CHAT:", chat_summary(chat_messages, lo_s, hi_s, lag_s=float(STREAMER_CHAT_LAG_S), rel_to=lo_s),
         f"PAYOFF MARKERS: {', '.join(f't={m - lo_s:.1f}' for m in c.get('markers') or [] if lo_s <= m <= hi_s) or '(none)'}",
         f"CANDIDATE NOTE: {c.get('note', '')[:200]}",
@@ -220,7 +221,8 @@ def post_rank_stream(picks, *, words, signals_payload, duration_ms, settings, sc
                 cf = picks[i].ai_meta.get("clipfind") or {}
                 cands.append({"idx": i, "start_ms": picks[i].start_ms, "end_ms": picks[i].end_ms,
                               "beats": cf.get("beats"), "judge": cf.get("judge"), "note": picks[i].title,
-                              "markers": [float(e["sec"]) for e in cue_events or [] if e.get("payoff")]})
+                              "markers": [float(e["sec"]) for e in cue_events or [] if e.get("payoff")],
+                              "audio": (signals_payload or {}).get("audio")})
             budget = D.Budget(D.budget_cap_usd(duration_ms / 3_600_000))
             base_abs = bool((state or {}).get("localUploadKey") and not (state or {}).get("analysisProxyKey"))
             out = D.run_dense(

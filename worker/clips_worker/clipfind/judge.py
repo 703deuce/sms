@@ -45,8 +45,12 @@ HOW TO READ THE MODALITIES TOGETHER
 4. A QUIET moment can score 9-10: a deadpan reply after a pause, a surprising answer, an awkward silence after a
    question, a stranger's unexpected line, a face changing with no sound, a quiet clutch play.
    Treat a held silence or a stunned face after a line as a REACTION. "(pause N s)" marks silences in the transcript.
-5. For IRL: a second person entering the frame or addressing the camera is a strong start cue. Walking, driving,
+5. Non-gaming covers BOTH out-and-about IRL AND at-the-desk Just Chatting; judge them equally.
+   Out and about: a second person entering the frame or addressing the camera is a strong start cue. Walking, driving,
    waiting and scenery alone are filler until something happens between people.
+   At the desk: the event is what is said or shown. A hot take and the pushback, a story reaching its punchline, a
+   roast or comeback to a chat message / TTS / donation (include the message being read), a guest or caller line,
+   a face reaction to something on screen, a sudden mood change. Reading chat, thanking subs and idle talk are filler.
 6. For reaction content: the clip must show enough of the on-screen source to see the cause.
 
 FIND THE BOUNDARIES (all times in the same seconds as the transcript labels)
