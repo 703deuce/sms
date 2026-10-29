@@ -1,9 +1,17 @@
 'use client'
 
-import { Component, type ReactNode, useState } from 'react'
+import { Component, type ReactNode, useEffect, useRef, useState } from 'react'
 import { ChevronDown, History, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +62,64 @@ class VersionsMenuErrorBoundary extends Component<{ children: ReactNode }, { fai
   }
 }
 
+function SaveVersionDialog({
+  open,
+  onOpenChange,
+  onSave,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSave: (name: string) => void
+}) {
+  const [saveName, setSaveName] = useState('My version')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    setSaveName('My version')
+    const t = window.setTimeout(() => inputRef.current?.focus(), 0)
+    return () => window.clearTimeout(t)
+  }, [open])
+
+  const submit = () => {
+    const name = saveName.trim()
+    if (!name) return
+    onSave(name)
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" data-testid="versions-save-dialog">
+        <DialogHeader>
+          <DialogTitle>Save version</DialogTitle>
+          <DialogDescription>Name this snapshot of your current edits.</DialogDescription>
+        </DialogHeader>
+        <Input
+          ref={inputRef}
+          aria-label="Version name"
+          value={saveName}
+          onChange={(e) => setSaveName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              submit()
+            }
+          }}
+        />
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={!saveName.trim()} onClick={submit} data-testid="versions-save-submit">
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function EditorVersionsMenuInner({
   enabled,
   versions,
@@ -69,112 +135,99 @@ function EditorVersionsMenuInner({
   onDeleteVersion: (id: string) => void
   onRestoreOriginal: () => void
 }) {
-  const [saveOpen, setSaveOpen] = useState(false)
-  const [saveName, setSaveName] = useState('My version')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   if (!enabled) return null
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button type="button" size="sm" variant="outline" className="gap-1" data-testid="versions-menu">
-            Versions
-            <ChevronDown className="size-3.5 opacity-70" aria-hidden />
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="flex items-center gap-2">
-            <History className="size-4" aria-hidden />
-            Edit versions
-          </DropdownMenuLabel>
-        </DropdownMenuGroup>
-        <DropdownMenuItem
-          onClick={(e) => {
-            e.preventDefault()
-            setSaveOpen((v) => !v)
-          }}
-          data-testid="versions-save-item"
-        >
-          Save version…
-        </DropdownMenuItem>
-        {saveOpen ? (
-          <div className="flex flex-col gap-2 px-2 py-2" data-testid="versions-save-form">
-            <Input
-              aria-label="Version name"
-              value={saveName}
-              onChange={(e) => setSaveName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const name = saveName.trim()
-                  if (!name) return
-                  onSaveVersion(name)
-                  setSaveOpen(false)
-                }
-              }}
-            />
-            <Button
-              type="button"
-              size="sm"
-              disabled={!saveName.trim()}
-              onClick={() => {
-                const name = saveName.trim()
-                if (!name) return
-                onSaveVersion(name)
-                setSaveOpen(false)
-              }}
-            >
-              Save
+    <>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger
+          render={
+            <Button type="button" size="sm" variant="outline" className="gap-1" data-testid="versions-menu">
+              Versions
+              <ChevronDown className="size-3.5 opacity-70" aria-hidden />
             </Button>
-          </div>
-        ) : null}
-        <DropdownMenuSeparator />
-        {versions.length === 0 ? (
-          <DropdownMenuItem disabled data-testid="versions-empty-item">
-            No saved versions yet
+          }
+        />
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="flex items-center gap-2">
+              <History className="size-4" aria-hidden />
+              Edit versions
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.preventDefault()
+              setMenuOpen(false)
+              setSaveDialogOpen(true)
+            }}
+            data-testid="versions-save-item"
+          >
+            Save version…
           </DropdownMenuItem>
-        ) : (
-          versions.map((v) => (
-            <DropdownMenuItem
-              key={v.id}
-              className="flex flex-col items-start gap-1 py-2"
-              onClick={(e) => e.preventDefault()}
-              data-testid={`versions-row-${v.id}`}
-            >
-              <span className="text-sm font-medium">{v.name}</span>
-              <span className="text-[10px] text-muted-foreground">{relativeTime(v.createdAt)}</span>
-              <span className="mt-1 flex gap-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="h-7 text-xs"
-                  onClick={() => onRestoreVersion(v.id)}
-                >
-                  Restore
-                </Button>
-                {v.kind !== 'original' ? (
+          <DropdownMenuSeparator />
+          {versions.length === 0 ? (
+            <DropdownMenuItem disabled data-testid="versions-empty-item">
+              No saved versions yet
+            </DropdownMenuItem>
+          ) : (
+            versions.map((v) => (
+              <DropdownMenuItem
+                key={v.id}
+                className="flex flex-col items-start gap-1 py-2"
+                onClick={(e) => e.preventDefault()}
+                data-testid={`versions-row-${v.id}`}
+              >
+                <span className="text-sm font-medium">{v.name}</span>
+                <span className="text-[10px] text-muted-foreground">{relativeTime(v.createdAt)}</span>
+                <span className="mt-1 flex gap-1">
                   <Button
                     type="button"
                     size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs text-destructive"
-                    onClick={() => onDeleteVersion(v.id)}
+                    variant="secondary"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      onRestoreVersion(v.id)
+                    }}
                   >
-                    <Trash2 className="mr-1 size-3" aria-hidden />
-                    Delete
+                    Restore
                   </Button>
-                ) : null}
-              </span>
-            </DropdownMenuItem>
-          ))
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onRestoreOriginal} data-testid="versions-restore-original">
-          Restore original
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+                  {v.kind !== 'original' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs text-destructive"
+                      onClick={() => onDeleteVersion(v.id)}
+                    >
+                      <Trash2 className="mr-1 size-3" aria-hidden />
+                      Delete
+                    </Button>
+                  ) : null}
+                </span>
+              </DropdownMenuItem>
+            ))
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => {
+              setMenuOpen(false)
+              onRestoreOriginal()
+            }}
+            data-testid="versions-restore-original"
+          >
+            Restore original
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <SaveVersionDialog
+        open={saveDialogOpen}
+        onOpenChange={setSaveDialogOpen}
+        onSave={onSaveVersion}
+      />
+    </>
   )
 }
 

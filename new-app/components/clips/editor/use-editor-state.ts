@@ -15,6 +15,7 @@ import { isManualBroll } from '@/lib/clips/broll-auto-utils'
 import {
   canonicalEditsJson,
   defaultEdits,
+  editsPayloadForSave,
   mergeCutRanges,
   normalizeEdits,
   subtractRangeFromCuts,
@@ -582,7 +583,7 @@ export function useEditorState(
         })
         try {
           const res = await patchClip(clipId, {
-            edits: editsRef.current,
+            edits: editsPayloadForSave(editsRef.current),
             baseVersion: serverVersionRef.current,
             expectedUpdatedAt: serverUpdatedAtRef.current,
           })

@@ -15,6 +15,7 @@ import {
   type ClipStudioSound,
 } from '@/lib/clips/audio'
 import { isSpeechLevelingEnabled, speechLevelingPatch } from '@/lib/clips/speech-leveling'
+import { normalizeEditSpeed } from '@/lib/clips/edits'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
@@ -53,7 +54,11 @@ export function AudioPanel({
   onStartStudioSound?: () => void
   studioSlow?: boolean
   onRetryStudioPoll?: () => void
-  onPatchExportAudio?: (patch: Pick<ClipEditsV2, 'loudnessLufs' | 'speed' | 'speechLevelingEnabled'>) => void
+  onPatchExportAudio?: (
+    patch: Pick<ClipEditsV2, 'loudnessLufs' | 'speed' | 'speechLevelingEnabled'> & {
+      speed?: ClipEditsV2['speed'] | null
+    },
+  ) => void
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -177,7 +182,7 @@ export function AudioPanel({
           <div className="flex flex-wrap gap-1">
             {([1, 1.1, 1.25, 1.5] as const).map((s) => {
               const active =
-                s === 1 ? edits.speed == null : edits.speed === s
+                s === 1 ? normalizeEditSpeed(edits.speed) === undefined : edits.speed === s
               return (
                 <Button
                   key={s}
@@ -186,7 +191,7 @@ export function AudioPanel({
                   variant={active ? 'default' : 'outline'}
                   className="h-7 min-w-[3rem] px-2"
                   onClick={() =>
-                    onPatchExportAudio?.({ speed: s === 1 ? undefined : s })
+                    onPatchExportAudio?.({ speed: s === 1 ? null : s })
                   }
                 >
                   {s === 1 ? '1×' : `${s}×`}

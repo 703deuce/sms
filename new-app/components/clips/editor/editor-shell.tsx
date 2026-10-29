@@ -1026,7 +1026,13 @@ export function EditorShell({
           onStartStudioSound={startStudioSoundPreview}
           studioSlow={studioSlow}
           onRetryStudioPoll={retryPoll}
-          onPatchExportAudio={(patch) => setEdits({ ...edits, ...patch })}
+          onPatchExportAudio={(patch) => {
+            const next = { ...edits, ...patch }
+            if ('speed' in patch && (patch.speed === null || patch.speed === undefined)) {
+              delete next.speed
+            }
+            setEdits(next)
+          }}
         />
         </EditorPanelErrorBoundary>
       </div>

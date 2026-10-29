@@ -1,6 +1,6 @@
 import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
 import { normalizeCropTrack, shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
-import { normalizeEdits, type ClipBounds, type ClipWord } from '@/lib/clips/edits'
+import { mergeEditsPatch, normalizeEdits, type ClipBounds, type ClipWord } from '@/lib/clips/edits'
 import { normalizeTranscriptJson, resolveEditorWords } from '@/lib/server/clips/editor-words'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { clipperCapabilities } from '@/lib/server/clips/clipper-capabilities'
@@ -246,12 +246,4 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   return payload
 }
 
-export function mergeEditsPatch(
-  current: ReturnType<typeof normalizeEdits>,
-  patch: unknown,
-  bounds: ClipBounds,
-) {
-  const base = normalizeEdits(current, bounds)
-  if (!patch || typeof patch !== 'object') return base
-  return normalizeEdits({ ...base, ...(patch as object) }, bounds)
-}
+export { mergeEditsPatch, editsPayloadForSave } from '@/lib/clips/edits'

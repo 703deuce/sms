@@ -310,7 +310,21 @@ export function mergeEditsPatch(
 ): ClipEditsV2 {
   const base = normalizeEdits(current, bounds)
   if (!patch || typeof patch !== 'object') return base
-  return normalizeEdits({ ...base, ...(patch as object) }, bounds)
+  const p = patch as Record<string, unknown>
+  const merged: Record<string, unknown> = { ...base, ...p }
+  if (Object.prototype.hasOwnProperty.call(p, 'speed') && (p.speed === null || p.speed === 1)) {
+    delete merged.speed
+  }
+  return normalizeEdits(merged, bounds)
+}
+
+/** JSON-safe edits for PATCH — explicit `speed: null` clears persisted export speed (1×). */
+export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown> {
+  const payload = JSON.parse(canonicalEditsJson(edits)) as Record<string, unknown>
+  if (normalizeEditSpeed(edits.speed) === undefined) {
+    payload.speed = null
+  }
+  return payload
 }
 
 export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
