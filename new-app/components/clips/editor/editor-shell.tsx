@@ -45,7 +45,7 @@ import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { LayersPanel } from '@/components/clips/editor/layers-panel'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
-import { templateFromEdits } from '@/lib/clips/layers-template'
+import { applyAutoTemplateToEdits, applyTemplateV3ToEdits, templateFromEdits } from '@/lib/clips/layers-template'
 import { clipStyleSettingsFromEdits, type BrandTemplateSettings } from '@/lib/clips/brand'
 import { saveClipBrandTemplate } from '@/lib/clips-api'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -274,9 +274,9 @@ export function EditorShell({
   )
 
   const onLayoutMode = useCallback(
-    (mode: ClipEditsV2['layout']['mode']) => {
+    (mode: ClipEditsV2['layout']['mode'], facecam?: ClipEditsV2['layout']['facecam']) => {
       logEditorDecision('layout', { clipId, mode, reason: 'layout_panel' })
-      setLayoutMode(mode)
+      setLayoutMode(mode, facecam)
     },
     [clipId, setLayoutMode],
   )
@@ -368,19 +368,24 @@ export function EditorShell({
       .catch(() => setBrandLogoUrl(null))
   }, [edits.brand])
 
-  const saveLayersBrandTemplate = useCallback(async () => {
-    const name = window.prompt('Brand template name')
-    if (!name?.trim()) return
+  const saveLayersBrandTemplate = useCallback(async (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
     try {
       const logoKey = (edits.brand as { logoKey?: string } | undefined)?.logoKey ?? null
-      await saveClipBrandTemplate({
-        name: name.trim(),
-        settings: {
-          ...clipStyleSettingsFromEdits(edits),
-          templateV3: templateFromEdits(edits, name.trim()),
-        },
+      const settings = {
+        ...clipStyleSettingsFromEdits(edits),
+        templateV3: templateFromEdits(edits, trimmed),
+      }
+      const res = await saveClipBrandTemplate({
+        name: trimmed,
+        settings,
         logoKey,
       })
+      setBrandTemplates((prev) => [
+        { id: res.template.id, name: res.template.name, settings },
+        ...prev.filter((t) => t.id !== res.template.id),
+      ])
       toast.success('Brand template saved')
       void clipsFetch<{ items: { id: string; name: string; settings: unknown }[] }>('/api/clips/brand/templates')
         .then((data) => setBrandTemplates(data.items ?? []))
@@ -590,6 +595,21 @@ export function EditorShell({
   const streamChatAvailable = vodChatOverlayEnabled(vodChatResolveInput)
   const streamChatToggleHint = vodChatToggleHint(vodChatResolveInput)
 
+  const applyAutoBrandTemplate = useCallback(() => {
+    setEdits(
+      applyAutoTemplateToEdits(edits, {
+        streamerSide,
+        platform:
+          streamerSide?.platform === 'kick'
+            ? 'kick'
+            : streamerSide?.platform === 'twitch'
+              ? 'twitch'
+              : undefined,
+      }),
+    )
+    toast.success('Auto template applied')
+  }, [edits, setEdits, streamerSide])
+
   const panelBody = (
     <>
       <div className={panel === 'transcript' ? undefined : 'hidden'} aria-hidden={panel !== 'transcript'}>
@@ -667,6 +687,7 @@ export function EditorShell({
             }
             brandTemplates={brandTemplates}
             onApplyTemplate={applyBrandTemplateById}
+            onApplyAutoTemplate={applyAutoBrandTemplate}
             onSaveTemplate={saveLayersBrandTemplate}
             onSyncEditsSaveVersion={syncEditsSaveVersion}
           />

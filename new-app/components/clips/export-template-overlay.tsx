@@ -74,7 +74,12 @@ export function ExportTemplateOverlay({
   if (!overlaysActive && !chatOn) return null
 
   const layoutMode = edits.layout?.mode ?? 'speaker_follow'
-  const layers = resolveLayers(edits)
+  let layers: ReturnType<typeof resolveLayers> = []
+  try {
+    layers = resolveLayers(edits)
+  } catch (e) {
+    console.error('[clipper:export] layers_resolve_fail', e)
+  }
   const badgeLayer = layers.find((l): l is BadgeLayer => l.id === 'badge' && l.type === 'badge' && l.enabled)
   const stickerLayer = layers.find(
     (l): l is StickerLayer => l.type === 'sticker' && l.kind === 'follow_cta' && l.enabled,
@@ -110,8 +115,8 @@ export function ExportTemplateOverlay({
   const scaleX = boxWidth / 1080
 
   if (useFitTop && (headlineOn || chatOn)) {
-    const lay = overlayLayout(Math.max(2, lines.length || 2), boxWidth, boxHeight)
-    const sy = boxHeight / lay.playH
+    const lay = overlayLayout(Math.max(2, lines.length || 2))
+    const sy = boxHeight / 1920
     const fontPx = Math.max(10, Math.round(84 * sy))
     return (
       <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
@@ -146,9 +151,10 @@ export function ExportTemplateOverlay({
             placement="fit_top_band"
             boxWidth={boxWidth}
             boxHeight={boxHeight}
-            videoY={lay.videoY * sy}
-            videoH={lay.videoH * sy}
-            badgeY={lay.badgeY * sy}
+            videoY={lay.videoY}
+            videoH={lay.videoH}
+            badgeY={lay.badgeY}
+            layoutMode={layoutMode}
           />
         ) : null}
         {stickerLayer ? (

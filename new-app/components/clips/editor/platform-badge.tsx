@@ -1,6 +1,6 @@
 'use client'
 
-import { badgeRect } from '@/lib/clips/overlay-geometry'
+import { badgePlacementForLayout, badgeRect } from '@/lib/clips/overlay-geometry'
 
 export function PlatformBadgePreview({
   platform,
@@ -8,6 +8,7 @@ export function PlatformBadgePreview({
   showLogo,
   handle,
   placement,
+  layoutMode,
   boxWidth,
   boxHeight,
   videoY = 0,
@@ -18,7 +19,8 @@ export function PlatformBadgePreview({
   showLabel: boolean
   showLogo: boolean
   handle?: string
-  placement: 'fit_top_band' | 'export_bar'
+  placement?: 'fit_top_band' | 'export_bar'
+  layoutMode?: string
   boxWidth: number
   boxHeight: number
   videoY?: number
@@ -28,25 +30,37 @@ export function PlatformBadgePreview({
   if (platform === 'none' || (!showLabel && !showLogo)) return null
   const playW = 1080
   const playH = 1920
-  const rect = badgeRect(placement, playW, playH, { videoY, videoH, badgeY: badgeY ?? null })
+  const resolvedPlacement = placement ?? badgePlacementForLayout(layoutMode ?? 'speaker_follow')
+  const label = platform === 'kick' ? 'KICK' : 'TWITCH'
+  const text = (showLabel ? (handle || label) : '').toUpperCase().slice(0, 24)
+  const rect = badgeRect(resolvedPlacement, playW, playH, {
+    text,
+    showLogo,
+    videoY,
+    videoH,
+    badgeY: badgeY ?? null,
+  })
   const sx = boxWidth / playW
   const sy = boxHeight / playH
+  const s = playH / 1920
   const color = platform === 'kick' ? '#53FC18' : '#9146FF'
-  const label = platform === 'kick' ? 'KICK' : 'TWITCH'
-  const text = (handle || label).toUpperCase().slice(0, 24)
+  const logoH = Math.max(8, Math.round(40 * s * sy))
+  const fontPx = Math.max(8, Math.round(32 * s * sy))
 
   return (
     <div
-      className="pointer-events-none absolute flex items-center gap-1 rounded font-bold text-white"
+      className="pointer-events-none absolute flex items-center justify-center gap-1 font-bold text-white"
       style={{
         left: rect.x * sx,
         top: rect.y * sy,
         width: rect.w * sx,
         height: rect.h * sy,
-        backgroundColor: showLogo ? color : color,
-        fontSize: Math.max(8, Math.round((rect.h * sy) / 3)),
-        paddingLeft: showLogo ? 4 : 8,
-        paddingRight: 8,
+        backgroundColor: color,
+        fontSize: fontPx,
+        paddingLeft: showLogo ? Math.round(22 * s * sx) : Math.round(12 * sx),
+        paddingRight: Math.round(12 * sx),
+        borderRadius: (rect.h * sy) / 2,
+        whiteSpace: 'nowrap',
       }}
     >
       {showLogo ? (
@@ -54,13 +68,13 @@ export function PlatformBadgePreview({
         <img
           src={platform === 'kick' ? '/brand/kick_black_128.png' : '/brand/twitch_white_128.png'}
           alt=""
-          width={Math.min(rect.w * sx - 8, 28)}
-          height={Math.min(rect.h * sy - 4, 28)}
+          height={logoH}
           className="shrink-0 object-contain"
+          style={{ height: logoH, width: 'auto' }}
           aria-hidden
         />
       ) : null}
-      {showLabel ? <span className="truncate">{text}</span> : null}
+      {showLabel && text ? <span>{text}</span> : null}
     </div>
   )
 }

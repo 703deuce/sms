@@ -16,13 +16,7 @@ export class EditorPanelErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    const tag = '[clip-editor-panel-error]'
-    console.error(tag, {
-      panel: this.props.label,
-      message: error.message,
-      stack: error.stack,
-      componentStack: info.componentStack,
-    })
+    console.error('[clipper:ui-error]', this.props.label, error, info.componentStack)
     if (typeof window !== 'undefined') {
       void fetch('/api/clips/client-error', {
         method: 'POST',
@@ -45,6 +39,9 @@ export class EditorPanelErrorBoundary extends Component<
           <p className="font-medium text-destructive">{this.props.label} couldn&apos;t load</p>
           <p className="mt-1 text-muted-foreground">
             Other editor panels still work. Try undoing recent changes or reload the page.
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
+            {this.state.error.name}: {this.state.error.message}
           </p>
           <Button
             type="button"

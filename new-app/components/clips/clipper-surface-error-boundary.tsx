@@ -16,20 +16,20 @@ export class ClipperSurfaceErrorBoundary extends Component<Props, { error: Error
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('[clipper:ui-error]', {
-      surface: this.props.surface,
-      message: error.message,
-      componentStack: info.componentStack,
-    })
+    console.error('[clipper:ui-error]', this.props.surface, error, info.componentStack)
   }
 
   render() {
     if (this.state.error) {
+      const err = this.state.error
       return (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-sm">
           <p className="font-medium text-destructive">Something went wrong</p>
           <p className="mt-1 text-muted-foreground">
             {this.props.surface} hit an unexpected error. Your project is still saved on the server when possible.
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
+            {err.name}: {err.message}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button type="button" size="sm" onClick={() => this.setState({ error: null })}>

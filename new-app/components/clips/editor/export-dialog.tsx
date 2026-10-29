@@ -42,6 +42,7 @@ import {
   normalizeExportSfxMode,
   type ExportSfxMode,
 } from '@/lib/clips/export-sfx'
+import { ExportLayoutPicker } from '@/components/clips/editor/export-layout-picker'
 import { resolveLayers } from '@/lib/clips/layers'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
@@ -324,7 +325,14 @@ export function ExportDialog({
     return exportPolishLintWarnings(items)
   }, [edits, exportPlatform])
 
-  const layerSummary = useMemo(() => resolveLayers(edits), [edits])
+  const layerSummary = useMemo(() => {
+    try {
+      return resolveLayers(edits)
+    } catch (e) {
+      console.error('[clipper:export] layers_resolve_fail', e)
+      return []
+    }
+  }, [edits])
   const headlineLayer = layerSummary.find((l) => l.id === 'headline' && l.type === 'headline')
   const stickerLayer = layerSummary.find((l) => l.type === 'sticker' && l.kind === 'follow_cta')
 
@@ -554,7 +562,7 @@ export function ExportDialog({
           <ul className="mt-1 space-y-0.5 text-muted-foreground">
             <li>
               Headline style:{' '}
-              {headlineLayer && headlineLayer.type === 'headline'
+              {headlineLayer && headlineLayer.type === 'headline' && headlineLayer.style?.preset
                 ? headlineLayer.style.preset.replace(/_/g, ' ')
                 : 'default'}
             </li>

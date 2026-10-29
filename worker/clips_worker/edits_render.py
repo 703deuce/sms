@@ -739,7 +739,7 @@ def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
     edits = ctx.get("edits") or {}
     layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
     from clips_worker.clip_export_template import stream_headline_frame_layout
-    from clips_worker.layers_spec import _layer_by_id, badge_sprite_active
+    from clips_worker.layers_spec import _layer_by_id, _placement, badge_sprite_active
     from clips_worker.layer_sprites import render_badge_png, render_sticker_png
     from clips_worker.overlay_geometry import sticker_rect
     from clips_worker.streamer.layout.stream_overlay_layout import overlay_layout
@@ -777,7 +777,18 @@ def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
                 }
             )
         elif ltype == "badge" and badge_sprite_active(layer):
-            placement = str(layer.get("placement") or "export_bar")
+            placement = _placement(edits)
+            platform = str(layer.get("platform") or "twitch")
+            from clips_worker.clip_export_template import _platform_label
+
+            label, _ = _platform_label(platform)
+            show_label = bool(layer.get("showLabel"))
+            show_logo = bool(layer.get("showLogo"))
+            handle = str(layer.get("handle") or layer.get("url") or "").split("/")[-1][:24]
+            text = handle.upper() if handle else label
+            if not show_label and not show_logo:
+                text = label
+            badge_text = text if show_label else ""
             dest = work_dir / f"sprite_{layer.get('id', 'badge')}.png"
             render_badge_png(
                 layer,
@@ -795,6 +806,8 @@ def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
                 placement,
                 play_w,
                 play_h,
+                text=badge_text,
+                show_logo=show_logo,
                 video_y=lay["video_y"] if placement == "fit_top_band" else video_y,
                 video_h=lay["video_h"] if placement == "fit_top_band" else video_h,
                 badge_y=lay.get("badge_y"),

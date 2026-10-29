@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +8,6 @@ import { Switch } from '@/components/ui/switch'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { HeadlineLayer, BadgeLayer, Layer, StickerLayer } from '@/lib/clips/layers'
 import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
-import { templateFromEdits } from '@/lib/clips/layers-template'
 import { EditorHeadlineField } from '@/components/clips/editor/editor-headline-field'
 
 const HEADLINE_PRESETS: HeadlineLayer['style']['preset'][] = [
@@ -31,6 +30,7 @@ export function LayersPanel({
   platform,
   brandTemplates,
   onApplyTemplate,
+  onApplyAutoTemplate,
   onSaveTemplate,
   onSyncEditsSaveVersion,
 }: {
@@ -42,14 +42,14 @@ export function LayersPanel({
   platform?: 'twitch' | 'kick'
   brandTemplates?: { id: string; name: string; settings: unknown }[]
   onApplyTemplate?: (templateId: string) => void
-  onSaveTemplate?: () => void | Promise<void>
+  onApplyAutoTemplate?: () => void
+  onSaveTemplate?: (name: string) => void | Promise<void>
   onSyncEditsSaveVersion?: (version: number) => void
 }) {
+  const [templateName, setTemplateName] = useState('')
   const headline = layers.find((l): l is HeadlineLayer => l.id === 'headline' && l.type === 'headline')
   const badge = layers.find((l): l is BadgeLayer => l.id === 'badge' && l.type === 'badge')
   const sticker = layers.find((l): l is StickerLayer => l.type === 'sticker' && l.kind === 'follow_cta')
-
-  const saveTemplateSnapshot = useMemo(() => templateFromEdits(edits, 'Current clip'), [edits])
 
   const ensureBadge = (): BadgeLayer => {
     if (badge) return badge
@@ -93,26 +93,54 @@ export function LayersPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {brandTemplates && brandTemplates.length > 0 && onApplyTemplate ? (
+      {(onApplyAutoTemplate || (brandTemplates && brandTemplates.length > 0 && onApplyTemplate)) ? (
         <div className="space-y-2 rounded-lg border border-border p-3">
           <p className="text-xs font-medium">Brand template</p>
           <div className="flex flex-wrap gap-2">
-            {brandTemplates.map((t) => (
-              <Button key={t.id} type="button" size="sm" variant="outline" onClick={() => onApplyTemplate(t.id)}>
+            {onApplyAutoTemplate ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => onApplyAutoTemplate()}>
+                Auto
+              </Button>
+            ) : null}
+            {brandTemplates?.map((t) => (
+              <Button key={t.id} type="button" size="sm" variant="outline" onClick={() => onApplyTemplate?.(t.id)}>
                 {t.name}
               </Button>
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            Applies v3 layers when the template includes templateV3; otherwise legacy brand fields.
+            Auto applies streamer defaults on VOD clips. Saved templates apply v3 layers when present.
           </p>
         </div>
       ) : null}
 
       {onSaveTemplate ? (
-        <Button type="button" size="sm" variant="outline" onClick={() => void onSaveTemplate()}>
-          Save as brand template
-        </Button>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[160px] flex-1 space-y-1">
+            <Label htmlFor={`${clipId}-template-name`} className="text-xs">
+              Template name
+            </Label>
+            <Input
+              id={`${clipId}-template-name`}
+              placeholder="Template name"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!templateName.trim()}
+            onClick={() => {
+              const name = templateName.trim()
+              if (!name) return
+              void Promise.resolve(onSaveTemplate(name)).then(() => setTemplateName(''))
+            }}
+          >
+            Save template
+          </Button>
+        </div>
       ) : null}
 
       <EditorHeadlineField
@@ -233,13 +261,6 @@ export function LayersPanel({
           </>
         )}
       </div>
-
-      <details className="rounded-lg border border-border p-3 text-xs text-muted-foreground">
-        <summary className="cursor-pointer font-medium text-foreground">Template v3 snapshot</summary>
-        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all">
-          {JSON.stringify(saveTemplateSnapshot, null, 2)}
-        </pre>
-      </details>
     </div>
   )
 }

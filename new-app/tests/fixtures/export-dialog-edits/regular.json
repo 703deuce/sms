@@ -1,0 +1,17 @@
+{
+  "v": 2,
+  "trim": { "in": 0, "out": 30000 },
+  "cutRanges": [],
+  "wordFixes": {},
+  "captions": {
+    "enabled": true,
+    "presetId": "bold_pop",
+    "animation": "pop",
+    "size": 6.5,
+    "position": "bottom",
+    "case": "sentence",
+    "wordsPerLine": 2
+  },
+  "layout": { "mode": "speaker_follow", "shotOverrides": [] },
+  "silenceTrim": { "enabled": false, "minGapMs": 350, "keepMs": 120 }
+}

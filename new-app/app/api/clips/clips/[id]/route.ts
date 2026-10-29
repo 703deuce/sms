@@ -35,8 +35,12 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const patchStartedAt = Date.now()
+  let patchClipId: string | null = null
+  let patchCas: number | null = null
   try {
     const { id } = await ctx.params
+    patchClipId = id
     const workspaceId = await resolveWorkspaceId()
     const clip = await getClipForWorkspace(workspaceId, id)
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -88,6 +92,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
           editsSaveVersion: { increment: 1 },
         },
       })
+      patchCas = cas.count
       if (cas.count === 0) {
         const fresh = await prisma.clip.findUniqueOrThrow({ where: { id } })
         const freshEdits = normalizeEdits(fresh.edits, bounds)
@@ -151,5 +156,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     })
   } catch (err) {
     return jsonError(err, 400)
+  } finally {
+    if (patchClipId) {
+      console.info('[clipper:patch] ms', {
+        clipId: patchClipId,
+        ms: Date.now() - patchStartedAt,
+        cas: patchCas,
+      })
+    }
   }
 }

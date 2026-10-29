@@ -17,7 +17,10 @@ import {
   type ClipGapToolSettings,
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
-import { defaultLayoutSegments } from '@/lib/clips/layout-segments'
+import {
+  ClipShortenGapsPanel,
+  type ClipGapToolSettings,
+} from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
@@ -84,7 +87,10 @@ export function LayoutPanel({
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
-  onMode: (mode: ClipEditsV2['layout']['mode']) => void
+  onMode: (
+    mode: ClipEditsV2['layout']['mode'],
+    facecam?: ClipEditsV2['layout']['facecam'],
+  ) => void
   onShotFocus: (i: number, focus: 'auto' | 'A' | 'B' | 'both') => void
   onRerunReframe: (shotIndex: number) => void
   onApplyBrand?: () => void
@@ -257,8 +263,23 @@ export function LayoutPanel({
           )}
         </div>
       )}
+      {(() => {
+        const savedFacecamMode =
+          edits.layout.mode === 'facecam_stack' || edits.layout.mode === 'facecam_pip'
+        if (!savedFacecamMode || facecamLayout?.facecam) return null
+        const label =
+          edits.layout.mode === 'facecam_stack' ? 'Facecam stack' : 'Facecam PiP'
+        return (
+          <p className="text-xs text-amber-800 dark:text-amber-300" role="note">
+            This clip is set to {label}, but no facecam was detected — export uses Fit with blur. Pick a
+            layout.
+          </p>
+        )
+      })()}
       {layoutOptions.some((l) => l.id === 'facecam_stack' || l.id === 'facecam_pip') &&
-      !facecamLayout?.facecam ? (
+      !facecamLayout?.facecam &&
+      edits.layout.mode !== 'facecam_stack' &&
+      edits.layout.mode !== 'facecam_pip' ? (
         <p className="text-xs text-amber-800 dark:text-amber-300" role="note">
           Facecam stack and PiP need detected facecam boxes from the VOD. Run stream layout detection or pick another
           layout.
@@ -271,6 +292,7 @@ export function LayoutPanel({
           const needsFacecam = l.id === 'facecam_stack' || l.id === 'facecam_pip'
           const disabled =
             l.disabled || (beta && !reframeV2Enabled) || (needsFacecam && !facecamLayout?.facecam)
+          const selected = edits.layout.mode === l.id && !disabled
           return (
           <button
             key={l.id}
@@ -278,28 +300,21 @@ export function LayoutPanel({
             disabled={disabled}
             onClick={() => {
               if (disabled) return
-              if (onEdits) {
-                const layout = {
-                  ...edits.layout,
-                  mode: l.id,
-                  layoutSegments: defaultLayoutSegments(edits.trim.in, edits.trim.out, l.id),
-                }
-                if (needsFacecam && facecamLayout?.facecam) {
-                  layout.facecam = {
-                    box: facecamLayout.facecam,
-                    gameplay: facecamLayout.gameplay ?? undefined,
-                    split: facecamLayout.split ?? 0.4,
-                    position: facecamLayout.facecamPosition ?? 'top',
-                    pipCorner: edits.layout.facecam?.pipCorner ?? 'BR',
-                  }
-                }
-                onEdits({ ...edits, layout })
+              const needsFacecamPick = l.id === 'facecam_stack' || l.id === 'facecam_pip'
+              if (needsFacecamPick && facecamLayout?.facecam) {
+                onMode(l.id, {
+                  box: facecamLayout.facecam,
+                  gameplay: facecamLayout.gameplay ?? undefined,
+                  split: facecamLayout.split ?? 0.4,
+                  position: facecamLayout.facecamPosition ?? 'top',
+                  pipCorner: edits.layout.facecam?.pipCorner ?? 'BR',
+                })
               } else {
                 onMode(l.id)
               }
             }}
             className={`rounded-lg border p-3 text-left ${
-              edits.layout.mode === l.id ? 'border-primary ring-1 ring-primary' : 'border-border'
+              selected ? 'border-primary ring-1 ring-primary' : 'border-border'
             } ${disabled ? 'opacity-50' : ''}`}
           >
             <p className="text-sm font-medium">

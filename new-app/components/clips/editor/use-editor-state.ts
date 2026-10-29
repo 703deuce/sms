@@ -307,13 +307,17 @@ export function useEditorState(
   )
 
   const setLayoutMode = useCallback(
-    (mode: ClipEditsV2['layout']['mode']) => {
+    (
+      mode: ClipEditsV2['layout']['mode'],
+      facecam?: ClipEditsV2['layout']['facecam'],
+    ) => {
       let next: ClipEditsV2 = {
         ...state.edits,
         layout: {
           ...state.edits.layout,
           mode,
           layoutSegments: defaultLayoutSegments(state.edits.trim.in, state.edits.trim.out, mode),
+          ...(facecam ? { facecam } : {}),
         },
       }
       const tpl = next.exportTemplate
@@ -532,8 +536,13 @@ export function useEditorState(
 
     saveInFlightRef.current = true
     dispatch({ type: 'saving' })
+    const saveStartedAt = Date.now()
+    let attempts = 0
+    let conflicts = 0
+    let failed = false
     try {
       while (savedRevisionRef.current < localRevisionRef.current) {
+        attempts += 1
         const revisionAtSend = localRevisionRef.current
         saveBaseEditsRef.current = lastSavedEditsRef.current
         writeEditorAutosaveDraft(clipId, {
@@ -558,6 +567,7 @@ export function useEditorState(
           break
         } catch (err) {
           if (err instanceof FetchJsonError && err.status === 409 && err.conflictData) {
+            conflicts += 1
             const data = err.conflictData as {
               edits?: ClipEditsV2
               updatedAt?: string
@@ -586,16 +596,24 @@ export function useEditorState(
         }
       }
     } catch {
+      failed = true
       dispatch({ type: 'saveFailed' })
       toast.error('Could not save edits')
     } finally {
       saveInFlightRef.current = false
       const pending = savePendingRef.current
       savePendingRef.current = false
-      dispatch({
-        type: 'saved',
-        clean: savedRevisionRef.current >= localRevisionRef.current,
+      console.info('[clipper:editor] save', {
+        ms: Date.now() - saveStartedAt,
+        attempts,
+        conflicts,
       })
+      if (!failed) {
+        dispatch({
+          type: 'saved',
+          clean: savedRevisionRef.current >= localRevisionRef.current,
+        })
+      }
       if (savedRevisionRef.current < localRevisionRef.current) {
         dispatch({ type: 'needsSave' })
       }

@@ -45,6 +45,15 @@ _DEFAULTS: dict = {
         "export_bar": {"textColor": "#000000", "boxColor": "#FFFFFF", "radiusPx": 0},
         "export_bar_dark": {"textColor": "#FFFFFF", "boxColor": "#000000", "radiusPx": 0},
     },
+    "badge": {
+        "hPx": 64,
+        "padXPx": 22,
+        "logoPx": 40,
+        "gapPx": 12,
+        "fontPx": 32,
+        "charW": 0.62,
+        "overlayYPx": 120,
+    },
     "stickerRect": {"wFrac": 0.22, "hFrac": 0.04, "marginPx": 16},
     "badgeRect": {
         "fitTopBand": {
@@ -82,9 +91,13 @@ def load_geometry() -> dict:
 GEOM = load_geometry()
 
 
+def _round_px(v: float) -> int:
+    return int(v + 0.5)
+
+
 def _scale_px(px: int, play_h: int) -> int:
     base_h = int(GEOM.get("baseH") or 1920)
-    return max(1, int(round(px * play_h / base_h)))
+    return max(1, _round_px(px * play_h / base_h))
 
 
 def headline_styles() -> dict:
@@ -101,26 +114,38 @@ def badge_rect(
     play_w: int,
     play_h: int,
     *,
+    text: str = "",
+    show_logo: bool = False,
     video_y: int = 0,
     video_h: int = 0,
     badge_y: int | None = None,
 ) -> dict[str, int]:
-    """Pixel rect {x,y,w,h} for platform badge overlay."""
-    br = GEOM.get("badgeRect") or _DEFAULTS["badgeRect"]
+    """Pixel rect {x,y,w,h} for platform badge overlay (parity with overlay-geometry.ts)."""
+    badge = GEOM.get("badge") or _DEFAULTS.get("badge") or {}
+    base_h = int(GEOM.get("baseH") or 1920)
+    s = play_h / base_h
+    h = max(8, _round_px(float(badge.get("hPx") or 64) * s))
+    pad_x = int(badge.get("padXPx") or 22)
+    logo_px = int(badge.get("logoPx") or 40)
+    gap_px = int(badge.get("gapPx") or 12)
+    font_px = int(badge.get("fontPx") or 32)
+    char_w = float(badge.get("charW") or 0.62)
+    label = (text or "")[:24]
+    inner_w = 2 * pad_x + (logo_px + gap_px if show_logo else 0) + len(label) * font_px * char_w
+    w = _round_px(inner_w * s)
+    margin = _scale_px(24, play_h)
+    w = max(h, min(w, play_w - 2 * margin))
+    x = (play_w - w) // 2
+    inset_y = _scale_px(int((GEOM.get("exportBar") or _DEFAULTS["exportBar"]).get("sourceInsetY") or 12), play_h)
     if placement == "fit_top_band":
-        spec = br.get("fitTopBand") or {}
-        w = _scale_px(int(spec.get("widthPx") or 200), play_h)
-        h = _scale_px(int(spec.get("heightPx") or 32), play_h)
-        y = badge_y if badge_y is not None else max(0, video_y + video_h - _scale_px(40, play_h) - h)
-        x = (play_w - w) // 2 if spec.get("centerX") else _scale_px(16, play_w)
-        return {"x": x, "y": y, "w": w, "h": h}
-    spec = br.get("exportBar") or {}
-    w = _scale_px(int(spec.get("widthPx") or int(GEOM["exportBar"]["badgeW"])), play_w)
-    h = _scale_px(int(spec.get("heightPx") or int(GEOM["exportBar"]["badgeH"])), play_h)
-    inset = _scale_px(int(spec.get("insetLeftPx") or 16), play_w)
-    inset_y = _scale_px(int(GEOM["exportBar"].get("sourceInsetY") or 12), play_h)
-    y = video_y + video_h - h - inset_y if video_h else play_h - h - inset_y
-    return {"x": inset, "y": y, "w": w, "h": h}
+        y = (
+            badge_y
+            if badge_y is not None
+            else max(0, video_y + video_h - _scale_px(40, play_h) - h)
+        )
+    else:
+        y = video_y + video_h - h - inset_y if video_h else play_h - h - inset_y
+    return {"x": x, "y": y, "w": w, "h": h}
 
 
 def _hex_ffmpeg_color(color: str, *, fallback: str = "white") -> str:

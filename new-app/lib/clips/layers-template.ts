@@ -1,4 +1,6 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { defaultLayoutSegments } from '@/lib/clips/layout-segments'
+import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 import {
   legacyFromLayers,
   type Layer,
@@ -45,4 +47,80 @@ export function applyTemplateV3ToEdits(edits: ClipEditsV2, template: TemplateV3)
     layersV: 3,
     layers,
   }
+}
+
+/** Built-in “Auto” preset — not stored as a brand template row. */
+export function applyAutoTemplateToEdits(
+  edits: ClipEditsV2,
+  opts: {
+    streamerSide?: { login?: string; platform?: string } | null
+    defaultLayoutMode?: ClipEditsV2['layout']['mode']
+    platform?: 'twitch' | 'kick'
+  },
+): ClipEditsV2 {
+  const isStreamer = opts.streamerSide?.platform === 'twitch' || opts.streamerSide?.platform === 'kick'
+  const platform =
+    opts.platform ??
+    (opts.streamerSide?.platform === 'kick'
+      ? 'kick'
+      : opts.streamerSide?.platform === 'twitch'
+        ? 'twitch'
+        : 'twitch')
+  const layoutMode: ClipEditsV2['layout']['mode'] = isStreamer
+    ? 'fit_top'
+    : (opts.defaultLayoutMode ?? edits.layout?.mode ?? 'speaker_follow')
+  const current = resolveLayers(edits)
+  const headline = current.find((l) => l.id === 'headline' && l.type === 'headline')
+  const headlineText =
+    headline?.type === 'headline' ? headline.text : edits.exportTemplate?.headlineBar?.text ?? ''
+  const yellow = headlineStyleForPreset('stream_yellow')
+  const barStyle = headlineStyleForPreset('export_bar')
+  const layers: Layer[] = current.map((layer) => {
+    if (layer.type === 'sticker' && layer.kind === 'follow_cta') {
+      return { ...layer, enabled: false }
+    }
+    if (layer.id === 'badge' && layer.type === 'badge') {
+      if (isStreamer) {
+        const handle = (opts.streamerSide?.login ?? '').replace(/^@/, '') || 'channel'
+        return {
+          ...layer,
+          enabled: true,
+          platform,
+          handle,
+          showLogo: true,
+          showLabel: true,
+          showLink: false,
+        }
+      }
+      return { ...layer, enabled: false, showLogo: false, showLabel: false, showLink: false }
+    }
+    if (layer.id === 'headline' && layer.type === 'headline') {
+      if (isStreamer) {
+        return {
+          ...layer,
+          enabled: true,
+          text: headlineText,
+          style: { preset: 'stream_yellow', ...yellow },
+          placement: 'export_bar',
+        }
+      }
+      return {
+        ...layer,
+        enabled: Boolean(headlineText?.trim()),
+        text: headlineText,
+        style: { preset: 'export_bar', ...barStyle },
+        placement: 'export_bar',
+      }
+    }
+    return layer
+  })
+  const merged = legacyFromLayers(layers, {
+    ...edits,
+    layout: {
+      ...edits.layout,
+      mode: layoutMode,
+      layoutSegments: defaultLayoutSegments(edits.trim.in, edits.trim.out, layoutMode),
+    },
+  })
+  return { ...merged, layersV: 3, layers }
 }

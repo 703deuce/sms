@@ -1,0 +1,14 @@
+{
+  "v": 2,
+  "trim": { "in": 1000, "out": 25000 },
+  "cutRanges": [],
+  "wordFixes": {},
+  "captions": { "enabled": true, "presetId": "bold_pop", "animation": "pop", "size": 6.5, "position": "bottom", "case": "sentence", "wordsPerLine": 2 },
+  "layout": { "mode": "center_crop", "shotOverrides": [] },
+  "silenceTrim": { "enabled": false, "minGapMs": 350, "keepMs": 120 },
+  "exportTemplate": {
+    "headlineBar": { "enabled": true, "text": "Sample headline" },
+    "platformBadge": { "enabled": false },
+    "channelLink": { "enabled": false, "url": "" }
+  }
+}

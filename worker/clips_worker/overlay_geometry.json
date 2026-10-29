@@ -55,6 +55,15 @@
       "radiusPx": 0
     }
   },
+  "badge": {
+    "hPx": 64,
+    "padXPx": 22,
+    "logoPx": 40,
+    "gapPx": 12,
+    "fontPx": 32,
+    "charW": 0.62,
+    "overlayYPx": 120
+  },
   "stickerRect": {
     "wFrac": 0.22,
     "hFrac": 0.04,

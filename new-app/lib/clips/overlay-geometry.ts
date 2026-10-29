@@ -1,34 +1,29 @@
 /** Shared overlay geometry — parity with worker/clips_worker/overlay_geometry.py */
 import geom from '@/lib/clips/overlay-geometry.json'
+import { headlineLayerPlacement } from '@/lib/clips/headline-band-layout'
 
-type BadgeRectSpec = {
-  widthPx?: number
-  heightPx?: number
-  logoSizePx?: number
-  padPx?: number
-  centerX?: boolean
-  padLeftPx?: number
-  linkGapPx?: number
-  insetLeftPx?: number
+type BadgeGeom = {
+  hPx?: number
+  padXPx?: number
+  logoPx?: number
+  gapPx?: number
+  fontPx?: number
+  charW?: number
 }
 
 const DEFAULTS = geom as typeof geom & {
-  badgeRect: {
-    fitTopBand: BadgeRectSpec
-    exportBar: BadgeRectSpec
-  }
-  exportBar: { badgeW: number; badgeH: number; sourceInsetY: number }
+  badge?: BadgeGeom
+  exportBar: { sourceInsetY: number }
   baseH: number
+}
+
+function roundPx(v: number): number {
+  return Math.floor(v + 0.5)
 }
 
 function scalePx(px: number, playH: number): number {
   const baseH = Number(DEFAULTS.baseH || 1920)
-  return Math.max(1, Math.round((px * playH) / baseH))
-}
-
-function scalePxW(px: number, playW: number): number {
-  const baseH = Number(DEFAULTS.baseH || 1920)
-  return Math.max(1, Math.round((px * playW) / baseH))
+  return Math.max(1, roundPx((px * playH) / baseH))
 }
 
 export function headlineStyles(): Record<string, { textColor: string; boxColor: string; radiusPx: number }> {
@@ -40,63 +35,69 @@ export function headlineStyleForPreset(preset: string) {
   return styles[preset] ?? styles.stream_white_box ?? { textColor: '#000000', boxColor: '#FFFFFF', radiusPx: 0 }
 }
 
-/** Pixel rect {x,y,w,h} for platform badge overlay. */
+export function badgePlacementForLayout(layoutMode: string): 'fit_top_band' | 'export_bar' {
+  return headlineLayerPlacement(layoutMode)
+}
+
+/** Pixel rect {x,y,w,h} for platform badge overlay (play space). */
 export function badgeRect(
   placement: string,
   playW: number,
   playH: number,
-  opts?: { videoY?: number; videoH?: number; badgeY?: number | null },
+  opts?: {
+    text?: string
+    showLogo?: boolean
+    videoY?: number
+    videoH?: number
+    badgeY?: number | null
+  },
 ): { x: number; y: number; w: number; h: number } {
-  const br = DEFAULTS.badgeRect ?? {}
+  const badge = DEFAULTS.badge ?? {}
+  const s = playH / (DEFAULTS.baseH || 1920)
+  const h = Math.max(8, roundPx((badge.hPx ?? 64) * s))
+  const padX = badge.padXPx ?? 22
+  const logoPx = badge.logoPx ?? 40
+  const gapPx = badge.gapPx ?? 12
+  const fontPx = badge.fontPx ?? 32
+  const charW = badge.charW ?? 0.62
+  const text = (opts?.text ?? '').slice(0, 24)
+  const showLogo = Boolean(opts?.showLogo)
+  let w = roundPx((2 * padX + (showLogo ? logoPx + gapPx : 0) + text.length * fontPx * charW) * s)
+  const margin = scalePx(24, playH)
+  w = Math.max(h, Math.min(w, playW - 2 * margin))
+  const x = Math.floor((playW - w) / 2)
   const videoY = opts?.videoY ?? 0
   const videoH = opts?.videoH ?? 0
   const badgeY = opts?.badgeY
-
+  let y: number
   if (placement === 'fit_top_band') {
-    const spec = br.fitTopBand ?? {}
-    const w = scalePx(Number(spec.widthPx ?? 200), playH)
-    const h = scalePx(Number(spec.heightPx ?? 32), playH)
-    const y =
+    y =
       badgeY != null
         ? badgeY
         : Math.max(0, videoY + videoH - scalePx(40, playH) - h)
-    const x = spec.centerX ? Math.floor((playW - w) / 2) : scalePxW(16, playW)
-    return { x, y, w, h }
+  } else {
+    const insetY = scalePx(DEFAULTS.exportBar?.sourceInsetY ?? 12, playH)
+    y = videoH ? videoY + videoH - h - insetY : playH - h - insetY
   }
-
-  const spec = br.exportBar ?? {}
-  const w = scalePxW(Number(spec.widthPx ?? DEFAULTS.exportBar.badgeW), playW)
-  const h = scalePx(Number(spec.heightPx ?? DEFAULTS.exportBar.badgeH), playH)
-  const inset = scalePxW(Number(spec.insetLeftPx ?? 16), playW)
-  const insetY = scalePx(Number(DEFAULTS.exportBar.sourceInsetY ?? 12), playH)
-  const y = videoH ? videoY + videoH - h - insetY : playH - h - insetY
-  return { x: inset, y, w, h }
+  return { x, y, w, h }
 }
 
-/** Pixel rect for follow sticker overlay (parity with worker sprite placement). */
+/** Pixel rect for follow sticker (center xNorm/yNorm, play space). */
 export function stickerRect(
   playW: number,
   playH: number,
   xNorm: number,
   yNorm: number,
-  anchor: 'TL' | 'TR' | 'BL' | 'BR' = 'TR',
 ): { left: number; top: number; width: number; height: number } {
-  const width = Math.max(80, Math.round(playW * 0.22))
-  const height = Math.max(28, Math.round(playH * 0.04))
-  const px = xNorm * playW
-  const py = yNorm * playH
-  let left = px
-  let top = py
-  if (anchor === 'TR') {
-    left -= width
-  } else if (anchor === 'BL') {
-    top -= height
-  } else if (anchor === 'BR') {
-    left -= width
-    top -= height
-  }
-  left = Math.max(0, Math.min(playW - width, left))
-  top = Math.max(0, Math.min(playH - height, top))
+  const spec = (DEFAULTS as { stickerRect?: { wFrac?: number; hFrac?: number; marginPx?: number } }).stickerRect ?? {}
+  const s = playH / (DEFAULTS.baseH || 1920)
+  const margin = scalePx(spec.marginPx ?? 24, playH)
+  const width = Math.max(80, roundPx(playW * (spec.wFrac ?? 0.22)))
+  const height = Math.max(28, roundPx(playH * (spec.hFrac ?? 0.04)))
+  const cx = xNorm * playW
+  const cy = yNorm * playH
+  const left = Math.max(margin, Math.min(playW - width - margin, cx - width / 2))
+  const top = Math.max(margin, Math.min(playH - height - margin, cy - height / 2))
   return { left, top, width, height }
 }
 
@@ -106,8 +107,9 @@ export function stickerVisible(
   outputMs: number,
   totalMs: number,
 ): boolean {
-  if (timing === 'intro') return outputMs <= durationMs
-  if (timing === 'outro') return totalMs > 0 && outputMs >= Math.max(0, totalMs - durationMs)
+  const d = durationMs
+  if (timing === 'intro') return outputMs <= d
+  if (timing === 'outro') return totalMs > 0 && outputMs >= Math.max(0, totalMs - d)
   return true
 }
 
