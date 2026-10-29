@@ -1,5 +1,6 @@
 'use client'
 
+import { Anton, Montserrat } from 'next/font/google'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } from '@/components/clips/editor/editor-rail'
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
@@ -53,6 +54,11 @@ import { saveClipBrandTemplate } from '@/lib/clips-api'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
 import { useSetBreadcrumbTitle } from '@/components/shell/breadcrumb-context'
+import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
+import type { StickerLayer } from '@/lib/clips/layers'
+
+const clipEditorAnton = Anton({ subsets: ['latin'], weight: '400', variable: '--font-clip-anton' })
+const clipEditorMontserrat = Montserrat({ subsets: ['latin'], weight: ['900'], variable: '--font-clip-montserrat' })
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
@@ -132,6 +138,7 @@ export function EditorShell({
     maxGapSec: 3,
     targetGapSec: 0.35,
   })
+  const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
   const [panel, setPanel] = useState<EditorPanelId>('transcript')
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
   const selectPanel = useCallback((id: EditorPanelId) => {
@@ -213,6 +220,32 @@ export function EditorShell({
       restoreCutRange(proposal.range)
     },
     [clipId, restoreCutRange],
+  )
+
+  const onStickerMove = useCallback(
+    (x: number, y: number) => {
+      setLayers((prev) =>
+        prev.map((l) =>
+          l.type === 'sticker' && (l as StickerLayer).kind === 'follow_cta'
+            ? ({ ...l, x, y } as typeof l)
+            : l,
+        ),
+      )
+    },
+    [setLayers],
+  )
+
+  const onPipCornerChange = useCallback(
+    (corner: 'TL' | 'TR' | 'BL' | 'BR') => {
+      setEdits({
+        ...edits,
+        layout: {
+          ...edits.layout,
+          facecam: { ...edits.layout.facecam, pipCorner: corner },
+        },
+      })
+    },
+    [edits, setEdits],
   )
 
   const applyCutRange = useCallback(
@@ -816,7 +849,13 @@ export function EditorShell({
   )
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] max-w-[100vw] flex-col overflow-x-hidden bg-background">
+    <div
+      className={cn(
+        'flex h-[calc(100dvh-3.5rem)] max-w-[100vw] flex-col overflow-x-hidden bg-background',
+        clipEditorAnton.variable,
+        clipEditorMontserrat.variable,
+      )}
+    >
       <EditorTopBar
           backHref={`/app/clips/${projectId}`}
           title={title}
@@ -908,6 +947,11 @@ export function EditorShell({
               chatPreviewEnabled={streamChatAvailable}
               media={editorMedia}
               audition={auditionEdits ? { edits: auditionEdits } : null}
+              safeZoneVisible={safeZoneVisible}
+              onStickerMove={onStickerMove}
+              onPipCornerChange={
+                edits.layout.mode === 'facecam_pip' && edits.layout.facecam?.box ? onPipCornerChange : undefined
+              }
             />
             {studioPreviewLoading ? (
               <div

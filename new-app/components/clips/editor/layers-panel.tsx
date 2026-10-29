@@ -10,6 +10,8 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { HeadlineLayer, BadgeLayer, Layer, StickerLayer } from '@/lib/clips/layers'
 import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 import { EditorHeadlineField } from '@/components/clips/editor/editor-headline-field'
+import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
+import { Slider } from '@/components/ui/slider'
 
 const HEADLINE_PRESETS: HeadlineLayer['style']['preset'][] = [
   'stream_white_box',
@@ -50,6 +52,9 @@ export function LayersPanel({
   savePending?: boolean
 }) {
   const [templateName, setTemplateName] = useState('')
+  const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
+  const [radiusDraft, setRadiusDraft] = useState<number | null>(null)
+  const [widthDraft, setWidthDraft] = useState<number | null>(null)
   const headline = layers.find((l): l is HeadlineLayer => l.id === 'headline' && l.type === 'headline')
   const badge = layers.find((l): l is BadgeLayer => l.id === 'badge' && l.type === 'badge')
   const sticker = layers.find((l): l is StickerLayer => l.type === 'sticker' && l.kind === 'follow_cta')
@@ -192,8 +197,74 @@ export function LayersPanel({
               </Button>
             ))}
           </div>
+          <label className="block space-y-1 text-xs">
+            Corner radius ({radiusDraft ?? headline.style.radiusPx ?? 0}px)
+            <Slider
+              min={0}
+              max={48}
+              step={2}
+              value={[radiusDraft ?? headline.style.radiusPx ?? 0]}
+              onValueChange={(v) => {
+                const n = Array.isArray(v) ? v[0] : v
+                setRadiusDraft(typeof n === 'number' ? n : 0)
+              }}
+              onValueCommit={(v) => {
+                const n = Array.isArray(v) ? v[0] : v
+                setRadiusDraft(null)
+                setLayers(
+                  patchLayer(layers, 'headline', {
+                    style: { ...headline.style, radiusPx: typeof n === 'number' ? n : 0 },
+                  }),
+                )
+              }}
+            />
+          </label>
+          <label className="block space-y-1 text-xs">
+            Width ({widthDraft ?? headline.style.widthPct ?? 100}%)
+            <Slider
+              min={60}
+              max={100}
+              step={5}
+              value={[widthDraft ?? headline.style.widthPct ?? 100]}
+              onValueChange={(v) => {
+                const n = Array.isArray(v) ? v[0] : v
+                setWidthDraft(typeof n === 'number' ? n : 100)
+              }}
+              onValueCommit={(v) => {
+                const n = Array.isArray(v) ? v[0] : v
+                setWidthDraft(null)
+                setLayers(
+                  patchLayer(layers, 'headline', {
+                    style: { ...headline.style, widthPct: typeof n === 'number' ? n : 100 },
+                  }),
+                )
+              }}
+            />
+          </label>
+          <label className="block space-y-1 text-xs">
+            Font
+            <select
+              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+              value={headline.style.font ?? 'Anton'}
+              onChange={(e) =>
+                setLayers(
+                  patchLayer(layers, 'headline', {
+                    style: { ...headline.style, font: e.target.value },
+                  }),
+                )
+              }
+            >
+              <option value="Anton">Anton</option>
+              <option value="Montserrat Black">Montserrat Black</option>
+            </select>
+          </label>
         </div>
       ) : null}
+
+      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+        <Label className="text-xs">Show safe zone</Label>
+        <Switch checked={safeZoneVisible} onCheckedChange={setSafeZoneVisible} />
+      </div>
 
       <div className="space-y-3 rounded-lg border border-border p-3">
         <p className="text-xs font-medium">Platform badge & link</p>

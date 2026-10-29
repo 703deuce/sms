@@ -9,11 +9,19 @@ import { activeCaptionWordIndex, captionEmojiForWord } from '@/lib/clips/caption
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { resolvePreset, type CaptionPreset } from '@/lib/clips/caption-presets'
 import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
+import { captionHighlightContrastText } from '@/lib/clips/caption-active-style'
+import { previewCaptionBottomPct } from '@/lib/clips/caption-safe-area'
+
+function positionStyle(position: string, marginVPct: number): React.CSSProperties | undefined {
+  if (position === 'top') return undefined
+  if (position === 'middle') return undefined
+  return { bottom: `${marginVPct}%` }
+}
 
 function positionClass(position: string) {
   if (position === 'top') return 'top-[8%]'
   if (position === 'middle') return 'top-1/2 -translate-y-1/2'
-  return 'bottom-[12%]'
+  return ''
 }
 
 function animClass(animation: string) {
@@ -71,12 +79,8 @@ export function CaptionOverlay({
   const progressPct = showProgress ? Math.min(100, (currentTimeSec / outputDurationSec) * 100) : 0
 
   const position = (cap.position || preset.position) as string
-
-  const emojiMap = cap.emojiByWord ?? {}
-  const hasEmojiMap = showEmojis && Object.keys(emojiMap).length > 0
-
-  if (activeIdx < 0 && !showProgress && !hasEmojiMap) return null
-
+  const marginVPct = previewCaptionBottomPct(cap, boxHeightPx)
+  const bottomStyle = positionStyle(position, marginVPct)
   const captionPosClass = positionClass(position)
   const emojiPosClass =
     position === 'top'
@@ -84,6 +88,13 @@ export function CaptionOverlay({
       : position === 'middle'
         ? 'top-[42%]'
         : 'bottom-[18%]'
+
+  const emojiMap = cap.emojiByWord ?? {}
+  const hasEmojiMap = showEmojis && Object.keys(emojiMap).length > 0
+  const activeStyle = cap.activeStyle ?? 'color'
+  const highlightColor = cap.highlightColor ?? '#FDE047'
+
+  if (activeIdx < 0 && !showProgress && !hasEmojiMap) return null
 
   return (
     <>
@@ -120,7 +131,11 @@ export function CaptionOverlay({
       {activeIdx >= 0 && lineWords.length ? (
     <div
       className={`pointer-events-none absolute inset-x-2 z-[25] flex flex-wrap justify-center gap-1 text-center ${captionPosClass}`}
-      style={{ fontFamily: preset.font, fontWeight: preset.weight }}
+      style={{
+        fontFamily: preset.font,
+        fontWeight: preset.weight,
+        ...bottomStyle,
+      }}
     >
       {lineWords.map((w, i) => {
         const globalIdx = lineStart + i
@@ -138,24 +153,40 @@ export function CaptionOverlay({
         const text = formatCaptionWord(w.w, caseMode, sentenceStart) + (emoji && !hasEmojiMap ? ` ${emoji}` : '')
         const strokeW = preset.outlineW
         const inactiveColor = preset.slug === 'boxed' ? '#FFFFFF' : preset.primary
+        const useFill =
+          activeStyle === 'fill' || (activeStyle === 'color' && animation === 'karaoke' && active)
+        const useHighlight = activeStyle === 'highlight' && active
+        const contrast = captionHighlightContrastText(highlightColor)
         const style: React.CSSProperties = {
           fontSize,
-          color: active || isEmph ? (preset.slug === 'boxed' && active ? '#000000' : activeColor) : inactiveColor,
-          WebkitTextStroke: strokeW ? `${strokeW}px ${preset.outline}` : undefined,
+          color: useHighlight
+            ? contrast
+            : active || isEmph
+              ? preset.slug === 'boxed' && active && activeStyle === 'color'
+                ? '#000000'
+                : activeColor
+              : inactiveColor,
+          WebkitTextStroke:
+            useHighlight && active ? undefined : strokeW ? `${strokeW}px ${preset.outline}` : undefined,
           paintOrder: 'stroke fill',
           textShadow: preset.shadow ? `0 2px ${preset.shadow * 4}px rgba(0,0,0,.45)` : undefined,
           ['--cap-glow-color' as string]: preset.outline,
           transform: isEmph ? `scale(${preset.emphasisScale})` : undefined,
-          background:
-            animation === 'karaoke' && active
+          background: useHighlight
+            ? highlightColor
+            : useFill && active
               ? `linear-gradient(90deg, ${activeColor} ${Math.min(100, ((currentTimeSec - w.s) / (w.e - w.s)) * 100)}%, ${preset.primary} 0)`
-              : preset.box && (active || isEmph)
+              : preset.box && (active || isEmph) && activeStyle === 'color'
                 ? preset.box.color
                 : undefined,
-          WebkitBackgroundClip: animation === 'karaoke' && active ? 'text' : undefined,
-          backgroundClip: animation === 'karaoke' && active ? 'text' : undefined,
-          padding: preset.box && (active || isEmph) ? `${preset.box.padY}px ${preset.box.padX}px` : undefined,
-          borderRadius: preset.box?.radius,
+          WebkitBackgroundClip: useFill && active ? 'text' : undefined,
+          backgroundClip: useFill && active ? 'text' : undefined,
+          padding: useHighlight
+            ? '0.08em 0.25em'
+            : preset.box && (active || isEmph) && activeStyle === 'color'
+              ? `${preset.box.padY}px ${preset.box.padX}px`
+              : undefined,
+          borderRadius: useHighlight ? '0.18em' : preset.box?.radius,
         }
 
         let content = text

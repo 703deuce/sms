@@ -50,6 +50,9 @@ export type ClipEditsV2 = {
     customPresetId?: string
     /** Bottom safe margin % for burned captions (platform export presets). */
     marginVPct?: number
+    /** Active-word emphasis independent of preset (default: legacy preset/animation). */
+    activeStyle?: 'color' | 'highlight' | 'fill'
+    highlightColor?: string
   }
   /** Optional hook title in the first ~2–3s (brand-styled). */
   hookOverlay?: {
@@ -231,6 +234,14 @@ function normalizeCaptions(
       typeof o.marginVPct === 'number' && o.marginVPct >= 6 && o.marginVPct <= 28
         ? o.marginVPct
         : base.marginVPct,
+    activeStyle:
+      o.activeStyle === 'color' || o.activeStyle === 'highlight' || o.activeStyle === 'fill'
+        ? o.activeStyle
+        : base.activeStyle,
+    highlightColor:
+      typeof o.highlightColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(o.highlightColor)
+        ? o.highlightColor
+        : base.highlightColor,
   }
 }
 

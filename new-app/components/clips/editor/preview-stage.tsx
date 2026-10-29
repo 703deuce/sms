@@ -18,6 +18,9 @@ import {
 } from '@/lib/clips/layout-preview'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
+import { PreviewSafeZoneOverlay } from '@/components/clips/editor/preview-safe-zone'
+import { nearestPipCorner, pipCornerSlotStyle } from '@/lib/clips/headline-preview-style'
+import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
@@ -72,6 +75,9 @@ export function PreviewStage({
   chatPreviewEnabled = false,
   media = null,
   audition = null,
+  safeZoneVisible = false,
+  onStickerMove,
+  onPipCornerChange,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -87,6 +93,9 @@ export function PreviewStage({
   chatPreviewEnabled?: boolean
   media?: EditorMedia | null
   audition?: { edits: ClipEditsV2 } | null
+  safeZoneVisible?: boolean
+  onStickerMove?: (x: number, y: number) => void
+  onPipCornerChange?: (corner: 'TL' | 'TR' | 'BL' | 'BR') => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -405,13 +414,17 @@ export function PreviewStage({
               onPause={() => setPlaying(false)}
             />
             <div
-              className="absolute z-[2] overflow-hidden rounded-md ring-2 ring-white/80"
-              style={{
-                width: '28%',
-                height: '22%',
-                right: '4%',
-                bottom: '12%',
-              }}
+              className={`absolute z-[2] overflow-hidden rounded-md ring-2 ring-white/80 ${onPipCornerChange ? 'cursor-grab' : ''}`}
+              style={pipCornerSlotStyle(edits.layout.facecam?.pipCorner)}
+              onPointerUp={
+                onPipCornerChange
+                  ? (e) => {
+                      const rect = e.currentTarget.parentElement?.getBoundingClientRect()
+                      if (!rect) return
+                      onPipCornerChange(nearestPipCorner(e.clientX, e.clientY, rect))
+                    }
+                  : undefined
+              }
             >
               <video
                 className="max-w-none"
@@ -499,6 +512,13 @@ export function PreviewStage({
             outputDurationSec={outputDurationFromEdits(previewEdits) / 1000}
           />
         )}
+        {safeZoneVisible && box.w > 0 ? (
+          <PreviewSafeZoneOverlay
+            boxWidth={box.w}
+            boxHeight={box.h}
+            platform={(edits.exportTemplate?.exportPlatformId ?? 'tiktok') as ExportPlatformId}
+          />
+        ) : null}
         {!compositePreview ? (
         <ExportTemplateOverlay
           edits={edits as ClipEditsV2}
@@ -508,6 +528,7 @@ export function PreviewStage({
           chatPreviewEnabled={chatPreviewEnabled}
           outputMs={captionTimeSec * 1000}
           outputDurationMs={previewOutDurMs}
+          onStickerMove={onStickerMove}
         />
         ) : null}
       </div>

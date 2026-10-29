@@ -54,3 +54,11 @@ export function verifyCaptionPresetsSafeArea(playH = 1920): { presetId: string; 
 export function minPlatformCaptionMarginVPct(): number {
   return Math.min(...Object.values(EXPORT_PLATFORM_PRESETS).map((p) => p.captionSafeMarginVPct))
 }
+
+/** Preview bottom offset % — mirrors worker clamp_caption_export_style marginVPct. */
+export function previewCaptionBottomPct(
+  captions: ClipEditsV2['captions'] | undefined,
+  playH = 1920,
+): number {
+  return clampCaptionExportStyle(captions, playH).marginVPct
+}

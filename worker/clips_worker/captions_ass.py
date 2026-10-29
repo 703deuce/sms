@@ -21,6 +21,23 @@ def hex_to_ass(hex_color: str) -> str:
     return "&H00FFFFFF&"
 
 
+def hex_to_ass_inline(hex_color: str) -> str:
+    """Inline override colour — leading alpha avoids libass parsing \\3c&H0047… as octal \\47."""
+    h = hex_color.lstrip("#")
+    if len(h) == 6:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"&HFF{b:02X}{g:02X}{r:02X}&"
+    return "&HFFFFFFFF&"
+
+
+def ass_safe_highlight_hex(hex_color: str) -> str:
+    """Libass treats \\47 as octal inside inline tags when the blue byte is 0x47."""
+    h = hex_color.lstrip("#").upper()
+    if len(h) == 6 and h[4:6] == "47":
+        h = h[:4] + "48"
+    return f"#{h}"
+
+
 def _sentence_boundary(prev: str | None) -> bool:
     if not prev:
         return True
@@ -105,6 +122,164 @@ def inactive_inline(preset: dict) -> str:
     return f"{{\\1c{pri}\\3c{out}\\bord{ow}\\shad0}}"
 
 
+def _luminance_hex(hex_color: str) -> float:
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return 0.5
+    r, g, b = int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast_ass_text(highlight_hex: str) -> str:
+    return hex_to_ass("#000000" if _luminance_hex(highlight_hex) > 0.5 else "#FFFFFF")
+
+
+def _full_line_box_layer_text(cased: list[str], active_ki: int, fill_hex: str, *, border: int = 22) -> str:
+    bc = hex_to_ass(ass_safe_highlight_hex(fill_hex))
+    parts: list[str] = []
+    for xi, word in enumerate(cased):
+        if xi == active_ki:
+            parts.append(f"{{\\1c&H000000&\\3c{bc}\\3a&H00&\\bord{border}}}{word}")
+        else:
+            parts.append(f"{{\\1c&H000000&\\3c&H00000000&\\3a&HFF&\\bord0}}{word}")
+    return " ".join(parts)
+
+
+def _append_caption_events(
+    events: list[str],
+    *,
+    words: list[dict],
+    edits_captions: dict,
+    preset: dict,
+    anim: str,
+    wpl: int,
+    case: str,
+    colors: dict | None,
+    emphasis: set,
+    emph_scale: float,
+    box: dict | None,
+    play_w: int,
+    play_h: int,
+    position: str,
+) -> None:
+    active_style = str(edits_captions.get("activeStyle") or "").lower()
+    if active_style not in ("color", "highlight", "fill"):
+        active_style = ""
+    highlight_hex = str(edits_captions.get("highlightColor") or "#FDE047")
+    if not re.match(r"^#[0-9a-fA-F]{6}$", highlight_hex):
+        highlight_hex = "#FDE047"
+
+    chunks = chunk_words(words, wpl)
+    cap_out, _, cap_ow = cap_style_colors(preset)
+
+    for chunk_idx, chunk in enumerate(chunks):
+        if not chunk:
+            continue
+        chunk_end = float(chunk[-1]["e"])
+        if chunk_idx + 1 < len(chunks):
+            chunk_end = min(chunk_end, float(chunks[chunk_idx + 1][0]["s"]))
+
+        if anim == "slideup":
+            ws, we = float(chunk[0]["s"]), chunk_end
+            cx = play_w // 2
+            y = {"bottom": int(play_h * 0.88), "middle": play_h // 2, "top": int(play_h * 0.12)}.get(
+                position, int(play_h * 0.88)
+            )
+            move = f"{{\\move({cx},{y + int(0.03 * play_h)},{cx},{y},0,150)\\fad(150,0)}}"
+            line = " ".join(disp_words(chunk, case))
+            events.append(f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{move}{line}")
+            continue
+
+        if anim == "karaoke" or active_style == "fill":
+            ws, we = float(chunk[0]["s"]), chunk_end
+            parts = []
+            for w, word in zip(chunk, disp_words(chunk, case), strict=True):
+                dur_cs = max(1, int((float(w["e"]) - float(w["s"])) * 100))
+                parts.append(f"{{\\kf{dur_cs}}}{word}")
+            sec = hex_to_ass(preset["primary"])
+            spk = int(chunk[0].get("spk", 0)) if chunk else 0
+            pri_hex = highlight_hex if active_style == "fill" else None
+            if pri_hex:
+                pri = hex_to_ass(pri_hex)
+            else:
+                pri = active_color(preset, spk, colors)
+            events.append(
+                f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
+                f"{{\\1c{pri}\\3c{cap_out}\\2c{sec}}}"
+                + " ".join(parts)
+            )
+            continue
+
+        if anim == "typewriter":
+            cased = disp_words(chunk, case)
+            for wi, w in enumerate(chunk):
+                w_start = float(w["s"])
+                w_end = float(chunk[wi + 1]["s"]) if wi + 1 < len(chunk) else chunk_end
+                text = cased[wi]
+                dur_ms = max(1, int((float(w["e"]) - float(w["s"])) * 1000))
+                step = max(1, dur_ms // max(1, len(text)))
+                built = ""
+                for ci, ch in enumerate(text):
+                    off0 = ci * step
+                    off1 = min(dur_ms, off0 + step)
+                    built += f"{{\\alpha&HFF&\\t({off0},{off1},\\alpha&H00&)}}{ch}"
+                spk = int(w.get("spk", 0))
+                col = active_color(preset, spk, colors)
+                events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{{\\c{col}}}{built}")
+            continue
+
+        for ki, w in enumerate(chunk):
+            w_start = float(w["s"])
+            w_end = float(chunk[ki + 1]["s"]) if ki + 1 < len(chunk) else chunk_end
+            if w_end <= w_start:
+                continue
+
+            spk = int(w.get("spk", 0))
+            col = active_color(preset, spk, colors)
+            wi = int(w.get("i", ki))
+            is_emph = wi in emphasis
+            use_box_layer = bool(box) and (
+                preset.get("slug") == "boxed" or (preset.get("slug") == "highlighter" and is_emph)
+            )
+            use_full_line_box = use_box_layer or active_style == "highlight"
+            box_fill = highlight_hex if active_style == "highlight" else str(box.get("color", "#FDE047") if box else "#FDE047")
+
+            cased = disp_words(chunk, case)
+            parts: list[str] = []
+            contrast = _contrast_ass_text(highlight_hex if active_style == "highlight" else "#FDE047")
+            for xi, x in enumerate(chunk):
+                word = cased[xi]
+                if x is w:
+                    tags = []
+                    if use_full_line_box and active_style == "highlight":
+                        tags.append(f"\\c{contrast}")
+                    elif use_box_layer and not use_full_line_box:
+                        tags.append("\\1c&H000000&")
+                    else:
+                        tags.append(f"\\c{col}")
+                    a = anim if not (preset.get("slug") == "highlighter" and not is_emph) else ("pop" if is_emph else "none")
+                    if a == "pop":
+                        tags.append(POP_TAG)
+                    elif a == "bounce":
+                        tags.append(BOUNCE_TAG)
+                    elif a == "glow":
+                        tags.append(GLOW_TAG.replace("{", "").replace("}", ""))
+                    if is_emph and not use_box_layer:
+                        sc = int(emph_scale * 100)
+                        tags.append(f"\\fscx{sc}\\fscy{sc}")
+                    parts.append("{" + "".join(tags) + "}" + word)
+                else:
+                    parts.append(inactive_inline(preset) + word)
+
+            line = " ".join(parts)
+            if use_full_line_box:
+                events.append(
+                    f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,"
+                    + _full_line_box_layer_text(cased, ki, box_fill)
+                )
+            events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
+
+
 def build_ass(
     words: list[dict],
     edits_captions: dict,
@@ -161,101 +336,44 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
     events: list[str] = []
-    chunks = chunk_words(words, wpl)
-
-    for chunk_idx, chunk in enumerate(chunks):
-        if not chunk:
-            continue
-        chunk_end = float(chunk[-1]["e"])
-        if chunk_idx + 1 < len(chunks):
-            chunk_end = min(chunk_end, float(chunks[chunk_idx + 1][0]["s"]))
-
-        if anim == "slideup":
-            ws, we = float(chunk[0]["s"]), chunk_end
-            cx = play_w // 2
-            y = {"bottom": int(play_h * 0.88), "middle": play_h // 2, "top": int(play_h * 0.12)}.get(
-                position, int(play_h * 0.88)
-            )
-            move = f"{{\\move({cx},{y + int(0.03 * play_h)},{cx},{y},0,150)\\fad(150,0)}}"
-            line = " ".join(disp_words(chunk, case))
-            events.append(f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{move}{line}")
-            continue
-
-        if anim == "karaoke":
-            ws, we = float(chunk[0]["s"]), chunk_end
-            parts = []
-            for w, word in zip(chunk, disp_words(chunk, case), strict=True):
-                dur_cs = max(1, int((float(w["e"]) - float(w["s"])) * 100))
-                parts.append(f"{{\\kf{dur_cs}}}{word}")
-            sec = hex_to_ass(preset["primary"])
-            pri = hex_to_ass(preset["active"])
-            events.append(
-                f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
-                f"{{\\1c{pri}\\3c{cap_out}\\2c{sec}}}"
-                + " ".join(parts)
-            )
-            continue
-
-        if anim == "typewriter":
-            cased = disp_words(chunk, case)
-            for wi, w in enumerate(chunk):
-                w_start = float(w["s"])
-                w_end = float(chunk[wi + 1]["s"]) if wi + 1 < len(chunk) else chunk_end
-                text = cased[wi]
-                dur_ms = max(1, int((float(w["e"]) - float(w["s"])) * 1000))
-                step = max(1, dur_ms // max(1, len(text)))
-                built = ""
-                for ci, ch in enumerate(text):
-                    off0 = ci * step
-                    off1 = min(dur_ms, off0 + step)
-                    built += f"{{\\alpha&HFF&\\t({off0},{off1},\\alpha&H00&)}}{ch}"
-                spk = int(w.get("spk", 0))
-                col = active_color(preset, spk, colors)
-                events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{{\\c{col}}}{built}")
-            continue
-
-        for ki, w in enumerate(chunk):
-            w_start = float(w["s"])
-            w_end = float(chunk[ki + 1]["s"]) if ki + 1 < len(chunk) else chunk_end
-            if w_end <= w_start:
-                continue
-
-            spk = int(w.get("spk", 0))
-            col = active_color(preset, spk, colors)
-            wi = int(w.get("i", ki))
-            is_emph = wi in emphasis
-            use_box_layer = bool(box) and (preset.get("slug") == "boxed" or (preset.get("slug") == "highlighter" and is_emph))
-
-            cased = disp_words(chunk, case)
-            parts: list[str] = []
-            for xi, x in enumerate(chunk):
-                word = cased[xi]
-                if x is w:
-                    tags = []
-                    if use_box_layer:
-                        tags.append("\\1c&H000000&")
-                    else:
-                        tags.append(f"\\c{col}")
-                    a = anim if not (preset.get("slug") == "highlighter" and not is_emph) else ("pop" if is_emph else "none")
-                    if a == "pop":
-                        tags.append(POP_TAG)
-                    elif a == "bounce":
-                        tags.append(BOUNCE_TAG)
-                    elif a == "glow":
-                        tags.append(GLOW_TAG.replace("{", "").replace("}", ""))
-                    if is_emph and not use_box_layer:
-                        sc = int(emph_scale * 100)
-                        tags.append(f"\\fscx{sc}\\fscy{sc}")
-                    parts.append("{" + "".join(tags) + "}" + word)
-                else:
-                    parts.append(inactive_inline(preset) + word)
-
-            line = " ".join(parts)
-            if use_box_layer:
-                events.append(
-                    f"Dialogue: 0,{ts(w_start)},{ts(w_end)},Box,,0,0,0,,{cased[ki]}"
-                )
-            events.append(f"Dialogue: 1,{ts(w_start)},{ts(w_end)},Cap,,0,0,0,,{line}")
-            # Color emoji export uses bundled Twemoji PNGs in burn_captions (not libass).
+    try:
+        _append_caption_events(
+            events,
+            words=words,
+            edits_captions=edits_captions,
+            preset=preset,
+            anim=anim,
+            wpl=wpl,
+            case=case,
+            colors=colors,
+            emphasis=emphasis,
+            emph_scale=emph_scale,
+            box=box,
+            play_w=play_w,
+            play_h=play_h,
+            position=position,
+        )
+    except Exception as e:
+        print(f"[clipper:captions] active_style_fallback reason={type(e).__name__}")
+        fallback = dict(edits_captions)
+        fallback.pop("activeStyle", None)
+        fallback.pop("highlightColor", None)
+        events.clear()
+        _append_caption_events(
+            events,
+            words=words,
+            edits_captions=fallback,
+            preset=preset,
+            anim=anim,
+            wpl=wpl,
+            case=case,
+            colors=colors,
+            emphasis=emphasis,
+            emph_scale=emph_scale,
+            box=box,
+            play_w=play_w,
+            play_h=play_h,
+            position=position,
+        )
 
     ass_path.write_text(header + "\n".join(events) + "\n")

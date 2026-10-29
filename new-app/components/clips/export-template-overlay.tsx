@@ -12,6 +12,11 @@ import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 import { overlayLayout, STREAM_HEADLINE_TOP } from '@/lib/clips/stream-overlay-layout'
 import { PlatformBadgePreview } from '@/components/clips/editor/platform-badge'
 import { FollowStickerPreview } from '@/components/clips/editor/follow-sticker'
+import {
+  headlinePreviewBoxMetrics,
+  headlinePreviewFontFamily,
+  headlinePreviewFontWeight,
+} from '@/lib/clips/headline-preview-style'
 
 function ChatPreviewBox({
   lay,
@@ -55,6 +60,7 @@ export function ExportTemplateOverlay({
   chatPreviewEnabled = false,
   outputMs = 0,
   outputDurationMs = 0,
+  onStickerMove,
 }: {
   edits: ClipEditsV2
   boxWidth: number
@@ -64,6 +70,7 @@ export function ExportTemplateOverlay({
   chatPreviewEnabled?: boolean
   outputMs?: number
   outputDurationMs?: number
+  onStickerMove?: (x: number, y: number) => void
 }) {
   if (boxWidth <= 0 || boxHeight <= 0) return null
   if (burnedIn) return null
@@ -118,19 +125,23 @@ export function ExportTemplateOverlay({
     const lay = overlayLayout(Math.max(2, lines.length || 2))
     const sy = boxHeight / 1920
     const fontPx = Math.max(10, Math.round(84 * sy))
+    const boxMetrics = headlinePreviewBoxMetrics(boxWidth, boxHeight, headlineStyle)
     return (
       <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
         {headlineOn ? (
           <div
-            className="absolute inset-x-0 px-1 text-center font-black leading-[0.95]"
+            className="absolute px-1 text-center font-black leading-[0.95]"
             style={{
               top: lay.headlineTop * sy,
               height: lay.headlineH * sy,
+              left: boxMetrics.left,
+              width: boxMetrics.width,
               fontSize: fontPx,
-              fontFamily: 'Anton, \"Bebas Neue\", Impact, sans-serif',
+              fontFamily: headlinePreviewFontFamily(headlineStyle.font),
+              fontWeight: headlinePreviewFontWeight(headlineStyle.font),
               color: headlineStyle.textColor,
               backgroundColor: headlineStyle.boxColor,
-              borderRadius: headlineStyle.radiusPx,
+              borderRadius: boxMetrics.borderRadius,
             }}
           >
             <div className="flex h-full flex-col items-center justify-center gap-0">
@@ -170,6 +181,7 @@ export function ExportTemplateOverlay({
             totalMs={outputDurationMs}
             boxWidth={boxWidth}
             boxHeight={boxHeight}
+            onMove={onStickerMove}
           />
         ) : null}
         {chatOn ? <ChatPreviewBox lay={lay} sy={sy} opacity={chatOpacity} /> : null}
@@ -180,19 +192,24 @@ export function ExportTemplateOverlay({
   const headlineTop = STREAM_HEADLINE_TOP * scaleY
   const barH = Math.round(boxHeight * 0.2)
   const videoH = Math.round(boxHeight * 0.52)
+  const barMetrics = headlinePreviewBoxMetrics(boxWidth, boxHeight, headlineStyle)
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
       {headlineOn ? (
         <div
-          className="absolute inset-x-0 px-2 text-center font-bold leading-tight"
+          className="absolute px-2 text-center font-bold leading-tight"
           style={{
             top: headlineTop,
             height: barH,
+            left: barMetrics.left,
+            width: barMetrics.width,
             fontSize: Math.max(9, 11 * scaleX),
+            fontFamily: headlinePreviewFontFamily(headlineStyle.font),
+            fontWeight: headlinePreviewFontWeight(headlineStyle.font),
             color: headlineStyle.textColor,
             backgroundColor: headlineStyle.boxColor,
-            borderRadius: headlineStyle.radiusPx,
+            borderRadius: barMetrics.borderRadius,
           }}
         >
           <div className="flex h-full flex-col items-center justify-center gap-0 leading-[1.1]">

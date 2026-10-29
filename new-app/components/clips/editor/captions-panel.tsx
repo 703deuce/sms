@@ -21,7 +21,15 @@ import { wordDisplayText } from '@/lib/clips/edits'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { clipsFetch } from '@/lib/clips-api'
 import { cn } from '@/lib/utils'
+import { useSafeZoneVisible } from '@/lib/clips/use-safe-zone-visible'
+import {
+  captionInBottomUnsafeBand,
+  moveUpMarginVPct,
+} from '@/components/clips/editor/preview-safe-zone'
+import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
+import { previewCaptionBottomPct } from '@/lib/clips/caption-safe-area'
 
+const HIGHLIGHT_SWATCHES = ['#FDE047', '#FACC15', '#22C55E', '#38BDF8', '#F472B6', '#FFFFFF'] as const
 const ANIMATIONS = ['none', 'pop', 'bounce', 'slideup', 'typewriter', 'karaoke', 'glow'] as const
 
 type CustomPreset = { id: string; name: string; config: Record<string, unknown> }
@@ -67,6 +75,10 @@ export function CaptionsPanel({
   }, [loadCustom])
 
   const patch = (partial: Partial<ClipEditsV2['captions']>) => onChange({ ...cap, ...partial })
+  const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
+  const exportPlatform = (edits.exportTemplate?.exportPlatformId ?? 'tiktok') as ExportPlatformId
+  const marginVPct = previewCaptionBottomPct(cap, 1920)
+  const unsafeCaption = captionInBottomUnsafeBand(exportPlatform, 1920, marginVPct)
 
   const activeWordsPerLine = Number(cap.wordsPerLine ?? preset.wordsPerLine)
   const activeCase = cap.case ?? preset.case
@@ -168,7 +180,7 @@ export function CaptionsPanel({
         </div>
       ) : null}
 
-      {customPresets.length > 0 ? (
+      {customPresets?.length ? (
         <div className="space-y-2" data-testid="caption-custom-presets">
           <p className="text-xs font-medium text-muted-foreground">My presets</p>
           <ul className="space-y-1">
@@ -257,6 +269,57 @@ export function CaptionsPanel({
           ))}
         </SelectContent>
       </Select>
+
+      <p className="text-xs font-medium text-muted-foreground">Active word</p>
+      <div className="flex flex-wrap gap-1">
+        {(['color', 'highlight', 'fill'] as const).map((mode) => (
+          <Button
+            key={mode}
+            size="sm"
+            variant={(cap.activeStyle ?? 'color') === mode ? 'default' : 'outline'}
+            onClick={() => patch({ activeStyle: mode })}
+          >
+            {mode === 'color' ? 'Color' : mode === 'highlight' ? 'Highlight' : 'Fill'}
+          </Button>
+        ))}
+      </div>
+      {(cap.activeStyle ?? 'color') === 'highlight' ? (
+        <div className="flex flex-wrap gap-2">
+          {HIGHLIGHT_SWATCHES.map((hex) => (
+            <button
+              key={hex}
+              type="button"
+              aria-label={hex}
+              className={cn(
+                'size-7 rounded-full border-2',
+                (cap.highlightColor ?? '#FDE047') === hex ? 'border-primary' : 'border-border',
+              )}
+              style={{ backgroundColor: hex }}
+              onClick={() => patch({ highlightColor: hex })}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <div className="flex items-center justify-between">
+        <label htmlFor="cap-safe-zone" className="text-sm">
+          Show safe zone
+        </label>
+        <Switch id="cap-safe-zone" checked={safeZoneVisible} onCheckedChange={setSafeZoneVisible} />
+      </div>
+      {unsafeCaption ? (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-100">
+          <p>Captions sit under {exportPlatform.replace(/_/g, ' ')}&apos;s buttons.</p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2 h-7"
+            onClick={() => patch({ marginVPct: moveUpMarginVPct(exportPlatform) })}
+          >
+            Move up
+          </Button>
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between">
         <label htmlFor="cap-auto-emojis" className="text-sm">Auto emojis</label>

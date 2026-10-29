@@ -45,4 +45,22 @@ describe('caption preview overlay', () => {
     )
     expect(screen.getByTestId('caption-floating-emoji').textContent).toContain('🔥')
   })
+
+  it('renders highlight style on active word', () => {
+    const edits = defaultEdits(bounds)
+    edits.captions = {
+      ...edits.captions,
+      activeStyle: 'highlight',
+      highlightColor: '#FDE047',
+    }
+    const words: ClipWord[] = [
+      { w: 'one', s: 0, e: 0.5, idx: 0 },
+      { w: 'two', s: 0.5, e: 1, idx: 1 },
+    ]
+    const { container } = render(
+      <CaptionOverlay words={words} currentTimeSec={0.6} edits={edits} boxHeightPx={320} outputDurationSec={5} />,
+    )
+    const active = container.querySelector('span[style*="background"]')
+    expect(active).toBeTruthy()
+  })
 })

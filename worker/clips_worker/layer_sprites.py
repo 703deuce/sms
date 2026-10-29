@@ -157,3 +157,41 @@ def render_sticker_png(
         stderr=subprocess.DEVNULL,
     )
     return dest
+
+
+def _parse_rgba(hex_color: str, alpha: int = 255) -> tuple[int, int, int, int]:
+    h = (hex_color or "#FFFFFF").lstrip("#")
+    if len(h) != 6:
+        return (255, 255, 255, alpha)
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha)
+
+
+def render_headline_box_png(w: int, h: int, color_hex: str, radius_px: int, dest: Path) -> Path:
+    from PIL import Image, ImageDraw
+
+    w, h = max(2, int(w)), max(2, int(h))
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(im)
+    fill = _parse_rgba(color_hex)
+    r = max(0, int(radius_px))
+    if r > 0:
+        draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=r, fill=fill)
+    else:
+        draw.rectangle([0, 0, w - 1, h - 1], fill=fill)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    im.save(dest)
+    return dest
+
+
+def headline_box_overlay_x(play_w: int, width_pct: int) -> int:
+    w = round(play_w * float(width_pct) / 100.0)
+    return max(0, (int(play_w) - w) // 2)
+
+
+def headline_drawbox_filter(play_w: int, y: int, bar_h: int, box_fill: str, style: dict) -> str:
+    width_pct = int(style.get("widthPct") or 100)
+    radius_px = int(style.get("radiusPx") or 0)
+    if radius_px <= 0 and width_pct >= 100:
+        return f"drawbox=x=0:y={y}:w={play_w}:h={bar_h}:color={box_fill}@1:t=fill"
+    x = headline_box_overlay_x(play_w, width_pct)
+    return f"overlay=x={x}:y={y}"
