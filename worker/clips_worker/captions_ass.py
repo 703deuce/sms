@@ -329,9 +329,18 @@ def build_ass(
         size_pct = float(preset["sizePct"])
     size_pct = max(3.0, min(12.0, size_pct))
     fontsize = round(size_pct / 100 * play_h)
+    spec_fs = edits_captions.get("_composeSpecAssFontsize")
+    if spec_fs is not None:
+        fontsize = int(spec_fs)
     position = edits_captions.get("position") or preset["position"]
     margin_v = margin_v_px(play_h, float(edits_captions.get("marginVPct") or preset["marginVPct"]))
-    margin_lr = margin_lr_px(play_w)
+    max_line_w = edits_captions.get("_composeSpecMaxLineWidthPx")
+    if max_line_w is not None:
+        max_line_w = int(max_line_w)
+        margin_lr = max(0, (play_w - max_line_w) // 2)
+    else:
+        margin_lr = margin_lr_px(play_w)
+        max_line_w = None
     colors = edits_captions.get("colors") if isinstance(edits_captions.get("colors"), dict) else None
     emphasis = set(edits_captions.get("emphasis") or [])
     emph_scale = float(preset.get("emphasisScale") or 1.15)

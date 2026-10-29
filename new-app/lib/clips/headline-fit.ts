@@ -99,15 +99,6 @@ export function fitHeadlineDisplayForBox(
   }
   return { lines, fontPx: Math.round(fontPx) }
 }
-
-export function fitHeadlineBoldNewsForBox(
-  formatted: string,
-  boxWidthPx: number,
-  boxHeightPx: number,
-): { lines: string[]; fontPx: number } {
-  return fitHeadlineDisplayForBox(formatted, boxWidthPx, boxHeightPx, { boldNews: true })
-}
-
 /** Fixed-scale preview when box metrics unknown (export dialog thumbnail). */
 export function fitHeadlineDisplayLines(formatted: string): string[] {
   if (!formatted.trim()) return []

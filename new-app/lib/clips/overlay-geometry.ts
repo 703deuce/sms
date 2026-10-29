@@ -91,22 +91,53 @@ export function badgeRect(
 }
 
 /** Pixel rect for follow sticker (center xNorm/yNorm, play space). */
+/** Pixel rect {x,y,w,h} for follow sticker (parity with worker overlay_geometry.sticker_rect). */
+export function stickerRectPx(
+  playW: number,
+  playH: number,
+  xNorm: number,
+  yNorm: number,
+  anchor?: string | null,
+): { x: number; y: number; w: number; h: number } {
+  const spec = (DEFAULTS as { stickerRect?: { wFrac?: number; hFrac?: number; marginPx?: number } }).stickerRect ?? {}
+  const s = playH / (DEFAULTS.baseH || 1920)
+  const margin = scalePx(spec.marginPx ?? 16, playH)
+  const w = Math.max(80, roundPx(playW * (spec.wFrac ?? 0.22)))
+  const h = Math.max(28, roundPx(playH * (spec.hFrac ?? 0.04)))
+  const cx = roundPx(xNorm * playW)
+  const cy = roundPx(yNorm * playH)
+  const anch = (anchor ?? 'center').toUpperCase()
+  let x: number
+  let y: number
+  if (anch === 'TL') {
+    x = cx
+    y = cy
+  } else if (anch === 'TR') {
+    x = cx - w
+    y = cy
+  } else if (anch === 'BL') {
+    x = cx
+    y = cy - h
+  } else if (anch === 'BR') {
+    x = cx - w
+    y = cy - h
+  } else {
+    x = cx - Math.floor(w / 2)
+    y = cy - Math.floor(h / 2)
+  }
+  x = Math.max(margin, Math.min(x, playW - w - margin))
+  y = Math.max(margin, Math.min(y, playH - h - margin))
+  return { x, y, w, h }
+}
+
 export function stickerRect(
   playW: number,
   playH: number,
   xNorm: number,
   yNorm: number,
 ): { left: number; top: number; width: number; height: number } {
-  const spec = (DEFAULTS as { stickerRect?: { wFrac?: number; hFrac?: number; marginPx?: number } }).stickerRect ?? {}
-  const s = playH / (DEFAULTS.baseH || 1920)
-  const margin = scalePx(spec.marginPx ?? 24, playH)
-  const width = Math.max(80, roundPx(playW * (spec.wFrac ?? 0.22)))
-  const height = Math.max(28, roundPx(playH * (spec.hFrac ?? 0.04)))
-  const cx = xNorm * playW
-  const cy = yNorm * playH
-  const left = Math.max(margin, Math.min(playW - width - margin, cx - width / 2))
-  const top = Math.max(margin, Math.min(playH - height - margin, cy - height / 2))
-  return { left, top, width, height }
+  const r = stickerRectPx(playW, playH, xNorm, yNorm, 'center')
+  return { left: r.x, top: r.y, width: r.w, height: r.h }
 }
 
 export function stickerVisible(

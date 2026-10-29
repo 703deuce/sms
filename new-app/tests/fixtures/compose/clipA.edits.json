@@ -1,0 +1,100 @@
+{
+ "v": 2,
+ "trim": {
+  "in": 148660,
+  "out": 160905
+ },
+ "zoom": {
+  "enabled": true,
+  "intensity": 1.12,
+  "facecamOnly": false
+ },
+ "audio": {
+  "sfx": [],
+  "music": null,
+  "studioSound": null
+ },
+ "broll": [],
+ "layout": {
+  "mode": "speaker_follow",
+  "shotOverrides": [],
+  "layoutSegments": [
+   {
+    "mode": "speaker_follow",
+    "endMs": 160905,
+    "startMs": 148660
+   }
+  ]
+ },
+ "captions": {
+  "case": "sentence",
+  "size": 6.5,
+  "colors": {
+   "a": "#FFD93D",
+   "b": "#39FF14"
+  },
+  "enabled": true,
+  "emphasis": [
+   169,
+   171,
+   178,
+   180,
+   188,
+   189,
+   187
+  ],
+  "position": "bottom",
+  "presetId": "bold_pop",
+  "animation": "pop",
+  "marginVPct": 14,
+  "presetConfig": {
+   "font": "Montserrat Black",
+   "active": "#FFD93D",
+   "weight": 900,
+   "activeB": "#39FF14",
+   "primary": "#FFFFFF",
+   "outlineW": 8,
+   "emphasisScale": 1.12
+  },
+  "wordsPerLine": 3,
+  "keywordHighlight": true
+ },
+ "cutRanges": [
+  [
+   150640,
+   155000
+  ],
+  [
+   155840,
+   156760
+  ],
+  [
+   159925,
+   160285
+  ]
+ ],
+ "exportSfx": "off",
+ "wordFixes": {},
+ "aspectRatio": "9:16",
+ "silenceTrim": {
+  "keepMs": 120,
+  "enabled": false,
+  "minGapMs": 350,
+  "fillerTrim": true
+ },
+ "exportTemplate": {
+  "channelLink": {
+   "url": "",
+   "enabled": true
+  },
+  "headlineBar": {
+   "text": "AFTER 'KOBE'S CRACKED,' A REACTION LEADS INTO 'THERE WE GO,",
+   "enabled": true
+  },
+  "platformBadge": {
+   "enabled": true
+  },
+  "profanityCensor": false,
+  "suggestedHeadline": "After 'Kobe's cracked,' a reaction leads into 'there we go,"
+ }
+}

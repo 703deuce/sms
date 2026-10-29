@@ -1,0 +1,193 @@
+{
+ "v": 2,
+ "trim": {
+  "in": 1964766,
+  "out": 1981766
+ },
+ "zoom": {
+  "enabled": true,
+  "intensity": 1.12,
+  "facecamOnly": false
+ },
+ "audio": {
+  "sfx": [],
+  "music": null,
+  "studioSound": null
+ },
+ "broll": [],
+ "layers": [
+  {
+   "z": 5,
+   "id": "headline",
+   "text": "THE WALMART PIN STRUGGLE",
+   "type": "headline",
+   "style": {
+    "preset": "stream_yellow",
+    "boxColor": "#FACC15",
+    "maxLines": 3,
+    "radiusPx": 0,
+    "widthPct": 100,
+    "textColor": "#000000"
+   },
+   "enabled": true,
+   "placement": "fit_top_band",
+   "suggested": "THE WALMART PIN STRUGGLE"
+  },
+  {
+   "z": 20,
+   "id": "captions",
+   "type": "captions",
+   "enabled": true,
+   "settings": {
+    "case": "sentence",
+    "size": 6.5,
+    "colors": {
+     "a": "#FFD93D",
+     "b": "#39FF14"
+    },
+    "enabled": true,
+    "emphasis": [
+     68,
+     86,
+     90,
+     91,
+     94,
+     106,
+     107,
+     112,
+     116,
+     121
+    ],
+    "position": "bottom",
+    "presetId": "bold_pop",
+    "animation": "pop",
+    "marginVPct": 14,
+    "wordsPerLine": 3,
+    "keywordHighlight": true
+   }
+  },
+  {
+   "x": 0.82,
+   "y": 0.12,
+   "z": 55,
+   "id": "follow_sticker",
+   "kind": "follow_cta",
+   "text": "FOLLOW",
+   "type": "sticker",
+   "anchor": "TR",
+   "timing": "always",
+   "enabled": true,
+   "platform": "twitch",
+   "durationMs": 4000
+  },
+  {
+   "z": 6,
+   "id": "badge",
+   "url": "https://twitch.tv/2xrakai",
+   "type": "badge",
+   "handle": "2xrakai",
+   "enabled": true,
+   "platform": "twitch",
+   "showLink": false,
+   "showLogo": true,
+   "placement": "fit_top_band",
+   "showLabel": true
+  }
+ ],
+ "layout": {
+  "mode": "fit_top",
+  "shotOverrides": [],
+  "layoutSegments": [
+   {
+    "mode": "fit_top",
+    "endMs": 1981766,
+    "startMs": 1964766
+   }
+  ]
+ },
+ "layersV": 3,
+ "captions": {
+  "case": "sentence",
+  "size": 6.5,
+  "colors": {
+   "a": "#FFD93D",
+   "b": "#39FF14"
+  },
+  "enabled": true,
+  "emphasis": [
+   86,
+   90,
+   94,
+   106,
+   107,
+   116,
+   93,
+   59,
+   73,
+   72,
+   68,
+   91,
+   121,
+   112
+  ],
+  "position": "bottom",
+  "presetId": "bold_pop",
+  "animation": "pop",
+  "marginVPct": 14,
+  "activeStyle": "highlight",
+  "presetConfig": {
+   "font": "Montserrat Black",
+   "active": "#FFD93D",
+   "weight": 900,
+   "activeB": "#39FF14",
+   "primary": "#FFFFFF",
+   "outlineW": 8,
+   "emphasisScale": 1.12
+  },
+  "wordsPerLine": 3,
+  "keywordHighlight": true
+ },
+ "cutRanges": [],
+ "exportSfx": "off",
+ "wordFixes": {},
+ "aspectRatio": "9:16",
+ "chatOverlay": {
+  "enabled": false,
+  "opacity": 0.6,
+  "position": "bottom"
+ },
+ "silenceTrim": {
+  "keepMs": 120,
+  "enabled": false,
+  "minGapMs": 350,
+  "fillerTrim": true
+ },
+ "sectionOrder": [
+  [
+   1980751,
+   1981766
+  ],
+  [
+   1964766,
+   1980751
+  ]
+ ],
+ "exportTemplate": {
+  "platform": "twitch",
+  "channelLink": {
+   "url": "https://twitch.tv/2xrakai",
+   "enabled": false
+  },
+  "headlineBar": {
+   "text": "THE WALMART PIN STRUGGLE",
+   "enabled": true
+  },
+  "platformBadge": {
+   "enabled": true
+  },
+  "profanityCensor": false,
+  "exportPlatformId": "tiktok",
+  "suggestedHeadline": "THE WALMART PIN STRUGGLE"
+ },
+ "layersLegacyFp": "b80b2b4f98ae2de3"
+}

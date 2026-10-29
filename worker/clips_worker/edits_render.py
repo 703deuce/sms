@@ -564,7 +564,51 @@ def _legacy_compose(
 
     layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
     stream_frame_applied = False
-    if export_stream_headline_compose_active(edits):
+    zoom_done = False
+    spec = ctx.get("compose_spec")
+    if spec:
+        zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
+        if zoom_cfg.get("enabled"):
+            from clips_worker.zoom_render import (
+                apply_zoom,
+                build_zoom_keyframes,
+                clamp_zoom_intensity,
+                layout_switch_times_from_words,
+            )
+
+            sw, sh = probe_video_size(caption_src)
+            cap_edits_pre = edits.get("captions") if isinstance(edits.get("captions"), dict) else {}
+            emph = (
+                emphasis_indexes_for_zoom(caption_words, cap_edits_pre)
+                if isinstance(cap_edits_pre, dict)
+                else []
+            )
+            kf = build_zoom_keyframes(
+                caption_words,
+                list(emph or []),
+                length_s,
+                clamp_zoom_intensity(zoom_cfg.get("intensity")),
+                layout_switches=layout_switch_times_from_words(caption_words),
+            )
+            zsrc = work_dir / "spec_zoomed_src.mp4"
+            apply_zoom(
+                caption_src,
+                zsrc,
+                kf,
+                length_s,
+                sw,
+                sh,
+                facecam_only=bool(zoom_cfg.get("facecamOnly")),
+            )
+            caption_src = zsrc
+        from clips_worker.compose_spec_render import render_stream_band
+
+        layout_mp4 = work_dir / "spec_stream_band.mp4"
+        render_stream_band(caption_src, layout_mp4, spec, work_dir, length_s)
+        caption_src = layout_mp4
+        stream_frame_applied = True
+        zoom_done = True
+    elif export_stream_headline_compose_active(edits):
         from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
 
         layout_mp4 = work_dir / "stream_layout.mp4"
@@ -581,7 +625,16 @@ def _legacy_compose(
 
     final = work_dir / "final.mp4"
     cap_edits = edits.get("captions") or {}
-    if (layout_mode == "fit_top" or stream_frame_applied) and isinstance(cap_edits, dict):
+    if spec and isinstance(spec.get("captions"), dict):
+        cap_spec = spec["captions"]
+        cap_edits = {
+            **cap_edits,
+            "marginVPct": cap_spec.get("marginVPct"),
+            "position": cap_spec.get("position"),
+            "_composeSpecMaxLineWidthPx": cap_spec.get("maxLineWidthPx"),
+            "_composeSpecAssFontsize": cap_spec.get("assFontsize"),
+        }
+    elif (layout_mode == "fit_top" or stream_frame_applied) and isinstance(cap_edits, dict):
         cap_edits = {**cap_edits, "marginVPct": 6, "position": "bottom"}
     if int(cap_edits.get("enabled", True)):
         burn_captions(caption_src, caption_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
@@ -608,7 +661,7 @@ def _legacy_compose(
         shutil.copy(hooked, out_mp4)
 
     zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
-    if zoom_cfg.get("enabled"):
+    if zoom_cfg.get("enabled") and not zoom_done:
         from clips_worker.zoom_render import (
             apply_zoom,
             build_zoom_keyframes,
@@ -979,6 +1032,8 @@ def compose_export(
         flush=True,
     )
     out_mp4, caption_words = _legacy_compose(caption_src, caption_words, out_mp4, burn_edits, ctx)
+    if ctx.get("compose_spec"):
+        return out_mp4, caption_words
     if "sprites" in plan or v3_has_extras(layers):
         sprites = build_v3_extras(layers, {**ctx, "edits": burn_edits})
         if sprites:
@@ -1007,6 +1062,7 @@ def render_edited_clip(
     project_id: str | None = None,
     clip_id: str | None = None,
     preview_crop_track: Path | None = None,
+    compose_spec: dict | None = None,
 ) -> tuple[Path, list[dict], str]:
     t0 = time.perf_counter()
     rid = render_id or "unknown"
@@ -1046,10 +1102,20 @@ def render_edited_clip(
     src_words = ensure_word_i(source_words)
     sc_settings = speakercrop_settings_from_edits(settings, edits)
 
+    from clips_worker.compose_spec_render import spec_active
+
     from clips_worker.preview_edits_match import preview_export_matches
 
-    preview_fast = preview_export_matches(edits, clip_start_ms, clip_end_ms)
-    stage("path", path="preview_fast" if preview_fast else "full_cut_pipeline")
+    use_spec = spec_active(compose_spec)
+    preview_fast = preview_export_matches(edits, clip_start_ms, clip_end_ms) if not use_spec else False
+    stage(
+        "path",
+        path=(
+            "compose_spec_stream_band"
+            if use_spec
+            else ("preview_fast" if preview_fast else "full_cut_pipeline")
+        ),
+    )
     if preview_fast and preview_crop_track is not None and preview_crop_track.is_file():
         stage("preview_crop_track", bytes=preview_crop_track.stat().st_size)
     if preview_fast:
@@ -1108,6 +1174,7 @@ def render_edited_clip(
             "clip_end_ms": clip_end_ms,
             "render_id": rid,
             "stage": stage,
+            "compose_spec": compose_spec if use_spec else None,
         }
         compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
         if compositor_off:
@@ -1167,7 +1234,10 @@ def render_edited_clip(
             from clips_worker.render_clip import resolve_clip_layout
 
             settings_nc["layout"] = resolve_clip_layout(settings_nc, 0)
-    if facecam_applied:
+    if use_spec:
+        shutil.copy(clip_src, full_render)
+        stage("compose_spec_skip_speakercrop")
+    elif facecam_applied:
         subprocess.check_call(
             [
                 "ffmpeg",
@@ -1317,6 +1387,7 @@ def render_edited_clip(
         "clip_end_ms": clip_end_ms,
         "render_id": rid,
         "stage": stage,
+        "compose_spec": compose_spec if use_spec else None,
     }
     compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
     if compositor_off:
@@ -1325,6 +1396,12 @@ def render_edited_clip(
         try:
             out_mp4, caption_words = compose_export(caption_src, caption_words, out_mp4, edits, ctx)
         except Exception as e:
+            if use_spec:
+                if render_meta is not None:
+                    render_meta["compose_fallback"] = f"{type(e).__name__}:{e}"[:200]
+                print(f"[clipper:compose_spec] fallback err={type(e).__name__}:{str(e)[:160]}", flush=True)
+                if __import__("os").environ.get("CLIPS_STRICT_COMPOSE", "0") == "1":
+                    raise
             print(f"[clipper:compositor] fallback err={type(e).__name__}:{str(e)[:160]}", flush=True)
             lw = work_dir / "legacy"
             lw.mkdir(exist_ok=True)

@@ -14,7 +14,8 @@ import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video
 import {
   layoutUsesLetterboxBlurPreview,
 } from '@/lib/clips/layout-preview'
-import { usesStreamHeadlineBandOverlay, resolveStreamOverlayLayout } from '@/lib/clips/stream-compose-layout'
+import { usesStreamHeadlineBandOverlay } from '@/lib/clips/stream-compose-layout'
+import { resolveComposeSpec, type ComposeSpec } from '@/lib/clips/compose-spec'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
 import { PreviewSafeZoneOverlay } from '@/components/clips/editor/preview-safe-zone'
@@ -81,6 +82,7 @@ export function PreviewStage({
   onStickerMove,
   onPipCornerChange,
   testBoxSize,
+  composeSpecPreview = false,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -101,6 +103,7 @@ export function PreviewStage({
   onPipCornerChange?: (corner: 'TL' | 'TR' | 'BL' | 'BR') => void
   /** Test-only fixed preview box (production never passes). */
   testBoxSize?: { w: number; h: number }
+  composeSpecPreview?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -387,16 +390,35 @@ export function PreviewStage({
     logEditorDecision('preview_fallback', { reason: 'no_crop_track' })
   }, [speakerApproxPreview])
 
+  const composeSpec = useMemo(() => {
+    if (!composeSpecPreview || !fitTopPreview) return null
+    try {
+      return resolveComposeSpec(edits as ClipEditsV2, 1080, 1920)
+    } catch {
+      return null
+    }
+  }, [composeSpecPreview, fitTopPreview, edits])
+
   const fitTopLayout = useMemo(() => {
     if (!fitTopPreview) return null
+    if (composeSpec) {
+      const legacy = overlayLayout(2, 1080, 1920)
+      return {
+        ...legacy,
+        videoY: composeSpec.video.y,
+        videoH: composeSpec.video.h,
+        headlineTop: composeSpec.headline?.y ?? legacy.headlineTop,
+        headlineH: composeSpec.headline?.h ?? legacy.headlineH,
+      }
+    }
     try {
       const lines = fitTopHeadlineLines(edits)
-      return resolveStreamOverlayLayout(edits as ClipEditsV2, Math.max(2, lines.length || 2))
+      return overlayLayout(Math.max(2, lines.length || 2), 1080, 1920)
     } catch (err) {
       console.warn('[clipper:preview] fit_top_fallback', err)
       return null
     }
-  }, [fitTopPreview, edits])
+  }, [fitTopPreview, edits, composeSpec])
 
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'
@@ -466,7 +488,7 @@ export function PreviewStage({
                 <video
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
-                  data-testid="fit-top-main-video"
+                  data-testid={composeSpec ? 'compose-video' : 'fit-top-main-video'}
                   className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={{ top: videoTop, height: videoH, width: '100%' }}
                   playsInline
@@ -682,6 +704,7 @@ export function PreviewStage({
           outputMs={captionTimeSec * 1000}
           outputDurationMs={previewOutDurMs}
           onStickerMove={onStickerMove}
+          composeSpec={composeSpec}
         />
         ) : null}
       </div>

@@ -1,0 +1,62 @@
+{
+  "v": 1,
+  "kind": "stream_band",
+  "playW": 1080,
+  "playH": 1920,
+  "bg": {
+    "kind": "blur_cover",
+    "blurPx": 20,
+    "brightness": 0.92
+  },
+  "video": {
+    "x": 0,
+    "y": 523,
+    "w": 1080,
+    "h": 608,
+    "fit": "cover"
+  },
+  "headline": {
+    "x": 0,
+    "y": 150,
+    "w": 1080,
+    "h": 373,
+    "lines": [
+      "AFTER 'KOBE'S CRACKED,'",
+      "A REACTION LEADS",
+      "INTO 'THERE WE GO,"
+    ],
+    "fontPx": 111,
+    "lineHeight": 1.04,
+    "font": "Anton",
+    "textColor": "#000000",
+    "boxColor": "#FFFFFF",
+    "radiusPx": 0,
+    "preset": "bold_news"
+  },
+  "badge": {
+    "x": 508,
+    "y": 120,
+    "w": 64,
+    "h": 64,
+    "platform": "twitch",
+    "text": "",
+    "showLogo": false,
+    "fontPx": 32,
+    "logoPx": 40,
+    "padX": 22,
+    "gap": 12,
+    "color": "#9146FF"
+  },
+  "stickers": [],
+  "captions": {
+    "font": "Montserrat Black",
+    "assFontsize": 125,
+    "emPx": 80.025625,
+    "maxLineWidthPx": 907,
+    "marginVPct": 14,
+    "position": "bottom"
+  },
+  "zoom": {
+    "target": "video"
+  }
+}

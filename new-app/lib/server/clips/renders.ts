@@ -1,5 +1,7 @@
 import { editsVersionHash, type ClipEditsV2 } from '@/lib/clips/edits'
-import { type ExportAspect, type ExportResolution, renderVersionHash } from '@/lib/clips/export-aspect'
+import { type ExportAspect, type ExportResolution, exportPixelSize, renderVersionHash } from '@/lib/clips/export-aspect'
+import { resolveComposeSpec } from '@/lib/clips/compose-spec'
+import { composeSpecV1Enabled } from '@/lib/clips/compose-spec-flags'
 import { exportFilename } from '@/lib/server/clips/clips'
 import {
   type ClipExportRowDto,
@@ -106,8 +108,14 @@ export async function enqueueRenderClip(
   },
 ) {
   const prisma = getPrisma()
+  const clipRow = await prisma.clip.findUniqueOrThrow({ where: { id: clipId }, select: { projectId: true } })
+  const { width: playW, height: playH } = exportPixelSize(opts.aspect, opts.resolution)
+  const composeSpec = composeSpecV1Enabled(workspaceId, clipRow.projectId)
+    ? resolveComposeSpec(opts.edits, playW, playH)
+    : null
   const editsHash = editsVersionHash(opts.edits)
-  const hash = renderVersionHash(editsHash, opts.aspect, opts.resolution)
+  const hashMaterial = composeSpec ? `${editsHash}:${JSON.stringify(composeSpec)}` : editsHash
+  const hash = renderVersionHash(hashMaterial, opts.aspect, opts.resolution)
   const existing = await prisma.clipRender.findFirst({
     where: { clipId, workspaceId, status: 'READY', editsVersionHash: hash },
     orderBy: { createdAt: 'desc' },
@@ -151,7 +159,11 @@ export async function enqueueRenderClip(
       clipId,
       type: 'RENDER_CLIP',
       status: 'QUEUED',
-      payload: { renderId, editsVersionHash: hash },
+      payload: {
+        renderId,
+        editsVersionHash: hash,
+        ...(composeSpec ? { composeSpec } : {}),
+      },
     },
   })
 

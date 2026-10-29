@@ -1,7 +1,6 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { formatHeadlineForExport, normalizeExportTemplate } from '@/lib/clips/export-template'
 import { headlineBarAllowedForLayout } from '@/lib/clips/headline-band-layout'
-import { overlayLayout, type StreamOverlayLayout } from '@/lib/clips/stream-overlay-layout'
 
 const STREAM_FRAME_MODES = new Set(['fit_blur', 'fit_top', 'full_frame'])
 
@@ -26,8 +25,4 @@ export function usesStreamHeadlineBandOverlay(edits: ClipEditsV2): boolean {
   if (!tpl?.headlineBar?.enabled) return false
   const text = formatHeadlineForExport(tpl.headlineBar.text || tpl.suggestedHeadline || '')
   return Boolean(text.trim())
-}
-
-export function resolveStreamOverlayLayout(edits: ClipEditsV2, headlineLineCount: number): StreamOverlayLayout {
-  return overlayLayout(Math.max(2, headlineLineCount || 2))
 }

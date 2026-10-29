@@ -452,7 +452,8 @@ def _run_render_clip_job_body(
     )
 
     preview_key = ctx["previewKey"]
-    if preview_key and can_reuse_clip_preview_for_render(aspect, resolution, edits, clip_start, clip_end):
+    compose_spec = payload.get("composeSpec") if isinstance(payload.get("composeSpec"), dict) else None
+    if preview_key and not compose_spec and can_reuse_clip_preview_for_render(aspect, resolution, edits, clip_start, clip_end):
         tmp = Path(tempfile.mkdtemp()) / "probe.mp4"
         try:
             download_object(preview_key, tmp)
@@ -657,6 +658,7 @@ def _run_render_clip_job_body(
                     project_id=project_id,
                     clip_id=clip_id,
                     preview_crop_track=preview_crop_track,
+                    compose_spec=compose_spec,
                 )
             finally:
                 progress_stop.set()

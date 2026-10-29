@@ -10,8 +10,9 @@ import {
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { resolveLayers, type BadgeLayer, type HeadlineLayer, type StickerLayer } from '@/lib/clips/layers'
 import { headlineStyleForPreset, badgePlacementForLayout } from '@/lib/clips/overlay-geometry'
+import { usesStreamHeadlineBandOverlay } from '@/lib/clips/stream-compose-layout'
+import { resolveComposeSpec, type ComposeSpec } from '@/lib/clips/compose-spec'
 import { overlayLayout, STREAM_HEADLINE_TOP } from '@/lib/clips/stream-overlay-layout'
-import { usesStreamHeadlineBandOverlay, resolveStreamOverlayLayout } from '@/lib/clips/stream-compose-layout'
 import { PlatformBadgePreview } from '@/components/clips/editor/platform-badge'
 import { FollowStickerPreview } from '@/components/clips/editor/follow-sticker'
 import { headlinePreviewBoxMetrics,
@@ -19,7 +20,7 @@ import { headlinePreviewBoxMetrics,
   headlinePreviewFontWeight,
 } from '@/lib/clips/headline-preview-style'
 import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
-import { fitHeadlineBoldNewsForBox, fitHeadlineDisplayForBox } from '@/lib/clips/headline-fit'
+import { fitHeadlineDisplayForBox } from '@/lib/clips/headline-fit'
 
 function ChatPreviewBox({
   lay,
@@ -64,6 +65,7 @@ export function ExportTemplateOverlay({
   outputMs = 0,
   outputDurationMs = 0,
   onStickerMove,
+  composeSpec: composeSpecProp,
 }: {
   edits: ClipEditsV2
   boxWidth: number
@@ -74,6 +76,7 @@ export function ExportTemplateOverlay({
   outputMs?: number
   outputDurationMs?: number
   onStickerMove?: (x: number, y: number) => void
+  composeSpec?: ComposeSpec | null
 }) {
   if (boxWidth <= 0 || boxHeight <= 0) return null
   if (burnedIn) return null
@@ -124,15 +127,91 @@ export function ExportTemplateOverlay({
   const chatOpacity = edits.chatOverlay?.opacity ?? 0.6
   const scaleY = boxHeight / 1920
 
+  const scaleY = boxHeight / 1920
+  const composeSpec = composeSpecProp ?? null
+
+  if (useFitTop && composeSpec && (headlineOn || chatOn || badgeOn || badgeLogo || channelOn || composeSpec.stickers.length)) {
+    const sy = scaleY
+    const sx = boxWidth / 1080
+    const hl = composeSpec.headline
+    return (
+      <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
+        {hl ? (
+          <div
+            data-testid="compose-headline"
+            className="absolute text-center font-black"
+            style={{
+              top: hl.y * sy,
+              left: hl.x * sx,
+              width: hl.w * sx,
+              height: hl.h * sy,
+              fontSize: hl.fontPx * sy,
+              lineHeight: hl.lineHeight,
+              letterSpacing: 0,
+              fontFamily: headlinePreviewFontFamily(hl.font),
+              fontWeight: headlinePreviewFontWeight(hl.font),
+              color: hl.textColor,
+              backgroundColor: hl.boxColor,
+              borderRadius: hl.radiusPx * sy,
+            }}
+          >
+            <div className="flex h-full flex-col items-center justify-center">
+              {hl.lines.map((line) => (
+                <span key={line} style={{ whiteSpace: 'pre', display: 'block' }}>
+                  {line}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {composeSpec.badge ? (
+          <div
+            data-testid="compose-badge"
+            className="absolute flex items-center justify-center rounded-full text-white"
+            style={{
+              top: composeSpec.badge.y * sy,
+              left: composeSpec.badge.x * sx,
+              width: composeSpec.badge.w * sx,
+              height: composeSpec.badge.h * sy,
+              backgroundColor: composeSpec.badge.color,
+              fontSize: composeSpec.badge.fontPx * sy,
+              fontFamily: headlinePreviewFontFamily('Montserrat Black'),
+            }}
+          >
+            {composeSpec.badge.text}
+          </div>
+        ) : null}
+        {composeSpec.stickers.map((st, i) => (
+          <div
+            key={i}
+            data-testid="compose-sticker"
+            className="absolute flex items-center justify-center rounded-full font-bold text-white"
+            style={{
+              top: st.y * sy,
+              left: st.x * sx,
+              width: st.w * sx,
+              height: st.h * sy,
+              backgroundColor: st.color,
+              fontSize: Math.max(10, (st.h / 3) * sy),
+            }}
+          >
+            {st.text}
+          </div>
+        ))}
+        {chatOn ? <ChatPreviewBox lay={overlayLayout(2)} sy={sy} opacity={chatOpacity} /> : null}
+      </div>
+    )
+  }
+
   if (useFitTop && (headlineOn || chatOn || badgeOn || badgeLogo || channelOn)) {
-    const lay = resolveStreamOverlayLayout(edits, Math.max(2, lines.length || 2))
+    const lay = overlayLayout(Math.max(2, lines.length || 2))
     const sy = boxHeight / 1920
     const boxMetrics = headlinePreviewBoxMetrics(boxWidth, boxHeight, headlineStyle)
     const headlineText = formatHeadlineForExport(
       tpl?.headlineBar?.text?.trim() || tpl?.suggestedHeadline?.trim() || headlineLayer?.text?.trim() || '',
     )
     const fit = headlineOn
-      ? fitHeadlineBoldNewsForBox(headlineText, boxMetrics.width, lay.headlineH * sy)
+      ? fitHeadlineDisplayForBox(headlineText, boxMetrics.width, lay.headlineH * sy)
       : { lines: [] as string[], fontPx: 10 }
     const displayLines = headlineOn ? fit.lines : []
     const fontPx = headlineOn ? fit.fontPx : Math.max(10, Math.round(84 * sy))

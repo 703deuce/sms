@@ -17,7 +17,7 @@ const headlineLayerSchema = layerBaseSchema.extend({
   suggested: z.string().optional(),
   placement: z.enum(['fit_top_band', 'export_bar']),
   style: z.object({
-    preset: z.enum(['stream_white_box', 'export_bar', 'stream_yellow', 'export_bar_dark']),
+    preset: z.enum(['stream_white_box', 'export_bar', 'stream_yellow', 'export_bar_dark', 'bold_news']),
     font: z.string().optional(),
     textColor: z.string(),
     boxColor: z.string(),
