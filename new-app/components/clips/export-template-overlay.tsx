@@ -4,6 +4,7 @@ import {
   exportTemplateOverlaysActive,
   formatHeadlineForExport,
   normalizeExportTemplate,
+  streamHeadlineFrameLayout,
   wrapHeadlineDisplayLines,
 } from '@/lib/clips/export-template'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -119,7 +120,6 @@ export function ExportTemplateOverlay({
   const platform = tpl?.platform ?? 'twitch'
   const chatOpacity = edits.chatOverlay?.opacity ?? 0.6
   const scaleY = boxHeight / 1920
-  const scaleX = boxWidth / 1080
 
   if (useFitTop && (headlineOn || chatOn)) {
     const lay = overlayLayout(Math.max(2, lines.length || 2))
@@ -190,9 +190,18 @@ export function ExportTemplateOverlay({
   }
 
   const headlineTop = STREAM_HEADLINE_TOP * scaleY
-  const barH = Math.round(boxHeight * 0.2)
-  const videoH = Math.round(boxHeight * 0.52)
+  const frameLay = streamHeadlineFrameLayout(Math.round(boxHeight))
+  const barH = frameLay.barHeightPx * scaleY
+  const videoTop = frameLay.videoTopPx * scaleY
+  const videoH = frameLay.videoHeightPx * scaleY
   const barMetrics = headlinePreviewBoxMetrics(boxWidth, boxHeight, headlineStyle)
+  const headlineFontPx = Math.max(
+    10,
+    Math.min(
+      (barH * 0.52) / Math.max(1, lines.length),
+      barH * 0.45,
+    ),
+  )
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
@@ -204,7 +213,7 @@ export function ExportTemplateOverlay({
             height: barH,
             left: barMetrics.left,
             width: barMetrics.width,
-            fontSize: Math.max(9, 11 * scaleX),
+            fontSize: headlineFontPx,
             fontFamily: headlinePreviewFontFamily(headlineStyle.font),
             fontWeight: headlinePreviewFontWeight(headlineStyle.font),
             color: headlineStyle.textColor,
@@ -212,9 +221,11 @@ export function ExportTemplateOverlay({
             borderRadius: barMetrics.borderRadius,
           }}
         >
-          <div className="flex h-full flex-col items-center justify-center gap-0 leading-[1.1]">
+          <div className="flex h-full flex-col items-center justify-center gap-0 leading-[1.05]">
             {lines.map((line) => (
-              <span key={line}>{line}</span>
+              <span key={line} className="block w-full truncate px-1">
+                {line}
+              </span>
             ))}
           </div>
         </div>
@@ -228,7 +239,7 @@ export function ExportTemplateOverlay({
           placement="export_bar"
           boxWidth={boxWidth}
           boxHeight={boxHeight}
-          videoY={headlineTop}
+          videoY={videoTop}
           videoH={videoH}
         />
       ) : null}

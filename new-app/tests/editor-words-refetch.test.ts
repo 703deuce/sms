@@ -29,4 +29,15 @@ describe('trimNeedsEditorWordsRefetch', () => {
     const words = [word('mid', 15, 16, 0)]
     expect(trimNeedsEditorWordsRefetch(words, { in: 0, out: 16_000 }, bounds)).toBe(false)
   })
+
+  it('uses media trim bounds when set', () => {
+    const words = [word('mid', 15, 16, 0)]
+    const mediaBounds: ClipBounds = {
+      ...bounds,
+      trimMinMs: 12_000,
+      trimMaxMs: 38_000,
+    }
+    expect(trimNeedsEditorWordsRefetch(words, { in: 11_500, out: 16_000 }, mediaBounds)).toBe(false)
+    expect(trimNeedsEditorWordsRefetch(words, { in: 12_500, out: 16_000 }, mediaBounds)).toBe(true)
+  })
 })

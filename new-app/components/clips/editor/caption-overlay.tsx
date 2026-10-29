@@ -5,7 +5,7 @@ import './caption-anim.css'
 import { useMemo, useRef, useEffect } from 'react'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { wordKey } from '@/lib/clips/edits'
-import { activeCaptionWordIndex, captionEmojiForWord } from '@/lib/clips/caption-overlay-active'
+import { activeCaptionWordIndex, captionEmojiForWord, previewCaptionWordIndex } from '@/lib/clips/caption-overlay-active'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { resolveCaptionPreset, type CaptionPreset } from '@/lib/clips/caption-presets'
 import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
@@ -48,6 +48,7 @@ export function CaptionOverlay({
 }) {
   const cap = edits.captions ?? {}
   const preset = resolveCaptionPreset(cap)
+  const captionFont = cap.font?.trim() || preset.font
   const animation = (cap.animation || preset.animation) as string
   const wpl = cap.wordsPerLine ?? preset.wordsPerLine
   const caseMode = (cap.case || preset.case) as string
@@ -59,7 +60,7 @@ export function CaptionOverlay({
   const colors = cap.colors
   const emphasis = new Set(cap.emphasis ?? [])
 
-  const activeIdx = activeCaptionWordIndex(words, currentTimeSec)
+  const activeIdx = previewCaptionWordIndex(words, currentTimeSec)
   const lastMissLog = useRef(0)
   useEffect(() => {
     if (activeIdx >= 0 || words.length === 0 || currentTimeSec <= 0.05) return
@@ -141,8 +142,8 @@ export function CaptionOverlay({
     <div
       className={`pointer-events-none absolute inset-x-0 z-[25] flex flex-nowrap justify-center gap-1 text-center ${captionPosClass}`}
       style={{
-        fontFamily: captionFontStack(preset.font),
-        fontWeight: captionFontWeight(preset.font, preset.weight),
+        fontFamily: captionFontStack(captionFont),
+        fontWeight: captionFontWeight(captionFont, preset.weight),
         paddingInline: inlinePad,
         whiteSpace: 'nowrap',
         ...posStyle,

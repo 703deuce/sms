@@ -49,7 +49,7 @@ export function useEditorWords(
     }, 280)
 
     return () => window.clearTimeout(handle)
-  }, [clipId, bounds.clipStartMs, bounds.clipEndMs, trim.in, trim.out])
+  }, [clipId, bounds.clipStartMs, bounds.clipEndMs, bounds.trimMinMs, bounds.trimMaxMs, trim.in, trim.out])
 
   return { words, wordsLoading }
 }

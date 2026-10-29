@@ -43,7 +43,11 @@ export function trimNeedsEditorWordsRefetch(
   bounds: ClipBounds,
   slackMs = 250,
 ): boolean {
-  const { minInMs, maxOutMs } = extendedTrimLimits(bounds.clipStartMs, bounds.clipEndMs)
+  const limits =
+    bounds.trimMinMs != null && bounds.trimMaxMs != null
+      ? { minMs: bounds.trimMinMs, maxMs: bounds.trimMaxMs }
+      : undefined
+  const { minInMs, maxOutMs } = extendedTrimLimits(bounds.clipStartMs, bounds.clipEndMs, limits)
   if (trim.in < minInMs || trim.out > maxOutMs) return false
   const span = wordTimelineBoundsMs(words)
   if (!span) return true

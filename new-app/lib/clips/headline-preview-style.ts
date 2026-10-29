@@ -2,6 +2,9 @@ import type { ClipLayoutFacecam } from '@/lib/clips/edits'
 import type { HeadlineLayer } from '@/lib/clips/layers'
 
 export function headlinePreviewFontFamily(font: string | undefined): string {
+  if (font === 'Poppins') {
+    return 'var(--font-poppins), Poppins, sans-serif'
+  }
   if (font === 'Montserrat Black') {
     return 'var(--font-clip-montserrat), Montserrat, sans-serif'
   }
@@ -9,7 +12,9 @@ export function headlinePreviewFontFamily(font: string | undefined): string {
 }
 
 export function headlinePreviewFontWeight(font: string | undefined): number {
-  return font === 'Montserrat Black' ? 900 : 400
+  if (font === 'Montserrat Black') return 900
+  if (font === 'Poppins') return 800
+  return 400
 }
 
 export function headlinePreviewBoxMetrics(

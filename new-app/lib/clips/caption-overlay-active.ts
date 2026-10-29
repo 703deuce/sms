@@ -12,6 +12,14 @@ export function activeCaptionWordIndex(words: ClipWord[], currentTimeSec: number
   return -1
 }
 
+/** At playhead 0, show the first caption line so hex/font edits update while paused. */
+export function previewCaptionWordIndex(words: ClipWord[], currentTimeSec: number): number {
+  const active = activeCaptionWordIndex(words, currentTimeSec)
+  if (active >= 0) return active
+  if (words.length && currentTimeSec <= CAPTION_TIME_EPS) return 0
+  return -1
+}
+
 export function captionEmojiForWord(
   w: ClipWord,
   globalIdx: number,

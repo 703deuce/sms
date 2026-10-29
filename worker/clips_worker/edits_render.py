@@ -1081,6 +1081,44 @@ def render_edited_clip(
         stage("speakercrop_fast_done")
         if render_meta is not None:
             render_meta["effective_edits_ms"] = output_duration_ms(edits)
+
+        from clips_worker.render_clip import aspect_size
+
+        aspect = settings.get("aspectRatio", "9:16")
+        resolution = settings.get("exportResolution", "720p")
+        play_w, play_h = aspect_size(aspect, resolution)
+        segs = ordered_keep_segments(edits)
+        length_s = sum((b - a) for a, b in segs) / 1000.0
+        ctx = {
+            "work_dir": work_dir,
+            "play_w": play_w,
+            "play_h": play_h,
+            "length_s": length_s,
+            "settings": settings,
+            "conn": conn,
+            "project_id": project_id,
+            "clip_id": clip_id,
+            "clip_start_ms": clip_start_ms,
+            "clip_end_ms": clip_end_ms,
+            "render_id": rid,
+            "stage": stage,
+        }
+        compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
+        if compositor_off:
+            out_mp4, remapped = _legacy_compose(out_mp4, remapped, out_mp4, edits, ctx)
+        else:
+            try:
+                out_mp4, remapped = compose_export(out_mp4, remapped, out_mp4, edits, ctx)
+            except Exception as e:
+                print(
+                    f"[clipper:compositor] preview_fast_fallback err={type(e).__name__}:{str(e)[:160]}",
+                    flush=True,
+                )
+                lw = work_dir / "legacy_preview_fast"
+                lw.mkdir(exist_ok=True)
+                legacy_ctx = {**ctx, "work_dir": lw}
+                out_mp4, remapped = _legacy_compose(out_mp4, remapped, out_mp4, edits, legacy_ctx)
+        stage("preview_fast_compose_done")
         return out_mp4, remapped, build_srt(remapped)
 
     segs_ms = ordered_keep_segments(edits)

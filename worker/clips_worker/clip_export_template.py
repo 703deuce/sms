@@ -140,6 +140,16 @@ def export_template_overlays_active(tpl: dict | None) -> bool:
     return False
 
 
+def _v3_badge_sprite_will_render(edits: dict) -> bool:
+    try:
+        from clips_worker.layers_spec import _layer_by_id, badge_sprite_active, resolve_layers
+
+        badge = _layer_by_id(resolve_layers(edits), "badge")
+        return bool(badge and badge_sprite_active(badge))
+    except Exception:
+        return False
+
+
 def apply_export_template(
     video: Path,
     out: Path,
@@ -173,6 +183,8 @@ def apply_export_template(
     headline = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip()
 
     badge_on = bool((tpl.get("platformBadge") or {}).get("enabled"))
+    if badge_on and _v3_badge_sprite_will_render(edits):
+        badge_on = False
     link_on = bool((tpl.get("channelLink") or {}).get("enabled"))
     link_url = str((tpl.get("channelLink") or {}).get("url") or "").strip()
     platform = str(tpl.get("platform") or "twitch")
@@ -231,33 +243,44 @@ def apply_export_template(
     else:
         vmap = v1_label
 
-    subprocess.check_call(
-        [
-            "ffmpeg",
-            "-y",
-            "-v",
-            "error",
-            "-i",
-            str(video),
-            "-filter_complex",
-            fc,
-            "-map",
-            vmap,
-            "-map",
-            "0:a?",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "23",
-            "-c:a",
-            "copy",
-            str(stage),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(video),
+                "-filter_complex",
+                fc,
+                "-map",
+                vmap,
+                "-map",
+                "0:a?",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-c:a",
+                "copy",
+                str(stage),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(
+            f"[clipper:export_template] stack_stage_fallback reason=ffmpeg_exit_{exc.returncode} "
+            f"styled_box={_headline_uses_styled_box(_headline_style_from_edits(edits))}",
+            flush=True,
+        )
+        import shutil
+
+        shutil.copy(video, out)
+        return out
 
     current = stage
     if headline_on and headline:
@@ -273,6 +296,7 @@ def apply_export_template(
             duration_ms=duration_ms,
             text_color=str(style.get("textColor") or "#000000"),
             box_color=str(style.get("boxColor") or "#FFFFFF"),
+            headline_style=style,
         )
         current = hl_out
 

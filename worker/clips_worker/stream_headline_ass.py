@@ -109,6 +109,24 @@ def _headline_fonts_dir() -> Path | None:
     return dirs[0] if dirs else None
 
 
+def _headline_font_from_style(style: dict | None, *, fit_top: bool) -> str:
+    raw = str((style or {}).get("font") or "").strip()
+    if raw:
+        low = raw.lower()
+        if "anton" in low:
+            return "Anton"
+        if "montserrat" in low:
+            return "Montserrat"
+        if "poppins" in low:
+            return "Poppins"
+    if fit_top:
+        for d in _font_dirs():
+            if list(d.glob("*nton*.ttf")) or list(d.glob("*Anton*.ttf")):
+                return "Anton"
+        return _HEADLINE_FONT_FIT_TOP
+    return _HEADLINE_FONT
+
+
 def headline_ass_content(
     headline: str,
     *,
@@ -120,23 +138,20 @@ def headline_ass_content(
     fit_top: bool = False,
     text_color: str | None = None,
     box_color: str | None = None,
+    headline_style: dict | None = None,
 ) -> str:
     from clips_worker.overlay_geometry import headline_style_for_preset
 
     preset_style = headline_style_for_preset("stream_white_box" if fit_top else "export_bar")
     primary = _ass_color(text_color or preset_style.get("textColor") or "#000000")
     display = prepare_headline_display(headline)
+    font = _headline_font_from_style(headline_style, fit_top=fit_top)
     if fit_top:
         line_count = max(1, display.count(r"\N") + 1)
         fontsize = max(36, min(92, int((bar_h * 0.52) / line_count)))
-        font = _HEADLINE_FONT_FIT_TOP
-        for d in _font_dirs():
-            if list(d.glob("*nton*.ttf")) or list(d.glob("*Anton*.ttf")):
-                font = "Anton"
-                break
     else:
-        fontsize = max(28, min(50, int(bar_h * 0.20)))
-        font = _HEADLINE_FONT
+        line_count = max(1, display.count(r"\N") + 1)
+        fontsize = max(28, min(56, int((bar_h * 0.52) / line_count)))
     y_center = bar_y + bar_h // 2
     cs = max(1, duration_ms) // 10
     h_part, rem = divmod(cs, 360000)
@@ -179,8 +194,10 @@ def burn_stream_headline(
     fit_top: bool = False,
     text_color: str | None = None,
     box_color: str | None = None,
+    headline_style: dict | None = None,
 ) -> Path:
     ass = video.parent / "stream_headline.ass"
+    resolved_font = _headline_font_from_style(headline_style, fit_top=fit_top)
     ass.write_text(
         headline_ass_content(
             headline,
@@ -192,15 +209,11 @@ def burn_stream_headline(
             fit_top=fit_top,
             text_color=text_color,
             box_color=box_color,
+            headline_style=headline_style,
         ),
         encoding="utf-8",
     )
     fontsdir = _headline_fonts_dir()
-    resolved_font = _HEADLINE_FONT_FIT_TOP if fit_top else _HEADLINE_FONT
-    if fit_top and fontsdir:
-        anton = list(fontsdir.glob("*nton*.ttf")) + list(fontsdir.glob("*Anton*.ttf"))
-        if anton:
-            resolved_font = "Anton"
     print(
         f"[editor:decision] headline_font font={resolved_font} fit_top={fit_top} "
         f"fontsdir={fontsdir or 'none'}",

@@ -370,6 +370,9 @@ def prepare_speakercrop_gpu_render(
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
     w, h = aspect_size(aspect, resolution)
+    layout_mode = str(settings.get("layout") or "speaker_follow")
+    from clips_worker.layout_router import editor_mode_uses_static_fit_blur
+
     try:
         crop = json.loads(track.read_text())
         if int(crop.get("v", crop.get("version", 1))) == 2 or int(crop.get("version", 1)) == 2:
@@ -377,6 +380,9 @@ def prepare_speakercrop_gpu_render(
 
             fg = build_multiperson_filter_complex(crop)
             use_fc = True
+        elif not editor_mode_uses_static_fit_blur(layout_mode):
+            # v1 dynamic speakercrop cannot be encoded as static fit_blur (T4.4 export/preview mismatch).
+            return None
         else:
             fg = fit_blur_overlay_filter("0:v", "vfinal", w, h)
             use_fc = True
