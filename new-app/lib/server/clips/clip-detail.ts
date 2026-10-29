@@ -1,6 +1,6 @@
 import { shotsFromCropJson, inferShotsFromWords } from '@/lib/clips/crop-shots'
 import { normalizeCropTrack, shotsToCropShots, type CropTrack } from '@/lib/clips/crop-track'
-import { normalizeEdits, type ClipWord } from '@/lib/clips/edits'
+import { normalizeEdits, type ClipBounds, type ClipWord } from '@/lib/clips/edits'
 import { normalizeTranscriptJson, resolveEditorWords } from '@/lib/server/clips/editor-words'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { clipperCapabilities } from '@/lib/server/clips/clipper-capabilities'
@@ -10,6 +10,7 @@ import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { layersFromLegacy, resolveLayers } from '@/lib/clips/layers'
+import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 
 export type FacecamLayoutState = {
   layout?: string
@@ -91,7 +92,15 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
   const storage = project.transcriptKey
     ? await getClipStorageForObjectKey(project.transcriptKey, driverHint)
     : getClipStorage(driverHint)
-  const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
+  const bounds = await clipBoundsForPatch({
+    startMs: clip.startMs,
+    endMs: clip.endMs,
+    projectId: clip.projectId,
+    sourceSegKey: clip.sourceSegKey,
+    sourceSegStartMs: clip.sourceSegStartMs,
+    sourceSegEndMs: clip.sourceSegEndMs,
+    previewKey: clip.previewKey,
+  })
   const edits = normalizeEdits(clip.edits, bounds)
 
   const projectTranscript = await loadProjectTranscript(storage, project)
@@ -237,7 +246,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
 export function mergeEditsPatch(
   current: ReturnType<typeof normalizeEdits>,
   patch: unknown,
-  bounds: { clipStartMs: number; clipEndMs: number },
+  bounds: ClipBounds,
 ) {
   const base = normalizeEdits(current, bounds)
   if (!patch || typeof patch !== 'object') return base

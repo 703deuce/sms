@@ -28,6 +28,14 @@ export function loopFriendlyEndDefault(exportPlatform?: ExportPlatformId | null)
   return exportPlatform === 'tiktok' || exportPlatform === 'youtube_shorts'
 }
 
+export function wordsInTrimWindow(words: SourceWord[], trim: { in: number; out: number }): SourceWord[] {
+  return words.filter((w) => {
+    const startMs = Math.round(w.s * 1000)
+    const endMs = Math.round(w.e * 1000)
+    return endMs >= trim.in && startMs <= trim.out
+  })
+}
+
 export function applyLoopFriendlyTrimToEdits(
   edits: ClipEditsV2,
   words: SourceWord[],
@@ -40,7 +48,9 @@ export function applyLoopFriendlyTrimToEdits(
   const tin = edits.trim.in
   const tout = edits.trim.out
   if (tout - tin < 4000) return edits
-  const ordered = [...words].filter((w) => w.w?.trim()).sort((a, b) => a.s - b.s)
+  const ordered = wordsInTrimWindow(words, edits.trim)
+    .filter((w) => w.w?.trim())
+    .sort((a, b) => a.s - b.s)
   if (ordered.length < 4) return edits
   const texts = ordered.map((w) => w.w.trim())
   const score = loopAlignmentScore(texts.slice(0, 5), texts.slice(-5))

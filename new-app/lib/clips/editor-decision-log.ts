@@ -11,6 +11,8 @@ export type EditorDecisionKind =
   | 'layout'
   | 'export_request'
   | 'export_progress'
+  | 'cleanup_apply'
+  | 'cleanup_restore'
 
 export function hostOnlyFromUrl(url: string | null | undefined): string | null {
   if (!url?.trim()) return null

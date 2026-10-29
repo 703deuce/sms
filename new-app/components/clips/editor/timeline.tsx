@@ -434,25 +434,31 @@ function TrimHandle({
   maxMs: number
   onChange: (ms: number) => void
 }) {
+  const [dragMs, setDragMs] = useState<number | null>(null)
+  const displayMs = dragMs ?? ms
   return (
     <button
       type="button"
       className="absolute top-16 -translate-x-1/2 rounded border border-border bg-background px-1 text-[10px] shadow"
-      style={{ left: `${((ms - trimIn) / span) * 100}%` }}
+      style={{ left: `${((displayMs - trimIn) / span) * 100}%` }}
       onMouseDown={(e) => {
         e.preventDefault()
         const startX = e.clientX
-        const startMs = ms
+        const startMs = displayMs
+        let latestMs = startMs
         const onMove = (ev: MouseEvent) => {
           const parent = (e.target as HTMLElement).parentElement
           const w = parent?.clientWidth ?? 640
           const delta = ((ev.clientX - startX) / w) * span
-          const next = Math.round(startMs + delta)
-          onChange(Math.max(minMs, Math.min(maxMs, next)))
+          latestMs = Math.round(startMs + delta)
+          latestMs = Math.max(minMs, Math.min(maxMs, latestMs))
+          setDragMs(latestMs)
         }
         const onUp = () => {
           window.removeEventListener('mousemove', onMove)
           window.removeEventListener('mouseup', onUp)
+          setDragMs(null)
+          onChange(latestMs)
         }
         window.addEventListener('mousemove', onMove)
         window.addEventListener('mouseup', onUp)

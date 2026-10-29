@@ -31,6 +31,7 @@ export function CaptionsPanel({
   edits,
   words = [],
   onWordFix,
+  onResetWordFix,
   onChange,
   onApplyBrand,
   onSaveClipTemplate,
@@ -38,7 +39,8 @@ export function CaptionsPanel({
   clipId?: string
   edits: ClipEditsV2
   words?: SourceWord[]
-  onWordFix?: (index: number, text: string) => void
+  onWordFix?: (index: number, text: string, meta?: { s: number; w: string }) => void
+  onResetWordFix?: (index: number) => void
   onChange: (captions: ClipEditsV2['captions']) => void
   onApplyBrand?: () => void
   onSaveClipTemplate?: () => void
@@ -103,6 +105,7 @@ export function CaptionsPanel({
             {words.map((w) => {
               const display = wordDisplayText(w, edits.wordFixes)
               const fixed = Boolean(edits.wordFixes?.[String(w.i)]?.trim())
+              const meta = edits.wordFixMeta?.[String(w.i)]
               if (editingWordI === w.i) {
                 return (
                   <span key={w.i} className="mr-1 inline-flex">
@@ -113,13 +116,16 @@ export function CaptionsPanel({
                       onFocus={(e) => e.currentTarget.select()}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
-                          onWordFix(w.i, e.currentTarget.value)
+                          onWordFix(w.i, e.currentTarget.value, {
+                            s: Math.round(w.s * 1000),
+                            w: w.w,
+                          })
                           setEditingWordI(null)
                         }
                         if (e.key === 'Escape') setEditingWordI(null)
                       }}
                       onBlur={(e) => {
-                        onWordFix(w.i, e.target.value)
+                        onWordFix(w.i, e.target.value, { s: Math.round(w.s * 1000), w: w.w })
                         setEditingWordI(null)
                       }}
                     />
@@ -127,21 +133,35 @@ export function CaptionsPanel({
                 )
               }
               return (
-                <button
-                  key={w.i}
-                  type="button"
-                  className={cn(
-                    'mr-1 rounded px-0.5 hover:bg-accent',
-                    fixed && 'bg-primary/15 ring-1 ring-primary/30',
-                  )}
-                  onDoubleClick={(e) => {
-                    e.preventDefault()
-                    setEditingWordI(w.i)
-                  }}
-                  title={fixed ? `Corrected from “${w.w}”` : 'Double-click to edit'}
-                >
-                  {display}
-                </button>
+                <span key={w.i} className="mr-1 inline-flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded px-0.5 hover:bg-accent',
+                      fixed && 'bg-primary/15 ring-1 ring-primary/30',
+                    )}
+                    onDoubleClick={(e) => {
+                      e.preventDefault()
+                      setEditingWordI(w.i)
+                    }}
+                    title={
+                      fixed
+                        ? `Corrected from “${meta?.w ?? w.w}”`
+                        : 'Double-click to edit'
+                    }
+                  >
+                    {display}
+                  </button>
+                  {fixed && onResetWordFix ? (
+                    <button
+                      type="button"
+                      className="text-[10px] text-primary"
+                      onClick={() => onResetWordFix(w.i)}
+                    >
+                      Reset
+                    </button>
+                  ) : null}
+                </span>
               )
             })}
           </div>

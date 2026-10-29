@@ -1,10 +1,42 @@
 import { getPrisma } from "@/lib/server/db";
 import { ensureInternalOperatorMembership } from "@/lib/server/workspace-operator";
 
+let cached: { id: string; at: number } | null = null;
+let inflight: Promise<string> | null = null;
+const TTL_MS = 10 * 60_000;
+
 /**
  * Until product auth ships: pin workspace via env or bootstrap the first workspace row.
  */
 export async function resolveWorkspaceId(): Promise<string> {
+  if (process.env.VITEST) {
+    return resolveWorkspaceIdUncached();
+  }
+  if (cached && Date.now() - cached.at < TTL_MS) {
+    return cached.id;
+  }
+  if (inflight) {
+    return inflight;
+  }
+  inflight = resolveWorkspaceIdUncached()
+    .then((id) => {
+      cached = { id, at: Date.now() };
+      return id;
+    })
+    .catch((err) => {
+      console.warn(
+        "[clipper:workspace] resolve_fail",
+        err instanceof Error ? err.message : String(err),
+      );
+      throw err;
+    })
+    .finally(() => {
+      inflight = null;
+    });
+  return inflight;
+}
+
+async function resolveWorkspaceIdUncached(): Promise<string> {
   const pinned =
     process.env.DEV_WORKSPACE_ID?.trim() ||
     process.env.TRANSOVO_WORKSPACE_ID?.trim() ||

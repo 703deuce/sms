@@ -71,6 +71,9 @@ export function PlatformBadgePreview({
           height={logoH}
           className="shrink-0 object-contain"
           style={{ height: logoH, width: 'auto' }}
+          onError={(e) => {
+            e.currentTarget.style.display = 'none'
+          }}
           aria-hidden
         />
       ) : null}

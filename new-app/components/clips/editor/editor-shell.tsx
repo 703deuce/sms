@@ -5,7 +5,7 @@ import { EditorRail, EDITOR_RAIL_ITEMS, editorRailIcon, type EditorPanelId } fro
 import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Loader2, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
@@ -41,7 +41,9 @@ import type { ClipGapToolSettings } from '@/components/clips/editor/clip-shorten
 import { StudioSoundPreview } from '@/components/script-editor/studio-sound-preview'
 import { DEFAULT_STUDIO_SOUND_MIX, normalizeAudioEdits } from '@/lib/clips/audio'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
-import { useEditorState } from '@/components/clips/editor/use-editor-state'
+import { CleanupPanel } from '@/components/clips/editor/cleanup-panel'
+import type { CleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
+import { deriveClipFromEditor } from '@/lib/clips-api'
 import { LayersPanel } from '@/components/clips/editor/layers-panel'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
@@ -122,6 +124,8 @@ export function EditorShell({
   const [exportOpen, setExportOpen] = useState(false)
   const [fillerReviewOpen, setFillerReviewOpen] = useState(false)
   const [gapReviewOpen, setGapReviewOpen] = useState(false)
+  const [auditionEdits, setAuditionEdits] = useState<ClipEditsV2 | null>(null)
+  const [pendingDerivedClipId, setPendingDerivedClipId] = useState<string | null>(null)
   const [gapToolSettings, setGapToolSettings] = useState<ClipGapToolSettings>({
     mode: 'more_than',
     minGapSec: 0.6,
@@ -157,7 +161,8 @@ export function EditorShell({
     canUndo,
     canRedo,
     saveState,
-    addCutRange,
+    applyCleanupCut,
+    applyCleanupCuts,
     setCutRanges,
     setWordFix,
     restoreWord,
@@ -185,6 +190,56 @@ export function EditorShell({
     setLayoutModeAtSource,
     updateBrollItem,
   } = useEditorState(clipId, bounds, initialEdits, { serverUpdatedAt, editsSaveVersion, words })
+
+  const onApplyCleanupProposal = useCallback(
+    (proposal: CleanupProposal) => {
+      logEditorDecision('cleanup_apply', {
+        clipId,
+        kind: proposal.kind,
+        range: proposal.range,
+      })
+      applyCleanupCut(proposal.range)
+    },
+    [applyCleanupCut, clipId],
+  )
+
+  const onRestoreCleanupProposal = useCallback(
+    (proposal: CleanupProposal) => {
+      logEditorDecision('cleanup_restore', {
+        clipId,
+        kind: proposal.kind,
+        range: proposal.range,
+      })
+      restoreCutRange(proposal.range)
+    },
+    [clipId, restoreCutRange],
+  )
+
+  const applyCutRange = useCallback(
+    (range: [number, number]) => {
+      applyCleanupCut(range)
+    },
+    [applyCleanupCut],
+  )
+
+  const handleDeriveClip = useCallback(
+    async (trimIn: number, trimOut: number, deriveTitle?: string) => {
+      setPendingDerivedClipId('pending')
+      try {
+        const data = await deriveClipFromEditor(clipId, { trimIn, trimOut, title: deriveTitle })
+        setPendingDerivedClipId(data.clipId)
+        toast.success('New clip created from selection')
+      } catch (e) {
+        setPendingDerivedClipId(null)
+        toast.error(e instanceof Error ? e.message : 'Could not create clip')
+      }
+    },
+    [clipId],
+  )
+
+  const toggleLoopFriendly = useCallback(() => {
+    setEdits({ ...edits, loopFriendlyEnd: !(edits.loopFriendlyEnd ?? false) })
+  }, [edits, setEdits])
 
   const setTrim = useCallback(
     (trim: { in: number; out: number }) => {
@@ -517,9 +572,9 @@ export function EditorShell({
     if (!selected.length) return
     const wa = selected[0]
     const wb = selected[selected.length - 1]
-    addCutRange([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
+    applyCutRange([Math.round(wa.s * 1000), Math.round(wb.e * 1000)])
     sel.clear()
-  }, [addCutRange, editorWords])
+  }, [applyCutRange, editorWords])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -622,7 +677,8 @@ export function EditorShell({
           shots={cropShots}
           edits={edits}
           onSeek={seekSource}
-          onAddCut={addCutRange}
+          onAddCut={applyCutRange}
+          onSaveAsNewClip={handleDeriveClip}
           onWordFix={setWordFix}
           onRestoreWord={restoreWord}
           onRestoreCutRange={restoreCutRange}
@@ -633,6 +689,22 @@ export function EditorShell({
           onToggleEmphasis={edits.captions?.keywordHighlight ? toggleEmphasis : undefined}
           selectionRef={selectionRef}
         />
+        </EditorPanelErrorBoundary>
+      </div>
+      <div className={panel === 'cleanup' ? undefined : 'hidden'} aria-hidden={panel !== 'cleanup'}>
+        <EditorPanelErrorBoundary label="Cleanup">
+          <CleanupPanel
+            clipId={clipId}
+            bounds={bounds}
+            edits={edits}
+            words={editorWords}
+            gapSettings={gapToolSettings}
+            onApplyProposal={onApplyCleanupProposal}
+            onRestoreProposal={onRestoreCleanupProposal}
+            onCommitTrim={setTrim}
+            onAuditionChange={setAuditionEdits}
+            onSeek={seekSource}
+          />
         </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'layout' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layout'}>
@@ -653,7 +725,7 @@ export function EditorShell({
           clipEndMs={bounds.clipEndMs}
           gapToolSettings={gapToolSettings}
           onGapToolSettingsChange={(patch) => setGapToolSettings((s) => ({ ...s, ...patch }))}
-          onAddCut={addCutRange}
+          onAddCut={applyCutRange}
           onSetCutRanges={setCutRanges}
           onSeekSource={seekSource}
           onOpenGapReview={() => setGapReviewOpen(true)}
@@ -690,6 +762,7 @@ export function EditorShell({
             onApplyAutoTemplate={applyAutoBrandTemplate}
             onSaveTemplate={saveLayersBrandTemplate}
             onSyncEditsSaveVersion={syncEditsSaveVersion}
+            savePending={saveState === 'saving'}
           />
         </EditorPanelErrorBoundary>
       </div>
@@ -700,6 +773,7 @@ export function EditorShell({
           edits={edits}
           words={editorWords}
           onWordFix={setWordFix}
+          onResetWordFix={(i) => setWordFix(i, '')}
           onChange={setCaptions}
           onApplyBrand={() => void applyBrand()}
           onSaveClipTemplate={() => void saveClipTemplate()}
@@ -735,6 +809,7 @@ export function EditorShell({
           title={title}
           onTitleChange={setTitle}
           saveState={saveState}
+          optimisticPending={saveState === 'dirty'}
           canUndo={canUndo}
           canRedo={canRedo}
           onUndo={undo}
@@ -751,7 +826,7 @@ export function EditorShell({
         clipBounds={{ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }}
         open={fillerReviewOpen}
         onOpenChange={setFillerReviewOpen}
-        onAddCut={addCutRange}
+        onApplyProposal={onApplyCleanupProposal}
         onSeek={seekSource}
       />
       <ClipGapReview
@@ -761,7 +836,7 @@ export function EditorShell({
         clipBounds={{ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }}
         open={gapReviewOpen}
         onOpenChange={setGapReviewOpen}
-        onAddCut={addCutRange}
+        onApplyProposal={onApplyCleanupProposal}
         onSeek={seekSource}
         minGapSec={gapToolSettings.minGapSec}
         maxGapSec={gapToolSettings.maxGapSec}
@@ -792,6 +867,18 @@ export function EditorShell({
                 AI reframing
               </span>
             ) : null}
+            {pendingDerivedClipId ? (
+              <Badge className="absolute right-2 top-2 z-10" variant="secondary">
+                {pendingDerivedClipId === 'pending' ? 'Creating clip…' : 'New clip saved'}
+              </Badge>
+            ) : null}
+            <button
+              type="button"
+              className="absolute bottom-2 right-2 z-10 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-medium text-white ring-1 ring-white/15"
+              onClick={toggleLoopFriendly}
+            >
+              Loop trim {edits.loopFriendlyEnd === false ? 'off' : 'on'}
+            </button>
             <EditorPanelErrorBoundary label="Preview">
             <PreviewStage
               videoUrl={videoUrl}
@@ -807,6 +894,7 @@ export function EditorShell({
               channelDisplay={streamChannelDisplay}
               chatPreviewEnabled={streamChatAvailable}
               media={editorMedia}
+              audition={auditionEdits ? { edits: auditionEdits } : null}
             />
             {studioPreviewLoading ? (
               <div

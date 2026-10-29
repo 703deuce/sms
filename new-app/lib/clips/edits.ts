@@ -25,6 +25,8 @@ export type ClipEditsV2 = {
   trim: { in: number; out: number }
   cutRanges: CutRange[]
   wordFixes: Record<string, string>
+  /** Stable source-time + original text for export parity when word indices differ. */
+  wordFixMeta?: Record<string, WordFixMetaEntry>
   captions: {
     enabled?: boolean
     presetId?: string
@@ -107,7 +109,14 @@ export type ClipEditsV2 = {
   layersLegacyFp?: string
 }
 
-export type ClipBounds = { clipStartMs: number; clipEndMs: number }
+export type ClipBounds = {
+  clipStartMs: number
+  clipEndMs: number
+  trimMinMs?: number
+  trimMaxMs?: number
+}
+
+export type WordFixMetaEntry = { s: number; w: string }
 
 export function defaultEdits(bounds: ClipBounds): ClipEditsV2 {
   return {
@@ -165,6 +174,25 @@ const LAYOUT_MODES: ClipEditsV2['layout']['mode'][] = [
 ]
 
 const EXPORT_ASPECTS: ExportAspect[] = ['9:16', '4:5', '1:1', '16:9']
+
+function normalizeWordFixMeta(
+  raw: unknown,
+  fixes: Record<string, string>,
+): Record<string, WordFixMetaEntry> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const o = raw as Record<string, unknown>
+  const out: Record<string, WordFixMetaEntry> = {}
+  for (const [k, v] of Object.entries(o)) {
+    if (!fixes[k]) continue
+    if (!v || typeof v !== 'object') continue
+    const row = v as { s?: unknown; w?: unknown }
+    const s = Number(row.s)
+    const w = typeof row.w === 'string' ? row.w : fixes[k]
+    if (!Number.isFinite(s) || !w) continue
+    out[k] = { s: Math.round(s), w }
+  }
+  return Object.keys(out).length ? out : undefined
+}
 
 function normalizeCaptions(
   raw: unknown,
@@ -293,10 +321,19 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
         .filter(Boolean) as ClipEditsV2['layout']['shotOverrides']
     : []
   const trimRaw = (o.trim as { in?: number; out?: number }) || {}
-  const trim = clampTrimToExtendedBounds(bounds.clipStartMs, bounds.clipEndMs, {
-    in: Number(trimRaw.in ?? base.trim.in),
-    out: Number(trimRaw.out ?? base.trim.out),
-  })
+  const trimLimits =
+    bounds.trimMinMs != null && bounds.trimMaxMs != null
+      ? { minMs: bounds.trimMinMs, maxMs: bounds.trimMaxMs }
+      : undefined
+  const trim = clampTrimToExtendedBounds(
+    bounds.clipStartMs,
+    bounds.clipEndMs,
+    {
+      in: Number(trimRaw.in ?? base.trim.in),
+      out: Number(trimRaw.out ?? base.trim.out),
+    },
+    trimLimits,
+  )
   const rawCuts = Array.isArray(o.cutRanges)
     ? (o.cutRanges as CutRange[]).filter(
         (r) => Array.isArray(r) && r.length === 2 && Number.isFinite(r[0]) && Number.isFinite(r[1]),
@@ -309,6 +346,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     trim,
     cutRanges: sanitizeCutRangesForTrim(rawCuts, trim.in, trim.out),
     wordFixes: (o.wordFixes as Record<string, string>) || {},
+    wordFixMeta: normalizeWordFixMeta(o.wordFixMeta, (o.wordFixes as Record<string, string>) || {}),
     captions: normalizeCaptions(o.captions, base.captions),
     layout: {
       ...base.layout,

@@ -1,5 +1,6 @@
 'use client'
 
+import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +34,7 @@ export function LayersPanel({
   onApplyAutoTemplate,
   onSaveTemplate,
   onSyncEditsSaveVersion,
+  savePending = false,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -45,6 +47,7 @@ export function LayersPanel({
   onApplyAutoTemplate?: () => void
   onSaveTemplate?: (name: string) => void | Promise<void>
   onSyncEditsSaveVersion?: (version: number) => void
+  savePending?: boolean
 }) {
   const [templateName, setTemplateName] = useState('')
   const headline = layers.find((l): l is HeadlineLayer => l.id === 'headline' && l.type === 'headline')
@@ -93,6 +96,12 @@ export function LayersPanel({
 
   return (
     <div className="flex flex-col gap-4">
+      {savePending ? (
+        <p className="inline-flex items-center gap-2 text-xs text-muted-foreground" role="status">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          Saving layers…
+        </p>
+      ) : null}
       {(onApplyAutoTemplate || (brandTemplates && brandTemplates.length > 0 && onApplyTemplate)) ? (
         <div className="space-y-2 rounded-lg border border-border p-3">
           <p className="text-xs font-medium">Brand template</p>
