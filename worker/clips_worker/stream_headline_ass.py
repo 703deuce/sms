@@ -9,7 +9,7 @@ _EMOJI_RE = re.compile(r"([\U0001F300-\U0001FAFF\U00002700-\U000027BF]+)\s*$")
 _HEADLINE_FONT = "Montserrat"
 _HEADLINE_FONT_FIT_TOP = "Anton"
 _EMOJI_FONT = "Noto Color Emoji"
-_MAX_LINES = 3
+_MAX_LINES = 4
 _HEADLINE_CHAR_LIMIT = 72
 
 
@@ -64,7 +64,9 @@ def _wrap_headline_lines(body: str, max_chars_per_line: int = 22) -> list[str]:
             cur.append(w)
         if len(lines) >= _MAX_LINES:
             break
-    if len(lines) < _MAX_LINES and cur:
+    if len(lines) >= _MAX_LINES and cur:
+        lines[_MAX_LINES - 1] = f"{lines[_MAX_LINES - 1]} {' '.join(cur)}".strip()
+    elif len(lines) < _MAX_LINES and cur:
         lines.append(" ".join(cur))
     return lines[:_MAX_LINES]
 

@@ -31,7 +31,7 @@ export function useEditorWords(
     const handle = window.setTimeout(() => {
       if (!trimNeedsEditorWordsRefetch(wordsRef.current, trimSnap, bounds)) return
       setWordsLoading(true)
-      void fetchClipEditorWords(clipId)
+      void fetchClipEditorWords(clipId, trimSnap)
         .then((data) => {
           if (
             lastTrimRef.current.in !== trimSnap.in ||

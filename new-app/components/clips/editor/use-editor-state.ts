@@ -79,6 +79,7 @@ type Action =
   | { type: 'needsSave' }
   | { type: 'saveFailed' }
   | { type: 'replaceRestore'; edits: ClipEditsV2 }
+  | { type: 'hydrate'; edits: ClipEditsV2 }
 
 function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
   return canonicalEditsJson(a) === canonicalEditsJson(b)
@@ -153,6 +154,10 @@ export function editorEditsReducer(state: State, action: Action): State {
       if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'dirty' }
       const past = [...state.past, state.edits].slice(-MAX_UNDO)
       return { ...state, edits: action.edits, past, future: [], saveState: 'dirty' }
+    }
+    case 'hydrate': {
+      if (editsEqual(state.edits, action.edits)) return { ...state, saveState: 'saved' }
+      return { ...state, edits: action.edits, saveState: 'saved' }
     }
     default:
       return state
@@ -580,6 +585,10 @@ export function useEditorState(
     try {
       while (savedRevisionRef.current < localRevisionRef.current) {
         attempts += 1
+        if (editsEqual(editsRef.current, lastSavedEditsRef.current)) {
+          savedRevisionRef.current = localRevisionRef.current
+          break
+        }
         const revisionAtSend = localRevisionRef.current
         saveBaseEditsRef.current = lastSavedEditsRef.current
         writeEditorAutosaveDraft(clipId, {
@@ -710,11 +719,24 @@ export function useEditorState(
     [setEdits],
   )
 
+  const hydrateEdits = useCallback(
+    (next: ClipEditsV2) => {
+      const normalized = normalizeEdits(next, bounds)
+      if (editsEqual(editsRef.current, normalized)) return
+      editsRef.current = normalized
+      lastSavedEditsRef.current = normalized
+      saveBaseEditsRef.current = normalized
+      dispatch({ type: 'hydrate', edits: normalized })
+    },
+    [bounds],
+  )
+
   return {
     edits: state.edits,
     layers: resolveLayers(state.edits),
     setLayers,
     setEdits,
+    hydrateEdits,
     undo,
     redo,
     canUndo: state.past.length > 0,

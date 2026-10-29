@@ -11,10 +11,13 @@ export function mergeClipWordsWithProjectTranscript(
   clipStartMs: number,
   clipEndMs: number,
   extendMs = MAX_TRIM_EXTEND_MS,
+  range?: { startMs: number; endMs: number },
 ): SourceWord[] {
   if (!projectWords.length) return clipWords
-  const lo = Math.max(0, clipStartMs - extendMs)
-  const hi = clipEndMs + extendMs
+  const padLo = range ? Math.min(clipStartMs, range.startMs) : clipStartMs
+  const padHi = range ? Math.max(clipEndMs, range.endMs) : clipEndMs
+  const lo = Math.max(0, padLo - extendMs)
+  const hi = padHi + extendMs
   const fromProject = wordsInRange(projectWords, lo, hi)
   if (!clipWords.length) return fromProject
   const byIndex = new Map<number, SourceWord>()

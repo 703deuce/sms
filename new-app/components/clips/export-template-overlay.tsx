@@ -18,6 +18,7 @@ import { headlinePreviewBoxMetrics,
   headlinePreviewFontWeight,
 } from '@/lib/clips/headline-preview-style'
 import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
+import { fitHeadlineDisplayForBox } from '@/lib/clips/headline-fit'
 
 function ChatPreviewBox({
   lay,
@@ -124,8 +125,15 @@ export function ExportTemplateOverlay({
   if (useFitTop && (headlineOn || chatOn)) {
     const lay = overlayLayout(Math.max(2, lines.length || 2))
     const sy = boxHeight / 1920
-    const fontPx = Math.max(10, Math.round(84 * sy))
     const boxMetrics = headlinePreviewBoxMetrics(boxWidth, boxHeight, headlineStyle)
+    const headlineText = formatHeadlineForExport(
+      tpl?.headlineBar?.text?.trim() || tpl?.suggestedHeadline?.trim() || headlineLayer?.text?.trim() || '',
+    )
+    const fit = headlineOn
+      ? fitHeadlineDisplayForBox(headlineText, boxMetrics.width, lay.headlineH * sy)
+      : { lines: [] as string[], fontPx: 10 }
+    const displayLines = headlineOn ? fit.lines : []
+    const fontPx = headlineOn ? fit.fontPx : Math.max(10, Math.round(84 * sy))
     return (
       <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
         {headlineOn ? (
@@ -145,8 +153,8 @@ export function ExportTemplateOverlay({
             }}
           >
             <div className="flex h-full flex-col items-center justify-center gap-0">
-              {lines.map((line) => (
-                <span key={line} className="block w-full truncate px-1">
+              {displayLines.map((line) => (
+                <span key={line} className="block w-full break-words px-1">
                   {line}
                 </span>
               ))}
@@ -195,13 +203,15 @@ export function ExportTemplateOverlay({
   const videoTop = frameLay.videoTopPx * scaleY
   const videoH = frameLay.videoHeightPx * scaleY
   const barMetrics = headlinePreviewBoxMetrics(boxWidth, boxHeight, headlineStyle)
-  const headlineFontPx = Math.max(
+  const fit = headlineOn ? fitHeadlineDisplayForBox(headline, barMetrics.width, barH) : null
+  const headlineFontPx = fit?.fontPx ?? Math.max(
     10,
     Math.min(
       (barH * 0.52) / Math.max(1, lines.length),
       barH * 0.45,
     ),
   )
+  const barLines = fit?.lines ?? lines
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
@@ -222,8 +232,8 @@ export function ExportTemplateOverlay({
           }}
         >
           <div className="flex h-full flex-col items-center justify-center gap-0 leading-[1.05]">
-            {lines.map((line) => (
-              <span key={line} className="block w-full truncate px-1">
+            {barLines.map((line) => (
+              <span key={line} className="block w-full break-words px-1">
                 {line}
               </span>
             ))}

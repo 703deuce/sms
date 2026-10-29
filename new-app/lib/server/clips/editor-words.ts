@@ -1,5 +1,6 @@
 import type { ClipWord } from '@/lib/clips/edits'
 import { mergeClipWordsWithProjectTranscript } from '@/lib/clips/editor-words-merge'
+import { MAX_TRIM_EXTEND_MS } from '@/lib/clips/trim-bounds'
 import { loadSourceWords, wordsInRange, type SourceWord } from '@/lib/clips/source-words'
 import type { getClipStorage } from '@/lib/storage'
 
@@ -54,9 +55,13 @@ export function clipWordsToAbsolute(
   clipEndMs: number,
 ): ClipWord[] {
   if (!words.length) return words
+  const clipLenMs = clipEndMs - clipStartMs
   const maxEndMs = Math.max(...words.map((w) => w.e * 1000))
-  const clipLen = clipEndMs - clipStartMs
-  const looksRelative = maxEndMs <= clipLen + 2000 && maxEndMs < clipStartMs
+  const minStartMs = Math.min(...words.map((w) => w.s * 1000))
+  const looksRelative =
+    maxEndMs <= clipLenMs + 2000 &&
+    minStartMs >= -500 &&
+    maxEndMs < clipStartMs - 250
   if (!looksRelative) return words
   const offsetSec = clipStartMs / 1000
   return words.map((w) => ({ ...w, s: w.s + offsetSec, e: w.e + offsetSec }))
@@ -70,6 +75,7 @@ export async function resolveEditorWords(
   workspaceId: string,
   clip: { id: string; projectId: string; startMs: number; endMs: number; wordsKey: string | null },
   projectTranscript: ClipWord[],
+  opts?: { trimInMs?: number; trimOutMs?: number },
 ): Promise<SourceWord[]> {
   let clipRaw = await readClipWordJson(storage, clip.wordsKey)
   if (!clipRaw.length) {
@@ -88,6 +94,10 @@ export async function resolveEditorWords(
           projectLoaded,
           clip.startMs,
           clip.endMs,
+          MAX_TRIM_EXTEND_MS,
+          opts?.trimInMs != null && opts?.trimOutMs != null
+            ? { startMs: opts.trimInMs, endMs: opts.trimOutMs }
+            : undefined,
         )
       }
     }

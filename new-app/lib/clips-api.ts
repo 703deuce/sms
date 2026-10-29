@@ -166,11 +166,15 @@ export type ExportRenderRow = {
   downloadUrl: string | null
 }
 
-export function fetchClipEditorWords(clipId: string) {
+export function fetchClipEditorWords(clipId: string, trim?: { in: number; out: number }) {
+  const qs =
+    trim && Number.isFinite(trim.in) && Number.isFinite(trim.out)
+      ? `?trimInMs=${trim.in}&trimOutMs=${trim.out}`
+      : ''
   return clipsFetch<{
     words: import('@/lib/clips/source-words').SourceWord[]
     bounds: { clipStartMs: number; clipEndMs: number }
-  }>(`/api/clips/clips/${clipId}/editor-words`)
+  }>(`/api/clips/clips/${clipId}/editor-words${qs}`)
 }
 
 export function getClipEditor(clipId: string) {

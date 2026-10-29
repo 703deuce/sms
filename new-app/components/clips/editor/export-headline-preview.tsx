@@ -1,6 +1,6 @@
 'use client'
 
-import { streamHeadlineFrameLayout, wrapHeadlineDisplayLines } from '@/lib/clips/export-template'
+import { fitHeadlineDisplayLines } from '@/lib/clips/headline-fit'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 
 export function ExportHeadlinePreview({
@@ -26,7 +26,7 @@ export function ExportHeadlinePreview({
   const footerH = footerHeightPx * scale
   const textY = barH * 0.45
   const badgeBottom = videoTop + videoH - 14
-  const headlineLines = headline ? wrapHeadlineDisplayLines(headline) : []
+  const headlineLines = headline ? fitHeadlineDisplayLines(headline) : []
 
   return (
     <div className="mt-2 overflow-hidden rounded-md border border-border bg-zinc-800 text-white">

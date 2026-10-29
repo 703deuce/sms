@@ -184,7 +184,7 @@ export function formatHeadlineForExport(raw: string): string {
   return `${upper}${emojis ? ` ${emojis}` : ''}`.trim()
 }
 
-const HEADLINE_WRAP_MAX_LINES = 3
+const HEADLINE_WRAP_MAX_LINES = 4
 const HEADLINE_WRAP_CHARS_PER_LINE = 22
 
 /** Preview + parity with worker stream_headline_ass wrap (export burns multi-line ASS). */
@@ -207,7 +207,10 @@ export function wrapHeadlineDisplayLines(formatted: string, maxCharsPerLine = HE
     }
     if (lines.length >= HEADLINE_WRAP_MAX_LINES) break
   }
-  if (lines.length < HEADLINE_WRAP_MAX_LINES && cur.length) {
+  if (lines.length >= HEADLINE_WRAP_MAX_LINES && cur.length) {
+    const tail = cur.join(' ')
+    lines[HEADLINE_WRAP_MAX_LINES - 1] = `${lines[HEADLINE_WRAP_MAX_LINES - 1]} ${tail}`.trim()
+  } else if (lines.length < HEADLINE_WRAP_MAX_LINES && cur.length) {
     lines.push(cur.join(' '))
   }
   const capped = lines.slice(0, HEADLINE_WRAP_MAX_LINES)
