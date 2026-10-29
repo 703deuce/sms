@@ -1,0 +1,8 @@
+{
+  "id": "case1",
+  "duration_s": 900,
+  "gemini_moment": {"start_s": 572, "end_s": 610, "peak_s": 600, "score": 0.88, "title": "Fury badge", "what_happened": "badge unlock"},
+  "video_curve_peak": 0.95,
+  "expect_gate": "ADVANCE",
+  "expect_family": "visual"
+}

@@ -118,6 +118,9 @@ def select_clips(
                 kept_start_ms=int(dup["start_ms"]),
                 kept_score=_clip_score(dup),
             )
+            from clips_worker.clipfind.ledger import ledger_drop_plan_dict
+
+            ledger_drop_plan_dict(p, "selection", "overlap_duplicate")
             picker_info(
                 "selection_drop",
                 reason="overlap_duplicate",

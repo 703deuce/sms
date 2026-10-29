@@ -359,8 +359,10 @@ def fuse_moments(
                 demote_ids.add(str(lid))
                 llm = {**llm, "keep": True, "llm_keep": False}
             else:
+                from clips_worker.clipfind.ledger import ledger_drop_candidate
                 from clips_worker.decision_log import decision_log
 
+                ledger_drop_candidate(cand, "stream_fusion", "llm_drop", candidate_id=lid)
                 decision_log(
                     "stream_fusion",
                     "llm_drop",
@@ -491,6 +493,9 @@ def fuse_moments(
             None,
         )
         if beat is not None:
+            from clips_worker.clipfind.ledger import ledger_merged_fusion_picks
+
+            ledger_merged_fusion_picks(p, beat, "rank_dedupe_drop")
             decision_log(
                 "stream_fusion",
                 "rank_dedupe_drop",

@@ -625,6 +625,13 @@ def validate_and_normalize_moments(
                     hook_s=hook,
                     peak_s=peak,
                 )
+                from clips_worker.clipfind.ledger import ledger_drop_moment
+
+                ledger_drop_moment(
+                    {"start_s": start, "end_s": end, "peak_s": peak, "score": row.get("score")},
+                    "video_picker",
+                    "hook_peak_order",
+                )
                 continue
         score = max(0.0, min(1.0, float(row.get("score") or 0)))
         edge = str(row.get("touches_edge") or "none").lower()
@@ -1546,13 +1553,33 @@ def reassess_edge_moments(
                 )
                 out.append(m)
             else:
-                decision_log(
-                    "reassess_edge",
-                    "drop",
-                    chunk=chunk_label,
-                    edge=edge,
-                    reason="reassess_empty_low_confidence",
-                )
+                from clips_worker.clipfind.flags import clipfind_flag
+                from clips_worker.clipfind.ledger import ledger_drop_moment, ledger_register_moment
+
+                if clipfind_flag("CLIPFIND_REASSESS_KEEP"):
+                    kept = dict(m)
+                    cf = dict(kept.get("clipfind") or {})
+                    cf["investigate"] = True
+                    cf["reassess_keep"] = True
+                    kept["clipfind"] = cf
+                    ledger_register_moment(kept, provenance="edge_reassess", source="gemini_chunk")
+                    decision_log(
+                        "reassess_edge",
+                        "keep_original",
+                        chunk=chunk_label,
+                        edge=edge,
+                        reason="reassess_empty_low_confidence_keep",
+                    )
+                    out.append(kept)
+                else:
+                    ledger_drop_moment(m, "reassess_edge", "reassess_empty_low_confidence")
+                    decision_log(
+                        "reassess_edge",
+                        "drop",
+                        chunk=chunk_label,
+                        edge=edge,
+                        reason="reassess_empty_low_confidence",
+                    )
             continue
         if float(m.get("confidence") or 0) >= 0.35:
             decision_log(
@@ -1564,13 +1591,33 @@ def reassess_edge_moments(
             )
             out.append(m)
         else:
-            decision_log(
-                "reassess_edge",
-                "drop",
-                chunk=chunk_label,
-                edge=edge,
-                reason="reassess_no_result_low_confidence",
-            )
+            from clips_worker.clipfind.flags import clipfind_flag
+            from clips_worker.clipfind.ledger import ledger_drop_moment, ledger_register_moment
+
+            if clipfind_flag("CLIPFIND_REASSESS_KEEP"):
+                kept = dict(m)
+                cf = dict(kept.get("clipfind") or {})
+                cf["investigate"] = True
+                cf["reassess_keep"] = True
+                kept["clipfind"] = cf
+                ledger_register_moment(kept, provenance="edge_reassess", source="gemini_chunk")
+                decision_log(
+                    "reassess_edge",
+                    "keep_original",
+                    chunk=chunk_label,
+                    edge=edge,
+                    reason="reassess_no_result_low_confidence_keep",
+                )
+                out.append(kept)
+            else:
+                ledger_drop_moment(m, "reassess_edge", "reassess_no_result_low_confidence")
+                decision_log(
+                    "reassess_edge",
+                    "drop",
+                    chunk=chunk_label,
+                    edge=edge,
+                    reason="reassess_no_result_low_confidence",
+                )
     return out or moments
 
 

@@ -241,3 +241,161 @@ def ledger_if_enabled(fn):
         return fn(*args, **kwargs)
 
     return wrapper
+
+
+def _peak_ms_from_pick(pick: Any) -> int:
+    sm = (getattr(pick, "ai_meta", None) or {}).get("streamer") or {}
+    peak = sm.get("peakMs") or getattr(pick, "peak_ms", None)
+    if peak is not None:
+        return int(peak)
+    return (int(pick.start_ms) + int(pick.end_ms)) // 2
+
+
+def ledger_ensure_fusion_pick(
+    pick: Any,
+    *,
+    provenance: str = "fusion",
+    source: str = "stream",
+) -> str | None:
+    from clips_worker.clipfind.context import get_ledger
+    from clips_worker.clipfind.flags import clipfind_flag
+
+    if not clipfind_flag("CLIPFIND_DROP_LEDGER"):
+        return None
+    led = get_ledger()
+    if not led:
+        return None
+    try:
+        meta = dict(getattr(pick, "ai_meta", None) or {})
+        cf = dict(meta.get("clipfind") or {})
+        if cf.get("cf_id"):
+            return str(cf["cf_id"])
+        start_ms = int(pick.start_ms)
+        end_ms = int(pick.end_ms)
+        peak_ms = _peak_ms_from_pick(pick)
+        cf_id = cf_id_for(source=source, start_ms=start_ms, end_ms=end_ms, peak_ms=peak_ms)
+        cf["cf_id"] = cf_id
+        meta["clipfind"] = cf
+        pick.ai_meta = meta
+        led.register(
+            cf_id,
+            provenance=provenance,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            peak_ms=peak_ms,
+            score=float(getattr(pick, "score", 0) or 0),
+        )
+        return cf_id
+    except Exception:
+        return None
+
+
+def ledger_drop_fusion_pick(pick: Any, stage: str, reason: str, **extra: Any) -> None:
+    cf_id = ledger_ensure_fusion_pick(pick)
+    if not cf_id:
+        return
+    from clips_worker.clipfind.context import get_ledger
+
+    led = get_ledger()
+    if led:
+        led.dropped(cf_id, stage=stage, reason=reason, **extra)
+
+
+def ledger_merged_fusion_picks(loser: Any, winner: Any, reason: str, **extra: Any) -> None:
+    loser_id = ledger_ensure_fusion_pick(loser)
+    winner_id = ledger_ensure_fusion_pick(winner)
+    if not loser_id or not winner_id:
+        return
+    from clips_worker.clipfind.context import get_ledger
+
+    led = get_ledger()
+    if led:
+        led.merged_into(loser_id, winner_id, reason, **extra)
+
+
+def ledger_drop_candidate(cand: dict, stage: str, reason: str, **extra: Any) -> None:
+    from clips_worker.clipfind.context import get_ledger
+    from clips_worker.clipfind.flags import clipfind_flag
+
+    if not clipfind_flag("CLIPFIND_DROP_LEDGER"):
+        return
+    led = get_ledger()
+    if not led:
+        return
+    try:
+        start_ms = int(cand["start_ms"])
+        end_ms = int(cand["end_ms"])
+        peak_ms = int(cand.get("peak_ms") or (start_ms + end_ms) // 2)
+        cf_id = str(cand.get("cf_id") or "")
+        if not cf_id:
+            cf_id = cf_id_for(source="fusion_cand", start_ms=start_ms, end_ms=end_ms, peak_ms=peak_ms)
+            led.register(
+                cf_id,
+                provenance="fusion",
+                start_ms=start_ms,
+                end_ms=end_ms,
+                peak_ms=peak_ms,
+            )
+            cand["cf_id"] = cf_id
+        led.dropped(cf_id, stage=stage, reason=reason, **extra)
+    except Exception:
+        return
+
+
+def ledger_ensure_plan_dict(p: dict, *, provenance: str = "upload", source: str = "upload") -> str | None:
+    from clips_worker.clipfind.context import get_ledger
+    from clips_worker.clipfind.flags import clipfind_flag
+
+    if not clipfind_flag("CLIPFIND_DROP_LEDGER"):
+        return None
+    led = get_ledger()
+    if not led:
+        return None
+    try:
+        ai = p.get("ai_meta") if isinstance(p.get("ai_meta"), dict) else {}
+        cf = dict((ai or {}).get("clipfind") or p.get("clipfind") or {})
+        if cf.get("cf_id"):
+            p.setdefault("clipfind", cf)
+            return str(cf["cf_id"])
+        start_ms = int(p["start_ms"])
+        end_ms = int(p["end_ms"])
+        peak_ms = int(p.get("peak_ms") or (start_ms + end_ms) // 2)
+        cf_id = cf_id_for(source=source, start_ms=start_ms, end_ms=end_ms, peak_ms=peak_ms)
+        cf["cf_id"] = cf_id
+        p["clipfind"] = cf
+        if isinstance(ai, dict):
+            ai = {**ai, "clipfind": cf}
+            p["ai_meta"] = ai
+        led.register(
+            cf_id,
+            provenance=provenance,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            peak_ms=peak_ms,
+            score=float(p.get("final_score") or p.get("score") or 0),
+        )
+        return cf_id
+    except Exception:
+        return None
+
+
+def ledger_drop_plan_dict(p: dict, stage: str, reason: str, **extra: Any) -> None:
+    cf_id = ledger_ensure_plan_dict(p)
+    if not cf_id:
+        return
+    from clips_worker.clipfind.context import get_ledger
+
+    led = get_ledger()
+    if led:
+        led.dropped(cf_id, stage=stage, reason=reason, **extra)
+
+
+def ledger_returned_fusion_pick(pick: Any, tier: str) -> None:
+    cf_id = ledger_ensure_fusion_pick(pick)
+    if not cf_id:
+        return
+    from clips_worker.clipfind.context import get_ledger
+
+    led = get_ledger()
+    if led:
+        led.returned(cf_id, tier=tier)

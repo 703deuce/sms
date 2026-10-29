@@ -243,6 +243,15 @@ def finalize_picks(
         picks.append(pick)
 
     duration_ms = int(source_duration_ms or span_ms)
+    from clips_worker.clipfind.shadow import run_upload_selection_shadow
+
+    shadow_payload = run_upload_selection_shadow(picks=picks, source_duration_ms=duration_ms)
+    if shadow_payload:
+        from clips_worker.clipfind.context import get_job_ctx
+
+        ctx = get_job_ctx()
+        if ctx:
+            ctx.extra["clipfind_upload_shadow"] = shadow_payload
     selected = select_clips(picks, duration_ms)
     from clips_worker.picker.pick_quota import compute_pick_want, log_pick_stage
 

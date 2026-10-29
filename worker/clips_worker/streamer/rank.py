@@ -167,8 +167,20 @@ def rank_moments(
             min_ms=min_ms,
         )
         if kept is None:
+            from clips_worker.streamer.min_clip_length import minlen_keep_pad_without_words
+
+            kept = minlen_keep_pad_without_words(
+                snapped,
+                range_start_ms=0,
+                range_end_ms=range_end,
+                settings=settings,
+                min_ms=min_ms,
+            )
+        if kept is None:
+            from clips_worker.clipfind.ledger import ledger_drop_fusion_pick
             from clips_worker.decision_log import decision_log
 
+            ledger_drop_fusion_pick(snapped, "rank", "min_length_drop")
             decision_log(
                 "streamer",
                 "min_length_drop",
@@ -180,8 +192,11 @@ def rank_moments(
             )
             continue
         enforced.append(kept)
+    from clips_worker.clipfind.ledger import ledger_returned_fusion_pick
     from clips_worker.decision_log import decision_log
 
+    for p in enforced:
+        ledger_returned_fusion_pick(p, "primary")
     decision_log(
         "streamer",
         "rank_finish",

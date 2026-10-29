@@ -96,3 +96,88 @@ def _cf(p: Any) -> str:
     if cf.get("cf_id"):
         return str(cf["cf_id"])
     return f"{getattr(p, 'start_ms', 0)}_{getattr(p, 'end_ms', 0)}"
+
+
+def run_upload_selection_shadow(
+    *,
+    picks: list[dict],
+    source_duration_ms: int,
+) -> dict[str, Any] | None:
+    """Shadow fair-rank on upload picks before overlap selection (C1.1)."""
+    if not clipfind_flag("CLIPFIND_SHADOW_RANK"):
+        return None
+    t0 = time.perf_counter()
+    try:
+        duration_s = max(1, int(source_duration_ms / 1000))
+        from clips_worker.clipfind.fair_rank import fair_rank_skipped_short
+
+        if fair_rank_skipped_short(duration_s) and not clipfind_flag("CLIPFIND_UPLOAD_FAIR_RANK"):
+            return {"skipped": "fair_rank_skipped_short"}
+        cands = []
+        for p in picks:
+            cands.append(
+                {
+                    "id": str(p.get("clipfind", {}).get("cf_id") or f"{p.get('start_ms')}_{p.get('end_ms')}"),
+                    "cf_id": p.get("clipfind", {}).get("cf_id"),
+                    "start_ms": int(p["start_ms"]),
+                    "end_ms": int(p["end_ms"]),
+                    "gemini_score": p.get("gemini_score"),
+                    "transcript_score": p.get("transcript_score") or p.get("final_score"),
+                    "title": p.get("title"),
+                    "hook": p.get("hook"),
+                }
+            )
+        fair_rows = rank_candidates_fair(cands, duration_s=duration_s, channels={})
+        if not fair_rows:
+            return {"skipped": "no_fair_rows"}
+        ranked = sorted(picks, key=lambda x: -float(x.get("final_score") or 0))
+        n = min(5, len(ranked))
+        old_top = [
+            (
+                str(p.get("clipfind", {}).get("cf_id") or f"{p['start_ms']}_{p['end_ms']}"),
+                int(p["start_ms"]),
+                int(p["end_ms"]),
+                int(float(p.get("final_score") or 0) * 100),
+            )
+            for p in ranked[:n]
+        ]
+        new_top = [
+            (
+                str(r.get("cf_id") or r.get("id")),
+                int(r.get("start_ms", 0)),
+                int(r.get("end_ms", 0)),
+                int(round(float(r.get("fair_rank_score") or 0) * 100)),
+            )
+            for r in fair_rows[:n]
+        ]
+        old_ids = {x[0] for x in old_top if x[0]}
+        new_ids = {x[0] for x in new_top if x[0]}
+        overlap = len(old_ids & new_ids) / max(1, len(old_ids | new_ids))
+        led = get_ledger()
+        payload = {
+            "v": 1,
+            "path": "upload",
+            "old_top": old_top,
+            "new_top": new_top,
+            "overlap_at_n": round(overlap, 4),
+            "investigate_count": sum(1 for r in fair_rows if r.get("fair_gate") == "INVESTIGATE"),
+            "pool_count": sum(1 for r in fair_rows if r.get("fair_gate") == "POOL"),
+            "new_only": [
+                {
+                    "cf_id": str(r.get("cf_id") or r.get("id")),
+                    "gate": r.get("fair_gate"),
+                    "old_fate": led.old_fate(str(r.get("cf_id") or r.get("id"))) if led else None,
+                }
+                for r in fair_rows[: n + 5]
+                if str(r.get("cf_id") or r.get("id")) not in old_ids
+            ][:10],
+            "ms": round((time.perf_counter() - t0) * 1000, 2),
+        }
+        if payload["ms"] > 300:
+            decision_log("clipfind", "shadow_skipped", reason="time_cap_ms", ms=payload["ms"], path="upload")
+            return None
+        decision_log("clipfind", "shadow", **{k: v for k, v in payload.items() if k != "v"})
+        return payload
+    except Exception as exc:
+        decision_log("clipfind", "shadow_skipped", reason=type(exc).__name__, path="upload")
+        return None

@@ -43,6 +43,10 @@ def plan_or_finish_empty(
         output_count=len(planned),
     )
     if not planned:
+        from clips_worker.clipfind.ledger import ledger_drop_plan_dict
+
+        for p in raw:
+            ledger_drop_plan_dict(p, "pipeline_plan", "empty_after_plan")
         empty_msg = picker_message or "No complete, self-contained moments found."
         decision_log("pipeline", "empty_picks_ready", message=empty_msg)
         mark_project_ready(conn, project_id, error=empty_msg)

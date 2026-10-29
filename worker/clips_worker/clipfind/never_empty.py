@@ -47,6 +47,44 @@ def best_available_from_ledger(max_n: int) -> list[dict]:
     return out
 
 
+def maybe_never_empty_stream_planned(
+    planned: list[dict],
+    *,
+    archive: list[dict],
+    duration_ms: int,
+    want: int,
+) -> list[dict]:
+    if planned or not clipfind_flag("CLIPFIND_NEVER_EMPTY"):
+        return planned
+    if duration_ms < 10_000:
+        return planned
+    rescue: list[dict] = []
+    if archive:
+        ranked = sorted(archive, key=lambda r: float(r.get("score") or 0), reverse=True)
+        for row in ranked[: max(1, min(3, want))]:
+            rescue.append(
+                {
+                    "start_ms": int(row.get("startMs") or row.get("start_ms") or 0),
+                    "end_ms": int(row.get("endMs") or row.get("end_ms") or 0),
+                    "title": str(row.get("title") or "Best available moment")[:80],
+                    "hook": str(row.get("title") or "Best available moment")[:90],
+                    "score": float(row.get("score") or 0.3),
+                    "ai_meta": {
+                        "clipfind": {"best_available": True, "low_confidence": True},
+                        "streamer": {"tier": "primary", "render": True},
+                    },
+                }
+            )
+    if not rescue:
+        rescue = best_available_from_ledger(max(1, min(3, want)))
+    if not rescue:
+        return planned
+    from clips_worker.plan_clips import plan_clips
+
+    decision_log("clipfind", "never_empty_rescue", count=len(rescue), path="stream")
+    return plan_clips(rescue)
+
+
 def maybe_never_empty_upload_planned(
     planned: list[dict],
     *,

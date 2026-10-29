@@ -301,7 +301,28 @@ def _clip_row_from_llm(
     )
     if scored.get("reject"):
         from clips_worker.decision_log import decision_log
+        from clips_worker.clipfind.gates_demote import try_gates_demote_instead_of_reject
 
+        demoted = try_gates_demote_instead_of_reject(
+            scored,
+            scores={k: float(sc[k]) for k in sc},
+            genre=genre,
+            teaser=(row.get("archetype") == "teaser"),
+            visual_payoff_moment=gemini_moment or bool(moment.get("visual_origin") or moment.get("from_visual")),
+        )
+        if not demoted:
+            from clips_worker.clipfind.ledger import ledger_drop_plan_dict
+
+            ledger_drop_plan_dict(
+                {
+                    "start_ms": int(moment.get("start_ms") or 0),
+                    "end_ms": int(moment.get("end_ms") or 0),
+                    "title": row.get("title"),
+                    "final_score": base.get("transcript_score"),
+                },
+                "pass2",
+                str(scored.get("reject_reason") or "gate"),
+            )
         decision_log(
             "pass2",
             "transcript_gate",
@@ -310,16 +331,43 @@ def _clip_row_from_llm(
             gemini_score=g_carry,
             title=str(row.get("title") or "")[:60],
         )
-        if not gemini_moment:
-            base["gate_reject"] = True
-            base["final"] = scored.get("final")
-            base["score"] = scored.get("score_0_100")
+        if not demoted:
+            if not gemini_moment:
+                base["gate_reject"] = True
+                base["final"] = scored.get("final")
+                base["score"] = scored.get("score_0_100")
+                apply_combined_scores(base, log=True, stage="pass2")
+                return base
+            base["gate_reject"] = False
+            base["scores"] = scored.get("scores") or {}
             apply_combined_scores(base, log=True, stage="pass2")
             return base
+        base["gate_demoted"] = True
         base["gate_reject"] = False
-        base["scores"] = scored.get("scores") or {}
-        apply_combined_scores(base, log=True, stage="pass2")
-        return base
+        cf = dict(base.get("clipfind") or {})
+        cf["flags"] = list(set((cf.get("flags") or []) + ["gates_demote"]))
+        base["clipfind"] = cf
+        from clips_worker.picker.config import genre_meta, global_config
+
+        gcfg = global_config()
+        Gmeta = genre_meta(genre)
+        gates = {**(gcfg.get("hard_gates") or {}), **(Gmeta.get("gates") or {})}
+        bumped = {k: float(sc[k]) for k in sc}
+        bumped["self_contained"] = max(bumped.get("self_contained", 0), float(gates.get("self_contained_min", 5)))
+        bumped["payoff"] = max(bumped.get("payoff", 0), float(gates.get("payoff_min", 4)))
+        scored = score_clip(
+            sent_rows,
+            f"s{payoff_id}",
+            bumped,
+            genre,
+            teaser=(row.get("archetype") == "teaser"),
+            llm_reject=False,
+            source_duration_s=source_duration_s,
+            length_min_s=length_policy.scoring_min_s if length_policy else None,
+            length_max_s=length_policy.scoring_max_s if length_policy else None,
+            skip_length_penalty=bool(length_policy),
+            visual_payoff_moment=gemini_moment or bool(moment.get("visual_origin") or moment.get("from_visual")),
+        )
     base.update(
         {
             "scores": scored["scores"],

@@ -67,6 +67,10 @@ def _plan_overlap_pass(
                     dropped_end_ms=int(dropped["end_ms"]),
                     dropped_score=_pick_score(dropped),
                 )
+                from clips_worker.clipfind.ledger import ledger_drop_plan_dict, ledger_ensure_plan_dict
+
+                ledger_ensure_plan_dict(kept)
+                ledger_drop_plan_dict(dropped, "plan_clips", "overlap_merge")
                 merged += 1
                 changed = True
                 break
@@ -94,6 +98,9 @@ def _plan_overlap_pass(
         if span >= min_clip_ms:
             kept.append(p)
         else:
+            from clips_worker.clipfind.ledger import ledger_drop_plan_dict
+
+            ledger_drop_plan_dict(p, "plan_clips", "min_length_drop")
             decision_log(
                 "plan_clips",
                 "min_length_drop",

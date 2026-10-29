@@ -1,0 +1,6 @@
+{
+  "id": "case4",
+  "duration_s": 300,
+  "moment": {"start_s": 100, "end_s": 130, "llm_score": 88, "audio_p": 0.4},
+  "expect_gate": "ADVANCE"
+}

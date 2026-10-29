@@ -1,0 +1,6 @@
+{
+  "id": "case6",
+  "duration_s": 600,
+  "moment": {"start_s": 300, "end_s": 330, "gemini_score": 0.2, "llm_score": 25, "audio_p": 0.99, "chat_p": 0.95},
+  "expect_gate": "INVESTIGATE"
+}

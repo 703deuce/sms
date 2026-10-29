@@ -485,6 +485,14 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
 
             want = compute_pick_want(settings, duration_ms)
             planned = plan_clips([fusion_pick_as_plan_dict(p) for p in picks])
+            from clips_worker.clipfind.never_empty import maybe_never_empty_stream_planned
+
+            planned = maybe_never_empty_stream_planned(
+                planned,
+                archive=list(signals_payload.get("candidates") or []),
+                duration_ms=duration_ms,
+                want=want,
+            )
             picks = fusion_picks_from_planned(planned)
             log_pick_stage(
                 "stream",

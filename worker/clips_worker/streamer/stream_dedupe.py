@@ -34,6 +34,9 @@ def dedupe_picks_within_run(
         peak = _peak_ms(p)
         sep_hit = next((k for k in kept if abs(peak - _peak_ms(k)) < min_peak_sep_ms), None)
         if sep_hit is not None:
+            from clips_worker.clipfind.ledger import ledger_drop_fusion_pick
+
+            ledger_drop_fusion_pick(p, "stream_dedupe", "peak_too_close", kept_peak_ms=_peak_ms(sep_hit))
             decision_log(
                 "stream_dedupe",
                 "drop",
@@ -48,6 +51,9 @@ def dedupe_picks_within_run(
             None,
         )
         if iou_hit is not None:
+            from clips_worker.clipfind.ledger import ledger_drop_fusion_pick
+
+            ledger_drop_fusion_pick(p, "stream_dedupe", "iou_overlap", kept_start_ms=iou_hit.start_ms)
             decision_log(
                 "stream_dedupe",
                 "drop",
@@ -137,8 +143,10 @@ def dedupe_picks_against_channel_history(
                 break
         if duplicate:
             dropped += 1
+            from clips_worker.clipfind.ledger import ledger_drop_fusion_pick
             from clips_worker.decision_log import decision_log
 
+            ledger_drop_fusion_pick(p, "stream_dedupe", "channel_history_duplicate")
             decision_log(
                 "stream_dedupe",
                 "drop",

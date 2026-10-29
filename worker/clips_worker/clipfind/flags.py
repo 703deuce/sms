@@ -41,17 +41,28 @@ def _workspace_override_on(workspace_id: str) -> bool:
     return workspace_id in ids
 
 
+def _project_override_on(project_id: str) -> bool:
+    raw = os.environ.get("CLIPFIND_ON_PROJECTS", "").strip()
+    if not raw or not project_id:
+        return False
+    ids = {x.strip() for x in raw.split(",") if x.strip()}
+    return project_id in ids
+
+
 def resolved_clipfind_flags(job_ctx: JobCtx | None = None) -> dict[str, bool]:
     ctx = job_ctx or get_job_ctx()
     ws = (ctx.workspace_id if ctx else "") or ""
+    proj = (ctx.project_id if ctx else "") or ""
     if _env_bool("CLIPFIND_ALL_OFF", False):
         return {name: False for name in _ALL_FLAGS}
     ws_on = _workspace_override_on(ws)
+    proj_on = _project_override_on(proj)
+    behavior_override = ws_on or proj_on
     out: dict[str, bool] = {}
     for name in _ALL_FLAGS:
         default = name in _DEFAULT_ON
         val = _env_bool(name, default)
-        if ws_on and name in _BEHAVIOR_FLAGS:
+        if behavior_override and name in _BEHAVIOR_FLAGS:
             val = True
         out[name] = val
     return out
@@ -63,8 +74,15 @@ def clipfind_flag(name: str, job_ctx: JobCtx | None = None) -> bool:
 
 def log_resolved_flags(job_ctx: JobCtx | None = None) -> None:
     try:
+        ctx = job_ctx or get_job_ctx()
         resolved = resolved_clipfind_flags(job_ctx)
-        decision_log("clipfind", "flags", **{k.lower(): v for k, v in resolved.items()})
+        decision_log(
+            "clipfind",
+            "flags",
+            clipfind_on_workspace=_workspace_override_on((ctx.workspace_id if ctx else "") or ""),
+            clipfind_on_project=_project_override_on((ctx.project_id if ctx else "") or ""),
+            **{k.lower(): v for k, v in resolved.items()},
+        )
     except Exception as exc:
         decision_log("clipfind", "fallback", site="log_resolved_flags", reason=type(exc).__name__)
 

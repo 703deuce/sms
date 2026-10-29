@@ -1,0 +1,6 @@
+{
+  "id": "case3",
+  "duration_s": 400,
+  "moment": {"start_s": 220, "end_s": 260, "llm_score": 85, "title": "answer after question"},
+  "expect_gate": "ADVANCE"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "case2",
+  "duration_s": 600,
+  "plan": {"start_s": 400, "end_s": 430, "llm_score": 70, "title": "plan push on three"},
+  "execution": {"start_s": 440, "end_s": 470, "gemini_score": 0.92, "words": []},
+  "expect_execution_advance": true
+}

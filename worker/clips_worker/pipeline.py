@@ -1210,6 +1210,22 @@ def run_m4_pipeline(
             )
     finally:
         try:
+            from clips_worker.clipfind.context import get_job_ctx, get_ledger
+            from clips_worker.storage import put_json
+
+            led = get_ledger()
+            ctx = get_job_ctx()
+            if led and ctx and ctx.project_id and ctx.job_type == "PROCESS_PROJECT":
+                base = f"workspaces/{ctx.workspace_id}/projects/{ctx.project_id}/clipfind"
+                shadow = ctx.extra.get("clipfind_upload_shadow")
+                put_json(f"{base}/clipfind_ledger.json", led.summary())
+                if shadow:
+                    put_json(f"{base}/clipfind_shadow.json", shadow)
+        except Exception as exc:
+            from clips_worker.clipfind.flags import clipfind_fallback
+
+            clipfind_fallback("pipeline_upload_artifacts", type(exc).__name__)
+        try:
             from clips_worker.clipfind.context import unbind_clipfind
 
             unbind_clipfind()

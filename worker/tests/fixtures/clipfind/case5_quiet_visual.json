@@ -1,0 +1,7 @@
+{
+  "id": "case5",
+  "duration_s": 600,
+  "moment": {"start_s": 200, "end_s": 230, "gemini_score": 0.9, "words": [], "audio_p": 0.2},
+  "loud_peak_offset_s": 30,
+  "expect_gate": "ADVANCE"
+}
