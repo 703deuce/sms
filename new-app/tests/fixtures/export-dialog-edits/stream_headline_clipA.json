@@ -1,0 +1,40 @@
+{
+  "v": 2,
+  "layersV": 3,
+  "trim": { "in": 0, "out": 6605 },
+  "cutRanges": [],
+  "wordFixes": {},
+  "captions": { "enabled": true, "presetId": "bold_pop", "animation": "pop", "size": 6.5, "position": "bottom", "case": "sentence", "wordsPerLine": 2 },
+  "layout": {
+    "mode": "fit_top",
+    "shotOverrides": [],
+    "layoutSegments": [{ "startMs": 0, "endMs": 6605, "mode": "fit_top" }]
+  },
+  "silenceTrim": { "enabled": false, "minGapMs": 350, "keepMs": 120 },
+  "layers": [
+    { "id": "captions", "type": "captions", "enabled": true, "z": 50 },
+    {
+      "id": "headline",
+      "type": "headline",
+      "enabled": true,
+      "z": 70,
+      "text": "AFTER KOBE'S CRACKED A REACTION LEADS INTO THERE WE GO",
+      "placement": "export_bar",
+      "style": {
+        "preset": "stream_yellow",
+        "textColor": "#000000",
+        "boxColor": "#FACC15",
+        "radiusPx": 0
+      }
+    }
+  ],
+  "exportTemplate": {
+    "headlineBar": {
+      "enabled": true,
+      "text": "AFTER KOBE'S CRACKED A REACTION LEADS INTO THERE WE GO"
+    },
+    "platformBadge": { "enabled": true },
+    "channelLink": { "enabled": true, "url": "https://twitch.tv/2xrakai" },
+    "platform": "twitch"
+  }
+}

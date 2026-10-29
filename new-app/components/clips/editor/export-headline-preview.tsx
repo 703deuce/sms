@@ -1,7 +1,13 @@
 'use client'
 
-import { fitHeadlineDisplayLines } from '@/lib/clips/headline-fit'
+import { fitHeadlineDisplayForBox } from '@/lib/clips/headline-fit'
+import { streamHeadlineFrameLayout } from '@/lib/clips/export-template'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
+import {
+  headlinePreviewBoxMetrics,
+  headlinePreviewFontFamily,
+  headlinePreviewFontWeight,
+} from '@/lib/clips/headline-preview-style'
 
 export function ExportHeadlinePreview({
   headline,
@@ -17,16 +23,25 @@ export function ExportHeadlinePreview({
   exportPlatformId?: ExportPlatformId
 }) {
   const badgeColor = platform === 'kick' ? '#53FC18' : '#9146FF'
+  const previewW = 140
   const h = 280
-  const scale = h / 1920
-  const { barHeightPx, videoHeightPx, videoTopPx, footerHeightPx } = streamHeadlineFrameLayout(1920)
-  const barH = barHeightPx * scale
-  const videoTop = videoTopPx * scale
-  const videoH = videoHeightPx * scale
-  const footerH = footerHeightPx * scale
-  const textY = barH * 0.45
+  const frameLay = streamHeadlineFrameLayout(h)
+  const barH = frameLay.barHeightPx
+  const videoTop = frameLay.videoTopPx
+  const videoH = frameLay.videoHeightPx
+  const footerH = frameLay.footerHeightPx
   const badgeBottom = videoTop + videoH - 14
-  const headlineLines = headline ? fitHeadlineDisplayLines(headline) : []
+  const headlineStyle = {
+    preset: 'stream_white' as const,
+    textColor: '#000000',
+    boxColor: '#ffffff',
+    radiusPx: 0,
+    widthPct: 100,
+  }
+  const barMetrics = headlinePreviewBoxMetrics(previewW, h, headlineStyle)
+  const fit = headline ? fitHeadlineDisplayForBox(headline, barMetrics.width, barH) : null
+  const headlineLines = fit?.lines ?? []
+  const headlineFontPx = fit?.fontPx ?? 8
 
   return (
     <div className="mt-2 overflow-hidden rounded-md border border-border bg-zinc-800 text-white">
@@ -34,12 +49,23 @@ export function ExportHeadlinePreview({
         <div className="absolute inset-0 bg-zinc-700/80" aria-hidden />
         {headline ? (
           <div
-            className="absolute inset-x-0 top-0 bg-white px-1 text-center font-bold leading-tight text-black"
-            style={{ height: barH, paddingTop: Math.max(2, textY - 4) }}
+            className="absolute top-0 text-center font-bold leading-tight text-black"
+            style={{
+              height: barH,
+              left: barMetrics.left,
+              width: barMetrics.width,
+              fontSize: headlineFontPx,
+              fontFamily: headlinePreviewFontFamily(undefined),
+              fontWeight: headlinePreviewFontWeight(undefined),
+              backgroundColor: headlineStyle.boxColor,
+              borderRadius: barMetrics.borderRadius,
+            }}
           >
-            <div className="flex flex-col items-center justify-center gap-0 text-[8px] leading-[1.1]">
+            <div className="flex h-full flex-col items-center justify-center gap-0 leading-[1.05]">
               {headlineLines.map((line) => (
-                <span key={line}>{line}</span>
+                <span key={line} className="block w-full break-words px-1">
+                  {line}
+                </span>
               ))}
             </div>
           </div>

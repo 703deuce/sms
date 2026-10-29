@@ -51,7 +51,14 @@ describe('ExportDialog render', () => {
     vi.clearAllMocks()
   })
 
-  const cases = ['regular.json', 'stream_v3_clipB.json', 'no_layers.json', 'malformed_layers.json', 'byo_clip.json'] as const
+  const cases = [
+    'regular.json',
+    'stream_v3_clipB.json',
+    'stream_headline_clipA.json',
+    'no_layers.json',
+    'malformed_layers.json',
+    'byo_clip.json',
+  ] as const
 
   for (const file of cases) {
     it(`does not throw for ${file}`, () => {
@@ -74,4 +81,25 @@ describe('ExportDialog render', () => {
       ).not.toThrow()
     })
   }
+
+  it('renders stream headline preview without ReferenceError and shows full wrap', () => {
+    const edits = loadFixture('stream_headline_clipA.json')
+    const { container } = render(
+      <ExportDialog
+        clipId="clip_227bcc257bc9488a9fd3118baee57b19"
+        title="Clip A"
+        edits={edits}
+        open
+        onClose={() => {}}
+        layoutMode={edits.layout.mode}
+        facecamLayout={null}
+        reframeV2Enabled={false}
+        platform="twitch"
+        defaultChannelUrl="https://twitch.tv/2xrakai"
+      />,
+    )
+    const text = container.textContent ?? ''
+    expect(text).toMatch(/THERE WE GO/)
+    expect(text).not.toMatch(/streamHeadlineFrameLayout/)
+  })
 })
