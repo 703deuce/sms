@@ -554,89 +554,64 @@ def _ingest_twitch_hls_window(
     window_start_ms: int,
     window_end_ms: int,
     job_id: str,
-    rolling_window: bool,
     cache_dir: Path,
 ) -> tuple[str, str, int, int, dict]:
-    """Download HLS window with recorded vodStartMs; return audio_key, video_key, vod_start, vod_end, window_meta."""
+    """Download HLS window with recorded vodStartMs (auto-pull / growing VOD only)."""
     from clips_worker.decision_log import decision_log
     from clips_worker.streamer.hls_window import fetch_window, resolve_rendition_playlist
     from clips_worker.streamer.keys import stream_window_audio_key, stream_window_capture_video_key
 
-    playlist_url = resolve_rendition_playlist(meta_raw, want="audio_only" if not rolling_window else "video")
-    dest = cache_dir / ("window.ts" if rolling_window else "window_audio.ts")
+    playlist_url = resolve_rendition_playlist(meta_raw, want="video")
+    dest = cache_dir / "window.ts"
     wm = fetch_window(playlist_url, window_start_ms, window_end_ms, dest)
     audio_path = cache_dir / "window.opus"
-    if rolling_window:
-        subprocess.check_call(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(wm.path),
-                "-vn",
-                "-ac",
-                "1",
-                "-ar",
-                "16000",
-                "-c:a",
-                "libopus",
-                "-b:a",
-                "24k",
-                str(audio_path),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        video_path = cache_dir / "window.mp4"
-        subprocess.check_call(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(wm.path),
-                "-c",
-                "copy",
-                str(video_path),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        video_key = stream_window_capture_video_key(workspace_id, vod_id, window_end_ms)
-        upload_file(video_key, video_path, "video/mp4")
-    else:
-        subprocess.check_call(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(wm.path),
-                "-vn",
-                "-ac",
-                "1",
-                "-ar",
-                "16000",
-                "-c:a",
-                "libopus",
-                "-b:a",
-                "24k",
-                str(audio_path),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        video_key = ""
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(wm.path),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "24k",
+            str(audio_path),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    video_path = cache_dir / "window.mp4"
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(wm.path),
+            "-c",
+            "copy",
+            str(video_path),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    video_key = stream_window_capture_video_key(workspace_id, vod_id, window_end_ms)
+    upload_file(video_key, video_path, "video/mp4")
     audio_key = stream_window_audio_key(workspace_id, vod_id, window_end_ms)
     upload_file(audio_key, audio_path, "audio/opus")
     window_meta = {
         "audioKey": audio_key,
+        "videoKey": video_key,
         "vodStartMs": wm.vod_start_ms,
         "vodEndMs": wm.vod_end_ms,
         "requestedStartMs": wm.requested_start_ms,
         "requestedEndMs": wm.requested_end_ms,
         "method": wm.method,
     }
-    if video_key:
-        window_meta["videoKey"] = video_key
     decision_log(
         "streamer",
         "window_anchor",
@@ -1065,7 +1040,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
             rolling_window = bool(
                 _rolling_import_mode(vod, payload) or (allow_growing and growing)
             )
-            use_hls = platform == "twitch" and window_end_ms > window_start_ms
+            use_hls = platform == "twitch" and rolling_window and window_end_ms > window_start_ms
 
             if use_hls:
                 cache_dir = vod_import_dir(vod_id)
@@ -1078,7 +1053,6 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                     window_start_ms=window_start_ms,
                     window_end_ms=window_end_ms,
                     job_id=str(job["id"]),
-                    rolling_window=rolling_window,
                     cache_dir=cache_dir,
                 )
                 from clips_worker.streamer.rolling_ingest import mark_rolling_pull_complete
@@ -1156,42 +1130,6 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                     )
                     cleanup_vod_import_dir(vod_id)
                     return vod
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE stream_vods
-                        SET title=%s, category=%s, "durationMs"=%s, state=%s::jsonb, "updatedAt"=NOW()
-                        WHERE id=%s
-                        """,
-                        (
-                            meta.get("title"),
-                            meta.get("category"),
-                            duration_ms,
-                            json.dumps(state),
-                            vod_id,
-                        ),
-                    )
-                from clips_worker.streamer.analyze_enqueue import enqueue_stream_analyze
-
-                enqueue_stream_analyze(
-                    conn,
-                    project_id=project_id,
-                    vod_id=vod_id,
-                    workspace_id=workspace_id,
-                    triggered_by=str(vod.get("triggeredBy") or "paste"),
-                    source="hls_window_import",
-                    range_start_ms=window_start_ms,
-                    range_end_ms=window_end_ms,
-                    audio_key=audio_key,
-                    media_start_ms=vod_start,
-                )
-                cleanup_vod_import_dir(vod_id)
-                hb.update(stage="queued", progress=25)
-                post_progress(
-                    job["id"],
-                    {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
-                )
-                return vod
 
             staged_audio: Path | None = None
             if stream_audio_first_ingest_enabled():
