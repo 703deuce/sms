@@ -13,6 +13,10 @@ import {
   deletedEditorWordIds,
   editorWordsForClipFillerReview,
 } from '@/lib/clips/editor/filler-review-words'
+import {
+  proposalId,
+  type CleanupProposal,
+} from '@/lib/clips/editor/cleanup-proposals'
 import { toast } from 'sonner'
 
 const DEFAULT_SEARCH_OPTIONS: FillerSearchOptions = {
@@ -30,7 +34,7 @@ export function ClipFillerReview({
   edits,
   open,
   onOpenChange,
-  onAddCut,
+  onApplyProposal,
   onSeek,
   clipBounds,
 }: {
@@ -40,7 +44,7 @@ export function ClipFillerReview({
   clipBounds?: { clipStartMs: number; clipEndMs: number }
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAddCut: (range: [number, number]) => void
+  onApplyProposal: (proposal: CleanupProposal) => void
   onSeek: (sourceMs: number) => void
 }) {
   const [fillerCursor, setFillerCursor] = useState(0)
@@ -82,7 +86,13 @@ export function ClipFillerReview({
       if (!hits.length) return
       if (action === 'delete') {
         for (const h of hits) {
-          onAddCut([h.word.t0Ms, h.word.t1Ms])
+          const range: [number, number] = [h.word.t0Ms, h.word.t1Ms]
+          onApplyProposal({
+            id: proposalId(range),
+            kind: 'filler',
+            range,
+            label: h.word.text.trim() || 'filler',
+          })
         }
         toast.success(`Removed ${hits.length} filler word(s). Undo`)
         return
@@ -93,7 +103,7 @@ export function ClipFillerReview({
       }
       toast.message('Only delete is supported in clip editor')
     },
-    [onAddCut],
+    [onApplyProposal],
   )
 
   const onSkipOne = useCallback(() => {

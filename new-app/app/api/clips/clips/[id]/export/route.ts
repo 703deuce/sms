@@ -13,14 +13,13 @@ import { CLIP_PREVIEW_EXPORT_ASPECT, CLIP_PREVIEW_EXPORT_RESOLUTION } from '@/li
 import { normalizeEdits, outputDurationMs, sanitizeCutRangesForTrim } from '@/lib/clips/edits'
 import { jsonError } from '@/lib/server/api-error'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
-import { mergeEditsPatch } from '@/lib/server/clips/clip-detail'
+import { mergeEditsPatch, getClipEditorWords } from '@/lib/server/clips/clip-detail'
 import { logClipEvent } from '@/lib/server/clips/events'
 import { recordStreamClipFeedback } from '@/lib/server/clips/stream-feedback'
 import { createReadyRenderFromPreview } from '@/lib/server/clips/export-preview-ready'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { applyExportPolishEdits } from '@/lib/server/clips/apply-export-polish'
-import { getClipEditorWords } from '@/lib/server/clips/clip-detail'
-import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 import { getPrisma } from '@/lib/server/db'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
@@ -57,7 +56,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const raw = await request.text()
     const body = bodySchema.parse(raw ? JSON.parse(raw) : {})
-    const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
+    const bounds = await clipBoundsForPatch(clip)
     let edits = body.edits
       ? normalizeEdits(mergeEditsPatch(normalizeEdits(clip.edits, bounds), body.edits, bounds), bounds)
       : normalizeEdits(clip.edits, bounds)

@@ -1,0 +1,207 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import type { SourceWord } from '@/lib/clips/source-words'
+import { wordSourceMs } from '@/lib/clips/source-words'
+import {
+  appliedCutProposals,
+  auditionEditsForProposals,
+  fillerProposals,
+  gapProposals,
+  type CleanupProposal,
+} from '@/lib/clips/editor/cleanup-proposals'
+import { deletedEditorWordIds, editorWordsForClipFillerReview } from '@/lib/clips/editor/filler-review-words'
+import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
+import type { ClipGapToolSettings } from '@/components/clips/editor/clip-shorten-gaps-panel'
+import { TrimRangeBar } from '@/components/clips/editor/trim-range-bar'
+import { nudgeTrimIn, nudgeTrimOut } from '@/lib/clips/editor/nudge'
+import type { ClipBounds } from '@/lib/clips/edits'
+
+export function CleanupPanel({
+  clipId,
+  bounds,
+  edits,
+  words,
+  gapSettings,
+  onApplyProposal,
+  onRestoreProposal,
+  onCommitTrim,
+  onAuditionChange,
+  onSeek,
+}: {
+  clipId: string
+  bounds: ClipBounds
+  edits: ClipEditsV2
+  words: SourceWord[]
+  gapSettings: ClipGapToolSettings
+  onApplyProposal: (proposal: CleanupProposal) => void
+  onRestoreProposal: (proposal: CleanupProposal) => void
+  onCommitTrim: (trim: { in: number; out: number }) => void
+  onAuditionChange: (edits: ClipEditsV2 | null) => void
+  onSeek: (sourceMs: number) => void
+}) {
+  const [auditionIds, setAuditionIds] = useState<Set<string>>(new Set())
+
+  const clipBounds = useMemo(
+    () => ({ clipStartMs: bounds.clipStartMs, clipEndMs: bounds.clipEndMs }),
+    [bounds.clipEndMs, bounds.clipStartMs],
+  )
+  const orderedWords = useMemo(
+    () => editorWordsForClipFillerReview(clipId, words, edits, clipBounds),
+    [clipId, words, edits.trim.in, edits.trim.out, edits.cutRanges, clipBounds],
+  )
+  const deletedSet = useMemo(
+    () => deletedEditorWordIds(orderedWords, edits.cutRanges ?? []),
+    [orderedWords, edits.cutRanges],
+  )
+  const scopedWords = useMemo(
+    () => sourceWordsForClipEditing(words, edits, clipBounds),
+    [words, edits, clipBounds],
+  )
+  const wordSpans = useMemo(
+    () =>
+      scopedWords.map((w) => {
+        const { startMs, endMs } = wordSourceMs(w)
+        return { s: startMs / 1000, e: endMs / 1000 }
+      }),
+    [scopedWords],
+  )
+  const maxPlausibleGapMs = useMemo(() => maxPlausibleGapMsForTrim(edits.trim), [edits.trim.in, edits.trim.out])
+
+  const filler = useMemo(() => fillerProposals(orderedWords, deletedSet), [orderedWords, deletedSet])
+  const gaps = useMemo(
+    () =>
+      gapProposals(orderedWords, edits.cutRanges ?? [], {
+        mode: gapSettings.mode,
+        minGapMs: Math.round(gapSettings.minGapSec * 1000),
+        maxGapMs: Math.round(gapSettings.maxGapSec * 1000),
+        targetGapMs: Math.round(gapSettings.targetGapSec * 1000),
+        maxPlausibleGapMs,
+        wordSpans,
+      }),
+    [orderedWords, edits.cutRanges, gapSettings, maxPlausibleGapMs, wordSpans],
+  )
+  const applied = useMemo(
+    () => appliedCutProposals(edits, orderedWords, deletedSet),
+    [edits, orderedWords, deletedSet],
+  )
+  const proposed = useMemo(() => [...filler, ...gaps], [filler, gaps])
+
+  const toggleAudition = (p: CleanupProposal) => {
+    setAuditionIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(p.id)) next.delete(p.id)
+      else next.add(p.id)
+      const selected = proposed.filter((row) => next.has(row.id))
+      onAuditionChange(
+        selected.length ? auditionEditsForProposals(edits, selected, wordSpans) : null,
+      )
+      return next
+    })
+    onSeek(p.range[0])
+  }
+
+  const limits = {
+    clipStartMs: bounds.clipStartMs,
+    clipEndMs: bounds.clipEndMs,
+    trimMinMs: bounds.trimMinMs,
+    trimMaxMs: bounds.trimMaxMs,
+  }
+
+  return (
+    <div className="flex flex-col gap-4 p-3">
+      <TrimRangeBar bounds={bounds} trim={edits.trim} onCommitTrim={onCommitTrim} />
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" variant="outline" onClick={() => onCommitTrim(nudgeTrimIn(edits.trim, -100, limits))}>
+          Nudge in −100ms
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => onCommitTrim(nudgeTrimIn(edits.trim, 100, limits))}>
+          Nudge in +100ms
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => onCommitTrim(nudgeTrimOut(edits.trim, -100, limits))}>
+          Nudge out −100ms
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => onCommitTrim(nudgeTrimOut(edits.trim, 100, limits))}>
+          Nudge out +100ms
+        </Button>
+      </div>
+
+      <Tabs defaultValue="proposed">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="proposed">Proposed ({proposed.length})</TabsTrigger>
+          <TabsTrigger value="applied">Applied ({applied.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="proposed" className="mt-3 space-y-2">
+          {proposed.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No cleanup suggestions right now.</p>
+          ) : (
+            proposed.map((p) => (
+              <ProposalRow
+                key={p.id}
+                proposal={p}
+                auditioning={auditionIds.has(p.id)}
+                onAudition={() => toggleAudition(p)}
+                onApply={() => {
+                  onApplyProposal(p)
+                  setAuditionIds((s) => {
+                    const n = new Set(s)
+                    n.delete(p.id)
+                    onAuditionChange(null)
+                    return n
+                  })
+                }}
+              />
+            ))
+          )}
+        </TabsContent>
+        <TabsContent value="applied" className="mt-3 space-y-2">
+          {applied.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No cuts applied yet.</p>
+          ) : (
+            applied.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
+                <span>
+                  {p.label} · {p.kind}
+                </span>
+                <Button type="button" size="sm" variant="ghost" onClick={() => onRestoreProposal(p)}>
+                  Restore
+                </Button>
+              </div>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+function ProposalRow({
+  proposal,
+  auditioning,
+  onAudition,
+  onApply,
+}: {
+  proposal: CleanupProposal
+  auditioning: boolean
+  onAudition: () => void
+  onApply: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
+      <span>
+        {proposal.label} · {proposal.kind}
+      </span>
+      <div className="flex gap-1">
+        <Button type="button" size="sm" variant={auditioning ? 'default' : 'outline'} onClick={onAudition}>
+          Audition
+        </Button>
+        <Button type="button" size="sm" onClick={onApply}>
+          Apply
+        </Button>
+      </div>
+    </div>
+  )
+}

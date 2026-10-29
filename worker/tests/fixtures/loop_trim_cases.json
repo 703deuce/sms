@@ -1,0 +1,28 @@
+[
+  {
+    "name": "trims_end_on_tiktok_overlap",
+    "edits": { "trim": { "in": 0, "out": 8000 }, "loopFriendlyEnd": true },
+    "exportPlatform": "tiktok",
+    "words": [
+      { "w": "Secret", "s": 0.0, "e": 0.4 },
+      { "w": "growth", "s": 0.5, "e": 0.9 },
+      { "w": "hack", "s": 1.0, "e": 1.4 },
+      { "w": "for", "s": 1.5, "e": 1.7 },
+      { "w": "you!", "s": 6.5, "e": 7.0 }
+    ],
+    "expectOutLt": 8000
+  },
+  {
+    "name": "no_trim_when_payoff_missing",
+    "edits": { "trim": { "in": 0, "out": 8000 }, "loopFriendlyEnd": false },
+    "exportPlatform": "tiktok",
+    "words": [
+      { "w": "alpha", "s": 0.0, "e": 0.4 },
+      { "w": "beta", "s": 0.5, "e": 0.9 },
+      { "w": "gamma", "s": 1.0, "e": 1.4 },
+      { "w": "delta", "s": 1.5, "e": 1.9 },
+      { "w": "other", "s": 7.0, "e": 7.4 }
+    ],
+    "expectOutEq": 8000
+  }
+]

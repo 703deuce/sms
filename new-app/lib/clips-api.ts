@@ -192,6 +192,16 @@ export function getClipEditor(clipId: string) {
   }>(`/api/clips/clips/${clipId}`)
 }
 
+export function deriveClipFromEditor(
+  clipId: string,
+  body: { trimIn: number; trimOut: number; title?: string },
+) {
+  return clipsFetch<{ clipId: string; projectId: string; edits: unknown }>(
+    `/api/clips/clips/${clipId}/derive`,
+    { method: 'POST', body: JSON.stringify(body) },
+  )
+}
+
 export function patchClip(
   clipId: string,
   body: { title?: string; edits?: unknown; expectedUpdatedAt?: string; baseVersion?: number },

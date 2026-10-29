@@ -40,6 +40,7 @@ import {
   writeEditorAutosaveDraft,
 } from '@/lib/clips/editor-autosave-draft'
 import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
+import { mergeCleanupCutRanges } from '@/lib/clips/editor/cleanup-proposals'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
@@ -247,19 +248,13 @@ export function useEditorState(
     })
   }, [])
 
-  const addCutRanges = useCallback(
+  const addCleanupCuts = useCallback(
     (ranges: CutRange[]) => {
       if (!ranges.length) return
       const spans = wordSpans()
-      let cuts = [...editsRef.current.cutRanges]
-      for (const range of ranges) {
-        const snapped = spans.length ? snapCutRangeToWordGaps(range, spans) ?? range : range
-        const nextRange = spans.length
-          ? sanitizeCutRangesForWords([snapped], spans)[0] ?? snapped
-          : snapped
-        cuts = mergeCutRanges([...cuts, nextRange])
-      }
+      const cuts = mergeCleanupCutRanges(editsRef.current.cutRanges, ranges, spans)
       const nextEdits = { ...editsRef.current, cutRanges: cuts }
+      if (editsEqual(editsRef.current, nextEdits)) return
       editsRef.current = nextEdits
       bumpLocalRevision()
       dispatch({ type: 'addCuts', cutRanges: cuts })
@@ -267,21 +262,29 @@ export function useEditorState(
     [bumpLocalRevision, wordSpans],
   )
 
-  const addCutRange = useCallback(
+  const applyCleanupCut = useCallback(
     (range: CutRange) => {
-      addCutRanges([range])
+      addCleanupCuts([range])
     },
-    [addCutRanges],
+    [addCleanupCuts],
   )
 
   const setWordFix = useCallback(
-    (index: number, text: string) => {
+    (index: number, text: string, meta?: { s: number; w: string }) => {
       const fixes = { ...state.edits.wordFixes }
-      if (!text.trim()) delete fixes[String(index)]
-      else fixes[String(index)] = text.trim()
+      const fixMeta = { ...(state.edits.wordFixMeta ?? {}) }
+      const key = String(index)
+      if (!text.trim()) {
+        delete fixes[key]
+        delete fixMeta[key]
+      } else {
+        fixes[key] = text.trim()
+        if (meta) fixMeta[key] = { s: meta.s, w: meta.w }
+      }
       setEdits({
         ...state.edits,
         wordFixes: fixes,
+        wordFixMeta: Object.keys(fixMeta).length ? fixMeta : undefined,
       })
     },
     [setEdits, state.edits],
@@ -482,12 +485,16 @@ export function useEditorState(
 
   const setTrim = useCallback(
     (trim: { in: number; out: number }) => {
+      const media =
+        bounds.trimMinMs != null && bounds.trimMaxMs != null
+          ? { minMs: bounds.trimMinMs, maxMs: bounds.trimMaxMs }
+          : undefined
       setEdits({
         ...state.edits,
-        trim: clampTrimToExtendedBounds(bounds.clipStartMs, bounds.clipEndMs, trim),
+        trim: clampTrimToExtendedBounds(bounds.clipStartMs, bounds.clipEndMs, trim, media),
       })
     },
-    [bounds.clipEndMs, bounds.clipStartMs, setEdits, state.edits],
+    [bounds.clipEndMs, bounds.clipStartMs, bounds.trimMaxMs, bounds.trimMinMs, setEdits, state.edits],
   )
 
   const splitLayoutAtSource = useCallback(
@@ -665,8 +672,8 @@ export function useEditorState(
     saveState: state.saveState,
     producerStrip: state.producerStrip,
     clearProducerStrip,
-    addCutRange,
-    addCutRanges,
+    applyCleanupCut,
+    applyCleanupCuts,
     setCutRanges,
     setWordFix,
     restoreWord,

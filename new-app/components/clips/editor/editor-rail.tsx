@@ -2,24 +2,14 @@
 
 import { useCallback, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import {
-  Captions,
-  Clapperboard,
-  Image as ImageIcon,
-  Languages,
-  LayoutPanelTop,
-  Layers,
-  Music2,
-  Palette,
-  Sparkles,
-  FileText,
-} from 'lucide-react'
+import { Captions, Clapperboard, Eraser, Image as ImageIcon, Languages, LayoutPanelTop, Layers, Music2, Palette, Sparkles, FileText } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 export type EditorPanelId =
   | 'producer'
   | 'transcript'
+  | 'cleanup'
   | 'layout'
   | 'layers'
   | 'captions'
@@ -30,7 +20,7 @@ export type EditorPanelId =
   | 'brand'
 
 /** Clip editor launch rail — transcript, pauses/layout, captions, audio mix (no AI producer / B-roll / dub). */
-const CLIP_EDITOR_RAIL_IDS: EditorPanelId[] = ['transcript', 'layout', 'layers', 'captions', 'audio']
+const CLIP_EDITOR_RAIL_IDS: EditorPanelId[] = ['transcript', 'cleanup', 'layout', 'layers', 'captions', 'audio']
 
 const ALL_EDITOR_RAIL_ITEMS: {
   id: EditorPanelId
@@ -40,6 +30,7 @@ const ALL_EDITOR_RAIL_ITEMS: {
 }[] = [
   { id: 'producer', label: 'AI Producer', icon: Sparkles, tone: 'text-lane-ai' },
   { id: 'transcript', label: 'Script', icon: FileText },
+  { id: 'cleanup', label: 'Cleanup', icon: Eraser, tone: 'text-lane-broll' },
   { id: 'layout', label: 'Polish', icon: LayoutPanelTop, tone: 'text-lane-broll' },
   { id: 'layers', label: 'Layers', icon: Layers, tone: 'text-lane-brand' },
   { id: 'captions', label: 'Captions', icon: Captions, tone: 'text-lane-caption' },

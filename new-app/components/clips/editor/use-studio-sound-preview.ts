@@ -17,8 +17,16 @@ export function useStudioSoundPreview(opts: {
 }) {
   const { clipId, generationId, jobId, enabled, onReady, onFailed } = opts
   const [loading, setLoading] = useState(false)
+  const [studioSlow, setStudioSlow] = useState(false)
   const failToastRef = useRef(false)
   const startedRef = useRef<number | null>(null)
+
+  const retryPoll = useCallback(() => {
+    failToastRef.current = false
+    setStudioSlow(false)
+    setLoading(true)
+    startedRef.current = Date.now()
+  }, [])
 
   const poll = useCallback(async () => {
     if (!enabled || !generationId) return
@@ -29,6 +37,7 @@ export function useStudioSoundPreview(opts: {
         )
         if (job.status === 'FAILED') {
           setLoading(false)
+          setStudioSlow(false)
           if (!failToastRef.current) {
             failToastRef.current = true
             toast.error('Studio Sound failed, try again')
@@ -47,11 +56,13 @@ export function useStudioSoundPreview(opts: {
     }>(`/api/clips/generations/${generationId}`)
     if (gen.status === 'READY' && gen.downloadUrl) {
       setLoading(false)
+      setStudioSlow(false)
       onReady(gen.downloadUrl)
       return
     }
     if (gen.status === 'FAILED') {
       setLoading(false)
+      setStudioSlow(false)
       if (!failToastRef.current) {
         failToastRef.current = true
         toast.error(gen.error || 'Studio Sound failed, try again')
@@ -63,11 +74,13 @@ export function useStudioSoundPreview(opts: {
   useEffect(() => {
     if (!enabled || !generationId) {
       setLoading(false)
+      setStudioSlow(false)
       startedRef.current = null
       failToastRef.current = false
       return
     }
     failToastRef.current = false
+    setStudioSlow(false)
     setLoading(true)
     startedRef.current = Date.now()
     const tick = () => {
@@ -80,15 +93,20 @@ export function useStudioSoundPreview(opts: {
 
   useEffect(() => {
     if (!loading || !startedRef.current) return
-    const elapsed = Date.now() - startedRef.current
-    if (elapsed < TIMEOUT_MS) return
-    setLoading(false)
-    if (!failToastRef.current) {
-      failToastRef.current = true
-      toast.error('Studio Sound failed, try again')
-      onFailed()
-    }
-  }, [loading, onFailed])
+    const started = startedRef.current
+    const delay = Math.max(0, TIMEOUT_MS - (Date.now() - started))
+    const timer = setTimeout(() => {
+      if (!startedRef.current || startedRef.current !== started) return
+      setLoading(false)
+      setStudioSlow(true)
+      console.info('[clipper:studio] still_processing', {
+        clipId,
+        generationId,
+        elapsedMs: Date.now() - started,
+      })
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [clipId, generationId, loading])
 
-  return { loading }
+  return { loading, studioSlow, retryPoll }
 }

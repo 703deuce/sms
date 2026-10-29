@@ -11,6 +11,7 @@ import { wordSourceMs } from '@/lib/clips/source-words'
 import { maxPlausibleGapMsForTrim, sourceWordsForClipEditing } from '@/lib/clips/editor/clip-editor-word-scope'
 import { editorWordsForClipFillerReview } from '@/lib/clips/editor/filler-review-words'
 import { gapShortenCutRange, listClipGapHits } from '@/lib/clips/gap-shorten'
+import { proposalId, type CleanupProposal } from '@/lib/clips/editor/cleanup-proposals'
 import type { GapFilterMode } from '@/lib/clips/script-editor/gap-hits'
 import { toast } from 'sonner'
 
@@ -29,7 +30,7 @@ export function ClipGapReview({
   edits,
   open,
   onOpenChange,
-  onAddCut,
+  onApplyProposal,
   onSeek,
   minGapSec,
   maxGapSec,
@@ -44,7 +45,7 @@ export function ClipGapReview({
   clipBounds?: { clipStartMs: number; clipEndMs: number }
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAddCut: (range: [number, number]) => void
+  onApplyProposal: (proposal: CleanupProposal) => void
   onSeek: (sourceMs: number) => void
   minGapSec: number
   maxGapSec: number
@@ -111,11 +112,16 @@ export function ClipGapReview({
         toast.message('Gap already short enough')
         return
       }
-      onAddCut(range)
+      onApplyProposal({
+        id: proposalId(range),
+        kind: 'gap',
+        range,
+        label: `${(hit.gapMs / 1000).toFixed(1)}s pause`,
+      })
       const saved = Math.max(0, hit.gapMs - targetGapMs)
       toast.success(`Shortened pause (−${(saved / 1000).toFixed(1)} s). Undo`)
     },
-    [onAddCut, targetGapMs, wordSpans],
+    [onApplyProposal, targetGapMs, wordSpans],
   )
 
   const onSkipOne = useCallback(() => {
@@ -135,13 +141,18 @@ export function ClipGapReview({
     for (const hit of gapHits) {
       const range = gapShortenCutRange(hit.prevWord.t1Ms, hit.word.t0Ms, hit.gapMs, targetGapMs, wordSpans)
       if (range) {
-        onAddCut(range)
+        onApplyProposal({
+          id: proposalId(range),
+          kind: 'gap',
+          range,
+          label: `${(hit.gapMs / 1000).toFixed(1)}s pause`,
+        })
         n += 1
       }
     }
     if (n) toast.success(`Shortened ${n} pause(s). Undo`)
     onOpenChange(false)
-  }, [gapHits, onAddCut, onOpenChange, targetGapMs, wordSpans])
+  }, [gapHits, onApplyProposal, onOpenChange, targetGapMs, wordSpans])
 
   if (!open) return null
 

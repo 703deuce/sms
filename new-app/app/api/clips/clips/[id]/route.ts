@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
 import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
 import { getClipEditorPayload, mergeEditsPatch } from '@/lib/server/clips/clip-detail'
+import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { enqueueReplaceClip } from '@/lib/server/clips/replace-clip'
 import { recordStreamClipFeedback } from '@/lib/server/clips/stream-feedback'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 const patchSchema = z.object({
   title: z.string().min(1).max(120).optional(),
@@ -16,11 +19,60 @@ const patchSchema = z.object({
   edits: z.record(z.unknown()).optional(),
   hidden: z.boolean().optional(),
   disliked: z.boolean().optional(),
-  /** Optimistic concurrency — must match server editsSaveVersion from last successful save. */
   baseVersion: z.number().int().min(0).optional(),
-  /** @deprecated use baseVersion */
   expectedUpdatedAt: z.string().min(8).optional(),
 })
+
+type PatchRow = {
+  id: string
+  title: string
+  updatedAt: Date
+  editsSaveVersion: number
+}
+
+async function casUpdateEdits(
+  prisma: ReturnType<typeof getPrisma>,
+  id: string,
+  mergedEdits: ClipEditsV2,
+  versionForCas: number,
+): Promise<{ ok: true; row: PatchRow } | { ok: false; conflict: boolean }> {
+  try {
+    const rows = await prisma.$queryRaw<PatchRow[]>(
+      Prisma.sql`
+        UPDATE clips SET
+          edits = ${JSON.stringify(mergedEdits)}::jsonb,
+          "editsSaveVersion" = "editsSaveVersion" + 1,
+          "updatedAt" = NOW()
+        WHERE id = ${id} AND "editsSaveVersion" = ${versionForCas}
+        RETURNING id, title, "updatedAt", "editsSaveVersion"
+      `,
+    )
+    if (rows.length > 0) {
+      return { ok: true, row: rows[0]! }
+    }
+    return { ok: false, conflict: true }
+  } catch (err) {
+    console.warn(
+      '[clipper:patch] raw_update_fail',
+      err instanceof Error ? err.message : String(err),
+    )
+    const cas = await prisma.clip.updateMany({
+      where: { id, editsSaveVersion: versionForCas },
+      data: {
+        edits: toPrismaJson(mergedEdits),
+        editsSaveVersion: { increment: 1 },
+      },
+    })
+    if (cas.count === 0) {
+      return { ok: false, conflict: true }
+    }
+    const row = await prisma.clip.findUniqueOrThrow({
+      where: { id },
+      select: { id: true, title: true, updatedAt: true, editsSaveVersion: true },
+    })
+    return { ok: true, row }
+  }
+}
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -37,15 +89,24 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const patchStartedAt = Date.now()
   let patchClipId: string | null = null
-  let patchCas: number | null = null
+  let stageLog: Record<string, number | null> = {
+    ws: null,
+    load: null,
+    write: null,
+    cas: null,
+  }
   try {
     const { id } = await ctx.params
     patchClipId = id
+    const ws0 = Date.now()
     const workspaceId = await resolveWorkspaceId()
+    stageLog.ws = Date.now() - ws0
+    const load0 = Date.now()
     const clip = await getClipForWorkspace(workspaceId, id)
+    stageLog.load = Date.now() - load0
     if (!clip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const body = patchSchema.parse(await request.json())
-    const bounds = { clipStartMs: clip.startMs, clipEndMs: clip.endMs }
+    const bounds = await clipBoundsForPatch(clip)
     const { normalizeEdits } = await import('@/lib/clips/edits')
     const serverEdits = normalizeEdits(clip.edits, bounds)
     const baseVersion =
@@ -54,16 +115,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         ? clip.editsSaveVersion
         : undefined)
 
-    if (body.edits !== undefined && baseVersion === undefined) {
-      /* legacy clients without version — still allow save */
-    }
-
     const prisma = getPrisma()
     const nonEditData: Record<string, unknown> = {}
     if (body.title !== undefined) nonEditData.title = body.title
     if (body.favorite !== undefined) nonEditData.favorite = body.favorite
     if (body.hidden !== undefined || body.disliked !== undefined) {
-      const prev = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<string, unknown>
+      const prev = (clip.aiMeta && typeof clip.aiMeta === 'object' ? clip.aiMeta : {}) as Record<
+        string,
+        unknown
+      >
       const meta = { ...prev }
       if (body.hidden !== undefined) meta.userHidden = body.hidden
       if (body.disliked !== undefined) {
@@ -82,18 +142,22 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       await prisma.clip.update({ where: { id }, data: nonEditData })
     }
 
+    let editsResponse: {
+      id: string
+      title: string
+      edits: unknown
+      updatedAt: string
+      editsSaveVersion: number
+    } | null = null
+
     if (body.edits !== undefined) {
       const mergedEdits = mergeEditsPatch(serverEdits, body.edits, bounds)
       const versionForCas = baseVersion ?? clip.editsSaveVersion
-      const cas = await prisma.clip.updateMany({
-        where: { id, editsSaveVersion: versionForCas },
-        data: {
-          edits: toPrismaJson(mergedEdits),
-          editsSaveVersion: { increment: 1 },
-        },
-      })
-      patchCas = cas.count
-      if (cas.count === 0) {
+      const write0 = Date.now()
+      const result = await casUpdateEdits(prisma, id, mergedEdits, versionForCas)
+      stageLog.write = Date.now() - write0
+      stageLog.cas = result.ok ? 1 : 0
+      if (!result.ok && result.conflict) {
         const fresh = await prisma.clip.findUniqueOrThrow({ where: { id } })
         const freshEdits = normalizeEdits(fresh.edits, bounds)
         const clientFull = normalizeEdits(mergeEditsPatch(serverEdits, body.edits, bounds), bounds)
@@ -123,9 +187,16 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
           { status: 409 },
         )
       }
+      if (result.ok) {
+        editsResponse = {
+          id: result.row.id,
+          title: result.row.title,
+          edits: mergedEdits,
+          updatedAt: result.row.updatedAt.toISOString(),
+          editsSaveVersion: result.row.editsSaveVersion,
+        }
+      }
     }
-
-    const updated = await prisma.clip.findUniqueOrThrow({ where: { id } })
 
     if (body.disliked === true) {
       await recordStreamClipFeedback(workspaceId, id, 'thumbs_down').catch(() => {})
@@ -145,6 +216,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       }
     }
 
+    if (editsResponse) {
+      return NextResponse.json({ data: editsResponse })
+    }
+
+    const updated = await prisma.clip.findUniqueOrThrow({ where: { id } })
     return NextResponse.json({
       data: {
         id: updated.id,
@@ -160,8 +236,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     if (patchClipId) {
       console.info('[clipper:patch] ms', {
         clipId: patchClipId,
-        ms: Date.now() - patchStartedAt,
-        cas: patchCas,
+        total: Date.now() - patchStartedAt,
+        ws: stageLog.ws,
+        load: stageLog.load,
+        write: stageLog.write,
+        cas: stageLog.cas,
       })
     }
   }

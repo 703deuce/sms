@@ -71,6 +71,7 @@ export function PreviewStage({
   channelDisplay,
   chatPreviewEnabled = false,
   media = null,
+  audition = null,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -85,6 +86,7 @@ export function PreviewStage({
   channelDisplay?: string | null
   chatPreviewEnabled?: boolean
   media?: EditorMedia | null
+  audition?: { edits: ClipEditsV2 } | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -117,7 +119,9 @@ export function PreviewStage({
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
   const wordsRef = useRef(words)
+  const auditionRef = useRef(audition)
   wordsRef.current = words
+  auditionRef.current = audition
   onTickRef.current = onTick
   boxSizeRef.current = box
 
@@ -169,7 +173,7 @@ export function PreviewStage({
     const tick = () => {
       const v = videoRefInner.current
       const blur = blurRef.current
-      const e = editsRef.current
+      const e = auditionRef.current?.edits ?? editsRef.current
       const playbackEdits = editorPreviewEdits(e, wordsRef.current)
       const track = trackRef.current
       const letterbox = layoutUsesLetterboxBlurPreview(e.layout?.mode ?? 'speaker_follow')

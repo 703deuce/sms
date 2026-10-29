@@ -47,10 +47,18 @@ def apply_loop_friendly_trim(
     if tout - tin < 4000:
         return edits
 
-    ordered = sorted(
-        [w for w in words if str(w.get("w", "")).strip()],
-        key=lambda w: float(w.get("s", 0)),
-    )
+    def _in_trim(w: dict) -> bool:
+        if not str(w.get("w", "")).strip():
+            return False
+        s = float(w.get("s", 0))
+        e = float(w.get("e", s))
+        if s < 1e6:
+            mid_ms = int((s + e) * 500.0)
+        else:
+            mid_ms = int((s + e) / 2.0)
+        return tin <= mid_ms < tout
+
+    ordered = sorted([w for w in words if _in_trim(w)], key=lambda w: float(w.get("s", 0)))
     if len(ordered) < 4:
         return edits
 

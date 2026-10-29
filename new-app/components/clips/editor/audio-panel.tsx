@@ -33,6 +33,8 @@ export function AudioPanel({
   onRemoveSfx,
   onPatchStudioSound,
   onStartStudioSound,
+  studioSlow,
+  onRetryStudioPoll,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -47,6 +49,8 @@ export function AudioPanel({
   onRemoveSfx: (generationId: string) => void
   onPatchStudioSound: (studio: ClipStudioSound | null) => void
   onStartStudioSound?: () => void
+  studioSlow?: boolean
+  onRetryStudioPoll?: () => void
 }) {
   const [prompt, setPrompt] = useState('')
   const [instrumental, setInstrumental] = useState(true)
@@ -190,6 +194,19 @@ export function AudioPanel({
           void enqueueStudioSound()
         }}
       />
+      {studioSlow ? (
+        <div
+          className="rounded-md border border-border bg-muted/30 p-2 text-xs text-muted-foreground"
+          data-testid="studio-sound-slow"
+        >
+          <p>Studio Sound is still processing — it will apply when ready.</p>
+          {onRetryStudioPoll ? (
+            <Button type="button" size="sm" variant="outline" className="mt-2 h-7" onClick={onRetryStudioPoll}>
+              Retry
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {aiExtras ? (
       <section className="space-y-2">
         <h3 className="font-medium">Music</h3>

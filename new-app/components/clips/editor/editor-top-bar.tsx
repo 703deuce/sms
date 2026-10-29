@@ -15,6 +15,7 @@ import { PrimaryButton } from '@/components/app/primary-button'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Kbd } from '@/components/ui/kbd'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -24,6 +25,7 @@ export function EditorTopBar({
   title,
   onTitleChange,
   saveState,
+  optimisticPending = false,
   canUndo,
   canRedo,
   onUndo,
@@ -39,6 +41,7 @@ export function EditorTopBar({
   title: string
   onTitleChange: (t: string) => void
   saveState: 'saved' | 'saving' | 'dirty' | 'error'
+  optimisticPending?: boolean
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
@@ -69,6 +72,11 @@ export function EditorTopBar({
         aria-label="Clip title"
       />
       <span className={cn('shrink-0', saveTone)} aria-live="polite">
+        {optimisticPending && saveState !== 'saving' ? (
+          <Badge variant="outline" className="mr-2 h-6 text-[10px] font-normal">
+            Pending save
+          </Badge>
+        ) : null}
         {(saveState === 'saving' || saveState === 'dirty') && (
           <span className="inline-flex items-center gap-1 text-xs">
             <Loader2 className="size-3.5 animate-spin" aria-hidden />

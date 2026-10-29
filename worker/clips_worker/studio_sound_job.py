@@ -77,6 +77,7 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
         params = json.loads(params)
     params = params or {}
     source_key = params.get("sourceKey")
+    source_offset_ms = int(params.get("sourceOffsetMs") or 0)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -103,9 +104,10 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
             "projectId": project_id,
             "source_key": crow[6],
         }
-        resolved, _, reason = resolve_clip_export_source(ctx)
+        resolved, resolved_offset, reason = resolve_clip_export_source(ctx)
         if resolved:
             source_key = resolved
+            source_offset_ms = int(resolved_offset or 0)
             from clips_worker.decision_log import decision_log
 
             decision_log(
@@ -154,14 +156,19 @@ def run_studio_sound_job(conn, job: dict, post_progress) -> None:
         upload_file(storage_key, iso_mp3, "audio/mpeg")
 
     cost_usd = Decimal(isolation_cost_micros(dur_sec)) / Decimal(1_000_000)
+    persist_params = {
+        **(params if isinstance(params, dict) else {}),
+        "sourceKey": source_key,
+        "sourceOffsetMs": int(source_offset_ms),
+    }
     with conn.cursor() as cur:
         cur.execute(
             """
             UPDATE ai_generations
-            SET status=%s, "storageKey"=%s, "costUsd"=%s, "updatedAt"=NOW()
+            SET status=%s, "storageKey"=%s, "costUsd"=%s, params=%s, "updatedAt"=NOW()
             WHERE id=%s
             """,
-            ("READY", storage_key, cost_usd, generation_id),
+            ("READY", storage_key, cost_usd, json.dumps(persist_params), generation_id),
         )
         cur.execute(
             """

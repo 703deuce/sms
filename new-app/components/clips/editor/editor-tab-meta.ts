@@ -6,6 +6,7 @@ export const TAB_META: Record<
 > = {
   producer: { label: 'AI Producer', hint: 'Edit by chatting' },
   transcript: { label: 'Script', hint: 'Edit video by editing text' },
+  cleanup: { label: 'Cleanup', hint: 'Fillers, pauses, trim & cuts' },
   layout: { label: 'Polish', hint: 'Shorten pauses & framing' },
   layers: { label: 'Layers', hint: 'Headline, badge, stickers' },
   captions: { label: 'Captions', hint: 'Style & animation' },

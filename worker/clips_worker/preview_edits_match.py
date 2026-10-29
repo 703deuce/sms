@@ -30,6 +30,9 @@ def preview_export_matches(edits: dict, clip_start_ms: int, clip_end_ms: int) ->
     audio = edits.get("audio") if isinstance(edits.get("audio"), dict) else {}
     if audio.get("music") or (audio.get("sfx") or []):
         return False
+    studio = audio.get("studioSound") if isinstance(audio.get("studioSound"), dict) else {}
+    if studio.get("enabled"):
+        return False
     layout = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
     if (layout.get("mode") or d["layout"]["mode"]) != d["layout"]["mode"]:
         return False

@@ -28,7 +28,7 @@ def test_load_audio_assets_studio_when_ready(tmp_path):
     cur = MagicMock()
     conn.cursor.return_value.__enter__ = lambda s: cur
     conn.cursor.return_value.__exit__ = lambda *a: None
-    cur.fetchone.return_value = ("ws/x/studio.mp3", "READY")
+    cur.fetchone.return_value = ("ws/x/studio.mp3", "READY", "{}")
 
     edits = {
         "audio": {

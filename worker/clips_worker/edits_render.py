@@ -107,6 +107,7 @@ def normalize_edits(raw, clip_start_ms: int, clip_end_ms: int) -> dict:
         },
         "cutRanges": list(raw.get("cutRanges") or []),
         "wordFixes": dict(raw.get("wordFixes") or {}),
+        "wordFixMeta": dict(raw.get("wordFixMeta") or {}),
         "layout": {
             "mode": layout.get("mode") or base["layout"]["mode"],
             "shotOverrides": list(layout.get("shotOverrides") or []),
@@ -158,7 +159,8 @@ def ensure_word_i(words: list[dict]) -> list[dict]:
 
 def words_after_edits(words: list[dict], edits: dict) -> tuple[list[dict], list[tuple[int, int]]]:
     segs = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
-    capped = build_caption_words(ensure_word_i(words), edits)
+    words_fallback = bool(edits.get("_wordsFallback"))
+    capped = build_caption_words(ensure_word_i(words), edits, words_fallback=words_fallback)
     remapped = caption_words_to_render(capped)
     return remapped, segs
 
@@ -1009,6 +1011,10 @@ def render_edited_clip(
 
     from clips_worker.silence_trim import effective_cut_ranges
 
+    editor_edits_ms = output_duration_ms(edits)
+    if render_meta is not None:
+        render_meta["expected_editor_ms"] = editor_edits_ms
+
     edits = {**edits, "cutRanges": effective_cut_ranges(edits, source_words)}
     from clips_worker.loop_friendly_trim import apply_loop_friendly_trim
 
@@ -1017,6 +1023,8 @@ def render_edited_clip(
     if isinstance(tpl, dict) and tpl.get("exportPlatformId"):
         plat = str(tpl.get("exportPlatformId"))
     edits = apply_loop_friendly_trim(edits, source_words, export_platform=plat)
+    if render_meta is not None:
+        render_meta["effective_edits_ms"] = output_duration_ms(edits)
     shot_overrides = (edits.get("layout") or {}).get("shotOverrides") or []
     src_words = ensure_word_i(source_words)
     sc_settings = speakercrop_settings_from_edits(settings, edits)
@@ -1060,6 +1068,8 @@ def render_edited_clip(
             preview_crop_track=preview_crop_track,
         )
         stage("speakercrop_fast_done")
+        if render_meta is not None:
+            render_meta["effective_edits_ms"] = output_duration_ms(edits)
         return out_mp4, remapped, build_srt(remapped)
 
     segs_ms = keep_segments(int(edits["trim"]["in"]), int(edits["trim"]["out"]), edits.get("cutRanges") or [])
@@ -1168,10 +1178,22 @@ def render_edited_clip(
     studio_path = (audio_assets or {}).get("studio_path") if audio_assets else None
     studio_mix = (audio_assets or {}).get("studio_mix") if audio_assets else None
     if studio_path and studio_path.is_file() and studio_mix is not None:
-        from clips_worker.audio_render import apply_studio_sound_mix
+        from clips_worker.audio_render import apply_studio_sound_mix_aligned
 
+        offset_ms = (audio_assets or {}).get("studio_source_offset_ms")
+        if offset_ms is None:
+            offset_ms = 0
+        track_start = max(0.0, (clip_start_ms - int(offset_ms)) / 1000.0)
         studio_out = work_dir / "studio_mix.mp4"
-        apply_studio_sound_mix(caption_src, studio_path, studio_out, float(studio_mix))
+        apply_studio_sound_mix_aligned(
+            caption_src,
+            studio_path,
+            studio_out,
+            float(studio_mix),
+            segs_sec,
+            track_start_sec=track_start,
+            work_dir=work_dir,
+        )
         caption_src = studio_out
     if dub_assets and dub_assets.get("dub_audio_path"):
         from clips_worker.audio_render import apply_dub_speech_mix
@@ -1252,4 +1274,6 @@ def render_edited_clip(
             out_mp4, caption_words = _legacy_compose(caption_src, caption_words, out_mp4, edits, legacy_ctx)
 
     stage("full_pipeline_done")
+    if render_meta is not None and "effective_edits_ms" not in render_meta:
+        render_meta["effective_edits_ms"] = output_duration_ms(edits)
     return out_mp4, caption_words, build_srt(caption_words)

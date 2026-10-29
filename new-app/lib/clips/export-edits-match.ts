@@ -10,6 +10,7 @@ export function previewExportMatchesDefault(edits: ClipEditsV2, bounds: ClipBoun
   if ((edits.broll?.length ?? 0) > 0) return false
   if (edits.zoom?.enabled) return false
   if (edits.silenceTrim?.enabled) return false
+  if (edits.audio?.studioSound?.enabled) return false
   if (edits.audio?.music || (edits.audio?.sfx?.length ?? 0) > 0) return false
   if (edits.layout.mode !== d.layout.mode) return false
   if (edits.aspectRatio && edits.aspectRatio !== '9:16') return false

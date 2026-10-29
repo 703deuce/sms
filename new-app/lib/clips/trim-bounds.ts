@@ -3,7 +3,14 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 /** Match worker `MAX_TRIM_EXTEND_MS` — export may include extra source beyond AI clip bounds. */
 export const MAX_TRIM_EXTEND_MS = 8000
 
-export function extendedTrimLimits(clipStartMs: number, clipEndMs: number) {
+export function extendedTrimLimits(
+  clipStartMs: number,
+  clipEndMs: number,
+  limits?: { minMs?: number; maxMs?: number },
+) {
+  if (limits?.minMs != null && limits?.maxMs != null) {
+    return { minInMs: limits.minMs, maxOutMs: limits.maxMs }
+  }
   return {
     minInMs: Math.max(0, clipStartMs - MAX_TRIM_EXTEND_MS),
     maxOutMs: clipEndMs + MAX_TRIM_EXTEND_MS,
@@ -15,8 +22,9 @@ export function clampTrimToExtendedBounds(
   clipStartMs: number,
   clipEndMs: number,
   trim: { in: number; out: number },
+  limits?: { minMs?: number; maxMs?: number },
 ): { in: number; out: number } {
-  const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs)
+  const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs, limits)
   let tin = Math.max(minInMs, Math.min(maxOutMs, trim.in))
   let tout = Math.max(minInMs, Math.min(maxOutMs, trim.out))
   const minSpan = 500
@@ -51,11 +59,11 @@ export function expandedSourceCutMs(
   clipStartMs: number,
   clipEndMs: number,
   edits: Pick<ClipEditsV2, 'trim'>,
+  limits?: { minMs?: number; maxMs?: number },
 ): { cutStartMs: number; cutEndMs: number } {
   const tin = edits.trim.in
   const tout = edits.trim.out
-  const lo = Math.max(0, clipStartMs - MAX_TRIM_EXTEND_MS)
-  const hi = clipEndMs + MAX_TRIM_EXTEND_MS
+  const { minInMs: lo, maxOutMs: hi } = extendedTrimLimits(clipStartMs, clipEndMs, limits)
   const cutStartMs = Math.max(lo, Math.min(clipStartMs, tin))
   const cutEndMs = Math.min(hi, Math.max(clipEndMs, tout))
   if (cutEndMs <= cutStartMs) {

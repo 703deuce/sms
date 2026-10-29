@@ -44,6 +44,7 @@ export function TranscriptPanel({
   onExtendTrim,
   onToggleEmphasis,
   onRestoreCutRange,
+  onSaveAsNewClip,
   selectionRef,
   clipStartMs,
   clipEndMs,
@@ -61,6 +62,7 @@ export function TranscriptPanel({
   onExtendTrim: (sourceMs: number) => void
   onToggleEmphasis?: (wordIndex: number) => void
   onRestoreCutRange?: (range: CutRange) => void
+  onSaveAsNewClip?: (trimIn: number, trimOut: number) => void | Promise<void>
   selectionRef: React.MutableRefObject<TranscriptSelection | null>
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
@@ -295,6 +297,25 @@ export function TranscriptPanel({
       )}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={deleteSelection}>Delete selection</Button>
+        {onSaveAsNewClip ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              const trimIn =
+                selStart != null && selEnd != null
+                  ? Math.min(selStart, selEnd)
+                  : edits.trim.in
+              const trimOut =
+                selStart != null && selEnd != null
+                  ? Math.max(selStart, selEnd)
+                  : edits.trim.out
+              void onSaveAsNewClip(trimIn, trimOut)
+            }}
+          >
+            Save as new clip
+          </Button>
+        ) : null}
       </div>
       <div className="max-h-[min(50vh,420px)] overflow-y-auto text-sm leading-relaxed">
         {!visible.length ? (
