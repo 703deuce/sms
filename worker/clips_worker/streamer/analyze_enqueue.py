@@ -35,6 +35,7 @@ def enqueue_stream_analyze(
     range_end_ms: int | None = None,
     audio_key: str | None = None,
     allow_queue_behind_pending: bool = False,
+    media_start_ms: int | None = None,
 ) -> str | None:
     from clips_worker.decision_log import decision_log
 
@@ -67,6 +68,8 @@ def enqueue_stream_analyze(
         body["windowOnly"] = True
     if audio_key:
         body["audioKey"] = str(audio_key)
+    if media_start_ms is not None:
+        body["mediaStartMs"] = int(media_start_ms)
     with conn.cursor() as cur:
         cur.execute(
             """

@@ -40,6 +40,18 @@ def collect_bulky_stream_keys(
         keys.append(str(state["analysisProxyKey"]))
     if state.get("localUploadKey"):
         keys.append(str(state["localUploadKey"]))
+    if state.get("windowCaptureVideoKey"):
+        keys.append(str(state["windowCaptureVideoKey"]))
+
+    windows = state.get("windows") or {}
+    if isinstance(windows, dict):
+        for _end, meta in windows.items():
+            if not isinstance(meta, dict):
+                continue
+            if meta.get("audioKey"):
+                keys.append(str(meta["audioKey"]))
+            if meta.get("videoKey"):
+                keys.append(str(meta["videoKey"]))
 
     chunks = state.get("chunks") or {}
     for idx, meta in chunks.items():

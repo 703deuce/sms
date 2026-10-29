@@ -458,23 +458,41 @@ def handle_stream_analyze(conn, job: dict) -> None:
 
 
 def handle_stream_render(conn, job: dict) -> None:
+    from clips_worker.decision_log import bind_decision_log, flush_decision_log, unbind_decision_log
     from clips_worker.streamer.render_job import run_stream_render_job
 
-    run_stream_render_job(conn, job, post_progress)
+    bind_decision_log(conn, str(job.get("id") or ""))
+    try:
+        run_stream_render_job(conn, job, post_progress)
+    finally:
+        flush_decision_log(force=True)
+        unbind_decision_log()
     _mark_job_done(conn, job["id"])
 
 
 def handle_stream_relayout(conn, job: dict) -> None:
+    from clips_worker.decision_log import bind_decision_log, flush_decision_log, unbind_decision_log
     from clips_worker.streamer.relayout_job import run_stream_relayout_job
 
-    run_stream_relayout_job(conn, job, post_progress)
+    bind_decision_log(conn, str(job.get("id") or ""))
+    try:
+        run_stream_relayout_job(conn, job, post_progress)
+    finally:
+        flush_decision_log(force=True)
+        unbind_decision_log()
     _mark_job_done(conn, job["id"])
 
 
 def handle_stream_cleanup(conn, job: dict) -> None:
+    from clips_worker.decision_log import bind_decision_log, flush_decision_log, unbind_decision_log
     from clips_worker.streamer.cleanup_job import run_stream_cleanup_job
 
-    run_stream_cleanup_job(conn, job, post_progress)
+    bind_decision_log(conn, str(job.get("id") or ""))
+    try:
+        run_stream_cleanup_job(conn, job, post_progress)
+    finally:
+        flush_decision_log(force=True)
+        unbind_decision_log()
     _mark_job_done(conn, job["id"])
 
 

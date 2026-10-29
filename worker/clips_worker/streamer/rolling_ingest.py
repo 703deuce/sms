@@ -278,6 +278,23 @@ def emit_rolling_session_check(
     return elapsed_h, cap_h, rolling, mutated
 
 
+def next_rolling_window(
+    *,
+    committed_end_ms: int,
+    total_vod_ms: int,
+    min_new_ms: int,
+    max_window_ms: int,
+    finalize: bool,
+) -> tuple[int, int] | None:
+    start = max(0, int(committed_end_ms))
+    if total_vod_ms - start < (1 if finalize else min_new_ms):
+        return None
+    end = min(int(total_vod_ms), start + max_window_ms)
+    if start >= end:
+        return None
+    return start, end
+
+
 def plan_rolling_window_ms(
     *,
     total_vod_ms: int,
@@ -299,21 +316,33 @@ def plan_rolling_window_ms(
     min_new_ms = rolling_min_new_ms_for_state(state)
 
     if finalize:
-        start_ms = last_pulled
-        end_ms = total_vod_ms
+        planned = next_rolling_window(
+            committed_end_ms=last_pulled,
+            total_vod_ms=total_vod_ms,
+            min_new_ms=0,
+            max_window_ms=max_window,
+            finalize=True,
+        )
+        if planned is None:
+            return None
+        start_ms, end_ms = planned
     else:
-        end_ms = total_vod_ms
+        end_ms = int(total_vod_ms)
         if end_ms <= last_pulled + min_new_ms:
             return None
-        # Live edge chunk: from previous pull end (≤30s overlap) through current archive end.
-        start_ms = max(0, last_pulled - overlap_ms, end_ms - chunk_ms)
-        if end_ms - start_ms > chunk_ms + overlap_ms:
-            start_ms = max(0, end_ms - chunk_ms)
+        planned = next_rolling_window(
+            committed_end_ms=last_pulled,
+            total_vod_ms=end_ms,
+            min_new_ms=min_new_ms,
+            max_window_ms=max_window,
+            finalize=False,
+        )
+        if planned is None:
+            return None
+        start_ms, end_ms = planned
 
     if start_ms >= end_ms:
         return None
-    if end_ms - start_ms > max_window:
-        start_ms = end_ms - max_window
 
     elapsed_h, cap_h, rolling, session_mutated = emit_rolling_session_check(
         vod_id=vod_id,
@@ -499,7 +528,15 @@ def mark_rolling_pull_complete(
                 """
                 UPDATE stream_vods
                 SET state = jsonb_set(
-                      jsonb_set(COALESCE(state, '{}'::jsonb), '{rolling,lastPulledMs}', to_jsonb(%s::bigint), true),
+                      jsonb_set(
+                        COALESCE(state, '{}'::jsonb),
+                        '{rolling,lastPulledMs}',
+                        to_jsonb(GREATEST(
+                          COALESCE((state->'rolling'->>'lastPulledMs')::bigint, 0),
+                          %s::bigint
+                        )),
+                        true
+                      ),
                       '{rolling,lastPullCompletedAt}', to_jsonb(%s::text), true
                     ),
                     "rangeStartMs"=%s,
@@ -514,7 +551,15 @@ def mark_rolling_pull_complete(
                 """
                 UPDATE stream_vods
                 SET state = jsonb_set(
-                      jsonb_set(COALESCE(state, '{}'::jsonb), '{rolling,lastPulledMs}', to_jsonb(%s::bigint), true),
+                      jsonb_set(
+                        COALESCE(state, '{}'::jsonb),
+                        '{rolling,lastPulledMs}',
+                        to_jsonb(GREATEST(
+                          COALESCE((state->'rolling'->>'lastPulledMs')::bigint, 0),
+                          %s::bigint
+                        )),
+                        true
+                      ),
                       '{rolling,lastPullCompletedAt}', to_jsonb(%s::text), true
                     ),
                     "updatedAt"=NOW()

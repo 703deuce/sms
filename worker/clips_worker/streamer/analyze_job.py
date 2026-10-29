@@ -497,7 +497,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
 
             render_id: str | None = None
             clip_rows = []
-            time_offset_ms = window_start_ms if payload.get("windowOnly") else 0
+            time_offset_ms = int(payload.get("mediaStartMs") or window_start_ms)
             streamer_settings = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
             genre = str(streamer_settings.get("genre") or "stream")
             for pick in picks:
@@ -554,13 +554,28 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 )
                 sm = dict((ai_meta.get("streamer") or {}))
                 cap_key = state.get("windowCaptureVideoKey")
+                win_video = None
+                windows = state.get("windows") if isinstance(state.get("windows"), dict) else {}
+                if windows:
+                    wentry = windows.get(str(window_end_ms)) or next(iter(windows.values()), None)
+                    if isinstance(wentry, dict):
+                        win_video = wentry.get("videoKey")
                 if payload.get("windowOnly"):
                     sm["clipTimesAbsolute"] = True
-                if cap_key:
+                    sm["vodRangeStartMs"] = time_offset_ms
+                    sm["windowAudioKey"] = audio_key
+                    if win_video:
+                        sm["windowVideoKey"] = str(win_video)
+                    elif cap_key:
+                        sm["captureVideoKey"] = str(cap_key)
+                    sm["timelineV"] = 2
+                if cap_key and not sm.get("captureVideoKey"):
                     sm["captureVideoKey"] = str(cap_key)
-                    sm["captureWindowStartMs"] = int(window_start_ms if payload.get("windowOnly") else vod.get("rangeStartMs") or 0)
+                    sm["captureWindowStartMs"] = int(
+                        time_offset_ms if payload.get("windowOnly") else (vod.get("rangeStartMs") or 0)
+                    )
                     sm["clipTimesAbsolute"] = bool(payload.get("windowOnly"))
-                    ai_meta = {**ai_meta, "streamer": sm}
+                ai_meta = {**ai_meta, "streamer": sm}
                 clip_rows.append(
                     {
                         "id": clip_id,

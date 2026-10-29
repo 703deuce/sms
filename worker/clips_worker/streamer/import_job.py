@@ -88,11 +88,10 @@ def _vod_state_dict(vod: dict) -> dict:
     return state if isinstance(state, dict) else {}
 
 
-def _rolling_import_mode(vod: dict) -> bool:
-    from clips_worker.streamer.config import streamer_twitch_rolling_enabled
-
-    if not streamer_twitch_rolling_enabled():
-        return False
+def _rolling_import_mode(vod: dict, payload: dict | None = None) -> bool:
+    payload = payload or {}
+    if payload.get("rollingTick") is not None:
+        return str(vod.get("platform") or "").lower() == "twitch"
     state = _vod_state_dict(vod)
     if state.get("liveCapture") and str(vod.get("platform") or "").lower() == "twitch":
         return True
@@ -190,7 +189,7 @@ def _rolling_preflight_after_meta(
     meta_dur_s: float,
 ) -> bool:
     """Plan rolling window or defer. Returns True when this import job should exit."""
-    if not _rolling_import_mode(vod):
+    if not _rolling_import_mode(vod, payload):
         return False
     from clips_worker.streamer.rolling_ingest import (
         apply_rolling_pull_plan,
@@ -407,6 +406,7 @@ def _complete_rolling_window_import(
             range_start_ms=window_start_ms,
             range_end_ms=window_end_ms,
             audio_key=window_audio_key or None,
+            media_start_ms=int(state.get("vodStartMs") or window_start_ms),
             allow_queue_behind_pending=live_capture,
         )
     conn.commit()
@@ -423,6 +423,17 @@ def _complete_rolling_window_import(
     finalize = rolling_finalize or bool(rolling_live.get("finalize"))
     chunk_min = rolling_chunk_min(prior)
     schedule_tick = (live and not finalize) or (schedule_growing_tick and not rolling_finalize)
+    from clips_worker.streamer.config import streamer_twitch_rolling_enabled
+
+    if schedule_tick and not streamer_twitch_rolling_enabled():
+        decision_log(
+            "streamer",
+            "rolling_tick_not_scheduled",
+            vodId=vod_id,
+            projectId=project_id,
+            reason="flag_off",
+        )
+        schedule_tick = False
     if schedule_tick:
         from clips_worker.streamer.rolling_ingest import rolling_autopull_stop_reason
 
@@ -545,13 +556,125 @@ def _section_from_range(start_ms: int, end_ms: int | None) -> str | None:
     return f"*{start_s}-{end_s}"
 
 
+def _ingest_twitch_hls_window(
+    *,
+    url: str,
+    meta_raw: dict,
+    workspace_id: str,
+    vod_id: str,
+    window_start_ms: int,
+    window_end_ms: int,
+    job_id: str,
+    rolling_window: bool,
+    cache_dir: Path,
+) -> tuple[str, str, int, int, dict]:
+    """Download HLS window with recorded vodStartMs; return audio_key, video_key, vod_start, vod_end, window_meta."""
+    from clips_worker.decision_log import decision_log
+    from clips_worker.streamer.hls_window import fetch_window, resolve_rendition_playlist
+    from clips_worker.streamer.keys import stream_window_audio_key, stream_window_capture_video_key
+
+    playlist_url = resolve_rendition_playlist(meta_raw, want="audio_only" if not rolling_window else "video")
+    dest = cache_dir / ("window.ts" if rolling_window else "window_audio.ts")
+    wm = fetch_window(playlist_url, window_start_ms, window_end_ms, dest)
+    audio_path = cache_dir / "window.opus"
+    if rolling_window:
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(wm.path),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "libopus",
+                "-b:a",
+                "24k",
+                str(audio_path),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        video_path = cache_dir / "window.mp4"
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(wm.path),
+                "-c",
+                "copy",
+                str(video_path),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        video_key = stream_window_capture_video_key(workspace_id, vod_id, window_end_ms)
+        upload_file(video_key, video_path, "video/mp4")
+    else:
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(wm.path),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "libopus",
+                "-b:a",
+                "24k",
+                str(audio_path),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        video_key = ""
+    audio_key = stream_window_audio_key(workspace_id, vod_id, window_end_ms)
+    upload_file(audio_key, audio_path, "audio/opus")
+    window_meta = {
+        "audioKey": audio_key,
+        "vodStartMs": wm.vod_start_ms,
+        "vodEndMs": wm.vod_end_ms,
+        "requestedStartMs": wm.requested_start_ms,
+        "requestedEndMs": wm.requested_end_ms,
+        "method": wm.method,
+    }
+    if video_key:
+        window_meta["videoKey"] = video_key
+    decision_log(
+        "streamer",
+        "window_anchor",
+        vodId=vod_id,
+        jobId=job_id,
+        requestedStartMs=wm.requested_start_ms,
+        vodStartMs=wm.vod_start_ms,
+        deltaMs=int(wm.vod_start_ms - wm.requested_start_ms),
+        method=wm.method,
+        windowEndMs=window_end_ms,
+    )
+    return audio_key, video_key, wm.vod_start_ms, wm.vod_end_ms, window_meta
+
+
 def _maybe_complete_import_from_state(conn, vod: dict, job: dict, project_id: str, vod_id: str, post_progress) -> bool:
     """Idempotent: skip re-download when audio is already in storage."""
-    if _rolling_import_mode(vod):
+    payload = job.get("payload") or {}
+    if isinstance(payload, str):
+        payload = json.loads(payload) if payload else {}
+    if _rolling_import_mode(vod, payload):
         return False
     state = vod.get("state") or {}
     if isinstance(state, str):
         state = json.loads(state)
+    rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
+    if rolling.get("lastPulledMs") and not state.get("audioKey"):
+        return False
     if not state.get("audioKey"):
         return False
     with conn.cursor() as cur:
@@ -706,7 +829,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
         )
 
     rolling_tick = payload.get("rollingTick") is not None
-    if rolling_tick or _rolling_import_mode(vod):
+    if rolling_tick or _rolling_import_mode(vod, payload):
         from clips_worker.streamer.rolling_ingest import abort_rolling_autopull_if_stopped
 
         if abort_rolling_autopull_if_stopped(
@@ -945,6 +1068,142 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
                 )
                 return vod
 
+            window_start_ms = int(vod.get("rangeStartMs") or 0)
+            window_end_ms = int(vod.get("rangeEndMs") or 0)
+            platform = str(vod.get("platform") or "").lower()
+            prior_state = _vod_state_dict(vod)
+            growing = bool(meta_raw.get("growing_vod"))
+            rolling_window = bool(
+                _rolling_import_mode(vod, payload) or (allow_growing and growing)
+            )
+            use_hls = platform == "twitch" and window_end_ms > window_start_ms
+
+            if use_hls:
+                cache_dir = vod_import_dir(vod_id)
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                audio_key, video_key, vod_start, vod_end, wmeta = _ingest_twitch_hls_window(
+                    url=url,
+                    meta_raw=meta_raw,
+                    workspace_id=workspace_id,
+                    vod_id=vod_id,
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                    job_id=str(job["id"]),
+                    rolling_window=rolling_window,
+                    cache_dir=cache_dir,
+                )
+                from clips_worker.streamer.rolling_ingest import mark_rolling_pull_complete
+
+                mark_rolling_pull_complete(
+                    conn,
+                    vod_id,
+                    vod_end,
+                    start_ms=window_start_ms,
+                    job_id=str(job["id"]),
+                )
+                windows = dict(prior_state.get("windows") or {})
+                windows[str(window_end_ms)] = wmeta
+                state = {
+                    **prior_state,
+                    "audioKey": audio_key,
+                    "vodStartMs": vod_start,
+                    "windows": windows,
+                    "importMeta": {"tags": meta.get("tags") or []},
+                }
+                if video_key:
+                    state["windowCaptureVideoKey"] = video_key
+                    state["windowCaptureEndMs"] = window_end_ms
+                duration_ms = max(1, window_end_ms - window_start_ms)
+                from clips_worker.streamer.channel_resolve import resolve_vod_channel_fields
+
+                ch_fields = resolve_vod_channel_fields(vod, meta, url)
+                if ch_fields.get("login"):
+                    state["channelLogin"] = ch_fields["login"]
+                if ch_fields.get("display"):
+                    state["channelDisplayName"] = ch_fields["display"]
+                if _rolling_import_mode(vod, payload):
+                    _complete_rolling_window_import(
+                        conn,
+                        job=job,
+                        vod=vod,
+                        project_id=project_id,
+                        vod_id=vod_id,
+                        payload=payload,
+                        state=state,
+                        meta=meta,
+                        duration_ms=duration_ms,
+                        post_progress=post_progress,
+                        hb=hb,
+                    )
+                    cleanup_vod_import_dir(vod_id)
+                    return vod
+                if allow_growing and growing and not rolling_finalize:
+                    if duration_ms <= 0:
+                        _rolling_import_idle_done(
+                            conn,
+                            job=job,
+                            vod=vod,
+                            project_id=project_id,
+                            vod_id=vod_id,
+                            post_progress=post_progress,
+                            reason="no_audio_downloaded",
+                        )
+                        cleanup_vod_import_dir(vod_id)
+                        return vod
+                    _complete_rolling_window_import(
+                        conn,
+                        job=job,
+                        vod=vod,
+                        project_id=project_id,
+                        vod_id=vod_id,
+                        payload=payload,
+                        state=state,
+                        meta=meta,
+                        duration_ms=duration_ms,
+                        post_progress=post_progress,
+                        hb=hb,
+                        analyze_source="growing_live_import",
+                        schedule_growing_tick=True,
+                    )
+                    cleanup_vod_import_dir(vod_id)
+                    return vod
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE stream_vods
+                        SET title=%s, category=%s, "durationMs"=%s, state=%s::jsonb, "updatedAt"=NOW()
+                        WHERE id=%s
+                        """,
+                        (
+                            meta.get("title"),
+                            meta.get("category"),
+                            duration_ms,
+                            json.dumps(state),
+                            vod_id,
+                        ),
+                    )
+                from clips_worker.streamer.analyze_enqueue import enqueue_stream_analyze
+
+                enqueue_stream_analyze(
+                    conn,
+                    project_id=project_id,
+                    vod_id=vod_id,
+                    workspace_id=workspace_id,
+                    triggered_by=str(vod.get("triggeredBy") or "paste"),
+                    source="hls_window_import",
+                    range_start_ms=window_start_ms,
+                    range_end_ms=window_end_ms,
+                    audio_key=audio_key,
+                    media_start_ms=vod_start,
+                )
+                cleanup_vod_import_dir(vod_id)
+                hb.update(stage="queued", progress=25)
+                post_progress(
+                    job["id"],
+                    {"projectStatus": "QUEUED", "stage": "queued", "progress": 25, "jobStatus": "DONE"},
+                )
+                return vod
+
             staged_audio: Path | None = None
             if stream_audio_first_ingest_enabled():
                 staged_audio, _ingest_metrics = ingest_vod_audio(
@@ -981,7 +1240,7 @@ def _run_stream_import_job_inner(conn, job: dict, post_progress, payload: dict, 
             if ch_fields.get("display"):
                 state["channelDisplayName"] = ch_fields["display"]
             growing = bool(meta_raw.get("growing_vod"))
-            if _rolling_import_mode(vod):
+            if _rolling_import_mode(vod, payload):
                 _complete_rolling_window_import(
                     conn,
                     job=job,

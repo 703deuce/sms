@@ -52,18 +52,25 @@ def download_segment(
 
 
 def cut_local_segment(src: Path, dest: Path, start_s: float, end_s: float) -> None:
+    dur = max(0.05, end_s - start_s)
     subprocess.check_call(
         [
             "ffmpeg",
             "-y",
             "-ss",
             f"{start_s:.3f}",
-            "-to",
-            f"{end_s:.3f}",
             "-i",
             str(src),
-            "-c",
-            "copy",
+            "-t",
+            f"{dur:.3f}",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "18",
+            "-c:a",
+            "aac",
             str(dest),
         ],
         stdout=subprocess.DEVNULL,

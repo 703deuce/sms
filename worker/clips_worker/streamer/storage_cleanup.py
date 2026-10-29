@@ -37,6 +37,25 @@ def delete_storage_keys(keys: list[str], *, vod_id: str, reason: str) -> int:
     return freed
 
 
+def _cleanup_defer_reason(conn, vod_id: str, state: dict, project_id: str) -> str | None:
+    rolling = state.get("rolling") if isinstance(state.get("rolling"), dict) else {}
+    if rolling.get("live"):
+        return "rolling_live"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1 FROM clip_jobs
+            WHERE "projectId"=%s AND type IN ('STREAM_IMPORT','STREAM_ANALYZE','STREAM_RENDER')
+              AND status IN ('QUEUED','RUNNING')
+            LIMIT 1
+            """,
+            (project_id,),
+        )
+        if cur.fetchone():
+            return "pending_stream_jobs"
+    return None
+
+
 def purge_stream_bulky_storage(conn, vod_id: str, *, reason: str = "success") -> int:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -55,6 +74,20 @@ def purge_stream_bulky_storage(conn, vod_id: str, *, reason: str = "success") ->
     if isinstance(state, str):
         state = json.loads(state)
     project_id = row["projectId"]
+
+    defer = _cleanup_defer_reason(conn, vod_id, state, str(project_id))
+    if defer:
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "streamer",
+            "cleanup_deferred",
+            vodId=vod_id,
+            projectId=str(project_id),
+            reason=defer,
+        )
+        enqueue_stream_cleanup_job(conn, str(project_id), vod_id, delay_hours=0.5)
+        return 0
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
