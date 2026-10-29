@@ -29,6 +29,7 @@ import {
   deleteLayoutSegmentAt,
   setLayoutModeForSegmentAt,
   splitLayoutSegmentAt,
+  defaultLayoutSegments,
 } from '@/lib/clips/layout-segments'
 import { FetchJsonError } from '@/lib/client/fetch-json'
 import { patchClip } from '@/lib/clips-api'
@@ -44,8 +45,6 @@ import { wordSourceMs } from '@/lib/clips/source-words'
 import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
 import {
   legacyFromLayers,
-  legacyLayersFingerprint,
-  mappedEditsSubset,
   resolveLayers,
   type Layer,
 } from '@/lib/clips/layers'
@@ -59,7 +58,7 @@ type State = {
   edits: ClipEditsV2
   past: ClipEditsV2[]
   future: ClipEditsV2[]
-  saveState: 'saved' | 'saving' | 'dirty'
+  saveState: 'saved' | 'saving' | 'dirty' | 'error'
   producerStrip: ProducerStripState | null
 }
 
@@ -76,6 +75,7 @@ type Action =
   | { type: 'saving' }
   | { type: 'serverSync'; edits: ClipEditsV2 }
   | { type: 'needsSave' }
+  | { type: 'saveFailed' }
 
 function editsEqual(a: ClipEditsV2, b: ClipEditsV2) {
   return canonicalEditsJson(a) === canonicalEditsJson(b)
@@ -144,6 +144,8 @@ export function editorEditsReducer(state: State, action: Action): State {
       return { ...state, edits: action.edits, saveState: 'saved' }
     case 'needsSave':
       return { ...state, saveState: 'dirty' }
+    case 'saveFailed':
+      return { ...state, saveState: 'error' }
     default:
       return state
   }
@@ -306,7 +308,14 @@ export function useEditorState(
 
   const setLayoutMode = useCallback(
     (mode: ClipEditsV2['layout']['mode']) => {
-      let next: ClipEditsV2 = { ...state.edits, layout: { ...state.edits.layout, mode } }
+      let next: ClipEditsV2 = {
+        ...state.edits,
+        layout: {
+          ...state.edits.layout,
+          mode,
+          layoutSegments: defaultLayoutSegments(state.edits.trim.in, state.edits.trim.out, mode),
+        },
+      }
       const tpl = next.exportTemplate
       if (tpl?.headlineBar?.enabled && !headlineBarAllowedForLayout(mode)) {
         next = {
@@ -577,7 +586,8 @@ export function useEditorState(
         }
       }
     } catch {
-      /* keep dirty; user can retry */
+      dispatch({ type: 'saveFailed' })
+      toast.error('Could not save edits')
     } finally {
       saveInFlightRef.current = false
       const pending = savePendingRef.current
@@ -620,8 +630,7 @@ export function useEditorState(
   const setLayers = useCallback(
     (layers: Layer[]) => {
       const merged = legacyFromLayers(layers, editsRef.current)
-      const fp = legacyLayersFingerprint(mappedEditsSubset(merged))
-      setEdits({ ...merged, layersV: 3, layers, layersLegacyFp: fp })
+      setEdits({ ...merged, layersV: 3, layers })
     },
     [setEdits],
   )

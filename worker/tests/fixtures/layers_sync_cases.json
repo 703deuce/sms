@@ -1,0 +1,146 @@
+[
+  {
+    "name": "legacy_badge_off_keeps_showLogo",
+    "edits": {
+      "layersV": 3,
+      "exportTemplate": {
+        "headlineBar": { "enabled": true, "text": "HI" },
+        "platformBadge": { "enabled": false },
+        "channelLink": { "enabled": false, "url": "" },
+        "platform": "twitch"
+      },
+      "captions": { "enabled": true, "presetId": "default" },
+      "layout": { "mode": "fit_top", "shotOverrides": [] },
+      "layers": [
+        {
+          "id": "headline",
+          "type": "headline",
+          "enabled": true,
+          "z": 5,
+          "text": "HI",
+          "placement": "fit_top_band",
+          "style": {
+            "preset": "stream_yellow",
+            "textColor": "#000000",
+            "boxColor": "#FACC15",
+            "radiusPx": 0,
+            "widthPct": 100,
+            "maxLines": 4
+          }
+        },
+        {
+          "id": "badge",
+          "type": "badge",
+          "enabled": true,
+          "z": 6,
+          "platform": "twitch",
+          "handle": "2xrakai",
+          "showLabel": true,
+          "showLink": true,
+          "showLogo": true,
+          "placement": "fit_top_band"
+        }
+      ]
+    },
+    "expectBadge": { "enabled": false, "showLogo": true, "handle": "2xrakai" },
+    "expectHeadlinePreset": "stream_yellow"
+  },
+  {
+    "name": "caption_change_keeps_headline_style",
+    "edits": {
+      "layersV": 3,
+      "exportTemplate": { "headlineBar": { "enabled": true, "text": "A" }, "platform": "twitch" },
+      "captions": { "enabled": true, "presetId": "bold" },
+      "layout": { "mode": "speaker_follow", "shotOverrides": [] },
+      "layers": [
+        {
+          "id": "headline",
+          "type": "headline",
+          "enabled": true,
+          "z": 70,
+          "text": "A",
+          "placement": "export_bar",
+          "style": {
+            "preset": "export_bar_dark",
+            "textColor": "#FFFFFF",
+            "boxColor": "#000000",
+            "radiusPx": 0,
+            "widthPct": 100,
+            "maxLines": 3
+          }
+        },
+        {
+          "id": "captions",
+          "type": "captions",
+          "enabled": true,
+          "z": 20,
+          "settings": { "enabled": true, "presetId": "default" }
+        }
+      ]
+    },
+    "expectCaptionsPreset": "bold",
+    "expectHeadlinePreset": "export_bar_dark"
+  },
+  {
+    "name": "headline_text_from_legacy",
+    "edits": {
+      "layersV": 3,
+      "exportTemplate": { "headlineBar": { "enabled": true, "text": "NEW TEXT" }, "platform": "twitch" },
+      "captions": { "enabled": true },
+      "layout": { "mode": "fit_top", "shotOverrides": [] },
+      "layers": [
+        {
+          "id": "headline",
+          "type": "headline",
+          "enabled": true,
+          "z": 5,
+          "text": "OLD",
+          "placement": "fit_top_band",
+          "style": {
+            "preset": "stream_yellow",
+            "textColor": "#000000",
+            "boxColor": "#FACC15",
+            "radiusPx": 0,
+            "widthPct": 100,
+            "maxLines": 4
+          }
+        }
+      ]
+    },
+    "expectHeadlineText": "NEW TEXT",
+    "expectHeadlinePreset": "stream_yellow"
+  },
+  {
+    "name": "sticker_kept",
+    "edits": {
+      "layersV": 3,
+      "exportTemplate": { "platform": "twitch" },
+      "captions": { "enabled": true },
+      "layout": { "mode": "speaker_follow", "shotOverrides": [] },
+      "layers": [
+        {
+          "id": "sticker",
+          "type": "sticker",
+          "enabled": true,
+          "z": 85,
+          "kind": "follow_cta",
+          "text": "Follow",
+          "x": 0.5,
+          "y": 0.9,
+          "timing": "always",
+          "durationMs": 3500
+        }
+      ]
+    },
+    "expectStickerText": "Follow"
+  },
+  {
+    "name": "no_layers_v_derived",
+    "edits": {
+      "exportTemplate": { "headlineBar": { "enabled": true, "text": "X" }, "platform": "twitch" },
+      "captions": { "enabled": true },
+      "layout": { "mode": "fit_top", "shotOverrides": [] }
+    },
+    "expectFromLegacy": true
+  }
+]

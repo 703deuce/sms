@@ -17,9 +17,8 @@ import {
   type ClipGapToolSettings,
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
-import { EditorHeadlineField } from '@/components/clips/editor/editor-headline-field'
-import { LayersPanel } from '@/components/clips/editor/layers-panel'
-import type { Layer } from '@/lib/clips/layers'
+import { defaultLayoutSegments } from '@/lib/clips/layout-segments'
+import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
   { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
@@ -80,8 +79,8 @@ export function LayoutPanel({
   onOpenGapReview,
   onOpenFillerReview,
   headlinePlatform,
-  layers,
-  setLayers,
+  facecamLayout = null,
+  onOpenLayersTab,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -105,8 +104,8 @@ export function LayoutPanel({
   onSeekSource?: (sourceMs: number) => void
   onOpenGapReview?: () => void
   headlinePlatform?: 'twitch' | 'kick'
-  layers?: Layer[]
-  setLayers?: (layers: Layer[]) => void
+  facecamLayout?: FacecamLayoutState | null
+  onOpenLayersTab?: () => void
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -158,22 +157,13 @@ export function LayoutPanel({
           <p className="text-xs text-muted-foreground">Updates the preview and export framing.</p>
         </div>
       )}
-      {clipId && onEdits && setLayers && layers ? (
-        <LayersPanel
-          clipId={clipId}
-          edits={edits}
-          layers={layers}
-          setLayers={setLayers}
-          onEdits={onEdits}
-          platform={headlinePlatform}
-        />
-      ) : clipId && onEdits ? (
-        <EditorHeadlineField
-          clipId={clipId}
-          edits={edits}
-          onEdits={onEdits}
-          platform={headlinePlatform}
-        />
+      {onOpenLayersTab ? (
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+          <p className="text-muted-foreground">Headline, platform badge, and follow sticker live in Layers.</p>
+          <Button type="button" size="sm" variant="link" className="h-auto px-0" onClick={onOpenLayersTab}>
+            Open Layers
+          </Button>
+        </div>
       ) : null}
       {onOpenFillerReview ? (
         <Button type="button" size="sm" variant="outline" className="w-full gap-1.5" onClick={onOpenFillerReview}>
@@ -267,17 +257,47 @@ export function LayoutPanel({
           )}
         </div>
       )}
+      {layoutOptions.some((l) => l.id === 'facecam_stack' || l.id === 'facecam_pip') &&
+      !facecamLayout?.facecam ? (
+        <p className="text-xs text-amber-800 dark:text-amber-300" role="note">
+          Facecam stack and PiP need detected facecam boxes from the VOD. Run stream layout detection or pick another
+          layout.
+        </p>
+      ) : null}
       {layoutOptions.length > 0 ? (
       <div className="grid gap-2 sm:grid-cols-2">
         {layoutOptions.map((l) => {
           const beta = isClipLayoutBeta(l.id)
-          const disabled = l.disabled || (beta && !reframeV2Enabled)
+          const needsFacecam = l.id === 'facecam_stack' || l.id === 'facecam_pip'
+          const disabled =
+            l.disabled || (beta && !reframeV2Enabled) || (needsFacecam && !facecamLayout?.facecam)
           return (
           <button
             key={l.id}
             type="button"
             disabled={disabled}
-            onClick={() => onMode(l.id)}
+            onClick={() => {
+              if (disabled) return
+              if (onEdits) {
+                const layout = {
+                  ...edits.layout,
+                  mode: l.id,
+                  layoutSegments: defaultLayoutSegments(edits.trim.in, edits.trim.out, l.id),
+                }
+                if (needsFacecam && facecamLayout?.facecam) {
+                  layout.facecam = {
+                    box: facecamLayout.facecam,
+                    gameplay: facecamLayout.gameplay ?? undefined,
+                    split: facecamLayout.split ?? 0.4,
+                    position: facecamLayout.facecamPosition ?? 'top',
+                    pipCorner: edits.layout.facecam?.pipCorner ?? 'BR',
+                  }
+                }
+                onEdits({ ...edits, layout })
+              } else {
+                onMode(l.id)
+              }
+            }}
             className={`rounded-lg border p-3 text-left ${
               edits.layout.mode === l.id ? 'border-primary ring-1 ring-primary' : 'border-border'
             } ${disabled ? 'opacity-50' : ''}`}

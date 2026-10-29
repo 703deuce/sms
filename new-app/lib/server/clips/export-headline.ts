@@ -118,6 +118,7 @@ export async function generateExportHeadline(opts: {
   edits: ClipEditsV2
   aiMeta?: Record<string, unknown> | null
 }): Promise<{ headline: string; generations: number; exportTemplate: ClipExportTemplate }> {
+  const t0 = Date.now()
   const streamCtx = await loadStreamExportTemplateContext(opts.projectId)
   const tpl = mergeStreamExportTemplate((opts.edits.exportTemplate || {}) as ClipExportTemplate, streamCtx)
   const used = tpl.headlineGenerations ?? 0
@@ -188,6 +189,8 @@ export async function generateExportHeadline(opts: {
     },
     streamCtx,
   )
+
+  console.info('[clipper:headline] gen_ms', { clipId: opts.clipId, ms: Date.now() - t0 })
 
   return { headline, generations: nextGen, exportTemplate }
 }

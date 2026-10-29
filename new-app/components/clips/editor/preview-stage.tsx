@@ -20,7 +20,7 @@ import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
 import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
-import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
+import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n))
@@ -155,6 +155,12 @@ export function PreviewStage({
     setCanPlay(false)
     v.src = videoUrl
     if (b && (cropPreview || letterboxPreview)) b.src = videoUrl
+    wrapRef.current?.querySelectorAll('video').forEach((el) => {
+      if (el !== v && el !== b) {
+        el.src = videoUrl
+        el.muted = true
+      }
+    })
     v.currentTime = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
   }, [videoUrl, edits.trim.in, cropPreview, letterboxPreview, mediaOffsetMs])
 
@@ -173,6 +179,11 @@ export function PreviewStage({
         if (blur && Math.abs(blur.currentTime - v.currentTime) > 0.05) {
           blur.currentTime = v.currentTime
         }
+        wrapRef.current?.querySelectorAll('video').forEach((el) => {
+          if (el !== v && el !== blur && Math.abs(el.currentTime - v.currentTime) > 0.05) {
+            el.currentTime = v.currentTime
+          }
+        })
         if (!v.paused) {
           const stepped = applyPlaybackTime(src, playbackEdits)
           if (Math.abs(stepped.sourceMs - src) > 5) {
@@ -251,6 +262,23 @@ export function PreviewStage({
   }, [])
 
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
+  const previewOutDurMs = useMemo(() => outputDurationFromEdits(previewEdits), [previewEdits])
+  const facecamBox = edits.layout.facecam?.box
+  const facecamGameplay = edits.layout.facecam?.gameplay
+  const facecamStackPreview =
+    Boolean(videoUrl) &&
+    !compositePreview &&
+    layoutMode === 'facecam_stack' &&
+    facecamBox &&
+    !cropPreview &&
+    !letterboxPreview
+  const facecamPipPreview =
+    Boolean(videoUrl) &&
+    !compositePreview &&
+    layoutMode === 'facecam_pip' &&
+    facecamBox &&
+    !cropPreview &&
+    !letterboxPreview
   const captionWords = useMemo(() => {
     if (previewWords?.length) return previewWords.map((w) => ({
       ...w,
@@ -326,6 +354,70 @@ export function PreviewStage({
               onPause={() => setPlaying(false)}
             />
           </>
+        ) : facecamStackPreview && facecamBox ? (
+          (() => {
+            const split = edits.layout.facecam?.split ?? 0.4
+            const position = edits.layout.facecam?.position ?? 'top'
+            const { faceFrac, gameFrac, faceFirst } = stackPanelStyles(split, position)
+            const gameBox = facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 }
+            const panels = faceFirst
+              ? [
+                  { box: facecamBox, h: `${faceFrac * 100}%` },
+                  { box: gameBox, h: `${gameFrac * 100}%` },
+                ]
+              : [
+                  { box: gameBox, h: `${gameFrac * 100}%` },
+                  { box: facecamBox, h: `${faceFrac * 100}%` },
+                ]
+            return (
+              <div className="flex size-full flex-col overflow-hidden">
+                {panels.map((panel, idx) => (
+                  <div key={idx} className="relative w-full overflow-hidden" style={{ height: panel.h }}>
+                    <video
+                      ref={idx === (faceFirst ? 1 : 0) ? videoRefInner : undefined}
+                      className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                      style={coverBoxStyle(panel.box)}
+                      playsInline
+                      poster={posterUrl ?? undefined}
+                      onCanPlay={() => setCanPlay(true)}
+                      onPlay={() => setPlaying(true)}
+                      onPause={() => setPlaying(false)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )
+          })()
+        ) : facecamPipPreview && facecamBox ? (
+          <div className="relative size-full overflow-hidden">
+            <video
+              ref={videoRefInner}
+              className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+              style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
+              playsInline
+              poster={posterUrl ?? undefined}
+              onCanPlay={() => setCanPlay(true)}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+            />
+            <div
+              className="absolute z-[2] overflow-hidden rounded-md ring-2 ring-white/80"
+              style={{
+                width: '28%',
+                height: '22%',
+                right: '4%',
+                bottom: '12%',
+              }}
+            >
+              <video
+                className="max-w-none"
+                style={coverBoxStyle(facecamBox)}
+                playsInline
+                muted
+                aria-hidden
+              />
+            </div>
+          </div>
         ) : cropPreview ? (
           <>
             <video
@@ -410,6 +502,8 @@ export function PreviewStage({
           boxHeight={box.h}
           channelDisplay={channelDisplay}
           chatPreviewEnabled={chatPreviewEnabled}
+          outputMs={captionTimeSec * 1000}
+          outputDurationMs={previewOutDurMs}
         />
         ) : null}
       </div>

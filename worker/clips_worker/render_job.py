@@ -184,6 +184,22 @@ def upload_text(object_key: str, body: str, content_type: str = "text/plain") ->
 
 
 def load_source_words(ctx: dict, work_dir: Path) -> list[dict]:
+    start_ms = int(ctx.get("startMs") or 0)
+    end_ms = int(ctx.get("endMs") or start_ms)
+
+    def _overlaps_clip(words: list[dict]) -> bool:
+        start_s = start_ms / 1000.0
+        end_s = end_ms / 1000.0
+        for w in words:
+            try:
+                ws = float(w.get("s", 0))
+                we = float(w.get("e", ws))
+            except (TypeError, ValueError):
+                continue
+            if we > start_s and ws < end_s:
+                return True
+        return False
+
     words: list[dict] = []
     if ctx.get("transcriptKey"):
         try:
@@ -197,6 +213,9 @@ def load_source_words(ctx: dict, work_dir: Path) -> list[dict]:
         if isinstance(tw, str):
             tw = json.loads(tw)
         words = list(tw) if isinstance(tw, list) else []
+    if words and not _overlaps_clip(words):
+        print("[clipper:words] words_fallback reason=no_overlap", flush=True)
+        words = []
     if not words:
         clip_id = ctx["clipId"]
         workspace_id = ctx["workspaceId"]
@@ -207,6 +226,7 @@ def load_source_words(ctx: dict, work_dir: Path) -> list[dict]:
         clip_words = json.loads(p.read_text())
         start = int(ctx["startMs"])
         words = [{**w, "s": w["s"] + start / 1000.0, "e": w["e"] + start / 1000.0} for w in clip_words]
+        print("[clipper:words] words_fallback source=clip_words", flush=True)
     out = []
     for pos, w in enumerate(words):
         wi = w.get("i", w.get("idx", pos))

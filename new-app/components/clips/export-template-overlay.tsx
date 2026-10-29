@@ -7,7 +7,8 @@ import {
   wrapHeadlineDisplayLines,
 } from '@/lib/clips/export-template'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { resolveLayers, type BadgeLayer, type StickerLayer } from '@/lib/clips/layers'
+import { resolveLayers, type BadgeLayer, type HeadlineLayer, type StickerLayer } from '@/lib/clips/layers'
+import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
 import { overlayLayout, STREAM_HEADLINE_TOP } from '@/lib/clips/stream-overlay-layout'
 import { PlatformBadgePreview } from '@/components/clips/editor/platform-badge'
 import { FollowStickerPreview } from '@/components/clips/editor/follow-sticker'
@@ -52,6 +53,8 @@ export function ExportTemplateOverlay({
   burnedIn = false,
   channelDisplay,
   chatPreviewEnabled = false,
+  outputMs = 0,
+  outputDurationMs = 0,
 }: {
   edits: ClipEditsV2
   boxWidth: number
@@ -59,6 +62,8 @@ export function ExportTemplateOverlay({
   burnedIn?: boolean
   channelDisplay?: string | null
   chatPreviewEnabled?: boolean
+  outputMs?: number
+  outputDurationMs?: number
 }) {
   if (boxWidth <= 0 || boxHeight <= 0) return null
   if (burnedIn) return null
@@ -75,6 +80,8 @@ export function ExportTemplateOverlay({
     (l): l is StickerLayer => l.type === 'sticker' && l.kind === 'follow_cta' && l.enabled,
   )
   const useFitTop = layoutMode === 'fit_top'
+  const headlineLayer = layers.find((l): l is HeadlineLayer => l.id === 'headline' && l.type === 'headline')
+  const headlineStyle = headlineLayer?.style ?? headlineStyleForPreset(useFitTop ? 'stream_white_box' : 'export_bar')
   const headlineOn = Boolean(
     tpl?.headlineBar?.enabled && (tpl.headlineBar.text?.trim() || tpl.suggestedHeadline),
   )
@@ -110,12 +117,15 @@ export function ExportTemplateOverlay({
       <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
         {headlineOn ? (
           <div
-            className="absolute inset-x-0 bg-white px-1 text-center font-black leading-[0.95] text-black"
+            className="absolute inset-x-0 px-1 text-center font-black leading-[0.95]"
             style={{
               top: lay.headlineTop * sy,
               height: lay.headlineH * sy,
               fontSize: fontPx,
               fontFamily: 'Anton, \"Bebas Neue\", Impact, sans-serif',
+              color: headlineStyle.textColor,
+              backgroundColor: headlineStyle.boxColor,
+              borderRadius: headlineStyle.radiusPx,
             }}
           >
             <div className="flex h-full flex-col items-center justify-center gap-0">
@@ -147,6 +157,11 @@ export function ExportTemplateOverlay({
             platform={stickerLayer.platform}
             x={stickerLayer.x}
             y={stickerLayer.y}
+            anchor={stickerLayer.anchor}
+            timing={stickerLayer.timing}
+            durationMs={stickerLayer.durationMs}
+            outputMs={outputMs}
+            totalMs={outputDurationMs}
             boxWidth={boxWidth}
             boxHeight={boxHeight}
           />
@@ -164,8 +179,15 @@ export function ExportTemplateOverlay({
     <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden">
       {headlineOn ? (
         <div
-          className="absolute inset-x-0 bg-white px-2 text-center font-bold leading-tight text-black"
-          style={{ top: headlineTop, height: barH, fontSize: Math.max(9, 11 * scaleX) }}
+          className="absolute inset-x-0 px-2 text-center font-bold leading-tight"
+          style={{
+            top: headlineTop,
+            height: barH,
+            fontSize: Math.max(9, 11 * scaleX),
+            color: headlineStyle.textColor,
+            backgroundColor: headlineStyle.boxColor,
+            borderRadius: headlineStyle.radiusPx,
+          }}
         >
           <div className="flex h-full flex-col items-center justify-center gap-0 leading-[1.1]">
             {lines.map((line) => (

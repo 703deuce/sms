@@ -31,11 +31,14 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       clip.edits,
       clip.projectId,
     )
+    const fresh = await getClipForWorkspace(workspaceId, clipId)
     return NextResponse.json({
       data: {
         headline: result.headline,
         generations: result.generations,
         exportTemplate: saved.exportTemplate,
+        updatedAt: fresh?.updatedAt?.toISOString?.() ?? fresh?.updatedAt,
+        editsSaveVersion: fresh?.editsSaveVersion ?? clip.editsSaveVersion,
       },
     })
   } catch (e) {

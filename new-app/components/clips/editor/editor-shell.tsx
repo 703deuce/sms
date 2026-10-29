@@ -42,7 +42,10 @@ import { StudioSoundPreview } from '@/components/script-editor/studio-sound-prev
 import { DEFAULT_STUDIO_SOUND_MIX, normalizeAudioEdits } from '@/lib/clips/audio'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
+import { LayersPanel } from '@/components/clips/editor/layers-panel'
+import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
+import { templateFromEdits } from '@/lib/clips/layers-template'
 import { clipStyleSettingsFromEdits, type BrandTemplateSettings } from '@/lib/clips/brand'
 import { saveClipBrandTemplate } from '@/lib/clips-api'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -84,6 +87,7 @@ export function EditorShell({
   reframeV2Enabled = false,
   vodChat = null,
   projectStatus = null,
+  facecamLayout = null,
 }: {
   projectId: string
   projectTitle?: string
@@ -110,6 +114,7 @@ export function EditorShell({
     chatMeta?: VodChatMeta | null
   } | null
   projectStatus?: string | null
+  facecamLayout?: FacecamLayoutState | null
 }) {
   const [title, setTitle] = useState(initialTitle)
   useSetBreadcrumbTitle('project', projectTitle)
@@ -131,6 +136,7 @@ export function EditorShell({
       setMobilePanelOpen(true)
     }
   }, [])
+  const openLayersTab = useCallback(() => selectPanel('layers'), [selectPanel])
 
   useEffect(() => {
     if (!EDITOR_RAIL_ITEMS.some((item) => item.id === panel)) {
@@ -173,6 +179,7 @@ export function EditorShell({
     patchStudioSound,
     flushSave,
     syncServerUpdatedAt,
+    syncEditsSaveVersion,
     splitLayoutAtSource,
     cutSectionAtSource,
     setLayoutModeAtSource,
@@ -330,7 +337,14 @@ export function EditorShell({
   }, [enqueueStudioSound])
 
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
+  const [brandTemplates, setBrandTemplates] = useState<{ id: string; name: string; settings: unknown }[]>([])
   const outDur = editorPreviewDurationMs(edits, editorWords)
+
+  useEffect(() => {
+    void clipsFetch<{ items: { id: string; name: string; settings: unknown }[] }>('/api/clips/brand/templates')
+      .then((data) => setBrandTemplates(data.items ?? []))
+      .catch(() => setBrandTemplates([]))
+  }, [])
   useAudioMix({
     videoRef,
     edits,
@@ -353,6 +367,43 @@ export function EditorShell({
       .then((d) => setBrandLogoUrl(d.url))
       .catch(() => setBrandLogoUrl(null))
   }, [edits.brand])
+
+  const saveLayersBrandTemplate = useCallback(async () => {
+    const name = window.prompt('Brand template name')
+    if (!name?.trim()) return
+    try {
+      const logoKey = (edits.brand as { logoKey?: string } | undefined)?.logoKey ?? null
+      await saveClipBrandTemplate({
+        name: name.trim(),
+        settings: {
+          ...clipStyleSettingsFromEdits(edits),
+          templateV3: templateFromEdits(edits, name.trim()),
+        },
+        logoKey,
+      })
+      toast.success('Brand template saved')
+      void clipsFetch<{ items: { id: string; name: string; settings: unknown }[] }>('/api/clips/brand/templates')
+        .then((data) => setBrandTemplates(data.items ?? []))
+        .catch(() => {})
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed')
+    }
+  }, [edits])
+
+  const applyBrandTemplateById = useCallback(
+    (templateId: string) => {
+      const row = brandTemplates.find((t) => t.id === templateId)
+      if (!row) return
+      setEdits(
+        applyBrandTemplateToEdits(edits, {
+          id: row.id,
+          settings: row.settings as BrandTemplateSettings,
+        }),
+      )
+      toast.success('Template applied')
+    },
+    [brandTemplates, edits, setEdits],
+  )
 
   const saveClipTemplate = useCallback(async () => {
     const name = window.prompt('Clip template name (captions + layout + brand kit)')
@@ -594,9 +645,31 @@ export function EditorShell({
                 ? 'twitch'
                 : undefined
           }
-          layers={layers}
-          setLayers={setLayers}
+          facecamLayout={facecamLayout}
+          onOpenLayersTab={openLayersTab}
         />
+        </EditorPanelErrorBoundary>
+      </div>
+      <div className={panel === 'layers' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'layers'}>
+        <EditorPanelErrorBoundary label="Layers">
+          <LayersPanel
+            clipId={clipId}
+            edits={edits}
+            layers={layers}
+            setLayers={setLayers}
+            onEdits={setEdits}
+            platform={
+              streamerSide?.platform === 'kick'
+                ? 'kick'
+                : streamerSide?.platform === 'twitch'
+                  ? 'twitch'
+                  : undefined
+            }
+            brandTemplates={brandTemplates}
+            onApplyTemplate={applyBrandTemplateById}
+            onSaveTemplate={saveLayersBrandTemplate}
+            onSyncEditsSaveVersion={syncEditsSaveVersion}
+          />
         </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'captions' ? undefined : 'hidden'} aria-hidden={panel !== 'captions'}>
@@ -646,6 +719,9 @@ export function EditorShell({
           onUndo={undo}
           onRedo={redo}
           onExport={() => setExportOpen(true)}
+          onRetrySave={() => {
+            void flushSave()
+          }}
         />
       <ClipFillerReview
         clipId={clipId}
@@ -868,7 +944,11 @@ export function EditorShell({
         onAspectChange={(aspect) => setEdits({ ...edits, aspectRatio: aspect })}
         onBeforeExport={() => flushSave()}
         words={editorWords}
-        onPatchEdits={(patch) => setEdits({ ...edits, ...patch })}
+        onEdits={setEdits}
+        onOpenLayersTab={() => {
+          setExportOpen(false)
+          openLayersTab()
+        }}
         onSilenceTrimChange={(enabled) =>
           setEdits({
             ...edits,

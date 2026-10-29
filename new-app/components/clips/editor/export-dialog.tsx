@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { can } from '@/lib/billing/entitlements'
-import { clipsFetch, exportClipWithOptions, getRenderStatus, patchClip } from '@/lib/clips-api'
+import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
 import { exportRequestMatchesClipPreview } from '@/lib/clips/export-preview-reuse'
 import {
   EXPORT_PLATFORM_IDS,
@@ -42,7 +42,7 @@ import {
   normalizeExportSfxMode,
   type ExportSfxMode,
 } from '@/lib/clips/export-sfx'
-import { ExportLayoutPicker } from '@/components/clips/editor/export-layout-picker'
+import { resolveLayers } from '@/lib/clips/layers'
 
 type DubRow = { id: string; targetLang: string; status: string; audioUrl: string | null }
 
@@ -63,7 +63,8 @@ export function ExportDialog({
   chatAvailable = false,
   chatToggleHint,
   words = [],
-  onPatchEdits,
+  onEdits,
+  onOpenLayersTab,
   onSilenceTrimChange,
 }: {
   clipId: string
@@ -80,7 +81,8 @@ export function ExportDialog({
   chatAvailable?: boolean
   chatToggleHint?: string
   words?: SourceWord[]
-  onPatchEdits?: (patch: Partial<ClipEditsV2>) => void
+  onEdits?: (edits: ClipEditsV2) => void
+  onOpenLayersTab?: () => void
   onSilenceTrimChange?: (enabled: boolean) => void
   open: boolean
   onClose: () => void
@@ -126,7 +128,19 @@ export function ExportDialog({
       setAspect(prefs.defaultAspect ?? edits.aspectRatio ?? '9:16')
       if (prefs.defaultResolution) setResolution(prefs.defaultResolution)
       if (edits.exportTemplate) {
-        setExportTemplate(applyExportPreferencesToTemplate(edits.exportTemplate, prefs))
+        const url =
+          edits.exportTemplate.channelLink?.url?.trim() ||
+          defaultChannelUrl?.trim() ||
+          edits.exportTemplate.channelLink?.url ||
+          ''
+        setExportTemplate({
+          ...edits.exportTemplate,
+          channelLink: {
+            ...edits.exportTemplate.channelLink,
+            enabled: edits.exportTemplate.channelLink?.enabled,
+            url,
+          },
+        })
         return
       }
       if (platform && (platform === 'kick' || platform === 'twitch')) {
@@ -240,7 +254,7 @@ export function ExportDialog({
             },
           }
         : tpl
-      const exportEdits = {
+      const exportEdits: ClipEditsV2 = {
         ...edits,
         silenceTrim: {
           ...edits.silenceTrim,
@@ -256,7 +270,7 @@ export function ExportDialog({
             }
           : formattedTpl,
       }
-      await patchClip(clipId, { edits: { exportTemplate: exportEdits.exportTemplate } })
+      onEdits?.(exportEdits)
       logEditorDecision('export_request', {
         clipId,
         resolution: exportPlatform !== 'none' ? EXPORT_PLATFORM_PRESETS[exportPlatform].resolution : resolution,
@@ -309,6 +323,10 @@ export function ExportDialog({
     })
     return exportPolishLintWarnings(items)
   }, [edits, exportPlatform])
+
+  const layerSummary = useMemo(() => resolveLayers(edits), [edits])
+  const headlineLayer = layerSummary.find((l) => l.id === 'headline' && l.type === 'headline')
+  const stickerLayer = layerSummary.find((l) => l.type === 'sticker' && l.kind === 'follow_cta')
 
   if (!open) return null
 
@@ -495,6 +513,15 @@ export function ExportDialog({
               const on = Boolean(c)
               setRemoveDeadAir(on)
               onSilenceTrimChange?.(on)
+              onEdits?.({
+                ...edits,
+                silenceTrim: {
+                  ...edits.silenceTrim,
+                  enabled: on,
+                  minGapMs: edits.silenceTrim?.minGapMs ?? 350,
+                  keepMs: edits.silenceTrim?.keepMs ?? 120,
+                },
+              })
               persistExportDialogPreferences({ removeDeadAir: on })
             }}
           />
@@ -522,6 +549,25 @@ export function ExportDialog({
             Music and sound effects generated with ElevenLabs
           </p>
         )}
+        <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-xs">
+          <p className="font-medium text-foreground">Layers (v3)</p>
+          <ul className="mt-1 space-y-0.5 text-muted-foreground">
+            <li>
+              Headline style:{' '}
+              {headlineLayer && headlineLayer.type === 'headline'
+                ? headlineLayer.style.preset.replace(/_/g, ' ')
+                : 'default'}
+            </li>
+            {stickerLayer && stickerLayer.type === 'sticker' ? (
+              <li>Follow sticker: {stickerLayer.enabled ? stickerLayer.text : 'off'}</li>
+            ) : null}
+          </ul>
+          {onOpenLayersTab ? (
+            <Button type="button" size="sm" variant="link" className="mt-1 h-auto px-0" onClick={onOpenLayersTab}>
+              Edit in Layers
+            </Button>
+          ) : null}
+        </div>
         <ExportTemplateSection
           clipId={clipId}
           edits={{ ...edits, exportTemplate }}
@@ -531,7 +577,7 @@ export function ExportDialog({
           exportPlatformId={exportPlatform !== 'none' ? exportPlatform : undefined}
           onChange={(tpl) => {
             setExportTemplate(tpl)
-            onPatchEdits?.({ exportTemplate: tpl })
+            onEdits?.({ ...edits, exportTemplate: tpl })
             persistExportDialogPreferences({
               headlineBarEnabled: Boolean(tpl.headlineBar?.enabled),
               platformBadgeEnabled: Boolean(tpl.platformBadge?.enabled),
@@ -542,9 +588,7 @@ export function ExportDialog({
           onPatchEdits={(patch) => {
             if (patch.layout?.mode) onLayoutModeChange?.(patch.layout.mode)
             if (patch.layout || patch.chatOverlay) {
-              void patchClip(clipId, { edits: patch }).catch(() => {
-                toast.error('Could not save clip settings')
-              })
+              onEdits?.({ ...edits, ...patch })
             }
           }}
           chatAvailable={chatAvailable}

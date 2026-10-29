@@ -39,11 +39,26 @@
       "boxColor": "#FFFFFF",
       "radiusPx": 0
     },
+    "stream_yellow": {
+      "textColor": "#000000",
+      "boxColor": "#FACC15",
+      "radiusPx": 0
+    },
     "export_bar": {
       "textColor": "#000000",
       "boxColor": "#FFFFFF",
       "radiusPx": 0
+    },
+    "export_bar_dark": {
+      "textColor": "#FFFFFF",
+      "boxColor": "#000000",
+      "radiusPx": 0
     }
+  },
+  "stickerRect": {
+    "wFrac": 0.22,
+    "hFrac": 0.04,
+    "marginPx": 16
   },
   "badgeRect": {
     "fitTopBand": {

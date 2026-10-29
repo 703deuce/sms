@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Languages,
   LayoutPanelTop,
+  Layers,
   Music2,
   Palette,
   Sparkles,
@@ -20,6 +21,7 @@ export type EditorPanelId =
   | 'producer'
   | 'transcript'
   | 'layout'
+  | 'layers'
   | 'captions'
   | 'broll'
   | 'audio'
@@ -28,7 +30,7 @@ export type EditorPanelId =
   | 'brand'
 
 /** Clip editor launch rail — transcript, pauses/layout, captions, audio mix (no AI producer / B-roll / dub). */
-const CLIP_EDITOR_RAIL_IDS: EditorPanelId[] = ['transcript', 'layout', 'captions', 'audio']
+const CLIP_EDITOR_RAIL_IDS: EditorPanelId[] = ['transcript', 'layout', 'layers', 'captions', 'audio']
 
 const ALL_EDITOR_RAIL_ITEMS: {
   id: EditorPanelId
@@ -39,6 +41,7 @@ const ALL_EDITOR_RAIL_ITEMS: {
   { id: 'producer', label: 'AI Producer', icon: Sparkles, tone: 'text-lane-ai' },
   { id: 'transcript', label: 'Script', icon: FileText },
   { id: 'layout', label: 'Polish', icon: LayoutPanelTop, tone: 'text-lane-broll' },
+  { id: 'layers', label: 'Layers', icon: Layers, tone: 'text-lane-brand' },
   { id: 'captions', label: 'Captions', icon: Captions, tone: 'text-lane-caption' },
   { id: 'broll', label: 'B-roll', icon: Clapperboard, tone: 'text-lane-broll' },
   { id: 'audio', label: 'Audio', icon: Music2, tone: 'text-lane-music' },

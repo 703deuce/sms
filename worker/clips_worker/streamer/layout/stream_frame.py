@@ -96,14 +96,18 @@ def _fit_top_base(
     play_h: int,
     vid_y: int,
     h_box: int,
+    box_color: str = "white",
 ) -> None:
+    from clips_worker.overlay_geometry import _hex_ffmpeg_color
+
+    fill = _hex_ffmpeg_color(box_color, fallback="white")
     fc = (
         f"[0:v]scale={play_w}:{play_h}:force_original_aspect_ratio=increase,"
         f"crop={play_w}:{play_h},boxblur=20:2,eq=brightness=-0.08[bgfull];"
         f"[0:v]scale={play_w}:-2[fg];"
         f"color=c=black:s={play_w}x{play_h}:d={dur:.3f}[base];"
         f"[base][bgfull]overlay=0:0[bg0];"
-        f"[bg0]drawbox=x=0:y={lay['headline_top']}:w={play_w}:h={h_box}:color=white:t=fill[bg1];"
+        f"[bg0]drawbox=x=0:y={lay['headline_top']}:w={play_w}:h={h_box}:color={fill}:t=fill[bg1];"
         f"[bg1][fg]overlay=0:{vid_y}[v1]"
     )
     subprocess.check_call(
@@ -241,7 +245,19 @@ def render_fit_top_stream(
         channel = url.rstrip("/").split("/")[-1].upper()[:32] if url else ""
 
     stage = dest.parent / "fit_top_stage.mp4"
-    _fit_top_base(src, stage, lay=lay, dur=dur, play_w=play_w, play_h=play_h, vid_y=vid_y, h_box=h_box)
+    style = _headline_style_from_edits(edits)
+    box_color = str(style.get("boxColor") or "#FFFFFF")
+    _fit_top_base(
+        src,
+        stage,
+        lay=lay,
+        dur=dur,
+        play_w=play_w,
+        play_h=play_h,
+        vid_y=vid_y,
+        h_box=h_box,
+        box_color=box_color,
+    )
     current = stage
     _fit_top_band_layers(
         current,

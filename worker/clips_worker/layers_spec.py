@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 from typing import Any
 from urllib.parse import urlparse
@@ -280,33 +279,96 @@ def _validate(layers_raw: list) -> list[dict] | None:
     return parsed if parsed else None
 
 
-def _legacy_layers_fingerprint(edits: dict) -> str:
-    body = json.dumps(mapped_subset(edits), separators=(",", ":"), sort_keys=True)
-    return hashlib.sha256(body.encode()).hexdigest()[:16]
+def _layers_canonical(layers: list) -> str:
+    return json.dumps(layers, separators=(",", ":"), sort_keys=True)
+
+
+def _count_layer_sync_changes(before: list, after: list) -> int:
+    before_by_id = {
+        layer.get("id"): layer for layer in before if isinstance(layer, dict) and layer.get("id")
+    }
+    changed = 0
+    for layer in after:
+        if not isinstance(layer, dict) or not layer.get("id"):
+            changed += 1
+            continue
+        prev = before_by_id.get(layer["id"])
+        if prev is None or _layers_canonical([prev]) != _layers_canonical([layer]):
+            changed += 1
+    for lid in before_by_id:
+        if not any(isinstance(layer, dict) and layer.get("id") == lid for layer in after):
+            changed += 1
+    return changed
+
+
+def _badge_layer_enabled(layer: dict) -> bool:
+    return bool(layer.get("showLabel") or layer.get("showLink"))
+
+
+def badge_sprite_active(layer: dict) -> bool:
+    return bool(layer.get("showLabel") or layer.get("showLink") or layer.get("showLogo"))
+
+
+def _merge_sync_layer(stored: dict | None, fresh: dict) -> dict:
+    out = copy.deepcopy(fresh)
+    if not stored:
+        if out.get("type") == "badge":
+            out["enabled"] = _badge_layer_enabled(out)
+        return out
+    if out.get("type") == "headline" and isinstance(stored.get("style"), dict):
+        out["style"] = copy.deepcopy(stored["style"])
+    if out.get("type") == "badge":
+        out["showLogo"] = bool(stored.get("showLogo"))
+        if stored.get("handle"):
+            out["handle"] = stored["handle"]
+        out["enabled"] = _badge_layer_enabled(out)
+    return out
+
+
+def _orphan_badge_from_stored(stored: dict, edits: dict) -> dict:
+    out = copy.deepcopy(stored)
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    pb = tpl.get("platformBadge") if isinstance(tpl.get("platformBadge"), dict) else {}
+    cl = tpl.get("channelLink") if isinstance(tpl.get("channelLink"), dict) else {}
+    out["showLabel"] = bool(pb.get("enabled"))
+    out["showLink"] = bool(cl.get("enabled"))
+    out["enabled"] = _badge_layer_enabled(out)
+    return out
 
 
 def sync_layers_from_legacy(edits: dict) -> dict:
-    """Refresh stored v3 layers when mapped legacy fields drift; preserve sticker extras."""
+    """Merge mapped legacy fields into stored v3 layers; preserve headline style, badge logo, stickers."""
     if edits.get("layersV") != 3:
         return edits
-    fp = _legacy_layers_fingerprint(edits)
-    stored_fp = edits.get("layersLegacyFp")
-    layers_raw = edits.get("layers")
-    if stored_fp == fp and isinstance(layers_raw, list) and _validate(layers_raw):
-        return edits
+    layers_raw = edits.get("layers") if isinstance(edits.get("layers"), list) else []
+    stored_map = {
+        layer["id"]: layer
+        for layer in layers_raw
+        if isinstance(layer, dict) and layer.get("id")
+    }
     fresh = layers_from_legacy(edits)
+    merged: list[dict] = []
+    fresh_ids: set[str] = set()
+    for layer in fresh:
+        lid = str(layer.get("id") or "")
+        fresh_ids.add(lid)
+        merged.append(_merge_sync_layer(stored_map.get(lid), layer))
+    stored_badge = stored_map.get("badge")
+    if stored_badge and "badge" not in fresh_ids and badge_sprite_active(stored_badge):
+        merged.append(_orphan_badge_from_stored(stored_badge, edits))
     extras = [
-        layer
-        for layer in (layers_raw or [])
+        copy.deepcopy(layer)
+        for layer in layers_raw
         if isinstance(layer, dict) and layer.get("type") in _V3_EXTRA_LAYER_TYPES
     ]
-    merged = fresh + extras
+    merged.extend(extras)
     merged.sort(key=lambda x: int(x.get("z") or 0))
-    print(
-        f"[clipper:layers] sync_from_legacy stale={stored_fp != fp} extras={len(extras)}",
-        flush=True,
-    )
-    return {**edits, "layers": merged, "layersLegacyFp": fp}
+    changed = _count_layer_sync_changes(layers_raw, merged)
+    if changed:
+        print(f"[clipper:layers] synced changed={changed}", flush=True)
+    out = {**edits, "layers": merged}
+    out.pop("layersLegacyFp", None)
+    return out
 
 
 def v3_has_extras(layers: list[dict]) -> bool:
@@ -315,13 +377,14 @@ def v3_has_extras(layers: list[dict]) -> bool:
             continue
         if layer.get("type") in _V3_EXTRA_LAYER_TYPES:
             return True
-        if layer.get("type") == "badge" and layer.get("showLogo"):
+        if layer.get("type") == "badge" and badge_sprite_active(layer):
             return True
     return False
 
 
 def resolve_layers(edits: dict) -> list[dict]:
-    edits = sync_layers_from_legacy(edits)
+    if edits.get("layersV") == 3:
+        edits = sync_layers_from_legacy(edits)
     if edits.get("layersV") == 3 and isinstance(edits.get("layers"), list):
         parsed = _validate(edits["layers"])
         if parsed is not None:

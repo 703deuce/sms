@@ -125,7 +125,6 @@ def headline_ass_content(
 
     preset_style = headline_style_for_preset("stream_white_box" if fit_top else "export_bar")
     primary = _ass_color(text_color or preset_style.get("textColor") or "#000000")
-    _ = box_color or preset_style.get("boxColor")
     display = prepare_headline_display(headline)
     if fit_top:
         line_count = max(1, display.count(r"\N") + 1)

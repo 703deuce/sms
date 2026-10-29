@@ -41,8 +41,11 @@ _DEFAULTS: dict = {
     },
     "headlineStyles": {
         "stream_white_box": {"textColor": "#000000", "boxColor": "#FFFFFF", "radiusPx": 0},
+        "stream_yellow": {"textColor": "#000000", "boxColor": "#FACC15", "radiusPx": 0},
         "export_bar": {"textColor": "#000000", "boxColor": "#FFFFFF", "radiusPx": 0},
+        "export_bar_dark": {"textColor": "#FFFFFF", "boxColor": "#000000", "radiusPx": 0},
     },
+    "stickerRect": {"wFrac": 0.22, "hFrac": 0.04, "marginPx": 16},
     "badgeRect": {
         "fitTopBand": {
             "widthPx": 200,
@@ -118,3 +121,45 @@ def badge_rect(
     inset_y = _scale_px(int(GEOM["exportBar"].get("sourceInsetY") or 12), play_h)
     y = video_y + video_h - h - inset_y if video_h else play_h - h - inset_y
     return {"x": inset, "y": y, "w": w, "h": h}
+
+
+def _hex_ffmpeg_color(color: str, *, fallback: str = "white") -> str:
+    c = (color or "").strip()
+    if c.startswith("#") and len(c) >= 7:
+        return c
+    if c:
+        return c
+    return fallback
+
+
+def sticker_rect(
+    play_w: int,
+    play_h: int,
+    x_pct: float,
+    y_pct: float,
+    *,
+    anchor: str | None = None,
+) -> dict[str, int]:
+    """Center-anchored sticker rect in pixel space (parity with editor follow sticker)."""
+    spec = GEOM.get("stickerRect") or _DEFAULTS.get("stickerRect") or {}
+    w_frac = float(spec.get("wFrac") or 0.22)
+    h_frac = float(spec.get("hFrac") or 0.04)
+    margin = _scale_px(int(spec.get("marginPx") or 16), play_h)
+    w = max(80, int(round(play_w * w_frac)))
+    h = max(28, int(round(play_h * h_frac)))
+    cx = int(round(x_pct * play_w))
+    cy = int(round(y_pct * play_h))
+    anch = (anchor or "center").upper()
+    if anch == "TL":
+        x, y = cx, cy
+    elif anch == "TR":
+        x, y = cx - w, cy
+    elif anch == "BL":
+        x, y = cx, cy - h
+    elif anch == "BR":
+        x, y = cx - w, cy - h
+    else:
+        x, y = cx - w // 2, cy - h // 2
+    x = max(margin, min(x, play_w - w - margin))
+    y = max(margin, min(y, play_h - h - margin))
+    return {"x": x, "y": y, "w": w, "h": h}

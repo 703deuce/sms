@@ -148,7 +148,18 @@ def apply_export_template(
     if not tpl:
         return video
 
-    split_layouts = {"split", "grid3", "grid4", "dynamic", "screen_pip", "split_debate", "grid", "two_up"}
+    split_layouts = {
+        "split",
+        "grid3",
+        "grid4",
+        "dynamic",
+        "screen_pip",
+        "facecam_pip",
+        "facecam_stack",
+        "split_debate",
+        "grid",
+        "two_up",
+    }
     allow_headline = layout_mode not in split_layouts and not stream_stack
 
     headline_on = allow_headline and bool((tpl.get("headlineBar") or {}).get("enabled"))
@@ -194,7 +205,9 @@ def apply_export_template(
         )
         v1_label = "[v1]"
     if headline_on and headline:
-        fc += f"{v1_label}drawbox=x=0:y=0:w={play_w}:h={bar_h}:color=white@1:t=fill[vout]"
+        style = _headline_style_from_edits(edits)
+        box_fill = str(style.get("boxColor") or "#FFFFFF")
+        fc += f"{v1_label}drawbox=x=0:y=0:w={play_w}:h={bar_h}:color={box_fill}@1:t=fill[vout]"
         vmap = "[vout]"
     else:
         vmap = v1_label

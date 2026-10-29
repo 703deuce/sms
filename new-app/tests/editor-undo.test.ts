@@ -28,8 +28,6 @@ describe('editor undo', () => {
     expect(undone.edits.captions?.size).toBe(1)
   })
 
-  })
-
   it('saved action respects clean flag', () => {
     const base = defaultEdits(bounds)
     const dirty = editorEditsReducer(

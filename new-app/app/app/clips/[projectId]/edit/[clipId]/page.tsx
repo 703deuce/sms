@@ -33,6 +33,7 @@ export default async function ClipEditorPage({
         words={data.words}
         cropShots={data.crop.shots}
         cropTrack={data.crop.track}
+        facecamLayout={data.facecamLayout}
         videoUrl={videoUrl}
         editorMedia={data.media}
         posterUrl={posterUrl}

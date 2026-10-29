@@ -1,6 +1,6 @@
 'use client'
 
-import { Sparkles } from 'lucide-react'
+import { Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,6 +18,7 @@ import { clipsFetch } from '@/lib/clips-api'
 import { ExportHeadlinePreview } from '@/components/clips/editor/export-headline-preview'
 import type { HeadlineLayer, Layer } from '@/lib/clips/layers'
 import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useState } from 'react'
 
@@ -28,6 +29,7 @@ export function EditorHeadlineField({
   platform,
   layers,
   setLayers,
+  onSyncEditsSaveVersion,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -35,6 +37,7 @@ export function EditorHeadlineField({
   platform?: 'twitch' | 'kick'
   layers?: Layer[]
   setLayers?: (layers: Layer[]) => void
+  onSyncEditsSaveVersion?: (version: number) => void
 }) {
   const tpl = edits.exportTemplate ?? {}
   const layoutMode = edits.layout.mode
@@ -43,32 +46,34 @@ export function EditorHeadlineField({
   const gens = tpl.headlineGenerations ?? 0
   const [genBusy, setGenBusy] = useState(false)
 
-  const setTemplate = (next: ClipExportTemplate) => {
-    onEdits({ ...edits, exportTemplate: next })
-  }
-
   const generate = async () => {
     if (gens >= EXPORT_HEADLINE_MAX_REGENERATIONS) {
       toast.error(`Max ${EXPORT_HEADLINE_MAX_REGENERATIONS} AI headlines per clip`)
       return
     }
     setGenBusy(true)
+    const toastId = toast.loading('Generating headline…')
     try {
       const res = await clipsFetch<{
         headline: string
         generations: number
         exportTemplate: ClipExportTemplate
+        editsSaveVersion?: number
       }>(`/api/clips/clips/${clipId}/export-headline/generate`, { method: 'POST', body: '{}' })
-      setTemplate({
-        ...res.exportTemplate,
-        headlineBar: {
-          enabled: true,
-          text: res.exportTemplate.headlineBar?.text || res.headline,
+      onEdits({
+        ...edits,
+        exportTemplate: {
+          ...res.exportTemplate,
+          headlineBar: {
+            enabled: true,
+            text: res.exportTemplate.headlineBar?.text || res.headline,
+          },
         },
       })
-      toast.success('Headline updated')
+      if (typeof res.editsSaveVersion === 'number') onSyncEditsSaveVersion?.(res.editsSaveVersion)
+      toast.success('Headline updated', { id: toastId })
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not generate headline')
+      toast.error(e instanceof Error ? e.message : 'Could not generate headline', { id: toastId })
     } finally {
       setGenBusy(false)
     }
@@ -110,9 +115,10 @@ export function EditorHeadlineField({
         />
       </div>
       <Input
+        className={cn(genBusy && 'animate-pulse opacity-70')}
         value={tpl.headlineBar?.text ?? tpl.suggestedHeadline ?? ''}
         maxLength={120}
-        disabled={!enabled}
+        disabled={!enabled || genBusy}
         onChange={(e) =>
           onEdits(
             patchEditorExportTemplateHeadline(edits, {
@@ -139,7 +145,7 @@ export function EditorHeadlineField({
           disabled={genBusy || gens >= EXPORT_HEADLINE_MAX_REGENERATIONS}
           onClick={() => void generate()}
         >
-          <Sparkles className="mr-1 size-3.5" />
+          {genBusy ? <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden /> : <Sparkles className="mr-1 size-3.5" />}
           {genBusy ? 'Generating…' : 'Generate headline'}
         </Button>
         <span className="text-xs text-muted-foreground">

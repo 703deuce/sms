@@ -73,4 +73,42 @@ export function badgeRect(
   return { x: inset, y, w, h }
 }
 
+/** Pixel rect for follow sticker overlay (parity with worker sprite placement). */
+export function stickerRect(
+  playW: number,
+  playH: number,
+  xNorm: number,
+  yNorm: number,
+  anchor: 'TL' | 'TR' | 'BL' | 'BR' = 'TR',
+): { left: number; top: number; width: number; height: number } {
+  const width = Math.max(80, Math.round(playW * 0.22))
+  const height = Math.max(28, Math.round(playH * 0.04))
+  const px = xNorm * playW
+  const py = yNorm * playH
+  let left = px
+  let top = py
+  if (anchor === 'TR') {
+    left -= width
+  } else if (anchor === 'BL') {
+    top -= height
+  } else if (anchor === 'BR') {
+    left -= width
+    top -= height
+  }
+  left = Math.max(0, Math.min(playW - width, left))
+  top = Math.max(0, Math.min(playH - height, top))
+  return { left, top, width, height }
+}
+
+export function stickerVisible(
+  timing: 'always' | 'intro' | 'outro' | undefined,
+  durationMs: number,
+  outputMs: number,
+  totalMs: number,
+): boolean {
+  if (timing === 'intro') return outputMs <= durationMs
+  if (timing === 'outro') return totalMs > 0 && outputMs >= Math.max(0, totalMs - durationMs)
+  return true
+}
+
 export { geom as overlayGeometryJson }

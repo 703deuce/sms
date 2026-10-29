@@ -739,8 +739,9 @@ def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
     edits = ctx.get("edits") or {}
     layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
     from clips_worker.clip_export_template import stream_headline_frame_layout
-    from clips_worker.layers_spec import _layer_by_id
+    from clips_worker.layers_spec import _layer_by_id, badge_sprite_active
     from clips_worker.layer_sprites import render_badge_png, render_sticker_png
+    from clips_worker.overlay_geometry import sticker_rect
     from clips_worker.streamer.layout.stream_overlay_layout import overlay_layout
 
     frame = stream_headline_frame_layout(play_w, play_h)
@@ -760,16 +761,22 @@ def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
         if ltype == "sticker":
             dest = work_dir / f"sprite_{layer.get('id', 'sticker')}.png"
             render_sticker_png(layer, dest, play_w=play_w, play_h=play_h)
-            x_pct = float(layer.get("x") if layer.get("x") is not None else 0.72)
-            y_pct = float(layer.get("y") if layer.get("y") is not None else 0.08)
+            x_pct = float(layer.get("x") if layer.get("x") is not None else 0.82)
+            y_pct = float(layer.get("y") if layer.get("y") is not None else 0.12)
+            anchor = str(layer.get("anchor") or "center")
+            rect = sticker_rect(play_w, play_h, x_pct, y_pct, anchor=anchor)
+            timing = str(layer.get("timing") or "always")
+            duration_ms = int(layer.get("durationMs") or 3500)
             sprites.append(
                 {
                     "path": dest,
-                    "x": int(x_pct * play_w),
-                    "y": int(y_pct * play_h),
+                    "x": rect["x"],
+                    "y": rect["y"],
+                    "timing": timing,
+                    "durationMs": duration_ms,
                 }
             )
-        elif ltype == "badge" and layer.get("showLogo"):
+        elif ltype == "badge" and badge_sprite_active(layer):
             placement = str(layer.get("placement") or "export_bar")
             dest = work_dir / f"sprite_{layer.get('id', 'badge')}.png"
             render_badge_png(
@@ -805,13 +812,26 @@ def apply_v3_sprite_overlays(video: Path, out: Path, sprites: list[dict], work_d
     if not sprites:
         shutil.copy(video, out)
         return
+    from clips_worker.clip_export_template import _probe_duration_ms
+
+    duration_s = _probe_duration_ms(video) / 1000.0
     parts: list[str] = []
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
     last = "[0:v]"
     for i, sp in enumerate(sprites):
         cmd.extend(["-i", str(sp["path"])])
         label = f"[v{i}]"
-        parts.append(f"{last}[{i + 1}:v]overlay={sp['x']}:{sp['y']}:format=auto{label}")
+        timing = str(sp.get("timing") or "always")
+        duration_ms = int(sp.get("durationMs") or 3500)
+        enable = ""
+        if timing == "intro":
+            enable = f":enable='between(t,0,{duration_ms / 1000.0:.3f})'"
+        elif timing == "outro":
+            start = max(0.0, duration_s - duration_ms / 1000.0)
+            enable = f":enable='gte(t,{start:.3f})'"
+        parts.append(
+            f"{last}[{i + 1}:v]overlay={sp['x']}:{sp['y']}:format=auto{enable}{label}"
+        )
         last = label
     fc = ";".join(parts)
     cmd.extend(
@@ -836,6 +856,25 @@ def apply_v3_sprite_overlays(video: Path, out: Path, sprites: list[dict], work_d
     subprocess.check_call(cmd)
 
 
+def _facecam_layout_for_render(edits: dict, stream_layout: dict) -> tuple[dict | None, str]:
+    layout_ed = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    fc_meta = layout_ed.get("facecam") if isinstance(layout_ed.get("facecam"), dict) else {}
+    box = fc_meta.get("box") if isinstance(fc_meta.get("box"), dict) else None
+    if box and all(k in box for k in ("x", "y", "w", "h")):
+        lay: dict = {
+            "facecam": box,
+            "split": fc_meta.get("split"),
+            "facecamPosition": fc_meta.get("position") or fc_meta.get("facecamPosition") or "top",
+        }
+        gameplay = fc_meta.get("gameplay")
+        if isinstance(gameplay, dict):
+            lay["gameplay"] = gameplay
+        return lay, "editor"
+    if stream_layout.get("facecam"):
+        return stream_layout, "stream"
+    return None, "fallback"
+
+
 def _apply_facecam_or_pip_layout(
     clip_src: Path,
     work_dir: Path,
@@ -844,28 +883,52 @@ def _apply_facecam_or_pip_layout(
     *,
     play_w: int,
     play_h: int,
-) -> Path:
+) -> tuple[Path, bool]:
     layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
     ai = settings.get("aiMeta") if isinstance(settings.get("aiMeta"), dict) else {}
     streamer = ai.get("streamer") if isinstance(ai.get("streamer"), dict) else {}
     stream_layout = streamer.get("layout") if isinstance(streamer.get("layout"), dict) else {}
-    if layout_mode in ("stack", "facecam_stack") and stream_layout.get("facecam"):
-        from clips_worker.streamer.layout.render_stack import render_stack_mp4
+    lay, source = _facecam_layout_for_render(edits, stream_layout)
+    if layout_mode in ("stack", "facecam_stack"):
+        if lay and lay.get("facecam"):
+            from clips_worker.streamer.layout.render_stack import render_stack_mp4
 
-        stacked = work_dir / "facecam_stack.mp4"
-        render_stack_mp4(clip_src, stacked, stream_layout, out_w=play_w, out_h=play_h)
-        return stacked
+            stacked = work_dir / "facecam_stack.mp4"
+            try:
+                render_stack_mp4(clip_src, stacked, lay, out_w=play_w, out_h=play_h)
+                print(f"[clipper:facecam] facecam_applied mode=stack source={source}", flush=True)
+                return stacked, True
+            except Exception as e:
+                print(
+                    f"[clipper:facecam] facecam_fallback mode=stack err={type(e).__name__}:{str(e)[:120]}",
+                    flush=True,
+                )
+        else:
+            print("[clipper:facecam] facecam_fallback mode=stack reason=no_facecam_box", flush=True)
     if layout_mode in ("screen_pip", "facecam_pip"):
         from clips_worker.streamer.layout.render_stack import render_pip_mp4
 
-        layout = stream_layout if stream_layout.get("facecam") else (edits.get("layout") or {})
-        pip_out = work_dir / "screen_pip_layout.mp4"
-        try:
-            render_pip_mp4(clip_src, pip_out, layout if isinstance(layout, dict) else {}, out_w=play_w, out_h=play_h)
-            return pip_out
-        except Exception as e:
-            print(f"[clipper:pip] fallback err={type(e).__name__}:{str(e)[:120]}", flush=True)
-    return clip_src
+        pip_layout = lay if lay and lay.get("facecam") else None
+        if pip_layout:
+            pip_out = work_dir / "screen_pip_layout.mp4"
+            try:
+                render_pip_mp4(
+                    clip_src,
+                    pip_out,
+                    pip_layout,
+                    out_w=play_w,
+                    out_h=play_h,
+                )
+                print(f"[clipper:facecam] facecam_applied mode=pip source={source}", flush=True)
+                return pip_out, True
+            except Exception as e:
+                print(
+                    f"[clipper:facecam] facecam_fallback mode=pip err={type(e).__name__}:{str(e)[:120]}",
+                    flush=True,
+                )
+        else:
+            print("[clipper:facecam] facecam_fallback mode=pip reason=no_facecam_box", flush=True)
+    return clip_src, False
 
 
 def compose_export(
@@ -1002,7 +1065,7 @@ def render_edited_clip(
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
     play_w, play_h = aspect_size(aspect, resolution)
-    clip_src = _apply_facecam_or_pip_layout(
+    clip_src, facecam_applied = _apply_facecam_or_pip_layout(
         clip_src,
         work_dir,
         edits,
@@ -1026,25 +1089,43 @@ def render_edited_clip(
             from clips_worker.render_clip import resolve_clip_layout
 
             settings_nc["layout"] = resolve_clip_layout(settings_nc, 0)
-    run_speakercrop_layout_timeline(
-        clip_src,
-        full_render,
-        w_reframe,
-        settings_nc,
-        edits,
-        work_dir,
-        clip_start_ms,
-        clip_end_ms,
-        shot_overrides=shot_overrides,
-        render_id=render_id,
-        render_meta=render_meta,
-        conn=conn,
-        workspace_id=workspace_id,
-        project_id=project_id,
-        clip_id=clip_id,
-        preview_crop_track=preview_crop_track,
-    )
-    stage("speakercrop_nc_done")
+    if facecam_applied:
+        subprocess.check_call(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(clip_src),
+                "-c",
+                "copy",
+                str(full_render),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        stage("facecam_layout_skip_speakercrop")
+    else:
+        run_speakercrop_layout_timeline(
+            clip_src,
+            full_render,
+            w_reframe,
+            settings_nc,
+            edits,
+            work_dir,
+            clip_start_ms,
+            clip_end_ms,
+            shot_overrides=shot_overrides,
+            render_id=render_id,
+            render_meta=render_meta,
+            conn=conn,
+            workspace_id=workspace_id,
+            project_id=project_id,
+            clip_id=clip_id,
+            preview_crop_track=preview_crop_track,
+        )
+        stage("speakercrop_nc_done")
 
     cut_mp4 = work_dir / "cut.mp4"
     if len(segs_sec) == 1 and segs_sec[0][0] <= 0.01 and abs(segs_sec[0][1] - (clip_end_ms - clip_start_ms) / 1000) < 0.1:

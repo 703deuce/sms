@@ -3,14 +3,21 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 
 import pytest
 
 from clips_worker.clip_export_template import _platform_label, headline_layout, stream_headline_frame_layout
-from clips_worker.edits_render import compose_export, default_edits, render_edited_clip
+from clips_worker.edits_render import (
+    _facecam_layout_for_render,
+    compose_export,
+    default_edits,
+    render_edited_clip,
+)
 from clips_worker.layers_spec import (
     _stage_plan,
     badge_rect,
+    badge_sprite_active,
     legacy_from_layers,
     layers_from_legacy,
     mapped_subset,
@@ -18,6 +25,8 @@ from clips_worker.layers_spec import (
     sync_layers_from_legacy,
     v3_has_extras,
 )
+from clips_worker.overlay_geometry import headline_style_for_preset, sticker_rect
+from clips_worker.render_job import load_source_words
 from clips_worker.streamer.layout.stream_overlay_layout import overlay_layout
 
 
@@ -204,10 +213,103 @@ def test_sync_layers_from_legacy_refreshes_stale_fp() -> None:
     ]
     e["exportTemplate"] = {"headlineBar": {"enabled": True, "text": "NEW"}}
     synced = sync_layers_from_legacy(e)
-    assert synced["layersLegacyFp"] != "deadbeef00000000"
+    assert "layersLegacyFp" not in synced
     ids = [layer["id"] for layer in synced["layers"]]
     assert "sticker1" in ids
     assert any(layer.get("id") == "headline" for layer in synced["layers"])
+
+
+_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "layers_sync_cases.json"
+
+
+@pytest.mark.parametrize("case", json.loads(_FIXTURES.read_text()), ids=lambda c: c["name"])
+def test_sync_layers_fixture_cases(case: dict) -> None:
+    edits = copy.deepcopy(case["edits"])
+    if case.get("expectFromLegacy"):
+        layers = resolve_layers(edits)
+        assert any(layer.get("type") == "headline" for layer in layers)
+        return
+    synced = sync_layers_from_legacy(edits)
+    layers = synced["layers"]
+    if case.get("expectBadge"):
+        badge = next(layer for layer in layers if layer.get("id") == "badge")
+        for key, val in case["expectBadge"].items():
+            assert badge.get(key) == val
+    if case.get("expectHeadlinePreset"):
+        hl = next(layer for layer in layers if layer.get("id") == "headline")
+        assert hl.get("style", {}).get("preset") == case["expectHeadlinePreset"]
+    if case.get("expectHeadlineText"):
+        hl = next(layer for layer in layers if layer.get("id") == "headline")
+        assert hl.get("text") == case["expectHeadlineText"]
+    if case.get("expectCaptionsPreset"):
+        cap = next(layer for layer in layers if layer.get("id") == "captions")
+        assert cap.get("settings", {}).get("presetId") == case["expectCaptionsPreset"]
+    if case.get("expectStickerText"):
+        sticker = next(layer for layer in layers if layer.get("type") == "sticker")
+        assert sticker.get("text") == case["expectStickerText"]
+
+
+def test_headline_style_presets_golden() -> None:
+    yellow = headline_style_for_preset("stream_yellow")
+    assert yellow["boxColor"] == "#FACC15"
+    dark = headline_style_for_preset("export_bar_dark")
+    assert dark["boxColor"] == "#000000"
+    assert dark["textColor"] == "#FFFFFF"
+
+
+def test_sticker_rect_center_golden() -> None:
+    rect = sticker_rect(1080, 1920, 0.5, 0.5)
+    assert rect == {"x": 421, "y": 922, "w": 238, "h": 77}
+
+
+def test_fit_top_drawbox_uses_style_box_color() -> None:
+    from clips_worker.overlay_geometry import _hex_ffmpeg_color
+
+    assert _hex_ffmpeg_color("#FACC15") == "#FACC15"
+    assert _hex_ffmpeg_color("") == "white"
+
+
+def test_facecam_layout_reads_editor_box() -> None:
+    edits = {
+        "layout": {
+            "mode": "facecam_stack",
+            "facecam": {"box": {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.25}, "split": 0.35},
+        }
+    }
+    lay, source = _facecam_layout_for_render(edits, {})
+    assert source == "editor"
+    assert lay is not None
+    assert lay["facecam"] == {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.25}
+
+
+def test_badge_sprite_active() -> None:
+    assert badge_sprite_active({"showLogo": True})
+    assert not badge_sprite_active({"showLabel": False, "showLink": False, "showLogo": False})
+
+
+def test_load_source_words_fallback_on_no_overlap(monkeypatch, tmp_path) -> None:
+    calls: list[str] = []
+
+    def fake_download(key: str, dest: Path) -> None:
+        calls.append(key)
+        if key.endswith("words.json"):
+            dest.write_text(json.dumps([{"s": 0.0, "e": 0.5, "w": "hi", "i": 0}]))
+        else:
+            dest.write_text(json.dumps([{"s": 100.0, "e": 101.0, "w": "far", "i": 0}]))
+
+    monkeypatch.setattr("clips_worker.render_job.download_object", fake_download)
+    ctx = {
+        "transcriptKey": "ws/x/transcript.json",
+        "startMs": 0,
+        "endMs": 5000,
+        "clipId": "c1",
+        "workspaceId": "w1",
+        "projectId": "p1",
+    }
+    words = load_source_words(ctx, tmp_path)
+    assert len(words) == 1
+    assert words[0]["w"] == "hi"
+    assert any("words.json" in c for c in calls)
 
 
 def test_v3_has_extras_sticker() -> None:

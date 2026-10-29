@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from clips_worker.clip_export_template import _esc_drawtext, _platform_label
-from clips_worker.overlay_geometry import badge_rect
+from clips_worker.overlay_geometry import badge_rect, sticker_rect
 
 _ASSETS = Path(__file__).resolve().parent.parent / "assets" / "brand"
 
@@ -100,8 +100,11 @@ def render_sticker_png(
     text = str(layer.get("text") or "FOLLOW").strip()[:32] or "FOLLOW"
     platform = str(layer.get("platform") or "twitch")
     _, color = _platform_label(platform)
-    w = max(120, int(play_w * 0.22))
-    h = max(40, int(play_h * 0.04))
+    x_pct = float(layer.get("x") if layer.get("x") is not None else 0.82)
+    y_pct = float(layer.get("y") if layer.get("y") is not None else 0.12)
+    anchor = str(layer.get("anchor") or "center")
+    rect = sticker_rect(play_w, play_h, x_pct, y_pct, anchor=anchor)
+    w, h = rect["w"], rect["h"]
     dest.parent.mkdir(parents=True, exist_ok=True)
     subprocess.check_call(
         [

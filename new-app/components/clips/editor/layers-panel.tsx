@@ -31,6 +31,8 @@ export function LayersPanel({
   platform,
   brandTemplates,
   onApplyTemplate,
+  onSaveTemplate,
+  onSyncEditsSaveVersion,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -40,6 +42,8 @@ export function LayersPanel({
   platform?: 'twitch' | 'kick'
   brandTemplates?: { id: string; name: string; settings: unknown }[]
   onApplyTemplate?: (templateId: string) => void
+  onSaveTemplate?: () => void | Promise<void>
+  onSyncEditsSaveVersion?: (version: number) => void
 }) {
   const headline = layers.find((l): l is HeadlineLayer => l.id === 'headline' && l.type === 'headline')
   const badge = layers.find((l): l is BadgeLayer => l.id === 'badge' && l.type === 'badge')
@@ -105,6 +109,12 @@ export function LayersPanel({
         </div>
       ) : null}
 
+      {onSaveTemplate ? (
+        <Button type="button" size="sm" variant="outline" onClick={() => void onSaveTemplate()}>
+          Save as brand template
+        </Button>
+      ) : null}
+
       <EditorHeadlineField
         clipId={clipId}
         edits={edits}
@@ -112,6 +122,7 @@ export function LayersPanel({
         platform={platform}
         layers={layers}
         setLayers={setLayers}
+        onSyncEditsSaveVersion={onSyncEditsSaveVersion}
       />
 
       {headline ? (

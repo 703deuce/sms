@@ -1,4 +1,3 @@
-import { createHash } from 'crypto'
 import { z } from 'zod'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { headlineLayerPlacement } from '@/lib/clips/headline-band-layout'
@@ -254,9 +253,107 @@ export function layersFromLegacy(edits: ClipEditsV2): Layer[] {
   return out.sort((a, b) => a.z - b.z)
 }
 
-const MAPPED_KEYS = ['exportTemplate', 'captions', 'brand', 'hookOverlay', 'chatOverlay'] as const
-
 const V3_EXTRA_LAYER_TYPES = new Set(['sticker'])
+
+function mergeHeadlineLayer(fresh: HeadlineLayer, stored: HeadlineLayer | undefined): HeadlineLayer {
+  if (!stored || stored.type !== 'headline') return fresh
+  return {
+    ...fresh,
+    style: { ...fresh.style, ...stored.style },
+  }
+}
+
+function mergeBadgeLayer(
+  fresh: BadgeLayer | undefined,
+  stored: BadgeLayer | undefined,
+  edits: ClipEditsV2,
+): BadgeLayer | null {
+  const tpl = edits.exportTemplate
+  const badgeOn = Boolean(tpl?.platformBadge?.enabled)
+  const linkOn = Boolean(tpl?.channelLink?.enabled)
+  const place = placement(edits)
+  const z = place === 'fit_top_band' ? 6 : 71
+  const platform = (tpl?.platform as BadgeLayer['platform']) || 'twitch'
+  const url = String(tpl?.channelLink?.url ?? '')
+
+  if (fresh && fresh.type === 'badge') {
+    return {
+      ...fresh,
+      showLogo: stored?.showLogo ?? fresh.showLogo,
+      handle: fresh.handle ?? stored?.handle,
+    }
+  }
+
+  if (!stored || stored.type !== 'badge') return fresh ?? null
+
+  if (!badgeOn && !linkOn) {
+    if (stored.showLogo || stored.enabled) {
+      return {
+        ...stored,
+        enabled: false,
+        showLabel: false,
+        showLink: false,
+        showLogo: stored.showLogo,
+        handle: stored.handle ?? handleFromUrl(url),
+        platform: stored.platform ?? platform,
+        placement: place,
+        z,
+      }
+    }
+    return null
+  }
+
+  return fresh ?? null
+}
+
+function mergeMappedLayer(fresh: Layer, stored: Layer | undefined): Layer {
+  if (fresh.type === 'headline') return mergeHeadlineLayer(fresh, stored as HeadlineLayer | undefined)
+  if (fresh.type === 'captions') return fresh
+  return fresh
+}
+
+export function syncLayersFromLegacy(
+  edits: ClipEditsV2 & { layersV?: number; layers?: unknown },
+): ClipEditsV2 & { layersV?: number; layers?: unknown } {
+  if (edits.layersV !== 3) return edits
+  const fresh = layersFromLegacy(edits)
+  const stored = validateLayers(edits.layers) ?? []
+  const storedById = new Map(stored.map((l) => [l.id, l]))
+  const merged: Layer[] = []
+
+  for (const freshLayer of fresh) {
+    if (freshLayer.type === 'badge') {
+      const badge = mergeBadgeLayer(freshLayer, storedById.get('badge') as BadgeLayer | undefined, edits)
+      if (badge) merged.push(badge)
+      continue
+    }
+    merged.push(mergeMappedLayer(freshLayer, storedById.get(freshLayer.id)))
+  }
+
+  const freshIds = new Set(fresh.map((l) => l.id))
+  if (!freshIds.has('badge')) {
+    const orphanBadge = mergeBadgeLayer(undefined, storedById.get('badge') as BadgeLayer | undefined, edits)
+    if (orphanBadge) merged.push(orphanBadge)
+  }
+
+  for (const layer of stored) {
+    if (V3_EXTRA_LAYER_TYPES.has(layer.type)) merged.push(layer)
+  }
+
+  merged.sort((a, b) => a.z - b.z)
+  return { ...edits, layers: merged }
+}
+
+export function v3HasExtras(layers: Layer[]): boolean {
+  for (const layer of layers) {
+    if (!layer.enabled) continue
+    if (layer.type === 'sticker') return true
+    if (layer.type === 'badge' && layer.showLogo) return true
+  }
+  return false
+}
+
+const MAPPED_KEYS = ['exportTemplate', 'captions', 'brand', 'hookOverlay', 'chatOverlay'] as const
 
 function sortJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortJson)
@@ -271,38 +368,6 @@ function sortJson(value: unknown): unknown {
 
 export function canonicalLayersJSON(layers: Layer[]): string {
   return JSON.stringify(sortJson(layers))
-}
-
-export function legacyLayersFingerprint(edits: Pick<ClipEditsV2, (typeof MAPPED_KEYS)[number]>): string {
-  const body = JSON.stringify(sortJson(mappedEditsSubset(edits as ClipEditsV2)))
-  return createHash('sha256').update(body).digest('hex').slice(0, 16)
-}
-
-export function v3HasExtras(layers: Layer[]): boolean {
-  for (const layer of layers) {
-    if (!layer.enabled) continue
-    if (layer.type === 'sticker') return true
-    if (layer.type === 'badge' && layer.showLogo) return true
-  }
-  return false
-}
-
-export function syncLayersFromLegacy(
-  edits: ClipEditsV2 & { layersV?: number; layers?: unknown; layersLegacyFp?: string },
-): ClipEditsV2 & { layersV?: number; layers?: unknown; layersLegacyFp?: string } {
-  if (edits.layersV !== 3) return edits
-  const fp = legacyLayersFingerprint(edits)
-  const storedFp = edits.layersLegacyFp
-  const layersRaw = edits.layers
-  const parsed = Array.isArray(layersRaw) ? validateLayers(layersRaw) : null
-  if (storedFp === fp && parsed) return edits
-  const fresh = layersFromLegacy(edits)
-  const extras = (Array.isArray(layersRaw) ? layersRaw : []).filter(
-    (layer): layer is Layer =>
-      Boolean(layer && typeof layer === 'object' && V3_EXTRA_LAYER_TYPES.has(String((layer as Layer).type))),
-  )
-  const merged = [...fresh, ...extras].sort((a, b) => a.z - b.z)
-  return { ...edits, layers: merged, layersLegacyFp: fp }
 }
 
 function layerById(layers: Layer[], id: string): Layer | undefined {

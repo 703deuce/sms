@@ -30,6 +30,7 @@ export function EditorTopBar({
   onRedo,
   onExport,
   onOpenProducer,
+  onRetrySave,
   producerOpen = false,
   producerStrip,
   pendingPaidCount = 0,
@@ -37,22 +38,23 @@ export function EditorTopBar({
   backHref: string
   title: string
   onTitleChange: (t: string) => void
-  saveState: 'saved' | 'saving' | 'dirty'
+  saveState: 'saved' | 'saving' | 'dirty' | 'error'
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
   onExport: () => void
+  onRetrySave?: () => void
   onOpenProducer?: () => void
   producerOpen?: boolean
   producerStrip?: { changeCount: number; onUndo: () => void } | null
   pendingPaidCount?: number
 }) {
   const saveTone =
-    saveState === 'saving'
-      ? 'text-muted-foreground'
-      : saveState === 'dirty'
-        ? 'text-destructive'
+    saveState === 'error'
+      ? 'text-destructive'
+      : saveState === 'saved'
+        ? 'text-muted-foreground'
         : 'text-muted-foreground'
 
   return (
@@ -67,7 +69,7 @@ export function EditorTopBar({
         aria-label="Clip title"
       />
       <span className={cn('shrink-0', saveTone)} aria-live="polite">
-        {saveState === 'saving' && (
+        {(saveState === 'saving' || saveState === 'dirty') && (
           <span className="inline-flex items-center gap-1 text-xs">
             <Loader2 className="size-3.5 animate-spin" aria-hidden />
             Saving…
@@ -79,11 +81,17 @@ export function EditorTopBar({
             Saved
           </span>
         )}
-        {saveState === 'dirty' && (
-          <span className="inline-flex items-center gap-1 text-xs text-destructive">
-            <CloudAlert className="size-3.5" aria-hidden />
-            Not saved
-          </span>
+        {saveState === 'error' && (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-xs text-destructive"
+            onClick={() => onRetrySave?.()}
+          >
+            <CloudAlert className="mr-1 size-3.5 inline" aria-hidden />
+            Not saved · Retry
+          </Button>
         )}
       </span>
       {producerStrip && producerStrip.changeCount > 0 ? (
