@@ -422,6 +422,14 @@ def fuse_moments(
             meta_cf["llm_keep"] = False
             meta_cf["demote_tier"] = "more"
         try:
+            from clips_worker.clipfind.c3_seams import judge_total
+
+            total = judge_total(llm, total, meta_cf)
+        except Exception as exc:
+            from clips_worker.clipfind.flags import clipfind_fallback
+
+            clipfind_fallback("judge_total", type(exc).__name__, exc=exc)
+        try:
             from clips_worker.clipfind.c2_seams import refine_stream_candidate
 
             start_ms, end_ms = refine_stream_candidate(
@@ -547,6 +555,22 @@ def fuse_moments(
             tail_s=tail_s,
             clip_count=max(clip_count, PRIMARY_TIER_MAX),
         )
+        try:
+            from clips_worker.clipfind.c3_seams import refine_cue_picks
+
+            deduped = refine_cue_picks(
+                deduped,
+                video_moments=video_moments,
+                words=words,
+                signals=signals,
+                raw_channels=raw_channels,
+                duration_s=duration_s,
+                max_clip_s=max_clip_s,
+            )
+        except Exception as exc:
+            from clips_worker.clipfind.flags import clipfind_fallback
+
+            clipfind_fallback("cue_refine", type(exc).__name__, exc=exc)
 
     from clips_worker.picker.pick_quota import compute_pick_want
 

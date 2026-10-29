@@ -44,6 +44,7 @@ def test_flag_precedence_all_off(monkeypatch):
     assert clipfind_flag("CLIPFIND_DROP_LEDGER") is False
     assert clipfind_flag("CLIPFIND_NEVER_EMPTY") is False
     assert clipfind_flag("CLIPFIND_BEATS_SHADOW") is False
+    assert clipfind_flag("CLIPFIND_COST_LOG") is False
 
 
 def test_workspace_override_behavior_only(monkeypatch):

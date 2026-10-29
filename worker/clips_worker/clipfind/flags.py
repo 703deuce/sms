@@ -10,7 +10,12 @@ from clips_worker.decision_log import decision_log
 
 # Logging-only defaults ON
 _DEFAULT_ON = frozenset(
-    {"CLIPFIND_DROP_LEDGER", "CLIPFIND_SHADOW_RANK", "CLIPFIND_BEATS_SHADOW"}
+    {
+        "CLIPFIND_DROP_LEDGER",
+        "CLIPFIND_SHADOW_RANK",
+        "CLIPFIND_BEATS_SHADOW",
+        "CLIPFIND_COST_LOG",
+    }
 )
 
 _BEHAVIOR_FLAGS = (
@@ -28,6 +33,9 @@ _BEHAVIOR_FLAGS = (
     "CLIPFIND_REACTION_TAIL",
     "CLIPFIND_VARIANTS",
     "CLIPFIND_VALIDATE_WINDOW",
+    "CLIPFIND_JUDGE_V2",
+    "CLIPFIND_CHAT_PAYOFF",
+    "CLIPFIND_DENSE_LOOK",
 )
 
 _ALL_FLAGS = tuple(_DEFAULT_ON) + _BEHAVIOR_FLAGS

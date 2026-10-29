@@ -57,6 +57,16 @@ def _match_vm(cand: dict, vms: list[dict] | None) -> dict | None:
     return best[1] if best else None
 
 
+def _judge_override(llm):
+    try:
+        from clips_worker.clipfind.c3_seams import judge_beats_override
+
+        return judge_beats_override(llm)
+    except Exception as exc:
+        clipfind_fallback("judge_beats_override", type(exc).__name__, exc=exc)
+        return None
+
+
 def _log(site: str, before: tuple[int, int], r, applied: tuple[int, int]) -> None:
     decision_log(
         "clipfind",
@@ -117,8 +127,8 @@ def refine_stream_candidate(
         energy=rc.get("_raw_reaction") or rc.get("_raw_audio") or signals.get("audio"),
         visual=signals.get("video"),
         chat=_unshift(signals.get("chat"), int(STREAMER_CHAT_LAG_S)),
-        gemini_setup_ms=_vm_ms(vm, "start"),
-        gemini_payoff_ms=_vm_ms(vm, "peak"),
+        gemini_setup_ms=(_jb[0] if (_jb := _judge_override(llm)) else _vm_ms(vm, "start")),
+        gemini_payoff_ms=(_jb[1] if _jb else _vm_ms(vm, "peak")),
         pad_lo_ms=start_ms - 30_000,
         pad_hi_ms=end_ms + 15_000,
     )

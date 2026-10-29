@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "note": "5 short windows (John, Oct 29). All times are seconds from the START OF THE DOWNLOADED FILE <id>.mp4. Replace every \"TODO-label\" by watching. VOD windows expire ~60 days after the stream (early Dec 2026): run download_c3_windows.sh first.",
+  "cases": [
+    {
+      "id": "c1_irl_encounter",
+      "archetype": "stranger_encounter",
+      "source": {"url": "https://www.twitch.tv/videos/2903589115", "viewer_clip_t": "3h42m54s", "vod_start_s": 13284, "vod_end_s": 13464, "title": "jasontheween: got blocked by a lil kid (30s viewer clip)"},
+      "expect": {"setup_start_s": "TODO-label", "payoff_s": "TODO-label", "reaction_end_s": "TODO-label"},
+      "expect_risk_flags": ["minor"],
+      "why_in_set": "Loud IRL encounter. Clip must start at the first line of the exchange, and the judge must set 'minor' (never primary if it mocks the child). Viewer clip starts at file t=90."
+    },
+    {
+      "id": "c2_quiet_talk",
+      "archetype": "hot_take",
+      "source": {"url": "https://www.twitch.tv/videos/2892073246", "viewer_clip_t": "0h4m18s", "vod_start_s": 168, "vod_end_s": 348, "title": "plaqueboymax: Speaks On The Carti & Lucki Situation (30s viewer clip)"},
+      "expect": {"setup_start_s": "TODO-label", "payoff_s": "TODO-label", "reaction_end_s": "TODO-label"},
+      "expect_risk_flags": [],
+      "why_in_set": "Quiet, transcript-led talk moment with flat chat/audio. Must start at the question or claim, not the closing line. Viewer clip starts at file t=90."
+    },
+    {
+      "id": "c3_storytime",
+      "archetype": "storytime",
+      "source": {"url": "https://www.twitch.tv/videos/2900808923", "viewer_clip_t": "3h18m17s", "vod_start_s": 11777, "vod_end_s": 11957, "title": "lacy: lacy lost his lambo to debt (16s viewer clip)"},
+      "expect": {"setup_start_s": "TODO-label", "payoff_s": "TODO-label", "reaction_end_s": "TODO-label"},
+      "expect_risk_flags": [],
+      "why_in_set": "Story/confession where the 16s viewer clip is aftermath-only. Boundary test: look back for the start of the story. Viewer clip starts at file t=120."
+    },
+    {
+      "id": "c4_false_alarm_raid",
+      "archetype": "none",
+      "expect_demote": true,
+      "source": {"url": "https://www.twitch.tv/videos/2898193275", "viewer_clip_t": "3h20m25s", "vod_start_s": 11965, "vod_end_s": 12145, "title": "extraemily: Agent raids Emily (34s viewer clip)"},
+      "expect": {"span_start_s": "TODO-label", "span_end_s": "TODO-label"},
+      "expect_risk_flags": [],
+      "why_in_set": "Loud false alarm: raid alert + chat flood. Label span = the raid/alert stretch with no real exchange; no PRIMARY pick may overlap it (IoU>=0.3). If you see a real exchange, change this case to archetype banter with setup/payoff/reaction instead."
+    },
+    {
+      "id": "c5_quiet_gaming",
+      "archetype": "gaming_play",
+      "source": {"url": "https://clips.twitch.tv/PolishedGloriousDogeDansGame", "clip_only": true, "title": "gigaboots: tfw you make a streamer speechless (17s, Sonic Mania)"},
+      "expect": {"setup_start_s": "TODO-label", "payoff_s": "TODO-label", "reaction_end_s": "TODO-label"},
+      "expect_risk_flags": [],
+      "why_in_set": "Quiet gaming control: stunned silence is the reaction. Checks there is no genre mode and quiet is not penalized. Clip only (17s), so no lookback is possible."
+    }
+  ]
+}

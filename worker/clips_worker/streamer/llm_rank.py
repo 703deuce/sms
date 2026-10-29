@@ -147,6 +147,25 @@ def rank_candidates_batch(
     cue_events: list[dict] | None = None,
     range_start_ms: int = 0,
 ) -> list[dict]:
+    try:
+        from clips_worker.clipfind.c3_seams import judge_rank_batch
+
+        rows = judge_rank_batch(
+            batch,
+            words,
+            signals,
+            video_moments=video_moments,
+            chat_messages=chat_messages,
+            viewer_clips=viewer_clips,
+            cue_events=cue_events,
+            range_start_ms=range_start_ms,
+        )
+        if rows is not None:
+            return rows
+    except Exception as exc:
+        from clips_worker.clipfind.flags import clipfind_fallback
+
+        clipfind_fallback("judge_v2", type(exc).__name__, exc=exc)
     from clips_worker.streamer.llm_rank_context import format_stream_rank_batch
 
     system = _load_prompt()

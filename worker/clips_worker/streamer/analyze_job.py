@@ -399,9 +399,20 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 fetch_ms=chat_fetch_ms,
             )
             viewer_clips = fetch_viewer_clips_for_vod(vod, conn)
+            try:
+                from clips_worker.clipfind.c3_seams import rebase_viewer_clips
+
+                viewer_clips = rebase_viewer_clips(
+                    viewer_clips, int(payload.get("mediaStartMs") or window_start_ms)
+                )
+            except Exception as exc:
+                from clips_worker.clipfind.flags import clipfind_fallback
+
+                clipfind_fallback("viewer_rebase", type(exc).__name__, exc=exc)
             vod_signal_curves = merge_chunk_signal_curves(chunk_signal_payloads, duration_s)
             video_signal = None
             video_moments: list[dict] = []
+            vp_agg: dict = {}
             from clips_worker.video_picker import video_picker_enabled
             from clips_worker.streamer.video_picker_stream import stream_chunk_video_signals
 
@@ -477,6 +488,27 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     video_moments=video_moments,
                     transcript_ok=transcript_ok,
                 )
+            _cf_t0 = time.monotonic()
+            dense_usd = 0.0
+            try:
+                from clips_worker.clipfind.c3_seams import post_rank_stream
+
+                with stage_span("clipfind_dense", heartbeat=True):
+                    picks, dense_usd = post_rank_stream(
+                        picks,
+                        words=words,
+                        signals_payload=signals_payload,
+                        duration_ms=duration_ms,
+                        settings=settings,
+                        scratch=scratch,
+                        state=state,
+                        chat_messages=chat_messages,
+                        time_offset_ms=int(payload.get("mediaStartMs") or window_start_ms),
+                    )
+            except Exception as exc:
+                from clips_worker.clipfind.flags import clipfind_fallback
+
+                clipfind_fallback("dense_look", type(exc).__name__, exc=exc)
             got = len(picks)
             picks = dedupe_stream_picks(conn, vod, picks)
             after_dedupe = len(picks)
@@ -664,6 +696,21 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 est_cost_usd=chunk_metrics.est_cost_usd,
                 clips_out=inserted if inserted else len(clip_rows),
             )
+            try:
+                from clips_worker.clipfind.c3_seams import log_job_cost
+                from clips_worker.clipfind.flags import clipfind_flag
+
+                log_job_cost(
+                    broad_usd=float((vp_agg or {}).get("est_usd") or 0),
+                    dense_usd=dense_usd,
+                    analysed_ms=int(duration_ms),
+                    t0=_cf_t0,
+                    judge_on=clipfind_flag("CLIPFIND_JUDGE_V2"),
+                )
+            except Exception as exc:
+                from clips_worker.clipfind.flags import clipfind_fallback
+
+                clipfind_fallback("cost_log", type(exc).__name__, exc=exc)
 
             from clips_worker.decision_log import decision_log
 

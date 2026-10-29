@@ -91,6 +91,24 @@ def rank_moments(
         chat_messages=chat_messages,
         viewer_clips=viewer_clips,
     )
+    try:
+        from clips_worker.clipfind.c3_seams import payoff_markers
+
+        _ev, _vc = payoff_markers(cue_events, viewer_cues, viewer_clips, duration_s)
+        if _ev is not cue_events:
+            cue_events, viewer_cues = _ev, _vc
+            clip_cues = [
+                max(
+                    streamer_cues[i] if i < len(streamer_cues) else 0.0,
+                    chat_cues[i] if chat_cues and i < len(chat_cues) else 0.0,
+                    viewer_cues[i] if viewer_cues and i < len(viewer_cues) else 0.0,
+                )
+                for i in range(duration_s)
+            ]
+    except Exception as exc:
+        from clips_worker.clipfind.flags import clipfind_fallback
+
+        clipfind_fallback("payoff_markers", type(exc).__name__, exc=exc)
     video_sig = None
     if video_signal and len(video_signal) >= duration_s:
         video_sig = video_signal[:duration_s]
