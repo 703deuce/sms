@@ -126,8 +126,6 @@ export function ExportTemplateOverlay({
   const platform = tpl?.platform ?? 'twitch'
   const chatOpacity = edits.chatOverlay?.opacity ?? 0.6
   const scaleY = boxHeight / 1920
-
-  const scaleY = boxHeight / 1920
   const composeSpec = composeSpecProp ?? null
 
   if (useFitTop && composeSpec && (headlineOn || chatOn || badgeOn || badgeLogo || channelOn || composeSpec.stickers.length)) {
