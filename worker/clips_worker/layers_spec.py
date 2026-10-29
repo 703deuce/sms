@@ -8,6 +8,12 @@ from urllib.parse import urlparse
 
 from clips_worker.layout_router import editor_mode_uses_stream_frame, export_stream_headline_compose_active
 
+_V3_EXTRA_LAYER_TYPES = frozenset({"sticker"})
+
+
+def _layout_mode(edits: dict) -> str:
+    return str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+
 
 def _placement(edits: dict) -> str:
     mode = _layout_mode(edits)
