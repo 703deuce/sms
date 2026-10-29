@@ -27,6 +27,13 @@ GEMINI_USD_PER_1M_TOKENS: dict[str, tuple[float, float]] = {
 def gemini_token_pricing_usd(model: str) -> tuple[float, float]:
     """Return (input_usd_per_1m, output_usd_per_1m) for a model id."""
     low = (model or "").lower()
+    if "3.8-flash" in low or "3-8-flash" in low:
+        try:
+            in_per_m = float(os.environ.get("GEMINI_38_FLASH_USD_PER_1M_INPUT", "0.75"))
+            out_per_m = float(os.environ.get("GEMINI_38_FLASH_USD_PER_1M_OUTPUT", "3.75"))
+        except ValueError:
+            in_per_m, out_per_m = 0.75, 3.75
+        return in_per_m, out_per_m
     for key, prices in GEMINI_USD_PER_1M_TOKENS.items():
         if key in low or low in key:
             return prices

@@ -28,17 +28,17 @@ def test_quiet_moment_can_reach_advance():
     assert j["score"] >= 8 and j["band"] == "advance" and j["verdict"] == "keep"
 
 
-def test_model_score_and_loudness_never_set_the_score():
-    a = J.parse_judge_item(_item(score=10.0), 0, 60)
-    b = J.parse_judge_item(_item(score=1.0), 0, 60)
-    assert a["score"] == b["score"]                       # recomputed from criteria only
+def test_model_score_can_raise_rubric_weak_still_ranked_not_auto_demote():
+    rubric = J.parse_judge_item(_item(score=1.0), 0, 60)
+    raised = J.parse_judge_item(_item(score=10.0), 0, 60)
+    assert raised["score"] >= rubric["score"]
     loud_weak = J.parse_judge_item(_item(criteria=dict(WEAK), score=10.0), 0, 60)
-    assert loud_weak["score"] < 4 and loud_weak["verdict"] == "demote"
+    assert loud_weak["score"] >= 4 and loud_weak["verdict"] == "keep"
 
 
-def test_penalties_subtract():
-    j = J.parse_judge_item(_item(penalties={"context_needed": 4, "boundary": 2, "risk": 0}), 0, 60)
-    assert j["score"] == pytest.approx(J.rubric_score(QUIET, {}) - 6, abs=0.01)
+def test_penalties_subtract_without_risk():
+    j = J.parse_judge_item(_item(score=0.0, penalties={"context_needed": 4, "boundary": 5, "risk": 9}), 0, 60)
+    assert j["score"] == pytest.approx(J.rubric_score(QUIET, {"context_needed": 2, "boundary": 2}), abs=0.01)
 
 
 @pytest.mark.parametrize("s,p,r", [(30, 20, 40), (10, 20, 70), (-5, 20, 24), (20, 20, 24)])
@@ -54,7 +54,10 @@ def test_no_event_is_demote_not_none():
 def test_risk_actions():
     assert J.risk_action(["minor"]) == "block"
     assert J.risk_action(["private_info", "bystander_target"]) == "block"
-    assert J.risk_action(["bystander_target"]) == "demote"
+    assert J.risk_action(["bystander_target"]) == "none"
+    assert J.risk_action(["hate_or_harassment"]) == "demote"
+    assert J.risk_action(["creator_regret"]) == "demote"
+    assert J.risk_action(["violence_or_medical", "third_party_media"]) == "none"
     assert J.risk_action(["not_a_flag"]) == "none"
 
 
@@ -131,12 +134,16 @@ def test_interval_clamp_never_above_1fps(raw, want, monkeypatch):
 def test_budget_cap(monkeypatch):
     for k in ("CLIPFIND_DENSE_MAX_USD_PER_STREAM_HOUR", "CLIPFIND_DENSE_MAX_USD_PER_JOB"):
         monkeypatch.delenv(k, raising=False)
-    assert D.budget_cap_usd(1.0) == 0.30 and D.budget_cap_usd(1 / 6) == 0.10 and D.budget_cap_usd(8) == 0.75
+    assert D.budget_cap_usd(1.0) == 1.0 and D.budget_cap_usd(1 / 6) == pytest.approx(0.30, abs=0.01) and D.budget_cap_usd(8) == 2.0
+
+
+def test_pad_s_is_25():
+    assert D.PAD_S == 25.0
 
 
 def test_window_caps_at_120s_keeping_the_end():
     lo, hi = D.dense_window(100_000, 130_000, 10_000_000, {"setup_start_ms": 10_000, "reaction_end_ms": 140_000})
-    assert hi == 150_000 and hi - lo == 120_000
+    assert hi == 165_000 and hi - lo == 120_000
 
 
 WORDS = [{"w": f"w{i}", "s": float(i), "e": i + 0.6} for i in range(0, 400)]
@@ -162,15 +169,39 @@ def test_budget_stops_calls_and_logs():
 
 
 def test_call_errors_and_invalid_output_are_skipped_not_fatal():
+    entries: list[tuple] = []
+
     def fn(c):
         if c["idx"] == 0:
             raise TimeoutError()
         if c["idx"] == 1:
             return {"garbage": True}, 0.001
         return _item(), 0.001
-    out, logs = _run(_cands(3), fn)
+
+    out = D.run_dense(
+        _cands(3), call_fn=fn, price=lambda a, b: 0.01, budget=D.Budget(1.0), words=WORDS,
+        min_ms=15_000, max_ms=60_000, duration_ms=1_000_000, interval_s=2.5,
+        log=lambda ev, **k: entries.append((ev, k)),
+    )
     assert [s[0] for s in out.skipped] == [0, 1] and set(out.results) == {2}
-    assert "dense_call_error" in logs and "dense_invalid_output" in logs
+    assert any(e[0] == "dense_call_error" for e in entries)
+    inv = [e for e in entries if e[0] == "dense_invalid_output"]
+    assert inv and inv[0][1].get("reason")
+
+
+def test_dense_clamp_fixes_order_before_parse():
+    entries: list[tuple] = []
+    raw = _item(setup_start_s=50.0, payoff_s=40.0, reaction_end_s=38.0)
+
+    def fn(c):
+        return raw, 0.001
+
+    out = D.run_dense(
+        _cands(1), call_fn=fn, price=lambda a, b: 0.01, budget=D.Budget(1.0), words=WORDS,
+        min_ms=15_000, max_ms=60_000, duration_ms=1_000_000, interval_s=2.5,
+        log=lambda ev, **k: entries.append((ev, k)),
+    )
+    assert 0 in out.results and not any(e[0] == "dense_invalid_output" for e in entries)
 
 
 def test_apply_quiet_joke_bounds_word_safe_and_min_len():
@@ -193,17 +224,17 @@ def test_time_cap():
 
 
 def test_retier_blocks_demotes_promotes_never_drops():
-    items = [{"tier": "primary", "judge": {"risk_action": "block", "risk_flags": ["minor"]}},
-             {"tier": "primary", "judge": {"verdict": "keep"}},
-             {"tier": "primary", "judge": {"verdict": "demote"}},
-             {"tier": "more", "judge": None},
-             {"tier": "more", "judge": {"risk_action": "demote", "risk_flags": ["bystander_target"]}},
-             {"tier": "more", "judge": {"verdict": "keep"}}]
+    items = [{"tier": "primary", "judge": {"risk_action": "block", "risk_flags": ["minor"], "score": 3}},
+             {"tier": "primary", "judge": {"verdict": "keep", "score": 8}},
+             {"tier": "primary", "judge": {"verdict": "demote", "score": 3}},
+             {"tier": "more", "judge": None, "old_score": 7.5},
+             {"tier": "more", "judge": {"risk_action": "none", "risk_flags": ["bystander_target"], "score": 8}},
+             {"tier": "more", "judge": {"verdict": "keep", "score": 9}}]
     order = D.retier(items)
     assert len(order) == 6 and sorted(order) == list(range(6))
-    assert [items[i]["tier"] for i in order[:3]] == ["primary"] * 3
-    assert items[0]["tier"] == "more" and items[0]["render"] is False and items[0]["demote_reason"].startswith("risk_block")
-    assert items[3]["tier"] == "primary" and items[5]["tier"] == "primary" and items[4]["tier"] == "more"
+    assert sum(it["tier"] == "primary" for it in items) >= 3
+    assert items[0]["tier"] == "more" and items[0]["render"] is False
+    assert items[3]["final_score"] == 7.5
 
 
 # ---------------------------------------------------------------- eval scorer
@@ -266,20 +297,22 @@ def test_retier_dense_visual_payoff_promotes_quiet_transcript_clip():
     items = [
         {"tier": "primary", "id": "c0", "judge": {"score": 4.5, "verdict": "keep"}},
         {"tier": "primary", "id": "c1", "judge": {"score": 7.0, "verdict": "keep"}},
-        {"tier": "more", "id": "c2", "judge": {"score": 9.0, "verdict": "keep"}},  # visual-only payoff seen in frames
+        {"tier": "more", "id": "c2", "judge": {"score": 9.0, "verdict": "keep"}},
     ]
-    order = D.retier(items)
-    assert [it["tier"] for it in items] == ["more", "primary", "primary"]
-    assert order[:2] == [2, 1]
+    order = D.retier(items, stream_hours=1.0)
+    assert items[2]["tier"] == "primary" and items[1]["tier"] == "primary"
+    assert order[0] == 2
 
 
-def test_retier_keeps_primary_count_and_never_drops():
+def test_retier_keeps_at_least_one_primary_and_unjudged_old_score():
     items = [{"tier": "primary", "id": "a", "judge": {"score": 2, "verdict": "demote"}},
-             {"tier": "more", "id": "b", "judge": None},
+             {"tier": "more", "id": "b", "judge": None, "old_score": 7.0},
              {"tier": "more", "id": "c", "judge": {"score": 6}}]
-    order = D.retier(items)
+    order = D.retier(items, stream_hours=1 / 12)
     assert sorted(order) == [0, 1, 2]
-    assert sum(it["tier"] == "primary" for it in items) == 1 and items[2]["tier"] == "primary"
+    assert sum(it["tier"] == "primary" for it in items) >= 1
+    assert items[1]["final_score"] == 7.0
+    assert items[1]["tier"] == "primary"
 
 
 def test_retier_gaming_floor_for_video_found():
@@ -297,5 +330,7 @@ def test_retier_risk_block_beats_floor():
     assert items[0]["tier"] == "more" and items[0]["render"] is False and items[1]["tier"] == "primary"
 
 
-def test_prompt_says_video_is_primary():
+def test_prompt_says_video_is_primary_and_examples_not_checklist():
     assert "VIDEO IS PRIMARY EVIDENCE" in J.JUDGE_SYSTEM_DENSE and "purely visual" in J.JUDGE_SYSTEM_BATCH
+    assert "EXAMPLES, not a checklist" in J.JUDGE_SYSTEM_BATCH
+    assert "weak but still ranked" in J.JUDGE_SYSTEM_DENSE

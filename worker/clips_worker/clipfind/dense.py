@@ -10,12 +10,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from clips_worker.clipfind.judge import JUDGE_PROMPT_VERSION, judge_beats_ms, parse_judge_item
+from clips_worker.clipfind.judge import ARCHETYPES, JUDGE_PROMPT_VERSION, judge_beats_ms, parse_judge_item
 from clips_worker.clipfind.refine import ClipBeats, fit_max, snap_end_to_word, snap_start_to_word
 
 DEFAULT_INTERVAL_S = 1.0
 MAX_WINDOW_S = 120.0
-PAD_S = 10.0
+PAD_S = 25.0
 LOW_TOKENS_PER_FRAME = 66      # Gemini MEDIA_RESOLUTION_LOW
 AUDIO_TOKENS_PER_S = 32
 OUT_TOKENS_EST = 1500
@@ -47,10 +47,10 @@ def dense_fps(raw: str | float | None = None) -> float:
 
 
 def budget_cap_usd(stream_hours: float) -> float:
-    """min(per-job cap, max(floor, per-hour x hours)). Defaults: 0.30/h, floor 0.10, job 0.75."""
-    per_h = _envf("CLIPFIND_DENSE_MAX_USD_PER_STREAM_HOUR", 0.30)
-    per_job = _envf("CLIPFIND_DENSE_MAX_USD_PER_JOB", 0.75)
-    return round(min(per_job, max(0.10, per_h * max(0.0, stream_hours))), 4)
+    """min(per-job cap, max(floor, per-hour x hours)). Defaults: 1.00/h, floor 0.30, job 2.00."""
+    per_h = _envf("CLIPFIND_DENSE_MAX_USD_PER_STREAM_HOUR", 1.00)
+    per_job = _envf("CLIPFIND_DENSE_MAX_USD_PER_JOB", 2.00)
+    return round(min(per_job, max(0.30, per_h * max(0.0, stream_hours))), 4)
 
 
 @dataclass
@@ -79,7 +79,7 @@ def estimate_call_usd(window_s: float, interval_s: float, text_chars: int,
 
 
 def dense_window(start_ms: int, end_ms: int, duration_ms: int, beats: dict | None = None) -> tuple[int, int]:
-    """[min(start, setup) - 10s, max(end, reaction_end) + 10s], <= 120 s (trim the front first), clamped."""
+    """[min(start, setup) - PAD_S, max(end, reaction_end) + PAD_S], <= 120 s (trim the front first), clamped."""
     lo = min(start_ms, int((beats or {}).get("setup_start_ms", start_ms))) - int(PAD_S * 1000)
     hi = max(end_ms, int((beats or {}).get("reaction_end_ms", end_ms))) + int(PAD_S * 1000)
     lo, hi = max(0, lo), min(duration_ms, hi)
@@ -100,6 +100,14 @@ def select_candidates(items: list[dict], k: int | None = None) -> list[int]:
     return order[: max(0, k)]
 
 
+def _visual_setup_only(j: dict) -> bool:
+    """Dense judge cited a frame/visual setup with no transcript quote."""
+    ev = str((j.get("evidence") or {}).get("setup") or "").strip()
+    if not ev:
+        return True
+    return '"' not in ev and "'" not in ev and not ev.startswith("(")
+
+
 def apply_judgement(j: dict, *, offset_ms: int, words: list[dict], start_ms: int, end_ms: int,
                     min_ms: int, max_ms: int, duration_ms: int) -> tuple[int, int, dict] | None:
     """Judge beats (window-relative) -> word-safe bounds + ClipBeats(source='dense').
@@ -107,7 +115,9 @@ def apply_judgement(j: dict, *, offset_ms: int, words: list[dict], start_ms: int
     b = judge_beats_ms(j, offset_ms / 1000.0)
     if not b:
         return None
-    s = snap_start_to_word(max(0, b["setup"]), words)
+    setup_ms = max(0, b["setup"])
+    snapped = snap_start_to_word(setup_ms, words)
+    s = min(snapped, setup_ms) if j.get("source") == "dense" and _visual_setup_only(j) else snapped
     e = snap_end_to_word(min(duration_ms, b["reaction_end"]), words, duration_ms)
     e = max(e, b["payoff"] + 1000)
     if e - s < min_ms:
@@ -131,6 +141,38 @@ class DenseOutcome:
     calls: int = 0
     budget_exhausted: bool = False
     time_exhausted: bool = False
+
+
+def _fixup_judge_times(row: dict, lo_s: float, hi_s: float) -> dict:
+    out = dict(row)
+    try:
+        s = float(out.get("setup_start_s", 0))
+        p = float(out.get("payoff_s", s))
+        r = float(out.get("reaction_end_s", p))
+    except (TypeError, ValueError):
+        return out
+    s, p, r = max(lo_s, min(hi_s, s)), max(lo_s, min(hi_s, p)), max(lo_s, min(hi_s, r))
+    if s >= p:
+        s = max(lo_s, p - 1.0)
+    if r < p:
+        r = p
+    out["setup_start_s"], out["payoff_s"], out["reaction_end_s"] = s, p, r
+    return out
+
+
+def _invalid_judge_reason(row: dict, lo_s: float, hi_s: float) -> str:
+    if not isinstance(row, dict):
+        return "not_object"
+    try:
+        s, p, r = float(row["setup_start_s"]), float(row["payoff_s"]), float(row["reaction_end_s"])
+    except (KeyError, TypeError, ValueError):
+        return "missing_times"
+    present = bool(row.get("event_present", True)) and row.get("archetype") != "none"
+    if present and not (lo_s - 0.5 <= s < p <= r <= hi_s + 0.5):
+        return f"bad_order_or_span setup={s} payoff={p} reaction={r} lo={lo_s} hi={hi_s}"
+    if row.get("archetype") not in ARCHETYPES:
+        return f"bad_archetype={row.get('archetype')!r}"
+    return "unknown"
 
 
 def run_dense(cands: list[dict], *, call_fn: Callable[[dict], tuple[dict | None, float]],
@@ -162,10 +204,15 @@ def run_dense(cands: list[dict], *, call_fn: Callable[[dict], tuple[dict | None,
             log("dense_call_error", idx=idx, reason=type(exc).__name__)
             continue
         budget.add(usd if usd else est)
-        j = parse_judge_item(raw, 0.0, (hi - lo) / 1000.0) if raw else None
+        win_s = (hi - lo) / 1000.0
+        fixed = _fixup_judge_times(raw, 0.0, win_s) if raw else None
+        j = parse_judge_item(fixed, 0.0, win_s) if fixed else None
         if not j:
-            out.skipped.append((idx, "invalid_output"))
-            log("dense_invalid_output", idx=idx)
+            reason = _invalid_judge_reason(fixed or {}, 0.0, win_s) if fixed else "empty_output"
+            out.skipped.append((idx, f"invalid_output:{reason}"))
+            log("dense_invalid_output", idx=idx, reason=reason,
+                setup=(fixed or {}).get("setup_start_s"), payoff=(fixed or {}).get("payoff_s"),
+                reaction=(fixed or {}).get("reaction_end_s"))
             continue
         j["source"] = "dense"
         j["window_ms"] = [lo, hi]
@@ -183,30 +230,29 @@ def run_dense(cands: list[dict], *, call_fn: Callable[[dict], tuple[dict | None,
     return out
 
 
+def primary_slot_cap(stream_hours: float) -> int:
+    return max(3, min(12, int(round(12 * max(0.0, stream_hours)))))
+
+
 def _final_score(it: dict) -> float | None:
-    """The dense (frames+audio+transcript+chat) score wins; else the text judge; vp_ items keep a floor of their
-    pre-judge score (0-10) unless risk-blocked (gaming floor)."""
+    """Dense/text judge score when present; unjudged items keep old_score (0-10). vp_ judged items keep a floor."""
     j = it.get("judge") or {}
     sc = j.get("score")
+    old = it.get("old_score")
     if sc is None:
-        return None
+        return float(old) if old is not None else None
     sc = float(sc)
-    if str(it.get("id") or "").startswith("vp_") and it.get("old_score") is not None \
-            and j.get("risk_action", "none") != "block":
-        sc = max(sc, float(it["old_score"]))
+    if old is not None and str(it.get("id") or "").startswith("vp_") and j.get("risk_action", "none") != "block":
+        sc = max(sc, float(old))
     return sc
 
 
-def retier(items: list[dict]) -> list[int]:
-    """Judge-aware re-tier that NEVER drops and keeps the primary COUNT constant.
-    items: [{"tier","judge"|None,"id","old_score"(0-10)|None}] in current order. "judge" is the dense judgement when the
-    dense look ran for that item, else the text judgement.
-    - risk_action block -> tier more, render False (never primary)
-    - verdict demote or risk demote -> not eligible for primary
-    - the primary slots go to the eligible primary+more items with the highest final score (_final_score);
-      items with no score keep their old relative position after scored ones of the same old tier.
-    Mutates each item's "tier"/"render"/"demote_reason"/"final_score"; returns the new order (indices)."""
-    n_primary = sum(1 for it in items if it.get("tier") == "primary")
+def retier(items: list[dict], *, stream_hours: float = 1.0) -> list[int]:
+    """Judge-aware re-tier that NEVER drops candidates.
+    Primary slot count = max(old primary count, judged items scoring >=6), capped by stream length (3-12).
+    Fills primary slots from highest final_score; never leaves primaries empty except risk-block-only pools."""
+    n_primary_old = sum(1 for it in items if it.get("tier") == "primary")
+    judged_ge6 = 0
     for it in items:
         j = it.get("judge") or {}
         ra = j.get("risk_action", "none")
@@ -215,23 +261,41 @@ def retier(items: list[dict]) -> list[int]:
         elif j.get("verdict") == "demote" or ra == "demote":
             it["demote_reason"] = "judge_demote" if j.get("verdict") == "demote" else "risk:" + ",".join(j.get("risk_flags") or [])
         it["final_score"] = _final_score(it)
+        if (j.get("score") is not None and it["final_score"] is not None and it["final_score"] >= 6
+                and not str(it.get("demote_reason") or "").startswith("risk_block")):
+            judged_ge6 += 1
+    n_primary = min(primary_slot_cap(stream_hours), max(n_primary_old, judged_ge6))
     pool = [i for i, it in enumerate(items) if it.get("tier") in ("primary", "more")]
     old_rank = {"primary": 0, "more": 1}
 
     def key(i: int):
         it = items[i]
         fs = it["final_score"]
-        return (1 if it.get("demote_reason") else 0,
+        blocked = str(it.get("demote_reason") or "").startswith("risk_block")
+        return (1 if blocked else 0,
+                1 if it.get("demote_reason") and not blocked else 0,
                 0 if fs is not None else 1,
                 -(fs or 0.0),
                 old_rank.get(it.get("tier"), 2),
                 i)
 
     ordered = sorted(pool, key=key)
-    primary = set(i for i in ordered[:n_primary] if not items[i].get("demote_reason"))
+    primary: list[int] = []
+    for i in ordered:
+        if str(items[i].get("demote_reason") or "").startswith("risk_block"):
+            continue
+        primary.append(i)
+        if len(primary) >= n_primary:
+            break
+    if not primary:
+        for i in ordered:
+            if not str(items[i].get("demote_reason") or "").startswith("risk_block"):
+                primary = [i]
+                break
+    primary_set = set(primary)
     for i in pool:
-        items[i]["tier"] = "primary" if i in primary else "more"
+        items[i]["tier"] = "primary" if i in primary_set else "more"
     for it in items:
         it["render"] = it.get("tier") == "primary"
     rest = [i for i in range(len(items)) if i not in pool]
-    return [i for i in ordered if i in primary] + [i for i in ordered if i not in primary] + rest
+    return [i for i in ordered if i in primary_set] + [i for i in ordered if i not in primary_set] + rest

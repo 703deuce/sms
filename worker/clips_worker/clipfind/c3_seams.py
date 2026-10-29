@@ -272,7 +272,7 @@ def post_rank_stream(picks, *, words, signals_payload, duration_ms, settings, sc
               "old_score": _old10(p),
               "judge": (p.ai_meta.get("clipfind") or {}).get("judge")} for p in picks]
     from clips_worker.clipfind.dense import retier
-    order = retier(items)
+    order = retier(items, stream_hours=duration_ms / 3_600_000)
     for p, it in zip(picks, items):
         sm = p.ai_meta.setdefault("streamer", {})
         if sm.get("tier") != it["tier"]:

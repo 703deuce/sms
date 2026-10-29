@@ -19,8 +19,9 @@ RISK_FLAGS = (
     "bystander_target", "minor", "private_info", "sexual", "violence_or_medical",
     "third_party_media", "creator_regret", "hate_or_harassment",
 )
-# Flags that must never render as primary (demote to "more", render=False). Others demote one band.
-BLOCK_FLAGS = frozenset({"minor", "sexual", "private_info", "hate_or_harassment"})
+# Flags that must never render as primary (demote to "more", render=False).
+BLOCK_FLAGS = frozenset({"minor", "sexual", "private_info"})
+DEMOTE_FLAGS = frozenset({"hate_or_harassment", "creator_regret"})
 WEIGHTS = {"payoff": 0.30, "standalone": 0.20, "hook": 0.15, "reaction": 0.15, "rewatch": 0.20}
 # Legacy llm_rank category enum (llm_rank.py:23-36) so fusion/_reasons_for keep working.
 ARCHETYPE_TO_CATEGORY = {
@@ -36,6 +37,9 @@ PAYOFF (the line, answer, outcome or play), REACTION (the laugh, stunned silence
 The signal is not the moment. A laugh points back to a joke. A "W/L" spam points back to a take or outcome.
 A badge or victory screen points back to the fight. A closing line points back to its question.
 A viewer clip or a chat !clip marks the PAYOFF or the reaction; the setup is usually 5-30 s earlier.
+The archetypes and cues below are EXAMPLES, not a checklist. Anything a viewer would rewatch or send to a friend qualifies:
+funny, shocking, awkward, wholesome, impressive, emotional, chaotic, a visual spectacle, a strong opinion, a surprising fact.
+Use your own judgement for moments that fit no example; use archetype 'banter' or the closest one.
 
 HOW TO READ THE MODALITIES TOGETHER
 1. VIDEO IS PRIMARY EVIDENCE, at least as important as the transcript. Find the PAYOFF from what is shown and what is
@@ -61,6 +65,8 @@ FIND THE BOUNDARIES (all times in the same seconds as the transcript labels)
   line, the moment the stakes become visible (a 1vX, low HP), the start of the story ("so this one time..."), or the
   donation/TTS text being read. Never a greeting, "so anyway", or the previous topic. Start on a sentence boundary.
   If the setup is longer than ~30 s before the payoff, choose the latest start that still makes it understandable.
+  setup_start_s may be earlier than the candidate start if the video shows the setup beginning before anyone talks
+  (e.g. a car starting up a ramp).
 - payoff_s: the time of the punchline, answer, outcome or decisive play.
 - reaction_end_s: after the reaction peaks and decays: the laugh ends, the comeback finishes, the stranger leaves,
   the streamer's one-line take lands. Include the pause before the reaction. Never end mid-laugh or mid-word, or into
@@ -70,20 +76,21 @@ FIND THE BOUNDARIES (all times in the same seconds as the transcript labels)
 
 SCORE (each criterion 0-10)
 payoff 0.30 . standalone 0.20 . hook 0.15 . reaction 0.15 . rewatch 0.20,
-minus penalties: context_needed (0-4), boundary (0-5), risk (0-10).
-Guidance: 9-10 = a stranger would share it. 7-8 = clearly good. 5-6 = fine filler. <=4 = drop.
+minus penalties: context_needed (0-2), boundary (0-2). Do not use the risk field to change score.
+Guidance: 9-10 = a stranger would share it. 7-8 = clearly good. 5-6 = fine filler. <=4 = weak but still ranked.
 Do not raise a score because it is loud or because chat spiked. Do not lower a score because it is quiet.
-If the clip only makes sense with earlier stream context (an inside joke, "remember earlier"), standalone <=3.
+If the clip only makes sense with earlier stream context (an inside joke, "remember earlier"), lower standalone a little.
 
-RISK FLAGS (set every one that applies, even if the score is high)
-bystander_target: a non-consenting stranger is the butt of the joke or humiliated.
+RISK FLAGS (set every one that applies, even if the score is high; labels for safety review, not automatic drops)
+bystander_target: a stranger is mocked or humiliated on purpose; bumping into or reacting to strangers is NOT this.
 minor: a person who appears under 18 is central (block any mockery, conflict or flirting with them).
 private_info: an address, plate, phone, ID, house number, or a person's private details read or shown.
 sexual: nudity or sexual content.
-violence_or_medical: a fight, injury or emergency involving a non-streamer.
-third_party_media: copyrighted video or music dominates the clip.
+violence_or_medical: a real injury or emergency to a non-streamer; sport, boxing, staged fights and pranks are NOT this.
+third_party_media: someone else's video/music plays with NO streamer reaction visible or audible.
 creator_regret: the streamer asks not to clip it, or is visibly distressed about it airing.
-hate_or_harassment: slurs, or targeted harassment.
+hate_or_harassment: the streamer or a guest uses a slur or harasses someone in a way that would embarrass them.
+NOT someone shutting a slur down, NOT the topic being discussed.
 """
 
 _ITEM_FIELDS = """  "archetype": "stranger_encounter|confrontation|quick_wit|chat_roast_tts|hot_take|storytime|banter|reaction_to_content|fail|wholesome|rizz|surprising_answer|gaming_play|none",
@@ -189,7 +196,7 @@ def rubric_score(criteria: dict | None, penalties: dict | None) -> float:
     cr = criteria or {}
     pe = penalties or {}
     s = sum(w * _c(cr.get(k), 0, 10) for k, w in WEIGHTS.items())
-    s -= _c(pe.get("context_needed"), 0, 4) + _c(pe.get("boundary"), 0, 5) + _c(pe.get("risk"), 0, 10)
+    s -= _c(pe.get("context_needed"), 0, 2) + _c(pe.get("boundary"), 0, 2)
     return round(max(0.0, min(10.0, s)), 2)
 
 
@@ -198,11 +205,13 @@ def band(score: float) -> str:
 
 
 def risk_action(flags: list[str] | None) -> str:
-    """'block' -> never primary (render False). 'demote' -> one band down. 'none'."""
+    """'block' -> never primary (render False). 'demote' -> hate/regret only. Other flags are labels ('none')."""
     fl = {f for f in (flags or []) if f in RISK_FLAGS}
     if fl & BLOCK_FLAGS:
         return "block"
-    return "demote" if fl else "none"
+    if fl & DEMOTE_FLAGS:
+        return "demote"
+    return "none"
 
 
 # ---------------------------------------------------------------- parsing
@@ -221,8 +230,9 @@ def parse_judge_item(row: Any, lo_s: float, hi_s: float) -> dict | None:
         return None
     arch = row.get("archetype") if row.get("archetype") in ARCHETYPES else "none"
     flags = [f for f in (row.get("risk_flags") or []) if f in RISK_FLAGS]
-    score = rubric_score(row.get("criteria"), row.get("penalties"))
-    verdict = "demote" if (not present or row.get("verdict") == "demote" or score < 4) else "keep"
+    rubric = rubric_score(row.get("criteria"), row.get("penalties"))
+    score = round(max(_c(row.get("score"), 0, 10), rubric), 2)
+    verdict = "demote" if not present else ("demote" if row.get("verdict") == "demote" else "keep")
     hook = row.get("hook_s")
     hook = float(hook) if isinstance(hook, (int, float)) and lo_s <= float(hook) <= hi_s else None
     return {
