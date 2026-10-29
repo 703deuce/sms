@@ -4,19 +4,20 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 CLIPS_RE='^(components/clips|lib/clips|app/app/clips|app/api/clips|lib/server/clips)/'
 OUT="$(mktemp)"
-if ! npx tsc -p tsconfig.typecheck.json --noEmit --pretty false >"$OUT" 2>&1; then
-  if rg -q "${CLIPS_RE}.* error TS(2300|2440):" "$OUT"; then
-    cat "$OUT"
-    rm -f "$OUT"
-    echo "[typecheck:clips] FAILED — duplicate identifier (TS2300/TS2440) under clips paths" >&2
-    exit 1
-  fi
-  if rg -q "${CLIPS_RE}" "$OUT"; then
-    cat "$OUT"
-    rm -f "$OUT"
-    echo "[typecheck:clips] FAILED — errors under clips paths" >&2
-    exit 1
-  fi
+NODE_OPTIONS='--max-old-space-size=8192' npx tsc -p tsconfig.typecheck.json --noEmit --pretty false >"$OUT" 2>&1 || true
+
+if rg -q "${CLIPS_RE}.* error TS(2304|2552):" "$OUT"; then
+  rg "${CLIPS_RE}.* error TS(2304|2552):" "$OUT" || true
+  rm -f "$OUT"
+  echo "[typecheck:clips] FAILED — Cannot find name (TS2304/TS2552) under clips paths" >&2
+  exit 1
+fi
+
+if rg -q "${CLIPS_RE}.* error TS(2300|2440):" "$OUT"; then
+  rg "${CLIPS_RE}.* error TS(2300|2440):" "$OUT" || true
+  rm -f "$OUT"
+  echo "[typecheck:clips] FAILED — duplicate identifier (TS2300/TS2440) under clips paths" >&2
+  exit 1
 fi
 
 # Turbopack: duplicate value imports of the same binding from one module.

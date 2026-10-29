@@ -7,6 +7,7 @@ import { EditorMobileRail } from '@/components/clips/editor/editor-mobile-rail'
 import { TAB_META } from '@/components/clips/editor/editor-tab-meta'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Loader2, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ClipBounds } from '@/lib/clips/edits'
@@ -62,6 +63,7 @@ const clipEditorMontserrat = Montserrat({ subsets: ['latin'], weight: ['900'], v
 import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
+import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import {
   vodChatOverlayEnabled,

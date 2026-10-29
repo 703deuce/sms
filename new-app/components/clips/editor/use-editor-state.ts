@@ -269,6 +269,8 @@ export function useEditorState(
     [addCleanupCuts],
   )
 
+  const applyCleanupCuts = addCleanupCuts
+
   const setWordFix = useCallback(
     (index: number, text: string, meta?: { s: number; w: string }) => {
       const fixes = { ...state.edits.wordFixes }

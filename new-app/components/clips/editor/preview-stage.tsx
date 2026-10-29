@@ -23,6 +23,7 @@ import { nearestPipCorner, pipCornerSlotStyle } from '@/lib/clips/headline-previ
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
+import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
 
 function clamp(n: number, lo: number, hi: number) {

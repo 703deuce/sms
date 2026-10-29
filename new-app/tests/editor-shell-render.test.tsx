@@ -1,0 +1,102 @@
+// @vitest-environment happy-dom
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { render } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { EditorShell } from '@/components/clips/editor/editor-shell'
+import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+
+vi.mock('next/font/google', () => ({
+  Anton: () => ({ variable: '--font-clip-anton' }),
+  Montserrat: () => ({ variable: '--font-clip-montserrat' }),
+}))
+
+vi.mock('@/components/shell/breadcrumb-context', () => ({
+  useSetBreadcrumbTitle: vi.fn(),
+}))
+
+vi.mock('@/lib/clips-api', () => ({
+  clipsFetch: vi.fn(() => Promise.resolve({ channels: [] })),
+  patchClip: vi.fn(() => Promise.resolve({})),
+  deriveClipFromEditor: vi.fn(),
+  requestClipReframe: vi.fn(),
+  saveClipBrandTemplate: vi.fn(),
+  exportClipWithOptions: vi.fn(),
+  getRenderStatus: vi.fn(),
+}))
+
+vi.mock('@/components/clips/editor/use-generation', () => ({
+  useGeneration: () => ({
+    gen: null,
+    brollMedia: [],
+    refreshBroll: vi.fn(),
+  }),
+}))
+
+vi.mock('@/components/clips/editor/use-dub-preview', () => ({
+  useDubPreview: () => ({ dubs: [], dubLoading: false }),
+}))
+
+vi.mock('@/components/clips/editor/use-audio-mix', () => ({
+  useAudioMix: () => ({
+    mix: null,
+    mixLoading: false,
+    refreshMix: vi.fn(),
+  }),
+}))
+
+vi.mock('@/components/clips/editor/use-studio-sound-preview', () => ({
+  useStudioSoundPreview: () => ({
+    studioPreviewUrl: null,
+    studioPreviewState: 'idle',
+    studioSlow: false,
+    requestStudioPreview: vi.fn(),
+  }),
+}))
+
+vi.mock('@/components/clips/editor/use-editor-words', () => ({
+  useEditorWords: () => ({ words: [{ i: 0, w: 'hello', s: 0, e: 500 }], loading: false }),
+}))
+
+vi.mock('@/lib/clips/video-playback', () => ({
+  playWithSound: vi.fn(),
+}))
+
+vi.mock('sonner', () => ({
+  toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() },
+}))
+
+const bounds = { clipStartMs: 0, clipEndMs: 60000, trimMinMs: 0, trimMaxMs: 120000 }
+
+function loadFixture(name: string): ClipEditsV2 {
+  const raw = JSON.parse(readFileSync(join(__dirname, 'fixtures/export-dialog-edits', name), 'utf8'))
+  if (name === 'regular.json') {
+    return normalizeEdits(defaultEdits(bounds), bounds)
+  }
+  return normalizeEdits(raw, bounds)
+}
+
+describe('EditorShell render smoke', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('mounts with regular fixture edits (useEditorState + shell imports resolve)', () => {
+    const edits = loadFixture('regular.json')
+    expect(() =>
+      render(
+        <EditorShell
+          projectId="proj_test"
+          clipId="clip_test"
+          initialTitle="Test clip"
+          bounds={bounds}
+          initialEdits={edits}
+          words={[{ i: 0, w: 'hello', s: 0, e: 500 }]}
+          cropShots={[]}
+          cropTrack={null}
+          videoUrl={null}
+        />,
+      ),
+    ).not.toThrow()
+  })
+})

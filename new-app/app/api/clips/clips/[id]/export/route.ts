@@ -21,6 +21,7 @@ import { enqueueRenderClip } from '@/lib/server/clips/renders'
 import { applyExportPolishEdits } from '@/lib/server/clips/apply-export-polish'
 import { clipBoundsForPatch } from '@/lib/server/clips/clip-patch-bounds'
 import { getPrisma } from '@/lib/server/db'
+import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 
