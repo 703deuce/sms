@@ -22,7 +22,7 @@ const DEFAULTS: ExportDialogPreferences = {
   exportSfx: 'off',
   headlineBarEnabled: false,
   platformBadgeEnabled: false,
-  channelLinkEnabled: true,
+  channelLinkEnabled: false,
   profanityCensor: false,
 }
 

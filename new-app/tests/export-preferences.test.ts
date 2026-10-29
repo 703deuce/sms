@@ -14,6 +14,6 @@ describe('export preferences', () => {
     )
     expect(tpl.headlineBar?.enabled).toBe(false)
     expect(tpl.platformBadge?.enabled).toBe(false)
-    expect(tpl.channelLink?.enabled).toBe(true)
+    expect(tpl.channelLink?.enabled).toBe(false)
   })
 })

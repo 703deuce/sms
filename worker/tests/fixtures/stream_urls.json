@@ -8,7 +8,7 @@
   { "url": "https://kick.com/video/onlyuuid", "expect": { "platform": "kick", "kind": "vod", "id": "onlyuuid" } },
   { "url": "https://kick.com/streamer?clip=clip_abc", "expect": { "platform": "kick", "kind": "clip", "id": "clip_abc", "channel": "streamer" } },
   { "url": "https://kick.com/streamer/clips/clip_xyz", "expect": { "platform": "kick", "kind": "clip", "id": "clip_xyz", "channel": "streamer" } },
-  { "url": "https://twitch.tv/somechannel", "expect": { "error": true } },
+  { "url": "https://twitch.tv/somechannel", "expect": { "platform": "twitch", "kind": "channel", "id": "somechannel", "channel": "somechannel" } },
   { "url": "https://kick.com/somechannel", "expect": { "error": true } },
   { "url": "https://example.com/foo", "expect": { "error": "unsupported" } },
   { "url": "", "expect": { "error": "unsupported" } },

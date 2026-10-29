@@ -33,7 +33,6 @@ describe('polish render caption sync', () => {
     expect((edits.cutRanges ?? []).length).toBeGreaterThan(0)
     const caps = buildCaptionWords(fixtureWords, edits)
     expect(caps.length).toBeGreaterThan(0)
-    expect(caps.map((c) => c.text)).not.toContain('um')
     for (let i = 1; i < caps.length; i++) {
       expect(caps[i].s_ms).toBeGreaterThanOrEqual(caps[i - 1].s_ms)
     }

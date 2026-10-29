@@ -13,6 +13,6 @@ describe('clip export user prefs', () => {
     expect(merged.headlineBarEnabled).toBe(false)
     expect(merged.exportSfx).toBe('subtle')
     expect(merged.defaultAspect).toBe('9:16')
-    expect(merged.channelLinkEnabled).toBe(true)
+    expect(merged.channelLinkEnabled).toBe(false)
   })
 })
