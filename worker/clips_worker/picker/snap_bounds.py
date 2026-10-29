@@ -380,6 +380,29 @@ def snap_bounds(
     if not _is_sentence_final_word(words, we_end):
         we_end = _sentence_final_word_index_at_or_before(words, we_end)
     end_ms = min(range_end_ms, int(words[we_end]["e"] * 1000))
+    sentence_final_end_ms = end_ms
+    try:
+        from clips_worker.clipfind.flags import clipfind_flag
+
+        if clipfind_flag("CLIPFIND_REACTION_TAIL"):
+            from clips_worker.clipfind.beats import compute_beats_heuristic
+            from clips_worker.clipfind.c2_boundaries import apply_reaction_tail_to_end_ms
+
+            beats = compute_beats_heuristic(
+                start_ms=before[0],
+                end_ms=before[1],
+                range_start_ms=range_start_ms,
+                range_end_ms=range_end_ms,
+                words=words,
+            )
+            end_ms = apply_reaction_tail_to_end_ms(
+                end_ms,
+                beats=beats,
+                range_end_ms=range_end_ms,
+                sentence_final_end_ms=sentence_final_end_ms,
+            )
+    except Exception:
+        pass
     if end_ms <= start_ms:
         start_ms, end_ms = before
 
