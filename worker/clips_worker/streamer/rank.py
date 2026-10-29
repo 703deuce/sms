@@ -134,6 +134,12 @@ def rank_moments(
         cue_events=cue_events,
         video_moments=video_moments,
         transcript_ok=transcript_ok,
+        raw_channels={
+            "_raw_audio": list(vod_signal_curves.get("audio") or []) if vod_signal_curves else None,
+            "_raw_reaction": list(vod_signal_curves.get("reaction") or []) if vod_signal_curves else None,
+        }
+        if vod_signal_curves
+        else None,
     )
     from clips_worker.target_clip_len import enrich_settings_with_clip_length, resolve_clip_length_policy
 

@@ -183,7 +183,10 @@ def stream_chunk_video_signals(
                 ti = off + i
                 if 0 <= ti < duration_s:
                     merged[ti] = max(merged[ti], float(val))
-    all_moments = merge_stream_moments(all_moments, overlap_s)
+    from clips_worker.clipfind.flags import clipfind_flag
+
+    merge_mode = "peak_iou" if clipfind_flag("CLIPFIND_PEAK_DEDUPE_IOU") else "peak_window"
+    all_moments = merge_stream_moments(all_moments, overlap_s, mode=merge_mode)
     vod_range_start_ms = vod_start_ms
     attach_absolute_ms(all_moments, vod_range_start_ms)
     agg = {

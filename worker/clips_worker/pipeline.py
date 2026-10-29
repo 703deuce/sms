@@ -449,6 +449,16 @@ def run_m4_pipeline(
         if isinstance(job_payload, str):
             job_payload = json.loads(job_payload)
     workspace_id = project["workspaceId"]
+    from clips_worker.clipfind.context import bind_clipfind, unbind_clipfind
+    from clips_worker.clipfind.flags import log_resolved_flags
+
+    bind_clipfind(
+        workspace_id=str(workspace_id),
+        job_type=str(mode),
+        job_id=str(job_id),
+        project_id=str(project_id),
+    )
+    log_resolved_flags()
     project_id = project["id"]
     range_start = int(project.get("rangeStartMs") or 0)
     range_end = int(project.get("rangeEndMs") or 0)
@@ -1200,6 +1210,9 @@ def run_m4_pipeline(
             )
     finally:
         try:
+            from clips_worker.clipfind.context import unbind_clipfind
+
+            unbind_clipfind()
             from clips_worker.decision_log import unbind_decision_log
 
             unbind_decision_log()

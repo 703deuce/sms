@@ -1,0 +1,76 @@
+"""Clipfind feature flags — single resolver (C1 hard rule 2)."""
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from clips_worker.clipfind.context import JobCtx, get_job_ctx
+from clips_worker.decision_log import decision_log
+
+# Logging-only defaults ON
+_DEFAULT_ON = frozenset({"CLIPFIND_DROP_LEDGER", "CLIPFIND_SHADOW_RANK"})
+
+_BEHAVIOR_FLAGS = (
+    "CLIPFIND_MINLEN_KEEP",
+    "CLIPFIND_PEAK_DEDUPE_IOU",
+    "CLIPFIND_LLM_KEEP_DEMOTE",
+    "CLIPFIND_HOOK_ORDER_REPAIR",
+    "CLIPFIND_REASSESS_KEEP",
+    "CLIPFIND_UPLOAD_MISSING_UNAVAILABLE",
+    "CLIPFIND_GATES_DEMOTE",
+    "CLIPFIND_FAIR_RANK",
+    "CLIPFIND_UPLOAD_FAIR_RANK",
+    "CLIPFIND_NEVER_EMPTY",
+)
+
+_ALL_FLAGS = tuple(_DEFAULT_ON) + _BEHAVIOR_FLAGS
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _workspace_override_on(workspace_id: str) -> bool:
+    raw = os.environ.get("CLIPFIND_ON_WORKSPACES", "").strip()
+    if not raw or not workspace_id:
+        return False
+    ids = {x.strip() for x in raw.split(",") if x.strip()}
+    return workspace_id in ids
+
+
+def resolved_clipfind_flags(job_ctx: JobCtx | None = None) -> dict[str, bool]:
+    ctx = job_ctx or get_job_ctx()
+    ws = (ctx.workspace_id if ctx else "") or ""
+    if _env_bool("CLIPFIND_ALL_OFF", False):
+        return {name: False for name in _ALL_FLAGS}
+    ws_on = _workspace_override_on(ws)
+    out: dict[str, bool] = {}
+    for name in _ALL_FLAGS:
+        default = name in _DEFAULT_ON
+        val = _env_bool(name, default)
+        if ws_on and name in _BEHAVIOR_FLAGS:
+            val = True
+        out[name] = val
+    return out
+
+
+def clipfind_flag(name: str, job_ctx: JobCtx | None = None) -> bool:
+    return resolved_clipfind_flags(job_ctx).get(name, False)
+
+
+def log_resolved_flags(job_ctx: JobCtx | None = None) -> None:
+    try:
+        resolved = resolved_clipfind_flags(job_ctx)
+        decision_log("clipfind", "flags", **{k.lower(): v for k, v in resolved.items()})
+    except Exception as exc:
+        decision_log("clipfind", "fallback", site="log_resolved_flags", reason=type(exc).__name__)
+
+
+def clipfind_fallback(site: str, reason: str, **extra: Any) -> None:
+    try:
+        decision_log("clipfind", "fallback", site=site, reason=str(reason)[:200], **extra)
+    except Exception:
+        pass

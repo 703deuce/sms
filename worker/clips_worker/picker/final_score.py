@@ -93,8 +93,14 @@ def moment_has_gemini_provenance(moment: dict[str, Any]) -> bool:
 
 
 def combined_final_score(gemini: float | None, transcript: float) -> float:
-    g = normalize_gemini_score(gemini) if gemini is not None else 0.0
+    from clips_worker.clipfind.flags import clipfind_flag
+    from clips_worker.decision_log import decision_log
+
     t = max(0.0, min(1.0, transcript))
+    if gemini is None and clipfind_flag("CLIPFIND_UPLOAD_MISSING_UNAVAILABLE"):
+        decision_log("clipfind", "rescaled_missing_gemini", transcript_score=t)
+        return t
+    g = normalize_gemini_score(gemini) if gemini is not None else 0.0
     return (VIDEO_WEIGHT * g + TRANSCRIPT_WEIGHT * t) / _SCORE_DENOM
 
 

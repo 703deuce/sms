@@ -84,7 +84,28 @@ def run_stream_analyze_job(conn, job: dict, post_progress) -> None:
         _run_stream_analyze_job_inner(conn, job, post_progress, payload, vod_id)
     finally:
         flush_decision_log(force=True)
+        from clips_worker.clipfind.context import unbind_clipfind
+
+        unbind_clipfind()
         unbind_decision_log()
+
+
+def _bind_stream_clipfind(conn, job: dict, vod: dict) -> None:
+    from clips_worker.clipfind.context import bind_clipfind
+    from clips_worker.clipfind.flags import log_resolved_flags
+    from clips_worker.streamer.keys import stream_signals_key
+
+    workspace_id = str(vod.get("workspaceId") or "")
+    vod_id = str(vod.get("id") or "")
+    bind_clipfind(
+        workspace_id=workspace_id,
+        job_type="STREAM_ANALYZE",
+        job_id=str(job.get("id") or ""),
+        vod_id=vod_id,
+        project_id=str(vod.get("project_id") or ""),
+        signals_key=stream_signals_key(workspace_id, vod_id),
+    )
+    log_resolved_flags()
 
 
 def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict, vod_id: str) -> None:
@@ -104,6 +125,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
         vod["channelDisplayName"] = ch["display"]
     workspace_id = vod["workspaceId"]
     project_id = vod["project_id"]
+    _bind_stream_clipfind(conn, job, vod)
     bind_stage_context(project_id=str(project_id), job_id=str(job["id"]))
     state = vod.get("state") or {}
     if isinstance(state, str):
@@ -475,6 +497,18 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
             signals_payload["chunkCount"] = len(chunk_signal_payloads)
             sig_key = stream_signals_key(workspace_id, vod_id)
             put_json(sig_key, signals_payload)
+            from clips_worker.clipfind.context import get_ledger, get_job_ctx
+
+            led = get_ledger()
+            ctx = get_job_ctx()
+            if led and ctx and ctx.signals_key:
+                ledger_path = ctx.signals_key.replace("signals.json", "clipfind_ledger.json")
+                shadow_path = ctx.signals_key.replace("signals.json", "clipfind_shadow.json")
+                led.write_artifacts(
+                    ledger_path=ledger_path,
+                    shadow_path=shadow_path,
+                    shadow_payload=signals_payload.get("clipfind_shadow"),
+                )
             cand_key = stream_candidates_key(workspace_id, vod_id)
             put_json(
                 cand_key,

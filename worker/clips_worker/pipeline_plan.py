@@ -15,6 +15,9 @@ def plan_or_finish_empty(
     picker_message: str | None,
     *,
     mark_project_ready,
+    duration_ms: int | None = None,
+    words: list[dict] | None = None,
+    want: int = 3,
 ) -> list[dict] | None:
     """
     Run plan_clips exactly once. Returns planned picks, or None when the pipeline
@@ -24,6 +27,15 @@ def plan_or_finish_empty(
 
     raw = list(picks or [])
     planned = plan_clips(raw) if raw else []
+    from clips_worker.clipfind.never_empty import maybe_never_empty_upload_planned
+
+    planned = maybe_never_empty_upload_planned(
+        planned,
+        raw_picks=raw,
+        duration_ms=int(duration_ms or 0),
+        words=words,
+        want=want,
+    )
     decision_log(
         "plan_clips",
         "pipeline_plan",

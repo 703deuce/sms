@@ -601,17 +601,31 @@ def validate_and_normalize_moments(
                     max_span_s=max_span_s,
                 )
         if not (start <= hook <= peak < end):
-            rejects["hook_peak_order"] = rejects.get("hook_peak_order", 0) + 1
-            decision_log(
-                "normalize",
-                "reject",
-                reason="hook_peak_order",
-                start_s=start,
-                end_s=end,
-                hook_s=hook,
-                peak_s=peak,
-            )
-            continue
+            from clips_worker.clipfind.flags import clipfind_flag
+
+            if clipfind_flag("CLIPFIND_HOOK_ORDER_REPAIR"):
+                hook = _clamp(hook, start, peak)
+                peak = _clamp(peak, hook, end - 0.001)
+                decision_log(
+                    "clipfind",
+                    "hook_order_repaired",
+                    start_s=start,
+                    end_s=end,
+                    hook_s=hook,
+                    peak_s=peak,
+                )
+            if not (start <= hook <= peak < end):
+                rejects["hook_peak_order"] = rejects.get("hook_peak_order", 0) + 1
+                decision_log(
+                    "normalize",
+                    "reject",
+                    reason="hook_peak_order",
+                    start_s=start,
+                    end_s=end,
+                    hook_s=hook,
+                    peak_s=peak,
+                )
+                continue
         score = max(0.0, min(1.0, float(row.get("score") or 0)))
         edge = str(row.get("touches_edge") or "none").lower()
         if edge not in ("none", "start", "end", "both"):
@@ -820,18 +834,67 @@ def format_moments_for_window(
     return format_moments_for_llm(picked, limit=limit)
 
 
-def merge_stream_moments(moments: list[dict], overlap_s: float) -> list[dict]:
+def merge_stream_moments(moments: list[dict], overlap_s: float, *, mode: str = "peak_window") -> list[dict]:
     """Dedupe by peak_s within overlap; stitch touches_edge pairs when adjacent."""
     if not moments:
         return []
+    from clips_worker.clipfind.fair_rank import span_iou_ms
+    from clips_worker.clipfind.flags import clipfind_flag
+    from clips_worker.clipfind.ledger import ledger_drop_moment, ledger_register_moment
+
+    use_iou = mode == "peak_iou" or clipfind_flag("CLIPFIND_PEAK_DEDUPE_IOU")
     ranked = sorted(moments, key=lambda m: -float(m.get("score") or 0))
     kept: list[dict] = []
     for m in ranked:
+        ledger_register_moment(m, provenance="gemini_chunk", source="stream_moment")
         try:
             peak = float(m.get("peak_s"))
+            start_ms = int(float(m.get("start_s", 0)) * 1000)
+            end_ms = int(float(m.get("end_s", 0)) * 1000)
         except (TypeError, ValueError):
             continue
-        if any(abs(peak - float(k.get("peak_s") or 0)) < overlap_s for k in kept):
+        drop_reason: str | None = None
+        merge_winner: dict | None = None
+        if use_iou:
+            for k in kept:
+                k_start = int(float(k.get("start_s", 0)) * 1000)
+                k_end = int(float(k.get("end_s", 0)) * 1000)
+                iou = span_iou_ms(start_ms, end_ms, k_start, k_end)
+                peak_delta = abs(peak - float(k.get("peak_s") or 0))
+                if iou > 0.5 or (peak_delta < 8 and iou > 0.3):
+                    merge_winner = k
+                    drop_reason = f"peak_iou_merge iou={iou:.3f}"
+                    alt = {
+                        "start_s": m.get("start_s"),
+                        "end_s": m.get("end_s"),
+                        "peak_s": m.get("peak_s"),
+                        "score": m.get("score"),
+                        "what_happened": m.get("what_happened"),
+                    }
+                    k.setdefault("alternates", []).append(alt)
+                    if clipfind_flag("CLIPFIND_DROP_LEDGER") and m.get("cf_id") and k.get("cf_id"):
+                        from clips_worker.clipfind.context import get_ledger
+
+                        led = get_ledger()
+                        if led:
+                            led.merged_into(str(m["cf_id"]), str(k["cf_id"]), "peak_dedupe_iou")
+                    break
+        else:
+            if any(abs(peak - float(k.get("peak_s") or 0)) < overlap_s for k in kept):
+                drop_reason = "peak_within_overlap_window"
+        if merge_winner is not None or drop_reason:
+            if drop_reason and not merge_winner:
+                from clips_worker.decision_log import decision_log
+
+                decision_log(
+                    "stream_merge",
+                    "peak_dedupe_drop",
+                    reason=drop_reason,
+                    peak_s=peak,
+                    start_s=m.get("start_s"),
+                    end_s=m.get("end_s"),
+                )
+                ledger_drop_moment(m, "stream_merge", drop_reason)
             continue
         kept.append(dict(m))
     kept.sort(key=lambda m: float(m.get("start_s") or 0))

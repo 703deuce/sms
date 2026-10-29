@@ -159,6 +159,30 @@ def _inject_video_picker_candidates(
             dup = out[dup_idx]
             score = float(vm.get("score") or vm.get("gemini_score") or 0.55)
             cid = f"vp_{idx}"
+            from clips_worker.clipfind.flags import clipfind_flag
+            from clips_worker.clipfind.ledger import cf_id_for
+
+            if clipfind_flag("CLIPFIND_DROP_LEDGER"):
+                try:
+                    from clips_worker.clipfind.context import get_ledger
+
+                    led = get_ledger()
+                    if led:
+                        loser = cf_id_for(
+                            source="inject_overlap",
+                            start_ms=start_ms,
+                            end_ms=end_ms,
+                            peak_ms=peak_ms,
+                        )
+                        winner = cf_id_for(
+                            source=str(dup.get("id") or "cand"),
+                            start_ms=int(dup["start_ms"]),
+                            end_ms=int(dup["end_ms"]),
+                            peak_ms=int(dup.get("peak_ms") or 0),
+                        )
+                        led.merged_into(loser, winner, "inject_iou_028")
+                except Exception:
+                    pass
             replacement = {
                 "id": cid,
                 "start_ms": start_ms,
@@ -246,6 +270,7 @@ def fuse_moments(
     cue_events: list[dict] | None = None,
     video_moments: list[dict] | None = None,
     transcript_ok: bool = True,
+    raw_channels: dict[str, list[float] | None] | None = None,
 ) -> tuple[list[FusionPick], dict]:
     """Return ranked clip candidates and signals.json payload."""
     weights = (settings.get("signalWeights") or {}) if isinstance(settings, dict) else {}
@@ -323,21 +348,28 @@ def fuse_moments(
 
     by_id = {r.get("id"): r for r in llm_rows if r.get("id")}
     picks: list[FusionPick] = []
+    demote_ids: set[str] = set()
     for cand in candidates:
         lid = cand["id"]
         llm = by_id.get(lid) or {}
         if llm.get("keep") is False and not cand.get("gemini_sourced") and not cand.get("video_picker"):
-            from clips_worker.decision_log import decision_log
+            from clips_worker.clipfind.flags import clipfind_flag
 
-            decision_log(
-                "stream_fusion",
-                "llm_drop",
-                candidate_id=lid,
-                start_ms=int(cand["start_ms"]),
-                end_ms=int(cand["end_ms"]),
-                reason=str(llm.get("reason") or "keep_false")[:120],
-            )
-            continue
+            if clipfind_flag("CLIPFIND_LLM_KEEP_DEMOTE"):
+                demote_ids.add(str(lid))
+                llm = {**llm, "keep": True, "llm_keep": False}
+            else:
+                from clips_worker.decision_log import decision_log
+
+                decision_log(
+                    "stream_fusion",
+                    "llm_drop",
+                    candidate_id=lid,
+                    start_ms=int(cand["start_ms"]),
+                    end_ms=int(cand["end_ms"]),
+                    reason=str(llm.get("reason") or "keep_false")[:120],
+                )
+                continue
         if llm.get("keep") is False and (cand.get("gemini_sourced") or cand.get("video_picker")):
             from clips_worker.decision_log import decision_log
 
@@ -383,6 +415,10 @@ def fuse_moments(
             )
         except Exception:
             pass
+        meta_cf: dict[str, Any] = {}
+        if demote_ids and str(lid) in demote_ids:
+            meta_cf["llm_keep"] = False
+            meta_cf["demote_tier"] = "more"
         picks.append(
             FusionPick(
                 start_ms=start_ms,
@@ -394,6 +430,7 @@ def fuse_moments(
                     "total": total,
                     **{k: v for k, v in component_scores.items() if k != "llm"},
                     "llm": llm_score,
+                    "candidate_id": lid,
                 },
                 ai_meta={
                     "streamer": {
@@ -403,6 +440,7 @@ def fuse_moments(
                         "signalPeak": cand["signal_peak"],
                     },
                     "hook": hook,
+                    "clipfind": meta_cf,
                     **(
                         {
                             "boundary_setup_ms": boundary_setup_ms,
@@ -416,13 +454,40 @@ def fuse_moments(
             )
         )
 
+    from clips_worker.clipfind.shadow import run_fusion_shadow
+
+    channels = raw_channels or {}
+    shadow_payload = run_fusion_shadow(
+        picks_before_sort=list(picks),
+        candidates=[{**c, "llm_score": (by_id.get(c["id"]) or {}).get("score")} for c in candidates],
+        duration_s=duration_s,
+        channels={
+            **channels,
+            "_raw_audio": channels.get("_raw_audio") or signals.get("audio"),
+            "_raw_reaction": channels.get("_raw_reaction"),
+            "_raw_chat": signals.get("chat"),
+            "_raw_viewerClips": signals.get("viewerClips"),
+            "_raw_video": signals.get("video"),
+            "_raw_transcript": signals.get("transcript"),
+            "_raw_clipCues": signals.get("clipCues"),
+        },
+        primary_n=min(PRIMARY_TIER_MAX, clip_count),
+    )
+    if shadow_payload:
+        signals_payload_shadow = shadow_payload
+    else:
+        signals_payload_shadow = None
+
     picks.sort(key=lambda p: p.score, reverse=True)
     from clips_worker.decision_log import decision_log
+    from clips_worker.clipfind.flags import clipfind_flag
 
+    fair_on = clipfind_flag("CLIPFIND_FAIR_RANK")
+    dedupe_iou = 0.5 if fair_on else 0.3
     deduped: list[FusionPick] = []
     for p in picks:
         beat = next(
-            (d for d in deduped if _iou(p.start_ms, p.end_ms, d.start_ms, d.end_ms) > 0.3),
+            (d for d in deduped if _iou(p.start_ms, p.end_ms, d.start_ms, d.end_ms) > dedupe_iou),
             None,
         )
         if beat is not None:
@@ -524,6 +589,8 @@ def fuse_moments(
             "wideGenerated": len(candidates),
         },
     }
+    if signals_payload_shadow:
+        payload["clipfind_shadow"] = signals_payload_shadow
     return visible, payload
 
 
