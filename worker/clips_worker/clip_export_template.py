@@ -96,18 +96,30 @@ def _headline_style_from_edits(edits: dict) -> dict:
     raw = tpl.get("headlineStyle") if isinstance(tpl.get("headlineStyle"), dict) else {}
     if raw:
         return raw
-    from clips_worker.layers_spec import _layer_by_id, resolve_layers
+    from clips_worker.layers_spec import _layer_by_id, _placement, resolve_layers
+    from clips_worker.layout_router import export_stream_headline_compose_active
 
     hl = _layer_by_id(resolve_layers(edits), "headline")
     if hl and isinstance(hl.get("style"), dict):
         preset = str(hl["style"].get("preset") or "export_bar")
+        if export_stream_headline_compose_active(edits) or _placement(edits) == "fit_top_band":
+            base = headline_style_for_preset("bold_news")
+            merged = {**base, **hl["style"]}
+            if preset in ("stream_yellow", "stream_white_box") and hl["style"].get("boxColor"):
+                merged["boxColor"] = hl["style"]["boxColor"]
+            if not merged.get("font") or str(merged.get("font")).startswith("Montserrat"):
+                merged["font"] = "Anton"
+            return merged
         base = headline_style_for_preset(preset)
         merged = {**base, **hl["style"]}
         if not merged.get("font"):
-            merged["font"] = "Anton" if preset in ("stream_yellow", "stream_white_box") else merged.get("font")
+            merged["font"] = "Anton" if preset in ("stream_yellow", "stream_white_box", "bold_news") else merged.get("font")
         return merged
     hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
     if hb.get("enabled"):
+        if export_stream_headline_compose_active(edits):
+            base = headline_style_for_preset("bold_news")
+            return {**base, **raw, "font": raw.get("font") or "Anton"}
         base = headline_style_for_preset("stream_yellow")
         return {**base, **raw, "font": raw.get("font") or "Anton"}
     return headline_style_for_preset("export_bar")

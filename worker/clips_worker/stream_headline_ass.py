@@ -151,8 +151,12 @@ def headline_ass_content(
         preset_style = {**preset_style, **headline_style}
     primary = _ass_color(text_color or preset_style.get("textColor") or "#000000")
     raw_headline = format_headline_for_export(headline)
-    box_w = max(1, int(play_w * 0.94))
-    lines_fit, font_px = fit_headline_display_for_box(raw_headline, box_w, bar_h, max_bar_frac=0.24)
+    width_pct = int(preset_style.get("widthPct") or 100)
+    box_w = max(1, int(play_w * (width_pct / 100.0) * 0.96))
+    bold = fit_top or str(preset_style.get("preset") or "") == "bold_news"
+    lines_fit, font_px = fit_headline_display_for_box(
+        raw_headline, box_w, bar_h, bold_news=bold
+    )
     if lines_fit:
         display = r"\N".join(
             _split_emoji_runs(_esc_ass(line.upper())) for line in lines_fit if line.strip()

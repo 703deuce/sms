@@ -104,8 +104,8 @@ def margin_v_px(play_h: int, margin_pct: float) -> int:
 
 
 def margin_lr_px(play_w: int) -> int:
-    """Horizontal safe area so captions do not clip at frame edges."""
-    return max(56, round(play_w * 0.08))
+    """Horizontal safe area — ~90% max caption width (parity with preview)."""
+    return max(54, round(play_w * 0.05))
 
 
 def chunk_words(words: list[dict], wpl: int) -> list[list[dict]]:

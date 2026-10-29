@@ -19,7 +19,7 @@ import { headlinePreviewBoxMetrics,
   headlinePreviewFontWeight,
 } from '@/lib/clips/headline-preview-style'
 import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
-import { fitHeadlineDisplayForBox } from '@/lib/clips/headline-fit'
+import { fitHeadlineBoldNewsForBox, fitHeadlineDisplayForBox } from '@/lib/clips/headline-fit'
 
 function ChatPreviewBox({
   lay,
@@ -132,7 +132,7 @@ export function ExportTemplateOverlay({
       tpl?.headlineBar?.text?.trim() || tpl?.suggestedHeadline?.trim() || headlineLayer?.text?.trim() || '',
     )
     const fit = headlineOn
-      ? fitHeadlineDisplayForBox(headlineText, boxMetrics.width, lay.headlineH * sy)
+      ? fitHeadlineBoldNewsForBox(headlineText, boxMetrics.width, lay.headlineH * sy)
       : { lines: [] as string[], fontPx: 10 }
     const displayLines = headlineOn ? fit.lines : []
     const fontPx = headlineOn ? fit.fontPx : Math.max(10, Math.round(84 * sy))

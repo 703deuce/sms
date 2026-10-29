@@ -367,6 +367,25 @@ def sync_layers_from_legacy(edits: dict) -> dict:
     ]
     merged.extend(extras)
     merged.sort(key=lambda x: int(x.get("z") or 0))
+    placement = _placement(edits)
+    for layer in merged:
+        if layer.get("type") in ("headline", "badge"):
+            layer["placement"] = placement
+        if layer.get("type") == "headline" and placement == "fit_top_band":
+            style = layer.setdefault("style", {})
+            if not isinstance(style, dict):
+                continue
+            preset = str(style.get("preset") or "")
+            custom_font = str(style.get("font") or "").strip()
+            if preset in ("export_bar", "stream_yellow", "stream_white_box", "bold_news") and custom_font not in (
+                "Poppins",
+                "Montserrat Black",
+            ):
+                style["preset"] = "bold_news"
+                if custom_font not in ("Anton",):
+                    style["font"] = "Anton"
+        if layer.get("type") == "badge" and placement == "fit_top_band":
+            layer["placement"] = "fit_top_band"
     changed = _count_layer_sync_changes(layers_raw, merged)
     if changed:
         print(f"[clipper:layers] synced changed={changed}", flush=True)

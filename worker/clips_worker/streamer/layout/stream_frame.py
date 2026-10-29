@@ -104,6 +104,40 @@ def _compose_layout(
     return overlay_layout(max(2, headline_line_count or 2), play_w=play_w, play_h=play_h)
 
 
+def fit_top_headline_band_filters(
+    *,
+    lay: dict[str, int],
+    play_w: int,
+    h_box: int,
+    box_color: str,
+    headline_style: dict | None,
+    work_dir: Path,
+) -> str:
+    """Headline band: full-width drawbox or rounded PNG when styled."""
+    from clips_worker.clip_export_template import _headline_uses_styled_box
+    from clips_worker.overlay_geometry import _hex_ffmpeg_color
+
+    fill = _hex_ffmpeg_color(box_color, fallback="white")
+    y = int(lay["headline_top"])
+    style = headline_style if isinstance(headline_style, dict) else {}
+    if _headline_uses_styled_box(style):
+        from clips_worker.layer_sprites import headline_box_overlay_x, render_headline_box_png
+
+        width_pct = int(style.get("widthPct") or 100)
+        box_w = max(2, round(play_w * width_pct / 100.0))
+        box_x = headline_box_overlay_x(play_w, width_pct)
+        hl_png = work_dir / "fit_top_headline_box.png"
+        render_headline_box_png(
+            box_w, h_box, str(style.get("boxColor") or box_color), int(style.get("radiusPx") or 0), hl_png
+        )
+        hl_path = str(hl_png).replace("\\", "/").replace(":", "\\:")
+        return (
+            f"movie={hl_path}:loop=0,setpts=N/FRAME_RATE/TB[hlbox];"
+            f"[bg0][hlbox]overlay=x={box_x}:y={y}:shortest=1[bg1]"
+        )
+    return f"[bg0]drawbox=x=0:y={y}:w={play_w}:h={h_box}:color={fill}:t=fill[bg1]"
+
+
 def _fit_top_base(
     src: Path,
     stage: Path,
@@ -113,19 +147,27 @@ def _fit_top_base(
     play_w: int,
     play_h: int,
     vid_y: int,
+    vid_h: int,
     h_box: int,
     box_color: str = "white",
+    headline_style: dict | None = None,
 ) -> None:
-    from clips_worker.overlay_geometry import _hex_ffmpeg_color
-
-    fill = _hex_ffmpeg_color(box_color, fallback="white")
+    band = fit_top_headline_band_filters(
+        lay=lay,
+        play_w=play_w,
+        h_box=h_box,
+        box_color=box_color,
+        headline_style=headline_style,
+        work_dir=stage.parent,
+    )
     fc = (
         f"[0:v]scale={play_w}:{play_h}:force_original_aspect_ratio=increase,"
         f"crop={play_w}:{play_h},boxblur=20:2,eq=brightness=-0.08[bgfull];"
-        f"[0:v]scale={play_w}:-2[fg];"
+        f"[0:v]scale={play_w}:{vid_h}:force_original_aspect_ratio=increase,"
+        f"crop={play_w}:{vid_h}:(iw-{play_w})/2:(ih-{vid_h})/2[fg];"
         f"color=c=black:s={play_w}x{play_h}:d={dur:.3f}[base];"
         f"[base][bgfull]overlay=0:0[bg0];"
-        f"[bg0]drawbox=x=0:y={lay['headline_top']}:w={play_w}:h={h_box}:color={fill}:t=fill[bg1];"
+        f"{band};"
         f"[bg1][fg]overlay=0:{vid_y}[v1]"
     )
     subprocess.check_call(
@@ -200,13 +242,27 @@ def _fit_top_band_layers(
         badge_on = False
         channel = ""
     if badge_on or channel:
+        from clips_worker.overlay_geometry import badge_rect
+
         label, color = _platform_label(platform)
-        badge_y = lay["badge_y"]
-        badge_x = (play_w - 200) // 2
         name = channel or label
+        badge_text = name if badge_on else ""
+        rect = badge_rect(
+            "fit_top_band",
+            play_w,
+            play_h,
+            text=badge_text[:24],
+            show_logo=False,
+            video_y=lay["video_y"],
+            video_h=lay["video_h"],
+            anchor_top_gap=True,
+        )
+        badge_x = rect["x"]
+        badge_y = rect["y"]
+        bw, bh = rect["w"], rect["h"]
         dt = (
-            f"[0:v]drawbox=x={badge_x}:y={badge_y}:w=200:h=32:color={color}@0.95:t=fill,"
-            f"drawtext=text='{_esc_drawtext(name[:24])}':fontsize=28:fontcolor=white:"
+            f"[0:v]drawbox=x={badge_x}:y={badge_y}:w={bw}:h={bh}:color={color}@0.95:t=fill,"
+            f"drawtext=text='{_esc_drawtext(badge_text[:24] or label)}':fontsize=28:fontcolor=white:"
             f"x={badge_x + 8}:y={badge_y + 4}[vout]"
         )
         badged = dest.parent / "fit_top_badge.mp4"
@@ -285,8 +341,10 @@ def render_fit_top_stream(
         play_w=play_w,
         play_h=play_h,
         vid_y=vid_y,
+        vid_h=vid_h,
         h_box=h_box,
         box_color=box_color,
+        headline_style=style,
     )
     current = stage
     _fit_top_band_layers(

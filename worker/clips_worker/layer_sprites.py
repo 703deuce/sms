@@ -10,6 +10,17 @@ from clips_worker.overlay_geometry import GEOM, badge_rect, sticker_rect
 _ASSETS = Path(__file__).resolve().parent.parent / "assets" / "brand"
 _MONTSERRAT = Path("/usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf")
 _V3_MONTSERRAT = Path(__file__).resolve().parent.parent / "v3" / "fonts" / "Montserrat-Black.ttf"
+_V3_ANTON = Path(__file__).resolve().parent.parent / "v3" / "fonts" / "Anton-Regular.ttf"
+_ANTON_SYS = Path("/usr/share/fonts/truetype/anton/Anton-Regular.ttf")
+
+_DEJAVU_BOLD = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+
+
+def _badge_label_fontfile() -> str | None:
+    for path in (_MONTSERRAT, _V3_MONTSERRAT, _V3_ANTON, _ANTON_SYS, _DEJAVU_BOLD):
+        if path.is_file():
+            return str(path).replace(":", "\\:")
+    return None
 
 
 def _brand_logo_path(platform: str) -> Path | None:
@@ -19,13 +30,6 @@ def _brand_logo_path(platform: str) -> Path | None:
     else:
         candidate = _ASSETS / "twitch_white_128.png"
     return candidate if candidate.is_file() else None
-
-
-def _montserrat_fontfile() -> str | None:
-    for path in (_MONTSERRAT, _V3_MONTSERRAT):
-        if path.is_file():
-            return str(path)
-    return None
 
 
 def _badge_scale(play_h: int) -> float:
@@ -70,15 +74,16 @@ def render_badge_png(
     font_size = max(10, int(round(float(badge.get("fontPx") or 32) * s)))
     pad_x = max(4, int(round(float(badge.get("padXPx") or 22) * s)))
     gap_x = max(2, int(round(float(badge.get("gapPx") or 12) * s)))
-    fontfile = _montserrat_fontfile()
-    font_opt = f"fontfile={fontfile}:" if fontfile else "font=Montserrat:"
+    fontfile = _badge_label_fontfile()
+    font_opt = f"fontfile={fontfile}:" if fontfile else "font=DejaVu-Sans-Bold:"
     draw_text = text if show_label else ""
 
     logo = _brand_logo_path(platform) if show_logo else None
     if logo:
+        logo_path = str(logo).replace("\\", "/").replace(":", "\\:")
         filter_parts = [
             f"color=c={color}:s={w}x{h}:d=1,format=rgba[bg]",
-            f"movie={logo}:scale={logo_size}:-1[lg]",
+            f"movie={logo_path}[lg0];[lg0]scale={logo_size}:-1[lg]",
             f"[bg][lg]overlay={pad_x}:{max(0, (h - logo_size) // 2)}[bg2]",
         ]
         if show_label and draw_text:

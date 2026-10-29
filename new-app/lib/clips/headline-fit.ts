@@ -48,41 +48,64 @@ export function headlineCharsPerLineForBox(boxWidthPx: number, fontPx: number): 
   return Math.max(MIN_CHARS_PER_LINE, Math.floor((boxWidthPx * 0.94) / charW))
 }
 
+const BOLD_NEWS_WIDTH_FRAC = 0.96
+const BOLD_NEWS_MAX_BAR_FRAC = 0.88
+const BOLD_NEWS_CHAR_WIDTH_FRAC = 0.48
+
+function estimateLineWidthPx(line: string, fontPx: number, charWidthFrac: number): number {
+  return line.length * fontPx * charWidthFrac
+}
+
 /** Fit headline into box: shrink font / tighten wrap — never truncate words. */
 export function fitHeadlineDisplayForBox(
   formatted: string,
   boxWidthPx: number,
   boxHeightPx: number,
-  opts?: { maxBarFrac?: number },
+  opts?: { maxBarFrac?: number; widthFrac?: number; boldNews?: boolean },
 ): { lines: string[]; fontPx: number } {
   const trimmed = formatted.trim()
   if (!trimmed || boxWidthPx <= 0 || boxHeightPx <= 0) {
     return { lines: [], fontPx: 12 }
   }
-  const maxBarFrac = opts?.maxBarFrac ?? 0.24
+  const boldNews = opts?.boldNews ?? false
+  const widthFrac = opts?.widthFrac ?? (boldNews ? BOLD_NEWS_WIDTH_FRAC : 0.94)
+  const maxBarFrac = opts?.maxBarFrac ?? (boldNews ? BOLD_NEWS_MAX_BAR_FRAC : 0.24)
+  const charWidthFrac = boldNews ? BOLD_NEWS_CHAR_WIDTH_FRAC : 0.52
+  const targetWidth = boxWidthPx * widthFrac
   const emojiTail = (trimmed.match(/(\p{Extended_Pictographic}+)$/u) || [])[0] || ''
   const body = trimmed.slice(0, trimmed.length - emojiTail.length).trim()
   const emojis = [...emojiTail].slice(0, 2).join('')
 
   let fontPx = Math.max(
     12,
-    Math.min(boxHeightPx * 0.45, (boxHeightPx * 0.52) / 3),
+    boldNews
+      ? Math.min(boxHeightPx * 0.46, targetWidth / Math.max(MIN_CHARS_PER_LINE, 8))
+      : Math.min(boxHeightPx * 0.45, (boxHeightPx * 0.52) / 3),
   )
   const maxBarH = boxHeightPx * maxBarFrac
   let lines: string[] = []
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
     const cpl = headlineCharsPerLineForBox(boxWidthPx, fontPx)
     lines = wrapHeadlineLinesFull(body, cpl, MAX_LINES)
     const lineH = fontPx * 1.05
     const totalH = lineH * Math.max(1, lines.length)
-    const longest = Math.max(0, ...lines.map((l) => l.length))
-    if (totalH <= maxBarH && longest <= cpl + 1) break
+    const widest = Math.max(0, ...lines.map((l) => estimateLineWidthPx(l, fontPx, charWidthFrac)))
+    const longestChars = Math.max(0, ...lines.map((l) => l.length))
+    if (totalH <= maxBarH && widest <= targetWidth && longestChars <= cpl + 1) break
     fontPx = Math.max(12, fontPx * 0.9)
   }
   if (emojis && lines.length) {
     lines[lines.length - 1] = `${lines[lines.length - 1]} ${emojis}`.trim()
   }
   return { lines, fontPx: Math.round(fontPx) }
+}
+
+export function fitHeadlineBoldNewsForBox(
+  formatted: string,
+  boxWidthPx: number,
+  boxHeightPx: number,
+): { lines: string[]; fontPx: number } {
+  return fitHeadlineDisplayForBox(formatted, boxWidthPx, boxHeightPx, { boldNews: true })
 }
 
 /** Fixed-scale preview when box metrics unknown (export dialog thumbnail). */
