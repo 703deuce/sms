@@ -2,14 +2,74 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+CLIPS_RE='^(components/clips|lib/clips|app/app/clips|app/api/clips|lib/server/clips)/'
 OUT="$(mktemp)"
 if ! npx tsc -p tsconfig.typecheck.json --noEmit --pretty false >"$OUT" 2>&1; then
-  if rg -q '^(components/clips|lib/clips|app/app/clips|app/api/clips|lib/server/clips)/' "$OUT"; then
+  if rg -q "${CLIPS_RE}.* error TS(2300|2440):" "$OUT"; then
+    cat "$OUT"
+    rm -f "$OUT"
+    echo "[typecheck:clips] FAILED — duplicate identifier (TS2300/TS2440) under clips paths" >&2
+    exit 1
+  fi
+  if rg -q "${CLIPS_RE}" "$OUT"; then
     cat "$OUT"
     rm -f "$OUT"
     echo "[typecheck:clips] FAILED — errors under clips paths" >&2
     exit 1
   fi
 fi
+
+# Turbopack: duplicate value imports of the same binding from one module.
+node --input-type=module -e "
+import fs from 'node:fs';
+import path from 'node:path';
+const roots = ['components/clips', 'lib/clips', 'app/api/clips', 'lib/server/clips'];
+const files = [];
+for (const r of roots) {
+  const p = path.join(process.cwd(), r);
+  if (!fs.existsSync(p)) continue;
+  const walk = (dir) => {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) walk(full);
+      else if (/\\.(ts|tsx)$/.test(ent.name)) files.push(full);
+    }
+  };
+  walk(p);
+}
+const importRe =
+  /import\\s+(type\\s+)?(?:\\{([^}]+)\\}|([A-Za-z0-9_$]+))\\s+from\\s+['\"]([^'\"]+)['\"]/g;
+let failed = false;
+for (const file of files) {
+  const text = fs.readFileSync(file, 'utf8');
+  const byMod = new Map();
+  let m;
+  while ((m = importRe.exec(text)) !== null) {
+    const isTypeOnly = Boolean(m[1]);
+    const mod = m[4];
+    const names = m[3]
+      ? [m[3]]
+      : m[2]
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => s.replace(/^type\\s+/, '').split(/\\s+as\\s+/)[0].trim());
+    if (!byMod.has(mod)) byMod.set(mod, new Set());
+    const set = byMod.get(mod);
+    for (const n of names) {
+      if (set.has(n)) {
+        console.error('[typecheck:clips] duplicate import', n, 'from', mod, 'in', file);
+        failed = true;
+      }
+      if (!isTypeOnly) set.add(n);
+    }
+  }
+}
+process.exit(failed ? 1 : 0);
+" || {
+  rm -f "$OUT"
+  exit 1
+}
+
 rm -f "$OUT"
 echo "[typecheck:clips] ok"

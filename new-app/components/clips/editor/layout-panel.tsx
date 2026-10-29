@@ -11,17 +11,12 @@ import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipAspectRatios } from '@/lib/clips/settings'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
-import type { CropShot } from '@/lib/server/clips/clip-detail'
+import type { CropShot, FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import {
   ClipShortenGapsPanel,
   type ClipGapToolSettings,
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
-import {
-  ClipShortenGapsPanel,
-  type ClipGapToolSettings,
-} from '@/components/clips/editor/clip-shorten-gaps-panel'
-import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 
 const LAYOUTS: { id: ClipEditsV2['layout']['mode']; title: string; desc: string; disabled?: boolean }[] = [
   { id: 'auto', title: 'Auto variety', desc: 'Rotate layouts per clip rank.' },
