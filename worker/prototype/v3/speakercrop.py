@@ -158,12 +158,12 @@ if int(E('CAPTIONS', 1)) and not os.path.exists(WORDS):     # local ASR (faster-
 t_asr = time.time() - t_asr
 if USE_VOICE and cent is not None and os.path.exists(WORDS):
     words = json.load(open(WORDS))
-    dg_ids = sorted({int(w.get("spk", 0)) for w in words})
+    dg_ids = sorted({int(w.get("spk") or 0) for w in words})
     if int(os.environ.get("TRANSCRIPT_SPK", "1")) and len(dg_ids) >= 2:
         dg_map = {dg_ids[0]: 0}
         for sid in dg_ids[1:]:
             dg_map[sid] = 1
-        sm_lab = np.array([dg_map.get(int(w.get("spk", dg_ids[0])), 0) for w in words])
+        sm_lab = np.array([dg_map.get(int(w.get("spk") or dg_ids[0]), 0) for w in words])
         lab = sm_lab.copy()
         mar = np.ones(len(words))
         word_spk = sm_lab

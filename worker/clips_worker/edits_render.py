@@ -545,6 +545,13 @@ def burn_captions(
         )
 
 
+def _per_clip_vertical_stack_layout(edits: dict, ctx: dict) -> bool:
+    if not ctx.get("per_clip_layout_applied"):
+        return False
+    mode = str((edits.get("layout") or {}).get("mode") or "")
+    return mode in ("facecam_stack", "facecam_pip", "screen_pip", "stack")
+
+
 def _legacy_compose(
     caption_src: Path,
     caption_words: list[dict],
@@ -609,13 +616,31 @@ def _legacy_compose(
         stream_frame_applied = True
         zoom_done = True
     elif export_stream_headline_compose_active(edits):
-        from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
+        per_clip_vertical = _per_clip_vertical_stack_layout(edits, ctx)
+        if per_clip_vertical:
+            tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+            hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+            headline = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip()
+            if hb.get("enabled") and headline:
+                from clips_worker.clip_export_template import overlay_headline_on_vertical_frame
 
-        layout_mp4 = work_dir / "stream_layout.mp4"
-        compose_mode = stream_compose_layout_mode(edits)
-        render_stream_clip_layout(caption_src, layout_mp4, edits, compose_mode, play_w=play_w, play_h=play_h)
-        caption_src = layout_mp4
-        stream_frame_applied = True
+                layout_mp4 = work_dir / "vertical_headline_overlay.mp4"
+                overlay_headline_on_vertical_frame(
+                    caption_src,
+                    layout_mp4,
+                    edits,
+                    play_w=play_w,
+                    play_h=play_h,
+                )
+                caption_src = layout_mp4
+        else:
+            from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
+
+            layout_mp4 = work_dir / "stream_layout.mp4"
+            compose_mode = stream_compose_layout_mode(edits)
+            render_stream_clip_layout(caption_src, layout_mp4, edits, compose_mode, play_w=play_w, play_h=play_h)
+            caption_src = layout_mp4
+            stream_frame_applied = True
 
     tpl_censor = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
     if tpl_censor and tpl_censor.get("profanityCensor"):
@@ -708,7 +733,7 @@ def _legacy_compose(
         from clips_worker.clip_export_template import apply_export_template
 
         templated = work_dir / "export_template.mp4"
-        apply_export_template(
+        result_path = apply_export_template(
             out_mp4,
             templated,
             edits,
@@ -716,7 +741,10 @@ def _legacy_compose(
             play_h=play_h,
             layout_mode=layout_mode,
         )
-        shutil.copy(templated, out_mp4)
+        if result_path.resolve() == templated.resolve() and templated.is_file():
+            shutil.copy(templated, out_mp4)
+        elif result_path.resolve() != out_mp4.resolve() and result_path.is_file():
+            shutil.copy(result_path, out_mp4)
 
     pb = cap_edits.get("progressBar") if isinstance(cap_edits.get("progressBar"), dict) else None
     if pb and pb.get("enabled"):
@@ -1348,6 +1376,7 @@ def render_edited_clip(
         "compose_spec": compose_spec if use_spec else None,
         "facecam_seam_captions": bool(layout_meta.get("seam_captions")),
         "facecam_stack_split": layout_meta.get("stack_split"),
+        "per_clip_layout_applied": bool(facecam_applied),
     }
     compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
     if compositor_off:

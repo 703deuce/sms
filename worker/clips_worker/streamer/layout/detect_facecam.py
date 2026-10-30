@@ -85,6 +85,28 @@ def find_overlay_rect(P: np.ndarray, face: tuple[float, float, float, float], mi
     return best, best_s
 
 
+def _expand_norm_box(box: dict[str, float], *, margin: float = 0.015) -> dict[str, float]:
+    x = max(0.0, box["x"] - margin)
+    y = max(0.0, box["y"] - margin)
+    w = min(1.0 - x, box["w"] + 2 * margin)
+    h = min(1.0 - y, box["h"] + 2 * margin)
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
+def _gameplay_crop_excluding_facecam(facecam: dict[str, float], *, margin: float = 0.02) -> dict[str, float]:
+    fx = max(0.0, float(facecam["x"]) - margin)
+    fy = max(0.0, float(facecam["y"]) - margin)
+    fw = min(1.0 - fx, float(facecam["w"]) + 2 * margin)
+    fh = min(1.0 - fy, float(facecam["h"]) + 2 * margin)
+    candidates = [
+        {"x": 0.0, "y": 0.0, "w": max(0.08, fx), "h": 1.0},
+        {"x": 0.0, "y": 0.0, "w": 1.0, "h": max(0.08, fy)},
+        {"x": min(1.0, fx + fw), "y": 0.0, "w": max(0.08, 1.0 - fx - fw), "h": 1.0},
+        {"x": 0.0, "y": min(1.0, fy + fh), "w": 1.0, "h": max(0.08, 1.0 - fy - fh)},
+    ]
+    return max(candidates, key=lambda b: b["w"] * b["h"])
+
+
 def detect_facecam_layout(video: Path, work: Path, n_samples: int = 60) -> dict[str, Any]:
     """Return layout dict: layout stack|gameplay, facecam box normalised, confidence. (contract unchanged,
     plus `method`: rect|face_box and `persist`: fraction of samples with a face in the box)."""
@@ -117,9 +139,30 @@ def detect_facecam_layout(video: Path, work: Path, n_samples: int = 60) -> dict[
         if n_s > best_n:
             best_n, best_c = n_s, m
     C = F[best_c]
+    xs = C[:, 1]
+    ys = C[:, 2]
+    ws = C[:, 3]
+    hs = C[:, 4]
+    union_l = float(np.min(xs - ws / 2))
+    union_t = float(np.min(ys - hs / 2))
+    union_r = float(np.max(xs + ws / 2))
+    union_b = float(np.max(ys + hs / 2))
+    pad = 0.02 * AW
+    union_l = max(0.0, union_l - pad)
+    union_t = max(0.0, union_t - pad)
+    union_r = min(float(AW), union_r + pad)
+    union_b = min(float(ah), union_b + pad)
+    union_face = (
+        (union_l + union_r) / 2,
+        (union_t + union_b) / 2,
+        union_r - union_l,
+        union_b - union_t,
+    )
     face = tuple(float(np.median(C[:, i])) for i in (1, 2, 3, 4))
     persist = best_n / len(frames)
-    rect, support = find_overlay_rect(P, face)
+    rect, support = find_overlay_rect(P, union_face)
+    if rect is None:
+        rect, support = find_overlay_rect(P, face)
     if rect is not None:
         l, t, r, b = rect; method = "rect"
         confidence = float(min(1.0, 0.5 * support + 0.5 * min(1.0, persist / 0.5)))
@@ -131,6 +174,16 @@ def detect_facecam_layout(video: Path, work: Path, n_samples: int = 60) -> dict[
         confidence = float(min(0.5, persist))       # < 0.6: caller asks Gemini (bic 4.5 step 5) / user
     if persist < 0.5:                     # bic 4.5: the cam face must be present in >= 50% of samples
         return {**gameplay, "confidence": round(1 - persist, 2)}
-    return {"layout": "stack", "facecam": {k: round(v, 4) for k, v in box.items()}, "gameplay": None,
-            "split": 0.4, "facecamPosition": "top", "confidence": round(confidence, 3), "source": "auto",
-            "method": method, "persist": round(persist, 3)}
+    box = _expand_norm_box(box, margin=0.012)
+    gameplay_box = _gameplay_crop_excluding_facecam(box)
+    return {
+        "layout": "stack",
+        "facecam": {k: round(v, 4) for k, v in box.items()},
+        "gameplay": {k: round(v, 4) for k, v in gameplay_box.items()},
+        "split": 0.4,
+        "facecamPosition": "top",
+        "confidence": round(confidence, 3),
+        "source": "auto",
+        "method": method,
+        "persist": round(persist, 3),
+    }

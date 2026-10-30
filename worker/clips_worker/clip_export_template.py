@@ -169,6 +169,97 @@ def _v3_badge_sprite_will_render(edits: dict) -> bool:
         return False
 
 
+def overlay_headline_on_vertical_frame(
+    video: Path,
+    out: Path,
+    edits: dict,
+    *,
+    play_w: int,
+    play_h: int,
+) -> Path:
+    """Burn headline/title band on top of an already 9:16 per-clip layout (stack / PiP)."""
+    import shutil
+
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
+    if not tpl:
+        shutil.copy(video, out)
+        return out
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    headline = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip()
+    if not hb.get("enabled") or not headline:
+        shutil.copy(video, out)
+        return out
+
+    frame = stream_headline_frame_layout(play_w, play_h)
+    bar_h = frame["bar_h"]
+    duration_ms = _probe_duration_ms(video)
+    style = _headline_style_from_edits(edits)
+    box_fill = str(style.get("boxColor") or "#FFFFFF")
+    stage = out.parent / "vertical_headline_box.mp4"
+
+    if _headline_uses_styled_box(style):
+        from clips_worker.layer_sprites import headline_box_overlay_x, render_headline_box_png
+
+        width_pct = int(style.get("widthPct") or 100)
+        box_w = max(2, round(play_w * width_pct / 100.0))
+        box_x = headline_box_overlay_x(play_w, width_pct)
+        hl_png = out.parent / "vertical_headline_box.png"
+        render_headline_box_png(box_w, bar_h, box_fill, int(style.get("radiusPx") or 0), hl_png)
+        hl_path = str(hl_png).replace("\\", "/").replace(":", "\\:")
+        fc = (
+            f"movie={hl_path}:loop=0,setpts=N/FRAME_RATE/TB[hlbox];"
+            f"[0:v][hlbox]overlay=x={box_x}:y=0:shortest=1[vout]"
+        )
+    else:
+        from clips_worker.overlay_geometry import _hex_ffmpeg_color
+
+        fill = f"{_hex_ffmpeg_color(box_fill, fallback='white')}@1"
+        fc = f"[0:v]drawbox=x=0:y=0:w={play_w}:h={bar_h}:color={fill}:t=fill[vout]"
+
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video),
+            "-filter_complex",
+            fc,
+            "-map",
+            "[vout]",
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-c:a",
+            "copy",
+            str(stage),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    burn_stream_headline(
+        stage,
+        out,
+        format_headline_for_export(headline),
+        play_w=play_w,
+        play_h=play_h,
+        bar_h=bar_h,
+        duration_ms=duration_ms,
+        bar_y=0,
+        fit_top=True,
+        text_color=str(style.get("textColor") or "#000000"),
+        box_color=str(style.get("boxColor") or "#FFFFFF"),
+        headline_style=style,
+    )
+    return out
+
+
 def apply_export_template(
     video: Path,
     out: Path,
