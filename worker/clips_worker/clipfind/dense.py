@@ -215,6 +215,12 @@ def run_dense(cands: list[dict], *, call_fn: Callable[[dict], tuple[dict | None,
             continue
         j["source"] = "dense"
         j["window_ms"] = [lo, hi]
+        if isinstance(fixed, dict) and isinstance(fixed.get("layout_signals"), dict):
+            from clips_worker.t6_signals import validate_ai
+
+            ls = validate_ai(fixed["layout_signals"])
+            if ls:
+                j["layout_signals"] = ls
         out.results[idx] = j
         if j["observation_confidence"] >= 0.5:
             ab = apply_judgement(j, offset_ms=lo, words=words, start_ms=int(c["start_ms"]),

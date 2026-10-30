@@ -33,3 +33,40 @@ def caption_rect(spec: dict, preset: dict, signals: dict) -> dict:
 
 def resolve_caption_preset_v2(preset_id: str) -> dict:
     return dict(CAPTION_PRESETS_V2.get(preset_id) or CAPTION_PRESETS_V2.get("cp1") or {})
+
+
+def map_v2_to_legacy_ass_preset(p: dict) -> dict:
+    if not p:
+        return {}
+    box = p.get("box")
+    return {
+        "slug": p.get("id") or "cp1",
+        "name": p.get("name") or "CP",
+        "font": p.get("font") or "Montserrat",
+        "weight": int(p.get("weight") or 800),
+        "case": p.get("case") or "upper",
+        "wordsPerLine": int(p.get("wordsPerChunk") or 3),
+        "sizePct": float(p.get("sizePx1920") or 80) / 1920 * 100,
+        "position": "bottom",
+        "marginVPct": int((1 - float((p.get("position") or {}).get("y") or 0.65)) * 100),
+        "primary": p.get("fill") or "#FFFFFF",
+        "active": (p.get("highlight") or {}).get("color") or "#FFD93D",
+        "activeB": (p.get("highlight") or {}).get("altColor") or "#39FF14",
+        "outline": (p.get("stroke") or {}).get("color") or "#000000",
+        "outlineW": int((p.get("stroke") or {}).get("px") or 4),
+        "shadow": int((p.get("shadow") or {}).get("px") or 0),
+        "box": (
+            {
+                "color": box.get("color"),
+                "padX": box.get("padX"),
+                "padY": box.get("padY"),
+                "radius": box.get("radiusPx"),
+            }
+            if isinstance(box, dict)
+            else None
+        ),
+        "animation": (p.get("animation") or {}).get("kind") or "none",
+        "emphasisScale": 1.15,
+        "highlightMode": (p.get("highlight") or {}).get("mode") or "color",
+        "animationMs": int((p.get("animation") or {}).get("ms") or 200),
+    }

@@ -185,11 +185,19 @@ def _append_caption_events(
     play_w: int,
     play_h: int,
     position: str,
+    highlight_mode: str = "color",
 ) -> None:
     active_style = str(edits_captions.get("activeStyle") or "").lower()
     if active_style not in ("color", "highlight", "fill"):
         active_style = ""
-    highlight_hex = str(edits_captions.get("highlightColor") or "#FDE047")
+    highlight_mode = str(highlight_mode or preset.get("highlightMode") or "color").lower()
+    if highlight_mode == "box" and not active_style:
+        active_style = "highlight"
+    if highlight_mode == "fill" and not active_style:
+        active_style = "fill"
+    if highlight_mode in ("karaoke", "karaoke_dim") and anim == "none":
+        anim = "karaoke" if highlight_mode == "karaoke" else "karaoke_dim"
+    highlight_hex = str(edits_captions.get("highlightColor") or preset.get("active") or "#FDE047")
     if not re.match(r"^#[0-9a-fA-F]{6}$", highlight_hex):
         highlight_hex = "#FDE047"
 
@@ -234,6 +242,22 @@ def _append_caption_events(
             )
             continue
 
+        if anim == "karaoke_dim" or highlight_mode == "karaoke_dim":
+            ws, we = float(chunk[0]["s"]), chunk_end
+            parts = []
+            dim = hex_to_ass(preset.get("primary") or "#808080")
+            for w, word in zip(chunk, disp_words(chunk, case), strict=True):
+                dur_cs = max(1, int((float(w["e"]) - float(w["s"])) * 100))
+                parts.append(f"{{\\kf{dur_cs}}}{word}")
+            spk = int(chunk[0].get("spk", 0)) if chunk else 0
+            pri = active_color(preset, spk, colors)
+            events.append(
+                f"Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,"
+                f"{{\\1c{pri}\\3c{cap_out}\\2c{dim}\\alpha&H40&}}"
+                + " ".join(parts)
+            )
+            continue
+
         if anim == "typewriter":
             cased = disp_words(chunk, case)
             for wi, w in enumerate(chunk):
@@ -263,7 +287,9 @@ def _append_caption_events(
             wi = int(w.get("i", ki))
             is_emph = wi in emphasis
             use_box_layer = bool(box) and (
-                preset.get("slug") == "boxed" or (preset.get("slug") == "highlighter" and is_emph)
+                preset.get("slug") == "boxed"
+                or (preset.get("slug") == "highlighter" and is_emph)
+                or highlight_mode == "box"
             )
             use_full_line_box = use_box_layer or active_style == "highlight"
             box_fill = highlight_hex if active_style == "highlight" else str(box.get("color", "#FDE047") if box else "#FDE047")
@@ -288,12 +314,19 @@ def _append_caption_events(
                         tags.append(BOUNCE_TAG)
                     elif a == "glow":
                         tags.append(GLOW_TAG.replace("{", "").replace("}", ""))
+                    if highlight_mode == "underline" and x is w:
+                        tags.append("\\u1")
+                    if highlight_mode == "supersize" and x is w:
+                        tags.append("\\fscx125\\fscy125")
                     if is_emph and not use_box_layer:
                         sc = int(emph_scale * 100)
                         tags.append(f"\\fscx{sc}\\fscy{sc}")
                     parts.append("{" + "".join(tags) + "}" + word)
                 else:
-                    parts.append(inactive_inline(preset) + word)
+                    inactive = inactive_inline(preset)
+                    if highlight_mode == "karaoke_dim":
+                        inactive = f"{{\\alpha&H60&}}{inactive}"
+                    parts.append(inactive + word)
 
             line = " ".join(parts)
             if use_full_line_box:
@@ -312,7 +345,14 @@ def build_ass(
     play_h: int = 1280,
 ) -> None:
     edits_captions = clamp_caption_export_style(edits_captions if isinstance(edits_captions, dict) else {}, play_h)
-    preset = copy.deepcopy(resolve_preset(edits_captions.get("presetId") or edits_captions.get("preset")))
+    preset_id = str(edits_captions.get("presetId") or edits_captions.get("preset") or "bold_pop")
+    if preset_id.startswith("cp"):
+        from clips_worker.t6_captions import map_v2_to_legacy_ass_preset, resolve_caption_preset_v2
+
+        v2 = resolve_caption_preset_v2(preset_id)
+        preset = copy.deepcopy(map_v2_to_legacy_ass_preset({**v2, "id": preset_id}))
+    else:
+        preset = copy.deepcopy(resolve_preset(preset_id))
     inline = edits_captions.get("presetConfig")
     if isinstance(inline, dict) and inline:
         for k, v in inline.items():
@@ -322,6 +362,7 @@ def build_ass(
         preset["font"] = edits_captions.get("font")
     emoji_by_word = edits_captions.get("emojiByWord") if isinstance(edits_captions.get("emojiByWord"), dict) else {}
     anim = (edits_captions.get("animation") or preset["animation"] or "none").lower()
+    highlight_mode = str(preset.get("highlightMode") or edits_captions.get("highlightMode") or "color").lower()
     wpl = int(edits_captions.get("wordsPerLine") or preset["wordsPerLine"] or 2)
     case = (edits_captions.get("case") or preset["case"] or "upper").lower()
     case = "upper" if case == "upper" else "sentence"
@@ -391,6 +432,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             play_w=play_w,
             play_h=play_h,
             position=position,
+            highlight_mode=highlight_mode,
         )
     except Exception as e:
         print(f"[clipper:captions] active_style_fallback reason={type(e).__name__}")
@@ -413,6 +455,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             play_w=play_w,
             play_h=play_h,
             position=position,
+            highlight_mode=highlight_mode,
         )
 
     ass_path.write_text(header + "\n".join(events) + "\n")

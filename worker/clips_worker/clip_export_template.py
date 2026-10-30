@@ -94,6 +94,25 @@ def _hex_to_drawtext(color: str) -> str:
 def _headline_style_from_edits(edits: dict) -> dict:
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
     raw = tpl.get("headlineStyle") if isinstance(tpl.get("headlineStyle"), dict) else {}
+    t6_id = str(raw.get("t6Id") or tpl.get("headlineT6Id") or "").strip()
+    if t6_id:
+        from clips_worker.t6_titles import title_style
+
+        s = title_style(t6_id)
+        bg = s.get("bg") if isinstance(s.get("bg"), dict) else {}
+        mapped = {
+            "textColor": s.get("text") or "#FFFFFF",
+            "font": s.get("font") or "Anton",
+            "case": s.get("case") or "upper",
+            "boxColor": bg.get("color") if bg.get("kind") == "box" else None,
+            "radiusPx": int(bg.get("radiusPx") or 0),
+            "widthPct": 100,
+            "t6Id": t6_id,
+        }
+        sh = s.get("shadow") if isinstance(s.get("shadow"), dict) else {}
+        if sh.get("px"):
+            mapped["shadowPx"] = int(sh["px"])
+        return {**mapped, **raw}
     if raw:
         return raw
     from clips_worker.layers_spec import _layer_by_id, _placement, resolve_layers

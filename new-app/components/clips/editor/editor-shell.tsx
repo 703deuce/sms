@@ -997,6 +997,7 @@ export function EditorShell({
           channelId={streamChannelId}
           clipType={(aiMeta as ClipAiMeta | null)?.clipType ?? null}
           mediaOffsetMs={mediaOffsetMs}
+          aiMeta={aiMeta as Record<string, unknown> | null}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -1204,6 +1205,7 @@ export function EditorShell({
               onPipCornerChange={
                 edits.layout.mode === 'facecam_pip' && edits.layout.facecam?.box ? onPipCornerChange : undefined
               }
+              aiMeta={aiMeta as Record<string, unknown> | null}
             />
             {studioPreviewLoading ? (
               <div

@@ -8,6 +8,8 @@ import { wordKey } from '@/lib/clips/edits'
 import { activeCaptionWordIndex, captionEmojiForWord, previewCaptionWordIndex } from '@/lib/clips/caption-overlay-active'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { resolveCaptionPreset, type CaptionPreset } from '@/lib/clips/caption-presets'
+import { resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
+import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 import { captionHighlightContrastText } from '@/lib/clips/caption-active-style'
 import { previewCaptionBottomPct, previewCaptionTopPct } from '@/lib/clips/caption-safe-area'
@@ -47,7 +49,8 @@ export function CaptionOverlay({
   outputDurationSec?: number
 }) {
   const cap = edits.captions ?? {}
-  const preset = resolveCaptionPreset(cap)
+  const t6Caps = t6CaptionPresetsEnabled()
+  const preset = resolveT6CaptionPreset(cap, t6Caps)
   const captionFont = cap.font?.trim() || preset.font
   const animation = (cap.animation || preset.animation) as string
   const wpl = cap.wordsPerLine ?? preset.wordsPerLine
@@ -103,6 +106,7 @@ export function CaptionOverlay({
   const hasEmojiMap = showEmojis && Object.keys(emojiMap).length > 0
   const activeStyle = cap.activeStyle ?? 'color'
   const highlightColor = cap.highlightColor ?? '#FDE047'
+  const highlightMode = String((preset as CaptionPreset & { highlightMode?: string }).highlightMode ?? '').toLowerCase()
 
   if (activeIdx < 0 && !showProgress && !hasEmojiMap) return null
 
@@ -170,6 +174,9 @@ export function CaptionOverlay({
         const useFill =
           activeStyle === 'fill' || (activeStyle === 'color' && animation === 'karaoke' && active)
         const useHighlight = activeStyle === 'highlight' && active
+        const useT6Box = t6Caps && highlightMode === 'box' && active
+        const useT6Underline = t6Caps && highlightMode === 'underline' && active
+        const useT6Supersize = t6Caps && highlightMode === 'supersize' && active
         const highlightBg = activeColor || highlightColor
         const contrast = captionHighlightContrastText(highlightBg)
         const style: React.CSSProperties = {
@@ -190,22 +197,26 @@ export function CaptionOverlay({
           paintOrder: 'stroke fill',
           textShadow: preset.shadow ? `0 2px ${preset.shadow * 4}px rgba(0,0,0,.45)` : undefined,
           ['--cap-glow-color' as string]: preset.outline,
-          transform: isEmph ? `scale(${preset.emphasisScale})` : undefined,
-          background: useHighlight
+          transform: isEmph || useT6Supersize ? `scale(${useT6Supersize ? 1.25 : preset.emphasisScale})` : undefined,
+          textDecoration: useT6Underline ? 'underline' : undefined,
+          textDecorationThickness: useT6Underline ? '0.12em' : undefined,
+          background: useHighlight || useT6Box
             ? highlightBg
-            : useFill && active
-              ? `linear-gradient(90deg, ${activeColor} ${Math.min(100, ((currentTimeSec - w.s) / (w.e - w.s)) * 100)}%, ${preset.primary} 0)`
-              : preset.box && (active || isEmph) && activeStyle === 'color'
-                ? preset.box.color
-                : undefined,
+              : useFill && active
+                ? `linear-gradient(90deg, ${activeColor} ${Math.min(100, ((currentTimeSec - w.s) / (w.e - w.s)) * 100)}%, ${preset.primary} 0)`
+                : preset.box && (active || isEmph) && activeStyle === 'color'
+                  ? preset.box.color
+                  : useT6Box
+                    ? preset.active
+                    : undefined,
           WebkitBackgroundClip: useFill && active ? 'text' : undefined,
           backgroundClip: useFill && active ? 'text' : undefined,
-          padding: useHighlight
+          padding: useHighlight || useT6Box
             ? '0.08em 0.25em'
             : preset.box && (active || isEmph) && activeStyle === 'color'
               ? `${(preset.box.padY * assScale).toFixed(2)}px ${(preset.box.padX * assScale).toFixed(2)}px`
               : undefined,
-          borderRadius: useHighlight ? '0.18em' : preset.box?.radius,
+          borderRadius: useHighlight || useT6Box ? '0.18em' : preset.box?.radius,
         }
 
         let content = text

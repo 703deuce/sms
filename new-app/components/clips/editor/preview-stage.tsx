@@ -6,6 +6,10 @@ import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { normalizeEditSpeed, orderedKeepSegments } from '@/lib/clips/edits'
 import { editorPreviewCaptionClipWords, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
+import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
+import { resolveTemplateGeometryById } from '@/lib/clips/templates/geometry'
+import { signalsOrDefaults } from '@/lib/clips/templates/signals'
+import { TemplateStage } from '@/components/clips/editor/template-stage'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { shotAt } from '@/lib/clips/crop-track'
@@ -84,6 +88,7 @@ export function PreviewStage({
   onPipCornerChange,
   testBoxSize,
   composeSpecPreview = false,
+  aiMeta = null,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -105,6 +110,7 @@ export function PreviewStage({
   /** Test-only fixed preview box (production never passes). */
   testBoxSize?: { w: number; h: number }
   composeSpecPreview?: boolean
+  aiMeta?: Record<string, unknown> | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -457,6 +463,13 @@ export function PreviewStage({
     }
   }, [fitTopPreview, edits, composeSpec])
 
+  const templatePreview = useMemo(() => {
+    if (!t6TemplatesEnabled() || !videoUrl || compositePreview) return null
+    const tid = edits.layout?.template?.id
+    if (!tid) return null
+    return resolveTemplateGeometryById(tid, signalsOrDefaults(aiMeta), edits)
+  }, [videoUrl, compositePreview, edits, aiMeta])
+
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'
 
@@ -481,7 +494,14 @@ export function PreviewStage({
             aria-hidden
           />
         ) : null}
-        {letterboxPreview ? (
+        {templatePreview ? (
+          <TemplateStage
+            spec={templatePreview}
+            videoUrl={videoUrl}
+            posterUrl={posterUrl}
+            onReady={() => setCanPlay(true)}
+          />
+        ) : letterboxPreview ? (
           <>
             <video
               key={`preview-blur-${layoutMode}`}

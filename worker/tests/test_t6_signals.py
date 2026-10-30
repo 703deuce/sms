@@ -23,6 +23,10 @@ def test_dense_layout_signals_passthrough():
     assert merged["sources"]["ai"] == "dense"
 
 
-def test_signals_call_returns_none_without_network():
+def test_signals_call_returns_none_without_network(monkeypatch):
+    def fake_call(*_a, **_k):
+        return None, 0.0
+
+    monkeypatch.setattr("clips_worker.t6_signals.signals_call", fake_call)
     out, cost = signals_call(None, [], None)
     assert out is None and cost == 0.0

@@ -663,6 +663,39 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                 raw_ct_layouts = proj_streamer.get("clipTypeLayouts")
                 if isinstance(raw_ct_layouts, dict):
                     channel_clip_type_layouts = raw_ct_layouts
+                from clips_worker.t6_flags import t6_log_fallback, t6_signals_enabled
+
+                sig = None
+                if t6_signals_enabled(settings):
+                    try:
+                        from clips_worker.t6_signals import build_signals_for_clip
+
+                        cf = pick.ai_meta.get("clipfind") if isinstance(pick.ai_meta.get("clipfind"), dict) else {}
+                        dense_cand = (
+                            {"layout_signals": cf["layout_signals"]}
+                            if isinstance(cf.get("layout_signals"), dict)
+                            else None
+                        )
+                        clip_words = [
+                            w
+                            for w in words
+                            if float(w.get("s") or 0) * 1000 >= int(pick.start_ms)
+                            and float(w.get("e") or 0) * 1000 <= int(pick.end_ms)
+                        ]
+                        sig = build_signals_for_clip(
+                            ai_meta={**type_info},
+                            fc_layout=stream_facecam_layout,
+                            words=clip_words,
+                            crop_track=None,
+                            clip_file=None,
+                            work=Path(scratch) if scratch else None,
+                            dense_candidate=dense_cand,
+                        )
+                        type_info["signals"] = sig
+                        if float(sig.get("type_conf") or 0) >= 0.6 and sig.get("clip_type"):
+                            type_info["clipType"] = str(sig["clip_type"])
+                    except Exception as exc:
+                        t6_log_fallback("signals", exc)
                 init_edits = apply_clip_type_layout_to_edits(
                     init_edits,
                     clip_type=str(type_info["clipType"]),
@@ -672,6 +705,9 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     headline_on=headline_on,
                     fallback_archetype=layout_archetype,
                     channel_clip_type_layouts=channel_clip_type_layouts,
+                    settings=settings,
+                    signals=sig,
+                    clip_id=clip_id,
                 )
                 layout_mode = str((init_edits.get("layout") or {}).get("mode") or "fit_top")
                 ai_meta = enrich_streamer_meta(
