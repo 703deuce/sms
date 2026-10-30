@@ -447,6 +447,33 @@ def _regular_clip_type_and_layout(
             for k in ("layout", "facecam", "gameplay", "split", "facecamPosition", "confidence", "method")
             if fc_layout.get(k) is not None
         }
+    from clips_worker.t6_flags import t6_log_fallback, t6_signals_enabled
+
+    if t6_signals_enabled(settings):
+        try:
+            from clips_worker.t6_signals import build_signals_for_clip
+
+            sig = build_signals_for_clip(
+                ai_meta={**meta, **type_info},
+                fc_layout=fc_layout,
+                words=[],
+                crop_track=None,
+                clip_file=clip_file,
+                work=work_dir,
+            )
+            type_info["signals"] = sig
+            if float(sig.get("type_conf") or 0) >= 0.6 and sig.get("clip_type"):
+                type_info["clipType"] = str(sig["clip_type"])
+            print(
+                "[t6:signals] "
+                f"type={type_info.get('clipType')!r} conf={float(sig.get('type_conf') or 0):.2f} "
+                f"facecam={float(sig.get('facecam_conf') or 0):.2f} "
+                f"bg_action={bool(sig.get('background_action'))} "
+                f"src_ai={(sig.get('sources') or {}).get('ai')!r}",
+                flush=True,
+            )
+        except Exception as exc:
+            t6_log_fallback("signals", exc)
     print(
         "[clipper:upload_type] "
         f"picker_ct={picker_ct!r} stream_majority={stream_majority!r} "
@@ -456,6 +483,7 @@ def _regular_clip_type_and_layout(
         flush=True,
     )
     headline_on = bool(((edits.get("exportTemplate") or {}).get("headlineBar") or {}).get("enabled"))
+    sig = type_info.get("signals") if isinstance(type_info.get("signals"), dict) else None
     edits = apply_clip_type_layout_to_edits(
         edits,
         clip_type=type_info["clipType"],
@@ -465,6 +493,9 @@ def _regular_clip_type_and_layout(
         headline_on=headline_on,
         fallback_archetype=str(meta.get("archetype") or ""),
         channel_clip_type_layouts=None,
+        settings=settings,
+        signals=sig,
+        clip_id=str(meta.get("clipId") or pick.get("id") or ""),
     )
     return edits, type_info, fc_layout
 

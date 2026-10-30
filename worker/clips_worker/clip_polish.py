@@ -100,6 +100,20 @@ def apply_clip_polish_initial(
         preset["enabled"] = ct in ("just_chatting", "podcast")
         out["silenceTrim"] = preset
 
+    from clips_worker.t6_flags import t6_caption_presets_enabled, t6_log_fallback
+
+    if t6_caption_presets_enabled(settings):
+        try:
+            from clips_worker.t6_captions import pick_caption_preset
+
+            pid, reason = pick_caption_preset({}, pick or {}, [])
+            cap = dict(out.get("captions") or {})
+            cap["presetId"] = pid
+            cap["t6"] = {"auto": True, "reason": reason}
+            out["captions"] = cap
+        except Exception as exc:
+            t6_log_fallback("captions", exc)
+
     if (polish_feature_enabled("AUDIO")):
         pass  # speech leveling is user opt-in only (speechLevelingEnabled on edits)
 

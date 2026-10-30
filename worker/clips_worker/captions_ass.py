@@ -1,6 +1,7 @@
 """Preset-driven ASS caption generator (PlayRes matches output)."""
 from __future__ import annotations
 
+import copy
 import os
 import re
 from pathlib import Path
@@ -311,7 +312,7 @@ def build_ass(
     play_h: int = 1280,
 ) -> None:
     edits_captions = clamp_caption_export_style(edits_captions if isinstance(edits_captions, dict) else {}, play_h)
-    preset = resolve_preset(edits_captions.get("presetId") or edits_captions.get("preset"))
+    preset = copy.deepcopy(resolve_preset(edits_captions.get("presetId") or edits_captions.get("preset")))
     inline = edits_captions.get("presetConfig")
     if isinstance(inline, dict) and inline:
         for k, v in inline.items():
