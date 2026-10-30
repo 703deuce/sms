@@ -159,6 +159,38 @@ def export_template_overlays_active(tpl: dict | None) -> bool:
     return False
 
 
+def export_headline_active(edits: dict) -> bool:
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    if not hb.get("enabled"):
+        return False
+    return bool(str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip())
+
+
+def export_badge_xy(
+    edits: dict,
+    *,
+    play_w: int,
+    play_h: int,
+    video_y: int,
+    video_h: int,
+    vertical_precomposed: bool,
+    headline_on: bool,
+) -> tuple[int, int]:
+    """Top-left badge anchor — headline band when bar on, else top of stack/game band."""
+    inset_x = _scale_y(16, play_w)
+    inset_y = _scale_y(12, play_h)
+    layout_mode = str((edits.get("layout") or {}).get("mode") or "")
+    stack_layout = layout_mode in ("facecam_stack", "facecam_pip", "screen_pip", "stack")
+    if vertical_precomposed or stack_layout:
+        if headline_on:
+            return inset_x, inset_y
+        return inset_x, video_y + inset_y
+    if headline_on:
+        return inset_x, inset_y
+    return inset_x, video_y + video_h - _scale_y(_BADGE_H + _SOURCE_INSET_Y, play_h)
+
+
 def _v3_badge_sprite_will_render(edits: dict) -> bool:
     try:
         from clips_worker.layers_spec import _layer_by_id, badge_sprite_active, resolve_layers
@@ -237,8 +269,8 @@ def apply_export_template(
     if vertical_precomposed:
         fc = (
             f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
-            f"[0:v]scale={play_w}:{video_h}:force_original_aspect_ratio=decrease,"
-            f"pad={play_w}:{video_h}:(ow-iw)/2:(oh-ih)/2[vid];"
+            f"[0:v]scale={play_w}:{video_h}:force_original_aspect_ratio=increase,"
+            f"crop={play_w}:{video_h}[vid];"
             f"[bg][vid]overlay=0:{video_y}[v1];"
         )
         v1_label = "[v1]"
@@ -341,11 +373,15 @@ def apply_export_template(
     if source_on:
         label, color = _platform_label(platform)
         display = link_url.replace("https://", "").replace("http://", "").upper() if link_on and link_url else ""
-        if vertical_precomposed:
-            badge_y = video_y + _scale_y(_SOURCE_INSET_Y, play_h)
-        else:
-            badge_y = video_y + video_h - _scale_y(_BADGE_H + _SOURCE_INSET_Y, play_h)
-        badge_x = _scale_y(16, play_w)
+        badge_x, badge_y = export_badge_xy(
+            edits,
+            play_w=play_w,
+            play_h=play_h,
+            video_y=video_y,
+            video_h=video_h,
+            vertical_precomposed=vertical_precomposed,
+            headline_on=headline_on,
+        )
         bw = _scale_y(_BADGE_W, play_w)
         bh = _scale_y(_BADGE_H, play_h)
         fs_badge = _scale_y(18, play_h)

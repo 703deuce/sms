@@ -120,6 +120,7 @@ def _maximize_corner_overlay_rect(
     chat_floor = int(max(0.0, union_t - 0.06 * ah))
     if union_b > 0.65 * ah:
         t = max(t, chat_floor)
+        t = min(h - 2, t + max(2, int(0.012 * ah)))
     return l, t, r, b
 
 
@@ -216,6 +217,8 @@ def detect_facecam_layout(video: Path, work: Path, n_samples: int = 60) -> dict[
     if persist < 0.5:                     # bic 4.5: the cam face must be present in >= 50% of samples
         return {**gameplay, "confidence": round(1 - persist, 2)}
     box = _expand_norm_box(box, margin=0.012)
+    box["y"] = round(min(1.0 - box["h"], box["y"] + 0.012), 4)
+    box["h"] = round(max(0.05, box["h"] - 0.012), 4)
     gameplay_box = _gameplay_crop_excluding_facecam(box)
     return {
         "layout": "stack",

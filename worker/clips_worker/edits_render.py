@@ -895,7 +895,9 @@ def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
                 badge_y=lay.get("badge_y"),
             )
             from clips_worker.overlay_geometry import badge_rect
+            from clips_worker.clip_export_template import export_headline_active
 
+            headline_in_bar = export_headline_active(edits)
             rect = badge_rect(
                 placement,
                 play_w,
@@ -906,6 +908,7 @@ def build_v3_extras(layers: list[dict], ctx: dict) -> list[dict]:
                 video_h=lay["video_h"] if placement == "fit_top_band" else video_h,
                 badge_y=lay.get("badge_y"),
                 anchor_top_gap=placement == "fit_top_band",
+                headline_in_bar=headline_in_bar if placement == "stack_corner" else False,
             )
             sprites.append({"path": dest, "x": rect["x"], "y": rect["y"]})
     if sprites:

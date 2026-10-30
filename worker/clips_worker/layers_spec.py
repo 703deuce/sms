@@ -17,6 +17,8 @@ def _layout_mode(edits: dict) -> str:
 
 def _placement(edits: dict) -> str:
     mode = _layout_mode(edits)
+    if mode in ("facecam_stack", "facecam_pip", "screen_pip", "stack"):
+        return "stack_corner"
     if mode == "fit_top" or export_stream_headline_compose_active(edits):
         return "fit_top_band"
     return "export_bar"

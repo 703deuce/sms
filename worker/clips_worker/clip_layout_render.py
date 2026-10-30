@@ -80,6 +80,21 @@ def _render_center_fill(src: Path, dest: Path, *, play_w: int, play_h: int) -> N
     )
 
 
+def per_clip_stack_out_height(edits: dict, *, play_w: int, play_h: int) -> int:
+    """When headline export band is active, stack/PiP render at full width under the bar (no side pad)."""
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    if not hb.get("enabled"):
+        return play_h
+    headline = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip()
+    if not headline:
+        return play_h
+    from clips_worker.clip_export_template import stream_headline_frame_layout
+
+    frame = stream_headline_frame_layout(play_w, play_h)
+    return max(1, play_h - frame["bar_h"])
+
+
 def apply_per_clip_layout(
     clip_src: Path,
     work_dir: Path,
@@ -90,6 +105,7 @@ def apply_per_clip_layout(
 ) -> ClipLayoutApplyResult:
     layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
     lay, source = facecam_layout_for_render(edits)
+    stack_out_h = per_clip_stack_out_height(edits, play_w=play_w, play_h=play_h)
 
     if layout_mode in ("stack", "facecam_stack"):
         if lay and lay.get("facecam"):
@@ -97,7 +113,7 @@ def apply_per_clip_layout(
 
             stacked = work_dir / "facecam_stack.mp4"
             try:
-                render_stack_mp4(clip_src, stacked, lay, out_w=play_w, out_h=play_h)
+                render_stack_mp4(clip_src, stacked, lay, out_w=play_w, out_h=stack_out_h)
                 split = float(lay.get("split") or 0.4)
                 print(
                     f"[clipper:facecam] facecam_applied mode=stack source={source} split={split}",
@@ -123,7 +139,7 @@ def apply_per_clip_layout(
         if lay and lay.get("facecam"):
             pip_out = work_dir / "screen_pip_layout.mp4"
             try:
-                render_pip_mp4(clip_src, pip_out, lay, out_w=play_w, out_h=play_h)
+                render_pip_mp4(clip_src, pip_out, lay, out_w=play_w, out_h=stack_out_h)
                 print(f"[clipper:facecam] facecam_applied mode=pip source={source}", flush=True)
                 return ClipLayoutApplyResult(pip_out, True)
             except Exception as e:
