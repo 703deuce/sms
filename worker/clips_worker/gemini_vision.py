@@ -13,20 +13,28 @@ GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 # Video-watch default (mixed_4min bake-off: prefer 3.8 Flash when quality ties).
-DEFAULT_VIDEO_PICKER_MODEL = "gemini-3.8-flash"
-DEFAULT_VIDEO_PICKER_FALLBACK_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_VIDEO_PICKER_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_VIDEO_PICKER_FALLBACK_MODEL = "gemini-3.1-flash-lite"
 
 # Paid list prices (USD per 1M tokens) for cost logging — see ai.google.dev/pricing.
 GEMINI_USD_PER_1M_TOKENS: dict[str, tuple[float, float]] = {
     "gemini-2.5-flash": (0.10, 0.40),
+    "gemini-3.1-flash-lite": (0.25, 1.50),
     "gemini-3.8-flash": (0.75, 3.75),  # intro through 2026-12-31; then 1.50 / 7.50
     "gemini-3.5-flash-lite": (0.30, 2.50),
 }
 
 
 def gemini_token_pricing_usd(model: str) -> tuple[float, float]:
-    """Return (input_usd_per_1m, output_usd_per_1m) for a model id."""
+    """Return (input_usd_per_1m, output_usd_per_1m) for a model id (text/image input rate)."""
     low = (model or "").lower()
+    if "3.1-flash-lite" in low or "3-1-flash-lite" in low:
+        try:
+            in_per_m = float(os.environ.get("GEMINI_31_FLASH_LITE_USD_PER_1M_INPUT_TEXT", "0.25"))
+            out_per_m = float(os.environ.get("GEMINI_31_FLASH_LITE_USD_PER_1M_OUTPUT", "1.50"))
+        except ValueError:
+            in_per_m, out_per_m = 0.25, 1.50
+        return in_per_m, out_per_m
     if "3.8-flash" in low or "3-8-flash" in low:
         try:
             in_per_m = float(os.environ.get("GEMINI_38_FLASH_USD_PER_1M_INPUT", "0.75"))
@@ -43,6 +51,18 @@ def gemini_token_pricing_usd(model: str) -> tuple[float, float]:
     except ValueError:
         in_per_m, out_per_m = 0.10, 0.40
     return in_per_m, out_per_m
+
+
+def gemini_audio_input_usd_per_1m(model: str) -> float:
+    low = (model or "").lower()
+    if "3.1-flash-lite" in low or "3-1-flash-lite" in low:
+        try:
+            return float(os.environ.get("GEMINI_31_FLASH_LITE_USD_PER_1M_INPUT_AUDIO", "0.50"))
+        except ValueError:
+            return 0.50
+    in_per_m, _ = gemini_token_pricing_usd(model)
+    return in_per_m
+
 
 _GEMINI_MODEL_BLOCKLIST = ("preview", "omni", "tts", "image", "imagen", "experimental", "-exp")
 

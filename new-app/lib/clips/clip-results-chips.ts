@@ -3,6 +3,9 @@
 export type ClipAiMeta = {
   hook?: string
   pass1_why?: string
+  clipType?: string
+  hasFacecam?: boolean
+  facecamConfidence?: number
   score_detail?: string
   cropMethod?: string
   layoutMode?: string
@@ -143,6 +146,20 @@ export function clipWhySummary(meta: ClipAiMeta | null | undefined): string | nu
     return trimmed
   }
   return null
+}
+
+const CLIP_TYPE_LABELS: Record<string, string> = {
+  gaming: 'Gaming',
+  irl: 'IRL',
+  just_chatting: 'Just Chatting',
+  podcast: 'Podcast',
+  other: 'Other',
+}
+
+export function clipTypeBadge(meta: ClipAiMeta | null | undefined): string | null {
+  if (!meta?.clipType) return null
+  const key = String(meta.clipType).toLowerCase()
+  return CLIP_TYPE_LABELS[key] || key.replace(/_/g, ' ')
 }
 
 export function clipLayoutChip(meta: ClipAiMeta | null | undefined): string | null {

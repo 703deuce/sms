@@ -582,6 +582,23 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
             time_offset_ms = int(payload.get("mediaStartMs") or window_start_ms)
             streamer_settings = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
             genre = str(streamer_settings.get("genre") or "stream")
+            from clips_worker.clip_type import (
+                content_type_from_picker_moment,
+                resolve_clip_type,
+                section_activity_for_moment,
+                stream_majority_clip_type,
+                video_moment_for_pick,
+            )
+            from clips_worker.clip_layout_policy import apply_clip_type_layout_to_edits
+            from clips_worker.streamer.content_archetype import resolve_streamer_layout_archetype
+
+            vp_sections = state.get("videoPickerSections") if isinstance(state.get("videoPickerSections"), list) else None
+            stream_facecam_layout = state.get("layout") if isinstance(state.get("layout"), dict) else None
+            layout_archetype, _arch_src = resolve_streamer_layout_archetype(vod=vod, state=state)
+            pre_types = [
+                content_type_from_picker_moment(vm, None) for vm in (video_moments or []) if isinstance(vm, dict)
+            ]
+            stream_majority = stream_majority_clip_type(pre_types)
             for pick in picks:
                 clip_start = int(pick.start_ms) + time_offset_ms
                 clip_end = int(pick.end_ms) + time_offset_ms
@@ -622,6 +639,34 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     clip_start_ms=clip_start,
                     clip_end_ms=clip_end,
                 )
+                headline_on = bool((init_edits.get("exportTemplate") or {}).get("headlineBar", {}).get("enabled"))
+                vm = video_moment_for_pick(video_moments, int(pick.start_ms), int(pick.end_ms))
+                section_act = section_activity_for_moment(vm, vp_sections)
+                fc_conf = (
+                    float(stream_facecam_layout.get("confidence") or 0.0)
+                    if isinstance(stream_facecam_layout, dict)
+                    else 0.0
+                )
+                has_fc = bool(
+                    isinstance(stream_facecam_layout, dict)
+                    and isinstance(stream_facecam_layout.get("facecam"), dict)
+                )
+                type_info = resolve_clip_type(
+                    moment=vm,
+                    section_activity=section_act,
+                    stream_majority=stream_majority,
+                    has_facecam=has_fc,
+                    facecam_confidence=fc_conf,
+                )
+                init_edits = apply_clip_type_layout_to_edits(
+                    init_edits,
+                    clip_type=str(type_info["clipType"]),
+                    has_facecam=bool(type_info["hasFacecam"]),
+                    facecam_confidence=float(type_info["facecamConfidence"]),
+                    stream_facecam_layout=stream_facecam_layout,
+                    headline_on=headline_on,
+                    fallback_archetype=layout_archetype,
+                )
                 layout_mode = str((init_edits.get("layout") or {}).get("mode") or "fit_top")
                 ai_meta = enrich_streamer_meta(
                     pick.ai_meta,
@@ -634,6 +679,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     chat_messages=chat_messages or [],
                     layout_mode=layout_mode,
                 )
+                ai_meta = {**ai_meta, **type_info}
                 cfm = ai_meta.get("clipfind") if isinstance(ai_meta.get("clipfind"), dict) else None
                 if cfm and isinstance(cfm.get("variants"), dict):
                     cfm["variants"] = {

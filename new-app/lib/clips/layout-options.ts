@@ -79,15 +79,29 @@ export function layoutPickPayload(
   facecamLayout: FacecamLayoutState | null,
   edits: ClipEditsV2,
 ): { mode: LayoutOptionId; facecam?: ClipEditsV2['layout']['facecam'] } {
+  const editsBox = edits.layout.facecam?.box
+  const effectiveFacecam: FacecamLayoutState | null =
+    editsBox && editsBox.w > 0 && editsBox.h > 0
+      ? {
+          facecam: editsBox,
+          gameplay: edits.layout.facecam?.gameplay ?? facecamLayout?.gameplay ?? null,
+          split: edits.layout.facecam?.split ?? facecamLayout?.split ?? 0.35,
+          facecamPosition:
+            edits.layout.facecam?.position ?? facecamLayout?.facecamPosition ?? 'top',
+          layout: 'stack',
+          confidence: facecamLayout?.confidence ?? 1,
+          source: 'editor',
+        }
+      : facecamLayout
   const needsFacecamPick = mode === 'facecam_stack' || mode === 'facecam_pip'
-  if (needsFacecamPick && facecamLayout?.facecam) {
+  if (needsFacecamPick && effectiveFacecam?.facecam) {
     return {
       mode,
       facecam: {
-        box: facecamLayout.facecam,
-        gameplay: facecamLayout.gameplay ?? undefined,
-        split: facecamLayout.split ?? 0.4,
-        position: facecamLayout.facecamPosition ?? 'top',
+        box: effectiveFacecam.facecam,
+        gameplay: effectiveFacecam.gameplay ?? undefined,
+        split: effectiveFacecam.split ?? 0.35,
+        position: effectiveFacecam.facecamPosition ?? 'top',
         pipCorner: edits.layout.facecam?.pipCorner ?? 'BR',
       },
     }

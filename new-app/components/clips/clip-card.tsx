@@ -18,6 +18,7 @@ import {
   clipPersonCount,
   clipDisplayTitle,
   clipFallbackPickLabel,
+  clipTypeBadge,
   clipWhySummary,
   type ClipAiMeta,
 } from '@/lib/clips/clip-results-chips'
@@ -55,6 +56,7 @@ export function ClipCard({
   const aiMeta = (clip.aiMeta || {}) as ClipAiMeta
   const why = clipWhySummary(aiMeta)
   const layoutChip = clipLayoutChip(aiMeta)
+  const clipTypeLabel = clipTypeBadge(aiMeta)
   const people = clipPersonCount(aiMeta)
   const fallbackLabel = clipFallbackPickLabel(aiMeta, clip.reason)
   const displayTitle = clipDisplayTitle(clip)
@@ -239,6 +241,11 @@ export function ClipCard({
               title="Lower-confidence moment — you can still preview, edit, and export"
             >
               {fallbackLabel}
+            </span>
+          ) : null}
+          {clipTypeLabel ? (
+            <span className="rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
+              {clipTypeLabel}
             </span>
           ) : null}
           {layoutChip ? (

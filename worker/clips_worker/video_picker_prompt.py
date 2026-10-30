@@ -99,7 +99,8 @@ moments: array of objects, sorted by score descending, each with:
 - confidence: number 0.0 to 1.0, how sure you are the description and boundaries are right.
 - why_it_works: one or two sentences naming the setup, the payoff and why a stranger would care.
 - touches_edge: none, start, end or both.
-- score: number 0.0 to 1.0."""
+- score: number 0.0 to 1.0.
+- content_type: one of gaming, irl, just_chatting, podcast, other — what is on screen for this moment (gameplay vs desk talk vs out-and-about vs multi-person seated talk)."""
 
 VISUAL_WATCH_PASS1_HINT = (
     "Visual watch (Gemini v3): full spans start_s–end_s with peak/hook (hook is advisory only; never trim to hook_s). "
@@ -146,6 +147,32 @@ def length_rule_text(target_clip_len_s: int | None) -> str:
     if target_clip_len_s is None:
         return _LENGTH_RULE_AUTO
     return _LENGTH_RULE_FIXED.format(target_len_s=int(target_clip_len_s))
+
+
+def _coverage_time_parts(video_len_s: int, need: int) -> str:
+    """Equal slices a-bs; c-ds for FULL COVERAGE prompt."""
+    video_len_s = max(1, int(video_len_s))
+    need = max(1, int(need))
+    step = float(video_len_s) / need
+    parts: list[str] = []
+    for i in range(need):
+        a = i * step
+        b = min(float(video_len_s), (i + 1) * step)
+        parts.append(f"{a:.1f}s-{b:.1f}s")
+    return "; ".join(parts)
+
+
+def full_coverage_user_suffix(video_len_s: int) -> str:
+    dur = float(max(1, int(video_len_s)))
+    need = min_moments_for_video(int(video_len_s))
+    parts = _coverage_time_parts(int(video_len_s), need)
+    return (
+        f"FULL COVERAGE: return AT LEAST {need} moments for this {dur:.1f}s clip. "
+        "Every section you list in sections[] must contain at least one moment. "
+        "Cover the whole clip; as a guide, include your best moment from each of these parts: "
+        f"{parts}. If a part has nothing great, still return its best candidate and give it an honest "
+        "(lower) score; do not inflate scores to fill the count."
+    )
 
 
 def build_video_picker_system_prompt(video_len_s: int, target_clip_len_s: int | None) -> str:

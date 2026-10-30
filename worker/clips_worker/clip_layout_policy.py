@@ -1,6 +1,9 @@
 """Shared layout mode for regular + streamer clips from picker archetype."""
 from __future__ import annotations
 
+from typing import Any
+
+from clips_worker.clip_type import FACECAM_CONFIDENCE_THRESHOLD
 from clips_worker.picker.titles import INTERNAL_TITLES
 
 _GAMEPLAY_ARCHETYPES = frozenset(
@@ -37,6 +40,89 @@ def resolve_content_layout_mode(
             return "fit_top", "gameplay_archetype_with_headline"
         return "fit_blur", "gameplay_archetype"
     return "speaker_follow", "talking_head_archetype"
+
+
+def _facecam_edits_from_stream_layout(stream_layout: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(stream_layout, dict):
+        return None
+    box = stream_layout.get("facecam")
+    if not isinstance(box, dict) or not all(k in box for k in ("x", "y", "w", "h")):
+        return None
+    return {
+        "box": box,
+        "gameplay": stream_layout.get("gameplay") if isinstance(stream_layout.get("gameplay"), dict) else None,
+        "split": float(stream_layout.get("split") or 0.35),
+        "position": str(stream_layout.get("facecamPosition") or "top"),
+    }
+
+
+def apply_clip_type_layout_to_edits(
+    edits: dict,
+    *,
+    clip_type: str,
+    has_facecam: bool,
+    facecam_confidence: float,
+    stream_facecam_layout: dict[str, Any] | None,
+    headline_on: bool,
+    fallback_archetype: str | None = None,
+) -> dict:
+    """Per-clip auto layout (T5). IRL / just_chatting keep speaker_follow; gaming uses stack when facecam confident."""
+    ct = (clip_type or "other").strip().lower()
+    layout = dict(edits.get("layout") or {})
+    reason = f"clip_type_{ct}"
+
+    if ct == "gaming" and has_facecam and facecam_confidence >= FACECAM_CONFIDENCE_THRESHOLD:
+        fc = _facecam_edits_from_stream_layout(stream_facecam_layout)
+        if fc:
+            layout["mode"] = "facecam_stack"
+            layout["facecam"] = {k: v for k, v in fc.items() if v is not None}
+            out = {**edits, "layout": layout}
+            from clips_worker.decision_log import decision_log
+
+            decision_log(
+                "layout",
+                "clip_type_policy",
+                clip_type=ct,
+                layout_mode=layout["mode"],
+                reason="gaming_facecam_stack",
+                facecam_confidence=round(facecam_confidence, 3),
+            )
+            return out
+
+    if ct == "gaming":
+        mode, reason = resolve_content_layout_mode(archetype="gaming_stream", headline_on=headline_on)
+        layout["mode"] = mode
+        return apply_content_layout_to_edits(
+            {**edits, "layout": layout},
+            archetype="gaming_stream",
+            headline_on=headline_on,
+            log=True,
+            archetype_source=reason,
+        )
+
+    if ct in ("irl", "just_chatting", "podcast"):
+        layout["mode"] = "speaker_follow"
+        if ct == "podcast" and isinstance(stream_facecam_layout, dict) and stream_facecam_layout.get("layout") == "split":
+            layout["mode"] = "split"
+        out = {**edits, "layout": layout}
+        from clips_worker.decision_log import decision_log
+
+        decision_log(
+            "layout",
+            "clip_type_policy",
+            clip_type=ct,
+            layout_mode=layout["mode"],
+            reason=reason,
+        )
+        return out
+
+    return apply_content_layout_to_edits(
+        edits,
+        archetype=fallback_archetype,
+        headline_on=headline_on,
+        log=True,
+        archetype_source="clip_type_fallback",
+    )
 
 
 def apply_content_layout_to_edits(

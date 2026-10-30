@@ -23,6 +23,7 @@ from clips_worker.video_picker_prompt import (
     VISUAL_WATCH_PASS1_HINT,
     VISUAL_WATCH_PASS2_HINT,
     build_video_picker_system_prompt,
+    full_coverage_user_suffix,
     min_moments_for_video,
     min_moments_rule_description,
 )
@@ -274,9 +275,16 @@ def video_picker_max_model_attempts() -> int:
 
 def video_picker_fps() -> float:
     try:
-        return min(1.0, max(0.1, float(os.environ.get("VIDEO_PICKER_FPS", "0.5"))))
+        return min(1.0, max(0.1, float(os.environ.get("VIDEO_PICKER_FPS", "0.25"))))
     except ValueError:
-        return 0.5
+        return 0.25
+
+
+def video_picker_transcript_max_chars() -> int:
+    try:
+        return max(16_000, int(os.environ.get("VIDEO_PICKER_TRANSCRIPT_MAX_CHARS", "60000")))
+    except ValueError:
+        return 60_000
 
 
 def video_picker_user_part_order() -> str:
@@ -333,9 +341,24 @@ def video_picker_stream_overlap_s() -> float:
     return max(30.0, min(60.0, v))
 
 
-def estimate_gemini_usd(prompt_tokens: int, output_tokens: int, model: str = "") -> float:
+def estimate_gemini_usd(
+    prompt_tokens: int,
+    output_tokens: int,
+    model: str = "",
+    *,
+    audio_tokens: int = 0,
+) -> float:
+    from clips_worker.gemini_vision import gemini_audio_input_usd_per_1m, gemini_token_pricing_usd
+
     in_per_m, out_per_m = gemini_token_pricing_usd(model)
-    return (prompt_tokens / 1_000_000) * in_per_m + (output_tokens / 1_000_000) * out_per_m
+    text_tok = max(0, int(prompt_tokens) - int(audio_tokens or 0))
+    audio_tok = max(0, int(audio_tokens or 0))
+    audio_rate = gemini_audio_input_usd_per_1m(model)
+    return (
+        (text_tok / 1_000_000) * in_per_m
+        + (audio_tok / 1_000_000) * audio_rate
+        + (output_tokens / 1_000_000) * out_per_m
+    )
 
 
 def _gemini_omits_legacy_sampling(model: str) -> bool:
@@ -1721,12 +1744,26 @@ def watch_video_file(
                 "and the timestamped transcript together."
             )
         system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
+        transcript_cap = video_picker_transcript_max_chars()
+        transcript_body = transcript_text or "(none)"
+        if transcript_text and len(transcript_text) > transcript_cap:
+            decision_log(
+                "video_picker",
+                "transcript_truncated",
+                chunk=chunk_label,
+                original_chars=len(transcript_text),
+                cap=transcript_cap,
+            )
+            transcript_body = transcript_text[:transcript_cap]
+        elif transcript_text:
+            transcript_body = transcript_text
         user_text_base = (
             f"The video is exactly {duration_s:.1f} seconds. Every timestamp must be between 0 and {duration_s:.1f}.\n\n"
             f"{time_hint}\n\n"
-            f"TIMESTAMPED TRANSCRIPT:\n{transcript_text[:16000] if transcript_text else '(none)'}\n\n"
+            f"TIMESTAMPED TRANSCRIPT:\n{transcript_body}\n\n"
             f"Return sections and moments JSON for this video only ({duration_s}s max; "
-            "all times must match [t=…] labels and transcript)."
+            "all times must match [t=…] labels and transcript).\n\n"
+            f"{full_coverage_user_suffix(int(duration_s))}"
         )
         if user_text_override:
             user_text_base = user_text_override
@@ -1809,7 +1846,6 @@ def watch_video_file(
             user_text = user_text_base
             time_invalid_retries = 1
             sections_moment_retries = 1
-            shortfall_retries = 1
             parsed_ok: dict[str, Any] | None = None
             model_failed_reason = ""
 
@@ -2032,47 +2068,16 @@ def watch_video_file(
                 before_final_dedupe = len(moments)
                 moments = dedupe_overlapping_video_picker_moments(moments, stage="dedupe_reassess")
                 min_need = int(meta.get("min_moments") or min_moments_for_video(int(duration_s)))
-                if len(moments) < min_need and shortfall_retries > 0:
-                    uncovered_spans = compute_uncovered_spans(
-                        meta.get("sections") or [],
-                        moments,
-                        float(duration_s),
-                    )
-                    gap = uncovered_labels_for_prompt(uncovered_spans)
+                if len(moments) < min_need:
                     decision_log(
                         "video_picker",
-                        "uncovered_spans",
+                        "shortfall_accepted",
                         chunk=chunk_label,
+                        reason="below_min_moments",
                         have=len(moments),
                         need=min_need,
-                        spans=uncovered_spans[:10],
                     )
-                    if gap:
-                        moments_before_shortfall = list(moments)
-                        if _wall_exceeded():
-                            return _accept_shortfall(moments, "wall_clock_before_shortfall_retry")
-                        shortfall_retries -= 1
-                        decision_log(
-                            "video_picker",
-                            "retry",
-                            model=active_model,
-                            chunk=chunk_label,
-                            retry_reason="shortfall_vs_min_moments",
-                            have=len(moments),
-                            need=min_need,
-                            uncovered=gap[:6],
-                        )
-                        user_text = (
-                            user_text_base
-                            + f"\n\nRETRY: You returned {len(moments)} moments but need at least {min_need}. "
-                            f"The video is exactly {float(duration_s):.1f} seconds — every timestamp must be >= 0 and < {float(duration_s):.1f}. "
-                            f"Add strong moments covering these uncovered sections (do not duplicate existing beats): "
-                            + "; ".join(gap[:8])
-                        )
-                        parsed_ok = None
-                        continue
-                    elif len(moments) < min_need:
-                        return _accept_shortfall(moments, "no_uncovered_spans")
+                    meta["shortfall_accepted"] = "below_min_moments"
                 meta["moments_deduped"] = {
                     "before": moments_before_dedupe,
                     "after": len(moments),

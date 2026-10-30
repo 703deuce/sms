@@ -22,6 +22,7 @@ import {
   type ClipGapToolSettings,
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
+import { FacecamLayoutControls } from '@/components/clips/editor/facecam-layout-controls'
 
 export function LayoutPanel({
   edits,
@@ -243,6 +244,9 @@ export function LayoutPanel({
           Facecam stack and PiP need detected facecam boxes from the VOD. Run stream layout detection or pick another
           layout.
         </p>
+      ) : null}
+      {onEdits ? (
+        <FacecamLayoutControls edits={edits} facecamLayout={facecamLayout} onEdits={onEdits} />
       ) : null}
       {layoutOptions.length > 0 ? (
       <div className="grid gap-2 sm:grid-cols-2">

@@ -194,7 +194,11 @@ def gemini_dense_call(c: dict, *, base: Path, base_absolute: bool, time_offset_m
     ])
     parts = _labeled_frame_user_parts(proxy, work, duration_s=int(hi_s - lo_s), user_text=user,
                                       fps=1.0 / interval_s, part_order="frames_first")
-    gen = {"responseMimeType": "application/json", "mediaResolution": os.environ.get("CLIPFIND_DENSE_MEDIA_RES", "MEDIA_RESOLUTION_MEDIUM"), "maxOutputTokens": 2048}
+    gen = {
+        "responseMimeType": "application/json",
+        "mediaResolution": os.environ.get("CLIPFIND_DENSE_MEDIA_RES", "MEDIA_RESOLUTION_LOW"),
+        "maxOutputTokens": 2048,
+    }
     if "3.8-flash" in model.lower():
         gen["thinkingConfig"] = {"thinkingLevel": "low"}
     payload = {"systemInstruction": {"parts": [{"text": JUDGE_SYSTEM_DENSE}]},

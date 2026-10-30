@@ -13,7 +13,7 @@ from typing import Any, Callable
 from clips_worker.clipfind.judge import ARCHETYPES, JUDGE_PROMPT_VERSION, judge_beats_ms, parse_judge_item
 from clips_worker.clipfind.refine import ClipBeats, fit_max, snap_end_to_word, snap_start_to_word
 
-DEFAULT_INTERVAL_S = 1.0
+DEFAULT_INTERVAL_S = 2.0
 MAX_WINDOW_S = 120.0
 PAD_S = 25.0
 LOW_TOKENS_PER_FRAME = 66      # Gemini MEDIA_RESOLUTION_LOW
@@ -29,15 +29,14 @@ def _envf(name: str, default: float) -> float:
 
 
 def dense_frame_interval_s(raw: str | float | None = None) -> float:
-    """CLIPFIND_DENSE_FRAME_INTERVAL_S, default 1.0, clamped to [1, 3] => 0.33-1 fps. The close look is MORE detailed
-    than the whole-stream pass (1 frame / 2 s, LOW): denser frames at MEDIUM resolution."""
+    """CLIPFIND_DENSE_FRAME_INTERVAL_S, default 2.0 s (0.5 fps), clamped to [2, 3]."""
     if raw is None:
         raw = os.environ.get("CLIPFIND_DENSE_FRAME_INTERVAL_S", "")
     try:
         v = float(raw) if str(raw).strip() else DEFAULT_INTERVAL_S
     except ValueError:
         v = DEFAULT_INTERVAL_S
-    return max(1.0, min(3.0, v))
+    return max(2.0, min(3.0, v))
 
 
 def dense_fps(raw: str | float | None = None) -> float:
@@ -90,8 +89,8 @@ def dense_window(start_ms: int, end_ms: int, duration_ms: int, beats: dict | Non
 
 def select_candidates(items: list[dict], k: int | None = None) -> list[int]:
     """items: [{"tier","rank","id"}] in fusion order. Video-found candidates (id starts with "vp_") go first so
-    every on-screen moment gets a frame-by-frame look, then primary, then more, by rank. Default k=30."""
-    k = int(k if k is not None else _envf("CLIPFIND_DENSE_MAX_CANDIDATES", 30))
+    every on-screen moment gets a frame-by-frame look, then primary, then more, by rank. Default k=15."""
+    k = int(k if k is not None else _envf("CLIPFIND_DENSE_MAX_CANDIDATES", 15))
     order = sorted(
         (i for i, it in enumerate(items) if it.get("tier") in ("primary", "more")),
         key=lambda i: (0 if str(items[i].get("id") or "").startswith("vp_") else 1,
