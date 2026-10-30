@@ -14,16 +14,35 @@ BOUNCE_TAG = r"\fscy70\t(0,90,\fscy118)\t(90,180,\fscy100)"
 GLOW_TAG = r"{\blur4\t(0,200,\blur9)\t(200,400,\blur4)}"
 
 _V3_FONTS = Path(__file__).resolve().parent.parent / "v3" / "fonts"
+if not (_V3_FONTS / "Poppins-ExtraBold.ttf").is_file():
+    _V3_FONTS = Path(__file__).resolve().parent.parent / "prototype" / "v3" / "fonts"
+_T6_FONTS = Path(__file__).resolve().parent.parent / "v3" / "fonts" / "t6"
+if not (_T6_FONTS / "Lato.ttf").is_file():
+    _T6_FONTS = Path(__file__).resolve().parent.parent / "prototype" / "v3" / "fonts" / "t6"
 _ASS_FONT_FILES: dict[str, Path] = {
     "Poppins ExtraBold": _V3_FONTS / "Poppins-ExtraBold.ttf",
     "Anton": _V3_FONTS / "Anton-Regular.ttf",
     "Montserrat Black": _V3_FONTS / "Montserrat-Black.ttf",
+    "Bangers": _T6_FONTS / "Bangers.ttf",
+    "Inter": _T6_FONTS / "Inter.ttf",
+    "Lato": _T6_FONTS / "Lato.ttf",
+    "Bebas Neue": _T6_FONTS / "BebasNeue.ttf",
+    "Luckiest Guy": _T6_FONTS / "LuckiestGuy.ttf",
+    "Archivo Black": _T6_FONTS / "ArchivoBlack.ttf",
+    "Oswald": _T6_FONTS / "Oswald.ttf",
 }
 _ASS_FONT_ALIASES: dict[str, str] = {
     "Poppins": "Poppins ExtraBold",
     "Anton": "Anton",
     "Montserrat Black": "Montserrat Black",
     "Montserrat": "Montserrat Black",
+    "Bangers": "Bangers",
+    "Inter": "Inter",
+    "Lato": "Lato",
+    "Bebas Neue": "Bebas Neue",
+    "Luckiest Guy": "Luckiest Guy",
+    "Archivo Black": "Archivo Black",
+    "Oswald": "Oswald",
 }
 
 
@@ -354,7 +373,12 @@ def build_ass(
     else:
         preset = copy.deepcopy(resolve_preset(preset_id))
     inline = edits_captions.get("presetConfig")
-    if isinstance(inline, dict) and inline:
+    if isinstance(inline, dict) and inline and preset_id.startswith("cp"):
+        allowed = ("font", "primary", "active", "activeB", "outline", "outlineW", "sizePct")
+        for k in allowed:
+            if inline.get(k) is not None:
+                preset[k] = inline[k]
+    elif isinstance(inline, dict) and inline:
         for k, v in inline.items():
             if v is not None:
                 preset[k] = v

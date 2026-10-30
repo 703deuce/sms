@@ -48,7 +48,9 @@ export function resolveT6CaptionPreset(
       const cfg = cap?.presetConfig
       if (cfg && typeof cfg === 'object') {
         const merged = { ...base } as Record<string, unknown>
-        for (const [k, v] of Object.entries(cfg)) {
+        const allowed = ['font', 'primary', 'active', 'activeB', 'outline', 'outlineW', 'sizePct']
+        for (const k of allowed) {
+          const v = cfg[k]
           if (v !== null && v !== undefined && v !== '') merged[k] = v
         }
         base = merged as CaptionPreset

@@ -48,6 +48,7 @@ import { mergeEditsThreeWay } from '@/lib/clips/edits-merge'
 import {
   legacyFromLayers,
   resolveLayers,
+  syncLayersFromLegacy,
   type Layer,
 } from '@/lib/clips/layers'
 import { toast } from 'sonner'
@@ -387,7 +388,8 @@ export function useEditorState(
 
   const setCaptions = useCallback(
     (captions: ClipEditsV2['captions']) => {
-      setEdits({ ...state.edits, captions: { ...state.edits.captions, ...captions } })
+      const next = { ...state.edits, captions: { ...state.edits.captions, ...captions } }
+      setEdits(state.edits.layersV === 3 ? syncLayersFromLegacy(next) : next)
     },
     [setEdits, state.edits],
   )

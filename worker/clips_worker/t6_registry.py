@@ -441,14 +441,14 @@ TEMPLATES: dict[str, dict] = {
     "id": "I4",
     "lane": "irl",
     "name": "4:5 Action",
-    "fallbackMode": "center_crop",
+    "fallbackMode": "fit_blur",
     "panels": [
       {
         "role": "action",
         "y": 0.19,
         "h": 0.64,
-        "src": "action_box_widened",
-        "fit": "cover",
+        "src": "trim_sides",
+        "fit": "contain_black",
         "focus": "center",
         "x": 0,
         "w": 1

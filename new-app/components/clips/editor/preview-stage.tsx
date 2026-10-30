@@ -175,7 +175,7 @@ export function PreviewStage({
     const el = videoRefInner.current
     if (!el) return
     ;(videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
-  }, [videoRef, cropPreview, letterboxPreview, aspect, videoUrl, layoutMode])
+  }, [videoRef, cropPreview, letterboxPreview, aspect, videoUrl, layoutMode, edits.layout?.template?.id])
 
   useLayoutEffect(() => {
     const v = videoRefInner.current
@@ -499,6 +499,13 @@ export function PreviewStage({
             spec={templatePreview}
             videoUrl={videoUrl}
             posterUrl={posterUrl}
+            primaryVideoRef={videoRefInner}
+            seekTime={captionTimeSec}
+            paused={!playing}
+            lowResWarning={
+              (media?.height ?? 1080) < 720 &&
+              templatePreview.panels.some((p) => p.src.w < 0.5 && p.dest.h > templatePreview.playH * 0.3)
+            }
             onReady={() => setCanPlay(true)}
           />
         ) : letterboxPreview ? (

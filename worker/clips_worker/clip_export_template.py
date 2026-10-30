@@ -109,6 +109,13 @@ def _headline_style_from_edits(edits: dict) -> dict:
             "widthPct": 100,
             "t6Id": t6_id,
         }
+        kind = str(bg.get("kind") or "")
+        if kind == "band":
+            mapped["boxColor"] = bg.get("color") or "#000000"
+            mapped["bandFill"] = "black"
+        elif kind == "blur":
+            mapped["boxColor"] = None
+            mapped["bandFill"] = "blur"
         sh = s.get("shadow") if isinstance(s.get("shadow"), dict) else {}
         if sh.get("px"):
             mapped["shadowPx"] = int(sh["px"])

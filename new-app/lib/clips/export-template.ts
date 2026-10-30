@@ -59,6 +59,12 @@ export const exportTemplateSchema = z.object({
   platform: z.enum(['twitch', 'kick']).optional(),
   exportPlatformId: z.enum(['tiktok', 'youtube_shorts', 'instagram_reels']).optional(),
   profanityCensor: z.boolean().optional(),
+  headlineStyle: z
+    .object({
+      t6Id: z.string().optional(),
+    })
+    .passthrough()
+    .optional(),
 })
 
 export type ClipExportTemplate = z.infer<typeof exportTemplateSchema>

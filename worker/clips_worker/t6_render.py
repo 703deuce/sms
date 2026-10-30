@@ -58,20 +58,36 @@ def _norm_box(box: dict) -> tuple[float, float, float, float]:
     )
 
 
-def _panel_src_filter(in_label: str, tag: str, src: dict, dest_w: int, dest_h: int, fit: str) -> tuple[str, str]:
+def _panel_src_filter(
+    in_label: str,
+    tag: str,
+    src: dict,
+    dest_w: int,
+    dest_h: int,
+    fit: str,
+    *,
+    src_w: int,
+    src_h: int,
+) -> tuple[str, str]:
     x, y, w, h = _norm_box(src)
     crop = f"[{in_label}]crop=iw*{w}:ih*{h}:iw*{x}:ih*{y}[{tag}raw]"
+    src_crop_w = max(1.0, src_w * w)
+    upscale = dest_w / src_crop_w if src_crop_w > 0 else 1.0
+    sharp = ""
+    if upscale > 2.0:
+        sharp = ",unsharp=5:5:0.6:5:5:0.0"
     if fit == "contain_black":
         scale = (
-            f"[{tag}raw]scale={dest_w}:{dest_h}:force_original_aspect_ratio=decrease,"
+            f"[{tag}raw]scale={dest_w}:{dest_h}:force_original_aspect_ratio=decrease:flags=lanczos{sharp},"
             f"pad={dest_w}:{dest_h}:(ow-iw)/2:(oh-ih)/2:black[{tag}]"
         )
         return f"{crop};{scale}", tag
     if fit == "contain_blur":
         inner = fit_blur_overlay_filter(f"{tag}raw", tag, dest_w, dest_h)
+        inner = inner.replace(f"scale={dest_w}:{dest_h}", f"scale={dest_w}:{dest_h}:flags=lanczos{sharp}", 1)
         return f"{crop};{inner}", tag
     scale = (
-        f"[{tag}raw]scale={dest_w}:{dest_h}:force_original_aspect_ratio=increase,"
+        f"[{tag}raw]scale={dest_w}:{dest_h}:force_original_aspect_ratio=increase:flags=lanczos{sharp},"
         f"crop={dest_w}:{dest_h}[{tag}]"
     )
     return f"{crop};{scale}", tag
@@ -117,9 +133,26 @@ def build_template_filtergraph(
         dh = max(2, int(dest.get("h") or play_h))
         src = panel.get("src") or {"x": 0, "y": 0, "w": 1, "h": 1}
         fit = str(panel.get("fit") or "cover")
-        chain, ptag = _panel_src_filter("0:v", f"p{pi}", src, dw, dh, fit)
+        chain, ptag = _panel_src_filter("0:v", f"p{pi}", src, dw, dh, fit, src_w=src_w, src_h=src_h)
         parts.append(chain)
         parts.append(f"[{over}][{ptag}]overlay={dx}:{dy}[o{idx}]")
+        over = f"o{idx}"
+        idx += 1
+    pip = spec.get("pip")
+    if isinstance(pip, dict) and isinstance(pip.get("dest"), dict):
+        pdest = pip["dest"]
+        px = int(pdest.get("x") or 0)
+        py = int(pdest.get("y") or 0)
+        pw = max(2, int(pdest.get("w") or 0))
+        ph = max(2, int(pdest.get("h") or pw))
+        psrc = pip.get("src") or {"x": 0, "y": 0, "w": 0.32, "h": 0.28}
+        pchain, ptag = _panel_src_filter("0:v", "pip", psrc, pw, ph, "cover", src_w=src_w, src_h=src_h)
+        parts.append(pchain)
+        parts.append(
+            f"[{ptag}]format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
+            f"a='if(lte(hypot(X-{pw // 2},Y-{ph // 2}),{pw // 2}),255,0)'[pipmask]"
+        )
+        parts.append(f"[{over}][pipmask]overlay={px}:{py}[o{idx}]")
         over = f"o{idx}"
         idx += 1
     if over != "vout":

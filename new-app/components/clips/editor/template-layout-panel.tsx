@@ -37,13 +37,18 @@ export function TemplateLayoutPanel({
   const applyTemplate = (id: string, auto: boolean, reason?: string) => {
     const t = T6_TEMPLATES_BY_ID[id]
     if (!t) return
+    const usesTrim = t.panels.some((p) => p.src === 'trim_sides' || p.src === 'action_box')
+    const fallback =
+      t.lane === 'irl' && /^I[1-4]$/.test(t.id) ? 'fit_blur' : (t.fallbackMode as ClipEditsV2['layout']['mode'])
     onEdits({
       ...edits,
       layout: {
         ...edits.layout,
-        mode: t.fallbackMode as ClipEditsV2['layout']['mode'],
+        mode: fallback,
+        cropBox: usesTrim ? edits.layout.cropBox : undefined,
+        layoutSegments: undefined,
         userPicked: !auto,
-        template: { id, auto, reason, lane: t.lane },
+        template: { id, auto, reason, lane: t.lane, boxes: edits.layout.template?.boxes },
       },
     })
   }

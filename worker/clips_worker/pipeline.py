@@ -552,6 +552,47 @@ def _finalize_regular_clip_edits(
     st = dict(edits.get("silenceTrim") or {})
     st["enabled"] = ct in ("just_chatting", "podcast")
     edits = {**edits, "silenceTrim": st}
+    from clips_worker.t6_flags import t6_caption_presets_enabled
+
+    if t6_caption_presets_enabled(settings):
+        try:
+            from clips_worker.t6_captions import pick_caption_preset
+
+            signals = type_info.get("signals") if isinstance(type_info.get("signals"), dict) else {}
+            meta = (pick or {}).get("aiMeta") or {}
+            user_default = (settings.get("captions") or {}).get("presetId")
+            cap = dict(edits.get("captions") or {})
+            if user_default:
+                cap["presetId"] = user_default
+            else:
+                from clips_worker.t6_render import probe_duration_s
+
+                dur = probe_duration_s(clip_file) if clip_file.is_file() else 30.0
+                clip_id = str(meta.get("clipId") or (pick or {}).get("id") or "")
+                history: list[str] = []
+                pid, reason = pick_caption_preset(
+                    signals,
+                    {"duration_s": dur, "id": clip_id},
+                    history,
+                    seed=clip_id or "clip",
+                )
+                strip_keys = (
+                    "presetConfig",
+                    "animation",
+                    "case",
+                    "colors",
+                    "wordsPerLine",
+                    "keywordHighlight",
+                    "activeStyle",
+                    "highlightColor",
+                )
+                cap = {k: v for k, v in cap.items() if k not in strip_keys}
+                cap.update({"presetId": pid, "t6": {"auto": True, "reason": reason}})
+            edits = {**edits, "captions": cap}
+        except Exception as exc:
+            from clips_worker.t6_flags import t6_log_fallback
+
+            t6_log_fallback("captions", exc)
     if ct in ("just_chatting", "podcast"):
         from clips_worker.regular_auto_layout import apply_regular_auto_layout
 

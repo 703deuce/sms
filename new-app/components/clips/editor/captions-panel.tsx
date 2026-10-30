@@ -363,7 +363,15 @@ export function CaptionsPanel({
                   <button
                     key={id}
                     type="button"
-                    onClick={() => onChange({ ...cap, enabled: cap.enabled !== false, presetId: id })}
+                    onClick={() =>
+                      onChange({
+                        enabled: cap.enabled !== false,
+                        presetId: id,
+                        emphasis: cap.emphasis,
+                        size: cap.size,
+                        position: cap.position,
+                      })
+                    }
                     className={cn(
                       'rounded-lg border p-2 text-left text-xs',
                       active ? 'border-primary ring-2 ring-primary/20' : 'border-border',
