@@ -139,11 +139,8 @@ def badge_rect(
     w = max(h, min(w, play_w - 2 * margin))
     inset_y = _scale_px(int((GEOM.get("exportBar") or _DEFAULTS["exportBar"]).get("sourceInsetY") or 12), play_h)
     if placement == "stack_corner":
-        x = _scale_px(16, play_w)
-        if headline_in_bar:
-            y = _scale_px(int(badge.get("overlayYPx") or 12), play_h)
-        else:
-            y = (video_y if video_y else 0) + _scale_px(int(badge.get("overlayYPx") or 12), play_h)
+        x = _scale_px(24, play_w)
+        y = _scale_px(24, play_h)
         return {"x": x, "y": y, "w": w, "h": h}
     x = (play_w - w) // 2
     if placement == "fit_top_band":

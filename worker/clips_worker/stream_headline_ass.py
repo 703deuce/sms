@@ -141,6 +141,8 @@ def headline_ass_content(
     text_color: str | None = None,
     box_color: str | None = None,
     headline_style: dict | None = None,
+    text_box_x: int | None = None,
+    text_box_w: int | None = None,
 ) -> str:
     from clips_worker.overlay_geometry import headline_style_for_preset
 
@@ -152,7 +154,10 @@ def headline_ass_content(
     primary = _ass_color(text_color or preset_style.get("textColor") or "#000000")
     raw_headline = format_headline_for_export(headline)
     width_pct = int(preset_style.get("widthPct") or 100)
-    box_w = max(1, int(play_w * (width_pct / 100.0) * 0.96))
+    if text_box_w is not None and text_box_w > 0:
+        box_w = max(1, int(text_box_w))
+    else:
+        box_w = max(1, int(play_w * (width_pct / 100.0) * 0.96))
     bold = fit_top or str(preset_style.get("preset") or "") == "bold_news"
     lines_fit, font_px = fit_headline_display_for_box(
         raw_headline, box_w, bar_h, bold_news=bold
@@ -172,6 +177,11 @@ def headline_ass_content(
     s_part, c_part = divmod(rem, 100)
     end_ts = f"{h_part}:{m_part:02d}:{s_part:02d}.{c_part:02d}"
 
+    if text_box_x is not None and text_box_w is not None and text_box_w > 0:
+        text_center_x = text_box_x + text_box_w // 2
+    else:
+        text_center_x = play_w // 2
+
     fonts_lines = ""
     for d in _font_dirs():
         fonts_lines += f"FontsDir: {d}\n"
@@ -190,7 +200,7 @@ Style: Headline,{font},{fontsize},{primary},{primary},&H00000000,&H00000000,1,0,
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-    tag = rf"{{\an5\pos({play_w // 2},{y_center})}}"
+    tag = rf"{{\an5\pos({text_center_x},{y_center})}}"
     return header + f"Dialogue: 0,0:00:00.00,{end_ts},Headline,,0,0,0,,{tag}{display}\n"
 
 
@@ -209,6 +219,8 @@ def burn_stream_headline(
     box_color: str | None = None,
     headline_style: dict | None = None,
     scratch_dir: Path | None = None,
+    text_box_x: int | None = None,
+    text_box_w: int | None = None,
 ) -> Path:
     scratch = scratch_dir or video.parent
     ass = scratch / "stream_headline.ass"
@@ -225,6 +237,8 @@ def burn_stream_headline(
             text_color=text_color,
             box_color=box_color,
             headline_style=headline_style,
+            text_box_x=text_box_x,
+            text_box_w=text_box_w,
         ),
         encoding="utf-8",
     )

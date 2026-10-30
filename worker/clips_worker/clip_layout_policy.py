@@ -150,7 +150,27 @@ def apply_clip_type_layout_to_edits(
             channel_layouts=channel_clip_type_layouts,
         )
 
-    if ct in ("irl", "just_chatting", "podcast", "other"):
+    if ct == "irl":
+        layout = dict(edits.get("layout") or {})
+        layout["mode"] = "fit_blur" if headline_on else "center_crop"
+        out = apply_channel_clip_type_layout(
+            {**edits, "layout": layout},
+            clip_type=ct,
+            channel_layouts=channel_clip_type_layouts,
+        )
+        from clips_worker.decision_log import decision_log
+
+        layout = out.get("layout") if isinstance(out.get("layout"), dict) else {}
+        decision_log(
+            "layout",
+            "clip_type_policy",
+            clip_type=ct,
+            layout_mode=str(layout.get("mode") or "speaker_follow"),
+            reason="irl_headline_fit_blur" if headline_on else "irl_no_headline_center_crop",
+        )
+        return out
+
+    if ct in ("just_chatting", "podcast", "other"):
         out = apply_channel_clip_type_layout(
             edits,
             clip_type=ct,

@@ -177,18 +177,16 @@ def export_badge_xy(
     vertical_precomposed: bool,
     headline_on: bool,
 ) -> tuple[int, int]:
-    """Top-left badge anchor — headline band when bar on, else top of stack/game band."""
-    inset_x = _scale_y(16, play_w)
-    inset_y = _scale_y(12, play_h)
+    """Top-left badge anchor — headline band when bar on, else top of frame/stack."""
+    margin_x = _scale_y(24, play_w)
+    margin_y = _scale_y(24, play_h)
     layout_mode = str((edits.get("layout") or {}).get("mode") or "")
     stack_layout = layout_mode in ("facecam_stack", "facecam_pip", "screen_pip", "stack")
     if vertical_precomposed or stack_layout:
-        if headline_on:
-            return inset_x, inset_y
-        return inset_x, video_y + inset_y
+        return margin_x, margin_y if headline_on else margin_y
     if headline_on:
-        return inset_x, inset_y
-    return inset_x, video_y + video_h - _scale_y(_BADGE_H + _SOURCE_INSET_Y, play_h)
+        return margin_x, margin_y
+    return margin_x, video_y + video_h - _scale_y(_BADGE_H + _SOURCE_INSET_Y, play_h)
 
 
 def _v3_badge_sprite_will_render(edits: dict) -> bool:
@@ -254,6 +252,9 @@ def apply_export_template(
         else:
             video_h = play_h
             video_y = 0
+    elif headline_on:
+        video_h = max(1, play_h - bar_h)
+        video_y = bar_h
     else:
         video_h = frame["video_h"]
         video_y = frame["video_y"]
@@ -265,7 +266,23 @@ def apply_export_template(
     from clips_worker.filtergraph import fit_blur_overlay_filter
 
     use_blur_fill = layout_mode in ("full_frame", "fit_blur") and not vertical_precomposed
-    # 1) Stack: black 9:16, video band (blurred fill for full_frame), optional white headline bar on top
+    fill_band_blur = headline_on and not vertical_precomposed
+    badge_x = badge_y = 0
+    bw = _scale_y(_BADGE_W, play_w)
+    if source_on:
+        badge_x, badge_y = export_badge_xy(
+            edits,
+            play_w=play_w,
+            play_h=play_h,
+            video_y=video_y,
+            video_h=video_h,
+            vertical_precomposed=vertical_precomposed,
+            headline_on=headline_on,
+        )
+    headline_reserve_x = 0
+    if badge_on and headline_on:
+        headline_reserve_x = badge_x + bw + _scale_y(12, play_w)
+    # 1) Full-height canvas; band under headline fills edge-to-edge (blur or crop — never black pad).
     if vertical_precomposed:
         fc = (
             f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
@@ -274,20 +291,19 @@ def apply_export_template(
             f"[bg][vid]overlay=0:{video_y}[v1];"
         )
         v1_label = "[v1]"
-    elif use_blur_fill:
+    elif use_blur_fill or fill_band_blur:
         fc = (
-            f"color=c=black:s={play_w}x{video_h}:d={duration_ms / 1000:.3f}[bg];"
+            f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
             f"{fit_blur_overlay_filter('0:v', 'vid', play_w, video_h)};"
-            f"[bg][vid]overlay=0:0[v1];"
-            f"[v1]pad={play_w}:{play_h}:0:{video_y}:black[v1p];"
+            f"[bg][vid]overlay=0:{video_y}[v1];"
         )
-        v1_label = "[v1p]"
+        v1_label = "[v1]"
     else:
         fc = (
             f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
-            f"[0:v]scale={play_w}:{video_h}:force_original_aspect_ratio=increase,"
-            f"crop={play_w}:{video_h}:(iw-{play_w})/2:(ih-{video_h})/2[vid];"
-            f"[bg][vid]overlay=0:{video_y}[v1];"
+            f"[0:v]scale={play_w}:{play_h}:force_original_aspect_ratio=increase,"
+            f"crop={play_w}:{play_h}[vid];"
+            f"[bg][vid]overlay=0:0[v1];"
         )
         v1_label = "[v1]"
     if headline_on and headline:
@@ -299,6 +315,9 @@ def apply_export_template(
             width_pct = int(style.get("widthPct") or 100)
             box_w = max(2, round(play_w * width_pct / 100.0))
             box_x = headline_box_overlay_x(play_w, width_pct)
+            if headline_reserve_x > 0:
+                box_x = headline_reserve_x
+                box_w = max(2, play_w - box_x - _scale_y(16, play_w))
             hl_png = scratch / "export_headline_box.png"
             render_headline_box_png(box_w, bar_h, box_fill, int(style.get("radiusPx") or 0), hl_png)
             fc += (
@@ -367,22 +386,24 @@ def apply_export_template(
             headline_style=style,
             fit_top=layout_mode == "fit_top" or headline_on,
             scratch_dir=scratch,
+            text_box_x=headline_reserve_x if headline_reserve_x > 0 else None,
+            text_box_w=(play_w - headline_reserve_x - _scale_y(16, play_w)) if headline_reserve_x > 0 else None,
         )
         current = hl_out
 
     if source_on:
         label, color = _platform_label(platform)
         display = link_url.replace("https://", "").replace("http://", "").upper() if link_on and link_url else ""
-        badge_x, badge_y = export_badge_xy(
-            edits,
-            play_w=play_w,
-            play_h=play_h,
-            video_y=video_y,
-            video_h=video_h,
-            vertical_precomposed=vertical_precomposed,
-            headline_on=headline_on,
-        )
-        bw = _scale_y(_BADGE_W, play_w)
+        if not badge_on:
+            badge_x, badge_y = export_badge_xy(
+                edits,
+                play_w=play_w,
+                play_h=play_h,
+                video_y=video_y,
+                video_h=video_h,
+                vertical_precomposed=vertical_precomposed,
+                headline_on=headline_on,
+            )
         bh = _scale_y(_BADGE_H, play_h)
         fs_badge = _scale_y(18, play_h)
         fs_link = _scale_y(_FONT_LINK, play_h)
