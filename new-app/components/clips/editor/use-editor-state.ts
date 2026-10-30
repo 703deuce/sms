@@ -613,6 +613,13 @@ export function useEditorState(
           lastSavedEditsRef.current = editsRef.current
           break
         } catch (err) {
+          const transient =
+            !(err instanceof FetchJsonError) ||
+            [0, 408, 429, 500, 502, 503, 504].includes(err.status)
+          if (transient && attempts < 4) {
+            await new Promise((r) => setTimeout(r, 600 * 2 ** (attempts - 1)))
+            continue
+          }
           if (err instanceof FetchJsonError && err.status === 409 && err.conflictData) {
             conflicts += 1
             const data = err.conflictData as {
@@ -680,6 +687,23 @@ export function useEditorState(
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [clipId, processSaveQueue, state.edits, state.saveState])
+
+  useEffect(() => {
+    const retrySave = () => {
+      if (savedRevisionRef.current < localRevisionRef.current) {
+        void processSaveQueue()
+      }
+    }
+    window.addEventListener('online', retrySave)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') retrySave()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('online', retrySave)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [processSaveQueue])
 
   useEffect(() => {
     if (!state.producerStrip) return
