@@ -23,6 +23,7 @@ import {
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { FacecamLayoutStudio } from '@/components/clips/editor/facecam-layout-studio'
+import { TemplateLayoutPanel } from '@/components/clips/editor/template-layout-panel'
 
 export function LayoutPanel({
   edits,
@@ -54,6 +55,7 @@ export function LayoutPanel({
   channelId = null,
   clipType = null,
   mediaOffsetMs = 0,
+  aiMeta = null,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -88,6 +90,7 @@ export function LayoutPanel({
   channelId?: string | null
   clipType?: string | null
   mediaOffsetMs?: number
+  aiMeta?: Record<string, unknown> | null
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -253,6 +256,15 @@ export function LayoutPanel({
         <p className="text-xs text-muted-foreground" role="note">
           No facecam detected — drag the Facecam box onto the webcam in the layout editor below.
         </p>
+      ) : null}
+      {onEdits ? (
+        <TemplateLayoutPanel
+          edits={edits}
+          onEdits={onEdits}
+          aiMeta={aiMeta}
+          videoUrl={videoUrl}
+          posterUrl={posterUrl}
+        />
       ) : null}
       {onEdits ? (
         <FacecamLayoutStudio

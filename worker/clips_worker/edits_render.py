@@ -1037,7 +1037,36 @@ def _apply_facecam_or_pip_layout(
     play_w: int,
     play_h: int,
 ) -> tuple[Path, bool, dict]:
-    del settings
+    from clips_worker.t6_flags import t6_log_fallback, t6_templates_enabled
+
+    layout_ed = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    tmpl = layout_ed.get("template") if isinstance(layout_ed.get("template"), dict) else {}
+    tmpl_id = str(tmpl.get("id") or "").strip()
+    if t6_templates_enabled(settings) and tmpl_id:
+        try:
+            from clips_worker.t6_geometry import resolve_template_geometry
+            from clips_worker.t6_registry import TEMPLATES
+            from clips_worker.t6_render import probe_duration_s, render_template
+            from clips_worker.t6_signals import signals_or_defaults
+
+            ai_meta = settings.get("aiMeta") if isinstance(settings.get("aiMeta"), dict) else {}
+            signals = signals_or_defaults({**ai_meta, "signals": ai_meta.get("signals")})
+            tdef = TEMPLATES.get(tmpl_id)
+            if tdef:
+                spec = resolve_template_geometry(tdef, signals, edits, play_w=play_w, play_h=play_h)
+                out = work_dir / f"t6_{tmpl_id}.mp4"
+                render_template(clip_src, out, spec, work_dir, duration_s=probe_duration_s(clip_src))
+                meta = {
+                    "seam_captions": True,
+                    "stack_split": float((tdef.get("panels") or [{}])[0].get("h") or 0.35),
+                    "facecam_position": "top",
+                    "t6_spec": spec,
+                }
+                ctx_spec = spec
+                print(f"[t6:render] template={tmpl_id} panels={len(spec.get('panels') or [])}", flush=True)
+                return out, True, meta
+        except Exception as exc:
+            t6_log_fallback("render", exc)
     from clips_worker.clip_layout_render import apply_per_clip_layout
 
     result = apply_per_clip_layout(clip_src, work_dir, edits, play_w=play_w, play_h=play_h)

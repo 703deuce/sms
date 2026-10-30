@@ -70,6 +70,16 @@ def resolve_template_geometry(
         )
         y_cursor = dest_y + dest_h
     cap_y = float((t.get("captions") or {}).get("y") or 0.65)
+    bands_out: list[dict] = []
+    for b in t.get("bands") or []:
+        by = float(b.get("y") or 0)
+        bh = float(b.get("h") or 0)
+        bands_out.append(
+            {
+                "dest": {"x": 0, "y": _even(play_h * by), "w": play_w, "h": _even(play_h * bh)},
+                "fill": b.get("fill") or "blur",
+            }
+        )
     return {
         "v": 2,
         "kind": "template",
@@ -77,7 +87,7 @@ def resolve_template_geometry(
         "playW": play_w,
         "playH": play_h,
         "panels": panels_out,
-        "bands": [],
+        "bands": bands_out,
         "pip": t.get("pip"),
         "titleRect": None,
         "captionRect": {"x": 0, "y": _even(play_h * cap_y), "w": play_w, "h": _even(play_h * 0.12)},
