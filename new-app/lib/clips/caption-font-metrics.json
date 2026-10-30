@@ -1,8 +1,13 @@
 {
-  "Poppins": {
-    "unitsPerEm": 1000,
-    "winAscent": 1050,
-    "winDescent": 350,
-    "cssEmPerAssFontsize": 0.714286
-  }
+  "Poppins": { "unitsPerEm": 1000, "winAscent": 1050, "winDescent": 350, "cssEmPerAssFontsize": 0.714286 },
+  "Montserrat": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
+  "Montserrat Black": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
+  "Anton": { "unitsPerEm": 1000, "winAscent": 1175, "winDescent": 355, "cssEmPerAssFontsize": 0.714286 },
+  "Bangers": { "unitsPerEm": 1000, "winAscent": 920, "winDescent": 280, "cssEmPerAssFontsize": 0.714286 },
+  "Inter": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
+  "Lato": { "unitsPerEm": 1000, "winAscent": 1010, "winDescent": 225, "cssEmPerAssFontsize": 0.714286 },
+  "Bebas Neue": { "unitsPerEm": 1000, "winAscent": 950, "winDescent": 250, "cssEmPerAssFontsize": 0.714286 },
+  "Archivo Black": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
+  "Oswald": { "unitsPerEm": 1000, "winAscent": 1100, "winDescent": 274, "cssEmPerAssFontsize": 0.714286 },
+  "Luckiest Guy": { "unitsPerEm": 1000, "winAscent": 920, "winDescent": 280, "cssEmPerAssFontsize": 0.714286 }
 }

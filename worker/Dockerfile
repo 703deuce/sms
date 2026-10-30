@@ -34,6 +34,20 @@ RUN set -eux; \
     mkdir -p /usr/share/fonts/truetype/poppins; \
     cp /app/v3/fonts/Poppins-ExtraBold.ttf /usr/share/fonts/truetype/poppins/; \
     test -s /usr/share/fonts/truetype/poppins/Poppins-ExtraBold.ttf; \
+    mkdir -p /usr/share/fonts/truetype/t6 /app/v3/fonts/t6; \
+    for spec in \
+      'Bangers|https://github.com/google/fonts/raw/main/ofl/bangers/Bangers-Regular.ttf' \
+      'Inter|https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-ExtraBold.ttf' \
+      'Lato|https://github.com/google/fonts/raw/main/ofl/lato/Lato-Black.ttf' \
+      'BebasNeue|https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-Regular.ttf' \
+      'ArchivoBlack|https://github.com/google/fonts/raw/main/ofl/archivoblack/ArchivoBlack-Regular.ttf' \
+      'Oswald|https://github.com/google/fonts/raw/main/ofl/oswald/static/Oswald-Bold.ttf' \
+      'LuckiestGuy|https://github.com/google/fonts/raw/main/ofl/luckiestguy/LuckiestGuy-Regular.ttf'; \
+    do \
+      name="$${spec%%|*}"; url="$${spec#*|}"; \
+      curl -fsSL -o "/usr/share/fonts/truetype/t6/$${name}.ttf" "$$url"; \
+      cp "/usr/share/fonts/truetype/t6/$${name}.ttf" "/app/v3/fonts/t6/$${name}.ttf"; \
+    done; \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
     test -s /app/v3/fonts/Montserrat-Black.ttf

@@ -14,6 +14,13 @@ _FONT_FILES = {
     "Anton": "Anton-Regular.ttf",
     "Montserrat Black": "Montserrat-Black.ttf",
     "Poppins": "Poppins-ExtraBold.ttf",
+    "Bangers": "t6/Bangers.ttf",
+    "Inter": "t6/Inter.ttf",
+    "Lato": "t6/Lato.ttf",
+    "Bebas Neue": "t6/BebasNeue.ttf",
+    "Archivo Black": "t6/ArchivoBlack.ttf",
+    "Oswald": "t6/Oswald.ttf",
+    "Luckiest Guy": "t6/LuckiestGuy.ttf",
 }
 _EMOJI = Path("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf")
 

@@ -1,0 +1,531 @@
+{
+  "cp1": {
+    "name": "Punch",
+    "lanes": [
+      "just_chatting",
+      "podcast",
+      "irl"
+    ],
+    "font": "Montserrat",
+    "weight": 900,
+    "case": "upper",
+    "sizePx1920": 92,
+    "wordsPerChunk": 3,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 9
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 3,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "color",
+      "color": "#FFD93D",
+      "altColor": "#39FF14",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "pop",
+      "ms": 200,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "titlePair": [
+      "white_on_dark_blur",
+      "white_box_black"
+    ]
+  },
+  "cp2": {
+    "name": "Game HUD",
+    "lanes": [
+      "gaming"
+    ],
+    "font": "Bangers",
+    "weight": 400,
+    "case": "upper",
+    "sizePx1920": 88,
+    "wordsPerChunk": 2,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 10
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 2,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "supersize",
+      "color": "#FFD93D",
+      "altColor": "#39FF14",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "stomp",
+      "ms": 180,
+      "shake": true,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.68
+    },
+    "titlePair": [
+      "white_on_dark_blur"
+    ]
+  },
+  "cp3": {
+    "name": "Boxed Bold",
+    "lanes": [
+      "gaming",
+      "irl",
+      "just_chatting",
+      "podcast"
+    ],
+    "font": "Montserrat",
+    "weight": 900,
+    "case": "upper",
+    "sizePx1920": 78,
+    "wordsPerChunk": 3,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 6
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 0,
+      "blur": 0
+    },
+    "box": {
+      "color": "#000000",
+      "opacity": 0.6,
+      "radiusPx": 12,
+      "padX": 18,
+      "padY": 8
+    },
+    "highlight": {
+      "mode": "box",
+      "color": "#FFD93D",
+      "altColor": "#39FF14",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "box_glide",
+      "ms": 220,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "titlePair": [
+      "white_box_black"
+    ]
+  },
+  "cp4": {
+    "name": "Reaction",
+    "lanes": [
+      "irl",
+      "just_chatting",
+      "gaming"
+    ],
+    "font": "Bangers",
+    "weight": 400,
+    "case": "upper",
+    "sizePx1920": 96,
+    "wordsPerChunk": 2,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 8
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 4,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "color",
+      "color": "#FFD93D",
+      "altColor": "#FF6B6B",
+      "keywordsPerChunk": 2
+    },
+    "animation": {
+      "kind": "flash",
+      "ms": 120,
+      "shake": false,
+      "emoji": true
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.62
+    },
+    "titlePair": [
+      "white_on_dark_blur"
+    ]
+  },
+  "cp5": {
+    "name": "Soft Podcast",
+    "lanes": [
+      "podcast",
+      "just_chatting"
+    ],
+    "font": "Inter",
+    "weight": 700,
+    "case": "sentence",
+    "sizePx1920": 72,
+    "wordsPerChunk": 4,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 4
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 2,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "weight",
+      "color": "#FFD93D",
+      "altColor": "#39FF14",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "fade",
+      "ms": 200,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.7
+    },
+    "titlePair": [
+      "white_on_black"
+    ]
+  },
+  "cp6": {
+    "name": "Hype Short",
+    "lanes": [
+      "gaming"
+    ],
+    "font": "Luckiest Guy",
+    "weight": 400,
+    "case": "upper",
+    "sizePx1920": 100,
+    "wordsPerChunk": 2,
+    "maxLines": 1,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 10
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 3,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "supersize",
+      "color": "#39FF14",
+      "altColor": "#FFD93D",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "stomp",
+      "ms": 160,
+      "shake": true,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.66
+    },
+    "titlePair": [
+      "white_on_dark_blur"
+    ]
+  },
+  "cp7": {
+    "name": "Stage",
+    "lanes": [
+      "podcast"
+    ],
+    "font": "Archivo Black",
+    "weight": 400,
+    "case": "upper",
+    "sizePx1920": 80,
+    "wordsPerChunk": 3,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 8
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 0,
+      "blur": 0
+    },
+    "box": {
+      "color": "#000000",
+      "opacity": 0.55,
+      "radiusPx": 10,
+      "padX": 16,
+      "padY": 6
+    },
+    "highlight": {
+      "mode": "underline",
+      "color": "#FFD93D",
+      "altColor": "#39FF14",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "underline_draw",
+      "ms": 240,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.58
+    },
+    "titlePair": [
+      "white_box_black"
+    ]
+  },
+  "cp8": {
+    "name": "Karaoke Dim",
+    "lanes": [
+      "just_chatting",
+      "podcast"
+    ],
+    "font": "Montserrat",
+    "weight": 800,
+    "case": "upper",
+    "sizePx1920": 84,
+    "wordsPerChunk": 4,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 6
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 2,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "karaoke_dim",
+      "color": "#FFD93D",
+      "altColor": "#39FF14",
+      "keywordsPerChunk": 0
+    },
+    "animation": {
+      "kind": "word_fade",
+      "ms": 180,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "titlePair": [
+      "white_on_dark_blur"
+    ]
+  },
+  "cp9": {
+    "name": "Alt Pop",
+    "lanes": [
+      "just_chatting"
+    ],
+    "font": "Bebas Neue",
+    "weight": 400,
+    "case": "upper",
+    "sizePx1920": 90,
+    "wordsPerChunk": 3,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 8
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 3,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "color",
+      "color": "#39FF14",
+      "altColor": "#FFD93D",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "pop",
+      "ms": 200,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "titlePair": [
+      "white_on_dark_blur"
+    ]
+  },
+  "cp10": {
+    "name": "Clean IRL",
+    "lanes": [
+      "irl"
+    ],
+    "font": "Lato",
+    "weight": 900,
+    "case": "sentence",
+    "sizePx1920": 76,
+    "wordsPerChunk": 3,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 7
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 2,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "color",
+      "color": "#FFD93D",
+      "altColor": "#2563EB",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "fade",
+      "ms": 180,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "titlePair": [
+      "black_on_light_blur"
+    ]
+  },
+  "cp11": {
+    "name": "Light BG",
+    "lanes": [
+      "irl"
+    ],
+    "font": "Inter",
+    "weight": 800,
+    "case": "sentence",
+    "sizePx1920": 74,
+    "wordsPerChunk": 3,
+    "maxLines": 2,
+    "fill": "#111111",
+    "stroke": {
+      "color": "#FFFFFF",
+      "px": 0
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 0,
+      "blur": 0
+    },
+    "box": {
+      "color": "#FFFFFF",
+      "opacity": 0.85,
+      "radiusPx": 8,
+      "padX": 14,
+      "padY": 6
+    },
+    "highlight": {
+      "mode": "box",
+      "color": "#FFD93D",
+      "altColor": "#39FF14",
+      "keywordsPerChunk": 1
+    },
+    "animation": {
+      "kind": "none",
+      "ms": 0,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "titlePair": [
+      "black_on_light_blur"
+    ]
+  },
+  "cp12": {
+    "name": "Deferred",
+    "lanes": [],
+    "deferred": true,
+    "font": "Montserrat",
+    "weight": 900,
+    "case": "upper",
+    "sizePx1920": 80,
+    "wordsPerChunk": 3,
+    "maxLines": 2,
+    "fill": "#FFFFFF",
+    "stroke": {
+      "color": "#000000",
+      "px": 8
+    },
+    "shadow": {
+      "color": "#000000",
+      "px": 0,
+      "blur": 0
+    },
+    "box": null,
+    "highlight": {
+      "mode": "none",
+      "color": "#FFD93D",
+      "altColor": "#39FF14",
+      "keywordsPerChunk": 0
+    },
+    "animation": {
+      "kind": "none",
+      "ms": 0,
+      "shake": false,
+      "emoji": false
+    },
+    "position": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "titlePair": []
+  }
+}

@@ -1,0 +1,909 @@
+[
+  {
+    "requires": {
+      "facecam": true
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "seam",
+      "y": 0.35
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {
+      "facecam_conf": 2,
+      "action_wide": 1
+    },
+    "id": "G1",
+    "lane": "gaming",
+    "name": "Cam Stack",
+    "fallbackMode": "facecam_stack",
+    "panels": [
+      {
+        "role": "face",
+        "y": 0,
+        "h": 0.35,
+        "src": "facecam_box",
+        "fit": "cover",
+        "focus": "center",
+        "adjust": {
+          "param": "split",
+          "min": 0.25,
+          "max": 0.5
+        }
+      },
+      {
+        "role": "game",
+        "y": 0.35,
+        "h": 0.65,
+        "src": "action_box_widened",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": true
+    },
+    "bands": [
+      {
+        "y": 0,
+        "h": 0.15,
+        "fill": "black"
+      }
+    ],
+    "title": {
+      "slot": "band_top",
+      "allowed": [
+        "white_on_black",
+        "white_on_dark_blur"
+      ]
+    },
+    "captions": {
+      "anchor": "seam",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "G2",
+    "lane": "gaming",
+    "name": "Title + Stack",
+    "fallbackMode": "facecam_stack",
+    "panels": [
+      {
+        "role": "game",
+        "y": 0.15,
+        "h": 0.5,
+        "src": "action_box_widened",
+        "fit": "cover",
+        "focus": "center"
+      },
+      {
+        "role": "face",
+        "y": 0.65,
+        "h": 0.35,
+        "src": "facecam_box",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": true
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.72
+    },
+    "pip": {
+      "src": "facecam_box",
+      "w": 0.3,
+      "shape": "circle",
+      "corner": "auto_far_from_action"
+    },
+    "motion": null,
+    "pickWeights": {},
+    "id": "G3",
+    "lane": "gaming",
+    "name": "Game PiP",
+    "fallbackMode": "facecam_pip",
+    "panels": [
+      {
+        "role": "game",
+        "y": 0,
+        "h": 1,
+        "src": "action_box",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [
+      {
+        "y": 0,
+        "h": 0.33,
+        "fill": "blur"
+      },
+      {
+        "y": 0.65,
+        "h": 0.35,
+        "fill": "blur"
+      }
+    ],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "band_bottom",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "G4",
+    "lane": "gaming",
+    "name": "Full Frame Blur",
+    "fallbackMode": "fit_blur",
+    "panels": [
+      {
+        "role": "frame",
+        "y": 0.33,
+        "h": 0.32,
+        "src": "full",
+        "fit": "contain_blur",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": {
+      "kind": "track",
+      "src": "action_box"
+    },
+    "pickWeights": {},
+    "id": "G5",
+    "lane": "gaming",
+    "name": "Track Action",
+    "fallbackMode": "fill",
+    "panels": [
+      {
+        "role": "game",
+        "y": 0,
+        "h": 1,
+        "src": "action_box",
+        "fit": "cover",
+        "focus": "center",
+        "track": "action_box"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": true
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "seam",
+      "y": 0.55
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "G6",
+    "lane": "gaming",
+    "name": "Face Focus",
+    "fallbackMode": "facecam_stack",
+    "panels": [
+      {
+        "role": "face",
+        "y": 0,
+        "h": 0.55,
+        "src": "face_tight",
+        "fit": "cover",
+        "focus": "center"
+      },
+      {
+        "role": "game",
+        "y": 0.55,
+        "h": 0.45,
+        "src": "action_box_widened",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [
+      {
+        "y": 0,
+        "h": 0.31,
+        "fill": "black"
+      },
+      {
+        "y": 0.63,
+        "h": 0.37,
+        "fill": "black"
+      }
+    ],
+    "title": {
+      "slot": "band_top",
+      "allowed": [
+        "white_on_black"
+      ]
+    },
+    "captions": {
+      "anchor": "band_bottom",
+      "y": 0.63
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "I1",
+    "lane": "irl",
+    "name": "Letterbox Black",
+    "fallbackMode": "fit_blur",
+    "panels": [
+      {
+        "role": "frame",
+        "y": 0.31,
+        "h": 0.32,
+        "src": "full",
+        "fit": "contain_black",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [
+      {
+        "y": 0,
+        "h": 0.28,
+        "fill": "blur"
+      },
+      {
+        "y": 0.6,
+        "h": 0.4,
+        "fill": "blur"
+      }
+    ],
+    "title": {
+      "slot": "on_video_top",
+      "allowed": [
+        "white_box_black"
+      ]
+    },
+    "captions": {
+      "anchor": "band_bottom",
+      "y": 0.6
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "I2",
+    "lane": "irl",
+    "name": "Blur Title Box",
+    "fallbackMode": "fit_blur",
+    "panels": [
+      {
+        "role": "frame",
+        "y": 0.28,
+        "h": 0.32,
+        "src": "full",
+        "fit": "contain_blur",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [
+      {
+        "y": 0,
+        "h": 0.31,
+        "fill": "blur"
+      },
+      {
+        "y": 0.63,
+        "h": 0.37,
+        "fill": "blur"
+      }
+    ],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "band_bottom",
+      "y": 0.63
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "I3",
+    "lane": "irl",
+    "name": "Full Blur",
+    "fallbackMode": "fit_blur",
+    "panels": [
+      {
+        "role": "frame",
+        "y": 0.31,
+        "h": 0.32,
+        "src": "full",
+        "fit": "contain_blur",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [
+      {
+        "y": 0,
+        "h": 0.19,
+        "fill": "black"
+      },
+      {
+        "y": 0.83,
+        "h": 0.17,
+        "fill": "black"
+      }
+    ],
+    "title": {
+      "slot": "band_top",
+      "allowed": [
+        "white_on_black"
+      ]
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.75
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "I4",
+    "lane": "irl",
+    "name": "4:5 Action",
+    "fallbackMode": "center_crop",
+    "panels": [
+      {
+        "role": "action",
+        "y": 0.19,
+        "h": 0.64,
+        "src": "action_box_widened",
+        "fit": "cover",
+        "focus": "center",
+        "x": 0,
+        "w": 1
+      }
+    ]
+  },
+  {
+    "requires": {
+      "noBackgroundAction": true,
+      "maxPersons": 1
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "I5",
+    "lane": "irl",
+    "name": "Single Person",
+    "fallbackMode": "speaker_follow",
+    "panels": [
+      {
+        "role": "person",
+        "y": 0,
+        "h": 1,
+        "src": "person:0",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "noBackgroundAction": true,
+      "personCountMin": 2
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "I6",
+    "lane": "irl",
+    "name": "Split People",
+    "fallbackMode": "split",
+    "panels": [
+      {
+        "role": "a",
+        "y": 0,
+        "h": 0.5,
+        "src": "person:0",
+        "fit": "cover",
+        "focus": "center"
+      },
+      {
+        "role": "b",
+        "y": 0.5,
+        "h": 0.5,
+        "src": "person:1",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "noBackgroundAction": true
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "C1",
+    "lane": "just_chatting",
+    "name": "Face Tight",
+    "fallbackMode": "center_crop",
+    "panels": [
+      {
+        "role": "face",
+        "y": 0,
+        "h": 1,
+        "src": "face_tight",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "C2",
+    "lane": "just_chatting",
+    "name": "Active Speaker",
+    "fallbackMode": "speaker_follow",
+    "panels": [
+      {
+        "role": "speaker",
+        "y": 0,
+        "h": 1,
+        "src": "active_speaker",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "contentBox": true
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "seam",
+      "y": 0.55
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "C3",
+    "lane": "just_chatting",
+    "name": "Content + Face",
+    "fallbackMode": "facecam_stack",
+    "panels": [
+      {
+        "role": "content",
+        "y": 0,
+        "h": 0.55,
+        "src": "content_box",
+        "fit": "cover",
+        "focus": "center"
+      },
+      {
+        "role": "face",
+        "y": 0.55,
+        "h": 0.45,
+        "src": "facecam_box",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "noBackgroundAction": true,
+      "maxDurationSec": 20
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": {
+      "kind": "push_in",
+      "from": 1,
+      "to": 1.15
+    },
+    "pickWeights": {},
+    "id": "C4",
+    "lane": "just_chatting",
+    "name": "Push In Face",
+    "fallbackMode": "center_crop",
+    "panels": [
+      {
+        "role": "face",
+        "y": 0,
+        "h": 1,
+        "src": "face_tight",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "personCountMin": 2
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "C5",
+    "lane": "just_chatting",
+    "name": "Dual Cam",
+    "fallbackMode": "split",
+    "panels": [
+      {
+        "role": "a",
+        "y": 0,
+        "h": 0.5,
+        "src": "person:0",
+        "fit": "cover",
+        "focus": "center"
+      },
+      {
+        "role": "b",
+        "y": 0.5,
+        "h": 0.5,
+        "src": "person:1",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [
+      {
+        "y": 0,
+        "h": 0.33,
+        "fill": "blur"
+      },
+      {
+        "y": 0.65,
+        "h": 0.35,
+        "fill": "blur"
+      }
+    ],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "band_bottom",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "C6",
+    "lane": "just_chatting",
+    "name": "Blur Frame",
+    "fallbackMode": "fit_blur",
+    "panels": [
+      {
+        "role": "frame",
+        "y": 0.33,
+        "h": 0.32,
+        "src": "full",
+        "fit": "contain_blur",
+        "focus": "center"
+      }
+    ]
+  },
+  {
+    "requires": {
+      "facecam": false,
+      "maxPersons": null,
+      "noBackgroundAction": false,
+      "contentBox": false,
+      "personCountMin": null,
+      "maxDurationSec": null
+    },
+    "bands": [
+      {
+        "y": 0,
+        "h": 0.12,
+        "fill": "dark_gradient"
+      },
+      {
+        "y": 0.55,
+        "h": 0.45,
+        "fill": "black"
+      }
+    ],
+    "title": {
+      "slot": "on_video_top",
+      "allowed": [
+        "white_on_black",
+        "white_box_black"
+      ]
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.58
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "C7",
+    "lane": "podcast",
+    "name": "Stage Card",
+    "fallbackMode": "fit_blur",
+    "panels": [
+      {
+        "role": "card",
+        "y": 0.12,
+        "h": 0.43,
+        "src": "active_speaker",
+        "fit": "cover",
+        "focus": "center",
+        "x": 0.0625,
+        "w": 0.875
+      }
+    ]
+  },
+  {
+    "requires": {
+      "personCountMin": 3
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "y",
+      "y": 0.65
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "C8",
+    "lane": "podcast",
+    "name": "Grid",
+    "fallbackMode": "grid4",
+    "panels": [
+      {
+        "role": "p0",
+        "y": 0,
+        "h": 0.5,
+        "src": "person:0",
+        "fit": "cover",
+        "focus": "center",
+        "x": 0,
+        "w": 0.5
+      },
+      {
+        "role": "p1",
+        "y": 0,
+        "h": 0.5,
+        "src": "person:1",
+        "fit": "cover",
+        "focus": "center",
+        "x": 0.5,
+        "w": 0.5
+      },
+      {
+        "role": "p2",
+        "y": 0.5,
+        "h": 0.5,
+        "src": "person:2",
+        "fit": "cover",
+        "focus": "center",
+        "x": 0,
+        "w": 0.5
+      },
+      {
+        "role": "p3",
+        "y": 0.5,
+        "h": 0.5,
+        "src": "person:3",
+        "fit": "cover",
+        "focus": "center",
+        "x": 0.5,
+        "w": 0.5
+      }
+    ]
+  },
+  {
+    "requires": {
+      "contentBox": true
+    },
+    "bands": [],
+    "title": {
+      "slot": "none",
+      "allowed": []
+    },
+    "captions": {
+      "anchor": "seam",
+      "y": 0.6
+    },
+    "pip": null,
+    "motion": null,
+    "pickWeights": {},
+    "id": "C9",
+    "lane": "podcast",
+    "name": "Screen + Speaker",
+    "fallbackMode": "screen_pip",
+    "panels": [
+      {
+        "role": "screen",
+        "y": 0,
+        "h": 0.6,
+        "src": "content_box",
+        "fit": "cover",
+        "focus": "center"
+      },
+      {
+        "role": "speaker",
+        "y": 0.6,
+        "h": 0.4,
+        "src": "active_speaker",
+        "fit": "cover",
+        "focus": "center"
+      }
+    ]
+  }
+]

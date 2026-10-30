@@ -7,6 +7,13 @@ export function captionFontStack(font: string): string {
   if (font === 'Anton') return 'var(--font-clip-anton), Anton, Impact, sans-serif'
   if (font === 'Montserrat Black' || font === 'Montserrat')
     return 'var(--font-clip-montserrat), Montserrat, sans-serif'
+  if (font === 'Bangers') return 'var(--font-clip-bangers), Bangers, Impact, sans-serif'
+  if (font === 'Inter') return 'var(--font-clip-inter), Inter, sans-serif'
+  if (font === 'Lato') return 'var(--font-clip-lato), Lato, sans-serif'
+  if (font === 'Bebas Neue') return 'var(--font-clip-bebas), "Bebas Neue", sans-serif'
+  if (font === 'Archivo Black') return 'var(--font-clip-archivo), "Archivo Black", sans-serif'
+  if (font === 'Oswald') return 'var(--font-clip-oswald), Oswald, sans-serif'
+  if (font === 'Luckiest Guy') return 'var(--font-clip-luckiest), "Luckiest Guy", cursive'
   return font
 }
 
