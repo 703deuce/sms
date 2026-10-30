@@ -28,13 +28,10 @@ const bodySchema = z.object({
   makeDefault: z.boolean().optional(),
 })
 
-export async function POST(
-  request: Request,
-  ctx: { params: Promise<{ projectId: string }> },
-) {
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const workspaceId = await resolveWorkspaceId()
-    const { projectId } = await ctx.params
+    const { id: projectId } = await ctx.params
     const body = bodySchema.parse(await request.json())
     const prisma = getPrisma()
     const channel = await prisma.streamChannel.findFirst({
