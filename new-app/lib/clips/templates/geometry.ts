@@ -90,8 +90,8 @@ function srcBox(
   panelAspect: number,
 ): FacecamBox {
   const boxes = edits.layout.template?.boxes
-  if (boxes?.facecam_box ?? boxes?.facecam) && name === 'facecam_box') {
-    return boxes.facecam_box ?? boxes.facecam!
+  if (name === 'facecam_box' && (boxes?.facecam_box ?? boxes?.facecam)) {
+    return (boxes.facecam_box ?? boxes.facecam)!
   }
   if (boxes && name in boxes && boxes[name as keyof typeof boxes]) {
     const raw = boxes[name as keyof typeof boxes]!
