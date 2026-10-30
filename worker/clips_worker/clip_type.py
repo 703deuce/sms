@@ -5,6 +5,7 @@ from typing import Any
 
 CLIP_TYPES = frozenset({"gaming", "irl", "just_chatting", "podcast", "other"})
 FACECAM_CONFIDENCE_THRESHOLD = 0.45
+UPLOAD_FACECAM_MIN_CONF = 0.85
 
 
 def _norm_content_type(raw: str | None) -> str | None:
@@ -22,7 +23,16 @@ def _norm_content_type(raw: str | None) -> str | None:
 
 def content_type_from_picker_moment(moment: dict | None, section_activity: str | None = None) -> str:
     if isinstance(moment, dict):
+        gui = moment.get("game_ui_visible")
+        cam = moment.get("real_camera_footage")
+        if gui is True and cam is not True:
+            return "gaming"
+        if cam is True and gui is not True:
+            ct = _norm_content_type(str(moment.get("content_type") or ""))
+            return ct if ct in ("just_chatting", "podcast") else "irl"
         ct = _norm_content_type(str(moment.get("content_type") or ""))
+        if ct == "gaming" and cam is True:
+            return "irl"
         if ct:
             return ct
         cats = moment.get("category") or []
@@ -57,13 +67,42 @@ def upload_project_majority_type(picks: list[dict]) -> str:
     """One default clip type per upload from picker evidence (never ``other``)."""
     labels: list[str] = []
     stream_m: str | None = None
+    bool_moment_count = 0
+    real_cam_count = 0
+    jc_podcast_votes = 0
     for p in picks:
         meta = p.get("aiMeta") or {}
-        labels.append(_upload_type_vote_label(meta.get("videoMoment"), meta.get("sectionActivity")))
+        vm = meta.get("videoMoment")
+        section = meta.get("sectionActivity")
+        if isinstance(vm, dict):
+            gui = vm.get("game_ui_visible")
+            cam = vm.get("real_camera_footage")
+            if gui is not None or cam is not None:
+                bool_moment_count += 1
+                if cam is True:
+                    real_cam_count += 1
+                if gui is True and cam is not True:
+                    labels.append("gaming")
+                elif cam is True:
+                    ct = content_type_from_picker_moment(vm, section)
+                    vote = ct if ct in ("just_chatting", "podcast") else "irl"
+                    labels.append(vote)
+                    if vote in ("just_chatting", "podcast"):
+                        jc_podcast_votes += 1
+                else:
+                    labels.append(_upload_type_vote_label(vm, section))
+            else:
+                labels.append(_upload_type_vote_label(vm, section))
+        else:
+            labels.append(_upload_type_vote_label(vm, section))
         if stream_m is None:
             sm = meta.get("streamMajorityType")
             if sm in CLIP_TYPES and sm != "other":
                 stream_m = str(sm)
+    if bool_moment_count > 0 and real_cam_count >= (bool_moment_count + 1) // 2:
+        if jc_podcast_votes > real_cam_count // 2:
+            return "just_chatting"
+        return "irl"
     maj = stream_majority_clip_type(labels)
     if maj in CLIP_TYPES and maj != "other":
         if maj == "irl" and stream_m == "gaming":
@@ -106,10 +145,15 @@ def resolve_upload_clip_type(
         ct = project_m
     if ct == "other":
         ct = "irl"
-    if has_facecam and facecam_confidence >= FACECAM_CONFIDENCE_THRESHOLD:
+    game_evidence = (
+        isinstance(moment, dict) and moment.get("game_ui_visible") is True
+    ) or project_m == "gaming"
+    strong_fc = has_facecam and facecam_confidence >= UPLOAD_FACECAM_MIN_CONF
+    real_cam = isinstance(moment, dict) and moment.get("real_camera_footage") is True
+    if strong_fc and game_evidence and not real_cam:
         ct = "gaming"
-    elif ct == "gaming" and project_m != "gaming":
-        ct = project_m
+    elif ct == "gaming" and not game_evidence:
+        ct = project_m if project_m != "gaming" else "irl"
     return {
         "clipType": ct,
         "hasFacecam": bool(has_facecam),

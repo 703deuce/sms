@@ -431,6 +431,7 @@ def _regular_clip_type_and_layout(
 
     has_fc = bool(isinstance(fc_layout, dict) and isinstance(fc_layout.get("facecam"), dict))
     fc_conf = float((fc_layout or {}).get("confidence") or 0.0)
+    has_fc_layout = has_fc and fc_conf >= 0.85
     type_info = resolve_upload_clip_type(
         moment=vm,
         section_activity=section_activity,
@@ -458,7 +459,7 @@ def _regular_clip_type_and_layout(
     edits = apply_clip_type_layout_to_edits(
         edits,
         clip_type=type_info["clipType"],
-        has_facecam=has_fc,
+        has_facecam=has_fc_layout,
         facecam_confidence=fc_conf,
         stream_facecam_layout=fc_layout,
         headline_on=headline_on,

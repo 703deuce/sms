@@ -223,6 +223,8 @@ WATCH_RESPONSE_SCHEMA: dict[str, Any] = {
                         "type": "string",
                         "enum": ["gaming", "irl", "just_chatting", "podcast", "other"],
                     },
+                    "game_ui_visible": {"type": "boolean"},
+                    "real_camera_footage": {"type": "boolean"},
                 },
                 "required": [
                     "start_s",
@@ -231,6 +233,8 @@ WATCH_RESPONSE_SCHEMA: dict[str, Any] = {
                     "hook_s",
                     "category",
                     "content_type",
+                    "game_ui_visible",
+                    "real_camera_footage",
                     "what_happened",
                     "unverified",
                     "confidence",
@@ -678,6 +682,8 @@ def validate_and_normalize_moments(
             "content_type": ct_raw
             if ct_raw in ("gaming", "irl", "just_chatting", "podcast", "other")
             else "",
+            "game_ui_visible": bool(row.get("game_ui_visible")),
+            "real_camera_footage": bool(row.get("real_camera_footage")),
             "what_happened": what[:1200],
             "unverified": unverified,
             "confidence": round(conf, 3),

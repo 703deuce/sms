@@ -197,6 +197,68 @@ describe('PreviewStage prod clip edits', () => {
     expect(main?.getAttribute('src')).toBe(url)
   })
 
+  it('cached fill video shows video not poster when readyState is already loaded', () => {
+    const url = 'https://example.com/video.mp4'
+    const origReady = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'readyState')
+    Object.defineProperty(HTMLMediaElement.prototype, 'readyState', {
+      configurable: true,
+      get() {
+        return 4
+      },
+    })
+    try {
+      const stackEdits = normalizeEdits(
+        {
+          ...PROD_EDITS,
+          layout: {
+            mode: 'facecam_stack',
+            shotOverrides: [],
+            facecam: {
+              box: { x: 0.02, y: 0.02, w: 0.3, h: 0.25 },
+              gameplay: { x: 0, y: 0, w: 1, h: 1 },
+              split: 0.35,
+              position: 'top',
+            },
+          },
+          exportTemplate: headlineTpl,
+        },
+        bounds,
+      )
+      const fillEdits = normalizeEdits(
+        { ...PROD_EDITS, layout: { mode: 'fill', shotOverrides: [] }, exportTemplate: headlineTpl },
+        bounds,
+      )
+      const { container, rerender } = render(
+        <PreviewStage
+          videoUrl={url}
+          edits={stackEdits}
+          words={[]}
+          cropTrack={null}
+          brollMedia={[]}
+          videoRef={{ current: null }}
+          onTick={vi.fn()}
+        />,
+      )
+      rerender(
+        <PreviewStage
+          videoUrl={url}
+          edits={fillEdits}
+          words={[]}
+          cropTrack={null}
+          brollMedia={[]}
+          videoRef={{ current: null }}
+          onTick={vi.fn()}
+        />,
+      )
+      expect(container.querySelector('img[alt=""]')).toBeNull()
+      const main = container.querySelector('[data-testid="center-crop-video"]') as HTMLVideoElement | null
+      expect(main?.className).toContain('opacity-100')
+    } finally {
+      if (origReady) Object.defineProperty(HTMLMediaElement.prototype, 'readyState', origReady)
+      else delete (HTMLMediaElement.prototype as { readyState?: number }).readyState
+    }
+  })
+
   it('CaptionOverlay tolerates undefined word text', () => {
     const edits = normalizeEdits(PROD_EDITS, bounds)
     const words = [{ w: undefined as unknown as string, s: 0, e: 5, idx: 0 }]

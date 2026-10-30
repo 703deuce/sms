@@ -241,14 +241,15 @@ export function PreviewStage({
       setCanPlay(false)
       return
     }
-    setCanPlay(false)
-    if (v) {
-      v.src = videoUrl
-      v.currentTime = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
-    }
+    const v0 = videoRefInner.current
+    setCanPlay(Boolean(v0 && v0.readyState >= 2))
+    logEditorDecision('preview_ready', {
+      mode: layoutMode,
+      readyState: v0?.readyState ?? 0,
+    })
     if (b) {
       if (cropPreview || letterboxPreview || fitTopPreview) {
-        b.src = videoUrl
+        if (!b.src) b.src = videoUrl
       } else {
         b.removeAttribute('src')
         b.load()
@@ -256,15 +257,16 @@ export function PreviewStage({
     }
     const seekAll = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
     wrapRef.current?.querySelectorAll('video').forEach((el) => {
-      el.src = videoUrl
       el.muted = el !== v
-      if (Number.isFinite(seekAll) && seekAll >= 0) {
+      const seek = () => {
         try {
-          el.currentTime = seekAll
+          if (Number.isFinite(seekAll) && seekAll >= 0) el.currentTime = seekAll
         } catch {
           /* metadata not ready */
         }
       }
+      if (el.readyState >= 1) seek()
+      else el.addEventListener('loadedmetadata', seek, { once: true })
     })
   }, [
     videoUrl,
@@ -504,6 +506,7 @@ export function PreviewStage({
                 if (v && b) b.currentTime = v.currentTime
               }}
               onCanPlay={() => setCanPlay(true)}
+              onLoadedData={() => setCanPlay(true)}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
             />
@@ -539,6 +542,7 @@ export function PreviewStage({
                     if (v && b) b.currentTime = v.currentTime
                   }}
                   onCanPlay={() => setCanPlay(true)}
+                  onLoadedData={() => setCanPlay(true)}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                 />
@@ -583,6 +587,7 @@ export function PreviewStage({
                       style={coverBoxStyle(panel.box)}
                       playsInline
                       onCanPlay={() => setCanPlay(true)}
+                      onLoadedData={() => setCanPlay(true)}
                       onPlay={() => setPlaying(true)}
                       onPause={() => setPlaying(false)}
                     />
@@ -612,6 +617,7 @@ export function PreviewStage({
                   style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
                   playsInline
                   onCanPlay={() => setCanPlay(true)}
+                  onLoadedData={() => setCanPlay(true)}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                 />
@@ -670,13 +676,13 @@ export function PreviewStage({
                   className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
                   playsInline
-                  poster={posterUrl ?? undefined}
                   onLoadedMetadata={() => {
                     const v = videoRefInner.current
                     const b = blurRef.current
                     if (v && b) b.currentTime = v.currentTime
                   }}
                   onCanPlay={() => setCanPlay(true)}
+                  onLoadedData={() => setCanPlay(true)}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                 />
@@ -704,8 +710,8 @@ export function PreviewStage({
                 className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}`}
                 style={edits.layout.cropBox ? coverBoxStyle(edits.layout.cropBox) : undefined}
                 playsInline
-                poster={posterUrl ?? undefined}
                 onCanPlay={() => setCanPlay(true)}
+                onLoadedData={() => setCanPlay(true)}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
               />
@@ -725,11 +731,11 @@ export function PreviewStage({
           <>
             <video
               ref={videoRefInner}
-              src={videoUrl ?? undefined}
-              className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
-              playsInline
-              poster={posterUrl ?? undefined}
-              onCanPlay={() => setCanPlay(true)}
+            src={videoUrl ?? undefined}
+            className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+            playsInline
+            onCanPlay={() => setCanPlay(true)}
+            onLoadedData={() => setCanPlay(true)}
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
             />
@@ -743,8 +749,8 @@ export function PreviewStage({
             src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
-            poster={posterUrl ?? undefined}
             onCanPlay={() => setCanPlay(true)}
+            onLoadedData={() => setCanPlay(true)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
           />

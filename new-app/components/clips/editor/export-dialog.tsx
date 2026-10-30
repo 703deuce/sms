@@ -204,7 +204,7 @@ export function ExportDialog({
 
   useEffect(() => {
     if (!renderId || status === 'READY' || status === 'FAILED') return
-    const t = setInterval(() => {
+    const poll = () => {
       void getRenderStatus(renderId)
         .then((r) => {
           setStatus(r.status)
@@ -240,9 +240,21 @@ export function ExportDialog({
           setErrorDetail(msg)
           setBusy(false)
         })
-    }, 2000)
-    return () => clearInterval(t)
-  }, [renderId, status])
+    }
+    poll()
+    const t = setInterval(poll, 2000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') poll()
+    }
+    const onFocus = () => poll()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [renderId, status, clipId])
 
   const startExport = async () => {
     if (busy) return

@@ -15,6 +15,7 @@ export type EditorDecisionKind =
   | 'cleanup_restore'
   | 'reorder'
   | 'loop_trim_skipped'
+  | 'preview_ready'
 
 export function hostOnlyFromUrl(url: string | null | undefined): string | null {
   if (!url?.trim()) return null
