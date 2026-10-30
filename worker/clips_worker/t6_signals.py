@@ -67,8 +67,23 @@ def signals_or_defaults(ai_meta: dict | None) -> dict:
         base = dict(stored)
     else:
         base = {"v": SIGNALS_VERSION}
-    clip_type = str(meta.get("clipType") or base.get("clip_type") or "irl")
-    base.setdefault("clip_type", clip_type)
+    cls = meta.get("classify") if isinstance(meta.get("classify"), dict) else None
+    if meta.get("typeSource") == "classify" or cls is not None:
+        base["clip_type"] = str(meta.get("clipType") or base.get("clip_type"))
+        try:
+            base["type_conf"] = float(meta.get("typeConf") or base.get("type_conf") or 0)
+        except (TypeError, ValueError):
+            pass
+    if isinstance(cls, dict):
+        if cls.get("game_graphics_visible") is not None:
+            base["game_ui_visible"] = bool(cls.get("game_graphics_visible"))
+        main = str(cls.get("main_picture") or "")
+        if main == "real_camera":
+            base["real_camera_footage"] = True
+        elif main == "video_game":
+            base["real_camera_footage"] = False
+        base["sources"] = {"ai": "classify", "cv": "local"}
+    base.setdefault("clip_type", str(meta.get("clipType") or base.get("clip_type") or "irl"))
     base.setdefault("type_conf", float(base.get("type_conf") or 0.0))
     base.setdefault("game_ui_visible", bool(base.get("game_ui_visible", False)))
     base.setdefault("real_camera_footage", bool(base.get("real_camera_footage", False)))
@@ -279,11 +294,14 @@ def build_signals_for_clip(
                 base["facecam_box"] = box
         base["facecam_conf"] = float(fc_layout.get("confidence") or base.get("facecam_conf") or 0.0)
     if base.get("sources", {}).get("ai") == "none" and clip_file is not None and work is not None:
-        ai_sig, cost = signals_call(clip_file, words or [], work)
-        if ai_sig:
-            base.update({k: v for k, v in ai_sig.items() if k not in ("v",)})
-            base["sources"] = {"ai": "call", "cv": "local"}
-            base["cost_usd"] = float(cost)
+        if ai_meta.get("typeSource") == "classify" or isinstance(ai_meta.get("classify"), dict):
+            pass
+        else:
+            ai_sig, cost = signals_call(clip_file, words or [], work)
+            if ai_sig:
+                base.update({k: v for k, v in ai_sig.items() if k not in ("v",)})
+                base["sources"] = {"ai": "call", "cv": "local"}
+                base["cost_usd"] = float(cost)
     try:
         base = enrich_signals_cv(base, clip_file, words or [], crop_track)
     except Exception:

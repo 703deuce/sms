@@ -682,8 +682,8 @@ def validate_and_normalize_moments(
             "content_type": ct_raw
             if ct_raw in ("gaming", "irl", "just_chatting", "podcast", "other")
             else "",
-            "game_ui_visible": bool(row.get("game_ui_visible")),
-            "real_camera_footage": bool(row.get("real_camera_footage")),
+            "game_ui_visible": row.get("game_ui_visible") if isinstance(row.get("game_ui_visible"), bool) else None,
+            "real_camera_footage": row.get("real_camera_footage") if isinstance(row.get("real_camera_footage"), bool) else None,
             "what_happened": what[:1200],
             "unverified": unverified,
             "confidence": round(conf, 3),

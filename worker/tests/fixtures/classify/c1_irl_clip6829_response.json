@@ -1,0 +1,10 @@
+{
+  "main_picture": "real_camera",
+  "game_graphics_visible": false,
+  "sport_or_physical_activity": true,
+  "seated_talking_to_camera": false,
+  "people_on_camera": 3,
+  "clip_type": "gaming",
+  "confidence": 0.86,
+  "evidence": "Outdoor basketball."
+}

@@ -397,6 +397,7 @@ def _regular_clip_type_and_layout(
     pick: dict | None,
     settings: dict,
     work_dir: Path,
+    clip_words: list[dict] | None = None,
 ) -> tuple[dict, dict, dict | None]:
     from clips_worker.clip_layout_policy import apply_clip_type_layout_to_edits
     from clips_worker.clip_type import (
@@ -432,6 +433,26 @@ def _regular_clip_type_and_layout(
     has_fc = bool(isinstance(fc_layout, dict) and isinstance(fc_layout.get("facecam"), dict))
     fc_conf = float((fc_layout or {}).get("confidence") or 0.0)
     has_fc_layout = has_fc and fc_conf >= 0.85
+
+    from clips_worker.clip_classify import (
+        classify_clip,
+        clip_classify_enabled,
+        resolve_type_from_classification,
+    )
+
+    cls = None
+    cls_type = picker_ct
+    cls_conf = 0.4
+    type_source = "picker"
+    if clip_classify_enabled():
+        cls = classify_clip(clip_file, clip_words or [], work_dir)
+        cls_type, cls_conf, type_source = resolve_type_from_classification(
+            cls,
+            facecam_conf=fc_conf,
+            picker_moment=vm if isinstance(vm, dict) else None,
+            fallback=project_majority,
+        )
+
     type_info = resolve_upload_clip_type(
         moment=vm,
         section_activity=section_activity,
@@ -441,6 +462,12 @@ def _regular_clip_type_and_layout(
         has_facecam=has_fc,
         facecam_confidence=fc_conf,
     )
+    if type_source == "classify":
+        type_info["clipType"] = cls_type
+    type_info["typeSource"] = type_source
+    type_info["typeConf"] = round(float(cls_conf), 3)
+    if cls:
+        type_info["classify"] = cls
     if has_fc and isinstance(fc_layout, dict):
         type_info["facecamLayout"] = {
             k: fc_layout.get(k)
@@ -456,14 +483,15 @@ def _regular_clip_type_and_layout(
             sig = build_signals_for_clip(
                 ai_meta={**meta, **type_info},
                 fc_layout=fc_layout,
-                words=[],
+                words=clip_words or [],
                 crop_track=None,
                 clip_file=clip_file,
                 work=work_dir,
             )
             type_info["signals"] = sig
-            if float(sig.get("type_conf") or 0) >= 0.6 and sig.get("clip_type"):
-                type_info["clipType"] = str(sig["clip_type"])
+            if type_info.get("typeSource") != "classify":
+                if float(sig.get("type_conf") or 0) >= 0.6 and sig.get("clip_type"):
+                    type_info["clipType"] = str(sig["clip_type"])
             print(
                 "[t6:signals] "
                 f"type={type_info.get('clipType')!r} conf={float(sig.get('type_conf') or 0):.2f} "
@@ -474,11 +502,15 @@ def _regular_clip_type_and_layout(
             )
         except Exception as exc:
             t6_log_fallback("signals", exc)
+    gui = vm.get("game_ui_visible") if isinstance(vm, dict) else None
+    cam = vm.get("real_camera_footage") if isinstance(vm, dict) else None
     print(
         "[clipper:upload_type] "
         f"picker_ct={picker_ct!r} stream_majority={stream_majority!r} "
         f"project_majority={project_majority!r} moment_iou={moment_iou:.3f} "
         f"facecam={has_fc} facecam_conf={fc_conf:.3f} "
+        f"gui={gui} cam={cam} "
+        f"cls={type_info.get('clipType')!r} cls_conf={type_info.get('typeConf')} src={type_info.get('typeSource')!r} "
         f"final={type_info.get('clipType')!r}",
         flush=True,
     )
@@ -513,12 +545,13 @@ def _finalize_regular_clip_edits(
     if mode == "anything" or settings.get("streamer"):
         return edits, {}, None
     wd = work_dir or clip_file.parent
-    edits, type_info, _fc = _regular_clip_type_and_layout(edits, clip_file, pick, settings, wd)
+    edits, type_info, _fc = _regular_clip_type_and_layout(
+        edits, clip_file, pick, settings, wd, clip_words=clip_words
+    )
     ct = str(type_info.get("clipType") or "irl")
-    if ct not in ("just_chatting", "podcast"):
-        st = dict(edits.get("silenceTrim") or {})
-        st["enabled"] = False
-        edits = {**edits, "silenceTrim": st}
+    st = dict(edits.get("silenceTrim") or {})
+    st["enabled"] = ct in ("just_chatting", "podcast")
+    edits = {**edits, "silenceTrim": st}
     if ct in ("just_chatting", "podcast"):
         from clips_worker.regular_auto_layout import apply_regular_auto_layout
 
@@ -1089,10 +1122,12 @@ def run_m4_pipeline(
                                 project_id=project_id,
                             )
                         if cached is not None:
+                            cmeta = cached.get("aiMeta") or {}
+                            if cmeta.get("typeSource") == "classify":
+                                return cached
                             from clips_worker.clip_type import resolve_upload_clip_type
 
                             pmeta = pick.get("aiMeta") or {}
-                            cmeta = cached.get("aiMeta") or {}
                             cached_type = cmeta.get("clipType")
                             expected_type = resolve_upload_clip_type(
                                 moment=pmeta.get("videoMoment"),

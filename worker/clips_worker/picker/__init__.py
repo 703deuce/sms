@@ -55,7 +55,16 @@ def _annotate_clip_type_meta(
         meta["videoMoment"] = (
             {
                 k: vm.get(k)
-                for k in ("content_type", "category", "start_ms", "end_ms", "start_s", "end_s")
+                for k in (
+                    "content_type",
+                    "category",
+                    "start_ms",
+                    "end_ms",
+                    "start_s",
+                    "end_s",
+                    "game_ui_visible",
+                    "real_camera_footage",
+                )
             }
             if vm
             else None

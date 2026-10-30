@@ -1,0 +1,10 @@
+{
+  "main_picture": "real_camera",
+  "game_graphics_visible": false,
+  "sport_or_physical_activity": false,
+  "seated_talking_to_camera": false,
+  "people_on_camera": 1,
+  "clip_type": "just_chatting",
+  "confidence": 0.84,
+  "evidence": "Person standing in gym talking."
+}

@@ -253,6 +253,7 @@ def claim_job(conn) -> dict | None:
                   )
                 )
               ORDER BY priority DESC,
+                (type = 'RENDER_CLIP') DESC,
                 (
                   SELECT COUNT(*)::int FROM clip_jobs j3
                   JOIN clip_projects p3 ON p3.id = j3."projectId"

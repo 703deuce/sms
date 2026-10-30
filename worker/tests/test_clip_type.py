@@ -3,6 +3,38 @@ from clips_worker.clip_type import (
     resolve_upload_clip_type,
     upload_project_majority_type,
 )
+from clips_worker.picker import _annotate_clip_type_meta
+
+
+def test_annotate_preserves_evidence_booleans():
+    picks = [{"start_ms": 100, "end_ms": 5000, "aiMeta": {}}]
+    moments = [
+        {
+            "start_ms": 0,
+            "end_ms": 8000,
+            "content_type": "just_chatting",
+            "game_ui_visible": False,
+            "real_camera_footage": True,
+        }
+    ]
+    _annotate_clip_type_meta(picks, moments, None)
+    vm = picks[0]["aiMeta"]["videoMoment"]
+    assert vm.get("game_ui_visible") is False
+    assert vm.get("real_camera_footage") is True
+
+
+def test_low_iou_real_camera_moment_is_irl_not_project_gaming():
+    moment = {"content_type": "irl", "real_camera_footage": True, "game_ui_visible": False}
+    out = resolve_upload_clip_type(
+        moment=moment,
+        section_activity=None,
+        upload_project_majority="gaming",
+        stream_majority="gaming",
+        moment_match_iou=0.238,
+        has_facecam=True,
+        facecam_confidence=0.79,
+    )
+    assert out["clipType"] == "irl"
 
 
 def test_basketball_moment_with_gaming_label_is_irl():

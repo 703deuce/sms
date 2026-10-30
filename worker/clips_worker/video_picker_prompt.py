@@ -100,9 +100,9 @@ moments: array of objects, sorted by score descending, each with:
 - why_it_works: one or two sentences naming the setup, the payoff and why a stranger would care.
 - touches_edge: none, start, end or both.
 - score: number 0.0 to 1.0.
-- content_type: one of gaming, irl, just_chatting, podcast, other. gaming = VIDEO-GAME footage fills most of the screen (usually with a small webcam overlay). irl = real-world camera footage, including sports, streets, events. just_chatting = one person at a desk/camera talking. podcast = 2+ people seated talking. Real sports are irl, never gaming.
+- content_type: one of gaming, irl, just_chatting, podcast, other. Judge the MAIN picture. A game menu, level/track select or loading screen counts as gaming. Stream overlays (chat, sub goals, alerts, small webcam) do not change the type. gaming = VIDEO-GAME footage fills most of the screen (usually with a small webcam overlay). irl = real-world camera footage, including sports, streets, events. just_chatting = one person at a desk/camera talking. podcast = 2+ people seated talking. Real sports are irl, never gaming.
 - game_ui_visible: true only if rendered VIDEO-GAME graphics (HUD, health/ammo bars, minimap, game menus, game world) fill most of the screen. A real sport, scoreboard, or TV broadcast is false.
-- real_camera_footage: true if the main picture is filmed by a real camera (people, streets, gyms, courts, rooms), even if a scoreboard or overlay is present."""
+- real_camera_footage: true if the main picture is filmed by a real camera (people, streets, gyms, courts, rooms), even if a scoreboard or overlay is present. A small webcam/facecam overlay on top of game or desktop footage does NOT make this true."""
 
 VISUAL_WATCH_PASS1_HINT = (
     "Visual watch (Gemini v3): full spans start_s–end_s with peak/hook (hook is advisory only; never trim to hook_s). "

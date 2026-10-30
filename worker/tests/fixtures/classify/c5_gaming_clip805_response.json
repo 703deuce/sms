@@ -1,0 +1,10 @@
+{
+  "main_picture": "video_game",
+  "game_graphics_visible": true,
+  "sport_or_physical_activity": false,
+  "seated_talking_to_camera": true,
+  "people_on_camera": 1,
+  "clip_type": "gaming",
+  "confidence": 0.92,
+  "evidence": "Track select menu fills the frame."
+}

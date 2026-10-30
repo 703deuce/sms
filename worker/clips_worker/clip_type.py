@@ -137,7 +137,15 @@ def resolve_upload_clip_type(
     if project_m == "other":
         project_m = "irl"
     strong = moment_has_explicit_content_type(moment) and float(moment_match_iou or 0) >= 0.35
-    if strong and picker_ct != "other" and picker_ct != "gaming":
+    low_iou = float(moment_match_iou or 0) < 0.35
+    if (
+        low_iou
+        and isinstance(moment, dict)
+        and moment.get("real_camera_footage") is True
+        and moment.get("game_ui_visible") is not True
+    ):
+        ct = "irl"
+    elif strong and picker_ct != "other" and picker_ct != "gaming":
         ct = picker_ct
     elif strong and picker_ct == "gaming" and project_m == "gaming":
         ct = "gaming"
@@ -145,9 +153,7 @@ def resolve_upload_clip_type(
         ct = project_m
     if ct == "other":
         ct = "irl"
-    game_evidence = (
-        isinstance(moment, dict) and moment.get("game_ui_visible") is True
-    ) or project_m == "gaming"
+    game_evidence = isinstance(moment, dict) and moment.get("game_ui_visible") is True
     strong_fc = has_facecam and facecam_confidence >= UPLOAD_FACECAM_MIN_CONF
     real_cam = isinstance(moment, dict) and moment.get("real_camera_footage") is True
     if strong_fc and game_evidence and not real_cam:
@@ -174,8 +180,18 @@ def resolve_clip_type(
         ct = str(stream_majority)
     if ct == "other":
         ct = "irl"
-    if has_facecam and facecam_confidence >= FACECAM_CONFIDENCE_THRESHOLD:
+    gui = isinstance(moment, dict) and moment.get("game_ui_visible") is True
+    real_cam = isinstance(moment, dict) and moment.get("real_camera_footage") is True
+    if gui and not real_cam:
         ct = "gaming"
+    elif (
+        has_facecam
+        and facecam_confidence >= UPLOAD_FACECAM_MIN_CONF
+        and not gui
+        and not real_cam
+        and ct == "gaming"
+    ):
+        ct = "irl"
     return {
         "clipType": ct,
         "hasFacecam": bool(has_facecam),

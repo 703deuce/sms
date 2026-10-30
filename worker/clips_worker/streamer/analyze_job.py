@@ -651,6 +651,39 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     isinstance(stream_facecam_layout, dict)
                     and isinstance(stream_facecam_layout.get("facecam"), dict)
                 )
+                clip_words = [
+                    w
+                    for w in words
+                    if float(w.get("s") or 0) * 1000 >= int(pick.start_ms)
+                    and float(w.get("e") or 0) * 1000 <= int(pick.end_ms)
+                ]
+                from clips_worker.clip_classify import (
+                    classify_clip,
+                    clip_classify_stream_enabled,
+                    resolve_type_from_classification,
+                )
+
+                cls = None
+                type_source = "picker"
+                cls_conf = 0.4
+                classify_file: Path | None = None
+                if clip_classify_stream_enabled() and probe_video is not None and probe_video.is_file():
+                    try:
+                        from clips_worker.streamer.collab_detect import _ffmpeg_sample_clip
+
+                        classify_file = scratch / f"classify_{clip_id}.mp4"
+                        rel_start_s = max(0.0, int(pick.start_ms) / 1000.0)
+                        dur_s = max(0.5, (int(pick.end_ms) - int(pick.start_ms)) / 1000.0)
+                        _ffmpeg_sample_clip(probe_video, classify_file, rel_start_s, dur_s)
+                        cls = classify_clip(classify_file, clip_words, scratch)
+                    except Exception:
+                        cls = None
+                    cls_type, cls_conf, type_source = resolve_type_from_classification(
+                        cls,
+                        facecam_conf=fc_conf,
+                        picker_moment=vm if isinstance(vm, dict) else None,
+                        fallback=stream_majority or "irl",
+                    )
                 type_info = resolve_clip_type(
                     moment=vm,
                     section_activity=section_act,
@@ -658,6 +691,12 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     has_facecam=has_fc,
                     facecam_confidence=fc_conf,
                 )
+                if type_source == "classify":
+                    type_info["clipType"] = cls_type
+                type_info["typeSource"] = type_source
+                type_info["typeConf"] = round(float(cls_conf), 3)
+                if cls:
+                    type_info["classify"] = cls
                 channel_clip_type_layouts = None
                 proj_streamer = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
                 raw_ct_layouts = proj_streamer.get("clipTypeLayouts")
@@ -683,17 +722,18 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                             and float(w.get("e") or 0) * 1000 <= int(pick.end_ms)
                         ]
                         sig = build_signals_for_clip(
-                            ai_meta={**type_info},
+                            ai_meta={**type_info, "videoMoment": vm},
                             fc_layout=stream_facecam_layout,
                             words=clip_words,
                             crop_track=None,
-                            clip_file=None,
+                            clip_file=classify_file,
                             work=Path(scratch) if scratch else None,
                             dense_candidate=dense_cand,
                         )
                         type_info["signals"] = sig
-                        if float(sig.get("type_conf") or 0) >= 0.6 and sig.get("clip_type"):
-                            type_info["clipType"] = str(sig["clip_type"])
+                        if type_info.get("typeSource") != "classify":
+                            if float(sig.get("type_conf") or 0) >= 0.6 and sig.get("clip_type"):
+                                type_info["clipType"] = str(sig["clip_type"])
                     except Exception as exc:
                         t6_log_fallback("signals", exc)
                 init_edits = apply_clip_type_layout_to_edits(
