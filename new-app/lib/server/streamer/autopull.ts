@@ -6,6 +6,7 @@ import { createId } from '@/lib/supabase/id'
 import { getPrisma } from '@/lib/server/db'
 import { getTwitchVodDelaySec } from '@/lib/server/streamer/twitch'
 import { getKickVodDelaySec } from '@/lib/server/streamer/kick'
+import { recordPendingAutopull } from '@/lib/server/streamer/autopull-grace'
 import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 
 const AUTOPULL_DEDUPE_MS = 5 * 60 * 1000
@@ -150,6 +151,11 @@ export async function enqueueStreamAutopull(
         runAfter,
       },
     })
+  })
+  await recordPendingAutopull(channelId, {
+    vodId,
+    projectId,
+    sessionId: opts?.streamSessionId,
   })
   return { projectId, vodId }
 }

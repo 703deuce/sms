@@ -1,5 +1,6 @@
 import { encryptIntegrationSecret, decryptIntegrationSecret } from '@/lib/integrations/framework/secrets'
 import { streamerLiveRealtimeEnabled, twitchRedirectUri, twitchWebhookUrl } from '@/lib/server/streamer/env'
+import { getStreamAutopullGraceSec } from '@/lib/server/streamer/autopull-grace'
 
 export { twitchRedirectUri }
 import { getPrisma } from '@/lib/server/db'
@@ -190,7 +191,12 @@ export function twitchAuthorizeUrl(state: string, redirectUri: string): string {
 }
 
 export function getTwitchVodDelaySec(): number {
-  return Number(process.env.TWITCH_VOD_DELAY_S || 120)
+  const raw = process.env.TWITCH_VOD_DELAY_S
+  if (raw != null && String(raw).trim() !== '') {
+    const n = Number(raw)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return getStreamAutopullGraceSec()
 }
 
 export async function refreshTwitchUserToken(refreshToken: string) {

@@ -8,6 +8,7 @@ import {
   beginTwitchRollingSession,
   finalizeTwitchRollingSession,
 } from '@/lib/server/streamer/rolling-autopull'
+import { cancelPendingAutopullIfStreamResumed } from '@/lib/server/streamer/autopull-grace'
 import { verifyTwitchEventSubSignature } from '@/lib/server/streamer/twitch-webhook'
 import { handleStreamerNotify } from '@/lib/server/streamer/notify'
 import { getPrisma } from '@/lib/server/db'
@@ -66,6 +67,11 @@ export async function POST(request: Request) {
     const startedAt = new Date()
     const streamSessionId = String(event.id || messageId)
     for (const ch of channels) {
+      const resumed = await cancelPendingAutopullIfStreamResumed(ch.id, { sessionId: streamSessionId })
+      if (resumed) {
+        console.info(`[clipper:autopull] grace_same_stream channelId=${ch.id} platform=twitch`)
+        continue
+      }
       await prisma.streamChannel.update({
         where: { id: ch.id },
         data: {

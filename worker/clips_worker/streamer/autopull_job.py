@@ -108,6 +108,26 @@ def _normalize_helix_video(v: dict, parse_duration) -> dict:
     return v
 
 
+def _vod_already_processed(conn, channel_id: str | None, external_id: str | None, exclude_vod_id: str) -> dict | None:
+    if not channel_id or not external_id:
+        return None
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT v.id, v."projectId"
+            FROM stream_vods v
+            INNER JOIN clip_projects p ON p.id = v."projectId"
+            WHERE v."channelId" = %s AND v."externalId" = %s AND v.id <> %s
+              AND v.url IS NOT NULL AND v."triggeredBy" = 'auto'
+              AND p.status NOT IN ('FAILED', 'CANCELLED')
+            LIMIT 1
+            """,
+            (channel_id, str(external_id), exclude_vod_id),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
 def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
     payload = job.get("payload") or {}
     if isinstance(payload, str):
@@ -144,6 +164,10 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
     state = vod.get("state") or {}
     if isinstance(state, str):
         state = json.loads(state)
+    if state.get("superseded"):
+        _log_autopull(f"skipped vodId={vod_id} reason=superseded_grace")
+        post_progress(job["id"], {"jobStatus": "DONE"})
+        return
     stream_id = state.get("streamSessionId") or state.get("streamId")
 
     matched = None
@@ -158,6 +182,15 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
             raise
     elif platform == "kick" and vod.get("login"):
         matched = _match_kick_vod(str(vod["login"]), streamed_at)
+    elif platform == "youtube":
+        vid = str(stream_id or state.get("streamSessionId") or "").strip()
+        if vid:
+            matched = {
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "id": vid,
+                "title": vod.get("title"),
+                "duration": 0,
+            }
 
     if platform == "twitch" and vod.get("channel_external"):
         from clips_worker.streamer.vod_saving import channel_stores_past_broadcasts
@@ -218,6 +251,22 @@ def run_stream_autopull_job(conn, job: dict, post_progress) -> None:
     title = matched.get("title") or vod.get("title")
     duration_ms = int(float(matched.get("duration") or matched.get("duration_s") or 0) * 1000)
     external = matched.get("id") or matched.get("video_id")
+    dup = _vod_already_processed(conn, vod.get("channelId"), str(external) if external else None, vod_id)
+    if dup:
+        _log_autopull(
+            f"duplicate_vod_skip vodId={vod_id} existingVodId={dup.get('id')} externalId={external}"
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE clip_projects SET status='READY', stage='duplicate_vod', "updatedAt"=NOW()
+                WHERE id=%s
+                """,
+                (vod["projectId"],),
+            )
+        conn.commit()
+        post_progress(job["id"], {"jobStatus": "DONE"})
+        return
     segment_ranges = plan_vod_segment_ranges(duration_ms)
     range_start_ms = 0
     range_end_ms = duration_ms

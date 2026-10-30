@@ -216,5 +216,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Reaper failed', data: result }, { status: 500 })
   }
 
+  try {
+    const { pollYoutubeStreamChannels } = await import('@/lib/server/streamer/youtube-autopoll')
+    const yt = await pollYoutubeStreamChannels()
+    ;(result as Record<string, unknown>).youtubeAutopoll = yt
+  } catch (err) {
+    errors.push(`youtube_poll: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
   return NextResponse.json({ data: result })
 }

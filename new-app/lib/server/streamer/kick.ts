@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { encryptIntegrationSecret, decryptIntegrationSecret } from '@/lib/integrations/framework/secrets'
 import { kickRedirectUri } from '@/lib/server/streamer/env'
+import { getStreamAutopullGraceSec } from '@/lib/server/streamer/autopull-grace'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 
@@ -141,7 +142,12 @@ export function decryptKickToken(enc: string | null | undefined): string | null 
 }
 
 export function getKickVodDelaySec(): number {
-  return Number(process.env.KICK_VOD_DELAY_S || 300)
+  const raw = process.env.KICK_VOD_DELAY_S
+  if (raw != null && String(raw).trim() !== '') {
+    const n = Number(raw)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return getStreamAutopullGraceSec()
 }
 
 const KICK_EVENT_NAMES = [

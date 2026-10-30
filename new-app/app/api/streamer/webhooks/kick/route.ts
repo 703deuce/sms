@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { ingestLiveChatMessage } from '@/lib/server/streamer/chat-aggregator'
 import { streamerLiveRealtimeEnabled } from '@/lib/server/streamer/env'
 import { enqueueStreamAutopull } from '@/lib/server/streamer/autopull'
+import { cancelPendingAutopullIfStreamResumed } from '@/lib/server/streamer/autopull-grace'
 import { streamerAutopullUiEnabled } from '@/lib/server/streamer/autopull-ui'
 import { kickLiveCaptureEnabled } from '@/lib/server/streamer/kick-live-capture'
 import { getPrisma } from '@/lib/server/db'
@@ -75,6 +76,13 @@ export async function POST(request: Request) {
     const ch = await prisma.streamChannel.findFirst({ where: { platform: 'kick', login: slug.toLowerCase() } })
     if (!ch) return new NextResponse(null, { status: 204 })
     if (isLive) {
+      const resumed = await cancelPendingAutopullIfStreamResumed(ch.id, {
+        sessionId: String(data.started_at || new Date().toISOString()),
+      })
+      if (resumed) {
+        console.info(`[clipper:autopull] grace_same_stream channelId=${ch.id} platform=kick`)
+        return new NextResponse(null, { status: 204 })
+      }
       const startedAt = String(data.started_at || new Date().toISOString())
       await prisma.streamChannel.update({
         where: { id: ch.id },
