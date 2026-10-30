@@ -20,3 +20,12 @@ def test_normalize_edits_preserves_facecam_and_crop_box():
     assert layout["facecam"]["box"]["x"] == 0.1
     assert layout["cropBox"]["w"] == 0.9
     assert layout.get("userPicked") is True
+
+
+def test_normalize_edits_keeps_layout_template():
+    raw = {
+        "trim": {"in": 0, "out": 5000},
+        "layout": {"mode": "facecam_stack", "template": {"id": "G1", "auto": True, "reason": "test"}},
+    }
+    out = normalize_edits(raw, 0, 10_000)
+    assert out["layout"]["template"]["id"] == "G1"

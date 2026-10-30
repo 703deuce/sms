@@ -106,8 +106,31 @@ def apply_clip_type_layout_to_edits(
     headline_on: bool,
     fallback_archetype: str | None = None,
     channel_clip_type_layouts: dict[str, Any] | None = None,
+    settings: dict | None = None,
+    signals: dict | None = None,
+    clip_id: str | None = None,
+    pick_history: list[str] | None = None,
+    batch_counts: dict[str, int] | None = None,
+    batch_size: int = 1,
 ) -> dict:
-    """Per-clip auto layout (T5). IRL / just_chatting keep speaker_follow; gaming uses stack when facecam confident."""
+    from clips_worker.t6_flags import t6_log_fallback, t6_templates_enabled
+
+    if t6_templates_enabled(settings) and isinstance(signals, dict):
+        try:
+            from clips_worker.t6_pick import apply_t6_template_to_edits
+
+            return apply_t6_template_to_edits(
+                edits,
+                signals=signals,
+                clip={"id": clip_id, "trim": edits.get("trim"), "duration_ms": 0},
+                history=list(pick_history or []),
+                batch_counts=dict(batch_counts or {}),
+                batch_size=batch_size,
+                seed=str(clip_id or "clip"),
+            )
+        except Exception as exc:
+            t6_log_fallback("pick", exc)
+    # Per-clip auto layout (T5). IRL / just_chatting keep speaker_follow; gaming uses stack when facecam confident.
     ct = (clip_type or "other").strip().lower()
     layout = dict(edits.get("layout") or {})
     reason = f"clip_type_{ct}"

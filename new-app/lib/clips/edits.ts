@@ -87,6 +87,16 @@ export type ClipEditsV2 = {
     cropBox?: FacecamBox
     /** User chose layout in editor — skip auto IRL headline ↔ layout sync. */
     userPicked?: boolean
+    template?: {
+      id?: string
+      auto?: boolean
+      reason?: string
+      lane?: 'gaming' | 'irl' | 'just_chatting' | 'podcast'
+      boxes?: Partial<
+        Record<'facecam' | 'action' | 'content' | 'person0' | 'person1' | 'person2' | 'person3', FacecamBox>
+      >
+      params?: { split?: number; pipCorner?: 'TL' | 'TR' | 'BL' | 'BR' }
+    }
   }
   broll?: BrollItem[]
   audio?: ClipEditsAudio
@@ -288,6 +298,38 @@ function normalizeNormBox(raw: unknown): FacecamBox | undefined {
   return { x, y, w, h }
 }
 
+function normalizeLayoutTemplate(raw: unknown): ClipEditsV2['layout']['template'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const o = raw as Record<string, unknown>
+  const id = typeof o.id === 'string' ? o.id : undefined
+  if (!id) return undefined
+  const lane = o.lane
+  const laneOk =
+    lane === 'gaming' || lane === 'irl' || lane === 'just_chatting' || lane === 'podcast'
+      ? lane
+      : undefined
+  const boxesRaw = o.boxes
+  let boxes: NonNullable<ClipEditsV2['layout']['template']>['boxes']
+  if (boxesRaw && typeof boxesRaw === 'object') {
+    boxes = {}
+    for (const [k, v] of Object.entries(boxesRaw as Record<string, unknown>)) {
+      const b = normalizeNormBox(v)
+      if (b) boxes[k as keyof typeof boxes] = b
+    }
+  }
+  return {
+    id,
+    auto: o.auto === true ? true : o.auto === false ? false : undefined,
+    reason: typeof o.reason === 'string' ? o.reason : undefined,
+    lane: laneOk,
+    boxes,
+    params:
+      o.params && typeof o.params === 'object'
+        ? (o.params as { split?: number; pipCorner?: 'TL' | 'TR' | 'BL' | 'BR' })
+        : undefined,
+  }
+}
+
 function normalizeFacecam(raw: unknown): ClipLayoutFacecam | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const o = raw as Record<string, unknown>
@@ -401,6 +443,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       facecam: normalizeFacecam(layoutRaw.facecam) ?? base.layout.facecam,
       cropBox: normalizeNormBox((layoutRaw as { cropBox?: unknown }).cropBox),
       userPicked: (layoutRaw as { userPicked?: boolean }).userPicked === true ? true : undefined,
+      template: normalizeLayoutTemplate((layoutRaw as { template?: unknown }).template),
     },
     aspectRatio,
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
