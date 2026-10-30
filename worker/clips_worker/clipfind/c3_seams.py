@@ -197,7 +197,7 @@ def gemini_dense_call(c: dict, *, base: Path, base_absolute: bool, time_offset_m
     gen = {
         "responseMimeType": "application/json",
         "mediaResolution": os.environ.get("CLIPFIND_DENSE_MEDIA_RES", "MEDIA_RESOLUTION_LOW"),
-        "maxOutputTokens": 2048,
+        "maxOutputTokens": 2400,
     }
     if "3.8-flash" in model.lower():
         gen["thinkingConfig"] = {"thinkingLevel": "low"}
@@ -260,6 +260,8 @@ def post_rank_stream(picks, *, words, signals_payload, duration_ms, settings, sc
                                                          "risk_action", "observation_confidence", "quiet_moment",
                                                          "standalone_ok", "why", "hook_s", "prompt_version")},
                                "source": "dense", "window_ms": j["window_ms"]}
+                if j.get("layout_signals"):
+                    cf["layout_signals"] = j["layout_signals"]
                 if i in out.bounds:
                     s, e, beats = out.bounds[i]
                     picks[i].start_ms, picks[i].end_ms = s, e

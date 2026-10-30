@@ -115,9 +115,137 @@ def merge_dense_layout_signals(candidate: dict | None) -> dict | None:
     return validated
 
 
+SIGNALS_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "clip_type": {"type": "string", "enum": ["gaming", "irl", "just_chatting", "podcast"]},
+        "type_conf": {"type": "number"},
+        "game_ui_visible": {"type": "boolean"},
+        "real_camera_footage": {"type": "boolean"},
+        "action_box": {"type": ["object", "null"]},
+        "content_box": {"type": ["object", "null"]},
+        "background_action": {"type": "boolean"},
+        "background_action_reason": {"type": "string"},
+        "moment_kind": {"type": "string", "enum": ["play", "reaction", "story", "hot_take", "event"]},
+        "energy": {"type": "string", "enum": ["low", "mid", "high"]},
+    },
+    "required": [
+        "clip_type",
+        "type_conf",
+        "game_ui_visible",
+        "real_camera_footage",
+        "background_action",
+        "moment_kind",
+        "energy",
+    ],
+}
+
+
+def _transcript_snippet(words: list[dict], max_lines: int = 40) -> str:
+    lines: list[str] = []
+    for w in words[: max_lines * 6]:
+        try:
+            lines.append(f"[{float(w['s']):.1f}] {w.get('w') or w.get('word') or ''}")
+        except (KeyError, TypeError, ValueError):
+            continue
+    return "\n".join(lines[:max_lines]) or "(no transcript)"
+
+
 def signals_call(clip_file, words: list[dict], work, model: str | None = None) -> tuple[dict | None, float]:
-    """Optional Flash-Lite signals call; returns (signals, cost_usd)."""
-    _ = (clip_file, words, work, model)
+    """Flash-Lite layout signals for one clip file."""
+    from pathlib import Path
+
+    from clips_worker.gemini_vision import discover_video_picker_model
+    from clips_worker.video_picker import (
+        _gemini_post_watch,
+        _labeled_frame_user_parts,
+        estimate_gemini_usd,
+        make_watch_proxy,
+        video_picker_media_resolution,
+    )
+
+    path = Path(clip_file) if clip_file is not None else None
+    if path is None or not path.is_file():
+        return None, 0.0
+    work = Path(work)
+    work.mkdir(parents=True, exist_ok=True)
+    model = (model or discover_video_picker_model()).strip()
+    proxy = work / "signals_watch.mp4"
+    try:
+        import json
+        import subprocess
+
+        dur = float(
+            json.loads(
+                subprocess.check_output(
+                    [
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_entries",
+                        "format=duration",
+                        "-of",
+                        "json",
+                        str(path),
+                    ],
+                    stderr=subprocess.DEVNULL,
+                )
+            )["format"]["duration"]
+        )
+    except Exception:
+        dur = 30.0
+    dur = max(3.0, min(120.0, dur))
+    make_watch_proxy(path, proxy, 0.0, dur)
+    prompt = (
+        "Return layout_signals JSON only. clip_type gaming|irl|just_chatting|podcast. "
+        "game_ui_visible=true only if persistent game HUD/menus dominate the frame. "
+        "real_camera_footage=true when the clip is mostly real camera (sports, IRL, podcast), not pure game capture. "
+        "background_action=true when the scene has meaningful motion/activity beyond a static talking head. "
+        "Normalized boxes 0-1 on 16:9 or null.\n\n"
+        f"TRANSCRIPT:\n{_transcript_snippet(words)}"
+    )
+    parts = _labeled_frame_user_parts(
+        proxy,
+        work,
+        duration_s=int(dur),
+        user_text=prompt,
+        fps=0.5,
+        part_order="frames_first",
+    )
+    gen: dict = {
+        "responseMimeType": "application/json",
+        "responseSchema": SIGNALS_SCHEMA,
+        "mediaResolution": video_picker_media_resolution(),
+        "maxOutputTokens": 600,
+    }
+    payload = {
+        "systemInstruction": {"parts": [{"text": "You label short vertical clip layout signals. JSON only."}]},
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": gen,
+    }
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        try:
+            res, err, status = _gemini_post_watch(model, payload, chunk_label="t6_signals")
+            if res is None or not res.ok:
+                raise RuntimeError(f"signals_gemini_failed status={status} {str(err)[:120]}")
+            data = res.json()
+            u = data.get("usageMetadata") or {}
+            usd = estimate_gemini_usd(int(u.get("promptTokenCount") or 0), int(u.get("candidatesTokenCount") or 0), model)
+            import json as json_mod
+
+            raw = json_mod.loads(data["candidates"][0]["content"]["parts"][0]["text"])
+            validated = validate_ai(raw)
+            if not validated.get("clip_type"):
+                return None, usd
+            validated["sources"] = {"ai": "call", "cv": "local"}
+            validated["cost_usd"] = usd
+            return validated, usd
+        except Exception as exc:
+            last_exc = exc
+            continue
+    if last_exc:
+        print(f"[t6:signals] call_failed err={type(last_exc).__name__}", flush=True)
     return None, 0.0
 
 
@@ -150,6 +278,12 @@ def build_signals_for_clip(
             if box:
                 base["facecam_box"] = box
         base["facecam_conf"] = float(fc_layout.get("confidence") or base.get("facecam_conf") or 0.0)
+    if base.get("sources", {}).get("ai") == "none" and clip_file is not None and work is not None:
+        ai_sig, cost = signals_call(clip_file, words or [], work)
+        if ai_sig:
+            base.update({k: v for k, v in ai_sig.items() if k not in ("v",)})
+            base["sources"] = {"ai": "call", "cv": "local"}
+            base["cost_usd"] = float(cost)
     try:
         base = enrich_signals_cv(base, clip_file, words or [], crop_track)
     except Exception:

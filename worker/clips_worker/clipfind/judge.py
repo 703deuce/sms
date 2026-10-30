@@ -144,6 +144,18 @@ JUDGE_SYSTEM_DENSE = (
     + _RUBRIC_BODY
     + "\nOUTPUT: JSON only, with no prose outside it:\n{\n"
     + "  \"activity_labels\": [{\"start_s\": 0, \"end_s\": 0, \"label\": \"irl|talking|reaction|gaming|creative\"}],\n"
+    + "  \"layout_signals\": {\n"
+    + "    \"clip_type\": \"gaming|irl|just_chatting|podcast\",\n"
+    + "    \"type_conf\": 0.0,\n"
+    + "    \"game_ui_visible\": false,\n"
+    + "    \"real_camera_footage\": false,\n"
+    + "    \"action_box\": null,\n"
+    + "    \"content_box\": null,\n"
+    + "    \"background_action\": false,\n"
+    + "    \"background_action_reason\": \"\",\n"
+    + "    \"moment_kind\": \"play|reaction|story|hot_take|event\",\n"
+    + "    \"energy\": \"low|mid|high\"\n"
+    + "  },\n"
     + _ITEM_FIELDS + "\n}\n" + _RULES.replace("CONTEXT span", "window")
 )
 
