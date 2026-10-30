@@ -616,30 +616,18 @@ def _legacy_compose(
         stream_frame_applied = True
         zoom_done = True
     elif export_stream_headline_compose_active(edits):
-        per_clip_vertical = _per_clip_vertical_stack_layout(edits, ctx)
-        if per_clip_vertical:
-            tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
-            hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
-            headline = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip()
-            if hb.get("enabled") and headline:
-                from clips_worker.clip_export_template import overlay_headline_on_vertical_frame
+        if _per_clip_vertical_stack_layout(edits, ctx):
+            pass
+        elif editor_mode_uses_stream_frame(layout_mode):
+            if not ctx.get("per_clip_layout_applied"):
+                from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
 
-                layout_mp4 = work_dir / "vertical_headline_overlay.mp4"
-                overlay_headline_on_vertical_frame(
-                    caption_src,
-                    layout_mp4,
-                    edits,
-                    play_w=play_w,
-                    play_h=play_h,
+                layout_mp4 = work_dir / "stream_layout.mp4"
+                compose_mode = stream_compose_layout_mode(edits)
+                render_stream_clip_layout(
+                    caption_src, layout_mp4, edits, compose_mode, play_w=play_w, play_h=play_h
                 )
                 caption_src = layout_mp4
-        else:
-            from clips_worker.streamer.layout.stream_frame import render_stream_clip_layout
-
-            layout_mp4 = work_dir / "stream_layout.mp4"
-            compose_mode = stream_compose_layout_mode(edits)
-            render_stream_clip_layout(caption_src, layout_mp4, edits, compose_mode, play_w=play_w, play_h=play_h)
-            caption_src = layout_mp4
             stream_frame_applied = True
 
     tpl_censor = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
@@ -666,6 +654,7 @@ def _legacy_compose(
             cap_edits,
             play_h=play_h,
             stack_split=float(ctx.get("facecam_stack_split") or 0.4),
+            facecam_position=str(ctx.get("facecam_position") or "top"),
         )
     elif (layout_mode == "fit_top" or stream_frame_applied) and isinstance(cap_edits, dict):
         cap_edits = {**cap_edits, "marginVPct": 6, "position": "bottom"}
@@ -729,6 +718,7 @@ def _legacy_compose(
         shutil.copy(zoomed, out_mp4)
 
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
+    per_clip_vertical = _per_clip_vertical_stack_layout(edits, ctx)
     if tpl and not stream_frame_applied and not editor_mode_uses_stream_frame(layout_mode):
         from clips_worker.clip_export_template import apply_export_template
 
@@ -740,6 +730,8 @@ def _legacy_compose(
             play_w=play_w,
             play_h=play_h,
             layout_mode=layout_mode,
+            vertical_precomposed=per_clip_vertical,
+            work_dir=work_dir,
         )
         if result_path.resolve() == templated.resolve() and templated.is_file():
             shutil.copy(templated, out_mp4)
@@ -993,7 +985,15 @@ def _apply_facecam_or_pip_layout(
     from clips_worker.clip_layout_render import apply_per_clip_layout
 
     result = apply_per_clip_layout(clip_src, work_dir, edits, play_w=play_w, play_h=play_h)
-    meta = {"seam_captions": result.seam_captions, "stack_split": result.stack_split}
+    layout_ed = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+    fc_meta = layout_ed.get("facecam") if isinstance(layout_ed.get("facecam"), dict) else {}
+    meta = {
+        "seam_captions": result.seam_captions,
+        "stack_split": result.stack_split,
+        "facecam_position": str(
+            fc_meta.get("position") or fc_meta.get("facecamPosition") or "top"
+        ),
+    }
     return result.path, result.applied, meta
 
 
@@ -1376,6 +1376,7 @@ def render_edited_clip(
         "compose_spec": compose_spec if use_spec else None,
         "facecam_seam_captions": bool(layout_meta.get("seam_captions")),
         "facecam_stack_split": layout_meta.get("stack_split"),
+        "facecam_position": layout_meta.get("facecam_position"),
         "per_clip_layout_applied": bool(facecam_applied),
     }
     compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"

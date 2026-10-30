@@ -208,8 +208,10 @@ def burn_stream_headline(
     text_color: str | None = None,
     box_color: str | None = None,
     headline_style: dict | None = None,
+    scratch_dir: Path | None = None,
 ) -> Path:
-    ass = video.parent / "stream_headline.ass"
+    scratch = scratch_dir or video.parent
+    ass = scratch / "stream_headline.ass"
     resolved_font = _headline_font_from_style(headline_style, fit_top=fit_top)
     ass.write_text(
         headline_ass_content(

@@ -66,6 +66,7 @@ def find_overlay_rect(P: np.ndarray, face: tuple[float, float, float, float], mi
     L = [x for x in cols if x < cx - 0.3 * fw]; R = [x for x in cols if x > cx + 0.3 * fw]   # face may touch
     T = [y for y in rows if y < cy - 0.3 * fh]; B = [y for y in rows if y > cy + 0.3 * fh]   # the cam border
     best, best_s = None, 0.0
+    best_area = 0.0
     for l in L:
         for r in R:
             for t in T:
@@ -79,10 +80,47 @@ def find_overlay_rect(P: np.ndarray, face: tuple[float, float, float, float], mi
                     sides = [vsup(l, t, b), vsup(r, t, b), hsup(t, l, r), hsup(b, l, r)]
                     if min(sides) < min_support:
                         continue
-                    s = float(np.mean(sides)) + 0.05 * area      # tie-break toward the outer (overlay) border
-                    if s > best_s:
-                        best, best_s = (l, t, r, b), s
+                    s = float(np.mean(sides))
+                    if s > best_s + 0.02 or (s >= best_s - 0.02 and area > best_area):
+                        best, best_s, best_area = (l, t, r, b), s, area
     return best, best_s
+
+
+def _maximize_corner_overlay_rect(
+    P: np.ndarray,
+    rect: tuple[int, int, int, int],
+    union_l: float,
+    union_t: float,
+    union_r: float,
+    union_b: float,
+    *,
+    ah: int,
+) -> tuple[int, int, int, int]:
+    """Expand inner overlay rect toward the outer persistent border; avoid extending into chat above."""
+    h, w = P.shape
+    l, t, r, b = rect
+    cs_v = np.vstack([np.zeros((1, w)), np.cumsum(P, axis=0)])
+    cs_h = np.hstack([np.zeros((h, 1)), np.cumsum(P, axis=1)])
+    EDGE = 0.8
+
+    def vsup(x, y0, y1):
+        return EDGE if x in (0, w - 1) else (cs_v[y1, x] - cs_v[y0, x]) / max(1, y1 - y0)
+
+    def hsup(y, x0, x1):
+        return EDGE if y in (0, h - 1) else (cs_h[y, x1] - cs_h[y, x0]) / max(1, x1 - x0)
+
+    if union_l < 0.45 * w and vsup(0, t, b) >= 0.55:
+        l = 0
+    if union_r > 0.55 * w and vsup(w - 1, t, b) >= 0.55:
+        r = w - 1
+    if union_b > 0.72 * ah:
+        b = h - 1
+    r = max(r, int(min(w - 1, union_r + 0.02 * w)))
+    l = min(l, int(max(0, union_l - 0.02 * w)))
+    chat_floor = int(max(0.0, union_t - 0.06 * ah))
+    if union_b > 0.65 * ah:
+        t = max(t, chat_floor)
+    return l, t, r, b
 
 
 def _expand_norm_box(box: dict[str, float], *, margin: float = 0.015) -> dict[str, float]:
@@ -164,7 +202,10 @@ def detect_facecam_layout(video: Path, work: Path, n_samples: int = 60) -> dict[
     if rect is None:
         rect, support = find_overlay_rect(P, face)
     if rect is not None:
-        l, t, r, b = rect; method = "rect"
+        l, t, r, b = _maximize_corner_overlay_rect(
+            P, rect, union_l, union_t, union_r, union_b, ah=ah
+        )
+        method = "rect"
         confidence = float(min(1.0, 0.5 * support + 0.5 * min(1.0, persist / 0.5)))
         box = {"x": l / AW, "y": t / ah, "w": (r - l) / AW, "h": (b - t) / ah}
     else:                                                            # legacy heuristic, kept as fallback

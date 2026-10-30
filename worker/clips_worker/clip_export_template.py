@@ -169,97 +169,6 @@ def _v3_badge_sprite_will_render(edits: dict) -> bool:
         return False
 
 
-def overlay_headline_on_vertical_frame(
-    video: Path,
-    out: Path,
-    edits: dict,
-    *,
-    play_w: int,
-    play_h: int,
-) -> Path:
-    """Burn headline/title band on top of an already 9:16 per-clip layout (stack / PiP)."""
-    import shutil
-
-    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
-    if not tpl:
-        shutil.copy(video, out)
-        return out
-    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
-    headline = str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip()
-    if not hb.get("enabled") or not headline:
-        shutil.copy(video, out)
-        return out
-
-    frame = stream_headline_frame_layout(play_w, play_h)
-    bar_h = frame["bar_h"]
-    duration_ms = _probe_duration_ms(video)
-    style = _headline_style_from_edits(edits)
-    box_fill = str(style.get("boxColor") or "#FFFFFF")
-    stage = out.parent / "vertical_headline_box.mp4"
-
-    if _headline_uses_styled_box(style):
-        from clips_worker.layer_sprites import headline_box_overlay_x, render_headline_box_png
-
-        width_pct = int(style.get("widthPct") or 100)
-        box_w = max(2, round(play_w * width_pct / 100.0))
-        box_x = headline_box_overlay_x(play_w, width_pct)
-        hl_png = out.parent / "vertical_headline_box.png"
-        render_headline_box_png(box_w, bar_h, box_fill, int(style.get("radiusPx") or 0), hl_png)
-        hl_path = str(hl_png).replace("\\", "/").replace(":", "\\:")
-        fc = (
-            f"movie={hl_path}:loop=0,setpts=N/FRAME_RATE/TB[hlbox];"
-            f"[0:v][hlbox]overlay=x={box_x}:y=0:shortest=1[vout]"
-        )
-    else:
-        from clips_worker.overlay_geometry import _hex_ffmpeg_color
-
-        fill = f"{_hex_ffmpeg_color(box_fill, fallback='white')}@1"
-        fc = f"[0:v]drawbox=x=0:y=0:w={play_w}:h={bar_h}:color={fill}:t=fill[vout]"
-
-    subprocess.check_call(
-        [
-            "ffmpeg",
-            "-y",
-            "-v",
-            "error",
-            "-i",
-            str(video),
-            "-filter_complex",
-            fc,
-            "-map",
-            "[vout]",
-            "-map",
-            "0:a?",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "23",
-            "-c:a",
-            "copy",
-            str(stage),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    burn_stream_headline(
-        stage,
-        out,
-        format_headline_for_export(headline),
-        play_w=play_w,
-        play_h=play_h,
-        bar_h=bar_h,
-        duration_ms=duration_ms,
-        bar_y=0,
-        fit_top=True,
-        text_color=str(style.get("textColor") or "#000000"),
-        box_color=str(style.get("boxColor") or "#FFFFFF"),
-        headline_style=style,
-    )
-    return out
-
-
 def apply_export_template(
     video: Path,
     out: Path,
@@ -269,10 +178,14 @@ def apply_export_template(
     play_h: int,
     layout_mode: str = "speaker_follow",
     stream_stack: bool = False,
+    vertical_precomposed: bool = False,
+    work_dir: Path | None = None,
 ) -> Path:
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
     if not tpl:
         return video
+
+    scratch = work_dir or video.parent
 
     split_layouts = {
         "split",
@@ -283,7 +196,7 @@ def apply_export_template(
         "grid",
         "two_up",
     }
-    allow_headline = layout_mode not in split_layouts and not stream_stack
+    allow_headline = layout_mode not in split_layouts and (not stream_stack or vertical_precomposed)
 
     headline_on = allow_headline and bool((tpl.get("headlineBar") or {}).get("enabled"))
     hb = tpl.get("headlineBar") or {}
@@ -302,18 +215,34 @@ def apply_export_template(
 
     frame = stream_headline_frame_layout(play_w, play_h)
     bar_h = frame["bar_h"]
-    video_h = frame["video_h"]
-    video_y = frame["video_y"]
+    if vertical_precomposed:
+        if headline_on:
+            video_h = max(1, play_h - bar_h)
+            video_y = bar_h
+        else:
+            video_h = play_h
+            video_y = 0
+    else:
+        video_h = frame["video_h"]
+        video_y = frame["video_y"]
     duration_ms = _probe_duration_ms(video)
 
-    work = video.parent / "export_tpl_stage.mp4"
-    stage = video.parent / "export_tpl_composed.mp4"
+    work = scratch / "export_tpl_stage.mp4"
+    stage = scratch / "export_tpl_composed.mp4"
 
     from clips_worker.filtergraph import fit_blur_overlay_filter
 
-    use_blur_fill = layout_mode in ("full_frame", "fit_blur")
+    use_blur_fill = layout_mode in ("full_frame", "fit_blur") and not vertical_precomposed
     # 1) Stack: black 9:16, video band (blurred fill for full_frame), optional white headline bar on top
-    if use_blur_fill:
+    if vertical_precomposed:
+        fc = (
+            f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
+            f"[0:v]scale={play_w}:{video_h}:force_original_aspect_ratio=decrease,"
+            f"pad={play_w}:{video_h}:(ow-iw)/2:(oh-ih)/2[vid];"
+            f"[bg][vid]overlay=0:{video_y}[v1];"
+        )
+        v1_label = "[v1]"
+    elif use_blur_fill:
         fc = (
             f"color=c=black:s={play_w}x{video_h}:d={duration_ms / 1000:.3f}[bg];"
             f"{fit_blur_overlay_filter('0:v', 'vid', play_w, video_h)};"
@@ -338,7 +267,7 @@ def apply_export_template(
             width_pct = int(style.get("widthPct") or 100)
             box_w = max(2, round(play_w * width_pct / 100.0))
             box_x = headline_box_overlay_x(play_w, width_pct)
-            hl_png = video.parent / "export_headline_box.png"
+            hl_png = scratch / "export_headline_box.png"
             render_headline_box_png(box_w, bar_h, box_fill, int(style.get("radiusPx") or 0), hl_png)
             fc += (
                 f"movie={hl_png}:loop=0,setpts=N/FRAME_RATE/TB[hlbox];"
@@ -391,7 +320,7 @@ def apply_export_template(
 
     current = stage
     if headline_on and headline:
-        hl_out = video.parent / "export_tpl_headline.mp4"
+        hl_out = scratch / "export_tpl_headline.mp4"
         style = _headline_style_from_edits(edits)
         burn_stream_headline(
             current,
@@ -405,13 +334,17 @@ def apply_export_template(
             box_color=str(style.get("boxColor") or "#FFFFFF"),
             headline_style=style,
             fit_top=layout_mode == "fit_top" or headline_on,
+            scratch_dir=scratch,
         )
         current = hl_out
 
     if source_on:
         label, color = _platform_label(platform)
         display = link_url.replace("https://", "").replace("http://", "").upper() if link_on and link_url else ""
-        badge_y = video_y + video_h - _scale_y(_BADGE_H + _SOURCE_INSET_Y, play_h)
+        if vertical_precomposed:
+            badge_y = video_y + _scale_y(_SOURCE_INSET_Y, play_h)
+        else:
+            badge_y = video_y + video_h - _scale_y(_BADGE_H + _SOURCE_INSET_Y, play_h)
         badge_x = _scale_y(16, play_w)
         bw = _scale_y(_BADGE_W, play_w)
         bh = _scale_y(_BADGE_H, play_h)

@@ -158,10 +158,21 @@ def apply_per_clip_layout(
     return ClipLayoutApplyResult(clip_src, False)
 
 
-def caption_edits_for_seam(cap_edits: dict, *, play_h: int, stack_split: float) -> dict:
+def caption_edits_for_seam(
+    cap_edits: dict,
+    *,
+    play_h: int,
+    stack_split: float,
+    facecam_position: str = "top",
+) -> dict:
     from clips_worker.streamer.layout.caption_anchor import caption_margin_v
 
-    align, margin_v = caption_margin_v("seam", stack_split=stack_split, frame_h=play_h)
+    align, margin_v = caption_margin_v(
+        "seam",
+        stack_split=stack_split,
+        frame_h=play_h,
+        facecam_position=facecam_position,
+    )
     base = dict(cap_edits) if isinstance(cap_edits, dict) else {}
     return {
         **base,
