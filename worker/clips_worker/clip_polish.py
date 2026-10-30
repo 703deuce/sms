@@ -89,7 +89,16 @@ def apply_clip_polish_initial(
         }
 
     if polish_feature_enabled("SILENCE"):
-        out["silenceTrim"] = _silence_preset(stream)
+        ct = str((pick.get("aiMeta") or {}).get("uploadProjectMajorityType") or "").lower()
+        if not ct:
+            g = str(settings.get("genre") or "").lower()
+            if g in ("podcast", "talking", "interview"):
+                ct = "just_chatting"
+            elif g in ("gaming", "sports"):
+                ct = "gaming"
+        preset = _silence_preset(stream)
+        preset["enabled"] = ct in ("just_chatting", "podcast")
+        out["silenceTrim"] = preset
 
     if (polish_feature_enabled("AUDIO")):
         pass  # speech leveling is user opt-in only (speechLevelingEnabled on edits)

@@ -209,10 +209,13 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
       : null
 
   const vodLayoutRaw = vodState?.layout
+  const aiFc = (clip.aiMeta as { facecamLayout?: FacecamLayoutState } | null)?.facecamLayout
   const facecamLayout: FacecamLayoutState | null =
     vodLayoutRaw && typeof vodLayoutRaw === 'object' && !Array.isArray(vodLayoutRaw)
       ? (vodLayoutRaw as FacecamLayoutState)
-      : null
+      : aiFc?.facecam
+        ? aiFc
+        : null
 
   const payload = {
     clip: {

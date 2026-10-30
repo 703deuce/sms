@@ -32,7 +32,7 @@ export function ExportLayoutPicker({
       <p className="text-xs text-muted-foreground">
         Full frame keeps the entire stream shot with blurred sides and space for the headline bar.
       </p>
-      {!facecamLayout?.facecam ? (
+      {!facecamLayout?.facecam && !edits.layout.facecam?.box ? (
         <p className="text-[10px] text-muted-foreground">No facecam detected for this clip</p>
       ) : null}
       <div className="mt-1 flex flex-wrap gap-2">

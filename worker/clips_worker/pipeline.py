@@ -440,6 +440,12 @@ def _regular_clip_type_and_layout(
         has_facecam=has_fc,
         facecam_confidence=fc_conf,
     )
+    if has_fc and isinstance(fc_layout, dict):
+        type_info["facecamLayout"] = {
+            k: fc_layout.get(k)
+            for k in ("layout", "facecam", "gameplay", "split", "facecamPosition", "confidence", "method")
+            if fc_layout.get(k) is not None
+        }
     print(
         "[clipper:upload_type] "
         f"picker_ct={picker_ct!r} stream_majority={stream_majority!r} "
@@ -477,6 +483,10 @@ def _finalize_regular_clip_edits(
     wd = work_dir or clip_file.parent
     edits, type_info, _fc = _regular_clip_type_and_layout(edits, clip_file, pick, settings, wd)
     ct = str(type_info.get("clipType") or "irl")
+    if ct not in ("just_chatting", "podcast"):
+        st = dict(edits.get("silenceTrim") or {})
+        st["enabled"] = False
+        edits = {**edits, "silenceTrim": st}
     if ct in ("just_chatting", "podcast"):
         from clips_worker.regular_auto_layout import apply_regular_auto_layout
 
@@ -1047,21 +1057,26 @@ def run_m4_pipeline(
                                 project_id=project_id,
                             )
                         if cached is not None:
+                            from clips_worker.clip_type import resolve_upload_clip_type
+
                             pmeta = pick.get("aiMeta") or {}
                             cmeta = cached.get("aiMeta") or {}
-                            final_type = pmeta.get("uploadProjectMajorityType")
                             cached_type = cmeta.get("clipType")
-                            if (
-                                final_type
-                                and cached_type
-                                and str(cached_type) != str(final_type)
-                            ) or (
-                                final_type
-                                and cmeta.get("uploadProjectMajorityType") != final_type
+                            expected_type = resolve_upload_clip_type(
+                                moment=pmeta.get("videoMoment"),
+                                section_activity=pmeta.get("sectionActivity"),
+                                upload_project_majority=pmeta.get("uploadProjectMajorityType"),
+                                stream_majority=pmeta.get("streamMajorityType"),
+                                moment_match_iou=float(pmeta.get("videoMomentMatchIou") or 0),
+                                has_facecam=bool(cmeta.get("hasFacecam")),
+                                facecam_confidence=float(cmeta.get("facecamConfidence") or 0),
+                            ).get("clipType")
+                            if cached_type and expected_type and str(cached_type) != str(
+                                expected_type
                             ):
                                 print(
                                     "[clipper:upload_type] headstart_type_mismatch "
-                                    f"cached={cached_type!r} final={final_type!r}",
+                                    f"cached={cached_type!r} final={expected_type!r}",
                                     flush=True,
                                 )
                                 return build_clip_row_from_pick(

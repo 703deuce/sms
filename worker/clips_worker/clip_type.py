@@ -98,14 +98,18 @@ def resolve_upload_clip_type(
     if project_m == "other":
         project_m = "irl"
     strong = moment_has_explicit_content_type(moment) and float(moment_match_iou or 0) >= 0.35
-    if strong and picker_ct != "other":
+    if strong and picker_ct != "other" and picker_ct != "gaming":
         ct = picker_ct
+    elif strong and picker_ct == "gaming" and project_m == "gaming":
+        ct = "gaming"
     else:
         ct = project_m
     if ct == "other":
         ct = "irl"
     if has_facecam and facecam_confidence >= FACECAM_CONFIDENCE_THRESHOLD:
         ct = "gaming"
+    elif ct == "gaming" and project_m != "gaming":
+        ct = project_m
     return {
         "clipType": ct,
         "hasFacecam": bool(has_facecam),

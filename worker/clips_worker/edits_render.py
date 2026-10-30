@@ -111,6 +111,7 @@ def normalize_edits(raw, clip_start_ms: int, clip_end_ms: int) -> dict:
         "wordFixes": dict(raw.get("wordFixes") or {}),
         "wordFixMeta": dict(raw.get("wordFixMeta") or {}),
         "layout": {
+            **{k: v for k, v in layout.items() if k not in ("shotOverrides", "layoutSegments")},
             "mode": layout.get("mode") or base["layout"]["mode"],
             "shotOverrides": list(layout.get("shotOverrides") or []),
             "layoutSegments": list(layout.get("layoutSegments") or []),
@@ -1124,7 +1125,16 @@ def render_edited_clip(
     if render_meta is not None:
         render_meta["expected_editor_ms"] = editor_edits_ms
 
-    edits = {**edits, "cutRanges": effective_cut_ranges(edits, source_words)}
+    eff_cuts = effective_cut_ranges(edits, source_words)
+    eff_edits = {**edits, "cutRanges": eff_cuts}
+    if output_duration_ms(eff_edits) < int(0.6 * editor_edits_ms):
+        print(
+            f"[clipper:silence] guard_skipped editor_ms={editor_edits_ms} "
+            f"effective_ms={output_duration_ms(eff_edits)}",
+            flush=True,
+        )
+        eff_cuts = list(edits.get("cutRanges") or [])
+    edits = {**edits, "cutRanges": eff_cuts}
     from clips_worker.loop_friendly_trim import apply_loop_friendly_trim
 
     plat = None

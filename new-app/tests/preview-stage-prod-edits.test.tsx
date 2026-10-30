@@ -76,35 +76,6 @@ describe('PreviewStage prod clip edits', () => {
     ).not.toThrow()
   })
 
-  it('headline on + fill uses center-crop preview, not fit-top', () => {
-    const edits = normalizeEdits(
-      {
-        ...PROD_EDITS,
-        layout: { mode: 'fill', shotOverrides: [] },
-        exportTemplate: {
-          headlineBar: { enabled: true, text: 'Test headline' },
-          platformBadge: { enabled: false },
-          channelLink: { enabled: false },
-          platform: 'tiktok',
-        },
-      },
-      bounds,
-    )
-    const { container } = render(
-      <PreviewStage
-        videoUrl="https://example.com/video.mp4"
-        edits={edits}
-        words={[]}
-        cropTrack={null}
-        brollMedia={[]}
-        videoRef={{ current: null }}
-        onTick={vi.fn()}
-      />,
-    )
-    expect(container.querySelector('[data-testid="center-crop-video"]')).toBeTruthy()
-    expect(container.querySelector('[data-testid="fit-top-main-video"]')).toBeNull()
-  })
-
   it('headline on + facecam_stack does not use fit-top main video', () => {
     const edits = normalizeEdits(
       {
@@ -141,6 +112,89 @@ describe('PreviewStage prod clip edits', () => {
     )
     expect(container.querySelector('[data-testid="fit-top-main-video"]')).toBeNull()
     expect(container.querySelector('[data-testid="compose-video"]')).toBeNull()
+  })
+
+  const headlineTpl = {
+    headlineBar: { enabled: true, text: 'Test headline' },
+    platformBadge: { enabled: false },
+    channelLink: { enabled: false },
+    platform: 'tiktok',
+  } as const
+
+  it('headline on + fill uses center-crop preview with video src', () => {
+    const edits = normalizeEdits(
+      {
+        ...PROD_EDITS,
+        layout: { mode: 'fill', shotOverrides: [] },
+        exportTemplate: headlineTpl,
+      },
+      bounds,
+    )
+    const url = 'https://example.com/video.mp4'
+    const { container } = render(
+      <PreviewStage
+        videoUrl={url}
+        edits={edits}
+        words={[]}
+        cropTrack={null}
+        brollMedia={[]}
+        videoRef={{ current: null }}
+        onTick={vi.fn()}
+      />,
+    )
+    const main = container.querySelector('[data-testid="center-crop-video"]') as HTMLVideoElement | null
+    expect(main).toBeTruthy()
+    expect(main?.getAttribute('src')).toBe(url)
+  })
+
+  it('layout switch facecam_stack to fill keeps src on center-crop video', () => {
+    const url = 'https://example.com/video.mp4'
+    const stackEdits = normalizeEdits(
+      {
+        ...PROD_EDITS,
+        layout: {
+          mode: 'facecam_stack',
+          shotOverrides: [],
+          facecam: {
+            box: { x: 0.02, y: 0.02, w: 0.3, h: 0.25 },
+            gameplay: { x: 0, y: 0, w: 1, h: 1 },
+            split: 0.35,
+            position: 'top',
+          },
+        },
+        exportTemplate: headlineTpl,
+      },
+      bounds,
+    )
+    const fillEdits = normalizeEdits(
+      { ...PROD_EDITS, layout: { mode: 'fill', shotOverrides: [] }, exportTemplate: headlineTpl },
+      bounds,
+    )
+    const { container, rerender } = render(
+      <PreviewStage
+        videoUrl={url}
+        edits={stackEdits}
+        words={[]}
+        cropTrack={null}
+        brollMedia={[]}
+        videoRef={{ current: null }}
+        onTick={vi.fn()}
+      />,
+    )
+    expect(container.querySelectorAll('video').length).toBeGreaterThan(0)
+    rerender(
+      <PreviewStage
+        videoUrl={url}
+        edits={fillEdits}
+        words={[]}
+        cropTrack={null}
+        brollMedia={[]}
+        videoRef={{ current: null }}
+        onTick={vi.fn()}
+      />,
+    )
+    const main = container.querySelector('[data-testid="center-crop-video"]') as HTMLVideoElement | null
+    expect(main?.getAttribute('src')).toBe(url)
   })
 
   it('CaptionOverlay tolerates undefined word text', () => {

@@ -720,7 +720,10 @@ def _run_render_clip_job_body(
         expected_editor_s = expected_editor_ms / 1000.0
         expected_effective_s = expected_effective_ms / 1000.0
         actual_s = _probe_duration_sec(out_mp4)
-        length_mismatch = abs(actual_s - expected_effective_s) > 0.35
+        length_mismatch = (
+            abs(actual_s - expected_effective_s) > 0.35
+            or expected_effective_s < 0.6 * expected_editor_s
+        )
         print(
             f"[clipper:duration] {json.dumps({'renderId': render_id, 'expected_editor_s': round(expected_editor_s, 3), 'expected_effective_s': round(expected_effective_s, 3), 'actual_s': round(actual_s, 3), 'length_mismatch': length_mismatch})}",
             flush=True,

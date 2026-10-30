@@ -35,6 +35,7 @@ def _layout_edits_facecam(edits: dict) -> dict[str, Any]:
         return lay
     mode = str(layout_ed.get("mode") or "")
     if mode in ("facecam_stack", "facecam_pip", "stack", "screen_pip", "facecam_pip"):
+        print(f"[clipper:facecam] facecam_default_fallback mode={mode}", flush=True)
         return {
             "facecam": dict(DEFAULT_FACECAM_BOX),
             "gameplay": dict(DEFAULT_GAMEPLAY_BOX),

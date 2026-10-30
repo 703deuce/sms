@@ -55,6 +55,7 @@ export function LayoutQuickPicker({
         })}
       </div>
       {!facecamLayout?.facecam &&
+      !edits.layout.facecam?.box &&
       EXPORT_LAYOUT_OPTIONS.some((o) => o.needsFacecam) ? (
         <p className="mt-1 text-[10px] text-muted-foreground">No facecam detected for this clip</p>
       ) : null}

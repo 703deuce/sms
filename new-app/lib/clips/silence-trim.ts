@@ -1,5 +1,4 @@
 import { mergeCutRanges, sanitizeCutRangesForTrim, type ClipEditsV2, type ClipWord, type CutRange } from '@/lib/clips/edits'
-import { maxPlausibleGapMsForTrim } from '@/lib/clips/editor/clip-editor-word-scope'
 import { sanitizeCutRangesForWords, snapCutRangeToWordGaps } from '@/lib/clips/word-cut'
 
 /** Gap cuts between words for silence trimming (ms on source timeline). */
@@ -105,9 +104,10 @@ export function silenceTrimCutRanges(
   if (!opts.enabled) return []
   const trimIn = ctx?.trimIn ?? 0
   const trimOut = ctx?.trimOut ?? Number.MAX_SAFE_INTEGER
-  const maxGapMs = maxPlausibleGapMsForTrim({ in: trimIn, out: trimOut })
+  const maxGapMs = opts.maxGapMs ?? 1500
   const minGap = opts.minGapMs ?? SILENCE_TRIM_NATURAL.minGapMs ?? 350
   const keep = opts.keepMs ?? SILENCE_TRIM_NATURAL.keepMs ?? 120
+  const maxSingleCutMs = 3000
   const cuts: CutRange[] = []
   for (let i = 0; i < words.length - 1; i++) {
     const gapStart = words[i].e * 1000
@@ -117,8 +117,9 @@ export function silenceTrimCutRanges(
     if (gap > maxGapMs) continue
     if (opts.protectReactionGaps && gap < minGap + 200) continue
     if (gap <= minGap) continue
-    const remove = gap - keep
+    let remove = gap - keep
     if (remove <= 50) continue
+    remove = Math.min(remove, maxSingleCutMs)
     const mid = gapStart + gap / 2
     const raw: CutRange = [Math.round(mid - remove / 2), Math.round(mid + remove / 2)]
     if (cutOverlapsProtectedSpan(raw, ctx?.protectedSpans)) continue

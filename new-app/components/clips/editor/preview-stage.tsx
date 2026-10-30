@@ -237,27 +237,45 @@ export function PreviewStage({
   useEffect(() => {
     const v = videoRefInner.current
     const b = blurRef.current
-    if (!v || !videoUrl) {
+    if (!videoUrl) {
       setCanPlay(false)
       return
     }
     setCanPlay(false)
-    v.src = videoUrl
+    if (v) {
+      v.src = videoUrl
+      v.currentTime = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
+    }
     if (b) {
-      if (cropPreview || letterboxPreview || fitTopPreview) b.src = videoUrl
-      else {
+      if (cropPreview || letterboxPreview || fitTopPreview) {
+        b.src = videoUrl
+      } else {
         b.removeAttribute('src')
         b.load()
       }
     }
+    const seekAll = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
     wrapRef.current?.querySelectorAll('video').forEach((el) => {
-      if (el !== v && el !== b) {
-        el.src = videoUrl
-        el.muted = true
+      el.src = videoUrl
+      el.muted = el !== v
+      if (Number.isFinite(seekAll) && seekAll >= 0) {
+        try {
+          el.currentTime = seekAll
+        } catch {
+          /* metadata not ready */
+        }
       }
     })
-    v.currentTime = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
-  }, [videoUrl, edits.trim.in, cropPreview, letterboxPreview, fitTopPreview, mediaOffsetMs])
+  }, [
+    videoUrl,
+    edits.trim.in,
+    cropPreview,
+    letterboxPreview,
+    fitTopPreview,
+    mediaOffsetMs,
+    layoutMode,
+    headlineBandTopFrac,
+  ])
 
   useEffect(() => {
     const rate = normalizeEditSpeed(edits.speed) ?? 1
@@ -466,6 +484,7 @@ export function PreviewStage({
             <video
               key={`preview-blur-${layoutMode}`}
               ref={blurRef}
+              src={videoUrl ?? undefined}
               className="absolute inset-0 size-full max-w-none scale-110 object-cover blur-2xl"
               style={{ filter: 'blur(20px) brightness(0.92)' }}
               muted
@@ -475,6 +494,7 @@ export function PreviewStage({
             <video
               key={`preview-main-${layoutMode}`}
               ref={videoRefInner}
+              src={videoUrl ?? undefined}
               className={`absolute inset-x-0 top-1/2 z-[1] w-full -translate-y-1/2 object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
               playsInline
               poster={posterUrl ?? undefined}
@@ -497,6 +517,7 @@ export function PreviewStage({
               <>
                 <video
                   ref={blurRef}
+                  src={videoUrl ?? undefined}
                   className="absolute inset-0 size-full max-w-none object-cover"
                   style={{ filter: 'blur(20px) brightness(0.92)' }}
                   muted
@@ -506,6 +527,7 @@ export function PreviewStage({
                 <video
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
+                  src={videoUrl ?? undefined}
                   data-testid={composeSpec ? 'compose-video' : 'fit-top-main-video'}
                   className={`absolute inset-x-0 z-[1] max-w-none object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={{ top: videoTop, height: videoH, width: '100%' }}
@@ -526,6 +548,7 @@ export function PreviewStage({
         ) : fitTopPreview && videoUrl ? (
           <video
             ref={videoRefInner}
+            src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
             poster={posterUrl ?? undefined}
@@ -553,11 +576,12 @@ export function PreviewStage({
                 {panels.map((panel, idx) => (
                   <div key={idx} className="relative w-full overflow-hidden" style={{ height: panel.h }}>
                     <video
+                      key={`stack-${idx}-${layoutMode}`}
                       ref={idx === (faceFirst ? 1 : 0) ? videoRefInner : undefined}
+                      src={videoUrl ?? undefined}
                       className={`max-w-none ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                       style={coverBoxStyle(panel.box)}
                       playsInline
-                      poster={posterUrl ?? undefined}
                       onCanPlay={() => setCanPlay(true)}
                       onPlay={() => setPlaying(true)}
                       onPause={() => setPlaying(false)}
@@ -583,10 +607,10 @@ export function PreviewStage({
               <div className="relative size-full overflow-hidden">
                 <video
                   ref={videoRefInner}
+                  src={videoUrl ?? undefined}
                   className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
                   playsInline
-                  poster={posterUrl ?? undefined}
                   onCanPlay={() => setCanPlay(true)}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
@@ -605,6 +629,7 @@ export function PreviewStage({
                   }
                 >
                   <video
+                    src={videoUrl ?? undefined}
                     className="max-w-none"
                     style={coverBoxStyle(facecamBox)}
                     playsInline
@@ -632,6 +657,7 @@ export function PreviewStage({
                 <video
                   key={`preview-blur-${layoutMode}`}
                   ref={blurRef}
+                  src={videoUrl ?? undefined}
                   className="absolute inset-0 size-full max-w-none object-cover"
                   muted
                   playsInline
@@ -640,6 +666,7 @@ export function PreviewStage({
                 <video
                   key={`preview-main-${layoutMode}`}
                   ref={videoRefInner}
+                  src={videoUrl ?? undefined}
                   className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
                   style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
                   playsInline
@@ -672,6 +699,7 @@ export function PreviewStage({
               <video
                 key={`preview-main-${layoutMode}`}
                 ref={videoRefInner}
+                src={videoUrl ?? undefined}
                 data-testid="center-crop-video"
                 className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}`}
                 style={edits.layout.cropBox ? coverBoxStyle(edits.layout.cropBox) : undefined}
@@ -697,6 +725,7 @@ export function PreviewStage({
           <>
             <video
               ref={videoRefInner}
+              src={videoUrl ?? undefined}
               className={`size-full object-cover transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
               playsInline
               poster={posterUrl ?? undefined}
@@ -711,6 +740,7 @@ export function PreviewStage({
         ) : videoUrl ? (
           <video
             ref={videoRefInner}
+            src={videoUrl ?? undefined}
             className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
             playsInline
             poster={posterUrl ?? undefined}
