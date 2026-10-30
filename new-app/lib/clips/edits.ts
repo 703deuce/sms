@@ -83,6 +83,8 @@ export type ClipEditsV2 = {
     shotOverrides: { i: number; focus: 'auto' | 'A' | 'B' | 'both' }[]
     layoutSegments?: LayoutSegment[]
     facecam?: ClipLayoutFacecam
+    /** User chose layout in editor — skip auto IRL headline ↔ layout sync. */
+    userPicked?: boolean
   }
   broll?: BrollItem[]
   audio?: ClipEditsAudio

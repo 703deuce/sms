@@ -277,6 +277,12 @@ def speakercrop_norender_crop_track(
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
     w, h = aspect_size(aspect, resolution)
+    h_override = settings.get("speakercropOutH")
+    if h_override is not None:
+        try:
+            h = max(1, int(h_override))
+        except (TypeError, ValueError):
+            pass
     env = os.environ.copy()
     env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
     from clips_worker.reframe_routing import apply_production_reframe_routing
@@ -464,6 +470,12 @@ def run_speakercrop(
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
     w, h = aspect_size(aspect, resolution)
+    h_override = settings.get("speakercropOutH")
+    if h_override is not None:
+        try:
+            h = max(1, int(h_override))
+        except (TypeError, ValueError):
+            pass
     env = os.environ.copy()
     env["FFMPEG_THREADS"] = str(ffmpeg_threads_per_job())
     from clips_worker.reframe_routing import apply_production_reframe_routing

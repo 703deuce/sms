@@ -354,6 +354,7 @@ export function useEditorState(
         layout: {
           ...state.edits.layout,
           mode,
+          userPicked: true,
           layoutSegments: defaultLayoutSegments(state.edits.trim.in, state.edits.trim.out, mode),
           ...(facecam ? { facecam } : {}),
         },

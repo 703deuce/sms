@@ -137,22 +137,8 @@ def badge_rect(
     w = _round_px(inner_w * s)
     margin = _scale_px(24, play_h)
     w = max(h, min(w, play_w - 2 * margin))
-    inset_y = _scale_px(int((GEOM.get("exportBar") or _DEFAULTS["exportBar"]).get("sourceInsetY") or 12), play_h)
-    if placement == "stack_corner":
-        x = _scale_px(24, play_w)
-        y = _scale_px(24, play_h)
-        return {"x": x, "y": y, "w": w, "h": h}
-    x = (play_w - w) // 2
-    if placement == "fit_top_band":
-        if anchor_top_gap:
-            overlay_y = int(badge.get("overlayYPx") or 24)
-            y = _scale_px(overlay_y, play_h)
-        elif badge_y is not None:
-            y = badge_y
-        else:
-            y = max(0, video_y + video_h - _scale_px(40, play_h) - h)
-    else:
-        y = video_y + video_h - h - inset_y if video_h else play_h - h - inset_y
+    x = _scale_px(24, play_w)
+    y = _scale_px(24, play_h)
     return {"x": x, "y": y, "w": w, "h": h}
 
 

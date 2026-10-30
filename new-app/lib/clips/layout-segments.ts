@@ -95,9 +95,14 @@ export function setLayoutModeForSegmentAt(edits: ClipEditsV2, sourceMs: number, 
   const segs = normalizeLayoutSegments(edits.layout.layoutSegments, trimIn, trimOut, edits.layout.mode)
   const ms = Math.round(sourceMs)
   const idx = segs.findIndex((s) => ms >= s.startMs && ms < s.endMs)
-  if (idx < 0) return { ...edits, layout: { ...edits.layout, mode, layoutSegments: defaultLayoutSegments(trimIn, trimOut, mode) } }
+  if (idx < 0) {
+    return {
+      ...edits,
+      layout: { ...edits.layout, mode, userPicked: true, layoutSegments: defaultLayoutSegments(trimIn, trimOut, mode) },
+    }
+  }
   const next = segs.map((s, i) => (i === idx ? { ...s, mode } : s))
-  return { ...edits, layout: { ...edits.layout, layoutSegments: next } }
+  return { ...edits, layout: { ...edits.layout, layoutSegments: next, userPicked: true } }
 }
 
 /** Remove the layout segment under the playhead (merge into neighbors). */

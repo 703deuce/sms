@@ -38,6 +38,7 @@ export function LayersPanel({
   onSaveTemplate,
   onSyncEditsSaveVersion,
   savePending = false,
+  clipType = null,
 }: {
   clipId: string
   edits: ClipEditsV2
@@ -51,6 +52,7 @@ export function LayersPanel({
   onSaveTemplate?: (name: string) => void | Promise<void>
   onSyncEditsSaveVersion?: (version: number) => void
   savePending?: boolean
+  clipType?: string | null
 }) {
   const [templateName, setTemplateName] = useState('')
   const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
@@ -177,6 +179,7 @@ export function LayersPanel({
         edits={edits}
         onEdits={onEdits}
         platform={platform}
+        clipType={clipType}
         layers={layers}
         setLayers={setLayers}
         onSyncEditsSaveVersion={onSyncEditsSaveVersion}

@@ -1014,6 +1014,7 @@ export function EditorShell({
             layers={layers}
             setLayers={setLayers}
             onEdits={setEdits}
+            clipType={(aiMeta as ClipAiMeta | null)?.clipType ?? null}
             platform={
               streamerSide?.platform === 'kick'
                 ? 'kick'

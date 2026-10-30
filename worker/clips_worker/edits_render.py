@@ -338,8 +338,19 @@ def run_speakercrop_layout_timeline(
     preview_crop_track: Path | None = None,
 ) -> Path:
     """Export speakercrop honoring per-segment layout modes when they differ."""
+    from clips_worker.clip_layout_render import speakercrop_settings_band_height
+    from clips_worker.render_clip import aspect_size
+
+    aspect = settings.get("aspectRatio", "9:16")
+    resolution = settings.get("exportResolution", "720p")
+    play_w, play_h = aspect_size(aspect, resolution)
     if not needs_per_segment_layout_export(edits):
-        sc_settings = speakercrop_settings_from_edits(settings, edits)
+        sc_settings = speakercrop_settings_band_height(
+            speakercrop_settings_from_edits(settings, edits),
+            edits,
+            play_w=play_w,
+            play_h=play_h,
+        )
         wpath = work_dir / "words_export.json"
         wpath.write_text(json.dumps(words_clip_relative))
         dom_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
@@ -387,7 +398,12 @@ def run_speakercrop_layout_timeline(
         seg_wpath = work_dir / f"layout_words_{i}.json"
         seg_wpath.write_text(json.dumps(seg_words))
         seg_mode = str(seg["mode"])
-        seg_settings = speakercrop_settings_for_layout_mode(settings, seg_mode)
+        seg_settings = speakercrop_settings_band_height(
+            speakercrop_settings_for_layout_mode(settings, seg_mode),
+            edits,
+            play_w=play_w,
+            play_h=play_h,
+        )
         crop_track = _maybe_static_fit_blur_crop_track(trimmed, work_dir, int(seg["startMs"]), seg_mode)
         run_speakercrop(
             trimmed,
@@ -409,7 +425,12 @@ def run_speakercrop_layout_timeline(
         part_paths.append(part_out)
 
     if not part_paths:
-        sc_settings = speakercrop_settings_from_edits(settings, edits)
+        sc_settings = speakercrop_settings_band_height(
+            speakercrop_settings_from_edits(settings, edits),
+            edits,
+            play_w=play_w,
+            play_h=play_h,
+        )
         wpath = work_dir / "words_export.json"
         wpath.write_text(json.dumps(words_clip_relative))
         run_speakercrop(
@@ -545,11 +566,22 @@ def burn_captions(
         )
 
 
-def _per_clip_vertical_stack_layout(edits: dict, ctx: dict) -> bool:
-    if not ctx.get("per_clip_layout_applied"):
+def _export_vertical_precomposed(edits: dict, ctx: dict) -> bool:
+    """Video already sized to the band under the headline (stack/PiP or speaker_follow)."""
+    from clips_worker.clip_export_template import export_headline_active
+
+    if not export_headline_active(edits):
         return False
     mode = str((edits.get("layout") or {}).get("mode") or "")
-    return mode in ("facecam_stack", "facecam_pip", "screen_pip", "stack")
+    if mode in ("facecam_stack", "facecam_pip", "screen_pip", "stack"):
+        return bool(ctx.get("per_clip_layout_applied"))
+    if mode in ("speaker_follow", "subject_follow"):
+        return True
+    return False
+
+
+def _per_clip_vertical_stack_layout(edits: dict, ctx: dict) -> bool:
+    return _export_vertical_precomposed(edits, ctx)
 
 
 def _legacy_compose(
@@ -1223,6 +1255,9 @@ def render_edited_clip(
             from clips_worker.render_clip import resolve_clip_layout
 
             settings_nc["layout"] = resolve_clip_layout(settings_nc, 0)
+    from clips_worker.clip_layout_render import speakercrop_settings_band_height
+
+    settings_nc = speakercrop_settings_band_height(settings_nc, edits, play_w=play_w, play_h=play_h)
     if use_spec:
         shutil.copy(clip_src, full_render)
         stage("compose_spec_skip_speakercrop")

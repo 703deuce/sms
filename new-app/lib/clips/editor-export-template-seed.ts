@@ -73,14 +73,30 @@ export function seedEditorExportTemplate(
 export function patchEditorExportTemplateHeadline(
   edits: ClipEditsV2,
   patch: { enabled?: boolean; text?: string },
+  opts?: { clipType?: string | null },
 ): ClipEditsV2 {
   const cur = edits.exportTemplate ?? {}
-  const next: ClipExportTemplate = {
+  const nextTpl: ClipExportTemplate = {
     ...cur,
     headlineBar: {
       enabled: patch.enabled ?? cur.headlineBar?.enabled ?? false,
       text: patch.text ?? cur.headlineBar?.text ?? cur.suggestedHeadline ?? '',
     },
   }
-  return { ...edits, exportTemplate: next }
+  let next: ClipEditsV2 = { ...edits, exportTemplate: nextTpl }
+  const ct = (opts?.clipType || '').toLowerCase()
+  if (ct === 'irl' && !edits.layout.userPicked) {
+    const headlineOn = Boolean(nextTpl.headlineBar?.enabled)
+    const mode = headlineOn ? 'fit_blur' : 'center_crop'
+    if (next.layout.mode !== mode) {
+      next = {
+        ...next,
+        layout: {
+          ...next.layout,
+          mode,
+        },
+      }
+    }
+  }
+  return next
 }

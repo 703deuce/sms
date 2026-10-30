@@ -11,7 +11,7 @@ describe('overlay-geometry badgeRect', () => {
     expect(rect.y).toBeGreaterThan(0)
   })
 
-  it('centers fit_top_band badge horizontally', () => {
+  it('places badge at top-left margin for every placement', () => {
     const rect = badgeRect('fit_top_band', 1080, 1920, {
       videoY: 520,
       videoH: 608,
@@ -19,7 +19,8 @@ describe('overlay-geometry badgeRect', () => {
       text: '2XRAKAI',
       showLogo: true,
     })
-    expect(rect.x).toBe(Math.floor((1080 - rect.w) / 2))
+    expect(rect.x).toBe(24)
+    expect(rect.y).toBe(24)
   })
 
   it('golden 2XRAKAI with logo at 1080x1920', () => {
@@ -31,7 +32,8 @@ describe('overlay-geometry badgeRect', () => {
     })
     expect(rect.w).toBe(235)
     expect(rect.h).toBe(64)
-    expect(rect.x).toBe(422)
+    expect(rect.x).toBe(24)
+    expect(rect.y).toBe(24)
   })
 })
 

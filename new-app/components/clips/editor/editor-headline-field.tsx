@@ -27,6 +27,7 @@ export function EditorHeadlineField({
   edits,
   onEdits,
   platform,
+  clipType = null,
   layers,
   setLayers,
   onSyncEditsSaveVersion,
@@ -35,6 +36,7 @@ export function EditorHeadlineField({
   edits: ClipEditsV2
   onEdits: (edits: ClipEditsV2) => void
   platform?: 'twitch' | 'kick'
+  clipType?: string | null
   layers?: Layer[]
   setLayers?: (layers: Layer[]) => void
   onSyncEditsSaveVersion?: (version: number) => void
@@ -106,10 +108,14 @@ export function EditorHeadlineField({
           aria-label="Show headline"
           onCheckedChange={(on) =>
             onEdits(
-              patchEditorExportTemplateHeadline(edits, {
-                enabled: on,
-                text: displayText || tpl.suggestedHeadline || '',
-              }),
+              patchEditorExportTemplateHeadline(
+                edits,
+                {
+                  enabled: on,
+                  text: displayText || tpl.suggestedHeadline || '',
+                },
+                { clipType },
+              ),
             )
           }
         />
@@ -121,18 +127,26 @@ export function EditorHeadlineField({
         disabled={!enabled || genBusy}
         onChange={(e) =>
           onEdits(
-            patchEditorExportTemplateHeadline(edits, {
-              enabled: true,
-              text: e.target.value,
-            }),
+            patchEditorExportTemplateHeadline(
+              edits,
+              {
+                enabled: true,
+                text: e.target.value,
+              },
+              { clipType },
+            ),
           )
         }
         onBlur={(e) =>
           onEdits(
-            patchEditorExportTemplateHeadline(edits, {
-              enabled: enabled || Boolean(e.target.value.trim()),
-              text: formatHeadlineForExport(e.target.value),
-            }),
+            patchEditorExportTemplateHeadline(
+              edits,
+              {
+                enabled: enabled || Boolean(e.target.value.trim()),
+                text: formatHeadlineForExport(e.target.value),
+              },
+              { clipType },
+            ),
           )
         }
         placeholder={tpl.suggestedHeadline?.trim() || 'ALL CAPS HEADLINE 🔥'}

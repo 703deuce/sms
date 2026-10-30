@@ -69,24 +69,8 @@ export function badgeRect(
   let w = roundPx((2 * padX + (showLogo ? logoPx + gapPx : 0) + text.length * fontPx * charW) * s)
   const margin = scalePx(24, playH)
   w = Math.max(h, Math.min(w, playW - 2 * margin))
-  const x = Math.floor((playW - w) / 2)
-  const videoY = opts?.videoY ?? 0
-  const videoH = opts?.videoH ?? 0
-  const badgeY = opts?.badgeY
-  const anchorTop = Boolean(opts?.anchorTopGap)
-  let y: number
-  if (placement === 'fit_top_band') {
-    if (anchorTop) {
-      y = scalePx(Number(badge.overlayYPx ?? 24), playH)
-    } else if (badgeY != null) {
-      y = badgeY
-    } else {
-      y = Math.max(0, videoY + videoH - scalePx(40, playH) - h)
-    }
-  } else {
-    const insetY = scalePx(DEFAULTS.exportBar?.sourceInsetY ?? 12, playH)
-    y = videoH ? videoY + videoH - h - insetY : playH - h - insetY
-  }
+  const x = scalePx(24, playW)
+  const y = scalePx(24, playH)
   return { x, y, w, h }
 }
 

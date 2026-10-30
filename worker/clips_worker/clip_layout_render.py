@@ -80,8 +80,8 @@ def _render_center_fill(src: Path, dest: Path, *, play_w: int, play_h: int) -> N
     )
 
 
-def per_clip_stack_out_height(edits: dict, *, play_w: int, play_h: int) -> int:
-    """When headline export band is active, stack/PiP render at full width under the bar (no side pad)."""
+def headline_band_out_height(edits: dict, *, play_w: int, play_h: int) -> int:
+    """When headline export band is active, render/crop at full width under the bar (no side pad)."""
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
     hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
     if not hb.get("enabled"):
@@ -95,6 +95,32 @@ def per_clip_stack_out_height(edits: dict, *, play_w: int, play_h: int) -> int:
     return max(1, play_h - frame["bar_h"])
 
 
+def speakercrop_settings_band_height(
+    settings: dict,
+    edits: dict,
+    *,
+    play_w: int,
+    play_h: int,
+) -> dict:
+    """Speaker-follow export at band height when headline bar is on (edge-to-edge under bar)."""
+    from clips_worker.clip_export_template import export_headline_active
+
+    mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+    if not export_headline_active(edits):
+        return settings
+    if mode not in ("speaker_follow", "subject_follow", "auto", "dynamic"):
+        return settings
+    band_h = headline_band_out_height(edits, play_w=play_w, play_h=play_h)
+    if band_h >= play_h:
+        return settings
+    return {**settings, "speakercropOutH": band_h}
+
+
+def per_clip_stack_out_height(edits: dict, *, play_w: int, play_h: int) -> int:
+    """Alias — stack/PiP and speaker_follow share headline band height."""
+    return headline_band_out_height(edits, play_w=play_w, play_h=play_h)
+
+
 def apply_per_clip_layout(
     clip_src: Path,
     work_dir: Path,
@@ -105,7 +131,7 @@ def apply_per_clip_layout(
 ) -> ClipLayoutApplyResult:
     layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
     lay, source = facecam_layout_for_render(edits)
-    stack_out_h = per_clip_stack_out_height(edits, play_w=play_w, play_h=play_h)
+    stack_out_h = headline_band_out_height(edits, play_w=play_w, play_h=play_h)
 
     if layout_mode in ("stack", "facecam_stack"):
         if lay and lay.get("facecam"):

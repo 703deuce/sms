@@ -216,6 +216,28 @@ def _fit_top_band_layers(
     link_on: bool,
     channel: str,
 ) -> None:
+    text_box_x: int | None = None
+    text_box_w: int | None = None
+    from clips_worker.clip_export_template import _v3_badge_sprite_will_render
+
+    badge_draw = badge_on and not _v3_badge_sprite_will_render(edits)
+    if badge_draw:
+        from clips_worker.overlay_geometry import badge_rect, _scale_px
+
+        label, color = _platform_label(platform)
+        name = channel or label
+        badge_text = name if badge_on else ""
+        rect = badge_rect(
+            "fit_top_band",
+            play_w,
+            play_h,
+            text=badge_text[:24],
+            show_logo=False,
+            anchor_top_gap=True,
+        )
+        gap = max(8, _scale_px(12, play_w))
+        text_box_x = rect["x"] + rect["w"] + gap
+        text_box_w = max(2, play_w - text_box_x - _scale_px(16, play_w))
     if lines:
         hl = dest.parent / "fit_top_headline.mp4"
         style = _headline_style_from_edits(edits)
@@ -234,15 +256,15 @@ def _fit_top_band_layers(
             text_color=str(style.get("textColor") or "#000000"),
             box_color=str(style.get("boxColor") or "#FFFFFF"),
             headline_style=style,
+            text_box_x=text_box_x,
+            text_box_w=text_box_w,
         )
         current = hl
-    from clips_worker.clip_export_template import _v3_badge_sprite_will_render
-
     if _v3_badge_sprite_will_render(edits):
         badge_on = False
         channel = ""
     if badge_on or channel:
-        from clips_worker.overlay_geometry import badge_rect
+        from clips_worker.overlay_geometry import badge_rect, _scale_px
 
         label, color = _platform_label(platform)
         name = channel or label
@@ -377,5 +399,10 @@ def render_stream_clip_layout(
     mode = (layout_mode or "fit_blur").strip()
     if mode == "fit_top":
         render_fit_top_stream(src, dest, edits, play_w=play_w, play_h=play_h)
-    else:
-        render_fit_blur_stream(src, dest, play_w=play_w, play_h=play_h)
+        return
+    from clips_worker.clip_export_template import export_headline_active
+
+    if mode == "fit_blur" and export_headline_active(edits):
+        render_fit_top_stream(src, dest, edits, play_w=play_w, play_h=play_h)
+        return
+    render_fit_blur_stream(src, dest, play_w=play_w, play_h=play_h)
