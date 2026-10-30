@@ -26,7 +26,7 @@ import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
-import { clipLayoutChip, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
+import { clipLayoutChip, clipTypeBadge, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
 import { PlayerControls } from '@/components/clips/editor/player-controls'
 import { Timeline } from '@/components/clips/editor/timeline'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
@@ -868,6 +868,7 @@ export function EditorShell({
           : '9 / 16'
   const pickerWhy = clipWhySummary(aiMeta as ClipAiMeta | null)
   const detectedLayout = clipLayoutChip(aiMeta as ClipAiMeta | null)
+  const clipTypeLabel = clipTypeBadge(aiMeta as ClipAiMeta | null)
   const streamerSide = (
     aiMeta as {
       streamer?: {
@@ -1225,8 +1226,13 @@ export function EditorShell({
             </EditorPanelErrorBoundary>
             </div>
           </div>
-          {pickerWhy || detectedLayout ? (
+          {pickerWhy || detectedLayout || clipTypeLabel ? (
             <div className="max-w-xl space-y-1 px-1">
+              {clipTypeLabel ? (
+                <p className="text-[10px] text-muted-foreground">
+                  <span className="font-medium text-foreground">Clip type:</span> {clipTypeLabel}
+                </p>
+              ) : null}
               {detectedLayout ? (
                 <p className="text-[10px] text-muted-foreground">
                   <span className="font-medium text-foreground">Detected layout:</span> {detectedLayout}

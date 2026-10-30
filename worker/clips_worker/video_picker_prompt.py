@@ -100,7 +100,7 @@ moments: array of objects, sorted by score descending, each with:
 - why_it_works: one or two sentences naming the setup, the payoff and why a stranger would care.
 - touches_edge: none, start, end or both.
 - score: number 0.0 to 1.0.
-- content_type: one of gaming, irl, just_chatting, podcast, other — what is on screen for this moment (gameplay vs desk talk vs out-and-about vs multi-person seated talk)."""
+- content_type: one of gaming, irl, just_chatting, podcast, other. gaming = VIDEO-GAME footage fills most of the screen (usually with a small webcam overlay). irl = real-world camera footage, including sports, streets, events. just_chatting = one person at a desk/camera talking. podcast = 2+ people seated talking. Real sports are irl, never gaming."""
 
 VISUAL_WATCH_PASS1_HINT = (
     "Visual watch (Gemini v3): full spans start_s–end_s with peak/hook (hook is advisory only; never trim to hook_s). "

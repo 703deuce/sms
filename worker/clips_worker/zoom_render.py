@@ -122,7 +122,13 @@ def apply_zoom(
     h: int,
     *,
     facecam_only: bool = False,
+    facecam_band_h: int | None = None,
 ) -> None:
+    from clips_worker.edits_render import probe_video_size
+
+    w, h = probe_video_size(video)
+    w = max(2, w - (w % 2))
+    h = max(2, h - (h % 2))
     if not keyframes or all(z == 1.0 for _, z in keyframes):
         subprocess.check_call(["cp", str(video), str(out)])
         return
@@ -131,19 +137,21 @@ def apply_zoom(
         subprocess.check_call(["cp", str(video), str(out)])
         return
     if facecam_only:
-        band_h = max(1, int(h * 0.42))
-        rest_h = max(1, h - band_h)
+        band_h = max(2, min(h - 2, facecam_band_h or int(h * 0.35)))
+        band_h = band_h - (band_h % 2)
+        rest_h = max(2, h - band_h)
+        rest_h = rest_h - (rest_h % 2)
         vf = (
             f"split[full][full2];"
             f"[full]crop={w}:{band_h}:0:0,"
-            f"scale=w='trunc(iw*({z_expr}))':h='trunc(ih*({z_expr}))':eval=frame,"
+            f"scale=w='trunc(iw*({z_expr})/2)*2':h='trunc(ih*({z_expr})/2)*2':eval=frame,"
             f"crop={w}:{band_h}:(iw-{w})/2:(ih-{band_h})/2[topz];"
             f"[full2]crop={w}:{rest_h}:0:{band_h}[bot];"
             f"[topz][bot]vstack=inputs=2"
         )
     else:
         vf = (
-            f"scale=w='trunc(iw*({z_expr}))':h='trunc(ih*({z_expr}))':eval=frame,"
+            f"scale=w='trunc(iw*({z_expr})/2)*2':h='trunc(ih*({z_expr})/2)*2':eval=frame,"
             f"crop={w}:{h}:(iw-{w})/2:(ih-{h})/2"
         )
     subprocess.check_call(

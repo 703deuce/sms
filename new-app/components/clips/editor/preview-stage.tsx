@@ -19,6 +19,7 @@ import { resolveComposeSpec, type ComposeSpec } from '@/lib/clips/compose-spec'
 import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
 import { PreviewSafeZoneOverlay } from '@/components/clips/editor/preview-safe-zone'
+import { STREAM_HEADLINE_BAR_FRAC } from '@/lib/clips/headline-band-layout'
 import { nearestPipCorner, pipCornerSlotStyle } from '@/lib/clips/headline-preview-style'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
@@ -114,12 +115,18 @@ export function PreviewStage({
   const layoutMode = edits.layout?.mode ?? 'speaker_follow'
   const mediaOffsetMs = media?.offsetMs ?? 0
   const compositePreview = media?.kind === 'composite'
+  const headlineOn = usesStreamHeadlineBandOverlay(edits as ClipEditsV2)
+  const HEADLINE_FITTOP_MODES = new Set(['fit_top', 'speaker_follow', 'auto'])
   const letterboxPreview = !compositePreview && layoutUsesLetterboxBlurPreview(layoutMode)
   const fitTopPreview = Boolean(
     !compositePreview &&
       videoUrl &&
-      (layoutMode === 'fit_top' || usesStreamHeadlineBandOverlay(edits as ClipEditsV2)),
+      (layoutMode === 'fit_top' || (headlineOn && HEADLINE_FITTOP_MODES.has(layoutMode))),
   )
+  const headlineBandTopFrac =
+    headlineOn && !HEADLINE_FITTOP_MODES.has(layoutMode) && !letterboxPreview
+      ? STREAM_HEADLINE_BAR_FRAC
+      : 0
   const centerCropPreview =
     Boolean(!compositePreview && videoUrl && (layoutMode === 'center_crop' || layoutMode === 'fill'))
   const normalizedTrack = cropTrack ? normalizeCropTrack(cropTrack) : null
@@ -541,7 +548,7 @@ export function PreviewStage({
                   { box: gameBox, h: `${gameFrac * 100}%` },
                   { box: facecamBox, h: `${faceFrac * 100}%` },
                 ]
-            return (
+            const stackBody = (
               <div className="flex size-full flex-col overflow-hidden">
                 {panels.map((panel, idx) => (
                   <div key={idx} className="relative w-full overflow-hidden" style={{ height: panel.h }}>
@@ -559,81 +566,133 @@ export function PreviewStage({
                 ))}
               </div>
             )
+            return headlineBandTopFrac > 0 ? (
+              <div
+                className="absolute inset-x-0 bottom-0 overflow-hidden"
+                style={{ top: `${headlineBandTopFrac * 100}%` }}
+              >
+                {stackBody}
+              </div>
+            ) : (
+              stackBody
+            )
           })()
         ) : facecamPipPreview && facecamBox ? (
-          <div className="relative size-full overflow-hidden">
-            <video
-              ref={videoRefInner}
-              className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}`}
-              style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
-              playsInline
-              poster={posterUrl ?? undefined}
-              onCanPlay={() => setCanPlay(true)}
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-            />
-            <div
-              className={`absolute z-[2] overflow-hidden rounded-md ring-2 ring-white/80 ${onPipCornerChange ? 'cursor-grab' : ''}`}
-              style={pipCornerSlotStyle(edits.layout.facecam?.pipCorner)}
-              onPointerUp={
-                onPipCornerChange
-                  ? (e) => {
-                      const rect = e.currentTarget.parentElement?.getBoundingClientRect()
-                      if (!rect) return
-                      onPipCornerChange(nearestPipCorner(e.clientX, e.clientY, rect))
-                    }
-                  : undefined
-              }
-            >
-              <video
-                className="max-w-none"
-                style={coverBoxStyle(facecamBox)}
-                playsInline
-                muted
-                aria-hidden
-              />
-            </div>
-          </div>
+          (() => {
+            const pipBody = (
+              <div className="relative size-full overflow-hidden">
+                <video
+                  ref={videoRefInner}
+                  className={`max-w-none size-full object-cover ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                  style={coverBoxStyle(facecamGameplay ?? { x: 0, y: 0, w: 1, h: 1 })}
+                  playsInline
+                  poster={posterUrl ?? undefined}
+                  onCanPlay={() => setCanPlay(true)}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                />
+                <div
+                  className={`absolute z-[2] overflow-hidden rounded-md ring-2 ring-white/80 ${onPipCornerChange ? 'cursor-grab' : ''}`}
+                  style={pipCornerSlotStyle(edits.layout.facecam?.pipCorner)}
+                  onPointerUp={
+                    onPipCornerChange
+                      ? (e) => {
+                          const rect = e.currentTarget.parentElement?.getBoundingClientRect()
+                          if (!rect) return
+                          onPipCornerChange(nearestPipCorner(e.clientX, e.clientY, rect))
+                        }
+                      : undefined
+                  }
+                >
+                  <video
+                    className="max-w-none"
+                    style={coverBoxStyle(facecamBox)}
+                    playsInline
+                    muted
+                    aria-hidden
+                  />
+                </div>
+              </div>
+            )
+            return headlineBandTopFrac > 0 ? (
+              <div
+                className="absolute inset-x-0 bottom-0 overflow-hidden"
+                style={{ top: `${headlineBandTopFrac * 100}%` }}
+              >
+                {pipBody}
+              </div>
+            ) : (
+              pipBody
+            )
+          })()
         ) : cropPreview ? (
-          <>
-            <video
-              key={`preview-blur-${layoutMode}`}
-              ref={blurRef}
-              className="absolute inset-0 size-full max-w-none object-cover"
-              muted
-              playsInline
-              aria-hidden
-            />
-            <video
-              key={`preview-main-${layoutMode}`}
-              ref={videoRefInner}
-              className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
-              style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
-              playsInline
-              poster={posterUrl ?? undefined}
-              onLoadedMetadata={() => {
-                const v = videoRefInner.current
-                const b = blurRef.current
-                if (v && b) b.currentTime = v.currentTime
-              }}
-              onCanPlay={() => setCanPlay(true)}
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-            />
-          </>
+          (() => {
+            const cropBody = (
+              <>
+                <video
+                  key={`preview-blur-${layoutMode}`}
+                  ref={blurRef}
+                  className="absolute inset-0 size-full max-w-none object-cover"
+                  muted
+                  playsInline
+                  aria-hidden
+                />
+                <video
+                  key={`preview-main-${layoutMode}`}
+                  ref={videoRefInner}
+                  className={`absolute left-0 top-0 z-[1] max-w-none transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}`}
+                  style={{ position: 'absolute', left: 0, top: 0, maxWidth: 'none' }}
+                  playsInline
+                  poster={posterUrl ?? undefined}
+                  onLoadedMetadata={() => {
+                    const v = videoRefInner.current
+                    const b = blurRef.current
+                    if (v && b) b.currentTime = v.currentTime
+                  }}
+                  onCanPlay={() => setCanPlay(true)}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                />
+              </>
+            )
+            return headlineBandTopFrac > 0 ? (
+              <div
+                className="absolute inset-x-0 bottom-0 overflow-hidden"
+                style={{ top: `${headlineBandTopFrac * 100}%` }}
+              >
+                {cropBody}
+              </div>
+            ) : (
+              cropBody
+            )
+          })()
         ) : centerCropPreview ? (
-          <video
-            key={`preview-main-${layoutMode}`}
-            ref={videoRefInner}
-            data-testid="center-crop-video"
-            className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}`}
-            style={edits.layout.cropBox ? coverBoxStyle(edits.layout.cropBox) : undefined}
-            playsInline
-            poster={posterUrl ?? undefined}
-            onCanPlay={() => setCanPlay(true)}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-          />
+          (() => {
+            const fillBody = (
+              <video
+                key={`preview-main-${layoutMode}`}
+                ref={videoRefInner}
+                data-testid="center-crop-video"
+                className={`size-full transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'} ${edits.layout.cropBox ? '' : 'object-cover'}`}
+                style={edits.layout.cropBox ? coverBoxStyle(edits.layout.cropBox) : undefined}
+                playsInline
+                poster={posterUrl ?? undefined}
+                onCanPlay={() => setCanPlay(true)}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+              />
+            )
+            return headlineBandTopFrac > 0 ? (
+              <div
+                className="absolute inset-x-0 bottom-0 overflow-hidden"
+                style={{ top: `${headlineBandTopFrac * 100}%` }}
+              >
+                {fillBody}
+              </div>
+            ) : (
+              fillBody
+            )
+          })()
         ) : speakerApproxPreview ? (
           <>
             <video

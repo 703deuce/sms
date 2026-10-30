@@ -266,7 +266,10 @@ def apply_export_template(
     from clips_worker.filtergraph import fit_blur_overlay_filter
 
     use_blur_fill = layout_mode in ("full_frame", "fit_blur") and not vertical_precomposed
-    fill_band_blur = headline_on and not vertical_precomposed
+    band_edge_to_edge = vertical_precomposed or (
+        headline_on and layout_mode in ("center_crop", "fill")
+    )
+    fill_band_blur = headline_on and not band_edge_to_edge
     badge_x = badge_y = 0
     bw = _scale_y(_BADGE_W, play_w)
     if source_on:
@@ -283,7 +286,7 @@ def apply_export_template(
     if badge_on and headline_on:
         headline_reserve_x = badge_x + bw + _scale_y(12, play_w)
     # 1) Full-height canvas; band under headline fills edge-to-edge (blur or crop — never black pad).
-    if vertical_precomposed:
+    if band_edge_to_edge:
         fc = (
             f"color=c=black:s={play_w}x{play_h}:d={duration_ms / 1000:.3f}[bg];"
             f"[0:v]scale={play_w}:{video_h}:force_original_aspect_ratio=increase,"

@@ -28,15 +28,11 @@ def content_type_from_picker_moment(moment: dict | None, section_activity: str |
         cats = moment.get("category") or []
         if isinstance(cats, list):
             cats_l = [str(c).lower() for c in cats]
-            if "gaming" in cats_l:
-                return "gaming"
             if "irl" in cats_l:
                 return "irl"
             if "talking" in cats_l or "reaction" in cats_l or "creative" in cats_l:
                 return "just_chatting"
     act = (section_activity or "").lower()
-    if "gaming" in act or "game" in act:
-        return "gaming"
     if "irl" in act:
         return "irl"
     if "podcast" in act or "interview" in act:
@@ -83,20 +79,8 @@ def upload_project_majority_type(picks: list[dict]) -> str:
     return "irl"
 
 
-def upload_should_run_facecam_detect(
-    *,
-    picker_ct: str,
-    project_majority: str,
-    stream_majority: str | None,
-    moment: dict | None,
-) -> bool:
-    if picker_ct == "gaming" or project_majority == "gaming" or stream_majority == "gaming":
-        return True
-    if moment_has_explicit_content_type(moment) and picker_ct == "irl" and project_majority == "irl":
-        return False
-    if picker_ct in ("other", "just_chatting", "podcast"):
-        return project_majority != "irl" or stream_majority == "gaming"
-    return picker_ct not in ("irl", "podcast")
+def upload_should_run_facecam_detect(**_kw) -> bool:
+    return True
 
 
 def resolve_upload_clip_type(
@@ -138,8 +122,12 @@ def resolve_clip_type(
     facecam_confidence: float,
 ) -> dict[str, Any]:
     ct = content_type_from_picker_moment(moment, section_activity)
-    if ct == "other" and stream_majority in CLIP_TYPES:
+    if ct == "other" and stream_majority in CLIP_TYPES and stream_majority != "other":
         ct = str(stream_majority)
+    if ct == "other":
+        ct = "irl"
+    if has_facecam and facecam_confidence >= FACECAM_CONFIDENCE_THRESHOLD:
+        ct = "gaming"
     return {
         "clipType": ct,
         "hasFacecam": bool(has_facecam),

@@ -1047,6 +1047,26 @@ def run_m4_pipeline(
                                 project_id=project_id,
                             )
                         if cached is not None:
+                            pmeta = pick.get("aiMeta") or {}
+                            cmeta = cached.get("aiMeta") or {}
+                            final_type = pmeta.get("uploadProjectMajorityType")
+                            cached_type = cmeta.get("clipType")
+                            if (
+                                final_type
+                                and cached_type
+                                and str(cached_type) != str(final_type)
+                            ) or (
+                                final_type
+                                and cmeta.get("uploadProjectMajorityType") != final_type
+                            ):
+                                print(
+                                    "[clipper:upload_type] headstart_type_mismatch "
+                                    f"cached={cached_type!r} final={final_type!r}",
+                                    flush=True,
+                                )
+                                return build_clip_row_from_pick(
+                                    pick, idx, clip_id=str(cached.get("id") or "")
+                                )
                             return cached
                         if not _mark_span(pick["start_ms"], pick["end_ms"]):
                             decision_log(

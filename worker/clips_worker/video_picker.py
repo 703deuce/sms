@@ -219,6 +219,10 @@ WATCH_RESPONSE_SCHEMA: dict[str, Any] = {
                         "enum": ["none", "start", "end", "both"],
                     },
                     "score": {"type": "number"},
+                    "content_type": {
+                        "type": "string",
+                        "enum": ["gaming", "irl", "just_chatting", "podcast", "other"],
+                    },
                 },
                 "required": [
                     "start_s",
@@ -226,6 +230,7 @@ WATCH_RESPONSE_SCHEMA: dict[str, Any] = {
                     "peak_s",
                     "hook_s",
                     "category",
+                    "content_type",
                     "what_happened",
                     "unverified",
                     "confidence",
@@ -663,12 +668,16 @@ def validate_and_normalize_moments(
             cats = [c.strip() for c in cats.split("+") if c.strip()]
         what = str(row.get("what_happened") or "").strip()
         why = str(row.get("why_it_works") or "").strip()
+        ct_raw = str(row.get("content_type") or "").strip().lower()
         m = {
             "start_s": round(start + chunk_offset_s, 3),
             "end_s": round(end + chunk_offset_s, 3),
             "peak_s": round(peak + chunk_offset_s, 3),
             "hook_s": round(hook + chunk_offset_s, 3),
             "category": list(cats)[:6],
+            "content_type": ct_raw
+            if ct_raw in ("gaming", "irl", "just_chatting", "podcast", "other")
+            else "",
             "what_happened": what[:1200],
             "unverified": unverified,
             "confidence": round(conf, 3),

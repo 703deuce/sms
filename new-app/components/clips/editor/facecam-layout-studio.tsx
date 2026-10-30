@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { clipTypeBadge } from '@/lib/clips/clip-results-chips'
 import { coverBoxStyle, stackPanelStyles, DEFAULT_FACECAM_BOX, DEFAULT_GAMEPLAY_BOX, defaultUploadCropBox } from '@/lib/clips/facecam-geometry'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { clipsFetch } from '@/lib/clips-api'
@@ -15,6 +16,10 @@ type NormBox = { x: number; y: number; w: number; h: number }
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n))
 }
+
+const MIN_BOX = 0.04
+const FACECAM_LAYOUT_MODES = new Set(['facecam_stack', 'facecam_pip', 'screen_pip'])
+type ResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
 
 function defaultFacecam(): NormBox {
   return { ...DEFAULT_FACECAM_BOX }
@@ -32,6 +37,34 @@ function seekVideoToClip(e: React.SyntheticEvent<HTMLVideoElement>, sourceTimeSe
   if (Number.isFinite(sourceTimeSec) && sourceTimeSec >= 0) {
     el.currentTime = sourceTimeSec + 0.5
   }
+}
+
+function resizeBox(origin: NormBox, dx: number, dy: number, corner: ResizeCorner): NormBox {
+  let { x, y, w, h } = origin
+  if (corner === 'se') {
+    w = clamp01(Math.max(MIN_BOX, w + dx))
+    h = clamp01(Math.max(MIN_BOX, h + dy))
+  } else if (corner === 'sw') {
+    const nw = clamp01(Math.max(MIN_BOX, w - dx))
+    x = clamp01(origin.x + (origin.w - nw))
+    w = nw
+    h = clamp01(Math.max(MIN_BOX, h + dy))
+  } else if (corner === 'ne') {
+    w = clamp01(Math.max(MIN_BOX, w + dx))
+    const nh = clamp01(Math.max(MIN_BOX, h - dy))
+    y = clamp01(origin.y + (origin.h - nh))
+    h = nh
+  } else {
+    const nw = clamp01(Math.max(MIN_BOX, w - dx))
+    const nh = clamp01(Math.max(MIN_BOX, h - dy))
+    x = clamp01(origin.x + (origin.w - nw))
+    y = clamp01(origin.y + (origin.h - nh))
+    w = nw
+    h = nh
+  }
+  x = Math.min(x, 1 - w)
+  y = Math.min(y, 1 - h)
+  return { x, y, w, h }
 }
 
 export function FacecamLayoutStudio({
@@ -79,11 +112,13 @@ export function FacecamLayoutStudio({
     mode === 'center_crop' || mode === 'fill' || mode === 'speaker_follow' || mode === 'auto'
   const wholeFrameHint =
     mode === 'fit_blur' || mode === 'fit_top' || mode === 'full_frame'
+  const clipTypeLabel = clipTypeBadge(clipType ? { clipType } : null)
 
   const sourceRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
     kind: DragKind
     target: BoxTarget
+    corner: ResizeCorner
     startX: number
     startY: number
     origin: NormBox
@@ -91,10 +126,12 @@ export function FacecamLayoutStudio({
 
   const patchFacecam = useCallback(
     (patch: Partial<NonNullable<ClipEditsV2['layout']['facecam']>>) => {
+      const nextMode = FACECAM_LAYOUT_MODES.has(mode) ? mode : 'facecam_stack'
       onEdits({
         ...edits,
         layout: {
           ...edits.layout,
+          mode: nextMode,
           facecam: {
             box: faceBox,
             split,
@@ -106,7 +143,7 @@ export function FacecamLayoutStudio({
         },
       })
     },
-    [edits, faceBox, gameBox, split, position, fc?.pipCorner, onEdits],
+    [edits, faceBox, gameBox, split, position, fc?.pipCorner, mode, onEdits],
   )
 
   const patchCrop = useCallback(
@@ -123,12 +160,18 @@ export function FacecamLayoutStudio({
     [edits, onEdits],
   )
 
-  const onPointerDown = (e: React.PointerEvent, target: BoxTarget, kind: DragKind) => {
+  const onPointerDown = (
+    e: React.PointerEvent,
+    target: BoxTarget,
+    kind: DragKind,
+    corner: ResizeCorner = 'se',
+  ) => {
     if (!kind) return
     e.preventDefault()
+    e.stopPropagation()
     const box = target === 'face' ? faceBox : target === 'game' ? gameBox : cropBox
-    dragRef.current = { kind, target, startX: e.clientX, startY: e.clientY, origin: { ...box } }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    dragRef.current = { kind, target, corner, startX: e.clientX, startY: e.clientY, origin: { ...box } }
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -139,24 +182,25 @@ export function FacecamLayoutStudio({
     const dx = (e.clientX - drag.startX) / rect.width
     const dy = (e.clientY - drag.startY) / rect.height
     const o = drag.origin
-    let next: NormBox = { ...o }
+    let next: NormBox
     if (drag.kind === 'move') {
+      next = { ...o }
       next.x = clamp01(o.x + dx)
       next.y = clamp01(o.y + dy)
       next.x = Math.min(next.x, 1 - o.w)
       next.y = Math.min(next.y, 1 - o.h)
     } else {
-      next.w = clamp01(Math.max(0.08, o.w + dx))
-      next.h = clamp01(Math.max(0.08, o.h + dy))
-      next.x = Math.min(o.x, 1 - next.w)
-      next.y = Math.min(o.y, 1 - next.h)
+      next = resizeBox(o, dx, dy, drag.corner)
     }
     if (drag.target === 'face') patchFacecam({ box: next })
     else if (drag.target === 'game') patchFacecam({ gameplay: next })
     else patchCrop(next)
   }
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
     dragRef.current = null
   }
 
@@ -195,17 +239,19 @@ export function FacecamLayoutStudio({
 
   return (
     <div className="space-y-3 rounded-lg border border-border p-3">
-      <p className="text-xs font-medium text-foreground">Layout editor</p>
+      <p className="text-xs font-medium text-foreground">
+        Layout editor{clipTypeLabel ? ` · ${clipTypeLabel}` : ''}
+      </p>
       <p className="text-xs text-muted-foreground">
         Drag boxes on the 16:9 source; 9:16 preview matches export (per-clip edits only).
       </p>
-      <div className="grid gap-3 md:grid-cols-[1fr_120px]">
+      <div className="grid gap-3">
         <div
           ref={sourceRef}
           className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-black"
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerLeave={onPointerUp}
+          onPointerCancel={onPointerUp}
         >
           {videoUrl ? (
             <video
@@ -233,15 +279,19 @@ export function FacecamLayoutStudio({
                 label="Gameplay"
                 box={gameBox}
                 color="border-sky-400/80"
+                zClass="z-10"
                 onMove={(e) => onPointerDown(e, 'game', 'move')}
-                onResize={(e) => onPointerDown(e, 'game', 'resize')}
+                onResizeCorner={(e, corner) => onPointerDown(e, 'game', 'resize', corner)}
+                onPointerUp={onPointerUp}
               />
               <BoxOverlay
                 label="Facecam"
                 box={faceBox}
                 color="border-amber-400/80"
+                zClass="z-20"
                 onMove={(e) => onPointerDown(e, 'face', 'move')}
-                onResize={(e) => onPointerDown(e, 'face', 'resize')}
+                onResizeCorner={(e, corner) => onPointerDown(e, 'face', 'resize', corner)}
+                onPointerUp={onPointerUp}
               />
             </>
           )}
@@ -250,13 +300,15 @@ export function FacecamLayoutStudio({
               label="Crop"
               box={cropBox}
               color="border-emerald-400/80"
+              zClass="z-[15]"
               onMove={(e) => onPointerDown(e, 'crop', 'move')}
-              onResize={(e) => onPointerDown(e, 'crop', 'resize')}
+              onResizeCorner={(e, corner) => onPointerDown(e, 'crop', 'resize', corner)}
+              onPointerUp={onPointerUp}
             />
           ) : null}
         </div>
         <div
-          className="relative mx-auto aspect-[9/16] w-full max-w-[120px] overflow-hidden rounded-md border border-border bg-black"
+          className="relative mx-auto aspect-[9/16] w-[120px] overflow-hidden rounded-md border border-border bg-black"
           aria-label="9:16 export preview"
         >
           {videoUrl && stackPreview ? (
@@ -354,22 +406,33 @@ export function FacecamLayoutStudio({
   )
 }
 
+const CORNERS: { corner: ResizeCorner; className: string; cursor: string }[] = [
+  { corner: 'nw', className: '-left-1.5 -top-1.5', cursor: 'cursor-nwse-resize' },
+  { corner: 'ne', className: '-right-1.5 -top-1.5', cursor: 'cursor-nesw-resize' },
+  { corner: 'sw', className: '-left-1.5 -bottom-1.5', cursor: 'cursor-nesw-resize' },
+  { corner: 'se', className: '-right-1.5 -bottom-1.5', cursor: 'cursor-nwse-resize' },
+]
+
 function BoxOverlay({
   label,
   box,
   color,
+  zClass,
   onMove,
-  onResize,
+  onResizeCorner,
+  onPointerUp,
 }: {
   label: string
   box: NormBox
   color: string
+  zClass: string
   onMove: (e: React.PointerEvent) => void
-  onResize: (e: React.PointerEvent) => void
+  onResizeCorner: (e: React.PointerEvent, corner: ResizeCorner) => void
+  onPointerUp: (e: React.PointerEvent) => void
 }) {
   return (
     <div
-      className={`absolute border-2 ${color} bg-black/10`}
+      className={`absolute border-2 ${color} bg-black/10 ${zClass}`}
       style={{
         left: `${box.x * 100}%`,
         top: `${box.y * 100}%`,
@@ -379,17 +442,24 @@ function BoxOverlay({
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-move"
+        className="absolute inset-0 z-0 cursor-move"
         aria-label={`Move ${label} region`}
         onPointerDown={onMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
       />
-      <button
-        type="button"
-        className="absolute bottom-0 right-0 size-4 cursor-se-resize rounded-sm bg-background/80"
-        aria-label={`Resize ${label} region`}
-        onPointerDown={onResize}
-      />
-      <span className="pointer-events-none absolute left-1 top-0.5 text-[10px] font-medium text-white drop-shadow">
+      {CORNERS.map(({ corner, className, cursor }) => (
+        <button
+          key={corner}
+          type="button"
+          className={`absolute z-10 size-3 rounded-sm bg-background/90 ${className} ${cursor}`}
+          aria-label={`Resize ${label} region ${corner}`}
+          onPointerDown={(e) => onResizeCorner(e, corner)}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        />
+      ))}
+      <span className="pointer-events-none absolute left-1 top-0.5 z-[1] text-[10px] font-medium text-white drop-shadow">
         {label}
       </span>
     </div>

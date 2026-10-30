@@ -27,6 +27,47 @@ def _slice_words(words: list[dict], range_start_ms: int, range_end_ms: int) -> l
     return [w for w in words if w["e"] * 1000 >= range_start_ms and w["s"] * 1000 <= range_end_ms]
 
 
+def _annotate_clip_type_meta(
+    picks: list[dict],
+    visual_moments: list[dict] | None,
+    vp_sections: list | None,
+) -> None:
+    from clips_worker.clip_type import (
+        section_activity_for_moment,
+        stream_majority_clip_type,
+        upload_project_majority_type,
+        video_moment_match_for_pick,
+        content_type_from_picker_moment,
+    )
+
+    stream_majority = (
+        stream_majority_clip_type([content_type_from_picker_moment(m, None) for m in visual_moments])
+        if visual_moments
+        else None
+    )
+    for p in picks:
+        meta = p.setdefault("aiMeta", {})
+        vm, iou = (
+            video_moment_match_for_pick(visual_moments, int(p["start_ms"]), int(p["end_ms"]))
+            if visual_moments
+            else (None, 0.0)
+        )
+        meta["videoMoment"] = (
+            {
+                k: vm.get(k)
+                for k in ("content_type", "category", "start_ms", "end_ms", "start_s", "end_s")
+            }
+            if vm
+            else None
+        )
+        meta["videoMomentMatchIou"] = round(float(iou), 4)
+        meta["sectionActivity"] = section_activity_for_moment(vm, vp_sections) if vm else None
+        meta["streamMajorityType"] = stream_majority
+    maj = upload_project_majority_type(picks)
+    for p in picks:
+        p["aiMeta"]["uploadProjectMajorityType"] = maj
+
+
 def pick_talking_clips(
     words: list[dict],
     audio_path: str,
@@ -283,6 +324,7 @@ def pick_talking_clips(
                         length_policy=length_policy,
                     )
                     if early:
+                        _annotate_clip_type_meta(early, visual_moments or None, vp_sections)
                         picker_info("headstart_picks", count=len(early))
                         on_headstart_picks(early)
             except Exception as exc:
@@ -361,19 +403,7 @@ def pick_talking_clips(
         picker_info("picker_empty", message=msg)
         return [], msg
 
-    from clips_worker.clip_type import (
-        content_type_from_picker_moment,
-        section_activity_for_moment,
-        stream_majority_clip_type,
-        upload_project_majority_type,
-        video_moment_match_for_pick,
-    )
-
-    stream_majority = None
-    if visual_moments:
-        stream_majority = stream_majority_clip_type(
-            [content_type_from_picker_moment(m, None) for m in visual_moments]
-        )
+    from clips_worker.clip_type import upload_project_majority_type
 
     for p in picks:
         ensure_clip_title(p, words, layout_genre, source_ms=source_ms)
@@ -391,28 +421,8 @@ def pick_talking_clips(
             ],
             "low_confidence": p.get("low_confidence", False),
         }
-        vm_match, vm_iou = (
-            video_moment_match_for_pick(visual_moments, int(p["start_ms"]), int(p["end_ms"]))
-            if visual_moments
-            else (None, 0.0)
-        )
-        p["aiMeta"]["videoMoment"] = (
-            {
-                k: vm_match.get(k)
-                for k in ("content_type", "category", "start_ms", "end_ms", "start_s", "end_s")
-            }
-            if vm_match
-            else None
-        )
-        p["aiMeta"]["videoMomentMatchIou"] = round(float(vm_iou), 4)
-        p["aiMeta"]["sectionActivity"] = (
-            section_activity_for_moment(vm_match, vp_sections) if vm_match else None
-        )
-        p["aiMeta"]["streamMajorityType"] = stream_majority
         p["scores"] = p.get("scores") or {}
 
-    upload_majority = upload_project_majority_type(picks)
-    for p in picks:
-        p["aiMeta"]["uploadProjectMajorityType"] = upload_majority
+    _annotate_clip_type_meta(picks, visual_moments or None, vp_sections)
     picker_info("picker_done", selected=len(picks))
     return picks, None

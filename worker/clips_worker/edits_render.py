@@ -750,14 +750,22 @@ def _legacy_compose(
             layout_switches=layout_switches,
         )
         zoomed = work_dir / "zoomed.mp4"
+        zw, zh = probe_video_size(out_mp4)
+        facecam_band_h: int | None = None
+        if bool(zoom_cfg.get("facecamOnly")):
+            split = float(ctx.get("facecam_stack_split") or 0.4)
+            pos = str(ctx.get("facecam_position") or "top").lower()
+            if pos == "top":
+                facecam_band_h = max(1, int(zh * split))
         apply_zoom(
             out_mp4,
             zoomed,
             kf,
             length_s,
-            play_w,
-            play_h,
+            zw,
+            zh,
             facecam_only=bool(zoom_cfg.get("facecamOnly")),
+            facecam_band_h=facecam_band_h,
         )
         shutil.copy(zoomed, out_mp4)
 
