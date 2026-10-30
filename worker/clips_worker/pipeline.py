@@ -398,34 +398,55 @@ def _regular_clip_type_and_layout(
     settings: dict,
     work_dir: Path,
 ) -> tuple[dict, dict, dict | None]:
-    from clips_worker.clip_type import resolve_clip_type
     from clips_worker.clip_layout_policy import apply_clip_type_layout_to_edits
+    from clips_worker.clip_type import (
+        content_type_from_picker_moment,
+        resolve_upload_clip_type,
+        upload_should_run_facecam_detect,
+    )
 
     meta = (pick or {}).get("aiMeta") or {}
     vm = meta.get("videoMoment")
+    section_activity = meta.get("sectionActivity")
+    stream_majority = meta.get("streamMajorityType")
+    project_majority = str(meta.get("uploadProjectMajorityType") or stream_majority or "irl")
+    if project_majority == "other":
+        project_majority = "irl"
+    picker_ct = content_type_from_picker_moment(vm, section_activity)
+    moment_iou = float(meta.get("videoMomentMatchIou") or 0.0)
+
     fc_layout = None
-    ct_guess = resolve_clip_type(
+    if upload_should_run_facecam_detect(
+        picker_ct=picker_ct,
+        project_majority=project_majority,
+        stream_majority=stream_majority,
         moment=vm,
-        section_activity=meta.get("sectionActivity"),
-        stream_majority=meta.get("streamMajorityType"),
-        has_facecam=False,
-        facecam_confidence=0.0,
-    )["clipType"]
-    if ct_guess == "gaming":
+    ):
         from clips_worker.streamer.layout.detect_facecam import detect_facecam_layout
 
         try:
             fc_layout = detect_facecam_layout(clip_file, work_dir, n_samples=24)
         except Exception:
             fc_layout = None
+
     has_fc = bool(isinstance(fc_layout, dict) and isinstance(fc_layout.get("facecam"), dict))
     fc_conf = float((fc_layout or {}).get("confidence") or 0.0)
-    type_info = resolve_clip_type(
+    type_info = resolve_upload_clip_type(
         moment=vm,
-        section_activity=meta.get("sectionActivity"),
-        stream_majority=meta.get("streamMajorityType"),
+        section_activity=section_activity,
+        upload_project_majority=project_majority,
+        stream_majority=stream_majority,
+        moment_match_iou=moment_iou,
         has_facecam=has_fc,
         facecam_confidence=fc_conf,
+    )
+    print(
+        "[clipper:upload_type] "
+        f"picker_ct={picker_ct!r} stream_majority={stream_majority!r} "
+        f"project_majority={project_majority!r} moment_iou={moment_iou:.3f} "
+        f"facecam={has_fc} facecam_conf={fc_conf:.3f} "
+        f"final={type_info.get('clipType')!r}",
+        flush=True,
     )
     headline_on = bool(((edits.get("exportTemplate") or {}).get("headlineBar") or {}).get("enabled"))
     edits = apply_clip_type_layout_to_edits(
@@ -455,8 +476,8 @@ def _finalize_regular_clip_edits(
         return edits, {}, None
     wd = work_dir or clip_file.parent
     edits, type_info, _fc = _regular_clip_type_and_layout(edits, clip_file, pick, settings, wd)
-    ct = str(type_info.get("clipType") or "other")
-    if ct in ("just_chatting", "podcast", "other"):
+    ct = str(type_info.get("clipType") or "irl")
+    if ct in ("just_chatting", "podcast"):
         from clips_worker.regular_auto_layout import apply_regular_auto_layout
 
         edits = apply_regular_auto_layout(

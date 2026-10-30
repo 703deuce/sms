@@ -365,7 +365,8 @@ def pick_talking_clips(
         content_type_from_picker_moment,
         section_activity_for_moment,
         stream_majority_clip_type,
-        video_moment_for_pick,
+        upload_project_majority_type,
+        video_moment_match_for_pick,
     )
 
     stream_majority = None
@@ -390,10 +391,10 @@ def pick_talking_clips(
             ],
             "low_confidence": p.get("low_confidence", False),
         }
-        vm_match = (
-            video_moment_for_pick(visual_moments, int(p["start_ms"]), int(p["end_ms"]))
+        vm_match, vm_iou = (
+            video_moment_match_for_pick(visual_moments, int(p["start_ms"]), int(p["end_ms"]))
             if visual_moments
-            else None
+            else (None, 0.0)
         )
         p["aiMeta"]["videoMoment"] = (
             {
@@ -403,10 +404,15 @@ def pick_talking_clips(
             if vm_match
             else None
         )
+        p["aiMeta"]["videoMomentMatchIou"] = round(float(vm_iou), 4)
         p["aiMeta"]["sectionActivity"] = (
             section_activity_for_moment(vm_match, vp_sections) if vm_match else None
         )
         p["aiMeta"]["streamMajorityType"] = stream_majority
         p["scores"] = p.get("scores") or {}
+
+    upload_majority = upload_project_majority_type(picks)
+    for p in picks:
+        p["aiMeta"]["uploadProjectMajorityType"] = upload_majority
     picker_info("picker_done", selected=len(picks))
     return picks, None

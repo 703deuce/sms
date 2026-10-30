@@ -995,7 +995,7 @@ export function EditorShell({
           projectId={projectId}
           channelId={streamChannelId}
           clipType={(aiMeta as ClipAiMeta | null)?.clipType ?? null}
-          mediaOffsetMs={media?.offsetMs ?? 0}
+          mediaOffsetMs={mediaOffsetMs}
         />
         </EditorPanelErrorBoundary>
       </div>
