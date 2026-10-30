@@ -321,8 +321,8 @@ def test_v3_has_extras_sticker() -> None:
 def test_badge_rect_export_bar() -> None:
     rect = badge_rect("export_bar", 1080, 1920, video_y=384, video_h=998)
     assert rect["w"] > 0 and rect["h"] > 0
-    assert rect["x"] >= 0 and rect["y"] > 0
-    assert rect["x"] == (1080 - rect["w"]) // 2
+    assert rect["x"] == 14
+    assert rect["y"] == 24
 
 
 def test_badge_rect_golden_2xrakai_show_logo() -> None:
@@ -337,11 +337,11 @@ def test_badge_rect_golden_2xrakai_show_logo() -> None:
     )
     assert rect["w"] == 235
     assert rect["h"] == 64
-    assert rect["x"] == 422
-    assert rect["y"] == 384 + 998 - 64 - 12
+    assert rect["x"] == 14
+    assert rect["y"] == 24
 
 
-def test_badge_rect_fit_top_band_centered() -> None:
+def test_badge_rect_fit_top_band_top_left() -> None:
     rect = badge_rect(
         "fit_top_band",
         1080,
@@ -351,7 +351,8 @@ def test_badge_rect_fit_top_band_centered() -> None:
         video_y=520,
         video_h=608,
     )
-    assert rect["x"] == (1080 - rect["w"]) // 2
+    assert rect["x"] == 14
+    assert rect["y"] == 24
 
 
 def test_stage_plan_includes_sprites() -> None:
