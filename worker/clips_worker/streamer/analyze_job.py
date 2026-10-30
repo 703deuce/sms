@@ -658,6 +658,11 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     has_facecam=has_fc,
                     facecam_confidence=fc_conf,
                 )
+                channel_clip_type_layouts = None
+                proj_streamer = settings.get("streamer") if isinstance(settings.get("streamer"), dict) else {}
+                raw_ct_layouts = proj_streamer.get("clipTypeLayouts")
+                if isinstance(raw_ct_layouts, dict):
+                    channel_clip_type_layouts = raw_ct_layouts
                 init_edits = apply_clip_type_layout_to_edits(
                     init_edits,
                     clip_type=str(type_info["clipType"]),
@@ -666,6 +671,7 @@ def _run_stream_analyze_job_inner(conn, job: dict, post_progress, payload: dict,
                     stream_facecam_layout=stream_facecam_layout,
                     headline_on=headline_on,
                     fallback_archetype=layout_archetype,
+                    channel_clip_type_layouts=channel_clip_type_layouts,
                 )
                 layout_mode = str((init_edits.get("layout") or {}).get("mode") or "fit_top")
                 ai_meta = enrich_streamer_meta(

@@ -136,7 +136,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     sourceSegKey ? storage.getObjectSizeBytes(sourceSegKey).catch(() => null) : Promise.resolve(null),
     prisma.streamVod.findUnique({
       where: { projectId: project.id },
-      select: { chatSource: true, chatMessages: true, sourceType: true, state: true },
+      select: { chatSource: true, chatMessages: true, sourceType: true, state: true, channelId: true },
     }),
     previewKey ? createCachedSignedDownloadUrl(storage, previewKey).catch(() => null) : Promise.resolve(null),
     clip.posterKey ? createCachedSignedDownloadUrl(storage, clip.posterKey).catch(() => null) : Promise.resolve(null),
@@ -253,6 +253,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     capabilities: clipperCapabilities(),
     aiMeta,
     brollMedia,
+    streamChannelId: streamVod?.channelId ?? null,
   }
   console.info('[clipper:detail] ms', { clipId, total: Date.now() - detailStartedAt })
   return payload

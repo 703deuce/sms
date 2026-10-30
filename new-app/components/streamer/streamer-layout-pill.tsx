@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { LayoutEditorDialog } from '@/components/streamer/layout-editor-dialog'
+import Link from 'next/link'
 
 export function StreamerLayoutPill({
   projectId,
@@ -10,7 +9,6 @@ export function StreamerLayoutPill({
   projectId: string
   layout: Record<string, unknown> | null
 }) {
-  const [open, setOpen] = useState(false)
   const l = layout as { layout?: string; confidence?: number; source?: string } | null
   const label =
     l?.layout === 'stack'
@@ -19,15 +17,12 @@ export function StreamerLayoutPill({
         ? 'Gameplay only'
         : 'Layout: auto'
   return (
-    <>
-      <button
-        type="button"
-        className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
-        onClick={() => setOpen(true)}
-      >
-        {label}
-      </button>
-      <LayoutEditorDialog projectId={projectId} open={open} onOpenChange={setOpen} initialLayout={layout} />
-    </>
+    <Link
+      href={`/app/clips/${projectId}`}
+      className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+      title="Per-clip layout is edited in each clip's Layout panel"
+    >
+      {label} · edit per clip
+    </Link>
   )
 }

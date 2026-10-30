@@ -56,6 +56,46 @@ def _facecam_edits_from_stream_layout(stream_layout: dict[str, Any] | None) -> d
     }
 
 
+def _edits_from_channel_clip_type_preset(preset: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(preset, dict):
+        return None
+    mode = str(preset.get("mode") or "").strip()
+    if not mode:
+        return None
+    fc = preset.get("facecam")
+    layout: dict[str, Any] = {"mode": mode}
+    if isinstance(fc, dict) and isinstance(fc.get("box"), dict):
+        layout["facecam"] = {
+            k: fc[k]
+            for k in ("box", "gameplay", "split", "position", "pipCorner")
+            if fc.get(k) is not None
+        }
+    return layout
+
+
+def apply_channel_clip_type_layout(
+    edits: dict,
+    *,
+    clip_type: str,
+    channel_layouts: dict[str, Any] | None,
+) -> dict:
+    """Merge saved per-channel / per-clip-type layout defaults (T5 Part D)."""
+    if not channel_layouts or not isinstance(channel_layouts, dict):
+        return edits
+    ct = (clip_type or "other").strip().lower()
+    preset = channel_layouts.get(ct)
+    if not isinstance(preset, dict):
+        return edits
+    layout_patch = _edits_from_channel_clip_type_preset(preset)
+    if not layout_patch:
+        return edits
+    layout = dict(edits.get("layout") or {})
+    layout.update(layout_patch)
+    if isinstance(layout_patch.get("facecam"), dict):
+        layout["facecam"] = layout_patch["facecam"]
+    return {**edits, "layout": layout}
+
+
 def apply_clip_type_layout_to_edits(
     edits: dict,
     *,
@@ -65,6 +105,7 @@ def apply_clip_type_layout_to_edits(
     stream_facecam_layout: dict[str, Any] | None,
     headline_on: bool,
     fallback_archetype: str | None = None,
+    channel_clip_type_layouts: dict[str, Any] | None = None,
 ) -> dict:
     """Per-clip auto layout (T5). IRL / just_chatting keep speaker_follow; gaming uses stack when facecam confident."""
     ct = (clip_type or "other").strip().lower()
@@ -87,17 +128,26 @@ def apply_clip_type_layout_to_edits(
                 reason="gaming_facecam_stack",
                 facecam_confidence=round(facecam_confidence, 3),
             )
-            return out
+            return apply_channel_clip_type_layout(
+                out,
+                clip_type=ct,
+                channel_layouts=channel_clip_type_layouts,
+            )
 
     if ct == "gaming":
         mode, reason = resolve_content_layout_mode(archetype="gaming_stream", headline_on=headline_on)
         layout["mode"] = mode
-        return apply_content_layout_to_edits(
+        out = apply_content_layout_to_edits(
             {**edits, "layout": layout},
             archetype="gaming_stream",
             headline_on=headline_on,
             log=True,
             archetype_source=reason,
+        )
+        return apply_channel_clip_type_layout(
+            out,
+            clip_type=ct,
+            channel_layouts=channel_clip_type_layouts,
         )
 
     if ct in ("irl", "just_chatting", "podcast"):
@@ -114,14 +164,24 @@ def apply_clip_type_layout_to_edits(
             layout_mode=layout["mode"],
             reason=reason,
         )
+        out = apply_channel_clip_type_layout(
+            out,
+            clip_type=ct,
+            channel_layouts=channel_clip_type_layouts,
+        )
         return out
 
-    return apply_content_layout_to_edits(
+    out = apply_content_layout_to_edits(
         edits,
         archetype=fallback_archetype,
         headline_on=headline_on,
         log=True,
         archetype_source="clip_type_fallback",
+    )
+    return apply_channel_clip_type_layout(
+        out,
+        clip_type=ct,
+        channel_layouts=channel_clip_type_layouts,
     )
 
 

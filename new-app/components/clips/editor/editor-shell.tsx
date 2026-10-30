@@ -108,6 +108,7 @@ export function EditorShell({
   vodChat = null,
   projectStatus = null,
   facecamLayout = null,
+  streamChannelId = null,
 }: {
   projectId: string
   projectTitle?: string
@@ -135,6 +136,7 @@ export function EditorShell({
   } | null
   projectStatus?: string | null
   facecamLayout?: FacecamLayoutState | null
+  streamChannelId?: string | null
 }) {
   const [title, setTitle] = useState(initialTitle)
   useSetBreadcrumbTitle('project', projectTitle)
@@ -988,6 +990,11 @@ export function EditorShell({
           }
           facecamLayout={facecamLayout}
           onOpenLayersTab={openLayersTab}
+          videoUrl={videoUrl}
+          posterUrl={posterUrl}
+          projectId={projectId}
+          channelId={streamChannelId}
+          clipType={(aiMeta as ClipAiMeta | null)?.clipType ?? null}
         />
         </EditorPanelErrorBoundary>
       </div>

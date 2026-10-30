@@ -22,7 +22,7 @@ import {
   type ClipGapToolSettings,
 } from '@/components/clips/editor/clip-shorten-gaps-panel'
 import type { SourceWord } from '@/lib/clips/source-words'
-import { FacecamLayoutControls } from '@/components/clips/editor/facecam-layout-controls'
+import { FacecamLayoutStudio } from '@/components/clips/editor/facecam-layout-studio'
 
 export function LayoutPanel({
   edits,
@@ -48,6 +48,11 @@ export function LayoutPanel({
   headlinePlatform,
   facecamLayout = null,
   onOpenLayersTab,
+  videoUrl = null,
+  posterUrl = null,
+  projectId,
+  channelId = null,
+  clipType = null,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -76,6 +81,11 @@ export function LayoutPanel({
   headlinePlatform?: 'twitch' | 'kick'
   facecamLayout?: FacecamLayoutState | null
   onOpenLayersTab?: () => void
+  videoUrl?: string | null
+  posterUrl?: string | null
+  projectId?: string
+  channelId?: string | null
+  clipType?: string | null
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -246,7 +256,16 @@ export function LayoutPanel({
         </p>
       ) : null}
       {onEdits ? (
-        <FacecamLayoutControls edits={edits} facecamLayout={facecamLayout} onEdits={onEdits} />
+        <FacecamLayoutStudio
+          edits={edits}
+          facecamLayout={facecamLayout}
+          onEdits={onEdits}
+          videoUrl={videoUrl}
+          posterUrl={posterUrl}
+          projectId={projectId}
+          channelId={channelId}
+          clipType={clipType}
+        />
       ) : null}
       {layoutOptions.length > 0 ? (
       <div className="grid gap-2 sm:grid-cols-2">

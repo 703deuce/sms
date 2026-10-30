@@ -334,6 +334,11 @@ def build_ass(
         fontsize = int(spec_fs)
     position = edits_captions.get("position") or preset["position"]
     margin_v = margin_v_px(play_h, float(edits_captions.get("marginVPct") or preset["marginVPct"]))
+    if edits_captions.get("_assMarginV") is not None:
+        margin_v = int(edits_captions["_assMarginV"])
+    ass_align = alignment_for(position)
+    if edits_captions.get("_assAlignment") is not None:
+        ass_align = int(edits_captions["_assAlignment"])
     max_line_w = edits_captions.get("_composeSpecMaxLineWidthPx")
     if max_line_w is not None:
         max_line_w = int(max_line_w)
@@ -361,8 +366,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{font_name},{fontsize},{cap_pri},{cap_pri},{cap_out},&H99000000,0,0,0,0,100,100,0,0,1,{cap_ow},0,{alignment_for(position)},{margin_lr},{margin_lr},{margin_v},1
-Style: Box,{font_name},{fontsize},{box_pri},{box_pri},{box_outline},&H99000000,0,0,0,0,100,100,0,0,3,{box_pad},0,{alignment_for(position)},{margin_lr},{margin_lr},{margin_v},1
+Style: Cap,{font_name},{fontsize},{cap_pri},{cap_pri},{cap_out},&H99000000,0,0,0,0,100,100,0,0,1,{cap_ow},0,{ass_align},{margin_lr},{margin_lr},{margin_v},1
+Style: Box,{font_name},{fontsize},{box_pri},{box_pri},{box_outline},&H99000000,0,0,0,0,100,100,0,0,3,{box_pad},0,{ass_align},{margin_lr},{margin_lr},{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

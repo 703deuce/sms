@@ -634,6 +634,14 @@ def _legacy_compose(
             "_composeSpecMaxLineWidthPx": cap_spec.get("maxLineWidthPx"),
             "_composeSpecAssFontsize": cap_spec.get("assFontsize"),
         }
+    elif ctx.get("facecam_seam_captions") and isinstance(cap_edits, dict):
+        from clips_worker.clip_layout_render import caption_edits_for_seam
+
+        cap_edits = caption_edits_for_seam(
+            cap_edits,
+            play_h=play_h,
+            stack_split=float(ctx.get("facecam_stack_split") or 0.4),
+        )
     elif (layout_mode == "fit_top" or stream_frame_applied) and isinstance(cap_edits, dict):
         cap_edits = {**cap_edits, "marginVPct": 6, "position": "bottom"}
     if int(cap_edits.get("enabled", True)):
@@ -936,23 +944,12 @@ def apply_v3_sprite_overlays(video: Path, out: Path, sprites: list[dict], work_d
     subprocess.check_call(cmd)
 
 
-def _facecam_layout_for_render(edits: dict, stream_layout: dict) -> tuple[dict | None, str]:
-    layout_ed = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
-    fc_meta = layout_ed.get("facecam") if isinstance(layout_ed.get("facecam"), dict) else {}
-    box = fc_meta.get("box") if isinstance(fc_meta.get("box"), dict) else None
-    if box and all(k in box for k in ("x", "y", "w", "h")):
-        lay: dict = {
-            "facecam": box,
-            "split": fc_meta.get("split"),
-            "facecamPosition": fc_meta.get("position") or fc_meta.get("facecamPosition") or "top",
-        }
-        gameplay = fc_meta.get("gameplay")
-        if isinstance(gameplay, dict):
-            lay["gameplay"] = gameplay
-        return lay, "editor"
-    if stream_layout.get("facecam"):
-        return stream_layout, "stream"
-    return None, "fallback"
+def _facecam_layout_for_render(edits: dict, stream_layout: dict | None = None) -> tuple[dict | None, str]:
+    """Backward-compatible wrapper — stream_layout ignored (T5 Part C)."""
+    del stream_layout
+    from clips_worker.clip_layout_render import facecam_layout_for_render
+
+    return facecam_layout_for_render(edits)
 
 
 def _apply_facecam_or_pip_layout(
@@ -963,52 +960,13 @@ def _apply_facecam_or_pip_layout(
     *,
     play_w: int,
     play_h: int,
-) -> tuple[Path, bool]:
-    layout_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
-    ai = settings.get("aiMeta") if isinstance(settings.get("aiMeta"), dict) else {}
-    streamer = ai.get("streamer") if isinstance(ai.get("streamer"), dict) else {}
-    stream_layout = streamer.get("layout") if isinstance(streamer.get("layout"), dict) else {}
-    lay, source = _facecam_layout_for_render(edits, stream_layout)
-    if layout_mode in ("stack", "facecam_stack"):
-        if lay and lay.get("facecam"):
-            from clips_worker.streamer.layout.render_stack import render_stack_mp4
+) -> tuple[Path, bool, dict]:
+    del settings
+    from clips_worker.clip_layout_render import apply_per_clip_layout
 
-            stacked = work_dir / "facecam_stack.mp4"
-            try:
-                render_stack_mp4(clip_src, stacked, lay, out_w=play_w, out_h=play_h)
-                print(f"[clipper:facecam] facecam_applied mode=stack source={source}", flush=True)
-                return stacked, True
-            except Exception as e:
-                print(
-                    f"[clipper:facecam] facecam_fallback mode=stack err={type(e).__name__}:{str(e)[:120]}",
-                    flush=True,
-                )
-        else:
-            print("[clipper:facecam] facecam_fallback mode=stack reason=no_facecam_box", flush=True)
-    if layout_mode in ("screen_pip", "facecam_pip"):
-        from clips_worker.streamer.layout.render_stack import render_pip_mp4
-
-        pip_layout = lay if lay and lay.get("facecam") else None
-        if pip_layout:
-            pip_out = work_dir / "screen_pip_layout.mp4"
-            try:
-                render_pip_mp4(
-                    clip_src,
-                    pip_out,
-                    pip_layout,
-                    out_w=play_w,
-                    out_h=play_h,
-                )
-                print(f"[clipper:facecam] facecam_applied mode=pip source={source}", flush=True)
-                return pip_out, True
-            except Exception as e:
-                print(
-                    f"[clipper:facecam] facecam_fallback mode=pip err={type(e).__name__}:{str(e)[:120]}",
-                    flush=True,
-                )
-        else:
-            print("[clipper:facecam] facecam_fallback mode=pip reason=no_facecam_box", flush=True)
-    return clip_src, False
+    result = apply_per_clip_layout(clip_src, work_dir, edits, play_w=play_w, play_h=play_h)
+    meta = {"seam_captions": result.seam_captions, "stack_split": result.stack_split}
+    return result.path, result.applied, meta
 
 
 def compose_export(
@@ -1210,7 +1168,7 @@ def render_edited_clip(
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
     play_w, play_h = aspect_size(aspect, resolution)
-    clip_src, facecam_applied = _apply_facecam_or_pip_layout(
+    clip_src, facecam_applied, layout_meta = _apply_facecam_or_pip_layout(
         clip_src,
         work_dir,
         edits,
@@ -1388,6 +1346,8 @@ def render_edited_clip(
         "render_id": rid,
         "stage": stage,
         "compose_spec": compose_spec if use_spec else None,
+        "facecam_seam_captions": bool(layout_meta.get("seam_captions")),
+        "facecam_stack_split": layout_meta.get("stack_split"),
     }
     compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
     if compositor_off:

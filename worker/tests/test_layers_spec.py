@@ -276,8 +276,8 @@ def test_facecam_layout_reads_editor_box() -> None:
             "facecam": {"box": {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.25}, "split": 0.35},
         }
     }
-    lay, source = _facecam_layout_for_render(edits, {})
-    assert source == "editor"
+    lay, source = _facecam_layout_for_render(edits, {"facecam": {"x": 0.9, "y": 0.9, "w": 0.1, "h": 0.1}})
+    assert source == "clip_edits"
     assert lay is not None
     assert lay["facecam"] == {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.25}
 
