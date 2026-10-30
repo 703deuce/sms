@@ -27,10 +27,6 @@ from clips_worker.video_picker_prompt import (
     min_moments_for_video,
     min_moments_rule_description,
 )
-from clips_worker.video_picker_coverage import (
-    compute_uncovered_spans,
-    uncovered_labels_for_prompt,
-)
 
 _MIN_MOMENT_S = 5.0
 _TIME_EPS_S = 0.35
