@@ -101,6 +101,7 @@ def pick_talking_clips(
 
     visual_moments: list[dict] = []
     video_context: str | None = None
+    vp_sections: list | None = None
     from pathlib import Path
 
     from clips_worker.video_picker import (
@@ -136,6 +137,7 @@ def pick_talking_clips(
                 range_start_ms=range_start_ms,
                 sections=vp_meta.get("sections"),
             )
+            vp_sections = vp_meta.get("sections")
             if not vp_meta.get("ok"):
                 from clips_worker.picker.picker_errors import VideoPickerRetryableError
 
@@ -359,6 +361,19 @@ def pick_talking_clips(
         picker_info("picker_empty", message=msg)
         return [], msg
 
+    from clips_worker.clip_type import (
+        content_type_from_picker_moment,
+        section_activity_for_moment,
+        stream_majority_clip_type,
+        video_moment_for_pick,
+    )
+
+    stream_majority = None
+    if visual_moments:
+        stream_majority = stream_majority_clip_type(
+            [content_type_from_picker_moment(m, None) for m in visual_moments]
+        )
+
     for p in picks:
         ensure_clip_title(p, words, layout_genre, source_ms=source_ms)
         ss, es = p["start_sentence"], p["end_sentence"]
@@ -375,6 +390,23 @@ def pick_talking_clips(
             ],
             "low_confidence": p.get("low_confidence", False),
         }
+        vm_match = (
+            video_moment_for_pick(visual_moments, int(p["start_ms"]), int(p["end_ms"]))
+            if visual_moments
+            else None
+        )
+        p["aiMeta"]["videoMoment"] = (
+            {
+                k: vm_match.get(k)
+                for k in ("content_type", "category", "start_ms", "end_ms", "start_s", "end_s")
+            }
+            if vm_match
+            else None
+        )
+        p["aiMeta"]["sectionActivity"] = (
+            section_activity_for_moment(vm_match, vp_sections) if vm_match else None
+        )
+        p["aiMeta"]["streamMajorityType"] = stream_majority
         p["scores"] = p.get("scores") or {}
     picker_info("picker_done", selected=len(picks))
     return picks, None

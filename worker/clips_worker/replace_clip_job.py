@@ -143,7 +143,24 @@ def run_replace_clip_job(conn, job: dict, post_progress) -> None:
         ai_meta["userFeedback"] = None
         idx = 99
         resolved_layout = resolve_clip_layout(settings, idx)
-        clip_settings = {**settings, "layout": resolved_layout}
+        polish = apply_clip_polish_initial(
+            initial_clip_edits(settings),
+            pick,
+            clip_words,
+            settings,
+        )
+        edits_final, type_info, _fc = _finalize_regular_clip_edits(
+            polish,
+            clip_file,
+            clip_words,
+            settings,
+            settings.get("mode") or "talking",
+            pick=pick,
+            work_dir=td_path / "work",
+        )
+        layout_ed = edits_final.get("layout") if isinstance(edits_final.get("layout"), dict) else {}
+        final_mode = str(layout_ed.get("mode") or resolved_layout)
+        clip_settings = {**settings, "layout": resolved_layout, "layoutMode": final_mode}
         rendered, crop_method, _ = reframe_clip_preview(
             clip_file,
             out_mp4,
@@ -170,6 +187,12 @@ def run_replace_clip_job(conn, job: dict, post_progress) -> None:
             upload_file(keys["crop_track"], crop_track_path, "application/json")
             crop_key = keys["crop_track"]
         ai_meta_out = finalize_clip_ai_meta(pick, ai_meta, crop_method, resolved_layout)
+        ai_meta_out = {
+            **ai_meta_out,
+            **type_info,
+            "layoutMode": final_mode,
+            "layoutResolved": final_mode,
+        }
         row = {
             "id": clip_id,
             "projectId": project_id,
@@ -184,18 +207,7 @@ def run_replace_clip_job(conn, job: dict, post_progress) -> None:
             "posterKey": keys["poster"],
             "wordsKey": keys["words"],
             "cropKey": crop_key,
-            "edits": _finalize_regular_clip_edits(
-                apply_clip_polish_initial(
-                    initial_clip_edits(settings),
-                    pick,
-                    clip_words,
-                    settings,
-                ),
-                clip_file,
-                clip_words,
-                settings,
-                settings.get("mode") or "talking",
-            ),
+            "edits": edits_final,
             "aiMeta": ai_meta_out,
         }
         insert_clips_batch(conn, [row])

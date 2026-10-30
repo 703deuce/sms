@@ -53,6 +53,7 @@ export function LayoutPanel({
   projectId,
   channelId = null,
   clipType = null,
+  mediaOffsetMs = 0,
 }: {
   edits: ClipEditsV2
   shots: CropShot[]
@@ -86,6 +87,7 @@ export function LayoutPanel({
   projectId?: string
   channelId?: string | null
   clipType?: string | null
+  mediaOffsetMs?: number
 }) {
   const zoom = edits.zoom || { enabled: false, intensity: 1.08 }
   const silence = edits.silenceTrim || { enabled: false, minGapMs: 600, keepMs: 150 }
@@ -236,23 +238,20 @@ export function LayoutPanel({
       {(() => {
         const savedFacecamMode =
           edits.layout.mode === 'facecam_stack' || edits.layout.mode === 'facecam_pip'
-        if (!savedFacecamMode || facecamLayout?.facecam) return null
+        if (!savedFacecamMode || facecamLayout?.facecam || edits.layout.facecam?.box) return null
         const label =
           edits.layout.mode === 'facecam_stack' ? 'Facecam stack' : 'Facecam PiP'
         return (
-          <p className="text-xs text-amber-800 dark:text-amber-300" role="note">
-            This clip is set to {label}, but no facecam was detected — export uses Fit with blur. Pick a
-            layout.
+          <p className="text-xs text-muted-foreground" role="note">
+            No facecam detected — drag the Facecam box onto the webcam in the layout editor below.
           </p>
         )
       })()}
       {layoutOptions.some((l) => l.id === 'facecam_stack' || l.id === 'facecam_pip') &&
       !facecamLayout?.facecam &&
-      edits.layout.mode !== 'facecam_stack' &&
-      edits.layout.mode !== 'facecam_pip' ? (
-        <p className="text-xs text-amber-800 dark:text-amber-300" role="note">
-          Facecam stack and PiP need detected facecam boxes from the VOD. Run stream layout detection or pick another
-          layout.
+      !edits.layout.facecam?.box ? (
+        <p className="text-xs text-muted-foreground" role="note">
+          No facecam detected — drag the Facecam box onto the webcam in the layout editor below.
         </p>
       ) : null}
       {onEdits ? (
@@ -265,6 +264,7 @@ export function LayoutPanel({
           projectId={projectId}
           channelId={channelId}
           clipType={clipType}
+          sourceTimeSec={(edits.trim.in - mediaOffsetMs) / 1000}
         />
       ) : null}
       {layoutOptions.length > 0 ? (

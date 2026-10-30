@@ -708,15 +708,18 @@ def layout_slots(layout: str, out_w: int, out_h: int, n: int) -> list[tuple[int,
 
 # ---------------------------------------------------------------- Stage 8b: compositing (OpenCV pipe renderer)
 def blur_fit(fr: np.ndarray, out_w: int, out_h: int, *, blur_px: int = 51, interp=cv2.INTER_LINEAR) -> np.ndarray:
-    """Whole frame scaled to out_w, centred over a blurred, zoomed copy (speakercrop.render_wide, faster:
-    blur at 1/4 size and upscale, same look)."""
+    """Cover-crop background, blur hard, darken slightly; foreground letterboxed (wide layout)."""
     H, W = fr.shape[:2]
-    small = cv2.resize(fr, (out_w // 4, out_h // 4), interpolation=cv2.INTER_AREA)
-    k = max(3, blur_px // 4 | 1)
-    bg = cv2.resize(cv2.GaussianBlur(small, (k, k), 0), (out_w, out_h), interpolation=cv2.INTER_LINEAR)
+    s = max(out_w / max(W, 1), out_h / max(H, 1))
+    cw, ch = int(round(out_w / s)), int(round(out_h / s))
+    x0, y0 = max(0, (W - cw) // 2), max(0, (H - ch) // 2)
+    small = cv2.resize(fr[y0 : y0 + ch, x0 : x0 + cw], (out_w // 8, out_h // 8), interpolation=cv2.INTER_AREA)
+    small = cv2.GaussianBlur(small, (0, 0), sigmaX=6)
+    bg = cv2.resize(small, (out_w, out_h), interpolation=cv2.INTER_LINEAR)
+    bg = cv2.convertScaleAbs(bg, alpha=0.9, beta=0)
     nh = min(out_h, int(round(H * out_w / W)) // 2 * 2)
-    y0 = (out_h - nh) // 2
-    bg[y0:y0 + nh] = cv2.resize(fr, (out_w, nh), interpolation=interp)
+    fg_y0 = (out_h - nh) // 2
+    bg[fg_y0 : fg_y0 + nh] = cv2.resize(fr, (out_w, nh), interpolation=interp)
     return bg
 
 

@@ -190,7 +190,11 @@ def reframe_clip_preview(
     render_meta: dict = {}
 
     layout_cfg = settings.get("layout") if isinstance(settings.get("layout"), dict) else {}
-    layout_mode = str(layout_cfg.get("mode") or "speaker_follow").lower()
+    layout_mode = str(
+        settings.get("layoutMode") or layout_cfg.get("mode") or settings.get("layout") or "speaker_follow"
+    ).lower()
+    if isinstance(settings.get("layout"), str):
+        layout_mode = str(settings.get("layoutMode") or settings.get("layout") or "speaker_follow").lower()
     needs_speaker_reframe = motion_subject or bool(settings.get("autoZoom"))
     if layout_mode in ("fit_blur", "fit_top", "fit", "center_crop", "full_frame", "fill"):
         needs_speaker_reframe = False
@@ -387,6 +391,56 @@ def streamer_initial_clip_edits(
     return edits
 
 
+def _regular_clip_type_and_layout(
+    edits: dict,
+    clip_file: Path,
+    pick: dict | None,
+    settings: dict,
+    work_dir: Path,
+) -> tuple[dict, dict, dict | None]:
+    from clips_worker.clip_type import resolve_clip_type
+    from clips_worker.clip_layout_policy import apply_clip_type_layout_to_edits
+
+    meta = (pick or {}).get("aiMeta") or {}
+    vm = meta.get("videoMoment")
+    fc_layout = None
+    ct_guess = resolve_clip_type(
+        moment=vm,
+        section_activity=meta.get("sectionActivity"),
+        stream_majority=meta.get("streamMajorityType"),
+        has_facecam=False,
+        facecam_confidence=0.0,
+    )["clipType"]
+    if ct_guess == "gaming":
+        from clips_worker.streamer.layout.detect_facecam import detect_facecam_layout
+
+        try:
+            fc_layout = detect_facecam_layout(clip_file, work_dir, n_samples=24)
+        except Exception:
+            fc_layout = None
+    has_fc = bool(isinstance(fc_layout, dict) and isinstance(fc_layout.get("facecam"), dict))
+    fc_conf = float((fc_layout or {}).get("confidence") or 0.0)
+    type_info = resolve_clip_type(
+        moment=vm,
+        section_activity=meta.get("sectionActivity"),
+        stream_majority=meta.get("streamMajorityType"),
+        has_facecam=has_fc,
+        facecam_confidence=fc_conf,
+    )
+    headline_on = bool(((edits.get("exportTemplate") or {}).get("headlineBar") or {}).get("enabled"))
+    edits = apply_clip_type_layout_to_edits(
+        edits,
+        clip_type=type_info["clipType"],
+        has_facecam=has_fc,
+        facecam_confidence=fc_conf,
+        stream_facecam_layout=fc_layout,
+        headline_on=headline_on,
+        fallback_archetype=str(meta.get("archetype") or ""),
+        channel_clip_type_layouts=None,
+    )
+    return edits, type_info, fc_layout
+
+
 def _finalize_regular_clip_edits(
     edits: dict,
     clip_file: Path,
@@ -395,21 +449,23 @@ def _finalize_regular_clip_edits(
     mode: str,
     *,
     pick: dict | None = None,
-) -> dict:
+    work_dir: Path | None = None,
+) -> tuple[dict, dict, dict | None]:
     if mode == "anything" or settings.get("streamer"):
-        return edits
-    from clips_worker.clip_layout_policy import apply_content_layout_to_edits
+        return edits, {}, None
+    wd = work_dir or clip_file.parent
+    edits, type_info, _fc = _regular_clip_type_and_layout(edits, clip_file, pick, settings, wd)
+    ct = str(type_info.get("clipType") or "other")
+    if ct in ("just_chatting", "podcast", "other"):
+        from clips_worker.regular_auto_layout import apply_regular_auto_layout
 
-    archetype = str((pick or {}).get("archetype") or "")
-    edits = apply_content_layout_to_edits(edits, archetype=archetype, headline_on=False)
-    from clips_worker.regular_auto_layout import apply_regular_auto_layout
-
-    return apply_regular_auto_layout(
-        edits,
-        clip_file,
-        clip_words,
-        streamer=bool(settings.get("streamer")),
-    )
+        edits = apply_regular_auto_layout(
+            edits,
+            clip_file,
+            clip_words,
+            streamer=bool(settings.get("streamer")),
+        )
+    return edits, type_info, _fc
 
 
 def mark_project_ready(conn, project_id: str, error: str | None = None) -> None:
@@ -704,7 +760,24 @@ def run_m4_pipeline(
                     crop_track_path = td_path / f"crop_track_{idx}.json"
                     ai_meta = pick.get("aiMeta") or {}
                     resolved_layout = resolve_clip_layout(settings, idx)
-                    clip_settings = {**settings, "layout": resolved_layout}
+                    polish_edits = apply_clip_polish_initial(
+                        _regular_initial_edits(settings, pick, clip_words),
+                        pick,
+                        clip_words,
+                        settings,
+                    )
+                    edits_final, type_info, _fc = _finalize_regular_clip_edits(
+                        polish_edits,
+                        clip_file,
+                        clip_words,
+                        settings,
+                        mode,
+                        pick=pick,
+                        work_dir=td_path / f"reframe_work_{idx}",
+                    )
+                    layout_ed = edits_final.get("layout") if isinstance(edits_final.get("layout"), dict) else {}
+                    final_mode = str(layout_ed.get("mode") or resolved_layout)
+                    clip_settings = {**settings, "layout": resolved_layout, "layoutMode": final_mode}
                     rendered, crop_method, _reframe_settings = reframe_clip_preview(
                         clip_file,
                         out_mp4,
@@ -736,6 +809,12 @@ def run_m4_pipeline(
                         raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
 
                     ai_meta_out = finalize_clip_ai_meta(pick, ai_meta, crop_method, resolved_layout)
+                    ai_meta_out = {
+                        **ai_meta_out,
+                        **type_info,
+                        "layoutMode": final_mode,
+                        "layoutResolved": final_mode,
+                    }
                     if mode == "anything" and not crop_key:
                         raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
 
@@ -753,19 +832,7 @@ def run_m4_pipeline(
                         "posterKey": keys["poster"],
                         "wordsKey": keys["words"],
                         "cropKey": crop_key,
-                        "edits": _finalize_regular_clip_edits(
-                            apply_clip_polish_initial(
-                                _regular_initial_edits(settings, pick, clip_words),
-                                pick,
-                                clip_words,
-                                settings,
-                            ),
-                            clip_file,
-                            clip_words,
-                            settings,
-                            mode,
-                            pick=pick,
-                        ),
+                        "edits": edits_final,
                         "aiMeta": ai_meta_out,
                     }
 
@@ -1097,7 +1164,24 @@ def run_m4_pipeline(
                     crop_track_path = td_path / f"crop_track_{idx}.json"
                     ai_meta = pick.get("aiMeta") or {}
                     resolved_layout = resolve_clip_layout(settings, idx)
-                    clip_settings = {**settings, "layout": resolved_layout}
+                    polish_edits = apply_clip_polish_initial(
+                        _regular_initial_edits(settings, pick, clip_words),
+                        pick,
+                        clip_words,
+                        settings,
+                    )
+                    edits_final, type_info, _fc = _finalize_regular_clip_edits(
+                        polish_edits,
+                        clip_file,
+                        clip_words,
+                        settings,
+                        mode,
+                        pick=pick,
+                        work_dir=td_path / f"reframe_work_{idx}",
+                    )
+                    layout_ed = edits_final.get("layout") if isinstance(edits_final.get("layout"), dict) else {}
+                    final_mode = str(layout_ed.get("mode") or resolved_layout)
+                    clip_settings = {**settings, "layout": resolved_layout, "layoutMode": final_mode}
                     rendered, crop_method, _reframe_settings = reframe_clip_preview(
                         clip_file,
                         out_mp4,
@@ -1129,6 +1213,12 @@ def run_m4_pipeline(
                         raise RuntimeError(f"ClipAnything clip missing crop track: {clip_id}")
 
                     ai_meta_out = finalize_clip_ai_meta(pick, ai_meta, crop_method, resolved_layout)
+                    ai_meta_out = {
+                        **ai_meta_out,
+                        **type_info,
+                        "layoutMode": final_mode,
+                        "layoutResolved": final_mode,
+                    }
                     if mode == "anything" and not crop_key:
                         raise RuntimeError(f"ClipAnything clip missing cropKey: {clip_id}")
 
@@ -1146,19 +1236,7 @@ def run_m4_pipeline(
                         "posterKey": keys["poster"],
                         "wordsKey": keys["words"],
                         "cropKey": crop_key,
-                        "edits": _finalize_regular_clip_edits(
-                            apply_clip_polish_initial(
-                                _regular_initial_edits(settings, pick, clip_words),
-                                pick,
-                                clip_words,
-                                settings,
-                            ),
-                            clip_file,
-                            clip_words,
-                            settings,
-                            mode,
-                            pick=pick,
-                        ),
+                        "edits": edits_final,
                         "aiMeta": ai_meta_out,
                     }
 

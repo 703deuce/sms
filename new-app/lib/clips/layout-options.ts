@@ -1,4 +1,5 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { DEFAULT_FACECAM_BOX, DEFAULT_GAMEPLAY_BOX } from '@/lib/clips/facecam-geometry'
 import { isClipLayoutBeta } from '@/lib/clips/clipper-layout-beta'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 
@@ -70,7 +71,6 @@ export function layoutOptionDisabled(
 ): boolean {
   if (opt.disabled) return !ctx.aiExtras
   if (isClipLayoutBeta(opt.id) && !ctx.reframeV2Enabled) return !ctx.aiExtras
-  if (opt.needsFacecam && !ctx.facecamLayout?.facecam) return true
   return false
 }
 
@@ -102,6 +102,18 @@ export function layoutPickPayload(
         gameplay: effectiveFacecam.gameplay ?? undefined,
         split: effectiveFacecam.split ?? 0.35,
         position: effectiveFacecam.facecamPosition ?? 'top',
+        pipCorner: edits.layout.facecam?.pipCorner ?? 'BR',
+      },
+    }
+  }
+  if (needsFacecamPick) {
+    return {
+      mode,
+      facecam: {
+        box: { ...DEFAULT_FACECAM_BOX },
+        gameplay: { ...DEFAULT_GAMEPLAY_BOX },
+        split: 0.35,
+        position: 'top',
         pipCorner: edits.layout.facecam?.pipCorner ?? 'BR',
       },
     }

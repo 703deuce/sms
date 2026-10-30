@@ -37,7 +37,7 @@ def fit_blur_overlay_filter(in_label: str, out_label: str, width: int, height: i
     return (
         f"[{in_label}]split=2[a][b];"
         f"[a]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
-        f"boxblur=20:2,eq=brightness=0.8:saturation=0.92[bg];"
+        f"boxblur=30:3,eq=brightness=-0.06:saturation=0.9[bg];"
         f"[b]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
         f"[bg][fg]overlay=(W-w)/2:(H-h)/2[{out_label}]"
     )

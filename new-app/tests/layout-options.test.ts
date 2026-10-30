@@ -5,9 +5,9 @@ import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
 describe('layout-options', () => {
   const bounds = { clipStartMs: 0, clipEndMs: 60_000 }
 
-  it('disables facecam options without facecam', () => {
+  it('allows facecam options on uploads without stream-detected boxes', () => {
     const pip = LAYOUT_OPTIONS.find((o) => o.id === 'facecam_pip')!
-    expect(layoutOptionDisabled(pip, { facecamLayout: null, reframeV2Enabled: true, aiExtras: false })).toBe(true)
+    expect(layoutOptionDisabled(pip, { facecamLayout: null, reframeV2Enabled: true, aiExtras: false })).toBe(false)
   })
 
   it('layoutPickPayload matches facecam payload shape', () => {

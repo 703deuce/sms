@@ -2,6 +2,15 @@ import type { CSSProperties } from 'react'
 import type { FacecamBox } from '@/lib/clips/edits'
 import { stackHeights } from '@/lib/streamer/layout-math'
 
+export const DEFAULT_FACECAM_BOX: FacecamBox = { x: 0.02, y: 0.02, w: 0.32, h: 0.28 }
+export const DEFAULT_GAMEPLAY_BOX: FacecamBox = { x: 0, y: 0, w: 1, h: 1 }
+
+/** 9:16 crop window on 16:9 source (full height). */
+export function defaultUploadCropBox(): FacecamBox {
+  const w = (9 / 16) / (16 / 9)
+  return { x: (1 - w) / 2, y: 0, w, h: 1 }
+}
+
 /** CSS to show a normalized source crop filling a container (object-cover math). */
 export function coverBoxStyle(box: FacecamBox): CSSProperties {
   const w = Math.max(0.01, box.w)

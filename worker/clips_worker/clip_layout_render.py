@@ -52,7 +52,19 @@ def facecam_layout_for_render(edits: dict) -> tuple[dict | None, str]:
     return None, "none"
 
 
-def _render_center_fill(src: Path, dest: Path, *, play_w: int, play_h: int) -> None:
+def _render_center_fill(
+    src: Path,
+    dest: Path,
+    *,
+    play_w: int,
+    play_h: int,
+    crop_box: dict | None = None,
+) -> None:
+    if crop_box and all(k in crop_box for k in ("x", "y", "w", "h")):
+        x, y, w, h = float(crop_box["x"]), float(crop_box["y"]), float(crop_box["w"]), float(crop_box["h"])
+        vf = f"crop=iw*{w}:ih*{h}:iw*{x}:ih*{y},scale={play_w}:{play_h}"
+    else:
+        vf = f"scale={play_w}:{play_h}:force_original_aspect_ratio=increase,crop={play_w}:{play_h}"
     subprocess.check_call(
         [
             "ffmpeg",
@@ -62,7 +74,7 @@ def _render_center_fill(src: Path, dest: Path, *, play_w: int, play_h: int) -> N
             "-i",
             str(src),
             "-vf",
-            f"scale={play_w}:{play_h}:force_original_aspect_ratio=increase,crop={play_w}:{play_h}",
+            vf,
             "-c:v",
             "libx264",
             "-preset",
@@ -190,8 +202,10 @@ def apply_per_clip_layout(
 
     if layout_mode in ("center_crop", "fill"):
         out = work_dir / "center_fill_layout.mp4"
+        layout_ed = edits.get("layout") if isinstance(edits.get("layout"), dict) else {}
+        crop_box = layout_ed.get("cropBox") if isinstance(layout_ed.get("cropBox"), dict) else None
         try:
-            _render_center_fill(clip_src, out, play_w=play_w, play_h=play_h)
+            _render_center_fill(clip_src, out, play_w=play_w, play_h=play_h, crop_box=crop_box)
             print("[clipper:layout] center_fill_applied", flush=True)
             return ClipLayoutApplyResult(out, True)
         except Exception as e:

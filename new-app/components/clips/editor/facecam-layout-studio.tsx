@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { coverBoxStyle, stackPanelStyles } from '@/lib/clips/facecam-geometry'
+import { coverBoxStyle, stackPanelStyles, DEFAULT_FACECAM_BOX, DEFAULT_GAMEPLAY_BOX, defaultUploadCropBox } from '@/lib/clips/facecam-geometry'
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
@@ -17,15 +17,22 @@ function clamp01(n: number) {
 }
 
 function defaultFacecam(): NormBox {
-  return { x: 0.02, y: 0.02, w: 0.32, h: 0.28 }
+  return { ...DEFAULT_FACECAM_BOX }
 }
 
 function defaultGameplay(): NormBox {
-  return { x: 0, y: 0, w: 1, h: 0.72 }
+  return { ...DEFAULT_GAMEPLAY_BOX }
 }
 
 type DragKind = 'move' | 'resize' | null
-type BoxTarget = 'face' | 'game'
+type BoxTarget = 'face' | 'game' | 'crop'
+
+function seekVideoToClip(e: React.SyntheticEvent<HTMLVideoElement>, sourceTimeSec: number) {
+  const el = e.currentTarget
+  if (Number.isFinite(sourceTimeSec) && sourceTimeSec >= 0) {
+    el.currentTime = sourceTimeSec + 0.5
+  }
+}
 
 export function FacecamLayoutStudio({
   edits,
@@ -36,6 +43,7 @@ export function FacecamLayoutStudio({
   projectId,
   channelId,
   clipType,
+  sourceTimeSec = 0,
 }: {
   edits: ClipEditsV2
   facecamLayout: FacecamLayoutState | null
@@ -45,6 +53,7 @@ export function FacecamLayoutStudio({
   projectId?: string
   channelId?: string | null
   clipType?: string | null
+  sourceTimeSec?: number
 }) {
   const mode = edits.layout.mode
   const showStudio =
@@ -56,13 +65,20 @@ export function FacecamLayoutStudio({
     mode === 'full_frame' ||
     mode === 'center_crop' ||
     mode === 'fill' ||
-    mode === 'split'
+    mode === 'split' ||
+    mode === 'speaker_follow' ||
+    mode === 'auto'
 
   const fc = edits.layout.facecam
   const faceBox = fc?.box ?? facecamLayout?.facecam ?? defaultFacecam()
   const gameBox = fc?.gameplay ?? facecamLayout?.gameplay ?? defaultGameplay()
   const split = fc?.split ?? facecamLayout?.split ?? 0.35
   const position = fc?.position ?? facecamLayout?.facecamPosition ?? 'top'
+  const cropBox = edits.layout.cropBox ?? defaultUploadCropBox()
+  const showCropBox =
+    mode === 'center_crop' || mode === 'fill' || mode === 'speaker_follow' || mode === 'auto'
+  const wholeFrameHint =
+    mode === 'fit_blur' || mode === 'fit_top' || mode === 'full_frame'
 
   const sourceRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
@@ -93,10 +109,24 @@ export function FacecamLayoutStudio({
     [edits, faceBox, gameBox, split, position, fc?.pipCorner, onEdits],
   )
 
+  const patchCrop = useCallback(
+    (next: NormBox) => {
+      onEdits({
+        ...edits,
+        layout: {
+          ...edits.layout,
+          mode: 'center_crop',
+          cropBox: next,
+        },
+      })
+    },
+    [edits, onEdits],
+  )
+
   const onPointerDown = (e: React.PointerEvent, target: BoxTarget, kind: DragKind) => {
     if (!kind) return
     e.preventDefault()
-    const box = target === 'face' ? faceBox : gameBox
+    const box = target === 'face' ? faceBox : target === 'game' ? gameBox : cropBox
     dragRef.current = { kind, target, startX: e.clientX, startY: e.clientY, origin: { ...box } }
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }
@@ -122,7 +152,8 @@ export function FacecamLayoutStudio({
       next.y = Math.min(o.y, 1 - next.h)
     }
     if (drag.target === 'face') patchFacecam({ box: next })
-    else patchFacecam({ gameplay: next })
+    else if (drag.target === 'game') patchFacecam({ gameplay: next })
+    else patchCrop(next)
   }
 
   const onPointerUp = () => {
@@ -179,18 +210,23 @@ export function FacecamLayoutStudio({
           {videoUrl ? (
             <video
               src={videoUrl}
-              poster={posterUrl ?? undefined}
               className="absolute inset-0 h-full w-full object-contain"
               muted
               playsInline
-              preload="metadata"
+              preload="auto"
+              onLoadedMetadata={(e) => seekVideoToClip(e, sourceTimeSec)}
             />
           ) : posterUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
+            <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No preview</div>
           )}
+          {wholeFrameHint ? (
+            <p className="pointer-events-none absolute bottom-2 inset-x-2 z-10 text-center text-[10px] text-white/90 drop-shadow">
+              Whole frame is used.
+            </p>
+          ) : null}
           {(mode === 'facecam_stack' || mode === 'facecam_pip') && (
             <>
               <BoxOverlay
@@ -209,6 +245,15 @@ export function FacecamLayoutStudio({
               />
             </>
           )}
+          {showCropBox ? (
+            <BoxOverlay
+              label="Crop"
+              box={cropBox}
+              color="border-emerald-400/80"
+              onMove={(e) => onPointerDown(e, 'crop', 'move')}
+              onResize={(e) => onPointerDown(e, 'crop', 'resize')}
+            />
+          ) : null}
         </div>
         <div
           className="relative mx-auto aspect-[9/16] w-full max-w-[120px] overflow-hidden rounded-md border border-border bg-black"
@@ -226,7 +271,8 @@ export function FacecamLayoutStudio({
                   style={coverBoxStyle(faceBox)}
                   muted
                   playsInline
-                  preload="metadata"
+                  preload="auto"
+                  onLoadedMetadata={(e) => seekVideoToClip(e, sourceTimeSec)}
                 />
               </div>
               <div
@@ -239,12 +285,20 @@ export function FacecamLayoutStudio({
                   style={coverBoxStyle(gameBox)}
                   muted
                   playsInline
-                  preload="metadata"
+                  preload="auto"
+                  onLoadedMetadata={(e) => seekVideoToClip(e, sourceTimeSec)}
                 />
               </div>
             </>
           ) : videoUrl ? (
-            <video src={videoUrl} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+            <video
+              src={videoUrl}
+              className="h-full w-full object-cover"
+              muted
+              playsInline
+              preload="auto"
+              onLoadedMetadata={(e) => seekVideoToClip(e, sourceTimeSec)}
+            />
           ) : null}
         </div>
       </div>

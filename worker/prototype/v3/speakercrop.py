@@ -328,14 +328,19 @@ def tile(fr, j, k):            # 9:8 tile (720x640 out) around person k's face
     return cv2.resize(fr[y0:y0 + th, x0:x0 + tw], (OUT_W, OUT_H // 2), interpolation=cv2.INTER_CUBIC)
 
 def render_wide(fr):
-    bg = cv2.resize(fr, (OUT_W, OUT_H))
-    bg = cv2.GaussianBlur(bg, (51, 51), 0)
+    s = max(OUT_W / max(W, 1), OUT_H / max(H, 1))
+    cw, ch = int(round(OUT_W / s)), int(round(OUT_H / s))
+    x0, y0 = max(0, (W - cw) // 2), max(0, (H - ch) // 2)
+    small = cv2.resize(fr[y0 : y0 + ch, x0 : x0 + cw], (OUT_W // 8, OUT_H // 8), interpolation=cv2.INTER_AREA)
+    small = cv2.GaussianBlur(small, (0, 0), sigmaX=6)
+    bg = cv2.resize(small, (OUT_W, OUT_H), interpolation=cv2.INTER_LINEAR)
+    bg = cv2.convertScaleAbs(bg, alpha=0.9, beta=0)
     scale = OUT_W / max(W, 1)
     nh = int(H * scale)
     fg = cv2.resize(fr, (OUT_W, nh), interpolation=cv2.INTER_CUBIC)
-    y0 = max(0, (OUT_H - nh) // 2)
+    fg_y0 = max(0, (OUT_H - nh) // 2)
     out = bg.copy()
-    out[y0:y0 + nh, :] = fg
+    out[fg_y0 : fg_y0 + nh, :] = fg
     return out
 
 def render_fill(fr):

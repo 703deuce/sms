@@ -83,6 +83,8 @@ export type ClipEditsV2 = {
     shotOverrides: { i: number; focus: 'auto' | 'A' | 'B' | 'both' }[]
     layoutSegments?: LayoutSegment[]
     facecam?: ClipLayoutFacecam
+    /** Normalized pan crop for Fill / speaker_follow (upload editor). */
+    cropBox?: FacecamBox
     /** User chose layout in editor — skip auto IRL headline ↔ layout sync. */
     userPicked?: boolean
   }
@@ -275,20 +277,22 @@ function normalizeHookOverlay(raw: unknown): ClipEditsV2['hookOverlay'] | undefi
   }
 }
 
+function normalizeNormBox(raw: unknown): FacecamBox | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const x = Number(r.x)
+  const y = Number(r.y)
+  const w = Number(r.w)
+  const h = Number(r.h)
+  if (![x, y, w, h].every(Number.isFinite)) return undefined
+  return { x, y, w, h }
+}
+
 function normalizeFacecam(raw: unknown): ClipLayoutFacecam | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const o = raw as Record<string, unknown>
   const boxRaw = o.box
-  const parseBox = (b: unknown): FacecamBox | undefined => {
-    if (!b || typeof b !== 'object') return undefined
-    const r = b as Record<string, unknown>
-    const x = Number(r.x)
-    const y = Number(r.y)
-    const w = Number(r.w)
-    const h = Number(r.h)
-    if (![x, y, w, h].every(Number.isFinite)) return undefined
-    return { x, y, w, h }
-  }
+  const parseBox = (b: unknown): FacecamBox | undefined => normalizeNormBox(b)
   const split = Number(o.split)
   const pipCorner = o.pipCorner
   const position = o.position
@@ -395,6 +399,8 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
       shotOverrides,
       layoutSegments: normalizeLayoutSegments(layoutRaw.layoutSegments, trim.in, trim.out, mode),
       facecam: normalizeFacecam(layoutRaw.facecam) ?? base.layout.facecam,
+      cropBox: normalizeNormBox((layoutRaw as { cropBox?: unknown }).cropBox),
+      userPicked: (layoutRaw as { userPicked?: boolean }).userPicked === true ? true : undefined,
     },
     aspectRatio,
     broll: normalizeBrollItems(o.broll, outputDurationMs({ ...base, ...o, v: 2 } as ClipEditsV2)),
@@ -481,6 +487,7 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     edits.cutRanges.length === 0 &&
     Object.keys(edits.wordFixes).length === 0 &&
     (edits.layout.shotOverrides?.length ?? 0) === 0 &&
+    !edits.layout.cropBox &&
     !normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out) &&
     !isSpeechLevelingEnabled(edits) &&
     normalizeEditSpeed(edits.speed) === undefined

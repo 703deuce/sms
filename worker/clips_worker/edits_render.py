@@ -318,6 +318,15 @@ def _maybe_static_fit_blur_crop_track(
     return track
 
 
+def _preview_crop_track_for_export(edits: dict, preview_crop_track: Path | None) -> Path | None:
+    dom_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
+    if editor_mode_uses_static_fit_blur(dom_mode):
+        return None
+    if preview_crop_track is not None and preview_crop_track.is_file():
+        return preview_crop_track
+    return None
+
+
 def run_speakercrop_layout_timeline(
     clip_src: Path,
     out_mp4: Path,
@@ -354,11 +363,14 @@ def run_speakercrop_layout_timeline(
         wpath = work_dir / "words_export.json"
         wpath.write_text(json.dumps(words_clip_relative))
         dom_mode = str((edits.get("layout") or {}).get("mode") or "speaker_follow")
-        crop_track = (
-            preview_crop_track
-            if preview_crop_track is not None and preview_crop_track.is_file()
-            else _maybe_static_fit_blur_crop_track(clip_src, work_dir, clip_start_ms, dom_mode)
-        )
+        from clips_worker.layout_router import editor_mode_uses_static_fit_blur
+
+        if editor_mode_uses_static_fit_blur(dom_mode):
+            crop_track = _maybe_static_fit_blur_crop_track(clip_src, work_dir, clip_start_ms, dom_mode)
+        elif preview_crop_track is not None and preview_crop_track.is_file():
+            crop_track = preview_crop_track
+        else:
+            crop_track = None
         run_speakercrop(
             clip_src,
             out_mp4,
@@ -1169,7 +1181,7 @@ def render_edited_clip(
             workspace_id=workspace_id,
             project_id=project_id,
             clip_id=clip_id,
-            preview_crop_track=preview_crop_track,
+            preview_crop_track=_preview_crop_track_for_export(edits, preview_crop_track),
         )
         stage("speakercrop_fast_done")
         if render_meta is not None:
@@ -1295,7 +1307,7 @@ def render_edited_clip(
             workspace_id=workspace_id,
             project_id=project_id,
             clip_id=clip_id,
-            preview_crop_track=preview_crop_track,
+            preview_crop_track=_preview_crop_track_for_export(edits, preview_crop_track),
         )
         stage("speakercrop_nc_done")
 
