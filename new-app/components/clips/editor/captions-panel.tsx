@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolveCaptionPreset, resolvePreset } from '@/lib/clips/caption-presets'
+import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
+import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { VocabEntry } from '@/lib/clips/clip-export-user-types'
 import { wordDisplayText } from '@/lib/clips/edits'
@@ -349,7 +351,33 @@ export function CaptionsPanel({
           </ul>
         </div>
       ) : null}
+      {t6CaptionPresetsEnabled() ? (
+        <div className="space-y-2 border-t pt-3">
+          <p className="text-xs font-medium text-muted-foreground">CP presets (T6)</p>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(CAPTION_PRESETS_V2)
+              .filter(([id, p]) => id.startsWith('cp') && !(p as { deferred?: boolean }).deferred)
+              .map(([id, p]) => {
+                const active = presetId === id
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onChange({ ...cap, enabled: cap.enabled !== false, presetId: id })}
+                    className={cn(
+                      'rounded-lg border p-2 text-left text-xs',
+                      active ? 'border-primary ring-2 ring-primary/20' : 'border-border',
+                    )}
+                  >
+                    {(p as { name?: string }).name ?? id}
+                  </button>
+                )
+              })}
+          </div>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2">
+        <p className="col-span-2 text-xs font-medium text-muted-foreground">Classic</p>
         {CAPTION_PRESETS.map((p) => {
           const id = presetSlugToId(p.slug)
           const active = id === presetId

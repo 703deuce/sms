@@ -13,11 +13,18 @@ export async function listCaptionPresets(workspaceId: string) {
 
 export async function createCaptionPreset(workspaceId: string, name: string, config: Record<string, unknown>) {
   const prisma = getPrisma()
+  const basePresetId =
+    typeof config.basePresetId === 'string'
+      ? config.basePresetId
+      : typeof config.presetId === 'string'
+        ? config.presetId
+        : null
   return prisma.captionPreset.create({
     data: {
       id: createId('cpre'),
       workspaceId,
       name: name.trim(),
+      basePresetId,
       config: config as Prisma.InputJsonValue,
     },
   })
