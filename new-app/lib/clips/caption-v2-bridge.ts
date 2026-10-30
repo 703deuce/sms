@@ -26,6 +26,7 @@ export function mapV2PresetToLegacy(p: CaptionPresetV2): Record<string, unknown>
           padX: p.box.padX,
           padY: p.box.padY,
           radius: p.box.radiusPx,
+          opacity: (p.box as { opacity?: number }).opacity,
         }
       : null,
     animation: p.animation.kind === 'stomp' ? 'pop' : p.animation.kind,
@@ -33,6 +34,34 @@ export function mapV2PresetToLegacy(p: CaptionPresetV2): Record<string, unknown>
     highlightMode: p.highlight.mode,
     animationMs: p.animation.ms,
   }
+}
+
+/** T6.2: keys that belong to the legacy preset and must not leak into a CP preset. Mirror of worker
+ * captions_ass.CP_STALE_KEYS. */
+export const CP_STALE_KEYS = [
+  'presetConfig',
+  'colors',
+  'animation',
+  'case',
+  'wordsPerLine',
+  'size',
+  'sizePct',
+  'font',
+  'activeStyle',
+  'highlightColor',
+] as const
+
+/**
+ * T6.2: edits.captions for rendering. For CP presets the legacy keys (bold_pop presetConfig,
+ * colors.a yellow, size 6.5, animation pop…) are dropped so preview == export. Non-CP presets
+ * are returned unchanged.
+ */
+export function effectiveCaptionEdits<T extends { presetId?: string | null }>(cap: T, t6Enabled: boolean): T {
+  const id = cap?.presetId?.trim() ?? ''
+  if (!t6Enabled || !id.startsWith('cp')) return cap
+  const out = { ...cap } as Record<string, unknown>
+  for (const k of CP_STALE_KEYS) delete out[k]
+  return out as T
 }
 
 export function resolveT6CaptionPreset(
@@ -44,18 +73,8 @@ export function resolveT6CaptionPreset(
     const raw = CAPTION_PRESETS_V2[id]
     if (raw && typeof raw === 'object') {
       const mapped = mapV2PresetToLegacy(raw as CaptionPresetV2) as CaptionPreset
-      let base = cap?.font?.trim() ? { ...mapped, font: cap.font.trim() } : mapped
-      const cfg = cap?.presetConfig
-      if (cfg && typeof cfg === 'object') {
-        const merged = { ...base } as Record<string, unknown>
-        const allowed = ['font', 'primary', 'active', 'activeB', 'outline', 'outlineW', 'sizePct']
-        for (const k of allowed) {
-          const v = cfg[k]
-          if (v !== null && v !== undefined && v !== '') merged[k] = v
-        }
-        base = merged as CaptionPreset
-      }
-      return base
+      // T6.2: CP presets are self-contained — no presetConfig/font overrides (see effectiveCaptionEdits).
+      return mapped
     }
   }
   return resolveCaptionPreset(cap)

@@ -8,7 +8,7 @@ import { wordKey } from '@/lib/clips/edits'
 import { activeCaptionWordIndex, captionEmojiForWord, previewCaptionWordIndex } from '@/lib/clips/caption-overlay-active'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { resolveCaptionPreset, type CaptionPreset } from '@/lib/clips/caption-presets'
-import { resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
+import { effectiveCaptionEdits, resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
 import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import { formatCaptionWord, isSentenceBoundary } from '@/lib/clips/caption-case'
 import { captionHighlightContrastText } from '@/lib/clips/caption-active-style'
@@ -48,8 +48,8 @@ export function CaptionOverlay({
   boxHeightPx: number
   outputDurationSec?: number
 }) {
-  const cap = edits.captions ?? {}
   const t6Caps = t6CaptionPresetsEnabled()
+  const cap = effectiveCaptionEdits(edits.captions ?? {}, t6Caps)
   const preset = resolveT6CaptionPreset(cap, t6Caps)
   const captionFont = cap.font?.trim() || preset.font
   const animation = (cap.animation || preset.animation) as string
@@ -107,6 +107,12 @@ export function CaptionOverlay({
   const activeStyle = cap.activeStyle ?? 'color'
   const highlightColor = cap.highlightColor ?? '#FDE047'
   const highlightMode = String((preset as CaptionPreset & { highlightMode?: string }).highlightMode ?? '').toLowerCase()
+  // T6.2: CP line background (Boxed Bold / Stage / Light BG) behind every word, like the export ASS.
+  const cpBox =
+    t6Caps && String(cap.presetId ?? '').startsWith('cp') && preset.box
+      ? (preset.box as { color: string; opacity?: number })
+      : null
+  const cpBoxBg = cpBox ? hexWithAlpha(cpBox.color, cpBox.opacity ?? 0.6) : undefined
 
   if (activeIdx < 0 && !showProgress && !hasEmojiMap) return null
 
@@ -148,6 +154,7 @@ export function CaptionOverlay({
       style={{
         fontFamily: captionFontStack(captionFont),
         fontWeight: captionFontWeight(captionFont, preset.weight),
+        columnGap: cpBoxBg ? 0 : undefined,
         paddingInline: inlinePad,
         maxWidth: `${100 - parseFloat(inlinePad) * 2}%`,
         marginInline: 'auto',
@@ -200,7 +207,9 @@ export function CaptionOverlay({
           transform: isEmph || useT6Supersize ? `scale(${useT6Supersize ? 1.25 : preset.emphasisScale})` : undefined,
           textDecoration: useT6Underline ? 'underline' : undefined,
           textDecorationThickness: useT6Underline ? '0.12em' : undefined,
-          background: useHighlight || useT6Box
+          background: cpBoxBg && !(useHighlight || useT6Box)
+            ? cpBoxBg
+            : useHighlight || useT6Box
             ? highlightBg
               : useFill && active
                 ? `linear-gradient(90deg, ${activeColor} ${Math.min(100, ((currentTimeSec - w.s) / (w.e - w.s)) * 100)}%, ${preset.primary} 0)`
@@ -211,7 +220,7 @@ export function CaptionOverlay({
                     : undefined,
           WebkitBackgroundClip: useFill && active ? 'text' : undefined,
           backgroundClip: useFill && active ? 'text' : undefined,
-          padding: useHighlight || useT6Box
+          padding: cpBoxBg || useHighlight || useT6Box
             ? '0.08em 0.25em'
             : preset.box && (active || isEmph) && activeStyle === 'color'
               ? `${(preset.box.padY * assScale).toFixed(2)}px ${(preset.box.padX * assScale).toFixed(2)}px`
@@ -271,4 +280,14 @@ export function CaptionMiniPreview({ preset, label = 'CLIP' }: { preset: Caption
       />
     </div>
   )
+}
+
+/** T6.2: '#RRGGBB' + opacity → rgba() for the CP line background. */
+function hexWithAlpha(hex: string, alpha: number): string {
+  const h = hex.replace('#', '')
+  if (h.length !== 6) return hex
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`
 }

@@ -105,6 +105,13 @@ def _src_box(name: str, signals: dict, edits: dict, *, panel_aspect: float = 9 /
         if name == "action_box_widened":
             return widen_to_aspect(base, panel_aspect)
         return base
+    if name == "gameplay_box":
+        # T6.2: whole game region (user-dragged Gameplay box, else full frame) — never a zoomed crop.
+        if isinstance(boxes.get("gameplay"), dict):
+            return dict(boxes["gameplay"])
+        if isinstance(fc.get("gameplay"), dict):
+            return dict(fc["gameplay"])
+        return dict(DEFAULT_FULL)
     if name == "trim_sides":
         return _trim_sides_box(signals, edits)
     if name == "content_box":
@@ -132,8 +139,8 @@ def _pip_dest(pip: dict, signals: dict, edits: dict, play_w: int, play_h: int) -
     if not isinstance(pip, dict):
         return None
     frac = float(pip.get("w") or 0.3)
-    size = _even(play_w * frac)
     src = _src_box(str(pip.get("src") or "facecam_box"), signals, edits)
+    size, pip_h, shape = _pip_size(src, frac, play_w, str(pip.get("shape") or "circle"))
     action = _src_box("action_box", signals, edits)
     ax = float(action.get("x") or 0) + float(action.get("w") or 1) / 2
     ay = float(action.get("y") or 0) + float(action.get("h") or 1) / 2
@@ -141,21 +148,45 @@ def _pip_dest(pip: dict, signals: dict, edits: dict, play_w: int, play_h: int) -
     corners = [
         (margin, margin),
         (play_w - size - margin, margin),
-        (margin, play_h - size - margin),
-        (play_w - size - margin, play_h - size - margin),
+        (margin, play_h - pip_h - margin),
+        (play_w - size - margin, play_h - pip_h - margin),
     ]
+    if _headline_on(edits):
+        corners = corners[2:]
 
     def dist(c: tuple[int, int]) -> float:
         cx = c[0] + size / 2
-        cy = c[1] + size / 2
+        cy = c[1] + pip_h / 2
         return (cx / play_w - ax) ** 2 + (cy / play_h - ay) ** 2
 
     x, y = max(corners, key=dist)
     return {
-        "dest": {"x": x, "y": y, "w": size, "h": size},
+        "dest": {"x": x, "y": y, "w": size, "h": pip_h},
         "src": src,
-        "shape": pip.get("shape") or "circle",
+        "shape": shape,
     }
+
+
+def _headline_on(edits: dict) -> bool:
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    return bool(hb.get("enabled") and str(hb.get("text") or "").strip())
+
+
+def _pip_size(src: dict, frac: float, play_w: int, shape: str) -> tuple[int, int, str]:
+    """T6.2: a wide facecam (e.g. 2-person cam strip) keeps its aspect in a rect.
+
+    Cropping a square circle out of the centre of a 3:1 cam box shows the wall between
+    the people. Square-ish boxes keep the registry circle.
+    """
+    w = max(0.01, float(src.get("w") or 0.3))
+    h = max(0.01, float(src.get("h") or 0.3))
+    aspect = (w * SRC_ASPECT) / h
+    if aspect > 1.3:
+        pw = _even(play_w * max(frac, 0.6))
+        return pw, max(2, _even(pw / aspect)), "rect"
+    size = _even(play_w * frac)
+    return size, size, shape
 
 
 def _title_rect(t: dict, bands_out: list[dict], play_w: int, play_h: int) -> dict | None:

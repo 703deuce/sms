@@ -692,6 +692,8 @@ def _legacy_compose(
             "_composeSpecMaxLineWidthPx": cap_spec.get("maxLineWidthPx"),
             "_composeSpecAssFontsize": cap_spec.get("assFontsize"),
         }
+    elif isinstance(ctx.get("t6_spec"), dict) and isinstance(cap_edits, dict):
+        cap_edits = _t6_caption_edits(cap_edits, ctx["t6_spec"], play_h)
     elif ctx.get("facecam_seam_captions") and isinstance(cap_edits, dict):
         from clips_worker.clip_layout_render import caption_edits_for_seam
 
@@ -720,6 +722,11 @@ def _legacy_compose(
         shutil.copy(caption_src, out_mp4)
 
     ho = edits.get("hookOverlay") if isinstance(edits.get("hookOverlay"), dict) else None
+    if ho and ho.get("enabled") and isinstance(ctx.get("t6_spec"), dict) and _t6_headline_on(edits):
+        # T6.2: the template title already shows the hook line; a second DejaVu line under it
+        # reads as a broken caption.
+        print("[t6:hook_skip] reason=title_on", flush=True)
+        ho = None
     if ho and ho.get("enabled") and str(ho.get("text") or "").strip():
         from clips_worker.hook_overlay import apply_hook_overlay
 
@@ -772,7 +779,8 @@ def _legacy_compose(
 
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
     per_clip_vertical = _per_clip_vertical_stack_layout(edits, ctx)
-    if tpl and not stream_frame_applied and not editor_mode_uses_stream_frame(layout_mode):
+    t6_spec = ctx.get("t6_spec") if isinstance(ctx.get("t6_spec"), dict) else None
+    if tpl and (t6_spec or (not stream_frame_applied and not editor_mode_uses_stream_frame(layout_mode))):
         from clips_worker.clip_export_template import apply_export_template
 
         templated = work_dir / "export_template.mp4"
@@ -785,6 +793,7 @@ def _legacy_compose(
             layout_mode=layout_mode,
             vertical_precomposed=per_clip_vertical,
             work_dir=work_dir,
+            t6_spec=t6_spec,
         )
         if result_path.resolve() == templated.resolve() and templated.is_file():
             shutil.copy(templated, out_mp4)
@@ -867,9 +876,34 @@ def _legacy_compose(
     return out_mp4, caption_words
 
 
-def _merge_headline_style_burn(burn_edits: dict, layers: list[dict]) -> dict:
+def _t6_headline_on(edits: dict) -> bool:
+    tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else {}
+    hb = tpl.get("headlineBar") if isinstance(tpl.get("headlineBar"), dict) else {}
+    return bool(hb.get("enabled") and str(hb.get("text") or tpl.get("suggestedHeadline") or "").strip())
+
+
+def _t6_caption_edits(cap_edits: dict, spec: dict, play_h: int) -> dict:
+    """T6.2: bottom-anchor captions inside the template captionRect (export px space)."""
+    rect = spec.get("captionRect") if isinstance(spec.get("captionRect"), dict) else None
+    if not rect:
+        return cap_edits
+    bottom = int(rect.get("y") or 0) + int(rect.get("h") or 0)
+    margin_v = max(0, int(play_h) - bottom)
+    return {**cap_edits, "position": "bottom", "_assAlignment": 2, "_assMarginV": margin_v}
+
+
+def _merge_headline_style_burn(burn_edits: dict, layers: list[dict], edits: dict | None = None) -> dict:
     from clips_worker.layers_spec import _layer_by_id
 
+    src_tpl = (edits or {}).get("exportTemplate") if isinstance((edits or {}).get("exportTemplate"), dict) else {}
+    src_style = src_tpl.get("headlineStyle") if isinstance(src_tpl.get("headlineStyle"), dict) else {}
+    if src_style.get("t6Id"):
+        # T6.2: a T6 title chip is the user's explicit choice — the derived headline layer
+        # (legacy export_bar / bold_news white box) must not overwrite it.
+        out = {**burn_edits}
+        tpl = out.get("exportTemplate") if isinstance(out.get("exportTemplate"), dict) else {}
+        out["exportTemplate"] = {**tpl, "headlineStyle": {"t6Id": str(src_style["t6Id"])}}
+        return out
     hl = _layer_by_id(layers, "headline")
     if not hl or not isinstance(hl.get("style"), dict):
         return burn_edits
@@ -1057,7 +1091,8 @@ def _apply_facecam_or_pip_layout(
                 out = work_dir / f"t6_{tmpl_id}.mp4"
                 render_template(clip_src, out, spec, work_dir, duration_s=probe_duration_s(clip_src))
                 meta = {
-                    "seam_captions": True,
+                    # T6.2: captions follow spec.captionRect, not the facecam-stack seam.
+                    "seam_captions": False,
                     "stack_split": float((tdef.get("panels") or [{}])[0].get("h") or 0.35),
                     "facecam_position": "top",
                     "t6_spec": spec,
@@ -1093,7 +1128,7 @@ def compose_export(
 
     layers = resolve_layers(edits)
     burn_edits = legacy_from_layers(layers, edits)
-    burn_edits = _merge_headline_style_burn(burn_edits, layers)
+    burn_edits = _merge_headline_style_burn(burn_edits, layers, edits)
     plan = _stage_plan(burn_edits)
     source = "v3" if edits.get("layersV") == 3 and isinstance(edits.get("layers"), list) else "derived"
     layer_types = [{"type": l.get("type"), "enabled": l.get("enabled")} for l in layers if l.get("enabled")]
@@ -1475,6 +1510,7 @@ def render_edited_clip(
         "facecam_stack_split": layout_meta.get("stack_split"),
         "facecam_position": layout_meta.get("facecam_position"),
         "per_clip_layout_applied": bool(facecam_applied),
+        "t6_spec": layout_meta.get("t6_spec") if isinstance(layout_meta.get("t6_spec"), dict) else None,
     }
     compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
     if compositor_off:

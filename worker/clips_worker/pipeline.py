@@ -560,7 +560,12 @@ def _finalize_regular_clip_edits(
 
             signals = type_info.get("signals") if isinstance(type_info.get("signals"), dict) else {}
             meta = (pick or {}).get("aiMeta") or {}
-            user_default = (settings.get("captions") or {}).get("presetId")
+            cap_settings = settings.get("captions") if isinstance(settings.get("captions"), dict) else {}
+            user_default = cap_settings.get("presetId")
+            if user_default == "bold_pop" and not cap_settings.get("userChosen"):
+                # T6.2: every project is created with settings.captions.presetId="bold_pop" (the
+                # legacy default), which made the CP auto-pick dead code. Only an explicit choice wins.
+                user_default = None
             cap = dict(edits.get("captions") or {})
             if user_default:
                 cap["presetId"] = user_default

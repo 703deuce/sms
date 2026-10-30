@@ -148,11 +148,14 @@ def build_template_filtergraph(
         psrc = pip.get("src") or {"x": 0, "y": 0, "w": 0.32, "h": 0.28}
         pchain, ptag = _panel_src_filter("0:v", "pip", psrc, pw, ph, "cover", src_w=src_w, src_h=src_h)
         parts.append(pchain)
-        parts.append(
-            f"[{ptag}]format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
-            f"a='if(lte(hypot(X-{pw // 2},Y-{ph // 2}),{pw // 2}),255,0)'[pipmask]"
-        )
-        parts.append(f"[{over}][pipmask]overlay={px}:{py}[o{idx}]")
+        if str(pip.get("shape") or "circle") == "circle":
+            parts.append(
+                f"[{ptag}]format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
+                f"a='if(lte(hypot(X-{pw // 2},Y-{ph // 2}),{pw // 2}),255,0)'[pipmask]"
+            )
+            parts.append(f"[{over}][pipmask]overlay={px}:{py}[o{idx}]")
+        else:
+            parts.append(f"[{over}][{ptag}]overlay={px}:{py}[o{idx}]")
         over = f"o{idx}"
         idx += 1
     if over != "vout":

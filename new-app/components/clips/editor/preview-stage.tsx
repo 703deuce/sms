@@ -9,7 +9,7 @@ import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { resolveTemplateGeometryById } from '@/lib/clips/templates/geometry'
 import { signalsOrDefaults } from '@/lib/clips/templates/signals'
-import { TemplateStage } from '@/components/clips/editor/template-stage'
+import { TemplateStage, TemplateTitleOverlay } from '@/components/clips/editor/template-stage'
 import { cropPanX, normalizeCropTrack, type CropTrack } from '@/lib/clips/crop-track'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { shotAt } from '@/lib/clips/crop-track'
@@ -24,7 +24,7 @@ import { CaptionOverlay } from '@/components/clips/editor/caption-overlay'
 import { ExportTemplateOverlay } from '@/components/clips/export-template-overlay'
 import { PreviewSafeZoneOverlay } from '@/components/clips/editor/preview-safe-zone'
 import { STREAM_HEADLINE_BAR_FRAC } from '@/lib/clips/headline-band-layout'
-import { nearestPipCorner, pipCornerSlotStyle } from '@/lib/clips/headline-preview-style'
+import { headlinePreviewFontFamily, nearestPipCorner, pipCornerSlotStyle } from '@/lib/clips/headline-preview-style'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
@@ -500,8 +500,8 @@ export function PreviewStage({
             videoUrl={videoUrl}
             posterUrl={posterUrl}
             primaryVideoRef={videoRefInner}
-            seekTime={captionTimeSec}
-            paused={!playing}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
             lowResWarning={
               (media?.height ?? 1080) < 720 &&
               templatePreview.panels.some((p) => p.src.w < 0.5 && p.dest.h > templatePreview.playH * 0.3)
@@ -830,8 +830,18 @@ export function PreviewStage({
             platform={(edits.exportTemplate?.exportPlatformId ?? 'tiktok') as ExportPlatformId}
           />
         ) : null}
+        {templatePreview && edits.exportTemplate?.headlineBar?.enabled ? (
+          <TemplateTitleOverlay
+            spec={templatePreview}
+            text={edits.exportTemplate.headlineBar.text?.trim() || edits.exportTemplate.suggestedHeadline?.trim() || ''}
+            styleId={edits.exportTemplate.headlineStyle?.t6Id}
+            boxWidth={box.w}
+            fontFamily={headlinePreviewFontFamily('Anton')}
+          />
+        ) : null}
         {!compositePreview ? (
         <ExportTemplateOverlay
+          hideHeadline={Boolean(templatePreview)}
           edits={edits as ClipEditsV2}
           boxWidth={box.w}
           boxHeight={box.h}

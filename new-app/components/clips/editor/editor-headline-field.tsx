@@ -191,7 +191,7 @@ export function EditorHeadlineField({
           ))}
         </div>
       ) : null}
-      {setLayers && layers ? (
+      {setLayers && layers && !t6TitleAutoEnabled() ? (
         <div className="flex flex-wrap gap-2">
           {(['stream_white_box', 'export_bar'] as const).map((preset) => (
             <Button key={preset} type="button" size="sm" variant="outline" onClick={() => applyHeadlineLayerStyle(preset)}>

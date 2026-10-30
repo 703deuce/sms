@@ -225,6 +225,83 @@ def _v3_badge_sprite_will_render(edits: dict) -> bool:
         return False
 
 
+def _t6_title_burn(
+    video: Path,
+    out: Path,
+    edits: dict,
+    headline: str,
+    spec: dict,
+    *,
+    play_w: int,
+    play_h: int,
+    scratch: Path,
+) -> Path:
+    """T6.2: draw the title background + text in spec.titleRect (or a top bar) in place."""
+    rect = spec.get("titleRect") if isinstance(spec.get("titleRect"), dict) else None
+    if not rect or int(rect.get("h") or 0) < 8:
+        bar = stream_headline_frame_layout(play_w, play_h)["bar_h"]
+        rect = {"x": 0, "y": 0, "w": play_w, "h": bar}
+    x, y = int(rect.get("x") or 0), int(rect.get("y") or 0)
+    w, h = max(2, int(rect.get("w") or play_w)), max(2, int(rect.get("h") or 0))
+    style = _headline_style_from_edits(edits)
+    t6_id = str(style.get("t6Id") or "")
+    bg: dict = {}
+    if t6_id:
+        from clips_worker.t6_titles import title_style
+
+        bg = title_style(t6_id).get("bg") or {}
+    kind = str(bg.get("kind") or ("band" if style.get("boxColor") else "none"))
+    stage = scratch / "t6_title_bg.mp4"
+    if kind == "blur":
+        bright = "0.22" if str(style.get("textColor") or "").upper() in ("#111111", "#000000") else "-0.28"
+        fc = (
+            f"[0:v]split=2[a][b];[b]crop={w}:{h}:{x}:{y},boxblur=20:2,eq=brightness={bright}[bl];"
+            f"[a][bl]overlay={x}:{y}[vout]"
+        )
+    elif kind == "box":
+        from clips_worker.layer_sprites import render_headline_box_png
+
+        bw, bh = int(w * 0.9), int(h * 0.72)
+        png = render_headline_box_png(
+            bw, bh, str(bg.get("color") or "#FFFFFF"), int(bg.get("radiusPx") or 0), scratch / "t6_title_box.png"
+        )
+        fc = (
+            f"movie={png}:loop=0,setpts=N/FRAME_RATE/TB[hl];"
+            f"[0:v][hl]overlay=x={x + (w - bw) // 2}:y={y + (h - bh) // 2}:shortest=1[vout]"
+        )
+    elif kind == "band":
+        color = str(bg.get("color") or style.get("boxColor") or "#000000")
+        fc = f"[0:v]drawbox=x={x}:y={y}:w={w}:h={h}:color={color}@1:t=fill[vout]"
+    else:
+        fc = "[0:v]null[vout]"
+    subprocess.check_call(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-filter_complex", fc, "-map", "[vout]",
+         "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "copy", str(stage)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    pad = int(w * 0.06)
+    burn_stream_headline(
+        stage,
+        out,
+        format_headline_for_export(headline),
+        play_w=play_w,
+        play_h=play_h,
+        bar_h=h,
+        bar_y=y,
+        duration_ms=_probe_duration_ms(video),
+        text_color=str(style.get("textColor") or "#FFFFFF"),
+        box_color=None,
+        headline_style=style,
+        fit_top=True,
+        scratch_dir=scratch,
+        text_box_x=x + pad,
+        text_box_w=w - 2 * pad,
+    )
+    print(f"[t6:title] t6Id={t6_id or '-'} kind={kind} rect={x},{y},{w},{h}", flush=True)
+    return out
+
+
 def apply_export_template(
     video: Path,
     out: Path,
@@ -236,10 +313,21 @@ def apply_export_template(
     stream_stack: bool = False,
     vertical_precomposed: bool = False,
     work_dir: Path | None = None,
+    t6_spec: dict | None = None,
 ) -> Path:
     tpl = edits.get("exportTemplate") if isinstance(edits.get("exportTemplate"), dict) else None
     if not tpl:
         return video
+    if isinstance(t6_spec, dict):
+        # T6.2: the T6 composite is already the final 9:16 frame — never re-stack, scale or crop
+        # it (that pushed burned captions off-frame). Draw the title in the template's titleRect.
+        hb6 = tpl.get("headlineBar") or {}
+        text6 = str(hb6.get("text") or tpl.get("suggestedHeadline") or "").strip()
+        if not (hb6.get("enabled") and text6):
+            return video
+        return _t6_title_burn(
+            video, out, edits, text6, t6_spec, play_w=play_w, play_h=play_h, scratch=work_dir or video.parent
+        )
 
     scratch = work_dir or video.parent
 

@@ -127,8 +127,8 @@ TEMPLATES: dict[str, dict] = {
         "role": "game",
         "y": 0,
         "h": 1,
-        "src": "action_box",
-        "fit": "cover",
+        "src": "gameplay_box",
+        "fit": "contain_blur",
         "focus": "center"
       }
     ]
@@ -447,8 +447,8 @@ TEMPLATES: dict[str, dict] = {
         "role": "action",
         "y": 0.19,
         "h": 0.64,
-        "src": "trim_sides",
-        "fit": "contain_black",
+        "src": "full",
+        "fit": "contain_blur",
         "focus": "center",
         "x": 0,
         "w": 1

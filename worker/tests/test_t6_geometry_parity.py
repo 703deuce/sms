@@ -65,15 +65,15 @@ def test_i1_panel_height_not_full_frame():
     assert h == 614
 
 
-def test_i4_trim_sides_no_boxes():
+def test_i4_full_frame_contain_blur():
     edits, signals = _fixture_edits_signals()
     edits["layout"]["cropBox"] = None
     edits["layout"]["template"]["boxes"] = {}
     signals = signals_or_defaults({"clipType": "irl", "signals": {}})
     spec = resolve_template_geometry(TEMPLATES["I4"], signals, edits)
     src = spec["panels"][0]["src"]
-    assert spec["panels"][0]["fit"] == "contain_black"
-    assert abs(src["w"] - 0.70) < 0.01
+    assert spec["panels"][0]["fit"] == "contain_blur"
+    assert src["w"] >= 0.98
 
 
 def test_facecam_box_priority_template_over_signals():

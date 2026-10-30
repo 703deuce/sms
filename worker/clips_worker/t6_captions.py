@@ -61,6 +61,7 @@ def map_v2_to_legacy_ass_preset(p: dict) -> dict:
                 "padX": box.get("padX"),
                 "padY": box.get("padY"),
                 "radius": box.get("radiusPx"),
+                "opacity": box.get("opacity"),
             }
             if isinstance(box, dict)
             else None

@@ -66,6 +66,7 @@ export function ExportTemplateOverlay({
   outputDurationMs = 0,
   onStickerMove,
   composeSpec: composeSpecProp,
+  hideHeadline = false,
 }: {
   edits: ClipEditsV2
   boxWidth: number
@@ -77,6 +78,8 @@ export function ExportTemplateOverlay({
   outputDurationMs?: number
   onStickerMove?: (x: number, y: number) => void
   composeSpec?: ComposeSpec | null
+  /** T6.2: template mode draws its own title (TemplateTitleOverlay) in spec.titleRect. */
+  hideHeadline?: boolean
 }) {
   if (boxWidth <= 0 || boxHeight <= 0) return null
   if (burnedIn) return null
@@ -101,7 +104,7 @@ export function ExportTemplateOverlay({
   const useFitTop = layoutMode === 'fit_top' || streamOverlay
   const headlineLayer = layers.find((l): l is HeadlineLayer => l.id === 'headline' && l.type === 'headline')
   const headlineStyle = headlineLayer?.style ?? headlineStyleForPreset(useFitTop ? 'bold_news' : 'export_bar')
-  const headlineOn = Boolean(
+  const headlineOn = !hideHeadline && Boolean(
     tpl?.headlineBar?.enabled && (tpl.headlineBar.text?.trim() || tpl.suggestedHeadline),
   )
   const headline = formatHeadlineForExport(

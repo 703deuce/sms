@@ -10,6 +10,7 @@ import { coverBoxStyle, stackPanelStyles, DEFAULT_FACECAM_BOX, DEFAULT_GAMEPLAY_
 import type { FacecamLayoutState } from '@/lib/server/clips/clip-detail'
 import { clipsFetch } from '@/lib/clips-api'
 import { toast } from 'sonner'
+import { T6_TEMPLATES_BY_ID } from '@/lib/clips/templates/registry'
 
 type NormBox = { x: number; y: number; w: number; h: number }
 
@@ -108,10 +109,17 @@ export function FacecamLayoutStudio({
   const split = fc?.split ?? facecamLayout?.split ?? 0.35
   const position = fc?.position ?? facecamLayout?.facecamPosition ?? 'top'
   const cropBox = edits.layout.cropBox ?? defaultUploadCropBox()
-  const showCropBox =
-    mode === 'center_crop' || mode === 'fill' || mode === 'speaker_follow' || mode === 'auto'
-  const wholeFrameHint =
-    mode === 'fit_blur' || mode === 'fit_top' || mode === 'full_frame'
+  // T6.2: with a T6 template the template's panel sources decide which boxes are editable.
+  const t6Tpl = edits.layout.template?.id ? T6_TEMPLATES_BY_ID[edits.layout.template.id] : undefined
+  const t6Srcs = t6Tpl ? t6Tpl.panels.map((p) => String(p.src)) : []
+  const t6UsesCrop = t6Srcs.some((s) => s === 'action_box' || s === 'action_box_widened' || s === 'trim_sides')
+  const t6UsesFacecam = Boolean(t6Tpl?.pip) || t6Srcs.some((s) => s === 'facecam_box' || s === 'gameplay_box')
+  const showCropBox = t6Tpl
+    ? t6UsesCrop
+    : mode === 'center_crop' || mode === 'fill' || mode === 'speaker_follow' || mode === 'auto'
+  const wholeFrameHint = t6Tpl
+    ? t6Srcs.length > 0 && t6Srcs.every((s) => s === 'full')
+    : mode === 'fit_blur' || mode === 'fit_top' || mode === 'full_frame'
   const clipTypeLabel = clipTypeBadge(clipType ? { clipType } : null)
 
   const sourceRef = useRef<HTMLDivElement>(null)
@@ -126,7 +134,8 @@ export function FacecamLayoutStudio({
 
   const patchFacecam = useCallback(
     (patch: Partial<NonNullable<ClipEditsV2['layout']['facecam']>>) => {
-      const nextMode = FACECAM_LAYOUT_MODES.has(mode) ? mode : 'facecam_stack'
+      // T6.2: never flip the layout mode under an active template (it drives the template render).
+      const nextMode = FACECAM_LAYOUT_MODES.has(mode) || edits.layout.template?.id ? mode : 'facecam_stack'
       onEdits({
         ...edits,
         layout: {
@@ -152,7 +161,8 @@ export function FacecamLayoutStudio({
         ...edits,
         layout: {
           ...edits.layout,
-          mode: 'center_crop',
+          // T6.2: keep the template's mode; the crop box feeds its action_box/trim_sides panel.
+          mode: edits.layout.template?.id ? edits.layout.mode : 'center_crop',
           cropBox: next,
         },
       })
@@ -273,7 +283,7 @@ export function FacecamLayoutStudio({
               Whole frame is used.
             </p>
           ) : null}
-          {(mode === 'facecam_stack' || mode === 'facecam_pip') && (
+          {(mode === 'facecam_stack' || mode === 'facecam_pip' || t6UsesFacecam) && (
             <>
               <BoxOverlay
                 label="Gameplay"
@@ -354,7 +364,7 @@ export function FacecamLayoutStudio({
           ) : null}
         </div>
       </div>
-      {(mode === 'facecam_stack' || mode === 'facecam_pip') && (
+      {(mode === 'facecam_stack' || mode === 'facecam_pip' || t6UsesFacecam) && (
         <>
           <div className="space-y-1">
             <Label className="text-xs">Stack split — top panel {Math.round(split * 100)}% (20–50%)</Label>

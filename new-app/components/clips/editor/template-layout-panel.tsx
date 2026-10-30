@@ -82,7 +82,8 @@ export function TemplateLayoutPanel({
               onClick={() => applyTemplate(t.id, false, 'user_pick')}
             >
               <div className="h-[72px] w-full bg-black">
-                <TemplateStage spec={spec} videoUrl={videoUrl} posterUrl={posterUrl} />
+                {/* T6.2: static poster thumbnails — N live <video>s starved the main preview. */}
+                <TemplateStage spec={spec} videoUrl={videoUrl} posterUrl={posterUrl} staticPoster />
               </div>
               <span className="block bg-muted/40 px-1 py-0.5 text-[10px] font-medium">
                 {t.id} · {t.name}

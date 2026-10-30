@@ -108,6 +108,11 @@ function srcBox(
     const base = edits.layout.cropBox ?? signals.action_box ?? DEFAULT_FULL
     return name === 'action_box_widened' ? widenToAspect(base, panelAspect) : base
   }
+  if (name === 'gameplay_box') {
+    // T6.2 parity with t6_geometry._src_box: whole game region, never a zoomed crop.
+    const g = (boxes as Record<string, FacecamBox | undefined> | undefined)?.gameplay
+    return g ?? edits.layout.facecam?.gameplay ?? DEFAULT_FULL
+  }
   if (name === 'trim_sides') return trimSidesBox(signals, edits)
   if (name === 'content_box') {
     if (boxes?.content) return boxes.content
@@ -130,28 +135,35 @@ function pipDest(
   playH: number,
 ): TemplatePipSpec {
   const frac = Number(pip.w ?? 0.3)
-  const size = even(playW * frac)
   const src = srcBox(String(pip.src ?? 'facecam_box'), signals, edits, 1)
+  // T6.2 parity with t6_geometry._pip_size: wide cam boxes keep aspect (rect).
+  const srcAspect = (Math.max(0.01, src.w) * (16 / 9)) / Math.max(0.01, src.h)
+  const wide = srcAspect > 1.3
+  const size = wide ? even(playW * Math.max(frac, 0.6)) : even(playW * frac)
+  const pipH = wide ? Math.max(2, even(size / srcAspect)) : size
+  const hb = edits.exportTemplate?.headlineBar
+  const headlineOn = Boolean(hb?.enabled && String(hb?.text ?? '').trim())
   const action = srcBox('action_box', signals, edits, 1)
   const ax = action.x + action.w / 2
   const ay = action.y + action.h / 2
   const margin = Math.round(playW * 0.04)
-  const corners: [number, number][] = [
+  const allCorners: [number, number][] = [
     [margin, margin],
     [playW - size - margin, margin],
-    [margin, playH - size - margin],
-    [playW - size - margin, playH - size - margin],
+    [margin, playH - pipH - margin],
+    [playW - size - margin, playH - pipH - margin],
   ]
+  const corners = headlineOn ? allCorners.slice(2) : allCorners
   const dist = (c: [number, number]) => {
     const cx = c[0] + size / 2
-    const cy = c[1] + size / 2
+    const cy = c[1] + pipH / 2
     return (cx / playW - ax) ** 2 + (cy / playH - ay) ** 2
   }
   const [x, y] = corners.reduce((best, c) => (dist(c) > dist(best) ? c : best))
   return {
-    dest: { x, y, w: size, h: size },
+    dest: { x, y, w: size, h: pipH },
     src,
-    shape: String(pip.shape ?? 'circle'),
+    shape: wide ? 'rect' : String(pip.shape ?? 'circle'),
   }
 }
 
