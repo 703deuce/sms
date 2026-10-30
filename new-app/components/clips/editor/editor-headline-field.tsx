@@ -18,6 +18,8 @@ import { clipsFetch } from '@/lib/clips-api'
 import { ExportHeadlinePreview } from '@/components/clips/editor/export-headline-preview'
 import type { HeadlineLayer, Layer } from '@/lib/clips/layers'
 import { headlineStyleForPreset } from '@/lib/clips/overlay-geometry'
+import { t6TitleAutoEnabled } from '@/lib/clips/t6-feature-flags'
+import { TITLE_STYLES } from '@/lib/clips/templates/registry'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useState } from 'react'
@@ -166,6 +168,29 @@ export function EditorHeadlineField({
           {gens}/{EXPORT_HEADLINE_MAX_REGENERATIONS} AI generations
         </span>
       </div>
+      {t6TitleAutoEnabled() ? (
+        <div className="flex flex-wrap gap-2">
+          {Object.keys(TITLE_STYLES).map((id) => (
+            <Button
+              key={id}
+              type="button"
+              size="sm"
+              variant={tpl.headlineStyle?.t6Id === id ? 'default' : 'outline'}
+              onClick={() =>
+                onEdits({
+                  ...edits,
+                  exportTemplate: {
+                    ...tpl,
+                    headlineStyle: { ...(tpl.headlineStyle ?? {}), t6Id: id },
+                  },
+                })
+              }
+            >
+              {id.replace(/_/g, ' ')}
+            </Button>
+          ))}
+        </div>
+      ) : null}
       {setLayers && layers ? (
         <div className="flex flex-wrap gap-2">
           {(['stream_white_box', 'export_bar'] as const).map((preset) => (
