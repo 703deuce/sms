@@ -15,13 +15,25 @@ export type CaptionExportStyle = {
   safeOk: boolean
 }
 
+/** G3a: bottom safe margin by frame shape (worker caption_min_margin_v_pct): 9:16 12, 4:5 10, 1:1 8, 16:9 6. */
+export function captionMinMarginVPct(playW: number | undefined, playH: number): number {
+  if (!playW || !playH) return CAPTION_MIN_MARGIN_V_PCT
+  const r = playW / playH
+  if (r >= 1.5) return 6
+  if (r >= 0.95) return 8
+  if (r >= 0.75) return 10
+  return CAPTION_MIN_MARGIN_V_PCT
+}
+
 export function clampCaptionExportStyle(
   captions: ClipEditsV2['captions'] | undefined,
   playH = 1280,
+  playW?: number,
 ): CaptionExportStyle {
   const preset = resolvePreset(captions?.presetId)
+  const minM = captionMinMarginVPct(playW, playH)
   let marginVPct = Math.max(
-    CAPTION_MIN_MARGIN_V_PCT,
+    minM,
     captions?.marginVPct ?? preset.marginVPct,
   )
   let sizePct = Math.min(CAPTION_MAX_SIZE_PCT, captions?.size ?? preset.sizePct)
@@ -29,9 +41,9 @@ export function clampCaptionExportStyle(
   const fontsize = (sizePct / 100) * playH
   const marginPx = (marginVPct / 100) * playH
   const maxMarginPx = playH * SAFE_TEXT_BAND - fontsize * 1.45
-  let safeOk = marginPx <= maxMarginPx && marginVPct >= CAPTION_MIN_MARGIN_V_PCT
+  let safeOk = marginPx <= maxMarginPx && marginVPct >= minM
   if (!safeOk && maxMarginPx > 0) {
-    marginVPct = Math.max(CAPTION_MIN_MARGIN_V_PCT, (maxMarginPx / playH) * 100)
+    marginVPct = Math.max(minM, (maxMarginPx / playH) * 100)
     safeOk = true
   }
   return {
@@ -59,14 +71,16 @@ export function minPlatformCaptionMarginVPct(): number {
 export function previewCaptionBottomPct(
   captions: ClipEditsV2['captions'] | undefined,
   playH = 1920,
+  playW?: number,
 ): number {
-  return clampCaptionExportStyle(captions, playH).marginVPct
+  return clampCaptionExportStyle(captions, playH, playW).marginVPct
 }
 
 /** Preview top offset % for alignment 8 — same clamped marginVPct as export. */
 export function previewCaptionTopPct(
   captions: ClipEditsV2['captions'] | undefined,
   playH = 1920,
+  playW?: number,
 ): number {
-  return clampCaptionExportStyle(captions, playH).marginVPct
+  return clampCaptionExportStyle(captions, playH, playW).marginVPct
 }

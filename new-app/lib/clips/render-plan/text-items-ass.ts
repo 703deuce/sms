@@ -5,6 +5,7 @@
  */
 import { textWidthPx } from '@/lib/clips/caption-fit'
 import { hasMotionPy, layerTransformAtPy, MOTION_FPS, normalizeKeyframes } from '@/lib/clips/render-plan/motion'
+import { fitDurations, frameAnim, normAnim, splitUnits, unitState, type UnitAnim } from '@/lib/clips/render-plan/text-anim'
 import { hex2, pyFloatStr, pyRound, pyRoundN } from '@/lib/clips/render-plan/py'
 import { normalizeLayerProps } from '@/lib/clips/editor/motion-schema'
 import { layerOrder, spansTracks } from '@/lib/clips/editor/tracks'
@@ -103,6 +104,32 @@ function stylesFor(i: number, it: TextItemRow, h: number): [string, string | nul
   return [textStyle, boxStyle]
 }
 
+const IDENT = { x: 0.0, y: 0.0, scale: 100.0, rotation: 0.0, opacity: 100.0 }
+
+/** G3a: per line / word / character inline alpha (+ pop height) — py _unit_body. */
+function unitBody(txt: string, unit: UnitAnim, op: number, shadowA: number, scale: number): string {
+  const pieces = splitUnits(txt, unit.unit)
+  const n = pieces.filter(([, u]) => u).length
+  const parts: string[] = []
+  let k = 0
+  for (const [piece, isUnit] of pieces) {
+    if (!isUnit) {
+      parts.push(esc(piece))
+      continue
+    }
+    const kk = unit.rev ? n - 1 - k : k
+    const [uo, us] = unitState(unit.type, kk, n, unit.t, unit.d)
+    const o = op * uo
+    const a = pyRound(255 * (1 - o))
+    const aSh = pyRound(255 - (255 - shadowA) * o)
+    let tag = `\\1a&H${hex2(a)}&\\3a&H${hex2(a)}&\\4a&H${hex2(aSh)}&`
+    if (us !== 1.0) tag += `\\fscy${pyFloatStr(pyRoundN(scale * us, 2))}`
+    parts.push(`{${tag}}${esc(piece)}`)
+    k += 1
+  }
+  return parts.join('')
+}
+
 export function buildTextItemsAss(edits: Dict, w: number, h: number, fps = MOTION_FPS): string | null {
   let items = textItemsPy(edits)
   if (!items.length) return null
@@ -136,9 +163,11 @@ export function buildTextItemsAss(edits: Dict, w: number, h: number, fps = MOTIO
     const target = `text:${it.id}`
     const start = it.startMs
     const end = it.endMs
-    if (!hasMotionPy(tracks, target)) {
-      const tag = `{\\an${an}\\pos(${pyRound(ax + alignDx(align, blockW))},${pyRound(ay)})}`
-      for (const [layer, style] of layers) events.push(`Dialogue: ${layer},${ts(Math.floor(start / 10))},${ts(Math.floor(end / 10))},${style},,0,0,0,,${tag}${e}`)
+    const motion = hasMotionPy(tracks, target)
+    const anim = normAnim(it.anim)
+    const staticTag = `{\\an${an}\\pos(${pyRound(ax + alignDx(align, blockW))},${pyRound(ay)})}`
+    if (!motion && !anim) {
+      for (const [layer, style] of layers) events.push(`Dialogue: ${layer},${ts(Math.floor(start / 10))},${ts(Math.floor(end / 10))},${style},,0,0,0,,${staticTag}${e}`)
       return
     }
     const shadow = isDict(st.shadow) ? st.shadow : null
@@ -147,29 +176,56 @@ export function buildTextItemsAss(edits: Dict, w: number, h: number, fps = MOTIO
     const boxA = box ? alphaForOpacity(box.opacity ?? 100) : 255
     const f0 = Math.trunc(Math.ceil((start * fps) / 1000 - 1e-9))
     const f1 = Math.trunc(Math.ceil((end * fps) / 1000 - 1e-9))
-    for (let f = f0; f < f1; f++) {
-      const tMs = (f * 1000) / fps
-      const sCs = Math.trunc(Math.floor((f * 100) / fps + 1e-9))
-      const eCs = Math.trunc(Math.floor(((f + 1) * 100) / fps + 1e-9))
-      if (eCs <= sCs) continue
-      const tf = layerTransformAtPy(tracks, target, tMs - start)
-      const op = Math.max(0, Math.min(1, tf.opacity / 100))
-      const aTxt = pyRound(255 * (1 - op))
-      const aSh = pyRound(255 - (255 - shadowA) * op)
-      const aBox = pyRound(255 - (255 - boxA) * op)
-      const pxo = pyRound(ax + (tf.x * w) / 100)
-      const pyo = pyRound(ay + (tf.y * h) / 100)
-      const sc = pyFloatStr(pyRoundN(tf.scale, 2))
-      const rot = pyFloatStr(pyRoundN(-tf.rotation, 2))
-      const pxa = pyRound(ax + (tf.x * w) / 100 + alignDx(align, (blockW * tf.scale) / 100))
-      const base = `\\an${an}\\pos(${pxa},${pyo})\\org(${pxo},${pyo})\\fscx${sc}\\fscy${sc}\\frz${rot}`
-      for (const [layer, style] of layers) {
-        const tag = style.startsWith('T')
-          ? `{${base}\\1a&H${hex2(aTxt)}&\\3a&H${hex2(aTxt)}&\\4a&H${hex2(aSh)}&}`
-          : `{${base}\\1a&HFF&\\3a&H${hex2(aBox)}&\\4a&HFF&}`
-        events.push(`Dialogue: ${layer},${ts(sCs)},${ts(eCs)},${style},,0,0,0,,${tag}${e}`)
-      }
+    const [dIn, dOut] = anim ? fitDurations(anim, end - start) : [0, 0]
+    // G3a: without keyframes / loop only the in + out windows go per frame (py text_items_ass).
+    let spans: [number, number][]
+    let mid: [number, number] | null = null
+    if (motion || (anim && anim.loop)) spans = [[f0, f1]]
+    else {
+      const fi = dIn ? Math.trunc(Math.ceil(((start + dIn) * fps) / 1000 - 1e-9)) : f0
+      let fo = dOut ? Math.trunc(Math.ceil(((end - dOut) * fps) / 1000 - 1e-9)) : f1
+      fo = Math.max(fo, fi)
+      spans = [[f0, fi], [fo, f1]]
+      const csA = dIn ? Math.trunc(Math.floor((fi * 100) / fps + 1e-9)) : Math.floor(start / 10)
+      const csB = dOut ? Math.trunc(Math.floor((fo * 100) / fps + 1e-9)) : Math.floor(end / 10)
+      mid = csB > csA ? [csA, csB] : null
     }
+    spans.forEach(([fa, fb], si) => {
+      if (si === 1 && mid) {
+        for (const [layer, style] of layers) events.push(`Dialogue: ${layer},${ts(mid[0])},${ts(mid[1])},${style},,0,0,0,,${staticTag}${e}`)
+      }
+      for (let f = fa; f < fb; f++) {
+        const tMs = (f * 1000) / fps
+        const sCs = Math.trunc(Math.floor((f * 100) / fps + 1e-9))
+        const eCs = Math.trunc(Math.floor(((f + 1) * 100) / fps + 1e-9))
+        if (eCs <= sCs) continue
+        let tf = motion ? layerTransformAtPy(tracks, target, tMs - start) : { ...IDENT }
+        let unit: UnitAnim | null = null
+        if (anim) {
+          const fan = frameAnim(anim, tMs, start, end, dIn, dOut)
+          tf = { ...tf, x: tf.x + fan.dx, y: tf.y + fan.dy, scale: tf.scale * fan.sc, rotation: tf.rotation + fan.rot, opacity: tf.opacity * fan.op }
+          unit = fan.unit
+        }
+        const op = Math.max(0, Math.min(1, tf.opacity / 100))
+        const aTxt = pyRound(255 * (1 - op))
+        const aSh = pyRound(255 - (255 - shadowA) * op)
+        const aBox = pyRound(255 - (255 - boxA) * op)
+        const pxo = pyRound(ax + (tf.x * w) / 100)
+        const pyo = pyRound(ay + (tf.y * h) / 100)
+        const sc = pyFloatStr(pyRoundN(tf.scale, 2))
+        const rot = pyFloatStr(pyRoundN(-tf.rotation, 2))
+        const pxa = pyRound(ax + (tf.x * w) / 100 + alignDx(align, (blockW * tf.scale) / 100))
+        const base = `\\an${an}\\pos(${pxa},${pyo})\\org(${pxo},${pyo})\\fscx${sc}\\fscy${sc}\\frz${rot}`
+        const body = unit ? unitBody(txt, unit, op, shadowA, tf.scale) : e
+        for (const [layer, style] of layers) {
+          if (style.startsWith('T')) {
+            events.push(`Dialogue: ${layer},${ts(sCs)},${ts(eCs)},${style},,0,0,0,,{${base}\\1a&H${hex2(aTxt)}&\\3a&H${hex2(aTxt)}&\\4a&H${hex2(aSh)}&}${body}`)
+          } else {
+            events.push(`Dialogue: ${layer},${ts(sCs)},${ts(eCs)},${style},,0,0,0,,{${base}\\1a&HFF&\\3a&H${hex2(aBox)}&\\4a&HFF&}${e}`)
+          }
+        }
+      }
+    })
   })
   const header = `[Script Info]
 ScriptType: v4.00+

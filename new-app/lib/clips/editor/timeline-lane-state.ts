@@ -1,11 +1,13 @@
 /** Persisted timeline lane toggles (edits.timelineLanes). No imports: safe to use from edits.ts. */
-export type LaneId = 'text' | 'video' | 'broll' | 'voice' | 'music' | 'sfx'
+/** G3a: 'captions' = manual caption lines (edits.captionLines); its row shows only when lines exist. */
+export type LaneId = 'captions' | 'text' | 'video' | 'broll' | 'voice' | 'music' | 'sfx'
 
 /** Top → bottom, CapCut order: overlays above the main track, audio below. */
-export const LANE_ORDER: LaneId[] = ['text', 'video', 'broll', 'voice', 'music', 'sfx']
+export const LANE_ORDER: LaneId[] = ['captions', 'text', 'video', 'broll', 'voice', 'music', 'sfx']
 
 /** Which header toggles a lane offers (lock is always available). G2: solo on the audio lanes. */
 export const LANE_TOGGLES: Record<LaneId, { mute: boolean; hide: boolean; solo?: boolean }> = {
+  captions: { mute: false, hide: false },
   text: { mute: false, hide: true },
   video: { mute: false, hide: false },
   broll: { mute: false, hide: true },

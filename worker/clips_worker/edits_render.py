@@ -149,6 +149,8 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and not edits.get("trackMotion")
         # E4: text items / color looks / per-item speed change the frames or the length.
         and not edits.get("textItems")
+        # G3a: manual caption lines replace the preview's transcript captions.
+        and not edits.get("captionLines")
         and not _e4_color(edits)
         and not edits.get("segmentSpeeds")
         # E5: source segments replace frames / sound.
@@ -247,6 +249,17 @@ def build_srt(words: list[dict]) -> str:
         lines.append("")
         idx += 1
     return "\n".join(lines)
+
+
+def export_srt(edits: dict, words: list[dict]) -> str:
+    """G3a: the export .srt — one cue per manual caption line when set, else per word (as before)."""
+    if edits.get("captionLines"):
+        from clips_worker.caption_lines import build_line_srt
+
+        body = build_line_srt(edits)
+        if body:
+            return body
+    return build_srt(words)
 
 
 def _srt_time(sec: float) -> str:
@@ -740,8 +753,15 @@ def _legacy_compose(
         )
     elif (layout_mode == "fit_top" or stream_frame_applied) and isinstance(cap_edits, dict):
         cap_edits = {**cap_edits, "marginVPct": 6, "position": "bottom"}
+    burn_words = caption_words
+    if edits.get("captionLines"):
+        # G3a: manual caption lines replace the transcript words for the burned captions (and the
+        # hook-duplicate check, like the editor preview); zoom / censor keep the transcript.
+        from clips_worker.caption_lines import caption_line_render_words
+
+        burn_words = caption_line_render_words(edits) or caption_words
     if int(cap_edits.get("enabled", True)):
-        burn_captions(caption_src, caption_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
+        burn_captions(caption_src, burn_words, final, work_dir, cap_edits, play_w=play_w, play_h=play_h)
         caption_src = final
     branded = work_dir / "branded.mp4"
     brand = edits.get("brand") if isinstance(edits.get("brand"), dict) else None
@@ -768,7 +788,7 @@ def _legacy_compose(
         ho
         and ho.get("enabled")
         and int(cap_edits.get("enabled", True))
-        and _hook_dup(str(ho.get("text") or ""), caption_words, int(ho.get("durationMs") or 2500))
+        and _hook_dup(str(ho.get("text") or ""), burn_words, int(ho.get("durationMs") or 2500))
     ):
         # E6: the auto hook is often the clip's first spoken line; with captions on it burned the
         # same words twice (most visible on stacked/split templates, where the title is off).
@@ -1533,7 +1553,7 @@ def render_edited_clip(
                 legacy_ctx = {**ctx, "work_dir": lw}
                 out_mp4, remapped = _legacy_compose(compose_in, remapped, out_mp4, edits, legacy_ctx)
         stage("preview_fast_compose_done")
-        return out_mp4, remapped, build_srt(remapped)
+        return out_mp4, remapped, export_srt(edits, remapped)
 
     segs_ms = ordered_keep_segments(edits)
     segs_sec = [
@@ -1902,4 +1922,4 @@ def render_edited_clip(
     stage("full_pipeline_done")
     if render_meta is not None and "effective_edits_ms" not in render_meta:
         render_meta["effective_edits_ms"] = output_duration_ms(edits)
-    return out_mp4, caption_words, build_srt(caption_words)
+    return out_mp4, caption_words, export_srt(edits, caption_words)

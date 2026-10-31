@@ -26,6 +26,7 @@ import {
   type TextStyle,
 } from '@/lib/clips/editor/text-items'
 import { SliderRow } from '@/components/clips/editor/e4/slider-row'
+import { TextAnimSection } from '@/components/clips/editor/text-anim-section'
 import { coalescePush, type CoalesceBurst } from '@/lib/clips/editor/undo-coalesce'
 
 const ALIGNS: TextAlign[] = ['left', 'center', 'right']
@@ -304,10 +305,19 @@ export function TextPanel({
             ) : null}
           </div>
 
+          <TextAnimSection
+            anim={sel.anim}
+            onChange={(anim, key) => {
+              onLive?.(null)
+              patch({ anim }, key)
+            }}
+            onLive={(anim) => livePatch({ anim })}
+          />
+
           <SliderRow label="Position X" value={sel.x} min={0} max={100} unit="%" testId="text-x" onLive={(v) => livePatch({ x: v })} onCommit={(v) => commitPatch({ x: v }, 'x')} />
           <SliderRow label="Position Y" value={sel.y} min={0} max={100} unit="%" testId="text-y" onLive={(v) => livePatch({ y: v })} onCommit={(v) => commitPatch({ y: v }, 'y')} />
           <p className="text-[11px] text-muted-foreground">
-            Timing: drag / trim it on the Text lane. Animate: select it on the timeline and add keyframes.
+            Timing: drag / trim it on the Text lane. Move it with keyframes: select it on the timeline.
           </p>
           <Button
             variant="ghost"

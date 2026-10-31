@@ -41,6 +41,7 @@ import {
 import { applyTrackRender } from '@/lib/clips/editor/track-render'
 import { inactiveBrollTakeIds, mainTakeLabel, takeLabel } from '@/lib/clips/editor/takes'
 import { AUDIO_KIND_LABEL, audioClipKind } from '@/lib/clips/editor/audio-kind'
+import { CAPTION_LINE_MIN_MS, splitCaptionLine, type CaptionLine } from '@/lib/clips/editor/caption-lines'
 import {
   applyAudioSolo,
   applyTrackState,
@@ -58,6 +59,7 @@ export { LANE_ORDER, LANE_TOGGLES, normalizeTimelineLanes }
 export type { LaneId, LaneState, TimelineLanesState }
 
 export const LANE_LABELS: Record<LaneId, string> = {
+  captions: 'Captions',
   text: 'Text',
   video: 'Video',
   broll: 'B-roll',
@@ -298,7 +300,7 @@ export function buildTimelineItems(input: {
   const { edits, previewEdits } = input
   const tb = timebaseFor(previewEdits)
   const dur = tb.durationMs
-  const lanes: Record<LaneId, TimelineItem[]> = { text: [], video: [], broll: [], voice: [], music: [], sfx: [] }
+  const lanes: Record<LaneId, TimelineItem[]> = { captions: [], text: [], video: [], broll: [], voice: [], music: [], sfx: [] }
   const tracks = effectiveTracks(edits)
 
   const ho = edits.hookOverlay
@@ -311,6 +313,17 @@ export function buildTimelineItems(input: {
       label: ho.text?.trim() || 'Hook title',
       caps: { ...NO_CAPS, trimEnd: true, del: true },
       track: DEFAULT_TRACK_ID.text,
+    })
+  }
+  // G3a: manual caption lines (output ms) — move / trim / split / delete on the Captions row.
+  for (const l of edits.captionLines ?? []) {
+    lanes.captions.push({
+      lane: 'captions',
+      id: l.id,
+      startMs: l.startMs,
+      endMs: l.endMs,
+      label: l.text,
+      caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
     })
   }
   for (const t of edits.textItems ?? []) {
@@ -524,7 +537,8 @@ export function timelineRows(edits: ClipEditsV2): TimelineRow[] {
   }
   const visual = ts.filter((t) => t.kind !== 'audio').reverse().map(row)
   const fixed = (lane: LaneId): TimelineRow => ({ key: lane, lane, label: LANE_LABELS[lane], isDefault: true })
-  return [...visual, fixed('video'), fixed('voice'), fixed('music'), ...ts.filter((t) => t.kind === 'audio').map(row)]
+  const caps = edits.captionLines?.length ? [fixed('captions')] : []
+  return [...caps, ...visual, fixed('video'), fixed('voice'), fixed('music'), ...ts.filter((t) => t.kind === 'audio').map(row)]
 }
 
 /** Row state (mute / hide / lock) for the header. */
@@ -547,6 +561,24 @@ function patchBroll(edits: ClipEditsV2, id: string, patch: Partial<BrollItem>): 
 
 function patchText(edits: ClipEditsV2, id: string, patch: Partial<TextItem>): ClipEditsV2 {
   return { ...edits, textItems: (edits.textItems ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)) }
+}
+
+function patchCaption(edits: ClipEditsV2, id: string, patch: Partial<CaptionLine>): ClipEditsV2 {
+  return { ...edits, captionLines: (edits.captionLines ?? []).map((l) => (l.id === id ? { ...l, ...patch } : l)) }
+}
+
+/** G3a: free room around caption line `id` (neighbours not in `skip`) — lines never overlap. */
+function captionRoom(edits: ClipEditsV2, id: string, dur: number, skip?: Set<string>): [number, number] {
+  const me = (edits.captionLines ?? []).find((l) => l.id === id)
+  let lo = 0
+  let hi = dur
+  if (!me) return [lo, hi]
+  for (const l of edits.captionLines ?? []) {
+    if (l.id === id || skip?.has(l.id)) continue
+    if (l.endMs <= me.startMs) lo = Math.max(lo, l.endMs)
+    else if (l.startMs >= me.endMs) hi = Math.min(hi, l.startMs)
+  }
+  return [lo, hi]
 }
 
 function patchMusic(edits: ClipEditsV2, patch: Partial<ClipAudioMusic>): ClipEditsV2 {
@@ -577,6 +609,11 @@ export function moveItems(ctx: OpCtx, refs: ItemRef[], deltaMs: number): ClipEdi
     if (it.lane === 'sfx') {
       d = Math.max(d, -it.startMs)
       d = Math.min(d, Math.max(0, dur - 1 - it.startMs))
+    } else if (it.lane === 'captions') {
+      const moving = new Set(items.filter((x) => x.lane === 'captions').map((x) => x.id))
+      const [lo, hi] = captionRoom(ctx.edits, it.id, dur, moving)
+      d = Math.max(d, lo - it.startMs)
+      d = Math.min(d, Math.max(0, hi - it.endMs))
     } else {
       d = Math.max(d, -it.startMs)
       d = Math.min(d, Math.max(0, dur - len - it.startMs))
@@ -589,6 +626,7 @@ export function moveItems(ctx: OpCtx, refs: ItemRef[], deltaMs: number): ClipEdi
     else if (it.lane === 'text') next = patchText(next, it.id, { startMs: it.startMs + d, endMs: it.endMs + d })
     else if (it.lane === 'music') next = patchMusic(next, { startMs: it.startMs + d, endMs: it.endMs + d })
     else if (it.lane === 'sfx') next = patchSfx(next, it.id, { atMs: it.startMs + d })
+    else if (it.lane === 'captions') next = patchCaption(next, it.id, { startMs: it.startMs + d, endMs: it.endMs + d })
   }
   return next
 }
@@ -637,6 +675,16 @@ export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: 
     const e = clamp(to, it.startMs + SFX_MIN_MS, hi)
     if (e === it.endMs) return null
     return patchSfx(ctx.edits, it.id, { durMs: e - it.startMs })
+  }
+
+  if (it.lane === 'captions') {
+    const [lo, hi] = captionRoom(ctx.edits, it.id, dur)
+    if (edge === 'start') {
+      const s = clamp(to, lo, it.endMs - CAPTION_LINE_MIN_MS)
+      return s === it.startMs ? null : patchCaption(ctx.edits, it.id, { startMs: s })
+    }
+    const e = clamp(to, it.startMs + CAPTION_LINE_MIN_MS, hi)
+    return e === it.endMs ? null : patchCaption(ctx.edits, it.id, { endMs: e })
   }
 
   if (it.lane === 'text' && it.id !== 'hook') {
@@ -779,6 +827,15 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
       next = { ...next, broll: [...list.slice(0, idx), left, right, ...list.slice(idx + 1)] }
       changed = true
     }
+    if (r.lane === 'captions') {
+      const lines = next.captionLines ?? []
+      const after = splitCaptionLine(lines, it.id, { ms: t })
+      if (after !== lines) {
+        next = { ...next, captionLines: after }
+        changed = true
+      }
+      continue
+    }
     if (r.lane === 'text') {
       if (t - it.startMs < TEXT_MIN_MS || it.endMs - t < TEXT_MIN_MS) continue
       const list = next.textItems ?? []
@@ -872,6 +929,10 @@ export function deleteItems(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null {
       next = { ...next, audio: { ...next.audio, sfx: next.audio.sfx.filter((s) => s.generationId !== r.id) } }
     else if (r.lane === 'text' && r.id !== 'hook')
       next = { ...next, textItems: (next.textItems ?? []).filter((t) => t.id !== r.id) }
+    else if (r.lane === 'captions') {
+      const kept = (next.captionLines ?? []).filter((l) => l.id !== r.id)
+      next = { ...next, captionLines: kept.length ? kept : undefined }
+    }
     else if (r.lane === 'text' && next.hookOverlay) next = { ...next, hookOverlay: { ...next.hookOverlay, enabled: false } }
     else if (r.lane === 'video') videoCuts.push([it.srcInMs!, it.srcOutMs!])
   }
@@ -896,7 +957,7 @@ function sameSegs(a: Timebase, b: Timebase): boolean {
 }
 
 function anchoredJson(e: ClipEditsV2): string {
-  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null])
+  return JSON.stringify([e.broll ?? [], e.audio?.sfx ?? [], e.audio?.music ?? null, e.keyframes ?? null, e.textItems ?? null, e.captionLines ?? null])
 }
 
 /** E3: anything that must follow the EDL or its items (ripple / reconcile). */
@@ -908,7 +969,8 @@ export function hasAnchoredContent(e: ClipEditsV2): boolean {
       e.keyframes?.length ||
       e.transitions?.length ||
       e.splitEdits?.length ||
-      e.textItems?.length,
+      e.textItems?.length ||
+      e.captionLines?.length,
   )
 }
 
@@ -982,6 +1044,17 @@ export function rippleAnchoredItems(
         return s === it.startMs && e === it.endMs ? it : { ...it, startMs: s, endMs: e }
       }),
     }
+  }
+  if (next.captionLines?.length) {
+    // G3a: caption lines follow their speech like text items; a line whose speech was cut goes.
+    const kept: CaptionLine[] = []
+    for (const l of next.captionLines) {
+      const s = mapStart(l.startMs)
+      const e = Math.min(dur, mapEnd(l.endMs))
+      if (e - s < CAPTION_LINE_MIN_MS) continue
+      kept.push(s === l.startMs && e === l.endMs ? l : { ...l, startMs: s, endMs: e })
+    }
+    out = { ...out, captionLines: kept.length ? kept : undefined }
   }
   const audio = next.audio
   if (audio) {

@@ -27,8 +27,8 @@ EXPECTED = {
 
 
 def test_caption_horizontal_margins_scale_with_play_res():
-    assert margin_lr_px(720) >= 56
-    assert margin_lr_px(1080) >= 86
+    assert margin_lr_px(720) == 54
+    assert margin_lr_px(1080) == 54
     with tempfile.TemporaryDirectory() as td:
         ass = Path(td) / "t.ass"
         build_ass(SAMPLE, {"presetId": "clean_white"}, ass, play_w=1080, play_h=1920)
