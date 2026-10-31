@@ -31,8 +31,10 @@ QUESTION_START = re.compile(r"^(who|what|when|where|why|how|is|are|do|does|did|c
 
 
 def load_audio_16k(path: str) -> tuple[np.ndarray, int]:
+    from clips_worker.audio_extract import audio_extract_cmd
+
     pcm = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", "16000", "-f", "s16le", "-"],
+        audio_extract_cmd(path, "-", fmt="s16le", overwrite=False),
         capture_output=True,
         check=True,
     ).stdout

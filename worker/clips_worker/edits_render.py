@@ -1103,6 +1103,34 @@ def _t6_backfill_faces(clip_src: Path, signals: dict, *, conn=None, clip_id: str
     return out
 
 
+def _t6_scene_parts(
+    tmpl: dict, signals: dict, edits: dict, *, play_w: int, play_h: int, clip_start_ms: int = 0
+) -> list[tuple]:
+    """T6.7: ``layout.template.segments`` -> [(start_s, end_s, spec)], or [] for one template.
+
+    Segments are only used while the pick is automatic: a user who picks a template in the
+    editor (template-layout-panel writes a template without segments) or drags a box
+    (template.boxes) gets that one template for the whole clip."""
+    from clips_worker.t6_scenes import scene_spec_for_segment
+
+    segs = tmpl.get("segments") if isinstance(tmpl.get("segments"), list) else None
+    scenes = signals.get("scenes") if isinstance(signals.get("scenes"), list) else None
+    if not segs or len(segs) < 2 or not scenes or tmpl.get("boxes") or tmpl.get("auto") is False:
+        return []
+    # clip_src starts at clip_start_ms (the export cut may start before/after clips.startMs).
+    off_s = (int(tmpl.get("segmentsBaseMs") or clip_start_ms) - int(clip_start_ms)) / 1000.0
+    parts = []
+    for i, sg in enumerate(segs):
+        spec = scene_spec_for_segment(sg, signals, edits, play_w=play_w, play_h=play_h)
+        if spec is None:
+            return []
+        a = 0.0 if i == 0 else float(sg.get("startS") or 0) + off_s
+        b = 1e9 if i == len(segs) - 1 else float(sg.get("endS") or 0) + off_s
+        if b > a:
+            parts.append((max(0.0, a), b, spec))
+    return parts if len(parts) >= 2 else []
+
+
 def _apply_facecam_or_pip_layout(
     clip_src: Path,
     work_dir: Path,
@@ -1113,6 +1141,7 @@ def _apply_facecam_or_pip_layout(
     play_h: int,
     conn=None,
     clip_id: str | None = None,
+    clip_start_ms: int = 0,
 ) -> tuple[Path, bool, dict]:
     from clips_worker.t6_flags import t6_log_fallback, t6_templates_enabled
 
@@ -1134,7 +1163,19 @@ def _apply_facecam_or_pip_layout(
             if tdef:
                 spec = resolve_template_geometry(tdef, signals, edits, play_w=play_w, play_h=play_h)
                 out = work_dir / f"t6_{tmpl_id}.mp4"
-                render_template(clip_src, out, spec, work_dir, duration_s=probe_duration_s(clip_src))
+                scene_parts = _t6_scene_parts(
+                    tmpl, signals, edits, play_w=play_w, play_h=play_h, clip_start_ms=clip_start_ms
+                )
+                if scene_parts:
+                    # T6.7: one template per scene of the close look's scene map.
+                    from clips_worker.t6_render import render_template_segments
+
+                    render_template_segments(
+                        clip_src, out, scene_parts, work_dir / "t6_scenes", duration_s=probe_duration_s(clip_src)
+                    )
+                    print(f"[t6:render] scenes={len(scene_parts)} ids={[p[2].get('templateId') for p in scene_parts]}", flush=True)
+                else:
+                    render_template(clip_src, out, spec, work_dir, duration_s=probe_duration_s(clip_src))
                 meta = {
                     # T6.2: captions follow spec.captionRect, not the facecam-stack seam.
                     "seam_captions": False,
@@ -1379,6 +1420,7 @@ def render_edited_clip(
         play_h=play_h,
         conn=conn,
         clip_id=clip_id,
+        clip_start_ms=clip_start_ms,
     )
 
     full_render = work_dir / "full_render.mp4"

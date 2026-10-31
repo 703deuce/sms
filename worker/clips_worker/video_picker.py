@@ -1172,21 +1172,10 @@ def _extract_watch_audio_b64(video_path: Path, scratch: Path) -> tuple[str, str]
     raw = out.read_bytes()
     if len(raw) < 64:
         wav = scratch / "watch_audio.wav"
+        from clips_worker.audio_extract import audio_extract_cmd
+
         subprocess.check_call(
-            [
-                "ffmpeg",
-                "-y",
-                "-v",
-                "error",
-                "-i",
-                str(video_path),
-                "-vn",
-                "-ac",
-                "1",
-                "-ar",
-                "16000",
-                str(wav),
-            ],
+            audio_extract_cmd(video_path, wav),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

@@ -15,6 +15,14 @@ except ImportError:  # pragma: no cover
 
 FACES_VERSION = 1
 
+# T6.7: a "face" whose centre and size do not move at all across the clip is a picture of a
+# face (Halloween pumpkin, poster, thumbnails in a browser), not a person. Real people,
+# including a still streamer behind a webcam, measured >= 0.06 jitter on every test source;
+# pictures measured <= 0.021 (see specs/T6_7_fixes.md).
+STATIC_FACE_JITTER = 0.03
+STATIC_FACE_SIZEVAR = 0.03
+STATIC_FACE_MIN_PERSIST = 0.6
+
 
 def _yunet_path() -> Path | None:
     import os
@@ -88,6 +96,8 @@ def detect_faces(clip_file, n_samples: int = 10, min_persist: float = 0.4) -> li
         persist = len({e[0] for e in c}) / n_ok
         if persist < min_persist:
             continue
+        if _is_static_face(c, persist):
+            continue
         out.append(
             {
                 "x": round(float(np.median([e[1] for e in c])), 4),
@@ -100,6 +110,19 @@ def detect_faces(clip_file, n_samples: int = 10, min_persist: float = 0.4) -> li
         )
     out.sort(key=lambda f: (-f["persist"], -(f["w"] * f["h"])))
     return out[:6]
+
+
+def _is_static_face(cluster: list[tuple], persist: float) -> bool:
+    """T6.7: True for a face that never moves (picture/statue/thumbnail), see STATIC_FACE_*."""
+    if persist < STATIC_FACE_MIN_PERSIST or len(cluster) < 4:
+        return False
+    cxs = np.array([e[1] + e[3] / 2 for e in cluster])
+    cys = np.array([e[2] + e[4] / 2 for e in cluster])
+    ws = np.array([e[3] for e in cluster])
+    mw = float(np.median(ws)) or 1e-6
+    jitter = float(np.hypot(cxs.std(), cys.std()) / mw)
+    sizevar = float(ws.std() / mw)
+    return jitter < STATIC_FACE_JITTER and sizevar < STATIC_FACE_SIZEVAR
 
 
 def person_boxes(clip_file, n_samples: int = 10) -> tuple[int, list[dict]]:
@@ -159,7 +182,16 @@ def _frame_gray(path: Path, t_s: float) -> np.ndarray | None:
             tmp.unlink(missing_ok=True)
 
 
+BUSY_ANALYSIS_W = 320
+BUSY_NORM = 6000.0
+
+
 def _region_stats(gray: np.ndarray, y0: float, y1: float) -> dict[str, float]:
+    # T6.7: Laplacian variance depends on resolution and saturated (busy=1.0) on almost every
+    # 720p stream frame, so every title became the white box. Measure at a fixed 320 px width.
+    if cv2 is not None and gray.shape[1] > BUSY_ANALYSIS_W:
+        sh = max(2, int(round(gray.shape[0] * BUSY_ANALYSIS_W / gray.shape[1])))
+        gray = cv2.resize(gray, (BUSY_ANALYSIS_W, sh), interpolation=cv2.INTER_AREA)
     h, w = gray.shape[:2]
     r0 = max(0, min(h - 1, int(round(y0 * h))))
     r1 = max(r0 + 1, min(h, int(round(y1 * h))))
@@ -167,7 +199,7 @@ def _region_stats(gray: np.ndarray, y0: float, y1: float) -> dict[str, float]:
     luma = float(np.mean(crop) / 255.0)
     if cv2 is not None:
         lap = cv2.Laplacian(crop, cv2.CV_64F)
-        busy = float(min(1.0, np.var(lap) / 500.0))
+        busy = float(min(1.0, np.var(lap) / BUSY_NORM))
     else:
         busy = 0.5
     return {"luma": round(luma, 3), "busy": round(busy, 3)}

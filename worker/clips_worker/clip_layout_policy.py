@@ -109,6 +109,7 @@ def apply_clip_type_layout_to_edits(
     settings: dict | None = None,
     signals: dict | None = None,
     clip_id: str | None = None,
+    clip_start_ms: int = 0,
     pick_history: list[str] | None = None,
     batch_counts: dict[str, int] | None = None,
     batch_size: int = 1,
@@ -122,7 +123,7 @@ def apply_clip_type_layout_to_edits(
             return apply_t6_template_to_edits(
                 edits,
                 signals=signals,
-                clip={"id": clip_id, "trim": edits.get("trim"), "duration_ms": 0},
+                clip={"id": clip_id, "trim": edits.get("trim"), "duration_ms": 0, "start_ms": clip_start_ms},
                 history=list(pick_history or []),
                 batch_counts=dict(batch_counts or {}),
                 batch_size=batch_size,

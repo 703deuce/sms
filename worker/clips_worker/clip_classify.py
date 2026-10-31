@@ -18,6 +18,33 @@ from clips_worker.video_picker import (
     video_picker_media_resolution,
 )
 
+_BOX_SCHEMA: dict = {
+    "type": "object",
+    "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "w": {"type": "number"}, "h": {"type": "number"}},
+    "required": ["x", "y", "w", "h"],
+}
+# T6.7: per-clip scene map (authoritative for layout; t6_scenes.py). One extra field in the
+# existing call, no new call.
+SCENES_SCHEMA: dict = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "start_s": {"type": "number"},
+            "end_s": {"type": "number"},
+            "layout": {
+                "type": "string",
+                "enum": ["webcam_game", "webcam_screen", "full_cam_person", "multi_cam", "irl_world", "no_person"],
+            },
+            "n_cams": {"type": "integer"},
+            "real_person_boxes": {"type": "array", "items": _BOX_SCHEMA},
+            "facecam_box": {**_BOX_SCHEMA, "nullable": True},
+            "content_box": {**_BOX_SCHEMA, "nullable": True},
+        },
+        "required": ["start_s", "end_s", "layout", "real_person_boxes"],
+    },
+}
+
 CLASSIFY_SCHEMA: dict = {
     "type": "object",
     "properties": {
@@ -32,6 +59,7 @@ CLASSIFY_SCHEMA: dict = {
         "clip_type": {"type": "string", "enum": ["gaming", "irl", "just_chatting", "podcast"]},
         "confidence": {"type": "number"},
         "evidence": {"type": "string"},
+        "scenes": SCENES_SCHEMA,
     },
     "required": [
         "main_picture",
@@ -42,6 +70,7 @@ CLASSIFY_SCHEMA: dict = {
         "clip_type",
         "confidence",
         "evidence",
+        "scenes",
     ],
 }
 
@@ -55,9 +84,30 @@ IGNORE streaming overlays: chat boxes, subscriber/sub-goal bars, alerts, donatio
 clip_type rules (apply in order):
 1. main_picture=video_game -> gaming.
 2. main_picture=real_camera and seated_talking_to_camera -> podcast if people_on_camera>=2 else just_chatting.
+   podcast cues: 2+ hosts in a conversation, each on their own mic and/or their own camera/webcam box, often with show branding (show name/logo, lower thirds, guest name cards). A studio show with these cues is podcast even when it also shows a screen or clip.
 3. main_picture=real_camera -> irl.
 4. desktop_or_browser -> just_chatting.
+scenes: split the clip into the parts where the PICTURE LAYOUT stays the same (frames are labelled with their time in seconds; a scene starts/ends between two frames where the layout changes). Usually 1 scene; only split on a real layout change (the stream switches scene, a cut to another camera, the webcam appears/disappears). For each scene:
+- layout: webcam_game = game + webcam overlay of the streamer; webcam_screen = streamer's webcam over a website/video/screen they react to; full_cam_person = one camera fills the picture with the live person (or a group SEATED together at a desk/couch/table with nothing happening behind them); multi_cam = 2+ SEPARATE camera feeds / webcam boxes shown at the same time, each with its own live person (n_cams = how many feeds) - NEVER a group filmed by one camera; irl_world = filmed out and about / at a venue / anywhere the background or action matters, INCLUDING a group filmed by one camera that is not seated at a desk/couch; no_person = no live person visible (game only, screen only, video only).
+- A webcam slot counts only if a live person is visible in it. A dark, empty, covered or "camera off" slot is NOT a facecam: use no_person (game/screen only) and facecam_box=null.
+- real_person_boxes: a box around the HEAD of each LIVE streamer/host/guest in this scene. NEVER pictures, posters, statues, masks, carved pumpkins, figurines, thumbnails, faces inside a game, or faces in a video/stream that is being watched.
+- facecam_box: the streamer's webcam rectangle (or the cut-out webcam area) when it is an overlay, else null. content_box: the website/video area being reacted to, else null.
+Boxes are {x,y,w,h} as fractions 0-1 of the full frame (x,y = top-left).
 Return JSON only."""
+
+
+# T6.7: frames for the scene map: one per ~SCENE_FRAME_EVERY_S, 4..8 (was a fixed 4). Product
+# choices (cost vs scene-boundary resolution), not fitted on the tuning videos.
+SCENE_FRAME_EVERY_S = 5.0
+SCENE_FRAMES_MIN = 4
+SCENE_FRAMES_MAX = 8
+SCENES_MAX_OUTPUT_TOKENS = 900
+
+
+def classify_frame_times(dur_s: float) -> list[float]:
+    n = int(round(float(dur_s) / SCENE_FRAME_EVERY_S))
+    n = max(SCENE_FRAMES_MIN, min(SCENE_FRAMES_MAX, n))
+    return [round(max(0.0, min(dur_s - 0.05, dur_s * (i + 0.5) / n)), 2) for i in range(n)]
 
 
 def clip_classify_enabled() -> bool:
@@ -150,14 +200,12 @@ def classify_clip(
     dur = _clip_duration_s(clip_file)
     parts: list[dict] = [{"text": CLASSIFY_PROMPT}]
     parts.append({"text": f"TRANSCRIPT:\n{_transcript_snippet(words)}"})
-    for pct in (0.15, 0.40, 0.65, 0.90):
-        t_s = max(0.0, min(dur - 0.05, dur * pct))
-        frame_path = work / f"classify_{int(pct * 100)}.jpg"
+    parts.append({"text": f"CLIP LENGTH: {dur:.1f} s"})
+    for i, t_s in enumerate(classify_frame_times(dur)):
+        frame_path = work / f"classify_{i}.jpg"
         if not _extract_frame_jpeg(clip_file, t_s, frame_path):
             continue
-        mm = int(t_s // 60)
-        ss = int(t_s % 60)
-        parts.append({"text": f"[t={mm:02d}:{ss:02d}]"})
+        parts.append({"text": f"[t={t_s:.1f}s]"})
         raw = frame_path.read_bytes()
         parts.append(
             {
@@ -170,7 +218,7 @@ def classify_clip(
     gen: dict[str, Any] = {
         "responseMimeType": "application/json",
         "responseSchema": CLASSIFY_SCHEMA,
-        "maxOutputTokens": 200,
+        "maxOutputTokens": SCENES_MAX_OUTPUT_TOKENS,
         "temperature": 0,
         "mediaResolution": video_picker_media_resolution(),
     }
@@ -208,6 +256,14 @@ def classify_clip(
                     usd=round(usd, 6),
                 )
                 raw["_usd"] = usd
+                raw["_tokens"] = {
+                    "in": int(u.get("promptTokenCount") or 0),
+                    "out": int(u.get("candidatesTokenCount") or 0),
+                }
+                from clips_worker.t6_scenes import normalize_scene_map
+
+                raw["scenes"] = normalize_scene_map(raw.get("scenes"), dur)
+                raw["_duration_s"] = round(dur, 3)
                 return raw
             except Exception as exc:
                 last_err = str(exc)[:120]
@@ -218,6 +274,16 @@ def classify_clip(
     if last_err:
         decision_log("clip_classify", "failed", error=last_err[:180])
     return None
+
+
+def _scene_map_says_show(cls: dict) -> bool:
+    """T6.7: the scene map's longest scene is a studio/desk layout (hosts on cams, a webcam
+    over a screen), not someone filmed out in the world."""
+    from clips_worker.t6_scenes import dominant_scene
+
+    scenes = cls.get("scenes") if isinstance(cls, dict) else None
+    dom = dominant_scene(scenes) if isinstance(scenes, list) else None
+    return bool(dom and dom.get("layout") in ("multi_cam", "webcam_screen", "full_cam_person"))
 
 
 def resolve_type_from_classification(
@@ -258,6 +324,11 @@ def resolve_type_from_classification(
             return "irl", conf, "classify"
         if seated and people >= 1:
             return ("podcast" if people >= 2 else "just_chatting"), conf, "classify"
+        if model_ct in ("podcast", "just_chatting") and (_scene_map_says_show(cls) or float(facecam_conf or 0) >= 0.85):
+            # T6.7: a studio show playing filmed footage (Dropped Frames: host webcams in a
+            # broadcast overlay + an interview video). The main picture is real camera, but a
+            # confirmed overlay webcam means it is a show, not someone out IRL. Trust the model.
+            return model_ct, conf, "classify"
         return "irl", conf, "classify"
     if main == "desktop_or_browser":
         return "just_chatting", conf, "classify"

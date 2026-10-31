@@ -12,26 +12,10 @@ from clips_worker.transcribe_provider import TranscribeMeta, transcribe_audio_re
 
 
 def _extract_opus_16k(src: Path, dest: Path) -> None:
-    subprocess.check_call(
-        [
-            "ffmpeg",
-            "-y",
-            "-v",
-            "error",
-            "-i",
-            str(src),
-            "-vn",
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            "-c:a",
-            "libopus",
-            "-b:a",
-            "24k",
-            str(dest),
-        ],
-    )
+    from clips_worker.audio_extract import audio_extract_cmd
+
+    # T6.7: timestamp-aligned (gaps / late audio start padded) so words match the video.
+    subprocess.check_call(audio_extract_cmd(src, dest, codec="libopus", bitrate="24k"))
 
 
 def transcribe_video_file(

@@ -96,6 +96,10 @@ export type ClipEditsV2 = {
         Record<'facecam' | 'action' | 'content' | 'person0' | 'person1' | 'person2' | 'person3', FacecamBox>
       >
       params?: { split?: number; pipCorner?: 'TL' | 'TR' | 'BL' | 'BR' }
+      /** T6.7: auto pick per scene of aiMeta.signals.scenes (export renders each segment). */
+      segments?: { startS: number; endS: number; id: string; lane?: string; scene: number }[]
+      /** Source-timeline ms of the clip start the segment times are relative to. */
+      segmentsBaseMs?: number
     }
   }
   broll?: BrollItem[]
@@ -327,7 +331,28 @@ function normalizeLayoutTemplate(raw: unknown): ClipEditsV2['layout']['template'
       o.params && typeof o.params === 'object'
         ? (o.params as { split?: number; pipCorner?: 'TL' | 'TR' | 'BL' | 'BR' })
         : undefined,
+    segments: normalizeTemplateSegments(o.segments),
+    segmentsBaseMs: Number.isFinite(Number(o.segmentsBaseMs)) ? Number(o.segmentsBaseMs) : undefined,
   }
+}
+
+/** T6.7: keep the worker's per-scene template segments through editor saves. */
+function normalizeTemplateSegments(
+  raw: unknown,
+): NonNullable<ClipEditsV2['layout']['template']>['segments'] {
+  if (!Array.isArray(raw)) return undefined
+  const out: NonNullable<NonNullable<ClipEditsV2['layout']['template']>['segments']> = []
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue
+    const o = r as Record<string, unknown>
+    const startS = Number(o.startS)
+    const endS = Number(o.endS)
+    const scene = Number(o.scene)
+    if (typeof o.id !== 'string' || !Number.isFinite(startS) || !Number.isFinite(endS) || !(endS > startS)) continue
+    if (!Number.isInteger(scene) || scene < 0) continue
+    out.push({ startS, endS, id: o.id, lane: typeof o.lane === 'string' ? o.lane : undefined, scene })
+  }
+  return out.length >= 2 ? out : undefined
 }
 
 function normalizeFacecam(raw: unknown): ClipLayoutFacecam | undefined {
