@@ -1,10 +1,15 @@
 /**
  * E4 text item preview math (pure). Mirrors worker clips_worker/text_items.py:
- *   anchor (x %, y %) + \an4/5/6 → CSS left/top + translate(0 | −50 % | −100 %, −50 %)
- *   ASS px = v · H / 1920 → CSS px = v · boxH / 1920 (× cssEmPerAssFontsize for the font size)
+ *   anchor (x %, y %) = the CENTRE of the text block → CSS left/top + translate(−50 %, −50 %).
+ *     E4fix: align only aligns the lines inside the block (CapCut / Descript); the worker places
+ *     \an4 / \an6 at anchor ∓ half the metric block width, so the block stays put in both.
+ *   ASS Fontsize = round(v · H / 1920) → CSS font-size = boxH · Fontsize / H · assEmPerFontsize(font)
+ *     (libass em per Fontsize, caption-fit metrics — E4fix: was the stale cssEmPerAssFontsize, which
+ *     is 1 for Bangers & co., so those previewed ~1.75× too large). One line = Fontsize tall.
+ *   box → per-line inline-block: line height + 2·pad, advance + 2·pad (libass BorderStyle 3)
  *   keyframes `text:<id>` (item-local ms) → translate (% of frame) / rotate / scale about the anchor
  */
-import { cssEmPerAssFontsize } from '@/lib/clips/caption-fonts'
+import { assEmPerFontsize } from '@/lib/clips/caption-fit'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { layerTransformAt } from '@/lib/clips/editor/keyframes'
 import { keyframeTransform } from '@/lib/clips/editor/motion-frame'
@@ -26,20 +31,27 @@ function rgba(hex: string, opacityPct: number): string {
   return `rgba(${r},${g},${b},${Math.max(0, Math.min(100, opacityPct)) / 100})`
 }
 
+export const TEXT_REF_H = 1920
+
+/** ASS Fontsize the worker uses at PlayRes height `playH` (text_items._styles_for). */
+export function textAssFontsize(size: number, playH = TEXT_REF_H): number {
+  return Math.max(1, Math.round((size * playH) / TEXT_REF_H))
+}
+
 /** Static CSS for one item at a preview box height (px). */
 export function textItemCss(item: TextItem, boxH: number) {
-  const k = boxH / 1920
+  const k = boxH / TEXT_REF_H
   const st = item.style
   const font = textFont(st.font)
-  const em = cssEmPerAssFontsize(font.id === 'Montserrat' ? 'Montserrat Black' : font.id)
-  const tx = st.align === 'left' ? '0%' : st.align === 'right' ? '-100%' : '-50%'
+  const em = assEmPerFontsize(font.id)
+  const linePx = textAssFontsize(st.size) * k
   const text: Record<string, string | number> = {
-    fontSize: st.size * k * em,
-    lineHeight: 1 / em,
+    fontSize: linePx * em,
+    lineHeight: `${linePx}px`,
     fontWeight: font.weight,
     color: st.color,
-    textAlign: st.align,
     whiteSpace: 'pre',
+    display: 'inline-block',
   }
   if (st.stroke && st.stroke.width > 0) {
     text.WebkitTextStroke = `${2 * st.stroke.width * k}px ${st.stroke.color}`
@@ -49,12 +61,14 @@ export function textItemCss(item: TextItem, boxH: number) {
     const d = st.shadow.dist * k
     text.textShadow = `${d}px ${d}px 0 ${rgba(st.shadow.color, st.shadow.opacity)}`
   }
+  const pad = st.box ? st.box.pad * k : 0
   const box = st.box
-    ? { background: rgba(st.box.color, st.box.opacity), padding: `${st.box.pad * k}px`, boxDecorationBreak: 'clone' }
+    ? { background: rgba(st.box.color, st.box.opacity), padding: `${pad}px`, margin: `${-pad}px 0` }
     : null
   return {
-    anchor: { left: `${item.x}%`, top: `${item.y}%`, transform: `translate(${tx}, -50%)` },
+    anchor: { left: `${item.x}%`, top: `${item.y}%`, transform: 'translate(-50%, -50%)', textAlign: st.align, width: 'max-content' },
     origin: `${item.x}% ${item.y}%`,
+    linePx,
     text,
     box,
   }

@@ -8,6 +8,7 @@ import {
   sanitizeProducerCaptionReply,
 } from '@/lib/clips/producer-captions'
 import { countProducerFieldChanges } from '@/lib/clips/producer-diff'
+import { appliedProducerSummaries, honestProducerReply, promoteMusicMixWithoutMusic } from '@/lib/clips/producer-honesty'
 import { normalizeEdits, type ClipBounds, type ClipEditsV2, type ClipWord } from '@/lib/clips/edits'
 import { getClipStorage } from '@/lib/storage'
 
@@ -46,10 +47,12 @@ export async function loadClipWords(
 export function runProducerOnClip(
   edits: ClipEditsV2,
   bounds: ClipBounds,
-  tools: ProducerToolCall[],
+  rawTools: ProducerToolCall[],
   words: ClipWord[],
   assistantReply?: string,
 ) {
+  // E4fix: "add music" on a clip without music → generate_music cost card (nothing generated yet).
+  const tools = promoteMusicMixWithoutMusic(edits, rawTools)
   let applied = applyProducerToolsWithWords(edits, bounds, tools, words)
   const wantedCaptions = tools.some((t) => t.name === 'set_captions')
   if (wantedCaptions && captionStylesEqual(edits, applied.edits)) {
@@ -77,13 +80,13 @@ export function runProducerOnClip(
       }
     }
   }
-  const summaryCount = applied.summaries.filter(
-    (s) => !/^Pending /.test(s) && s !== 'No caption change needed',
-  ).length
+  // E4fix: no-op summaries ("No music to mix", …) are not changes.
+  const summaryCount = appliedProducerSummaries(applied.summaries).length
   const fieldCount = countProducerFieldChanges(edits, applied.edits)
   const changeCount = Math.max(summaryCount, fieldCount)
-  const reply = assistantReply
+  const captionReply = assistantReply
     ? sanitizeProducerCaptionReply(assistantReply, edits, applied.edits, wantedCaptions)
     : undefined
+  const reply = assistantReply ? honestProducerReply(captionReply, changeCount, applied.pendingPaid, applied.summaries) : undefined
   return { ...applied, changeCount, reply }
 }

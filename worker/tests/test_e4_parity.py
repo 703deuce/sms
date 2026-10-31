@@ -70,8 +70,12 @@ def test_text_ass_static_box_stroke_align():
     assert "Style: T0,Anton,61,&H0000CCFF,&H0000CCFF,&H00000000,&HFF000000,0,0,0,0,100,100,0,0,1,4.0,0,4," in ass
     # Box: BorderStyle 3, 60 % opacity → alpha 0x66, pad 12@1920 → 8 px, transparent fill.
     assert "Style: B0,Anton,61,&HFF000000,&HFF000000,&H66111111,&HFF000000,0,0,0,0,100,100,0,0,3,8.0,0,4," in ass
-    assert r"Dialogue: 1,0:00:00.10,0:00:00.90,T0,,0,0,0,,{\an4\pos(360,384)}HELLO" in ass
-    assert r"Dialogue: 0,0:00:00.10,0:00:00.90,B0,,0,0,0,,{\an4\pos(360,384)}HELLO" in ass
+    # E4fix: the block stays centred on the anchor; \an4 sits half the metric width to the left.
+    from clips_worker.text_items import text_block_width_px
+
+    x_left = round(360 - text_block_width_px("HELLO", "Anton", 61) / 2)
+    assert rf"Dialogue: 1,0:00:00.10,0:00:00.90,T0,,0,0,0,,{{\an4\pos({x_left},384)}}HELLO" in ass
+    assert rf"Dialogue: 0,0:00:00.10,0:00:00.90,B0,,0,0,0,,{{\an4\pos({x_left},384)}}HELLO" in ass
 
 
 def test_text_ass_keyframes_one_event_per_frame():
@@ -82,7 +86,13 @@ def test_text_ass_keyframes_one_event_per_frame():
     ass = text_items_ass(edits, w=1000, h=1000)
     lines = [ln for ln in ass.splitlines() if ln.startswith("Dialogue: 1,")]
     assert len(lines) == 30
-    assert r"\pos(500,300)" in lines[0] and r"\pos(597,300)" in lines[-1]
+    # E4fix: \org = the moving anchor (rotation pivot); \pos = anchor − half the block (left aligned).
+    assert r"\org(500,300)" in lines[0] and r"\org(597,300)" in lines[-1]
+    from clips_worker.text_items import text_block_width_px
+
+    half = text_block_width_px("HELLO", "Anton", round(92 * 1000 / 1920)) / 2
+    pos = [int(ln.split("\\pos(")[1].split(",")[0]) for ln in (lines[0], lines[-1])]
+    assert abs(pos[0] - (500 - half)) <= 0.5 and abs(pos[1] - (597 - half)) <= 1
 
 
 def test_cube_is_identity_for_empty_spec(tmp_path):

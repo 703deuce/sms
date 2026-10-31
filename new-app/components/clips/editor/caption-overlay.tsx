@@ -17,6 +17,12 @@ import { captionFontStack, captionFontWeight, previewCaptionStrokePx } from '@/l
 import { exportPixelSize } from '@/lib/clips/export-aspect'
 import { assEmPerFontsize, captionChunkFit, captionFitConfigForEdits, captionSafeWidthPct } from '@/lib/clips/caption-fit'
 
+/** E4fix: bottom margin (% of frame) of a T6 template caption rect — same as the worker's MarginV. */
+export function templateCaptionBottomPct(r: { y: number; h: number; playH: number }): number {
+  if (!(r.playH > 0)) return 0
+  return (Math.max(0, r.playH - (Math.round(r.y) + Math.round(r.h))) / r.playH) * 100
+}
+
 function positionStyle(position: string, marginVPct: number): React.CSSProperties | undefined {
   if (position === 'top') return { top: `${marginVPct}%` }
   if (position === 'middle') return undefined
@@ -42,12 +48,18 @@ export function CaptionOverlay({
   edits,
   boxHeightPx,
   outputDurationSec = 1,
+  templateCaptionRect,
 }: {
   words: ClipWord[]
   currentTimeSec: number
   edits: ClipEditsV2
   boxHeightPx: number
   outputDurationSec?: number
+  /**
+   * E4fix: T6 template mode — the export bottom-anchors captions at the template captionRect
+   * (worker `_t6_caption_edits`: \an2, MarginV = playH − (y + h)), ignoring the preset position.
+   */
+  templateCaptionRect?: { y: number; h: number; playH: number } | null
 }) {
   const t6Caps = t6CaptionPresetsEnabled()
   const cap = effectiveCaptionEdits(edits.captions ?? {}, t6Caps)
@@ -102,9 +114,10 @@ export function CaptionOverlay({
   const showEmojis = Boolean(cap.autoEmojis)
   const progressPct = showProgress ? Math.min(100, (currentTimeSec / outputDurationSec) * 100) : 0
 
-  const position = (cap.position || preset.position) as string
-  const marginVPct =
-    position === 'top'
+  const position = templateCaptionRect ? 'bottom' : ((cap.position || preset.position) as string)
+  const marginVPct = templateCaptionRect
+    ? templateCaptionBottomPct(templateCaptionRect)
+    : position === 'top'
       ? previewCaptionTopPct(cap, exportPlayH)
       : previewCaptionBottomPct(cap, exportPlayH)
   const posStyle = positionStyle(position, marginVPct)

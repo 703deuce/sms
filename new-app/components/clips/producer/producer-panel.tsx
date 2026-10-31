@@ -6,6 +6,7 @@ import { PrimaryButton } from '@/components/app/primary-button'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
+import { isNoopProducerSummary, isPendingProducerSummary } from '@/lib/clips/producer-honesty'
 import { ToolCallCard } from '@/components/clips/producer/tool-call-card'
 import type { ClipBounds, ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
@@ -180,9 +181,17 @@ export function ProducerPanel({
               </p>
             </div>
           )}
-          {summaries.map((s, i) => (
-            <ToolCallCard key={i} summary={s} toolName={s.split(' ')[0]?.toLowerCase()} />
-          ))}
+          {/* E4fix: pending paid tools show as the cost card below, no-ops say "No change" (never "Applied"). */}
+          {summaries
+            .filter((s) => !isPendingProducerSummary(s))
+            .map((s, i) => (
+              <ToolCallCard
+                key={i}
+                summary={s}
+                toolName={s.split(' ')[0]?.toLowerCase()}
+                status={isNoopProducerSummary(s) ? 'noop' : 'done'}
+              />
+            ))}
           {pendingPaid.map((t) => (
             <div key={t.name} className="rounded-xl border border-warning/40 bg-warning/8 p-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold">

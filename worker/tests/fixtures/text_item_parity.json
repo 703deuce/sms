@@ -1,0 +1,186 @@
+{
+ "cases": [
+  {
+   "case": {
+    "id": "bangers_center_box",
+    "text": "TEST TEXT",
+    "font": "Bangers",
+    "size": 84,
+    "align": "center",
+    "x": 50,
+    "y": 50,
+    "pad": 16
+   },
+   "measured": {
+    "1280": {
+     "x0": 0.4167,
+     "x1": 0.5833,
+     "y0": 0.4703,
+     "y1": 0.5297
+    },
+    "1920": {
+     "x0": 0.4148,
+     "x1": 0.5852,
+     "y0": 0.4698,
+     "y1": 0.5302
+    }
+   }
+  },
+  {
+   "case": {
+    "id": "montserrat_left_2lines",
+    "text": "Left aligned\nsecond",
+    "font": "Montserrat",
+    "size": 72,
+    "align": "left",
+    "x": 40,
+    "y": 35,
+    "pad": 12
+   },
+   "measured": {
+    "1280": {
+     "x0": 0.25,
+     "x1": 0.55,
+     "y0": 0.3063,
+     "y1": 0.3937
+    },
+    "1920": {
+     "x0": 0.25,
+     "x1": 0.55,
+     "y0": 0.3063,
+     "y1": 0.3937
+    }
+   }
+  },
+  {
+   "case": {
+    "id": "anton_right",
+    "text": "RIGHT SIDE",
+    "font": "Anton",
+    "size": 96,
+    "align": "right",
+    "x": 60,
+    "y": 70,
+    "pad": 10
+   },
+   "measured": {
+    "1280": {
+     "x0": 0.4889,
+     "x1": 0.7083,
+     "y0": 0.6703,
+     "y1": 0.7297
+    },
+    "1920": {
+     "x0": 0.4889,
+     "x1": 0.7093,
+     "y0": 0.6698,
+     "y1": 0.7302
+    }
+   }
+  },
+  {
+   "case": {
+    "id": "luckiest_center",
+    "text": "Luckiest",
+    "font": "Luckiest Guy",
+    "size": 120,
+    "align": "center",
+    "x": 50,
+    "y": 20,
+    "pad": 8
+   },
+   "measured": {
+    "1280": {
+     "x0": 0.3056,
+     "x1": 0.6944,
+     "y0": 0.1641,
+     "y1": 0.2359
+    },
+    "1920": {
+     "x0": 0.3056,
+     "x1": 0.6944,
+     "y0": 0.1646,
+     "y1": 0.2354
+    }
+   }
+  },
+  {
+   "case": {
+    "id": "bebas_left",
+    "text": "BEBAS NEUE LEFT",
+    "font": "Bebas Neue",
+    "size": 110,
+    "align": "left",
+    "x": 50,
+    "y": 60,
+    "pad": 14
+   },
+   "measured": {
+    "1280": {
+     "x0": 0.2833,
+     "x1": 0.7194,
+     "y0": 0.5641,
+     "y1": 0.6359
+    },
+    "1920": {
+     "x0": 0.2833,
+     "x1": 0.7204,
+     "y0": 0.5646,
+     "y1": 0.6354
+    }
+   }
+  },
+  {
+   "case": {
+    "id": "archivo_right_2lines",
+    "text": "Archivo\nBlack right",
+    "font": "Archivo Black",
+    "size": 64,
+    "align": "right",
+    "x": 50,
+    "y": 45,
+    "pad": 10
+   },
+   "measured": {
+    "1280": {
+     "x0": 0.3583,
+     "x1": 0.6417,
+     "y0": 0.4109,
+     "y1": 0.4891
+    },
+    "1920": {
+     "x0": 0.3593,
+     "x1": 0.6426,
+     "y0": 0.4115,
+     "y1": 0.4885
+    }
+   }
+  },
+  {
+   "case": {
+    "id": "poppins_center",
+    "text": "Poppins bold",
+    "font": "Poppins",
+    "size": 80,
+    "align": "center",
+    "x": 50,
+    "y": 80,
+    "pad": 10
+   },
+   "measured": {
+    "1280": {
+     "x0": 0.3528,
+     "x1": 0.6472,
+     "y0": 0.7734,
+     "y1": 0.8266
+    },
+    "1920": {
+     "x0": 0.35,
+     "x1": 0.65,
+     "y0": 0.774,
+     "y1": 0.826
+    }
+   }
+  }
+ ]
+}

@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { outputDurationMs, normalizeEditSpeed, type ClipEditsV2 } from '@/lib/clips/edits'
-import { editorPreviewDurationMs } from '@/lib/clips/editor-preview-edits'
+import { displayDurationMs, outputDurationMs, normalizeEditSpeed, type ClipEditsV2 } from '@/lib/clips/edits'
+import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { DUB_LANGUAGES } from '@/lib/clips/dub'
 import { can } from '@/lib/billing/entitlements'
 import { clipsFetch, exportClipWithOptions, getRenderStatus } from '@/lib/clips-api'
@@ -346,11 +346,11 @@ export function ExportDialog({
     }
   }
 
-  const editedDurationMs = useMemo(() => {
-    const outMs = words.length ? editorPreviewDurationMs(edits, words) : outputDurationMs(edits)
-    const speed = normalizeEditSpeed(edits.speed) ?? 1
-    return Math.round(outMs / speed)
-  }, [edits, words])
+  // E4fix: exported length = per-item speed warp + global speed (same as the player clock).
+  const editedDurationMs = useMemo(
+    () => displayDurationMs(words.length ? { ...editorPreviewEdits(edits, words), speed: edits.speed } : edits),
+    [edits, words],
+  )
   const platformWarn =
     exportPlatform !== 'none' ? exportPlatformDurationWarning(exportPlatform, editedDurationMs) : null
   const polishLintWarnings = useMemo(() => {
@@ -669,6 +669,8 @@ export function ExportDialog({
             {(() => {
               const speed = normalizeEditSpeed(edits.speed) ?? 1
               const renderDisplayMs = Math.round(durationMs / speed)
+              // E4fix: render durationMs is not speed-warped; skip the hint when per-item speeds are set.
+              if (edits.segmentSpeeds?.length) return ''
               return Math.abs(editedDurationMs - renderDisplayMs) > 500
                 ? ` (render ${Math.round(renderDisplayMs / 1000)}s)`
                 : ''

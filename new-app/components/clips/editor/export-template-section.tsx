@@ -17,6 +17,7 @@ import {
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
 import { clipsFetch, patchClip } from '@/lib/clips-api'
+import { layoutMiniPreviewLabel } from '@/lib/clips/layout-options'
 import { ExportHeadlinePreview } from '@/components/clips/editor/export-headline-preview'
 import { ExportSavedChannelsField } from '@/components/clips/editor/export-saved-channels-field'
 import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
@@ -303,6 +304,7 @@ export function ExportTemplateSection({
         platform={platform ?? tpl.platform}
         channelUrl={linkOn ? normalizeChannelUrl(channelUrl) || undefined : undefined}
         exportPlatformId={exportPlatformId ?? tpl.exportPlatformId ?? 'tiktok'}
+        videoLabel={layoutMiniPreviewLabel(layoutMode)}
       />
     </div>
   )

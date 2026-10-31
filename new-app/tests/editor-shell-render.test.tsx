@@ -10,6 +10,13 @@ vi.mock('next/font/google', () => ({
   Anton: () => ({ variable: '--font-clip-anton' }),
   Montserrat: () => ({ variable: '--font-clip-montserrat' }),
   Poppins: () => ({ variable: '--font-poppins' }),
+  Bangers: () => ({ variable: '--font-clip-bangers' }),
+  Bebas_Neue: () => ({ variable: '--font-clip-bebas' }),
+  Archivo_Black: () => ({ variable: '--font-clip-archivo' }),
+  Luckiest_Guy: () => ({ variable: '--font-clip-luckiest' }),
+  Inter: () => ({ variable: '--font-clip-inter' }),
+  Lato: () => ({ variable: '--font-clip-lato' }),
+  Oswald: () => ({ variable: '--font-clip-oswald' }),
 }))
 
 vi.mock('@/components/shell/breadcrumb-context', () => ({

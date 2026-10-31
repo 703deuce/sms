@@ -5,6 +5,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import {
   EXPORT_LAYOUT_OPTIONS,
+  exportLayoutHint,
   layoutOptionDisabled,
   layoutPickPayload,
   type LayoutOptionId,
@@ -29,8 +30,8 @@ export function ExportLayoutPicker({
   return (
     <div className="mt-3 space-y-1" data-testid="export-layout-picker">
       <p className="text-xs font-medium">Layout for this export</p>
-      <p className="text-xs text-muted-foreground">
-        Full frame keeps the entire stream shot with blurred sides and space for the headline bar.
+      <p className="text-xs text-muted-foreground" data-testid="export-layout-hint">
+        {exportLayoutHint(value)}
       </p>
       {!facecamLayout?.facecam && !edits.layout.facecam?.box ? (
         <p className="text-[10px] text-muted-foreground">No facecam detected for this clip</p>

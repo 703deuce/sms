@@ -16,7 +16,7 @@ import {
   type KeyframeTrack,
 } from '@/lib/clips/editor/motion-schema'
 import { hasColor, normalizeColorEdits, type ClipColorEdits } from '@/lib/clips/editor/color'
-import { normalizeSegmentSpeeds, speedWarpPieces, warpedDurationMs, type SegmentSpeed } from '@/lib/clips/editor/speed'
+import { normalizeSegmentSpeeds, speedWarpPieces, warpedDurationMs, warpMs, type SegmentSpeed } from '@/lib/clips/editor/speed'
 import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
 
 export type CutRange = [number, number]
@@ -737,6 +737,18 @@ export function displayDurationMs(edits: ClipEditsV2): number {
   const base = edits.segmentSpeeds?.length
     ? warpedDurationMs(speedWarpPieces(orderedKeepSegments(edits), edits.segmentSpeeds))
     : outputDurationMs(edits)
+  return Math.round(base / speed)
+}
+
+/**
+ * E4fix: an edit-timeline position (ms, before speed) → what the viewer sees in the export
+ * (per-item speed warp, then global speed). Pairs with displayDurationMs for the player clock.
+ */
+export function displayPositionMs(edits: ClipEditsV2, editMs: number): number {
+  const speed = normalizeEditSpeed(edits.speed) ?? 1
+  const base = edits.segmentSpeeds?.length
+    ? warpMs(speedWarpPieces(orderedKeepSegments(edits), edits.segmentSpeeds), Math.max(0, editMs))
+    : Math.max(0, editMs)
   return Math.round(base / speed)
 }
 

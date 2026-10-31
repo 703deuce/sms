@@ -1,7 +1,9 @@
 """E4 text items (Text lane) → ASS, burned in the hook stage (after captions / brand logo).
 
 Mirror of new-app/lib/clips/editor/text-items.ts + components/clips/editor/text-items-preview.tsx:
-  * (x, y) = anchor in % of the frame; align left / center / right → ASS \\an4 / \\an5 / \\an6
+  * (x, y) = anchor in % of the frame = the CENTRE of the text block. E4fix: align left / right only
+    aligns the lines inside the block (CapCut / Descript); the block never moves. Export: \\an4 / \\an6
+    at anchor ∓ half the block width (font metrics, caption_fit), \\org at the anchor for rotation
   * sizes are px at a 1920 px tall frame → ASS px = v · H / 1920 (PlayRes = output size)
   * stroke → Outline, shadow → Shadow depth + BackColour alpha, box → a BorderStyle 3 event on the
     layer below with a transparent fill (so stroke and box can both show, like CapCut)
@@ -25,6 +27,25 @@ TEXT_FONTS = {
 }
 REF_H = 1920
 _AN = {"left": 4, "center": 5, "right": 6}
+# caption_font_metrics.json row for each text font (fontconfig family → bundled face).
+_METRIC_FONT = {"Montserrat": "Montserrat Black", "Poppins": "Poppins ExtraBold"}
+
+
+def text_block_width_px(text: str, font_id: str, fontsize: float) -> float:
+    """Advance width of the widest line at ASS ``fontsize`` (same metrics as the preview)."""
+    from clips_worker.caption_fit import text_width_px
+
+    name = _METRIC_FONT.get(font_id, font_id)
+    return max((text_width_px(line, name, fontsize) for line in str(text).split("\n")), default=0.0)
+
+
+def _align_dx(align: str, block_w: float) -> float:
+    """\\pos x offset from the block centre for the alignment point of \\an4 / \\an6."""
+    if align == "left":
+        return -block_w / 2
+    if align == "right":
+        return block_w / 2
+    return 0.0
 
 
 def _ass_color(hex_rgb: str, alpha: int = 0) -> str:
@@ -125,12 +146,17 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
             txt = txt.upper()
         esc = _esc(txt)
         ax, ay = _anchor(it, w, h)
-        an = _AN.get(str(st.get("align") or "center"), 5)
+        align = str(st.get("align") or "center")
+        an = _AN.get(align, 5)
+        font_id = str(st.get("font") or "")
+        font_id = font_id if font_id in TEXT_FONTS else "Montserrat"
+        fsize = max(1, round(float(st.get("size") or 96) * h / REF_H))
+        block_w = text_block_width_px(txt, font_id, fsize) if an != 5 else 0.0
         layers = [(1, f"T{i}")] + ([(0, f"B{i}")] if bs else [])
         target = f"text:{it['id']}"
         start, end = it["startMs"], it["endMs"]
         if not has_motion(edits, target):
-            tag = rf"{{\an{an}\pos({round(ax)},{round(ay)})}}"
+            tag = rf"{{\an{an}\pos({round(ax + _align_dx(align, block_w))},{round(ay)})}}"
             for layer, style in layers:
                 events.append(f"Dialogue: {layer},{_ts(start // 10)},{_ts(end // 10)},{style},,0,0,0,,{tag}{esc}")
             continue
@@ -155,7 +181,9 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
             py = round(ay + tf["y"] * h / 100)
             sc = round(tf["scale"], 2)
             rot = round(-tf["rotation"], 2)
-            base = rf"\an{an}\pos({px},{py})\fscx{sc}\fscy{sc}\frz{rot}"
+            # Scale about the block centre (the anchor): the \\an4/6 point moves with the scaled width.
+            pxa = round(ax + tf["x"] * w / 100 + _align_dx(align, block_w * tf["scale"] / 100))
+            base = rf"\an{an}\pos({pxa},{py})\org({px},{py})\fscx{sc}\fscy{sc}\frz{rot}"
             for layer, style in layers:
                 if style.startswith("T"):
                     tag = rf"{{{base}\1a&H{a_txt:02X}&\3a&H{a_txt:02X}&\4a&H{a_sh:02X}&}}"

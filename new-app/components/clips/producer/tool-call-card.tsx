@@ -48,13 +48,15 @@ export function ToolCallCard({
   toolName,
 }: {
   summary: string
-  status?: 'done' | 'pending' | 'failed' | 'paid'
+  /** noop (E4fix): the tool ran but nothing changed — never labelled Applied. */
+  status?: 'done' | 'pending' | 'failed' | 'paid' | 'noop'
   toolName?: string
 }) {
   const Icon = toolName && TOOL_ICONS[toolName] ? TOOL_ICONS[toolName] : iconForSummary(summary)
-  const tone = status === 'done' ? 'success' : status === 'failed' ? 'danger' : status === 'paid' ? 'warning' : 'info'
+  const tone =
+    status === 'done' ? 'success' : status === 'failed' ? 'danger' : status === 'paid' ? 'warning' : status === 'noop' ? 'muted' : 'info'
   const statusIcon =
-    status === 'done' ? <Check className="size-3" /> : status === 'failed' ? <XCircle className="size-3" /> : <Loader2 className="size-3 animate-spin" />
+    status === 'done' ? <Check className="size-3" /> : status === 'noop' ? null : status === 'failed' ? <XCircle className="size-3" /> : <Loader2 className="size-3 animate-spin" />
 
   return (
     <div className="rounded-xl border border-border bg-card p-3">
@@ -64,7 +66,7 @@ export function ToolCallCard({
         </span>
         <span className="min-w-0 flex-1 truncate">{summary}</span>
         <StatusBadge tone={tone} icon={statusIcon}>
-          {status === 'done' ? 'Applied' : status === 'pending' ? 'Running' : status === 'failed' ? 'Failed' : 'Paid'}
+          {status === 'done' ? 'Applied' : status === 'noop' ? 'No change' : status === 'pending' ? 'Running' : status === 'failed' ? 'Failed' : 'Paid'}
         </StatusBadge>
       </div>
     </div>
