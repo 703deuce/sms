@@ -367,15 +367,21 @@ export function Timeline({
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Ctrl/Cmd + wheel zooms around the cursor (non-passive so the page does not zoom).
+  // Ctrl/Cmd + wheel zooms around the cursor; plain wheel scrolls horizontally (FVfix2).
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return
-      e.preventDefault()
-      const rect = el.getBoundingClientRect()
-      applyZoom(zoomBy(pxPerSecRef.current, e.deltaY < 0 ? 'in' : 'out', 1.12, minPxRef.current), e.clientX - rect.left)
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        const rect = el.getBoundingClientRect()
+        applyZoom(zoomBy(pxPerSecRef.current, e.deltaY < 0 ? 'in' : 'out', 1.12, minPxRef.current), e.clientX - rect.left)
+        return
+      }
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault()
+        el.scrollLeft += e.deltaY
+      }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)

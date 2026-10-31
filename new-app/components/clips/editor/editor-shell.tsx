@@ -1856,6 +1856,7 @@ export function EditorShell({
         clipId={clipId}
         title={title}
         edits={edits}
+        fullVideo={fullVideo}
         dubs={dubs}
         layoutMode={edits.layout.mode}
         onLayoutModeChange={(mode, facecam) => onLayoutMode(mode, facecam, { reason: 'export' })}

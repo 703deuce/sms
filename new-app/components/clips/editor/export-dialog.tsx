@@ -82,6 +82,7 @@ export function ExportDialog({
   onEdits,
   onOpenLayersTab,
   onSilenceTrimChange,
+  fullVideo = false,
 }: {
   clipId: string
   title: string
@@ -103,6 +104,7 @@ export function ExportDialog({
   onEdits?: (edits: ClipEditsV2) => void
   onOpenLayersTab?: () => void
   onSilenceTrimChange?: (enabled: boolean) => void
+  fullVideo?: boolean
   open: boolean
   onClose: () => void
 }) {
@@ -147,8 +149,15 @@ export function ExportDialog({
       setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
       setAlsoSrt(prefs.alsoSrt)
       setExportSfx(prefs.exportSfx)
-      setAspect(prefs.defaultAspect ?? edits.aspectRatio ?? '9:16')
-      if (prefs.defaultResolution) setResolution(prefs.defaultResolution)
+      if (fullVideo) {
+        const a = edits.aspectRatio ?? '16:9'
+        setAspect(a)
+        setResolution(can('', 'export_1080p') ? '1080p' : '720p')
+        onAspectChange?.(a)
+      } else {
+        setAspect(prefs.defaultAspect ?? edits.aspectRatio ?? '9:16')
+        if (prefs.defaultResolution) setResolution(prefs.defaultResolution)
+      }
       if (edits.exportTemplate) {
         const url =
           edits.exportTemplate.channelLink?.url?.trim() ||
@@ -180,7 +189,7 @@ export function ExportDialog({
       }
       setExportTemplate(edits.exportTemplate)
     })
-  }, [open, edits.exportTemplate, edits.aspectRatio, edits.silenceTrim?.enabled, platform, defaultChannelUrl])
+  }, [open, edits.exportTemplate, edits.aspectRatio, edits.silenceTrim?.enabled, platform, defaultChannelUrl, fullVideo, onAspectChange])
 
   useEffect(() => {
     if (!open) return

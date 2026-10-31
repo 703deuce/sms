@@ -102,7 +102,7 @@ export async function enqueueRenderClip(
     edits: ClipEditsV2
     clipStartMs: number
     clipEndMs: number
-    previewKey: string
+    previewKey: string | null
     title: string
     batchId?: string
   },
