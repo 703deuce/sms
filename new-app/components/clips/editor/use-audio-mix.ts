@@ -23,6 +23,7 @@ export function useAudioMix({
   playing,
   outputDurationMs,
   voiceMuted = false,
+  musicRate,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   edits: ClipEditsV2
@@ -37,6 +38,8 @@ export function useAudioMix({
   outputDurationMs?: number
   /** E2: Voice lane muted (speech / dub silent; music + SFX still play). */
   voiceMuted?: boolean
+  /** E4: music element rate while per-item speeds play (global × item speed). Omitted = unchanged. */
+  musicRate?: number
 }) {
   const ctxRef = useRef<AudioContext | null>(null)
   const dubRef = useRef<HTMLAudioElement | null>(null)
@@ -158,6 +161,7 @@ export function useAudioMix({
     // E2: the bed only plays inside its timeline window, from its media in-point.
     const win = musicWindow(audio.music, outputDurationMs ?? Number.MAX_SAFE_INTEGER)
     const inWin = Boolean(win && outputMs >= win.startMs && outputMs < win.endMs)
+    if (musicRate != null && Number.isFinite(musicRate) && music.playbackRate !== musicRate) music.playbackRate = musicRate
     if (playing && win && inWin) {
       void ctx.resume()
       const target = (outputMs - win.startMs + win.inMs) / 1000
@@ -166,7 +170,7 @@ export function useAudioMix({
     } else {
       music.pause()
     }
-  }, [playing, outputMs, audio?.music, videoRef, outputDurationMs])
+  }, [playing, outputMs, audio?.music, videoRef, outputDurationMs, musicRate])
 
   // E3: volume envelopes, evaluated with the same math as the export's `volume` expressions.
   const hasVoiceEnv = Boolean(findTrack(edits, 'voice', 'volume'))

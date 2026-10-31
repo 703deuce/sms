@@ -90,7 +90,8 @@ def _finite(v):
 
 
 def _valid_target(t) -> bool:
-    return isinstance(t, str) and (t in ("video", "voice", "music", "text") or (t.startswith("broll:") and len(t) > 6))
+    return isinstance(t, str) and (t in ("video", "voice", "music", "text") or (t.startswith("broll:") and len(t) > 6)
+                                   or (t.startswith("text:") and len(t) > 5))
 
 
 def props_for_target(target: str) -> tuple[str, ...]:
@@ -265,6 +266,44 @@ def _round_half_even_safe(x: float) -> int:
     return int(math.floor(x + 0.5))
 
 
+def cut_match_tolerance_ms(fps: int = MOTION_FPS) -> float:
+    """E3fix2: a transition belongs to a cut when its srcMs is within half an export frame."""
+    return 500.0 / float(fps or MOTION_FPS)
+
+
+def match_transitions_to_cuts(segs: list[tuple[int, int]], trs: list[dict], fps: int = MOTION_FPS) -> dict[int, dict]:
+    """Mirror of matchTransitionsToCuts(): cut index k → transition.
+
+    Each transition goes to its NEAREST cut start (segs[k][0], k >= 1; ties → earlier cut) when
+    that is within half a frame; each cut keeps its nearest claimant (ties → first in the list).
+    Before E3fix2 the match was |srcMs - cut| <= 1 ms, so a web/worker silence-trim edge that
+    differed by a few ms dropped the transition silently. Unmatched / duplicate ones are logged.
+    """
+    tol = cut_match_tolerance_ms(fps)
+    cuts = [(k, segs[k][0]) for k in range(1, len(segs))]
+    best: dict[int, tuple[float, dict]] = {}
+    for tr in trs:
+        src = tr["srcMs"]
+        if not cuts:
+            break
+        k, b0 = min(cuts, key=lambda c: (abs(src - c[1]), c[0]))
+        delta = abs(src - b0)
+        if delta > tol:
+            print(
+                f"[motion] warning transition_unmatched srcMs={src} type={tr.get('type')} "
+                f"nearest_cut_ms={b0} delta_ms={delta} tol_ms={tol:.1f}"
+            )
+            continue
+        cur = best.get(k)
+        if cur is None or delta < cur[0]:
+            if cur is not None:
+                print(f"[motion] warning transition_duplicate srcMs={cur[1]['srcMs']} cut_ms={b0} kept={src}")
+            best[k] = (delta, tr)
+        else:
+            print(f"[motion] warning transition_duplicate srcMs={src} cut_ms={b0} kept={cur[1]['srcMs']}")
+    return {k: v[1] for k, v in best.items()}
+
+
 def cut_transition_windows(segs: list[tuple[int, int]], transitions, fps: int = MOTION_FPS) -> list[dict]:
     """Mirror of cutTransitionWindows(): segs = ordered keep segments (source ms, output order)."""
     trs = []
@@ -281,10 +320,11 @@ def cut_transition_windows(segs: list[tuple[int, int]], transitions, fps: int = 
         acc += b - a
     out: list[dict] = []
     last_end = 0
+    by_cut = match_transitions_to_cuts(segs, trs, fps)
     for k in range(1, len(segs)):
         a0, a1 = segs[k - 1]
         b0, b1 = segs[k]
-        tr = next((t for t in trs if abs(t["srcMs"] - b0) <= 1), None)
+        tr = by_cut.get(k)
         if not tr:
             continue
         d = min(_clamp_dur(tr["durMs"]), a1 - a0, b1 - b0)

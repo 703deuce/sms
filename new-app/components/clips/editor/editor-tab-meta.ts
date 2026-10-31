@@ -15,4 +15,7 @@ export const TAB_META: Record<
   thumbnail: { label: 'Cover', hint: 'Pick the thumbnail frame' },
   dub: { label: 'Dub', hint: 'Translate & AI voice (uses credits)' },
   brand: { label: 'Brand', hint: 'Logo, colors & fonts from your kit' },
+  text: { label: 'Text', hint: 'Titles & text layers on the Text lane' },
+  templates: { label: 'Templates', hint: 'Layouts, caption & text styles, brand kits' },
+  color: { label: 'Color', hint: 'Filters & adjustments' },
 }

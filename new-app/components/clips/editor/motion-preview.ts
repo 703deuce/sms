@@ -68,6 +68,7 @@ function syncClone(
   mediaOffsetMs: number,
   playing: boolean,
   rate: number,
+  look = '',
 ) {
   const vids = ensureClone(host, main)
   const mains = main ? Array.from(main.querySelectorAll('video')) : []
@@ -75,7 +76,16 @@ function syncClone(
   vids.forEach((v, i) => {
     const m = mains[i]
     // Per-tick crop transforms (speaker-follow) are inline styles on the main videos.
-    if (m && v.style.cssText !== m.style.cssText) v.style.cssText = m.style.cssText
+    // E4: the clone's own colour look (its segment) lives on style.filter; compare without it.
+    if (m && v.dataset.baseCss !== m.style.cssText) {
+      v.style.cssText = m.style.cssText
+      v.dataset.baseCss = m.style.cssText
+      v.dataset.look = ''
+    }
+    if ((v.dataset.look ?? '') !== look) {
+      v.style.filter = look
+      v.dataset.look = look
+    }
     if (m && v.className !== m.className) v.className = m.className
     v.playbackRate = rate
     const drift = Math.abs(v.currentTime - t)
@@ -102,14 +112,22 @@ export function applyMotionFrame(
   edits: ClipEditsV2,
   tb: { segs: [number, number][]; starts: number[] },
   outMs: number,
-  opts: { boxW: number; playing: boolean; rate: number; mediaOffsetMs: number },
+  opts: {
+    boxW: number
+    playing: boolean
+    rate: number
+    mediaOffsetMs: number
+    /** E4: CSS filter of the colour look at a source ms (clone A / B keep their own segment's look). */
+    lookAt?: (srcMs: number) => string
+  },
 ) {
+  const look = (ms: number) => opts.lookAt?.(ms) ?? ''
   const main = mainFrame(edits, tb, outMs, opts.boxW)
   setStyle(dom.mainKf, main.kf)
   if (main.cut) {
     const c = main.cut
-    syncClone(dom.cloneA, dom.mainLayer, c.aSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate)
-    syncClone(dom.cloneB, dom.mainLayer, c.bSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate)
+    syncClone(dom.cloneA, dom.mainLayer, c.aSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.aSrcMs))
+    syncClone(dom.cloneB, dom.mainLayer, c.bSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.bSrcMs))
     setStyle(dom.cloneA, c.a)
     setStyle(dom.cloneB, c.b)
     if (dom.cutDip) {
@@ -121,8 +139,8 @@ export function applyMotionFrame(
   } else {
     if (main.upcoming) {
       // Pre-seek both clones to the window start so they are decoded when it begins.
-      syncClone(dom.cloneA, dom.mainLayer, main.upcoming.aSrcMs, opts.mediaOffsetMs, false, opts.rate)
-      syncClone(dom.cloneB, dom.mainLayer, main.upcoming.bSrcMs, opts.mediaOffsetMs, false, opts.rate)
+      syncClone(dom.cloneA, dom.mainLayer, main.upcoming.aSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.aSrcMs))
+      syncClone(dom.cloneB, dom.mainLayer, main.upcoming.bSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.bSrcMs))
     } else {
       pauseClone(dom.cloneA)
       pauseClone(dom.cloneB)

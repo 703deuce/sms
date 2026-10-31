@@ -210,6 +210,52 @@ function clampDur(d: number): number {
   return Math.min(TRANSITION_MAX_MS, Math.max(TRANSITION_MIN_MS, Math.round(d)))
 }
 
+/** E3fix2: a transition belongs to a cut when its srcMs is within half an export frame. */
+export function cutMatchToleranceMs(fps = MOTION_FPS): number {
+  return 500 / (fps || MOTION_FPS)
+}
+
+/**
+ * E3fix2 (mirror of motion.match_transitions_to_cuts): cut index k → transition. Each transition
+ * goes to its NEAREST cut start (segs[k][0], k ≥ 1; ties → earlier cut) when within half a frame;
+ * each cut keeps its nearest claimant (ties → first in the list). Was |srcMs − cut| ≤ 1 ms.
+ */
+export function matchTransitionsToCuts<T extends { srcMs: number }>(
+  segs: readonly (readonly [number, number])[],
+  transitions: readonly T[] | undefined,
+  fps = MOTION_FPS,
+): Map<number, T> {
+  const tol = cutMatchToleranceMs(fps)
+  const best = new Map<number, { delta: number; tr: T }>()
+  if (!transitions?.length || segs.length < 2) return new Map()
+  for (const tr of transitions) {
+    let bk = -1
+    let bd = Infinity
+    for (let k = 1; k < segs.length; k++) {
+      const d = Math.abs(tr.srcMs - segs[k]![0])
+      if (d < bd) {
+        bd = d
+        bk = k
+      }
+    }
+    if (bk < 0 || bd > tol) continue
+    const cur = best.get(bk)
+    if (!cur || bd < cur.delta) best.set(bk, { delta: bd, tr })
+  }
+  return new Map([...best].map(([k, v]) => [k, v.tr]))
+}
+
+/** E3fix2: the transition shown for the cut whose next segment starts at `cutSrcMs`. */
+export function transitionAtCut<T extends { srcMs: number }>(
+  segs: readonly (readonly [number, number])[],
+  transitions: readonly T[] | undefined,
+  cutSrcMs: number,
+  fps = MOTION_FPS,
+): T | undefined {
+  const k = segs.findIndex(([a], i) => i > 0 && a === cutSrcMs)
+  return k > 0 ? matchTransitionsToCuts(segs, transitions, fps).get(k) : undefined
+}
+
 /**
  * Cut windows on the effective EDL. segs/starts = timebaseFor(editorPreviewEdits(...)).
  * d ≤ min(len before, len after) so neighbouring windows never overlap (each segment gives at
@@ -224,10 +270,11 @@ export function cutTransitionWindows(
   if (!transitions?.length || segs.length < 2) return []
   const out: CutWindow[] = []
   let lastEndFrame = 0
+  const byCut = matchTransitionsToCuts(segs, transitions, fps)
   for (let k = 1; k < segs.length; k++) {
     const [a0, a1] = segs[k - 1]!
     const [b0, b1] = segs[k]!
-    const tr = transitions.find((t) => Math.abs(t.srcMs - b0) <= 1)
+    const tr = byCut.get(k)
     if (!tr) continue
     const d = Math.min(clampDur(tr.durMs), a1 - a0, b1 - b0)
     if (d < TRANSITION_MIN_MS) continue
@@ -319,7 +366,7 @@ export function progressIn(w: { w0Ms: number; w1Ms: number }, outMs: number): nu
 // ---------------------------------------------------------------------------
 
 export function setCutTransition(edits: ClipEditsV2, srcMs: number, spec: TransitionSpec | null): ClipEditsV2 {
-  const rest = (edits.transitions ?? []).filter((t) => Math.abs(t.srcMs - srcMs) > 1)
+  const rest = (edits.transitions ?? []).filter((t) => Math.abs(t.srcMs - srcMs) > cutMatchToleranceMs())
   const list = spec ? [...rest, { srcMs: Math.round(srcMs), type: spec.type, durMs: clampDur(spec.durMs) }] : rest
   list.sort((a, b) => a.srcMs - b.srcMs)
   return { ...edits, transitions: list.length ? list : undefined }
@@ -374,13 +421,17 @@ export function remapCutTransitions(
   const starts = new Set(nextSegs.slice(1).map(([a]) => a))
   let changed = false
   const out: CutTransition[] = []
+  const tol = cutMatchToleranceMs()
   for (const t of transitions) {
-    if ([...starts].some((s) => Math.abs(s - t.srcMs) <= 1)) {
-      out.push(t)
+    // E3fix2: within half a frame (was 1 ms) — and snap the key onto the cut it belongs to.
+    const hit = [...starts].find((s) => Math.abs(s - t.srcMs) <= tol)
+    if (hit !== undefined) {
+      if (hit !== t.srcMs) changed = true
+      out.push(hit === t.srcMs ? t : { ...t, srcMs: hit })
       continue
     }
     changed = true
-    const old = prevSegs.find(([a]) => Math.abs(a - t.srcMs) <= 1)
+    const old = prevSegs.find(([a]) => Math.abs(a - t.srcMs) <= tol)
     const moved = old ? nextSegs.slice(1).find(([, b]) => b === old[1]) : undefined
     if (moved) out.push({ ...t, srcMs: moved[0] })
   }

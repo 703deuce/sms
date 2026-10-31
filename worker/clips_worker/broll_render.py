@@ -125,11 +125,14 @@ def build_broll_filtergraph(
         bar_crop = detect_letterbox_crop(local)
         bar_vf = f"{bar_crop}," if bar_crop else ""
         trim = f"trim=0:{clip_dur:.3f}" if in_s <= 0 else f"trim={in_s:.3f}:{in_s + clip_dur:.3f}"
+        from clips_worker.color import broll_color_filter
+
+        look = broll_color_filter(edits, item["id"], cmd_dir)  # E4: per-item color look
         parts.append(
             f"[{inp}]{trim},setpts=PTS-STARTPTS+{start:.3f}/TB,"
             f"{bar_vf}"
             f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},fps=30,format=yuv420p[b{i}]"
+            f"crop={width}:{height}{look},fps=30,format=yuv420p[b{i}]"
         )
         out = f"v{i}"
         enable = f"enable='between(t,{start:.3f},{end:.3f})':eof_action=pass"

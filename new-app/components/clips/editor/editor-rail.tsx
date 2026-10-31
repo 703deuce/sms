@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Captions, Clapperboard, Eraser, Image as ImageIcon, Languages, LayoutPanelTop, Layers, Music2, Palette, Sparkles, FileText } from 'lucide-react'
+import { Captions, Clapperboard, Eraser, Image as ImageIcon, Languages, LayoutPanelTop, Layers, Music2, Palette, Sparkles, FileText, Type, LayoutTemplate, SwatchBook } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
@@ -19,11 +19,14 @@ export type EditorPanelId =
   | 'thumbnail'
   | 'dub'
   | 'brand'
+  | 'text'
+  | 'templates'
+  | 'color'
 
 /**
  * Clip editor rail, top to bottom. The launch items keep their positions; re-hooked tools are appended
  * below Audio (B-roll, Brand, Cover). Dub (paid AI voice) only with NEXT_PUBLIC_CLIP_EDITOR_AI_EXTRAS=1.
- * AI Producer stays off the rail (returns later as a small optional assistant).
+ * AI Producer stays off the rail (E4: ✨ top-bar pop-over). E4 appends Text, Templates, Color last.
  */
 export function clipEditorRailIds(aiExtras: boolean = clipEditorAiExtrasEnabled()): EditorPanelId[] {
   return [
@@ -37,6 +40,9 @@ export function clipEditorRailIds(aiExtras: boolean = clipEditorAiExtrasEnabled(
     'brand',
     'thumbnail',
     ...(aiExtras ? (['dub'] as EditorPanelId[]) : []),
+    'text',
+    'templates',
+    'color',
   ]
 }
 
@@ -59,6 +65,9 @@ const ALL_EDITOR_RAIL_ITEMS: {
   { id: 'thumbnail', label: 'Cover', icon: ImageIcon, tone: 'text-lane-brand' },
   { id: 'dub', label: 'Dub', icon: Languages, tone: 'text-lane-voice' },
   { id: 'brand', label: 'Brand', icon: Palette, tone: 'text-lane-brand' },
+  { id: 'text', label: 'Text', icon: Type, tone: 'text-lane-caption' },
+  { id: 'templates', label: 'Templates', icon: LayoutTemplate, tone: 'text-lane-brand' },
+  { id: 'color', label: 'Color', icon: SwatchBook, tone: 'text-lane-broll' },
 ]
 
 /** Ordered by CLIP_EDITOR_RAIL_IDS (not ALL_EDITOR_RAIL_ITEMS) so existing items never move. */

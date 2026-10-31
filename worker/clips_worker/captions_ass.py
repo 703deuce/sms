@@ -6,7 +6,14 @@ import os
 import re
 from pathlib import Path
 
-from clips_worker.caption_fit import apply_line_scale, fit_caption_line, join_caption_parts
+from clips_worker.caption_fit import (
+    apply_line_scale,
+    caption_safe_width_px,
+    fit_caption_line,
+    fit_reference_frame,
+    join_caption_parts,
+    round_half_up,
+)
 from clips_worker.caption_presets import resolve_preset
 from clips_worker.caption_safe_area import clamp_caption_export_style
 
@@ -420,7 +427,7 @@ def _chunk_fit(
     if not fit:
         return [], 1.0
     peak = 1.0
-    if anim in ("pop", "bounce"):
+    if anim in ("pop", "bounce", "stomp"):
         peak = max(peak, 1.12)
     if any(int(w.get("i", -1)) in emphasis for w in chunk):
         peak = max(peak, float(fit.get("emph_scale") or 1.0))
@@ -503,10 +510,17 @@ def build_ass(
     box_pad = int(box.get("padX", 8)) if box else cap_ow
 
     font_name = resolve_ass_font_name(edits_captions, preset)
+    # E3fix2: line breaking is decided in a resolution-independent reference frame (1080 px short
+    # side, same aspect) so 720p / 1080p exports and the editor preview break identically.
+    ref_w, ref_h, ref_k = fit_reference_frame(play_w, play_h)
     fit = {
         "font": font_name,
-        "fontsize": fontsize,
-        "max_width_px": int(max_line_w) if max_line_w is not None else max(1, play_w - 2 * margin_lr),
+        "fontsize": round_half_up(int(spec_fs) * ref_k) if spec_fs is not None else round_half_up(size_pct / 100 * ref_h),
+        "max_width_px": (
+            round_half_up(int(max_line_w) * ref_k)
+            if max_line_w is not None
+            else caption_safe_width_px(ref_w)
+        ),
         "outline_px": int(cap_ow or 0),
         "box_pad_px": int(box_pad or 0) if box else 0,
         "emph_scale": emph_scale,
