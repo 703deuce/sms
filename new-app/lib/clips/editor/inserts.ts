@@ -34,6 +34,14 @@ export type ClipInsert = {
   fit?: SourceFit
 }
 
+/**
+ * G1b3: freeze frame — an insert with this reserved sourceId holds the composed frame at its point
+ * (export: the finished frame at baseMs, cloned; preview: the paused main + overlays at baseMs).
+ * Silent. No media source needed.
+ */
+export const FREEZE_SOURCE_ID = 'freeze'
+export const FREEZE_DEFAULT_MS = 3000
+
 export const INSERT_MIN_MS = 200
 export const INSERT_MAX_MS = 10 * 60 * 1000
 export const MAX_INSERTS = 50
@@ -59,9 +67,24 @@ export function normalizeInserts(raw: unknown, sources: readonly ClipMediaSource
     if (!r || typeof r !== 'object') continue
     const o = r as Record<string, unknown>
     const id = safeId(o.id)
-    const src = byId.get(safeId(o.sourceId))
     const at = int(o.atSrcMs)
     const dur = int(o.durMs)
+    if (safeId(o.sourceId) === FREEZE_SOURCE_ID) {
+      if (!id || seen.has(id) || at === undefined || dur === undefined || dur < INSERT_MIN_MS) continue
+      seen.add(id)
+      out.push({
+        id,
+        sourceId: FREEZE_SOURCE_ID,
+        atSrcMs: Math.max(0, at),
+        ...(o.append === true ? { append: true as const } : {}),
+        inMs: 0,
+        durMs: Math.min(dur, INSERT_MAX_MS),
+        audio: 'mute',
+      })
+      if (out.length >= MAX_INSERTS) break
+      continue
+    }
+    const src = byId.get(safeId(o.sourceId))
     if (!id || seen.has(id) || !src || src.mediaType === 'audio' || at === undefined || dur === undefined) continue
     if (dur < INSERT_MIN_MS) continue
     seen.add(id)
@@ -110,6 +133,8 @@ export type InsertWindow = {
   durMs: number
   audio: InsertAudio
   fit: SourceFit
+  /** G1b3: freeze frame (hold the frame at baseMs). */
+  freeze?: true
 }
 
 /** Display windows in play order (worker parity: media_inserts.insert_windows). */
@@ -140,6 +165,7 @@ export function insertWindows(
       durMs: p.ins.durMs,
       audio: insertAudio(p.ins),
       fit: p.ins.fit ?? 'cover',
+      ...(p.ins.sourceId === FREEZE_SOURCE_ID ? { freeze: true as const } : {}),
     })
     shift += p.ins.durMs
   }
@@ -201,4 +227,34 @@ export function patchInsert(
 export function removeInsert(inserts: readonly ClipInsert[] | undefined, id: string): ClipInsert[] | undefined {
   const next = (inserts ?? []).filter((i) => i.id !== id)
   return next.length ? next : undefined
+}
+
+export function isFreezeInsert(ins: Pick<ClipInsert, 'sourceId'>): boolean {
+  return ins.sourceId === FREEZE_SOURCE_ID
+}
+
+/** G1b3: add a freeze frame at edit-timeline ms `baseMs` (anchored to the main source point there). */
+export function addFreezeFrame(
+  inserts: readonly ClipInsert[] | undefined,
+  segs: readonly [number, number][],
+  baseMs: number,
+  id: string,
+  durMs = FREEZE_DEFAULT_MS,
+): ClipInsert[] | null {
+  if ((inserts?.length ?? 0) >= MAX_INSERTS) return null
+  const total = segs.reduce((s, [a, b]) => s + (b - a), 0)
+  const t = Math.max(0, Math.min(total, Math.round(baseMs)))
+  const ins: ClipInsert = { id, sourceId: FREEZE_SOURCE_ID, atSrcMs: 0, inMs: 0, durMs: Math.max(INSERT_MIN_MS, Math.round(durMs)), audio: 'mute' }
+  if (t >= total) ins.append = true
+  else {
+    let acc = 0
+    for (const [a, b] of segs) {
+      if (t < acc + (b - a)) {
+        ins.atSrcMs = a + (t - acc)
+        break
+      }
+      acc += b - a
+    }
+  }
+  return [...(inserts ?? []), ins]
 }

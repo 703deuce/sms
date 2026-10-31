@@ -6,10 +6,10 @@ import { buildCaptionWords } from '@/lib/clips/caption-words'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { normalizeEditSpeed } from '@/lib/clips/edits'
 import { musicWindow } from '@/lib/clips/editor/clip-timeline'
-import { findTrack, volumeAt } from '@/lib/clips/editor/keyframes'
+import { findTrack, trackValueAt, volumeAt } from '@/lib/clips/editor/keyframes'
 import type { SourceWord } from '@/lib/clips/source-words'
 
-type SfxCue = { buffer: AudioBuffer; atMs: number; volume: number; generationId: string }
+type SfxCue = { buffer: AudioBuffer; atMs: number; volume: number; generationId: string; inMs?: number; durMs?: number }
 
 export function useAudioMix({
   videoRef,
@@ -193,7 +193,9 @@ export function useAudioMix({
   }, [audio?.music, edits, hasMusicEnv, hasVoiceEnv, outputDurationMs, outputMs, videoRef])
 
   // E2: SFX play in preview at atMs (previously never scheduled). Re-scheduled on play / seek.
-  const sfxKey = sfxCues.map((c) => `${c.generationId}:${c.atMs}:${c.volume}`).join('|')
+  // G1b3: + the SFX volume envelopes (`sfx:<id>` keyframes), so editing one re-schedules.
+  const sfxEnvKey = JSON.stringify((edits.keyframes ?? []).filter((k) => k.target.startsWith('sfx:')))
+  const sfxKey = sfxCues.map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}`).join('|') + sfxEnvKey
   const stopSfx = () => {
     for (const n of sfxNodesRef.current) {
       try {
@@ -212,16 +214,32 @@ export function useAudioMix({
     const ctx = ctxRef.current
     void ctx.resume()
     for (const cue of sfxCues) {
-      const endMs = cue.atMs + cue.buffer.duration * 1000
-      if (endMs <= fromMs) continue
+      // G1b3: in-point / length (detached audio).
+      const inS = (cue.inMs ?? 0) / 1000
+      const playS = Math.max(0, Math.min(cue.buffer.duration - inS, cue.durMs != null ? cue.durMs / 1000 : Infinity))
+      const endMs = cue.atMs + playS * 1000
+      if (endMs <= fromMs || playS <= 0) continue
       const src = ctx.createBufferSource()
       src.buffer = cue.buffer
       const g = ctx.createGain()
       g.gain.value = cue.volume
+      // G1b3: SFX envelope — sampled every 20 ms of the cue as linear ramps (any ease matches the
+      // export's per-frame volume expression to within a ramp step).
+      const env = findTrack(edits, `sfx:${cue.generationId}`, 'volume')
+      if (env && (env.points.length || env.value != null)) {
+        const lenMs = cue.buffer.duration * 1000
+        const local0 = Math.max(0, fromMs - cue.atMs)
+        const t0 = ctx.currentTime + Math.max(0, cue.atMs - fromMs) / 1000 / rate
+        const at = (local: number) => t0 + (local - local0) / 1000 / rate
+        g.gain.setValueAtTime(cue.volume * (trackValueAt(env, 'volume', local0) / 100), ctx.currentTime)
+        for (let l = local0 + 20, n = 0; l <= lenMs && n < 2000; l += 20, n++) {
+          g.gain.linearRampToValueAtTime(cue.volume * (trackValueAt(env, 'volume', l) / 100), at(l))
+        }
+      }
       src.connect(g)
       g.connect(ctx.destination)
-      if (cue.atMs >= fromMs) src.start(ctx.currentTime + (cue.atMs - fromMs) / 1000 / rate)
-      else src.start(ctx.currentTime, (fromMs - cue.atMs) / 1000)
+      if (cue.atMs >= fromMs) src.start(ctx.currentTime + (cue.atMs - fromMs) / 1000 / rate, inS, playS)
+      else src.start(ctx.currentTime, inS + (fromMs - cue.atMs) / 1000, playS - (fromMs - cue.atMs) / 1000)
       sfxNodesRef.current.push(src)
     }
     sfxAnchorRef.current = { ctxT: ctx.currentTime, outMs: fromMs }

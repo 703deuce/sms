@@ -41,6 +41,9 @@ def _safe_id(v) -> str:
     return s if _ID_RE.match(s) else ""
 
 
+FREEZE_SOURCE_ID = "freeze"  # G1b3: freeze frame — holds the finished frame at its point, silent.
+
+
 def normalize_inserts(raw, sources: list[dict] | None) -> list[dict] | None:
     if not isinstance(raw, list):
         return None
@@ -54,6 +57,18 @@ def normalize_inserts(raw, sources: list[dict] | None) -> list[dict] | None:
         src = by_id.get(_safe_id(r.get("sourceId")))
         at = _int(r.get("atSrcMs"))
         dur = _int(r.get("durMs"))
+        if _safe_id(r.get("sourceId")) == FREEZE_SOURCE_ID:
+            if not iid or iid in seen or at is None or dur is None or dur < INSERT_MIN_MS:
+                continue
+            seen.add(iid)
+            item = {"id": iid, "sourceId": FREEZE_SOURCE_ID, "atSrcMs": max(0, at)}
+            if r.get("append") is True:
+                item["append"] = True
+            item.update({"inMs": 0, "durMs": min(dur, INSERT_MAX_MS), "audio": "mute"})
+            out.append(item)
+            if len(out) >= MAX_INSERTS:
+                break
+            continue
         if not iid or iid in seen or not src or src["mediaType"] == "audio" or at is None or dur is None:
             continue
         if dur < INSERT_MIN_MS:
@@ -114,6 +129,7 @@ def insert_windows(segs, inserts: list[dict] | None) -> list[dict]:
                 "durMs": ins["durMs"],
                 "audio": "mute" if ins.get("audio") == "mute" else "source",
                 "fit": ins.get("fit") or "cover",
+                **({"freeze": True} if ins["sourceId"] == FREEZE_SOURCE_ID else {}),
             }
         )
         shift += ins["durMs"]
@@ -235,7 +251,15 @@ def build_splice_graph(
         else:
             i, d = p["input"], p["durS"]
             vf = fit_filter(p["fit"], w, h)
-            if p["still"]:
+            if p.get("freeze"):
+                # G1b3: first frame of the seeked finished file, repeated for d. `loop` (not tpad: after
+                # trim=end_frame=1 ffmpeg 7 stops tpad's clone) — same frame count on ffmpeg 5.1 and 7.
+                n_rep = int(d * fps) + 1
+                parts.append(
+                    f"[{i}:v]trim=end_frame=1,setpts=PTS-STARTPTS,format=yuv420p,setsar=1,"
+                    f"loop=loop={n_rep}:size=1:start=0,setpts=N/({fps_s})/TB,trim=duration={d:.6f},setpts=PTS-STARTPTS[{v}]"
+                )
+            elif p["still"]:
                 parts.append(f"[{i}:v]{vf},fps={fps_s},format=yuv420p,trim=duration={d:.6f},setpts=PTS-STARTPTS[{v}]")
             else:
                 parts.append(f"[{i}:v]{vf},fps={fps_s},format=yuv420p,tpad=stop_mode=clone:stop_duration={d:.6f},trim=duration={d:.6f},setpts=PTS-STARTPTS[{v}]")
@@ -267,6 +291,9 @@ def splice_inserts(
     sources = {s["id"]: s for s in (normalize_media_sources(edits.get("sources")) or [])}
     usable = []
     for win in windows:
+        if win.get("freeze"):
+            usable.append((win, Path(out_mp4)))
+            continue
         path = media_path_for(edits, win["sourceId"], media_paths or {})
         if not path or not Path(path).is_file():
             print(f"[clipper:inserts] skip {win['id']} (media missing)", flush=True)
@@ -298,6 +325,14 @@ def splice_inserts(
         src = sources.get(win["sourceId"]) or {}
         still = src.get("mediaType") == "image"
         d = win["durMs"] / 1000.0
+        if win.get("freeze"):
+            # The finished frame at the point (the last one when it is the very end).
+            fz = max(0.0, min(at_s, total_s - 1.5 / fps))
+            inputs += ["-ss", f"{fz:.3f}", "-i", str(out_mp4)]
+            pieces.append({"kind": "insert", "input": idx, "still": False, "freeze": True, "durS": d,
+                           "audio": "mute", "fit": "cover", "hasAudio": False})
+            points.append((at_s * 1000.0, float(win["durMs"])))
+            continue
         if still:
             inputs += ["-loop", "1", "-framerate", f"{fps:.6g}", "-t", f"{d:.3f}", "-i", str(path)]
         else:

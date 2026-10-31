@@ -1,7 +1,19 @@
 'use client'
 
-import { Eye, EyeOff, ImageIcon, Lock, Unlock, Volume2, VolumeX } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Eye, EyeOff, ImageIcon, Lock, MoreHorizontal, Unlock, Volume2, VolumeX } from 'lucide-react'
 import { LANE_LABELS, LANE_TOGGLES, type LaneId, type LaneState } from '@/lib/clips/editor/clip-timeline'
+
+/** G1b: per-track actions (text / overlay / audio rows). */
+export type TrackHeaderActions = {
+  onRename?: (name: string) => void
+  onMoveUp?: () => void
+  onMoveDown?: () => void
+  onAddAbove?: () => void
+  onRemove?: () => void
+  /** Visual tracks: "up" = toward the front. */
+  visual?: boolean
+}
 
 const btn =
   'inline-flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40'
@@ -13,22 +25,34 @@ export function TimelineLaneHeader({
   height,
   onToggle,
   onOpenCover,
+  label,
+  testKey,
+  track,
+  dropTarget = false,
 }: {
   lane: LaneId
   state: LaneState
   height: number
   onToggle?: (patch: LaneState) => void
   onOpenCover?: () => void
+  /** G1b: track name (defaults to the lane label). */
+  label?: string
+  /** G1b: test id suffix (extra tracks: `broll-ov2`); defaults to the lane id. */
+  testKey?: string
+  track?: TrackHeaderActions
+  dropTarget?: boolean
 }) {
   const caps = LANE_TOGGLES[lane]
-  const name = LANE_LABELS[lane]
+  const name = label ?? LANE_LABELS[lane]
+  const tk = testKey ?? lane
   return (
     <div
-      className="flex items-center gap-0.5 border-b border-border/40 pl-1.5 pr-1 text-[10px] font-medium text-muted-foreground"
+      className={`flex items-center gap-0.5 border-b border-border/40 pl-1.5 pr-1 text-[10px] font-medium text-muted-foreground ${dropTarget ? 'bg-primary/15' : ''}`}
       style={{ height }}
-      data-testid={`timeline-lane-header-${lane}`}
+      data-testid={`timeline-lane-header-${tk}`}
     >
-      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <TrackName name={name} tk={tk} onRename={track?.onRename} />
+      {track ? <TrackMenu tk={tk} name={name} actions={track} /> : null}
       {lane === 'video' && onOpenCover ? (
         <button type="button" className={btn} onClick={onOpenCover} title="Cover / thumbnail" aria-label="Open cover">
           <ImageIcon className="size-3" />
@@ -43,7 +67,7 @@ export function TimelineLaneHeader({
           aria-pressed={Boolean(state.muted)}
           aria-label={`${state.muted ? 'Unmute' : 'Mute'} ${name}`}
           title={`${state.muted ? 'Unmute' : 'Mute'} ${name} (preview + export)`}
-          data-testid={`timeline-lane-mute-${lane}`}
+          data-testid={`timeline-lane-mute-${tk}`}
         >
           {state.muted ? <VolumeX className="size-3 text-amber-500" /> : <Volume2 className="size-3" />}
         </button>
@@ -57,7 +81,7 @@ export function TimelineLaneHeader({
           aria-pressed={Boolean(state.hidden)}
           aria-label={`${state.hidden ? 'Show' : 'Hide'} ${name}`}
           title={`${state.hidden ? 'Show' : 'Hide'} ${name} (preview + export)`}
-          data-testid={`timeline-lane-hide-${lane}`}
+          data-testid={`timeline-lane-hide-${tk}`}
         >
           {state.hidden ? <EyeOff className="size-3 text-amber-500" /> : <Eye className="size-3" />}
         </button>
@@ -70,10 +94,115 @@ export function TimelineLaneHeader({
         aria-pressed={Boolean(state.locked)}
         aria-label={`${state.locked ? 'Unlock' : 'Lock'} ${name}`}
         title={`${state.locked ? 'Unlock' : 'Lock'} ${name}`}
-        data-testid={`timeline-lane-lock-${lane}`}
+        data-testid={`timeline-lane-lock-${tk}`}
       >
         {state.locked ? <Lock className="size-3 text-amber-500" /> : <Unlock className="size-3" />}
       </button>
+    </div>
+  )
+}
+
+function TrackName({ name, tk, onRename }: { name: string; tk: string; onRename?: (name: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+  if (editing && onRename) {
+    return (
+      <input
+        autoFocus
+        className="min-w-0 flex-1 rounded border border-border bg-background px-0.5 text-[10px] text-foreground"
+        value={draft}
+        maxLength={40}
+        aria-label="Track name"
+        data-testid={`timeline-track-name-input-${tk}`}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          setEditing(false)
+          onRename(draft)
+        }}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') {
+            setDraft(name)
+            setEditing(false)
+          }
+        }}
+      />
+    )
+  }
+  return (
+    <span
+      className="min-w-0 flex-1 truncate"
+      title={onRename ? `${name} — double-click to rename` : name}
+      data-testid={`timeline-track-name-${tk}`}
+      onDoubleClick={
+        onRename
+          ? () => {
+              setDraft(name)
+              setEditing(true)
+            }
+          : undefined
+      }
+    >
+      {name}
+    </span>
+  )
+}
+
+function TrackMenu({ tk, name, actions }: { tk: string; name: string; actions: TrackHeaderActions }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [open])
+  const item = 'block w-full rounded px-2 py-1 text-left hover:bg-muted disabled:pointer-events-none disabled:opacity-40'
+  const run = (fn?: () => void) => () => {
+    setOpen(false)
+    fn?.()
+  }
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        className={btn}
+        onClick={() => setOpen((v) => !v)}
+        aria-label={`${name} track options`}
+        aria-expanded={open}
+        title="Track options"
+        data-testid={`timeline-track-menu-${tk}`}
+      >
+        <MoreHorizontal className="size-3" />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-5 z-50 min-w-[150px] rounded-md border border-border bg-popover p-1 text-[11px] font-normal text-foreground shadow-lg" role="menu">
+          {actions.onRename ? (
+            <button type="button" role="menuitem" className={item} onClick={run(() => actions.onRename?.(window.prompt('Track name', name) ?? name))}>
+              Rename…
+            </button>
+          ) : null}
+          <button type="button" role="menuitem" className={item} disabled={!actions.onMoveUp} onClick={run(actions.onMoveUp)} data-testid={`timeline-track-up-${tk}`}>
+            {actions.visual ? 'Bring track forward' : 'Move up'}
+          </button>
+          <button type="button" role="menuitem" className={item} disabled={!actions.onMoveDown} onClick={run(actions.onMoveDown)} data-testid={`timeline-track-down-${tk}`}>
+            {actions.visual ? 'Send track backward' : 'Move down'}
+          </button>
+          {actions.onAddAbove ? (
+            <button type="button" role="menuitem" className={item} onClick={run(actions.onAddAbove)} data-testid={`timeline-track-add-${tk}`}>
+              {actions.visual ? 'Add track above' : 'Add track below'}
+            </button>
+          ) : null}
+          {actions.onRemove ? (
+            <button type="button" role="menuitem" className={`${item} text-destructive`} onClick={run(actions.onRemove)} data-testid={`timeline-track-remove-${tk}`}>
+              Remove track
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

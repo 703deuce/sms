@@ -15,7 +15,11 @@ type Dict = Record<string, unknown>
 type Rect = { x: number; y: number; w: number; h: number }
 
 export type PreviewScriptKey = 'captions' | 'hook' | 'text' | 'top'
-export type PreviewScripts = Record<PreviewScriptKey, string | null>
+/** G1b: a text track under an overlay track — its own libass canvas between the B-roll layers. */
+export type UnderScript = { key: string; z: number; ass: string }
+export type PreviewScripts = Record<PreviewScriptKey, string | null> & { under?: UnderScript[] }
+/** G1b: CSS z-index of B-roll stage pass i (B-roll wrappers + under-text canvases); < captions (25). */
+export const UNDER_Z_BASE = 10
 export const PREVIEW_SCRIPT_ORDER: PreviewScriptKey[] = ['captions', 'hook', 'text', 'top']
 
 export type PreviewScriptInput = {
@@ -38,6 +42,9 @@ export type PreviewScriptInput = {
   badge?: BadgeTextInput | null
   /** E6 hook_duplicate rule (edits_render): the export skips a hook that repeats the captions. */
   hookDuplicatesCaptions?: boolean
+  /** G1b: B-roll stage passes (tracks.underPasses) when text sits under an overlay; edits_render
+   * burns those text items there and the rest on top. */
+  underPasses?: ReadonlyArray<{ kind: 'overlay' | 'text'; trackId: string; ids: string[] }> | null
 }
 
 /** edits_render: the caption edits burn_captions receives (T6 rect / stream frame overrides). */
@@ -89,7 +96,21 @@ export function buildPreviewScripts(o: PreviewScriptInput): PreviewScripts {
   // edits_render: the T6 title already shows the hook line → no hook burn.
   // E6: …and none when the hook repeats the opening captions (hook_text_duplicates_captions).
   const hook = t6TitleOn || o.hookDuplicatesCaptions ? null : hookAssForEdits(e, o.playW, o.playH)
-  const text = buildTextItemsAss(e, o.playW, o.playH)
+  const passes = o.underPasses ?? []
+  const underIds = new Set(passes.filter((p) => p.kind === 'text').flatMap((p) => p.ids))
+  const items = Array.isArray(e.textItems) ? (e.textItems as Dict[]) : []
+  const pick = (keep: (id: string) => boolean): Dict => {
+    const kept = items.filter((t) => keep(String(t.id)))
+    return { ...e, textItems: kept.length ? kept : null }
+  }
+  const text = buildTextItemsAss(underIds.size ? pick((id) => !underIds.has(id)) : e, o.playW, o.playH)
+  const under: UnderScript[] = []
+  passes.forEach((p, i) => {
+    if (p.kind !== 'text') return
+    const ids = new Set(p.ids)
+    const ass = buildTextItemsAss(pick((id) => ids.has(id)), o.playW, o.playH)
+    if (ass) under.push({ key: `under:${p.trackId}`, z: UNDER_Z_BASE + i, ass })
+  })
 
   let top: string | null = null
   if (t6TitleOn && o.t6Spec && o.titleStyles && o.formatHeadline) {
@@ -109,7 +130,7 @@ export function buildPreviewScripts(o: PreviewScriptInput): PreviewScripts {
         : o.badge
     top = mergeAss(top, badgeTextAss(b, o.durationMs))
   }
-  return { captions, hook, text, top }
+  return under.length ? { captions, hook, text, top, under } : { captions, hook, text, top }
 }
 
 /** Family names (Style Fontname + \fn overrides) used by a script. */

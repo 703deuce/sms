@@ -1,0 +1,1589 @@
+{
+ "normalize": [
+  {
+   "raw": null,
+   "out": null
+  },
+  {
+   "raw": "x",
+   "out": null
+  },
+  {
+   "raw": [],
+   "out": null
+  },
+  {
+   "raw": [
+    {
+     "id": "ov1",
+     "kind": "overlay"
+    },
+    {
+     "id": "tx1",
+     "kind": "text"
+    },
+    {
+     "id": "au1",
+     "kind": "audio"
+    }
+   ],
+   "out": null
+  },
+  {
+   "raw": [
+    {
+     "id": "tx2",
+     "kind": "text",
+     "name": "  Lower   thirds ",
+     "items": [
+      "a",
+      "a",
+      "b"
+     ],
+     "hidden": true,
+     "muted": true
+    },
+    {
+     "id": "tx1",
+     "kind": "overlay"
+    },
+    {
+     "id": "bad id",
+     "kind": "text"
+    },
+    {
+     "id": "ov2",
+     "kind": "overlay",
+     "items": [
+      "b1"
+     ],
+     "locked": true
+    },
+    {
+     "id": "au2",
+     "kind": "audio",
+     "muted": true,
+     "hidden": true,
+     "items": [
+      "s1"
+     ]
+    },
+    {
+     "id": "tx3",
+     "kind": "text",
+     "items": [
+      "b"
+     ]
+    }
+   ],
+   "out": [
+    {
+     "id": "ov1",
+     "kind": "overlay"
+    },
+    {
+     "id": "tx2",
+     "kind": "text",
+     "name": "Lower thirds",
+     "hidden": true,
+     "items": [
+      "a",
+      "b"
+     ]
+    },
+    {
+     "id": "ov2",
+     "kind": "overlay",
+     "locked": true,
+     "items": [
+      "b1"
+     ]
+    },
+    {
+     "id": "au2",
+     "kind": "audio",
+     "muted": true,
+     "items": [
+      "s1"
+     ]
+    },
+    {
+     "id": "tx3",
+     "kind": "text"
+    },
+    {
+     "id": "tx1",
+     "kind": "text"
+    },
+    {
+     "id": "au1",
+     "kind": "audio"
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "id": "tx1",
+     "kind": "text"
+    },
+    {
+     "id": "ov1",
+     "kind": "overlay"
+    }
+   ],
+   "out": [
+    {
+     "id": "tx1",
+     "kind": "text"
+    },
+    {
+     "id": "ov1",
+     "kind": "overlay"
+    },
+    {
+     "id": "au1",
+     "kind": "audio"
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "id": "ov1",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov2",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov3",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov4",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov5",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov6",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov7",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov8",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov9",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov10",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov11",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov12",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov13",
+     "kind": "overlay"
+    }
+   ],
+   "out": [
+    {
+     "id": "ov1",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov2",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov3",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov4",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov5",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov6",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov7",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov8",
+     "kind": "overlay"
+    },
+    {
+     "id": "ov9",
+     "kind": "overlay"
+    },
+    {
+     "id": "tx1",
+     "kind": "text"
+    },
+    {
+     "id": "au1",
+     "kind": "audio"
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "id": "au1",
+     "kind": "audio"
+    },
+    {
+     "id": "au2",
+     "kind": "audio"
+    },
+    {
+     "id": "au3",
+     "kind": "audio"
+    },
+    {
+     "id": "au4",
+     "kind": "audio"
+    },
+    {
+     "id": "au5",
+     "kind": "audio"
+    },
+    {
+     "id": "au6",
+     "kind": "audio"
+    },
+    {
+     "id": "au7",
+     "kind": "audio"
+    },
+    {
+     "id": "au8",
+     "kind": "audio"
+    },
+    {
+     "id": "au9",
+     "kind": "audio"
+    },
+    {
+     "id": "au10",
+     "kind": "audio"
+    },
+    {
+     "id": "au11",
+     "kind": "audio"
+    },
+    {
+     "id": "au12",
+     "kind": "audio"
+    },
+    {
+     "id": "au13",
+     "kind": "audio"
+    },
+    {
+     "id": "au14",
+     "kind": "audio"
+    },
+    {
+     "id": "au15",
+     "kind": "audio"
+    },
+    {
+     "id": "au16",
+     "kind": "audio"
+    },
+    {
+     "id": "au17",
+     "kind": "audio"
+    },
+    {
+     "id": "au18",
+     "kind": "audio"
+    },
+    {
+     "id": "au19",
+     "kind": "audio"
+    }
+   ],
+   "out": [
+    {
+     "id": "ov1",
+     "kind": "overlay"
+    },
+    {
+     "id": "tx1",
+     "kind": "text"
+    },
+    {
+     "id": "au1",
+     "kind": "audio"
+    },
+    {
+     "id": "au2",
+     "kind": "audio"
+    },
+    {
+     "id": "au3",
+     "kind": "audio"
+    },
+    {
+     "id": "au4",
+     "kind": "audio"
+    },
+    {
+     "id": "au5",
+     "kind": "audio"
+    },
+    {
+     "id": "au6",
+     "kind": "audio"
+    },
+    {
+     "id": "au7",
+     "kind": "audio"
+    },
+    {
+     "id": "au8",
+     "kind": "audio"
+    },
+    {
+     "id": "au9",
+     "kind": "audio"
+    },
+    {
+     "id": "au10",
+     "kind": "audio"
+    },
+    {
+     "id": "au11",
+     "kind": "audio"
+    },
+    {
+     "id": "au12",
+     "kind": "audio"
+    },
+    {
+     "id": "au13",
+     "kind": "audio"
+    },
+    {
+     "id": "au14",
+     "kind": "audio"
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "id": "ov1",
+     "kind": "overlay",
+     "name": "Main overlay",
+     "locked": true,
+     "items": [
+      "q"
+     ]
+    }
+   ],
+   "out": [
+    {
+     "id": "ov1",
+     "kind": "overlay",
+     "name": "Main overlay"
+    },
+    {
+     "id": "tx1",
+     "kind": "text"
+    },
+    {
+     "id": "au1",
+     "kind": "audio"
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "id": "x",
+     "kind": "text",
+     "items": [
+      "ok",
+      "bad/slash",
+      5,
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     ]
+    }
+   ],
+   "out": [
+    {
+     "id": "ov1",
+     "kind": "overlay"
+    },
+    {
+     "id": "x",
+     "kind": "text",
+     "items": [
+      "ok"
+     ]
+    },
+    {
+     "id": "tx1",
+     "kind": "text"
+    },
+    {
+     "id": "au1",
+     "kind": "audio"
+    }
+   ]
+  }
+ ],
+ "under": [
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2"
+      ]
+     },
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     },
+     {
+      "id": "tx3",
+      "kind": "text",
+      "items": [
+       "t3"
+      ]
+     },
+     {
+      "id": "ov3",
+      "kind": "overlay",
+      "items": [
+       "b3"
+      ]
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t3",
+      "text": "t3",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ]
+   },
+   "overlayIds": [
+    "b1",
+    "b2",
+    "b3"
+   ],
+   "ids": [
+    "t1",
+    "t2",
+    "t3"
+   ],
+   "passes": [
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "t1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov1",
+     "ids": [
+      "b1",
+      "b2"
+     ]
+    },
+    {
+     "kind": "text",
+     "trackId": "tx2",
+     "ids": [
+      "t2",
+      "t3"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov3",
+     "ids": [
+      "b3"
+     ]
+    }
+   ]
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2"
+      ]
+     },
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     },
+     {
+      "id": "tx3",
+      "kind": "text",
+      "items": [
+       "t3"
+      ]
+     },
+     {
+      "id": "ov3",
+      "kind": "overlay",
+      "items": [
+       "b3"
+      ]
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t3",
+      "text": "t3",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ]
+   },
+   "overlayIds": [
+    "b1"
+   ],
+   "ids": [
+    "t1"
+   ],
+   "passes": [
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "t1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov1",
+     "ids": [
+      "b1"
+     ]
+    }
+   ]
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2"
+      ]
+     },
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     },
+     {
+      "id": "tx3",
+      "kind": "text",
+      "items": [
+       "t3"
+      ]
+     },
+     {
+      "id": "ov3",
+      "kind": "overlay",
+      "items": [
+       "b3"
+      ]
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t3",
+      "text": "t3",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ]
+   },
+   "overlayIds": [
+    "b2"
+   ],
+   "ids": [
+    "t1"
+   ],
+   "passes": [
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "t1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov2",
+     "ids": [
+      "b2"
+     ]
+    }
+   ]
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2"
+      ]
+     },
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     },
+     {
+      "id": "tx3",
+      "kind": "text",
+      "items": [
+       "t3"
+      ]
+     },
+     {
+      "id": "ov3",
+      "kind": "overlay",
+      "items": [
+       "b3"
+      ]
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t3",
+      "text": "t3",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ]
+   },
+   "overlayIds": [],
+   "ids": [],
+   "passes": []
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2"
+      ]
+     },
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     },
+     {
+      "id": "tx3",
+      "kind": "text",
+      "items": [
+       "t3"
+      ]
+     },
+     {
+      "id": "ov3",
+      "kind": "overlay",
+      "items": [
+       "b3"
+      ]
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t3",
+      "text": "t3",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ]
+   },
+   "overlayIds": [
+    "b3"
+   ],
+   "ids": [
+    "t1",
+    "t2",
+    "t3"
+   ],
+   "passes": [
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "t1",
+      "t2",
+      "t3"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov3",
+     "ids": [
+      "b3"
+     ]
+    }
+   ]
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2"
+      ]
+     },
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     },
+     {
+      "id": "tx3",
+      "kind": "text",
+      "items": [
+       "t3"
+      ]
+     },
+     {
+      "id": "ov3",
+      "kind": "overlay",
+      "items": [
+       "b3"
+      ]
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "ab3",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t3",
+      "text": "t3",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ]
+   },
+   "overlayIds": [
+    "zz"
+   ],
+   "ids": [
+    "t1"
+   ],
+   "passes": [
+    {
+     "kind": "text",
+     "trackId": "tx1",
+     "ids": [
+      "t1"
+     ]
+    },
+    {
+     "kind": "overlay",
+     "trackId": "ov1",
+     "ids": [
+      "zz"
+     ]
+    }
+   ]
+  },
+  {
+   "edits": {
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 1
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ]
+   },
+   "overlayIds": [
+    "b1"
+   ],
+   "ids": [],
+   "passes": []
+  }
+ ],
+ "state": [
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2"
+      ],
+      "hidden": true
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     },
+     {
+      "id": "au2",
+      "kind": "audio",
+      "items": [
+       "s2"
+      ],
+      "muted": true
+     }
+    ],
+    "timelineLanes": null,
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ],
+    "audio": {
+     "music": null,
+     "sfx": [
+      {
+       "generationId": "s1",
+       "atMs": 0,
+       "volume": 1
+      },
+      {
+       "generationId": "s2",
+       "atMs": 0,
+       "volume": 1
+      }
+     ]
+    }
+   },
+   "out": {
+    "broll": [
+     "b1"
+    ],
+    "text": [
+     "t1",
+     "t2"
+    ],
+    "sfx": [
+     "s1"
+    ]
+   }
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2"
+      ],
+      "hidden": true
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     },
+     {
+      "id": "au2",
+      "kind": "audio",
+      "items": [
+       "s2"
+      ],
+      "muted": true
+     }
+    ],
+    "timelineLanes": {
+     "broll": {
+      "hidden": true
+     },
+     "text": {
+      "hidden": true
+     },
+     "sfx": {
+      "muted": true
+     }
+    },
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ],
+    "audio": {
+     "music": null,
+     "sfx": [
+      {
+       "generationId": "s1",
+       "atMs": 0,
+       "volume": 1
+      },
+      {
+       "generationId": "s2",
+       "atMs": 0,
+       "volume": 1
+      }
+     ]
+    }
+   },
+   "out": {
+    "broll": [],
+    "text": [
+     "t2"
+    ],
+    "sfx": []
+   }
+  },
+  {
+   "edits": {
+    "tracks": null,
+    "timelineLanes": {
+     "broll": {
+      "hidden": true
+     },
+     "sfx": {
+      "muted": true
+     }
+    },
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ],
+    "audio": {
+     "music": null,
+     "sfx": [
+      {
+       "generationId": "s1",
+       "atMs": 0,
+       "volume": 1
+      },
+      {
+       "generationId": "s2",
+       "atMs": 0,
+       "volume": 1
+      }
+     ]
+    }
+   },
+   "out": {
+    "broll": [],
+    "text": [
+     "t1",
+     "t2"
+    ],
+    "sfx": []
+   }
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "tx2",
+      "kind": "text",
+      "items": [
+       "t2"
+      ]
+     }
+    ],
+    "timelineLanes": {
+     "text": {
+      "hidden": true
+     }
+    },
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "ab1",
+      "startMs": 0,
+      "endMs": 3000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "ab2",
+      "startMs": 0,
+      "endMs": 3000
+     }
+    ],
+    "textItems": [
+     {
+      "id": "t1",
+      "text": "t1",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     },
+     {
+      "id": "t2",
+      "text": "t2",
+      "startMs": 0,
+      "endMs": 1000,
+      "x": 50,
+      "y": 50,
+      "style": {}
+     }
+    ],
+    "audio": {
+     "music": null,
+     "sfx": [
+      {
+       "generationId": "s1",
+       "atMs": 0,
+       "volume": 1
+      },
+      {
+       "generationId": "s2",
+       "atMs": 0,
+       "volume": 1
+      }
+     ]
+    }
+   },
+   "out": {
+    "broll": [
+     "b1",
+     "b2"
+    ],
+    "text": [
+     "t2"
+    ],
+    "sfx": [
+     "s1",
+     "s2"
+    ]
+   }
+  }
+ ]
+}

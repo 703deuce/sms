@@ -110,6 +110,17 @@ export function normalizeMediaSources(raw: unknown): ClipMediaSource[] | undefin
   return out.length ? out : undefined
 }
 
+/**
+ * G1b3: a manual "back to the main camera" span is STORED as a placeholder segment with this
+ * sourceId, so a later auto-switch (applyMulticamSegments keeps manual spans) never cuts there.
+ * It renders as the main picture: preview / export ignore it (worker media_sources drops it).
+ */
+export const MAIN_SOURCE_ID = 'main'
+
+export function isMainPlaceholder(s: Pick<SourceSegment, 'sourceId'>): boolean {
+  return s.sourceId === MAIN_SOURCE_ID
+}
+
 /** Sorted, non-overlapping (a later segment wins from its start), only known video / image sources. */
 export function normalizeSourceSegments(
   raw: unknown,
@@ -122,9 +133,15 @@ export function normalizeSourceSegments(
     if (!r || typeof r !== 'object') continue
     const o = r as Record<string, unknown>
     const id = safeId(o.id)
-    const src = byId.get(safeId(o.sourceId))
     const a = int(o.startMs)
     const b = int(o.endMs)
+    if (safeId(o.sourceId) === MAIN_SOURCE_ID && o.auto !== true) {
+      if (id && a !== undefined && b !== undefined && a >= 0 && b - a >= SOURCE_SEG_MIN_MS) {
+        out.push({ id, sourceId: MAIN_SOURCE_ID, startMs: a, endMs: b })
+      }
+      continue
+    }
+    const src = byId.get(safeId(o.sourceId))
     if (!id || !src || src.mediaType === 'audio' || a === undefined || b === undefined) continue
     if (b - a < SOURCE_SEG_MIN_MS || a < 0) continue
     const inMs = int(o.inMs)
@@ -183,7 +200,7 @@ export function sourceById(sources: readonly ClipMediaSource[] | undefined, id: 
 }
 
 export function sourceSegmentAt(segs: readonly SourceSegment[] | undefined, srcMs: number): SourceSegment | undefined {
-  for (const s of segs ?? []) if (srcMs >= s.startMs && srcMs < s.endMs) return s
+  for (const s of segs ?? []) if (srcMs >= s.startMs && srcMs < s.endMs) return isMainPlaceholder(s) ? undefined : s
   return undefined
 }
 

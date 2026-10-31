@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import type { ClipEditsV2, CutRange } from '@/lib/clips/edits'
 import { FILLER_RE, isWordCut, normalizeSectionOrder, wordDisplayText } from '@/lib/clips/edits'
 import { moveSelection, sectionBlocksForEdits } from '@/lib/clips/editor/reorder'
+import { multicamAngles, setAngleForRange } from '@/lib/clips/editor/multicam-manual'
+import type { ClipMediaSource } from '@/lib/clips/editor/sources'
 import { logEditorDecision } from '@/lib/clips/editor-decision-log'
 import { toast } from 'sonner'
 import { gapCutBetweenSourceWords } from '@/lib/clips/gap-shorten'
@@ -58,6 +60,8 @@ export function TranscriptPanel({
   panelActive = true,
   onPatchSectionOrder,
   mediaKind,
+  onSetEdits,
+  angleSources,
 }: {
   words: SourceWord[]
   wordsLoading?: boolean
@@ -81,6 +85,9 @@ export function TranscriptPanel({
   panelActive?: boolean
   onPatchSectionOrder?: (order: CutRange[] | undefined) => void
   mediaKind?: string
+  /** G1b2: commit edits (camera angle per selected sentence / word range). */
+  onSetEdits?: (next: ClipEditsV2) => void
+  angleSources?: readonly ClipMediaSource[]
 }) {
   const [selStart, setSelStart] = useState<number | null>(null)
   const [selEnd, setSelEnd] = useState<number | null>(null)
@@ -197,6 +204,19 @@ export function TranscriptPanel({
     }
   }, [selEnd, selStart, selectionRef])
 
+  // G1b2: camera angle for the selected words (main-source span of the first..last word).
+  const angles = onSetEdits ? multicamAngles(edits, angleSources) : []
+  const angleSelection = (sourceId: string) => {
+    if (selStart === null || selEnd === null || !onSetEdits) return
+    const a = Math.min(selStart, selEnd)
+    const b = Math.max(selStart, selEnd)
+    const selected = visible.filter((w) => {
+      const { startMs, endMs } = wordSourceMs(w)
+      return endMs > a && startMs < b
+    })
+    if (!selected.length) return
+    onSetEdits(setAngleForRange(edits, Math.round(selected[0]!.s * 1000), Math.round(selected[selected.length - 1]!.e * 1000), sourceId, angleSources))
+  }
   const deleteSelection = () => {
     if (selStart === null || selEnd === null) return
     const a = Math.min(selStart, selEnd)
@@ -462,6 +482,21 @@ export function TranscriptPanel({
             <Undo2 className="size-3.5" />
             Clear
           </Button>
+          {angles.length > 1
+            ? angles.map((ang) => (
+                <Button
+                  key={ang.sourceId}
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  title={`Show ${ang.label} for the selected words`}
+                  data-testid={`transcript-angle-${ang.sourceId}`}
+                  onClick={() => angleSelection(ang.sourceId)}
+                >
+                  {ang.key}. {ang.label}
+                </Button>
+              ))
+            : null}
         </div>
       )}
       <div className="flex flex-wrap gap-2">

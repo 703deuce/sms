@@ -56,6 +56,14 @@ export function createProjectFromLink(body: { sourceUrl: string; title?: string;
   })
 }
 
+/** G1b3: blank project (no source video; black canvas, no transcription). */
+export function createBlankProject(body: { blank: { aspectRatio?: '9:16' | '16:9' | '1:1' | '4:5'; durationMs?: number }; title?: string }) {
+  return clipsFetch<{ id: string; title: string; status: string }>('/api/clips/projects', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export function createProjectFromPrompt(body: { prompt: string; title?: string; settings?: unknown }) {
   return clipsFetch<{ id: string; title: string; status: string }>('/api/clips/projects', {
     method: 'POST',

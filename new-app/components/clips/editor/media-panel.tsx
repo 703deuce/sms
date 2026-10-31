@@ -1,5 +1,6 @@
 'use client'
 
+import { MAIN_ANGLE, SYNC_NUDGE_MS, multicamAngles, nudgeSync, resetSync } from '@/lib/clips/editor/multicam-manual'
 import { useMemo, useRef, useState } from 'react'
 import { AudioLines, Film, Image as ImageIcon, Plus, RefreshCw, Upload, Video, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -277,7 +278,12 @@ export function MediaPanel({
   const generate = () => {
     // Refresh angle sync values first (an audio re-sync may have landed since they were added).
     let sources = edits.sources
-    for (const a of angles) if (sources?.some((s) => s.id === a.refId)) sources = upsertSource(sources, sourceFromItem(a)).sources
+    // G1b2: keep a manual sync nudge (angle already on the clip with an offset) — Reset pulls the
+    // audio-sync value again.
+    for (const a of angles) {
+      const own = sources?.find((s) => s.id === a.refId)
+      if (own && own.syncMs === undefined) sources = upsertSource(sources, sourceFromItem(a)).sources
+    }
     const gen = buildMulticamSegments(words, edits.trim.in, edits.trim.out, mc, sources)
     const sourceSegments = applyMulticamSegments(edits.sourceSegments, gen, edits.trim.in, edits.trim.out, sources)
     onEdits({ ...edits, sources, sourceSegments })
@@ -388,12 +394,67 @@ export function MediaPanel({
             onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, minHoldMs: Math.round(v * 1000) } })} />
           <SliderRow label="Wide shot every" value={(mc.wideEveryMs ?? 45_000) / 1000} min={5} max={120} step={5} unit=" s" testId="multicam-wide"
             onCommit={(v) => onEdits({ ...edits, multicam: { ...mc, wideEveryMs: Math.round(v * 1000) } })} />
+          <ManualAngles edits={edits} angles={angles} mainLabel={mainItem?.label} onEdits={onEdits} />
           <div className="flex gap-1">
             <Button size="sm" onClick={generate} disabled={!speakers.length} data-testid="multicam-generate">Generate camera cuts</Button>
             {autoCount ? <Button size="sm" variant="ghost" onClick={clearAuto}>Clear {autoCount} auto cut{autoCount === 1 ? '' : 's'}</Button> : null}
           </div>
         </section>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * G1b2: manual multicam — angle keys (1–9 on the timeline while playing), sync offset nudge on top
+ * of the audio auto-sync, reset to the auto-sync value.
+ */
+function ManualAngles({
+  edits,
+  angles,
+  mainLabel,
+  onEdits,
+}: {
+  edits: ClipEditsV2
+  angles: ProjectMediaItem[]
+  mainLabel?: string
+  onEdits: (next: ClipEditsV2) => void
+}) {
+  const library = angles.map(sourceFromItem)
+  const list = multicamAngles(edits, library)
+  return (
+    <div className="space-y-1 rounded border border-dashed p-1.5" data-testid="multicam-manual">
+      <p className="text-[11px] text-muted-foreground">
+        Switch by hand: press 1–{Math.min(9, list.length)} on the timeline (also while playing), pick “Camera angle” on a clip or
+        in–out range, or select words in the transcript.
+      </p>
+      {list.map((a) => {
+        const own = edits.sources?.find((s) => s.id === a.sourceId)
+        const lib = library.find((s) => s.id === a.sourceId)
+        const off = (own ?? lib)?.syncMs
+        return (
+          <div key={a.sourceId} className="flex items-center gap-1 text-[11px]" data-testid={`multicam-angle-${a.key}`}>
+            <span className="w-4 font-mono">{a.key}</span>
+            <span className="min-w-0 flex-1 truncate">{a.sourceId === MAIN_ANGLE ? (mainLabel ? `${mainLabel} (main)` : 'Main camera') : a.label}</span>
+            {a.sourceId !== MAIN_ANGLE ? (
+              <>
+                <span className="tabular-nums text-muted-foreground" title="Sync offset (angle ms = main ms + offset)">
+                  {off != null ? `${off >= 0 ? '+' : ''}${Math.round(off)} ms` : '—'}
+                </span>
+                <Button size="xs" variant="ghost" className="h-6 px-1" title="Nudge −1 frame" data-testid={`multicam-nudge-minus-${a.key}`}
+                  onClick={() => onEdits(nudgeSync(edits, a.sourceId, -SYNC_NUDGE_MS, library))}>−1f</Button>
+                <Button size="xs" variant="ghost" className="h-6 px-1" title="Nudge +1 frame" data-testid={`multicam-nudge-plus-${a.key}`}
+                  onClick={() => onEdits(nudgeSync(edits, a.sourceId, SYNC_NUDGE_MS, library))}>+1f</Button>
+                {own && lib && own.syncMs !== lib.syncMs ? (
+                  <Button size="xs" variant="ghost" className="h-6 px-1" title="Back to the audio sync value" onClick={() => onEdits(resetSync(edits, lib))}>
+                    Reset
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        )
+      })}
     </div>
   )
 }

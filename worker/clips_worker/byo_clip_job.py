@@ -151,6 +151,12 @@ def finalize_byo_clip(
         settings = json.loads(settings)
 
     full = is_full_video(settings, job)
+    from clips_worker.blank_project import BLANK_INITIAL_TRIM_MS, is_blank_job
+
+    payload = job.get("payload") or {}
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    blank = is_blank_job(settings, payload)
     try:
         dur_ms = int(round(probe_duration(src) * 1000))
         if full:
@@ -175,7 +181,13 @@ def finalize_byo_clip(
         layout["mode"] = "center_crop" if h > w else "fit_blur"
         edits["layout"] = layout
         editor_assets: dict = {}
-        if full:
+        if blank:
+            # G1b3: canvas only — a short initial span (the trim extends over the canvas) and no
+            # peaks / filmstrip / proxy of a black file.
+            edits = full_video_initial_edits(edits, settings, w, h)
+            edits["trim"] = {"in": 0, "out": min(dur_ms, BLANK_INITIAL_TRIM_MS)}
+            edits["captions"] = {**dict(edits.get("captions") or {}), "enabled": False}
+        elif full:
             edits = full_video_initial_edits(edits, settings, w, h)
             post_progress(
                 job_id,
@@ -211,7 +223,7 @@ def finalize_byo_clip(
             "cropKey": None,
             "edits": edits,
             "aiMeta": (
-                {"byo": True, "fullVideo": True, **({"editorAssets": editor_assets} if editor_assets else {})}
+                {"byo": True, "fullVideo": True, **({"blank": True} if blank else {}), **({"editorAssets": editor_assets} if editor_assets else {})}
                 if full
                 else {"byo": True}
             ),
@@ -233,7 +245,7 @@ def finalize_byo_clip(
             f" full={int(full)}",
             flush=True,
         )
-        if full:
+        if full and not blank:
             _start_full_video_proxy(src, workspace_id, project_id, dur_ms)
     except ClipUserError:
         raise

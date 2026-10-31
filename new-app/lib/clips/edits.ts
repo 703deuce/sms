@@ -10,6 +10,7 @@ import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/ex
 import { isSpeechLevelingEnabled } from '@/lib/clips/speech-leveling'
 import { normalizeFitBlurStrength, type FitBlurStrength } from '@/lib/clips/fit-blur'
 import { normalizeTimelineLanes, type TimelineLanesState } from '@/lib/clips/editor/timeline-lane-state'
+import { normalizeTracks, type Track } from '@/lib/clips/editor/tracks'
 import {
   normalizeCutTransitions,
   normalizeKeyframeTracks,
@@ -30,6 +31,7 @@ import {
   type SourceSegment,
 } from '@/lib/clips/editor/sources'
 import { normalizeInserts, type ClipInsert } from '@/lib/clips/editor/inserts'
+import { normalizeSplitEdits, type SplitEdit } from '@/lib/clips/editor/split-edits'
 
 export type CutRange = [number, number]
 
@@ -179,6 +181,8 @@ export type ClipEditsV2 = {
   transitions?: CutTransition[]
   /** G1a: per-layer flip (video / B-roll) and stacking order (B-roll, text items). */
   layerProps?: LayerProp[]
+  /** G1b: overlay / text / audio tracks in layer order + item membership (lib/clips/editor/tracks.ts). */
+  tracks?: Track[]
   /** E4 text items on the Text lane (output ms; keyframe target `text:<id>`). */
   textItems?: TextItem[]
   /** E4 color looks (Adjust + Filters): whole video, per Video item (source range), per B-roll id. */
@@ -193,6 +197,8 @@ export type ClipEditsV2 = {
   multicam?: ClipMulticam
   /** E5b footage inserted between frames (lengthens the video; anchored to main source ms). */
   inserts?: ClipInsert[]
+  /** G1b3: J / L cuts — audio switch offset per real cut (lib/clips/editor/split-edits.ts). */
+  splitEdits?: SplitEdit[]
 }
 
 export type ClipBounds = {
@@ -459,6 +465,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.keyframes?.length) payload.keyframes = null
   if (!edits.transitions?.length) payload.transitions = null
   if (!edits.layerProps?.length) payload.layerProps = null
+  if (!edits.tracks?.length) payload.tracks = null
   if (!edits.textItems?.length) payload.textItems = null
   if (!edits.color) payload.color = null
   if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
@@ -466,6 +473,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.sourceSegments?.length) payload.sourceSegments = null
   if (!edits.multicam) payload.multicam = null
   if (!edits.inserts?.length) payload.inserts = null
+  if (!edits.splitEdits?.length) payload.splitEdits = null
   return payload
 }
 
@@ -573,6 +581,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     keyframes: normalizeKeyframeTracks(o.keyframes),
     transitions: normalizeCutTransitions(o.transitions),
     layerProps: normalizeLayerProps(o.layerProps),
+    tracks: normalizeTracks(o.tracks),
     textItems: normalizeTextItems(o.textItems),
     color: normalizeColorEdits(o.color),
     segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
@@ -590,6 +599,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     speechLevelingEnabled: o.speechLevelingEnabled === true ? true : undefined,
     sectionOrder: normalizeSectionOrder(o.sectionOrder, trim.in, trim.out),
     speed: normalizeEditSpeed(o.speed),
+    splitEdits: normalizeSplitEdits(o.splitEdits),
   }
 }
 
@@ -659,6 +669,7 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !edits.transitions?.length &&
     // G1a: flip / stacking order change the frames.
     !edits.layerProps?.length &&
+    !edits.tracks?.length && // G1b: track order / hidden tracks change the frames.
     // E4: text / color / per-item speed change the frames or the length.
     !edits.textItems?.length &&
     !hasColor(edits.color) &&
@@ -666,7 +677,9 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     // E5: other sources replace frames / sound.
     !edits.sourceSegments?.length &&
     // E5b: inserts lengthen the video.
-    !edits.inserts?.length
+    !edits.inserts?.length &&
+    // G1b3: J / L cuts change the sound.
+    !edits.splitEdits?.length
   )
 }
 
@@ -695,13 +708,16 @@ export function normalizeEditSpeed(raw: unknown): 1.1 | 1.25 | 1.5 | undefined {
   return undefined
 }
 
+/** G1b: main-track drag reorder needs more blocks than transcript moves did (was 12; worker first). */
+export const SECTION_ORDER_MAX_BLOCKS = 64
+
 export function normalizeSectionOrder(
   raw: unknown,
   trimIn: number,
   trimOut: number,
 ): CutRange[] | undefined {
   if (!raw || !Array.isArray(raw) || !raw.length) return undefined
-  if (raw.length > 12) {
+  if (raw.length > SECTION_ORDER_MAX_BLOCKS) {
     console.warn('[clipper:reorder] invalid_dropped')
     return undefined
   }

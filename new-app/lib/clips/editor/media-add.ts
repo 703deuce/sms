@@ -7,6 +7,7 @@ import { BROLL_MIN_MS, brollInsertWindow, toIntMs, type BrollItem } from '@/lib/
 import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { outputToSource, type Timebase } from '@/lib/clips/editor/clip-timeline'
+import { isDefaultTrackId, setItemsTrack } from '@/lib/clips/editor/tracks'
 import {
   IMAGE_DEFAULT_MS,
   SOURCE_SEG_MIN_MS,
@@ -83,6 +84,25 @@ export type AddResult = { edits: ClipEditsV2; message?: string } | { edits: null
  * - music: replaces the music track (one music track, as before) with the upload.
  * - sfx: one cue at the playhead.
  */
+/**
+ * G1b3: media dropped on an EXTRA track row lands on that track — the items the add created
+ * (new B-roll / SFX ids) are assigned to `trackId` (default track / unknown id: unchanged).
+ */
+export function placeAddedOnTrack(prev: ClipEditsV2, next: ClipEditsV2, lane: MediaDropLane, trackId: string | undefined): ClipEditsV2 {
+  if (!trackId || isDefaultTrackId(trackId)) return next
+  if (lane === 'broll') {
+    const had = new Set((prev.broll ?? []).map((b) => b.id))
+    const ids = (next.broll ?? []).filter((b) => !had.has(b.id)).map((b) => b.id)
+    return setItemsTrack(next, 'overlay', ids, trackId) ?? next
+  }
+  if (lane === 'sfx') {
+    const had = new Set((prev.audio?.sfx ?? []).map((c) => c.generationId))
+    const ids = (next.audio?.sfx ?? []).filter((c) => !had.has(c.generationId)).map((c) => c.generationId)
+    return setItemsTrack(next, 'audio', ids, trackId) ?? next
+  }
+  return next
+}
+
 export function addMediaToLane(
   edits: ClipEditsV2,
   tb: Timebase,

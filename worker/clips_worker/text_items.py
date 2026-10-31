@@ -14,7 +14,8 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from clips_worker.motion import MOTION_FPS, has_motion, layer_transform_at, layer_z, stack_order
+from clips_worker.motion import MOTION_FPS, has_motion, layer_transform_at, layer_z
+from clips_worker.tracks import layer_order, spans_tracks
 
 # EP1: canonical libass family names (name ID 1 of the bundled faces). fontconfig matched the
 # typographic family "Montserrat" / "Poppins" too, but libass-wasm (editor preview) only matches
@@ -139,9 +140,10 @@ def text_items_ass(edits: dict, *, w: int, h: int, fps: int = MOTION_FPS) -> str
     # G1a: with any stacking order set, events go bottom → top and each item gets its own pair of
     # layers (box 2k, text 2k+1) so a box never covers text above it. Without z: E4 bytes unchanged.
     z_of = lambda tid: layer_z(edits, f"text:{tid}")  # noqa: E731
-    z_on = any(z_of(it["id"]) for it in items)
+    # G1b: items on several text tracks stack by track (tracks.layer_order) — same layer pairs.
+    z_on = any(z_of(it["id"]) for it in items) or spans_tracks(edits, "text", [str(it["id"]) for it in items])
     if z_on:
-        items = stack_order(items, z_of)
+        items = layer_order(edits, "text", items, z_of)
     styles: list[str] = []
     events: list[str] = []
     for i, it in enumerate(items):

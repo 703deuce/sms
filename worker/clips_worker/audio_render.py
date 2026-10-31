@@ -17,6 +17,8 @@ def build_audio_filter(
     music_input_index: int = 1,
     music_window: dict | None = None,
     music_volume_expr: str | None = None,
+    sfx_volume_exprs: list[str | None] | None = None,
+    sfx_trims: list | None = None,
 ) -> tuple[str, str]:
     """
     Returns (filter_complex, audio_map_label).
@@ -48,12 +50,29 @@ def build_audio_filter(
         at_ms = int(spec.get("at_ms", 0))
         vol = float(spec.get("volume", 0.8))
         label = f"s{i}"
-        parts.append(f"[{inp}:a]adelay={at_ms}|{at_ms},volume={vol:.4f}[{label}]")
+        parts.append(f"[{inp}:a]{sfx_trim(sfx_trims, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
         mix_inputs.append(f"[{label}]")
 
     n = len(mix_inputs)
     parts.append(f"{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0,alimiter=limit=0.95[aout]")
     return ";".join(parts), "[aout]"
+
+
+def sfx_trim(trims, i: int) -> str:
+    """G1b3: `atrim` for an SFX with an in-point / length (detached clip audio), before adelay."""
+    t = trims[i] if trims and i < len(trims) else None
+    if not t or (not t[0] and t[1] is None):
+        return ""
+    in_ms, dur = t
+    d = f":duration={dur / 1000.0:.3f}" if dur else ""
+    return f"atrim=start={in_ms / 1000.0:.3f}{d},asetpts=PTS-STARTPTS,"
+
+
+def sfx_env(exprs: list[str | None] | None, i: int) -> str:
+    """G1b3: SFX volume envelope after adelay, so `t` is OUTPUT seconds (motion.volume_expr with
+    origin = the SFX start). volume eval=frame exists in ffmpeg 5.1."""
+    e = exprs[i] if exprs and i < len(exprs) else None
+    return f",volume='{e}':eval=frame" if e else ""
 
 
 def _windowed(window: dict | None, L: float) -> tuple[float, float, float] | None:
@@ -118,11 +137,15 @@ def apply_audio_mix(
     fade_out_s: float,
     music_window: dict | None = None,
     music_volume_expr: str | None = None,
+    sfx_volume_exprs: list[str | None] | None = None,
+    sfx_trims: list | None = None,
 ) -> None:
     has_music = music_path is not None and music_path.is_file()
     sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
     fc, alabel = build_audio_filter(
         music_volume_expr=music_volume_expr,
+        sfx_volume_exprs=sfx_volume_exprs,
+        sfx_trims=sfx_trims,
         length_s=length_s,
         volume=volume,
         duck_depth=duck_depth,
@@ -339,6 +362,8 @@ def apply_dub_speech_mix(
     music_window: dict | None = None,
     music_volume_expr: str | None = None,
     speech_volume_expr: str | None = None,
+    sfx_volume_exprs: list[str | None] | None = None,
+    sfx_trims: list | None = None,
 ) -> None:
     """Replace speech with dub audio; duck music against dub track.
     E3: speech_volume_expr = Voice-lane volume envelope (the dub is the voice)."""
@@ -367,7 +392,7 @@ def apply_dub_speech_mix(
         at_ms = int(spec.get("at_ms", 0))
         vol = float(spec.get("volume", 0.8))
         label = f"s{i}"
-        parts.append(f"[{inp}:a]adelay={at_ms}|{at_ms},volume={vol:.4f}[{label}]")
+        parts.append(f"[{inp}:a]{sfx_trim(sfx_trims, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
         mix_inputs.append(f"[{label}]")
     n = len(mix_inputs)
     parts.append(f"{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0,alimiter=limit=0.95[aout]")

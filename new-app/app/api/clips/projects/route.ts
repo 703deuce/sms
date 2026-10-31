@@ -4,6 +4,7 @@ import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { jsonError } from '@/lib/server/api-error'
 import { clipperLog } from '@/lib/server/clips/clipper-log'
 import {
+  createBlankClipProject,
   createClipProject,
   createClipProjectFromImportUrl,
   createClipProjectFromPrompt,
@@ -43,6 +44,14 @@ const createSchema = z.union([
     title: z.string().optional(),
     settings: z.unknown().optional(),
   }),
+  // G1b3: blank project (no source video).
+  z.object({
+    blank: z.object({
+      aspectRatio: z.enum(['9:16', '16:9', '1:1', '4:5']).optional(),
+      durationMs: z.number().int().positive().optional(),
+    }),
+    title: z.string().optional(),
+  }),
 ])
 
 export async function POST(request: Request) {
@@ -52,7 +61,9 @@ export async function POST(request: Request) {
     const workspaceId = await resolveWorkspaceId()
     const body = createSchema.parse(await request.json())
     const project =
-      'prompt' in body
+      'blank' in body
+        ? await createBlankClipProject(workspaceId, body)
+        : 'prompt' in body
         ? await createClipProjectFromPrompt(workspaceId, body)
         : 'sourceUrl' in body
           ? await createClipProjectFromImportUrl(workspaceId, body)
@@ -65,7 +76,9 @@ export async function POST(request: Request) {
       mode: String(settings.mode ?? 'auto'),
       genre: String(settings.genre ?? 'auto'),
       source:
-        settings.fullVideo === true
+        settings.blank === true
+          ? 'blank'
+          : settings.fullVideo === true
           ? 'full_video'
           : settings.byo === true
           ? 'byo'

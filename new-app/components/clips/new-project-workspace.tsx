@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { PrimaryButton } from '@/components/app/primary-button'
 import { Dropzone } from '@/components/clips/dropzone'
+import { BlankProjectCard } from '@/components/clips/blank-project-card'
 import { UploadProgressItem } from '@/components/clips/upload-progress-item'
 import { ProjectSettingsForm } from '@/components/clips/project-settings-form'
 import { Input } from '@/components/ui/input'
@@ -263,6 +264,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
           ))}
         </fieldset>
       ) : null}
+      <BlankProjectCard />
       {/* FVfix: ONE source row (was shown twice: link cards + "Import source" radios). */}
       <fieldset className="mb-6 grid gap-3 border-0 p-0 sm:grid-cols-2 lg:grid-cols-4" data-testid="new-project-source">
         <legend className="sr-only">Import source</legend>

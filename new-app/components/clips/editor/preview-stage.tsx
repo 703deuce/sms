@@ -38,6 +38,7 @@ import { hookTextDuplicatesCaptions } from '@/lib/clips/hook-duplicate'
 import { fitTopHeadlineLines } from '@/lib/clips/fit-top-headline-lines'
 import { overlayLayout } from '@/lib/clips/stream-overlay-layout'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { splitAudioSrcAt, splitPlanFor } from '@/lib/clips/editor/split-edits'
 import { brollTransitionWindows, brollVisibleRange } from '@/lib/clips/editor/transitions'
 import { applyMotionFrame } from '@/components/clips/editor/motion-preview'
 import { HookOverlayPreview } from '@/components/clips/editor/hook-overlay-preview'
@@ -50,7 +51,13 @@ import { videoSpecAtSource } from '@/lib/clips/editor/color'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import { textItemFrame } from '@/lib/clips/editor/text-frame'
 import { libassSupported, previewLibassEnabled } from '@/lib/clips/preview-libass-flag'
-import { buildPreviewScripts, PREVIEW_SCRIPT_ORDER, type PreviewScriptKey } from '@/lib/clips/render-plan/preview-scripts'
+import { buildPreviewScripts, PREVIEW_SCRIPT_ORDER, UNDER_Z_BASE, type PreviewScriptKey, type PreviewScripts } from '@/lib/clips/render-plan/preview-scripts'
+import { underPasses } from '@/lib/clips/editor/tracks'
+
+/** G1b: the Text script counts as present when only under-text canvases carry text items. */
+function hasScript(scripts: PreviewScripts, k: PreviewScriptKey): boolean {
+  return Boolean(scripts[k] || (k === 'text' && scripts.under?.length))
+}
 import { exportPixelSize } from '@/lib/clips/export-aspect'
 import { formatHeadlineForExport } from '@/lib/clips/export-template'
 import { TITLE_STYLES } from '@/lib/clips/templates/registry'
@@ -256,6 +263,9 @@ export function PreviewStage({
   const srcBoxRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const srcElRefs = useRef<Record<string, HTMLVideoElement | HTMLImageElement | null>>({})
   const srcMutedMainRef = useRef<{ prev: boolean } | null>(null)
+  // G1b3: J / L cuts — a hidden second element plays the main source's sound at the audio position
+  // while the picture is already / still on the other side of a cut (export: split_edits.py).
+  const splitAudioRef = useRef<HTMLVideoElement | null>(null)
   const lastRateRef = useRef<number | null>(null)
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
@@ -534,7 +544,22 @@ export function PreviewStage({
           }
         }
       }
-      const muteMain = Boolean(sseg && segmentAudio(sseg, ssrc) === 'source')
+      const tbNow = timebaseFor(playbackEdits)
+      const splitSrc = splitAudioSrcAt(splitPlanFor(playbackEdits, tbNow.segs), outMs)
+      const sa = splitAudioRef.current
+      if (sa) {
+        if (v && splitSrc != null) {
+          const t = videoTimeFromSourceMs(splitSrc, mediaOffsetMs)
+          if (Math.abs(sa.currentTime - t) > 0.12) sa.currentTime = t
+          const baseMuted = srcMutedMainRef.current ? srcMutedMainRef.current.prev : v.muted
+          if (sa.muted !== baseMuted) sa.muted = baseMuted
+          if (sa.volume !== v.volume) sa.volume = v.volume
+          if (sa.playbackRate !== v.playbackRate) sa.playbackRate = v.playbackRate
+          if (!v.paused && sa.paused) void sa.play().catch(() => {})
+          if (v.paused && !sa.paused) sa.pause()
+        } else if (!sa.paused) sa.pause()
+      }
+      const muteMain = Boolean(sseg && segmentAudio(sseg, ssrc) === 'source') || (Boolean(v) && splitSrc != null)
       if (v && muteMain && !srcMutedMainRef.current) {
         srcMutedMainRef.current = { prev: v.muted }
         v.muted = true
@@ -602,7 +627,7 @@ export function PreviewStage({
           hook: hookRef.current,
         },
         e,
-        timebaseFor(playbackEdits),
+        tbNow,
         outMs,
         {
           boxW: boxSizeRef.current.w,
@@ -753,6 +778,21 @@ export function PreviewStage({
   const [libassBadge, setLibassBadge] = useState<Parameters<LibassSink['badge']>[0]>(null)
   const libassSink = useMemo<LibassSink>(() => ({ headline: setLibassHeadline, badge: setLibassBadge }), [])
   const libassPlay = useMemo(() => exportPixelSize((edits.aspectRatio ?? '9:16') as ExportAspect, '1080p'), [edits.aspectRatio])
+  // G1b: a text track under an overlay track. Same rule as edits_render._under_text_passes: only
+  // when B-roll covers the whole frame (no template / fit_top / headline band); else text on top.
+  const underPassList = useMemo(() => {
+    if (compositePreview || templatePreview || fitTopPreview || headlineBandTopFrac > 0) return []
+    return underPasses(edits as ClipEditsV2, (edits.broll ?? []).map((b) => b.id))
+  }, [edits, compositePreview, templatePreview, fitTopPreview, headlineBandTopFrac])
+  const underZ = useMemo(() => {
+    const m: Record<string, number> = {}
+    underPassList.forEach((p, i) => {
+      for (const id of p.ids) m[`${p.kind}:${id}`] = UNDER_Z_BASE + i
+    })
+    return m
+  }, [underPassList])
+  const underZRef = useRef(underZ)
+  underZRef.current = underZ
   const libassScripts = useMemo(() => {
     if (!libassWanted || libassFailed) return null
     try {
@@ -771,12 +811,13 @@ export function PreviewStage({
         headline: templatePreview ? null : libassHeadline,
         badge: libassBadge,
         hookDuplicatesCaptions: hookDupesCaptions,
+        underPasses: underPassList,
       })
     } catch (err) {
       console.warn('[clipper:preview] libass_scripts_fail', err)
       return null
     }
-  }, [libassWanted, libassFailed, edits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions])
+  }, [libassWanted, libassFailed, edits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList])
   const onLibassStatus = useCallback<LibassStatusFn>((key, status, info) => {
     setLibassStatus((prev) => (prev[key] === status ? prev : { ...prev, [key]: status }))
     logEditorDecision('preview_ready', { renderer: 'libass', layer: key, status, ...info })
@@ -788,12 +829,12 @@ export function PreviewStage({
     setLibassStatus((prev) => {
       const next = { ...prev }
       let changed = false
-      for (const k of PREVIEW_SCRIPT_ORDER) if (!libassScripts[k] && next[k]) { delete next[k]; changed = true }
+      for (const k of PREVIEW_SCRIPT_ORDER) if (!hasScript(libassScripts, k) && next[k]) { delete next[k]; changed = true }
       return changed ? next : prev
     })
   }, [libassScripts])
   const libassClass = libassScripts
-    ? PREVIEW_SCRIPT_ORDER.filter((k) => libassScripts[k] && libassStatus[k] === 'ready').map((k) => `libass-${k}`).join(' ')
+    ? PREVIEW_SCRIPT_ORDER.filter((k) => hasScript(libassScripts, k) && libassStatus[k] === 'ready').map((k) => `libass-${k}`).join(' ')
     : ''
 
   const brollRegionStyle = useMemo((): React.CSSProperties => {
@@ -824,7 +865,16 @@ export function PreviewStage({
       const el = textRefs.current[t.id] ?? null
       out.push({ target: `text:${t.id}`, el, frame: stageBoxEl, content: el?.querySelector<HTMLElement>('[data-testid="preview-text-block"]') ?? null })
     }
-    return out
+    // G1b: text under an overlay track hit-tests under that overlay (same z as the drawing).
+    const uz = underZRef.current
+    if (!Object.keys(uz).length) return out
+    const zOf = (l: CanvasLayerDom) => {
+      if (l.target === 'video') return 0
+      if (l.target.startsWith('broll:')) return uz[`overlay:${l.target.slice(6)}`] ?? 15
+      if (l.target.startsWith('text:')) return uz[`text:${l.target.slice(5)}`] ?? 23
+      return 22
+    }
+    return out.map((l, i) => ({ l, i, z: zOf(l) })).sort((a, b) => a.z - b.z || a.i - b.i).map((x) => x.l)
   }, [stageBoxEl])
 
   return (
@@ -1189,6 +1239,18 @@ export function PreviewStage({
           )
         })}
         <InsertPlayback videoRef={videoRefInner} edits={edits} words={words} sourceUrls={sourceUrls} mediaOffsetMs={mediaOffsetMs} />
+        {videoUrl && edits.splitEdits?.length ? (
+          <video
+            ref={splitAudioRef}
+            src={videoUrl}
+            className="hidden"
+            data-testid="preview-split-audio"
+            data-own-clock="1"
+            playsInline
+            preload="auto"
+            aria-hidden
+          />
+        ) : null}
         </div>
         {/* E3 cut transitions: clone A (outgoing, continued), dip colour, clone B (incoming, pre-rolled). */}
         <div ref={cloneARef} className="pointer-events-none absolute inset-0" style={{ visibility: 'hidden' }} data-testid="preview-transition-a" aria-hidden />
@@ -1207,8 +1269,8 @@ export function PreviewStage({
               return (
                 <div
                   key={`${item.id}:${media.url}`}
-                  className="pointer-events-none absolute z-[15] overflow-hidden"
-                  style={brollRegionStyle}
+                  className={`pointer-events-none absolute overflow-hidden ${underZ[`overlay:${item.id}`] == null ? 'z-[15]' : ''}`}
+                  style={underZ[`overlay:${item.id}`] == null ? brollRegionStyle : { ...brollRegionStyle, zIndex: underZ[`overlay:${item.id}`] }}
                   data-testid="preview-broll"
                   data-broll-id={item.id}
                 >
@@ -1257,6 +1319,7 @@ export function PreviewStage({
         <ColorLookDefs specs={lookSpecs} />
         <TextItemsPreview
           edits={(audition?.edits ?? edits) as ClipEditsV2}
+          underZ={underZ}
           boxH={box.h}
           selectedId={selectedTextId}
           elRef={(id, el) => {

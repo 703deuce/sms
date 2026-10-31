@@ -57,7 +57,9 @@ export function InsertPlayback({
       const vid = vidRef.current
       const img = imgRef.current
       if (!box || !vid || !img) return
-      if (!w) {
+      if (!w || w.freeze) {
+        // G1b3: a freeze frame is the paused main picture (+ overlays) at the insert point — the
+        // export clones that composed frame — so nothing is drawn over it.
         box.style.visibility = 'hidden'
         if (!vid.paused) vid.pause()
         return

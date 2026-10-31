@@ -86,17 +86,20 @@ def build_broll_filtergraph(
     if not broll_specs:
         return "", [], "0:v"
 
-    from clips_worker.motion import broll_transition_windows, broll_visible_end_ms, has_layer_fx, layer_z, stack_order
+    from clips_worker.motion import broll_transition_windows, broll_visible_end_ms, has_layer_fx, layer_z
 
     if edits is not None:
         # Time order = overlay order, so a 'between' window's outgoing item is already composited.
         broll_specs = sorted(broll_specs, key=lambda sp: float(sp["start_s"]))
         # G1a: bring forward / send back re-orders only items that overlap in time (stack_order keeps
         # adjacent items — and so every 'between' window — in time order).
-        if (edits.get("layerProps") or []):
-            keyed = [{"id": str(sp.get("id") or f"_{i}"), "startMs": round(float(sp["start_s"]) * 1000),
-                      "endMs": round(float(sp["end_s"]) * 1000), "_sp": sp} for i, sp in enumerate(broll_specs)]
-            broll_specs = [k["_sp"] for k in stack_order(keyed, lambda bid: layer_z(edits, f"broll:{bid}"))]
+        # G1b: overlay tracks composite bottom -> top (tracks.layer_order), G1a order inside each.
+        from clips_worker.tracks import layer_order, spans_tracks
+
+        keyed = [{"id": str(sp.get("id") or f"_{i}"), "startMs": round(float(sp["start_s"]) * 1000),
+                  "endMs": round(float(sp["end_s"]) * 1000), "_sp": sp} for i, sp in enumerate(broll_specs)]
+        if (edits.get("layerProps") or []) or spans_tracks(edits, "overlay", [k["id"] for k in keyed]):
+            broll_specs = [k["_sp"] for k in layer_order(edits, "overlay", keyed, lambda bid: layer_z(edits, f"broll:{bid}"))]
     items = [
         {"id": str(sp.get("id") or f"_{i}"), "startMs": round(float(sp["start_s"]) * 1000),
          "endMs": round(float(sp["end_s"]) * 1000),

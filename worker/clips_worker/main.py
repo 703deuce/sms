@@ -325,6 +325,15 @@ def process_job(conn, job: dict) -> None:
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         src = td_path / "source.mp4"
+        if payload.get("blank") is True:
+            # G1b3: blank project — black, silent canvas; no download, no transcription, no credits.
+            from clips_worker.blank_project import prepare_blank_source
+            from clips_worker.byo_clip_job import finalize_byo_clip
+
+            prepare_blank_source(conn, project, payload, src)
+            finalize_byo_clip(conn, job, project, [], src, post_progress)
+            log(f"finished blank job={job['id']}")
+            return
         with stage_span("source_download", heartbeat=True):
             download_object(key, src)
         post_progress(job["id"], {"projectStatus": "PREPARING", "stage": "preparing", "progress": 8})

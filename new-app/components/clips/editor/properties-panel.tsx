@@ -53,6 +53,11 @@ export function tabsFor(target: KeyframeTarget | null): Record<PropertiesTab, st
       color: off('Audio-only item'),
     }
   }
+  if (target.startsWith('sfx:')) {
+    // G1b3: SFX volume envelope (◇ rows = the timeline envelope).
+    const why = 'Audio-only item'
+    return { video: off(why), audio: null, speed: off('SFX play at normal speed'), animation: off(why), color: off(why) }
+  }
   if (target === 'video') return { video: null, audio: null, speed: null, animation: null, color: null }
   if (target.startsWith('broll:')) {
     return { video: null, audio: off('B-roll is silent in the export'), speed: off('Speed is set per Video item'), animation: null, color: null }
@@ -152,11 +157,11 @@ export function PropertiesPanel({
       ) : tab === 'audio' && avail.audio == null ? (
         <KeyframeInspector
           edits={edits}
-          target={target === 'music' ? 'music' : 'voice'}
-          label={target === 'music' ? 'Music' : 'Voice'}
-          localMs={target === 'music' ? localMs : outputMs}
+          target={target === 'music' || target.startsWith('sfx:') ? target : 'voice'}
+          label={target === 'music' ? 'Music' : target.startsWith('sfx:') ? 'SFX' : 'Voice'}
+          localMs={target === 'music' || target.startsWith('sfx:') ? localMs : outputMs}
           onCommit={onCommit}
-          onSeekLocal={(t) => onSeekOutput((target === 'music' ? origin : 0) + t)}
+          onSeekLocal={(t) => onSeekOutput((target === 'music' || target.startsWith('sfx:') ? origin : 0) + t)}
           readOnly={readOnly}
           props={['volume']}
         />

@@ -91,6 +91,8 @@ export const clipProjectSettingsSchema = z.object({
   byo: z.boolean().optional(),
   /** FV1: "Edit a full video" (implies byo: one clip over the whole source, cap 3 h). */
   fullVideo: z.boolean().optional(),
+  /** G1b3: blank project (no source video; the worker makes a black canvas — no transcription). */
+  blank: z.boolean().optional(),
 })
 
 export type ClipProjectSettings = z.infer<typeof clipProjectSettingsSchema>

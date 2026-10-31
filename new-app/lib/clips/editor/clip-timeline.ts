@@ -28,6 +28,7 @@ import {
 import { splitLayoutSegmentAt } from '@/lib/clips/layout-segments'
 import { reconcileItemMotion, rippleGlobalKeyframes } from '@/lib/clips/editor/keyframes'
 import { remapCutTransitions } from '@/lib/clips/editor/transitions'
+import { remapSplitEdits, splitOffsets } from '@/lib/clips/editor/split-edits'
 import { TEXT_MIN_MS, type TextItem } from '@/lib/clips/editor/text-items'
 import {
   LANE_ORDER,
@@ -37,6 +38,17 @@ import {
   type LaneState,
   type TimelineLanesState,
 } from '@/lib/clips/editor/timeline-lane-state'
+import {
+  applyTrackState,
+  DEFAULT_TRACK_ID,
+  effectiveTracks,
+  LANE_TRACK_KIND,
+  onDefaultTrack,
+  trackIdOf,
+  trackLabel,
+  trackState,
+  type TrackKind,
+} from '@/lib/clips/editor/tracks'
 
 export { LANE_ORDER, LANE_TOGGLES, normalizeTimelineLanes }
 export type { LaneId, LaneState, TimelineLanesState }
@@ -76,6 +88,8 @@ export type TimelineItem = {
   srcOutMs?: number
   /** Media in-point (B-roll / music) — content offset at startMs. */
   inMs?: number
+  /** G1b: track id for text / B-roll / SFX items (lib/clips/editor/tracks.ts). */
+  track?: string
 }
 
 export type ItemRef = { lane: LaneId; id: string }
@@ -182,19 +196,26 @@ export function setLaneState(edits: ClipEditsV2, lane: LaneId, patch: LaneState)
  * (`timelineLanes.voice.muted`) and by muting the preview <video>.
  */
 export function applyTimelineLaneState(edits: ClipEditsV2): ClipEditsV2 {
-  const lanes = normalizeTimelineLanes(edits.timelineLanes)
-  if (!lanes) return edits
-  let next: ClipEditsV2 = edits
-  if (lanes.broll?.hidden && (edits.broll?.length ?? 0) > 0) next = { ...next, broll: [] }
-  if (lanes.text?.hidden && edits.hookOverlay?.enabled) {
-    next = { ...next, hookOverlay: { ...edits.hookOverlay, enabled: false } }
+  // G1b: hidden overlay / text tracks and muted audio tracks (non-default tracks) first.
+  const base = applyTrackState(edits)
+  const lanes = normalizeTimelineLanes(base.timelineLanes)
+  if (!lanes) return base
+  let next: ClipEditsV2 = base
+  // The E2 lane toggles are the DEFAULT track's state: with extra tracks they leave those alone.
+  const onDef = (kind: TrackKind, id: string) => onDefaultTrack(base, kind, id)
+  if (lanes.broll?.hidden && (base.broll?.length ?? 0) > 0) next = { ...next, broll: base.broll!.filter((b) => !onDef('overlay', b.id)) }
+  if (lanes.text?.hidden && base.hookOverlay?.enabled) {
+    next = { ...next, hookOverlay: { ...base.hookOverlay, enabled: false } }
   }
-  if (lanes.text?.hidden && (edits.textItems?.length ?? 0) > 0) next = { ...next, textItems: undefined }
+  if (lanes.text?.hidden && (base.textItems?.length ?? 0) > 0) {
+    const kept = base.textItems!.filter((t) => !onDef('text', t.id))
+    next = { ...next, textItems: kept.length ? kept : undefined }
+  }
   const audio = next.audio
   if (audio) {
     let a = audio
     if (lanes.music?.muted && a.music) a = { ...a, music: null }
-    if (lanes.sfx?.muted && a.sfx.length) a = { ...a, sfx: [] }
+    if (lanes.sfx?.muted && a.sfx.length) a = { ...a, sfx: a.sfx.filter((x) => !onDef('audio', x.generationId)) }
     if (lanes.voice?.muted && a.studioSound) a = { ...a, studioSound: null }
     if (a !== audio) next = { ...next, audio: a }
   }
@@ -270,6 +291,7 @@ export function buildTimelineItems(input: {
   const tb = timebaseFor(previewEdits)
   const dur = tb.durationMs
   const lanes: Record<LaneId, TimelineItem[]> = { text: [], video: [], broll: [], voice: [], music: [], sfx: [] }
+  const tracks = effectiveTracks(edits)
 
   const ho = edits.hookOverlay
   if (ho?.enabled) {
@@ -280,6 +302,7 @@ export function buildTimelineItems(input: {
       endMs: Math.min(dur, clamp(ho.durationMs ?? 2500, HOOK_MIN_MS, HOOK_MAX_MS)),
       label: ho.text?.trim() || 'Hook title',
       caps: { ...NO_CAPS, trimEnd: true, del: true },
+      track: DEFAULT_TRACK_ID.text,
     })
   }
   for (const t of edits.textItems ?? []) {
@@ -290,6 +313,7 @@ export function buildTimelineItems(input: {
       endMs: t.endMs,
       label: t.text.split('\n')[0]!.trim() || 'Text',
       caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
+      track: trackIdOf(edits, 'text', t.id, tracks),
     })
   }
 
@@ -307,18 +331,22 @@ export function buildTimelineItems(input: {
       caps: { move: false, trimStart: true, trimEnd: true, split: true, del: multi },
     })
   })
+  // G1b3: J / L cuts — each Voice piece is drawn where its SOUND plays ([s_i + a_i, e_i + a_{i+1}]);
+  // its edges at real cuts are handles (Alt-drag = audio-only edge, plain drag = linked trim).
+  const offs = splitOffsets(tb.segs, edits.splitEdits, previewEdits.trim.in, previewEdits.trim.out)
+  const real = new Set(realCutIndices(tb))
   tb.segs.forEach(([a, b], i) => {
-    const startMs = tb.starts[i]!
-    const endMs = startMs + (b - a)
+    const startMs = tb.starts[i]! + offs[i]!
+    const endMs = tb.starts[i]! + (b - a) + offs[i + 1]!
     lanes.voice.push({
       lane: 'voice',
       id: `voice:${a}`,
       startMs,
       endMs,
-      srcInMs: a,
-      srcOutMs: b,
-      label: 'Voice',
-      caps: NO_CAPS,
+      srcInMs: a + offs[i]!,
+      srcOutMs: b + offs[i + 1]!,
+      label: offs[i] || offs[i + 1] ? 'Voice · split' : 'Voice',
+      caps: { ...NO_CAPS, trimStart: real.has(i), trimEnd: real.has(i + 1) },
     })
   })
 
@@ -331,6 +359,7 @@ export function buildTimelineItems(input: {
       inMs: item.inMs ?? 0,
       label: item.source === 'ai' ? 'AI B-roll' : item.source === 'upload' ? (item.still ? 'Image' : 'Upload B-roll') : 'Stock B-roll',
       caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
+      track: trackIdOf(edits, 'overlay', item.id, tracks),
     })
   }
 
@@ -348,7 +377,10 @@ export function buildTimelineItems(input: {
   }
 
   for (const s of edits.audio?.sfx ?? []) {
-    const len = Math.max(100, Math.round(input.sfxDurationsMs?.[s.generationId] ?? SFX_DEFAULT_MS))
+    // G1b3: a detached clip sound plays [inMs, inMs + durMs] of its media.
+    const media = input.sfxDurationsMs?.[s.generationId]
+    const full = media != null ? media - (s.inMs ?? 0) : SFX_DEFAULT_MS
+    const len = Math.max(100, Math.round(s.durMs != null ? Math.min(s.durMs, full) : full))
     lanes.sfx.push({
       lane: 'sfx',
       id: s.generationId,
@@ -356,6 +388,7 @@ export function buildTimelineItems(input: {
       endMs: s.atMs + len,
       label: 'SFX',
       caps: { ...NO_CAPS, move: true, del: true },
+      track: trackIdOf(edits, 'audio', s.generationId, tracks),
     })
   }
   return lanes
@@ -439,6 +472,51 @@ function lockedLanes(edits: ClipEditsV2): Set<LaneId> {
   return new Set(LANE_ORDER.filter((id) => l?.[id]?.locked))
 }
 
+/** G1b: the track an item ref is on (text / B-roll / SFX), else null. */
+export function refTrack(edits: ClipEditsV2, ref: ItemRef): string | null {
+  const kind = LANE_TRACK_KIND[ref.lane]
+  if (!kind) return null
+  if (ref.lane === 'text' && ref.id === 'hook') return DEFAULT_TRACK_ID.text
+  return trackIdOf(edits, kind, ref.id)
+}
+
+/** G1b: locked = its track is locked (default tracks: the E2 lane lock; fixed lanes: lane lock). */
+export function refLocked(edits: ClipEditsV2, ref: ItemRef): boolean {
+  const t = refTrack(edits, ref)
+  if (t) return Boolean(trackState(edits, t).locked)
+  return lockedLanes(edits).has(ref.lane)
+}
+
+/** G1b: one timeline row — a fixed lane (video / voice / music) or one track of a free kind. */
+export type TimelineRow = { key: string; lane: LaneId; trackId?: string; label: string; isDefault: boolean }
+
+/**
+ * Rows top → bottom: the visual stack front-first (text and overlay tracks interleaved as the user
+ * ordered them), the main Video track, Voice, Music, then the audio (SFX) tracks.
+ */
+export function timelineRows(edits: ClipEditsV2): TimelineRow[] {
+  const ts = effectiveTracks(edits)
+  const row = (t: { id: string; kind: TrackKind }): TimelineRow => {
+    const lane = t.kind === 'overlay' ? 'broll' : t.kind === 'text' ? 'text' : 'sfx'
+    const isDefault = t.id === DEFAULT_TRACK_ID[t.kind]
+    return { key: isDefault ? lane : `${lane}:${t.id}`, lane, trackId: t.id, label: trackLabel(edits, t.id), isDefault }
+  }
+  const visual = ts.filter((t) => t.kind !== 'audio').reverse().map(row)
+  const fixed = (lane: LaneId): TimelineRow => ({ key: lane, lane, label: LANE_LABELS[lane], isDefault: true })
+  return [...visual, fixed('video'), fixed('voice'), fixed('music'), ...ts.filter((t) => t.kind === 'audio').map(row)]
+}
+
+/** Row state (mute / hide / lock) for the header. */
+export function rowState(edits: ClipEditsV2, r: TimelineRow): LaneState {
+  return r.trackId ? trackState(edits, r.trackId) : laneState(edits, r.lane)
+}
+
+/** Items shown on a row. */
+export function rowItems(lanes: Record<LaneId, TimelineItem[]>, r: TimelineRow): TimelineItem[] {
+  const all = lanes[r.lane]
+  return r.trackId ? all.filter((i) => (i.track ?? DEFAULT_TRACK_ID[LANE_TRACK_KIND[r.lane]!]) === r.trackId) : all
+}
+
 function patchBroll(edits: ClipEditsV2, id: string, patch: Partial<BrollItem>): ClipEditsV2 {
   return {
     ...edits,
@@ -464,11 +542,10 @@ function patchSfx(edits: ClipEditsV2, id: string, patch: Partial<ClipAudioSfx>):
 
 /** Move movable items by deltaMs (B-roll, music, SFX). Locked lanes are skipped. */
 export function moveItems(ctx: OpCtx, refs: ItemRef[], deltaMs: number): ClipEditsV2 | null {
-  const locked = lockedLanes(ctx.edits)
   const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
   const dur = timebaseFor(ctx.previewEdits).durationMs
   const items = refs
-    .filter((r) => !locked.has(r.lane))
+    .filter((r) => !refLocked(ctx.edits, r))
     .map((r) => findItem(lanes, r))
     .filter((i): i is TimelineItem => Boolean(i?.caps.move))
   if (!items.length || !deltaMs) return null
@@ -497,7 +574,7 @@ export function moveItems(ctx: OpCtx, refs: ItemRef[], deltaMs: number): ClipEdi
 
 /** Trim one edge of an item to `toMs` (output ms). */
 export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: number): ClipEditsV2 | null {
-  if (lockedLanes(ctx.edits).has(ref.lane)) return null
+  if (refLocked(ctx.edits, ref)) return null
   const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
   const it = findItem(lanes, ref)
   if (!it) return null
@@ -539,6 +616,16 @@ export function trimItem(ctx: OpCtx, ref: ItemRef, edge: 'start' | 'end', toMs: 
   }
 
   if (it.lane === 'video') return trimVideoSegment(ctx, tb, it, edge, to)
+  if (it.lane === 'voice') {
+    // G1b3: plain drag of a Voice edge = linked trim of the picture edge at the same cut.
+    const k = tb.segs.findIndex(([a]) => `voice:${a}` === it.id)
+    if (k < 0) return null
+    const [a, b] = tb.segs[k]!
+    const v = lanes.video.find((x) => (edge === 'start' ? x.srcInMs === a : x.srcOutMs === b))
+    if (!v) return null
+    const edgeNow = edge === 'start' ? v.startMs : v.endMs
+    return trimVideoSegment(ctx, tb, v, edge, edgeNow + (to - (edge === 'start' ? it.startMs : it.endMs)))
+  }
   return null
 }
 
@@ -610,7 +697,6 @@ export function splitBrollId(id: string, atMs: number, existing: string[] = []):
  * layout boundary is still added so each half can get its own layout this session.
  */
 export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2 | null {
-  const locked = lockedLanes(ctx.edits)
   const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
   const tb = timebaseFor(ctx.previewEdits)
   const t = Math.round(outMs)
@@ -618,7 +704,7 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
   let next = ctx.edits
   let changed = false
   for (const r of targets) {
-    if (locked.has(r.lane)) continue
+    if (refLocked(ctx.edits, r)) continue
     if (r.lane === 'video') {
       if (t <= 0 || t >= tb.durationMs) continue
       const vsegs = videoLaneSegments(tb, next.videoSplits)
@@ -669,11 +755,11 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
 
 /** E2fix: why a split did nothing (shown as a toast instead of silently ignoring S / Split). */
 export function splitNoopMessage(edits: ClipEditsV2, refs: ItemRef[]): string {
-  const locked = lockedLanes(edits)
-  const lanes: LaneId[] = refs.length ? [...new Set(refs.map((r) => r.lane))] : ['video']
-  const lockedOnes = lanes.filter((l) => locked.has(l))
-  if (lockedOnes.length === lanes.length) {
-    return `${LANE_LABELS[lockedOnes[0]!]} lane is locked — unlock it to split`
+  const rs: ItemRef[] = refs.length ? refs : [{ lane: 'video', id: '' }]
+  if (rs.every((r) => refLocked(edits, r))) {
+    const t = refTrack(edits, rs[0]!)
+    const name = t && t !== DEFAULT_TRACK_ID[LANE_TRACK_KIND[rs[0]!.lane]!] ? trackLabel(edits, t) : LANE_LABELS[rs[0]!.lane]
+    return `${name} ${t && name !== LANE_LABELS[rs[0]!.lane] ? 'track' : 'lane'} is locked — unlock it to split`
   }
   return refs.length
     ? 'Nothing to split — put the playhead inside the selected item'
@@ -731,13 +817,12 @@ export function joinVideoSplits(ctx: Pick<OpCtx, 'edits'>, splitSrcMs: readonly 
 
 /** Delete items. Video segments become cut ranges (never deletes the last segment). */
 export function deleteItems(ctx: OpCtx, refs: ItemRef[]): ClipEditsV2 | null {
-  const locked = lockedLanes(ctx.edits)
   const lanes = buildTimelineItems({ edits: ctx.edits, previewEdits: ctx.previewEdits })
   let next = ctx.edits
   let changed = false
   const videoCuts: CutRange[] = []
   for (const r of refs) {
-    if (locked.has(r.lane)) continue
+    if (refLocked(ctx.edits, r)) continue
     const it = findItem(lanes, r)
     if (!it?.caps.del) continue
     changed = true
@@ -782,8 +867,16 @@ export function hasAnchoredContent(e: ClipEditsV2): boolean {
       e.audio?.music ||
       e.keyframes?.length ||
       e.transitions?.length ||
+      e.splitEdits?.length ||
       e.textItems?.length,
   )
+}
+
+const RIPPLED = new WeakSet<ClipEditsV2>()
+/** G1b3: mark edits whose anchored items were already rippled by the op itself. */
+export function markRippled(e: ClipEditsV2): ClipEditsV2 {
+  RIPPLED.add(e)
+  return e
 }
 
 export function rippleAnchoredItems(
@@ -792,6 +885,8 @@ export function rippleAnchoredItems(
   prevPreview: ClipEditsV2,
   nextPreview: ClipEditsV2,
 ): ClipEditsV2 {
+  // G1b3: an op that already placed every track (range extract) must not be mapped again.
+  if (RIPPLED.has(next)) return reconcileItemMotion(prev, next)
   // E3: item edits keep their keyframes on the item's media (trim / split / delete).
   next = reconcileItemMotion(prev, next)
   // Only ripple when the change was to the EDL, not to the anchored items themselves.
@@ -811,6 +906,11 @@ export function rippleAnchoredItems(
   if (next.transitions?.length) {
     const tr = remapCutTransitions(next.transitions, a.segs, b.segs)
     if (tr !== next.transitions) out = { ...out, transitions: tr }
+  }
+  if (next.splitEdits?.length) {
+    // G1b3: a J / L stays with its cut when a trim / roll moves the cut's right segment start.
+    const sp = remapSplitEdits(next.splitEdits, a.segs, b.segs)
+    if (sp !== next.splitEdits) out = { ...out, splitEdits: sp }
   }
   if (next.broll?.length) {
     out = {

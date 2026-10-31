@@ -50,24 +50,31 @@ def voice_muted(edits: dict) -> bool:
 
 def apply_timeline_lane_state(edits: dict) -> dict:
     """Drop hidden / muted lanes so export renders exactly what the editor preview plays."""
+    from clips_worker.tracks import apply_track_state, on_default_track
+
+    # G1b: hidden overlay / text tracks and muted audio tracks first (non-default tracks).
+    edits = apply_track_state(edits)
     lanes = normalize_timeline_lanes(edits.get("timelineLanes"))
     if not lanes:
         return edits
     out = dict(edits)
+    # The E2 lane toggles are the DEFAULT track's state: extra tracks keep their own.
     if (lanes.get("broll") or {}).get("hidden") and out.get("broll"):
-        out["broll"] = []
+        out["broll"] = [b for b in out["broll"] if not on_default_track(edits, "overlay", str(b.get("id")))]
     hook = out.get("hookOverlay")
     if (lanes.get("text") or {}).get("hidden") and isinstance(hook, dict) and hook.get("enabled"):
         out["hookOverlay"] = {**hook, "enabled": False}
     if (lanes.get("text") or {}).get("hidden") and out.get("textItems"):
-        out["textItems"] = None  # E4: hiding the Text lane hides text items too
+        # E4: hiding the Text lane hides text items too
+        kept = [t for t in out["textItems"] if not on_default_track(edits, "text", str(t.get("id")))]
+        out["textItems"] = kept or None
     audio = out.get("audio")
     if isinstance(audio, dict):
         a = dict(audio)
         if (lanes.get("music") or {}).get("muted") and a.get("music"):
             a["music"] = None
         if (lanes.get("sfx") or {}).get("muted") and a.get("sfx"):
-            a["sfx"] = []
+            a["sfx"] = [s for s in a["sfx"] if not on_default_track(edits, "audio", str(s.get("generationId")))]
         if (lanes.get("voice") or {}).get("muted") and a.get("studioSound"):
             a["studioSound"] = None
         out["audio"] = a

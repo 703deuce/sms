@@ -100,7 +100,7 @@ def _finite(v):
 
 def _valid_target(t) -> bool:
     return isinstance(t, str) and (t in ("video", "voice", "music", "text") or (t.startswith("broll:") and len(t) > 6)
-                                   or (t.startswith("text:") and len(t) > 5))
+                                   or (t.startswith("text:") and len(t) > 5) or (t.startswith("sfx:") and len(t) > 4))
 
 
 def is_media_layer_target(target) -> bool:
@@ -108,7 +108,7 @@ def is_media_layer_target(target) -> bool:
 
 
 def props_for_target(target: str) -> tuple[str, ...]:
-    if target in ("voice", "music"):
+    if target in ("voice", "music") or target.startswith("sfx:"):
         return ("volume",)
     if is_media_layer_target(target):
         return ("x", "y", "scale", "rotation", "opacity") + CROP_PROPS
