@@ -12,8 +12,29 @@
  * the same function sampled into a 33³ .cube applied with ffmpeg `lut3d` (ffmpeg 5.1 has lut3d with
  * timeline `enable`). Parity: tests/fixtures/e4-parity.json is checked by vitest AND worker pytest.
  *
- * No imports, so lib/clips/edits.ts can use it.
+ * G4a: a spec may also carry the color-grade v2 fields (exposure / highlights / shadows, curves,
+ * lift-gamma-gain wheels, HSL ranges, a user LUT, sharpen / vignette / grain) — math in
+ * color-grade.ts (mirror: clips_worker/color_grade.py). E4-only specs keep their exact E4 output.
+ *
+ * Only imports color-grade.ts (itself import-free), so lib/clips/edits.ts can use it.
  */
+import {
+  canonGrade,
+  fnv1a,
+  GRID,
+  hasGradeFields,
+  hasPointwiseV2,
+  needs3d,
+  normalizeGradeFields,
+  postTables,
+  preTable,
+  stage3d,
+  tableAt,
+  V2_ADJUST,
+  type CubeLut,
+  type GradeFields,
+  type Rgb,
+} from '@/lib/clips/editor/color-grade'
 
 export type ColorAdjust = {
   brightness: number
@@ -22,9 +43,26 @@ export type ColorAdjust = {
   temperature: number
   tint: number
   vibrance: number
+  /** G4a (tables, see color-grade.ts) */
+  exposure: number
+  highlights: number
+  shadows: number
 }
 export type ColorAdjustKey = keyof ColorAdjust
-export const ADJUST_KEYS: readonly ColorAdjustKey[] = ['brightness', 'contrast', 'saturation', 'temperature', 'tint', 'vibrance'] as const
+/** E4 affine sliders (the matrix). */
+export const ADJUST_KEYS = ['brightness', 'contrast', 'saturation', 'temperature', 'tint', 'vibrance'] as const
+/** Every Adjust slider, panel order (G4a adds exposure / highlights / shadows). */
+export const ADJUST_KEYS_ALL: readonly ColorAdjustKey[] = [
+  'exposure',
+  'brightness',
+  'contrast',
+  'highlights',
+  'shadows',
+  'saturation',
+  'vibrance',
+  'temperature',
+  'tint',
+] as const
 export const ADJUST_LABELS: Record<ColorAdjustKey, string> = {
   brightness: 'Brightness',
   contrast: 'Contrast',
@@ -32,6 +70,9 @@ export const ADJUST_LABELS: Record<ColorAdjustKey, string> = {
   temperature: 'Temperature',
   tint: 'Tint',
   vibrance: 'Vibrance',
+  exposure: 'Exposure',
+  highlights: 'Highlights',
+  shadows: 'Shadows',
 }
 /** Every slider is −100..100, default 0 (CapCut Adjust). */
 export const ADJUST_MIN = -100
@@ -49,7 +90,7 @@ export type ColorPresetId =
   | 'vintage'
 
 /** A look applied to one target. All fields optional; {} = identity. */
-export type ColorSpec = { preset?: ColorPresetId; intensity?: number; adjust?: Partial<ColorAdjust> }
+export type ColorSpec = { preset?: ColorPresetId; intensity?: number; adjust?: Partial<ColorAdjust> } & GradeFields
 
 /** Source-anchored per-clip override: applies to source ms [fromMs, toMs) of the main video. */
 export type SegmentLook = { fromMs: number; toMs: number; spec: ColorSpec }
@@ -153,7 +194,7 @@ function clampN(v: number, lo: number, hi: number): number {
 
 /** Affine look of the Adjust sliders. Order: temperature/tint gains → saturation → vibrance → contrast → brightness. */
 function adjustAffine(a: Partial<ColorAdjust>): { m: Mat3; o: [number, number, number] } {
-  const g = (k: ColorAdjustKey) => clampN(Number(a[k] ?? 0) || 0, ADJUST_MIN, ADJUST_MAX) / 100
+  const g = (k: (typeof ADJUST_KEYS)[number]) => clampN(Number(a[k] ?? 0) || 0, ADJUST_MIN, ADJUST_MAX) / 100
   const temp = g('temperature') * 0.12
   const tint = g('tint') * 0.08
   // White-balance gains (warm: +R −B; tint +: magenta = −G).
@@ -177,7 +218,7 @@ function lerp(a: number, b: number, t: number): number {
 export function isIdentitySpec(spec: ColorSpec | undefined | null): boolean {
   if (!spec) return true
   const hasAdj = ADJUST_KEYS.some((k) => Number(spec.adjust?.[k] ?? 0) !== 0)
-  return !hasAdj && (!spec.preset || (spec.intensity ?? 100) <= 0)
+  return !hasAdj && (!spec.preset || (spec.intensity ?? 100) <= 0) && !hasGradeFields(spec)
 }
 
 /** Compose preset (at intensity) then the user's Adjust on top. */
@@ -246,8 +287,66 @@ export function lookKey(spec: ColorSpec | undefined | null): string {
   if (isIdentitySpec(spec)) return 'id'
   const parts = [spec?.preset ?? '-', String(Math.round(Number(spec?.intensity ?? 100)))]
   for (const k of ADJUST_KEYS) parts.push(String(Math.round(Number(spec?.adjust?.[k] ?? 0))))
+  // G4a: the v2 fields add a hash of their canonical form (E4-only keys are unchanged).
+  if (hasGradeFields(spec)) parts.push('g' + fnv1a(canonGrade(spec)))
   return parts.join('_').replace(/[^a-z0-9_-]/gi, '')
 }
+
+// ── G4a grade (pointwise part) ─────────────────────────────────────────────
+
+export type GradeParts = {
+  m: Mat3
+  o: [number, number, number]
+  pre: number[] | null
+  post: [number[], number[], number[]] | null
+}
+
+/** Exposure table → E4 affine → post tables. Mirrors color_grade.grade_parts. */
+export function gradeParts(spec: ColorSpec | undefined | null): GradeParts {
+  const look = lookForSpec(spec)
+  const s = spec ?? {}
+  return { m: look.m, o: look.o, pre: preTable(s), post: postTables(s, look.curve, curveAt) }
+}
+
+/** True when the spec needs the v2 path (tables / 3D stage) instead of the E4 look. */
+export function isV2Spec(spec: ColorSpec | undefined | null): boolean {
+  return hasPointwiseV2(spec)
+}
+
+/** Pointwise grade of one sRGB pixel (0..1). E4-only specs → applyLook (identical to before). */
+export function gradeRgb(spec: ColorSpec | undefined | null, rgb: Rgb, lut?: CubeLut | null, parts?: GradeParts): Rgb {
+  if (!spec || !hasPointwiseV2(spec)) return applyLook(lookForSpec(spec), rgb)
+  const p = parts ?? gradeParts(spec)
+  let x: Rgb = needs3d(spec) ? stage3d(spec, rgb, lut) : rgb
+  if (p.pre) x = [tableAt(p.pre, x[0]), tableAt(p.pre, x[1]), tableAt(p.pre, x[2])]
+  const v = mulV(p.m, x).map((q, i) => clampN(q + p.o[i]!, 0, 1)) as Rgb
+  if (!p.post) return v
+  return [tableAt(p.post[0], v[0]), tableAt(p.post[1], v[1]), tableAt(p.post[2], v[2])]
+}
+
+/** size³ × 3 grid in .cube order (R fastest) — what the export writes and the WebGL path samples. */
+export function bakeGrid(spec: ColorSpec | undefined | null, size = GRID, lut?: CubeLut | null): Float32Array {
+  const out = new Float32Array(size * size * size * 3)
+  const parts = spec && hasPointwiseV2(spec) ? gradeParts(spec) : undefined
+  const look = parts ? null : lookForSpec(spec)
+  let i = 0
+  for (let b = 0; b < size; b++)
+    for (let g = 0; g < size; g++)
+      for (let r = 0; r < size; r++) {
+        const x: Rgb = [r / (size - 1), g / (size - 1), b / (size - 1)]
+        const v = look ? applyLook(look, x) : gradeRgb(spec, x, lut, parts)
+        out[i++] = v[0]
+        out[i++] = v[1]
+        out[i++] = v[2]
+      }
+  return out
+}
+
+/** 256-entry tables as SVG tableValues strings. */
+export function svgTable(t: number[]): string {
+  return t.map(r6).join(' ')
+}
+export { V2_ADJUST }
 
 // ── Normalization / resolution ─────────────────────────────────────────────
 
@@ -263,12 +362,13 @@ export function normalizeColorSpec(raw: unknown): ColorSpec | undefined {
   if (o.adjust && typeof o.adjust === 'object') {
     const a = o.adjust as Record<string, unknown>
     const adj: Partial<ColorAdjust> = {}
-    for (const k of ADJUST_KEYS) {
+    for (const k of ADJUST_KEYS_ALL) {
       const n = Number(a[k])
       if (Number.isFinite(n) && Math.round(n) !== 0) adj[k] = Math.round(clampN(n, ADJUST_MIN, ADJUST_MAX))
     }
     if (Object.keys(adj).length) out.adjust = adj
   }
+  Object.assign(out, normalizeGradeFields(o))
   return isIdentitySpec(out) ? undefined : out
 }
 

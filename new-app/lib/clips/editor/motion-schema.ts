@@ -13,13 +13,52 @@ export type Ease = 'linear' | 'in' | 'out' | 'inOut'
 export const EASES: readonly Ease[] = ['linear', 'in', 'out', 'inOut'] as const
 export const EASE_LABELS: Record<Ease, string> = { linear: 'Linear', in: 'Ease in', out: 'Ease out', inOut: 'Ease in-out' }
 
-export type KeyProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity' | 'volume' | 'cropL' | 'cropT' | 'cropR' | 'cropB'
-export const KEY_PROPS: readonly KeyProp[] = ['x', 'y', 'scale', 'rotation', 'opacity', 'volume', 'cropL', 'cropT', 'cropR', 'cropB'] as const
+export type KeyProp =
+  | 'x'
+  | 'y'
+  | 'scale'
+  | 'rotation'
+  | 'opacity'
+  | 'volume'
+  | 'cropL'
+  | 'cropT'
+  | 'cropR'
+  | 'cropB'
+  | ColorKeyProp
+/**
+ * G4a: keyframable color (Adjust sliders) on picture layers — video, B-roll, adjustment layers.
+ * Same names in clips_worker/motion.py + color_grade.COLOR_KEY_PROPS. Never part of the motion
+ * chain (hasMotion ignores them); the color pass reads them, quantized to COLOR_STEP_MS.
+ */
+export const COLOR_PROPS = [
+  'cExposure',
+  'cBrightness',
+  'cContrast',
+  'cSaturation',
+  'cTemperature',
+  'cTint',
+  'cHighlights',
+  'cShadows',
+  'cVibrance',
+] as const
+export type ColorKeyProp = (typeof COLOR_PROPS)[number]
+export function isColorProp(p: string): p is ColorKeyProp {
+  return (COLOR_PROPS as readonly string[]).includes(p)
+}
+export const KEY_PROPS: readonly KeyProp[] = ['x', 'y', 'scale', 'rotation', 'opacity', 'volume', 'cropL', 'cropT', 'cropR', 'cropB', ...COLOR_PROPS] as const
 /** G1a: crop edges (% of the layer, measured in the un-flipped media) — video + B-roll layers only. */
 export const CROP_PROPS = ['cropL', 'cropT', 'cropR', 'cropB'] as const
 export type CropProp = (typeof CROP_PROPS)[number]
 
-export type KeyframeTarget = 'video' | 'voice' | 'music' | 'text' | `broll:${string}` | `text:${string}` | `sfx:${string}`
+export type KeyframeTarget =
+  | 'video'
+  | 'voice'
+  | 'music'
+  | 'text'
+  | `broll:${string}`
+  | `text:${string}`
+  | `sfx:${string}`
+  | `adjust:${string}`
 
 /** One keyframe. `ease` shapes the segment from this point to the next (After Effects "outgoing"). */
 export type KeyPoint = { tMs: number; v: number; ease?: Ease }
@@ -44,6 +83,15 @@ export const PROP_SPECS: Record<KeyProp, PropSpec> = {
   cropT: { label: 'Crop top', unit: '%', min: 0, max: 90, def: 0, step: 1 },
   cropR: { label: 'Crop right', unit: '%', min: 0, max: 90, def: 0, step: 1 },
   cropB: { label: 'Crop bottom', unit: '%', min: 0, max: 90, def: 0, step: 1 },
+  cExposure: { label: 'Exposure', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cBrightness: { label: 'Brightness', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cContrast: { label: 'Contrast', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cSaturation: { label: 'Saturation', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cTemperature: { label: 'Temperature', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cTint: { label: 'Tint', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cHighlights: { label: 'Highlights', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cShadows: { label: 'Shadows', unit: '', min: -100, max: 100, def: 0, step: 1 },
+  cVibrance: { label: 'Vibrance', unit: '', min: -100, max: 100, def: 0, step: 1 },
 }
 
 /** G1a: at least this much of the layer stays visible per axis (L + R and T + B are clamped). */
@@ -104,7 +152,17 @@ function clampN(n: number, lo: number, hi: number): number {
 
 function isTarget(t: unknown): t is KeyframeTarget {
   if (typeof t !== 'string') return false
-  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || (t.startsWith('broll:') && t.length > 6) || (t.startsWith('text:') && t.length > 5) || isSfxTarget(t)
+  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || (t.startsWith('broll:') && t.length > 6) || (t.startsWith('text:') && t.length > 5) || isSfxTarget(t) || isAdjustTarget(t)
+}
+
+/** G4a: adjustment layer (`adjust:<id>`, local ms from the layer start) — color props only. */
+export function isAdjustTarget(t: string): boolean {
+  return t.startsWith('adjust:') && t.length > 7
+}
+
+/** G4a: which color props a target can keyframe (picture layers + adjustment layers). */
+export function colorPropsForTarget(target: KeyframeTarget): readonly ColorKeyProp[] {
+  return isMediaLayerTarget(target) || isAdjustTarget(target) ? COLOR_PROPS : []
 }
 
 /** G1b3: per-SFX volume envelope (`sfx:<generationId>`, local ms from the SFX start). */
@@ -115,6 +173,7 @@ export function isSfxTarget(t: string): boolean {
 /** Which properties a target can animate (CapCut: visual layers vs audio). */
 export function propsForTarget(target: KeyframeTarget): readonly KeyProp[] {
   if (target === 'voice' || target === 'music' || isSfxTarget(target)) return ['volume']
+  if (isAdjustTarget(target)) return []
   if (isMediaLayerTarget(target)) return ['x', 'y', 'scale', 'rotation', 'opacity', ...CROP_PROPS]
   return ['x', 'y', 'scale', 'rotation', 'opacity']
 }
@@ -209,7 +268,7 @@ export function normalizeKeyframeTracks(raw: unknown): KeyframeTrack[] | undefin
     if (!isTarget(o.target)) continue
     const prop = o.prop
     if (typeof prop !== 'string' || !(KEY_PROPS as readonly string[]).includes(prop)) continue
-    if (!propsForTarget(o.target).includes(prop as KeyProp)) continue
+    if (!propsForTarget(o.target).includes(prop as KeyProp) && !colorPropsForTarget(o.target).includes(prop as ColorKeyProp)) continue
     const key = `${o.target}|${prop}`
     if (seen.has(key)) continue
     const spec = PROP_SPECS[prop as KeyProp]

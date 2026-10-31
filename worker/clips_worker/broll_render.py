@@ -136,7 +136,9 @@ def build_broll_filtergraph(
         trim = f"trim=0:{clip_dur:.3f}" if in_s <= 0 else f"trim={in_s:.3f}:{in_s + clip_dur:.3f}"
         from clips_worker.color import broll_color_filter
 
-        look = broll_color_filter(edits, item["id"], cmd_dir)  # E4: per-item color look
+        # E4: per-item color look; G4a: keyframed color windows + sharpen / vignette / grain.
+        look = broll_color_filter(edits, item["id"], cmd_dir, w=width, h=height, tag=f"bc{i}", start_s=start,
+                                  end_s=end)
         parts.append(
             f"[{inp}]{trim},setpts=PTS-STARTPTS+{start:.3f}/TB,"
             f"{bar_vf}"

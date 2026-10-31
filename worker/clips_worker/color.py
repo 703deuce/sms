@@ -7,6 +7,10 @@ Export: the look is sampled into a 33³ .cube and applied with ffmpeg ``lut3d`` 
 full_render.mp4 (source time) before the cut: cut.mp4 and the E3 transition handles (also cut from
 full_render) inherit the right look per side with no change to the transition graph.
 Parity: tests/fixtures/e4-parity.json is asserted by vitest and pytest.
+
+G4a: specs with color-grade v2 fields (color_grade.py) are baked by color_grade.write_grade_cube
+and may add frame-space effects (sharpen / vignette / grain, color_fx.py); E4-only specs keep the
+exact E4 cube and key.
 """
 from __future__ import annotations
 
@@ -85,7 +89,9 @@ def is_identity_spec(spec) -> bool:
     adj = spec.get("adjust") if isinstance(spec.get("adjust"), dict) else {}
     has_adj = any(_num(adj.get(k, 0)) != 0 for k in ADJUST_KEYS)
     preset = spec.get("preset")
-    return not has_adj and (not preset or _num(spec.get("intensity", 100)) <= 0)
+    from clips_worker.color_grade import has_grade_fields
+
+    return not has_adj and (not preset or _num(spec.get("intensity", 100)) <= 0) and not has_grade_fields(spec)
 
 
 def look_for_spec(spec) -> dict:
@@ -135,11 +141,19 @@ def look_key(spec) -> str:
     adj = spec.get("adjust") if isinstance(spec.get("adjust"), dict) else {}
     parts = [str(spec.get("preset") or "-"), str(round(_num(spec.get("intensity", 100))))]
     parts += [str(round(_num(adj.get(k, 0)))) for k in ADJUST_KEYS]
+    from clips_worker.color_grade import canon_grade, fnv1a, has_grade_fields
+
+    if has_grade_fields(spec):
+        parts.append("g" + fnv1a(canon_grade(spec)))
     return "".join(ch for ch in "_".join(parts) if ch.isalnum() or ch in "_-")
 
 
-def write_cube(spec, path: Path, size: int = LUT_SIZE) -> Path:
+def write_cube(spec, path: Path, size: int = LUT_SIZE, lut: dict | None = None) -> Path:
     """.cube 3D LUT (R fastest) sampling the look on a size³ grid."""
+    from clips_worker.color_grade import has_pointwise_v2, write_grade_cube
+
+    if has_pointwise_v2(spec):
+        return write_grade_cube(spec, path, lut=lut, size=size, title=look_key(spec))
     look = look_for_spec(spec)
     n = size - 1
     lines = [f"TITLE \"{look_key(spec)}\"", f"LUT_3D_SIZE {size}", "DOMAIN_MIN 0 0 0", "DOMAIN_MAX 1 1 1"]
@@ -154,9 +168,63 @@ def write_cube(spec, path: Path, size: int = LUT_SIZE) -> Path:
 
 # ── resolution ──────────────────────────────────────────────────────────────
 
+ADJUST_KEYS_ALL = ADJUST_KEYS + ("exposure", "highlights", "shadows")
+
+
+def normalize_spec(raw) -> dict | None:
+    """Mirror of color.ts normalizeColorSpec (E4 fields + G4a grade fields)."""
+    from clips_worker.color_grade import _ri, normalize_grade_fields
+
+    if not isinstance(raw, dict):
+        return None
+    out: dict = {}
+    if isinstance(raw.get("preset"), str) and raw["preset"] in COLOR_PRESETS:
+        out["preset"] = raw["preset"]
+        try:
+            it = float(raw.get("intensity"))
+        except (TypeError, ValueError):
+            it = float("nan")
+        if math.isfinite(it) and it != 100:
+            out["intensity"] = _ri(_clamp(it, 0, 100))
+    a = raw.get("adjust")
+    if isinstance(a, dict):
+        adj = {}
+        for k in ADJUST_KEYS_ALL:
+            try:
+                n = float(a.get(k))
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(n) and _ri(n) != 0:
+                adj[k] = _ri(_clamp(n, ADJUST_MIN, ADJUST_MAX))
+        if adj:
+            out["adjust"] = adj
+    out.update(normalize_grade_fields(raw))
+    return None if is_identity_spec(out) else out
+
+
+def _norm_color(c: dict) -> dict:
+    """Specs normalized (G4a fields validated) so a malformed edit can never break the export."""
+    out = dict(c)
+    if c.get("video") is not None:
+        out["video"] = normalize_spec(c.get("video"))
+    segs = []
+    for s in c.get("segments") or []:
+        if isinstance(s, dict):
+            segs.append({**s, "spec": normalize_spec(s.get("spec")) or {}})
+    out["segments"] = segs
+    if isinstance(c.get("broll"), dict):
+        out["broll"] = {k: v for k, v in ((k, normalize_spec(v)) for k, v in c["broll"].items()) if v}
+    return out
+
+
 def color_edits(edits: dict) -> dict:
     c = edits.get("color")
-    return c if isinstance(c, dict) else {}
+    if not isinstance(c, dict):
+        return {}
+    cached = edits.get("_colorNorm") if isinstance(edits.get("_colorNorm"), dict) else None
+    if cached is not None and cached.get("src") is c:
+        return cached["norm"]
+    return _norm_color(c)
 
 
 def has_color(edits: dict) -> bool:
@@ -210,9 +278,79 @@ def source_look_ranges(edits: dict, clip_start_ms: int, clip_end_ms: int) -> lis
     return out
 
 
-def full_render_color_filter(edits: dict, clip_start_ms: int, clip_end_ms: int, work_dir: Path) -> str | None:
-    """-vf chain for full_render.mp4 (t = (src − clip_start)/1000). One lut3d per distinct look."""
-    ranges = source_look_ranges(edits, clip_start_ms, clip_end_ms)
+def _lut_for(edits: dict, spec) -> dict | None:
+    """Parsed user LUT for a spec (prepared by user_luts.prepare_user_luts as ``_lutData``)."""
+    lut = spec.get("lut") if isinstance(spec, dict) else None
+    if not isinstance(lut, dict):
+        return None
+    data = edits.get("_lutData") if isinstance(edits.get("_lutData"), dict) else {}
+    return data.get(str(lut.get("id")))
+
+
+def video_grade_ranges(edits: dict, clip_start_ms: int, clip_end_ms: int) -> list[tuple[int, int, dict]]:
+    """[(srcFrom, srcTo, spec)] of the main video in SOURCE ms. G4a: with color keyframes on the
+    Video target (output ms) each kept segment is cut at the COLOR_STEP_MS grid (mapped to source)
+    and the keyframed Adjust values override the look — exactly what the preview evaluates."""
+    from clips_worker.color_grade import color_tracks, spec_with_overrides, step_of, tracks_span_ms, COLOR_STEP_MS
+
+    tracks = color_tracks(edits, "video")
+    if not tracks:
+        return source_look_ranges(edits, clip_start_ms, clip_end_ms)
+    from clips_worker.clip_keep_segments import ordered_keep_segments
+
+    c = color_edits(edits)
+    cuts = {int(clip_start_ms), int(clip_end_ms)}
+    for s in c.get("segments") or []:
+        for k in ("fromMs", "toMs"):
+            v = int(_num(s.get(k)))
+            if clip_start_ms < v < clip_end_ms:
+                cuts.add(v)
+    segs = []
+    o = 0
+    span = tracks_span_ms(tracks)
+    for a, b in ordered_keep_segments(edits):
+        segs.append((a, b, o))
+        for v in (a, b):
+            if clip_start_ms < v < clip_end_ms:
+                cuts.add(int(v))
+        if span:
+            for k in range(step_of(span[0]), step_of(span[1]) + 2):
+                src = a + (k * COLOR_STEP_MS - o)
+                if a < src < b and clip_start_ms < src < clip_end_ms:
+                    cuts.add(int(src))
+        o += b - a
+    pts = sorted(cuts)
+    out: list[tuple[int, int, dict]] = []
+    for a, b in zip(pts, pts[1:]):
+        base = video_spec_at_source(edits, a) or {}
+        out_ms = next((so + (a - sa) for sa, sb, so in segs if sa <= a < sb), None)
+        spec = spec_with_overrides(base, tracks, out_ms) if out_ms is not None else base
+        if not spec or is_identity_spec(spec):
+            continue
+        if out and out[-1][1] == a and look_key(out[-1][2]) == look_key(spec):
+            out[-1] = (out[-1][0], b, out[-1][2])
+        else:
+            out.append((a, b, spec))
+    return out
+
+
+def _probe_wh(path: Path) -> tuple[int, int]:
+    import subprocess
+
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+         "-of", "csv=p=0:s=x", str(path)], capture_output=True, text=True, check=True)
+    w, h = r.stdout.strip().split("x")[:2]
+    return int(w), int(h)
+
+
+def full_render_color_graph(edits: dict, clip_start_ms: int, clip_end_ms: int, work_dir: Path,
+                            size: tuple[int, int] | None = None) -> tuple[str, str] | None:
+    """filter_complex for full_render.mp4 (t = (src − clip_start)/1000): one lut3d per distinct
+    look (enable windows), then G4a sharpen / vignette / grain per distinct fx. → (graph, label)."""
+    from clips_worker.color_fx import enable_expr, fx_groups, fx_parts
+
+    ranges = video_grade_ranges(edits, clip_start_ms, clip_end_ms)
     if not ranges:
         return None
     by_key: dict[str, tuple[dict, list[tuple[int, int]]]] = {}
@@ -221,40 +359,111 @@ def full_render_color_filter(edits: dict, clip_start_ms: int, clip_end_ms: int, 
         by_key.setdefault(k, (spec, []))[1].append((a, b))
     chain: list[str] = []
     whole = len(ranges) == 1 and ranges[0][0] <= clip_start_ms and ranges[0][1] >= clip_end_ms
+    to_s = lambda spans: [((a - clip_start_ms) / 1000, (b - clip_start_ms) / 1000) for a, b in spans]  # noqa: E731
     for k, (spec, spans) in by_key.items():
-        cube = write_cube(spec, Path(work_dir) / f"look_{k}.cube")
+        if is_pointwise_identity(spec):
+            continue
+        cube = write_cube(spec, Path(work_dir) / f"look_{k}.cube", lut=_lut_for(edits, spec))
         if whole:
             chain.append(f"lut3d=file='{cube}'")
             continue
-        expr = "+".join(
-            f"gte(t,{(a - clip_start_ms) / 1000:.4f})*lt(t,{(b - clip_start_ms) / 1000:.4f})" for a, b in spans
-        )
-        chain.append(f"lut3d=file='{cube}':enable='{expr}'")
-    return ",".join(chain)
+        chain.append(f"lut3d=file='{cube}':enable='{enable_expr(to_s(spans))}'")
+    parts = [f"[0:v]{','.join(chain) or 'null'}[c0]"]
+    label = "c0"
+    groups = fx_groups([(a, b, spec) for a, b, spec in ranges])
+    if groups:
+        w, h = size if size else (0, 0)
+        for i, (fx, spans) in enumerate(groups):
+            en = None if whole else enable_expr(to_s(spans))
+            parts += fx_parts(label, f"fx{i}", fx, w, h, Path(work_dir), f"vfx{i}", en)
+            label = f"fx{i}"
+    return ";".join(parts), label
+
+
+def is_pointwise_identity(spec) -> bool:
+    """True when a spec only carries frame-space fx (no lut3d needed)."""
+    from clips_worker.color_grade import has_pointwise_v2
+
+    if not isinstance(spec, dict) or has_pointwise_v2(spec):
+        return False
+    rest = {k: v for k, v in spec.items() if k != "fx"}
+    return is_identity_spec(rest)
+
+
+def full_render_color_filter(edits: dict, clip_start_ms: int, clip_end_ms: int, work_dir: Path) -> str | None:
+    """E4 -vf chain (looks only; kept for callers / tests that have no fx)."""
+    g = full_render_color_graph(edits, clip_start_ms, clip_end_ms, work_dir)
+    if not g:
+        return None
+    graph, _ = g
+    return graph.split("]", 1)[1].rsplit("[", 1)[0] if ";" not in graph else None
 
 
 def apply_full_render_color(full_render: Path, edits: dict, clip_start_ms: int, clip_end_ms: int,
                             work_dir: Path) -> Path:
     import subprocess
 
-    vf = full_render_color_filter(edits, clip_start_ms, clip_end_ms, work_dir)
-    if not vf:
+    from clips_worker.color_grade import has_fx
+
+    ranges = video_grade_ranges(edits, clip_start_ms, clip_end_ms)
+    if not ranges:
         return full_render
+    size = _probe_wh(full_render) if any(has_fx(s) for _, _, s in ranges) else None
+    g = full_render_color_graph(edits, clip_start_ms, clip_end_ms, work_dir, size)
+    if not g:
+        return full_render
+    graph, label = g
     out = Path(work_dir) / "full_render_color.mp4"
     subprocess.check_call(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(full_render), "-vf", f"{vf},format=yuv420p",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "copy", str(out)]
+        ["ffmpeg", "-y", "-v", "error", "-i", str(full_render), "-filter_complex", f"{graph};[{label}]format=yuv420p[cv]",
+         "-map", "[cv]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "copy",
+         str(out)]
     )
-    print(f"[clipper:color] full_render looks={vf.count('lut3d')}", flush=True)
+    print(f"[clipper:color] full_render looks={graph.count('lut3d')} fx={graph.count('format=gbrp[')}", flush=True)
     return out
 
 
-def broll_color_filter(edits: dict | None, item_id: str, work_dir: Path | None) -> str:
-    """',lut3d=…' to append to a B-roll input chain, or ''."""
+def broll_color_filter(edits: dict | None, item_id: str, work_dir: Path | None, *, w: int = 0, h: int = 0,
+                       tag: str | None = None, start_s: float = 0.0, end_s: float = 0.0) -> str:
+    """',lut3d=…' to append to a B-roll input chain, or ''. G4a: keyframed color (target
+    ``broll:<id>``, local ms from the item start) adds stepped lut3d windows, and sharpen /
+    vignette / grain add filter-complex parts (needs w, h and a unique tag)."""
     if not edits:
         return ""
-    spec = broll_spec(edits, item_id)
-    if spec is None:
+    from clips_worker.color_fx import fx_parts
+    from clips_worker.color_grade import color_tracks, has_fx, stepped_windows
+
+    br = color_edits(edits).get("broll")
+    base = br.get(item_id) if isinstance(br, dict) else None
+    tracks = color_tracks(edits, f"broll:{item_id}")
+    if base is None and not tracks:
         return ""
-    cube = write_cube(spec, Path(work_dir or ".") / f"look_broll_{look_key(spec)}.cube")
-    return f",lut3d=file='{cube}'"
+    wd = Path(work_dir or ".")
+    if not tracks:
+        if is_identity_spec(base):
+            return ""
+        windows = [(0.0, 0.0, base)]
+        whole = True
+    else:
+        lo, hi = start_s * 1000, max(end_s * 1000, start_s * 1000 + 1)
+        windows = stepped_windows(base or {}, tracks, lo, hi, origin=start_s * 1000)
+        whole = False
+    out = ""
+    seen: dict[str, list] = {}
+    for a, b, spec in windows:
+        if is_pointwise_identity(spec):
+            continue
+        seen.setdefault(look_key(spec), [spec, []])[1].append((a, b))
+    for k, (spec, spans) in seen.items():
+        cube = write_cube(spec, wd / f"look_broll_{k}.cube", lut=_lut_for(edits, spec))
+        if whole:
+            out += f",lut3d=file='{cube}'"
+        else:
+            en = "+".join(f"gte(t,{a / 1000:.4f})*lt(t,{b / 1000:.4f})" for a, b in spans)
+            out += f",lut3d=file='{cube}':enable='{en}'"
+    if base and has_fx(base) and w > 0 and h > 0 and tag:
+        # fx are static per item (not keyframed); the parts split the chain with labels.
+        parts = fx_parts(f"{tag}i", f"{tag}o", base.get("fx") or {}, w, h, wd, tag)
+        last = parts[-1][1:].split("]", 1)[0]
+        out += f"[{tag}i];" + ";".join(parts[:-1]) + f";[{last}]null"
+    return out

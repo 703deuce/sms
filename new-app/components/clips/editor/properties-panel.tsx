@@ -82,6 +82,11 @@ export function tabsFor(target: KeyframeTarget | null): Record<PropertiesTab, st
     return { video: off(why), audio: null, speed: off('SFX play at normal speed'), animation: off(why), color: off(why) }
   }
   if (target === 'video') return { video: null, audio: null, speed: null, animation: null, color: null }
+  if (target.startsWith('adjust:')) {
+    // G4a: an adjustment layer is color / effects only.
+    const why = 'Adjustment layers only grade what is below them'
+    return { video: off(why), audio: off(why), speed: off(why), animation: off(why), color: null }
+  }
   if (target.startsWith('broll:')) {
     return { video: null, audio: off('B-roll is silent in the export'), speed: off('Speed is set per Video item'), animation: null, color: null }
   }

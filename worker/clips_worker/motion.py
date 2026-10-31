@@ -28,6 +28,13 @@ PROP_SPECS = {
     "cropR": (0.0, 90.0, 0.0),
     "cropB": (0.0, 90.0, 0.0),
 }
+# G4a: keyframable color (Adjust sliders) on video / B-roll / adjustment layers. Read by the color
+# pass (color_grade.spec_with_overrides), never by the motion chain (has_motion skips them).
+COLOR_PROPS = ("cExposure", "cBrightness", "cContrast", "cSaturation", "cTemperature", "cTint",
+               "cHighlights", "cShadows", "cVibrance")
+for _p in COLOR_PROPS:
+    PROP_SPECS[_p] = (-100.0, 100.0, 0.0)
+KEY_PROPS = KEY_PROPS + COLOR_PROPS
 EASES = ("linear", "in", "out", "inOut")
 TRANSITION_TYPES = (
     "crossfade", "dip_black", "dip_white",
@@ -100,7 +107,17 @@ def _finite(v):
 
 def _valid_target(t) -> bool:
     return isinstance(t, str) and (t in ("video", "voice", "music", "text") or (t.startswith("broll:") and len(t) > 6)
-                                   or (t.startswith("text:") and len(t) > 5) or (t.startswith("sfx:") and len(t) > 4))
+                                   or (t.startswith("text:") and len(t) > 5) or (t.startswith("sfx:") and len(t) > 4)
+                                   or is_adjust_target(t))
+
+
+def is_adjust_target(t) -> bool:
+    """G4a adjustment layer (``adjust:<id>``) — color props only."""
+    return isinstance(t, str) and t.startswith("adjust:") and len(t) > 7
+
+
+def color_props_for_target(target: str) -> tuple[str, ...]:
+    return COLOR_PROPS if (is_media_layer_target(target) or is_adjust_target(target)) else ()
 
 
 def is_media_layer_target(target) -> bool:
@@ -110,6 +127,8 @@ def is_media_layer_target(target) -> bool:
 def props_for_target(target: str) -> tuple[str, ...]:
     if target in ("voice", "music") or target.startswith("sfx:"):
         return ("volume",)
+    if is_adjust_target(target):
+        return ()
     if is_media_layer_target(target):
         return ("x", "y", "scale", "rotation", "opacity") + CROP_PROPS
     return ("x", "y", "scale", "rotation", "opacity")
@@ -123,7 +142,9 @@ def normalize_keyframes(raw) -> list[dict]:
         if not isinstance(r, dict):
             continue
         target, prop = r.get("target"), r.get("prop")
-        if not _valid_target(target) or prop not in PROP_SPECS or prop not in props_for_target(target):
+        if not _valid_target(target) or prop not in PROP_SPECS or (
+            prop not in props_for_target(target) and prop not in color_props_for_target(target)
+        ):
             continue
         key = f"{target}|{prop}"
         if key in seen:
@@ -177,7 +198,7 @@ def volume_at(edits: dict, target: str, local_ms: float) -> float:
 
 def has_motion(edits: dict, target: str) -> bool:
     for k in normalize_keyframes(edits.get("keyframes")):
-        if k["target"] != target:
+        if k["target"] != target or k["prop"] in COLOR_PROPS:
             continue
         if k["points"] or (k.get("value") is not None and k["value"] != PROP_SPECS[k["prop"]][2]):
             return True

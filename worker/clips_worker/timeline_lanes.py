@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from clips_worker.clip_keep_segments import ordered_keep_segments
 
-LANE_ORDER = ("text", "video", "broll", "voice", "music", "sfx")
+LANE_ORDER = ("text", "adjust", "video", "broll", "voice", "music", "sfx")
 LANE_TOGGLES = {
     "text": {"mute": False, "hide": True},
+    # G4a: adjustment layers (hide = export without them).
+    "adjust": {"mute": False, "hide": True},
     "video": {"mute": False, "hide": False},
     "broll": {"mute": False, "hide": True},
     "voice": {"mute": True, "hide": False, "solo": True},
@@ -92,6 +94,8 @@ def apply_timeline_lane_state(edits: dict) -> dict:
         return edits
     out = dict(edits)
     # The E2 lane toggles are the DEFAULT track's state: extra tracks keep their own.
+    if (lanes.get("adjust") or {}).get("hidden") and out.get("adjustLayers"):
+        out = {**out, "adjustLayers": None}
     if (lanes.get("broll") or {}).get("hidden") and out.get("broll"):
         out["broll"] = [b for b in out["broll"] if not on_default_track(edits, "overlay", str(b.get("id")))]
     hook = out.get("hookOverlay")

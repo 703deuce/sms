@@ -162,7 +162,7 @@ const TRACK_OFFSET_PX = 8
 const TRACK_EXTRA_PX = 16
 const RULER_H = 18
 // FV2: Video lane is taller so the filmstrip (top) and word chips (bottom) both show; B-roll gets a strip too.
-const LANE_H: Record<LaneId, number> = { captions: 20, text: 20, video: 58, broll: 30, voice: 24, music: 22, sfx: 20 }
+const LANE_H: Record<LaneId, number> = { captions: 20, text: 20, adjust: 20, video: 58, broll: 30, voice: 24, music: 22, sfx: 20 }
 /** Word-chip bar height at the bottom of the Video lane (filmstrip fills the space above it). */
 const VIDEO_WORDBAR_H = 18
 /** FV2: above this span (full videos) the timeline windows its DOM and opens at Fit; clips are unchanged. */
@@ -175,6 +175,7 @@ const DRAG_SLOP_PX = 3
 const LANE_COLORS: Record<LaneId, string> = {
   captions: 'bg-yellow-400/80 text-black',
   text: 'bg-fuchsia-500/75',
+  adjust: 'bg-gradient-to-r from-rose-500/70 via-amber-400/70 to-sky-500/70 text-black',
   video: 'bg-sky-600/40',
   broll: 'bg-indigo-500/80',
   voice: 'bg-emerald-950/50',

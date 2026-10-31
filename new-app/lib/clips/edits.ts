@@ -20,6 +20,7 @@ import {
   type LayerProp,
 } from '@/lib/clips/editor/motion-schema'
 import { hasColor, normalizeColorEdits, type ClipColorEdits } from '@/lib/clips/editor/color'
+import { normalizeAdjustLayers, type AdjustLayer } from '@/lib/clips/editor/adjust-layers'
 import { normalizeSegmentSpeeds, speedWarpPieces, warpedDurationMs, warpMs, type SegmentSpeed } from '@/lib/clips/editor/speed'
 import { normalizeTextItems, type TextItem } from '@/lib/clips/editor/text-items'
 import { normalizeCaptionLinesEdits, type CaptionLine } from '@/lib/clips/editor/caption-lines'
@@ -193,6 +194,8 @@ export type ClipEditsV2 = {
   captionLines?: CaptionLine[]
   /** E4 color looks (Adjust + Filters): whole video, per Video item (source range), per B-roll id. */
   color?: ClipColorEdits
+  /** G4a adjustment layers (output ms): grade everything below them (lib/clips/editor/adjust-layers.ts). */
+  adjustLayers?: AdjustLayer[]
   /** E4 per-item speed 0.25–4× over SOURCE ranges (pitch-preserved; export post-step warp). */
   segmentSpeeds?: SegmentSpeed[]
   /** E5 media this clip uses besides the main source (uploads, Rooms angles). */
@@ -481,6 +484,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.textItems?.length) payload.textItems = null
   if (!edits.captionLines?.length) payload.captionLines = null
   if (!edits.color) payload.color = null
+  if (!edits.adjustLayers?.length) payload.adjustLayers = null
   if (!edits.segmentSpeeds?.length) payload.segmentSpeeds = null
   if (!edits.sources?.length) payload.sources = null
   if (!edits.sourceSegments?.length) payload.sourceSegments = null
@@ -601,6 +605,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     textItems: normalizeTextItems(o.textItems),
     captionLines: normalizeCaptionLinesEdits(o.captionLines),
     color: normalizeColorEdits(o.color),
+    adjustLayers: normalizeAdjustLayers(o.adjustLayers),
     segmentSpeeds: normalizeSegmentSpeeds(o.segmentSpeeds),
     ...normalizeSourceFields(o),
     vocabApplied:
@@ -697,6 +702,8 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     // G3a: manual caption lines replace the preview's transcript captions.
     !edits.captionLines?.length &&
     !hasColor(edits.color) &&
+    // G4a: adjustment layers grade the frames.
+    !edits.adjustLayers?.length &&
     !edits.segmentSpeeds?.length &&
     // E5: other sources replace frames / sound.
     !edits.sourceSegments?.length &&

@@ -1,0 +1,323 @@
+{
+ "edits": {
+  "color": {
+   "video": {
+    "adjust": {
+     "exposure": 10
+    },
+    "curves": {
+     "m": [
+      [
+       0,
+       0.05
+      ],
+      [
+       0.5,
+       0.55
+      ],
+      [
+       1,
+       0.95
+      ]
+     ]
+    }
+   }
+  },
+  "adjustLayers": [
+   {
+    "id": "a1",
+    "startMs": 1000.4,
+    "endMs": 3000,
+    "spec": {
+     "adjust": {
+      "saturation": -40
+     },
+     "fx": {
+      "vignette": 30
+     },
+     "hsl": {
+      "red": {
+       "h": 5,
+       "s": 0,
+       "l": 0
+      }
+     }
+    }
+   },
+   {
+    "id": "a2",
+    "startMs": 2000,
+    "endMs": 2050,
+    "spec": {}
+   }
+  ],
+  "keyframes": [
+   {
+    "target": "video",
+    "prop": "cExposure",
+    "points": [
+     {
+      "tMs": 0,
+      "v": -30
+     },
+     {
+      "tMs": 2000,
+      "v": 45,
+      "ease": "easeInOut"
+     },
+     {
+      "tMs": 2600,
+      "v": 0
+     }
+    ]
+   },
+   {
+    "target": "video",
+    "prop": "cTint",
+    "points": [
+     {
+      "tMs": 500,
+      "v": 12.6
+     }
+    ]
+   },
+   {
+    "target": "adjust:a1",
+    "prop": "cContrast",
+    "points": [
+     {
+      "tMs": 0,
+      "v": 0
+     },
+     {
+      "tMs": 1000,
+      "v": 70
+     }
+    ]
+   }
+  ]
+ },
+ "layers": [
+  {
+   "id": "a1",
+   "startMs": 1000,
+   "endMs": 3000,
+   "spec": {
+    "adjust": {
+     "saturation": -40
+    },
+    "fx": {
+     "vignette": 30
+    }
+   }
+  }
+ ],
+ "video": [
+  {
+   "t": 0,
+   "adjust": {
+    "exposure": -30,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_ge23e2a6b"
+  },
+  {
+   "t": 99,
+   "adjust": {
+    "exposure": -30,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_ge23e2a6b"
+  },
+  {
+   "t": 100,
+   "adjust": {
+    "exposure": -26,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_g79ea8cfa"
+  },
+  {
+   "t": 250,
+   "adjust": {
+    "exposure": -22,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_g048f8626"
+  },
+  {
+   "t": 999,
+   "adjust": {
+    "exposure": 4,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_ga84c1313"
+  },
+  {
+   "t": 1000,
+   "adjust": {
+    "exposure": 8,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_g752dbe9f"
+  },
+  {
+   "t": 1550,
+   "adjust": {
+    "exposure": 26,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_ge35615b7"
+  },
+  {
+   "t": 1999,
+   "adjust": {
+    "exposure": 41,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_g091f217e"
+  },
+  {
+   "t": 2000,
+   "adjust": {
+    "exposure": 45,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_g413eae92"
+  },
+  {
+   "t": 2340,
+   "adjust": {
+    "exposure": 23,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_ge8ae408e"
+  },
+  {
+   "t": 2599,
+   "adjust": {
+    "exposure": 8,
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_g752dbe9f"
+  },
+  {
+   "t": 2600,
+   "adjust": {
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_g9f743b87"
+  },
+  {
+   "t": 3100,
+   "adjust": {
+    "tint": 13
+   },
+   "key": "-_100_0_0_0_0_13_0_g9f743b87"
+  }
+ ],
+ "adjust": [
+  {
+   "t": 0,
+   "adjust": {
+    "saturation": -40
+   },
+   "key": "-_100_0_0_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 99,
+   "adjust": {
+    "saturation": -40
+   },
+   "key": "-_100_0_0_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 100,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 7
+   },
+   "key": "-_100_0_7_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 250,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 14
+   },
+   "key": "-_100_0_14_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 999,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 63
+   },
+   "key": "-_100_0_63_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 1000,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 70
+   },
+   "key": "-_100_0_70_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 1550,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 70
+   },
+   "key": "-_100_0_70_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 1999,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 70
+   },
+   "key": "-_100_0_70_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 2000,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 70
+   },
+   "key": "-_100_0_70_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 2340,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 70
+   },
+   "key": "-_100_0_70_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 2599,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 70
+   },
+   "key": "-_100_0_70_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 2600,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 70
+   },
+   "key": "-_100_0_70_-40_0_0_0_gb3f6eba9"
+  },
+  {
+   "t": 3100,
+   "adjust": {
+    "saturation": -40,
+    "contrast": 70
+   },
+   "key": "-_100_0_70_-40_0_0_0_gb3f6eba9"
+  }
+ ]
+}
