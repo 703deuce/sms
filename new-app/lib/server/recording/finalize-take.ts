@@ -7,6 +7,7 @@ import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-projec
 import { projectWordsKey } from '@/lib/storage'
 import { ensureFullComposition } from '@/lib/server/clips/script-composition'
 import { resolveTracksForImport } from '@/lib/server/recording/resolve-import-tracks'
+import { isScriptEditorFeatureEnabled } from '@/lib/server/clips/feature-gates'
 
 export async function finalizeRecordingTakeToProject(
   workspaceId: string,
@@ -115,9 +116,13 @@ export async function finalizeRecordingTakeToProject(
     },
   })
 
+  const clipsUrl = `/app/clips/${projectId}`
+  const scriptUrl = `/app/clips/${projectId}/script`
   return {
     projectId,
-    clipsUrl: `/app/clips/${projectId}`,
-    scriptUrl: `/app/clips/${projectId}/script`,
+    clipsUrl,
+    scriptUrl,
+    /** Where the Rooms "Done / Start editing" button should go (script editor is paused by default). */
+    editorUrl: isScriptEditorFeatureEnabled() ? scriptUrl : clipsUrl,
   }
 }

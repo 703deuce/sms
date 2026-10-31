@@ -116,7 +116,7 @@ const SCRIPT_EDITOR_ONLY_HREFS = new Set([
   '/app/sw',
   '/app/editor',
   '/app/voice',
-  '/app/rooms/new',
+  // '/app/rooms' index is still a stub (redirects to /new); Rooms itself is not script-editor-only.
   '/app/rooms',
 ])
 
@@ -127,7 +127,7 @@ export function clipsNavItems(options?: { showRecording?: boolean; showSoloRecor
     items = items.filter((i) => !SCRIPT_EDITOR_ONLY_HREFS.has(i.href.split('?')[0]))
   }
   if (!isScreenwritingEnabled() || !scriptEditorOn) items = items.filter((i) => i.href !== '/app/sw')
-  if (!options?.showRecording || !scriptEditorOn) items = items.filter((i) => !i.recordingOnly)
+  if (!options?.showRecording) items = items.filter((i) => !i.recordingOnly)
   if (!options?.showSoloRecording) items = items.filter((i) => !i.soloRecordingOnly)
   return items
 }

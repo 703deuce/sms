@@ -32,6 +32,11 @@ import { Timeline } from '@/components/clips/editor/timeline'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { sourceMsAtOutput, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
+import { BrollPanel } from '@/components/clips/editor/broll-panel'
+import { BrandPanel } from '@/components/clips/editor/brand-panel'
+import { ThumbnailPanel } from '@/components/clips/editor/thumbnail-panel'
+import { DubPanel } from '@/components/clips/editor/dub-panel'
+import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useGeneration } from '@/components/clips/editor/use-generation'
@@ -156,6 +161,14 @@ export function EditorShell({
   streamChannelId?: string | null
 }) {
   const [title, setTitle] = useState(initialTitle)
+  const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
+  const mergeBrollMedia = useCallback((rows: BrollMediaRow[]) => {
+    setBrollMedia((prev) => {
+      const map = new Map(prev.map((r) => [r.id, r]))
+      for (const row of rows) map.set(row.id, row)
+      return [...map.values()]
+    })
+  }, [])
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
@@ -185,6 +198,12 @@ export function EditorShell({
       setPanel('transcript')
     }
   }, [panel])
+  /** Re-hooked panels (B-roll, Brand, Cover, Dub) mount on first open so they don't fetch on editor load. */
+  const [visitedPanels, setVisitedPanels] = useState<ReadonlySet<EditorPanelId>>(() => new Set(['transcript']))
+  useEffect(() => {
+    setVisitedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
+  }, [panel])
+  const panelMounted = (id: EditorPanelId) => panel === id || visitedPanels.has(id)
   const [outputMs, setOutputMs] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [playerMuted, setPlayerMuted] = useState(false)
@@ -211,6 +230,9 @@ export function EditorShell({
     setTrim: setTrimRaw,
     setCaptions,
     toggleEmphasis,
+    mergeBroll,
+    setBroll,
+    removeBroll,
     attachMusicGeneration,
     patchMusic,
     setMusic,
@@ -521,7 +543,7 @@ export function EditorShell({
   const musicGenId = edits.audio?.music?.generationId ?? null
   const musicGen = useGeneration(musicGenId)
   const aiExtras = clipEditorAiExtrasEnabled()
-  const { dubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
+  const { dubs, refreshDubs, dubAudioUrl, useDubAudio, previewWords, duckWords } = useDubPreview(
     clipId,
     edits,
     editorWords,
@@ -1055,6 +1077,14 @@ export function EditorShell({
             onSyncEditsSaveVersion={syncEditsSaveVersion}
             savePending={saveState === 'saving'}
           />
+          <div className="mt-4" data-testid="hook-overlay-section">
+            <HookOverlayPanel
+              clipId={clipId}
+              edits={edits}
+              defaultHook={(aiMeta as { hook?: string } | null)?.hook}
+              onChange={(patch) => setEdits({ ...edits, ...patch })}
+            />
+          </div>
         </EditorPanelErrorBoundary>
       </div>
       <div className={panel === 'captions' ? undefined : 'hidden'} aria-hidden={panel !== 'captions'}>
@@ -1099,6 +1129,53 @@ export function EditorShell({
         />
         </EditorPanelErrorBoundary>
       </div>
+      {panelMounted('broll') ? (
+        <div className={panel === 'broll' ? undefined : 'hidden'} aria-hidden={panel !== 'broll'} data-testid="editor-panel-broll">
+          <EditorPanelErrorBoundary label="B-roll">
+          <BrollPanel
+            clipId={clipId}
+            edits={edits}
+            outputDurationMs={outDur}
+            playheadMs={outputMs}
+            aiMeta={aiMeta}
+            brollMedia={brollMedia}
+            onMergeBroll={mergeBroll}
+            onSetBroll={setBroll}
+            onRemoveBroll={removeBroll}
+            onBrollMedia={mergeBrollMedia}
+            onFlushEdits={() => void flushSave()}
+          />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
+      {panelMounted('brand') ? (
+        <div className={panel === 'brand' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'brand'} data-testid="editor-panel-brand">
+          <EditorPanelErrorBoundary label="Brand">
+          <BrandPanel edits={edits} onEdits={setEdits} />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
+      {panelMounted('thumbnail') ? (
+        <div className={panel === 'thumbnail' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'thumbnail'} data-testid="editor-panel-thumbnail">
+          <EditorPanelErrorBoundary label="Cover">
+          <ThumbnailPanel clipId={clipId} edits={edits} onEdits={setEdits} />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
+      {aiExtras && panelMounted('dub') ? (
+        <div className={panel === 'dub' ? 'p-3' : 'hidden'} aria-hidden={panel !== 'dub'} data-testid="editor-panel-dub">
+          <EditorPanelErrorBoundary label="Dub">
+          <DubPanel
+            clipId={clipId}
+            durationMs={outDur}
+            edits={edits}
+            onEdits={setEdits}
+            onRefresh={refreshDubs}
+            dubs={dubs}
+          />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
     </>
   )
 
@@ -1216,7 +1293,7 @@ export function EditorShell({
               previewWords={previewWords}
               brandLogoUrl={brandLogoUrl}
               cropTrack={cropTrack}
-              brollMedia={initialBrollMedia}
+              brollMedia={brollMedia}
               videoRef={videoRef}
               onTick={onTick}
               channelDisplay={streamChannelDisplay}

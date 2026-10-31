@@ -10,9 +10,9 @@ export const TAB_META: Record<
   layout: { label: 'Layout', hint: 'Framing, layout & pauses' },
   layers: { label: 'Layers', hint: 'Headline, badge, stickers' },
   captions: { label: 'Captions', hint: 'Style & animation' },
-  broll: { label: 'B-roll', hint: 'Stock & AI footage' },
+  broll: { label: 'B-roll', hint: 'Stock & AI footage over your clip' },
   audio: { label: 'Audio', hint: 'Music, SFX & mix' },
-  thumbnail: { label: 'Cover', hint: 'Thumbnail' },
-  dub: { label: 'Dub', hint: 'Translate & voice' },
-  brand: { label: 'Brand', hint: 'Apply your kit' },
+  thumbnail: { label: 'Cover', hint: 'Pick the thumbnail frame' },
+  dub: { label: 'Dub', hint: 'Translate & AI voice (uses credits)' },
+  brand: { label: 'Brand', hint: 'Logo, colors & fonts from your kit' },
 }

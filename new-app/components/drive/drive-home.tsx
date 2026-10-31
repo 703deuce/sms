@@ -11,6 +11,7 @@ import {
   List,
   Radio,
   Upload,
+  Users,
 } from 'lucide-react'
 import { useClipsDriveOptional } from '@/components/drive/clips-drive-context'
 import { formatRelativeTime } from '@/lib/format-relative-time'
@@ -219,10 +220,20 @@ export function DriveHome({
 
       <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
         {pageView !== 'trash' && <NewFolderDialog variant="toolbar" />}
-        {recordHref ? (
+        {recordHref && recordHref !== '/app/rooms/new' ? (
           <Link href={recordHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             <span className="mr-1 inline-block size-2 rounded-full bg-lane-record" />
             Record
+          </Link>
+        ) : null}
+        {roomsRecordEnabled ? (
+          <Link
+            href="/app/rooms/new"
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            data-testid="drive-rooms-entry"
+          >
+            <Users className="mr-1 size-4" />
+            Rooms
           </Link>
         ) : null}
         {isT2vFeatureEnabled() ? (

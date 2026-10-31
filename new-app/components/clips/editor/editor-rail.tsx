@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Captions, Clapperboard, Eraser, Image as ImageIcon, Languages, LayoutPanelTop, Layers, Music2, Palette, Sparkles, FileText } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 
 export type EditorPanelId =
   | 'producer'
@@ -19,8 +20,27 @@ export type EditorPanelId =
   | 'dub'
   | 'brand'
 
-/** Clip editor launch rail — transcript, pauses/layout, captions, audio mix (no AI producer / B-roll / dub). */
-const CLIP_EDITOR_RAIL_IDS: EditorPanelId[] = ['transcript', 'cleanup', 'layout', 'layers', 'captions', 'audio']
+/**
+ * Clip editor rail, top to bottom. The launch items keep their positions; re-hooked tools are appended
+ * below Audio (B-roll, Brand, Cover). Dub (paid AI voice) only with NEXT_PUBLIC_CLIP_EDITOR_AI_EXTRAS=1.
+ * AI Producer stays off the rail (returns later as a small optional assistant).
+ */
+export function clipEditorRailIds(aiExtras: boolean = clipEditorAiExtrasEnabled()): EditorPanelId[] {
+  return [
+    'transcript',
+    'cleanup',
+    'layout',
+    'layers',
+    'captions',
+    'audio',
+    'broll',
+    'brand',
+    'thumbnail',
+    ...(aiExtras ? (['dub'] as EditorPanelId[]) : []),
+  ]
+}
+
+const CLIP_EDITOR_RAIL_IDS: EditorPanelId[] = clipEditorRailIds()
 
 const ALL_EDITOR_RAIL_ITEMS: {
   id: EditorPanelId
@@ -41,8 +61,9 @@ const ALL_EDITOR_RAIL_ITEMS: {
   { id: 'brand', label: 'Brand', icon: Palette, tone: 'text-lane-brand' },
 ]
 
-export const EDITOR_RAIL_ITEMS = ALL_EDITOR_RAIL_ITEMS.filter((item) =>
-  CLIP_EDITOR_RAIL_IDS.includes(item.id),
+/** Ordered by CLIP_EDITOR_RAIL_IDS (not ALL_EDITOR_RAIL_ITEMS) so existing items never move. */
+export const EDITOR_RAIL_ITEMS = CLIP_EDITOR_RAIL_IDS.map((id) => ALL_EDITOR_RAIL_ITEMS.find((item) => item.id === id)).filter(
+  (item): item is (typeof ALL_EDITOR_RAIL_ITEMS)[number] => Boolean(item),
 )
 
 export function editorRailIcon(id: EditorPanelId) {
