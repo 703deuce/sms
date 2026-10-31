@@ -125,6 +125,20 @@ export function overwriteFromSource(
   return { edits: { ...edits, sources, sourceSegments }, message: `Overwrote ${(total / 1000).toFixed(1)} s` }
 }
 
+/**
+ * FV4e: the media item "Build from transcript" opens in the source monitor — the first non-main
+ * video / audio upload or angle with a finished transcript, else the first one without (the monitor
+ * then offers In / Out and the transcribe hint). Null when the project has no other media.
+ */
+export function buildFromTranscriptItem(
+  items: readonly ProjectMediaItem[],
+  transcripts: readonly { ref: string; refId: string; status: string }[] | undefined,
+): ProjectMediaItem | null {
+  const playable = items.filter((i) => !i.isMain && i.url && (i.mediaType === 'video' || i.mediaType === 'audio'))
+  const done = playable.find((i) => transcripts?.some((t) => t.ref === i.ref && t.refId === i.refId && t.status === 'done'))
+  return done ?? playable[0] ?? null
+}
+
 export type MatchFrame = { itemId: string; mediaMs: number; via: 'broll' | 'segment' | 'main' }
 
 /**

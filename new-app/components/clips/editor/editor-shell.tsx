@@ -93,7 +93,7 @@ import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
 import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
-import { matchFrameAt } from '@/lib/clips/editor/source-monitor'
+import { buildFromTranscriptItem, matchFrameAt } from '@/lib/clips/editor/source-monitor'
 import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/clips/editor/use-project-media'
 import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
@@ -665,6 +665,17 @@ export function EditorShell({
     setMonitorRequest((r) => ({ itemId: m.itemId, mediaMs: m.mediaMs, seq: (r?.seq ?? 0) + 1 }))
     selectPanel('media')
     return true
+  }
+  // FV4e: "Build from transcript" (Script panel) → Media panel source monitor on an uploaded file.
+  const openBuildFromTranscript = () => {
+    const it = buildFromTranscriptItem(media.items, mediaTranscripts.transcripts)
+    if (!it) {
+      toast.message('Upload a video or audio file in Media first, then build from its transcript', { id: 'build-from-transcript' })
+      selectPanel('media')
+      return
+    }
+    setMonitorRequest((r) => ({ itemId: it.id, mediaMs: 0, seq: (r?.seq ?? 0) + 1 }))
+    selectPanel('media')
   }
 
   const onLayoutMode = useCallback(
@@ -1319,6 +1330,7 @@ export function EditorShell({
           mediaKind={editorMedia?.kind}
           onSetEdits={setEdits}
           angleSources={angleSources}
+          onBuildFromTranscript={openBuildFromTranscript}
         />
         </EditorPanelErrorBoundary>
       </div>
