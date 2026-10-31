@@ -328,6 +328,10 @@ def tile(fr, j, k):            # 9:8 tile (720x640 out) around person k's face
     return cv2.resize(fr[y0:y0 + th, x0:x0 + tw], (OUT_W, OUT_H // 2), interpolation=cv2.INTER_CUBIC)
 
 def render_wide(fr):
+    if abs(int(H * (OUT_W / max(W, 1))) - OUT_H) <= 2:
+        # FV4b: source and output aspect already match (16:9 → 16:9): the picture covers the whole
+        # frame, so skip the blurred background (downscale + blur + upscale + full-frame copy per frame).
+        return cv2.resize(fr, (OUT_W, OUT_H), interpolation=cv2.INTER_CUBIC)
     s = max(OUT_W / max(W, 1), OUT_H / max(H, 1))
     cw, ch = int(round(OUT_W / s)), int(round(OUT_H / s))
     x0, y0 = max(0, (W - cw) // 2), max(0, (H - ch) // 2)

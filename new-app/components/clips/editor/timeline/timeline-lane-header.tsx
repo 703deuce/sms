@@ -19,6 +19,8 @@ export type TrackHeaderActions = {
   /** G1c: open this track's motion (position / scale / crop, keyframable). */
   onMotion?: () => void
   motionOn?: boolean
+  /** FV4b: menu label for onMotion (the main Video row says "Main video slot…"). */
+  motionLabel?: string
 }
 
 const btn =
@@ -208,7 +210,7 @@ function TrackMenu({ tk, name, actions }: { tk: string; name: string; actions: T
           ) : null}
           {actions.onMotion ? (
             <button type="button" role="menuitem" className={item} onClick={run(actions.onMotion)} data-testid={`timeline-track-motion-${tk}`}>
-              Track motion…
+              {actions.motionLabel ?? 'Track motion…'}
             </button>
           ) : null}
           {actions.visual !== undefined ? (

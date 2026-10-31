@@ -238,6 +238,25 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       })
     }
 
+    if (result.inFlight) {
+      // FV4b: same edits already rendering — return that render (no new job, no second 'export' event).
+      console.info('[clipper:export] in_flight_reused', { clipId, renderId: result.render.id, jobId: result.jobId })
+      return NextResponse.json({
+        data: {
+          renderId: result.render.id,
+          downloadUrl: null,
+          filename: result.filename,
+          download: result.filename,
+          watermark,
+          projectId: clip.projectId,
+          status: result.render.status === 'RENDERING' ? 'RENDERING' : 'QUEUED',
+          jobId: result.jobId,
+          durationMs: editedDurationMs,
+          inFlight: true,
+        },
+      })
+    }
+
     await logClipEvent(workspaceId, clip.id, 'export')
     await recordStreamClipFeedback(workspaceId, clip.id, 'export').catch(() => {})
     console.info('[clipper:export] enqueued', {

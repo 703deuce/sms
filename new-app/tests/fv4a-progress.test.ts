@@ -54,10 +54,11 @@ describe('FV4a export status line', () => {
   it('formats ETAs', () => {
     expect(formatEtaShort(null)).toBeNull()
     expect(formatEtaShort(0)).toBeNull()
-    expect(formatEtaShort(16)).toBe('~16s left')
-    expect(formatEtaShort(840)).toBe('~14 min left')
-    expect(formatEtaShort(7800)).toBe('~2 h 10 min left')
-    expect(formatEtaShort(7200)).toBe('~2 h left')
+    // FV4b: rounded text
+    expect(formatEtaShort(16)).toBe('less than a minute left')
+    expect(formatEtaShort(840)).toBe('about 15 min left')
+    expect(formatEtaShort(7800)).toBe('about 2 h 10 min left')
+    expect(formatEtaShort(7200)).toBe('about 2 h left')
   })
   it('shows step and real ETA', () => {
     expect(
@@ -68,7 +69,7 @@ describe('FV4a export status line', () => {
         etaSec: 840,
         detail: { step: 2, steps: 4, stepPct: 41 },
       }),
-    ).toBe('Rendering export… 63% · step 2 of ~4 (41%) · ~14 min left')
+    ).toBe('Rendering export… 63% · step 2 of ~4 (41%) · about 15 min left')
   })
   it('falls back to phase when no detail', () => {
     expect(

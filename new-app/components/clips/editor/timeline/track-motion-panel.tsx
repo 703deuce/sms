@@ -32,6 +32,7 @@ export function TrackMotionPanel({
   onMainPreset,
   onClose,
   readOnly = false,
+  mainOnly = false,
 }: {
   trackId: string
   label: string
@@ -41,6 +42,8 @@ export function TrackMotionPanel({
   onMainPreset: (p: MotionPreset) => void
   onClose: () => void
   readOnly?: boolean
+  /** FV4b: opened from the main Video header — only the main picture's slot buttons. */
+  mainOnly?: boolean
 }) {
   const [animate, setAnimate] = useState(() => keys.some((k) => k.points.length > 0))
   const cur = (p: TrackMotionProp) => {
@@ -49,6 +52,20 @@ export function TrackMotionPanel({
     return k.points.length ? valueAtPoints(k.points, playheadMs, PROP_SPECS[p].def) : (k.value ?? PROP_SPECS[p].def)
   }
   const set = (p: TrackMotionProp, v: number) => onChange(setTrackMotionValue(keys, p, v, animate ? playheadMs : null))
+  if (mainOnly) {
+    return (
+      <div className="space-y-2 rounded-md border border-border/60 bg-card/40 p-2 text-[11px]" data-testid="track-motion-panel-main">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">Main video slot</span>
+          <span className="text-muted-foreground">Pair with an overlay track’s 2-up / 3-up preset (Track motion…).</span>
+          <button type="button" className="ml-auto rounded p-0.5 hover:bg-muted" onClick={onClose} aria-label="Close main video slot" data-testid="track-motion-close">
+            <X className="size-3.5" />
+          </button>
+        </div>
+        <MainSlotButtons readOnly={readOnly} onMainPreset={onMainPreset} />
+      </div>
+    )
+  }
   return (
     <div className="space-y-2 rounded-md border border-border/60 bg-card/40 p-2 text-[11px]" data-testid={`track-motion-panel-${trackId}`}>
       <div className="flex items-center gap-2">
@@ -73,14 +90,7 @@ export function TrackMotionPanel({
           </Button>
         ))}
       </div>
-      <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Main video slot">
-        <span className="text-muted-foreground">Main video:</span>
-        {MAIN_PRESETS.map((id) => (
-          <Button key={id} size="xs" variant="ghost" disabled={readOnly} onClick={() => onMainPreset(id)} data-testid={`track-motion-main-${id}`}>
-            {MOTION_PRESETS.find((p) => p.id === id)!.label}
-          </Button>
-        ))}
-      </div>
+      <MainSlotButtons readOnly={readOnly} onMainPreset={onMainPreset} />
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
         {TRACK_MOTION_PROPS.map((p) => (
           <SliderRow
@@ -97,6 +107,19 @@ export function TrackMotionPanel({
           />
         ))}
       </div>
+    </div>
+  )
+}
+
+function MainSlotButtons({ readOnly, onMainPreset }: { readOnly: boolean; onMainPreset: (p: MotionPreset) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Main video slot">
+      <span className="text-muted-foreground">Main video:</span>
+      {MAIN_PRESETS.map((id) => (
+        <Button key={id} size="xs" variant="ghost" disabled={readOnly} onClick={() => onMainPreset(id)} data-testid={`track-motion-main-${id}`}>
+          {MOTION_PRESETS.find((p) => p.id === id)!.label}
+        </Button>
+      ))}
     </div>
   )
 }

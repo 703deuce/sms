@@ -92,6 +92,43 @@ export async function getRenderForWorkspace(workspaceId: string, renderId: strin
   return prisma.clipRender.findFirst({ where: { id: renderId, workspaceId } })
 }
 
+/** FV4b: a QUEUED / RENDERING row older than this is treated as dead (never deduped onto). */
+export const IN_FLIGHT_RENDER_MAX_AGE_MS = 8 * 60 * 60 * 1000
+
+/**
+ * FV4b: the newest QUEUED / RENDERING render of this clip with the same edits hash that still has a
+ * live RENDER_CLIP job (QUEUED / RUNNING). A row whose job is gone (crash, manual fail) is not reused.
+ */
+export async function findInFlightRender(
+  workspaceId: string,
+  clipId: string,
+  editsHash: string,
+  now: number = Date.now(),
+) {
+  const prisma = getPrisma()
+  const render = await prisma.clipRender.findFirst({
+    where: {
+      clipId,
+      workspaceId,
+      status: { in: ['QUEUED', 'RENDERING'] },
+      editsVersionHash: editsHash,
+      createdAt: { gte: new Date(now - IN_FLIGHT_RENDER_MAX_AGE_MS) },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!render) return null
+  const job = await prisma.clipJob.findFirst({
+    where: {
+      clipId,
+      type: 'RENDER_CLIP',
+      status: { in: ['QUEUED', 'RUNNING'] },
+      payload: { path: ['renderId'], equals: render.id },
+    },
+    select: { id: true },
+  })
+  return job ? { render, jobId: job.id } : null
+}
+
 export async function enqueueRenderClip(
   workspaceId: string,
   clipId: string,
@@ -131,6 +168,20 @@ export async function enqueueRenderClip(
     }
   }
 
+  // FV4b: the same edits are already rendering (double click, second tab, dialog reopened) —
+  // hand back that render instead of starting a duplicate full-length encode.
+  const inFlight = await findInFlightRender(workspaceId, clipId, hash)
+  if (inFlight) {
+    return {
+      render: inFlight.render,
+      downloadUrl: null as string | null,
+      filename: inFlight.render.filename || exportFilename(opts.title),
+      reused: false,
+      inFlight: true,
+      jobId: inFlight.jobId,
+    }
+  }
+
   const renderId = createId('rnd')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   const filename = exportFilename(opts.title)
@@ -167,7 +218,7 @@ export async function enqueueRenderClip(
     },
   })
 
-  return { render, downloadUrl: null as string | null, filename, reused: false, jobId }
+  return { render, downloadUrl: null as string | null, filename, reused: false, inFlight: false, jobId }
 }
 
 export async function retryFailedRender(workspaceId: string, renderId: string) {

@@ -15,8 +15,8 @@ Python process (prototype/v3), which is the longest pass of a full-length export
 
 * ``step`` / ``steps``  — current heavy pass and the estimated pass count (``~``),
 * ``step_pct``          — % of the current pass (ffmpeg output time / clip length),
-* ``progress``          — overall 55–81 %, monotonic (the job keeps 82 / 95 / 100 for upload / done),
-* ``eta_s``             — from the measured speed,
+* ``progress``          — overall 10–89 %, monotonic (FV4b bands: prep 0–10, encode 10–90, upload 90–100),
+* ``eta_s``             — FV4b: elapsed ÷ encode fraction, smoothed; None until ~10 % of the encode,
 * ``activity``          — a token that changes whenever ffmpeg advances or work files grow; the web
   watchdog treats a change as progress, so a long but healthy render is never "stalled".
 
@@ -39,8 +39,15 @@ from pathlib import Path
 _ACTIVE: "RenderProgress | None" = None
 
 HEAVY_PASS_MIN_S = 15.0
-PROGRESS_LO = 55
-PROGRESS_HI = 81
+# FV4b: one overall % for the whole export, from one render fraction per phase.
+PREP_LO, PREP_HI = 0, 10
+ENCODE_LO, ENCODE_HI = 10, 90
+UPLOAD_LO, UPLOAD_HI = 90, 100
+PROGRESS_LO = ENCODE_LO
+PROGRESS_HI = ENCODE_HI - 1  # 90+ is reserved for the upload
+ETA_MIN_FRAC = 0.10  # no ETA before 10 % of the encode work (too noisy)
+ETA_UPLOAD_S = 30  # tail after the encode: post / upload / checks
+ETA_SMOOTH = 0.3  # weight of a fresh estimate (the rest follows the running countdown)
 _OUT_TIME_RE = re.compile(rb"out_time_(?:us|ms)=(\d+)")
 _SHIM = """#!/bin/sh
 d="$FV4A_PROGRESS_DIR"
@@ -70,6 +77,44 @@ CANCEL_MESSAGES = {
 
 def cancel_message(reason: str) -> str:
     return CANCEL_MESSAGES.get(reason, f"Export stopped ({reason}).")
+
+
+def overall_progress(phase: str, frac: float = 0.0) -> int:
+    """FV4b: overall export % for ``phase`` ('prep' | 'encode' | 'upload' | 'done') at ``frac`` (0..1)."""
+    if phase == "done":
+        return 100
+    lo, hi = {"prep": (PREP_LO, PREP_HI), "encode": (ENCODE_LO, ENCODE_HI), "upload": (UPLOAD_LO, UPLOAD_HI)}[phase]
+    f = min(1.0, max(0.0, float(frac or 0.0)))
+    return min(hi - 1, lo + int((hi - lo) * f))  # the band's top belongs to the next phase
+
+
+class EtaSmoother:
+    """FV4b: a stable ETA from elapsed time ÷ fraction done.
+
+    raw = elapsed · (1 − f) / f (+ a fixed upload tail). Hidden until ``f ≥ ETA_MIN_FRAC``. Between
+    updates the previous value counts down with wall time; a fresh raw estimate only pulls it by
+    ``ETA_SMOOTH`` and may raise it by at most 15 % (+ 30 s) per update, so it can't jump 2 → 12 min.
+    """
+
+    def __init__(self, *, min_frac: float = ETA_MIN_FRAC, tail_s: float = ETA_UPLOAD_S, alpha: float = ETA_SMOOTH) -> None:
+        self.min_frac = min_frac
+        self.tail_s = tail_s
+        self.alpha = alpha
+        self._eta: float | None = None
+        self._at: float | None = None
+
+    def update(self, elapsed_s: float, frac: float, now: float) -> int | None:
+        if frac < self.min_frac or elapsed_s <= 0:
+            return None
+        raw = elapsed_s * (1.0 - min(frac, 0.999)) / frac + self.tail_s
+        if self._eta is None or self._at is None:
+            eta = raw
+        else:
+            running = max(0.0, self._eta - max(0.0, now - self._at))
+            eta = running + self.alpha * (raw - running)
+            eta = min(eta, running * 1.15 + 30.0)
+        self._eta, self._at = max(0.0, eta), now
+        return int(round(self._eta))
 
 
 def _env_float(name: str, default: float) -> float:
@@ -209,6 +254,8 @@ class RenderProgress:
         self._bin = self._root / "bin"
         self._bin.mkdir()
         self._last_progress = PROGRESS_LO
+        self._last_frac = 0.0
+        self._eta = EtaSmoother()
         self._last_activity: str | None = None
         self._last_activity_at = self.t0
         self._saved_env: dict[str, str | None] = {}
@@ -345,16 +392,12 @@ class RenderProgress:
             work = len(heavy_done) + (cur_frac if cur_heavy else 0.0)
             step = len(heavy_done) + (1 if cur_heavy else 0)
             steps = max(self.est_passes, step)
-            frac = work / max(float(steps), work + 0.25)
-            progress = max(
-                self._last_progress,
-                min(PROGRESS_HI, PROGRESS_LO + int((PROGRESS_HI - PROGRESS_LO) * frac)),
-            )
+            # FV4b: one monotonic encode fraction → overall % (10–89) and the ETA.
+            frac = max(self._last_frac, min(0.99, work / max(float(steps), work + 0.25)))
+            self._last_frac = frac
+            progress = max(self._last_progress, min(PROGRESS_HI, overall_progress("encode", frac)))
             self._last_progress = progress
-            heavy_s = sum(p.running_s(now) for p in heavy_done) + (cur.running_s(now) if cur_heavy else 0.0)
-            eta = None
-            if work >= 0.05 and heavy_s > 0:
-                eta = int(heavy_s / work * max(0.0, steps - work)) + 20
+            eta = self._eta.update(now - self.t0, frac, now)
             out_s = int((cur.out_us if cur else 0) / 1e6)
             try:
                 cpu_s = int(self._child_cpu() // 10)
@@ -369,6 +412,7 @@ class RenderProgress:
             "steps": steps,
             "step_pct": int(round(cur_frac * 100)) if cur_heavy else None,
             "progress": progress,
+            "frac": round(frac, 4),
             "eta_s": eta,
             "activity": activity,
             "elapsed_s": int(now - self.t0),
