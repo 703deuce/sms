@@ -6,6 +6,8 @@ from typing import Any
 DEFAULT_FACECAM = {"x": 0.02, "y": 0.02, "w": 0.32, "h": 0.28}
 DEFAULT_FULL = {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
 SRC_ASPECT = 16 / 9
+# T6.6: max extra zoom used to keep a titled face crop inside its facecam box.
+MAX_TITLE_ZOOM = 2.0
 
 
 def _even(n: float) -> int:
@@ -138,17 +140,39 @@ def _crop_under_title(
     fcy: float | None = None,
 ) -> dict:
     """T6.3: the top ``t`` of the panel is covered by the title bar. Size the crop so the face
-    fits in the visible part, centre it there, and let only the hidden (under-title) strip
-    spill above ``region`` (a facecam at the bottom of the frame has no room above the face)."""
+    fits in the visible part and centre it there.
+
+    T6.6: the crop never leaves ``region``. A facecam at the bottom of the frame often has no
+    room above the face; T6.3 let the under-title strip spill above the box, which showed black
+    game background where the title does not fully cover it (blur/box title styles, preview).
+    Now the crop zooms in (up to ``MAX_TITLE_ZOOM``, never smaller than the face needs) so the
+    face sits under the title inside the box. Only when that is impossible does it spill, by the
+    minimum amount and only into the strip hidden under the title. A full-frame region (no
+    facecam) just clamps to the frame."""
     cx = float(cx if cx is not None else float(face["x"]) + float(face["w"]) / 2)
     fcy = float(fcy if fcy is not None else float(face["y"]) + float(face["h"]) / 2)
     h = min(1.0, max(h0, fh / (0.9 * (1 - t))))
     ft = t + (1 - t) * 0.45
-    rx, ry = float(region.get("x") or 0), float(region.get("y") or 0)
-    rw, rh = float(region.get("w") or 1), float(region.get("h") or 1)
-    ny = max(0.0, ry - t * h)
-    ext = {"x": rx, "y": ny, "w": rw, "h": min(1.0 - ny, rh + (ry - ny))}
-    return _crop_at(cx, fcy - ft * h + h / 2, h, panel_aspect, ext)
+    ry = float(region.get("y") or 0)
+    if not _is_full_frame(region) and fcy - ft * h < ry:
+        h = max(h / MAX_TITLE_ZOOM, (fcy - ry) / ft, fh / (0.95 * (1 - t)))
+        if fcy - ft * h < ry - 1e-4:
+            # Even at max zoom the face cannot sit under the title inside the box (e.g. G1: the
+            # 384px title covers 57% of a 672px face panel). Spill only the minimum needed above
+            # the box, never more than the strip hidden under the title.
+            ny = max(0.0, ry - t * h, fcy - ft * h)
+            rx, rw, rh = float(region.get("x") or 0), float(region.get("w") or 1), float(region.get("h") or 1)
+            return _crop_at(cx, fcy - ft * h + h / 2, h, panel_aspect, {"x": rx, "y": ny, "w": rw, "h": min(1.0 - ny, rh + (ry - ny))})
+    return _crop_at(cx, fcy - ft * h + h / 2, h, panel_aspect, region)
+
+
+def _is_full_frame(region: dict) -> bool:
+    return (
+        float(region.get("x") or 0) <= 1e-6
+        and float(region.get("y") or 0) <= 1e-6
+        and float(region.get("w") or 1) >= 1 - 1e-6
+        and float(region.get("h") or 1) >= 1 - 1e-6
+    )
 
 
 def _facecam_region(signals: dict, edits: dict) -> dict | None:
