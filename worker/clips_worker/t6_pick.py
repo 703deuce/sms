@@ -17,6 +17,23 @@ LANE_FALLBACK = {
 FACE_PANEL_SRCS = ("face_tight", "active_speaker")
 
 
+SHARED_FAMILY_PENALTY = 10.0
+
+
+def in_family(t: dict, lane: str) -> bool:
+    """T6.4 (parity with registry.ts templateInFamily): native lane or a shared family."""
+    return t.get("lane") == lane or lane in (t.get("families") or [])
+
+
+def requires_for_family(t: dict, lane: str) -> dict:
+    """T6.4: native requires plus the shared family's extras (e.g. C1 in podcast: 1 person)."""
+    base = dict(t.get("requires") or {})
+    if t.get("lane") == lane:
+        return base
+    extra = (t.get("familyRequires") or {}).get(lane) or {}
+    return {**base, **extra}
+
+
 def _needs_detected_face(t: dict) -> bool:
     for p in t.get("panels") or []:
         src = str(p.get("src") or "")
@@ -25,8 +42,8 @@ def _needs_detected_face(t: dict) -> bool:
     return False
 
 
-def eligible(t: dict, s: dict, clip: dict) -> bool:
-    req = t.get("requires") or {}
+def eligible(t: dict, s: dict, clip: dict, lane: str | None = None) -> bool:
+    req = requires_for_family(t, lane or str(t.get("lane") or ""))
     faces = s.get("faces")
     if isinstance(faces, list) and not faces and _needs_detected_face(t):
         # T6.3: no recurring real face/person -> never auto-pick a face/person zoom template
@@ -81,7 +98,7 @@ def pick_template(
     lane = str(s.get("clip_type") or "irl")
     if float(s.get("type_conf") or 0.0) < 0.6:
         return LANE_FALLBACK.get(lane, "I3"), "low_conf"
-    cands = [tid for tid, t in TEMPLATES.items() if t.get("lane") == lane and eligible(t, s, clip)]
+    cands = [tid for tid, t in TEMPLATES.items() if in_family(t, lane) and eligible(t, s, clip, lane)]
     if not cands:
         return LANE_FALLBACK.get(lane, "I3"), "no_eligible"
     cap = max(1, int((batch_size * 0.4) + 0.999))
@@ -89,6 +106,11 @@ def pick_template(
     for tid in cands:
         t = TEMPLATES[tid]
         sc = fit_score(t, s)
+        if t.get("lane") != lane:
+            # T6.4: shared-family templates (C1-C6 in podcast) only win when no native template
+            # is eligible or the natives hit the batch cap (-100). 10 > max tie noise (~4.3)
+            # + face bonus + history penalty, so podcast picks with an eligible native are unchanged.
+            sc -= SHARED_FAMILY_PENALTY
         if tid in history[-2:]:
             sc -= 3.0
         if batch_counts.get(tid, 0) + 1 > cap:
@@ -112,17 +134,19 @@ def apply_t6_template_to_edits(
 ) -> dict:
     tid, reason = pick_template(signals, clip, history, batch_counts, batch_size, seed)
     t = TEMPLATES[tid]
+    lane = str(signals.get("clip_type") or "")
     layout = dict(edits.get("layout") or {})
     layout["mode"] = t.get("fallbackMode") or layout.get("mode") or "fit_blur"
     layout["template"] = {
         "id": tid,
         "auto": True,
         "reason": reason,
-        "lane": t.get("lane"),
+        # T6.4: a shared template picked for a podcast clip keeps the podcast family in the picker.
+        "lane": lane if in_family(t, lane) else t.get("lane"),
         "pickedAt": "v1",
     }
     print(
-        f"[t6:pick] template={tid} lane={t.get('lane')!r} reason={reason!r} conf={float(signals.get('type_conf') or 0):.2f}",
+        f"[t6:pick] template={tid} lane={layout['template']['lane']!r} reason={reason!r} conf={float(signals.get('type_conf') or 0):.2f}",
         flush=True,
     )
     out = {**edits, "layout": layout}

@@ -21,6 +21,7 @@ import { ExportHeadlinePreview } from '@/components/clips/editor/export-headline
 import { ExportSavedChannelsField } from '@/components/clips/editor/export-saved-channels-field'
 import type { ClipUserStreamerChannelRow } from '@/lib/clips/clip-export-user-types'
 import { toast } from 'sonner'
+import { t6TitleAutoEnabled } from '@/lib/clips/t6-feature-flags'
 
 export function ExportTemplateSection({
   clipId,
@@ -139,7 +140,10 @@ export function ExportTemplateSection({
       <p className="text-xs font-medium">Stream headline template</p>
       <p className="text-xs text-muted-foreground">
         {hideHeadlineControls
-          ? 'Headline is edited in the Layout panel. Badge, channel, and chat apply here.'
+          ? t6TitleAutoEnabled()
+            ? // T6.4: the title (text + style chips) lives in the Layers panel.
+              'Title is edited in the Layers panel. Badge, channel, and chat apply here.'
+            : 'Headline is edited in the Layout panel. Badge, channel, and chat apply here.'
           : 'fit_top layout: white headline band, full-width video, blur footer. Toggle headline off for fit_blur.'}
       </p>
 

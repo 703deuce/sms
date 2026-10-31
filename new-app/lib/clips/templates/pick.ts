@@ -1,5 +1,12 @@
 import type { T6Signals } from '@/lib/clips/templates/signals'
-import { T6_TEMPLATES_BY_ID, type TemplateDef } from '@/lib/clips/templates/registry'
+import {
+  T6_TEMPLATES_BY_ID,
+  requiresForFamily,
+  templateInFamily,
+  type TemplateDef,
+} from '@/lib/clips/templates/registry'
+
+export const SHARED_FAMILY_PENALTY = 10
 
 const LANE_FALLBACK: Record<string, string> = {
   gaming: 'G4',
@@ -15,8 +22,9 @@ export function templateNeedsDetectedFace(t: TemplateDef): boolean {
   )
 }
 
-export function eligibleTemplate(t: TemplateDef, s: T6Signals, durationMs: number): boolean {
-  const req = t.requires ?? {}
+export function eligibleTemplate(t: TemplateDef, s: T6Signals, durationMs: number, lane?: string): boolean {
+  // T6.4: a shared-family template (e.g. C1 in podcast) adds that family's requirements.
+  const req = requiresForFamily(t, lane ?? t.lane)
   if (Array.isArray(s.faces) && s.faces.length === 0 && templateNeedsDetectedFace(t)) return false
   if (req.facecam && (Number(s.facecam_conf) < 0.85 || !s.facecam_box)) return false
   if (req.noBackgroundAction && s.background_action) return false
@@ -41,7 +49,7 @@ export function pickTemplate(
   const lane = s.clip_type
   const durationMs = clip.durationMs ?? 0
   const cands = Object.values(T6_TEMPLATES_BY_ID).filter(
-    (t) => t.lane === lane && eligibleTemplate(t, s, durationMs),
+    (t) => templateInFamily(t, lane) && eligibleTemplate(t, s, durationMs, lane),
   )
   if (!cands.length) return [LANE_FALLBACK[lane] ?? 'I3', 'no_eligible']
   const cap = Math.max(1, Math.ceil(batchSize * 0.4))
@@ -51,6 +59,8 @@ export function pickTemplate(
   for (const t of cands) {
     let score = Number(t.pickWeights?.facecam_conf ?? 0) * Number(s.facecam_conf ?? 0)
     if (Array.isArray(s.faces) && s.faces.length > 0 && templateNeedsDetectedFace(t)) score += 1
+    // T6.4 parity with t6_pick.SHARED_FAMILY_PENALTY: shared templates rank below native ones.
+    if (t.lane !== lane) score -= SHARED_FAMILY_PENALTY
     if (history.slice(-2).includes(t.id)) score -= 3
     if ((batchCounts[t.id] ?? 0) + 1 > cap) score -= 100
     const tie = parseInt(

@@ -401,14 +401,31 @@ export function FacecamLayoutStudio({
               variant="outline"
               onClick={() => {
                 if (!facecamLayout?.facecam) return
-                patchFacecam({
+                const detected = {
                   box: facecamLayout.facecam,
                   gameplay: facecamLayout.gameplay ?? undefined,
                   split: facecamLayout.split ?? 0.35,
                   position: facecamLayout.facecamPosition ?? 'top',
-                })
+                }
+                if (t6Tpl && t6UsesCrop && edits.layout.cropBox) {
+                  // T6.4: under a template the game panel (G1/G2/G6 action_box_widened) reads the
+                  // user's Crop box; "Snap to detected" resets it too, back to the detected game
+                  // region. Legacy stacks have no crop box in this view, so they are unchanged.
+                  onEdits({
+                    ...edits,
+                    layout: {
+                      ...edits.layout,
+                      cropBox: undefined,
+                      facecam: { ...(fc ?? {}), ...detected, pipCorner: fc?.pipCorner },
+                    },
+                  })
+                  return
+                }
+                patchFacecam(detected)
               }}
               disabled={!facecamLayout?.facecam}
+              data-testid="studio-snap-detected"
+              title="Reset the facecam and game framing to the detected layout"
             >
               Snap to detected
             </Button>

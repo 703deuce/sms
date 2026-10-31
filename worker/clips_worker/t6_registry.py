@@ -545,6 +545,14 @@ TEMPLATES: dict[str, dict] = {
     "pickWeights": {},
     "id": "C1",
     "lane": "just_chatting",
+    "families": [
+      "podcast"
+    ],
+    "familyRequires": {
+      "podcast": {
+        "maxPersons": 1
+      }
+    },
     "name": "Face Tight",
     "fallbackMode": "center_crop",
     "panels": [
@@ -581,6 +589,9 @@ TEMPLATES: dict[str, dict] = {
     "pickWeights": {},
     "id": "C2",
     "lane": "just_chatting",
+    "families": [
+      "podcast"
+    ],
     "name": "Active Speaker",
     "fallbackMode": "speaker_follow",
     "panels": [
@@ -612,6 +623,9 @@ TEMPLATES: dict[str, dict] = {
     "pickWeights": {},
     "id": "C3",
     "lane": "just_chatting",
+    "families": [
+      "podcast"
+    ],
     "name": "Content + Face",
     "fallbackMode": "facecam_stack",
     "panels": [
@@ -656,6 +670,14 @@ TEMPLATES: dict[str, dict] = {
     "pickWeights": {},
     "id": "C4",
     "lane": "just_chatting",
+    "families": [
+      "podcast"
+    ],
+    "familyRequires": {
+      "podcast": {
+        "maxPersons": 1
+      }
+    },
     "name": "Push In Face",
     "fallbackMode": "center_crop",
     "panels": [
@@ -687,6 +709,14 @@ TEMPLATES: dict[str, dict] = {
     "pickWeights": {},
     "id": "C5",
     "lane": "just_chatting",
+    "families": [
+      "podcast"
+    ],
+    "familyRequires": {
+      "podcast": {
+        "maxPersons": 2
+      }
+    },
     "name": "Dual Cam",
     "fallbackMode": "split",
     "panels": [
@@ -742,6 +772,9 @@ TEMPLATES: dict[str, dict] = {
     "pickWeights": {},
     "id": "C6",
     "lane": "just_chatting",
+    "families": [
+      "podcast"
+    ],
     "name": "Blur Frame",
     "fallbackMode": "fit_blur",
     "panels": [
