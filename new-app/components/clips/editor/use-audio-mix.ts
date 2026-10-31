@@ -11,8 +11,25 @@ import type { SourceWord } from '@/lib/clips/source-words'
 import { audioFxActive, buildFxChain, fxPlanKey, trackFxFor, webAudioPlan } from '@/lib/clips/editor/track-fx'
 import { trackIdOf } from '@/lib/clips/editor/tracks'
 import { connectChannel, useTrackFxLufs } from '@/components/clips/editor/use-track-fx-lufs'
+import { clipGainAt, clipHasGainCurve, musicFadeAt, musicMediaMsAt } from '@/lib/clips/editor/audio-clip'
 
-type SfxCue = { buffer: AudioBuffer; atMs: number; volume: number; generationId: string; inMs?: number; durMs?: number; channel?: 'L' | 'R' }
+/** G2: densest gain-curve step and most ramp points per scheduled clip. */
+const CURVE_STEP_MS = 20
+const CURVE_MAX_POINTS = 3000
+
+type SfxCue = {
+  buffer: AudioBuffer
+  atMs: number
+  volume: number
+  generationId: string
+  inMs?: number
+  durMs?: number
+  channel?: 'L' | 'R'
+  /** G2: clip fades / ducking under the voice. */
+  fadeInMs?: number
+  fadeOutMs?: number
+  duckDepth?: number
+}
 
 export function useAudioMix({
   videoRef,
@@ -208,10 +225,16 @@ export function useAudioMix({
     const win = musicWindow(audio.music, outputDurationMs ?? Number.MAX_SAFE_INTEGER)
     const inWin = Boolean(win && outputMs >= win.startMs && outputMs < win.endMs)
     if (musicRate != null && Number.isFinite(musicRate) && music.playbackRate !== musicRate) music.playbackRate = musicRate
+    // G2: a looping bed ("Fit to length") wraps to the media start, like `-stream_loop -1`.
+    const loop = Boolean(audio.music.loop)
+    if (music.loop !== loop) music.loop = loop
+    const mediaMs = Number.isFinite(music.duration) && music.duration > 0 ? music.duration * 1000 : null
     if (playing && win && inWin) {
       void ctx.resume()
-      const target = (outputMs - win.startMs + win.inMs) / 1000
-      if (music.paused || Math.abs(music.currentTime - target) > 0.3) music.currentTime = target
+      const target = (musicMediaMsAt(audio.music, outputMs, outputDurationMs ?? Number.MAX_SAFE_INTEGER, mediaMs) ?? 0) / 1000
+      const drift = Math.abs(music.currentTime - target)
+      const wrapped = mediaMs != null && loop ? Math.min(drift, mediaMs / 1000 - drift) : drift
+      if (music.paused || wrapped > 0.3) music.currentTime = target
       if (music.paused) void music.play().catch(() => {})
     } else {
       music.pause()
@@ -234,14 +257,24 @@ export function useAudioMix({
     const env = musicEnvRef.current
     if (env) {
       const win = audio?.music ? musicWindow(audio.music, outputDurationMs ?? Number.MAX_SAFE_INTEGER) : null
-      env.gain.value = hasMusicEnv && win ? volumeAt(edits, 'music', outputMs - win.startMs) : 1
+      const kf = hasMusicEnv && win ? volumeAt(edits, 'music', outputMs - win.startMs) : 1
+      // G2: the export's music fades (afade in / out) now play in preview too.
+      const fade = audio?.music && outputDurationMs ? musicFadeAt(audio.music, outputMs, outputDurationMs) : 1
+      env.gain.value = kf * fade
     }
   }, [audio?.music, edits, hasMusicEnv, hasVoiceEnv, outputDurationMs, outputMs, videoRef])
 
   // E2: SFX play in preview at atMs (previously never scheduled). Re-scheduled on play / seek.
   // G1b3: + the SFX volume envelopes (`sfx:<id>` keyframes), so editing one re-schedules.
   const sfxEnvKey = JSON.stringify((edits.keyframes ?? []).filter((k) => k.target.startsWith('sfx:')))
-  const sfxKey = sfxCues.map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}:${c.channel ?? ''}`).join('|') + sfxEnvKey + fxKey
+  const anyDuck = sfxCues.some((c) => c.duckDepth != null)
+  const sfxKey =
+    sfxCues
+      .map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}:${c.channel ?? ''}:${c.fadeInMs ?? 0}:${c.fadeOutMs ?? 0}:${c.duckDepth ?? ''}`)
+      .join('|') +
+    sfxEnvKey +
+    fxKey +
+    (anyDuck ? `#w${words.length}` : '')
   const stopSfx = () => {
     for (const n of sfxNodesRef.current) {
       try {
@@ -253,6 +286,8 @@ export function useAudioMix({
     sfxNodesRef.current = []
     sfxAnchorRef.current = null
   }
+  /** G2: the spoken words in OUTPUT ms (ducked clips dip under them). */
+  const duckCaptionWords = () => buildCaptionWords(words, edits)
   const scheduleSfx = (fromMs: number) => {
     stopSfx()
     if (!sfxCues.length) return
@@ -272,14 +307,20 @@ export function useAudioMix({
       // G1b3: SFX envelope — sampled every 20 ms of the cue as linear ramps (any ease matches the
       // export's per-frame volume expression to within a ramp step).
       const env = findTrack(edits, `sfx:${cue.generationId}`, 'volume')
-      if (env && (env.points.length || env.value != null)) {
-        const lenMs = cue.buffer.duration * 1000
+      const hasEnv = Boolean(env && (env.points.length || env.value != null))
+      if (hasEnv || clipHasGainCurve(cue)) {
+        // G2: one curve = volume × envelope × fades × ducking (clipGainAt), on the clip's play length.
+        const lenMs = playS * 1000
         const local0 = Math.max(0, fromMs - cue.atMs)
         const t0 = ctx.currentTime + Math.max(0, cue.atMs - fromMs) / 1000 / rate
         const at = (local: number) => t0 + (local - local0) / 1000 / rate
-        g.gain.setValueAtTime(cue.volume * (trackValueAt(env, 'volume', local0) / 100), ctx.currentTime)
-        for (let l = local0 + 20, n = 0; l <= lenMs && n < 2000; l += 20, n++) {
-          g.gain.linearRampToValueAtTime(cue.volume * (trackValueAt(env, 'volume', l) / 100), at(l))
+        const capWords = cue.duckDepth != null ? duckCaptionWords() : undefined
+        const gainAt = (l: number) =>
+          clipGainAt({ cue, localMs: l, lenMs, envPct: hasEnv ? trackValueAt(env!, 'volume', l) : undefined, words: capWords })
+        const step = Math.max(CURVE_STEP_MS, (lenMs - local0) / CURVE_MAX_POINTS)
+        g.gain.setValueAtTime(gainAt(local0), ctx.currentTime)
+        for (let l = local0 + step, n = 0; l <= lenMs + 0.5 && n < CURVE_MAX_POINTS; l += step, n++) {
+          g.gain.linearRampToValueAtTime(gainAt(Math.min(l, lenMs)), at(Math.min(l, lenMs)))
         }
       }
       // G1c: split-stereo channel pick, then the cue's audio-track chain (bus).

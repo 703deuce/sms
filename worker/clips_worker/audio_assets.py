@@ -6,6 +6,8 @@ from pathlib import Path
 
 from clips_worker.storage import download_object
 
+AUDIO_FADE_MAX_MS = 10_000  # TS AUDIO_FADE_MAX_MS
+
 
 
 def _sfx_trim(item: dict) -> tuple[int, int | None]:
@@ -19,6 +21,57 @@ def _sfx_trim(item: dict) -> tuple[int, int | None]:
     except (TypeError, ValueError):
         d = None
     return in_ms, (d if d is not None and d >= 100 else None)
+
+def _sfx_fx(item: dict) -> dict | None:
+    """G2: per-clip fades / ducking (TS ClipAudioSfx.fadeInMs / fadeOutMs / duckDepth)."""
+
+    def ms(v) -> int:
+        try:
+            n = int(round(float(v)))
+        except (TypeError, ValueError):
+            return 0
+        return max(0, min(AUDIO_FADE_MAX_MS, n))
+
+    fi, fo = ms(item.get("fadeInMs")), ms(item.get("fadeOutMs"))
+    duck = None
+    if item.get("duckDepth") is not None:
+        try:
+            duck = max(0.0, min(1.0, float(item.get("duckDepth"))))
+        except (TypeError, ValueError):
+            duck = None
+    if not fi and not fo and duck is None:
+        return None
+    return {"fade_in_ms": fi, "fade_out_ms": fo, "duck_depth": duck}
+
+
+def _media_len_ms(path: Path) -> int | None:
+    """Audio length (ms) for a fade-out on a clip with no explicit play length."""
+    import subprocess
+
+    try:
+        out = subprocess.check_output(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
+            text=True,
+            timeout=30,
+        )
+        return int(round(float(out.strip()) * 1000))
+    except Exception:
+        return None
+
+
+def _with_play_len(fx: dict | None, path: Path, trim: tuple[int, int | None]) -> dict | None:
+    if not fx or not (fx.get("fade_in_ms") or fx.get("fade_out_ms")):
+        return fx
+    # Same as the preview: the play length is durMs capped by the media after the in-point.
+    in_ms, dur = trim
+    full = _media_len_ms(path)
+    rest = None if full is None else max(0, full - in_ms)
+    if dur is None:
+        dur = rest
+    elif rest is not None:
+        dur = min(dur, rest)
+    return {**fx, "play_ms": dur}
+
 
 def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = None) -> dict:
     audio = edits.get("audio") or {}
@@ -40,6 +93,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
                 "startMs": music.get("startMs"),
                 "endMs": music.get("endMs"),
                 "inMs": music.get("inMs"),
+                "loop": music.get("loop") is True,  # G2 Fit to length
             }
     elif music and music.get("generationId"):
         with conn.cursor() as cur:
@@ -57,12 +111,14 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
                 "startMs": music.get("startMs"),
                 "endMs": music.get("endMs"),
                 "inMs": music.get("inMs"),
+                "loop": music.get("loop") is True,  # G2 Fit to length
             }
 
     sfx_paths: list[tuple[Path, int, float]] = []
     sfx_ids: list[str] = []  # G1b3: parallel to sfx_paths (generationId → `sfx:<id>` envelope)
     sfx_trims: list[tuple[int, int | None]] = []  # G1b3: (inMs, durMs) — detached clip audio
     sfx_channels: list[str | None] = []  # G1c: 'L' / 'R' (split stereo) or None
+    sfx_fx: list[dict | None] = []  # G2: fades / ducking per clip
     for i, item in enumerate(sfx_list):
         if item.get("uploadId"):
             up = (media or {}).get(str(item["uploadId"]))
@@ -71,6 +127,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
                 sfx_ids.append(str(item.get("generationId") or ""))
                 sfx_trims.append(_sfx_trim(item))
                 sfx_channels.append(item.get("channel") if item.get("channel") in ("L", "R") else None)
+                sfx_fx.append(_with_play_len(_sfx_fx(item), up, sfx_trims[-1]))
             continue
         gid = item.get("generationId")
         if not gid:
@@ -86,6 +143,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
         sfx_ids.append(str(gid))
         sfx_trims.append(_sfx_trim(item))
         sfx_channels.append(item.get("channel") if item.get("channel") in ("L", "R") else None)
+        sfx_fx.append(_with_play_len(_sfx_fx(item), local, sfx_trims[-1]))
 
     studio_path = None
     studio_mix = None
@@ -120,6 +178,7 @@ def load_audio_assets(conn, edits: dict, work_dir: Path, media: dict | None = No
         "sfx_ids": sfx_ids,
         "sfx_trims": sfx_trims,
         "sfx_channels": sfx_channels,
+        "sfx_fx": sfx_fx,
         "studio_path": studio_path,
         "studio_mix": studio_mix,
         "studio_source_offset_ms": studio_source_offset_ms,

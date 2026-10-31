@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { decodePeaksFile } from '@/lib/clips/editor/editor-assets'
+import { detectBeats, monoSamples } from '@/lib/clips/editor/beats'
 
-export type AudioPeaks = { peaks: number[]; peaksPerSec: number; durationMs: number }
+/** G2: `beatsMs` / `bpm` (media ms) when the hook was asked for beats (`opts.beats`). */
+export type AudioPeaks = { peaks: number[]; peaksPerSec: number; durationMs: number; beatsMs?: number[]; bpm?: number }
 
 const EMPTY: AudioPeaks = { peaks: [], peaksPerSec: 0, durationMs: 0 }
 
@@ -16,11 +18,12 @@ export function useAudioPeaks(
   url: string | null | undefined,
   peaksPerSec = 40,
   maxBuckets = 12_000,
-  opts?: { peaksUrl?: string | null; skipDecode?: boolean },
+  opts?: { peaksUrl?: string | null; skipDecode?: boolean; beats?: boolean },
 ): AudioPeaks {
   const [state, setState] = useState<AudioPeaks>(EMPTY)
   const peaksUrl = opts?.peaksUrl ?? null
   const skipDecode = opts?.skipDecode === true
+  const wantBeats = opts?.beats === true
   useEffect(() => {
     if (peaksUrl) {
       let cancelled = false
@@ -50,26 +53,10 @@ export function useAudioPeaks(
         const ctx = new AudioContext()
         const decoded = await ctx.decodeAudioData(buf.slice(0))
         await ctx.close()
-        const ch = decoded.getChannelData(0)
-        const durationMs = decoded.duration * 1000
-        const buckets = Math.max(1, Math.min(maxBuckets, Math.round(decoded.duration * peaksPerSec)))
-        const block = Math.max(1, Math.floor(ch.length / buckets))
-        const out: number[] = new Array(buckets)
-        let max = 0.001
-        for (let i = 0; i < buckets; i++) {
-          let peak = 0
-          const start = i * block
-          const end = Math.min(ch.length, start + block)
-          for (let j = start; j < end; j++) {
-            const v = Math.abs(ch[j]!)
-            if (v > peak) peak = v
-          }
-          out[i] = peak
-          if (peak > max) max = peak
-        }
-        if (!cancelled) {
-          setState({ peaks: out.map((p) => p / max), peaksPerSec: buckets / Math.max(0.001, decoded.duration), durationMs })
-        }
+        const p = peaksFromSamples(decoded.getChannelData(0), decoded.duration, peaksPerSec, maxBuckets)
+        // G2: local beat detection on the same decode (no extra download, no API).
+        const grid = wantBeats ? detectBeats(monoSamples(decoded), decoded.sampleRate) : null
+        if (!cancelled) setState(grid ? { ...p, beatsMs: grid.beatsMs, bpm: grid.bpm } : p)
       } catch {
         if (!cancelled) setState(EMPTY)
       }
@@ -78,8 +65,29 @@ export function useAudioPeaks(
     return () => {
       cancelled = true
     }
-  }, [url, peaksPerSec, maxBuckets, peaksUrl, skipDecode])
+  }, [url, peaksPerSec, maxBuckets, peaksUrl, skipDecode, wantBeats])
   return state
+}
+
+/** Normalised peak envelope of one channel (`durationSec` long) at ~`peaksPerSec`. */
+export function peaksFromSamples(ch: Float32Array, durationSec: number, peaksPerSec: number, maxBuckets = 12_000): AudioPeaks {
+  const durationMs = durationSec * 1000
+  const buckets = Math.max(1, Math.min(maxBuckets, Math.round(durationSec * peaksPerSec)))
+  const block = Math.max(1, Math.floor(ch.length / buckets))
+  const out: number[] = new Array(buckets)
+  let max = 0.001
+  for (let i = 0; i < buckets; i++) {
+    let peak = 0
+    const start = i * block
+    const end = Math.min(ch.length, start + block)
+    for (let j = start; j < end; j++) {
+      const v = Math.abs(ch[j]!)
+      if (v > peak) peak = v
+    }
+    out[i] = peak
+    if (peak > max) max = peak
+  }
+  return { peaks: out.map((p) => p / max), peaksPerSec: buckets / Math.max(0.001, durationSec), durationMs }
 }
 
 /** Down-sample the peaks between media times [fromMs, toMs) into `bars` values. */

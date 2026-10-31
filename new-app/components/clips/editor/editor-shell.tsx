@@ -1886,6 +1886,8 @@ export function EditorShell({
             mediaOffsetMs={mediaOffsetMs}
             musicUrl={musicUrl}
             sfxDurationsMs={sfxPreview.durationsMs}
+            sfxPeaks={sfxPreview.peaks}
+            sfxBeatsMs={sfxPreview.beatsMs}
             onOpenCover={() => selectPanel('thumbnail')}
             onSelectionChange={onTimelineSelection}
             onDropMedia={onDropMedia}

@@ -20,6 +20,7 @@ def build_audio_filter(
     sfx_volume_exprs: list[str | None] | None = None,
     sfx_trims: list | None = None,
     track_fx: dict | None = None,
+    sfx_fx: list | None = None,
 ) -> tuple[str, str]:
     """
     Returns (filter_complex, audio_map_label).
@@ -33,7 +34,8 @@ def build_audio_filter(
     FO = max(0.0, float(fade_out_s))
     ratio = 1.0 + 7.0 * D
 
-    parts: list[str] = ["[0:a]asplit=2[sp][sc]"]
+    ducks = duck_indices(sfx_fx, len(sfx_specs))
+    parts: list[str] = [voice_split("[0:a]", ducks)]
     mix_inputs: list[str] = ["[sp]"]
 
     if has_music:
@@ -52,13 +54,63 @@ def build_audio_filter(
         at_ms = int(spec.get("at_ms", 0))
         vol = float(spec.get("volume", 0.8))
         label = f"s{i}"
-        parts.append(f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
-        mix_inputs.append(f"[{label}]")
+        parts.append(f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}{clip_fade(sfx_fx, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
+        mix_inputs.append(clip_duck(parts, label, sfx_fx, i, ducks))
     mix_inputs = sfx_buses(parts, mix_inputs, len(sfx_specs), track_fx)
 
     n = len(mix_inputs)
     parts.append(f"{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0,alimiter=limit=0.95[aout]")
     return ";".join(parts), "[aout]"
+
+
+def duck_indices(sfx_fx: list | None, n: int) -> list[int]:
+    """G2: clips ducked under the voice (duck_depth > 0), in SFX order."""
+    out = []
+    for i in range(n):
+        fx = sfx_fx[i] if sfx_fx and i < len(sfx_fx) else None
+        if fx and fx.get("duck_depth") is not None and float(fx["duck_depth"]) > 0:
+            out.append(i)
+    return out
+
+
+def voice_split(src: str, ducks: list[int]) -> str:
+    """Voice → [sp] (mix) + [sc] (music sidechain) + one [dk<i>] sidechain per ducked clip (G2)."""
+    extra = "".join(f"[dk{i}]" for i in ducks)
+    return f"{src}asplit={2 + len(ducks)}[sp][sc]{extra}"
+
+
+def clip_fade(sfx_fx: list | None, i: int) -> str:
+    """G2: clip fades on its own play length, after the trim (local t = 0), before adelay.
+    Linear `afade` (default curve tri); each fade at most half the play length (TS fadeGain)."""
+    fx = sfx_fx[i] if sfx_fx and i < len(sfx_fx) else None
+    if not fx:
+        return ""
+    fi = max(0, int(fx.get("fade_in_ms") or 0)) / 1000.0
+    fo = max(0, int(fx.get("fade_out_ms") or 0)) / 1000.0
+    play = fx.get("play_ms")
+    ln = None if play is None else max(0.0, int(play) / 1000.0)
+    if ln is not None:
+        fi = min(fi, ln / 2)
+        fo = min(fo, ln / 2)
+    out = ""
+    if fi > 0.0005:
+        out += f"afade=t=in:st=0:d={fi:.3f},"
+    if fo > 0.0005 and ln is not None:
+        out += f"afade=t=out:st={max(0.0, ln - fo):.3f}:d={fo:.3f},"
+    # Local time from 0 (an untrimmed file can start at a small non-zero pts).
+    return f"asetpts=PTS-STARTPTS,{out}" if out else ""
+
+
+def clip_duck(parts: list[str], label: str, sfx_fx: list | None, i: int, ducks: list[int]) -> str:
+    """G2: duck one clip under the voice, same compressor as the music bed (ratio 1 + 7·depth)."""
+    if i not in ducks:
+        return f"[{label}]"
+    d = max(0.0, min(1.0, float(sfx_fx[i]["duck_depth"])))
+    ratio = 1.0 + 7.0 * d
+    parts.append(
+        f"[{label}][dk{i}]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[{label}d]"
+    )
+    return f"[{label}d]"
 
 
 def sfx_chan(track_fx: dict | None, i: int) -> str:
@@ -156,6 +208,12 @@ def music_chain(
     )
 
 
+def music_input_args(music_path: Path, loop: bool) -> list[str]:
+    """G2 Fit to length: a looping bed repeats its media (`-stream_loop -1`); music_chain's atrim /
+    the whole-clip atrim bounds the length, so the infinite input always ends."""
+    return (["-stream_loop", "-1"] if loop else []) + ["-i", str(music_path)]
+
+
 def apply_voice_mute(video: Path, out_video: Path) -> None:
     """E2 Voice lane muted: silence the speech track (video copied)."""
     subprocess.check_call(
@@ -183,10 +241,13 @@ def apply_audio_mix(
     sfx_volume_exprs: list[str | None] | None = None,
     sfx_trims: list | None = None,
     track_fx: dict | None = None,
+    sfx_fx: list | None = None,
+    music_loop: bool = False,
 ) -> None:
     has_music = music_path is not None and music_path.is_file()
     sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
     fc, alabel = build_audio_filter(
+        sfx_fx=sfx_fx,
         track_fx=track_fx,
         music_volume_expr=music_volume_expr,
         sfx_volume_exprs=sfx_volume_exprs,
@@ -204,7 +265,7 @@ def apply_audio_mix(
 
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video)]
     if has_music:
-        cmd.extend(["-i", str(music_path)])
+        cmd.extend(music_input_args(music_path, music_loop))
     for path, _, _ in sfx_paths:
         cmd.extend(["-i", str(path)])
 
@@ -410,6 +471,8 @@ def apply_dub_speech_mix(
     sfx_volume_exprs: list[str | None] | None = None,
     sfx_trims: list | None = None,
     track_fx: dict | None = None,
+    sfx_fx: list | None = None,
+    music_loop: bool = False,
 ) -> None:
     """Replace speech with dub audio; duck music against dub track.
     E3: speech_volume_expr = Voice-lane volume envelope (the dub is the voice)."""
@@ -422,7 +485,8 @@ def apply_dub_speech_mix(
     FO = max(0.0, float(fade_out_s))
     ratio = 1.0 + 7.0 * D
     voice_env = f"volume='{speech_volume_expr}':eval=frame," if speech_volume_expr else ""
-    parts = [f"[1:a]{voice_env}asplit=2[sp][sc]"]
+    ducks = duck_indices(sfx_fx, len(sfx_specs))
+    parts = [voice_split(f"[1:a]{voice_env}", ducks)]
     mix_inputs = ["[sp]"]
     if has_music:
         parts.append(music_chain(2, L, V, FI, FO, music_window, "mv", music_volume_expr))
@@ -439,15 +503,15 @@ def apply_dub_speech_mix(
         at_ms = int(spec.get("at_ms", 0))
         vol = float(spec.get("volume", 0.8))
         label = f"s{i}"
-        parts.append(f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
-        mix_inputs.append(f"[{label}]")
+        parts.append(f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}{clip_fade(sfx_fx, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
+        mix_inputs.append(clip_duck(parts, label, sfx_fx, i, ducks))
     mix_inputs = sfx_buses(parts, mix_inputs, len(sfx_specs), track_fx)
     n = len(mix_inputs)
     parts.append(f"{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0,alimiter=limit=0.95[aout]")
     fc = ";".join(parts)
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(video), "-i", str(dub_audio)]
     if has_music:
-        cmd.extend(["-i", str(music_path)])
+        cmd.extend(music_input_args(music_path, music_loop))
     for path, _, _ in sfx_paths:
         cmd.extend(["-i", str(path)])
     cmd.extend(

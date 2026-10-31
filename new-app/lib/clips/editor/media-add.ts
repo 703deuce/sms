@@ -8,6 +8,7 @@ import { DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME } from '@/lib/clips/audio'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { outputToSource, type Timebase } from '@/lib/clips/editor/clip-timeline'
 import { isDefaultTrackId, setItemsTrack } from '@/lib/clips/editor/tracks'
+import { addMusicClip } from '@/lib/clips/editor/audio-clip'
 import {
   IMAGE_DEFAULT_MS,
   SOURCE_SEG_MIN_MS,
@@ -92,7 +93,7 @@ export type AddResult = { edits: ClipEditsV2; message?: string } | { edits: null
  * - video: a source segment from the playhead to the end of the media (stills 3 s, synced angles to
  *   the end of the Video item), never past the Video item under the playhead.
  * - broll: an upload B-roll item (video or still) at the playhead.
- * - music: replaces the music track (one music track, as before) with the upload.
+ * - music: the music bed; G2: when one is already there, a music-style clip on a "Music N" track.
  * - sfx: one cue at the playhead.
  */
 /**
@@ -162,6 +163,13 @@ export function addMediaToLane(
   const audio = edits.audio ?? { music: null, sfx: [] }
   if (lane === 'music') {
     const len = mediaLenMs(item, tb.durationMs)
+    if (audio.music && audio.music.generationId !== item.refId) {
+      // G2: a second song never replaces the first — it lands on a "Music 2" audio track.
+      const generationId = sfxPlacementId(item.refId, audio.sfx.map((s) => s.generationId))
+      const r = addMusicClip(edits, { generationId, uploadId: item.refId, atMs: outMs, lenMs: len, durationMs: tb.durationMs })
+      if (!r) return { edits: null, message: 'Not enough room at the playhead' }
+      return { edits: r.edits, message: `Added on ${r.trackName} (the Music track already has a song)` }
+    }
     return {
       edits: {
         ...edits,

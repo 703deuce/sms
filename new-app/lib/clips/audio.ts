@@ -12,6 +12,8 @@ export type ClipAudioMusic = {
   endMs?: number
   /** Music media in-point at startMs (left-trim keeps content anchored). */
   inMs?: number
+  /** G2: loop the media to fill the window ("Fit to length"). Export: `-stream_loop -1`. */
+  loop?: boolean
 }
 
 export type ClipAudioSfx = {
@@ -25,6 +27,11 @@ export type ClipAudioSfx = {
   durMs?: number
   /** G1c split stereo: play only this channel of the media, as mono. */
   channel?: 'L' | 'R'
+  /** G2: fades on the clip's own play length (linear, like ffmpeg `afade`). */
+  fadeInMs?: number
+  fadeOutMs?: number
+  /** G2: duck this clip under the voice (music-style); absent = not ducked. */
+  duckDepth?: number
 }
 
 export type ClipStudioSound = {
@@ -44,6 +51,8 @@ export const DEFAULT_DUCK_DEPTH = 0.7
 export const DEFAULT_MUSIC_FADE_IN_MS = 500
 export const DEFAULT_MUSIC_FADE_OUT_MS = 1000
 export const DEFAULT_SFX_VOLUME = 0.8
+/** G2: longest fade handle on one audio clip. */
+export const AUDIO_FADE_MAX_MS = 10_000
 /** Default Studio Sound mix for clip editor (low; user can raise). */
 export const DEFAULT_STUDIO_SOUND_MIX = 0.35
 
@@ -97,6 +106,7 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         ...optionalMs('startMs', m.startMs),
         ...optionalMs('endMs', m.endMs),
         ...optionalMs('inMs', m.inMs),
+        ...(m.loop === true ? { loop: true } : {}),
       }
     }
   }
@@ -132,6 +142,9 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         ...(num(s.inMs, 0) > 0 ? { inMs: Math.round(num(s.inMs, 0)) } : {}),
         ...(num(s.durMs, 0) >= 100 ? { durMs: Math.round(num(s.durMs, 0)) } : {}),
         ...(s.channel === 'L' || s.channel === 'R' ? { channel: s.channel } : {}),
+        ...fadeMs('fadeInMs', s.fadeInMs),
+        ...fadeMs('fadeOutMs', s.fadeOutMs),
+        ...(s.duckDepth != null && Number.isFinite(Number(s.duckDepth)) ? { duckDepth: clamp01(s.duckDepth, DEFAULT_DUCK_DEPTH) } : {}),
       }
     })
     .filter(Boolean) as ClipAudioSfx[]
@@ -156,6 +169,13 @@ function optionalMs<K extends 'startMs' | 'endMs' | 'inMs'>(key: K, v: unknown):
   const n = Number(v)
   if (!Number.isFinite(n) || n < 0) return {}
   return { [key]: Math.round(n) } as Partial<Record<K, number>>
+}
+
+/** G2: a clip fade (whole ms, 1..AUDIO_FADE_MAX_MS); 0 / junk = no fade (key omitted). */
+function fadeMs<K extends 'fadeInMs' | 'fadeOutMs'>(key: K, v: unknown): Partial<Record<K, number>> {
+  const n = Math.round(Number(v))
+  if (!Number.isFinite(n) || n <= 0) return {}
+  return { [key]: Math.min(AUDIO_FADE_MAX_MS, n) } as Partial<Record<K, number>>
 }
 
 function clamp01(v: unknown, fallback: number): number {

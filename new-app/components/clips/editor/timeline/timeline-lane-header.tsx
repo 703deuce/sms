@@ -90,6 +90,20 @@ export function TimelineLaneHeader({
           {state.muted ? <VolumeX className="size-3 text-amber-500" /> : <Volume2 className="size-3" />}
         </button>
       ) : null}
+      {caps.solo ? (
+        <button
+          type="button"
+          className={`${btn} text-[9px] font-bold ${state.soloed ? 'bg-amber-500/20 text-amber-500' : ''}`}
+          disabled={!onToggle}
+          onClick={() => onToggle?.({ soloed: !state.soloed })}
+          aria-pressed={Boolean(state.soloed)}
+          aria-label={`${state.soloed ? 'Unsolo' : 'Solo'} ${name}`}
+          title={`${state.soloed ? 'Unsolo' : 'Solo'} ${name}: only soloed audio tracks play (preview + export)`}
+          data-testid={`timeline-lane-solo-${tk}`}
+        >
+          S
+        </button>
+      ) : null}
       {caps.hide ? (
         <button
           type="button"
