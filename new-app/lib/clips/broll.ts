@@ -5,10 +5,37 @@ export type BrollItem =
 export const BROLL_MIN_MS = 1000
 export const BROLL_DEFAULT_SHOT_MS = 3000
 
+/**
+ * E1fix: B-roll times are integer output ms everywhere (API zod schemas, worker `int(...)`).
+ * The playhead is a float (video.currentTime * 1000), so every write path rounds through this.
+ */
+export function toIntMs(ms: number): number {
+  const n = Number(ms)
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0
+}
+
 export function clampBrollItem(item: BrollItem, clipEndMs: number): BrollItem {
-  const startMs = Math.max(0, Math.min(item.startMs, clipEndMs - BROLL_MIN_MS))
-  const endMs = Math.max(startMs + BROLL_MIN_MS, Math.min(item.endMs, clipEndMs))
+  const endBound = Math.floor(Number.isFinite(clipEndMs) ? clipEndMs : 0)
+  const startMs = Math.max(0, Math.min(toIntMs(item.startMs), endBound - BROLL_MIN_MS))
+  const endMs = Math.max(startMs + BROLL_MIN_MS, Math.min(toIntMs(item.endMs), endBound))
   return { ...item, startMs, endMs }
+}
+
+/** Window for "Insert at playhead": integer ms, never past the clip end. */
+export function brollInsertWindow(
+  playheadMs: number,
+  clipEndMs: number,
+  shotMs: number = BROLL_DEFAULT_SHOT_MS,
+): { startMs: number; endMs: number } {
+  const startMs = toIntMs(playheadMs)
+  const endBound = Math.max(0, Math.floor(Number.isFinite(clipEndMs) ? clipEndMs : 0))
+  return { startMs, endMs: Math.max(startMs, Math.min(startMs + shotMs, endBound)) }
+}
+
+/** Zod-friendly coercion for API bodies: accepts floats / numeric strings, stores integer ms. */
+export function coerceIntMs(v: unknown): unknown {
+  if (typeof v === 'string' && v.trim() !== '') v = Number(v)
+  return typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : v
 }
 
 export function normalizeBrollItems(raw: unknown, clipDurationMs: number): BrollItem[] {

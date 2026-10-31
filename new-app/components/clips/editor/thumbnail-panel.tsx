@@ -1,9 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { clipsFetch } from '@/lib/clips-api'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { coverJobActive, coverJobNotice, coverPollMs, type CoverJobRow } from '@/lib/clips/editor/cover-jobs'
 import { toast } from 'sonner'
 
 type ThumbRow = {
@@ -14,6 +16,7 @@ type ThumbRow = {
   picked: boolean
   downloadUrl: string | null
   status: string
+  error?: string | null
 }
 
 export function ThumbnailPanel({
@@ -30,22 +33,54 @@ export function ThumbnailPanel({
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<ThumbRow[]>([])
+  const [jobs, setJobs] = useState<CoverJobRow[]>([])
+  // E1fix: the job this panel started; cleared once it finishes (success or failure toast).
+  const [trackedJobId, setTrackedJobId] = useState<string | null>(null)
+  const pollErrorShown = useRef(false)
 
   const refresh = useCallback(async () => {
     try {
-      const data = await clipsFetch<{ items: ThumbRow[] }>(`/api/clips/clips/${clipId}/thumbnail`)
-      setItems(data.items)
+      const data = await clipsFetch<{ items: ThumbRow[]; jobs?: CoverJobRow[] }>(`/api/clips/clips/${clipId}/thumbnail`)
+      setItems(data.items ?? [])
+      setJobs(data.jobs ?? [])
+      pollErrorShown.current = false
+    } catch (e) {
+      // E1fix: surface poll failures once (was swallowed, so the panel just stayed empty).
+      if (!pollErrorShown.current) {
+        pollErrorShown.current = true
+        toast.error(e instanceof Error ? `Could not load covers: ${e.message}` : 'Could not load covers')
+      }
     } finally {
       setLoading(false)
     }
   }, [clipId])
 
+  const runningJob = jobs.find((j) => coverJobActive(j.status)) ?? null
+  const pollMs = coverPollMs(trackedJobId ? [{ id: trackedJobId, status: 'RUNNING' }, ...jobs] : jobs, items)
+
   useEffect(() => {
     setLoading(true)
-    void refresh().catch(() => setLoading(false))
-    const t = setInterval(() => void refresh().catch(() => {}), 8000)
-    return () => clearInterval(t)
+    void refresh()
   }, [refresh])
+
+  useEffect(() => {
+    const t = setInterval(() => void refresh(), pollMs)
+    return () => clearInterval(t)
+  }, [refresh, pollMs])
+
+  // A job started before this panel mounted (or by another tab) is tracked too.
+  useEffect(() => {
+    if (!trackedJobId && runningJob) setTrackedJobId(runningJob.id)
+  }, [runningJob, trackedJobId])
+
+  useEffect(() => {
+    const notice = coverJobNotice(trackedJobId, jobs, items)
+    if (!notice) return
+    if (notice.kind === 'error') toast.error(notice.message)
+    else if (notice.kind === 'success') toast.success(notice.message)
+    else toast.message(notice.message)
+    setTrackedJobId(null)
+  }, [trackedJobId, jobs, items])
 
   useEffect(() => {
     const picked = items.find((t) => t.picked)
@@ -57,11 +92,15 @@ export function ThumbnailPanel({
   const generate = async () => {
     setBusy(true)
     try {
-      await clipsFetch(`/api/clips/clips/${clipId}/thumbnail`, {
+      const data = await clipsFetch<{ jobId?: string; alreadyRunning?: boolean }>(`/api/clips/clips/${clipId}/thumbnail`, {
         method: 'POST',
         body: JSON.stringify({ aspect, titleOverride: titleOverride.trim() || undefined }),
       })
-      toast.success('Thumbnail generation started')
+      if (!data?.jobId) throw new Error('Cover job was not created')
+      setTrackedJobId(data.jobId)
+      toast.message(
+        data.alreadyRunning ? 'Covers are already generating (about a minute)' : 'Generating 3 covers (about a minute)…',
+      )
       void refresh()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Generate failed')
@@ -71,14 +110,20 @@ export function ThumbnailPanel({
   }
 
   const setCover = async (thumbnailId: string) => {
-    await clipsFetch(`/api/clips/clips/${clipId}/thumbnail/pick`, {
-      method: 'POST',
-      body: JSON.stringify({ thumbnailId }),
-    })
-    onEdits({ ...edits, thumbnailId })
-    toast.success('Cover updated')
-    void refresh()
+    try {
+      await clipsFetch(`/api/clips/clips/${clipId}/thumbnail/pick`, {
+        method: 'POST',
+        body: JSON.stringify({ thumbnailId }),
+      })
+      onEdits({ ...edits, thumbnailId })
+      toast.success('Cover updated')
+      void refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not set cover')
+    }
   }
+
+  const generating = Boolean(trackedJobId || runningJob)
 
   return (
     <div className="space-y-3 p-3 text-sm">
@@ -93,7 +138,15 @@ export function ThumbnailPanel({
         onChange={(e) => setTitleOverride(e.target.value)}
       />
       <p className="text-xs text-muted-foreground">About $0.18 (3 × 2K images + vision)</p>
-      <Button size="sm" disabled={busy} onClick={() => void generate()}>Generate</Button>
+      <Button size="sm" disabled={busy || generating} onClick={() => void generate()} data-testid="cover-generate">
+        {busy || generating ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
+        {generating ? 'Generating…' : 'Generate'}
+      </Button>
+      {generating ? (
+        <p className="text-xs text-muted-foreground" role="status" aria-live="polite" data-testid="cover-generating">
+          Picking frames and rendering 3 covers — about a minute. You can keep editing.
+        </p>
+      ) : null}
       <div className="grid grid-cols-1 gap-2">
         {loading && items.length === 0 ? (
           <>
@@ -112,7 +165,9 @@ export function ThumbnailPanel({
             {t.downloadUrl ? (
               <img src={t.downloadUrl} alt="" className="mb-2 aspect-video w-full rounded object-cover" />
             ) : (
-              <div className="mb-2 flex h-24 items-center justify-center rounded bg-muted text-xs">{t.status}</div>
+              <div className="mb-2 flex h-24 items-center justify-center rounded bg-muted text-xs" title={t.error ?? undefined}>
+                {t.status === 'FAILED' ? 'Failed' : t.status === 'READY' ? 'Loading…' : 'Rendering…'}
+              </div>
             )}
             <p className="text-xs text-muted-foreground">{t.titleText || 'Thumbnail'}</p>
             <div className="mt-2 flex gap-2">

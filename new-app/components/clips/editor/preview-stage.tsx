@@ -180,6 +180,16 @@ export function PreviewStage({
   const sceneSrcMsRef = useRef<number | null>(null)
   const sceneSegRef = useRef(-1)
   const brollRefs = useRef<Record<string, HTMLVideoElement | null>>({})
+  // E1fix: the rAF tick below is mounted once ([] deps). Reading the `brollMedia` prop there froze
+  // it at the first render, so B-roll inserted after load (new media rows) stayed at opacity 0 in
+  // the preview while export showed it. Read the live list through a ref instead.
+  const brollMediaRef = useRef(brollMedia)
+  brollMediaRef.current = brollMedia
+  // E1fix: last source time read from the bound main <video>; a layout/template switch remounts that
+  // element (keyed by layout mode), and without this the new element starts at 0:00.
+  const lastSrcMsRef = useRef<number | null>(null)
+  const boundVideoRef = useRef<HTMLVideoElement | null>(null)
+  const seekKeyRef = useRef<string | null>(null)
   const onTickRef = useRef(onTick)
   const boxSizeRef = useRef({ w: 0, h: 0 })
   const captionTimeRef = useRef(0)
@@ -194,7 +204,21 @@ export function PreviewStage({
     const el = videoRefInner.current
     if (!el) return
     ;(videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
-  }, [videoRef, cropPreview, letterboxPreview, aspect, videoUrl, layoutMode, edits.layout?.template?.id])
+    const keepSrcMs = lastSrcMsRef.current
+    if (boundVideoRef.current === el || keepSrcMs == null) {
+      boundVideoRef.current = el
+      return
+    }
+    // E1fix: a different <video> mounted (layout / template change): restore the playhead.
+    const restore = () => {
+      const t = videoTimeFromSourceMs(keepSrcMs, mediaOffsetMs)
+      if (Math.abs(el.currentTime - t) > 0.05) el.currentTime = t
+      boundVideoRef.current = el
+    }
+    if (el.readyState >= 1) restore()
+    else el.addEventListener('loadedmetadata', restore, { once: true })
+    return () => el.removeEventListener('loadedmetadata', restore)
+  }, [videoRef, cropPreview, letterboxPreview, aspect, videoUrl, layoutMode, edits.layout?.template?.id, mediaOffsetMs])
 
   useLayoutEffect(() => {
     const v = videoRefInner.current
@@ -281,7 +305,13 @@ export function PreviewStage({
         b.load()
       }
     }
-    const seekAll = videoTimeFromSourceMs(edits.trim.in, mediaOffsetMs)
+    // E1fix: only a new source / trim-in rewinds to trim.in. A layout / template / band change
+    // (which can remount the <video>) keeps the current playhead instead of jumping to 0:00.
+    const seekKey = `${videoUrl}|${edits.trim.in}`
+    const keepMs = lastSrcMsRef.current
+    const sameSource = seekKeyRef.current === seekKey
+    seekKeyRef.current = seekKey
+    const seekAll = videoTimeFromSourceMs(sameSource && keepMs != null ? keepMs : edits.trim.in, mediaOffsetMs)
     wrapRef.current?.querySelectorAll('video').forEach((el) => {
       el.muted = el !== v
       const seek = () => {
@@ -350,6 +380,7 @@ export function PreviewStage({
           }
         }
       }
+      if (v && v === boundVideoRef.current) lastSrcMsRef.current = src
       const segIdx = editorTemplateSegmentIndex(editsRef.current, aiMetaRef.current, src)
       if (segIdx !== sceneSegRef.current) {
         sceneSegRef.current = segIdx
@@ -364,7 +395,7 @@ export function PreviewStage({
       }
       const outMs = out
       for (const item of editsRef.current.broll || []) {
-        const media = brollMedia.find((m) => m.id === item.id)
+        const media = brollMediaRef.current.find((m) => m.id === item.id)
         const el = brollRefs.current[item.id]
         if (!el || !media?.url) continue
         const active = item.startMs <= outMs && outMs < item.endMs
@@ -498,6 +529,21 @@ export function PreviewStage({
 
   const brand = (edits.brand || {}) as ClipBrandEdits
   const pos = brand.logoPosition ?? 'TR'
+
+  // E1fix: B-roll covers the same region the export overlays it on. Template mode and plain
+  // layouts: the whole 9:16 frame (the T6 title band is burned on top after B-roll; its preview
+  // band is z-[26]). fit_top / stream headline: the video area under the band, because the worker
+  // overlays B-roll on the cut and then composes that into the band layout.
+  const brollRegionStyle = useMemo((): React.CSSProperties => {
+    if (!templatePreview && fitTopPreview && fitTopLayout && box.h > 0) {
+      const sy = box.h / fitTopLayout.playH
+      return { left: 0, right: 0, top: fitTopLayout.videoY * sy, height: fitTopLayout.videoH * sy }
+    }
+    if (!templatePreview && headlineBandTopFrac > 0) {
+      return { left: 0, right: 0, bottom: 0, top: `${headlineBandTopFrac * 100}%` }
+    }
+    return { inset: 0 }
+  }, [templatePreview, fitTopPreview, fitTopLayout, box.h, headlineBandTopFrac])
 
   return (
     <div ref={wrapRef} className="absolute inset-0 flex flex-col items-center justify-center">
@@ -814,15 +860,22 @@ export function PreviewStage({
           const media = brollMedia.find((m) => m.id === item.id)
           if (!media?.url) return null
           return (
-            <BrollPreviewVideo
+            <div
               key={`${item.id}:${media.url}`}
-              src={media.url}
-              videoRef={(el) => {
-                brollRefs.current[item.id] = el
-              }}
               className="pointer-events-none absolute z-[15] overflow-hidden"
-              style={{ inset: 0, opacity: 0 }}
-            />
+              style={brollRegionStyle}
+              data-testid="preview-broll"
+              data-broll-id={item.id}
+            >
+              <BrollPreviewVideo
+                src={media.url}
+                videoRef={(el) => {
+                  brollRefs.current[item.id] = el
+                }}
+                className="pointer-events-none absolute overflow-hidden"
+                style={{ inset: 0, opacity: 0 }}
+              />
+            </div>
           )
         })}
         {!compositePreview && brandLogoUrl && brand.logoKey && (

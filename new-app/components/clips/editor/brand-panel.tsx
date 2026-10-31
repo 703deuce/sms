@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { applyBrandTemplateToEdits } from '@/lib/clips/apply-brand'
+import { toast } from 'sonner'
+import { applyBrandTemplateToEdits, describeTemplateChange, templateAppliedMessage } from '@/lib/clips/apply-brand'
 import type { BrandTemplateSettings } from '@/lib/clips/brand'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { clipsFetch } from '@/lib/clips-api'
@@ -40,18 +41,23 @@ export function BrandPanel({
   }, [])
 
   useEffect(() => {
-    void refresh().catch(() => {})
+    void refresh().catch((e) => toast.error(e instanceof Error ? `Could not load templates: ${e.message}` : 'Could not load templates'))
   }, [refresh])
 
   const applyTemplate = (tpl: TemplateRow) => {
-    const next = applyBrandTemplateToEdits(edits, {
-      id: tpl.id,
-      logoKey: tpl.logoKey,
-      introVideoKey: tpl.introVideoKey,
-      outroVideoKey: tpl.outroVideoKey,
-      settings: tpl.settings,
-    })
-    onEdits(next)
+    try {
+      const next = applyBrandTemplateToEdits(edits, {
+        id: tpl.id,
+        logoKey: tpl.logoKey,
+        introVideoKey: tpl.introVideoKey,
+        outroVideoKey: tpl.outroVideoKey,
+        settings: tpl.settings,
+      })
+      onEdits(next)
+      toast.success(templateAppliedMessage(tpl.name, describeTemplateChange(edits, next)))
+    } catch (e) {
+      toast.error(e instanceof Error ? `Template could not be applied: ${e.message}` : 'Template could not be applied')
+    }
   }
 
   const patchBrand = (patch: Record<string, unknown>) => {
@@ -65,14 +71,16 @@ export function BrandPanel({
       </p>
       <Label className="text-xs font-medium">Template</Label>
       <Select
-        value={brand.templateId || ''}
+        // E1fix: `items` lets the trigger show the template name (Base UI renders the raw id otherwise).
+        items={templates.map((t) => ({ value: t.id, label: t.name }))}
+        value={brand.templateId || null}
         onValueChange={(v) => {
           if (typeof v !== 'string' || !v) return
           const tpl = templates.find((t) => t.id === v)
           if (tpl) applyTemplate(tpl)
         }}
       >
-        <SelectTrigger className="w-full">
+        <SelectTrigger className="w-full" data-testid="brand-template-select">
           <SelectValue placeholder="Select template…" />
         </SelectTrigger>
         <SelectContent>

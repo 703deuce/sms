@@ -36,7 +36,7 @@ describe('Timeline zoom controls (E1)', () => {
     const { getByTestId } = renderTimeline()
     expect(getByTestId('timeline-zoom-controls')).toBeTruthy()
     expect(getByTestId('timeline-zoom-label').textContent).toBe('100%')
-    expect(getByTestId('timeline-scroll').getAttribute('data-px-per-sec')).toBe('120')
+    expect(getByTestId('timeline-scroll').getAttribute('data-px-per-sec')).toBe('160')
   })
 
   it('zoom in / out change px per second and the track width', () => {
@@ -44,27 +44,27 @@ describe('Timeline zoom controls (E1)', () => {
     const track = getByTestId('timeline-track')
     const w0 = parseFloat(track.style.width)
     fireEvent.click(getByTestId('timeline-zoom-in'))
-    expect(getByTestId('timeline-scroll').getAttribute('data-px-per-sec')).toBe('150')
+    expect(getByTestId('timeline-scroll').getAttribute('data-px-per-sec')).toBe('200')
     expect(parseFloat(getByTestId('timeline-track').style.width)).toBeGreaterThan(w0)
     fireEvent.click(getByTestId('timeline-zoom-out'))
     fireEvent.click(getByTestId('timeline-zoom-out'))
-    expect(getByTestId('timeline-scroll').getAttribute('data-px-per-sec')).toBe('96')
+    expect(getByTestId('timeline-scroll').getAttribute('data-px-per-sec')).toBe('128')
   })
 
   it('+ / - keys zoom when the timeline has focus', () => {
     const { getByTestId } = renderTimeline()
     const scroll = getByTestId('timeline-scroll')
     fireEvent.keyDown(scroll, { key: '+' })
-    expect(scroll.getAttribute('data-px-per-sec')).toBe('150')
+    expect(scroll.getAttribute('data-px-per-sec')).toBe('200')
     fireEvent.keyDown(scroll, { key: '-' })
-    expect(scroll.getAttribute('data-px-per-sec')).toBe('120')
+    expect(scroll.getAttribute('data-px-per-sec')).toBe('160')
   })
 
   it('word chips show readable labels at default zoom (not just the first letter)', () => {
     const { getAllByTestId } = renderTimeline()
     const chips = getAllByTestId('timeline-word')
     expect(chips.length).toBeGreaterThan(10)
-    // 400ms at 120px/s = 48px -> full label rendered
+    // 400ms at 160px/s = 64px -> full label rendered
     expect(chips[0].textContent?.toLowerCase()).toContain('word0')
   })
 

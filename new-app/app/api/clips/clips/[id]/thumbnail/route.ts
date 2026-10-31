@@ -6,6 +6,9 @@ import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { createId } from '@/lib/supabase/id'
 
+/** Jobs older than this are not treated as in flight (worker died / stuck). */
+const THUMBNAIL_JOB_STALE_MS = 10 * 60 * 1000
+
 const bodySchema = z.object({
   aspect: z.enum(['9:16', '16:9']).default('9:16'),
   titleOverride: z.string().max(80).optional(),
@@ -20,6 +23,29 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const body = bodySchema.parse(await request.json())
     const prisma = getPrisma()
+    // E1fix: a second click while a cover job is still queued/running used to enqueue (and bill)
+    // another full job. Return the in-flight job instead.
+    const inflight = await prisma.clipJob.findFirst({
+      where: {
+        clipId,
+        projectId: clip.projectId,
+        type: 'THUMBNAIL',
+        status: { in: ['QUEUED', 'RUNNING'] },
+        createdAt: { gte: new Date(Date.now() - THUMBNAIL_JOB_STALE_MS) },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (inflight) {
+      return NextResponse.json({
+        data: {
+          jobId: inflight.id,
+          alreadyRunning: true,
+          estimatedCostUsd: 0,
+          message: 'Cover generation already running',
+        },
+      })
+    }
     const jobId = createId('job')
     await prisma.clipJob.create({
       data: {
@@ -77,10 +103,30 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
           picked: r.picked,
           downloadUrl: key ? await storage.createSignedDownloadUrl(key, 3600) : null,
           status: gen?.status || (key ? 'READY' : 'PENDING'),
+          error: gen?.status === 'FAILED' ? gen.error || 'Image generation failed' : null,
         }
       }),
     )
-    return NextResponse.json({ data: { items } })
+    // E1fix: expose the recent cover jobs so the panel can show progress and surface failures
+    // (before, a job that failed in the worker left the panel silently empty).
+    const jobs = await prisma.clipJob.findMany({
+      where: { clipId, projectId: clip.projectId, type: 'THUMBNAIL' },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: { id: true, status: true, error: true, createdAt: true, finishedAt: true },
+    })
+    return NextResponse.json({
+      data: {
+        items,
+        jobs: jobs.map((j: (typeof jobs)[number]) => ({
+          id: j.id,
+          status: j.status,
+          error: j.error,
+          createdAt: j.createdAt.toISOString(),
+          finishedAt: j.finishedAt ? j.finishedAt.toISOString() : null,
+        })),
+      },
+    })
   } catch (err) {
     return jsonError(err, 500)
   }
