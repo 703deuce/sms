@@ -218,6 +218,9 @@ export function TranscriptPanel({
     return endMs >= edits.trim.in && startMs <= edits.trim.out
   }
 
+  // FV2: full-length transcripts (thousands of words) render lazily in chunks; clips render as before.
+  const longTranscript = visible.length > TRANSCRIPT_LAZY_MIN_WORDS && !reorderActive
+
   type Block = { spk: string; speakerNum: number; words: SourceWord[] }
   const blocks: Block[] = []
   for (const w of visible) {
@@ -556,24 +559,90 @@ export function TranscriptPanel({
                   Speaker {block.speakerNum}
                 </span>
               </div>
-              <div className="inline">
-                {block.words.flatMap((w, wi) => {
-                  const prev = wi === 0 ? prevBlockLast : block.words[wi - 1]
-                  let gapCut = prev ? gapCutBetweenSourceWords(prev, w, edits.cutRanges ?? []) : null
-                  if (prev && gapCut) {
-                    const gapMs = wordSourceMs(w).startMs - wordSourceMs(prev).endMs
-                    if (gapMs > maxPlausibleGapMs) gapCut = null
-                  }
-                  const nodes = [renderWord(w)]
-                  if (gapCut) nodes.push(renderGapCut(gapCut))
-                  return nodes
-                })}
-              </div>
+              {transcriptChunkStarts(block.words.length, longTranscript).map((from) => {
+                const to = Math.min(block.words.length, from + TRANSCRIPT_CHUNK_WORDS)
+                const renderRange = () =>
+                  block.words.slice(from, to).flatMap((w, k) => {
+                    const wi = from + k
+                    const prev = wi === 0 ? prevBlockLast : block.words[wi - 1]
+                    let gapCut = prev ? gapCutBetweenSourceWords(prev, w, edits.cutRanges ?? []) : null
+                    if (prev && gapCut) {
+                      const gapMs = wordSourceMs(w).startMs - wordSourceMs(prev).endMs
+                      if (gapMs > maxPlausibleGapMs) gapCut = null
+                    }
+                    const nodes = [renderWord(w)]
+                    if (gapCut) nodes.push(renderGapCut(gapCut))
+                    return nodes
+                  })
+                return longTranscript ? (
+                  <LazyTranscriptChunk key={from} words={to - from}>
+                    {renderRange}
+                  </LazyTranscriptChunk>
+                ) : (
+                  <div key={from} className="inline">
+                    {renderRange()}
+                  </div>
+                )
+              })}
             </div>
           )
         })
         )}
       </div>
+    </div>
+  )
+}
+
+/** FV2: above this many words the transcript renders in lazy chunks. */
+export const TRANSCRIPT_LAZY_MIN_WORDS = 2000
+/** FV2: words per lazy chunk. */
+export const TRANSCRIPT_CHUNK_WORDS = 300
+
+/** Start indexes of a block's chunks (one chunk = the whole block for short transcripts). */
+export function transcriptChunkStarts(n: number, chunked: boolean): number[] {
+  if (!chunked || n <= TRANSCRIPT_CHUNK_WORDS) return [0]
+  const out: number[] = []
+  for (let i = 0; i < n; i += TRANSCRIPT_CHUNK_WORDS) out.push(i)
+  return out
+}
+
+/**
+ * Renders its words only while near the scroll viewport; elsewhere a placeholder keeps the scroll
+ * height (estimated, then the measured height once it has been shown). Without IntersectionObserver
+ * it renders everything.
+ */
+function LazyTranscriptChunk({ words, children }: { words: number; children: () => ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined')
+  const heightRef = useRef<number>(Math.max(24, Math.ceil(words / 10) * 24))
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    let root: Element | null = el.parentElement
+    while (root && !(root instanceof HTMLElement && /(auto|scroll)/.test(getComputedStyle(root).overflowY))) {
+      root = root.parentElement
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting && el.offsetHeight > 0) heightRef.current = el.offsetHeight
+          setNear(e.isIntersecting)
+        }
+      },
+      { root, rootMargin: '600px 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  return (
+    <div
+      ref={ref}
+      className="inline"
+      data-testid="transcript-chunk"
+      data-rendered={near ? '1' : '0'}
+      style={near ? undefined : { display: 'block', height: heightRef.current }}
+    >
+      {near ? children() : null}
     </div>
   )
 }

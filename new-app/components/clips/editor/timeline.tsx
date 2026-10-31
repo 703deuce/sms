@@ -46,6 +46,9 @@ import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
 import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
 import { TimelineWaveform } from '@/components/clips/editor/timeline/timeline-waveform'
+import { TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-filmstrip'
+import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
+import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import { ItemSpeedControl, itemSpeed, speedLabel } from '@/components/clips/editor/timeline/item-speed-control'
 import { TransitionPopover } from '@/components/clips/editor/timeline/transition-popover'
@@ -71,6 +74,7 @@ import {
 import {
   TIMELINE_DEFAULT_PX_PER_SEC,
   TIMELINE_MIN_LABEL_PX,
+  timelineMinPxPerSec,
   anchoredScrollLeft,
   autoscrollLeftForPlayhead,
   fitPxPerSec,
@@ -90,7 +94,14 @@ const TRACK_OFFSET_PX = 8
 /** Left + right padding. */
 const TRACK_EXTRA_PX = 16
 const RULER_H = 18
-const LANE_H: Record<LaneId, number> = { text: 20, video: 40, broll: 24, voice: 24, music: 22, sfx: 20 }
+// FV2: Video lane is taller so the filmstrip (top) and word chips (bottom) both show; B-roll gets a strip too.
+const LANE_H: Record<LaneId, number> = { text: 20, video: 58, broll: 30, voice: 24, music: 22, sfx: 20 }
+/** Word-chip bar height at the bottom of the Video lane (filmstrip fills the space above it). */
+const VIDEO_WORDBAR_H = 18
+/** FV2: above this span (full videos) the timeline windows its DOM and opens at Fit; clips are unchanged. */
+const LONG_MEDIA_MS = 10 * 60 * 1000
+/** Timeline-side view of a B-roll media row (filmstrip source). */
+type TimelineBrollMedia = { id: string; url: string | null; thumbUrl?: string; mediaType?: string }
 const SNAP_PX = 8
 const DRAG_SLOP_PX = 3
 
@@ -144,6 +155,8 @@ export function Timeline({
   sfxDurationsMs,
   onOpenCover,
   onSelectionChange,
+  editorAssets = null,
+  brollMedia,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -178,6 +191,10 @@ export function Timeline({
   onOpenCover?: () => void
   /** E4: the single selected item (Color / Text panels follow it); null when 0 or 2+ selected. */
   onSelectionChange?: (item: TimelineItem | null) => void
+  /** FV2: full-video peaks + filmstrip sprite (null for clips). */
+  editorAssets?: EditorAssets | null
+  /** FV2: B-roll media rows (filmstrip on B-roll items). */
+  brollMedia?: TimelineBrollMedia[]
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -202,8 +219,13 @@ export function Timeline({
   const [pxPerSec, setPxPerSec] = useState<number | null>(null)
   const pendingScrollRef = useRef<number | null>(null)
   const trackViewportPx = Math.max(0, viewportPx - TRACK_EXTRA_PX)
-  const effectivePxPerSec = pxPerSec ?? TIMELINE_DEFAULT_PX_PER_SEC
-  const widthPx = trackWidthPx(span, effectivePxPerSec, trackViewportPx)
+  // FV2: long media can zoom out until the whole hour fits; clips keep the 4 px/s floor.
+  const minPx = timelineMinPxPerSec(span, trackViewportPx)
+  const minPxRef = useRef(minPx)
+  minPxRef.current = minPx
+  const longMedia = span > LONG_MEDIA_MS
+  const effectivePxPerSec = pxPerSec ?? (longMedia ? minPx : TIMELINE_DEFAULT_PX_PER_SEC)
+  const widthPx = trackWidthPx(span, effectivePxPerSec, trackViewportPx, minPx)
   const pxPerMs = widthPx / span
   const widthRef = useRef(widthPx)
   widthRef.current = widthPx
@@ -241,14 +263,19 @@ export function Timeline({
     [words, edits.wordFixes, previewEdits.trim.in, previewEdits.trim.out],
   )
   useEffect(() => {
-    if (pxPerSec == null && trackViewportPx > 0) setPxPerSec(initialPxPerSec(span, trackViewportPx, readableScale))
-  }, [pxPerSec, span, trackViewportPx, readableScale])
+    if (pxPerSec == null && trackViewportPx > 0)
+      setPxPerSec(
+        longMedia
+          ? fitPxPerSec(span, trackViewportPx, minPx)
+          : initialPxPerSec(span, trackViewportPx, readableScale, minPx),
+      )
+  }, [pxPerSec, span, trackViewportPx, readableScale, longMedia, minPx])
 
   const applyZoom = useCallback(
     (nextPxPerSec: number, anchorX?: number) => {
       const el = scrollRef.current
       const prevW = widthRef.current
-      const nextW = trackWidthPx(span, nextPxPerSec, trackViewportPx)
+      const nextW = trackWidthPx(span, nextPxPerSec, trackViewportPx, minPxRef.current)
       if (el) {
         const playheadAnchor = TRACK_OFFSET_PX + playheadPxRef.current - el.scrollLeft
         const anchor =
@@ -276,11 +303,11 @@ export function Timeline({
     pendingScrollRef.current = null
   }, [widthPx])
 
-  const zoomIn = () => applyZoom(zoomBy(effectivePxPerSec, 'in'))
-  const zoomOut = () => applyZoom(zoomBy(effectivePxPerSec, 'out'))
+  const zoomIn = () => applyZoom(zoomBy(effectivePxPerSec, 'in', undefined, minPx))
+  const zoomOut = () => applyZoom(zoomBy(effectivePxPerSec, 'out', undefined, minPx))
   const zoomFit = () => {
     pendingScrollRef.current = 0
-    setPxPerSec(fitPxPerSec(span, trackViewportPx))
+    setPxPerSec(fitPxPerSec(span, trackViewportPx, minPx))
   }
   const zoomDefault = () => applyZoom(TIMELINE_DEFAULT_PX_PER_SEC)
 
@@ -325,11 +352,35 @@ export function Timeline({
       if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
       const rect = el.getBoundingClientRect()
-      applyZoom(zoomBy(pxPerSecRef.current, e.deltaY < 0 ? 'in' : 'out', 1.12), e.clientX - rect.left)
+      applyZoom(zoomBy(pxPerSecRef.current, e.deltaY < 0 ? 'in' : 'out', 1.12, minPxRef.current), e.clientX - rect.left)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [applyZoom])
+
+  // FV2: visible track window (track px) — long media renders only what is near the viewport.
+  const [scrollX, setScrollX] = useState(0)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        setScrollX(el.scrollLeft)
+      })
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
+  const virtualize = longMedia && viewportPx > 0
+  const visFromPx = virtualize ? Math.max(0, scrollX - TRACK_OFFSET_PX - viewportPx) : 0
+  const visToPx = virtualize ? scrollX - TRACK_OFFSET_PX + 2 * viewportPx : Number.POSITIVE_INFINITY
+  const inView = (startMs: number, endMs: number) => !virtualize || (endMs * pxPerMs >= visFromPx && startMs * pxPerMs <= visToPx)
 
   useEffect(() => {
     const el = scrollRef.current
@@ -363,7 +414,15 @@ export function Timeline({
   const wordItems = useMemo(() => groupWordbarItems(wordChips, pxPerMs), [wordChips, pxPerMs])
   const wordEdges = useMemo(() => wordChips.flatMap((w) => [w.outStartMs, w.outEndMs]), [wordChips])
   const wordByI = useMemo(() => new Map(words.map((w) => [String(w.i), w])), [words])
-  const voicePeaks = useAudioPeaks(videoUrl)
+  // FV2: full videos read the worker's compact peaks file and never download the media for it.
+  const voicePeaks = useAudioPeaks(videoUrl, 40, 12_000, {
+    peaksUrl: editorAssets?.peaksUrl ?? null,
+    skipDecode: Boolean(editorAssets?.fullVideo) || longMedia,
+  })
+  // FV2: filmstrip frames. Clips: extracted client-side from the editor video (no stored files).
+  // Full videos: worker sprite first; client frames only refine visible tiles when zoomed in.
+  const videoFrames = useFilmstripFrames(videoUrl)
+  const filmstripSprite = editorAssets?.filmstrip ?? null
   const musicPeaks = useAudioPeaks(edits.audio?.music ? musicUrl : null, 20)
   const editable = Boolean(onCommitEdits)
 
@@ -737,6 +796,7 @@ export function Timeline({
       ? keyframeTimes(edits, kfTarget).filter((t) => kfOrigin + t >= item.startMs - 0.5 && kfOrigin + t <= item.endMs + 0.5)
       : []
     const bItem = item.lane === 'broll' ? edits.broll?.find((b) => b.id === item.id) : undefined
+    const bMedia = item.lane === 'broll' ? brollMedia?.find((m) => m.id === item.id) : undefined
     return (
       <div
         key={refKey(item)}
@@ -759,6 +819,29 @@ export function Timeline({
           setCtxMenu({ x: e.clientX, y: e.clientY })
         }}
       >
+        {item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null ? (
+          <TimelineFilmstrip
+            fromMs={item.srcInMs - mediaOffsetMs}
+            toMs={item.srcOutMs - mediaOffsetMs}
+            widthPx={w}
+            heightPx={h - 4 - VIDEO_WORDBAR_H}
+            pxPerMs={pxPerMs}
+            visLeftPx={virtualize ? visFromPx - left : undefined}
+            visRightPx={virtualize ? visToPx - left : undefined}
+            sprite={filmstripSprite}
+            frames={videoFrames}
+          />
+        ) : null}
+        {item.lane === 'broll' && bMedia ? (
+          <BrollFilmstrip
+            media={bMedia}
+            fromMs={item.inMs ?? 0}
+            toMs={(item.inMs ?? 0) + (item.endMs - item.startMs)}
+            widthPx={w}
+            heightPx={h - 4}
+            pxPerMs={pxPerMs}
+          />
+        ) : null}
         {item.lane === 'voice' ? (
           <TimelineWaveform
             peaks={voicePeaks}
@@ -781,7 +864,7 @@ export function Timeline({
           <span className="pointer-events-none relative truncate px-1">{item.label}</span>
         ) : null}
         {item.lane === 'video' && w > 40 ? (
-          <span className="pointer-events-none absolute left-1 top-0 text-[9px] text-white/80">{item.label}</span>
+          <span className="pointer-events-none absolute left-1 top-0 z-[1] rounded-sm bg-black/45 px-0.5 text-[9px] text-white/90">{item.label}</span>
         ) : null}
         {item.lane === 'video' && item.srcInMs != null && item.srcOutMs != null && edits.segmentSpeeds?.length
           ? (() => {
@@ -948,8 +1031,8 @@ export function Timeline({
             min={0}
             max={100}
             step={1}
-            value={pxPerSecToSlider(effectivePxPerSec)}
-            onChange={(e) => applyZoom(sliderToPxPerSec(Number(e.target.value)))}
+            value={pxPerSecToSlider(effectivePxPerSec, minPx)}
+            onChange={(e) => applyZoom(sliderToPxPerSec(Number(e.target.value), minPx))}
             className="h-1 w-24 cursor-pointer accent-primary"
             aria-label="Timeline zoom"
             data-testid="timeline-zoom-slider"
@@ -971,7 +1054,7 @@ export function Timeline({
             title="Reset zoom to 100%"
             data-testid="timeline-zoom-label"
           >
-            {zoomPercent(effectivePxPerSec)}%
+            {zoomPercent(effectivePxPerSec, minPx)}%
           </button>
           <button
             type="button"
@@ -1049,7 +1132,15 @@ export function Timeline({
                 setCtxMenu({ x: e.clientX, y: e.clientY })
               }}
             >
-              <TimelineRuler durationMs={span} pxPerMs={pxPerMs} widthPx={widthPx} height={RULER_H} onScrub={onSeekOutput} />
+              <TimelineRuler
+                durationMs={span}
+                pxPerMs={pxPerMs}
+                widthPx={widthPx}
+                height={RULER_H}
+                onScrub={onSeekOutput}
+                visFromPx={virtualize ? visFromPx : undefined}
+                visToPx={virtualize ? visToPx : undefined}
+              />
               {LANE_ORDER.map((lane) => (
                 <div
                   key={lane}
@@ -1084,7 +1175,7 @@ export function Timeline({
                         />
                       ))
                     : null}
-                  {lanes[lane].map(renderItem)}
+                  {(virtualize ? lanes[lane].filter((i) => inView(shown(i).startMs, shown(i).endMs)) : lanes[lane]).map(renderItem)}
                   {lane === 'video' && editable && !laneState(edits, 'video').locked
                     ? (() => {
                         const cutKs = realCutIndices(tb)
@@ -1126,7 +1217,7 @@ export function Timeline({
                   {lane === 'video' ? (
                     <>
                       <div className="pointer-events-none absolute inset-x-0 bottom-0.5 h-[18px]" role="group" aria-label="Transcript timeline">
-                        {wordItems.map((wi) => {
+                        {(virtualize ? wordItems.filter((wi) => inView(wi.outStartMs, wi.outEndMs)) : wordItems).map((wi) => {
                           const left = wi.outStartMs * pxPerMs
                           const w = Math.max(1, (wi.outEndMs - wi.outStartMs) * pxPerMs)
                           const id = wi.kind === 'word' ? wi.wordId : `g${wi.outStartMs}`
@@ -1375,5 +1466,37 @@ export function Timeline({
         </div>
       ) : null}
     </div>
+  )
+}
+
+/** FV2: B-roll filmstrip — client frames from the B-roll video (falls back to its thumbnail). */
+function BrollFilmstrip({
+  media,
+  fromMs,
+  toMs,
+  widthPx,
+  heightPx,
+  pxPerMs,
+}: {
+  media: TimelineBrollMedia
+  fromMs: number
+  toMs: number
+  widthPx: number
+  heightPx: number
+  pxPerMs: number
+}) {
+  const isImage = media.mediaType === 'image'
+  const frames = useFilmstripFrames(isImage ? null : media.url)
+  return (
+    <TimelineFilmstrip
+      fromMs={fromMs}
+      toMs={toMs}
+      widthPx={widthPx}
+      heightPx={heightPx}
+      pxPerMs={pxPerMs}
+      frames={frames}
+      stillUrl={media.thumbUrl ?? (isImage ? media.url : null)}
+      className="opacity-80"
+    />
   )
 }

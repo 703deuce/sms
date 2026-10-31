@@ -10,6 +10,12 @@ BYO_DURATION_MESSAGE = (
     "Bring-your-own clips can be up to 3 minutes. Use Find clips for longer videos."
 )
 
+# FV1: "Edit a full video" projects (BYO path, whole source) — same ceiling as URL import.
+FULL_VIDEO_MAX_DURATION_MS = 3 * 60 * 60 * 1000
+FULL_VIDEO_DURATION_MESSAGE = (
+    "Full videos can be up to 3 hours. Trim the file or upload it in parts."
+)
+
 _INTERNAL_MARKERS = (
     "on conflict",
     "unique or exclusion constraint",

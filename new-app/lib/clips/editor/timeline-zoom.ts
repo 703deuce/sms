@@ -20,15 +20,29 @@ export const TIMELINE_ZOOM_STEP = 1.25
 /** Hide a word's text below this chip width (keeps the colored chip + tooltip). */
 export const TIMELINE_MIN_LABEL_PX = 14
 
-export function clampPxPerSec(pxPerSec: number): number {
+/** FV2: absolute floor for long media (a 3 h video fits ~2700 px at this scale). */
+export const TIMELINE_LONG_MIN_PX_PER_SEC = 0.05
+
+/**
+ * FV2: zoom-out floor for this span. Short clips keep TIMELINE_MIN_PX_PER_SEC (4 px/s) exactly;
+ * long media (e.g. an hour) may zoom out until the whole span fits the viewport.
+ */
+export function timelineMinPxPerSec(spanMs: number, viewportPx: number): number {
+  if (!(spanMs > 0) || !(viewportPx > 0)) return TIMELINE_MIN_PX_PER_SEC
+  const fit = viewportPx / (spanMs / 1000)
+  if (fit >= TIMELINE_MIN_PX_PER_SEC) return TIMELINE_MIN_PX_PER_SEC
+  return Math.max(TIMELINE_LONG_MIN_PX_PER_SEC, fit)
+}
+
+export function clampPxPerSec(pxPerSec: number, minPxPerSec: number = TIMELINE_MIN_PX_PER_SEC): number {
   if (!Number.isFinite(pxPerSec) || pxPerSec <= 0) return TIMELINE_DEFAULT_PX_PER_SEC
-  return Math.min(TIMELINE_MAX_PX_PER_SEC, Math.max(TIMELINE_MIN_PX_PER_SEC, pxPerSec))
+  return Math.min(TIMELINE_MAX_PX_PER_SEC, Math.max(minPxPerSec, pxPerSec))
 }
 
 /** Scale that makes the whole span fit the visible track width. */
-export function fitPxPerSec(spanMs: number, viewportPx: number): number {
+export function fitPxPerSec(spanMs: number, viewportPx: number, minPxPerSec: number = TIMELINE_MIN_PX_PER_SEC): number {
   if (spanMs <= 0 || viewportPx <= 0) return TIMELINE_DEFAULT_PX_PER_SEC
-  return clampPxPerSec(viewportPx / (spanMs / 1000))
+  return clampPxPerSec(viewportPx / (spanMs / 1000), minPxPerSec)
 }
 
 /** Estimated px a word label needs at the chip font. */
@@ -57,8 +71,13 @@ export function readablePxPerSec(
  * Initial zoom: readable (default, or what the clip's words need), but never wider than needed
  * when the clip already fits at that scale.
  */
-export function initialPxPerSec(spanMs: number, viewportPx: number, readable = TIMELINE_DEFAULT_PX_PER_SEC): number {
-  const fit = fitPxPerSec(spanMs, viewportPx)
+export function initialPxPerSec(
+  spanMs: number,
+  viewportPx: number,
+  readable = TIMELINE_DEFAULT_PX_PER_SEC,
+  minPxPerSec: number = TIMELINE_MIN_PX_PER_SEC,
+): number {
+  const fit = fitPxPerSec(spanMs, viewportPx, minPxPerSec)
   const want = clampPxPerSec(Math.max(TIMELINE_DEFAULT_PX_PER_SEC, readable))
   return fit >= want ? fit : want
 }
@@ -101,13 +120,23 @@ export function isTextEntryTarget(target: unknown): boolean {
 }
 
 /** Track width in px; never narrower than the viewport so short clips fill the panel. */
-export function trackWidthPx(spanMs: number, pxPerSec: number, viewportPx = 0): number {
-  const w = Math.round((Math.max(1, spanMs) / 1000) * clampPxPerSec(pxPerSec))
+export function trackWidthPx(
+  spanMs: number,
+  pxPerSec: number,
+  viewportPx = 0,
+  minPxPerSec: number = TIMELINE_MIN_PX_PER_SEC,
+): number {
+  const w = Math.round((Math.max(1, spanMs) / 1000) * clampPxPerSec(pxPerSec, minPxPerSec))
   return Math.max(Math.max(0, Math.round(viewportPx)), w, 1)
 }
 
-export function zoomBy(pxPerSec: number, direction: 'in' | 'out', step = TIMELINE_ZOOM_STEP): number {
-  return clampPxPerSec(direction === 'in' ? pxPerSec * step : pxPerSec / step)
+export function zoomBy(
+  pxPerSec: number,
+  direction: 'in' | 'out',
+  step = TIMELINE_ZOOM_STEP,
+  minPxPerSec: number = TIMELINE_MIN_PX_PER_SEC,
+): number {
+  return clampPxPerSec(direction === 'in' ? pxPerSec * step : pxPerSec / step, minPxPerSec)
 }
 
 /**
@@ -158,22 +187,24 @@ export function autoscrollLeftForPlayhead(opts: {
 }
 
 /** Zoom readout relative to the readable default (100% = TIMELINE_DEFAULT_PX_PER_SEC). */
-export function zoomPercent(pxPerSec: number): number {
-  return Math.round((clampPxPerSec(pxPerSec) / TIMELINE_DEFAULT_PX_PER_SEC) * 100)
+export function zoomPercent(pxPerSec: number, minPxPerSec: number = TIMELINE_MIN_PX_PER_SEC): number {
+  const pct = (clampPxPerSec(pxPerSec, minPxPerSec) / TIMELINE_DEFAULT_PX_PER_SEC) * 100
+  // FV2: long-media zoom-outs go below 1% — keep one decimal there instead of reading "0%".
+  return pct < 1 ? Math.round(pct * 10) / 10 : Math.round(pct)
 }
 
 /** Slider maps 0..100 logarithmically onto MIN..MAX px/s. */
-export function sliderToPxPerSec(v: number): number {
+export function sliderToPxPerSec(v: number, minPxPerSec: number = TIMELINE_MIN_PX_PER_SEC): number {
   const t = Math.min(100, Math.max(0, v)) / 100
-  const lo = Math.log(TIMELINE_MIN_PX_PER_SEC)
+  const lo = Math.log(minPxPerSec)
   const hi = Math.log(TIMELINE_MAX_PX_PER_SEC)
-  return clampPxPerSec(Math.exp(lo + t * (hi - lo)))
+  return clampPxPerSec(Math.exp(lo + t * (hi - lo)), minPxPerSec)
 }
 
-export function pxPerSecToSlider(pxPerSec: number): number {
-  const lo = Math.log(TIMELINE_MIN_PX_PER_SEC)
+export function pxPerSecToSlider(pxPerSec: number, minPxPerSec: number = TIMELINE_MIN_PX_PER_SEC): number {
+  const lo = Math.log(minPxPerSec)
   const hi = Math.log(TIMELINE_MAX_PX_PER_SEC)
-  return Math.round(((Math.log(clampPxPerSec(pxPerSec)) - lo) / (hi - lo)) * 100)
+  return Math.round(((Math.log(clampPxPerSec(pxPerSec, minPxPerSec)) - lo) / (hi - lo)) * 100)
 }
 
 /** Percent position of a source-ms point on a track that spans trimIn..trimIn+spanMs. */

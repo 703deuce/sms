@@ -7,6 +7,7 @@ import { clipperCapabilities } from '@/lib/server/clips/clipper-capabilities'
 import { getClipForWorkspace } from '@/lib/server/clips/clips'
 import { getPrisma } from '@/lib/server/db'
 import { resolveBrollMedia } from '@/lib/server/clips/broll-media'
+import { resolveEditorAssets } from '@/lib/server/clips/editor-assets'
 import { getClipStorage, getClipStorageForObjectKey } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { resolveLayers } from '@/lib/clips/layers'
@@ -192,6 +193,8 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     : null
 
   const brollMedia = edits.broll?.length ? await resolveBrollMedia(edits.broll) : []
+  // FV2: full-video peaks + filmstrip (signed); clips have none and keep their current paths.
+  const editorAssets = await resolveEditorAssets(storage, clip.aiMeta)
   const aiMeta = (clip.aiMeta || null) as { brollIdeas?: string[] } | null
 
   const vodState =
@@ -256,6 +259,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     capabilities: clipperCapabilities(),
     aiMeta,
     brollMedia,
+    editorAssets,
     streamChannelId: streamVod?.channelId ?? null,
   }
   console.info('[clipper:detail] ms', { clipId, total: Date.now() - detailStartedAt })
