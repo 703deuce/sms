@@ -29,3 +29,48 @@ export async function getClipStorageForObjectKey(
   if (size !== null) return primary
   return createSupabaseStorageDriver()
 }
+
+/**
+ * E6fix: memo of which driver holds a key. AI covers / AI b-roll were written straight to Supabase
+ * Storage by the Kie callback while reads signed against the primary (B2) driver → every cover
+ * 404'd (NoSuchKey). Objects never move, so the answer is cached per key; a miss on both drivers
+ * is not cached (the object may simply not exist yet / a HEAD timed out).
+ */
+const driverByKey = new Map<string, StorageDriverName>()
+const DRIVER_MEMO_MAX = 5000
+
+export async function getReadableClipStorage(objectKey: string): Promise<ClipStorageDriver> {
+  const hit = driverByKey.get(objectKey)
+  if (hit) return getClipStorage(hit)
+  const primary = getClipStorage()
+  if (primary.name === 'supabase') return primary
+  const remember = (name: StorageDriverName) => {
+    if (driverByKey.size >= DRIVER_MEMO_MAX) driverByKey.clear()
+    driverByKey.set(objectKey, name)
+  }
+  if ((await primary.getObjectSizeBytes(objectKey)) !== null) {
+    remember(primary.name)
+    return primary
+  }
+  const legacy = createSupabaseStorageDriver()
+  if ((await legacy.getObjectSizeBytes(objectKey).catch(() => null)) !== null) {
+    remember('supabase')
+    return legacy
+  }
+  return primary
+}
+
+/** Signed GET URL from whichever driver actually holds the object (see getReadableClipStorage). */
+export async function createReadableSignedUrl(
+  objectKey: string,
+  expiresInSec: number,
+  options?: { downloadFilename?: string },
+): Promise<string> {
+  const storage = await getReadableClipStorage(objectKey)
+  return storage.createSignedDownloadUrl(objectKey, expiresInSec, options)
+}
+
+/** Test hook. */
+export function __resetReadableDriverMemo(): void {
+  driverByKey.clear()
+}

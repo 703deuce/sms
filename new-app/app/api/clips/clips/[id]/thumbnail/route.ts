@@ -90,7 +90,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       where: { id: { in: rows.map((r: (typeof rows)[number]) => r.generationId) } },
     })
     const genById = new Map(gens.map((g) => [g.id, g]))
-    const storage = (await import('@/lib/storage')).getClipStorage()
+    // E6fix: sign against the driver that actually holds the cover (legacy covers live in Supabase).
+    const { createReadableSignedUrl } = await import('@/lib/storage')
     const items = await Promise.all(
       rows.map(async (r: (typeof rows)[number]) => {
         const gen = genById.get(r.generationId)
@@ -101,7 +102,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
           aspect: r.aspect,
           titleText: r.titleText,
           picked: r.picked,
-          downloadUrl: key ? await storage.createSignedDownloadUrl(key, 3600) : null,
+          downloadUrl: key ? await createReadableSignedUrl(key, 3600).catch(() => null) : null,
           status: gen?.status || (key ? 'READY' : 'PENDING'),
           error: gen?.status === 'FAILED' ? gen.error || 'Image generation failed' : null,
         }

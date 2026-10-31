@@ -53,35 +53,21 @@ export async function POST(request: Request) {
       : `ws/${gen.workspaceId}/clips/${gen.clipId || 'none'}/gen/${gen.id}.mp4`
 
     const buf = Buffer.from(await res.arrayBuffer())
+    // E6fix: write through the configured clip storage driver (B2/S3 in prod). This used to upload
+    // straight to Supabase Storage while every reader signed against getClipStorage() → covers 404.
+    const storage = getClipStorage()
     let posterKey: string | undefined
     if (!isThumb && gen.kind === 'BROLL_VIDEO') {
       try {
         const jpg = await mp4BufferToJpegPoster(buf)
-        posterKey = `ws/${gen.workspaceId}/clips/${gen.clipId || 'none'}/gen/${gen.id}.jpg`
-        const { getSupabaseStorageConfig } = await import('@/lib/storage/supabase-driver')
-        const cfgPoster = getSupabaseStorageConfig()
-        if (cfgPoster) {
-          const { createClient } = await import('@supabase/supabase-js')
-          const supabasePoster = createClient(cfgPoster.url, cfgPoster.key, { auth: { persistSession: false } })
-          await supabasePoster.storage.from(cfgPoster.bucket).upload(posterKey, jpg, {
-            contentType: 'image/jpeg',
-            upsert: true,
-          })
-        }
+        const key = `ws/${gen.workspaceId}/clips/${gen.clipId || 'none'}/gen/${gen.id}.jpg`
+        await storage.putBytes(key, jpg, 'image/jpeg')
+        posterKey = key
       } catch {
         posterKey = undefined
       }
     }
-    const { getSupabaseStorageConfig } = await import('@/lib/storage/supabase-driver')
-    const cfg = getSupabaseStorageConfig()
-    if (!cfg) throw new Error('storage not configured')
-    const { createClient } = await import('@supabase/supabase-js')
-    const supabase = createClient(cfg.url, cfg.key, { auth: { persistSession: false } })
-    const { error } = await supabase.storage.from(cfg.bucket).upload(storageKey, buf, {
-      contentType: isThumb ? 'image/png' : 'video/mp4',
-      upsert: true,
-    })
-    if (error) throw new Error(error.message)
+    await storage.putBytes(storageKey, buf, isThumb ? 'image/png' : 'video/mp4')
 
     const nextParams = { ...(params as Record<string, unknown>), ...(posterKey ? { posterKey } : {}) }
     await prisma.aiGeneration.update({

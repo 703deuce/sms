@@ -3,7 +3,7 @@ import 'server-only'
 import type { BrollItem } from '@/lib/clips/broll'
 import { ensureStockAsset, findCachedHit } from '@/lib/server/ai/pixabay'
 import { getPrisma } from '@/lib/server/db'
-import { getClipStorage } from '@/lib/storage'
+import { createReadableSignedUrl, getClipStorage } from '@/lib/storage'
 
 export type BrollMediaRow = {
   id: string
@@ -57,10 +57,9 @@ export async function resolveBrollMedia(items: BrollItem[]): Promise<BrollMediaR
       let url: string | null = null
       let thumbUrl: string | undefined
       if (gen.storageKey) {
-        url = await storage.createSignedDownloadUrl(gen.storageKey, 3600)
-        thumbUrl = params.posterKey
-          ? await storage.createSignedDownloadUrl(params.posterKey, 3600)
-          : url
+        // E6fix: AI b-roll was written to Supabase by the Kie callback; sign where the object lives.
+        url = await createReadableSignedUrl(gen.storageKey, 3600)
+        thumbUrl = params.posterKey ? await createReadableSignedUrl(params.posterKey, 3600) : url
       }
       out.push({
         id: item.id,
