@@ -65,7 +65,9 @@ export async function POST(request: Request) {
       mode: String(settings.mode ?? 'auto'),
       genre: String(settings.genre ?? 'auto'),
       source:
-        settings.byo === true
+        settings.fullVideo === true
+          ? 'full_video'
+          : settings.byo === true
           ? 'byo'
           : 'prompt' in body
             ? 'prompt'

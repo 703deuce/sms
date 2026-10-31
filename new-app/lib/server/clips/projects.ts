@@ -5,6 +5,7 @@ import { getPrisma } from '@/lib/server/db'
 import { withAutoContentDetection } from '@/lib/clips/content-detection'
 import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
 import { assertByoUploadDuration } from '@/lib/clips/byo-project'
+import { assertFullVideoUploadDuration, sourceAspectRatio } from '@/lib/clips/full-video'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { projectWordsKey } from '@/lib/storage'
 import type { ClipBrandTemplate } from '@prisma/client'
@@ -89,7 +90,19 @@ export async function createClipProject(
   let settings = brandRow
     ? withAutoContentDetection(mergeDefaultBrandSettings(baseSettings, brandRow))
     : baseSettings
-  if (settings.byo) {
+  if (settings.fullVideo) {
+    // FV1: whole source, 3 h cap; canvas follows the source unless the client picked one.
+    assertFullVideoUploadDuration(upload.durationMs)
+    const rawAspect = (input.settings as { aspectRatio?: unknown } | null | undefined)?.aspectRatio
+    settings = {
+      ...settings,
+      byo: true,
+      fullVideo: true,
+      rangeStartMs: 0,
+      rangeEndMs: upload.durationMs || 0,
+      aspectRatio: typeof rawAspect === 'string' ? settings.aspectRatio : sourceAspectRatio(upload.width, upload.height),
+    }
+  } else if (settings.byo) {
     assertByoUploadDuration(upload.durationMs)
     settings = {
       ...settings,

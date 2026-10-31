@@ -89,6 +89,8 @@ export const clipProjectSettingsSchema = z.object({
     })
     .default({ music: false, thumbnails: false, dubLang: null }),
   byo: z.boolean().optional(),
+  /** FV1: "Edit a full video" (implies byo: one clip over the whole source, cap 3 h). */
+  fullVideo: z.boolean().optional(),
 })
 
 export type ClipProjectSettings = z.infer<typeof clipProjectSettingsSchema>

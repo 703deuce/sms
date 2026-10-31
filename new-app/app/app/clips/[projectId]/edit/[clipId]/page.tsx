@@ -1,6 +1,7 @@
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
 import { getClipEditorPayload } from '@/lib/server/clips/clip-detail'
+import { isFullVideoSettings } from '@/lib/clips/full-video'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { notFound } from 'next/navigation'
 
@@ -43,6 +44,8 @@ export default async function ClipEditorPage({
         vodChat={data.vodChat}
         projectStatus={data.project.status}
         streamChannelId={data.streamChannelId}
+        fullVideo={isFullVideoSettings(data.project.settings)}
+        editorAssets={data.editorAssets ?? null}
       />
     </ClipperSurfaceErrorBoundary>
   )

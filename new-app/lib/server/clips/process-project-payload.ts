@@ -21,6 +21,10 @@ export function buildProcessProjectJobPayload(
     mode,
     genre,
   }
+  if (parsed.success && parsed.data.fullVideo === true) {
+    // FV1: full-video projects run the BYO path (no clip finding) with the 3 h cap.
+    return { ...base, byo: true, fullVideo: true }
+  }
   if (parsed.success && parsed.data.byo === true) {
     return { ...base, byo: true }
   }

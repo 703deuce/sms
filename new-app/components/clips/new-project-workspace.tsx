@@ -13,6 +13,12 @@ import { createProject, createProjectFromLink, estimateCredits } from '@/lib/cli
 import { validateImportUrlForSubmit, YOUTUBE_UNSUPPORTED_MSG } from '@/lib/clips/import-url'
 import { defaultClipSettings, TOOL_PRESET_MAP, type ClipProjectSettings } from '@/lib/clips/settings'
 import { BYO_DURATION_ERROR } from '@/lib/clips/byo-project'
+import {
+  FULL_VIDEO_DURATION_ERROR,
+  FULL_VIDEO_MAX_DURATION_MS,
+  formatMediaDuration,
+  sourceAspectRatio,
+} from '@/lib/clips/full-video'
 import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
 import { StreamerImportPanel } from '@/components/streamer/streamer-import-panel'
@@ -26,17 +32,21 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   const router = useRouter()
   const params = useSearchParams()
   const preset = params.get('preset')
+  // FV1: /app/clips/new?intent=full opens "Edit a full video" (Home links here).
+  const fullIntentParam = params.get('intent') === 'full'
   const initial = useMemo(() => {
+    if (fullIntentParam) return defaultClipSettings({ byo: true, fullVideo: true, aspectRatio: '16:9' })
     const base = defaultClipSettings()
     if (preset && TOOL_PRESET_MAP[preset]) return defaultClipSettings(TOOL_PRESET_MAP[preset])
     return base
-  }, [preset])
+  }, [preset, fullIntentParam])
 
   const tabParam = params.get('tab')
   const [tab, setTab] = useState<'upload' | 'link' | 'streamer'>(
     tabParam === 'streamer' ? 'streamer' : tabParam === 'link' ? 'link' : 'upload',
   )
-  const [projectIntent, setProjectIntent] = useState<'find' | 'byo'>('find')
+  const [projectIntent, setProjectIntent] = useState<'find' | 'byo' | 'full'>(fullIntentParam ? 'full' : 'find')
+  const [sourceAspect, setSourceAspect] = useState<ReturnType<typeof sourceAspectRatio> | null>(null)
   const [settings, setSettings] = useState<ClipProjectSettings>(initial)
   const [upload, setUpload] = useState<UploadProgress | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
@@ -51,13 +61,25 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
     byoAutoStartedRef.current = false
     setPendingFile(file)
     if (!resumeUploadId) setUploadId(null)
-    void probeDuration(file)
-      .then((ms) => {
+    void probeVideo(file)
+      .then(({ durationMs: ms, width, height }) => {
         if (projectIntent === 'byo' && ms > 180_000) {
           toast.error(BYO_DURATION_ERROR)
           setUpload(null)
           setPendingFile(null)
           return
+        }
+        if (projectIntent === 'full' && ms > FULL_VIDEO_MAX_DURATION_MS) {
+          toast.error(FULL_VIDEO_DURATION_ERROR)
+          setUpload(null)
+          setPendingFile(null)
+          return
+        }
+        if (width > 0 && height > 0) {
+          const aspect = sourceAspectRatio(width, height)
+          setSourceAspect(aspect)
+          // FV1: a full video keeps its own shape (16:9 stays 16:9); still editable in the form.
+          if (projectIntent === 'full') setSettings((s) => ({ ...s, aspectRatio: aspect }))
         }
         setUpload({
           filename: file.name,
@@ -76,12 +98,13 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                 ...s,
                 rangeEndMs: p.durationMs!,
                 ...(projectIntent === 'byo' ? { byo: true as const, rangeStartMs: 0 } : {}),
+                ...(projectIntent === 'full' ? { byo: true as const, fullVideo: true as const, rangeStartMs: 0 } : {}),
               }))
             }
             if (p.state === 'complete' && p.uploadId) {
               setUploadId(p.uploadId)
               const ms = p.durationMs ?? 0
-              if (ms > 0 && projectIntent !== 'byo') {
+              if (ms > 0 && projectIntent === 'find') {
                 void estimateCredits({ durationMs: ms, rangeStartMs: 0, rangeEndMs: ms, settings }).then(setEstimate).catch(() => {})
               }
             }
@@ -118,9 +141,17 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
     setSubmitting(true)
     try {
       const payloadSettings =
-        projectIntent === 'byo' ? defaultClipSettings({ ...settings, byo: true }) : settings
+        projectIntent === 'full'
+          ? defaultClipSettings({ ...settings, byo: true, fullVideo: true })
+          : projectIntent === 'byo'
+            ? defaultClipSettings({ ...settings, byo: true })
+            : settings
       if (projectIntent === 'byo' && durationMs > 180_000) {
         toast.error(BYO_DURATION_ERROR)
+        return
+      }
+      if (projectIntent === 'full' && durationMs > FULL_VIDEO_MAX_DURATION_MS) {
+        toast.error(FULL_VIDEO_DURATION_ERROR)
         return
       }
       const project = await createProject({ uploadId, settings: payloadSettings })
@@ -133,7 +164,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   }, [durationMs, projectIntent, router, settings, uploadId])
 
   useEffect(() => {
-    if (projectIntent !== 'byo') return
+    if (projectIntent === 'find') return
     if (upload?.state !== 'complete' || !uploadId || submitting) return
     if (byoAutoStartedRef.current) return
     byoAutoStartedRef.current = true
@@ -179,6 +210,11 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
             [
               { id: 'find' as const, label: 'Find clips in a long video', hint: 'AI picks highlights from your upload' },
               { id: 'byo' as const, label: 'Edit a finished clip (up to 3 min)', hint: 'Transcribe and open the editor' },
+              {
+                id: 'full' as const,
+                label: 'Edit a full video',
+                hint: 'Up to 3 hours · edit start to finish, landscape stays landscape',
+              },
             ] as const
           ).map((opt) => (
             <label
@@ -195,12 +231,23 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                 checked={projectIntent === opt.id}
                 onChange={() => {
                   setProjectIntent(opt.id)
-                  if (opt.id === 'byo') {
+                  if (opt.id === 'full') {
+                    if (durationMs > FULL_VIDEO_MAX_DURATION_MS) toast.error(FULL_VIDEO_DURATION_ERROR)
+                    setSettings(
+                      defaultClipSettings({
+                        byo: true,
+                        fullVideo: true,
+                        rangeStartMs: 0,
+                        rangeEndMs: durationMs || 0,
+                        aspectRatio: sourceAspect ?? '16:9',
+                      }),
+                    )
+                  } else if (opt.id === 'byo') {
                     setSettings(defaultClipSettings({ byo: true, rangeStartMs: 0, rangeEndMs: durationMs || 0 }))
                   } else {
                     setSettings((s) => {
-                      const { byo: _b, ...rest } = s
-                      return defaultClipSettings({ ...rest, byo: undefined })
+                      const { byo: _b, fullVideo: _f, ...rest } = s
+                      return defaultClipSettings({ ...rest, byo: undefined, fullVideo: undefined })
                     })
                   }
                 }}
@@ -302,7 +349,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
               ) : null}
               {durationMs > 0 && (
                 <p className="text-sm text-muted-foreground tabular-nums">
-                  Detected duration {(durationMs / 1000).toFixed(1)}s
+                  Detected duration {durationMs >= 600_000 ? formatMediaDuration(durationMs) : `${(durationMs / 1000).toFixed(1)}s`}
                 </p>
               )}
             </div>
@@ -357,7 +404,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
             durationMs={durationMs}
             uploadState={upload?.state}
             reframeV2Enabled={reframeV2Enabled}
-            byoMode={projectIntent === 'byo'}
+            byoMode={projectIntent !== 'find'}
           />
           {estimate && tab === 'upload' && projectIntent === 'find' && (
             <p className="text-xs text-muted-foreground">
@@ -376,7 +423,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
                   <Loader2 className="size-4 animate-spin" aria-hidden />
                   Creating project…
                 </>
-              ) : projectIntent === 'byo' ? (
+              ) : projectIntent !== 'find' ? (
                 'Start'
               ) : (
                 'Get clips'
@@ -389,14 +436,18 @@ export function NewProjectWorkspace({ reframeV2Enabled = false }: { reframeV2Ena
   )
 }
 
-function probeDuration(file: File): Promise<number> {
+function probeVideo(file: File): Promise<{ durationMs: number; width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const video = document.createElement('video')
     video.preload = 'metadata'
     video.onloadedmetadata = () => {
       URL.revokeObjectURL(url)
-      resolve(Math.round(video.duration * 1000))
+      resolve({
+        durationMs: Math.round(video.duration * 1000),
+        width: video.videoWidth || 0,
+        height: video.videoHeight || 0,
+      })
     }
     video.onerror = () => {
       URL.revokeObjectURL(url)

@@ -1,16 +1,44 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { decodePeaksFile } from '@/lib/clips/editor/editor-assets'
 
 export type AudioPeaks = { peaks: number[]; peaksPerSec: number; durationMs: number }
 
 const EMPTY: AudioPeaks = { peaks: [], peaksPerSec: 0, durationMs: 0 }
 
-/** Normalised peak envelope over the whole media file (time-indexed, so lanes can slice it). */
-export function useAudioPeaks(url: string | null | undefined, peaksPerSec = 40, maxBuckets = 12_000): AudioPeaks {
+/**
+ * Normalised peak envelope over the whole media file (time-indexed, so lanes can slice it).
+ * FV2: `opts.peaksUrl` (full videos) reads the worker's compact peaks file instead — the media is
+ * never downloaded; `opts.skipDecode` disables the whole-file decode (long media, no peaks yet).
+ */
+export function useAudioPeaks(
+  url: string | null | undefined,
+  peaksPerSec = 40,
+  maxBuckets = 12_000,
+  opts?: { peaksUrl?: string | null; skipDecode?: boolean },
+): AudioPeaks {
   const [state, setState] = useState<AudioPeaks>(EMPTY)
+  const peaksUrl = opts?.peaksUrl ?? null
+  const skipDecode = opts?.skipDecode === true
   useEffect(() => {
-    if (!url) {
+    if (peaksUrl) {
+      let cancelled = false
+      void fetch(peaksUrl)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (cancelled) return
+          const d = decodePeaksFile(j)
+          setState(d ? { peaks: d.peaks, peaksPerSec: d.peaksPerSec, durationMs: d.durationMs } : EMPTY)
+        })
+        .catch(() => {
+          if (!cancelled) setState(EMPTY)
+        })
+      return () => {
+        cancelled = true
+      }
+    }
+    if (!url || skipDecode) {
       setState(EMPTY)
       return
     }
@@ -50,7 +78,7 @@ export function useAudioPeaks(url: string | null | undefined, peaksPerSec = 40, 
     return () => {
       cancelled = true
     }
-  }, [url, peaksPerSec, maxBuckets])
+  }, [url, peaksPerSec, maxBuckets, peaksUrl, skipDecode])
   return state
 }
 

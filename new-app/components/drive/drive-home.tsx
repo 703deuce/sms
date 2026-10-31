@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Clapperboard,
   Copy,
+  Film,
   FolderOpen,
   LayoutGrid,
   List,
@@ -274,6 +275,14 @@ export function DriveHome({
             AI Video
           </Link>
         ) : null}
+        <Link
+          href="/app/clips/new?intent=full"
+          className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          data-testid="drive-edit-full-video"
+        >
+          <Film className="mr-1 size-4" />
+          Edit a full video
+        </Link>
         <PrimaryButton render={<Link href="/app/clips/new" />} className="h-8 px-3 text-sm">
           New project
         </PrimaryButton>
@@ -327,6 +336,16 @@ export function DriveHome({
           ) : null}
         </div>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {pageView !== 'trash' ? (
+            <Link
+              href="/app/clips/new?intent=full"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/50 bg-primary/8 px-3 text-[13px] font-medium hover:bg-primary/15"
+              data-testid="drive-chip-edit-full-video"
+            >
+              <Film className="size-3.5" aria-hidden />
+              Edit a full video
+            </Link>
+          ) : null}
           {TEMPLATE_CHIPS.map((chip) => (
             <button
               key={chip.preset}

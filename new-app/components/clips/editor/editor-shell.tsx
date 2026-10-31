@@ -25,6 +25,7 @@ import { playWithSound } from '@/lib/clips/video-playback'
 import { EditorTopBar } from '@/components/clips/editor/editor-top-bar'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
+import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
 import { clipLayoutChip, clipTypeBadge, clipWhySummary, type ClipAiMeta } from '@/lib/clips/clip-results-chips'
@@ -49,6 +50,7 @@ import { HookOverlayPanel } from '@/components/clips/editor/hook-overlay-panel'
 import { useDubPreview } from '@/components/clips/editor/use-dub-preview'
 import { useAudioMix } from '@/components/clips/editor/use-audio-mix'
 import { useSfxCues } from '@/components/clips/editor/use-sfx-cues'
+import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import { applyTimelineLaneState, arrowStepMs, brollMediaForItems, voiceMuted } from '@/lib/clips/editor/clip-timeline'
 import { useGeneration } from '@/components/clips/editor/use-generation'
 import { useStudioSoundPreview } from '@/components/clips/editor/use-studio-sound-preview'
@@ -142,6 +144,8 @@ export function EditorShell({
   projectStatus = null,
   facecamLayout = null,
   streamChannelId = null,
+  fullVideo = false,
+  editorAssets = null,
 }: {
   projectId: string
   projectTitle?: string
@@ -170,6 +174,10 @@ export function EditorShell({
   projectStatus?: string | null
   facecamLayout?: FacecamLayoutState | null
   streamChannelId?: string | null
+  /** FV1: full-video project (whole source in one clip) — shows "Find clips in this video". */
+  fullVideo?: boolean
+  /** FV2: signed full-video editor assets (peaks + filmstrip sprite); null for clips. */
+  editorAssets?: EditorAssets | null
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
@@ -1353,6 +1361,10 @@ export function EditorShell({
             </EditorLayoutMenu>
           }
           versionsSlot={
+            <>
+            {fullVideo ? (
+              <FindClipsInVideoButton projectId={projectId} durationMs={bounds.clipEndMs - bounds.clipStartMs} />
+            ) : null}
             <EditorVersionsMenu
               enabled={versionsEnabled}
               versions={editVersions}
@@ -1361,6 +1373,7 @@ export function EditorShell({
               onDeleteVersion={(id) => void deleteEditVersion(id)}
               onRestoreOriginal={() => void restoreOriginalEdits()}
             />
+            </>
           }
         />
       <EditorPanelErrorBoundary label="AI Producer">
@@ -1507,6 +1520,8 @@ export function EditorShell({
             outputMs={outputMs}
             clipOutputDurationMs={outDur}
             videoUrl={videoUrl}
+            editorAssets={editorAssets}
+            brollMedia={previewBrollMedia}
             onSeekOutput={seekOutput}
             onTrimChange={setTrim}
             clipStartMs={bounds.clipStartMs}
