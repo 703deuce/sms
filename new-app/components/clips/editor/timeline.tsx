@@ -72,7 +72,9 @@ import {
   cutPoints,
   deleteRange,
   canDetachAudio,
+  canSplitStereo,
   detachBrollAudio,
+  splitStereoToTracks,
   duplicateItems,
   itemsInRange,
   moveItemsToTrack,
@@ -100,6 +102,12 @@ import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-films
 import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import { ItemSpeedControl, itemSpeed, speedLabel } from '@/components/clips/editor/timeline/item-speed-control'
+import { TrackFxPanel } from '@/components/clips/editor/timeline/track-fx-panel'
+import { PacingPanel } from '@/components/clips/editor/timeline/pacing-panel'
+import { TrackMotionPanel } from '@/components/clips/editor/timeline/track-motion-panel'
+import { applyMainPreset, trackMotionFor, withTrackMotion } from '@/lib/clips/editor/track-motion'
+import { cycleBrollTake, cycleMainTake, groupBrollTakes, groupMainTakes, takeGroupAtSource, takeGroupOfBroll, ungroupTakes } from '@/lib/clips/editor/takes'
+import { hasFx, trackFxFor, withTrackFx } from '@/lib/clips/editor/track-fx'
 import { TransitionPopover } from '@/components/clips/editor/timeline/transition-popover'
 import { MEDIA_DND_TYPE, type MediaDropLane } from '@/lib/clips/editor/media-add'
 import { segmentMediaMs, sourceById, sourceSegmentWindows } from '@/lib/clips/editor/sources'
@@ -202,6 +210,9 @@ const GLOBAL_COMMANDS = new Set<TimelineCommand>([
   'nextEdit',
   'help',
   'rippleDeleteRange',
+  'nextTake',
+  'prevTake',
+  'matchFrame',
 ])
 
 function hasDomTextSelection(): boolean {
@@ -251,6 +262,7 @@ export function Timeline({
   selectedSourceSegmentId = null,
   selectRequest = null,
   angleSources = NO_SOURCES,
+  onMatchFrame,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -300,6 +312,8 @@ export function Timeline({
   onSelectSourceSegment?: (id: string) => void
   /** G1b2: synced camera angles in the project media library (keys 1–9 / Camera angle menu). */
   angleSources?: readonly ClipMediaSource[]
+  /** G1c: F — open the source media at the playhead's moment (output ms). */
+  onMatchFrame?: (outMs: number) => boolean
   selectedSourceSegmentId?: string | null
   /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
   selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
@@ -577,6 +591,12 @@ export function Timeline({
   // G1b: in / out marks (output ms), shortcuts sheet, add-track menu.
   const [io, setIo] = useState<InOut>({ inMs: null, outMs: null })
   const [helpOpen, setHelpOpen] = useState(false)
+  // G1c: open track-FX inspector (key: voice | music | au<N> | ov<N>).
+  const [fxPanel, setFxPanel] = useState<{ key: string; label: string } | null>(null)
+  // G1c: pacing checker panel.
+  const [pacingOpen, setPacingOpen] = useState(false)
+  // G1c: track motion inspector (overlay tracks).
+  const [motionPanel, setMotionPanel] = useState<{ key: string; label: string } | null>(null)
   const [addMenu, setAddMenu] = useState(false)
   // G1b: Vegas-style envelopes (opacity on visual items, volume on Voice / Music) drawn on items.
   const [envOn, setEnvOn] = useState(false)
@@ -792,10 +812,56 @@ export function Timeline({
       case 'help':
         setHelpOpen(true)
         return true
+      case 'nextTake':
+        return cycleTake(1)
+      case 'prevTake':
+        return cycleTake(-1)
+      case 'matchFrame':
+        return onMatchFrame ? onMatchFrame(playheadMs) : false
       default:
         return false
     }
   }
+  // G1c takes: the selected B-roll item's group, else the main take under the playhead.
+  const cycleTake = (dir: 1 | -1): boolean => {
+    if (!editable) return false
+    const sel = liveSelected.length === 1 ? liveSelected[0]! : null
+    if (sel?.lane === 'broll' && takeGroupOfBroll(edits, sel.id)) {
+      const r = cycleBrollTake(edits, sel.id, dir)
+      if (!r) return false
+      commit(r.edits)
+      setSelected([{ lane: 'broll', id: r.active }])
+      return true
+    }
+    const g = takeGroupAtSource(edits, outputToSource(tb, playheadMs))
+    if (g) {
+      commit(cycleMainTake(edits, g.id, dir))
+      return true
+    }
+    toast.message('No takes here — select clips and use “Group as takes”', { id: 'timeline-takes' })
+    return true
+  }
+  const groupTakes = () => {
+    const br = liveSelected.filter((r) => r.lane === 'broll').map((r) => r.id)
+    if (br.length >= 2) return groupBrollTakes(edits, br)
+    const vids = liveSelected
+      .filter((r) => r.lane === 'video')
+      .map((r) => lanes.video.find((i) => i.id === r.id))
+      .filter((i): i is NonNullable<typeof i> => Boolean(i && i.srcInMs != null && i.srcOutMs != null))
+      .map((i) => [i.srcInMs!, i.srcOutMs!] as [number, number])
+      .sort((a, b) => a[0] - b[0])
+    return vids.length >= 2 ? groupMainTakes(edits, vids, 0) : null
+  }
+  const selTakeGroupId = (() => {
+    const sel = liveSelected.length === 1 ? liveSelected[0]! : null
+    if (!sel) return null
+    if (sel.lane === 'broll') return takeGroupOfBroll(edits, sel.id)?.id ?? null
+    if (sel.lane === 'video') {
+      const it = lanes.video.find((i) => i.id === sel.id)
+      return it?.srcInMs != null ? (takeGroupAtSource(edits, it.srcInMs)?.id ?? null) : null
+    }
+    return null
+  })()
   const cmdRef = useRef(runCommand)
   cmdRef.current = runCommand
   const addTrackOf = (kind: TrackKind, above?: string) => {
@@ -807,11 +873,27 @@ export function Timeline({
     commit(r.edits)
     setAddMenu(false)
   }
+  /** G1c: which track-FX key a row has (text tracks and the main picture have none). */
+  const fxKeyOf = (r: TimelineRow): string | null =>
+    r.lane === 'voice' || r.lane === 'music' ? r.lane : r.trackId && (r.lane === 'sfx' || r.lane === 'broll') ? r.trackId : null
+  const fxActions = (r: TimelineRow): { onFx?: () => void; fxOn?: boolean; onMotion?: () => void; motionOn?: boolean } => {
+    const key = fxKeyOf(r)
+    if (!key) return {}
+    const fx = { onFx: () => setFxPanel({ key, label: r.label }), fxOn: hasFx(trackFxFor(edits, key)) }
+    if (r.lane !== 'broll' || !r.trackId) return fx
+    const tid = r.trackId
+    return { ...fx, onMotion: () => setMotionPanel({ key: tid, label: r.label }), motionOn: Boolean(trackMotionFor(edits, tid)) }
+  }
   const trackActions = (r: TimelineRow) => {
-    if (!r.trackId || !editable) return undefined
+    if (!editable) return undefined
+    if (!r.trackId) {
+      const fx = fxActions(r)
+      return fx.onFx ? fx : undefined
+    }
     const mv = trackMoves(edits, r.trackId)
     const kind = LANE_TRACK_KIND[r.lane]!
     return {
+      ...fxActions(r),
       visual: kind !== 'audio',
       onRename: (name: string) => commit(renameTrack(edits, r.trackId!, name)),
       onMoveUp: mv.up ? () => commit(moveTrack(edits, r.trackId!, 'up')) : undefined,
@@ -1536,6 +1618,16 @@ export function Timeline({
           ) : null}
           <button
             type="button"
+            className={`${tbtn} w-auto px-1 text-[10px] ${pacingOpen ? 'text-primary' : 'text-muted-foreground'}`}
+            onClick={() => setPacingOpen((v) => !v)}
+            aria-pressed={pacingOpen}
+            title="Pacing check: long static shots, slivers, tiny gaps"
+            data-testid="timeline-pacing"
+          >
+            Pacing
+          </button>
+          <button
+            type="button"
             className={tbtn}
             onClick={() => setHelpOpen(true)}
             aria-label="Keyboard shortcuts"
@@ -1642,6 +1734,31 @@ export function Timeline({
           onCommit={(next) => commit(next)}
           onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
           readOnly={!editable || refLocked(edits, inspected.item)}
+        />
+      ) : null}
+      {pacingOpen ? (
+        <PacingPanel edits={edits} tb={tb} onSeekOutput={onSeekOutput} onCommit={commit} onClose={() => setPacingOpen(false)} readOnly={!editable} />
+      ) : null}
+      {motionPanel ? (
+        <TrackMotionPanel
+          trackId={motionPanel.key}
+          label={motionPanel.label}
+          keys={trackMotionFor(edits, motionPanel.key)?.keys ?? []}
+          playheadMs={playheadMs}
+          readOnly={!editable}
+          onChange={(keys) => commit({ ...edits, trackMotion: withTrackMotion(edits.trackMotion, motionPanel.key, keys) })}
+          onMainPreset={(p) => commit(applyMainPreset(edits, p))}
+          onClose={() => setMotionPanel(null)}
+        />
+      ) : null}
+      {fxPanel ? (
+        <TrackFxPanel
+          fxKey={fxPanel.key}
+          label={fxPanel.label}
+          fx={trackFxFor(edits, fxPanel.key)}
+          readOnly={!editable}
+          onChange={(body) => commit({ ...edits, trackFx: withTrackFx(edits.trackFx, fxPanel.key, body) })}
+          onClose={() => setFxPanel(null)}
         />
       ) : null}
       {singleSel && singleSel.lane === 'video' && singleSel.srcInMs != null && singleSel.srcOutMs != null && editable ? (
@@ -2057,6 +2174,70 @@ export function Timeline({
                 >
                   Detach audio
                 </button>
+              ) : null}
+              {liveSelected.length === 1 && canSplitStereo(edits, liveSelected[0]!.lane, liveSelected[0]!.id) ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-split-stereo"
+                  onClick={() => {
+                    // G1c: left / right channel each onto its own new audio track (own FX, mute, envelope).
+                    const r = splitStereoToTracks(edits, liveSelected[0]!.lane, liveSelected[0]!.id)
+                    if (r) {
+                      commit(r.edits)
+                      setSelected(r.ids.map((id) => ({ lane: 'sfx' as const, id })))
+                    }
+                    setCtxMenu(null)
+                  }}
+                >
+                  Split stereo to L/R tracks
+                </button>
+              ) : null}
+              {editable && (liveSelected.filter((r) => r.lane === 'broll').length >= 2 || liveSelected.filter((r) => r.lane === 'video').length >= 2) ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-group-takes"
+                  onClick={() => {
+                    // G1c: alternates in one slot; only the active take renders, T cycles.
+                    const n = groupTakes()
+                    if (n) commit(n)
+                    else toast.message('Pick 2–8 B-roll clips, or 2–8 Video clips that don’t overlap', { id: 'timeline-takes' })
+                    setCtxMenu(null)
+                  }}
+                >
+                  Group as takes
+                </button>
+              ) : null}
+              {editable && selTakeGroupId ? (
+                <>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                    role="menuitem"
+                    data-testid="timeline-next-take"
+                    onClick={() => {
+                      cycleTake(1)
+                      setCtxMenu(null)
+                    }}
+                  >
+                    Next take (T)
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                    role="menuitem"
+                    data-testid="timeline-ungroup-takes"
+                    onClick={() => {
+                      commit(ungroupTakes(edits, selTakeGroupId))
+                      setCtxMenu(null)
+                    }}
+                  >
+                    Ungroup takes
+                  </button>
+                </>
               ) : null}
               {liveSelected.length ? (
                 <button

@@ -1,0 +1,358 @@
+{
+ "fx_cases": [
+  {
+   "raw": [
+    {
+     "track": "voice",
+     "nr": 15.456,
+     "eq": {
+      "hp": 95.4,
+      "low": -3.333,
+      "mid": 2,
+      "midHz": 3000.6,
+      "high": 20
+     },
+     "comp": {
+      "threshold": -24,
+      "ratio": 4,
+      "attack": 5,
+      "release": 200,
+      "makeup": 3
+     },
+     "limit": -1,
+     "lufs": -16
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "nr": 15.46,
+     "eq": {
+      "hp": 95,
+      "low": -3.33,
+      "mid": 2,
+      "high": 12,
+      "midHz": 3001
+     },
+     "comp": {
+      "threshold": -24,
+      "ratio": 4,
+      "attack": 5,
+      "release": 200,
+      "makeup": 3
+     },
+     "limit": -1,
+     "lufs": -16
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "music",
+     "lufs": -50,
+     "limit": 5
+    },
+    {
+     "track": "au2",
+     "comp": {
+      "threshold": -100,
+      "ratio": 0.5,
+      "attack": 0,
+      "release": 99999,
+      "makeup": 40
+     }
+    }
+   ],
+   "out": [
+    {
+     "track": "au2",
+     "comp": {
+      "threshold": -60,
+      "ratio": 1,
+      "attack": 0.1,
+      "release": 2000,
+      "makeup": 24
+     }
+    },
+    {
+     "track": "music",
+     "limit": 0,
+     "lufs": -36
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "ov1",
+     "color": {
+      "preset": "warm",
+      "intensity": 50
+     }
+    },
+    {
+     "track": "bad key!",
+     "nr": 10
+    },
+    {
+     "track": "au1",
+     "bypass": true,
+     "nr": 3
+    }
+   ],
+   "out": [
+    {
+     "track": "au1",
+     "nr": 6,
+     "bypass": true
+    },
+    {
+     "track": "ov1",
+     "color": {
+      "preset": "warm",
+      "intensity": 50
+     }
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "voice"
+    },
+    {
+     "track": "voice",
+     "nr": 12
+    },
+    {
+     "track": "music",
+     "eq": {}
+    }
+   ],
+   "out": [
+    {
+     "track": "voice",
+     "nr": 12
+    }
+   ]
+  },
+  {
+   "raw": [
+    {
+     "track": "ov2",
+     "color": {
+      "adjust": {
+       "brightness": 20
+      }
+     }
+    },
+    {
+     "track": "tx1",
+     "nr": 9
+    }
+   ],
+   "out": [
+    {
+     "track": "ov2",
+     "color": {
+      "adjust": {
+       "brightness": 20
+      }
+     }
+    }
+   ]
+  },
+  {
+   "raw": "nope",
+   "out": []
+  }
+ ],
+ "gain_cases": [
+  {
+   "measured": -20,
+   "target": -16,
+   "gain": 4
+  },
+  {
+   "measured": -80,
+   "target": -16,
+   "gain": null
+  },
+  {
+   "measured": -30,
+   "target": 0,
+   "gain": 24
+  },
+  {
+   "measured": 10,
+   "target": -36,
+   "gain": -24
+  },
+  {
+   "measured": null,
+   "target": -16,
+   "gain": null
+  },
+  {
+   "measured": -18.333,
+   "target": -14,
+   "gain": 4.33
+  }
+ ],
+ "color_cases": [
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2",
+       "b3"
+      ]
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "a1",
+      "startMs": 0,
+      "endMs": 1000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "a2",
+      "startMs": 1000,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "a3",
+      "startMs": 2000,
+      "endMs": 3000
+     }
+    ],
+    "color": {
+     "broll": {
+      "b3": {
+       "preset": "bw"
+      }
+     }
+    },
+    "trackFx": [
+     {
+      "track": "ov1",
+      "color": {
+       "preset": "cool"
+      }
+     },
+     {
+      "track": "ov2",
+      "color": {
+       "preset": "warm",
+       "intensity": 40
+      }
+     }
+    ]
+   },
+   "color_broll": {
+    "b3": {
+     "preset": "bw"
+    },
+    "b1": {
+     "preset": "cool"
+    },
+    "b2": {
+     "preset": "warm",
+     "intensity": 40
+    }
+   }
+  },
+  {
+   "edits": {
+    "tracks": [
+     {
+      "id": "ov1",
+      "kind": "overlay"
+     },
+     {
+      "id": "ov2",
+      "kind": "overlay",
+      "items": [
+       "b2",
+       "b3"
+      ]
+     },
+     {
+      "id": "tx1",
+      "kind": "text"
+     },
+     {
+      "id": "au1",
+      "kind": "audio"
+     }
+    ],
+    "broll": [
+     {
+      "id": "b1",
+      "source": "stock",
+      "assetId": "a1",
+      "startMs": 0,
+      "endMs": 1000
+     },
+     {
+      "id": "b2",
+      "source": "stock",
+      "assetId": "a2",
+      "startMs": 1000,
+      "endMs": 2000
+     },
+     {
+      "id": "b3",
+      "source": "stock",
+      "assetId": "a3",
+      "startMs": 2000,
+      "endMs": 3000
+     }
+    ],
+    "color": {
+     "broll": {
+      "b3": {
+       "preset": "bw"
+      }
+     }
+    },
+    "trackFx": [
+     {
+      "track": "ov2",
+      "color": {
+       "preset": "warm"
+      },
+      "bypass": true
+     }
+    ]
+   },
+   "color_broll": {
+    "b3": {
+     "preset": "bw"
+    }
+   }
+  }
+ ]
+}

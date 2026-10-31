@@ -92,6 +92,8 @@ import { toast } from 'sonner'
 import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel-error-boundary'
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
+import type { MonitorRequest } from '@/components/clips/editor/source-monitor'
+import { matchFrameAt } from '@/lib/clips/editor/source-monitor'
 import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/clips/editor/use-project-media'
 import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
@@ -651,6 +653,19 @@ export function EditorShell({
     () => sourceMsAtOutput(previewEditsForTimeline, outputMs),
     [previewEditsForTimeline, outputMs],
   )
+  // G1c: source monitor (Media panel) + match frame (F on the timeline).
+  const timelineTb = useMemo(() => timebaseFor(previewEditsForTimeline), [previewEditsForTimeline])
+  const [monitorRequest, setMonitorRequest] = useState<MonitorRequest | null>(null)
+  const matchFrame = (outMs: number): boolean => {
+    const m = matchFrameAt(renderEdits, timelineTb, outMs, media.items)
+    if (!m) {
+      toast.message('No source media at the playhead', { id: 'match-frame' })
+      return true
+    }
+    setMonitorRequest((r) => ({ itemId: m.itemId, mediaMs: m.mediaMs, seq: (r?.seq ?? 0) + 1 }))
+    selectPanel('media')
+    return true
+  }
 
   const onLayoutMode = useCallback(
     (
@@ -1613,6 +1628,9 @@ export function EditorShell({
             onReplaceSelected={onReplaceSelected}
             onEdits={setEdits}
             playheadSourceMs={playheadSourceMs}
+            monitorRequest={monitorRequest}
+            timebase={timelineTb}
+            playheadOutMs={outputMs}
           />
           </EditorPanelErrorBoundary>
         </div>
@@ -1862,6 +1880,7 @@ export function EditorShell({
             onSelectSourceSegment={onSelectSourceSegment}
             selectedSourceSegmentId={selectedSourceSegmentId}
             selectRequest={timelineSelReq}
+            onMatchFrame={matchFrame}
           />
           <PlayerControls
             playing={playing}

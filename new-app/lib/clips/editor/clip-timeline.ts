@@ -38,6 +38,8 @@ import {
   type LaneState,
   type TimelineLanesState,
 } from '@/lib/clips/editor/timeline-lane-state'
+import { applyTrackRender } from '@/lib/clips/editor/track-render'
+import { inactiveBrollTakeIds, mainTakeLabel, takeLabel } from '@/lib/clips/editor/takes'
 import {
   applyTrackState,
   DEFAULT_TRACK_ID,
@@ -197,7 +199,8 @@ export function setLaneState(edits: ClipEditsV2, lane: LaneId, patch: LaneState)
  */
 export function applyTimelineLaneState(edits: ClipEditsV2): ClipEditsV2 {
   // G1b: hidden overlay / text tracks and muted audio tracks (non-default tracks) first.
-  const base = applyTrackState(edits)
+  // G1c: takes / track color / track motion (worker: track_render.apply_track_render).
+  const base = applyTrackRender(applyTrackState(edits))
   const lanes = normalizeTimelineLanes(base.timelineLanes)
   if (!lanes) return base
   let next: ClipEditsV2 = base
@@ -327,7 +330,7 @@ export function buildTimelineItems(input: {
       endMs: startMs + (b - a),
       srcInMs: a,
       srcOutMs: b,
-      label: `Clip ${i + 1}`,
+      label: mainTakeLabel(edits, a, b) ? `Clip ${i + 1} · ${mainTakeLabel(edits, a, b)}` : `Clip ${i + 1}`,
       caps: { move: false, trimStart: true, trimEnd: true, split: true, del: multi },
     })
   })
@@ -350,14 +353,19 @@ export function buildTimelineItems(input: {
     })
   })
 
+  // G1c: inactive takes are hidden (T cycles); the active one is labelled "Take i/n".
+  const offTakes = inactiveBrollTakeIds(edits)
   for (const item of edits.broll ?? []) {
+    if (offTakes.has(item.id)) continue
+    const tk = takeLabel(edits, item.id)
+    const kind = item.source === 'ai' ? 'AI B-roll' : item.source === 'upload' ? (item.still ? 'Image' : 'Upload B-roll') : 'Stock B-roll'
     lanes.broll.push({
       lane: 'broll',
       id: item.id,
       startMs: item.startMs,
       endMs: item.endMs,
       inMs: item.inMs ?? 0,
-      label: item.source === 'ai' ? 'AI B-roll' : item.source === 'upload' ? (item.still ? 'Image' : 'Upload B-roll') : 'Stock B-roll',
+      label: tk ? `${kind} · ${tk}` : kind,
       caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
       track: trackIdOf(edits, 'overlay', item.id, tracks),
     })

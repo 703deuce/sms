@@ -86,7 +86,7 @@ export function useSfxCues(
       const b = buffers[s.generationId]
       if (!b) continue
       durationsMs[s.generationId] = Math.round(b.duration * 1000)
-      cues.push({ buffer: b, atMs: s.atMs, volume: s.volume ?? 0.8, generationId: s.generationId, inMs: s.inMs, durMs: s.durMs })
+      cues.push({ buffer: b, atMs: s.atMs, volume: s.volume ?? 0.8, generationId: s.generationId, inMs: s.inMs, durMs: s.durMs, ...(s.channel ? { channel: s.channel } : {}) })
     }
     return { cues, durationsMs }
   }, [buffers, sfx])

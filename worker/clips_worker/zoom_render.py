@@ -93,24 +93,43 @@ def build_zoom_keyframes(
 
 
 def _scale_factor_expr(keyframes: list[tuple[float, float]]) -> str:
+    """Piecewise-linear zoom factor over output time ``t`` (1 before the first / after the last key).
+
+    FV4a: a BALANCED ``if(lt(t,..))`` tree (depth log2 n). The old linear ``if(between(..),..,if(..))``
+    chain added one nesting level per segment, so a full-length video with more than ~25 emphasis
+    punches went past ffmpeg's ~100-level expression limit and the zoom pass died with EINVAL
+    ("Invalid argument") — after the whole render had already run (12-min export, 31 Oct).
+    """
     if not keyframes:
         return "1"
     if all(z == 1.0 for _, z in keyframes):
         return "1"
-    parts: list[str] = []
+    from clips_worker.ffexpr import balanced_piecewise
+
+    pieces: list[str] = ["1"]
+    thresholds: list[str] = []
     for i in range(len(keyframes) - 1):
         t0, z0 = keyframes[i]
         t1, z1 = keyframes[i + 1]
         if abs(t1 - t0) < 1e-6:
             continue
         if abs(z0 - z1) < 1e-6:
-            seg = f"if(between(t,{t0:.4f},{t1:.4f}),{z0:.6f}"
+            seg = f"{z0:.6f}"
         else:
             slope = (z1 - z0) / (t1 - t0)
-            seg = f"if(between(t,{t0:.4f},{t1:.4f}),{z0:.6f}+{slope:.6f}*(t-{t0:.4f})"
-        parts.append(seg)
-    expr = parts[0] if len(parts) == 1 else ",".join(parts) + ",1" + ")" * len(parts)
-    return expr
+            seg = f"({z0:.6f}+{slope:.6f}*(t-{t0:.4f}))"
+        if not thresholds:
+            thresholds.append(f"{t0:.4f}")
+        elif thresholds[-1] != f"{t0:.4f}":
+            # gap between segments (not produced by build_zoom_keyframes) → 1 there, as before
+            pieces.append("1")
+            thresholds.append(f"{t0:.4f}")
+        pieces.append(seg)
+        thresholds.append(f"{t1:.4f}")
+    if not thresholds:
+        return "1"
+    pieces.append("1")  # after the last key (build_zoom_keyframes always ends at zoom 1.0)
+    return balanced_piecewise("t", thresholds, pieces)
 
 
 def _centre_offset_expr(z_expr: str, size: int) -> str:
@@ -176,6 +195,16 @@ def apply_zoom(
             str(video),
             "-vf",
             vf,
+            # FV4a: same encode as the other export passes (was libx264 defaults: preset medium,
+            # ~2-3x slower on a full-length 1080p video).
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "20",
+            "-pix_fmt",
+            "yuv420p",
             "-c:a",
             "copy",
             str(out),

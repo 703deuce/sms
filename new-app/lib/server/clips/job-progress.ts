@@ -20,6 +20,21 @@ async function isLatestT2vAssembleJob(projectId: string, jobId: string): Promise
   return latest?.id === jobId
 }
 
+/**
+ * FV4a: progress from a worker copy that no longer owns the job. The web watchdog / stale-lock
+ * recovery requeues a job (status QUEUED, lockedBy NULL) and another slot may re-claim it (lockedBy =
+ * that slot). The old copy's heartbeats used to flip a QUEUED job back to RUNNING and overwrite the
+ * new attempt's progress.
+ */
+export function isStaleWorkerPost(
+  stored: { status: string; lockedBy?: string | null },
+  body: { workerId?: string; jobStatus?: string; progress?: number },
+): boolean {
+  if (body.workerId && stored.lockedBy && stored.lockedBy !== body.workerId) return true
+  if (stored.status === 'QUEUED' && (body.jobStatus !== undefined || body.progress !== undefined)) return true
+  return false
+}
+
 /** Single round-trip progress apply for worker heartbeats (no transcript blob). */
 export async function applyWorkerJobProgress(input: {
   jobId: string
@@ -42,6 +57,11 @@ export async function applyWorkerJobProgress(input: {
   clipsTotal?: number
   transcriptionEngine?: 'deepgram' | 'local_whisper'
   transcriptionFallbackReason?: string
+  /** FV4a: export render detail (real ffmpeg progress). */
+  activity?: string
+  renderStep?: number
+  renderSteps?: number
+  stepPct?: number
 }) {
   const prisma = getPrisma()
 
@@ -134,9 +154,24 @@ export async function applyWorkerJobProgress(input: {
     })
     const prevPayload = (existingJob?.payload ?? {}) as Record<string, unknown>
     const prevWd = prevPayload.clipperWatchdog as ClipperWatchdogSnap | undefined
-    jobPayloadPatch.clipperWatchdog = mergeWatchdogSnap(prevWd, input.stage, input.progress)
+    jobPayloadPatch.clipperWatchdog = mergeWatchdogSnap(
+      prevWd,
+      input.stage,
+      input.progress,
+      Date.now(),
+      input.activity,
+    )
     if (input.etaSeconds !== undefined && input.jobType === 'RENDER_CLIP') {
       jobPayloadPatch.renderEtaSeconds = input.etaSeconds
+    }
+    if (input.jobType === 'RENDER_CLIP' && input.renderStep !== undefined) {
+      jobPayloadPatch.renderDetail = {
+        step: input.renderStep,
+        steps: input.renderSteps ?? input.renderStep,
+        stepPct: input.stepPct ?? null,
+      }
+      // No measured ETA yet → drop the previous attempt's / fake one instead of showing it forever.
+      if (input.etaSeconds === undefined) jobPayloadPatch.renderEtaSeconds = null
     }
   }
 

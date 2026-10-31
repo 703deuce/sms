@@ -19,6 +19,7 @@ def build_audio_filter(
     music_volume_expr: str | None = None,
     sfx_volume_exprs: list[str | None] | None = None,
     sfx_trims: list | None = None,
+    track_fx: dict | None = None,
 ) -> tuple[str, str]:
     """
     Returns (filter_complex, audio_map_label).
@@ -37,6 +38,7 @@ def build_audio_filter(
 
     if has_music:
         parts.append(music_chain(music_input_index, L, V, FI, FO, music_window, "mv", music_volume_expr))
+        music_fx(parts, track_fx)
         parts.append(
             f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
         )
@@ -50,12 +52,53 @@ def build_audio_filter(
         at_ms = int(spec.get("at_ms", 0))
         vol = float(spec.get("volume", 0.8))
         label = f"s{i}"
-        parts.append(f"[{inp}:a]{sfx_trim(sfx_trims, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
+        parts.append(f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
         mix_inputs.append(f"[{label}]")
+    mix_inputs = sfx_buses(parts, mix_inputs, len(sfx_specs), track_fx)
 
     n = len(mix_inputs)
     parts.append(f"{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0,alimiter=limit=0.95[aout]")
     return ";".join(parts), "[aout]"
+
+
+def sfx_chan(track_fx: dict | None, i: int) -> str:
+    """G1c split stereo: one channel of the media as mono (mono media: its only channel)."""
+    ch = ((track_fx or {}).get("channels") or [])
+    c = ch[i] if i < len(ch) else None
+    if c not in ("L", "R"):
+        return ""
+    return f"aformat=channel_layouts=stereo,pan=mono|c0={'c0' if c == 'L' else 'c1'},"
+
+
+def music_fx(parts: list[str], track_fx: dict | None) -> None:
+    """G1c: the music track chain on [mv] (before ducking), in place."""
+    chain = (track_fx or {}).get("music")
+    if chain and parts and parts[-1].endswith("[mv]"):
+        parts[-1] = parts[-1][: -len("[mv]")] + "[mv0]"
+        parts.append(f"[mv0]{chain}[mv]")
+
+
+def sfx_buses(parts: list[str], mix_inputs: list[str], n_sfx: int, track_fx: dict | None) -> list[str]:
+    """G1c: SFX on a track with a chain are summed into one bus, the chain runs on the bus."""
+    buses = (track_fx or {}).get("buses") or []
+    chains = (track_fx or {}).get("bus_fx") or {}
+    if not chains or not n_sfx:
+        return mix_inputs
+    head = mix_inputs[: len(mix_inputs) - n_sfx]
+    sfx_labels = mix_inputs[len(mix_inputs) - n_sfx:]
+    groups: dict[str, list[str]] = {}
+    out = list(head)
+    for i, lab in enumerate(sfx_labels):
+        key = buses[i] if i < len(buses) else None
+        if key and chains.get(key):
+            groups.setdefault(key, []).append(lab)
+        else:
+            out.append(lab)
+    for j, (key, labs) in enumerate(sorted(groups.items())):
+        sum_ = f"amix=inputs={len(labs)}:duration=longest:normalize=0," if len(labs) > 1 else ""
+        parts.append(f"{''.join(labs)}{sum_}{chains[key]}[bus{j}]")
+        out.append(f"[bus{j}]")
+    return out
 
 
 def sfx_trim(trims, i: int) -> str:
@@ -139,10 +182,12 @@ def apply_audio_mix(
     music_volume_expr: str | None = None,
     sfx_volume_exprs: list[str | None] | None = None,
     sfx_trims: list | None = None,
+    track_fx: dict | None = None,
 ) -> None:
     has_music = music_path is not None and music_path.is_file()
     sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
     fc, alabel = build_audio_filter(
+        track_fx=track_fx,
         music_volume_expr=music_volume_expr,
         sfx_volume_exprs=sfx_volume_exprs,
         sfx_trims=sfx_trims,
@@ -364,6 +409,7 @@ def apply_dub_speech_mix(
     speech_volume_expr: str | None = None,
     sfx_volume_exprs: list[str | None] | None = None,
     sfx_trims: list | None = None,
+    track_fx: dict | None = None,
 ) -> None:
     """Replace speech with dub audio; duck music against dub track.
     E3: speech_volume_expr = Voice-lane volume envelope (the dub is the voice)."""
@@ -380,6 +426,7 @@ def apply_dub_speech_mix(
     mix_inputs = ["[sp]"]
     if has_music:
         parts.append(music_chain(2, L, V, FI, FO, music_window, "mv", music_volume_expr))
+        music_fx(parts, track_fx)
         parts.append(
             f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
         )
@@ -392,8 +439,9 @@ def apply_dub_speech_mix(
         at_ms = int(spec.get("at_ms", 0))
         vol = float(spec.get("volume", 0.8))
         label = f"s{i}"
-        parts.append(f"[{inp}:a]{sfx_trim(sfx_trims, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
+        parts.append(f"[{inp}:a]{sfx_chan(track_fx, i)}{sfx_trim(sfx_trims, i)}adelay={at_ms}|{at_ms},volume={vol:.4f}{sfx_env(sfx_volume_exprs, i)}[{label}]")
         mix_inputs.append(f"[{label}]")
+    mix_inputs = sfx_buses(parts, mix_inputs, len(sfx_specs), track_fx)
     n = len(mix_inputs)
     parts.append(f"{''.join(mix_inputs)}amix=inputs={n}:duration=first:normalize=0,alimiter=limit=0.95[aout]")
     fc = ";".join(parts)

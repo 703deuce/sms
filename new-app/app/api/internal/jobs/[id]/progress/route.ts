@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { jsonError } from '@/lib/server/api-error'
-import { applyWorkerJobProgress } from '@/lib/server/clips/job-progress'
+import { applyWorkerJobProgress, isStaleWorkerPost } from '@/lib/server/clips/job-progress'
 import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
@@ -23,6 +23,12 @@ const schema = z.object({
   clipsTotal: z.number().int().min(0).optional(),
   transcriptionEngine: z.enum(['deepgram', 'local_whisper']).optional(),
   transcriptionFallbackReason: z.string().max(500).optional(),
+  // FV4a: worker slot id + real export progress detail.
+  workerId: z.string().max(200).optional(),
+  activity: z.string().max(200).optional(),
+  renderStep: z.number().int().min(0).max(1000).optional(),
+  renderSteps: z.number().int().min(0).max(1000).optional(),
+  stepPct: z.number().int().min(0).max(100).optional(),
 })
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -43,10 +49,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         type: true,
         payload: true,
         error: true,
+        lockedBy: true,
         project: { select: { transcriptKey: true, sourceKind: true } },
       },
     })
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (isStaleWorkerPost({ status: job.status, lockedBy: job.lockedBy }, body)) {
+      console.info('[clipper:job] stale_worker_progress_ignored', {
+        jobId,
+        status: job.status,
+        lockedBy: job.lockedBy,
+        workerId: body.workerId ?? null,
+      })
+      return NextResponse.json({ data: { ok: true, ignored: 'stale_worker' } })
+    }
 
     const payload = (job.payload ?? {}) as { draftId?: string }
     const isT2vAssemble = job.type === 'T2V_ASSEMBLE'
@@ -87,6 +103,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       clipsTotal: body.clipsTotal,
       transcriptionEngine: body.transcriptionEngine,
       transcriptionFallbackReason: body.transcriptionFallbackReason,
+      activity: body.activity,
+      renderStep: body.renderStep,
+      renderSteps: body.renderSteps,
+      stepPct: body.stepPct,
     })
 
     return NextResponse.json({ data: { ok: true } })

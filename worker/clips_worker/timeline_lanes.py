@@ -54,6 +54,10 @@ def apply_timeline_lane_state(edits: dict) -> dict:
 
     # G1b: hidden overlay / text tracks and muted audio tracks first (non-default tracks).
     edits = apply_track_state(edits)
+    # G1c: takes / track color / track motion (preview applies the same in applyTimelineLaneState).
+    from clips_worker.track_render import apply_track_render
+
+    edits = apply_track_render(edits)
     lanes = normalize_timeline_lanes(edits.get("timelineLanes"))
     if not lanes:
         return edits

@@ -13,6 +13,12 @@ export type TrackHeaderActions = {
   onRemove?: () => void
   /** Visual tracks: "up" = toward the front. */
   visual?: boolean
+  /** G1c: open this track's effect chain (audio FX / overlay color). */
+  onFx?: () => void
+  fxOn?: boolean
+  /** G1c: open this track's motion (position / scale / crop, keyframable). */
+  onMotion?: () => void
+  motionOn?: boolean
 }
 
 const btn =
@@ -52,6 +58,16 @@ export function TimelineLaneHeader({
       data-testid={`timeline-lane-header-${tk}`}
     >
       <TrackName name={name} tk={tk} onRename={track?.onRename} />
+      {track?.fxOn && track.onFx ? (
+        <button type="button" className={`${btn} w-auto px-0.5 text-[9px] font-semibold text-primary`} onClick={track.onFx} title="Track FX" data-testid={`timeline-track-fx-badge-${tk}`}>
+          FX
+        </button>
+      ) : null}
+      {track?.motionOn && track.onMotion ? (
+        <button type="button" className={`${btn} w-auto px-0.5 text-[9px] font-semibold text-primary`} onClick={track.onMotion} title="Track motion" data-testid={`timeline-track-motion-badge-${tk}`}>
+          TM
+        </button>
+      ) : null}
       {track ? <TrackMenu tk={tk} name={name} actions={track} /> : null}
       {lane === 'video' && onOpenCover ? (
         <button type="button" className={btn} onClick={onOpenCover} title="Cover / thumbnail" aria-label="Open cover">
@@ -185,12 +201,26 @@ function TrackMenu({ tk, name, actions }: { tk: string; name: string; actions: T
               Rename…
             </button>
           ) : null}
-          <button type="button" role="menuitem" className={item} disabled={!actions.onMoveUp} onClick={run(actions.onMoveUp)} data-testid={`timeline-track-up-${tk}`}>
-            {actions.visual ? 'Bring track forward' : 'Move up'}
-          </button>
-          <button type="button" role="menuitem" className={item} disabled={!actions.onMoveDown} onClick={run(actions.onMoveDown)} data-testid={`timeline-track-down-${tk}`}>
-            {actions.visual ? 'Send track backward' : 'Move down'}
-          </button>
+          {actions.onFx ? (
+            <button type="button" role="menuitem" className={item} onClick={run(actions.onFx)} data-testid={`timeline-track-fx-${tk}`}>
+              Track FX…
+            </button>
+          ) : null}
+          {actions.onMotion ? (
+            <button type="button" role="menuitem" className={item} onClick={run(actions.onMotion)} data-testid={`timeline-track-motion-${tk}`}>
+              Track motion…
+            </button>
+          ) : null}
+          {actions.visual !== undefined ? (
+            <>
+              <button type="button" role="menuitem" className={item} disabled={!actions.onMoveUp} onClick={run(actions.onMoveUp)} data-testid={`timeline-track-up-${tk}`}>
+                {actions.visual ? 'Bring track forward' : 'Move up'}
+              </button>
+              <button type="button" role="menuitem" className={item} disabled={!actions.onMoveDown} onClick={run(actions.onMoveDown)} data-testid={`timeline-track-down-${tk}`}>
+                {actions.visual ? 'Send track backward' : 'Move down'}
+              </button>
+            </>
+          ) : null}
           {actions.onAddAbove ? (
             <button type="button" role="menuitem" className={item} onClick={run(actions.onAddAbove)} data-testid={`timeline-track-add-${tk}`}>
               {actions.visual ? 'Add track above' : 'Add track below'}

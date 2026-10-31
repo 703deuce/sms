@@ -8,8 +8,11 @@ import { normalizeEditSpeed } from '@/lib/clips/edits'
 import { musicWindow } from '@/lib/clips/editor/clip-timeline'
 import { findTrack, trackValueAt, volumeAt } from '@/lib/clips/editor/keyframes'
 import type { SourceWord } from '@/lib/clips/source-words'
+import { audioFxActive, buildFxChain, fxPlanKey, trackFxFor, webAudioPlan } from '@/lib/clips/editor/track-fx'
+import { trackIdOf } from '@/lib/clips/editor/tracks'
+import { connectChannel, useTrackFxLufs } from '@/components/clips/editor/use-track-fx-lufs'
 
-type SfxCue = { buffer: AudioBuffer; atMs: number; volume: number; generationId: string; inMs?: number; durMs?: number }
+type SfxCue = { buffer: AudioBuffer; atMs: number; volume: number; generationId: string; inMs?: number; durMs?: number; channel?: 'L' | 'R' }
 
 export function useAudioMix({
   videoRef,
@@ -58,6 +61,55 @@ export function useAudioMix({
 
   const audio = edits.audio
 
+  // G1c track FX: one Web Audio chain per track key (voice / music / audio tracks).
+  const lufsGains = useTrackFxLufs({ edits, sfxCues, musicUrl, outputDurationMs })
+  const chainsRef = useRef(new Map<string, { key: string; input: AudioNode; nodes: AudioNode[] }>())
+  const fxKeyRef = useRef('')
+  /** Input node for a track key: its chain when active, else the destination. */
+  const fxInput = (ctx: AudioContext, key: string): AudioNode => {
+    const fx = trackFxFor(edits, key)
+    if (!audioFxActive(fx)) return ctx.destination
+    const gain = lufsGains[key] ?? null
+    const k = fxPlanKey(fx, gain)
+    const cur = chainsRef.current.get(key)
+    if (cur && cur.key === k) return cur.input
+    if (cur) for (const n of cur.nodes) n.disconnect()
+    const chain = buildFxChain(ctx, webAudioPlan(fx, gain))
+    chain.output.connect(ctx.destination)
+    chainsRef.current.set(key, { key: k, input: chain.input, nodes: chain.nodes })
+    return chain.input
+  }
+  const route = (which: 'voice' | 'music') => {
+    const ctx = ctxRef.current
+    const tail = which === 'voice' ? voiceGainRef.current : musicEnvRef.current
+    if (!ctx || !tail) return
+    tail.disconnect()
+    tail.connect(fxInput(ctx, which))
+  }
+  const routeRef = useRef(route)
+  routeRef.current = route
+  const ensureVoiceGraph = () => {
+    const video = videoRef.current
+    if (ctxRef.current && elementSourceRef.current) return
+    if (!video) return
+    if (!ctxRef.current) ctxRef.current = new AudioContext()
+    elementSourceRef.current = ctxRef.current.createMediaElementSource(video)
+    voiceGainRef.current = ctxRef.current.createGain()
+    elementSourceRef.current.connect(voiceGainRef.current)
+    routeRef.current('voice')
+  }
+  const voiceFxOn = audioFxActive(trackFxFor(edits, 'voice'))
+  const fxKey = JSON.stringify(edits.trackFx ?? []) + JSON.stringify(lufsGains)
+  useEffect(() => {
+    // The main sound only goes through Web Audio when it needs to (music bed or a Voice chain).
+    if (voiceFxOn) ensureVoiceGraph()
+    if (fxKeyRef.current === fxKey) return
+    fxKeyRef.current = fxKey
+    routeRef.current('voice')
+    routeRef.current('music')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fxKey captures the chains
+  }, [fxKey, voiceFxOn])
+
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
@@ -101,14 +153,8 @@ export function useAudioMix({
 
     let cancelled = false
     const setup = async () => {
-      if (!ctxRef.current) {
-        ctxRef.current = new AudioContext()
-        elementSourceRef.current = ctxRef.current.createMediaElementSource(video)
-        voiceGainRef.current = ctxRef.current.createGain()
-        elementSourceRef.current.connect(voiceGainRef.current)
-        voiceGainRef.current.connect(ctxRef.current.destination)
-      }
-      const ctx = ctxRef.current
+      ensureVoiceGraph()
+      const ctx = ctxRef.current!
       if (!musicRef.current) {
         musicRef.current = new Audio()
         musicRef.current.crossOrigin = 'anonymous'
@@ -125,7 +171,7 @@ export function useAudioMix({
         const track = ctx.createMediaElementSource(el)
         track.connect(musicGainRef.current)
         musicGainRef.current.connect(musicEnvRef.current)
-        musicEnvRef.current.connect(ctx.destination)
+        routeRef.current('music')
       }
 
       const capWords = buildCaptionWords(words, edits)
@@ -195,7 +241,7 @@ export function useAudioMix({
   // E2: SFX play in preview at atMs (previously never scheduled). Re-scheduled on play / seek.
   // G1b3: + the SFX volume envelopes (`sfx:<id>` keyframes), so editing one re-schedules.
   const sfxEnvKey = JSON.stringify((edits.keyframes ?? []).filter((k) => k.target.startsWith('sfx:')))
-  const sfxKey = sfxCues.map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}`).join('|') + sfxEnvKey
+  const sfxKey = sfxCues.map((c) => `${c.generationId}:${c.atMs}:${c.volume}:${c.inMs ?? 0}:${c.durMs ?? ''}:${c.channel ?? ''}`).join('|') + sfxEnvKey + fxKey
   const stopSfx = () => {
     for (const n of sfxNodesRef.current) {
       try {
@@ -236,8 +282,9 @@ export function useAudioMix({
           g.gain.linearRampToValueAtTime(cue.volume * (trackValueAt(env, 'volume', l) / 100), at(l))
         }
       }
-      src.connect(g)
-      g.connect(ctx.destination)
+      // G1c: split-stereo channel pick, then the cue's audio-track chain (bus).
+      connectChannel(ctx, src, cue.buffer, cue.channel, g)
+      g.connect(fxInput(ctx, trackIdOf(edits, 'audio', cue.generationId)))
       if (cue.atMs >= fromMs) src.start(ctx.currentTime + (cue.atMs - fromMs) / 1000 / rate, inS, playS)
       else src.start(ctx.currentTime, inS + (fromMs - cue.atMs) / 1000, playS - (fromMs - cue.atMs) / 1000)
       sfxNodesRef.current.push(src)
@@ -273,6 +320,7 @@ export function useAudioMix({
       musicEnvRef.current = null
       voiceGainRef.current = null
       elementSourceRef.current = null
+      chainsRef.current.clear()
     }
   }, [])
 }

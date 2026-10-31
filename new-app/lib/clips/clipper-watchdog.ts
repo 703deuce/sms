@@ -5,6 +5,8 @@ export type ClipperWatchdogSnap = {
   progress: number
   updatedAt: string
   lastChangeAt: string
+  /** FV4a: worker liveness token (ffmpeg output time / work files / CPU). A change counts as progress. */
+  activity?: string
 }
 
 export const WATCHDOG_AUTO_RETRY_MAX = 1
@@ -28,13 +30,17 @@ export function mergeWatchdogSnap(
   stage?: string,
   progress?: number,
   nowMs = Date.now(),
+  activity?: string,
 ): ClipperWatchdogSnap {
   const phase = stage?.trim() || prev?.phase || 'working'
   const prog = typeof progress === 'number' && Number.isFinite(progress) ? progress : prev?.progress ?? 0
   const iso = new Date(nowMs).toISOString()
-  const changed = !prev || prev.phase !== phase || prev.progress !== prog
+  const act = activity ?? prev?.activity
+  // FV4a: a long healthy pass keeps the same % for minutes; the worker's activity token still moves.
+  const changed =
+    !prev || prev.phase !== phase || prev.progress !== prog || (activity !== undefined && activity !== prev.activity)
   const lastChangeAt = changed ? iso : prev?.lastChangeAt ?? prev?.updatedAt ?? iso
-  return { phase, progress: prog, updatedAt: iso, lastChangeAt }
+  return { phase, progress: prog, updatedAt: iso, lastChangeAt, ...(act !== undefined ? { activity: act } : {}) }
 }
 
 export function progressStallExceeded(

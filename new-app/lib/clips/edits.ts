@@ -32,6 +32,9 @@ import {
 } from '@/lib/clips/editor/sources'
 import { normalizeInserts, type ClipInsert } from '@/lib/clips/editor/inserts'
 import { normalizeSplitEdits, type SplitEdit } from '@/lib/clips/editor/split-edits'
+import { normalizeTrackFx, type TrackFx } from '@/lib/clips/editor/track-fx'
+import { normalizeTakes, type TakeGroup } from '@/lib/clips/editor/takes'
+import { normalizeTrackMotion, type TrackMotion } from '@/lib/clips/editor/track-motion'
 
 export type CutRange = [number, number]
 
@@ -199,6 +202,12 @@ export type ClipEditsV2 = {
   inserts?: ClipInsert[]
   /** G1b3: J / L cuts — audio switch offset per real cut (lib/clips/editor/split-edits.ts). */
   splitEdits?: SplitEdit[]
+  /** G1c: track-level effect chains (audio FX / overlay-track color) — lib/clips/editor/track-fx.ts. */
+  trackFx?: TrackFx[]
+  /** G1c: take groups (alternates in one slot, one active) — lib/clips/editor/takes.ts. */
+  takes?: TakeGroup[]
+  /** G1c: per-overlay-track transform (position / scale / crop, keyframable) — track-motion.ts. */
+  trackMotion?: TrackMotion[]
 }
 
 export type ClipBounds = {
@@ -474,6 +483,9 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (!edits.multicam) payload.multicam = null
   if (!edits.inserts?.length) payload.inserts = null
   if (!edits.splitEdits?.length) payload.splitEdits = null
+  if (!edits.trackFx?.length) payload.trackFx = null
+  if (!edits.takes?.length) payload.takes = null
+  if (!edits.trackMotion?.length) payload.trackMotion = null
   return payload
 }
 
@@ -527,7 +539,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
         (r) => Array.isArray(r) && r.length === 2 && Number.isFinite(r[0]) && Number.isFinite(r[1]),
       )
     : []
-  return {
+  const out: ClipEditsV2 = {
     ...base,
     ...o,
     v: 2,
@@ -600,7 +612,12 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     sectionOrder: normalizeSectionOrder(o.sectionOrder, trim.in, trim.out),
     speed: normalizeEditSpeed(o.speed),
     splitEdits: normalizeSplitEdits(o.splitEdits),
+    trackFx: normalizeTrackFx(o.trackFx, new Set((normalizeTracks(o.tracks) ?? []).map((t) => t.id).concat(['ov1', 'au1']))),
+    trackMotion: normalizeTrackMotion(o.trackMotion, new Set((normalizeTracks(o.tracks) ?? []).map((t) => t.id).concat(['ov1']))),
   }
+  // G1c: take groups reference the normalized B-roll ids.
+  const takes = normalizeTakes(o.takes, new Set((out.broll ?? []).map((b) => b.id)))
+  return { ...out, takes }
 }
 
 function normalizeChatOverlay(raw: unknown): ClipEditsV2['chatOverlay'] | undefined {
@@ -679,7 +696,11 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     // E5b: inserts lengthen the video.
     !edits.inserts?.length &&
     // G1b3: J / L cuts change the sound.
-    !edits.splitEdits?.length
+    !edits.splitEdits?.length &&
+    // G1c: track effects change the sound / frames; takes hide items.
+    !edits.trackFx?.length &&
+    !edits.takes?.length &&
+    !edits.trackMotion?.length
   )
 }
 

@@ -303,9 +303,14 @@ def track_expr(track: dict | None, prop: str, *, var: str = "t", origin_s: float
     L = f"({var}-{_num(origin_s)})" if origin_s else var
     if len(pts) == 1:
         return _num(pts[0]["v"])
-    # Nested: if(lt(L,t0),v0, if(lt(L,t1), seg0, if(lt(L,t2), seg1, ... vLast)))
-    tail = _num(pts[-1]["v"])
-    for a, b in reversed(list(zip(pts, pts[1:]))):
+    # FV4a: piecewise v0 | seg0 | seg1 | ... | vLast on thresholds t0 < t1 < ... as a BALANCED
+    # if(lt(L,tk)) tree (depth log2 n). The old linear if-chain hit ffmpeg's ~100-level expression
+    # limit at ~100 points (long-video opacity / volume envelopes failed with EINVAL).
+    from clips_worker.ffexpr import balanced_piecewise
+
+    pieces = [_num(pts[0]["v"])]
+    thresholds = [_num(pts[0]["tMs"] / 1000.0)]
+    for a, b in zip(pts, pts[1:]):
         ta, tb = a["tMs"] / 1000.0, b["tMs"] / 1000.0
         if tb - ta <= 0:
             seg = _num(b["v"])
@@ -321,8 +326,10 @@ def track_expr(track: dict | None, prop: str, *, var: str = "t", origin_s: float
             else:
                 f = u
             seg = f"({_num(a['v'])}+({_num(b['v'] - a['v'])})*{f})"
-        tail = f"if(lt({L},{_num(tb)}),{seg},{tail})"
-    return f"if(lt({L},{_num(pts[0]['tMs'] / 1000.0)}),{_num(pts[0]['v'])},{tail})"
+        pieces.append(seg)
+        thresholds.append(_num(tb))
+    pieces.append(_num(pts[-1]["v"]))
+    return balanced_piecewise(L, thresholds, pieces)
 
 
 # ---------------------------------------------------------------------------

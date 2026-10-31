@@ -363,6 +363,57 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
         unbind_decision_log()
 
 
+def _start_render_progress_reporter(job_id: str, post_progress, tracker, every_s: float | None = None):
+    """FV4a: post real progress (ffmpeg -progress) every ~15 s while the full render runs.
+
+    Replaces the fake 58→74 % steps that stopped after one minute and let the web watchdog requeue
+    healthy long renders. Also runs the worker-side stall / hard-cap checks (tracker.tick()).
+    Returns a stop() callable.
+    """
+    import os
+
+    every = every_s if every_s is not None else max(5.0, float(os.environ.get("RENDER_PROGRESS_EVERY_SEC", "15") or 15))
+    stop = threading.Event()
+
+    def _loop() -> None:
+        while not stop.wait(every):
+            try:
+                snap = tracker.tick()
+                body = {
+                    "jobStatus": "RUNNING",
+                    "stage": "render_clip",
+                    "progress": int(snap["progress"]),
+                    "renderStep": int(snap["step"]),
+                    "renderSteps": int(snap["steps"]),
+                    "activity": str(snap["activity"]),
+                }
+                if snap.get("step_pct") is not None:
+                    body["stepPct"] = int(snap["step_pct"])
+                if snap.get("eta_s") is not None:
+                    body["etaSeconds"] = max(0, int(snap["eta_s"]))
+                post_progress(job_id, body)
+            except Exception as exc:  # never kill the render over a progress ping
+                print(f"[clipper:export_progress] post failed job={job_id}: {exc}", flush=True)
+
+    th = threading.Thread(target=_loop, daemon=True)
+    th.start()
+
+    def _stop() -> None:
+        stop.set()
+        th.join(timeout=2.0)
+
+    return _stop
+
+
+def _assert_still_owned(conn, job: dict) -> None:
+    """FV4a: a requeued job (watchdog / stale lock) must not be finished by the old process."""
+    from clips_worker.export_progress import RenderCanceled
+    from clips_worker.job_lock import job_still_owned
+
+    if not job_still_owned(conn, str(job["id"])):
+        raise RenderCanceled("claim_lost")
+
+
 def _export_decision(render_id: str, event: str, **fields: object) -> None:
     from clips_worker.decision_log import decision_log
 
@@ -476,7 +527,9 @@ def _run_render_clip_job_body(
     project_id = ctx["projectId"]
     clip_id = ctx["clipId"]
 
-    with tempfile.TemporaryDirectory() as td:
+    from contextlib import ExitStack
+
+    with tempfile.TemporaryDirectory() as td, ExitStack() as progress_stack:
         td_path = Path(td)
         src = td_path / "source.mp4"
         download_object(source_key, src)
@@ -645,22 +698,34 @@ def _run_render_clip_job_body(
                 {"resolution": resolution, "scaled": scaled},
             )
         else:
-            post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 90})
-            _export_decision(render_id, "render_start", path="full_edits_render")
+            from clips_worker.edits_render import output_duration_ms as _out_ms
+            from clips_worker.export_progress import RenderProgress, estimate_export_passes
+
+            # FV4a: real progress from ffmpeg (-progress via a PATH shim), worker-side stall / hard cap,
+            # and cancellation when the claim is lost. Active until the upload starts.
+            tracker = progress_stack.enter_context(
+                RenderProgress(_out_ms(edits) / 1000.0, estimate_export_passes(edits), work_dir=td_path)
+            )
+            post_progress(
+                job["id"],
+                {
+                    "jobStatus": "RUNNING",
+                    "stage": "render_clip",
+                    "progress": 55,
+                    "renderStep": 1,
+                    "renderSteps": tracker.est_passes,
+                    "activity": "start",
+                },
+            )
+            _export_decision(
+                render_id,
+                "render_start",
+                path="full_edits_render",
+                est_passes=tracker.est_passes,
+                max_seconds=int(tracker.max_seconds),
+            )
             t_render = time.perf_counter()
-            progress_stop = threading.Event()
-
-            def _render_progress_heartbeat() -> None:
-                for p in (58, 62, 66, 70, 74):
-                    if progress_stop.wait(12):
-                        return
-                    post_progress(
-                        job["id"],
-                        {"jobStatus": "RUNNING", "stage": "render_clip", "progress": p, "etaSeconds": max(15, 90 - p)},
-                    )
-
-            hb = threading.Thread(target=_render_progress_heartbeat, daemon=True)
-            hb.start()
+            progress_stack.callback(_start_render_progress_reporter(job["id"], post_progress, tracker))
             try:
                 _, _edited_words, srt_body = render_edited_clip(
                     clip_file,
@@ -682,10 +747,13 @@ def _run_render_clip_job_body(
                     preview_crop_track=preview_crop_track,
                     compose_spec=compose_spec,
                 )
-            finally:
-                progress_stop.set()
-                hb.join(timeout=1.0)
-            post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 78, "etaSeconds": 45})
+            except Exception as exc:
+                if tracker.cancel_reason:
+                    from clips_worker.export_progress import RenderCanceled
+
+                    raise RenderCanceled(tracker.cancel_reason) from exc
+                raise
+            tracker.check()
             _export_decision(
                 render_id,
                 "render_done",
@@ -748,6 +816,13 @@ def _run_render_clip_job_body(
             concat_brand_bookends(out_mp4, bookended, intro_p, outro_p, w, h, td_path)
             out_mp4 = bookended
 
+        from clips_worker.export_progress import active as _active_tracker
+
+        active_tracker = _active_tracker()
+        if active_tracker is not None:
+            active_tracker.check()
+        progress_stack.close()  # FV4a: stop the progress reporter + PATH shim before the upload
+        _assert_still_owned(conn, job)
         post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 82, "etaSeconds": 30})
         _export_stage_log(render_id, "pre_upload", t_job)
         out_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}.mp4"
@@ -782,6 +857,7 @@ def _run_render_clip_job_body(
             delta_s=round(actual_s - expected_effective_s, 3),
             length_mismatch=length_mismatch,
         )
+        _assert_still_owned(conn, job)
         mark_render(conn, render_id, "READY", out_key, size, None, srt_key)
         _clear_stale_project_render_error(conn, str(ctx.get("projectId") or ""))
         if render_meta.get("fit_fallback"):

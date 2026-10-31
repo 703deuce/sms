@@ -4,6 +4,7 @@ import { jsonError } from '@/lib/server/api-error'
 import { exportFilename } from '@/lib/server/clips/clips'
 import { getRenderForWorkspace } from '@/lib/server/clips/renders'
 import { getClipStorage } from '@/lib/storage'
+import { readRenderDetail } from '@/lib/clips/editor/export-progress-text'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 
@@ -38,7 +39,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
           })))
     const jobPayload = activeJob?.payload as {
       clipperWatchdog?: { phase?: string; progress?: number }
-      renderEtaSeconds?: number
+      renderEtaSeconds?: number | null
+      renderDetail?: unknown
     } | null
     const wd = jobPayload?.clipperWatchdog
     const filename = render.filename || exportFilename(clip?.title || 'clip')
@@ -89,6 +91,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
                 : null,
         phase: wd?.phase ?? (render.status === 'RENDERING' ? 'render_clip' : null),
         etaSec: typeof jobPayload?.renderEtaSeconds === 'number' ? jobPayload.renderEtaSeconds : null,
+        // FV4a: real progress detail (step k of ~N, % of the current pass) from the worker.
+        detail: render.status === 'RENDERING' ? readRenderDetail(jobPayload?.renderDetail) : null,
       },
     })
   } catch (err) {
