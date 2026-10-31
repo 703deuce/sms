@@ -164,6 +164,7 @@ export function Timeline({
   editorAssets = null,
   brollMedia,
   sourceUrls = null,
+  posterUrl = null,
   onDropMedia,
   onSelectSourceSegment,
   selectedSourceSegmentId = null,
@@ -207,6 +208,8 @@ export function Timeline({
   brollMedia?: TimelineBrollMedia[]
   /** E5×FV2: media URL by refId, so other-source Video-lane spans show their own frames. */
   sourceUrls?: Record<string, string> | null
+  /** FVfix: clip cover — Video-lane filmstrip fallback while frames load or when they can't be read. */
+  posterUrl?: string | null
   /** E5: a Media-panel card dropped on a lane at OUTPUT ms. */
   onDropMedia?: (lane: MediaDropLane, outMs: number, mediaId: string) => void
   /** E5: click on a source segment chip (Video lane) → Media panel segment editor. */
@@ -397,6 +400,9 @@ export function Timeline({
   const virtualize = longMedia && viewportPx > 0
   const visFromPx = virtualize ? Math.max(0, scrollX - TRACK_OFFSET_PX - viewportPx) : 0
   const visToPx = virtualize ? scrollX - TRACK_OFFSET_PX + 2 * viewportPx : Number.POSITIVE_INFINITY
+  // FVfix: waveforms always draw just the area around the viewport (clips zoomed in get wide too).
+  const wavWin: [number, number] | null =
+    viewportPx > 0 ? [scrollX - TRACK_OFFSET_PX - viewportPx, scrollX - TRACK_OFFSET_PX + 2 * viewportPx] : null
   const inView = (startMs: number, endMs: number) => !virtualize || (endMs * pxPerMs >= visFromPx && startMs * pxPerMs <= visToPx)
 
   useEffect(() => {
@@ -856,6 +862,7 @@ export function Timeline({
             visRightPx={virtualize ? visToPx - left : undefined}
             sprite={filmstripSprite}
             frames={videoFrames}
+            stillUrl={posterUrl}
           />
         ) : null}
         {item.lane === 'broll' && bMedia ? (
@@ -874,6 +881,8 @@ export function Timeline({
             mediaFromMs={(item.srcInMs ?? 0) - mediaOffsetMs}
             mediaToMs={(item.srcOutMs ?? 0) - mediaOffsetMs}
             widthPx={w}
+            visLeftPx={wavWin ? wavWin[0] - left : undefined}
+            visRightPx={wavWin ? wavWin[1] - left : undefined}
             className="absolute inset-0 size-full text-emerald-400/90"
           />
         ) : null}
@@ -883,6 +892,8 @@ export function Timeline({
             mediaFromMs={item.inMs ?? 0}
             mediaToMs={(item.inMs ?? 0) + (item.endMs - item.startMs)}
             widthPx={w}
+            visLeftPx={wavWin ? wavWin[0] - left : undefined}
+            visRightPx={wavWin ? wavWin[1] - left : undefined}
             className="absolute inset-0 size-full text-teal-200/80"
           />
         ) : null}

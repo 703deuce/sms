@@ -20,6 +20,19 @@ import subprocess
 from pathlib import Path
 
 PEAKS_PER_SEC = 20
+# FVfix: finer peaks so zoomed-in waveforms are smooth, within a size budget: the highest rate
+# (8 kHz divisors) keeping <= PEAKS_MAX_SAMPLES values (~0.53 MB base64 worst case).
+# 12 min -> 100/s (72k), 1 h -> 100/s (360k), 2 h -> 50/s, 3 h -> 25/s.
+PEAKS_RATES = (100, 80, 50, 40, 25, 20)
+PEAKS_MAX_SAMPLES = 400_000
+
+
+def peaks_rate_for(duration_ms: int) -> int:
+    sec = max(1.0, duration_ms / 1000.0)
+    for r in PEAKS_RATES:
+        if r * sec <= PEAKS_MAX_SAMPLES:
+            return r
+    return PEAKS_RATES[-1]
 PEAKS_SAMPLE_RATE = 8000
 FILMSTRIP_TILE_H = 90
 FILMSTRIP_COLS = 10
@@ -199,7 +212,7 @@ def build_pre_ready_assets(
     work = src.parent / "fv_assets"
     work.mkdir(parents=True, exist_ok=True)
     try:
-        peaks = compute_peaks(src, dur_ms)
+        peaks = compute_peaks(src, dur_ms, peaks_rate_for(dur_ms))
         p = work / "peaks.json"
         p.write_text(json.dumps(peaks, separators=(",", ":")))
         upload_file(f"{prefix}/peaks.json", p, "application/json")

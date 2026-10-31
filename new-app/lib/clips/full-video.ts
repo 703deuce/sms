@@ -51,7 +51,8 @@ export function isFullVideoSettings(settings: unknown): boolean {
 
 /** "1:02:03" / "4:05" for duration labels on the upload page. */
 export function formatMediaDuration(ms: number): string {
-  const total = Math.max(0, Math.round(ms / 1000))
+  // Floor like the editor clock (715.74 s → 11:55, never 11:56).
+  const total = Math.max(0, Math.floor(ms / 1000))
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)
   const s = total % 60
