@@ -125,7 +125,7 @@ function faceCrop(
   return cropUnderTitle(face, face.h, h0, panelAspect, region, t)
 }
 
-/** T6.3 parity with t6_geometry._crop_under_title. */
+/** T6.3/T6.6 parity with t6_geometry._crop_under_title. */
 function cropUnderTitle(
   face: T6Face,
   fh: number,
@@ -138,11 +138,28 @@ function cropUnderTitle(
 ): FacecamBox {
   const cx = cxOverride ?? face.x + face.w / 2
   const fcy = fcyOverride ?? face.y + face.h / 2
-  const h = Math.min(1, Math.max(h0, fh / (0.9 * (1 - t))))
+  let h = Math.min(1, Math.max(h0, fh / (0.9 * (1 - t))))
   const ft = t + (1 - t) * 0.45
-  const ny = Math.max(0, region.y - t * h)
-  const ext = { x: region.x, y: ny, w: region.w, h: Math.min(1 - ny, region.h + (region.y - ny)) }
-  return cropAt(cx, fcy - ft * h + h / 2, h, panelAspect, ext)
+  // T6.6: stay inside the region (no black game strip above a bottom facecam): zoom in up to
+  // MAX_TITLE_ZOOM (never tighter than the face needs) so the face sits under the title in the box.
+  if (!isFullFrame(region) && fcy - ft * h < region.y) {
+    h = Math.max(h / MAX_TITLE_ZOOM, (fcy - region.y) / ft, fh / (0.95 * (1 - t)))
+    if (fcy - ft * h < region.y - 1e-4) {
+      // Impossible inside the box even at max zoom (e.g. G1: title covers 57% of the face panel):
+      // spill the minimum, and only into the strip hidden under the title.
+      const ny = Math.max(0, region.y - t * h, fcy - ft * h)
+      const ext = { x: region.x, y: ny, w: region.w, h: Math.min(1 - ny, region.h + (region.y - ny)) }
+      return cropAt(cx, fcy - ft * h + h / 2, h, panelAspect, ext)
+    }
+  }
+  return cropAt(cx, fcy - ft * h + h / 2, h, panelAspect, region)
+}
+
+/** T6.6: max extra zoom used to keep a titled face crop inside its facecam box (parity: t6_geometry.MAX_TITLE_ZOOM). */
+export const MAX_TITLE_ZOOM = 2.0
+
+function isFullFrame(r: FacecamBox): boolean {
+  return r.x <= 1e-6 && r.y <= 1e-6 && r.w >= 1 - 1e-6 && r.h >= 1 - 1e-6
 }
 
 export function widenToAspectWithin(region: FacecamBox, panelAspect: number): FacecamBox {
