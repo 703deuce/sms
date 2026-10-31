@@ -134,6 +134,9 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and edits.get("speechLevelingEnabled") is not True
         and edits.get("speed") in (None, 1, 1.0)
         and not _timeline_voice_muted(edits)
+        # E3: keyframes / cut transitions change the frames — never reuse preview.mp4.
+        and not edits.get("keyframes")
+        and not edits.get("transitions")
     )
 
 
@@ -1496,6 +1499,17 @@ def render_edited_clip(
     else:
         ffmpeg_concat_segments(full_render, cut_mp4, segs_sec)
 
+    if edits.get("transitions") or edits.get("keyframes"):
+        # E3: cut transitions (centred on the cut, video only → length / audio unchanged) and
+        # Video-lane keyframes, on the same segments that were just concatenated.
+        from clips_worker.motion_render import apply_motion_after_cut
+
+        concat_ms = [
+            (clip_start_ms + int(round(a * 1000)), clip_start_ms + int(round(b * 1000))) for a, b in segs_sec
+        ]
+        cut_mp4 = apply_motion_after_cut(cut_mp4, full_render, edits, concat_ms, clip_start_ms, work_dir)
+        stage("motion_done")
+
     remapped, _ = words_after_edits(src_words, edits)
     caption_words = remapped
     dub_assets = (audio_assets or {}).get("dub_assets") if audio_assets else None
@@ -1507,7 +1521,7 @@ def render_edited_clip(
 
         w, h = probe_video_size(cut_mp4)
         broll_out = work_dir / "with_broll.mp4"
-        apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h)
+        apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h, edits=edits)
         caption_src = broll_out
 
     segs = ordered_keep_segments(edits)
@@ -1524,6 +1538,10 @@ def render_edited_clip(
         print("[clipper:timeline] voice_muted", flush=True)
     meta = (audio_assets or {}).get("music_meta") or {}
     music_win = _music_window(meta, int(round(length_s * 1000))) if meta else None
+    from clips_worker.motion import volume_expr as _volume_expr
+
+    music_env = _volume_expr(edits, "music", origin_s=(music_win or {}).get("startMs", 0) / 1000.0)
+    voice_env = None if _voice_muted(edits) else _volume_expr(edits, "voice")
     music_path = (audio_assets or {}).get("music_path") if audio_assets else None
     sfx_paths = (audio_assets or {}).get("sfx_paths") or [] if audio_assets else []
     studio_path = (audio_assets or {}).get("studio_path") if audio_assets else None
@@ -1546,6 +1564,12 @@ def render_edited_clip(
             work_dir=work_dir,
         )
         caption_src = studio_out
+    if voice_env and not (dub_assets and dub_assets.get("dub_audio_path")):
+        from clips_worker.motion_render import apply_voice_volume
+
+        vol_out = work_dir / "voice_volume.mp4"
+        if apply_voice_volume(caption_src, vol_out, edits):
+            caption_src = vol_out
     if dub_assets and dub_assets.get("dub_audio_path"):
         from clips_worker.audio_render import apply_dub_speech_mix
 
@@ -1562,6 +1586,8 @@ def render_edited_clip(
             fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
             fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
             music_window=music_win,
+            music_volume_expr=music_env,
+            speech_volume_expr=voice_env,
         )
         caption_src = mixed
     elif audio_assets and (music_path or sfx_paths):
@@ -1579,6 +1605,7 @@ def render_edited_clip(
             fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
             fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
             music_window=music_win,
+            music_volume_expr=music_env,
         )
         caption_src = mixed
 

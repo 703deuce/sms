@@ -9,6 +9,12 @@ import { normalizeLayoutSegments, type LayoutSegment } from '@/lib/clips/layout-
 import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/export-template'
 import { isSpeechLevelingEnabled } from '@/lib/clips/speech-leveling'
 import { normalizeTimelineLanes, type TimelineLanesState } from '@/lib/clips/editor/timeline-lane-state'
+import {
+  normalizeCutTransitions,
+  normalizeKeyframeTracks,
+  type CutTransition,
+  type KeyframeTrack,
+} from '@/lib/clips/editor/motion-schema'
 
 export type CutRange = [number, number]
 
@@ -147,6 +153,13 @@ export type ClipEditsV2 = {
    * (the worker ignores it — deleting a half becomes a normal cut range).
    */
   videoSplits?: number[]
+  /**
+   * E3 keyframes. Local time per target: video / voice / text = output ms; broll:<id> = ms from the
+   * item's startMs (anchored to its media via inMs); music = ms from the music window start.
+   */
+  keyframes?: KeyframeTrack[]
+  /** E3 Video-lane cut transitions, keyed by the source start of the segment after the cut. */
+  transitions?: CutTransition[]
 }
 
 export type ClipBounds = {
@@ -410,6 +423,8 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   // Clearing every lane toggle must clear the persisted value (PATCH merges over the server copy).
   if (!edits.timelineLanes) payload.timelineLanes = null
   if (!edits.videoSplits?.length) payload.videoSplits = null
+  if (!edits.keyframes?.length) payload.keyframes = null
+  if (!edits.transitions?.length) payload.transitions = null
   return payload
 }
 
@@ -513,6 +528,8 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     layersLegacyFp: typeof o.layersLegacyFp === 'string' ? o.layersLegacyFp : undefined,
     timelineLanes: normalizeTimelineLanes(o.timelineLanes),
     videoSplits: normalizeVideoSplits(o.videoSplits, trim.in, trim.out),
+    keyframes: normalizeKeyframeTracks(o.keyframes),
+    transitions: normalizeCutTransitions(o.transitions),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
     loudnessLufs:
@@ -589,7 +606,10 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !isSpeechLevelingEnabled(edits) &&
     normalizeEditSpeed(edits.speed) === undefined &&
     // E2: a muted Voice lane must not reuse the voiced preview render.
-    !edits.timelineLanes?.voice?.muted
+    !edits.timelineLanes?.voice?.muted &&
+    // E3: keyframes / cut transitions are export-only changes to the frames.
+    !edits.keyframes?.length &&
+    !edits.transitions?.length
   )
 }
 

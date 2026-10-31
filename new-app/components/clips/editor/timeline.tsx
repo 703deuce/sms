@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Magnet, Maximize2, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
+import { Blend, Magnet, Maximize2, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -23,6 +23,7 @@ import {
   laneState,
   moveItems,
   outputToSource,
+  realCutIndices,
   refKey,
   setLaneState,
   snapMoveDelta,
@@ -42,6 +43,26 @@ import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
 import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
 import { TimelineWaveform } from '@/components/clips/editor/timeline/timeline-waveform'
+import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
+import { TransitionPopover } from '@/components/clips/editor/timeline/transition-popover'
+import {
+  deleteKeyframesAt,
+  keyframeTimes,
+  moveKeyframesAt,
+  targetForItem,
+  targetOriginMs,
+  type KeyframeTarget,
+} from '@/lib/clips/editor/keyframes'
+import {
+  TRANSITION_INFO,
+  applyBrollTransitionToAll,
+  applyCutTransitionToAll,
+  brollTransitionWindows,
+  cutTransitionWindows,
+  setBrollTransition,
+  setCutTransition,
+  type TransitionSpec,
+} from '@/lib/clips/editor/transitions'
 import {
   TIMELINE_DEFAULT_PX_PER_SEC,
   TIMELINE_MIN_LABEL_PX,
@@ -76,6 +97,10 @@ const LANE_COLORS: Record<LaneId, string> = {
   music: 'bg-teal-600/60',
   sfx: 'bg-amber-500/80',
 }
+
+type TransitionTarget =
+  | { kind: 'cut'; srcMs: number; maxMs: number; x: number; y: number }
+  | { kind: 'broll'; id: string; edge: 'in' | 'out'; maxMs: number; x: number; y: number }
 
 type DragState = {
   mode: 'move' | 'start' | 'end'
@@ -339,6 +364,10 @@ export function Timeline({
   const [drag, setDrag] = useState<DragState | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  // E3: selected keyframe (diamond), live diamond drag, open transition pop-over.
+  const [selKf, setSelKf] = useState<{ target: KeyframeTarget; tMs: number } | null>(null)
+  const [kfDrag, setKfDrag] = useState<{ target: KeyframeTarget; fromMs: number; toMs: number } | null>(null)
+  const [trPop, setTrPop] = useState<TransitionTarget | null>(null)
 
   // Drop selections whose items no longer exist (ids change after cuts / undo).
   const liveSelected = useMemo(
@@ -366,6 +395,13 @@ export function Timeline({
     return true
   }
   const nudge = (dir: -1 | 1, big: boolean) => {
+    // A selected keyframe diamond nudges by the same frame step (1 frame / Shift 10).
+    if (selKf) {
+      const to = Math.max(0, selKf.tMs + dir * arrowStepMs(big))
+      commit(moveKeyframesAt(edits, selKf.target, selKf.tMs, to))
+      setSelKf({ target: selKf.target, tMs: to })
+      return true
+    }
     const movable = liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
     if (!movable.length) return false
     commit(moveItems(opCtx(), movable, dir * arrowStepMs(big)))
@@ -375,6 +411,75 @@ export function Timeline({
     commit(setLaneState(edits, lane, patch))
     if (patch.locked) setSelected((s) => s.filter((r) => r.lane !== lane))
   }
+
+  // ---- E3 keyframes / transitions -------------------------------------------
+  const startKfDrag = (e: React.PointerEvent, target: KeyframeTarget, tMs: number, origin: number) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    e.preventDefault()
+    rootRef.current?.focus({ preventScroll: true })
+    setSelKf({ target, tMs })
+    onSeekOutput(origin + tMs)
+    if (!editable) return
+    const originX = e.clientX
+    const state = { toMs: tMs, moved: false }
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - originX
+      if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX) return
+      state.moved = true
+      const raw = tMs + dx / Math.max(1e-6, pxPerMs)
+      // Snap to the playhead / whole frames.
+      const ph = playheadMs - origin
+      let t = Math.abs(raw - ph) * pxPerMs < SNAP_PX && snapOn ? ph : Math.round(raw / (1000 / 30)) * (1000 / 30)
+      t = Math.max(0, Math.round(t))
+      state.toMs = t
+      setKfDrag({ target, fromMs: tMs, toMs: t })
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      setKfDrag(null)
+      if (!state.moved || state.toMs === tMs) return
+      commit(moveKeyframesAt(edits, target, tMs, state.toMs))
+      setSelKf({ target, tMs: state.toMs })
+      onSeekOutput(origin + state.toMs)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const cutWindows = useMemo(() => cutTransitionWindows(tb.segs, tb.starts, edits.transitions), [edits.transitions, tb])
+  const brollWindows = useMemo(() => brollTransitionWindows(edits.broll), [edits.broll])
+  const openCutTransition = (e: React.MouseEvent, k: number) => {
+    e.stopPropagation()
+    const [a0, a1] = tb.segs[k - 1]!
+    const [b0, b1] = tb.segs[k]!
+    setTrPop({ kind: 'cut', srcMs: b0, maxMs: Math.min(a1 - a0, b1 - b0), x: e.clientX, y: e.clientY })
+  }
+  const openBrollTransition = (e: React.MouseEvent, item: TimelineItem, edge: 'in' | 'out') => {
+    e.stopPropagation()
+    setTrPop({ kind: 'broll', id: item.id, edge, maxMs: (item.endMs - item.startMs) / 2, x: e.clientX, y: e.clientY })
+  }
+  const trValue: TransitionSpec | null = (() => {
+    if (!trPop) return null
+    if (trPop.kind === 'cut') {
+      const t = edits.transitions?.find((x) => Math.abs(x.srcMs - trPop.srcMs) <= 1)
+      return t ? { type: t.type, durMs: t.durMs } : null
+    }
+    const b = edits.broll?.find((x) => x.id === trPop.id)
+    return (trPop.edge === 'in' ? b?.transitionIn : b?.transitionOut) ?? null
+  })()
+
+  // Inspector: exactly one selected item with an animatable target.
+  const inspected = (() => {
+    if (liveSelected.length !== 1) return null
+    const r = liveSelected[0]!
+    const item = lanes[r.lane].find((i) => i.id === r.id)
+    const target = item ? targetForItem(item.lane, item.id) : null
+    if (!item || !target) return null
+    const origin = targetOriginMs(edits, target)
+    return { item, target, origin }
+  })()
 
   const msAtClientX = (clientX: number, el: HTMLElement) => {
     const r = el.getBoundingClientRect()
@@ -486,6 +591,11 @@ export function Timeline({
     } else if (!mod && (k === 'n' || k === 'N')) {
       e.preventDefault()
       setSnapOn((v) => !v)
+    } else if ((k === 'Delete' || k === 'Backspace') && editable && selKf) {
+      e.preventDefault()
+      e.stopPropagation()
+      commit(deleteKeyframesAt(edits, selKf.target, selKf.tMs))
+      setSelKf(null)
     } else if ((k === 'Delete' || k === 'Backspace') && editable && liveSelected.length) {
       e.preventDefault()
       e.stopPropagation()
@@ -493,7 +603,7 @@ export function Timeline({
     } else if ((k === 'ArrowLeft' || k === 'ArrowRight') && !mod) {
       // E2fix: movable selection → nudge it. Clicked a locked item → nothing (it must not fall
       // through to the editor's playhead step). Otherwise the editor steps the playhead.
-      if (editable && liveSelected.length && nudge(k === 'ArrowLeft' ? -1 : 1, e.shiftKey)) {
+      if (editable && (liveSelected.length || selKf) && nudge(k === 'ArrowLeft' ? -1 : 1, e.shiftKey)) {
         e.preventDefault()
         e.stopPropagation()
       } else if (lockedClickRef.current && !liveSelected.length) {
@@ -504,7 +614,9 @@ export function Timeline({
     } else if (k === 'Escape') {
       lockedClickRef.current = null
       setSelected([])
+      setSelKf(null)
       setCtxMenu(null)
+      setTrPop(null)
     } else if (mod && (k === 'a' || k === 'A')) {
       e.preventDefault()
       e.stopPropagation()
@@ -588,7 +700,14 @@ export function Timeline({
     const isSel = selectedKeys.has(refKey(item))
     const faded = st.hidden || st.muted
     const h = LANE_H[item.lane]
-    const interactive = item.lane !== 'voice'
+    // E3: Voice is selectable (volume keyframes) but cannot move / trim.
+    const interactive = true
+    const kfTarget = targetForItem(item.lane, item.id)
+    const kfOrigin = kfTarget ? targetOriginMs(edits, kfTarget) : 0
+    const kfs = kfTarget
+      ? keyframeTimes(edits, kfTarget).filter((t) => kfOrigin + t >= item.startMs - 0.5 && kfOrigin + t <= item.endMs + 0.5)
+      : []
+    const bItem = item.lane === 'broll' ? edits.broll?.find((b) => b.id === item.id) : undefined
     return (
       <div
         key={refKey(item)}
@@ -635,6 +754,48 @@ export function Timeline({
         {item.lane === 'video' && w > 40 ? (
           <span className="pointer-events-none absolute left-1 top-0 text-[9px] text-white/80">{item.label}</span>
         ) : null}
+        {kfs.map((t) => {
+          const shownT = kfDrag && kfDrag.target === kfTarget && kfDrag.fromMs === t ? kfDrag.toMs : t
+          const isSelKf = selKf?.target === kfTarget && selKf.tMs === t
+          return (
+            <span
+              key={`kf${t}`}
+              className={`absolute top-1/2 z-10 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-ew-resize border ${
+                isSelKf ? 'border-white bg-amber-300 ring-1 ring-amber-200' : 'border-black/60 bg-amber-400'
+              }`}
+              style={{ left: (kfOrigin + shownT - geo.startMs) * pxPerMs }}
+              data-testid="timeline-keyframe"
+              data-target={kfTarget ?? undefined}
+              data-t-ms={Math.round(t)}
+              data-selected={isSelKf ? 'true' : undefined}
+              title={`Keyframe ${((kfOrigin + t) / 1000).toFixed(2)} s — drag to move, Del to delete`}
+              onPointerDown={(e) => startKfDrag(e, kfTarget!, t, kfOrigin)}
+            />
+          )
+        })}
+        {item.lane === 'broll' && editable && !st.locked && w > 36
+          ? (['in', 'out'] as const).map((edge) => {
+              const spec = edge === 'in' ? bItem?.transitionIn : bItem?.transitionOut
+              return (
+                <button
+                  key={edge}
+                  type="button"
+                  className={`absolute top-0.5 z-10 inline-flex size-3.5 items-center justify-center rounded-sm ${
+                    spec ? 'bg-white text-indigo-700' : 'bg-black/30 text-white/80 hover:bg-black/50'
+                  }`}
+                  style={edge === 'in' ? { left: 7 } : { right: 7 }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => openBrollTransition(e, item, edge)}
+                  aria-label={`${edge === 'in' ? 'In' : 'Out'} transition${spec ? `: ${TRANSITION_INFO[spec.type].label}` : ''}`}
+                  title={spec ? `${TRANSITION_INFO[spec.type].label} · ${(spec.durMs / 1000).toFixed(2)} s` : `Add ${edge} transition`}
+                  data-testid={`timeline-broll-transition-${edge}`}
+                  data-type={spec?.type}
+                >
+                  <Blend className="size-2.5" />
+                </button>
+              )
+            })
+          : null}
         {editable && !st.locked && item.caps.trimStart ? (
           <span
             className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-white/40 hover:bg-white/80"
@@ -771,6 +932,17 @@ export function Timeline({
           </button>
         </div>
       </div>
+      {inspected ? (
+        <KeyframeInspector
+          edits={edits}
+          target={inspected.target}
+          label={inspected.item.label}
+          localMs={Math.max(0, playheadMs - inspected.origin)}
+          onCommit={(next) => commit(next)}
+          onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
+          readOnly={!editable || laneState(edits, inspected.item.lane).locked}
+        />
+      ) : null}
       <div className="flex min-w-0 rounded-lg border border-border bg-card/30">
         <div className="w-[92px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
@@ -823,7 +995,59 @@ export function Timeline({
                   data-testid={`timeline-lane-${lane}`}
                   aria-label={`${lane} lane`}
                 >
+                  {lane === 'video'
+                    ? cutWindows.map((w) => (
+                        <div
+                          key={`tr${w.srcMs}`}
+                          className="pointer-events-none absolute inset-y-0 z-[1] bg-gradient-to-r from-white/0 via-white/35 to-white/0"
+                          style={{ left: w.w0Ms * pxPerMs, width: Math.max(2, (w.w1Ms - w.w0Ms) * pxPerMs) }}
+                          data-testid="timeline-transition-region"
+                          data-src-ms={w.srcMs}
+                          data-type={w.type}
+                          aria-hidden
+                        />
+                      ))
+                    : null}
+                  {lane === 'broll'
+                    ? brollWindows.map((w) => (
+                        <div
+                          key={`btr${w.itemId}${w.kind}`}
+                          className="pointer-events-none absolute inset-y-0 z-[1] bg-white/30"
+                          style={{ left: w.w0Ms * pxPerMs, width: Math.max(2, (w.w1Ms - w.w0Ms) * pxPerMs) }}
+                          data-testid="timeline-broll-transition-region"
+                          data-kind={w.kind}
+                          data-type={w.type}
+                          aria-hidden
+                        />
+                      ))
+                    : null}
                   {lanes[lane].map(renderItem)}
+                  {lane === 'video' && editable && !laneState(edits, 'video').locked
+                    ? realCutIndices(tb).map((k) => {
+                        const startMs = tb.starts[k]!
+                        const srcMs = tb.segs[k]![0]
+                        const tr = edits.transitions?.find((t) => Math.abs(t.srcMs - srcMs) <= 1)
+                        return (
+                          <button
+                            key={`cut${srcMs}`}
+                            type="button"
+                            className={`absolute top-1 z-20 inline-flex size-4 -translate-x-1/2 items-center justify-center rounded-sm border shadow ${
+                              tr ? 'border-white bg-primary text-primary-foreground' : 'border-white/70 bg-background/90 text-foreground hover:bg-muted'
+                            }`}
+                            style={{ left: startMs * pxPerMs }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => openCutTransition(e, k)}
+                            aria-label={tr ? `Transition: ${TRANSITION_INFO[tr.type].label}` : 'Add transition at this cut'}
+                            title={tr ? `${TRANSITION_INFO[tr.type].label} · ${(tr.durMs / 1000).toFixed(2)} s` : 'Add transition'}
+                            data-testid="timeline-transition-handle"
+                            data-src-ms={srcMs}
+                            data-type={tr?.type}
+                          >
+                            <Blend className="size-3" />
+                          </button>
+                        )
+                      })
+                    : null}
                   {lane === 'video' ? (
                     <>
                       <div className="pointer-events-none absolute inset-x-0 bottom-0.5 h-[18px]" role="group" aria-label="Transcript timeline">
@@ -909,8 +1133,28 @@ export function Timeline({
       </div>
       <p className="text-[10px] text-muted-foreground">
         Click to select (Shift-click for more), drag to move, drag edges to trim. S split · Del delete · ←/→ nudge
-        (Shift ×10) · N snapping · Space play. Right-click for layout and section actions.
+        (Shift ×10) · N snapping · Space play. ◇ in the strip above adds keyframes; click a cut to add a transition.
+        Right-click for layout and section actions.
       </p>
+      {trPop ? (
+        <TransitionPopover
+          title={trPop.kind === 'cut' ? 'Transition at cut' : trPop.edge === 'in' ? 'B-roll in transition' : 'B-roll out transition'}
+          value={trValue}
+          maxMs={trPop.maxMs}
+          anchor={{ x: trPop.x, y: trPop.y }}
+          onApply={(spec) =>
+            commit(
+              trPop.kind === 'cut'
+                ? setCutTransition(edits, trPop.srcMs, spec)
+                : setBrollTransition(edits, trPop.id, trPop.edge, spec),
+            )
+          }
+          onApplyAll={(spec) =>
+            commit(trPop.kind === 'cut' ? applyCutTransitionToAll(edits, [tb.segs[0]!, ...realCutIndices(tb).map((k) => tb.segs[k]!)], spec) : applyBrollTransitionToAll(edits, spec))
+          }
+          onClose={() => setTrPop(null)}
+        />
+      ) : null}
       {ctxMenu ? (
         <div
           ref={menuRef}

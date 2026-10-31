@@ -1,0 +1,177 @@
+/**
+ * E3 preview: per-frame styles for keyframes + transitions, from the shared math
+ * (keyframes.ts / transitions.ts — the same functions the export parity fixture asserts).
+ * Pure: the DOM side lives in components/clips/editor/motion-preview.ts.
+ */
+import type { BrollItem } from '@/lib/clips/broll'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import {
+  IDENTITY_TRANSFORM,
+  isIdentityTransform,
+  layerTransformAt,
+  tracksFor,
+  type LayerTransform,
+} from '@/lib/clips/editor/keyframes'
+import {
+  brollTransitionWindows,
+  brollVisibleRange,
+  compositeCss,
+  cutTransitionWindows,
+  progressIn,
+  transitionFrame,
+  type BrollWindow,
+  type CutWindow,
+  type LayerCss,
+} from '@/lib/clips/editor/transitions'
+
+export const HOOK_FADE_IN_MS = 180
+export const HOOK_FADE_OUT_MS = 220
+
+export type FrameStyle = { transform: string; opacity: number; clipPath: string; filter: string; visibility: 'visible' | 'hidden' }
+
+const NONE: FrameStyle = { transform: '', opacity: 1, clipPath: '', filter: '', visibility: 'visible' }
+
+/** CSS transform of a frame-sized layer, origin set by the caller (centre for video / B-roll). */
+export function keyframeTransform(t: LayerTransform): string {
+  if (isIdentityTransform({ ...t, opacity: 100 })) return ''
+  return `translate(${t.x}%, ${t.y}%) rotate(${t.rotation}deg) scale(${t.scale / 100})`
+}
+
+function join(...parts: string[]): string {
+  return parts.filter(Boolean).join(' ')
+}
+
+export type MainFrame = {
+  /** keyframes of the Video lane (whole main composite, like the export pass after the cut). */
+  kf: FrameStyle
+  /** active cut window (two clones A / B + dip colour), or null */
+  cut: null | {
+    win: CutWindow
+    q: number
+    /** source ms each clone must show at this output time */
+    aSrcMs: number
+    bSrcMs: number
+    a: LayerCss
+    b: LayerCss
+    color: { opacity: number; background: string }
+  }
+  /** next window starting within `preRollMs` (to pre-seek the clones) */
+  upcoming: null | { win: CutWindow; aSrcMs: number; bSrcMs: number }
+}
+
+export function mainFrame(
+  edits: ClipEditsV2,
+  tb: { segs: [number, number][]; starts: number[] },
+  outMs: number,
+  boxW: number,
+  preRollMs = 1500,
+): MainFrame {
+  const t = tracksFor(edits, 'video').length ? layerTransformAt(edits, 'video', outMs) : IDENTITY_TRANSFORM
+  const kf: FrameStyle = { ...NONE, transform: keyframeTransform(t), opacity: t.opacity / 100 }
+  const wins = cutTransitionWindows(tb.segs, tb.starts, edits.transitions)
+  let cut: MainFrame['cut'] = null
+  let upcoming: MainFrame['upcoming'] = null
+  for (const w of wins) {
+    if (outMs >= w.w0Ms && outMs < w.w1Ms) {
+      const q = progressIn(w, frameTime(outMs, w))
+      const f = transitionFrame(w.type, q)
+      // DOM order: clone A below, dip colour, clone B on top.
+      const css = compositeCss(f, false, boxW)
+      cut = {
+        win: w,
+        q,
+        aSrcMs: w.aEnd + (outMs - w.cutMs),
+        bSrcMs: w.bStart + (outMs - w.cutMs),
+        ...css,
+      }
+      break
+    }
+    if (!upcoming && w.w0Ms > outMs && w.w0Ms - outMs <= preRollMs) {
+      upcoming = { win: w, aSrcMs: w.aEnd + (w.w0Ms - w.cutMs), bSrcMs: w.bStart + (w.w0Ms - w.cutMs) }
+    }
+  }
+  return { kf, cut, upcoming }
+}
+
+/** Export renders whole frames: sample the composite at the frame the playhead is in. */
+function frameTime(outMs: number, w: { w0Ms: number }): number {
+  const fm = 1000 / 30
+  return w.w0Ms + Math.floor((outMs - w.w0Ms) / fm + 1e-6) * fm
+}
+
+export type BrollFrame = {
+  /** per item: wrapper style (null = hidden), dip colour under it */
+  items: Record<string, { box: FrameStyle | null; dip: { opacity: number; background: string } }>
+  /** style for the main composite when an item enters / leaves over it */
+  under: FrameStyle
+}
+
+export function brollFrame(edits: ClipEditsV2, outMs: number, boxW: number): BrollFrame {
+  const items = [...(edits.broll ?? [])].sort((a, b) => a.startMs - b.startMs)
+  const wins = brollTransitionWindows(items)
+  const out: BrollFrame = { items: {}, under: { ...NONE } }
+  const active = new Map<string, BrollWindow>()
+  for (const w of wins) if (outMs >= w.w0Ms && outMs < w.w1Ms) active.set(`${w.itemId}|${w.kind}`, w)
+  for (const it of items) {
+    const [s, e] = brollVisibleRange(it, wins)
+    out.items[it.id] = { box: null, dip: { opacity: 0, background: 'transparent' } }
+    if (!(outMs >= s && outMs < e)) continue
+    const kfT = layerTransformAt(edits, `broll:${it.id}`, outMs - it.startMs)
+    out.items[it.id]!.box = { ...NONE, transform: keyframeTransform(kfT), opacity: kfT.opacity / 100 }
+  }
+  for (const w of active.values()) {
+    const item = items.find((i) => i.id === w.itemId) as BrollItem
+    const f = transitionFrame(w.type, progressIn(w, frameTime(outMs, w)))
+    // Entering ('in' / 'between'): the item is B (top). Leaving ('out'): the item is A (top).
+    const itemIsA = w.kind === 'out'
+    const css = compositeCss(f, itemIsA, boxW)
+    const top = itemIsA ? css.a : css.b
+    const bottom = itemIsA ? css.b : css.a
+    const slot = out.items[item.id]!
+    if (slot.box) {
+      slot.box = {
+        transform: join(top.transform, slot.box.transform),
+        opacity: slot.box.opacity * top.opacity,
+        clipPath: top.clipPath,
+        filter: top.filter,
+        visibility: top.visibility,
+      }
+    }
+    slot.dip = css.color
+    // The bottom side: the previous item for 'between', else the main composite.
+    const prevSlot = w.kind === 'between' && w.fromId ? out.items[w.fromId] : null
+    const bottomStyle: FrameStyle = {
+      transform: bottom.transform,
+      opacity: 1,
+      clipPath: bottom.clipPath,
+      filter: bottom.filter,
+      visibility: 'visible',
+    }
+    if (prevSlot?.box) {
+      prevSlot.box = { ...bottomStyle, transform: join(bottom.transform, prevSlot.box.transform), opacity: prevSlot.box.opacity }
+    } else if (!prevSlot) {
+      out.under = bottomStyle
+    }
+  }
+  return out
+}
+
+/** ASS \fad(180,220) of the hook title as a 0..1 multiplier (hook_overlay.hook_fade_at). */
+export function hookFadeAt(tMs: number, durationMs: number): number {
+  if (tMs < HOOK_FADE_IN_MS) return Math.max(0, tMs / HOOK_FADE_IN_MS)
+  if (tMs > durationMs - HOOK_FADE_OUT_MS) return Math.max(0, (durationMs - tMs) / HOOK_FADE_OUT_MS)
+  return 1
+}
+
+export function hookFrame(edits: ClipEditsV2, outMs: number): FrameStyle | null {
+  const ho = edits.hookOverlay
+  if (!ho?.enabled || !ho.text?.trim()) return null
+  const dur = Math.max(1500, Math.min(5000, ho.durationMs ?? 2500))
+  if (outMs < 0 || outMs >= dur) return null
+  const t = layerTransformAt(edits, 'text', outMs)
+  return {
+    ...NONE,
+    transform: keyframeTransform(t),
+    opacity: Math.max(0, Math.min(1, (t.opacity / 100) * hookFadeAt(outMs, dur))),
+  }
+}

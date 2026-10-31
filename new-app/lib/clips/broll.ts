@@ -1,10 +1,15 @@
+import { normalizeTransitionSpec, type TransitionSpec } from '@/lib/clips/editor/motion-schema'
+
 /**
  * startMs/endMs are OUTPUT ms (post-cut timeline). inMs (optional, E2) is the media in-point:
  * the B-roll frame shown at startMs is media time inMs (set by left-trim / split).
+ * transitionIn / transitionOut (E3): edge transitions; when an item starts where the previous one
+ * ends, its transitionIn is the transition BETWEEN the two (CapCut).
  */
+type BrollTransitions = { transitionIn?: TransitionSpec; transitionOut?: TransitionSpec }
 export type BrollItem =
-  | { id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' }
-  | { id: string; source: 'ai'; generationId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' }
+  | ({ id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
+  | ({ id: string; source: 'ai'; generationId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
 
 export const BROLL_MIN_MS = 1000
 export const BROLL_DEFAULT_SHOT_MS = 3000
@@ -56,14 +61,17 @@ export function normalizeBrollItems(raw: unknown, clipDurationMs: number): Broll
     const placement = o.placement === 'auto' ? 'auto' : o.placement === 'manual' ? 'manual' : undefined
     const inRaw = Number(o.inMs)
     const inMs = Number.isFinite(inRaw) && inRaw > 0 ? Math.round(inRaw) : undefined
+    const tIn = normalizeTransitionSpec(o.transitionIn)
+    const tOut = normalizeTransitionSpec(o.transitionOut)
+    const extra = { ...(inMs ? { inMs } : {}), ...(tIn ? { transitionIn: tIn } : {}), ...(tOut ? { transitionOut: tOut } : {}) }
     if (source === 'ai') {
       const generationId = String(o.generationId ?? '')
       if (!generationId) continue
-      out.push(clampBrollItem({ id, source: 'ai', generationId, startMs, endMs, placement, ...(inMs ? { inMs } : {}) }, clipDurationMs))
+      out.push(clampBrollItem({ id, source: 'ai', generationId, startMs, endMs, placement, ...extra }, clipDurationMs))
     } else {
       const assetId = String(o.assetId ?? '')
       if (!assetId) continue
-      out.push(clampBrollItem({ id, source: 'stock', assetId, startMs, endMs, placement, ...(inMs ? { inMs } : {}) }, clipDurationMs))
+      out.push(clampBrollItem({ id, source: 'stock', assetId, startMs, endMs, placement, ...extra }, clipDurationMs))
     }
   }
   return out

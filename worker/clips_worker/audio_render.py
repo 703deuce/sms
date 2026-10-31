@@ -16,6 +16,7 @@ def build_audio_filter(
     sfx_specs: list[dict],
     music_input_index: int = 1,
     music_window: dict | None = None,
+    music_volume_expr: str | None = None,
 ) -> tuple[str, str]:
     """
     Returns (filter_complex, audio_map_label).
@@ -33,7 +34,7 @@ def build_audio_filter(
     mix_inputs: list[str] = ["[sp]"]
 
     if has_music:
-        parts.append(music_chain(music_input_index, L, V, FI, FO, music_window, "mv"))
+        parts.append(music_chain(music_input_index, L, V, FI, FO, music_window, "mv", music_volume_expr))
         parts.append(
             f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
         )
@@ -68,14 +69,19 @@ def _windowed(window: dict | None, L: float) -> tuple[float, float, float] | Non
     return start, max(0.1, end - start), in_s
 
 
-def music_chain(idx: int, L: float, V: float, FI: float, FO: float, window: dict | None, label: str) -> str:
-    """Music bed filter: legacy (0..L) or E2 windowed (atrim in-point, fades on the window, adelay)."""
+def music_chain(
+    idx: int, L: float, V: float, FI: float, FO: float, window: dict | None, label: str,
+    envelope: str | None = None,
+) -> str:
+    """Music bed filter: legacy (0..L) or E2 windowed (atrim in-point, fades on the window, adelay).
+    envelope (E3): `volume` expression in OUTPUT seconds (motion.volume_expr with the window origin)."""
     w = _windowed(window, L)
+    env = f",volume='{envelope}':eval=frame" if envelope else ""
     if w is None:
         return (
             f"[{idx}:a]volume={V:.4f},"
             f"afade=t=in:d={FI:.3f},afade=t=out:st={max(0, L - FO):.3f}:d={FO:.3f},"
-            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS[{label}]"
+            f"atrim=0:{L:.3f},asetpts=PTS-STARTPTS{env}[{label}]"
         )
     start, ln, in_s = w
     fi = min(FI, ln / 2)
@@ -84,7 +90,7 @@ def music_chain(idx: int, L: float, V: float, FI: float, FO: float, window: dict
     return (
         f"[{idx}:a]atrim=start={in_s:.3f}:end={in_s + ln:.3f},asetpts=PTS-STARTPTS,volume={V:.4f},"
         f"afade=t=in:d={fi:.3f},afade=t=out:st={max(0, ln - fo):.3f}:d={fo:.3f},"
-        f"adelay={delay_ms}|{delay_ms},apad=whole_dur={L:.3f}[{label}]"
+        f"adelay={delay_ms}|{delay_ms},apad=whole_dur={L:.3f}{env}[{label}]"
     )
 
 
@@ -111,10 +117,12 @@ def apply_audio_mix(
     fade_in_s: float,
     fade_out_s: float,
     music_window: dict | None = None,
+    music_volume_expr: str | None = None,
 ) -> None:
     has_music = music_path is not None and music_path.is_file()
     sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
     fc, alabel = build_audio_filter(
+        music_volume_expr=music_volume_expr,
         length_s=length_s,
         volume=volume,
         duck_depth=duck_depth,
@@ -329,8 +337,11 @@ def apply_dub_speech_mix(
     fade_in_s: float,
     fade_out_s: float,
     music_window: dict | None = None,
+    music_volume_expr: str | None = None,
+    speech_volume_expr: str | None = None,
 ) -> None:
-    """Replace speech with dub audio; duck music against dub track."""
+    """Replace speech with dub audio; duck music against dub track.
+    E3: speech_volume_expr = Voice-lane volume envelope (the dub is the voice)."""
     has_music = music_path is not None and music_path.is_file()
     sfx_specs = [{"at_ms": at, "volume": vol} for _, at, vol in sfx_paths]
     L = max(0.1, float(length_s))
@@ -339,10 +350,11 @@ def apply_dub_speech_mix(
     FI = max(0.0, float(fade_in_s))
     FO = max(0.0, float(fade_out_s))
     ratio = 1.0 + 7.0 * D
-    parts = ["[1:a]asplit=2[sp][sc]"]
+    voice_env = f"volume='{speech_volume_expr}':eval=frame," if speech_volume_expr else ""
+    parts = [f"[1:a]{voice_env}asplit=2[sp][sc]"]
     mix_inputs = ["[sp]"]
     if has_music:
-        parts.append(music_chain(2, L, V, FI, FO, music_window, "mv"))
+        parts.append(music_chain(2, L, V, FI, FO, music_window, "mv", music_volume_expr))
         parts.append(
             f"[mv][sc]sidechaincompress=threshold=0.0316:ratio={ratio:.3f}:attack=20:release=300:makeup=1[md]"
         )
