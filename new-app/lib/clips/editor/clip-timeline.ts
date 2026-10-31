@@ -6,7 +6,8 @@
  * renders. Every lane item maps 1:1 onto an existing `edits` field:
  *
  *   text  → edits.hookOverlay (0 .. durationMs)
- *   video → keep segments of the EDL (trim + cutRanges + sectionOrder)
+ *   video → keep segments of the EDL (trim + cutRanges + sectionOrder), further divided at
+ *           edits.videoSplits (E2fix: S / Split on the Video lane)
  *   broll → edits.broll[] {startMs, endMs, inMs?}           (output ms)
  *   voice → same segments as video (waveform; mute only)
  *   music → edits.audio.music {startMs?, endMs?, inMs?}      (output ms)
@@ -53,6 +54,10 @@ export const HOOK_MAX_MS = 5000
 export const VIDEO_MIN_SEG_MS = 200
 /** One frame at 30 fps — arrow-key nudge step. Shift = 10 frames. */
 export const NUDGE_MS = 33
+/** E2fix: one arrow-key step (items AND playhead): 1 frame, Shift = 10 frames. */
+export function arrowStepMs(shift: boolean): number {
+  return NUDGE_MS * (shift ? 10 : 1)
+}
 
 export type ItemCaps = { move: boolean; trimStart: boolean; trimEnd: boolean; split: boolean; del: boolean }
 
@@ -219,6 +224,28 @@ export function musicWindow(music: ClipAudioMusic | null | undefined, durationMs
 
 const NO_CAPS: ItemCaps = { move: false, trimStart: false, trimEnd: false, split: false, del: false }
 
+/** One Video-lane segment: a keep segment, or part of one after a split. */
+export type VideoLaneSeg = { a: number; b: number; startMs: number }
+
+/**
+ * E2fix: keep segments (output order) divided at `edits.videoSplits` (source ms). A split
+ * closer than VIDEO_MIN_SEG_MS to a segment edge is ignored. Output timing is unchanged.
+ */
+export function videoLaneSegments(tb: Timebase, splits: readonly number[] | undefined): VideoLaneSeg[] {
+  const pts = [...(splits ?? [])].sort((x, y) => x - y)
+  const out: VideoLaneSeg[] = []
+  tb.segs.forEach(([a, b], i) => {
+    let s = a
+    for (const p of pts) {
+      if (p - s < VIDEO_MIN_SEG_MS || b - p < VIDEO_MIN_SEG_MS) continue
+      out.push({ a: s, b: p, startMs: tb.starts[i]! + (s - a) })
+      s = p
+    }
+    out.push({ a: s, b, startMs: tb.starts[i]! + (s - a) })
+  })
+  return out
+}
+
 export function buildTimelineItems(input: {
   edits: ClipEditsV2
   previewEdits: ClipEditsV2
@@ -241,20 +268,23 @@ export function buildTimelineItems(input: {
     })
   }
 
-  const multi = tb.segs.length > 1
-  tb.segs.forEach(([a, b], i) => {
-    const startMs = tb.starts[i]!
-    const endMs = startMs + (b - a)
+  const vsegs = videoLaneSegments(tb, edits.videoSplits)
+  const multi = vsegs.length > 1
+  vsegs.forEach(({ a, b, startMs }, i) => {
     lanes.video.push({
       lane: 'video',
       id: `seg:${a}`,
       startMs,
-      endMs,
+      endMs: startMs + (b - a),
       srcInMs: a,
       srcOutMs: b,
       label: `Clip ${i + 1}`,
       caps: { move: false, trimStart: true, trimEnd: true, split: true, del: multi },
     })
+  })
+  tb.segs.forEach(([a, b], i) => {
+    const startMs = tb.starts[i]!
+    const endMs = startMs + (b - a)
     lanes.voice.push({
       lane: 'voice',
       id: `voice:${a}`,
@@ -485,9 +515,11 @@ function trimVideoSegment(
   const edits = ctx.edits
   const pv = ctx.previewEdits
   const clampTrim = ctx.clampTrim ?? ((t: { in: number; out: number }) => t)
-  // Neighbouring kept source (in SOURCE order) bounds how far an edge may extend.
-  const prevEnd = Math.max(pv.trim.in, ...tb.segs.filter(([, e]) => e <= a).map(([, e]) => e))
-  const nextStart = Math.min(pv.trim.out, ...tb.segs.filter(([s]) => s >= b).map(([s]) => s))
+  // Neighbouring kept source (in SOURCE order) bounds how far an edge may extend. E2fix: a split
+  // sibling is a neighbour too (an inner split edge can shrink its side, never eat the sibling).
+  const vsegs = videoLaneSegments(tb, edits.videoSplits)
+  const prevEnd = Math.max(pv.trim.in, ...vsegs.filter((v) => v.b <= a).map((v) => v.b))
+  const nextStart = Math.min(pv.trim.out, ...vsegs.filter((v) => v.a >= b).map((v) => v.a))
 
   if (edge === 'start') {
     const delta = toMs - it.startMs
@@ -531,7 +563,12 @@ export function splitBrollId(id: string, atMs: number, existing: string[] = []):
 
 /**
  * Split at the playhead. With a selection: split the selected items that contain it.
- * Without: split the main video (layout segment boundary) — CapCut's default.
+ * Without: split the main video — CapCut's default.
+ *
+ * E2fix: a Video split adds a point to `edits.videoSplits`, so the Video lane really gets two
+ * segments (before: only a layout-segment boundary, which normalizeLayoutSegments merges straight
+ * back because both halves have the same mode — the split was invisible and lost on save). The
+ * layout boundary is still added so each half can get its own layout this session.
  */
 export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2 | null {
   const locked = lockedLanes(ctx.edits)
@@ -544,13 +581,19 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
   for (const r of targets) {
     if (locked.has(r.lane)) continue
     if (r.lane === 'video') {
-      const src = outputToSource(tb, t)
       if (t <= 0 || t >= tb.durationMs) continue
-      const n = splitLayoutSegmentAt(next, src)
-      if (n !== next) {
-        next = n
-        changed = true
-      }
+      const vsegs = videoLaneSegments(tb, next.videoSplits)
+      const seg = vsegs.find((v) => t > v.startMs && t < v.startMs + (v.b - v.a))
+      if (!seg) continue
+      // A selected Video segment only splits when the playhead is inside it.
+      if (r.id && r.id !== `seg:${seg.a}`) continue
+      const src = seg.a + (t - seg.startMs)
+      if (src - seg.a < VIDEO_MIN_SEG_MS || seg.b - src < VIDEO_MIN_SEG_MS) continue
+      next = splitLayoutSegmentAt(
+        { ...next, videoSplits: [...(next.videoSplits ?? []), src].sort((x, y) => x - y) },
+        src,
+      )
+      changed = true
       continue
     }
     const it = findItem(lanes, r)
@@ -573,6 +616,19 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
     }
   }
   return changed ? next : null
+}
+
+/** E2fix: why a split did nothing (shown as a toast instead of silently ignoring S / Split). */
+export function splitNoopMessage(edits: ClipEditsV2, refs: ItemRef[]): string {
+  const locked = lockedLanes(edits)
+  const lanes: LaneId[] = refs.length ? [...new Set(refs.map((r) => r.lane))] : ['video']
+  const lockedOnes = lanes.filter((l) => locked.has(l))
+  if (lockedOnes.length === lanes.length) {
+    return `${LANE_LABELS[lockedOnes[0]!]} lane is locked — unlock it to split`
+  }
+  return refs.length
+    ? 'Nothing to split — put the playhead inside the selected item'
+    : 'Nothing to split here — move the playhead inside a clip'
 }
 
 /** Delete items. Video segments become cut ranges (never deletes the last segment). */

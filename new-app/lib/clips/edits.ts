@@ -141,6 +141,12 @@ export type ClipEditsV2 = {
   layersLegacyFp?: string
   /** E2 timeline lane toggles (mute / hide / lock); applied to preview + export. */
   timelineLanes?: TimelineLanesState
+  /**
+   * E2fix: Video-lane split points (SOURCE ms, sorted). A split only divides the Video lane into
+   * separately selectable / deletable / trimmable segments; it never changes the render by itself
+   * (the worker ignores it — deleting a half becomes a normal cut range).
+   */
+  videoSplits?: number[]
 }
 
 export type ClipBounds = {
@@ -403,6 +409,7 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   }
   // Clearing every lane toggle must clear the persisted value (PATCH merges over the server copy).
   if (!edits.timelineLanes) payload.timelineLanes = null
+  if (!edits.videoSplits?.length) payload.videoSplits = null
   return payload
 }
 
@@ -505,6 +512,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     layers: o.layers,
     layersLegacyFp: typeof o.layersLegacyFp === 'string' ? o.layersLegacyFp : undefined,
     timelineLanes: normalizeTimelineLanes(o.timelineLanes),
+    videoSplits: normalizeVideoSplits(o.videoSplits, trim.in, trim.out),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
     loudnessLufs:
@@ -551,6 +559,21 @@ export function canonicalEditsJson(edits: ClipEditsV2): string {
 
 export function editsVersionHash(edits: ClipEditsV2): string {
   return createHash('sha256').update(canonicalEditsJson(edits)).digest('hex')
+}
+
+const VIDEO_SPLITS_MAX = 200
+
+/** E2fix: sorted, unique, integer split points strictly inside the trim (else undefined). */
+export function normalizeVideoSplits(raw: unknown, trimIn: number, trimOut: number): number[] | undefined {
+  if (!Array.isArray(raw) || !raw.length) return undefined
+  const out = [
+    ...new Set(
+      raw
+        .map((v) => Math.round(Number(v)))
+        .filter((v) => Number.isFinite(v) && v > trimIn && v < trimOut),
+    ),
+  ].sort((a, b) => a - b)
+  return out.length ? out.slice(0, VIDEO_SPLITS_MAX) : undefined
 }
 
 export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean {
