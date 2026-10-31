@@ -26,6 +26,10 @@ def load_audio_assets(conn, edits: dict, work_dir: Path) -> dict:
                 "duckDepth": float(music.get("duckDepth", 0.7)),
                 "fadeInMs": int(music.get("fadeInMs", 500)),
                 "fadeOutMs": int(music.get("fadeOutMs", 1000)),
+                # E2 timeline window (output ms); absent = whole clip from media 0.
+                "startMs": music.get("startMs"),
+                "endMs": music.get("endMs"),
+                "inMs": music.get("inMs"),
             }
 
     sfx_paths: list[tuple[Path, int, float]] = []

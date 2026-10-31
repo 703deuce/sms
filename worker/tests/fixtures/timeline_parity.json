@@ -1,0 +1,96 @@
+{
+  "_doc": "E2 preview/export parity fixture. Loaded by new-app/tests/clip-timeline-parity.test.ts (renderTimingSpec) and worker/tests/test_timeline_lanes.py (timeline_render_spec). Edits are EFFECTIVE edits (silence + loop trim already applied); times are output ms.",
+  "cases": [
+    {
+      "name": "cut + broll in-point + windowed music + sfx + hook",
+      "edits": {
+        "v": 2,
+        "trim": { "in": 0, "out": 10000 },
+        "cutRanges": [[3000, 4000]],
+        "broll": [{ "id": "b1", "source": "stock", "assetId": "a1", "startMs": 1000, "endMs": 3000, "inMs": 500 }],
+        "audio": {
+          "music": { "generationId": "m1", "volume": 0.25, "startMs": 2000, "endMs": 6000, "inMs": 1000 },
+          "sfx": [{ "generationId": "s1", "atMs": 4500, "volume": 0.8 }]
+        },
+        "hookOverlay": { "enabled": true, "text": "Wait for it", "durationMs": 2500 }
+      },
+      "expected": {
+        "durationMs": 9000,
+        "broll": [{ "startMs": 1000, "endMs": 3000, "inMs": 500 }],
+        "music": { "startMs": 2000, "endMs": 6000, "inMs": 1000 },
+        "sfx": [{ "atMs": 4500 }],
+        "voiceMuted": false,
+        "hookOverlayMs": 2500
+      }
+    },
+    {
+      "name": "hidden / muted lanes are dropped for preview and export",
+      "edits": {
+        "v": 2,
+        "trim": { "in": 0, "out": 10000 },
+        "cutRanges": [[3000, 4000]],
+        "broll": [{ "id": "b1", "source": "stock", "assetId": "a1", "startMs": 1000, "endMs": 3000 }],
+        "audio": {
+          "music": { "generationId": "m1", "volume": 0.25 },
+          "sfx": [{ "generationId": "s1", "atMs": 4500, "volume": 0.8 }],
+          "studioSound": { "enabled": true, "generationId": "st1", "mix": 0.35 }
+        },
+        "hookOverlay": { "enabled": true, "text": "Hook", "durationMs": 9000 },
+        "timelineLanes": {
+          "broll": { "hidden": true },
+          "music": { "muted": true },
+          "voice": { "muted": true, "locked": true },
+          "text": { "hidden": true },
+          "video": { "muted": true, "hidden": true }
+        }
+      },
+      "expected": {
+        "durationMs": 9000,
+        "broll": [],
+        "music": null,
+        "sfx": [{ "atMs": 4500 }],
+        "voiceMuted": true,
+        "hookOverlayMs": null
+      }
+    },
+    {
+      "name": "default + clamped music windows, hook clamp",
+      "edits": {
+        "v": 2,
+        "trim": { "in": 5000, "out": 13000 },
+        "cutRanges": [],
+        "audio": {
+          "music": { "generationId": "m1", "startMs": 7900, "endMs": 20000 },
+          "sfx": []
+        },
+        "hookOverlay": { "enabled": true, "durationMs": 400 }
+      },
+      "expected": {
+        "durationMs": 8000,
+        "broll": [],
+        "music": { "startMs": 7500, "endMs": 8000, "inMs": 0 },
+        "sfx": [],
+        "voiceMuted": false,
+        "hookOverlayMs": 1500
+      }
+    },
+    {
+      "name": "section reorder keeps output duration",
+      "edits": {
+        "v": 2,
+        "trim": { "in": 0, "out": 9000 },
+        "cutRanges": [[1000, 1500]],
+        "sectionOrder": [[6000, 9000], [0, 6000]],
+        "audio": { "music": { "generationId": "m1" }, "sfx": [] }
+      },
+      "expected": {
+        "durationMs": 8500,
+        "broll": [],
+        "music": { "startMs": 0, "endMs": 8500, "inMs": 0 },
+        "sfx": [],
+        "voiceMuted": false,
+        "hookOverlayMs": null
+      }
+    }
+  ]
+}

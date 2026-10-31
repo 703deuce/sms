@@ -1,6 +1,10 @@
+/**
+ * startMs/endMs are OUTPUT ms (post-cut timeline). inMs (optional, E2) is the media in-point:
+ * the B-roll frame shown at startMs is media time inMs (set by left-trim / split).
+ */
 export type BrollItem =
-  | { id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; placement?: 'auto' | 'manual' }
-  | { id: string; source: 'ai'; generationId: string; startMs: number; endMs: number; placement?: 'auto' | 'manual' }
+  | { id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' }
+  | { id: string; source: 'ai'; generationId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' }
 
 export const BROLL_MIN_MS = 1000
 export const BROLL_DEFAULT_SHOT_MS = 3000
@@ -50,14 +54,16 @@ export function normalizeBrollItems(raw: unknown, clipDurationMs: number): Broll
     const endMs = Number(o.endMs)
     if (!id || !Number.isFinite(startMs) || !Number.isFinite(endMs)) continue
     const placement = o.placement === 'auto' ? 'auto' : o.placement === 'manual' ? 'manual' : undefined
+    const inRaw = Number(o.inMs)
+    const inMs = Number.isFinite(inRaw) && inRaw > 0 ? Math.round(inRaw) : undefined
     if (source === 'ai') {
       const generationId = String(o.generationId ?? '')
       if (!generationId) continue
-      out.push(clampBrollItem({ id, source: 'ai', generationId, startMs, endMs, placement }, clipDurationMs))
+      out.push(clampBrollItem({ id, source: 'ai', generationId, startMs, endMs, placement, ...(inMs ? { inMs } : {}) }, clipDurationMs))
     } else {
       const assetId = String(o.assetId ?? '')
       if (!assetId) continue
-      out.push(clampBrollItem({ id, source: 'stock', assetId, startMs, endMs, placement }, clipDurationMs))
+      out.push(clampBrollItem({ id, source: 'stock', assetId, startMs, endMs, placement, ...(inMs ? { inMs } : {}) }, clipDurationMs))
     }
   }
   return out

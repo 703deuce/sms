@@ -8,6 +8,7 @@ import type { SilenceTrimSettings } from '@/lib/clips/silence-trim'
 import { normalizeLayoutSegments, type LayoutSegment } from '@/lib/clips/layout-segments'
 import { normalizeExportTemplate, type ClipExportTemplate } from '@/lib/clips/export-template'
 import { isSpeechLevelingEnabled } from '@/lib/clips/speech-leveling'
+import { normalizeTimelineLanes, type TimelineLanesState } from '@/lib/clips/editor/timeline-lane-state'
 
 export type CutRange = [number, number]
 
@@ -138,6 +139,8 @@ export type ClipEditsV2 = {
   layersV?: number
   layers?: unknown
   layersLegacyFp?: string
+  /** E2 timeline lane toggles (mute / hide / lock); applied to preview + export. */
+  timelineLanes?: TimelineLanesState
 }
 
 export type ClipBounds = {
@@ -398,6 +401,8 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   if (normalizeEditSpeed(edits.speed) === undefined) {
     payload.speed = null
   }
+  // Clearing every lane toggle must clear the persisted value (PATCH merges over the server copy).
+  if (!edits.timelineLanes) payload.timelineLanes = null
   return payload
 }
 
@@ -499,6 +504,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     layersV: typeof o.layersV === 'number' ? o.layersV : undefined,
     layers: o.layers,
     layersLegacyFp: typeof o.layersLegacyFp === 'string' ? o.layersLegacyFp : undefined,
+    timelineLanes: normalizeTimelineLanes(o.timelineLanes),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
     loudnessLufs:
@@ -558,7 +564,9 @@ export function isDefaultEdits(edits: ClipEditsV2, bounds: ClipBounds): boolean 
     !edits.layout.cropBox &&
     !normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out) &&
     !isSpeechLevelingEnabled(edits) &&
-    normalizeEditSpeed(edits.speed) === undefined
+    normalizeEditSpeed(edits.speed) === undefined &&
+    // E2: a muted Voice lane must not reuse the voiced preview render.
+    !edits.timelineLanes?.voice?.muted
   )
 }
 

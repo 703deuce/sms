@@ -1,20 +1,44 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react'
+import { Magnet, Maximize2, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { BrollItem } from '@/lib/clips/broll'
-import { BROLL_MIN_MS } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
-import { keepSegments, normalizeSectionOrder, wordDisplayText } from '@/lib/clips/edits'
-import { clampTrimToExtendedBounds, clampTrimWithMediaBounds, extendedTrimLimits } from '@/lib/clips/trim-bounds'
+import { wordDisplayText } from '@/lib/clips/edits'
+import { clampTrimWithMediaBounds } from '@/lib/clips/trim-bounds'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
-import type { SourceWord } from '@/lib/clips/source-words'
-import { wordSourceMs } from '@/lib/clips/source-words'
+import { wordSourceMs, type SourceWord } from '@/lib/clips/source-words'
 import { layoutModeAtSourceMs } from '@/lib/clips/layout-segments'
 import { shotIndexAt } from '@/lib/clips/crop-shots'
 import type { CropShot } from '@/lib/server/clips/clip-detail'
-import { AudioWaveformLane } from '@/components/clips/editor/audio-waveform-lane'
+import { groupWordbarItems, type TimelineWordChip } from '@/lib/clips/script-editor/timeline-model'
+import {
+  LANE_ORDER,
+  NUDGE_MS,
+  buildTimelineItems,
+  deleteItems,
+  laneState,
+  moveItems,
+  outputToSource,
+  refKey,
+  setLaneState,
+  snapMoveDelta,
+  snapTargets,
+  snapValue,
+  sourceToOutput,
+  splitAt,
+  timebaseFor,
+  trimItem,
+  type ItemRef,
+  type LaneId,
+  type OpCtx,
+  type TimelineItem,
+} from '@/lib/clips/editor/clip-timeline'
+import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
+import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
+import { TimelineRuler } from '@/components/clips/editor/timeline/timeline-ruler'
+import { TimelineWaveform } from '@/components/clips/editor/timeline/timeline-waveform'
 import {
   TIMELINE_DEFAULT_PX_PER_SEC,
   TIMELINE_MIN_LABEL_PX,
@@ -23,21 +47,42 @@ import {
   fitPxPerSec,
   initialPxPerSec,
   isTextEntryTarget,
-  outputMsToSourceMs,
   pxPerSecToSlider,
   readablePxPerSec,
   sliderToPxPerSec,
-  sourceMsToTrackPct,
   timelineZoomKeyAction,
   trackWidthPx,
   zoomBy,
   zoomPercent,
 } from '@/lib/clips/editor/timeline-zoom'
 
-/** Lane label column (w-14 = 56px) + container left padding (p-2 = 8px). */
-const TRACK_OFFSET_PX = 64
-/** Label column + left and right padding. */
-const TRACK_EXTRA_PX = 72
+/** Track left padding inside the scroller (lane headers live outside it, CapCut-style). */
+const TRACK_OFFSET_PX = 8
+/** Left + right padding. */
+const TRACK_EXTRA_PX = 16
+const RULER_H = 18
+const LANE_H: Record<LaneId, number> = { text: 20, video: 40, broll: 24, voice: 24, music: 22, sfx: 20 }
+const SNAP_PX = 8
+const DRAG_SLOP_PX = 3
+
+const LANE_COLORS: Record<LaneId, string> = {
+  text: 'bg-fuchsia-500/75',
+  video: 'bg-sky-600/40',
+  broll: 'bg-indigo-500/80',
+  voice: 'bg-emerald-950/50',
+  music: 'bg-teal-600/60',
+  sfx: 'bg-amber-500/80',
+}
+
+type DragState = {
+  mode: 'move' | 'start' | 'end'
+  item: TimelineItem
+  refs: ItemRef[]
+  originX: number
+  deltaMs: number
+  snappedTo: number | null
+  moved: boolean
+}
 
 export function Timeline({
   edits,
@@ -47,8 +92,6 @@ export function Timeline({
   clipOutputDurationMs,
   videoUrl = null,
   onSeekOutput,
-  onTrimChange,
-  onBrollChange,
   clipStartMs,
   clipEndMs,
   mediaMinMs,
@@ -58,6 +101,15 @@ export function Timeline({
   onSplitLayout,
   onCutSection,
   onSetLayoutMode,
+  onCommitEdits,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
+  mediaOffsetMs = 0,
+  musicUrl = null,
+  sfxDurationsMs,
+  onOpenCover,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -66,7 +118,9 @@ export function Timeline({
   clipOutputDurationMs: number
   videoUrl?: string | null
   onSeekOutput: (outputMs: number) => void
-  onTrimChange: (trim: { in: number; out: number }) => void
+  /** @deprecated E2 trims the clip in/out via the Video lane edges (onCommitEdits). */
+  onTrimChange?: (trim: { in: number; out: number }) => void
+  /** @deprecated E2 commits B-roll moves through onCommitEdits (one undo step per drag). */
   onBrollChange?: (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => void
   clipStartMs: number
   clipEndMs: number
@@ -77,39 +131,49 @@ export function Timeline({
   onSplitLayout?: () => void
   onCutSection?: () => void
   onSetLayoutMode?: (mode: ClipEditsV2['layout']['mode']) => void
+  /** E2: every timeline edit is ONE call (= one undo step in useEditorState). Omit for read-only. */
+  onCommitEdits?: (next: ClipEditsV2) => void
+  onUndo?: () => void
+  onRedo?: () => void
+  canUndo?: boolean
+  canRedo?: boolean
+  /** Source ms at media time 0 of `videoUrl` (waveform slicing). */
+  mediaOffsetMs?: number
+  musicUrl?: string | null
+  sfxDurationsMs?: Record<string, number>
+  onOpenCover?: () => void
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
-  const span = Math.max(1, previewEdits.trim.out - previewEdits.trim.in)
+  const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
+  // Single time base: OUTPUT ms of the effective edits (what preview plays and export renders).
+  const span = Math.max(1, tb.durationMs || clipOutputDurationMs)
   const trimLimits = useMemo(() => {
     const min = trimMinMs ?? mediaMinMs
     const max = trimMaxMs ?? mediaMaxMs
     if (min != null && max != null) return { minMs: min, maxMs: max }
     return undefined
   }, [mediaMaxMs, mediaMinMs, trimMaxMs, trimMinMs])
-  const { minInMs, maxOutMs } = extendedTrimLimits(clipStartMs, clipEndMs, trimLimits)
-  const clampTrim = (next: { in: number; out: number }) =>
-    clampTrimWithMediaBounds(clipStartMs, clipEndMs, next, mediaMinMs, mediaMaxMs, trimLimits)
-  const aiInPct = ((clipStartMs - previewEdits.trim.in) / span) * 100
-  const aiOutPct = ((clipEndMs - previewEdits.trim.in) / span) * 100
+  const clampTrim = useCallback(
+    (next: { in: number; out: number }) =>
+      clampTrimWithMediaBounds(clipStartMs, clipEndMs, next, mediaMinMs, mediaMaxMs, trimLimits),
+    [clipEndMs, clipStartMs, mediaMaxMs, mediaMinMs, trimLimits],
+  )
+
+  // ---- zoom (E1) -----------------------------------------------------------
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const [viewportPx, setViewportPx] = useState(0)
   const [pxPerSec, setPxPerSec] = useState<number | null>(null)
   const pendingScrollRef = useRef<number | null>(null)
   const trackViewportPx = Math.max(0, viewportPx - TRACK_EXTRA_PX)
   const effectivePxPerSec = pxPerSec ?? TIMELINE_DEFAULT_PX_PER_SEC
   const widthPx = trackWidthPx(span, effectivePxPerSec, trackViewportPx)
+  const pxPerMs = widthPx / span
   const widthRef = useRef(widthPx)
   widthRef.current = widthPx
-  const captionByI = new Map(buildCaptionWords(words, previewEdits).map((c) => [c.i, c]))
 
-  const outputToSource = (outMs: number) =>
-    outputMsToSourceMs(
-      outMs,
-      keepSegments(previewEdits.trim.in, previewEdits.trim.out, previewEdits.cutRanges),
-      previewEdits.trim.out,
-    )
-  // Playhead is drawn on the SOURCE-span track (same space as word chips), not output %.
-  const playheadPct = sourceMsToTrackPct(outputToSource(outputMs), previewEdits.trim.in, span)
+  const playheadMs = Math.max(0, Math.min(span, outputMs))
+  const playheadPct = (playheadMs / span) * 100
   const playheadPx = (playheadPct / 100) * widthPx
   const playheadPxRef = useRef(playheadPx)
   playheadPxRef.current = playheadPx
@@ -217,7 +281,6 @@ export function Timeline({
     return () => el.removeEventListener('wheel', onWheel)
   }, [applyZoom])
 
-  // Keep the playhead in view while playing / after seeks (page-style jump).
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -230,34 +293,211 @@ export function Timeline({
     if (next != null) el.scrollLeft = next
   }, [playheadPx, widthPx])
 
-  const seekTimelineAtClientX = (clientX: number, el: HTMLElement) => {
-    const rect = el.getBoundingClientRect()
-    if (rect.width <= 0) return
-    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    const sourceMs = previewEdits.trim.in + pct * span
-    onSeekOutput(remapSourceToOutput(sourceMs, previewEdits))
+  // ---- lane model ----------------------------------------------------------
+  const lanes = useMemo(
+    () => buildTimelineItems({ edits, previewEdits, sfxDurationsMs }),
+    [edits, previewEdits, sfxDurationsMs],
+  )
+  const captionWords = useMemo(() => buildCaptionWords(words, previewEdits), [words, previewEdits])
+  const wordChips: TimelineWordChip[] = useMemo(
+    () =>
+      captionWords.map((c) => ({
+        wordId: String(c.i),
+        text: c.text,
+        outStartMs: c.s_ms,
+        outEndMs: Math.max(c.s_ms + 1, c.e_ms),
+        deleted: false,
+      })),
+    [captionWords],
+  )
+  const wordItems = useMemo(() => groupWordbarItems(wordChips, pxPerMs), [wordChips, pxPerMs])
+  const wordEdges = useMemo(() => wordChips.flatMap((w) => [w.outStartMs, w.outEndMs]), [wordChips])
+  const wordByI = useMemo(() => new Map(words.map((w) => [String(w.i), w])), [words])
+  const voicePeaks = useAudioPeaks(videoUrl)
+  const musicPeaks = useAudioPeaks(edits.audio?.music ? musicUrl : null, 20)
+  const editable = Boolean(onCommitEdits)
+
+  const [selected, setSelected] = useState<ItemRef[]>([])
+  const [snapOn, setSnapOn] = useState(true)
+  const [drag, setDrag] = useState<DragState | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  // Drop selections whose items no longer exist (ids change after cuts / undo).
+  const liveSelected = useMemo(
+    () => selected.filter((r) => lanes[r.lane].some((i) => i.id === r.id)),
+    [lanes, selected],
+  )
+  const selectedKeys = useMemo(() => new Set(liveSelected.map(refKey)), [liveSelected])
+
+  const opCtx = (): OpCtx => ({ edits, previewEdits, clampTrim })
+  const commit = (next: ClipEditsV2 | null) => {
+    if (next && onCommitEdits) onCommitEdits(next)
+  }
+  const split = () => commit(splitAt(opCtx(), liveSelected, playheadMs))
+  const del = () => {
+    if (!liveSelected.length) return false
+    commit(deleteItems(opCtx(), liveSelected))
+    setSelected([])
+    return true
+  }
+  const nudge = (dir: -1 | 1, big: boolean) => {
+    const movable = liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
+    if (!movable.length) return false
+    commit(moveItems(opCtx(), movable, dir * NUDGE_MS * (big ? 10 : 1)))
+    return true
+  }
+  const toggleLane = (lane: LaneId, patch: { muted?: boolean; hidden?: boolean; locked?: boolean }) => {
+    commit(setLaneState(edits, lane, patch))
+    if (patch.locked) setSelected((s) => s.filter((r) => r.lane !== lane))
   }
 
-  const broll = edits.broll || []
-  const reorderNote = Boolean(
-    (edits.broll?.length ?? 0) > 0 &&
-      normalizeSectionOrder(edits.sectionOrder, edits.trim.in, edits.trim.out),
-  )
-  const audio = edits.audio
-  const outSpan = Math.max(1, clipOutputDurationMs)
+  const msAtClientX = (clientX: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect()
+    return Math.max(0, Math.min(span, ((clientX - r.left) / Math.max(1, r.width)) * span))
+  }
 
-  const layoutSegs = edits.layout.layoutSegments || []
-  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-  const segmentModeAtPlayhead = layoutModeAtSourceMs(edits, outputToSource(outputMs))
+  const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    rootRef.current?.focus({ preventScroll: true })
+    const key = refKey(item)
+    const multi = e.shiftKey || e.metaKey || e.ctrlKey
+    if (laneState(edits, item.lane).locked) return
+    if (multi) {
+      setSelected((s) =>
+        s.some((r) => refKey(r) === key) ? s.filter((r) => refKey(r) !== key) : [...s, { lane: item.lane, id: item.id }],
+      )
+      return
+    }
+    const already = selectedKeys.has(key)
+    if (!already) setSelected([{ lane: item.lane, id: item.id }])
+    if (!editable) return
+    if (mode === 'move' && !item.caps.move) return
+    if (mode === 'start' && !item.caps.trimStart) return
+    if (mode === 'end' && !item.caps.trimEnd) return
+    const refs =
+      mode === 'move' && already
+        ? liveSelected.filter((r) => lanes[r.lane].find((i) => i.id === r.id)?.caps.move)
+        : [{ lane: item.lane, id: item.id }]
+    const moving = refs.map((r) => lanes[r.lane].find((i) => i.id === r.id)!).filter(Boolean)
+    const exclude = new Set(refs.map(refKey))
+    const targets = snapTargets({ lanes, durationMs: span, playheadMs, wordEdgesMs: wordEdges, exclude })
+    const thr = SNAP_PX / Math.max(1e-6, pxPerMs)
+    const ctx = opCtx()
+    const state: DragState = { mode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false }
+    setDrag(state)
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - state.originX
+      if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX) return
+      state.moved = true
+      const raw = dx / Math.max(1e-6, pxPerMs)
+      const snapping = snapOn && !ev.altKey
+      if (mode === 'move') {
+        const edges = moving.flatMap((m) => [m.startMs, m.endMs])
+        const s = snapping ? snapMoveDelta(edges, raw, targets, thr) : { deltaMs: raw, snappedTo: null }
+        state.deltaMs = s.deltaMs
+        state.snappedTo = s.snappedTo
+      } else {
+        const edge = mode === 'start' ? item.startMs : item.endMs
+        const s = snapping ? snapValue(edge + raw, targets, thr) : { ms: edge + raw, snappedTo: null }
+        state.deltaMs = s.ms - edge
+        state.snappedTo = s.snappedTo
+      }
+      setDrag({ ...state })
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      setDrag(null)
+      if (!state.moved || !state.deltaMs) return
+      if (mode === 'move') commit(moveItems(ctx, state.refs, state.deltaMs))
+      else {
+        const edge = mode === 'start' ? item.startMs : item.endMs
+        commit(trimItem(ctx, { lane: item.lane, id: item.id }, mode, edge + state.deltaMs))
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  /** Live (uncommitted) geometry while dragging. */
+  const shown = (item: TimelineItem): { startMs: number; endMs: number } => {
+    if (!drag?.moved) return item
+    const key = refKey(item)
+    if (drag.mode === 'move' && drag.refs.some((r) => refKey(r) === key)) {
+      return { startMs: item.startMs + drag.deltaMs, endMs: item.endMs + drag.deltaMs }
+    }
+    if (refKey(drag.item) === key) {
+      return drag.mode === 'start'
+        ? { startMs: Math.min(item.endMs - 1, item.startMs + drag.deltaMs), endMs: item.endMs }
+        : { startMs: item.startMs, endMs: Math.max(item.startMs + 1, item.endMs + drag.deltaMs) }
+    }
+    return item
+  }
+
+  // ---- keyboard (focus inside the timeline) ---------------------------------
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const t = e.target as HTMLElement
+    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
+    const mod = e.metaKey || e.ctrlKey
+    const k = e.key
+    if (!mod && (k === '+' || k === '=')) {
+      e.preventDefault()
+      zoomIn()
+    } else if (!mod && (k === '-' || k === '_')) {
+      e.preventDefault()
+      zoomOut()
+    } else if (!mod && k === '0') {
+      e.preventDefault()
+      zoomFit()
+    } else if (!mod && (k === 's' || k === 'S') && editable) {
+      e.preventDefault()
+      e.stopPropagation()
+      split()
+    } else if (!mod && (k === 'n' || k === 'N')) {
+      e.preventDefault()
+      setSnapOn((v) => !v)
+    } else if ((k === 'Delete' || k === 'Backspace') && editable && liveSelected.length) {
+      e.preventDefault()
+      e.stopPropagation()
+      del()
+    } else if ((k === 'ArrowLeft' || k === 'ArrowRight') && editable && liveSelected.length) {
+      if (nudge(k === 'ArrowLeft' ? -1 : 1, e.shiftKey)) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    } else if (k === 'Escape') {
+      setSelected([])
+      setCtxMenu(null)
+    } else if (mod && (k === 'a' || k === 'A')) {
+      e.preventDefault()
+      e.stopPropagation()
+      const all: ItemRef[] = []
+      for (const lane of LANE_ORDER) {
+        if (lane === 'voice' || laneState(edits, lane).locked) continue
+        for (const it of lanes[lane]) if (it.caps.move || it.caps.del) all.push({ lane, id: it.id })
+      }
+      setSelected(all)
+    } else if (mod && (k === 'z' || k === 'Z') && (onUndo || onRedo)) {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.shiftKey) onRedo?.()
+      else onUndo?.()
+    } else if (mod && (k === 'y' || k === 'Y') && onRedo) {
+      e.preventDefault()
+      e.stopPropagation()
+      onRedo()
+    }
+  }
 
   useEffect(() => {
-    if (!ctx) return
+    if (!ctxMenu) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setCtx(null)
+      if (e.key === 'Escape') setCtxMenu(null)
     }
     const onPointer = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setCtx(null)
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setCtxMenu(null)
     }
     window.addEventListener('keydown', onKey)
     window.addEventListener('mousedown', onPointer)
@@ -265,7 +505,9 @@ export function Timeline({
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('mousedown', onPointer)
     }
-  }, [ctx])
+  }, [ctxMenu])
+
+  const segmentModeAtPlayhead = layoutModeAtSourceMs(edits, outputToSource(tb, playheadMs))
   const layoutModes: ClipEditsV2['layout']['mode'][] = [
     'speaker_follow',
     'split',
@@ -274,280 +516,425 @@ export function Timeline({
     'screen_pip',
     'dynamic',
   ]
-  const lanes = [
-    { key: 'video', label: 'Video', top: 32, h: 32 },
-    { key: 'layout', label: 'Layout', top: 68, h: 14 },
-    { key: 'audio', label: 'Audio', top: 96, h: 20 },
-    { key: 'broll', label: 'B-roll', top: 120, h: 24 },
-  ] as const
+
+  // Layout segments (source ms) mapped onto the output time base, piece by piece.
+  const layoutPieces = useMemo(() => {
+    const out: { key: string; startMs: number; endMs: number; mode: string }[] = []
+    for (const seg of edits.layout.layoutSegments || []) {
+      tb.segs.forEach(([a, b], i) => {
+        const s = Math.max(a, seg.startMs)
+        const e = Math.min(b, seg.endMs)
+        if (e - s < 1) return
+        out.push({ key: `${seg.startMs}-${i}`, startMs: tb.starts[i]! + (s - a), endMs: tb.starts[i]! + (e - a), mode: seg.mode })
+      })
+    }
+    return out
+  }, [edits.layout.layoutSegments, tb])
+  const aiInOut = [sourceToOutput(tb, clipStartMs), sourceToOutput(tb, clipEndMs)]
+
+  const laneTop = (lane: LaneId) => {
+    let y = RULER_H
+    for (const l of LANE_ORDER) {
+      if (l === lane) return y
+      y += LANE_H[l]
+    }
+    return y
+  }
+  const totalH = RULER_H + LANE_ORDER.reduce((s, l) => s + LANE_H[l], 0)
+
+  const tbtn =
+    'inline-flex h-7 items-center gap-1 rounded px-1.5 text-[11px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40'
+
+  const renderItem = (item: TimelineItem) => {
+    const geo = shown(item)
+    const left = geo.startMs * pxPerMs
+    const w = Math.max(2, (geo.endMs - geo.startMs) * pxPerMs)
+    const st = laneState(edits, item.lane)
+    const isSel = selectedKeys.has(refKey(item))
+    const faded = st.hidden || st.muted
+    const h = LANE_H[item.lane]
+    const interactive = item.lane !== 'voice'
+    return (
+      <div
+        key={refKey(item)}
+        className={`absolute top-0.5 overflow-hidden rounded-[3px] text-[10px] leading-4 text-white ${LANE_COLORS[item.lane]} ${
+          isSel ? 'ring-2 ring-white ring-offset-1 ring-offset-primary' : ''
+        } ${faded ? 'opacity-40' : ''} ${st.locked ? 'cursor-not-allowed' : item.caps.move ? 'cursor-grab' : interactive ? 'cursor-pointer' : ''}`}
+        style={{ left, width: w, height: h - 4, pointerEvents: interactive ? 'auto' : 'none' }}
+        data-testid={`timeline-item-${item.lane}`}
+        data-item-id={item.id}
+        data-start-ms={Math.round(item.startMs)}
+        data-end-ms={Math.round(item.endMs)}
+        data-selected={isSel ? 'true' : undefined}
+        title={`${item.label} · ${(item.startMs / 1000).toFixed(2)}–${(item.endMs / 1000).toFixed(2)} s`}
+        onPointerDown={interactive ? (e) => startDrag(e, item, 'move') : undefined}
+        onContextMenu={(e) => {
+          if (!interactive) return
+          e.preventDefault()
+          e.stopPropagation()
+          if (!selectedKeys.has(refKey(item))) setSelected([{ lane: item.lane, id: item.id }])
+          setCtxMenu({ x: e.clientX, y: e.clientY })
+        }}
+      >
+        {item.lane === 'voice' ? (
+          <TimelineWaveform
+            peaks={voicePeaks}
+            mediaFromMs={(item.srcInMs ?? 0) - mediaOffsetMs}
+            mediaToMs={(item.srcOutMs ?? 0) - mediaOffsetMs}
+            widthPx={w}
+            className="absolute inset-0 size-full text-emerald-400/90"
+          />
+        ) : null}
+        {item.lane === 'music' ? (
+          <TimelineWaveform
+            peaks={musicPeaks}
+            mediaFromMs={item.inMs ?? 0}
+            mediaToMs={(item.inMs ?? 0) + (item.endMs - item.startMs)}
+            widthPx={w}
+            className="absolute inset-0 size-full text-teal-200/80"
+          />
+        ) : null}
+        {item.lane !== 'voice' && item.lane !== 'video' && w > 28 ? (
+          <span className="pointer-events-none relative truncate px-1">{item.label}</span>
+        ) : null}
+        {item.lane === 'video' && w > 40 ? (
+          <span className="pointer-events-none absolute left-1 top-0 text-[9px] text-white/80">{item.label}</span>
+        ) : null}
+        {editable && !st.locked && item.caps.trimStart ? (
+          <span
+            className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-white/40 hover:bg-white/80"
+            data-testid="timeline-trim-start"
+            onPointerDown={(e) => startDrag(e, item, 'start')}
+          />
+        ) : null}
+        {editable && !st.locked && item.caps.trimEnd ? (
+          <span
+            className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize bg-white/40 hover:bg-white/80"
+            data-testid="timeline-trim-end"
+            onPointerDown={(e) => startDrag(e, item, 'end')}
+          />
+        ) : null}
+      </div>
+    )
+  }
 
   return (
-    <div className="min-w-0 space-y-2">
-      {reorderNote ? (
-        <p className="text-xs text-muted-foreground">
-          Section reorder is active — B-roll clips stay at their output times and may not match moved speech.
-        </p>
-      ) : null}
-      <div className="flex items-center justify-end gap-1" data-testid="timeline-zoom-controls">
-        <button
-          type="button"
-          className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={zoomOut}
-          aria-label="Zoom out timeline"
-          title="Zoom out (-)"
-          data-testid="timeline-zoom-out"
-        >
-          <ZoomOut className="size-4" />
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          value={pxPerSecToSlider(effectivePxPerSec)}
-          onChange={(e) => applyZoom(sliderToPxPerSec(Number(e.target.value)))}
-          className="h-1 w-24 cursor-pointer accent-primary"
-          aria-label="Timeline zoom"
-          data-testid="timeline-zoom-slider"
-        />
-        <button
-          type="button"
-          className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={zoomIn}
-          aria-label="Zoom in timeline"
-          title="Zoom in (+ or Ctrl/Cmd + scroll)"
-          data-testid="timeline-zoom-in"
-        >
-          <ZoomIn className="size-4" />
-        </button>
-        <button
-          type="button"
-          className="min-w-[3rem] rounded px-1.5 py-1 text-[11px] tabular-nums text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={zoomDefault}
-          title="Reset zoom to 100%"
-          data-testid="timeline-zoom-label"
-        >
-          {zoomPercent(effectivePxPerSec)}%
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-7 items-center gap-1 rounded px-1.5 text-[11px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={zoomFit}
-          aria-label="Fit timeline to view"
-          title="Fit to view (0)"
-          data-testid="timeline-zoom-fit"
-        >
-          <Maximize2 className="size-3.5" />
-          Fit
-        </button>
-      </div>
     <div
-      ref={scrollRef}
-      className="min-w-0 overflow-x-auto rounded-lg border border-border bg-card/30 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      tabIndex={0}
-      aria-label="Timeline (+/- to zoom, 0 to fit)"
-      data-testid="timeline-scroll"
-      data-px-per-sec={Math.round(effectivePxPerSec)}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return
-        if (e.key === '+' || e.key === '=') {
-          e.preventDefault()
-          zoomIn()
-        } else if (e.key === '-' || e.key === '_') {
-          e.preventDefault()
-          zoomOut()
-        } else if (e.key === '0') {
-          e.preventDefault()
-          zoomFit()
-        }
-      }}
+      ref={rootRef}
+      className="min-w-0 space-y-1 focus-visible:outline-none"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      data-testid="timeline-root"
     >
-      <div className="flex" style={{ width: widthPx + 56 }}>
-        <div className="relative w-14 shrink-0 text-[10px] font-medium text-muted-foreground">
-          {lanes.map((lane) => (
-            <span
-              key={lane.key}
-              className="absolute left-0 flex items-center"
-              style={{ top: lane.top, height: lane.h }}
-            >
-              {lane.label}
+      <div className="flex flex-wrap items-center justify-between gap-1" data-testid="timeline-toolbar">
+        <div className="flex items-center gap-0.5">
+          {onUndo ? (
+            <button type="button" className={tbtn} onClick={onUndo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl/Cmd+Z)">
+              <Undo2 className="size-3.5" />
+            </button>
+          ) : null}
+          {onRedo ? (
+            <button type="button" className={tbtn} onClick={onRedo} disabled={!canRedo} aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)">
+              <Redo2 className="size-3.5" />
+            </button>
+          ) : null}
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+          <button
+            type="button"
+            className={tbtn}
+            onClick={split}
+            disabled={!editable}
+            aria-label="Split at playhead"
+            title="Split at playhead (S) — selected items, or the main video"
+            data-testid="timeline-split"
+          >
+            <Scissors className="size-3.5" />
+            Split
+          </button>
+          <button
+            type="button"
+            className={tbtn}
+            onClick={() => del()}
+            disabled={!editable || !liveSelected.length}
+            aria-label="Delete selected"
+            title="Delete selected (Del)"
+            data-testid="timeline-delete"
+          >
+            <Trash2 className="size-3.5" />
+            Delete
+          </button>
+          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+          <button
+            type="button"
+            className={`${tbtn} ${snapOn ? 'text-primary' : 'text-muted-foreground'}`}
+            onClick={() => setSnapOn((v) => !v)}
+            aria-pressed={snapOn}
+            aria-label="Snapping"
+            title="Snap to playhead, cuts, words and clip edges (N). Hold Alt while dragging to bypass."
+            data-testid="timeline-snap"
+          >
+            <Magnet className="size-3.5" />
+            Snap
+          </button>
+          {liveSelected.length > 1 ? (
+            <span className="ml-1 text-[10px] text-muted-foreground" data-testid="timeline-selection-count">
+              {liveSelected.length} selected
             </span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-1" data-testid="timeline-zoom-controls">
+          <button
+            type="button"
+            className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={zoomOut}
+            aria-label="Zoom out timeline"
+            title="Zoom out (-)"
+            data-testid="timeline-zoom-out"
+          >
+            <ZoomOut className="size-4" />
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={pxPerSecToSlider(effectivePxPerSec)}
+            onChange={(e) => applyZoom(sliderToPxPerSec(Number(e.target.value)))}
+            className="h-1 w-24 cursor-pointer accent-primary"
+            aria-label="Timeline zoom"
+            data-testid="timeline-zoom-slider"
+          />
+          <button
+            type="button"
+            className="inline-flex size-7 items-center justify-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={zoomIn}
+            aria-label="Zoom in timeline"
+            title="Zoom in (+ or Ctrl/Cmd + scroll)"
+            data-testid="timeline-zoom-in"
+          >
+            <ZoomIn className="size-4" />
+          </button>
+          <button
+            type="button"
+            className="min-w-[3rem] rounded px-1.5 py-1 text-[11px] tabular-nums text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={zoomDefault}
+            title="Reset zoom to 100%"
+            data-testid="timeline-zoom-label"
+          >
+            {zoomPercent(effectivePxPerSec)}%
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-7 items-center gap-1 rounded px-1.5 text-[11px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={zoomFit}
+            aria-label="Fit timeline to view"
+            title="Fit to view (0)"
+            data-testid="timeline-zoom-fit"
+          >
+            <Maximize2 className="size-3.5" />
+            Fit
+          </button>
+        </div>
+      </div>
+      <div className="flex min-w-0 rounded-lg border border-border bg-card/30">
+        <div className="w-[92px] shrink-0 border-r border-border/60" aria-label="Tracks">
+          <div style={{ height: RULER_H }} className="border-b border-border/60" />
+          {LANE_ORDER.map((lane) => (
+            <TimelineLaneHeader
+              key={lane}
+              lane={lane}
+              height={LANE_H[lane]}
+              state={laneState(edits, lane)}
+              onToggle={editable ? (patch) => toggleLane(lane, patch) : undefined}
+              onOpenCover={onOpenCover}
+            />
           ))}
         </div>
         <div
-          className="relative h-[9.5rem] shrink-0 cursor-pointer"
-          style={{ width: widthPx }}
-          role="presentation"
-          data-testid="timeline-track"
-          onClick={(e) => {
-            if ((e.target as HTMLElement).closest('button')) return
-            seekTimelineAtClientX(e.clientX, e.currentTarget)
-          }}
-          onContextMenu={(e) => {
-            if (!onSplitLayout) return
-            e.preventDefault()
-            setCtx({ x: e.clientX, y: e.clientY })
-          }}
+          ref={scrollRef}
+          className="min-w-0 flex-1 overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          tabIndex={0}
+          aria-label="Timeline (S split, Del delete, arrows nudge, +/- zoom, 0 fit, N snapping)"
+          data-testid="timeline-scroll"
+          data-px-per-sec={Math.round(effectivePxPerSec)}
         >
-        <div
-          className="pointer-events-none absolute top-8 bottom-6 border-x border-dashed border-primary/40"
-          style={{
-            left: `${Math.max(0, Math.min(100, aiInPct))}%`,
-            width: `${Math.max(0.5, Math.min(100, aiOutPct - aiInPct))}%`,
-          }}
-          title="Original AI clip bounds"
-          aria-hidden
-        />
-        <div className="absolute inset-x-0 top-8 h-8 rounded bg-muted" role="group" aria-label="Transcript timeline">
-          {words.map((w) => {
-            const { startMs, endMs } = wordSourceMs(w)
-            if (endMs < previewEdits.trim.in || startMs > previewEdits.trim.out) return null
-            const left = ((startMs - previewEdits.trim.in) / span) * 100
-            const wPct = ((endMs - startMs) / span) * 100
-            const shotI = shotIndexAt(shots, (startMs + endMs) / 2)
-            const bg = shotI % 2 === 0 ? 'bg-sky-500/70' : 'bg-violet-500/70'
-            const chipPx = ((endMs - startMs) / span) * widthPx
-            const label = captionByI.get(w.i)?.text ?? wordDisplayText(w, edits.wordFixes)
-            return (
-              <button
-                key={w.i}
-                type="button"
-                data-testid="timeline-word"
-                className={`absolute top-1 h-6 overflow-hidden text-ellipsis whitespace-nowrap rounded px-0.5 text-left text-[11px] leading-6 text-white shadow-[inset_-1px_0_0_rgba(0,0,0,0.45)] ${bg}`}
-                style={{ left: `${left}%`, width: `${Math.max(wPct, 0.4)}%` }}
-                onClick={(ev) => {
-                  ev.stopPropagation()
-                  onSeekOutput(remapSourceToOutput(startMs, previewEdits))
-                }}
-                title={wordDisplayText(w, edits.wordFixes)}
-              >
-                {chipPx >= TIMELINE_MIN_LABEL_PX ? label : null}
-              </button>
-            )
-          })}
-        </div>
-        <div className="absolute inset-x-0 top-[68px] h-3.5 rounded bg-muted/90" aria-label="Layout segments">
-          {layoutSegs.map((seg, i) => {
-            const left = ((seg.startMs - edits.trim.in) / span) * 100
-            const wPct = ((seg.endMs - seg.startMs) / span) * 100
-            const tint =
-              seg.mode === 'split'
-                ? 'bg-violet-500/70'
-                : seg.mode === 'fit_blur'
-                  ? 'bg-amber-500/70'
-                  : 'bg-sky-500/70'
-            return (
-              <div
-                key={`${seg.startMs}-${i}`}
-                className={`absolute top-0.5 h-2.5 truncate rounded px-0.5 text-[8px] text-white ${tint}`}
-                style={{ left: `${left}%`, width: `${Math.max(wPct, 0.5)}%` }}
-                title={`${seg.mode} (${seg.startMs}–${seg.endMs} ms)`}
-              >
-                {seg.mode.replace(/_/g, ' ')}
-              </div>
-            )
-          })}
-        </div>
-        <div
-          className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-red-500"
-          style={{ left: `${playheadPct}%` }}
-          data-testid="timeline-playhead"
-          aria-hidden
-        />
-        <TrimHandle
-          label="In"
-          ms={edits.trim.in}
-          span={span}
-          trimIn={edits.trim.in}
-          minMs={minInMs}
-          maxMs={maxOutMs}
-          onChange={(inMs) =>
-            onTrimChange(clampTrim({ in: inMs, out: Math.max(inMs + 500, edits.trim.out) }))
-          }
-        />
-        <TrimHandle
-          label="Out"
-          ms={edits.trim.out}
-          span={span}
-          trimIn={edits.trim.in}
-          minMs={minInMs}
-          maxMs={maxOutMs}
-          onChange={(outMs) =>
-            onTrimChange(clampTrim({ in: Math.min(outMs - 500, edits.trim.in), out: outMs }))
-          }
-        />
-        <div className="absolute inset-x-0 top-[96px] h-5 overflow-hidden rounded bg-emerald-950/40">
-          <AudioWaveformLane videoUrl={videoUrl} className="absolute inset-0 size-full text-emerald-400/90" />
-          {audio?.music && (
+          <div style={{ width: widthPx + TRACK_EXTRA_PX, paddingLeft: TRACK_OFFSET_PX, paddingRight: TRACK_EXTRA_PX - TRACK_OFFSET_PX }}>
             <div
-              className="pointer-events-none absolute top-0.5 h-4 rounded bg-emerald-500/40 mix-blend-screen"
-              style={{ left: 0, width: '100%' }}
-              title="Music"
-            />
-          )}
-          {(audio?.sfx || []).map((s) => {
-            const left = (s.atMs / outSpan) * 100
-            return (
+              className="relative shrink-0"
+              style={{ width: widthPx, height: totalH }}
+              role="presentation"
+              data-testid="timeline-track"
+              data-duration-ms={Math.round(span)}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return
+                if ((e.target as HTMLElement).closest('[data-testid^="timeline-item-"],[data-testid="timeline-word"],button')) return
+                rootRef.current?.focus({ preventScroll: true })
+                if (!(e.shiftKey || e.metaKey || e.ctrlKey)) setSelected([])
+                const y = e.clientY - e.currentTarget.getBoundingClientRect().top
+                if (y > RULER_H) onSeekOutput(msAtClientX(e.clientX, e.currentTarget))
+              }}
+              onContextMenu={(e) => {
+                if (!onSplitLayout && !editable) return
+                e.preventDefault()
+                setCtxMenu({ x: e.clientX, y: e.clientY })
+              }}
+            >
+              <TimelineRuler durationMs={span} pxPerMs={pxPerMs} widthPx={widthPx} height={RULER_H} onScrub={onSeekOutput} />
+              {LANE_ORDER.map((lane) => (
+                <div
+                  key={lane}
+                  className={`absolute inset-x-0 border-b border-border/30 ${lane === 'video' ? 'bg-muted/60' : 'bg-muted/20'}`}
+                  style={{ top: laneTop(lane), height: LANE_H[lane] }}
+                  data-testid={`timeline-lane-${lane}`}
+                  aria-label={`${lane} lane`}
+                >
+                  {lanes[lane].map(renderItem)}
+                  {lane === 'video' ? (
+                    <>
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0.5 h-[18px]" role="group" aria-label="Transcript timeline">
+                        {wordItems.map((wi) => {
+                          const left = wi.outStartMs * pxPerMs
+                          const w = Math.max(1, (wi.outEndMs - wi.outStartMs) * pxPerMs)
+                          const id = wi.kind === 'word' ? wi.wordId : `g${wi.outStartMs}`
+                          const src = wi.kind === 'word' ? wordByI.get(wi.wordId) : undefined
+                          const shotI = shotIndexAt(shots, outputToSource(tb, (wi.outStartMs + wi.outEndMs) / 2))
+                          const bg = shotI % 2 === 0 ? 'bg-sky-500/70' : 'bg-violet-500/70'
+                          const label = wi.kind === 'word' ? wi.text : '…'
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              data-testid="timeline-word"
+                              className={`pointer-events-auto absolute top-0 h-[16px] overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-0.5 text-left text-[10px] leading-4 text-white shadow-[inset_-1px_0_0_rgba(0,0,0,0.45)] ${bg}`}
+                              style={{ left, width: w }}
+                              onPointerDown={(ev) => ev.stopPropagation()}
+                              onClick={(ev) => {
+                                ev.stopPropagation()
+                                onSeekOutput(wi.outStartMs)
+                              }}
+                              title={src ? wordDisplayText(src, edits.wordFixes) : label}
+                            >
+                              {w >= TIMELINE_MIN_LABEL_PX ? label : null}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px]" aria-label="Layout segments">
+                        {layoutPieces.map((p) => (
+                          <div
+                            key={p.key}
+                            className={`absolute h-[3px] ${p.mode === 'split' ? 'bg-violet-400' : p.mode === 'fit_blur' ? 'bg-amber-400' : 'bg-sky-300'}`}
+                            style={{ left: p.startMs * pxPerMs, width: Math.max(1, (p.endMs - p.startMs) * pxPerMs) }}
+                            title={p.mode}
+                          />
+                        ))}
+                      </div>
+                      {aiInOut.map((ms, i) =>
+                        ms == null ? null : (
+                          <div
+                            key={i}
+                            className="pointer-events-none absolute inset-y-0 border-l border-dashed border-primary/60"
+                            style={{ left: ms * pxPerMs }}
+                            title={i === 0 ? 'Original AI clip start' : 'Original AI clip end'}
+                            aria-hidden
+                          />
+                        ),
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              ))}
+              {drag?.moved && drag.snappedTo != null ? (
+                <div
+                  className="pointer-events-none absolute top-0 bottom-0 w-px bg-yellow-300"
+                  style={{ left: drag.snappedTo * pxPerMs }}
+                  data-testid="timeline-snap-guide"
+                  aria-hidden
+                />
+              ) : null}
+              {drag?.moved ? (
+                <div
+                  className="pointer-events-none absolute -top-0.5 rounded bg-popover px-1 text-[10px] tabular-nums shadow"
+                  style={{ left: Math.max(0, (shown(drag.item).startMs) * pxPerMs) }}
+                  aria-live="polite"
+                >
+                  {drag.deltaMs >= 0 ? '+' : ''}
+                  {(drag.deltaMs / 1000).toFixed(2)}s
+                </div>
+              ) : null}
               <div
-                key={s.generationId}
-                className="absolute top-0.5 h-4 w-1 rounded bg-amber-400"
-                style={{ left: `${left}%` }}
-                title={`SFX @ ${s.atMs}ms`}
+                className="pointer-events-none absolute top-0 bottom-0 w-0.5 bg-red-500"
+                style={{ left: `${playheadPct}%` }}
+                data-testid="timeline-playhead"
+                aria-hidden
               />
-            )
-          })}
-        </div>
-        <div className="absolute inset-x-0 top-[120px] h-6 rounded bg-muted/80">
-          {broll.map((item) => {
-            const left = (item.startMs / outSpan) * 100
-            const wPct = ((item.endMs - item.startMs) / outSpan) * 100
-            const color = item.source === 'ai' ? 'bg-sky-500/80' : 'bg-neutral-500/80'
-            return (
-              <BrollBar
-                key={item.id}
-                className={color}
-                leftPct={left}
-                widthPct={wPct}
-                item={item}
-                outSpan={outSpan}
-                onChange={onBrollChange}
-              />
-            )
-          })}
-        </div>
+            </div>
+          </div>
         </div>
       </div>
-      <p className="mt-2 text-[10px] text-muted-foreground">
-        Right-click the timeline: split layout, delete a section (cut), or set layout for this segment. Drag In/Out up to 8s beyond the dashed AI bounds.
+      <p className="text-[10px] text-muted-foreground">
+        Click to select (Shift-click for more), drag to move, drag edges to trim. S split · Del delete · ←/→ nudge
+        (Shift ×10) · N snapping · Space play. Right-click for layout and section actions.
       </p>
-      {ctx && onSplitLayout ? (
+      {ctxMenu ? (
         <div
           ref={menuRef}
           className="fixed z-50 min-w-[200px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg"
-          style={{ left: ctx.x, top: ctx.y }}
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
           role="menu"
           aria-label="Timeline segment actions"
         >
+          {editable ? (
+            <>
+              <button
+                type="button"
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                role="menuitem"
+                onClick={() => {
+                  split()
+                  setCtxMenu(null)
+                }}
+              >
+                Split at playhead (S)
+              </button>
+              {liveSelected.length ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  onClick={() => {
+                    del()
+                    setCtxMenu(null)
+                  }}
+                >
+                  Delete selected (Del)
+                </button>
+              ) : null}
+              <div className="my-1 border-t border-border" role="separator" />
+            </>
+          ) : null}
           <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground">At playhead</p>
-          <button
-            type="button"
-            className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            role="menuitem"
-            onClick={() => {
-              onSplitLayout()
-              setCtx(null)
-            }}
-          >
-            Split layout here
-          </button>
+          {onSplitLayout ? (
+            <button
+              type="button"
+              className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+              role="menuitem"
+              onClick={() => {
+                onSplitLayout()
+                setCtxMenu(null)
+              }}
+            >
+              Split layout here
+            </button>
+          ) : null}
           {onCutSection ? (
             <button
               type="button"
-              className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
               role="menuitem"
               onClick={() => {
                 onCutSection()
-                setCtx(null)
+                setCtxMenu(null)
               }}
             >
               Delete section (cut)
@@ -558,9 +945,7 @@ export function Timeline({
               <div className="my-1 border-t border-border" role="separator" />
               <p className="px-2 py-1 text-[10px] text-muted-foreground">
                 Layout for this segment
-                <span className="block font-normal text-foreground">
-                  Current: {segmentModeAtPlayhead.replace(/_/g, ' ')}
-                </span>
+                <span className="block font-normal text-foreground">Current: {segmentModeAtPlayhead.replace(/_/g, ' ')}</span>
               </p>
               {layoutModes.map((m) => {
                 const active = m === segmentModeAtPlayhead
@@ -568,12 +953,12 @@ export function Timeline({
                   <button
                     key={m}
                     type="button"
-                    className={`block w-full rounded px-2 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'bg-muted/80 font-medium' : ''}`}
+                    className={`block w-full rounded px-2 py-1.5 text-left hover:bg-muted ${active ? 'bg-muted/80 font-medium' : ''}`}
                     role="menuitem"
                     aria-current={active ? 'true' : undefined}
                     onClick={() => {
                       onSetLayoutMode(m)
-                      setCtx(null)
+                      setCtxMenu(null)
                     }}
                   >
                     {m.replace(/_/g, ' ')}
@@ -586,133 +971,13 @@ export function Timeline({
           <div className="my-1 border-t border-border" role="separator" />
           <button
             type="button"
-            className="block w-full rounded px-2 py-1.5 text-left text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => setCtx(null)}
+            className="block w-full rounded px-2 py-1.5 text-left text-muted-foreground hover:bg-muted"
+            onClick={() => setCtxMenu(null)}
           >
             Close
           </button>
         </div>
       ) : null}
     </div>
-    </div>
-  )
-}
-
-function BrollBar({
-  item,
-  leftPct,
-  widthPct,
-  className,
-  outSpan,
-  onChange,
-}: {
-  item: BrollItem
-  leftPct: number
-  widthPct: number
-  className: string
-  outSpan: number
-  onChange?: (id: string, patch: Partial<Pick<BrollItem, 'startMs' | 'endMs'>>) => void
-}) {
-  const drag = (mode: 'move' | 'start' | 'end', e: React.MouseEvent) => {
-    if (!onChange) return
-    e.preventDefault()
-    const startX = e.clientX
-    const start = { ...item }
-    const parent = (e.target as HTMLElement).parentElement
-    const onMove = (ev: MouseEvent) => {
-      const w = parent?.clientWidth ?? 640
-      const deltaMs = ((ev.clientX - startX) / w) * outSpan
-      if (mode === 'move') {
-        const len = start.endMs - start.startMs
-        let s = Math.round(start.startMs + deltaMs)
-        s = Math.max(0, Math.min(outSpan - len, s))
-        onChange(item.id, { startMs: s, endMs: s + len })
-      } else if (mode === 'start') {
-        const s = Math.max(0, Math.min(start.endMs - BROLL_MIN_MS, Math.round(start.startMs + deltaMs)))
-        onChange(item.id, { startMs: s })
-      } else {
-        const end = Math.max(start.startMs + BROLL_MIN_MS, Math.min(outSpan, Math.round(start.endMs + deltaMs)))
-        onChange(item.id, { endMs: end })
-      }
-    }
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }
-
-  return (
-    <div
-      className={`absolute top-1 h-4 rounded ${className}`}
-      style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 0.5)}%` }}
-      onMouseDown={(e) => drag('move', e)}
-    >
-      <span className="absolute left-0 top-0 h-full w-1 cursor-ew-resize" onMouseDown={(e) => drag('start', e)} />
-      <span className="absolute right-0 top-0 h-full w-1 cursor-ew-resize" onMouseDown={(e) => drag('end', e)} />
-    </div>
-  )
-}
-
-function remapSourceToOutput(sourceMs: number, edits: ClipEditsV2) {
-  const segs = keepSegments(edits.trim.in, edits.trim.out, edits.cutRanges)
-  let acc = 0
-  for (const [a, b] of segs) {
-    if (sourceMs >= a && sourceMs < b) return acc + (sourceMs - a)
-    acc += b - a
-  }
-  return acc
-}
-
-function TrimHandle({
-  label,
-  ms,
-  span,
-  trimIn,
-  minMs,
-  maxMs,
-  onChange,
-}: {
-  label: string
-  ms: number
-  span: number
-  trimIn: number
-  minMs: number
-  maxMs: number
-  onChange: (ms: number) => void
-}) {
-  const [dragMs, setDragMs] = useState<number | null>(null)
-  const displayMs = dragMs ?? ms
-  return (
-    <button
-      type="button"
-      className="absolute top-16 -translate-x-1/2 rounded border border-border bg-background px-1 text-[10px] shadow"
-      style={{ left: `${((displayMs - trimIn) / span) * 100}%` }}
-      onMouseDown={(e) => {
-        e.preventDefault()
-        const startX = e.clientX
-        const startMs = displayMs
-        let latestMs = startMs
-        const onMove = (ev: MouseEvent) => {
-          const parent = (e.target as HTMLElement).parentElement
-          const w = parent?.clientWidth ?? 640
-          const delta = ((ev.clientX - startX) / w) * span
-          latestMs = Math.round(startMs + delta)
-          latestMs = Math.max(minMs, Math.min(maxMs, latestMs))
-          setDragMs(latestMs)
-        }
-        const onUp = () => {
-          window.removeEventListener('mousemove', onMove)
-          window.removeEventListener('mouseup', onUp)
-          setDragMs(null)
-          onChange(latestMs)
-        }
-        window.addEventListener('mousemove', onMove)
-        window.addEventListener('mouseup', onUp)
-      }}
-    >
-      {label}
-    </button>
   )
 }

@@ -133,7 +133,15 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and edits.get("loudnessLufs") is None
         and edits.get("speechLevelingEnabled") is not True
         and edits.get("speed") in (None, 1, 1.0)
+        and not _timeline_voice_muted(edits)
     )
+
+
+def _timeline_voice_muted(edits: dict) -> bool:
+    """E2: a muted Voice lane must never reuse the (voiced) preview render."""
+    from clips_worker.timeline_lanes import voice_muted
+
+    return voice_muted(edits)
 
 
 from clips_worker.clip_keep_segments import keep_segments, normalize_section_order, ordered_keep_segments
@@ -1504,7 +1512,18 @@ def render_edited_clip(
 
     segs = ordered_keep_segments(edits)
     length_s = sum((b - a) for a, b in segs) / 1000.0
+    from clips_worker.timeline_lanes import music_window as _music_window
+    from clips_worker.timeline_lanes import voice_muted as _voice_muted
+
+    if _voice_muted(edits):
+        from clips_worker.audio_render import apply_voice_mute
+
+        muted_out = work_dir / "voice_muted.mp4"
+        apply_voice_mute(caption_src, muted_out)
+        caption_src = muted_out
+        print("[clipper:timeline] voice_muted", flush=True)
     meta = (audio_assets or {}).get("music_meta") or {}
+    music_win = _music_window(meta, int(round(length_s * 1000))) if meta else None
     music_path = (audio_assets or {}).get("music_path") if audio_assets else None
     sfx_paths = (audio_assets or {}).get("sfx_paths") or [] if audio_assets else []
     studio_path = (audio_assets or {}).get("studio_path") if audio_assets else None
@@ -1542,6 +1561,7 @@ def render_edited_clip(
             duck_depth=float(meta.get("duckDepth", 0.7)),
             fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
             fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
+            music_window=music_win,
         )
         caption_src = mixed
     elif audio_assets and (music_path or sfx_paths):
@@ -1558,6 +1578,7 @@ def render_edited_clip(
             duck_depth=float(meta.get("duckDepth", 0.7)),
             fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
             fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
+            music_window=music_win,
         )
         caption_src = mixed
 
