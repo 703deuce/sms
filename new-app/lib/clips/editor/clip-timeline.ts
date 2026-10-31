@@ -16,6 +16,7 @@
  * Lane mute/hide/lock lives in edits.timelineLanes and is applied for preview AND
  * export by `applyTimelineLaneState` (mirrored in worker `timeline_lanes.py`).
  */
+import { splitAnim } from '@/lib/clips/editor/layer-anim'
 import type { ClipAudioMusic, ClipAudioSfx } from '@/lib/clips/audio'
 import { BROLL_MIN_MS, type BrollItem } from '@/lib/clips/broll'
 import {
@@ -29,7 +30,7 @@ import { splitLayoutSegmentAt } from '@/lib/clips/layout-segments'
 import { reconcileItemMotion, rippleGlobalKeyframes } from '@/lib/clips/editor/keyframes'
 import { remapCutTransitions } from '@/lib/clips/editor/transitions'
 import { remapSplitEdits, splitOffsets } from '@/lib/clips/editor/split-edits'
-import { TEXT_MIN_MS, type TextItem } from '@/lib/clips/editor/text-items'
+import { TEXT_MIN_MS, textItemLabel, type TextItem } from '@/lib/clips/editor/text-items'
 import {
   LANE_ORDER,
   LANE_TOGGLES,
@@ -332,7 +333,7 @@ export function buildTimelineItems(input: {
       id: t.id,
       startMs: t.startMs,
       endMs: t.endMs,
-      label: t.text.split('\n')[0]!.trim() || 'Text',
+      label: textItemLabel(t),
       caps: { move: true, trimStart: true, trimEnd: true, split: true, del: true },
       track: trackIdOf(edits, 'text', t.id, tracks),
     })
@@ -815,13 +816,13 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
       if (t - it.startMs < BROLL_MIN_MS || it.endMs - t < BROLL_MIN_MS) continue
       const src = (next.broll ?? []).find((b) => b.id === it.id)
       if (!src) continue
-      const left = { ...src, endMs: t } as BrollItem
-      const right = {
+      const left = splitAnim({ ...src, endMs: t } as BrollItem, 'left')
+      const right = splitAnim({
         ...src,
         id: splitBrollId(src.id, t, (next.broll ?? []).map((b) => b.id)),
         startMs: t,
         inMs: (src.inMs ?? 0) + (t - src.startMs),
-      } as BrollItem
+      } as BrollItem, 'right')
       const list = next.broll ?? []
       const idx = list.findIndex((b) => b.id === src.id)
       next = { ...next, broll: [...list.slice(0, idx), left, right, ...list.slice(idx + 1)] }
@@ -842,8 +843,8 @@ export function splitAt(ctx: OpCtx, refs: ItemRef[], outMs: number): ClipEditsV2
       const idx = list.findIndex((x) => x.id === it.id)
       if (idx < 0) continue
       const src = list[idx]!
-      const right: TextItem = { ...src, id: splitBrollId(src.id, t, list.map((x) => x.id)), startMs: t }
-      next = { ...next, textItems: [...list.slice(0, idx), { ...src, endMs: t }, right, ...list.slice(idx + 1)] }
+      const right: TextItem = splitAnim({ ...src, id: splitBrollId(src.id, t, list.map((x) => x.id)), startMs: t }, 'right')
+      next = { ...next, textItems: [...list.slice(0, idx), splitAnim({ ...src, endMs: t }, 'left'), right, ...list.slice(idx + 1)] }
       changed = true
     }
   }

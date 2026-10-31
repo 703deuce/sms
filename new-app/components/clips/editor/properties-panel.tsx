@@ -26,6 +26,29 @@ import {
 } from '@/lib/clips/editor/keyframes'
 import { layerFlip, moveInStack, setLayerFlip, stackKindOf, stackMoves, type StackMove } from '@/lib/clips/editor/layer-props'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
+import { TextAnimSection } from '@/components/clips/editor/text-anim-section'
+import type { TextAnim } from '@/lib/clips/render-plan/text-anim'
+
+/** G3b: the selection's in / out / loop preset (B-roll / image / overlay layers and text items). */
+function presetFor(edits: ClipEditsV2, target: KeyframeTarget): { anim: TextAnim | undefined; layer: boolean; set: (a: TextAnim | undefined) => ClipEditsV2 } | null {
+  const strip = <T extends { anim?: TextAnim }>(it: T, a: TextAnim | undefined): T => {
+    const { anim: _old, ...rest } = it
+    return (a ? { ...rest, anim: a } : rest) as T
+  }
+  if (target.startsWith('broll:')) {
+    const id = target.slice(6)
+    const it = (edits.broll ?? []).find((b) => b.id === id)
+    if (!it) return null
+    return { anim: it.anim, layer: true, set: (a) => ({ ...edits, broll: (edits.broll ?? []).map((b) => (b.id === id ? strip(b, a) : b)) }) }
+  }
+  if (target.startsWith('text:')) {
+    const id = target.slice(5)
+    const it = (edits.textItems ?? []).find((t) => t.id === id)
+    if (!it) return null
+    return { anim: it.anim, layer: Boolean(it.kind), set: (a) => ({ ...edits, textItems: (edits.textItems ?? []).map((t) => (t.id === id ? strip(t, a) : t)) }) }
+  }
+  return null
+}
 
 export type PropertiesTab = 'video' | 'audio' | 'speed' | 'animation' | 'color'
 const TABS: { id: PropertiesTab; label: string }[] = [
@@ -326,8 +349,15 @@ function AnimationTab({
     for (const p of props) if (!pointAt(findTrack(next, target, p), localMs)) next = toggleKeyframeAt(next, target, p, localMs)
     onCommit(next)
   }
+  const preset = presetFor(edits, target)
   return (
     <div className="space-y-4" data-testid="properties-animation">
+      {preset ? (
+        <Section title="In / Out / Loop" testId="properties-anim-presets">
+          <TextAnimSection layer={preset.layer} anim={preset.anim} onChange={(a) => !readOnly && onCommit(preset.set(a))} />
+          <p className="text-[11px] text-muted-foreground">Plays on top of the keyframes; the export burns the same motion.</p>
+        </Section>
+      ) : null}
       <Section title="Keyframes">
         <div className="flex flex-wrap gap-1.5">
           <button type="button" className={btn} disabled={readOnly || allHere} onClick={keyAll} data-testid="properties-key-all">

@@ -1,0 +1,20 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,Poppins ExtraBold,125,&H00FFFFFF&,&H00FFFFFF&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,1,4,0,2,54,54,230,1
+Style: Box,Poppins ExtraBold,125,&H00000000&,&H00000000&,&H00000000&,&H99000000,0,0,0,0,100,100,0,0,3,4,0,2,54,54,230,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:02.40,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf35}HELLO {\kf29}FROM {\kf23}THE {\kf23}SRT {\kf29}TEST\N{\kf41}SECOND {\kf29}LINE {\kf29}HERE
+Dialogue: 1,0:00:02.40,0:00:04.60,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf37}THIS {\kf22}IS {\kf53}{\i1}ITALIC{\i0} {\kf30}AND {\kf37}{\b1}BOLD{\b0}\N{\kf37}TEXT
+Dialogue: 1,0:00:04.60,0:00:06.40,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf30}{\i1}ALL{\i0} {\kf52}{\i1}ITALIC{\i0}\N{\kf22}{\i1}ON{\i0} {\kf29}{\i1}TWO{\i0} {\kf45}{\i1}LINES{\i0}
+Dialogue: 1,0:00:06.40,0:00:08.00,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf33}ONE\N{\kf33}TWO\N{\kf50}THREE {\kf42}FOUR
+Dialogue: 1,0:00:08.00,0:00:09.50,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf37}WORD {\kf37}{\b1}{\i1}BOTH{\i0}{\b0} {\kf15}A {\kf15}< {\kf14}B {\kf15}> {\kf15}C
+Dialogue: 1,0:00:09.50,0:00:11.00,Cap,,0,0,0,,{\1c&H0000D4FF&\3c&H00FFFFFF&\2c&H00FFFFFF&}{\kf61}SPACED {\kf35}OUT\N{\kf52}LINES

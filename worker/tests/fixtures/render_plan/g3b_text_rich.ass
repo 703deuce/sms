@@ -1,0 +1,118 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: T0,Anton,110,&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,0,0,0,0,100,100,8.0,0,1,6.0,0,4,0,0,0,1
+Style: T1,Montserrat Black,90,&H00FFFFFF,&H00FFFFFF,&H00111111,&HFF000000,0,0,0,0,100,100,0,0,1,4.0,0,5,0,0,0,1
+Style: T2,Poppins ExtraBold,80,&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,0,0,0,0,100,100,-5.0,0,1,0,0,6,0,0,0,1
+Style: B2,Poppins ExtraBold,80,&HFF000000,&HFF000000,&H66000000,&HFF000000,0,0,0,0,100,100,-5.0,0,3,14.0,0,6,0,0,0,1
+Style: T3,My Fontx,70,&H0088FF00,&H0088FF00,&H00000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+Style: T4,Montserrat Black,60,&H00FFFFFF,&H00FFFFFF,&H00000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:00:03.00,T0,,0,0,0,,{\an4\pos(175,384)}{\b1}BOLD{\b0} AND {\i1}ITALIC{\i0} {\b1\i1}WORDS
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,0,1080,678)\1c&H6633FF&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,0,1080,678)\1c&H6633FF&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,0,1080,678)\1c&H6633FF&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,678,1080,695)\1c&H6D3AF6&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,678,1080,695)\1c&H6D3AF6&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,678,1080,695)\1c&H6D3AF6&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,695,1080,712)\1c&H7340ED&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,695,1080,712)\1c&H7340ED&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,695,1080,712)\1c&H7340ED&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,712,1080,729)\1c&H7A47E4&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,712,1080,729)\1c&H7A47E4&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,712,1080,729)\1c&H7A47E4&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,729,1080,746)\1c&H814EDC&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,729,1080,746)\1c&H814EDC&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,729,1080,746)\1c&H814EDC&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,746,1080,763)\1c&H8754D3&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,746,1080,763)\1c&H8754D3&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,746,1080,763)\1c&H8754D3&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,763,1080,780)\1c&H8E5BCA&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,763,1080,780)\1c&H8E5BCA&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,763,1080,780)\1c&H8E5BCA&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,780,1080,796)\1c&H9562C1&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,780,1080,796)\1c&H9562C1&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,780,1080,796)\1c&H9562C1&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,796,1080,813)\1c&H9B68B8&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,796,1080,813)\1c&H9B68B8&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,796,1080,813)\1c&H9B68B8&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,813,1080,830)\1c&HA26FAF&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,813,1080,830)\1c&HA26FAF&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,813,1080,830)\1c&HA26FAF&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,830,1080,847)\1c&HA976A6&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,830,1080,847)\1c&HA976A6&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,830,1080,847)\1c&HA976A6&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,847,1080,864)\1c&HAF7C9D&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,847,1080,864)\1c&HAF7C9D&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,847,1080,864)\1c&HAF7C9D&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,864,1080,881)\1c&HB68395&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,864,1080,881)\1c&HB68395&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,864,1080,881)\1c&HB68395&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,881,1080,898)\1c&HBC898C&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,881,1080,898)\1c&HBC898C&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,881,1080,898)\1c&HBC898C&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,898,1080,915)\1c&HC39083&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,898,1080,915)\1c&HC39083&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,898,1080,915)\1c&HC39083&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,915,1080,932)\1c&HCA977A&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,915,1080,932)\1c&HCA977A&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,915,1080,932)\1c&HCA977A&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,932,1080,948)\1c&HD09D71&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,932,1080,948)\1c&HD09D71&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,932,1080,948)\1c&HD09D71&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,948,1080,965)\1c&HD7A468&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,948,1080,965)\1c&HD7A468&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,948,1080,965)\1c&HD7A468&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,965,1080,982)\1c&HDEAB5F&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,965,1080,982)\1c&HDEAB5F&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,965,1080,982)\1c&HDEAB5F&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,982,1080,999)\1c&HE4B156&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,982,1080,999)\1c&HE4B156&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,982,1080,999)\1c&HE4B156&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,999,1080,1016)\1c&HEBB84E&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,999,1080,1016)\1c&HEBB84E&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,999,1080,1016)\1c&HEBB84E&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,1016,1080,1033)\1c&HF2BF45&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,1016,1080,1033)\1c&HF2BF45&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,1016,1080,1033)\1c&HF2BF45&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,1033,1080,1050)\1c&HF8C53C&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,1033,1080,1050)\1c&HF8C53C&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,1033,1080,1050)\1c&HF8C53C&}three
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,729)\clip(0,1050,1080,1920)\1c&HFFCC33&}Line one
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,864)\clip(0,1050,1080,1920)\1c&HFFCC33&}Line two is longer
+Dialogue: 1,0:00:00.50,0:00:03.50,T1,,0,0,0,,{\an5\pos(540,999)\clip(0,1050,1080,1920)\1c&HFFCC33&}three
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(0,0,525,1920)\1c&H00D7FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(525,0,536,1920)\1c&H00D1FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(536,0,547,1920)\1c&H00CAFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(547,0,558,1920)\1c&H00C4FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(558,0,570,1920)\1c&H00BEFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(570,0,581,1920)\1c&H00B7FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(581,0,592,1920)\1c&H00B1FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(592,0,603,1920)\1c&H00ABFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(603,0,614,1920)\1c&H00A4FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(614,0,626,1920)\1c&H009EFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(626,0,637,1920)\1c&H0098FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(637,0,648,1920)\1c&H0091FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(648,0,659,1920)\1c&H008BFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(659,0,670,1920)\1c&H0084FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(670,0,682,1920)\1c&H007EFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(682,0,693,1920)\1c&H0078FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(693,0,704,1920)\1c&H0071FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(704,0,715,1920)\1c&H006BFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(715,0,726,1920)\1c&H0065FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(726,0,738,1920)\1c&H005EFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(738,0,749,1920)\1c&H0058FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(749,0,760,1920)\1c&H0052FF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(760,0,771,1920)\1c&H004BFF&}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:04.00,T2,,0,0,0,,{\an6\pos(782,1344)\clip(771,0,1080,1920)\1c&H0045FF&}Right gradient\Nwith box
+Dialogue: 0,0:00:00.00,0:00:04.00,B2,,0,0,0,,{\an6\pos(782,1344)}Right gradient\Nwith box
+Dialogue: 1,0:00:00.00,0:00:02.00,T3,,0,0,0,,{\an5\pos(540,1690)}Custom font text
+Dialogue: 1,0:00:00.00,0:00:02.00,T4,,0,0,0,,{\an5\pos(324,1824)}bad bits

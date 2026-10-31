@@ -73,7 +73,7 @@ describe('E4 text items model', () => {
     expect(out.map((t) => t.id)).toEqual(['c', 'a'])
     expect(out[0]).toMatchObject({ startMs: 0, endMs: TEXT_MIN_MS })
     expect(out[1]).toMatchObject({ startMs: 10000 - TEXT_MIN_MS, endMs: 10000 })
-    const many = Array.from({ length: 40 }, (_, i) => ({ id: `t${i}`, text: 'x', startMs: i, endMs: i + 500 }))
+    const many = Array.from({ length: TEXT_MAX_ITEMS + 10 }, (_, i) => ({ id: `t${i}`, text: 'x', startMs: i, endMs: i + 500 }))
     expect(normalizeTextItems(many)!.length).toBe(TEXT_MAX_ITEMS)
   })
 

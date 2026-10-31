@@ -109,15 +109,32 @@ def disp(text: str, case: str, sentence_start: bool = False) -> str:
     return lower[0:1].upper() + lower[1:] if sentence_start else lower
 
 
-def disp_words(chunk: list[dict], case: str) -> list[str]:
+def _styled(w: dict, text: str) -> str:
+    """G3afix: <i>/<b> from manual caption lines (caption_lines word flags "it"/"bo")."""
+    if not (w.get("it") or w.get("bo")):
+        return text
+    pre = ("{\\b1}" if w.get("bo") else "") + ("{\\i1}" if w.get("it") else "")
+    post = ("{\\i0}" if w.get("it") else "") + ("{\\b0}" if w.get("bo") else "")
+    return pre + text + post
+
+
+def disp_words(chunk: list[dict], case: str, styled: bool = True) -> list[str]:
     if case == "upper":
-        return [disp(w["w"], case) for w in chunk]
-    out: list[str] = []
-    sentence_start = True
-    for w in chunk:
-        out.append(disp(w["w"], case, sentence_start))
-        sentence_start = _sentence_boundary(str(w.get("w", "")))
+        out = [disp(w["w"], case) for w in chunk]
+    else:
+        out = []
+        sentence_start = True
+        for w in chunk:
+            out.append(disp(w["w"], case, sentence_start))
+            sentence_start = _sentence_boundary(str(w.get("w", "")))
+    if styled:
+        out = [_styled(w, t) for w, t in zip(chunk, out, strict=True)]
     return out
+
+
+def forced_breaks(chunk: list[dict]) -> list[int]:
+    """G3afix: explicit line breaks of a manual caption line (word flag "br")."""
+    return [k for k, w in enumerate(chunk) if k and w.get("br")]
 
 
 def ts(t: float) -> str:
@@ -438,8 +455,9 @@ def _chunk_fit(
     anim: str,
     active_style: str,
 ) -> tuple[list[int], float]:
+    forced = forced_breaks(chunk)
     if not fit:
-        return [], 1.0
+        return forced, 1.0
     peak = 1.0
     if anim in ("pop", "bounce", "stomp"):
         peak = max(peak, 1.12)
@@ -450,8 +468,24 @@ def _chunk_fit(
     pad = max(float(fit.get("outline_px") or 0), float(fit.get("box_pad_px") or 0))
     if active_style == "highlight":
         pad = max(pad, 22.0)
+    plain = disp_words(chunk, case, styled=False)
+    if forced:
+        # G3afix: the cue's own lines are kept; each one only shrinks (never re-wraps) to fit.
+        scale = 1.0
+        for a, b in zip([0, *forced], [*forced, len(plain)], strict=True):
+            _, sc = fit_caption_line(
+                plain[a:b],
+                font=fit.get("font"),
+                fontsize=float(fit.get("fontsize") or 0),
+                max_width_px=float(fit.get("max_width_px") or 0),
+                peak_scale=peak,
+                pad_px=pad,
+                max_lines=1,
+            )
+            scale = min(scale, sc)
+        return forced, scale
     return fit_caption_line(
-        disp_words(chunk, case),
+        plain,
         font=fit.get("font"),
         fontsize=float(fit.get("fontsize") or 0),
         max_width_px=float(fit.get("max_width_px") or 0),

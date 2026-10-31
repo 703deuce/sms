@@ -14,6 +14,8 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { layerTransformAt } from '@/lib/clips/editor/keyframes'
 import { keyframeTransform } from '@/lib/clips/editor/motion-frame'
 import { textFont, type TextItem } from '@/lib/clips/editor/text-items'
+import { gradientOf, lineHeightMult } from '@/lib/clips/render-plan/text-items-ass'
+import { userFontId } from '@/lib/clips/render-plan/text-rich'
 
 export type TextItemFrame = { visible: boolean; transform: string; opacity: number }
 
@@ -42,13 +44,17 @@ export function textAssFontsize(size: number, playH = TEXT_REF_H): number {
 export function textItemCss(item: TextItem, boxH: number) {
   const k = boxH / TEXT_REF_H
   const st = item.style
+  // G3b: a workspace font previews under its family (FontFace registered by use-workspace-fonts).
+  const userFamily = userFontId(st.font) && st.fontFamily ? st.fontFamily : null
   const font = textFont(st.font)
-  const em = assEmPerFontsize(font.id)
+  const em = assEmPerFontsize(userFamily ?? font.id)
   const linePx = textAssFontsize(st.size) * k
+  // G3b: line height multiplies the row pitch (worker text_items: per-line \pos at fontsize · lh).
+  const rowPx = linePx * lineHeightMult(st as unknown as Record<string, unknown>)
   const text: Record<string, string | number> = {
     fontSize: linePx * em,
     lineHeight: `${linePx}px`,
-    fontWeight: font.weight,
+    fontWeight: userFamily ? 400 : font.weight,
     color: st.color,
     whiteSpace: 'pre',
     display: 'inline-block',
@@ -61,6 +67,16 @@ export function textItemCss(item: TextItem, boxH: number) {
     const d = st.shadow.dist * k
     text.textShadow = `${d}px ${d}px 0 ${rgba(st.shadow.color, st.shadow.opacity)}`
   }
+  if (st.letterSpacing) text.letterSpacing = `${st.letterSpacing * k}px`
+  const g = gradientOf(st as unknown as Record<string, unknown>)
+  const gradient = g
+    ? {
+        backgroundImage: `linear-gradient(${g.dir === 'h' ? 'to right' : 'to bottom'}, ${g.from}, ${g.to})`,
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        color: 'transparent',
+      }
+    : null
   const pad = st.box ? st.box.pad * k : 0
   const box = st.box
     ? { background: rgba(st.box.color, st.box.opacity), padding: `${pad}px`, margin: `${-pad}px 0` }
@@ -69,7 +85,10 @@ export function textItemCss(item: TextItem, boxH: number) {
     anchor: { left: `${item.x}%`, top: `${item.y}%`, transform: 'translate(-50%, -50%)', textAlign: st.align, width: 'max-content' },
     origin: `${item.x}% ${item.y}%`,
     linePx,
+    rowPx,
+    userFamily,
     text,
+    gradient,
     box,
   }
 }

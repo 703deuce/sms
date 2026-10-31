@@ -1413,6 +1413,11 @@ def render_edited_clip(
 ) -> tuple[Path, list[dict], str]:
     t0 = time.perf_counter()
     rid = render_id or "unknown"
+    if conn is not None and workspace_id and edits.get("textItems"):
+        # G3b: workspace fonts used by text items (downloaded once; merged fontsdir for the burn).
+        from clips_worker.user_fonts import prepare_user_fonts
+
+        edits = prepare_user_fonts(conn, workspace_id, edits, work_dir)
 
     def stage(name: str, **extra: object) -> None:
         payload = {

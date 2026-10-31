@@ -1,0 +1,573 @@
+{
+ "lines": [
+  {
+   "id": "a",
+   "text": "Hello from the SRT test\nsecond line here",
+   "startMs": 0,
+   "endMs": 2400
+  },
+  {
+   "id": "b",
+   "text": "This is <i>italic</i> and <B>bold</B> text",
+   "startMs": 2400,
+   "endMs": 4600
+  },
+  {
+   "id": "c",
+   "text": "<i>All italic\non two lines</i>",
+   "startMs": 4600,
+   "endMs": 6400
+  },
+  {
+   "id": "d",
+   "text": "one\ntwo\nthree\nfour",
+   "startMs": 6400,
+   "endMs": 8000
+  },
+  {
+   "id": "e",
+   "text": "wo<i>rd</i> <b><i>both</i></b> a < b > c",
+   "startMs": 8000,
+   "endMs": 9500
+  },
+  {
+   "id": "f",
+   "text": "  spaced   out \n\n  lines  ",
+   "startMs": 9500,
+   "endMs": 11000
+  }
+ ],
+ "normalized": [
+  {
+   "id": "a",
+   "text": "Hello from the SRT test\nsecond line here",
+   "startMs": 0,
+   "endMs": 2400
+  },
+  {
+   "id": "b",
+   "text": "This is <i>italic</i> and <b>bold</b> text",
+   "startMs": 2400,
+   "endMs": 4600
+  },
+  {
+   "id": "c",
+   "text": "<i>All italic\non two lines</i>",
+   "startMs": 4600,
+   "endMs": 6400
+  },
+  {
+   "id": "d",
+   "text": "one\ntwo\nthree four",
+   "startMs": 6400,
+   "endMs": 8000
+  },
+  {
+   "id": "e",
+   "text": "word <b><i>both</i></b> a < b > c",
+   "startMs": 8000,
+   "endMs": 9500
+  },
+  {
+   "id": "f",
+   "text": "spaced out\nlines",
+   "startMs": 9500,
+   "endMs": 11000
+  }
+ ],
+ "words": [
+  {
+   "i": 1000000,
+   "text": "Hello",
+   "s_ms": 0,
+   "e_ms": 351,
+   "ln": 0
+  },
+  {
+   "i": 1000001,
+   "text": "from",
+   "s_ms": 351,
+   "e_ms": 643,
+   "ln": 0
+  },
+  {
+   "i": 1000002,
+   "text": "the",
+   "s_ms": 643,
+   "e_ms": 878,
+   "ln": 0
+  },
+  {
+   "i": 1000003,
+   "text": "SRT",
+   "s_ms": 878,
+   "e_ms": 1112,
+   "ln": 0
+  },
+  {
+   "i": 1000004,
+   "text": "test",
+   "s_ms": 1112,
+   "e_ms": 1404,
+   "ln": 0
+  },
+  {
+   "i": 1000005,
+   "text": "second",
+   "s_ms": 1404,
+   "e_ms": 1814,
+   "ln": 0,
+   "br": true
+  },
+  {
+   "i": 1000006,
+   "text": "line",
+   "s_ms": 1814,
+   "e_ms": 2107,
+   "ln": 0
+  },
+  {
+   "i": 1000007,
+   "text": "here",
+   "s_ms": 2107,
+   "e_ms": 2400,
+   "ln": 0
+  },
+  {
+   "i": 1001000,
+   "text": "This",
+   "s_ms": 2400,
+   "e_ms": 2779,
+   "ln": 1
+  },
+  {
+   "i": 1001001,
+   "text": "is",
+   "s_ms": 2779,
+   "e_ms": 3006,
+   "ln": 1
+  },
+  {
+   "i": 1001002,
+   "text": "italic",
+   "s_ms": 3006,
+   "e_ms": 3537,
+   "ln": 1,
+   "it": true
+  },
+  {
+   "i": 1001003,
+   "text": "and",
+   "s_ms": 3537,
+   "e_ms": 3841,
+   "ln": 1
+  },
+  {
+   "i": 1001004,
+   "text": "bold",
+   "s_ms": 3841,
+   "e_ms": 4220,
+   "ln": 1,
+   "bo": true
+  },
+  {
+   "i": 1001005,
+   "text": "text",
+   "s_ms": 4220,
+   "e_ms": 4600,
+   "ln": 1
+  },
+  {
+   "i": 1002000,
+   "text": "All",
+   "s_ms": 4600,
+   "e_ms": 4900,
+   "ln": 2,
+   "it": true
+  },
+  {
+   "i": 1002001,
+   "text": "italic",
+   "s_ms": 4900,
+   "e_ms": 5425,
+   "ln": 2,
+   "it": true
+  },
+  {
+   "i": 1002002,
+   "text": "on",
+   "s_ms": 5425,
+   "e_ms": 5650,
+   "ln": 2,
+   "br": true,
+   "it": true
+  },
+  {
+   "i": 1002003,
+   "text": "two",
+   "s_ms": 5650,
+   "e_ms": 5950,
+   "ln": 2,
+   "it": true
+  },
+  {
+   "i": 1002004,
+   "text": "lines",
+   "s_ms": 5950,
+   "e_ms": 6400,
+   "ln": 2,
+   "it": true
+  },
+  {
+   "i": 1003000,
+   "text": "one",
+   "s_ms": 6400,
+   "e_ms": 6736,
+   "ln": 3
+  },
+  {
+   "i": 1003001,
+   "text": "two",
+   "s_ms": 6736,
+   "e_ms": 7073,
+   "ln": 3,
+   "br": true
+  },
+  {
+   "i": 1003002,
+   "text": "three",
+   "s_ms": 7073,
+   "e_ms": 7578,
+   "ln": 3,
+   "br": true
+  },
+  {
+   "i": 1003003,
+   "text": "four",
+   "s_ms": 7578,
+   "e_ms": 8000,
+   "ln": 3
+  },
+  {
+   "i": 1004000,
+   "text": "word",
+   "s_ms": 8000,
+   "e_ms": 8375,
+   "ln": 4
+  },
+  {
+   "i": 1004001,
+   "text": "both",
+   "s_ms": 8375,
+   "e_ms": 8750,
+   "ln": 4,
+   "it": true,
+   "bo": true
+  },
+  {
+   "i": 1004002,
+   "text": "a",
+   "s_ms": 8750,
+   "e_ms": 8900,
+   "ln": 4
+  },
+  {
+   "i": 1004003,
+   "text": "<",
+   "s_ms": 8900,
+   "e_ms": 9050,
+   "ln": 4
+  },
+  {
+   "i": 1004004,
+   "text": "b",
+   "s_ms": 9050,
+   "e_ms": 9200,
+   "ln": 4
+  },
+  {
+   "i": 1004005,
+   "text": ">",
+   "s_ms": 9200,
+   "e_ms": 9350,
+   "ln": 4
+  },
+  {
+   "i": 1004006,
+   "text": "c",
+   "s_ms": 9350,
+   "e_ms": 9500,
+   "ln": 4
+  },
+  {
+   "i": 1005000,
+   "text": "spaced",
+   "s_ms": 9500,
+   "e_ms": 10117,
+   "ln": 5
+  },
+  {
+   "i": 1005001,
+   "text": "out",
+   "s_ms": 10117,
+   "e_ms": 10470,
+   "ln": 5
+  },
+  {
+   "i": 1005002,
+   "text": "lines",
+   "s_ms": 10470,
+   "e_ms": 11000,
+   "ln": 5,
+   "br": true
+  }
+ ],
+ "render": [
+  {
+   "w": "Hello",
+   "s": 0.0,
+   "e": 0.351,
+   "idx": 1000000,
+   "ln": 0
+  },
+  {
+   "w": "from",
+   "s": 0.351,
+   "e": 0.643,
+   "idx": 1000001,
+   "ln": 0
+  },
+  {
+   "w": "the",
+   "s": 0.643,
+   "e": 0.878,
+   "idx": 1000002,
+   "ln": 0
+  },
+  {
+   "w": "SRT",
+   "s": 0.878,
+   "e": 1.112,
+   "idx": 1000003,
+   "ln": 0
+  },
+  {
+   "w": "test",
+   "s": 1.112,
+   "e": 1.404,
+   "idx": 1000004,
+   "ln": 0
+  },
+  {
+   "w": "second",
+   "s": 1.404,
+   "e": 1.814,
+   "idx": 1000005,
+   "ln": 0,
+   "br": true
+  },
+  {
+   "w": "line",
+   "s": 1.814,
+   "e": 2.107,
+   "idx": 1000006,
+   "ln": 0
+  },
+  {
+   "w": "here",
+   "s": 2.107,
+   "e": 2.4,
+   "idx": 1000007,
+   "ln": 0
+  },
+  {
+   "w": "This",
+   "s": 2.4,
+   "e": 2.779,
+   "idx": 1001000,
+   "ln": 1
+  },
+  {
+   "w": "is",
+   "s": 2.779,
+   "e": 3.006,
+   "idx": 1001001,
+   "ln": 1
+  },
+  {
+   "w": "italic",
+   "s": 3.006,
+   "e": 3.537,
+   "idx": 1001002,
+   "ln": 1,
+   "it": true
+  },
+  {
+   "w": "and",
+   "s": 3.537,
+   "e": 3.841,
+   "idx": 1001003,
+   "ln": 1
+  },
+  {
+   "w": "bold",
+   "s": 3.841,
+   "e": 4.22,
+   "idx": 1001004,
+   "ln": 1,
+   "bo": true
+  },
+  {
+   "w": "text",
+   "s": 4.22,
+   "e": 4.6,
+   "idx": 1001005,
+   "ln": 1
+  },
+  {
+   "w": "All",
+   "s": 4.6,
+   "e": 4.9,
+   "idx": 1002000,
+   "ln": 2,
+   "it": true
+  },
+  {
+   "w": "italic",
+   "s": 4.9,
+   "e": 5.425,
+   "idx": 1002001,
+   "ln": 2,
+   "it": true
+  },
+  {
+   "w": "on",
+   "s": 5.425,
+   "e": 5.65,
+   "idx": 1002002,
+   "ln": 2,
+   "br": true,
+   "it": true
+  },
+  {
+   "w": "two",
+   "s": 5.65,
+   "e": 5.95,
+   "idx": 1002003,
+   "ln": 2,
+   "it": true
+  },
+  {
+   "w": "lines",
+   "s": 5.95,
+   "e": 6.4,
+   "idx": 1002004,
+   "ln": 2,
+   "it": true
+  },
+  {
+   "w": "one",
+   "s": 6.4,
+   "e": 6.736,
+   "idx": 1003000,
+   "ln": 3
+  },
+  {
+   "w": "two",
+   "s": 6.736,
+   "e": 7.073,
+   "idx": 1003001,
+   "ln": 3,
+   "br": true
+  },
+  {
+   "w": "three",
+   "s": 7.073,
+   "e": 7.578,
+   "idx": 1003002,
+   "ln": 3,
+   "br": true
+  },
+  {
+   "w": "four",
+   "s": 7.578,
+   "e": 8.0,
+   "idx": 1003003,
+   "ln": 3
+  },
+  {
+   "w": "word",
+   "s": 8.0,
+   "e": 8.375,
+   "idx": 1004000,
+   "ln": 4
+  },
+  {
+   "w": "both",
+   "s": 8.375,
+   "e": 8.75,
+   "idx": 1004001,
+   "ln": 4,
+   "it": true,
+   "bo": true
+  },
+  {
+   "w": "a",
+   "s": 8.75,
+   "e": 8.9,
+   "idx": 1004002,
+   "ln": 4
+  },
+  {
+   "w": "<",
+   "s": 8.9,
+   "e": 9.05,
+   "idx": 1004003,
+   "ln": 4
+  },
+  {
+   "w": "b",
+   "s": 9.05,
+   "e": 9.2,
+   "idx": 1004004,
+   "ln": 4
+  },
+  {
+   "w": ">",
+   "s": 9.2,
+   "e": 9.35,
+   "idx": 1004005,
+   "ln": 4
+  },
+  {
+   "w": "c",
+   "s": 9.35,
+   "e": 9.5,
+   "idx": 1004006,
+   "ln": 4
+  },
+  {
+   "w": "spaced",
+   "s": 9.5,
+   "e": 10.117,
+   "idx": 1005000,
+   "ln": 5
+  },
+  {
+   "w": "out",
+   "s": 10.117,
+   "e": 10.47,
+   "idx": 1005001,
+   "ln": 5
+  },
+  {
+   "w": "lines",
+   "s": 10.47,
+   "e": 11.0,
+   "idx": 1005002,
+   "ln": 5,
+   "br": true
+  }
+ ],
+ "srt": "1\n00:00:00,000 --> 00:00:02,400\nHello from the SRT test\nsecond line here\n\n2\n00:00:02,400 --> 00:00:04,600\nThis is <i>italic</i> and <b>bold</b> text\n\n3\n00:00:04,600 --> 00:00:06,400\n<i>All italic\non two lines</i>\n\n4\n00:00:06,400 --> 00:00:08,000\none\ntwo\nthree four\n\n5\n00:00:08,000 --> 00:00:09,500\nword <b><i>both</i></b> a < b > c\n\n6\n00:00:09,500 --> 00:00:11,000\nspaced out\nlines\n"
+}

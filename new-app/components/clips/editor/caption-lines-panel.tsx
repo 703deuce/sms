@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Download, FileUp, GitMerge, Plus, Scissors, Trash2, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { buildCaptionWords, type CaptionSourceWord } from '@/lib/clips/caption-words'
@@ -11,6 +10,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import {
   addTypedLines,
+  appendCaptionLines,
   CAPTION_LINE_MAX_CHARS,
   captionLinesFromWords,
   captionLinesToSrt,
@@ -19,6 +19,7 @@ import {
   mergeCaptionLineWithNext,
   normalizeCaptionLinesEdits,
   parseSubtitles,
+  rechunkCaptionLines,
   splitCaptionLine,
   type CaptionLine,
 } from '@/lib/clips/editor/caption-lines'
@@ -95,7 +96,8 @@ function LineRow({
   onDelete: () => void
 }) {
   const [draft, setDraft] = useState<string | null>(null)
-  const ref = useRef<HTMLInputElement>(null)
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const shown = draft ?? line.text
   const commit = () => {
     if (draft !== null && draft.trim() && draft !== line.text) onText(draft)
     setDraft(null)
@@ -121,21 +123,23 @@ function LineRow({
           </Button>
         </span>
       </div>
-      <Input
+      {/* G3afix: a line keeps its own line breaks (Shift+Enter) and <i>/<b> tags. */}
+      <Textarea
         ref={ref}
-        value={draft ?? line.text}
-        maxLength={CAPTION_LINE_MAX_CHARS}
+        value={shown}
+        rows={Math.min(3, shown.split('\n').length)}
+        maxLength={CAPTION_LINE_MAX_CHARS + 40}
         onFocus={onSelect}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
             commit()
           }
           if (e.key === 'Escape') setDraft(null)
         }}
-        className="h-7 text-xs"
+        className="min-h-7 resize-none px-2 py-1 text-xs"
         data-testid={`caption-line-text-${line.id}`}
       />
     </li>
@@ -164,7 +168,11 @@ export function CaptionLinesPanel({
   const lines = edits.captionLines ?? []
   const [typed, setTyped] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
+  // G3afix: an import over existing manual lines waits for Replace / Append.
+  const [pending, setPending] = useState<CaptionLine[] | null>(null)
+  const [rechunk, setRechunk] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const wpl = Math.max(1, Math.round(edits.captions?.wordsPerLine ?? 3))
   const autoLines = useMemo(() => {
     if (lines.length || !words.length) return []
     const w = buildCaptionWords(words, editorPreviewEdits(edits, words))
@@ -230,9 +238,16 @@ export function CaptionLinesPanel({
             const f = e.target.files?.[0]
             e.target.value = ''
             if (!f) return
-            const parsed = parseSubtitles(await f.text(), { durationMs })
+            const raw = parseSubtitles(await f.text(), { durationMs })
+            const parsed = rechunk ? rechunkCaptionLines(raw, wpl) : raw
             if (!parsed.length) {
+              setPending(null)
               setMsg('No subtitle cues found in that file.')
+              return
+            }
+            if (lines.length) {
+              setMsg(null)
+              setPending(parsed)
               return
             }
             setMsg(`Imported ${parsed.length} line${parsed.length === 1 ? '' : 's'}.`)
@@ -252,6 +267,49 @@ export function CaptionLinesPanel({
           Edit auto captions
         </Button>
       </div>
+      <label className="flex items-center gap-2 text-[11px] text-muted-foreground" data-testid="caption-lines-rechunk">
+        <input type="checkbox" checked={rechunk} onChange={(e) => setRechunk(e.target.checked)} data-testid="caption-lines-rechunk-toggle" />
+        On import, re-split cues into {wpl} word{wpl === 1 ? '' : 's'} per caption (otherwise each cue keeps its own lines)
+      </label>
+      {pending ? (
+        <div className="space-y-1.5 rounded-md border border-primary/50 bg-primary/5 p-2 text-[11px]" data-testid="caption-lines-import-choice">
+          <p>
+            The file has {pending.length} line{pending.length === 1 ? '' : 's'}; you already have {lines.length} manual line{lines.length === 1 ? '' : 's'}.
+          </p>
+          <div className="grid grid-cols-3 gap-1.5">
+            <Button
+              size="sm"
+              className="h-7 text-[11px]"
+              onClick={() => {
+                setMsg(`Replaced with ${pending.length} imported line${pending.length === 1 ? '' : 's'}.`)
+                setPending(null)
+                write(pending)
+              }}
+              data-testid="caption-lines-import-replace"
+            >
+              Replace
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px]"
+              onClick={() => {
+                const next = appendCaptionLines(lines, pending)
+                const added = next.length - lines.length
+                setMsg(added > 0 ? `Added ${added} line${added === 1 ? '' : 's'} into the gaps.` : 'No gaps for the imported lines — nothing added.')
+                setPending(null)
+                write(next)
+              }}
+              data-testid="caption-lines-import-append"
+            >
+              Append
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => setPending(null)} data-testid="caption-lines-import-cancel">
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {msg ? <p className="text-[11px] text-muted-foreground" data-testid="caption-lines-msg">{msg}</p> : null}
 
       {lines.length ? (
@@ -269,18 +327,28 @@ export function CaptionLinesPanel({
               onText={(t) => write(lines.map((x) => (x.id === l.id ? { ...x, text: t } : x)))}
               onSplit={(caret) => {
                 const after = splitCaptionLine(lines, l.id, caret !== undefined && caret > 0 && caret < l.text.length ? { charIndex: caret } : {})
+                setMsg(null)
                 if (after === lines) setMsg('A line needs two words and 0.2 s to split.')
                 else write(after)
               }}
               onMerge={() => write(mergeCaptionLineWithNext(lines, l.id))}
-              onDelete={() => write(lines.filter((x) => x.id !== l.id))}
+              onDelete={() => {
+                const rest = lines.filter((x) => x.id !== l.id)
+                if (!rest.length) setMsg(null)
+                write(rest)
+              }}
             />
           ))}
         </ul>
       ) : null}
 
       {lines.length ? (
-        <Button variant="ghost" size="sm" className="w-full gap-1.5 text-destructive" onClick={() => write([])} data-testid="caption-lines-clear">
+        <Button variant="ghost" size="sm" className="w-full gap-1.5 text-destructive" onClick={() => {
+            // G3afix: no stale "Imported N lines." once the lines are gone.
+            setMsg(null)
+            setPending(null)
+            write([])
+          }} data-testid="caption-lines-clear">
           <Trash2 className="size-4" aria-hidden />
           Remove manual lines (back to auto captions)
         </Button>

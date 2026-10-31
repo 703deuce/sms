@@ -20,8 +20,147 @@ export const CAPTION_LINE_MIN_MS = 100
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 const cpLen = (s: string) => Array.from(s).length
 
+/** G3afix: a cue keeps up to 3 of its own lines; extra lines join the last one. */
+export const CAPTION_LINE_MAX_TEXT_LINES = 3
+
+/** G3afix: one word of a caption line — `br` starts a new cue line, `it`/`bo` inside <i>/<b>. */
+export type LineToken = { w: string; br: boolean; it: boolean; bo: boolean }
+
+const OPEN: Record<string, 'it' | 'bo'> = { '<i>': 'it', '<b>': 'bo' }
+const CLOSE: Record<string, 'it' | 'bo'> = { '</i>': 'it', '</b>': 'bo' }
+
+/**
+ * Words of a caption line (py caption_lines.line_tokens): "\n" separates the cue's lines; <i>/<b>
+ * (any case) set the style of the words that START inside them (tags never split a word). Any
+ * other text is literal.
+ */
+export function lineTokens(text: string): LineToken[] {
+  const state = { it: false, bo: false }
+  const out: LineToken[] = []
+  let linesSeen = 1
+  String(text ?? '').replace(/\r/g, '').split('\n').forEach((line, li) => {
+    let br = li > 0 && out.length > 0
+    let cur: LineToken | null = null
+    let pos = 0
+    while (pos < line.length) {
+      const t3 = line.slice(pos, pos + 3).toLowerCase()
+      const t4 = line.slice(pos, pos + 4).toLowerCase()
+      if (OPEN[t3]) {
+        state[OPEN[t3]!] = true
+        pos += 3
+        continue
+      }
+      if (CLOSE[t4]) {
+        state[CLOSE[t4]!] = false
+        pos += 4
+        continue
+      }
+      const cp = line.codePointAt(pos)!
+      const ch = String.fromCodePoint(cp)
+      pos += ch.length
+      if (ch === ' ' || ch === '\t') {
+        cur = null
+        continue
+      }
+      if (cur === null) {
+        const nb = br && linesSeen < CAPTION_LINE_MAX_TEXT_LINES
+        if (nb) linesSeen++
+        cur = { w: '', br: nb, it: state.it, bo: state.bo }
+        br = false
+        out.push(cur)
+      }
+      cur.w += ch
+    }
+  })
+  return out
+}
+
+/** Raw text offset just after each word (caret split). */
+export function lineTokenEnds(text: string): number[] {
+  const ends: number[] = []
+  let base = 0
+  String(text ?? '').replace(/\r/g, '').split('\n').forEach((line, li) => {
+    if (li) base += 1
+    let inWord = false
+    let pos = 0
+    while (pos < line.length) {
+      const t3 = line.slice(pos, pos + 3).toLowerCase()
+      const t4 = line.slice(pos, pos + 4).toLowerCase()
+      if (OPEN[t3]) {
+        pos += 3
+        continue
+      }
+      if (CLOSE[t4]) {
+        pos += 4
+        continue
+      }
+      const ch = String.fromCodePoint(line.codePointAt(pos)!)
+      pos += ch.length
+      if (ch === ' ' || ch === '\t') {
+        inWord = false
+        continue
+      }
+      if (!inWord) ends.push(0)
+      inWord = true
+      ends[ends.length - 1] = base + pos
+    }
+    base += line.length
+  })
+  return ends
+}
+
+/** Canonical text for tokens (py serialize_tokens): cut after `maxChars` plain code points. */
+export function serializeTokens(tokens: readonly LineToken[], maxChars?: number): string {
+  let out = ''
+  let it = false
+  let bo = false
+  let left = maxChars ?? 1 << 30
+  for (let k = 0; k < tokens.length; k++) {
+    const t = tokens[k]!
+    if (left <= 0) break
+    if (it && !t.it) {
+      out += '</i>'
+      it = false
+    }
+    if (bo && !t.bo) {
+      out += '</b>'
+      bo = false
+    }
+    if (k) {
+      out += t.br ? '\n' : ' '
+      left -= 1
+      if (left <= 0) break
+    }
+    if (t.bo && !bo) {
+      out += '<b>'
+      bo = true
+    }
+    if (t.it && !it) {
+      out += '<i>'
+      it = true
+    }
+    const w = Array.from(t.w).slice(0, left)
+    out += w.join('')
+    left -= w.length
+  }
+  if (it) out += '</i>'
+  if (bo) out += '</b>'
+  return out
+}
+
+/** Plain words of a caption line (tags dropped). */
 export function captionLineWordsOf(text: string): string[] {
-  return text.replace(/\r/g, '').replace(/\n/g, ' ').replace(/\t/g, ' ').split(' ').filter(Boolean)
+  return lineTokens(text).map((t) => t.w)
+}
+
+/** Text without tags, cue lines kept (TXT export, reading time). */
+export function captionLinePlainText(text: string): string {
+  const segs: string[][] = []
+  for (const t of lineTokens(text)) {
+    if (!segs.length || t.br) segs.push([])
+    segs[segs.length - 1]!.push(t.w)
+  }
+  return segs.map((x) => x.join(' ')).join('\n')
 }
 
 /** Valid lines sorted by start, overlaps trimmed (py normalize_caption_lines). */
@@ -31,7 +170,7 @@ export function normalizeCaptionLines(raw: unknown): CaptionLine[] {
   for (const r of raw) {
     if (!r || typeof r !== 'object' || Array.isArray(r)) continue
     const o = r as Record<string, unknown>
-    const text = Array.from(captionLineWordsOf(String(o.text ?? '')).join(' ')).slice(0, CAPTION_LINE_MAX_CHARS).join('')
+    const text = serializeTokens(lineTokens(String(o.text ?? '')), CAPTION_LINE_MAX_CHARS)
     const a0 = num(o.startMs)
     const b0 = num(o.endMs)
     if (!text || a0 === null || b0 === null) continue
@@ -68,31 +207,43 @@ export function normalizeCaptionLinesEdits(raw: unknown): CaptionLine[] | undefi
   })
 }
 
-export type CaptionLineWord = { i: number; text: string; s_ms: number; e_ms: number; ln: number }
+export type CaptionLineWord = { i: number; text: string; s_ms: number; e_ms: number; ln: number; br?: true; it?: true; bo?: true }
 
 /** Caption words (output ms) for the lines — py caption_line_words. */
 export function captionLineWords(lines: unknown): CaptionLineWord[] {
   const out: CaptionLineWord[] = []
   normalizeCaptionLines(lines).forEach((line, li) => {
-    const words = captionLineWordsOf(line.text)
-    const total = words.reduce((n, w) => n + cpLen(w) + 1, 0)
+    const toks = lineTokens(line.text)
+    const total = toks.reduce((n, t) => n + cpLen(t.w) + 1, 0)
     const s = line.startMs
     const dur = line.endMs - s
     let acc = 0
-    words.forEach((w, wi) => {
+    toks.forEach((t, wi) => {
       const ws = s + Math.floor((dur * acc) / total)
-      acc += cpLen(w) + 1
+      acc += cpLen(t.w) + 1
       let we = s + Math.floor((dur * acc) / total)
       if (we <= ws) we = ws + 1
-      out.push({ i: CAPTION_LINE_ID_BASE + li * 1000 + wi, text: w, s_ms: ws, e_ms: we, ln: li })
+      const row: CaptionLineWord = { i: CAPTION_LINE_ID_BASE + li * 1000 + wi, text: t.w, s_ms: ws, e_ms: we, ln: li }
+      if (t.br) row.br = true
+      if (t.it) row.it = true
+      if (t.bo) row.bo = true
+      out.push(row)
     })
   })
   return out
 }
 
 /** Render words (seconds) for the caption ASS — captionWordsToClipWords shape + `ln`. */
-export function captionLineClipWords(lines: unknown): { w: string; s: number; e: number; i: number; idx: number; ln: number }[] {
-  return captionLineWords(lines).map((c) => ({ w: c.text, s: c.s_ms / 1000, e: c.e_ms / 1000, i: c.i, idx: c.i, ln: c.ln }))
+export type CaptionLineClipWord = { w: string; s: number; e: number; i: number; idx: number; ln: number; br?: true; it?: true; bo?: true }
+
+export function captionLineClipWords(lines: unknown): CaptionLineClipWord[] {
+  return captionLineWords(lines).map((c) => {
+    const row: CaptionLineClipWord = { w: c.text, s: c.s_ms / 1000, e: c.e_ms / 1000, i: c.i, idx: c.i, ln: c.ln }
+    if (c.br) row.br = true
+    if (c.it) row.it = true
+    if (c.bo) row.bo = true
+    return row
+  })
 }
 
 // ---- editing helpers (panel + Captions lane) ---------------------------------------------------
@@ -102,7 +253,7 @@ export const newCaptionLineId = () => `cl${Date.now().toString(36)}${(idSeq++).t
 
 /** Reading-speed length for a typed line: ~15 characters / s, 0.8 s – 6 s. */
 export function readingMs(text: string): number {
-  return Math.max(800, Math.min(6000, Math.round((cpLen(text.trim()) * 1000) / 15)))
+  return Math.max(800, Math.min(6000, Math.round((cpLen(captionLinePlainText(text).trim()) * 1000) / 15)))
 }
 
 /**
@@ -110,7 +261,7 @@ export function readingMs(text: string): number {
  * read, never overlapping the next existing line and never past `durationMs`.
  */
 export function addTypedLines(lines: CaptionLine[], text: string, atMs: number, durationMs: number): CaptionLine[] {
-  const rows = text.split('\n').map((r) => captionLineWordsOf(r).join(' ')).filter(Boolean)
+  const rows = text.split('\n').map((r) => serializeTokens(lineTokens(r))).filter(Boolean)
   const next = [...lines]
   let t = Math.max(0, Math.round(atMs))
   for (const row of rows) {
@@ -133,19 +284,14 @@ export function addTypedLines(lines: CaptionLine[], text: string, atMs: number, 
 export function splitCaptionLine(lines: CaptionLine[], id: string, at: { charIndex?: number; ms?: number } = {}): CaptionLine[] {
   const l = lines.find((x) => x.id === id)
   if (!l) return lines
-  const words = captionLineWordsOf(l.text)
+  const toks = lineTokens(l.text)
+  const words = toks.map((t) => t.w)
   if (words.length < 2) return lines
   const dur = l.endMs - l.startMs
   let k: number
   if (at.charIndex !== undefined) {
-    // words fully before the caret go left
-    let pos = 0
-    k = 0
-    for (const w of words) {
-      if (pos + w.length > at.charIndex) break
-      pos += w.length + 1
-      k++
-    }
+    // words that end at or before the caret (in the raw text, tags included) go left
+    k = lineTokenEnds(l.text).filter((e) => e <= at.charIndex!).length
   } else if (at.ms !== undefined && at.ms > l.startMs && at.ms < l.endMs) {
     const total = words.reduce((n, w) => n + cpLen(w) + 1, 0)
     const want = ((at.ms - l.startMs) / dur) * total
@@ -158,11 +304,11 @@ export function splitCaptionLine(lines: CaptionLine[], id: string, at: { charInd
     }
   } else k = Math.ceil(words.length / 2)
   k = Math.max(1, Math.min(words.length - 1, k))
-  const left = words.slice(0, k).join(' ')
-  const right = words.slice(k).join(' ')
+  const left = serializeTokens(toks.slice(0, k))
+  const right = serializeTokens(toks.slice(k).map((t, j) => (j === 0 ? { ...t, br: false } : t)))
   let cut: number
   if (at.ms !== undefined && at.charIndex === undefined && at.ms > l.startMs && at.ms < l.endMs) cut = Math.round(at.ms)
-  else cut = l.startMs + Math.round((dur * (cpLen(left) + 1)) / (cpLen(l.text) + 1))
+  else cut = l.startMs + Math.round((dur * (cpLen(captionLinePlainText(left)) + 1)) / (cpLen(captionLinePlainText(l.text)) + 1))
   cut = Math.max(l.startMs + CAPTION_LINE_MIN_MS, Math.min(l.endMs - CAPTION_LINE_MIN_MS, cut))
   if (cut - l.startMs < CAPTION_LINE_MIN_MS || l.endMs - cut < CAPTION_LINE_MIN_MS) return lines
   const out: CaptionLine[] = []
@@ -180,7 +326,8 @@ export function mergeCaptionLineWithNext(lines: CaptionLine[], id: string): Capt
   if (i < 0 || i + 1 >= sorted.length) return lines
   const a = sorted[i]!
   const b = sorted[i + 1]!
-  const text = Array.from(`${a.text} ${b.text}`).slice(0, CAPTION_LINE_MAX_CHARS).join('')
+  const tb = lineTokens(b.text)
+  const text = serializeTokens([...lineTokens(a.text), ...tb.map((t, j) => (j === 0 ? { ...t, br: false } : t))], CAPTION_LINE_MAX_CHARS)
   return [...sorted.slice(0, i), { ...a, text, endMs: Math.max(a.endMs, b.endMs) }, ...sorted.slice(i + 2)]
 }
 
@@ -209,7 +356,24 @@ function toMs(h: string | undefined, m: string, s: string, f: string): number {
   return ((Number(h ?? 0) * 60 + Number(m)) * 60 + Number(s)) * 1000 + Number(f.padEnd(3, '0'))
 }
 
-/** Parse SRT or WebVTT text (tags stripped, multi-line cues joined) into caption lines. */
+/**
+ * Keep a cue's <i>/<b> (any case, attributes dropped) and its line breaks; strip every other tag
+ * (<font>, <u>, VTT <c.x>/<v Name>/timestamps) and ASS {\\...} overrides.
+ */
+export function cleanCueText(rows: string[]): string {
+  return rows
+    .map((r) =>
+      r
+        .replace(/<\s*(\/?)\s*([ib])(?:\s[^>]*)?>/gi, (_m, sl: string, t: string) => `\u0001${sl}${t.toLowerCase()}\u0002`)
+        .replace(/<[^>]*>/g, '')
+        .replace(/\{\\[^}]*\}/g, '')
+        .replace(/\u0001/g, '<')
+        .replace(/\u0002/g, '>'),
+    )
+    .join('\n')
+}
+
+/** Parse SRT or WebVTT text into caption lines; cues keep their lines and <i>/<b> (G3afix). */
 export function parseSubtitles(src: string, opts: { offsetMs?: number; durationMs?: number } = {}): CaptionLine[] {
   const off = opts.offsetMs ?? 0
   const lim = opts.durationMs ?? Infinity
@@ -229,7 +393,7 @@ export function parseSubtitles(src: string, opts: { offsetMs?: number; durationM
       }
       text.push(rows[i]!)
     }
-    const t = captionLineWordsOf(text.join(' ').replace(/<[^>]*>/g, '').replace(/\{\\[^}]*\}/g, '')).join(' ')
+    const t = serializeTokens(lineTokens(cleanCueText(text)))
     if (!t || a >= lim) continue
     b = Math.min(b, lim)
     out.push({ id: `cl${out.length}_${a}`, text: t, startMs: a, endMs: b })
@@ -252,5 +416,56 @@ export function captionLinesToVtt(lines: CaptionLine[]): string {
 }
 
 export function captionLinesToTxt(lines: CaptionLine[]): string {
-  return normalizeCaptionLines(lines).map((l) => l.text).join('\n') + '\n'
+  return normalizeCaptionLines(lines).map((l) => captionLinePlainText(l.text).replace(/\n/g, ' ')).join('\n') + '\n'
+}
+
+/**
+ * G3afix: optional import re-chunk — every cue split into captions of `wordsPerLine` words, timed
+ * by length like the burned captions (cue line breaks dropped, <i>/<b> kept per word).
+ */
+export function rechunkCaptionLines(lines: CaptionLine[], wordsPerLine: number): CaptionLine[] {
+  const wpl = Math.max(1, Math.round(wordsPerLine) || 1)
+  const out: CaptionLine[] = []
+  for (const l of normalizeCaptionLines(lines)) {
+    const toks = lineTokens(l.text).map((t) => ({ ...t, br: false }))
+    const total = toks.reduce((n, t) => n + cpLen(t.w) + 1, 0)
+    const dur = l.endMs - l.startMs
+    let acc = 0
+    for (let k = 0; k < toks.length; k += wpl) {
+      const part = toks.slice(k, k + wpl)
+      const a = l.startMs + Math.floor((dur * acc) / total)
+      acc += part.reduce((n, t) => n + cpLen(t.w) + 1, 0)
+      const b = k + wpl >= toks.length ? l.endMs : l.startMs + Math.floor((dur * acc) / total)
+      out.push({ id: `cl${out.length}_${a}`, text: serializeTokens(part), startMs: a, endMs: b })
+    }
+  }
+  // pieces shorter than the minimum are merged into the previous caption by the normalizer's trim
+  const merged: CaptionLine[] = []
+  for (const x of out) {
+    const prev = merged[merged.length - 1]
+    if (x.endMs - x.startMs < CAPTION_LINE_MIN_MS && prev && prev.endMs === x.startMs) {
+      merged[merged.length - 1] = { ...prev, text: serializeTokens([...lineTokens(prev.text), ...lineTokens(x.text)]), endMs: x.endMs }
+    } else merged.push(x)
+  }
+  return normalizeCaptionLinesEdits(merged) ?? []
+}
+
+/**
+ * G3afix: import "Append" — imported lines go into the gaps of the existing ones (an imported line
+ * overlapping an existing one is trimmed to start after it, or dropped when nothing is left).
+ */
+export function appendCaptionLines(existing: CaptionLine[], imported: CaptionLine[]): CaptionLine[] {
+  const keep = normalizeCaptionLines(existing)
+  const add: CaptionLine[] = []
+  for (const l of normalizeCaptionLines(imported)) {
+    let s = l.startMs
+    let e = l.endMs
+    for (const x of keep) {
+      if (x.startMs <= s && s < x.endMs) s = x.endMs
+    }
+    const next = keep.filter((x) => x.startMs >= s).sort((p, q) => p.startMs - q.startMs)[0]
+    if (next) e = Math.min(e, next.startMs)
+    if (e - s >= CAPTION_LINE_MIN_MS) add.push({ ...l, id: newCaptionLineId(), startMs: s, endMs: e })
+  }
+  return normalizeCaptionLinesEdits([...existing, ...add]) ?? []
 }

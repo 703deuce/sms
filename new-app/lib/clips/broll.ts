@@ -1,4 +1,5 @@
 import { normalizeTransitionSpec, type TransitionSpec } from '@/lib/clips/editor/motion-schema'
+import { normLayerAnim, type TextAnim } from '@/lib/clips/render-plan/text-anim'
 
 /**
  * startMs/endMs are OUTPUT ms (post-cut timeline). inMs (optional, E2) is the media in-point:
@@ -6,7 +7,8 @@ import { normalizeTransitionSpec, type TransitionSpec } from '@/lib/clips/editor
  * transitionIn / transitionOut (E3): edge transitions; when an item starts where the previous one
  * ends, its transitionIn is the transition BETWEEN the two (CapCut).
  */
-type BrollTransitions = { transitionIn?: TransitionSpec; transitionOut?: TransitionSpec }
+/** G3b: `anim` = in / out / loop presets on the layer (whole-layer; worker motion.layer_anim). */
+type BrollTransitions = { transitionIn?: TransitionSpec; transitionOut?: TransitionSpec; anim?: TextAnim }
 export type BrollItem =
   | ({ id: string; source: 'stock'; assetId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
   | ({ id: string; source: 'ai'; generationId: string; startMs: number; endMs: number; inMs?: number; placement?: 'auto' | 'manual' } & BrollTransitions)
@@ -65,7 +67,8 @@ export function normalizeBrollItems(raw: unknown, clipDurationMs: number): Broll
     const inMs = Number.isFinite(inRaw) && inRaw > 0 ? Math.round(inRaw) : undefined
     const tIn = normalizeTransitionSpec(o.transitionIn)
     const tOut = normalizeTransitionSpec(o.transitionOut)
-    const extra = { ...(inMs ? { inMs } : {}), ...(tIn ? { transitionIn: tIn } : {}), ...(tOut ? { transitionOut: tOut } : {}) }
+    const anim = normLayerAnim(o.anim)
+    const extra = { ...(inMs ? { inMs } : {}), ...(tIn ? { transitionIn: tIn } : {}), ...(tOut ? { transitionOut: tOut } : {}), ...(anim ? { anim } : {}) }
     if (source === 'ai') {
       const generationId = String(o.generationId ?? '')
       if (!generationId) continue

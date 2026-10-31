@@ -63,6 +63,24 @@ def _all_metrics() -> dict:
         return {}
 
 
+def register_font_metrics(name: str, metrics: dict) -> bool:
+    """G3b: add a workspace (uploaded) font's metrics row — same shape as caption_font_metrics.json
+    ({unitsPerEm, defaultAdv, assEmPerFontsize, adv}); the web parses it at upload time."""
+    try:
+        row = {
+            "unitsPerEm": float(metrics["unitsPerEm"]),
+            "defaultAdv": float(metrics["defaultAdv"]),
+            "assEmPerFontsize": float(metrics["assEmPerFontsize"]),
+            "adv": {str(k): float(v) for k, v in dict(metrics.get("adv") or {}).items()},
+        }
+    except (KeyError, TypeError, ValueError):
+        return False
+    if not name or row["unitsPerEm"] <= 0 or row["assEmPerFontsize"] <= 0:
+        return False
+    _all_metrics()[str(name)] = row
+    return True
+
+
 def _metrics(font: str | None) -> dict | None:
     allm = _all_metrics()
     name = _FONT_ALIASES.get(str(font or ""), str(font or ""))

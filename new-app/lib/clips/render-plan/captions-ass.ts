@@ -11,7 +11,8 @@ import { captionSafeWidthPx, fitCaptionLine, fitReferenceFrame, roundHalfUp } fr
 import { hex2, pyFixedPad, pyFloat, pyInt, pyRound, pyRoundN } from '@/lib/clips/render-plan/py'
 
 /** G3a: `ln` = manual caption line index (captionLines) — one caption per line. */
-export type AssWord = { w: string; s: number; e: number; i?: number; spk?: number; ln?: number }
+/** G3afix: `br` = starts a new line of a manual caption line; `it`/`bo` = <i>/<b> from SRT/VTT/typed. */
+export type AssWord = { w: string; s: number; e: number; i?: number; spk?: number; ln?: number; br?: boolean; it?: boolean; bo?: boolean }
 type Dict = Record<string, unknown>
 type Preset = Dict & {
   slug?: string
@@ -81,14 +82,34 @@ function disp(text: string, caseMode: string, sentenceStart = false): string {
   return sentenceStart ? lower.slice(0, 1).toUpperCase() + lower.slice(1) : lower
 }
 
-export function dispWordsPy(chunk: readonly AssWord[], caseMode: string): string[] {
-  if (caseMode === 'upper') return chunk.map((w) => disp(w.w, caseMode))
-  const out: string[] = []
-  let start = true
-  for (const w of chunk) {
-    out.push(disp(w.w, caseMode, start))
-    start = sentenceBoundary(String(w.w ?? ''))
+/** G3afix: <i>/<b> from manual caption lines (py captions_ass._styled). */
+function styledWord(w: AssWord, text: string): string {
+  if (!(w.it || w.bo)) return text
+  const pre = (w.bo ? '{\\b1}' : '') + (w.it ? '{\\i1}' : '')
+  const post = (w.it ? '{\\i0}' : '') + (w.bo ? '{\\b0}' : '')
+  return pre + text + post
+}
+
+export function dispWordsPy(chunk: readonly AssWord[], caseMode: string, styled = true): string[] {
+  let out: string[]
+  if (caseMode === 'upper') out = chunk.map((w) => disp(w.w, caseMode))
+  else {
+    out = []
+    let start = true
+    for (const w of chunk) {
+      out.push(disp(w.w, caseMode, start))
+      start = sentenceBoundary(String(w.w ?? ''))
+    }
   }
+  return styled ? out.map((t, k) => styledWord(chunk[k]!, t)) : out
+}
+
+/** G3afix: explicit line breaks of a manual caption line (py forced_breaks). */
+export function forcedBreaks(chunk: readonly AssWord[]): number[] {
+  const out: number[] = []
+  chunk.forEach((w, k) => {
+    if (k && w.br) out.push(k)
+  })
   return out
 }
 
@@ -271,7 +292,20 @@ function chunkFit(chunk: AssWord[], caseMode: string, fit: Fit, emphasis: Set<nu
   if (fit.highlightMode === 'supersize') peak = Math.max(peak, 1.25)
   let pad = Math.max(fit.outlinePx || 0, fit.boxPadPx || 0)
   if (activeStyle === 'highlight') pad = Math.max(pad, 22.0)
-  const r = fitCaptionLine(dispWordsPy(chunk, caseMode), { font: fit.font, fontsize: fit.fontsize || 0, maxWidthPx: fit.maxWidthPx || 0, peakScale: peak, padPx: pad })
+  const plain = dispWordsPy(chunk, caseMode, false)
+  const forced = forcedBreaks(chunk)
+  if (forced.length) {
+    // G3afix: the cue's own lines are kept; each one only shrinks (never re-wraps) to fit.
+    let scale = 1.0
+    const starts = [0, ...forced]
+    const ends = [...forced, plain.length]
+    starts.forEach((a, k) => {
+      const r = fitCaptionLine(plain.slice(a, ends[k]), { font: fit.font, fontsize: fit.fontsize || 0, maxWidthPx: fit.maxWidthPx || 0, peakScale: peak, padPx: pad, maxLines: 1 })
+      scale = Math.min(scale, r.scale)
+    })
+    return [forced, scale]
+  }
+  const r = fitCaptionLine(plain, { font: fit.font, fontsize: fit.fontsize || 0, maxWidthPx: fit.maxWidthPx || 0, peakScale: peak, padPx: pad })
   return [r.breaks, r.scale]
 }
 

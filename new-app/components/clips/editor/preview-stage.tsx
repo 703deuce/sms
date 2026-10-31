@@ -53,6 +53,8 @@ import { textItemFrame } from '@/lib/clips/editor/text-frame'
 import { libassSupported, previewLibassEnabled } from '@/lib/clips/preview-libass-flag'
 import { buildPreviewScripts, PREVIEW_SCRIPT_ORDER, UNDER_Z_BASE, type PreviewScriptKey, type PreviewScripts } from '@/lib/clips/render-plan/preview-scripts'
 import { underPasses } from '@/lib/clips/editor/tracks'
+import { useWorkspaceFonts } from '@/components/clips/editor/use-workspace-fonts'
+import { registerFontsFromItems } from '@/lib/clips/editor/workspace-fonts'
 
 /** G1b: the Text script counts as present when only under-text canvases carry text items. */
 function hasScript(scripts: PreviewScripts, k: PreviewScriptKey): boolean {
@@ -794,9 +796,13 @@ export function PreviewStage({
   }, [underPassList])
   const underZRef = useRef(underZ)
   underZRef.current = underZ
+  // G3b: workspace fonts used by text items → metrics + JASSUB URLs registered before the build.
+  const usesUserFonts = (edits.textItems ?? []).some((t) => String(t.style?.font ?? '').startsWith('user:'))
+  const userFonts = useWorkspaceFonts(usesUserFonts)
   const libassScripts = useMemo(() => {
     if (!libassWanted || libassFailed) return null
     try {
+      if (usesUserFonts) registerFontsFromItems(edits.textItems)
       const mode = edits.layout?.mode ?? 'speaker_follow'
       return buildPreviewScripts({
         edits: edits as unknown as Record<string, unknown>,
@@ -818,7 +824,7 @@ export function PreviewStage({
       console.warn('[clipper:preview] libass_scripts_fail', err)
       return null
     }
-  }, [libassWanted, libassFailed, edits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList])
+  }, [libassWanted, libassFailed, edits, captionWords, templatePreview, libassPlay, previewOutDurMs, composeSpec, libassHeadline, libassBadge, hookDupesCaptions, underPassList, usesUserFonts, userFonts.version])
   const onLibassStatus = useCallback<LibassStatusFn>((key, status, info) => {
     setLibassStatus((prev) => (prev[key] === status ? prev : { ...prev, [key]: status }))
     logEditorDecision('preview_ready', { renderer: 'libass', layer: key, status, ...info })

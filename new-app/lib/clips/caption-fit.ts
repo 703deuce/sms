@@ -47,13 +47,29 @@ export function roundHalfUp(x: number): number {
 
 export function assFontName(raw: string | undefined | null): string {
   const name = String(raw ?? '').trim() || 'Poppins'
-  return ASS_FONT_ALIASES[name] ?? 'Poppins ExtraBold'
+  return ASS_FONT_ALIASES[name] ?? (Object.hasOwn(USER, name) ? name : 'Poppins ExtraBold')
+}
+
+/** G3b: workspace (uploaded) font metrics, registered by family name (py register_font_metrics). */
+const USER: Record<string, FontRow> = {}
+
+export function registerFontMetrics(name: string, row: unknown): boolean {
+  if (!name || typeof row !== 'object' || row === null) return false
+  const r = row as Record<string, unknown>
+  const upm = Number(r.unitsPerEm)
+  const em = Number(r.assEmPerFontsize)
+  const dflt = Number(r.defaultAdv)
+  if (!(upm > 0) || !(em > 0) || !Number.isFinite(dflt)) return false
+  const adv: Record<string, number> = {}
+  if (typeof r.adv === 'object' && r.adv !== null) for (const [k, v] of Object.entries(r.adv as Record<string, unknown>)) if (Number.isFinite(Number(v))) adv[k] = Number(v)
+  USER[name] = { unitsPerEm: upm, assEmPerFontsize: em, defaultAdv: dflt, adv }
+  return true
 }
 
 function metricsFor(font: string | undefined | null): FontRow | undefined {
   const n = String(font ?? '')
   const alias = n === 'Montserrat' ? 'Montserrat Black' : n === 'Poppins' ? 'Poppins ExtraBold' : n === 'Lato Black' ? 'Lato' : n
-  return ALL[alias] ?? ALL[FALLBACK_FONT]
+  return USER[alias] ?? ALL[alias] ?? ALL[FALLBACK_FONT]
 }
 
 /** libass em px per ASS Fontsize for a caption font (preview font-size parity). */
