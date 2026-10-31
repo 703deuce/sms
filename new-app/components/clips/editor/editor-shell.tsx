@@ -39,6 +39,10 @@ import { TemplateLayoutPanel } from '@/components/clips/editor/template-layout-p
 import { t6TemplatesEnabled } from '@/lib/clips/t6-feature-flags'
 import { speedAtSource } from '@/lib/clips/editor/speed'
 import type { TimelineItem } from '@/lib/clips/editor/clip-timeline'
+import type { KeyframeTarget } from '@/lib/clips/editor/keyframes'
+import type { LaneId } from '@/lib/clips/editor/timeline-lane-state'
+import { PropertiesPanel } from '@/components/clips/editor/properties-panel'
+import { ItemSpeedControl } from '@/components/clips/editor/timeline/item-speed-control'
 import { PreviewStage, seekToOutputMs } from '@/components/clips/editor/preview-stage'
 import { sourceMsAtOutput, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { AudioPanel } from '@/components/clips/editor/audio-panel'
@@ -202,6 +206,11 @@ export function EditorShell({
   // E4: Text / Color panels follow the timeline selection; ✨ Producer pop-over.
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null)
   const [colorTarget, setColorTarget] = useState<ColorTarget>({ kind: 'video' })
+  // G1a: one selection shared by the canvas, the timeline and the Properties inspector.
+  const [canvasSel, setCanvasSel] = useState<{ target: KeyframeTarget; label: string } | null>(null)
+  const [cropMode, setCropMode] = useState(false)
+  const [timelineSelReq, setTimelineSelReq] = useState<{ lane: LaneId; id?: string; atMs?: number; seq: number } | null>(null)
+  const [selVideoSeg, setSelVideoSeg] = useState<{ srcInMs: number; srcOutMs: number } | null>(null)
   // E4fix: font pickers / dialogs are portaled to <body>; give them the clip font variables too.
   useEffect(
     () =>
@@ -823,7 +832,64 @@ export function EditorShell({
         setColorTarget({ kind: 'video' })
       }
       if (item?.lane === 'text' && item.id !== 'hook') setSelectedTextId(item.id)
+      // G1a: the timeline selection drives the canvas box + Properties too.
+      setSelVideoSeg(
+        item?.lane === 'video' && item.srcInMs != null && item.srcOutMs != null ? { srcInMs: item.srcInMs, srcOutMs: item.srcOutMs } : null,
+      )
+      const t: KeyframeTarget | null = !item
+        ? null
+        : item.lane === 'video'
+          ? 'video'
+          : item.lane === 'broll'
+            ? `broll:${item.id}`
+            : item.lane === 'text'
+              ? item.id === 'hook'
+                ? 'text'
+                : `text:${item.id}`
+              : item.lane === 'voice'
+                ? 'voice'
+                : item.lane === 'music'
+                  ? 'music'
+                  : null
+      setCanvasSel((prev) => {
+        if (prev?.target !== t) setCropMode(false)
+        return t ? { target: t, label: item?.label || t } : null
+      })
     },
+    [],
+  )
+  const onCanvasSelect = useCallback(
+    (target: KeyframeTarget | null) => {
+      setCanvasSel((prev) => {
+        if (prev?.target !== target) setCropMode(false)
+        if (!target) return null
+        const label =
+          target === 'video'
+            ? 'Video'
+            : target === 'text'
+              ? 'Hook'
+              : target.startsWith('broll:')
+                ? 'B-roll'
+                : (edits.textItems?.find((x) => `text:${x.id}` === target)?.text ?? 'Text').slice(0, 40)
+        return { target, label }
+      })
+      setTimelineSelReq((prev) => {
+        const seq = (prev?.seq ?? 0) + 1
+        if (!target) return { lane: 'video', id: '__none__', seq }
+        if (target === 'video') return { lane: 'video', atMs: outputMs, seq }
+        if (target === 'text') return { lane: 'text', id: 'hook', seq }
+        if (target.startsWith('broll:')) return { lane: 'broll', id: target.slice(6), seq }
+        return { lane: 'text', id: target.slice(5), seq }
+      })
+      if (target?.startsWith('text:')) setSelectedTextId(target.slice(5))
+      // Text panel open + a text item clicked: stay there (it follows the selection); else Properties.
+      if (target && !(panel === 'text' && target.startsWith('text:'))) setPanel('inspector')
+    },
+    [edits.textItems, outputMs, panel],
+  )
+  const onCanvasCommit = useCallback(
+    (next: ClipEditsV2, pushHistory: boolean) => setEdits(next, pushHistory),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
   useAudioMix({
@@ -1400,6 +1466,50 @@ export function EditorShell({
           </EditorPanelErrorBoundary>
         </div>
       ) : null}
+      {panelMounted('inspector') ? (
+        <div className={panel === 'inspector' ? undefined : 'hidden'} aria-hidden={panel !== 'inspector'} data-testid="editor-panel-inspector">
+          <EditorPanelErrorBoundary label="Properties">
+          <PropertiesPanel
+            edits={edits}
+            target={canvasSel?.target ?? null}
+            label={canvasSel?.label ?? ''}
+            outputMs={outputMs}
+            onCommit={(next) => setEdits(next)}
+            onSeekOutput={seekOutput}
+            cropMode={cropMode}
+            onCropModeChange={setCropMode}
+            readOnly={Boolean(
+              canvasSel &&
+                edits.timelineLanes?.[
+                  canvasSel.target === 'video'
+                    ? 'video'
+                    : canvasSel.target.startsWith('broll:')
+                      ? 'broll'
+                      : canvasSel.target === 'voice'
+                        ? 'voice'
+                        : canvasSel.target === 'music'
+                          ? 'music'
+                          : 'text'
+                ]?.locked,
+            )}
+            speedSlot={
+              selVideoSeg ? (
+                <ItemSpeedControl
+                  edits={edits}
+                  srcInMs={selVideoSeg.srcInMs}
+                  srcOutMs={selVideoSeg.srcOutMs}
+                  onCommit={(next) => setEdits(next)}
+                  readOnly={Boolean(edits.timelineLanes?.video?.locked)}
+                />
+              ) : null
+            }
+            colorSlot={
+              <ColorPanel edits={edits} target={colorTarget} onEdits={setEdits} onLive={(e) => setAuditionEdits(e ? applyTimelineLaneState(e) : null)} />
+            }
+          />
+          </EditorPanelErrorBoundary>
+        </div>
+      ) : null}
       {panelMounted('color') ? (
         <div className={panel === 'color' ? undefined : 'hidden'} aria-hidden={panel !== 'color'} data-testid="editor-panel-color">
           <EditorPanelErrorBoundary label="Color">
@@ -1581,6 +1691,14 @@ export function EditorShell({
               }
               aiMeta={aiMeta as Record<string, unknown> | null}
               selectedTextId={panel === 'text' ? selectedTextId : null}
+              canvas={{
+                baseEdits: edits,
+                selected: canvasSel?.target ?? null,
+                onSelect: onCanvasSelect,
+                onCommit: onCanvasCommit,
+                cropMode,
+                onCropModeChange: setCropMode,
+              }}
             />
             {studioPreviewLoading ? (
               <div
@@ -1660,6 +1778,7 @@ export function EditorShell({
             onDropMedia={onDropMedia}
             onSelectSourceSegment={onSelectSourceSegment}
             selectedSourceSegmentId={selectedSourceSegmentId}
+            selectRequest={timelineSelReq}
           />
           <PlayerControls
             playing={playing}

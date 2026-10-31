@@ -168,6 +168,7 @@ export function Timeline({
   onDropMedia,
   onSelectSourceSegment,
   selectedSourceSegmentId = null,
+  selectRequest = null,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -215,6 +216,8 @@ export function Timeline({
   /** E5: click on a source segment chip (Video lane) → Media panel segment editor. */
   onSelectSourceSegment?: (id: string) => void
   selectedSourceSegmentId?: string | null
+  /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
+  selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
 }) {
   const previewEdits = useMemo(() => editorPreviewEdits(edits, words), [edits, words])
   const tb = useMemo(() => timebaseFor(previewEdits), [previewEdits])
@@ -470,6 +473,12 @@ export function Timeline({
   const singleSelKey = singleSel ? `${refKey(singleSel)}:${singleSel.srcInMs ?? ''}:${singleSel.srcOutMs ?? ''}` : ''
   const onSelRef = useRef(onSelectionChange)
   onSelRef.current = onSelectionChange
+  useEffect(() => {
+    const r = selectRequest
+    if (!r) return
+    const it = r.id != null ? lanes[r.lane].find((i) => i.id === r.id) : lanes[r.lane].find((i) => r.atMs! >= i.startMs && r.atMs! < i.endMs)
+    setSelected(it ? [{ lane: r.lane, id: it.id }] : [])
+  }, [selectRequest?.seq]) // eslint-disable-line react-hooks/exhaustive-deps
   const singleSelRef = useRef(singleSel)
   singleSelRef.current = singleSel
   useEffect(() => {

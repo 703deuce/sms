@@ -10,7 +10,11 @@ from __future__ import annotations
 import math
 
 MOTION_FPS = 30
-KEY_PROPS = ("x", "y", "scale", "rotation", "opacity", "volume")
+KEY_PROPS = ("x", "y", "scale", "rotation", "opacity", "volume", "cropL", "cropT", "cropR", "cropB")
+CROP_PROPS = ("cropL", "cropT", "cropR", "cropB")
+CROP_MIN_VISIBLE = 5.0
+# G1a: layers overlapping by less than one 30 fps frame (B-roll 'between' adjacency) do not stack.
+STACK_OVERLAP_TOL_MS = 34
 PROP_SPECS = {
     "x": (-100.0, 100.0, 0.0),
     "y": (-100.0, 100.0, 0.0),
@@ -18,6 +22,11 @@ PROP_SPECS = {
     "rotation": (-360.0, 360.0, 0.0),
     "opacity": (0.0, 100.0, 100.0),
     "volume": (0.0, 100.0, 100.0),
+    # G1a crop edges (% of the layer, in the un-flipped media) — video + B-roll only.
+    "cropL": (0.0, 90.0, 0.0),
+    "cropT": (0.0, 90.0, 0.0),
+    "cropR": (0.0, 90.0, 0.0),
+    "cropB": (0.0, 90.0, 0.0),
 }
 EASES = ("linear", "in", "out", "inOut")
 TRANSITION_TYPES = (
@@ -94,8 +103,16 @@ def _valid_target(t) -> bool:
                                    or (t.startswith("text:") and len(t) > 5))
 
 
+def is_media_layer_target(target) -> bool:
+    return isinstance(target, str) and (target == "video" or (target.startswith("broll:") and len(target) > 6))
+
+
 def props_for_target(target: str) -> tuple[str, ...]:
-    return ("volume",) if target in ("voice", "music") else ("x", "y", "scale", "rotation", "opacity")
+    if target in ("voice", "music"):
+        return ("volume",)
+    if is_media_layer_target(target):
+        return ("x", "y", "scale", "rotation", "opacity") + CROP_PROPS
+    return ("x", "y", "scale", "rotation", "opacity")
 
 
 def normalize_keyframes(raw) -> list[dict]:
@@ -165,6 +182,108 @@ def has_motion(edits: dict, target: str) -> bool:
         if k["points"] or (k.get("value") is not None and k["value"] != PROP_SPECS[k["prop"]][2]):
             return True
     return False
+
+
+# ---------------------------------------------------------------------------
+# G1a: crop / flip / stacking order (mirror of new-app lib/clips/editor/layer-props.ts)
+# ---------------------------------------------------------------------------
+
+def normalize_layer_props(raw) -> list[dict]:
+    """Mirror of normalizeLayerProps(): one row per target, flips on media layers, z on B-roll / text."""
+    by_t: dict[str, dict] = {}
+    for r in raw if isinstance(raw, list) else []:
+        if not isinstance(r, dict) or not _valid_target(r.get("target")):
+            continue
+        t = r["target"]
+        media = is_media_layer_target(t)
+        zable = (t.startswith("broll:") and len(t) > 6) or (t.startswith("text:") and len(t) > 5)
+        row: dict = {"target": t}
+        if media and r.get("flipH") is True:
+            row["flipH"] = True
+        if media and r.get("flipV") is True:
+            row["flipV"] = True
+        z = _finite(r.get("z"))
+        if zable and z is not None and _js_round(z) != 0:
+            row["z"] = _js_round(min(1000.0, max(-1000.0, z)))
+        if len(row) > 1:
+            by_t[t] = row
+    return [by_t[k] for k in sorted(by_t)]
+
+
+def _js_round(x: float) -> int:
+    return int(math.floor(x + 0.5))
+
+
+def layer_prop(edits: dict, target: str) -> dict:
+    for r in normalize_layer_props(edits.get("layerProps")):
+        if r["target"] == target:
+            return r
+    return {}
+
+
+def layer_flip(edits: dict, target: str) -> tuple[bool, bool]:
+    if not is_media_layer_target(target):
+        return False, False
+    r = layer_prop(edits, target)
+    return bool(r.get("flipH")), bool(r.get("flipV"))
+
+
+def layer_z(edits: dict, target: str) -> int:
+    return int(layer_prop(edits, target).get("z") or 0)
+
+
+def clamp_crop_axis(a: float, b: float) -> tuple[float, float]:
+    mx = 100.0 - CROP_MIN_VISIBLE
+    aa = min(mx, max(0.0, a))
+    bb = min(mx - aa, max(0.0, b))
+    return aa, bb
+
+
+def layer_crop_at(edits: dict, target: str, local_ms: float) -> dict:
+    """Effective crop {l,t,r,b} (%) — same clamp as layerCropAt()."""
+    if not is_media_layer_target(target):
+        return {"l": 0.0, "t": 0.0, "r": 0.0, "b": 0.0}
+    v = {p: track_value_at(find_track(edits, target, p), p, local_ms) for p in CROP_PROPS}
+    l, r = clamp_crop_axis(v["cropL"], v["cropR"])
+    t, b = clamp_crop_axis(v["cropT"], v["cropB"])
+    return {"l": l, "t": t, "r": r, "b": b}
+
+
+def has_crop(edits: dict, target: str) -> bool:
+    for p in CROP_PROPS:
+        tr = find_track(edits, target, p)
+        if tr and (tr["points"] or (tr.get("value") or 0) != 0):
+            return True
+    return False
+
+
+def has_layer_fx(edits: dict, target: str) -> bool:
+    """Keyframes / static transform / crop, or a flip: the layer needs the motion chain."""
+    return has_motion(edits, target) or any(layer_flip(edits, target))
+
+
+def stack_order(items: list[dict], z_of) -> list[dict]:
+    """Mirror of stackOrder(): bottom → top. Time-overlap clusters keep time order; inside a cluster
+    (z, startMs, original index)."""
+    idx = sorted(enumerate(items), key=lambda p: (p[1]["startMs"], p[0]))
+    out: list[dict] = []
+    cluster: list[tuple[int, dict]] = []
+    cluster_end = -math.inf
+
+    def flush():
+        for _i, it in sorted(cluster, key=lambda p: (z_of(p[1]["id"]), p[1]["startMs"], p[0])):
+            out.append(it)
+
+    for i, it in idx:
+        if cluster and it["startMs"] >= cluster_end - STACK_OVERLAP_TOL_MS:
+            flush()
+            cluster = []
+            cluster_end = -math.inf
+        cluster.append((i, it))
+        cluster_end = max(cluster_end, it["endMs"])
+    if cluster:
+        flush()
+    return out
 
 
 def _num(x: float) -> str:
@@ -401,11 +520,40 @@ def layer_motion_chain(edits: dict, target: str, *, w: int, h: int, origin_s: fl
     Frame-sized layer [label_in] (w x h) transformed exactly like transformCss() and composited onto
     [bg_label]: centre + (x%·W, y%·H) + R(rot, clockwise)·S(scale)·(p − centre), alpha·opacity.
     Opacity is driven per frame by sendcmd (colorchannelmixer has no time expressions in 5.1).
-    Returns (filter chain, sendcmd lines).
+    G1a: crop (media space) → flip → rotate → scale → overlay, the same order as the preview CSS
+    (clip-path is element-local; the flip is the last transform function, so it applies first).
+    Returns (filter chain, sendcmd tags) — write the cmd file with layer_sendcmd(edits, target, tags, …).
     """
     tr = {p: find_track(edits, target, p) for p in ("x", "y", "scale", "rotation", "opacity")}
     ex = {p: track_expr(tr[p], p, var=var, origin_s=origin_s) for p in tr}
-    chain = [f"[{label_in}]format=rgba"]
+    crop_on = has_crop(edits, target)
+    crop_anim = crop_on and any((find_track(edits, target, p) or {}).get("points") for p in CROP_PROPS)
+    crop_tag = f"crop_{label_out}"
+    cmds: list[str] = []
+    blocks: list[str] = []
+    cur = label_in
+
+    if crop_on and crop_anim:
+        if cmd_file:
+            cmds.append(crop_tag)
+        blocks.append(f"[{cur}]format=rgba,split=2[{cur}_a][{crop_tag}_mb]")
+        mask_parts = [f"[{crop_tag}_mb]format=gray,geq=lum='255'"]
+        mask_parts.extend(crop_mask_drawboxes(edits, target, crop_tag, w=w, h=h))
+        blocks.append(",".join(mask_parts) + f"[{crop_tag}_m]")
+        blocks.append(f"[{cur}_a][{crop_tag}_m]alphamerge[{cur}_c]")
+        cur = f"{cur}_c"
+    elif crop_on:
+        blocks.append(f"[{cur}]format=rgba,{crop_pad_filters(edits, target, w=w, h=h, origin_s=origin_s, var=var, animated=False)}[{cur}_c]")
+        cur = f"{cur}_c"
+
+    chain: list[str] = []
+    if not crop_on:
+        chain.append("format=rgba")
+    fh, fv = layer_flip(edits, target)
+    if fh:
+        chain.append("hflip")
+    if fv:
+        chain.append("vflip")
     if ex["rotation"] != "0":
         chain.append(
             f"rotate=a='({ex['rotation']})*PI/180':ow='ceil(hypot(iw,ih)/2)*2':oh=ow:c=black@0"
@@ -414,16 +562,23 @@ def layer_motion_chain(edits: dict, target: str, *, w: int, h: int, origin_s: fl
         chain.append(
             f"scale=w='max(2,trunc(iw*({ex['scale']})/200)*2)':h='max(2,trunc(ih*({ex['scale']})/200)*2)':eval=frame"
         )
-    cmds: list[str] = []
+    opacity_anim = bool(tr["opacity"] and tr["opacity"].get("points"))
     if ex["opacity"] != "100":
         tag = f"ccm_{label_out}"
-        if cmd_file:
-            chain.append(f"sendcmd=f='{cmd_file}'")
+        if cmd_file and opacity_anim:
+            cmds.append(tag)
         chain.append(f"colorchannelmixer@{tag}=aa={_opacity_at(tr['opacity'], 0, origin_s):.4f}")
-        cmds = [tag]
+    need_sendcmd = bool(cmd_file and cmds)
+    if need_sendcmd:
+        chain.insert(0, f"sendcmd=f='{cmd_file}'")
     x = f"(W-w)/2+({ex['x']})*W/100" if ex["x"] != "0" else "(W-w)/2"
     y = f"(H-h)/2+({ex['y']})*H/100" if ex["y"] != "0" else "(H-h)/2"
-    graph = ",".join(chain) + f"[{label_out}_l];[{bg_label}][{label_out}_l]overlay=x='{x}':y='{y}':eval=frame:format=auto[{label_out}]"
+    tail = ",".join(chain) + f"[{label_out}_l]"
+    motion = f"[{cur}]" + tail if chain else f"[{cur}]copy[{label_out}_l]"
+    if blocks:
+        graph = ";".join(blocks) + ";" + motion + f";[{bg_label}][{label_out}_l]overlay=x='{x}':y='{y}':eval=frame:format=auto[{label_out}]"
+    else:
+        graph = motion + f";[{bg_label}][{label_out}_l]overlay=x='{x}':y='{y}':eval=frame:format=auto[{label_out}]"
     return graph, cmds
 
 
@@ -448,6 +603,70 @@ def opacity_sendcmd(edits: dict, target: str, tag: str, *, start_s: float, end_s
         # Slightly before the frame's pts so the command is processed for that frame.
         lines.append(f"{max(0.0, t - 0.0005):.4f} colorchannelmixer@{tag} aa {v};")
     return "\n".join(lines) + "\n"
+
+
+def crop_px(c: dict, w: int, h: int) -> dict:
+    """Crop % → whole pixels of a w x h layer (each edge rounded half up, like the JS port)."""
+    return {"l": _js_round(c["l"] * w / 100), "r": _js_round(c["r"] * w / 100),
+            "t": _js_round(c["t"] * h / 100), "b": _js_round(c["b"] * h / 100)}
+
+
+def _crop_pct_expr(edits: dict, target: str, prop: str, *, origin_s: float, var: str) -> str:
+    tr = find_track(edits, target, prop)
+    if tr and tr.get("points"):
+        return track_expr(tr, prop, var=var, origin_s=origin_s)
+    v = track_value_at(tr, prop, 0.0)
+    return _num(v)
+
+
+def crop_pad_filters(edits: dict, target: str, *, w: int, h: int, origin_s: float, var: str = "t",
+                     animated: bool) -> str:
+    """Static crop only: crop visible rect, pad back to w×h with transparent margins."""
+    px = crop_px(layer_crop_at(edits, target, 0.0), w, h)
+    cw = max(1, w - px["l"] - px["r"])
+    ch = max(1, h - px["t"] - px["b"])
+    return f"crop={cw}:{ch}:{px['l']}:{px['t']},pad={w}:{h}:{px['l']}:{px['t']}:color=black@0"
+
+
+def crop_mask_drawboxes(edits: dict, target: str, tag: str, *, w: int, h: int) -> list[str]:
+    """Initial drawbox@ tags on a full-white gray mask (black = transparent after alphamerge)."""
+    px = crop_px(layer_crop_at(edits, target, 0.0), w, h)
+    out = []
+    for edge, (xx, yy) in (("l", (px["l"] - w, 0)), ("r", (w - px["r"], 0)), ("t", (0, px["t"] - h)), ("b", (0, h - px["b"]))):
+        out.append(f"drawbox@{tag}_{edge}=x={xx}:y={yy}:w={w}:h={h}:color=black:t=fill")
+    return out
+
+
+def layer_sendcmd(edits: dict, target: str, tags: list[str], *, w: int, h: int, start_s: float, end_s: float,
+                  origin_s: float, fps: int = MOTION_FPS) -> str:
+    """One sendcmd file for animated opacity (ccm) and/or crop mask drawbox x/y positions."""
+    by_t: dict[str, list[str]] = {}
+    order: list[str] = []
+    f0 = int(math.floor(start_s * fps))
+    f1 = int(math.ceil(end_s * fps))
+    for tag in tags:
+        prev = None
+        for f in range(f0, f1 + 1):
+            t = f / fps
+            if tag.startswith("ccm_"):
+                v = round(_opacity_at(find_track(edits, target, "opacity"), t, origin_s), 4)
+                cur = ("ccm", v)
+                parts = [f"colorchannelmixer@{tag} aa {v}"]
+            else:
+                px = crop_px(layer_crop_at(edits, target, (t - origin_s) * 1000), w, h)
+                cur = ("crop", px["l"], px["r"], px["t"], px["b"])
+                parts = [f"drawbox@{tag}_l x {px['l'] - w}", f"drawbox@{tag}_r x {w - px['r']}",
+                         f"drawbox@{tag}_t y {px['t'] - h}", f"drawbox@{tag}_b y {h - px['b']}"]
+            if cur == prev:
+                continue
+            prev = cur
+            key = f"{max(0.0, t - 0.0005):.4f}"
+            if key not in by_t:
+                by_t[key] = []
+                order.append(key)
+            by_t[key].extend(parts)
+    order.sort(key=float)
+    return "".join(f"{k} {', '.join(by_t[k])};\n" for k in order)
 
 
 def volume_expr(edits: dict, target: str, *, origin_s: float = 0.0) -> str | None:

@@ -42,6 +42,9 @@ import { brollTransitionWindows, brollVisibleRange } from '@/lib/clips/editor/tr
 import { applyMotionFrame } from '@/components/clips/editor/motion-preview'
 import { HookOverlayPreview } from '@/components/clips/editor/hook-overlay-preview'
 import { TextItemsPreview } from '@/components/clips/editor/text-items-preview'
+import { CanvasSelectionOverlay, type CanvasLayerDom } from '@/components/clips/editor/canvas-selection-overlay'
+import { orderedStack } from '@/lib/clips/editor/layer-props'
+import type { KeyframeTarget } from '@/lib/clips/editor/keyframes'
 import { ColorLookDefs, lookFilterCss, usedSpecs } from '@/components/clips/editor/color-look-defs'
 import { videoSpecAtSource } from '@/lib/clips/editor/color'
 import { speedAtSource } from '@/lib/clips/editor/speed'
@@ -118,6 +121,7 @@ export function PreviewStage({
   aiMeta = null,
   selectedTextId = null,
   sourceUrls = null,
+  canvas = null,
 }: {
   videoUrl: string | null
   posterUrl?: string | null
@@ -144,6 +148,16 @@ export function PreviewStage({
   selectedTextId?: string | null
   /** E5: signed URLs of other sources (refId → url) from the project media library. */
   sourceUrls?: Record<string, string> | null
+  /** G1a: on-canvas selection / move / scale / rotate / crop / text edit (null = view only). */
+  canvas?: {
+    /** saved edits (commits are computed from these, not from the lane-state `edits`) */
+    baseEdits: ClipEditsV2
+    selected: KeyframeTarget | null
+    onSelect: (target: KeyframeTarget | null) => void
+    onCommit: (next: ClipEditsV2, pushHistory: boolean) => void
+    cropMode: boolean
+    onCropModeChange: (on: boolean) => void
+  } | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -248,6 +262,9 @@ export function PreviewStage({
   const captionTimeRef = useRef(0)
   // EP2: output-time clock for the libass-wasm layers, fed by the rAF tick below.
   const libassOutMsRef = useRef(0)
+  // G1a: output ms of the frame on screen (canvas gestures key at the playhead).
+  const outMsRef = useRef(0)
+  const [stageBoxEl, setStageBoxEl] = useState<HTMLDivElement | null>(null)
   const libassSubsRef = useRef(new Set<(ms: number) => void>())
   const libassClock = useMemo<LibassClock>(
     () => ({
@@ -472,6 +489,7 @@ export function PreviewStage({
         setCaptionTimeSec(outSec)
       }
       const outMs = out
+      outMsRef.current = out
       // E4: per-item speed — every element plays at global × segment speed (pitch preserved), so
       // the edit-time clock (captions, overlays, B-roll, music) advances exactly like the export warp.
       const rate = (normalizeEditSpeed(e.speed) ?? 1) * speedAtSource(e.segmentSpeeds, src)
@@ -789,6 +807,26 @@ export function PreviewStage({
     return { inset: 0 }
   }, [templatePreview, fitTopPreview, fitTopLayout, box.h, headlineBandTopFrac])
 
+  // G1a: canvas layers bottom → top (same order as the DOM / the export composite).
+  const getOutMs = useCallback(() => outMsRef.current, [])
+  const getCanvasLayers = useCallback((): CanvasLayerDom[] => {
+    const e = editsRef.current
+    const out: CanvasLayerDom[] = [{ target: 'video', el: mainKfRef.current, frame: stageBoxEl }]
+    for (const b of orderedStack(e, 'broll', e.broll ?? [])) {
+      const el = brollBoxRefs.current[b.id] ?? null
+      out.push({ target: `broll:${b.id}`, el, frame: el?.parentElement ?? null })
+    }
+    // Hook (z-22) sits under the text items (z-23).
+    if (hookRef.current) {
+      out.push({ target: 'text', el: hookRef.current, frame: stageBoxEl, content: hookRef.current.firstElementChild as HTMLElement | null })
+    }
+    for (const t of orderedStack(e, 'text', e.textItems ?? [])) {
+      const el = textRefs.current[t.id] ?? null
+      out.push({ target: `text:${t.id}`, el, frame: stageBoxEl, content: el?.querySelector<HTMLElement>('[data-testid="preview-text-block"]') ?? null })
+    }
+    return out
+  }, [stageBoxEl])
+
   return (
     <div ref={wrapRef} className="absolute inset-0 flex flex-col items-center justify-center">
       {compositePreview ? (
@@ -799,6 +837,7 @@ export function PreviewStage({
       <LibassSinkContext.Provider value={libassWanted ? libassSink : null}>
       <div
         style={{ width: box.w || undefined, height: box.h || undefined }}
+        ref={setStageBoxEl}
         className={`relative overflow-hidden rounded-xl bg-black ${libassClass}`}
         data-preview-renderer={libassClass ? 'libass' : 'dom'}
       >
@@ -1158,8 +1197,8 @@ export function PreviewStage({
         </div>
         </div>
         {!compositePreview &&
-          [...(edits.broll || [])]
-            .sort((a, b) => a.startMs - b.startMs)
+          // G1a: DOM order = stacking order (time order; bring forward / back among overlapping items).
+          orderedStack(edits, 'broll', edits.broll || [])
             .map((item) => {
               const media = brollMedia.find((m) => m.id === item.id)
               if (!media?.url) return null
@@ -1304,6 +1343,21 @@ export function PreviewStage({
               onStatus={onLibassStatus}
             />
           </Suspense>
+        ) : null}
+        {canvas && !compositePreview && box.w > 0 ? (
+          <CanvasSelectionOverlay
+            edits={edits}
+            baseEdits={canvas.baseEdits}
+            box={stageBoxEl}
+            getOutMs={getOutMs}
+            getLayers={getCanvasLayers}
+            selected={canvas.selected}
+            onSelect={canvas.onSelect}
+            onCommit={canvas.onCommit}
+            cropMode={canvas.cropMode}
+            onCropModeChange={canvas.onCropModeChange}
+            readOnly={Boolean(audition)}
+          />
         ) : null}
         {libassFailed ? (
           <p

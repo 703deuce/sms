@@ -14,9 +14,9 @@ from clips_worker.motion import (
     XFADE_NAME,
     ZOOM_AMOUNT,
     cut_transition_windows,
-    has_motion,
+    has_layer_fx,
     layer_motion_chain,
-    opacity_sendcmd,
+    layer_sendcmd,
     volume_expr,
 )
 
@@ -114,8 +114,8 @@ def apply_cut_transitions(cut_mp4: Path, full_render: Path, out: Path, segs_ms: 
 
 
 def apply_main_keyframes(video: Path, out: Path, edits: dict, work_dir: Path) -> bool:
-    """Video-lane keyframes: transform the main video layer over black (CapCut canvas)."""
-    if not has_motion(edits, "video"):
+    """Video-lane keyframes / crop / flip: transform the main video layer over black (CapCut canvas)."""
+    if not has_layer_fx(edits, "video"):
         return False
     w, h, dur = probe_size_duration(video)
     cmd_file = Path(work_dir) / "main_kf.cmd"
@@ -124,7 +124,7 @@ def apply_main_keyframes(video: Path, out: Path, edits: dict, work_dir: Path) ->
         bg_label="bg", cmd_file=str(cmd_file),
     )
     if tags:
-        cmd_file.write_text(opacity_sendcmd(edits, "video", tags[0], start_s=0, end_s=dur + 1, origin_s=0.0))
+        cmd_file.write_text(layer_sendcmd(edits, "video", tags, w=w, h=h, start_s=0, end_s=dur + 1, origin_s=0.0))
     fc = (
         "[0:v]setsar=1,format=rgba,split=2[src][bgs];"
         "[bgs]drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill[bg];"

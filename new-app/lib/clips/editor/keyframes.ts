@@ -360,8 +360,46 @@ export function reconcileItemMotion(prev: ClipEditsV2, next: ClipEditsV2): ClipE
     if (kids.length) changed = true
     for (const t of kids) out.push(shiftTrack(t, parent.startMs - child.startMs, `text:${child.id}`))
   }
+  if (!changed) return reconcileLayerProps(prev, next)
+  return reconcileLayerProps(prev, { ...next, broll, keyframes: out.length ? out : undefined })
+}
+
+/**
+ * G1a: flip / z rows follow their layer — split children (`<id>~…`) inherit the parent's row,
+ * rows of deleted B-roll / text items are dropped. Untouched edits are returned as-is.
+ */
+export function reconcileLayerProps(prev: ClipEditsV2, next: ClipEditsV2): ClipEditsV2 {
+  const rows = next.layerProps
+  if (!rows?.length) return next
+  const live = new Set<string>([
+    'video',
+    ...(next.broll ?? []).map((b) => `broll:${b.id}`),
+    ...(next.textItems ?? []).map((t) => `text:${t.id}`),
+  ])
+  const had = new Set(rows.map((r) => r.target))
+  let changed = false
+  const out = rows.filter((r) => {
+    const keep = live.has(r.target)
+    if (!keep) changed = true
+    return keep
+  })
+  const inherit = (kind: 'broll' | 'text', prevItems: { id: string; startMs: number; endMs: number }[], nextItems: { id: string; startMs: number }[]) => {
+    const prevIds = new Set(prevItems.map((x) => x.id))
+    for (const child of nextItems) {
+      const tgt = `${kind}:${child.id}`
+      if (prevIds.has(child.id) || !child.id.includes('~') || had.has(tgt)) continue
+      const origin = child.id.split('~')[0]!
+      const parent = prevItems.find((x) => x.id.split('~')[0] === origin && x.startMs < child.startMs && child.startMs < x.endMs)
+      const row = parent && rows.find((r) => r.target === `${kind}:${parent.id}`)
+      if (!row) continue
+      out.push({ ...row, target: tgt as KeyframeTarget })
+      changed = true
+    }
+  }
+  inherit('broll', prev.broll ?? [], next.broll ?? [])
+  inherit('text', prev.textItems ?? [], next.textItems ?? [])
   if (!changed) return next
-  return { ...next, broll, keyframes: out.length ? out : undefined }
+  return { ...next, layerProps: out.length ? out : undefined }
 }
 
 /** E2 ripple hook: output-time (video / voice) keyframes follow their source content. */

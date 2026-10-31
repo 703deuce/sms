@@ -5,6 +5,7 @@ import { captionFontStack } from '@/lib/clips/caption-fonts'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { textDisplay } from '@/lib/clips/editor/text-items'
 import { textItemCss } from '@/lib/clips/editor/text-frame'
+import { orderedStack } from '@/lib/clips/editor/layer-props'
 
 /**
  * E4 Text-lane items over the preview (export: worker text_items.py ASS, burned with the hook).
@@ -22,7 +23,8 @@ export function TextItemsPreview({
   elRef: (id: string, el: HTMLDivElement | null) => void
   selectedId?: string | null
 }) {
-  const items = edits.textItems ?? []
+  // G1a: DOM order = stacking order (export: text_items.py events / layers in the same order).
+  const items = orderedStack(edits, 'text', edits.textItems ?? [])
   if (!items.length || boxH <= 0) return null
   return (
     <>

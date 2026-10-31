@@ -23,6 +23,14 @@ import {
   type CutWindow,
   type LayerCss,
 } from '@/lib/clips/editor/transitions'
+import {
+  cropClipPath,
+  flipCss,
+  intersectClipPaths,
+  layerCropAt,
+  layerFlip,
+  mirrorClipPath,
+} from '@/lib/clips/editor/layer-props'
 
 export const HOOK_FADE_IN_MS = 180
 export const HOOK_FADE_OUT_MS = 220
@@ -67,7 +75,14 @@ export function mainFrame(
   preRollMs = 1500,
 ): MainFrame {
   const t = tracksFor(edits, 'video').length ? layerTransformAt(edits, 'video', outMs) : IDENTITY_TRANSFORM
-  const kf: FrameStyle = { ...NONE, transform: keyframeTransform(t), opacity: t.opacity / 100 }
+  // G1a: crop (element-local clip) + flip (last transform function → applied first), as the export.
+  const flip = layerFlip(edits, 'video')
+  const kf: FrameStyle = {
+    ...NONE,
+    transform: join(keyframeTransform(t), flipCss(flip)),
+    opacity: t.opacity / 100,
+    clipPath: cropClipPath(layerCropAt(edits, 'video', outMs)),
+  }
   const wins = cutTransitionWindows(tb.segs, tb.starts, edits.transitions)
   let cut: MainFrame['cut'] = null
   let upcoming: MainFrame['upcoming'] = null
@@ -116,8 +131,14 @@ export function brollFrame(edits: ClipEditsV2, outMs: number, boxW: number): Bro
     const [s, e] = brollVisibleRange(it, wins)
     out.items[it.id] = { box: null, dip: { opacity: 0, background: 'transparent' } }
     if (!(outMs >= s && outMs < e)) continue
-    const kfT = layerTransformAt(edits, `broll:${it.id}`, outMs - it.startMs)
-    out.items[it.id]!.box = { ...NONE, transform: keyframeTransform(kfT), opacity: kfT.opacity / 100 }
+    const target = `broll:${it.id}` as const
+    const kfT = layerTransformAt(edits, target, outMs - it.startMs)
+    out.items[it.id]!.box = {
+      ...NONE,
+      transform: join(keyframeTransform(kfT), flipCss(layerFlip(edits, target))),
+      opacity: kfT.opacity / 100,
+      clipPath: cropClipPath(layerCropAt(edits, target, outMs - it.startMs)),
+    }
   }
   for (const w of active.values()) {
     const item = items.find((i) => i.id === w.itemId) as BrollItem
@@ -132,7 +153,8 @@ export function brollFrame(edits: ClipEditsV2, outMs: number, boxW: number): Bro
       slot.box = {
         transform: join(top.transform, slot.box.transform),
         opacity: slot.box.opacity * top.opacity,
-        clipPath: top.clipPath,
+        // Transition clips are screen-space: un-mirror them on a flipped item, then add the crop.
+        clipPath: intersectClipPaths(slot.box.clipPath, mirrorClipPath(top.clipPath, layerFlip(edits, `broll:${item.id}`))),
         filter: top.filter,
         visibility: top.visibility,
       }
@@ -148,7 +170,15 @@ export function brollFrame(edits: ClipEditsV2, outMs: number, boxW: number): Bro
       visibility: 'visible',
     }
     if (prevSlot?.box) {
-      prevSlot.box = { ...bottomStyle, transform: join(bottom.transform, prevSlot.box.transform), opacity: prevSlot.box.opacity }
+      prevSlot.box = {
+        ...bottomStyle,
+        transform: join(bottom.transform, prevSlot.box.transform),
+        opacity: prevSlot.box.opacity,
+        clipPath: intersectClipPaths(
+          prevSlot.box.clipPath,
+          mirrorClipPath(bottom.clipPath, layerFlip(edits, `broll:${w.fromId}`)),
+        ),
+      }
     } else if (!prevSlot) {
       out.under = bottomStyle
     }

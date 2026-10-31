@@ -86,11 +86,17 @@ def build_broll_filtergraph(
     if not broll_specs:
         return "", [], "0:v"
 
-    from clips_worker.motion import broll_transition_windows, broll_visible_end_ms, has_motion
+    from clips_worker.motion import broll_transition_windows, broll_visible_end_ms, has_layer_fx, layer_z, stack_order
 
     if edits is not None:
         # Time order = overlay order, so a 'between' window's outgoing item is already composited.
         broll_specs = sorted(broll_specs, key=lambda sp: float(sp["start_s"]))
+        # G1a: bring forward / send back re-orders only items that overlap in time (stack_order keeps
+        # adjacent items — and so every 'between' window — in time order).
+        if (edits.get("layerProps") or []):
+            keyed = [{"id": str(sp.get("id") or f"_{i}"), "startMs": round(float(sp["start_s"]) * 1000),
+                      "endMs": round(float(sp["end_s"]) * 1000), "_sp": sp} for i, sp in enumerate(broll_specs)]
+            broll_specs = [k["_sp"] for k in stack_order(keyed, lambda bid: layer_z(edits, f"broll:{bid}"))]
     items = [
         {"id": str(sp.get("id") or f"_{i}"), "startMs": round(float(sp["start_s"]) * 1000),
          "endMs": round(float(sp["end_s"]) * 1000),
@@ -109,7 +115,7 @@ def build_broll_filtergraph(
         end = float(spec["end_s"])
         item = items[i]
         target = f"broll:{item['id']}"
-        moving = edits is not None and spec.get("id") is not None and has_motion(edits, target)
+        moving = edits is not None and spec.get("id") is not None and has_layer_fx(edits, target)
         my_windows = [w for w in windows if w["itemId"] == item["id"]]
         vis_end = broll_visible_end_ms(item, windows) / 1000.0
         if vis_end > end:
@@ -163,7 +169,7 @@ def _broll_layer(parts, edits, target, b_label, cur_label, out, start, end, widt
     if not moving:
         parts.append(f"[{cur_label}][{b_label}]overlay=0:0:{enable}[{out}]")
         return out
-    from clips_worker.motion import layer_motion_chain, opacity_sendcmd
+    from clips_worker.motion import layer_motion_chain, layer_sendcmd
 
     cmd_file = (Path(cmd_dir) if cmd_dir else Path(".")) / f"{out}.cmd"
     graph, tags = layer_motion_chain(edits, target, w=width, h=height, origin_s=start, label_in=b_label,
@@ -171,8 +177,8 @@ def _broll_layer(parts, edits, target, b_label, cur_label, out, start, end, widt
     graph = graph.replace(":eval=frame:format=auto[", f":eval=frame:format=auto:{enable}[")
     parts.append(graph + f";[{out}_k]format=yuv420p[{out}]")
     if tags:
-        cmd_files.append((cmd_file, opacity_sendcmd(edits, target, tags[0], start_s=max(0.0, start),
-                                                    end_s=end, origin_s=start)))
+        cmd_files.append((cmd_file, layer_sendcmd(edits, target, tags, w=width, h=height, start_s=max(0.0, start),
+                                                  end_s=end, origin_s=start)))
     return out
 
 

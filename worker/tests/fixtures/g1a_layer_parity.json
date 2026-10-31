@@ -1,0 +1,304 @@
+{
+ "_doc": "G1a crop / layerProps / stack order parity \u2014 asserted by worker/tests/test_g1a_layer_fx.py and new-app/tests/g1a-layer-props.test.ts.",
+ "crop": [
+  {
+   "name": "static",
+   "edits": {
+    "keyframes": [
+     {
+      "target": "video",
+      "prop": "cropL",
+      "value": 12.5,
+      "points": []
+     }
+    ]
+   },
+   "target": "video",
+   "tMs": 0,
+   "expect": {
+    "l": 12.5,
+    "t": 0.0,
+    "r": 0.0,
+    "b": 0.0
+   }
+  },
+  {
+   "name": "clamp L+R",
+   "edits": {
+    "keyframes": [
+     {
+      "target": "video",
+      "prop": "cropL",
+      "value": 60,
+      "points": []
+     },
+     {
+      "target": "video",
+      "prop": "cropR",
+      "value": 60,
+      "points": []
+     }
+    ]
+   },
+   "target": "video",
+   "tMs": 0,
+   "expect": {
+    "l": 60.0,
+    "t": 0.0,
+    "r": 35.0,
+    "b": 0.0
+   }
+  },
+  {
+   "name": "keyed eased",
+   "edits": {
+    "keyframes": [
+     {
+      "target": "broll:a",
+      "prop": "cropT",
+      "points": [
+       {
+        "tMs": 0,
+        "v": 0,
+        "ease": "inOut"
+       },
+       {
+        "tMs": 1000,
+        "v": 40
+       }
+      ]
+     }
+    ]
+   },
+   "target": "broll:a",
+   "tMs": 250,
+   "expect": {
+    "l": 0.0,
+    "t": 6.25,
+    "r": 0.0,
+    "b": 0.0
+   }
+  },
+  {
+   "name": "text has no crop",
+   "edits": {
+    "keyframes": [
+     {
+      "target": "text:x",
+      "prop": "cropT",
+      "value": 30,
+      "points": []
+     }
+    ]
+   },
+   "target": "text:x",
+   "tMs": 0,
+   "expect": {
+    "l": 0.0,
+    "t": 0.0,
+    "r": 0.0,
+    "b": 0.0
+   }
+  },
+  {
+   "name": "max clamp 90",
+   "edits": {
+    "keyframes": [
+     {
+      "target": "video",
+      "prop": "cropB",
+      "value": 150,
+      "points": []
+     }
+    ]
+   },
+   "target": "video",
+   "tMs": 0,
+   "expect": {
+    "l": 0.0,
+    "t": 0.0,
+    "r": 0.0,
+    "b": 90.0
+   }
+  }
+ ],
+ "layerProps": [
+  {
+   "name": "basic",
+   "raw": [
+    {
+     "target": "video",
+     "flipH": true
+    },
+    {
+     "target": "broll:a",
+     "flipV": true,
+     "z": 2.4
+    },
+    {
+     "target": "text:t",
+     "z": -1,
+     "flipH": true
+    }
+   ],
+   "expect": [
+    {
+     "target": "broll:a",
+     "flipV": true,
+     "z": 2
+    },
+    {
+     "target": "text:t",
+     "z": -1
+    },
+    {
+     "target": "video",
+     "flipH": true
+    }
+   ]
+  },
+  {
+   "name": "drops junk",
+   "raw": [
+    {
+     "target": "voice",
+     "flipH": true
+    },
+    {
+     "target": "text:t",
+     "z": 0.2
+    },
+    {
+     "target": "video",
+     "z": 3
+    },
+    "x",
+    null,
+    {
+     "target": "nope:"
+    }
+   ],
+   "expect": []
+  },
+  {
+   "name": "last row wins + clamp",
+   "raw": [
+    {
+     "target": "broll:a",
+     "z": 1
+    },
+    {
+     "target": "broll:a",
+     "z": 5000
+    }
+   ],
+   "expect": [
+    {
+     "target": "broll:a",
+     "z": 1000
+    }
+   ]
+  }
+ ],
+ "stack": [
+  {
+   "name": "time order default",
+   "items": [
+    {
+     "id": "b",
+     "startMs": 500,
+     "endMs": 900
+    },
+    {
+     "id": "a",
+     "startMs": 0,
+     "endMs": 1000
+    }
+   ],
+   "z": {},
+   "expect": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "name": "z inside cluster",
+   "items": [
+    {
+     "id": "a",
+     "startMs": 0,
+     "endMs": 1000
+    },
+    {
+     "id": "b",
+     "startMs": 500,
+     "endMs": 1500
+    }
+   ],
+   "z": {
+    "a": 1
+   },
+   "expect": [
+    "b",
+    "a"
+   ]
+  },
+  {
+   "name": "adjacent keeps time",
+   "items": [
+    {
+     "id": "a",
+     "startMs": 0,
+     "endMs": 1000
+    },
+    {
+     "id": "b",
+     "startMs": 980,
+     "endMs": 2000
+    }
+   ],
+   "z": {
+    "a": 5
+   },
+   "expect": [
+    "a",
+    "b"
+   ]
+  },
+  {
+   "name": "clusters",
+   "items": [
+    {
+     "id": "a",
+     "startMs": 0,
+     "endMs": 1000
+    },
+    {
+     "id": "b",
+     "startMs": 100,
+     "endMs": 500
+    },
+    {
+     "id": "c",
+     "startMs": 2000,
+     "endMs": 3000
+    },
+    {
+     "id": "d",
+     "startMs": 2100,
+     "endMs": 2500
+    }
+   ],
+   "z": {
+    "b": -1,
+    "c": 2
+   },
+   "expect": [
+    "b",
+    "a",
+    "d",
+    "c"
+   ]
+  }
+ ]
+}
