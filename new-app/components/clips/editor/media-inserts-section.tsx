@@ -59,7 +59,7 @@ export function InsertsSection({
         return (
           <div key={w.id} className="space-y-1 rounded border p-1.5 text-[11px]" data-testid="media-insert-row">
             <div className="flex items-center gap-1">
-              <span className="min-w-0 flex-1 truncate font-medium" title={src?.label}>{src?.label ?? 'Clip'}</span>
+              <span className="min-w-0 flex-1 truncate font-medium" title={src?.label}>{w.freeze ? 'Freeze frame' : src?.label ?? 'Clip'}</span>
               <span className="tabular-nums text-muted-foreground">
                 {ins.append ? 'end' : `at ${formatMediaDuration(w.startMs)}`} · {(w.durMs / 1000).toFixed(1)} s
               </span>

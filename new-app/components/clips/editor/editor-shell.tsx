@@ -93,10 +93,12 @@ import { EditorPanelErrorBoundary } from '@/components/clips/editor/editor-panel
 import { useEditorWords } from '@/components/clips/editor/use-editor-words'
 import { MediaLibraryGrid, MediaPanel } from '@/components/clips/editor/media-panel'
 import { mediaUrlFor, useMediaTranscripts, useProjectMedia } from '@/components/clips/editor/use-project-media'
+import { sourceFromItem } from '@/lib/clips/editor/media-add'
 import { mergeMediaWords } from '@/lib/clips/editor/media-words'
-import { addMediaToLane, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
+import { addMediaToLane, placeAddedOnTrack, replaceVideoRange, type MediaDropLane, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
+import { nextShuttleRate, shuttleKey } from '@/lib/clips/editor/timeline-shortcuts'
 import { clipEditorAiExtrasEnabled } from '@/lib/clips/clip-editor-feature-flags'
 import {
   vodChatOverlayEnabled,
@@ -598,6 +600,11 @@ export function EditorShell({
   const studioSound = audioNorm.studioSound
   // E5: project media library (uploads + Rooms angles) — Media panel, B-roll Upload tab, preview.
   const media = useProjectMedia(projectId, mediaTranscripts)
+  // G1b2: synced camera angles in the media library (manual multicam keys 1–9 / transcript / menu).
+  const angleSources = useMemo(
+    () => media.items.filter((i) => i.mediaType === 'video' && !i.isMain && (i.ref === 'take' || i.syncMs != null)).map(sourceFromItem),
+    [media.items],
+  )
   const mediaItems = media.items
   const musicUploadId = edits.audio?.music?.uploadId ?? null
   const musicGenId = musicUploadId ? null : (edits.audio?.music?.generationId ?? null)
@@ -790,11 +797,14 @@ export function EditorShell({
     [applyAdd, edits, outputMs, previewEditsForTimeline],
   )
   const onDropMedia = useCallback(
-    (lane: MediaDropLane, atOutMs: number, mediaId: string) => {
+    (lane: MediaDropLane, atOutMs: number, mediaId: string, trackId?: string) => {
       const item = mediaItems.find((m) => m.id === mediaId)
-      if (item) onAddMedia(item, lane, atOutMs)
+      if (!item) return
+      const res = addMediaToLane(edits, timebaseFor(previewEditsForTimeline), item, lane, atOutMs, () => crypto.randomUUID())
+      // G1b3: dropped on an extra track row → the new item lives on that track.
+      applyAdd(res.edits ? { ...res, edits: placeAddedOnTrack(edits, res.edits, lane, trackId) } : res)
     },
-    [mediaItems, onAddMedia],
+    [applyAdd, edits, mediaItems, previewEditsForTimeline],
   )
   const onReplaceSelected = useCallback(
     (item: ProjectMediaItem) => {
@@ -850,7 +860,9 @@ export function EditorShell({
                 ? 'voice'
                 : item.lane === 'music'
                   ? 'music'
-                  : null
+                  : item.lane === 'sfx'
+                    ? `sfx:${item.id}`
+                    : null
       setCanvasSel((prev) => {
         if (prev?.target !== t) setCropMode(false)
         return t ? { target: t, label: item?.label || t } : null
@@ -1097,13 +1109,79 @@ export function EditorShell({
     sel.clear()
   }, [applyCutRange, editorWords])
 
+  // G1b: J / K / L shuttle. L plays (again: 2× / 4× / 8×), J plays backward (again: faster), K
+  // stops. Above 1× and backward the preview scrubs frame by frame (no sound), like a jog wheel.
+  const shuttleRef = useRef({ dir: 0 as -1 | 0 | 1, rate: 1, raf: 0, ms: 0, last: 0 })
+  const outputMsRef = useRef(outputMs)
+  outputMsRef.current = outputMs
+  const seekOutputRef = useRef(seekOutput)
+  seekOutputRef.current = seekOutput
+  const outDurRef = useRef(outDur)
+  outDurRef.current = outDur
+  const stopShuttle = useCallback(() => {
+    const s = shuttleRef.current
+    if (s.raf) cancelAnimationFrame(s.raf)
+    s.raf = 0
+    s.dir = 0
+    s.rate = 1
+  }, [])
+  const shuttle = useCallback(
+    (k: 'j' | 'k' | 'l') => {
+      const v = videoRef.current
+      if (!v) return
+      const s = shuttleRef.current
+      if (k === 'k') {
+        stopShuttle()
+        v.pause()
+        return
+      }
+      const dir = k === 'l' ? 1 : -1
+      const playingNative = dir === 1 && s.dir === 0 && !v.paused
+      if (dir === 1 && s.dir === 0 && v.paused) {
+        s.dir = 1
+        s.rate = 1
+        void togglePlay()
+        return
+      }
+      const rate = s.dir === dir || playingNative ? nextShuttleRate(s.rate) : 1
+      if (s.raf) cancelAnimationFrame(s.raf)
+      v.pause()
+      s.dir = dir
+      s.rate = rate
+      s.ms = outputMsRef.current
+      s.last = performance.now()
+      const tick = (now: number) => {
+        const dt = now - s.last
+        s.last = now
+        s.ms = Math.max(0, Math.min(outDurRef.current, s.ms + dt * s.rate * s.dir))
+        seekOutputRef.current(s.ms)
+        if ((s.dir < 0 && s.ms <= 0) || (s.dir > 0 && s.ms >= outDurRef.current)) {
+          stopShuttle()
+          return
+        }
+        s.raf = requestAnimationFrame(tick)
+      }
+      s.raf = requestAnimationFrame(tick)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stopShuttle],
+  )
+  useEffect(() => stopShuttle, [stopShuttle])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return
       const v = videoRef.current
       if (e.code === 'Space' && v) {
         e.preventDefault()
+        stopShuttle()
         togglePlay()
+      }
+      const jkl = shuttleKey(e)
+      if (jkl && v && !e.defaultPrevented) {
+        e.preventDefault()
+        shuttle(jkl)
+        return
       }
       const playbackEdits = editorPreviewEdits(edits, editorWords)
       // E2fix: same step as the timeline's item nudge — 1 frame, Shift = 10 frames. Skipped when
@@ -1126,7 +1204,7 @@ export function EditorShell({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [deleteSelection, edits, outDur, outputMs, redo, undo])
+  }, [deleteSelection, edits, outDur, outputMs, redo, undo, shuttle, stopShuttle])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -1224,6 +1302,8 @@ export function EditorShell({
             })
           }
           mediaKind={editorMedia?.kind}
+          onSetEdits={setEdits}
+          angleSources={angleSources}
         />
         </EditorPanelErrorBoundary>
       </div>
@@ -1489,7 +1569,9 @@ export function EditorShell({
                         ? 'voice'
                         : canvasSel.target === 'music'
                           ? 'music'
-                          : 'text'
+                          : canvasSel.target.startsWith('sfx:')
+                            ? 'sfx'
+                            : 'text'
                 ]?.locked,
             )}
             speedSlot={
@@ -1740,6 +1822,7 @@ export function EditorShell({
           ) : null}
           <div className="min-w-0 w-full space-y-2">
           <Timeline
+            angleSources={angleSources}
             edits={edits}
             words={editorWords}
             shots={cropShots}

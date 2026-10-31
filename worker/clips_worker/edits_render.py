@@ -139,6 +139,10 @@ def is_default_edits(edits: dict, clip_start_ms: int, clip_end_ms: int) -> bool:
         and not edits.get("transitions")
         # G1a: flip / stacking order change the frames.
         and not edits.get("layerProps")
+        # G1b: track order / hidden tracks change the frames.
+        and not edits.get("tracks")
+        # G1b3: J / L cuts change the sound.
+        and not edits.get("splitEdits")
         # E4: text items / color looks / per-item speed change the frames or the length.
         and not edits.get("textItems")
         and not _e4_color(edits)
@@ -775,10 +779,17 @@ def _legacy_compose(
 
     from clips_worker.text_items import apply_text_items, has_text_items
 
-    if has_text_items(edits):
+    # G1b: text items already burned under an overlay track (B-roll stage) are not burned again.
+    under = set(ctx.get("under_text_ids") or [])
+    top_edits = (
+        {**edits, "textItems": [t for t in (edits.get("textItems") or []) if str(t.get("id")) not in under] or None}
+        if under
+        else edits
+    )
+    if has_text_items(top_edits):
         # E4: Text-lane items, burned in the same stage as the hook title (output ms).
         texted = work_dir / "text_items.mp4"
-        apply_text_items(out_mp4, texted, edits, play_w=play_w, play_h=play_h)
+        apply_text_items(out_mp4, texted, top_edits, play_w=play_w, play_h=play_h)
         shutil.copy(texted, out_mp4)
 
     zoom_cfg = edits.get("zoom") if isinstance(edits.get("zoom"), dict) else {}
@@ -1289,6 +1300,72 @@ def compose_export(
     return out_mp4, caption_words
 
 
+def _under_text_passes(
+    edits: dict, broll_specs: list[dict], w: int, h: int, settings: dict, *, use_spec: bool, layout_meta: dict
+) -> list[dict]:
+    """G1b: B-roll stage passes when a text track sits under an overlay track, else [].
+
+    Only when the B-roll stage frame IS the final frame (no compose spec / T6 template / stream
+    headline compose, same size as the export) — the editor preview applies the same rule
+    (B-roll region = full frame); otherwise those text items burn on top as before.
+    """
+    from clips_worker.tracks import under_passes
+
+    ids = [str(sp.get("id")) for sp in broll_specs if sp.get("id") is not None]
+    passes = under_passes(edits, ids)
+    if not passes:
+        return []
+    from clips_worker.layout_router import export_stream_headline_compose_active
+    from clips_worker.render_clip import aspect_size
+
+    pw, ph = aspect_size(settings.get("aspectRatio", "9:16"), settings.get("exportResolution", "720p"))
+    if use_spec or layout_meta.get("t6_spec") or export_stream_headline_compose_active(edits) or (w, h) != (pw, ph):
+        print(f"[g1b:under_text] fallback=top frame={w}x{h} play={pw}x{ph} spec={bool(use_spec)}", flush=True)
+        return []
+    return passes
+
+
+def _apply_under_text_passes(
+    src: Path, out: Path, passes: list[dict], broll_specs: list[dict], edits: dict, w: int, h: int, work_dir: Path
+) -> list[str]:
+    from clips_worker.broll_render import apply_broll_overlays
+    from clips_worker.text_items import apply_text_items
+
+    cur = src
+    burned: list[str] = []
+    for i, p in enumerate(passes):
+        step = work_dir / f"layer_pass_{i}.mp4"
+        ids = set(p["ids"])
+        if p["kind"] == "overlay":
+            apply_broll_overlays(cur, step, [sp for sp in broll_specs if str(sp.get("id")) in ids], w, h, edits=edits)
+        else:
+            sub = {**edits, "textItems": [t for t in (edits.get("textItems") or []) if str(t.get("id")) in ids]}
+            if apply_text_items(cur, step, sub, play_w=w, play_h=h) != step:
+                shutil.copy(cur, step)
+            burned.extend(p["ids"])
+        cur = step
+    shutil.copy(cur, out)
+    print(f"[g1b:under_text] passes={[p['kind'] for p in passes]} text={len(burned)}", flush=True)
+    return burned
+
+
+def _split_audio_secs(edits: dict, segs_sec, clip_start_ms: int, clip_end_ms: int):
+    """G1b3: audio pieces (clip-relative s) when the clip has J / L cuts, else None."""
+    if not edits.get("splitEdits") or len(segs_sec) < 2:
+        return None
+    from clips_worker.split_edits import audio_segments, edits_split_offsets
+
+    segs = [(clip_start_ms + int(round(a * 1000)), clip_start_ms + int(round(b * 1000))) for a, b in segs_sec]
+    offs = edits_split_offsets(edits, segs)
+    if not any(offs):
+        return None
+    span = (clip_end_ms - clip_start_ms) / 1000.0
+    return [
+        (max(0.0, (a - clip_start_ms) / 1000.0), min(span, (b - clip_start_ms) / 1000.0))
+        for a, b in audio_segments(segs, offs)
+    ]
+
+
 def render_edited_clip(
     clip_src: Path,
     out_mp4: Path,
@@ -1565,6 +1642,15 @@ def render_edited_clip(
         shutil.copy(full_render, cut_mp4)
     else:
         ffmpeg_concat_segments(full_render, cut_mp4, segs_sec)
+    # G1b3: J / L cuts — same picture, the sound switches before / after each cut.
+    audio_secs = _split_audio_secs(edits, segs_sec, clip_start_ms, clip_end_ms)
+    if audio_secs:
+        from clips_worker.media_sources import has_audio_stream
+        from clips_worker.split_edits import apply_split_audio
+
+        if has_audio_stream(full_render):
+            cut_mp4 = apply_split_audio(cut_mp4, full_render, work_dir / "cut_split.mp4", audio_secs)
+            stage("split_audio_done", n=sum(1 for a, s in zip(audio_secs, segs_sec) if a != s))
 
     if edits.get("transitions") or edits.get("keyframes") or edits.get("layerProps"):
         # E3: cut transitions (centred on the cut, video only → length / audio unchanged) and
@@ -1592,12 +1678,19 @@ def render_edited_clip(
     if dub_assets and dub_assets.get("dub_words"):
         caption_words = dub_assets["dub_words"]
     caption_src = cut_mp4
+    under_text_ids: list[str] = []
     if broll_specs:
         from clips_worker.broll_render import apply_broll_overlays
 
         w, h = probe_video_size(cut_mp4)
         broll_out = work_dir / "with_broll.mp4"
-        apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h, edits=edits)
+        passes = _under_text_passes(edits, broll_specs, w, h, settings, use_spec=use_spec, layout_meta=layout_meta)
+        if passes:
+            # G1b: a text track under an overlay track — burn bottom -> top in the B-roll stage.
+            under_text_ids = _apply_under_text_passes(cut_mp4, broll_out, passes, broll_specs, edits, w, h, work_dir)
+            stage("under_text_done", passes=len(passes), n=len(under_text_ids))
+        else:
+            apply_broll_overlays(cut_mp4, broll_out, broll_specs, w, h, edits=edits)
         caption_src = broll_out
 
     segs = ordered_keep_segments(edits)
@@ -1620,6 +1713,15 @@ def render_edited_clip(
     voice_env = None if _voice_muted(edits) else _volume_expr(edits, "voice")
     music_path = (audio_assets or {}).get("music_path") if audio_assets else None
     sfx_paths = (audio_assets or {}).get("sfx_paths") or [] if audio_assets else []
+    # G1b3: per-SFX volume envelopes (`sfx:<id>` keyframes, local ms from the SFX start).
+    sfx_ids = (audio_assets or {}).get("sfx_ids") or [] if audio_assets else []
+    sfx_envs = [
+        _volume_expr(edits, f"sfx:{sid}", origin_s=at / 1000.0) if sid else None
+        for (_p, at, _v), sid in zip(sfx_paths, sfx_ids)
+    ] if len(sfx_ids) == len(sfx_paths) else None
+    sfx_trims = (audio_assets or {}).get("sfx_trims") if audio_assets else None
+    if sfx_trims is not None and len(sfx_trims) != len(sfx_paths):
+        sfx_trims = None
     studio_path = (audio_assets or {}).get("studio_path") if audio_assets else None
     studio_mix = (audio_assets or {}).get("studio_mix") if audio_assets else None
     if studio_path and studio_path.is_file() and studio_mix is not None:
@@ -1635,7 +1737,7 @@ def render_edited_clip(
             studio_path,
             studio_out,
             float(studio_mix),
-            segs_sec,
+            audio_secs or segs_sec,
             track_start_sec=track_start,
             work_dir=work_dir,
         )
@@ -1664,6 +1766,8 @@ def render_edited_clip(
             music_window=music_win,
             music_volume_expr=music_env,
             speech_volume_expr=voice_env,
+            sfx_volume_exprs=sfx_envs,
+            sfx_trims=sfx_trims,
         )
         caption_src = mixed
     elif audio_assets and (music_path or sfx_paths):
@@ -1682,6 +1786,8 @@ def render_edited_clip(
             fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
             music_window=music_win,
             music_volume_expr=music_env,
+            sfx_volume_exprs=sfx_envs,
+            sfx_trims=sfx_trims,
         )
         caption_src = mixed
 
@@ -1724,6 +1830,7 @@ def render_edited_clip(
         "facecam_position": layout_meta.get("facecam_position"),
         "per_clip_layout_applied": bool(facecam_applied),
         "t6_spec": layout_meta.get("t6_spec") if isinstance(layout_meta.get("t6_spec"), dict) else None,
+        "under_text_ids": under_text_ids,
     }
     compositor_off = __import__("os").environ.get("COMPOSITOR_V3", "1") == "0"
     if compositor_off:

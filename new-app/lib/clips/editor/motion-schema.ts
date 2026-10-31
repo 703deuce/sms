@@ -19,7 +19,7 @@ export const KEY_PROPS: readonly KeyProp[] = ['x', 'y', 'scale', 'rotation', 'op
 export const CROP_PROPS = ['cropL', 'cropT', 'cropR', 'cropB'] as const
 export type CropProp = (typeof CROP_PROPS)[number]
 
-export type KeyframeTarget = 'video' | 'voice' | 'music' | 'text' | `broll:${string}` | `text:${string}`
+export type KeyframeTarget = 'video' | 'voice' | 'music' | 'text' | `broll:${string}` | `text:${string}` | `sfx:${string}`
 
 /** One keyframe. `ease` shapes the segment from this point to the next (After Effects "outgoing"). */
 export type KeyPoint = { tMs: number; v: number; ease?: Ease }
@@ -104,12 +104,17 @@ function clampN(n: number, lo: number, hi: number): number {
 
 function isTarget(t: unknown): t is KeyframeTarget {
   if (typeof t !== 'string') return false
-  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || (t.startsWith('broll:') && t.length > 6) || (t.startsWith('text:') && t.length > 5)
+  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || (t.startsWith('broll:') && t.length > 6) || (t.startsWith('text:') && t.length > 5) || isSfxTarget(t)
+}
+
+/** G1b3: per-SFX volume envelope (`sfx:<generationId>`, local ms from the SFX start). */
+export function isSfxTarget(t: string): boolean {
+  return t.startsWith('sfx:') && t.length > 4
 }
 
 /** Which properties a target can animate (CapCut: visual layers vs audio). */
 export function propsForTarget(target: KeyframeTarget): readonly KeyProp[] {
-  if (target === 'voice' || target === 'music') return ['volume']
+  if (target === 'voice' || target === 'music' || isSfxTarget(target)) return ['volume']
   if (isMediaLayerTarget(target)) return ['x', 'y', 'scale', 'rotation', 'opacity', ...CROP_PROPS]
   return ['x', 'y', 'scale', 'rotation', 'opacity']
 }

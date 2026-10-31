@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { TimelineInsertMarkers } from '@/components/clips/editor/timeline-insert-markers'
-import { Blend, Magnet, Maximize2, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
+import { Activity, Blend, Keyboard, Magnet, Maximize2, Pause, Plus, Redo2, Scissors, Trash2, Undo2, ZoomIn, ZoomOut } from 'lucide-react'
 import { toast } from 'sonner'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -41,7 +41,55 @@ import {
   type OpCtx,
   type TimelineItem,
   videoJoinOptions,
+  refLocked,
+  rowItems,
+  rowState,
+  timelineRows,
+  type TimelineRow,
 } from '@/lib/clips/editor/clip-timeline'
+import { rollEdit, slideEdit, splitEdgeTrim, TRIM_TOOL_KEYS, type TrimTool } from '@/lib/clips/editor/trim-tools'
+import { autoCrossfade } from '@/lib/clips/editor/auto-crossfade'
+import { addFreezeFrame } from '@/lib/clips/editor/inserts'
+import {
+  addTrack,
+  canAddTrack,
+  moveTrack,
+  removeTrack,
+  renameTrack,
+  setTrackFlags,
+  trackLabel,
+  trackMoves,
+  trackState,
+  tracksOfKind,
+  LANE_TRACK_KIND,
+  type TrackKind,
+} from '@/lib/clips/editor/tracks'
+import {
+  adjacentCutPoint,
+  copyableRefs,
+  copyItems,
+  cutItems,
+  cutPoints,
+  deleteRange,
+  canDetachAudio,
+  detachBrollAudio,
+  duplicateItems,
+  itemsInRange,
+  moveItemsToTrack,
+  moveVideoSegment,
+  pasteAttributes,
+  pasteItems,
+  rangeOf,
+  timelineClipboard,
+  type InOut,
+} from '@/lib/clips/editor/timeline-edit-ops'
+import { timelineCommandFor, type TimelineCommand } from '@/lib/clips/editor/timeline-shortcuts'
+import { TimelineShortcutsSheet } from '@/components/clips/editor/timeline/shortcuts-sheet'
+import { EnvelopeLine } from '@/components/clips/editor/timeline/envelope-line'
+import { addEnvelopePoint, deleteEnvelopePoint, envelopeFor, envelopePoints, moveEnvelopePoint } from '@/lib/clips/editor/envelopes'
+import { PROP_SPECS } from '@/lib/clips/editor/motion-schema'
+import type { ClipMediaSource } from '@/lib/clips/editor/sources'
+import { angleAt, angleKey, multicamAngles, setAngleForOutputRange, switchAngleAt } from '@/lib/clips/editor/multicam-manual'
 import { CUT_HANDLE_ROW_TOP_PX, layoutCutHandles } from '@/lib/clips/editor/cut-handle-layout'
 import { useAudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { TimelineLaneHeader } from '@/components/clips/editor/timeline/timeline-lane-header'
@@ -129,10 +177,43 @@ type DragState = {
   deltaMs: number
   snappedTo: number | null
   moved: boolean
+  /** G1b: row key under the pointer while moving text / B-roll / SFX (drag between tracks). */
+  targetRow?: string | null
+  /** G1b: main-track reorder — drop before this Video segment id (null = last). */
+  insertBefore?: string | null
+  reorder?: boolean
+  /** G1b3: Alt held at any point of an edge drag (J / L). */
+  alt?: boolean
+}
+
+/** G1b: commands that work from anywhere in the editor (not only with the timeline focused). */
+const GLOBAL_COMMANDS = new Set<TimelineCommand>([
+  'copy',
+  'cut',
+  'paste',
+  'pasteAttributes',
+  'duplicate',
+  'markIn',
+  'markOut',
+  'clearInOut',
+  'home',
+  'end',
+  'prevEdit',
+  'nextEdit',
+  'help',
+  'rippleDeleteRange',
+])
+
+function hasDomTextSelection(): boolean {
+  if (typeof window === 'undefined' || !window.getSelection) return false
+  const sel = window.getSelection()
+  return Boolean(sel && !sel.isCollapsed && sel.toString().trim())
 }
 
 /** E5: lanes that accept a Media-panel drop. */
 const MEDIA_DROP_LANES = new Set<string>(['video', 'broll', 'music', 'sfx'])
+
+const NO_SOURCES: readonly ClipMediaSource[] = []
 
 export function Timeline({
   edits,
@@ -169,6 +250,7 @@ export function Timeline({
   onSelectSourceSegment,
   selectedSourceSegmentId = null,
   selectRequest = null,
+  angleSources = NO_SOURCES,
 }: {
   edits: ClipEditsV2
   words: SourceWord[]
@@ -212,9 +294,12 @@ export function Timeline({
   /** FVfix: clip cover — Video-lane filmstrip fallback while frames load or when they can't be read. */
   posterUrl?: string | null
   /** E5: a Media-panel card dropped on a lane at OUTPUT ms. */
-  onDropMedia?: (lane: MediaDropLane, outMs: number, mediaId: string) => void
+  /** G1b3: `trackId` = the row it was dropped on (extra tracks keep the item there). */
+  onDropMedia?: (lane: MediaDropLane, outMs: number, mediaId: string, trackId?: string) => void
   /** E5: click on a source segment chip (Video lane) → Media panel segment editor. */
   onSelectSourceSegment?: (id: string) => void
+  /** G1b2: synced camera angles in the project media library (keys 1–9 / Camera angle menu). */
+  angleSources?: readonly ClipMediaSource[]
   selectedSourceSegmentId?: string | null
   /** G1a: select an item from outside (canvas click); a new `seq` re-applies. `atMs` = output ms. */
   selectRequest?: { lane: LaneId; id?: string; atMs?: number; seq: number } | null
@@ -356,6 +441,25 @@ export function Timeline({
         zoomKeysRef.current.split()
         return
       }
+      // G1b: Ctrl/Cmd+B, clipboard, in/out, jumps, help from anywhere (text fields keep their keys;
+      // Ctrl+C / X with a text selection on the page stays a normal text copy).
+      const g1b = isTextEntryTarget(e.target) ? null : timelineCommandFor(e)
+      if (
+        g1b &&
+        (GLOBAL_COMMANDS.has(g1b) || (g1b === 'split' && (e.metaKey || e.ctrlKey) && zoomKeysRef.current.canSplit)) &&
+        !((g1b === 'copy' || g1b === 'cut') && hasDomTextSelection())
+      ) {
+        if (cmdRef.current(g1b)) {
+          e.preventDefault()
+          return
+        }
+      }
+      // G1b2: live multicam switching — keys 1–9 pick an angle at the playhead (also while playing).
+      const ak = isTextEntryTarget(e.target) ? null : angleKey(e)
+      if (ak && angleRef.current(ak)) {
+        e.preventDefault()
+        return
+      }
       const action = timelineZoomKeyAction(e)
       if (!action || isTextEntryTarget(e.target)) return
       e.preventDefault()
@@ -460,6 +564,9 @@ export function Timeline({
 
   const [selected, setSelected] = useState<ItemRef[]>([])
   const [snapOn, setSnapOn] = useState(true)
+  // G1b3: trim tools (V select · R roll · U slide) and Vegas-style auto-crossfade on overlap.
+  const [tool, setTool] = useState<TrimTool>('select')
+  const [autoXfade, setAutoXfade] = useState(true)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -467,6 +574,14 @@ export function Timeline({
   const [selKf, setSelKf] = useState<{ target: KeyframeTarget; tMs: number } | null>(null)
   const [kfDrag, setKfDrag] = useState<{ target: KeyframeTarget; fromMs: number; toMs: number } | null>(null)
   const [trPop, setTrPop] = useState<TransitionTarget | null>(null)
+  // G1b: in / out marks (output ms), shortcuts sheet, add-track menu.
+  const [io, setIo] = useState<InOut>({ inMs: null, outMs: null })
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [addMenu, setAddMenu] = useState(false)
+  // G1b: Vegas-style envelopes (opacity on visual items, volume on Voice / Music) drawn on items.
+  const [envOn, setEnvOn] = useState(false)
+  const trackAreaRef = useRef<HTMLDivElement | null>(null)
+  const rows = useMemo(() => timelineRows(edits), [edits])
 
   // Drop selections whose items no longer exist (ids change after cuts / undo).
   const liveSelected = useMemo(
@@ -492,8 +607,31 @@ export function Timeline({
   }, [singleSelKey])
 
   const opCtx = (): OpCtx => ({ edits, previewEdits, clampTrim })
+  // G1b2 manual multicam (angles = main + video sources; switches are E5 source segments).
+  const angles = multicamAngles(edits, angleSources)
+  const angleRef = useRef<(n: number) => boolean>(() => false)
+  angleRef.current = (n: number) => {
+    const a = angles[n - 1]
+    if (!editable || angles.length < 2 || !a) return false
+    const srcMs = outputToSource(tb, playheadMs)
+    if (angleAt(edits, srcMs) === a.sourceId) return true
+    const next = switchAngleAt(edits, srcMs, a.sourceId, angleSources)
+    if (next === edits) return false
+    commit(next)
+    return true
+  }
   const commit = (next: ClipEditsV2 | null) => {
     if (next && onCommitEdits) onCommitEdits(next)
+  }
+  // G1b3: freeze frame at the playhead (an E5b insert with no media: holds the composed frame).
+  const freezeFrame = () => {
+    if (!editable || refLocked(edits, { lane: 'video', id: '' })) return
+    const ins = addFreezeFrame(edits.inserts, timebaseFor(previewEdits).segs, playheadMs, `frz-${crypto.randomUUID().slice(0, 8)}`)
+    if (!ins) {
+      toast.message('Too many inserted clips')
+      return
+    }
+    commit({ ...edits, inserts: ins })
   }
   const split = () => {
     if (!editable) return
@@ -534,9 +672,161 @@ export function Timeline({
     return true
   }
   const toggleLane = (lane: LaneId, patch: { muted?: boolean; hidden?: boolean; locked?: boolean }) => {
-    commit(setLaneState(edits, lane, patch))
-    if (patch.locked) setSelected((s) => s.filter((r) => r.lane !== lane))
+    const next = setLaneState(edits, lane, patch)
+    commit(next)
+    if (patch.locked) setSelected((s) => s.filter((r) => !refLocked(next, r)))
   }
+  // G1b: track rows (extra tracks) toggle their own flags; default rows keep the E2 lane toggles.
+  const toggleRow = (r: TimelineRow, patch: { muted?: boolean; hidden?: boolean; locked?: boolean }) => {
+    if (r.isDefault || !r.trackId) return toggleLane(r.lane, patch)
+    const next = setTrackFlags(edits, r.trackId, patch)
+    commit(next)
+    if (patch.locked && next) setSelected((s) => s.filter((x) => !refLocked(next, x)))
+  }
+  const itemState = (item: TimelineItem) => (item.track ? trackState(edits, item.track) : laneState(edits, item.lane))
+
+  // ---- G1b commands (clipboard, ranges, jumps, tracks) -------------------------------------
+  const copySel = (cut: boolean) => {
+    const refs = copyableRefs(liveSelected)
+    if (!refs.length) return false
+    if (cut) {
+      if (!editable) return false
+      const r = cutItems(opCtx(), refs)
+      if (!r) return false
+      timelineClipboard.set(r.clip)
+      commit(r.edits)
+      setSelected([])
+      toast.message(`Cut ${r.clip.entries.length} item${r.clip.entries.length > 1 ? 's' : ''}`, { id: 'timeline-clipboard' })
+    } else {
+      const c = copyItems(edits, refs)
+      if (!c) return false
+      timelineClipboard.set(c)
+      toast.message(`Copied ${c.entries.length} item${c.entries.length > 1 ? 's' : ''}`, { id: 'timeline-clipboard' })
+    }
+    return true
+  }
+  const paste = () => {
+    const c = timelineClipboard.get()
+    if (!c || !editable) return false
+    const r = pasteItems(opCtx(), c, playheadMs)
+    if (!r) {
+      toast.message('Nothing to paste here', { id: 'timeline-clipboard' })
+      return true
+    }
+    commit(r.edits)
+    setSelected(r.refs)
+    if (r.skipped) toast.message(`${r.skipped} item${r.skipped > 1 ? 's' : ''} can't be placed twice (AI / library sounds)`, { id: 'timeline-clipboard' })
+    return true
+  }
+  const duplicate = () => {
+    if (!editable) return false
+    const r = duplicateItems(opCtx(), liveSelected)
+    if (!r) return false
+    commit(r.edits)
+    setSelected(r.refs)
+    return true
+  }
+  const pasteAttrs = () => {
+    const c = timelineClipboard.get()
+    if (!c || !editable || !liveSelected.length) return false
+    const next = pasteAttributes(opCtx(), c, liveSelected)
+    if (!next) toast.message('Copy a text or B-roll item first, then select items of the same kind', { id: 'timeline-clipboard' })
+    commit(next)
+    return true
+  }
+  const range = rangeOf(io, span)
+  const rippleDeleteRange = () => {
+    if (!range || !editable) return false
+    const next = deleteRange(opCtx(), range)
+    if (!next) {
+      toast.message('Can’t delete that range', { id: 'timeline-range' })
+      return true
+    }
+    commit(next)
+    setIo({ inMs: null, outMs: null })
+    onSeekOutput(range[0])
+    return true
+  }
+  const jump = (dir: -1 | 1) => {
+    const to = adjacentCutPoint(cutPoints(lanes, span), playheadMs, dir)
+    if (to == null) return false
+    onSeekOutput(to)
+    return true
+  }
+  const runCommand = (cmd: TimelineCommand): boolean => {
+    switch (cmd) {
+      case 'copy':
+        return copySel(false)
+      case 'cut':
+        return copySel(true)
+      case 'paste':
+        return paste()
+      case 'pasteAttributes':
+        return pasteAttrs()
+      case 'duplicate':
+        return duplicate()
+      case 'split':
+        split()
+        return true
+      case 'markIn':
+        setIo((v) => ({ inMs: Math.round(playheadMs), outMs: v.outMs != null && v.outMs > playheadMs ? v.outMs : null }))
+        return true
+      case 'markOut':
+        setIo((v) => ({ inMs: v.inMs != null && v.inMs < playheadMs ? v.inMs : null, outMs: Math.round(playheadMs) }))
+        return true
+      case 'clearInOut':
+        setIo({ inMs: null, outMs: null })
+        return true
+      case 'rippleDeleteRange':
+        return rippleDeleteRange()
+      case 'home':
+        onSeekOutput(0)
+        return true
+      case 'end':
+        onSeekOutput(Math.max(0, span - 1))
+        return true
+      case 'prevEdit':
+        return jump(-1)
+      case 'nextEdit':
+        return jump(1)
+      case 'help':
+        setHelpOpen(true)
+        return true
+      default:
+        return false
+    }
+  }
+  const cmdRef = useRef(runCommand)
+  cmdRef.current = runCommand
+  const addTrackOf = (kind: TrackKind, above?: string) => {
+    const r = addTrack(edits, kind, { above })
+    if (!r) {
+      toast.message('Track limit reached', { id: 'timeline-track' })
+      return
+    }
+    commit(r.edits)
+    setAddMenu(false)
+  }
+  const trackActions = (r: TimelineRow) => {
+    if (!r.trackId || !editable) return undefined
+    const mv = trackMoves(edits, r.trackId)
+    const kind = LANE_TRACK_KIND[r.lane]!
+    return {
+      visual: kind !== 'audio',
+      onRename: (name: string) => commit(renameTrack(edits, r.trackId!, name)),
+      onMoveUp: mv.up ? () => commit(moveTrack(edits, r.trackId!, 'up')) : undefined,
+      onMoveDown: mv.down ? () => commit(moveTrack(edits, r.trackId!, 'down')) : undefined,
+      onAddAbove: canAddTrack(edits, kind) ? () => addTrackOf(kind, r.trackId) : undefined,
+      onRemove: r.isDefault
+        ? undefined
+        : () => {
+            const n = rowItems(lanes, r).length
+            if (n && typeof window !== 'undefined' && !window.confirm(`Remove “${r.label}” and its ${n} item${n > 1 ? 's' : ''}?`)) return
+            commit(removeTrack(edits, r.trackId!))
+          },
+    }
+  }
+
 
   // ---- E3 keyframes / transitions -------------------------------------------
   const startKfDrag = (e: React.PointerEvent, target: KeyframeTarget, tMs: number, origin: number) => {
@@ -580,7 +870,7 @@ export function Timeline({
     () =>
       sourceSegmentWindows(tb, edits.sourceSegments).map((w) => ({
         ...w,
-        label: sourceById(edits.sources, w.sourceId)?.label ?? 'Source',
+        label: w.sourceId === 'main' ? 'Main' : sourceById(edits.sources, w.sourceId)?.label ?? 'Source',
       })),
     [edits.sourceSegments, edits.sources, tb],
   )
@@ -621,13 +911,54 @@ export function Timeline({
     return Math.max(0, Math.min(span, ((clientX - r.left) / Math.max(1, r.width)) * span))
   }
 
+  const rowOfItem = (item: TimelineItem) => rows.find((r) => r.lane === item.lane && (!r.trackId || r.trackId === item.track))
+  /** Row (same lane kind, unlocked track) under a client Y, for drag between tracks. */
+  const trackRowAt = (clientY: number, lane: LaneId): string | null => {
+    const el = trackAreaRef.current
+    if (!el || !LANE_TRACK_KIND[lane]) return null
+    const y = clientY - el.getBoundingClientRect().top
+    let top = RULER_H
+    for (const r of rows) {
+      const h = LANE_H[r.lane]
+      if (y >= top && y < top + h) return r.lane === lane && r.trackId && !trackState(edits, r.trackId).locked ? r.key : null
+      top += h
+    }
+    return null
+  }
+  /** G1b: drag a main-track clip earlier / later (CapCut main track; ripple, no gaps). */
+  const startVideoReorder = (e: React.PointerEvent, item: TimelineItem) => {
+    const ctx = opCtx()
+    const state: DragState = { mode: 'move', item, refs: [{ lane: 'video', id: item.id }], originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, reorder: true, insertBefore: undefined }
+    setDrag(state)
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - state.originX
+      if (!state.moved && Math.abs(dx) < DRAG_SLOP_PX * 2) return
+      state.moved = true
+      state.deltaMs = dx / Math.max(1e-6, pxPerMs)
+      const at = (item.startMs + item.endMs) / 2 + state.deltaMs
+      const next = lanes.video.find((v) => (v.startMs + v.endMs) / 2 > at && v.id !== item.id)
+      state.insertBefore = next ? next.id : null
+      setDrag({ ...state })
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      setDrag(null)
+      if (!state.moved || state.insertBefore === undefined) return
+      const next = moveVideoSegment(ctx, item.id, state.insertBefore)
+      if (next) commit(next)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
   const startDrag = (e: React.PointerEvent, item: TimelineItem, mode: DragState['mode']) => {
     if (e.button !== 0) return
     e.stopPropagation()
     rootRef.current?.focus({ preventScroll: true })
     const key = refKey(item)
     const multi = e.shiftKey || e.metaKey || e.ctrlKey
-    if (laneState(edits, item.lane).locked) {
+    if (refLocked(edits, item)) {
       lockedClickRef.current = item.lane
       return
     }
@@ -641,7 +972,13 @@ export function Timeline({
     const already = selectedKeys.has(key)
     if (!already) setSelected([{ lane: item.lane, id: item.id }])
     if (!editable) return
-    if (mode === 'move' && !item.caps.move) return
+    const slideTool = tool === 'slide' && mode === 'move' && (item.lane === 'video' || item.lane === 'broll' || item.lane === 'text')
+    const rollTool = tool === 'roll' && mode !== 'move'
+    if (!slideTool && mode === 'move' && item.lane === 'video' && lanes.video.length > 1) {
+      startVideoReorder(e, item)
+      return
+    }
+    if (mode === 'move' && !item.caps.move && !slideTool) return
     if (mode === 'start' && !item.caps.trimStart) return
     if (mode === 'end' && !item.caps.trimEnd) return
     const refs =
@@ -653,7 +990,7 @@ export function Timeline({
     const targets = snapTargets({ lanes, durationMs: span, playheadMs, wordEdgesMs: wordEdges, exclude })
     const thr = SNAP_PX / Math.max(1e-6, pxPerMs)
     const ctx = opCtx()
-    const state: DragState = { mode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false }
+    const state: DragState = { mode, item, refs, originX: e.clientX, deltaMs: 0, snappedTo: null, moved: false, alt: e.altKey }
     setDrag(state)
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - state.originX
@@ -661,6 +998,7 @@ export function Timeline({
       state.moved = true
       const raw = dx / Math.max(1e-6, pxPerMs)
       const snapping = snapOn && !ev.altKey
+      if (ev.altKey) state.alt = true
       if (mode === 'move') {
         const edges = moving.flatMap((m) => [m.startMs, m.endMs])
         const s = snapping ? snapMoveDelta(edges, raw, targets, thr) : { deltaMs: raw, snappedTo: null }
@@ -672,15 +1010,36 @@ export function Timeline({
         state.deltaMs = s.ms - edge
         state.snappedTo = s.snappedTo
       }
+      if (mode === 'move') state.targetRow = trackRowAt(ev.clientY, item.lane)
       setDrag({ ...state })
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       setDrag(null)
+      const fromRow = rowOfItem(item)?.key ?? null
+      const toRow = mode === 'move' && state.targetRow && state.targetRow !== fromRow ? rows.find((r) => r.key === state.targetRow) : undefined
+      if (toRow?.trackId && state.moved && !slideTool) {
+        // G1b: dropped on another track (and maybe moved in time) — one undo step.
+        const moved = state.deltaMs ? moveItems(ctx, state.refs, state.deltaMs) ?? ctx.edits : ctx.edits
+        commit(moveItemsToTrack(moved, state.refs, toRow.trackId) ?? (moved !== ctx.edits ? moved : null))
+        return
+      }
       if (!state.moved || !state.deltaMs) return
-      if (mode === 'move') commit(moveItems(ctx, state.refs, state.deltaMs))
-      else {
+      const ref = { lane: item.lane, id: item.id }
+      if (slideTool) return commit(slideEdit(ctx, ref, state.deltaMs))
+      if (rollTool) return commit(rollEdit(ctx, ref, mode as 'start' | 'end', state.deltaMs))
+      if (state.alt && mode !== 'move' && (item.lane === 'video' || item.lane === 'voice')) {
+        // G1b3: Alt-drag = J / L — only the sound (Voice edge) or only the picture (Video edge) moves.
+        // Not at a real cut (clip in / out point): Alt keeps its old meaning (no snapping trim).
+        const edge = mode === 'start' ? item.startMs : item.endMs
+        const jl = splitEdgeTrim(ctx, ref, mode, edge + state.deltaMs)
+        if (jl) return commit(jl)
+      }
+      if (mode === 'move') {
+        const moved = moveItems(ctx, state.refs, state.deltaMs)
+        commit(moved && autoXfade ? autoCrossfade(ctx.edits, moved, ctx.previewEdits, ctx.previewEdits, state.refs, sfxDurationsMs) : moved)
+      } else {
         const edge = mode === 'start' ? item.startMs : item.endMs
         commit(trimItem(ctx, { lane: item.lane, id: item.id }, mode, edge + state.deltaMs))
       }
@@ -692,6 +1051,7 @@ export function Timeline({
   /** Live (uncommitted) geometry while dragging. */
   const shown = (item: TimelineItem): { startMs: number; endMs: number } => {
     if (!drag?.moved) return item
+    if (drag.reorder) return refKey(drag.item) === refKey(item) ? { startMs: item.startMs + drag.deltaMs, endMs: item.endMs + drag.deltaMs } : item
     const key = refKey(item)
     if (drag.mode === 'move' && drag.refs.some((r) => refKey(r) === key)) {
       return { startMs: item.startMs + drag.deltaMs, endMs: item.endMs + drag.deltaMs }
@@ -710,6 +1070,15 @@ export function Timeline({
     if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return
     const mod = e.metaKey || e.ctrlKey
     const k = e.key
+    // G1b: clipboard, Ctrl+B, in/out, Home/End, ↑/↓ edit points, shortcuts sheet.
+    const g1b = timelineCommandFor(e)
+    if (g1b && (GLOBAL_COMMANDS.has(g1b) || (g1b === 'split' && mod)) && !(g1b === 'copy' && hasDomTextSelection())) {
+      if (runCommand(g1b)) {
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+    }
     if (!mod && (k === '+' || k === '=')) {
       e.preventDefault()
       zoomIn()
@@ -726,6 +1095,10 @@ export function Timeline({
     } else if (!mod && (k === 'n' || k === 'N')) {
       e.preventDefault()
       setSnapOn((v) => !v)
+    } else if (!mod && !e.altKey && TRIM_TOOL_KEYS[k.toLowerCase()]) {
+      e.preventDefault()
+      e.stopPropagation()
+      setTool(TRIM_TOOL_KEYS[k.toLowerCase()]!)
     } else if ((k === 'Delete' || k === 'Backspace') && editable && selKf) {
       e.preventDefault()
       e.stopPropagation()
@@ -747,6 +1120,7 @@ export function Timeline({
         toast.message(`${LANE_LABELS[lockedClickRef.current]} lane is locked`, { id: 'timeline-locked' })
       }
     } else if (k === 'Escape') {
+      setTool('select')
       lockedClickRef.current = null
       setSelected([])
       setSelKf(null)
@@ -757,8 +1131,8 @@ export function Timeline({
       e.stopPropagation()
       const all: ItemRef[] = []
       for (const lane of LANE_ORDER) {
-        if (lane === 'voice' || laneState(edits, lane).locked) continue
-        for (const it of lanes[lane]) if (it.caps.move || it.caps.del) all.push({ lane, id: it.id })
+        if (lane === 'voice') continue
+        for (const it of lanes[lane]) if ((it.caps.move || it.caps.del) && !refLocked(edits, it)) all.push({ lane, id: it.id })
       }
       setSelected(all)
     } else if (mod && (k === 'z' || k === 'Z') && (onUndo || onRedo)) {
@@ -814,15 +1188,15 @@ export function Timeline({
   }, [edits.layout.layoutSegments, tb])
   const aiInOut = [sourceToOutput(tb, clipStartMs), sourceToOutput(tb, clipEndMs)]
 
-  const laneTop = (lane: LaneId) => {
+  const rowTop = (key: string) => {
     let y = RULER_H
-    for (const l of LANE_ORDER) {
-      if (l === lane) return y
-      y += LANE_H[l]
+    for (const r of rows) {
+      if (r.key === key) return y
+      y += LANE_H[r.lane]
     }
     return y
   }
-  const totalH = RULER_H + LANE_ORDER.reduce((s, l) => s + LANE_H[l], 0)
+  const totalH = RULER_H + rows.reduce((s, r) => s + LANE_H[r.lane], 0)
 
   const tbtn =
     'inline-flex h-7 items-center gap-1 rounded px-1.5 text-[11px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40'
@@ -831,7 +1205,7 @@ export function Timeline({
     const geo = shown(item)
     const left = geo.startMs * pxPerMs
     const w = Math.max(2, (geo.endMs - geo.startMs) * pxPerMs)
-    const st = laneState(edits, item.lane)
+    const st = itemState(item)
     const isSel = selectedKeys.has(refKey(item))
     const faded = st.hidden || st.muted
     const h = LANE_H[item.lane]
@@ -931,6 +1305,32 @@ export function Timeline({
               ) : null
             })()
           : null}
+        {envOn
+          ? (() => {
+              const env = envelopeFor(item.lane, item.id)
+              if (!env) return null
+              const { points, flat } = envelopePoints(edits, env.target, env.prop)
+              const spec = PROP_SPECS[env.prop]
+              const origin = targetOriginMs(edits, env.target)
+              return (
+                <EnvelopeLine
+                  points={points}
+                  flat={flat}
+                  min={spec.min}
+                  max={spec.max}
+                  widthPx={w}
+                  heightPx={h - 4}
+                  pxPerMs={pxPerMs}
+                  fromLocalMs={geo.startMs - origin}
+                  kind={env.prop}
+                  readOnly={!editable || st.locked}
+                  onAdd={(t) => commit(addEnvelopePoint(edits, env.target, env.prop, t))}
+                  onMove={(from, to, v) => commit(moveEnvelopePoint(edits, env.target, env.prop, from, to, v))}
+                  onDelete={(t) => commit(deleteEnvelopePoint(edits, env.target, env.prop, t))}
+                />
+              )
+            })()
+          : null}
         {kfs.map((t) => {
           const shownT = kfDrag && kfDrag.target === kfTarget && kfDrag.fromMs === t ? kfDrag.toMs : t
           const isSelKf = selKf?.target === kfTarget && selKf.tMs === t
@@ -1027,6 +1427,18 @@ export function Timeline({
           <button
             type="button"
             className={tbtn}
+            onClick={freezeFrame}
+            disabled={!editable || refLocked(edits, { lane: 'video', id: '' })}
+            aria-label="Freeze frame at playhead"
+            title="Freeze frame: hold the frame at the playhead for 3 s (lengthens the video; adjust under Media → Inserted clips)"
+            data-testid="timeline-freeze"
+          >
+            <Pause className="size-3.5" />
+            Freeze
+          </button>
+          <button
+            type="button"
+            className={tbtn}
             onClick={() => del()}
             disabled={!editable || !liveSelected.length}
             aria-label="Delete selected"
@@ -1049,6 +1461,106 @@ export function Timeline({
             <Magnet className="size-3.5" />
             Snap
           </button>
+          {editable ? (
+            <span className="inline-flex items-center" role="group" aria-label="Trim tool" data-testid="timeline-tools">
+              {(
+                [
+                  ['select', 'Select', 'V', 'Select / trim (V)'],
+                  ['roll', 'Roll', 'R', 'Roll edit (R): drag the cut between two touching clips — one gets longer, the other shorter'],
+                  ['slide', 'Slide', 'U', 'Slide (U): move a clip between its neighbours — they give / take the time'],
+                ] as const
+              ).map(([id, label, , title]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`${tbtn} ${tool === id ? 'text-primary' : 'text-muted-foreground'}`}
+                  onClick={() => setTool(id)}
+                  aria-pressed={tool === id}
+                  title={title}
+                  data-testid={`timeline-tool-${id}`}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`${tbtn} ${autoXfade ? 'text-primary' : 'text-muted-foreground'}`}
+                onClick={() => setAutoXfade((v) => !v)}
+                aria-pressed={autoXfade}
+                title="Auto-crossfade: dragging a clip over another on the same overlay / text / audio track fades across the overlap (envelope points)"
+                data-testid="timeline-auto-xfade"
+              >
+                <Blend className="size-3.5" />
+                Xfade
+              </button>
+            </span>
+          ) : null}
+          {editable ? (
+            <div className="relative">
+              <button
+                type="button"
+                className={tbtn}
+                onClick={() => setAddMenu((v) => !v)}
+                aria-expanded={addMenu}
+                aria-label="Add track"
+                title="Add a video overlay, text or audio track"
+                data-testid="timeline-add-track"
+              >
+                <Plus className="size-3.5" />
+                Track
+              </button>
+              {addMenu ? (
+                <div className="absolute left-0 top-7 z-50 min-w-[150px] rounded-md border border-border bg-popover p-1 text-xs shadow-lg" role="menu">
+                  {(
+                    [
+                      ['overlay', 'Video overlay track'],
+                      ['text', 'Text track'],
+                      ['audio', 'Audio track'],
+                    ] as const
+                  ).map(([kind, label]) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      role="menuitem"
+                      className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted disabled:opacity-40"
+                      disabled={!canAddTrack(edits, kind)}
+                      onClick={() => addTrackOf(kind)}
+                      data-testid={`timeline-add-track-${kind}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className={tbtn}
+            onClick={() => setHelpOpen(true)}
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+            data-testid="timeline-shortcuts"
+          >
+            <Keyboard className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            className={`${tbtn} ${envOn ? 'text-primary' : 'text-muted-foreground'}`}
+            onClick={() => setEnvOn((v) => !v)}
+            aria-pressed={envOn}
+            aria-label="Envelopes"
+            title="Envelopes: opacity / volume lines on the items — click to add a point, drag it, double-click to delete"
+            data-testid="timeline-envelopes"
+          >
+            <Activity className="size-3.5" />
+            Envelopes
+          </button>
+          {range ? (
+            <span className="ml-1 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] tabular-nums text-primary" data-testid="timeline-inout-chip">
+              In {(range[0] / 1000).toFixed(2)} – Out {(range[1] / 1000).toFixed(2)} s
+            </span>
+          ) : null}
           {editable && joinOpts.between.length ? (
             <button
               type="button"
@@ -1129,7 +1641,7 @@ export function Timeline({
           localMs={Math.max(0, playheadMs - inspected.origin)}
           onCommit={(next) => commit(next)}
           onSeekLocal={(t) => onSeekOutput(inspected.origin + t)}
-          readOnly={!editable || laneState(edits, inspected.item.lane).locked}
+          readOnly={!editable || refLocked(edits, inspected.item)}
         />
       ) : null}
       {singleSel && singleSel.lane === 'video' && singleSel.srcInMs != null && singleSel.srcOutMs != null && editable ? (
@@ -1144,14 +1656,18 @@ export function Timeline({
       <div className="flex min-w-0 rounded-lg border border-border bg-card/30">
         <div className="w-[92px] shrink-0 border-r border-border/60" aria-label="Tracks">
           <div style={{ height: RULER_H }} className="border-b border-border/60" />
-          {LANE_ORDER.map((lane) => (
+          {rows.map((r) => (
             <TimelineLaneHeader
-              key={lane}
-              lane={lane}
-              height={LANE_H[lane]}
-              state={laneState(edits, lane)}
-              onToggle={editable ? (patch) => toggleLane(lane, patch) : undefined}
+              key={r.key}
+              lane={r.lane}
+              height={LANE_H[r.lane]}
+              state={rowState(edits, r)}
+              onToggle={editable ? (patch) => toggleRow(r, patch) : undefined}
               onOpenCover={onOpenCover}
+              label={r.trackId ? r.label : undefined}
+              testKey={r.isDefault ? r.lane : `${r.lane}-${r.trackId}`}
+              track={trackActions(r)}
+              dropTarget={Boolean(drag?.moved && drag.targetRow === r.key && rowOfItem(drag.item)?.key !== r.key)}
             />
           ))}
         </div>
@@ -1165,6 +1681,7 @@ export function Timeline({
         >
           <div style={{ width: widthPx + TRACK_EXTRA_PX, paddingLeft: TRACK_OFFSET_PX, paddingRight: TRACK_EXTRA_PX - TRACK_OFFSET_PX }}>
             <div
+              ref={trackAreaRef}
               className="relative shrink-0"
               style={{ width: widthPx, height: totalH }}
               role="presentation"
@@ -1193,13 +1710,24 @@ export function Timeline({
                 visFromPx={virtualize ? visFromPx : undefined}
                 visToPx={virtualize ? visToPx : undefined}
               />
-              {LANE_ORDER.map((lane) => (
+              {range ? (
                 <div
-                  key={lane}
-                  className={`absolute inset-x-0 border-b border-border/30 ${lane === 'video' ? 'bg-muted/60' : 'bg-muted/20'}`}
-                  style={{ top: laneTop(lane), height: LANE_H[lane] }}
-                  data-testid={`timeline-lane-${lane}`}
-                  aria-label={`${lane} lane`}
+                  className="pointer-events-none absolute inset-y-0 z-[5] border-x-2 border-primary/80 bg-primary/10"
+                  style={{ left: range[0] * pxPerMs, width: Math.max(2, (range[1] - range[0]) * pxPerMs) }}
+                  data-testid="timeline-inout-range"
+                  data-in-ms={range[0]}
+                  data-out-ms={range[1]}
+                  aria-hidden
+                />
+              ) : null}
+              {rows.map(({ lane, ...row }) => (
+                <div
+                  key={row.key}
+                  className={`absolute inset-x-0 border-b border-border/30 ${lane === 'video' ? 'bg-muted/60' : drag?.moved && drag.targetRow === row.key ? 'bg-primary/15' : 'bg-muted/20'}`}
+                  style={{ top: rowTop(row.key), height: LANE_H[lane] }}
+                  data-testid={row.isDefault ? `timeline-lane-${lane}` : `timeline-lane-${lane}-${row.trackId}`}
+                  data-track-id={row.trackId}
+                  aria-label={row.trackId ? `${row.label} track` : `${lane} lane`}
                   onDragOver={
                     onDropMedia && MEDIA_DROP_LANES.has(lane)
                       ? (e) => {
@@ -1215,7 +1743,7 @@ export function Timeline({
                           const id = e.dataTransfer.getData(MEDIA_DND_TYPE)
                           if (!id) return
                           e.preventDefault()
-                          onDropMedia(lane as MediaDropLane, msAtClientX(e.clientX, e.currentTarget), id)
+                          onDropMedia(lane as MediaDropLane, msAtClientX(e.clientX, e.currentTarget), id, row.trackId ?? undefined)
                         }
                       : undefined
                   }
@@ -1234,7 +1762,7 @@ export function Timeline({
                       ))
                     : null}
                   {lane === 'broll'
-                    ? brollWindows.map((w) => (
+                    ? brollWindows.filter((w) => rowItems(lanes, { lane, ...row }).some((i) => i.id === w.itemId)).map((w) => (
                         <div
                           key={`btr${w.itemId}${w.kind}`}
                           className="pointer-events-none absolute inset-y-0 z-[1] bg-white/30"
@@ -1246,7 +1774,15 @@ export function Timeline({
                         />
                       ))
                     : null}
-                  {(virtualize ? lanes[lane].filter((i) => inView(shown(i).startMs, shown(i).endMs)) : lanes[lane]).map(renderItem)}
+                  {(virtualize ? rowItems(lanes, { lane, ...row }).filter((i) => inView(shown(i).startMs, shown(i).endMs)) : rowItems(lanes, { lane, ...row })).map(renderItem)}
+                  {lane === 'video' && drag?.reorder && drag.moved && drag.insertBefore !== undefined ? (
+                    <div
+                      className="pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-primary"
+                      style={{ left: (drag.insertBefore == null ? span : lanes.video.find((v) => v.id === drag.insertBefore)?.startMs ?? span) * pxPerMs - 1 }}
+                      data-testid="timeline-reorder-marker"
+                      aria-hidden
+                    />
+                  ) : null}
                   {lane === 'video'
                     ? sourceChips.map((c) => {
                         const seg = edits.sourceSegments?.find((x) => x.id === c.id)
@@ -1416,10 +1952,11 @@ export function Timeline({
         </div>
       </div>
       <p className="text-[10px] text-muted-foreground">
-        Click to select (Shift-click for more), drag to move, drag edges to trim. S split · Del delete · ←/→ nudge
-        (Shift ×10) · N snapping · Space play. ◇ in the strip above adds keyframes; click a cut to add a transition.
-        Right-click for layout and section actions.
+        Click to select (Shift-click for more), drag to move (up / down: another track; main clips reorder), drag edges
+        to trim. S / Ctrl+B split · Del delete · Ctrl+C/X/V/D · I/O in–out · ←/→ nudge (Shift ×10) · ↑/↓ edit points ·
+        N snapping · Space / J K L play. ◇ adds keyframes; click a cut to add a transition. ? for all shortcuts.
       </p>
+      <TimelineShortcutsSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
       {trPop ? (
         <TransitionPopover
           title={trPop.kind === 'cut' ? 'Transition at cut' : trPop.edge === 'in' ? 'B-roll in transition' : 'B-roll out transition'}
@@ -1502,6 +2039,25 @@ export function Timeline({
                   Join selected clips
                 </button>
               ) : null}
+              {liveSelected.length === 1 && liveSelected[0]!.lane === 'broll' && canDetachAudio(edits, liveSelected[0]!.id) ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-detach-audio"
+                  onClick={() => {
+                    // G1b3: the clip's sound becomes an audio-track item (same time / in-point / length).
+                    const r = detachBrollAudio(edits, liveSelected[0]!.id)
+                    if (r) {
+                      commit(r.edits)
+                      setSelected([{ lane: 'sfx', id: r.id }])
+                    }
+                    setCtxMenu(null)
+                  }}
+                >
+                  Detach audio
+                </button>
+              ) : null}
               {liveSelected.length ? (
                 <button
                   type="button"
@@ -1514,6 +2070,157 @@ export function Timeline({
                 >
                   Delete selected (Del)
                 </button>
+              ) : null}
+              {copyableRefs(liveSelected).length ? (
+                <>
+                  {(
+                    [
+                      ['Copy (Ctrl+C)', () => copySel(false), 'copy'],
+                      ['Cut (Ctrl+X)', () => copySel(true), 'cut'],
+                      ['Duplicate (Ctrl+D)', () => duplicate(), 'duplicate'],
+                    ] as const
+                  ).map(([label, fn, id]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                      role="menuitem"
+                      data-testid={`timeline-ctx-${id}`}
+                      onClick={() => {
+                        fn()
+                        setCtxMenu(null)
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </>
+              ) : null}
+              {timelineClipboard.get() ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-ctx-paste"
+                  onClick={() => {
+                    paste()
+                    setCtxMenu(null)
+                  }}
+                >
+                  Paste at playhead (Ctrl+V)
+                </button>
+              ) : null}
+              {timelineClipboard.get() && liveSelected.some((r) => r.lane === 'text' || r.lane === 'broll') ? (
+                <button
+                  type="button"
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                  role="menuitem"
+                  data-testid="timeline-ctx-paste-attributes"
+                  onClick={() => {
+                    pasteAttrs()
+                    setCtxMenu(null)
+                  }}
+                >
+                  Paste attributes (Ctrl+Shift+V)
+                </button>
+              ) : null}
+              {angles.length > 1 && editable && (range || liveSelected.some((r) => r.lane === 'video')) ? (
+                <>
+                  <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">
+                    Camera angle {range ? '(in–out range)' : '(selected clips)'}
+                  </p>
+                  {angles.map((a) => (
+                    <button
+                      key={a.sourceId}
+                      type="button"
+                      className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
+                      role="menuitem"
+                      data-testid={`timeline-ctx-angle-${a.sourceId}`}
+                      onClick={() => {
+                        let next = edits
+                        const spans: [number, number][] = range
+                          ? [range]
+                          : liveSelected
+                              .filter((r) => r.lane === 'video')
+                              .map((r) => lanes.video.find((i) => i.id === r.id))
+                              .filter(Boolean)
+                              .map((i) => [i!.startMs, i!.endMs] as [number, number])
+                        for (const [a0, b0] of spans) next = setAngleForOutputRange(next, tb, a0, b0, a.sourceId, angleSources)
+                        commit(next)
+                        setCtxMenu(null)
+                      }}
+                    >
+                      {a.key}. {a.label}
+                    </button>
+                  ))}
+                </>
+              ) : null}
+              {(() => {
+                const kinds = [...new Set(liveSelected.map((r) => LANE_TRACK_KIND[r.lane]).filter(Boolean))] as TrackKind[]
+                if (kinds.length !== 1) return null
+                const here = new Set(liveSelected.map((r) => lanes[r.lane].find((i) => i.id === r.id)?.track))
+                const dests = tracksOfKind(edits, kinds[0]!).filter((t) => !(here.size === 1 && here.has(t.id)) && !trackState(edits, t.id).locked)
+                if (!dests.length) return null
+                return (
+                  <>
+                    <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">Move to track</p>
+                    {dests.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
+                        role="menuitem"
+                        data-testid={`timeline-ctx-move-to-${t.id}`}
+                        onClick={() => {
+                          commit(moveItemsToTrack(edits, liveSelected, t.id))
+                          setCtxMenu(null)
+                        }}
+                      >
+                        {trackLabel(edits, t.id)}
+                      </button>
+                    ))}
+                  </>
+                )
+              })()}
+              {range ? (
+                <>
+                  <p className="px-2 pt-1 text-[10px] font-medium text-muted-foreground">In–out range</p>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
+                    role="menuitem"
+                    data-testid="timeline-ctx-range-delete"
+                    onClick={() => {
+                      rippleDeleteRange()
+                      setCtxMenu(null)
+                    }}
+                  >
+                    Delete range, close gap (Shift+Del)
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
+                    role="menuitem"
+                    data-testid="timeline-ctx-range-select"
+                    onClick={() => {
+                      setSelected(itemsInRange(lanes, range).filter((r) => r.lane !== 'video' && !refLocked(edits, r)))
+                      setCtxMenu(null)
+                    }}
+                  >
+                    Select items in range
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full rounded px-2 py-1.5 pl-4 text-left hover:bg-muted"
+                    role="menuitem"
+                    onClick={() => {
+                      setIo({ inMs: null, outMs: null })
+                      setCtxMenu(null)
+                    }}
+                  >
+                    Clear in / out (Alt+X)
+                  </button>
+                </>
               ) : null}
               <div className="my-1 border-t border-border" role="separator" />
             </>

@@ -21,6 +21,10 @@ export function buildProcessProjectJobPayload(
     mode,
     genre,
   }
+  if (parsed.success && parsed.data.blank === true) {
+    // G1b3: blank canvas — full-video path, no transcription (worker blank_project.py).
+    return { ...base, byo: true, fullVideo: true, blank: true }
+  }
   if (parsed.success && parsed.data.fullVideo === true) {
     // FV1: full-video projects run the BYO path (no clip finding) with the 3 h cap.
     return { ...base, byo: true, fullVideo: true }

@@ -7,12 +7,12 @@
  *   crop (inset in the un-flipped media) → flip → scale / rotate about the centre → translate.
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { layerOrder, trackIdOf } from '@/lib/clips/editor/tracks'
 import {
   CROP_MIN_VISIBLE,
   CROP_PROPS,
   isMediaLayerTarget,
   normalizeLayerProps,
-  stackOrder,
   STACK_OVERLAP_TOL_MS,
   type CropProp,
   type KeyframeTarget,
@@ -156,7 +156,14 @@ export function stackItems(edits: ClipEditsV2, kind: StackKind): StackItem[] {
 
 /** Bottom → top order the preview draws and the worker composites. */
 export function orderedStack<T extends StackItem>(edits: ClipEditsV2, kind: StackKind, items: readonly T[]): T[] {
-  return stackOrder(items, (id) => layerZ(edits, `${kind}:${id}` as KeyframeTarget))
+  // G1b: by track first (bottom → top), then G1a z / time clustering inside each track.
+  return layerOrder(edits, kind === 'broll' ? 'overlay' : 'text', items, (id) => layerZ(edits, `${kind}:${id}` as KeyframeTarget))
+}
+
+/** G1b: bring forward / send back work among the layers on the SAME track (tracks order the rest). */
+function sameTrack(edits: ClipEditsV2, kind: StackKind, a: string, b: string): boolean {
+  const k = kind === 'broll' ? 'overlay' : 'text'
+  return trackIdOf(edits, k, a) === trackIdOf(edits, k, b)
 }
 
 function overlaps(a: StackItem, b: StackItem): boolean {
@@ -172,7 +179,7 @@ export function stackNeighbours(edits: ClipEditsV2, target: KeyframeTarget): Sta
   const items = stackItems(edits, kind)
   const me = items.find((i) => `${kind}:${i.id}` === target)
   if (!me) return []
-  return items.filter((i) => i.id !== me.id && overlaps(i, me))
+  return items.filter((i) => i.id !== me.id && overlaps(i, me) && sameTrack(edits, kind, i.id, me.id))
 }
 
 /**
@@ -185,7 +192,7 @@ export function moveInStack(edits: ClipEditsV2, target: KeyframeTarget, move: St
   const items = stackItems(edits, kind)
   const me = items.find((i) => `${kind}:${i.id}` === target)
   if (!me) return edits
-  const group = items.filter((i) => i.id === me.id || overlaps(i, me))
+  const group = items.filter((i) => i.id === me.id || (overlaps(i, me) && sameTrack(edits, kind, i.id, me.id)))
   if (group.length < 2) return edits
   const order = orderedStack(edits, kind, group)
   const at = order.findIndex((i) => i.id === me.id)
@@ -208,7 +215,7 @@ export function stackMoves(edits: ClipEditsV2, target: KeyframeTarget): Record<S
   const items = stackItems(edits, kind)
   const me = items.find((i) => `${kind}:${i.id}` === target)
   if (!me) return none
-  const group = items.filter((i) => i.id === me.id || overlaps(i, me))
+  const group = items.filter((i) => i.id === me.id || (overlaps(i, me) && sameTrack(edits, kind, i.id, me.id)))
   if (group.length < 2) return none
   const order = orderedStack(edits, kind, group)
   const at = order.findIndex((i) => i.id === me.id)

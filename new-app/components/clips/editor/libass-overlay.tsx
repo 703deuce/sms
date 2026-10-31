@@ -21,6 +21,8 @@ function LibassLayer({
   playH,
   clock,
   onStatus,
+  z,
+  layerId,
 }: {
   layer: PreviewScriptKey
   ass: string
@@ -28,6 +30,9 @@ function LibassLayer({
   playH: number
   clock: LibassClock
   onStatus: LibassStatusFn
+  /** G1b: explicit z-index (under-text canvases between B-roll layers). */
+  z?: number
+  layerId?: string
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const instRef = useRef<JassubInstance | null>(null)
@@ -128,9 +133,10 @@ function LibassLayer({
   return (
     <div
       ref={hostRef}
-      className={`pointer-events-none absolute inset-0 ${LAYER_Z[layer]}`}
+      className={`pointer-events-none absolute inset-0 ${z == null ? LAYER_Z[layer] : ''}`}
+      style={z == null ? undefined : { zIndex: z }}
       data-testid="libass-layer"
-      data-libass-layer={layer}
+      data-libass-layer={layerId ?? layer}
       aria-hidden
     />
   )
@@ -152,6 +158,9 @@ export function LibassPreviewLayers({
 }) {
   return (
     <>
+      {(scripts.under ?? []).map((u) => (
+        <LibassLayer key={u.key} layer="text" layerId={u.key} z={u.z} ass={u.ass} playW={playW} playH={playH} clock={clock} onStatus={onStatus} />
+      ))}
       {PREVIEW_SCRIPT_ORDER.map((k) =>
         scripts[k] ? (
           <LibassLayer key={k} layer={k} ass={scripts[k]!} playW={playW} playH={playH} clock={clock} onStatus={onStatus} />

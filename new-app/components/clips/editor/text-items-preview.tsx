@@ -17,8 +17,11 @@ export function TextItemsPreview({
   boxH,
   elRef,
   selectedId,
+  underZ,
 }: {
   edits: ClipEditsV2
+  /** G1b: z-index of text items burned under an overlay track (`text:<id>` → z). */
+  underZ?: Record<string, number>
   boxH: number
   elRef: (id: string, el: HTMLDivElement | null) => void
   selectedId?: string | null
@@ -35,8 +38,8 @@ export function TextItemsPreview({
           <div
             key={it.id}
             ref={(el) => elRef(it.id, el)}
-            className="pointer-events-none absolute inset-0 z-[23]"
-            style={{ transformOrigin: css.origin, visibility: 'hidden', opacity: 0 }}
+            className={`pointer-events-none absolute inset-0 ${underZ?.[`text:${it.id}`] == null ? 'z-[23]' : ''}`}
+            style={{ transformOrigin: css.origin, visibility: 'hidden', opacity: 0, ...(underZ?.[`text:${it.id}`] == null ? {} : { zIndex: underZ[`text:${it.id}`] }) }}
             data-testid="preview-text-item"
             data-text-id={it.id}
             data-libass-for="text"

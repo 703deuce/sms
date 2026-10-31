@@ -3,6 +3,7 @@
  * Mirrored 1:1 by worker/clips_worker/motion.py (parity fixture: worker/tests/fixtures/motion_parity.json).
  */
 import type { BrollItem } from '@/lib/clips/broll'
+import { reconcileTracks } from '@/lib/clips/editor/tracks'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
   PROP_SPECS,
@@ -75,6 +76,7 @@ export function targetForItem(lane: string, id: string): KeyframeTarget | null {
   if (lane === 'music') return 'music'
   if (lane === 'text') return id === 'hook' ? 'text' : `text:${id}`
   if (lane === 'broll') return `broll:${id}`
+  if (lane === 'sfx') return `sfx:${id}` // G1b3: volume envelope
   return null
 }
 
@@ -94,6 +96,7 @@ export function targetOriginMs(edits: ClipEditsV2, target: KeyframeTarget): numb
   const tid = textItemIdOf(target)
   if (tid) return edits.textItems?.find((t) => t.id === tid)?.startMs ?? 0
   if (target === 'music') return edits.audio?.music?.startMs ?? 0
+  if (target.startsWith('sfx:')) return edits.audio?.sfx?.find((s) => s.generationId === target.slice(4))?.atMs ?? 0
   return 0
 }
 
@@ -308,6 +311,15 @@ export function reconcileItemMotion(prev: ClipEditsV2, next: ClipEditsV2): ClipE
       out.push(by ? shiftTrack(t, by) : t)
       continue
     }
+    if (t.target.startsWith('sfx:')) {
+      // G1b3: SFX envelopes are local to the SFX start (a move keeps them); deleted SFX drop theirs.
+      if (!(next.audio?.sfx ?? []).some((s) => s.generationId === t.target.slice(4))) {
+        changed = true
+        continue
+      }
+      out.push(t)
+      continue
+    }
     if (t.target === 'music') {
       const pm = prev.audio?.music
       const nm = next.audio?.music
@@ -369,6 +381,11 @@ export function reconcileItemMotion(prev: ClipEditsV2, next: ClipEditsV2): ClipE
  * rows of deleted B-roll / text items are dropped. Untouched edits are returned as-is.
  */
 export function reconcileLayerProps(prev: ClipEditsV2, next: ClipEditsV2): ClipEditsV2 {
+  // G1b: track membership follows the same rules (split children inherit, deleted items drop).
+  return reconcileTracks(prev, reconcileLayerRows(prev, next))
+}
+
+function reconcileLayerRows(prev: ClipEditsV2, next: ClipEditsV2): ClipEditsV2 {
   const rows = next.layerProps
   if (!rows?.length) return next
   const live = new Set<string>([

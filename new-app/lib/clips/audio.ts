@@ -20,6 +20,9 @@ export type ClipAudioSfx = {
   uploadId?: string
   atMs: number
   volume?: number
+  /** G1b3: media in-point / play length (detached audio of a B-roll clip). */
+  inMs?: number
+  durMs?: number
 }
 
 export type ClipStudioSound = {
@@ -124,6 +127,8 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         ...(uploadId ? { uploadId } : {}),
         atMs: Math.max(0, Math.round(num(s.atMs, 0))),
         volume: clamp01(s.volume, DEFAULT_SFX_VOLUME),
+        ...(num(s.inMs, 0) > 0 ? { inMs: Math.round(num(s.inMs, 0)) } : {}),
+        ...(num(s.durMs, 0) >= 100 ? { durMs: Math.round(num(s.durMs, 0)) } : {}),
       }
     })
     .filter(Boolean) as ClipAudioSfx[]

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 MIN_BLOCK_MS = 300
+# G1b: main-track drag reorder (was 12; mirror of edits.ts SECTION_ORDER_MAX_BLOCKS).
+SECTION_ORDER_MAX_BLOCKS = 64
 MIN_SEGMENT_MS = 80
 
 
@@ -28,7 +30,7 @@ def keep_segments(trim_in: int, trim_out: int, cut_ranges: list) -> list[tuple[i
 def normalize_section_order(raw, trim_in: int, trim_out: int) -> list[tuple[int, int]] | None:
     if not raw or not isinstance(raw, list) or not raw:
         return None
-    if len(raw) > 12:
+    if len(raw) > SECTION_ORDER_MAX_BLOCKS:
         print("[clipper:reorder] invalid_dropped", flush=True)
         return None
     blocks: list[tuple[int, int]] = []

@@ -6,7 +6,9 @@
 import { textWidthPx } from '@/lib/clips/caption-fit'
 import { hasMotionPy, layerTransformAtPy, MOTION_FPS, normalizeKeyframes } from '@/lib/clips/render-plan/motion'
 import { hex2, pyFloatStr, pyRound, pyRoundN } from '@/lib/clips/render-plan/py'
-import { normalizeLayerProps, stackOrder } from '@/lib/clips/editor/motion-schema'
+import { normalizeLayerProps } from '@/lib/clips/editor/motion-schema'
+import { layerOrder, spansTracks } from '@/lib/clips/editor/tracks'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 type Dict = Record<string, unknown>
 export const TEXT_FONTS: Record<string, string> = {
@@ -107,8 +109,9 @@ export function buildTextItemsAss(edits: Dict, w: number, h: number, fps = MOTIO
   // G1a: mirror of text_items.py — stacking order (bottom → top) + one layer pair per item when set.
   const zRows = normalizeLayerProps(edits.layerProps) ?? []
   const zOf = (id: string) => zRows.find((r) => r.target === `text:${id}`)?.z ?? 0
-  const zOn = items.some((it) => zOf(String(it.id)) !== 0)
-  if (zOn) items = stackOrder(items.map((it) => ({ ...it, id: String(it.id) }) as TextItemRow), zOf)
+  // G1b: items on several text tracks stack by track (tracks.layerOrder) — same layer pairs.
+  const zOn = items.some((it) => zOf(String(it.id)) !== 0) || spansTracks(edits as Pick<ClipEditsV2, 'tracks'>, 'text', items.map((it) => String(it.id)))
+  if (zOn) items = layerOrder(edits as Pick<ClipEditsV2, 'tracks'>, 'text', items.map((it) => ({ ...it, id: String(it.id) }) as TextItemRow), zOf)
   const tracks = normalizeKeyframes(edits.keyframes)
   const styles: string[] = []
   const events: string[] = []

@@ -28,7 +28,7 @@ export function TimelineInsertMarkers({
     <>
       {[...groups.entries()].map(([baseMs, ws]) => {
         const addMs = ws.reduce((s, w) => s + w.durMs, 0)
-        const labels = ws.map((w) => sourceById(sources, w.sourceId)?.label ?? 'Clip').join(', ')
+        const labels = ws.map((w) => (w.freeze ? 'Freeze frame' : sourceById(sources, w.sourceId)?.label ?? 'Clip')).join(', ')
         return (
           <div
             key={`ins${baseMs}`}

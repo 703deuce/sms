@@ -7,7 +7,7 @@ import { clipProjectSettingsSchema, defaultClipSettings, type ClipProjectSetting
 import { assertByoUploadDuration } from '@/lib/clips/byo-project'
 import { assertFullVideoUploadDuration, sourceAspectRatio } from '@/lib/clips/full-video'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
-import { projectWordsKey } from '@/lib/storage'
+import { projectWordsKey, storageDriverName, uploadSourceKey } from '@/lib/storage'
 import type { ClipBrandTemplate } from '@prisma/client'
 
 function mergeDefaultBrandSettings(
@@ -138,6 +138,68 @@ export async function createClipProject(
       type: 'PROCESS_PROJECT',
       status: 'QUEUED',
       payload: buildProcessProjectJobPayload(settings),
+    },
+  })
+  return project
+}
+
+/** G1b3: canvas lengths a blank project may ask for (worker clamps the same: blank_project.py). */
+export const BLANK_MIN_MS = 10_000
+export const BLANK_MAX_MS = 60 * 60 * 1000
+export const BLANK_DEFAULT_MS = 10 * 60 * 1000
+
+/**
+ * G1b3: blank project (no source video). A PENDING upload row the worker fills with a black, silent
+ * canvas, a full-video project (settings.blank) and its PROCESS_PROJECT job (payload.blank → no
+ * transcription, no credits). Additive: existing columns / job type only.
+ */
+export async function createBlankClipProject(
+  workspaceId: string,
+  input: { blank: { aspectRatio?: string; durationMs?: number }; title?: string },
+) {
+  const prisma = getPrisma()
+  const uploadId = createId('upl')
+  await prisma.clipUpload.create({
+    data: {
+      id: uploadId,
+      workspaceId,
+      key: uploadSourceKey(workspaceId, uploadId, 'mp4'),
+      filename: 'Blank canvas.mp4',
+      bytes: BigInt(0),
+      mime: 'video/mp4',
+      status: 'PENDING',
+      storageDriver: storageDriverName(),
+    },
+  })
+  const parsed = clipProjectSettingsSchema.parse({
+    ...defaultClipSettings(),
+    ...(input.blank.aspectRatio ? { aspectRatio: input.blank.aspectRatio } : {}),
+  })
+  const durationMs = Math.max(BLANK_MIN_MS, Math.min(BLANK_MAX_MS, Math.round(input.blank.durationMs ?? BLANK_DEFAULT_MS)))
+  const settings: ClipProjectSettings = { ...parsed, byo: true, fullVideo: true, blank: true, rangeStartMs: 0, rangeEndMs: durationMs }
+  const projectId = createId('proj')
+  const project = await prisma.clipProject.create({
+    data: {
+      id: projectId,
+      workspaceId,
+      title: input.title?.trim() || 'Blank project',
+      uploadId,
+      settings: JSON.parse(JSON.stringify(settings)),
+      rangeStartMs: 0,
+      rangeEndMs: durationMs,
+      status: 'QUEUED',
+      stage: 'queued',
+      progress: 0,
+      transcriptKey: projectWordsKey(workspaceId, projectId),
+    },
+  })
+  await prisma.clipJob.create({
+    data: {
+      id: createId('job'),
+      projectId: project.id,
+      type: 'PROCESS_PROJECT',
+      status: 'QUEUED',
+      payload: buildProcessProjectJobPayload(settings, { blankMs: durationMs }),
     },
   })
   return project
